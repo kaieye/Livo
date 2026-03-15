@@ -2,6 +2,11 @@ node_modules/
 out/
 dist/
 dist-web/
+.claude/
+.agents/
+.vscode/
+__pycache__/
+*.pyc
 .DS_Store
 *.log
 .env
