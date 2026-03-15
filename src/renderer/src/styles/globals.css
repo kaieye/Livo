@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border dark:border-border-dark;
+  }
+
+  html {
+    @apply h-full;
+  }
+
+  body {
+    @apply h-full bg-white text-text dark:bg-surface-dark dark:text-text-dark-primary;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+
+  #root {
+    @apply h-full;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-600;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
+  }
+}
+
+@layer components {
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors
+      hover:bg-sidebar-hover dark:hover:bg-sidebar-dark-hover;
+  }
+
+  .sidebar-item-active {
+    @apply bg-accent/10 text-accent font-medium;
+  }
+}
+
+/* Entry content styling */
+.entry-content {
+  @apply prose prose-sm dark:prose-invert max-w-none;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.entry-content h1 { @apply text-[1.6em] font-bold; }
+.entry-content h2 { @apply text-[1.3em] font-semibold mt-8 mb-3; }
+.entry-content h3 { @apply text-[1.1em] font-semibold mt-6 mb-2; }
+
+.entry-content p {
+  @apply mb-4;
+}
+
+.entry-content img {
+  @apply rounded-xl max-w-full h-auto transition-transform duration-500;
+}
+
+.entry-content img:hover {
+  transform: scale(1.01);
+}
+
+.entry-content a {
+  @apply text-accent no-underline hover:underline decoration-accent/40 underline-offset-2;
+}
+
+.entry-content pre {
+  @apply bg-surface-secondary dark:bg-surface-dark-secondary rounded-xl p-4 overflow-x-auto text-[0.85em] my-6;
+}
+
+.entry-content code {
+  @apply bg-surface-secondary dark:bg-surface-dark-secondary px-1.5 py-0.5 rounded text-[0.85em];
+}
+
+.entry-content pre code {
+  @apply bg-transparent p-0;
+}
+
+.entry-content blockquote {
+  @apply border-l-4 border-accent/30 pl-4 italic bg-accent/[0.03] rounded-r-lg py-2 my-6;
+}
+
+.entry-content table {
+  @apply w-full border-collapse my-6 text-sm;
+}
+
+.entry-content th {
+  @apply bg-surface-secondary dark:bg-surface-dark-secondary font-semibold text-left px-3 py-2;
+}
+
+.entry-content td {
+  @apply border-t px-3 py-2;
+}
+
+.entry-content hr {
+  @apply my-8 border-surface-tertiary dark:border-surface-dark-tertiary;
+}
+
+.entry-content ul, .entry-content ol {
+  @apply my-4 pl-6;
+}
+
+.entry-content li {
+  @apply mb-1.5;
+}
+
+.entry-content figure {
+  @apply my-6;
+}
+
+.entry-content figcaption {
+  @apply text-center text-xs text-text-tertiary mt-2;
+}
+
+/* Responsive video & iframe */
+.entry-content video,
+.entry-content iframe {
+  @apply max-w-full rounded-xl my-4;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.entry-content video {
+  @apply bg-black;
+}
+
+/* Selection color */
+.entry-content ::selection {
+  @apply bg-accent/20;
+}
+
+/* Animate-in utilities */
+@keyframes animate-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: animate-in 0.3s ease-out;
+}
+
+.fade-in-0 {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.slide-in-from-top-2 {
+  animation: slide-in-top 0.3s ease-out;
+}
+
+@keyframes slide-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Quick search overlay backdrop */
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.backdrop-animate {
+  animation: backdrop-in 0.15s ease-out;
+}
+
+/* Media player slide up */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-up-animate {
+  animation: slide-up 0.25s ease-out;
+}
+
+/* Keyboard shortcut key cap style */
+.key-cap {
+  @apply inline-flex items-center justify-center min-w-[1.5em] h-[1.5em] px-1.5 text-[10px] font-medium
+    rounded bg-surface-secondary dark:bg-surface-dark-secondary border border-b-2 border-border dark:border-border-dark
+    text-text-secondary dark:text-text-dark-secondary;
+}
+
+/* External link warning shake */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Reduce motion — disables all animations when enabled */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

@@ -1,0 +1,892 @@
+import { ipcMain } from "electron"
+import {
+  CURATED_FEEDS,
+  DISCOVER_CATEGORIES,
+  RSSHUB_ROUTES,
+  DEFAULT_RSSHUB_INSTANCE,
+  searchCuratedFeeds,
+} from "../../shared/discover-data"
+import { IPC } from "../../shared/types"
+import type { ResolvedProfileFeedCandidate } from "../../shared/types"
+import { resolveProfileUrlToCandidates } from "../../shared/profile-resolver"
+import { fetchAndParseFeed } from "../services/rss-parser"
+import { formatFeedTitle } from "../services/feed-title"
+import { deriveImageUrl } from "../services/feed-utils"
+import { getSettings } from "./settings-handlers"
+import { getYouTubeAccountState } from "../services/account-session"
+import { resolveYouTubeProfileToOfficialFeed } from "../services/youtube-profile-resolver"
+import { normalizeRsshubProtocolUrl, toRsshubProtocolUrl } from "../services/rsshub-url"
+import RssParser from "rss-parser"
+
+/** A lightweight RSS parser with a short timeout 鈥?used for quick probes. */
+const fastParser = new RssParser({
+  timeout: 15000,
+  headers: {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/rss+xml, application/xml, application/atom+xml, text/xml, */*",
+  },
+})
+
+/** Fallback RSSHub instances for Twitter probes */
+const FALLBACK_RSSHUB_INSTANCES = [
+  "https://rsshub.pseudoyu.com",
+  "https://rsshub.app",
+  "https://rsshub.rssforever.com",
+  "https://rsshub-instance.zeabur.app",
+]
+const FALLBACK_NITTER_INSTANCES = [
+  "https://nitter.net",
+]
+
+/** Return the configured RSSHub instance URL (no trailing slash) */
+function getRSSHubInstance(): string {
+  const settings = getSettings()
+  const custom = settings.general.rsshubInstance?.trim()
+  return (custom || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
+}
+
+function appendSameRouteOnFallbackInstances(
+  candidates: ResolvedProfileFeedCandidate[],
+  instances: string[],
+): void {
+  const nextCandidates = [...candidates]
+  for (const candidate of candidates) {
+    try {
+      const u = new URL(candidate.feedUrl)
+      const pathAndQuery = `${u.pathname}${u.search}`
+      for (const inst of instances) {
+        const feedUrl = `${inst.replace(/\/+$/, "")}${pathAndQuery}`
+        if (!nextCandidates.some((x) => x.feedUrl === feedUrl)) {
+          nextCandidates.push({
+            ...candidate,
+            feedUrl,
+          })
+        }
+      }
+    } catch {
+      // Ignore malformed candidate URL and keep other candidates.
+    }
+  }
+  candidates.splice(0, candidates.length, ...nextCandidates)
+}
+
+function normalizeDiscoverQueryToFeedUrl(query: string, rsshubInstance: string): string {
+  const trimmed = query.trim()
+  if (!trimmed) return trimmed
+  const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
+  if (rsshubMatch?.[1]) {
+    const route = rsshubMatch[1].replace(/^\/+/, "")
+    const base = rsshubInstance.replace(/\/+$/, "")
+    return `${base}/${route}`
+  }
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  return `https://${trimmed}`
+}
+
+function extractBilibiliUid(feedUrl: string): string | null {
+  try {
+    const u = new URL(feedUrl)
+    const m = u.pathname.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
+    return m?.[1] || null
+  } catch {
+    return null
+  }
+}
+
+function extractTwitterUsernameFromUrl(value: string): string {
+  try {
+    const u = new URL(value)
+    const rsshubMatch = u.pathname.match(/\/twitter\/user\/([^/?#]+)/i)
+    if (rsshubMatch?.[1]) return decodeURIComponent(rsshubMatch[1]).replace(/^@/, "")
+    if (u.hostname.toLowerCase().includes("nitter")) {
+      const parts = u.pathname.split("/").filter(Boolean)
+      if (parts.length >= 2 && parts[1].toLowerCase() === "rss") {
+        return decodeURIComponent(parts[0]).replace(/^@/, "")
+      }
+    }
+    if (/^(www\.)?(x\.com|twitter\.com)$/i.test(u.hostname)) {
+      return (u.pathname.split("/").filter(Boolean)[0] || "").replace(/^@/, "")
+    }
+  } catch {
+    // Ignore malformed URL.
+  }
+  return ""
+}
+
+function decodeBasicHtmlEntities(input: string): string {
+  return input
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+}
+
+function extractTwitterDisplayNameFromText(text: string, username: string): string {
+  const raw = (text || "").trim()
+  if (!raw) return ""
+  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const withHandle = new RegExp(`^(.+?)\\s*\\(\\s*@?${escapedUser}\\s*\\)\\s*(?:\\/|[-\\u2013\\u2014]|on)\\s*(?:x|twitter)\\s*$`, "i")
+  const m1 = raw.match(withHandle)
+  if (m1?.[1]) return m1[1].trim()
+  const withoutHandle = raw.match(/^(.+?)\s*(?:\/|[-\u2013\u2014]|on)\s*(?:x|twitter)\s*$/i)
+  if (withoutHandle?.[1]) {
+    const name = withoutHandle[1].trim().replace(/^@/, "")
+    if (name && name.toLowerCase() !== username.toLowerCase()) return name
+  }
+  return ""
+}
+
+function isGenericTwitterTitle(title: string, username: string): boolean {
+  const cleaned = (title || "").trim().toLowerCase()
+  const user = username.trim().replace(/^@/, "").toLowerCase()
+  if (!cleaned || !user) return true
+  return cleaned === user || cleaned === `@${user}` || cleaned === `${user} - x` || cleaned === `@${user} - x`
+}
+
+async function fetchXDisplayNameByUsername(username: string): Promise<string> {
+  const clean = username.trim().replace(/^@/, "")
+  if (!clean) return ""
+  try {
+    const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
+    const res = await fetch(profileUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return ""
+    const html = await res.text()
+    const ogTitle =
+      html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1]
+      || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]
+      || ""
+    const decoded = decodeBasicHtmlEntities(ogTitle)
+    return extractTwitterDisplayNameFromText(decoded, clean)
+  } catch {
+    return ""
+  }
+}
+
+function getFeedImageUrl(parsed: any): string | undefined {
+  if (!parsed) return undefined
+  const imageUrl =
+    (parsed["image"] as { url?: string } | undefined)?.url ||
+    (parsed["itunes"] as { image?: string } | undefined)?.image
+  if (imageUrl) return imageUrl
+
+  const items = (parsed["items"] as Array<Record<string, unknown>> | undefined) || []
+  for (const item of items.slice(0, 3)) {
+    const image = deriveImageUrl(item)
+    if (image) return image
+  }
+  return undefined
+}
+
+async function fetchBilibiliNameByUid(uid: string): Promise<string | null> {
+  const referer = `https://space.bilibili.com/${encodeURIComponent(uid)}`
+  const endpoints = [
+    `https://api.bilibili.com/x/web-interface/card?mid=${encodeURIComponent(uid)}`,
+    `https://api.bilibili.com/x/space/acc/info?mid=${encodeURIComponent(uid)}`,
+  ]
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/json, text/plain, */*",
+          "Referer": referer,
+          "Origin": "https://www.bilibili.com",
+        },
+        signal: AbortSignal.timeout(2500),
+      })
+      if (!res.ok) continue
+      const json = await res.json() as {
+        code?: number
+        data?: { card?: { name?: string }; name?: string }
+      }
+      if (json.code !== 0) continue
+      const name = (json.data?.card?.name || json.data?.name || "").trim()
+      if (name) return name
+    } catch {
+      // Ignore single endpoint failure.
+    }
+  }
+  return null
+}
+
+async function fetchBilibiliAvatarByUid(uid: string): Promise<string | null> {
+  const referer = `https://space.bilibili.com/${encodeURIComponent(uid)}`
+  const endpoints = [
+    `https://api.bilibili.com/x/web-interface/card?mid=${encodeURIComponent(uid)}`,
+    `https://api.bilibili.com/x/space/acc/info?mid=${encodeURIComponent(uid)}`,
+  ]
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/json, text/plain, */*",
+          "Referer": referer,
+          "Origin": "https://www.bilibili.com",
+        },
+        signal: AbortSignal.timeout(2500),
+      })
+      if (!res.ok) continue
+      const json = await res.json() as {
+        code?: number
+        data?: { card?: { face?: string }; face?: string }
+      }
+      if (json.code !== 0) continue
+      const face = (json.data?.card?.face || json.data?.face || "").trim()
+      if (face) return face
+    } catch {
+      // Ignore single endpoint failure.
+    }
+  }
+  return null
+}
+
+async function inferDiscoverResultTitle(feedUrl: string, parsedTitle?: string): Promise<string> {
+  const twitterUsername = extractTwitterUsernameFromUrl(feedUrl)
+  if (twitterUsername) {
+    const normalizedByFeed = formatFeedTitle(feedUrl, parsedTitle, `${twitterUsername} - X`)
+    const parsedName = extractTwitterDisplayNameFromText(normalizedByFeed, twitterUsername)
+    if (parsedName) return `${parsedName} - X`
+    if (normalizedByFeed && !isGenericTwitterTitle(normalizedByFeed, twitterUsername)) return normalizedByFeed
+    const fetchedName = await fetchXDisplayNameByUsername(twitterUsername)
+    if (fetchedName) return `${fetchedName} - X`
+    return `${twitterUsername} - X`
+  }
+
+  const normalizedByFeed = formatFeedTitle(feedUrl, parsedTitle, feedUrl)
+  if (normalizedByFeed && normalizedByFeed !== feedUrl) return normalizedByFeed
+
+  const bilibiliUid = extractBilibiliUid(feedUrl)
+  if (bilibiliUid) {
+    const name = await fetchBilibiliNameByUid(bilibiliUid)
+    return `${name || `UID ${bilibiliUid}`} - Bilibili`
+  }
+
+  try {
+    const u = new URL(feedUrl)
+    const host = u.hostname.replace(/^www\./i, "")
+    return `${host} - RSS`
+  } catch {
+    return feedUrl
+  }
+}
+
+type VideoProbeCandidate = {
+  platform: "youtube" | "bilibili"
+  title: string
+  description: string
+  image: string
+  feedUrl: string
+}
+type BilibiliUserProbeCandidate = {
+  uid: string
+  title: string
+  description: string
+  image: string
+  feedUrl: string
+}
+
+function normalizeNameForMatch(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[@\s_.-]+/g, "")
+    .trim()
+}
+
+function isUsernameMatch(query: string, candidateName: string): boolean {
+  const q = normalizeNameForMatch(query)
+  const c = normalizeNameForMatch(candidateName)
+  if (!q || !c) return false
+  return c.includes(q)
+}
+
+function flattenTextRuns(node: any): string {
+  if (!node) return ""
+  if (typeof node.simpleText === "string") return node.simpleText
+  if (Array.isArray(node.runs)) return node.runs.map((r: any) => r?.text || "").join("").trim()
+  return ""
+}
+
+function collectChannelRenderers(node: any, out: any[]): void {
+  if (!node) return
+  if (Array.isArray(node)) {
+    for (const n of node) collectChannelRenderers(n, out)
+    return
+  }
+  if (typeof node !== "object") return
+  if (node.channelRenderer) out.push(node.channelRenderer)
+  for (const key of Object.keys(node)) {
+    collectChannelRenderers(node[key], out)
+  }
+}
+
+async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbeCandidate[]> {
+  const endpoint = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`
+  try {
+    const res = await fetch(endpoint, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(4000),
+    })
+    if (!res.ok) return []
+    const html = await res.text()
+    const m =
+      html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/) ||
+      html.match(/window\["ytInitialData"\] = (\{[\s\S]*?\});<\/script>/)
+    if (!m?.[1]) return []
+
+    const data = JSON.parse(m[1])
+    const renderers: any[] = []
+    collectChannelRenderers(data, renderers)
+
+    const seen = new Set<string>()
+    const out: VideoProbeCandidate[] = []
+    for (const r of renderers) {
+      const channelId = (r.channelId || "").trim()
+      if (!channelId || seen.has(channelId)) continue
+      seen.add(channelId)
+      const name = flattenTextRuns(r.title) || channelId
+      if (!isUsernameMatch(query, name)) continue
+      const description = flattenTextRuns(r.descriptionSnippet) || "YouTube channel"
+      const thumbs = r.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
+      const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
+      out.push({
+        platform: "youtube",
+        title: `${name} - YouTube`,
+        description,
+        image,
+        feedUrl: `${getRSSHubInstance()}/youtube/channel/${encodeURIComponent(channelId)}`,
+      })
+      if (out.length >= 6) break
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string): Promise<Array<{
+  platform: "youtube" | "bilibili"
+  title: string
+  description: string
+  image: string
+  feedUrl: string
+}>> {
+  const results: VideoProbeCandidate[] = []
+  const clean = query.trim().replace(/^@/, "")
+  if (!clean) return results
+  const uidMatch = clean.match(/^(?:uid[:\s-]*)?(\d{3,})$/i)
+  const bilibiliUid = uidMatch?.[1] || null
+
+  // 0) Bilibili UID direct lookup has highest priority
+  if (bilibiliUid) {
+    const name = await fetchBilibiliNameByUid(bilibiliUid)
+    const image = (await fetchBilibiliAvatarByUid(bilibiliUid)) || ""
+    results.push({
+      platform: "bilibili",
+      title: `${name || `UID ${bilibiliUid}`} - Bilibili`,
+      description: `UID ${bilibiliUid}`,
+      image,
+      feedUrl: `${rsshubInstance}/bilibili/user/video/${bilibiliUid}`,
+    })
+  }
+
+  // 1) YouTube direct candidate (handle/user/channel-like)
+  try {
+    const routes = [
+      `/youtube/user/@${clean}`,
+      `/youtube/user/${clean}`,
+      `/youtube/channel/${clean}`,
+    ]
+    const attempts = routes.map(async (route) => {
+      const feedUrl = `${rsshubInstance}${route}`
+      const parsed = await fastParser.parseURL(feedUrl)
+      const image = (parsed as any).image?.url || (parsed as any).itunes?.image || ""
+      return {
+        platform: "youtube" as const,
+        title: parsed.title || `${clean} - YouTube`,
+        description: parsed.description || "YouTube",
+        image,
+        feedUrl,
+      }
+    })
+    const yt = await Promise.any(attempts)
+    const ytName = (yt.title || "").replace(/\s*-\s*YouTube$/i, "").trim()
+    if (isUsernameMatch(clean, ytName) || isUsernameMatch(clean, yt.title || "")) {
+      results.push(yt)
+    }
+  } catch {
+    // Ignore YouTube probe failures.
+  }
+
+  // 2) YouTube search by keyword (username/channel name)
+  const ytSearchCandidates = await searchYouTubeChannelsByKeyword(clean)
+  for (const c of ytSearchCandidates) {
+    if (!results.some((x) => x.feedUrl === c.feedUrl)) results.push(c)
+  }
+
+  // 3) Bilibili user search candidates
+  const biliUsers = await probeBilibiliUsersByKeyword(clean, rsshubInstance)
+  for (const user of biliUsers) {
+    const candidate: VideoProbeCandidate = {
+      platform: "bilibili",
+      title: user.title,
+      description: user.description,
+      image: user.image,
+      // Video tab should keep video route.
+      feedUrl: user.feedUrl.replace(/\/bilibili\/user\/dynamic\//i, "/bilibili/user/video/"),
+    }
+    if (!results.some((x) => x.feedUrl === candidate.feedUrl)) results.push(candidate)
+  }
+  return results
+}
+
+async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string): Promise<BilibiliUserProbeCandidate[]> {
+  const clean = query.trim()
+  if (!clean) return []
+  const q = clean.toLowerCase()
+  const out: BilibiliUserProbeCandidate[] = []
+  const seen = new Set<string>()
+  try {
+    const endpoint = `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(clean)}`
+    const res = await fetch(endpoint, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.bilibili.com/",
+        "Origin": "https://www.bilibili.com",
+      },
+      signal: AbortSignal.timeout(3500),
+    })
+    if (res.ok) {
+      const json = await res.json() as {
+        code?: number
+        data?: {
+          result?: Array<{ mid?: number; uname?: string; usign?: string; upic?: string }>
+        }
+      }
+      if (json.code === 0) {
+        for (const user of (json.data?.result || []).slice(0, 6)) {
+          const mid = user.mid ? String(user.mid) : ""
+          if (!mid || seen.has(mid)) continue
+          seen.add(mid)
+          const uname = (user.uname || `UID ${mid}`).replace(/<[^>]+>/g, "").trim()
+          const usign = (user.usign || "Bilibili user").replace(/<[^>]+>/g, "").trim()
+          // Hard filter: candidate must contain the input string.
+          const searchable = `${uname} ${usign} ${mid}`.toLowerCase()
+          if (!searchable.includes(q)) continue
+          out.push({
+            uid: mid,
+            title: `${uname} - Bilibili`,
+            description: usign,
+            image: user.upic || "",
+            // Social tab should use dynamic route.
+            feedUrl: `${rsshubInstance}/bilibili/user/dynamic/${mid}`,
+          })
+        }
+      }
+    }
+  } catch {
+    // Ignore Bilibili search failures.
+  }
+  return out
+}
+
+async function fetchInstagramAvatarByUsername(username: string): Promise<string | undefined> {
+  const clean = username.trim().replace(/^@/, "")
+  if (!clean) return undefined
+  const profileUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/`
+  try {
+    const res = await fetch(profileUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return undefined
+    const html = await res.text()
+    const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+    if (og?.[1] && /^https?:\/\//i.test(og[1])) return og[1]
+    const hd = html.match(/"profile_pic_url_hd":"(https?:\\\/\\\/[^"]+)"/i)
+    if (hd?.[1]) {
+      const decoded = hd[1].replace(/\\\//g, "/")
+      if (/^https?:\/\//i.test(decoded)) return decoded
+    }
+  } catch {
+    // Ignore avatar fallback failures.
+  }
+  return undefined
+}
+
+export function registerDiscoverHandlers(): void {
+  // Get categories
+  ipcMain.handle("discover:categories", () => {
+    return DISCOVER_CATEGORIES
+  })
+
+  // Get curated feeds, optionally filtered by category
+  ipcMain.handle("discover:popular", (_event, category?: string) => {
+    if (category) {
+      return CURATED_FEEDS.filter((f) => f.category === category)
+    }
+    return CURATED_FEEDS
+  })
+
+  // Search feeds by query (check curated feeds + try as URL)
+  ipcMain.handle("discover:search", async (_event, query: string) => {
+    const results: Array<{
+      title: string
+      url: string
+      siteUrl: string
+      description: string
+      source: "curated" | "url" | "rsshub"
+    }> = []
+
+    // Search curated feeds
+    const curated = searchCuratedFeeds(query)
+    for (const feed of curated) {
+      results.push({
+        title: feed.title,
+        url: feed.url,
+        siteUrl: feed.siteUrl,
+        description: feed.description,
+        source: "curated",
+      })
+    }
+
+    // Search RSSHub routes
+    const q = query.toLowerCase()
+    const matchingRoutes = RSSHUB_ROUTES.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        r.description.toLowerCase().includes(q)
+    )
+    const instance = getRSSHubInstance()
+    for (const route of matchingRoutes) {
+      results.push({
+        title: route.name,
+        url: `${instance}${route.url}`,
+        siteUrl: `${instance}${route.url}`,
+        description: `${route.description} (RSSHub)`,
+        source: "rsshub",
+      })
+    }
+
+    // If query looks like a URL, try to fetch it as RSS
+    const trimmedQuery = query.trim()
+    const looksLikeUrl =
+      /^rsshub:\/\//i.test(trimmedQuery) ||
+      /^https?:\/\//i.test(trimmedQuery) ||
+      (trimmedQuery.includes(".") && !trimmedQuery.includes(" "))
+    if (looksLikeUrl) {
+      const feedUrl = normalizeDiscoverQueryToFeedUrl(trimmedQuery, instance)
+      try {
+        const parsed = await fetchAndParseFeed(feedUrl)
+        const data = parsed.data
+        // Only add if not already in results
+        if (data && !results.some((r) => r.url === feedUrl)) {
+          const displayTitle = await inferDiscoverResultTitle(feedUrl, data.title || undefined)
+          results.push({
+            title: displayTitle,
+            url: feedUrl,
+            siteUrl: data.link || feedUrl,
+            description: data.description || "鐩存帴 URL 璁㈤槄",
+            source: "url",
+          })
+        }
+      } catch {
+        // Keep a direct subscribable option even when probe fails.
+        if (!results.some((r) => r.url === feedUrl)) {
+          const displayTitle = await inferDiscoverResultTitle(feedUrl)
+          results.push({
+            title: displayTitle,
+            url: feedUrl,
+            siteUrl: feedUrl,
+            description: "Direct URL subscription",
+            source: "url",
+          })
+        }
+      }
+    }
+
+    return results
+  })
+
+  // Get RSSHub routes 鈥?prepend instance URL to make them subscribable
+  ipcMain.handle("discover:rsshub-routes", (_event, category?: string) => {
+    const routes = category
+      ? RSSHUB_ROUTES.filter((r) => r.category === category)
+      : RSSHUB_ROUTES
+    const instance = getRSSHubInstance()
+    return routes.map((r) => ({
+      ...r,
+      url: `${instance}${r.url}`,
+    }))
+  })
+
+  // Get RSSHub instance config
+  ipcMain.handle("discover:rsshub-instance", () => {
+    return getRSSHubInstance()
+  })
+
+  // Validate a feed URL (try to fetch and parse)
+  ipcMain.handle("discover:validate-feed", async (_event, url: string) => {
+    try {
+      const fetchableUrl = normalizeRsshubProtocolUrl(url, getRSSHubInstance())
+      const parsed = await fetchAndParseFeed(fetchableUrl)
+      const data = parsed.data
+      let image = getFeedImageUrl(data) || ""
+      if (!image) {
+        const bilibiliUid = extractBilibiliUid(fetchableUrl)
+        if (bilibiliUid) {
+          image = (await fetchBilibiliAvatarByUid(bilibiliUid)) || ""
+        }
+      }
+      return {
+        valid: !!data,
+        title: data?.title || url,
+        description: data?.description || "",
+        image,
+        itemCount: data?.items?.length || 0,
+      }
+    } catch (error) {
+      return {
+        valid: false,
+        error: String(error),
+      }
+    }
+  })
+
+  // Quick probe for a Twitter user via RSSHub 鈥?returns name + avatar fast
+  // Tries the configured instance first, then fallback instances
+  ipcMain.handle("twitter:probe-user", async (_event, username: string) => {
+    const clean = username.trim().replace(/^@/, "")
+    const instance = getRSSHubInstance()
+    const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
+    const allCandidates = [
+      ...allInstances.map((inst) => `${inst}/twitter/user/${encodeURIComponent(clean)}`),
+      ...FALLBACK_NITTER_INSTANCES.map((inst) => `${inst.replace(/\/+$/, "")}/${encodeURIComponent(clean)}/rss`),
+    ]
+
+    for (const feedUrl of allCandidates) {
+      try {
+        const parsed = await fastParser.parseURL(feedUrl)
+        const parsedName = extractTwitterDisplayNameFromText(parsed.title || "", clean)
+        const fetchedName = parsedName ? "" : await fetchXDisplayNameByUsername(clean)
+        return {
+          valid: true,
+          username: clean,
+          title: parsedName ? `${parsedName} - X` : (fetchedName ? `${fetchedName} - X` : formatFeedTitle(feedUrl, parsed.title || "", `${clean} - X`)),
+          description: parsed.description || "",
+          // Use unavatar.io for always-fresh Twitter profile pictures
+          image: `https://unavatar.io/x/${encodeURIComponent(clean)}`,
+          feedUrl,
+        }
+      } catch {
+        // Try next instance
+        continue
+      }
+    }
+    return { valid: false, username: clean }
+  })
+
+  // Quick probe for a YouTube channel via RSSHub 鈥?returns channel name + avatar
+  // Supports: channel ID, @handle, or plain username
+  ipcMain.handle("youtube:probe-channel", async (_event, query: string) => {
+    const instance = getRSSHubInstance()
+    const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
+    const clean = query.trim().replace(/^@/, "")
+    if (!clean) return { valid: false, query }
+
+    // Try multiple RSSHub route patterns
+    const routes = [
+      `/youtube/user/@${clean}`,    // @handle format
+      `/youtube/user/${clean}`,     // plain username
+      `/youtube/channel/${clean}`,  // channel ID (UC...)
+    ]
+
+    // Try all instance+route combinations in parallel for faster results
+    // (some instances may time out; Promise.any returns the first success)
+    const attempts = allInstances.flatMap((inst) =>
+      routes.map(async (route) => {
+        const feedUrl = `${inst}${route}`
+        const parsed = await fastParser.parseURL(feedUrl)
+        const image = (parsed as any).image?.url || (parsed as any).itunes?.image || ""
+        return {
+          valid: true as const,
+          query: clean,
+          title: parsed.title || clean,
+          description: parsed.description || "",
+          image,
+          feedUrl,
+          feedRoute: route,
+        }
+      }),
+    )
+
+    try {
+      return await Promise.any(attempts)
+    } catch {
+      // All attempts failed
+      return { valid: false, query: clean }
+    }
+  })
+
+  // Probe multi-platform video sources by keyword (for candidate list)
+  ipcMain.handle("discover:probe-video-sources", async (_event, query: string) => {
+    const instance = getRSSHubInstance()
+    const candidates = await probeVideoSourcesByKeyword(query, instance)
+    return { valid: candidates.length > 0, query: query.trim(), candidates }
+  })
+
+  // Fast probe for Bilibili UID (name + avatar + canonical video feed URL)
+  ipcMain.handle("discover:probe-bilibili-uid", async (_event, uidRaw: string) => {
+    const uid = (uidRaw || "").trim().match(/^(\d{3,})$/)?.[1]
+    if (!uid) return { valid: false, uid: uidRaw }
+    const instance = getRSSHubInstance()
+    const name = await fetchBilibiliNameByUid(uid)
+    const image = (await fetchBilibiliAvatarByUid(uid)) || ""
+    return {
+      valid: true,
+      uid,
+      title: `${name || `UID ${uid}`} - Bilibili`,
+      description: `UID ${uid}`,
+      image,
+      feedUrl: `${instance}/bilibili/user/video/${uid}`,
+    }
+  })
+
+  // Probe Bilibili users by keyword (for Social tab candidate list)
+  ipcMain.handle("discover:probe-bilibili-users", async (_event, query: string) => {
+    const instance = getRSSHubInstance()
+    const candidates = await probeBilibiliUsersByKeyword(query, instance)
+    return { valid: candidates.length > 0, query: query.trim(), candidates }
+  })
+
+  // Resolve a creator/profile homepage URL into one or more subscribable feed URLs.
+  ipcMain.handle(IPC.DISCOVER_RESOLVE_PROFILE_URL, async (_event, inputUrl: string) => {
+    const currentInstance = getRSSHubInstance()
+    const result = resolveProfileUrlToCandidates(inputUrl, currentInstance)
+
+    // For YouTube, always try to resolve official channel RSS from homepage first.
+    if (result.platform === "youtube" && result.normalizedUrl) {
+      const official = await resolveYouTubeProfileToOfficialFeed(result.normalizedUrl)
+      if (official) {
+        result.candidates = [official, ...result.candidates.filter((x) => x.feedUrl !== official.feedUrl)]
+        result.matched = true
+        result.reason = null
+      }
+    }
+
+    // For Bilibili/X, append fallback RSSHub-instance candidates for the same route path.
+    if ((result.platform === "bilibili" || result.platform === "x") && result.candidates.length > 0) {
+      const instances = [currentInstance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== currentInstance)]
+      appendSameRouteOnFallbackInstances(result.candidates, instances)
+      if (result.candidates.length > 0) {
+        result.matched = true
+        result.reason = null
+      }
+    }
+
+    // For X, also add Nitter RSS candidates to avoid stale/blocked RSSHub routes.
+    if (result.platform === "x" && result.candidates.length > 0) {
+      const usernameSet = new Set<string>()
+      for (const candidate of result.candidates) {
+        const m = candidate.feedUrl.match(/\/twitter\/user\/([^/?#]+)/i)
+        if (m?.[1]) usernameSet.add(decodeURIComponent(m[1]))
+      }
+      if (usernameSet.size === 0 && result.normalizedUrl) {
+        try {
+          const url = new URL(result.normalizedUrl)
+          const maybeUser = url.pathname.split("/").filter(Boolean)[0]?.replace(/^@/, "")
+          if (maybeUser) usernameSet.add(maybeUser)
+        } catch {
+          // Ignore malformed URL.
+        }
+      }
+
+      const existing = new Set(result.candidates.map((x) => x.feedUrl))
+      const nitterInstances = [...FALLBACK_NITTER_INSTANCES]
+      for (const username of usernameSet) {
+        for (const base of nitterInstances) {
+          const feedUrl = `${base.replace(/\/+$/, "")}/${encodeURIComponent(username)}/rss`
+          if (existing.has(feedUrl)) continue
+          result.candidates.push({
+            feedUrl,
+            title: `@${username}`,
+            source: "derived",
+            siteUrl: `https://x.com/${username}`,
+            description: "Nitter RSS fallback for X/Twitter user",
+            view: result.candidates[0]?.view,
+          })
+          existing.add(feedUrl)
+        }
+      }
+      if (result.candidates.length > 0) {
+        result.matched = true
+        result.reason = null
+      }
+    }
+
+    if (!result.matched) {
+      return result
+    }
+
+    const needsYoutube = result.candidates.some((x) => x.requiresAccount?.includes("youtube"))
+    if (needsYoutube) {
+      result.accountStates = [await getYouTubeAccountState()]
+    } else {
+      result.accountStates = []
+    }
+    return result
+  })
+
+  // Quick probe for an Instagram user via RSSHub official route.
+  ipcMain.handle("instagram:probe-user", async (_event, username: string) => {
+    const instance = getRSSHubInstance()
+    const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
+    const clean = username.trim().replace(/^@/, "")
+    if (!clean) return { valid: false, username: clean }
+
+    const routes = [`/instagram/user/${encodeURIComponent(clean)}`]
+    const profileAvatarPromise = fetchInstagramAvatarByUsername(clean).catch(() => undefined)
+    const attempts = allInstances.flatMap((inst) =>
+      routes.map(async (route) => {
+        const feedUrl = `${inst}${route}`
+        const parsed = await fastParser.parseURL(feedUrl)
+        const image =
+          getFeedImageUrl(parsed)
+          || await profileAvatarPromise
+          || `https://unavatar.io/instagram/${encodeURIComponent(clean)}`
+        return {
+          valid: true as const,
+          username: clean,
+          title: parsed.title || `@${clean}`,
+          description: parsed.description || "",
+          image,
+          feedUrl: toRsshubProtocolUrl(feedUrl),
+        }
+      }),
+    )
+    try {
+      return await Promise.any(attempts)
+    } catch {
+      return { valid: false, username: clean }
+    }
+  })
+}

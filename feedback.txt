@@ -1,0 +1,134 @@
+# Livo Instagram 轮播图多张图片获取功能修改说明
+
+## 问题描述
+
+订阅 Instagram 账号（如 `rsshub://instagram/user/jujingyi_kikuuu`）后，每条推文（Instagram 帖子）只能获取到一张图片，无法获取轮播图（carousel）中的多张图片。
+
+## 原因分析
+
+1. **RSSHub 返回的数据限制**：RSSHub 的 Instagram 路由通常只在 RSS feed 中提供每篇文章的第一张图片
+2. **网页爬取未使用登录会话**：Livo 虽然有 `scrapePhotosForEntry` 函数尝试通过访问 Instagram 帖子页面获取所有图片，但爬取时没有使用已登录的 session cookie
+3. **等待时间不足**：原代码只等待 6 秒，Instagram 的轮播图需要更长时间加载
+4. **Referer 设置问题**：原代码使用 `https://www.google.com/` 作为 Referer，可能导致 Instagram 重定向到登录页面
+
+## 修改内容
+
+### 1. rss-parser.ts - RSS 请求携带 Cookie
+
+**新增功能：**
+- `getInstagramSessionCookie()`: 从 Electron session 提取 Instagram Cookie（sessionid 和 ds_user_id）
+- `isInstagramRelatedUrl(url)`: 检测 URL 是否与 Instagram 相关
+- `buildRequestHeaders(url)`: 为 Instagram 请求构建请求头，使用移动端 UA
+
+**修改函数：**
+- `fetchFeedText()`: 请求 Instagram URL 时自动携带 Cookie
+- `fetchWithConditional()`: 新增 cookie 参数支持
+
+### 2. post-media-scraper.ts - 图片爬取使用 Cookie
+
+**修改导入：**
+```typescript
+import { BrowserWindow, session } from "electron"
+```
+
+**修改 extractPhotosFromInstagramBrowser():**
+- 增加等待时间：6 秒 → 8 秒
+- 修改 Referer：https://www.google.com/ → https://www.instagram.com/
+- 添加额外请求头：Sec-Fetch-* 系列
+- **新增轮播图导航逻辑**：自动点击"Next"按钮遍历所有轮播图片
+- 改进图片提取：跳过头像和装饰性图片
+- 增加 carousel_media JSON 结构解析
+
+**修改 extractPhotosFromInstagramEmbed():**
+- 增加等待时间：5 秒 → 8 秒
+- 修改 Referer：https://www.google.com/ → https://www.instagram.com/
+
+**修改 fetchHtml():**
+- 对于 Instagram 相关 URL，使用 session.defaultSession.fetch 携带 Cookie
+- 使用移动端 User-Agent
+- 修改 Referer 为 https://www.instagram.com/
+
+## 工作流程
+
+1. 用户在 设置 → 账户 中登录 Instagram
+2. sessionid 和 ds_user_id 保存到 Electron session
+3. 订阅源刷新，RSS 请求携带 Cookie
+4. 解析 RSS 条目，获取第一张图片
+5. 检测到 Instagram 帖子 URL
+6. BrowserWindow 加载帖子页面（自动携带 Cookie）
+7. 等待 8 秒让 JavaScript 加载轮播图
+8. 自动点击"Next"按钮遍历所有轮播图片
+9. 从页面提取所有图片 URL
+10. 保存到条目媒体数组
+
+## 使用方式
+
+1. **登录 Instagram 账户**：
+  - 打开 Livo 设置 → 账户
+   - 点击 Instagram 的"关联"按钮
+   - 在弹出的窗口中完成登录
+
+2. **添加订阅源**：
+   - 添加 Instagram 订阅源（如 rsshub://instagram/user/jujingyi_kikuuu）
+
+3. **刷新订阅源**：
+   - 订阅源刷新时会自动使用已登录的会话
+   - 每条帖子会尝试获取所有轮播图片
+
+4. **清除缓存**（可选）：
+   - 如果之前已经获取过单张图片的条目
+   - 可以删除该条目后重新刷新，或等待缓存过期（6 小时）
+
+## 修改的文件
+
+- src/main/services/rss-parser.ts: RSS 请求携带 Cookie
+- src/main/services/post-media-scraper.ts: 图片爬取使用 Cookie + 轮播图导航
+
+## 技术细节
+
+### 轮播图检测与遍历
+
+```javascript
+// 自动点击轮播图的"Next"按钮
+const tryNavigateCarousel = async () => {
+  const maxAttempts = 10
+  let attempts = 0
+
+  while (attempts < maxAttempts) {
+    const nextButton = document.querySelector('button[aria-label="Next"]')
+    if (!nextButton) break
+
+    nextButton.click()
+    await wait(500)
+    attempts++
+  }
+}
+```
+
+### Cookie 提取
+
+```typescript
+async function getInstagramSessionCookie(): Promise<string | null> {
+  const cookies = await session.defaultSession.cookies.get({ domain: "instagram.com" })
+  const sessionid = cookies.find((c) => c.name === "sessionid")
+  const dsUserId = cookies.find((c) => c.name === "ds_user_id")
+  if (sessionid?.value) {
+    return `sessionid=${sessionid.value}; ds_user_id=${dsUserId.value}`
+  }
+  return null
+}
+```
+
+## 注意事项
+
+1. **缓存机制**：爬取的图片会缓存 6 小时，相同 URL 不会重复爬取
+2. **失败缓存**：爬取失败会缓存 30 分钟，避免频繁重试
+3. **镜像站点**：如果 Instagram 官方页面爬取失败，会尝试 picnob.com、pixnoy.com、piokok.com 等镜像站点
+4. **性能影响**：每个帖子需要额外 8 秒等待时间，大量订阅可能影响刷新速度
+
+## 测试建议
+
+1. 订阅一个发布轮播图的 Instagram 账号
+2. 手动刷新该订阅源
+3. 检查条目中的图片数量是否大于 1
+4. 查看开发者工具中的网络请求，确认 Cookie 已携带
