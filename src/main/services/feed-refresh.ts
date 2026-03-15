@@ -7,7 +7,12 @@ import { DEFAULT_RSSHUB_INSTANCE } from "../../shared/discover-data"
 import type { Feed, Entry } from "../../shared/types"
 import { FeedViewType } from "../../shared/types"
 import { queueVideoDurationEnrich, enrichAllVideoFeeds } from "./video-duration"
-import { canonicalizeInstagramFeedUrl, ensureInstagramUserFeedLimit, normalizeRsshubProtocolUrl } from "./rsshub-url"
+import {
+  canonicalizeInstagramFeedUrl,
+  ensureInstagramUserFeedLimit,
+  ensureTwitterUserFeedLimit,
+  normalizeRsshubProtocolUrl,
+} from "./rsshub-url"
 import { resolveFeedAvatar } from "./feed-avatar"
 import { formatFeedTitle } from "./feed-title"
 import { buildEntriesFromParsedItems } from "./entry-builder"
@@ -77,7 +82,16 @@ function filterForeignEntries(
   entries: Entry[],
   feedSiteUrl: string | undefined,
   parsedFeedLink: string | undefined,
+  feedUrl?: string,
 ): Entry[] {
+  const rawFeedUrl = (feedUrl || "").toLowerCase()
+  const isTwitterFeed = /\/(?:twitter|x)\/user\//i.test(rawFeedUrl)
+  if (isTwitterFeed) {
+    // Twitter fallbacks may return x.com / twitter.com / nitter links interchangeably.
+    // Keep them all instead of strict same-domain filtering.
+    return entries
+  }
+
   const siteUrl = feedSiteUrl || parsedFeedLink || ""
   if (!siteUrl) return entries
   let siteHost: string
@@ -199,7 +213,7 @@ export async function refreshSingleFeed(feed: Feed, options?: { force?: boolean 
 
   try {
     // Update the feed URL to include limit param so subsequent refreshes use it directly
-    const feedUrlToStore = ensureInstagramUserFeedLimit(canonicalFeedUrl, 100)
+    const feedUrlToStore = ensureTwitterUserFeedLimit(ensureInstagramUserFeedLimit(canonicalFeedUrl, 100), 120)
     if (feedUrlToStore !== feed.url) {
       updateFeed(feed.id, { url: feedUrlToStore })
       feed = { ...feed, url: feedUrlToStore }
@@ -256,7 +270,7 @@ export async function refreshSingleFeed(feed: Feed, options?: { force?: boolean 
       now,
     )
     // Filter out entries injected by FeedBurner from unrelated domains
-    const entriesToInsert = filterForeignEntries(builtEntries, feed.siteUrl, parsed.link)
+    const entriesToInsert = filterForeignEntries(builtEntries, feed.siteUrl, parsed.link, feed.url)
     // IMPORTANT:
     // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
     // Full replacement can permanently drop history when upstream temporarily returns

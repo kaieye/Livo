@@ -1254,7 +1254,7 @@ function cleanRelativeTime(date: Date | string | number): string {
 }
 
 export function EntryList({ width }: { width?: number }) {
-  const { entries, selectedEntry, isLoading, loadEntries, selectEntry, markAllRead, markAboveRead, markBelowRead, searchQuery, setSearchQuery, search } =
+  const { entries, selectedEntry, isLoading, loadEntries, clearListCache, selectEntry, markAllRead, markAboveRead, markBelowRead, searchQuery, setSearchQuery, search } =
     useEntryStore()
   const { selectedFeedId, feeds, activeView, refreshFeed, refreshMultiple, refreshAll, isRefreshing, refreshProgress } = useFeedStore()
   const { settings } = useSettingsStore()
@@ -1325,6 +1325,10 @@ export function EntryList({ width }: { width?: number }) {
       loadEntries({ unreadOnly: filterMode === "unread", limit: entryLoadLimit })
     }
   }, [entryLoadLimit, filterMode, loadEntries, selectedFeedId, viewFeedIds])
+  const reloadCurrentListFresh = useCallback(() => {
+    clearListCache()
+    reloadCurrentList()
+  }, [clearListCache, reloadCurrentList])
   const mediaFailureRefreshAtRef = useRef(new Map<string, number>())
   const mediaFailureRefreshInFlightRef = useRef(new Set<string>())
   const handleEntryMediaAllFailed = useCallback((entry: Entry) => {
@@ -1339,12 +1343,12 @@ export function EntryList({ width }: { width?: number }) {
     mediaFailureRefreshInFlightRef.current.add(feedId)
     void refreshFeed(feedId)
       .then(() => {
-        reloadCurrentList()
+        reloadCurrentListFresh()
       })
       .finally(() => {
         mediaFailureRefreshInFlightRef.current.delete(feedId)
       })
-  }, [refreshFeed, reloadCurrentList])
+  }, [refreshFeed, reloadCurrentListFresh])
 
   // Build a set of recommended feed IDs so we can exclude their entries
   const recommendedFeedIds = useMemo(
@@ -1537,15 +1541,18 @@ export function EntryList({ width }: { width?: number }) {
               onClick={async () => {
                 if (selectedFeedId && selectedFeedId !== "starred") {
                   await refreshFeed(selectedFeedId)
+                  clearListCache()
                   loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
                 } else if (activeView !== null) {
                   const viewFeedIds = feeds
                     .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
                     .map((f) => f.id)
                   await refreshMultiple(viewFeedIds)
+                  clearListCache()
                   loadEntries({ limit: entryLoadLimit })
                 } else {
                   await refreshAll()
+                  clearListCache()
                   loadEntries({ limit: entryLoadLimit })
                 }
               }}
@@ -1653,6 +1660,7 @@ export function EntryList({ width }: { width?: number }) {
               <button
                 onClick={async () => {
                   await refreshFeed(selectedFeedId)
+                  clearListCache()
                   loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
                 }}
                 disabled={isRefreshing}

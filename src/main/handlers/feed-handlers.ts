@@ -9,7 +9,13 @@ import { DEFAULT_RSSHUB_INSTANCE } from "../../shared/discover-data"
 import { parseOPML, generateOPML } from "../services/opml-parser"
 import { extractMedia, deriveImageUrl, extractContent, extractAuthorAvatar } from "../services/feed-utils"
 import { queueVideoDurationEnrich } from "../services/video-duration"
-import { canonicalizeInstagramFeedUrl, normalizeRsshubProtocolUrl, toRsshubProtocolUrl } from "../services/rsshub-url"
+import {
+  canonicalizeInstagramFeedUrl,
+  ensureInstagramUserFeedLimit,
+  ensureTwitterUserFeedLimit,
+  normalizeRsshubProtocolUrl,
+  toRsshubProtocolUrl,
+} from "../services/rsshub-url"
 import { resolveFeedAvatar } from "../services/feed-avatar"
 import { formatFeedTitle } from "../services/feed-title"
 import { buildEntriesFromParsedItems } from "../services/entry-builder"
@@ -24,6 +30,7 @@ import {
   getUnreadCountMap,
   cleanupEntries,
   getDatabaseStats,
+  getEntries,
 } from "../database"
 
 const RECOMMENDED_CATEGORY = "Recommended"
@@ -39,10 +46,20 @@ export function registerFeedHandlers(): void {
     try {
       const id = uuidv4()
       const now = Date.now()
-      const storedUrl = canonicalizeInstagramFeedUrl(toRsshubProtocolUrl(url.trim()))
+      const rawProtocolUrl = toRsshubProtocolUrl(url.trim())
+      const limitedProtocolUrl = ensureTwitterUserFeedLimit(ensureInstagramUserFeedLimit(rawProtocolUrl, 100), 120)
+      const storedUrl = canonicalizeInstagramFeedUrl(limitedProtocolUrl)
+      const legacyStoredUrl = canonicalizeInstagramFeedUrl(rawProtocolUrl)
       const rsshubInstance = getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
       const normalizedUrl = normalizeRsshubProtocolUrl(storedUrl, rsshubInstance)
-      const existingFeed = getFeedByUrl(storedUrl) || getFeedByUrl(normalizedUrl) || getFeedByUrl(toRsshubProtocolUrl(normalizedUrl))
+      const normalizedLegacyUrl = normalizeRsshubProtocolUrl(legacyStoredUrl, rsshubInstance)
+      const existingFeed =
+        getFeedByUrl(storedUrl) ||
+        getFeedByUrl(normalizedUrl) ||
+        getFeedByUrl(toRsshubProtocolUrl(normalizedUrl)) ||
+        getFeedByUrl(legacyStoredUrl) ||
+        getFeedByUrl(normalizedLegacyUrl) ||
+        getFeedByUrl(toRsshubProtocolUrl(normalizedLegacyUrl))
       if (existingFeed) {
         const wantsRecommended = (category || "") === RECOMMENDED_CATEGORY
         const updates: Partial<Feed> = {}
@@ -62,17 +79,32 @@ export function registerFeedHandlers(): void {
           updates.title = formatFeedTitle(storedUrl, undefined, title.trim())
         }
 
-        if (Object.keys(updates).length > 0) {
-          updateFeed(existingFeed.id, updates)
-          return { success: true, feed: { ...existingFeed, ...updates } }
+        // Upgrade legacy RSSHub user feeds to include explicit high-enough limits.
+        const upgradedUrl = ensureTwitterUserFeedLimit(ensureInstagramUserFeedLimit(existingFeed.url, 100), 120)
+        if (upgradedUrl !== existingFeed.url) {
+          updates.url = upgradedUrl
         }
 
+        if (Object.keys(updates).length > 0) {
+          updateFeed(existingFeed.id, updates)
+          const mergedFeed = { ...existingFeed, ...updates }
+          // Existing subscriptions (especially promoted from Recommended) may have no data yet.
+          // Bootstrap a forced refresh so users can see entries immediately after subscribing.
+          await bootstrapFeedEntries(mergedFeed, normalizedUrl, mergedFeed.view)
+          const refreshed = getFeedById(existingFeed.id)
+          return { success: true, feed: refreshed ? toRendererFeed(refreshed) : mergedFeed }
+        }
+
+        await bootstrapFeedEntries(existingFeed, normalizedUrl, existingFeed.view)
+        const refreshed = getFeedById(existingFeed.id)
+        if (refreshed) return { success: true, feed: toRendererFeed(refreshed) }
         return { success: true, feed: existingFeed }
       }
 
       let parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>['data'] | null = null
       try {
-        const result = await withTimeout(fetchAndParseFeed(normalizedUrl), 6000)
+        const initialFetchTimeoutMs = getInitialFetchTimeoutMs(normalizedUrl, view)
+        const result = await withTimeout(fetchAndParseFeed(normalizedUrl), initialFetchTimeoutMs)
         parsed = result.data
       } catch {
         // Feed fetch failed/slow (e.g. RSSHub timeout) — still create the feed entry
@@ -136,9 +168,12 @@ export function registerFeedHandlers(): void {
         }).catch(() => {})
       }
 
-      // If quick add skipped/failed parsing, fetch in background so entries appear shortly after.
+      // If quick add skipped/failed parsing, force a synchronous refresh once so
+      // newly added subscriptions can show entries immediately.
       if (!parsed) {
-        void refreshSingleFeed(feed, { force: true }).catch(() => {})
+        await bootstrapFeedEntries(feed, normalizedUrl, detectedView)
+        const refreshed = getFeedById(feed.id)
+        return { success: true, feed: refreshed ? toRendererFeed(refreshed) : feed }
       }
 
       return { success: true, feed }
@@ -444,6 +479,21 @@ export function registerFeedHandlers(): void {
   })
 }
 
+async function bootstrapFeedEntries(feed: Feed, normalizedUrl: string, view?: FeedViewType): Promise<void> {
+  const bootstrapTimeoutMs = getBootstrapRefreshTimeoutMs(normalizedUrl, view)
+
+  await withTimeout(refreshSingleFeed(feed, { force: true }), bootstrapTimeoutMs).catch(() => {})
+  const hasEntriesAfterFirstTry = getEntries({
+    feedId: feed.id,
+    limit: 1,
+    skipDedupe: true,
+  }).length > 0
+  if (hasEntriesAfterFirstTry) return
+
+  // One extra retry for unstable social routes/instances.
+  await withTimeout(refreshSingleFeed(feed, { force: true }), bootstrapTimeoutMs).catch(() => {})
+}
+
 // ---- Helper functions ----
 
 /** Detect view type from parsed feed content */
@@ -487,6 +537,35 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
         reject(error)
       })
   })
+}
+
+function getInitialFetchTimeoutMs(url: string, view?: FeedViewType): number {
+  const raw = (url || "").toLowerCase()
+  const isSocialRoute =
+    /\/(?:twitter|x)\/user\//i.test(raw) ||
+    /\/instagram\/user\//i.test(raw) ||
+    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
+    /\/pixnoy\/user\//i.test(raw) ||
+    /\/piokok\/user\//i.test(raw)
+  if (isSocialRoute || view === FeedViewType.SocialMedia || view === FeedViewType.Pictures) {
+    return 18000
+  }
+  return 6000
+}
+
+function getBootstrapRefreshTimeoutMs(url: string, view?: FeedViewType): number {
+  const raw = (url || "").toLowerCase()
+  const isSocialRoute =
+    /\/(?:twitter|x)\/user\//i.test(raw) ||
+    /\/instagram\/user\//i.test(raw) ||
+    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
+    /\/pixnoy\/user\//i.test(raw) ||
+    /\/piokok\/user\//i.test(raw)
+
+  if (isSocialRoute || view === FeedViewType.SocialMedia || view === FeedViewType.Pictures) {
+    return 45000
+  }
+  return 18000
 }
 
 function getFeedImageUrl(parsed: any): string | undefined {

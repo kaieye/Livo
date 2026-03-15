@@ -218,6 +218,19 @@
   animation: slide-up 0.25s ease-out;
 }
 
+@keyframes search-progress-slide {
+  0% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.search-progress-slide {
+  animation: search-progress-slide 1.05s ease-in-out infinite;
+}
+
 /* Keyboard shortcut key cap style */
 .key-cap {
   @apply inline-flex items-center justify-center min-w-[1.5em] h-[1.5em] px-1.5 text-[10px] font-medium

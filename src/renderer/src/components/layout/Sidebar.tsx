@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next"
 import { useFeedStore } from "../../store/feed-store"
 import { useEntryStore } from "../../store/entry-store"
 import { useSettingsStore } from "../../store/settings-store"
-import { AddFeedDialog } from "../feed/AddFeedDialog"
 import { ImportProgressModal } from "../feed/ImportProgressModal"
 import { FeedViewType, VIEW_DEFINITIONS, DEFAULT_SETTINGS } from "../../../../shared/types"
 import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
@@ -356,7 +355,6 @@ export function Sidebar({ width }: { width?: number }) {
   const { isOpen: isDiscoverOpen, setOpen: setDiscoverOpen } = useDiscoverStore()
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
   const toggleShortcutHelp = useShortcutHelpStore((s) => s.toggle)
-  const [showAddDialog, setShowAddDialog] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [showImportProgress, setShowImportProgress] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
@@ -2806,7 +2804,7 @@ export function Sidebar({ width }: { width?: number }) {
 
           <div className="flex gap-1">
             <button
-              onClick={() => setShowAddDialog(true)}
+              onClick={() => setDiscoverOpen(true)}
               className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary"
               title={t("sidebar.addFeed")}
             >
@@ -2852,9 +2850,6 @@ export function Sidebar({ width }: { width?: number }) {
           </div>
         </div>
       </aside>
-
-      {/* Add feed dialog */}
-      {showAddDialog && <AddFeedDialog onClose={() => setShowAddDialog(false)} defaultView={activeView} />}
 
       {/* Import progress */}
       <ImportProgressModal open={showImportProgress} onDone={handleImportProgressDone} />

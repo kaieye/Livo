@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { useDiscoverStore } from "../../store/discover-store"
 import { useFeedStore } from "../../store/feed-store"
 import { TRENDING_FEEDS, FEED_BUNDLES } from "../../../../shared/discover-data"
+import { FeedViewType } from "../../../../shared/types"
+import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
 import {
   Search,
   X,
@@ -104,7 +106,14 @@ export function DiscoverPanel() {
   const { addFeed, feeds: userFeeds, removeFeed } = useFeedStore()
   const { t } = useTranslation()
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
-  const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [subscribeHint, setSubscribeHint] = useState<string>("")
+  const [pendingSubscribe, setPendingSubscribe] = useState<{
+    url: string
+    title: string
+    preferredView: FeedViewType
+  } | null>(null)
+  const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync subscribedUrls with existing user feeds
   useEffect(() => {
@@ -119,24 +128,52 @@ export function DiscoverPanel() {
     }
   }, [categories.length])
 
+  useEffect(() => {
+    return () => {
+      if (subscribeHintTimerRef.current) clearTimeout(subscribeHintTimerRef.current)
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
+
+  const inferViewFromUrl = useCallback((targetUrl: string): FeedViewType => {
+    const lower = (targetUrl || "").toLowerCase()
+    if (/\/twitter\/user\//i.test(lower) || /\/bilibili\/user\/dynamic\//i.test(lower)) return FeedViewType.SocialMedia
+    if (/\/youtube\//i.test(lower) || /\/bilibili\/user\/video\//i.test(lower)) return FeedViewType.Videos
+    if (/\/instagram\//i.test(lower) || /\/picnob\//i.test(lower) || /\/pixnoy\//i.test(lower) || /\/piokok\//i.test(lower)) return FeedViewType.Pictures
+    return FeedViewType.Articles
+  }, [])
+
+  const showSubscribedToHint = useCallback((url: string, feed?: { view?: number; category?: string; folder?: string }) => {
+    const resolvedView = typeof feed?.view === "number" ? feed.view as FeedViewType : inferViewFromUrl(url)
+    const columnName = t(VIEW_TYPE_I18N_KEYS[resolvedView] || "viewTypes.articles")
+    const folder = (feed?.folder || feed?.category || "").trim()
+    const isNormalFolder = !!folder && folder.toLowerCase() !== "recommended"
+    const text = isNormalFolder
+      ? t("discover.subscribedAddedToWithFolder", { column: columnName, folder })
+      : t("discover.subscribedAddedTo", { column: columnName })
+    setSubscribeHint(text)
+    if (subscribeHintTimerRef.current) clearTimeout(subscribeHintTimerRef.current)
+    subscribeHintTimerRef.current = setTimeout(() => setSubscribeHint(""), 2800)
+  }, [inferViewFromUrl, t])
+
   const handleSearch = useCallback(
     (query: string) => {
       setSearchQuery(query)
-      if (searchTimer) clearTimeout(searchTimer)
-      const timer = setTimeout(() => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = setTimeout(() => {
         search(query)
-      }, 400)
-      setSearchTimer(timer)
+      }, 180)
     },
-    [search, setSearchQuery, searchTimer]
+    [search, setSearchQuery]
   )
 
-  const handleSubscribe = async (url: string, title: string) => {
+  const handleSubscribe = async (url: string, title: string, targetView?: FeedViewType) => {
     setSubscribing(url, true)
     try {
-      const result = await addFeed(url, undefined, undefined, title)
+      const result = await addFeed(url, undefined, targetView, title)
       if (result.success) {
         setSubscribedUrls((prev) => new Set(prev).add(url))
+        showSubscribedToHint(url, result.feed)
       }
     } finally {
       setSubscribing(url, false)
@@ -163,12 +200,39 @@ export function DiscoverPanel() {
     if (isSubscribed(url)) {
       handleUnsubscribe(url)
     } else {
-      handleSubscribe(url, title)
+      setPendingSubscribe({
+        url,
+        title,
+        preferredView: inferViewFromUrl(url),
+      })
     }
   }
 
   const isSubscribed = (url: string) => subscribedUrls.has(url)
   const isSubscribing = (url: string) => subscribingUrls.has(url)
+  const hasSearchQuery = searchQuery.trim().length > 0
+  const showCenteredSearch = !selectedCategory
+
+  const searchBar = (
+    <div className="relative">
+      <Search
+        size={16}
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+      />
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => handleSearch(e.target.value)}
+        placeholder={t("discover.searchPlaceholder")}
+        className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
+      />
+      {isSearching && hasSearchQuery && (
+        <div className="absolute left-3 right-3 -bottom-1 h-0.5 overflow-hidden rounded-full bg-accent/10">
+          <div className="h-full w-1/3 bg-accent/70 search-progress-slide" />
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-surface-dark overflow-hidden">
@@ -199,40 +263,47 @@ export function DiscoverPanel() {
             <X size={18} />
           </button>
         </div>
-
-        {/* Search bar */}
-        <div className="px-6 pb-3">
-          <div className="relative">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder={t("discover.searchPlaceholder")}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
-            />
-            {isSearching && (
-              <Loader2
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-accent"
-              />
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
+        {showCenteredSearch ? (
+          <div className="w-full max-w-3xl mx-auto pt-[18vh]">{searchBar}</div>
+        ) : (
+          <div className="w-full max-w-3xl mx-auto mb-4">{searchBar}</div>
+        )}
+
+        {subscribeHint && (
+          <div className="w-full max-w-3xl mx-auto mt-2 mb-3 rounded-lg border border-emerald-300/60 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+            {subscribeHint}
+          </div>
+        )}
+
         {/* Search results */}
-        {searchQuery.trim() ? (
+        {hasSearchQuery ? (
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
               {t("discover.searchResults")} {searchResults.length > 0 && `(${searchResults.length})`}
             </h3>
-            {searchResults.length === 0 && !isSearching ? (
+            {isSearching && searchResults.length === 0 ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="h-[68px] rounded-xl border bg-white dark:bg-surface-dark-secondary px-3.5 py-3 animate-pulse"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary" />
+                      <div className="flex-1 min-w-0">
+                        <div className="h-3.5 w-1/3 rounded bg-surface-secondary dark:bg-surface-dark-tertiary mb-2" />
+                        <div className="h-3 w-1/2 rounded bg-surface-secondary dark:bg-surface-dark-tertiary" />
+                      </div>
+                      <div className="h-7 w-14 rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : searchResults.length === 0 && !isSearching ? (
               <div className="text-center py-12 text-text-tertiary">
                 <Search size={36} className="mx-auto mb-3 opacity-50" />
                 <p className="text-sm">{t("discover.noSearchResults")}</p>
@@ -246,6 +317,7 @@ export function DiscoverPanel() {
                     title={getDisplayTitle(result)}
                     url={result.url}
                     description={result.description}
+                    imageUrl={result.image}
                     badge={
                       result.source === "rsshub"
                         ? "RSSHub"
@@ -383,6 +455,7 @@ export function DiscoverPanel() {
                     title={feed.title}
                     url={feed.url}
                     description={feed.description}
+                    imageUrl={feed.imageUrl}
                     language={feed.language}
                     subscribed={isSubscribed(feed.url)}
                     subscribing={isSubscribing(feed.url)}
@@ -412,6 +485,7 @@ export function DiscoverPanel() {
                       title={feed.title}
                       url={feed.url}
                       description={feed.description}
+                      imageUrl={feed.imageUrl}
                       language={feed.language}
                       subscribed={isSubscribed(feed.url)}
                       subscribing={isSubscribing(feed.url)}
@@ -453,6 +527,64 @@ export function DiscoverPanel() {
           </div>
         )}
       </div>
+
+      {pendingSubscribe && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/30 flex items-center justify-center"
+          onClick={() => setPendingSubscribe(null)}
+        >
+          <div
+            className="w-[420px] max-w-[92vw] rounded-2xl border bg-white dark:bg-surface-dark-secondary shadow-2xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold">{t("discover.chooseColumnTitle")}</h3>
+              <button
+                onClick={() => setPendingSubscribe(null)}
+                className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-3">
+              {t("discover.chooseColumnDesc", { title: pendingSubscribe.title })}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {([FeedViewType.Articles, FeedViewType.SocialMedia, FeedViewType.Videos, FeedViewType.Pictures] as const).map((viewId) => {
+                const isPreferred = pendingSubscribe.preferredView === viewId
+                return (
+                  <button
+                    key={viewId}
+                    onClick={async () => {
+                      const payload = pendingSubscribe
+                      setPendingSubscribe(null)
+                      await handleSubscribe(payload.url, payload.title, viewId)
+                    }}
+                    className={`text-left rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                      isPreferred
+                        ? "border-accent bg-accent/10"
+                        : "hover:border-accent/40 hover:bg-accent/[0.03]"
+                    }`}
+                  >
+                    <div className="font-medium">{t(VIEW_TYPE_I18N_KEYS[viewId] || "viewTypes.articles")}</div>
+                    <div className="text-[11px] text-text-tertiary mt-0.5">
+                      {isPreferred ? t("discover.recommendedColumn") : t("discover.tapToAdd")}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => setPendingSubscribe(null)}
+                className="px-3 py-1.5 rounded-lg text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -462,6 +594,7 @@ function FeedCard({
   title,
   url,
   description,
+  imageUrl,
   badge,
   language,
   compact,
@@ -472,6 +605,7 @@ function FeedCard({
   title: string
   url: string
   description: string
+  imageUrl?: string
   badge?: string
   language?: string
   compact?: boolean
@@ -487,13 +621,22 @@ function FeedCard({
       }`}
     >
       {/* Icon */}
-      <div
-        className={`flex-shrink-0 rounded-lg bg-accent/10 flex items-center justify-center ${
-          compact ? "w-8 h-8" : "w-10 h-10"
-        }`}
-      >
-        <Rss size={compact ? 14 : 16} className="text-accent" />
-      </div>
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          className={`flex-shrink-0 rounded-lg object-cover ${compact ? "w-8 h-8" : "w-10 h-10"}`}
+          loading="lazy"
+        />
+      ) : (
+        <div
+          className={`flex-shrink-0 rounded-lg bg-accent/10 flex items-center justify-center ${
+            compact ? "w-8 h-8" : "w-10 h-10"
+          }`}
+        >
+          <Rss size={compact ? 14 : 16} className="text-accent" />
+        </div>
+      )}
 
       {/* Info */}
       <div className="flex-1 min-w-0">

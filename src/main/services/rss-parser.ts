@@ -52,6 +52,10 @@ const TWITTER_RSSHUB_FALLBACKS = [
 ]
 const TWITTER_NITTER_FALLBACKS = [
   "https://nitter.net",
+  "https://nitter.poast.org",
+  "https://nitter.privacydev.net",
+  "https://nitter.space",
+  "https://nitter.1d4.us",
 ]
 
 const INSTAGRAM_MOBILE_UA =
@@ -256,7 +260,7 @@ function toRsshubProtocolUrl(feedUrl: string): string | null {
     const parsed = new URL(raw)
     const route = parsed.pathname.replace(/^\/+/, "")
     if (!route) return null
-    if (!/^(?:twitter|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu)\//i.test(route)) {
+    if (!/^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu)\//i.test(route)) {
       return null
     }
     return `rsshub://${route}${parsed.search || ""}`
@@ -271,19 +275,42 @@ function extractTwitterUsernameFromFeedUrl(feedUrl: string): string | null {
     if (u.protocol.toLowerCase() === "rsshub:") {
       const host = (u.hostname || "").toLowerCase()
       const parts = u.pathname.split("/").filter(Boolean)
-      if (host === "twitter" && parts[0]?.toLowerCase() === "user" && parts[1]) {
-        return decodeURIComponent(parts[1]).replace(/^@/, "")
+      if ((host === "twitter" || host === "x") && parts[0]?.toLowerCase() === "user" && parts[1]) {
+        return decodeURIComponent(parts[1]).replace(/^@/, "").toLowerCase()
       }
     }
 
-    const rsshubMatch = u.pathname.match(/\/twitter\/user\/([^/?#]+)/i)
-    if (rsshubMatch?.[1]) return decodeURIComponent(rsshubMatch[1]).replace(/^@/, "")
+    const rsshubMatch = u.pathname.match(/\/(?:twitter|x)\/user\/([^/?#]+)/i)
+    if (rsshubMatch?.[1]) return decodeURIComponent(rsshubMatch[1]).replace(/^@/, "").toLowerCase()
 
     if (u.hostname.toLowerCase().includes("nitter")) {
       const parts = u.pathname.split("/").filter(Boolean)
       if (parts.length >= 2 && parts[1].toLowerCase() === "rss") {
-        return decodeURIComponent(parts[0]).replace(/^@/, "")
+        return decodeURIComponent(parts[0]).replace(/^@/, "").toLowerCase()
       }
+    }
+  } catch {
+    // Ignore invalid URL.
+  }
+  return null
+}
+
+function extractTwitterUserRoutePathAndQuery(feedUrl: string): string | null {
+  try {
+    const u = new URL(feedUrl)
+    if (u.protocol.toLowerCase() === "rsshub:") {
+      const host = (u.hostname || "").toLowerCase()
+      if (host === "twitter" || host === "x") {
+        const path = `/${host}${u.pathname || ""}`.replace(/\/+/g, "/")
+        if (/^\/(?:twitter|x)\/user\//i.test(path)) {
+          return `${path}${u.search || ""}`
+        }
+      }
+    }
+
+    const match = u.pathname.match(/(\/(?:twitter|x)\/user\/[^?#]+)/i)
+    if (match?.[1]) {
+      return `${match[1]}${u.search || ""}`
     }
   } catch {
     // Ignore invalid URL.
@@ -355,6 +382,25 @@ function pickBetterFeed(
   const currentQuality = scoreFeedQuality(current)
   const incomingQuality = scoreFeedQuality(incoming)
   return incomingQuality > currentQuality ? incoming : current
+}
+
+function isLikelyThinOrStaleFeed(feed: RssParser.Output<Record<string, any>> | null): boolean {
+  if (!feed) return true
+  const count = feed.items?.length || 0
+  if (count <= 3) return true
+  const latestTs = getLatestItemTimestamp(feed)
+  if (!latestTs) return true
+  const ageMs = Date.now() - latestTs
+  // If latest item is older than 3 days, treat as stale and try slower fallback merge.
+  return ageMs > 3 * 24 * 60 * 60 * 1000
+}
+
+function pickBetterNullableFeed(
+  current: RssParser.Output<Record<string, any>> | null,
+  incoming: RssParser.Output<Record<string, any>> | null,
+): RssParser.Output<Record<string, any>> | null {
+  if (!incoming) return current
+  return pickBetterFeed(current, incoming)
 }
 
 function getFeedItemKey(item: Record<string, any>): string {
@@ -813,21 +859,41 @@ export async function fetchAndParseFeed(
   const twitterUser = extractTwitterUsernameFromFeedUrl(feedUrl)
   if (twitterUser) {
     const candidates: string[] = []
+    const originalRoute = extractTwitterUserRoutePathAndQuery(feedUrl)
     const pushUnique = (u: string) => {
       if (!candidates.includes(u)) candidates.push(u)
     }
 
     pushUnique(feedUrl)
     for (const base of TWITTER_RSSHUB_FALLBACKS) {
-      pushUnique(`${base.replace(/\/+$/, "")}/twitter/user/${encodeURIComponent(twitterUser)}`)
+      const b = base.replace(/\/+$/, "")
+      if (originalRoute) {
+        pushUnique(`${b}${originalRoute}`)
+        pushUnique(`${b}${originalRoute.replace(/^\/(?:twitter|x)\//i, "/twitter/")}`)
+        pushUnique(`${b}${originalRoute.replace(/^\/(?:twitter|x)\//i, "/x/")}`)
+      }
+      pushUnique(`${b}/twitter/user/${encodeURIComponent(twitterUser)}`)
+      pushUnique(`${b}/x/user/${encodeURIComponent(twitterUser)}`)
     }
     for (const base of TWITTER_NITTER_FALLBACKS) {
       pushUnique(`${base.replace(/\/+$/, "")}/${encodeURIComponent(twitterUser)}/rss`)
     }
 
-    const bestFeed = await pickBestRsshubFallbackFeed(candidates, true)
-    if (bestFeed) return { data: bestFeed, notModified: false }
-    throw new Error("Failed to parse Twitter/X feed across fallbacks")
+    // Fast path first for responsiveness.
+    const bestFeedFast = await pickBestRsshubFallbackFeed(candidates, true)
+    // If fast result looks thin/stale, continue with slower merge and choose the better feed.
+    if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
+      return { data: bestFeedFast, notModified: false }
+    }
+
+    // Slow path retry for unstable / throttled instances.
+    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(candidates, false)
+    const improved = pickBetterNullableFeed(bestFeedFast || null, mergedFeedSlow)
+    if (improved) return { data: improved, notModified: false }
+
+    const bestFeedSlow = await pickBestRsshubFallbackFeed(candidates, false)
+    if (bestFeedSlow) return { data: pickBetterFeed(bestFeedFast || null, bestFeedSlow), notModified: false }
+    // Do not throw here: fall through to generic RSS fetch/fallback logic below.
   }
 
   // For Instagram routes, try official route variants across fallback instances.

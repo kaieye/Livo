@@ -1,5 +1,5 @@
 import { FeedViewType, type AccountProvider, type ResolvedProfileFeedCandidate, type ResolvedProfileUrlResult } from "./types"
-import { ensureInstagramUserFeedLimit } from "../main/services/rsshub-url"
+import { ensureInstagramUserFeedLimit, ensureTwitterUserFeedLimit } from "../main/services/rsshub-url"
 
 function normalizeBaseUrl(input: string): URL | null {
   const trimmed = input.trim()
@@ -135,8 +135,9 @@ export function resolveProfileUrlToCandidates(inputUrl: string, rsshubInstance: 
   } else if (host === "x.com" || host === "twitter.com") {
     platform = "x"
     const username = firstPathSegment(url.pathname).replace(/^@/, "")
-    if (username && !RESERVED_USER_NAMES.has(username.toLowerCase())) {
-      pushCandidate(candidates, `${rsshub}/twitter/user/${encodeURIComponent(username)}`, `@${username}`, {
+    const usernameLower = username.toLowerCase()
+    if (usernameLower && !RESERVED_USER_NAMES.has(usernameLower)) {
+      pushCandidate(candidates, ensureTwitterUserFeedLimit(`${rsshub}/x/user/${encodeURIComponent(usernameLower)}`, 120), `@${username}`, {
         source: "rsshub",
         siteUrl: normalizedUrl,
         description: "RSSHub X/Twitter user route",

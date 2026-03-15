@@ -172,7 +172,7 @@ export function QuickSearchPanel() {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh]" onClick={close}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={close}>
       <div
         className="w-[560px] max-w-[90vw] bg-white dark:bg-surface-dark-secondary rounded-2xl shadow-2xl border overflow-hidden animate-in"
         onClick={(e) => e.stopPropagation()}

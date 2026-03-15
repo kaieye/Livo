@@ -2,6 +2,7 @@ import { create } from "zustand"
 import type { FeedWithCount } from "../../../shared/types"
 import { FeedViewType } from "../../../shared/types"
 import { useSettingsStore } from "./settings-store"
+import { useEntryStore } from "./entry-store"
 
 const RECOMMENDED_CATEGORY = "Recommended"
 
@@ -25,7 +26,7 @@ interface FeedState {
 
   // Actions
   loadFeeds: () => Promise<void>
-  addFeed: (url: string, category?: string, view?: FeedViewType, title?: string) => Promise<{ success: boolean; error?: string; feed?: { id: string; url: string } }>
+  addFeed: (url: string, category?: string, view?: FeedViewType, title?: string) => Promise<{ success: boolean; error?: string; feed?: Partial<FeedWithCount> }>
   removeFeed: (feedId: string) => Promise<void>
   removeFeeds: (feedIds: string[]) => Promise<void>
   refreshFeed: (feedId: string) => Promise<void>
@@ -59,7 +60,36 @@ export const useFeedStore = create<FeedState>((set, get) => ({
   addFeed: async (url, category, view, title) => {
     const result = await window.api.feeds.add(url, category, view, title)
     if (result.success) {
+      // Avoid stale empty list cache for newly added subscriptions.
+      useEntryStore.getState().clearListCache()
       await get().loadFeeds()
+      const newFeedId = result.feed?.id
+      if (newFeedId) {
+        try {
+          const unreadEntries = await window.api.entries.list({
+            feedId: newFeedId,
+            unreadOnly: true,
+            limit: 5000,
+            compact: true,
+            maxContentLength: 200,
+            skipDedupe: false,
+          })
+          set((state) => ({
+            feeds: state.feeds.map((f) =>
+              f.id === newFeedId ? { ...f, unreadCount: unreadEntries.length } : f,
+            ),
+          }))
+
+          // Warm cache so opening the feed can render immediately.
+          await useEntryStore.getState().prefetchEntries({
+            feedId: newFeedId,
+            unreadOnly: false,
+            limit: 1000,
+          })
+        } catch {
+          // Keep UI on list() result when recount fails.
+        }
+      }
     }
     return result
   },

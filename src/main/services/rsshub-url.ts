@@ -1,5 +1,5 @@
 const RSSHUB_ROUTE_PREFIX =
-  /^(?:twitter|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu)\//i
+  /^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu)\//i
 
 function canonicalizeInstagramMirrorRoute(route: string): string {
   return route.replace(/^(picnob(?:\.info)?|pixnoy|piokok)\/user\//i, "instagram/user/")
@@ -86,6 +86,55 @@ export function ensureInstagramUserFeedLimit(rawUrl: string, limit = 100): strin
     }
     const nextQuery = search.toString()
     return `${canonicalPath}${nextQuery ? `?${nextQuery}` : ""}`
+  }
+
+  const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
+  if (rsshubMatch?.[1]) {
+    const route = rsshubMatch[1].replace(/^\/+/, "")
+    return `rsshub://${appendLimitToRoute(route)}`
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (!/^https?:$/i.test(parsed.protocol)) return trimmed
+    const route = parsed.pathname.replace(/^\/+/, "")
+    if (!route || !RSSHUB_ROUTE_PREFIX.test(route)) return trimmed
+
+    const routeWithQuery = `${route}${parsed.search || ""}`
+    const nextRoute = appendLimitToRoute(routeWithQuery)
+    const [nextPath = route, nextQuery = ""] = nextRoute.split("?", 2)
+    parsed.pathname = `/${nextPath}`
+    parsed.search = nextQuery ? `?${nextQuery}` : ""
+    return parsed.toString()
+  } catch {
+    return trimmed
+  }
+}
+
+export function ensureTwitterUserFeedLimit(rawUrl: string, limit = 120): string {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return trimmed
+
+  const normalizedLimit = Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 120)
+
+  const appendLimitToRoute = (routeWithMaybeQuery: string): string => {
+    const [path = "", query = ""] = routeWithMaybeQuery.split("?", 2)
+    if (!/^(?:twitter|x)\/user\//i.test(path)) {
+      return `${path}${query ? `?${query}` : ""}`
+    }
+
+    const normalizedPath = path.replace(/^(?:twitter|x)\/user\/([^/?#]+)/i, (_m, user: string) => {
+      const clean = decodeURIComponent(String(user || "")).replace(/^@/, "").toLowerCase()
+      return `twitter/user/${encodeURIComponent(clean)}`
+    })
+
+    const search = new URLSearchParams(query)
+    const current = Number.parseInt(search.get("limit") || "", 10)
+    if (!Number.isFinite(current) || current < normalizedLimit) {
+      search.set("limit", String(normalizedLimit))
+    }
+    const nextQuery = search.toString()
+    return `${normalizedPath}${nextQuery ? `?${nextQuery}` : ""}`
   }
 
   const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)

@@ -516,6 +516,12 @@
     rsshubCategory: "RSSHub Routes",
     viewSource: "View source",
     unsubscribeAction: "Cancel",
+    chooseColumnTitle: "Choose Column",
+    chooseColumnDesc: "Which column should \"{{title}}\" be added to?",
+    recommendedColumn: "Recommended",
+    tapToAdd: "Click to add",
+    subscribedAddedTo: "Added to column: {{column}}",
+    subscribedAddedToWithFolder: "Added to column: {{column}} (folder: {{folder}})",
     languageZh: "ZH",
   },
 

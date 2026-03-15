@@ -514,6 +514,12 @@
     rsshubCategory: "RSSHub 路由",
     viewSource: "查看源",
     unsubscribeAction: "取消",
+    chooseColumnTitle: "选择加入栏目",
+    chooseColumnDesc: "将“{{title}}”加入到哪个栏目？",
+    recommendedColumn: "推荐",
+    tapToAdd: "点击加入",
+    subscribedAddedTo: "已加入到栏目：{{column}}",
+    subscribedAddedToWithFolder: "已加入到栏目：{{column}}（文件夹：{{folder}}）",
     languageZh: "中",
   },
 

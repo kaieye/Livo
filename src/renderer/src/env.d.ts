@@ -17,7 +17,7 @@ declare global {
       discover: {
         categories: () => Promise<Array<{ id: string; name: string; nameEn: string; icon: string; description: string }>>
         popular: (category?: string) => Promise<Array<{ title: string; url: string; siteUrl: string; description: string; category: string; language: string }>>
-        search: (query: string) => Promise<Array<{ title: string; url: string; siteUrl: string; description: string; source: string }>>
+        search: (query: string) => Promise<Array<{ title: string; url: string; siteUrl: string; description: string; source: string; image?: string }>>
         rsshubRoutes: (category?: string) => Promise<Array<{ name: string; url: string; description: string; category: string }>>
         rsshubInstance: () => Promise<string>
         validateFeed: (url: string) => Promise<{ valid: boolean; title?: string; description?: string; image?: string; itemCount?: number; error?: string }>

@@ -7,6 +7,7 @@ interface DiscoverSearchResult {
   siteUrl: string
   description: string
   source: "curated" | "url" | "rsshub"
+  image?: string
 }
 
 interface DiscoverState {

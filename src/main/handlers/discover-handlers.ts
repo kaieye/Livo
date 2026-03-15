@@ -38,6 +38,21 @@ const FALLBACK_NITTER_INSTANCES = [
   "https://nitter.net",
 ]
 
+const X_AVATAR_CACHE_TTL = 10 * 60 * 1000
+const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
+const xAvatarCache = new Map<string, { expiresAt: number; image: string }>()
+const discoverSearchCache = new Map<string, {
+  expiresAt: number
+  results: Array<{
+    title: string
+    url: string
+    siteUrl: string
+    description: string
+    source: "curated" | "url" | "rsshub"
+    image?: string
+  }>
+}>()
+
 /** Return the configured RSSHub instance URL (no trailing slash) */
 function getRSSHubInstance(): string {
   const settings = getSettings()
@@ -81,6 +96,75 @@ function normalizeDiscoverQueryToFeedUrl(query: string, rsshubInstance: string):
   }
   if (/^https?:\/\//i.test(trimmed)) return trimmed
   return `https://${trimmed}`
+}
+
+function extractLikelyXHandle(query: string): string | null {
+  const clean = query.trim().replace(/^@+/, "")
+  if (!clean) return null
+  // X/Twitter username constraint: up to 15 chars, letters/digits/underscore.
+  if (!/^[a-zA-Z0-9_]{1,15}$/.test(clean)) return null
+  return clean
+}
+
+async function fetchXAvatarByUsername(username: string): Promise<string> {
+  const clean = extractLikelyXHandle(username)
+  if (!clean) return ""
+  const now = Date.now()
+  const cached = xAvatarCache.get(clean.toLowerCase())
+  if (cached && cached.expiresAt > now) return cached.image
+  try {
+    const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
+    const res = await fetch(profileUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(1200),
+    })
+    if (!res.ok) return ""
+    const html = await res.text()
+    const raw =
+      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
+      || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)?.[1]
+      || ""
+    const decoded = decodeBasicHtmlEntities(raw)
+    if (!/^https?:\/\//i.test(decoded)) return ""
+    const image = decoded.replace(/_normal(\.[a-z0-9]+)(\?.*)?$/i, "$1")
+    xAvatarCache.set(clean.toLowerCase(), {
+      expiresAt: now + X_AVATAR_CACHE_TTL,
+      image,
+    })
+    return image
+  } catch {
+    return ""
+  }
+}
+
+async function inferDiscoverResultImage(feedUrl: string, siteUrl?: string): Promise<string | undefined> {
+  const twitterUsername = extractTwitterUsernameFromUrl(feedUrl)
+  if (twitterUsername) {
+    const clean = extractLikelyXHandle(twitterUsername)
+    if (clean) {
+      const liveAvatar = await fetchXAvatarByUsername(clean)
+      if (liveAvatar) return liveAvatar
+      // Add a small cache-buster to reduce stale CDN/browser caches.
+      return `https://unavatar.io/x/${encodeURIComponent(clean)}?v=${Date.now()}`
+    }
+  }
+
+  const fromSite = (siteUrl || "").trim()
+  if (fromSite) {
+    try {
+      const siteHost = new URL(fromSite).hostname.replace(/^www\./i, "")
+      if (siteHost) return `https://unavatar.io/${siteHost}`
+    } catch {
+      // Ignore invalid site URL.
+    }
+  }
+
+  return undefined
 }
 
 function extractBilibiliUid(feedUrl: string): string | null {
@@ -549,12 +633,19 @@ export function registerDiscoverHandlers(): void {
 
   // Search feeds by query (check curated feeds + try as URL)
   ipcMain.handle("discover:search", async (_event, query: string) => {
+    const cacheKey = query.trim().toLowerCase()
+    const cached = discoverSearchCache.get(cacheKey)
+    if (cacheKey && cached && cached.expiresAt > Date.now()) {
+      return cached.results
+    }
+
     const results: Array<{
       title: string
       url: string
       siteUrl: string
       description: string
       source: "curated" | "url" | "rsshub"
+      image?: string
     }> = []
 
     // Search curated feeds
@@ -566,6 +657,7 @@ export function registerDiscoverHandlers(): void {
         siteUrl: feed.siteUrl,
         description: feed.description,
         source: "curated",
+        image: feed.imageUrl || await inferDiscoverResultImage(feed.url, feed.siteUrl),
       })
     }
 
@@ -584,11 +676,37 @@ export function registerDiscoverHandlers(): void {
         siteUrl: `${instance}${route.url}`,
         description: `${route.description} (RSSHub)`,
         source: "rsshub",
+        image: await inferDiscoverResultImage(`${instance}${route.url}`),
       })
     }
 
-    // If query looks like a URL, try to fetch it as RSS
     const trimmedQuery = query.trim()
+
+    // Resolve profile-like inputs (and plain X handles) to direct subscribable feed links.
+    // Example: "Elonmusk" -> "https://.../twitter/user/Elonmusk".
+    const profileInputs = new Set<string>()
+    if (trimmedQuery) {
+      profileInputs.add(trimmedQuery)
+      const xHandle = extractLikelyXHandle(trimmedQuery)
+      if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
+    }
+    for (const profileInput of profileInputs) {
+      const resolved = resolveProfileUrlToCandidates(profileInput, instance)
+      for (const candidate of resolved.candidates) {
+        if (results.some((r) => r.url === candidate.feedUrl)) continue
+        const displayTitle = await inferDiscoverResultTitle(candidate.feedUrl, candidate.title)
+        results.push({
+          title: displayTitle,
+          url: candidate.feedUrl,
+          siteUrl: candidate.siteUrl || profileInput,
+          description: candidate.description || "Profile feed",
+          source: candidate.source === "rss" ? "url" : "rsshub",
+          image: await inferDiscoverResultImage(candidate.feedUrl, candidate.siteUrl || profileInput),
+        })
+      }
+    }
+
+    // If query looks like a URL, try to fetch it as RSS
     const looksLikeUrl =
       /^rsshub:\/\//i.test(trimmedQuery) ||
       /^https?:\/\//i.test(trimmedQuery) ||
@@ -607,6 +725,7 @@ export function registerDiscoverHandlers(): void {
             siteUrl: data.link || feedUrl,
             description: data.description || "鐩存帴 URL 璁㈤槄",
             source: "url",
+            image: getFeedImageUrl(data) || await inferDiscoverResultImage(feedUrl, data.link || feedUrl),
           })
         }
       } catch {
@@ -619,9 +738,17 @@ export function registerDiscoverHandlers(): void {
             siteUrl: feedUrl,
             description: "Direct URL subscription",
             source: "url",
+            image: await inferDiscoverResultImage(feedUrl, feedUrl),
           })
         }
       }
+    }
+
+    if (cacheKey) {
+      discoverSearchCache.set(cacheKey, {
+        expiresAt: Date.now() + DISCOVER_SEARCH_CACHE_TTL,
+        results,
+      })
     }
 
     return results

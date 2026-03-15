@@ -50,6 +50,37 @@ function resolvePublishedAt(item: Record<string, any>, rawItem: Record<string, u
   return now
 }
 
+function extractTwitterStatusUrl(raw: string): string {
+  const text = String(raw || "")
+  const m = text.match(/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com|nitter\.[^/]+)\/[^/\s?#]+\/status\/\d+[^"]*/i)
+  return m?.[0] || ""
+}
+
+function hasTwitterStatusUrl(raw: string): boolean {
+  return /https?:\/\/(?:www\.)?(?:x\.com|twitter\.com|nitter\.[^/]+)\/[^/\s?#]+\/status\/\d+/i.test(String(raw || ""))
+}
+
+function resolveBestEntryUrl(item: Record<string, any>, rawItem: Record<string, unknown>, content: string, summary: string): string {
+  const link = String(item.link || "").trim()
+  const guid = String(item.guid || rawItem.guid || "").trim()
+  const id = String(item.id || rawItem.id || "").trim()
+  const textBlob = `${content || ""}\n${summary || ""}`
+
+  // For X/Twitter feeds, prefer concrete status URLs from any available field.
+  if (link.toLowerCase().includes("x.com") || link.toLowerCase().includes("twitter.com") || /\/status\//i.test(guid) || /\/status\//i.test(id)) {
+    const fromLink = extractTwitterStatusUrl(link)
+    if (fromLink) return fromLink
+    const fromGuid = extractTwitterStatusUrl(guid)
+    if (fromGuid) return fromGuid
+    const fromId = extractTwitterStatusUrl(id)
+    if (fromId) return fromId
+    const fromText = extractTwitterStatusUrl(textBlob)
+    if (fromText) return fromText
+  }
+
+  return link || guid || id
+}
+
 function buildSingleEntry(
   feedId: string,
   rawItem: Record<string, unknown>,
@@ -67,13 +98,18 @@ function buildSingleEntry(
     || (typeof descStr === "string" ? descStr : "")
     || (typeof summaryStr === "string" ? summaryStr : "")
     || ""
+  const bestSourceUrl = resolveBestEntryUrl(item, rawItem, content, summary)
   const canonicalUrl = resolveCanonicalPostUrlForEntry({
-    url: item.link || "",
+    url: bestSourceUrl,
     content,
     summary,
     imageUrl: derivedImage,
     media: extractedMedia,
   })
+  const canonicalOrBest = canonicalUrl || bestSourceUrl
+  const finalUrl = hasTwitterStatusUrl(bestSourceUrl)
+    ? bestSourceUrl
+    : (canonicalOrBest || item.link || "")
 
   const firstPhoto = extractedMedia.find((m) => m.type === "photo" && m.url)
 
@@ -81,7 +117,7 @@ function buildSingleEntry(
     id: uuidv4(),
     feedId,
     title: bestTitle(item.title || "", summary),
-    url: canonicalUrl || item.link || "",
+    url: finalUrl,
     content,
     summary,
     author: item.creator || item.author || "",
