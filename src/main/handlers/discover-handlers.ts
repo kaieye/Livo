@@ -39,8 +39,10 @@ const FALLBACK_NITTER_INSTANCES = [
 ]
 
 const X_AVATAR_CACHE_TTL = 10 * 60 * 1000
+const YOUTUBE_AVATAR_CACHE_TTL = 10 * 60 * 1000
 const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
 const xAvatarCache = new Map<string, { expiresAt: number; image: string }>()
+const youtubeAvatarCache = new Map<string, { expiresAt: number; image: string }>()
 const discoverSearchCache = new Map<string, {
   expiresAt: number
   results: Array<{
@@ -106,6 +108,140 @@ function extractLikelyXHandle(query: string): string | null {
   return clean
 }
 
+function extractLikelyYouTubeHandle(query: string): string | null {
+  const raw = query.trim()
+  if (!raw) return null
+  const clean = raw.replace(/^@+/, "")
+  if (!clean) return null
+  // YouTube handles allow letters, digits, underscore, dot and hyphen.
+  if (!/^[a-zA-Z0-9._-]{3,40}$/.test(clean)) return null
+  return clean
+}
+
+function extractLikelyYouTubeChannelId(query: string): string | null {
+  const clean = query.trim()
+  if (!clean) return null
+  // Typical YouTube channel id format starts with UC and is 24 chars.
+  if (!/^UC[a-zA-Z0-9_-]{20,30}$/.test(clean)) return null
+  return clean
+}
+
+function inferVideoProbeSiteUrl(feedUrl: string): string {
+  try {
+    const u = new URL(feedUrl)
+    const channelId = u.pathname.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
+    if (channelId) return `https://www.youtube.com/channel/${decodeURIComponent(channelId)}`
+
+    const user = u.pathname.match(/\/youtube\/user\/([^/?#]+)/i)?.[1]
+    if (user) {
+      const decoded = decodeURIComponent(user)
+      if (decoded.startsWith("@")) return `https://www.youtube.com/${decoded}`
+      return `https://www.youtube.com/@${decoded}`
+    }
+  } catch {
+    // Ignore malformed feed URL.
+  }
+  return "https://www.youtube.com"
+}
+
+function normalizeYouTubeImageUrl(raw: string): string {
+  const cleaned = decodeBasicHtmlEntities((raw || "").trim())
+  if (!cleaned) return ""
+  if (cleaned.startsWith("//")) return `https:${cleaned}`
+  return cleaned
+}
+
+function extractYouTubeChannelKey(feedUrl: string, siteUrl?: string): { cacheKey: string; profileUrl: string } | null {
+  const candidates = [feedUrl, siteUrl || ""].filter(Boolean)
+
+  for (const candidate of candidates) {
+    try {
+      const u = new URL(candidate)
+      const path = u.pathname || ""
+
+      const rsshubChannel = path.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
+      if (rsshubChannel) {
+        const channelId = decodeURIComponent(rsshubChannel)
+        return {
+          cacheKey: `channel:${channelId.toLowerCase()}`,
+          profileUrl: `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`,
+        }
+      }
+
+      const rsshubUser = path.match(/\/youtube\/user\/([^/?#]+)/i)?.[1]
+      if (rsshubUser) {
+        const decoded = decodeURIComponent(rsshubUser)
+        const handle = decoded.replace(/^@+/, "")
+        if (handle) {
+          return {
+            cacheKey: `handle:${handle.toLowerCase()}`,
+            profileUrl: `https://www.youtube.com/@${encodeURIComponent(handle)}`,
+          }
+        }
+      }
+
+      const directChannel = path.match(/^\/channel\/([^/?#]+)/i)?.[1]
+      if (directChannel) {
+        const channelId = decodeURIComponent(directChannel)
+        return {
+          cacheKey: `channel:${channelId.toLowerCase()}`,
+          profileUrl: `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`,
+        }
+      }
+
+      const directHandle = path.match(/^\/@([^/?#]+)/i)?.[1]
+      if (directHandle) {
+        const handle = decodeURIComponent(directHandle)
+        return {
+          cacheKey: `handle:${handle.toLowerCase()}`,
+          profileUrl: `https://www.youtube.com/@${encodeURIComponent(handle)}`,
+        }
+      }
+    } catch {
+      // Ignore malformed URL candidate.
+    }
+  }
+
+  return null
+}
+
+function extractYouTubeAvatarFromHtml(html: string): string {
+  const raw =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
+    || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)?.[1]
+    || ""
+  return normalizeYouTubeImageUrl(raw)
+}
+
+async function fetchYouTubeAvatarByProfile(profileUrl: string, cacheKey: string): Promise<string> {
+  const now = Date.now()
+  const cached = youtubeAvatarCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) return cached.image
+
+  try {
+    const res = await fetch(profileUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(3500),
+    })
+    if (!res.ok) return ""
+    const html = await res.text()
+    const image = extractYouTubeAvatarFromHtml(html)
+    if (!image) return ""
+    youtubeAvatarCache.set(cacheKey, {
+      expiresAt: now + YOUTUBE_AVATAR_CACHE_TTL,
+      image,
+    })
+    return image
+  } catch {
+    return ""
+  }
+}
+
 async function fetchXAvatarByUsername(username: string): Promise<string> {
   const clean = extractLikelyXHandle(username)
   if (!clean) return ""
@@ -152,6 +288,12 @@ async function inferDiscoverResultImage(feedUrl: string, siteUrl?: string): Prom
       // Add a small cache-buster to reduce stale CDN/browser caches.
       return `https://unavatar.io/x/${encodeURIComponent(clean)}?v=${Date.now()}`
     }
+  }
+
+  const youtubeKey = extractYouTubeChannelKey(feedUrl, siteUrl)
+  if (youtubeKey) {
+    const image = await fetchYouTubeAvatarByProfile(youtubeKey.profileUrl, youtubeKey.cacheKey)
+    if (image) return image
   }
 
   const fromSite = (siteUrl || "").trim()
@@ -384,7 +526,7 @@ function normalizeNameForMatch(input: string): string {
   return input
     .toLowerCase()
     .replace(/<[^>]+>/g, "")
-    .replace(/[@\s_.-]+/g, "")
+    .replace(/[\s\p{P}\p{S}_.-]+/gu, "")
     .trim()
 }
 
@@ -392,7 +534,7 @@ function isUsernameMatch(query: string, candidateName: string): boolean {
   const q = normalizeNameForMatch(query)
   const c = normalizeNameForMatch(candidateName)
   if (!q || !c) return false
-  return c.includes(q)
+  return c.includes(q) || q.includes(c)
 }
 
 function flattenTextRuns(node: any): string {
@@ -415,51 +557,163 @@ function collectChannelRenderers(node: any, out: any[]): void {
   }
 }
 
+function collectVideoRenderers(node: any, out: any[]): void {
+  if (!node) return
+  if (Array.isArray(node)) {
+    for (const n of node) collectVideoRenderers(n, out)
+    return
+  }
+  if (typeof node !== "object") return
+  if (node.videoRenderer) out.push(node.videoRenderer)
+  for (const key of Object.keys(node)) {
+    collectVideoRenderers(node[key], out)
+  }
+}
+
+function extractYouTubeInitialData(html: string): any | null {
+  const markers = ["var ytInitialData =", "window[\"ytInitialData\"] ="]
+  for (const marker of markers) {
+    const markerIdx = html.indexOf(marker)
+    if (markerIdx === -1) continue
+    const start = html.indexOf("{", markerIdx)
+    if (start === -1) continue
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (let i = start; i < html.length; i++) {
+      const ch = html[i]
+      if (inString) {
+        if (escaped) {
+          escaped = false
+        } else if (ch === "\\") {
+          escaped = true
+        } else if (ch === "\"") {
+          inString = false
+        }
+        continue
+      }
+
+      if (ch === "\"") {
+        inString = true
+        continue
+      }
+      if (ch === "{") depth++
+      if (ch === "}") depth--
+      if (depth === 0) {
+        const jsonText = html.slice(start, i + 1)
+        try {
+          return JSON.parse(jsonText)
+        } catch {
+          break
+        }
+      }
+    }
+  }
+  return null
+}
+
 async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbeCandidate[]> {
-  const endpoint = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`
-  try {
-    const res = await fetch(endpoint, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(4000),
+  const rsshubBase = getRSSHubInstance()
+  const seen = new Set<string>()
+  const out: VideoProbeCandidate[] = []
+
+  const addCandidate = (channelId: string, name: string, description: string, imageRaw: string) => {
+    if (!channelId || seen.has(channelId)) return
+    seen.add(channelId)
+    out.push({
+      platform: "youtube",
+      title: `${name} - YouTube`,
+      description: description || "YouTube channel",
+      image: normalizeYouTubeImageUrl(imageRaw),
+      feedUrl: `${rsshubBase}/youtube/channel/${encodeURIComponent(channelId)}`,
     })
-    if (!res.ok) return []
-    const html = await res.text()
-    const m =
-      html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/) ||
-      html.match(/window\["ytInitialData"\] = (\{[\s\S]*?\});<\/script>/)
-    if (!m?.[1]) return []
+  }
 
-    const data = JSON.parse(m[1])
-    const renderers: any[] = []
-    collectChannelRenderers(data, renderers)
-
-    const seen = new Set<string>()
-    const out: VideoProbeCandidate[] = []
-    for (const r of renderers) {
+  const processData = (data: any) => {
+    const channelRenderers: any[] = []
+    collectChannelRenderers(data, channelRenderers)
+    for (const r of channelRenderers) {
       const channelId = (r.channelId || "").trim()
-      if (!channelId || seen.has(channelId)) continue
-      seen.add(channelId)
+      if (!channelId) continue
       const name = flattenTextRuns(r.title) || channelId
-      if (!isUsernameMatch(query, name)) continue
-      const description = flattenTextRuns(r.descriptionSnippet) || "YouTube channel"
+      const description = flattenTextRuns(r.descriptionSnippet) || ""
       const thumbs = r.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
       const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
-      out.push({
-        platform: "youtube",
-        title: `${name} - YouTube`,
-        description,
-        image,
-        feedUrl: `${getRSSHubInstance()}/youtube/channel/${encodeURIComponent(channelId)}`,
-      })
-      if (out.length >= 6) break
+      addCandidate(channelId, name, description, image)
     }
-    return out
-  } catch {
-    return []
+    const videoRenderers: any[] = []
+    collectVideoRenderers(data, videoRenderers)
+    for (const r of videoRenderers) {
+      for (const run of ((r.ownerText?.runs || []) as Array<any>)) {
+        const browseId = String(run?.navigationEndpoint?.browseEndpoint?.browseId || "").trim()
+        if (!/^UC[a-zA-Z0-9_-]{20,30}$/.test(browseId)) continue
+        const name = String(run?.text || "").trim() || browseId
+        const thumbs = r.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
+        const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
+        addCandidate(browseId, name, "", image)
+      }
+    }
   }
+
+  // Method 1: InnerTube API (structured JSON, more reliable than HTML scraping).
+  // IMPORTANT: Do NOT set gl/hl to CN — YouTube returns empty results for gl=CN (blocked region).
+  // Try channel-only filter first, then unfiltered for broader coverage.
+  for (const params of ["EgIQAg==", undefined] as Array<string | undefined>) {
+    if (out.length > 0) break
+    try {
+      const body: Record<string, any> = {
+        context: { client: { clientName: "WEB", clientVersion: "2.20240716.00.00" } },
+        query,
+      }
+      if (params) body.params = params
+      const res = await fetch("https://www.youtube.com/youtubei/v1/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20240716.00.00",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(6000),
+      })
+      if (res.ok) {
+        const data = await res.json() as any
+        processData(data)
+      }
+    } catch {
+      // Try next approach.
+    }
+  }
+
+  // Method 2: HTML scraping fallback (if InnerTube failed or returned nothing).
+  if (out.length === 0) {
+    try {
+      const searchUrl = new URL("https://www.youtube.com/results")
+      searchUrl.searchParams.set("search_query", query)
+      searchUrl.searchParams.set("sp", "EgIQAg==")
+      const res = await fetch(searchUrl.toString(), {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (res.ok) {
+        const html = await res.text()
+        const data = extractYouTubeInitialData(html)
+        if (data) processData(data)
+      }
+    } catch {
+      // Ignore scraping failures.
+    }
+  }
+
+  if (out.length === 0) return []
+  const matched = out.filter((candidate) => isUsernameMatch(query, candidate.title))
+  if (matched.length > 0) return matched.slice(0, 6)
+  return out.slice(0, 6)
 }
 
 async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string): Promise<Array<{
@@ -689,6 +943,10 @@ export function registerDiscoverHandlers(): void {
       profileInputs.add(trimmedQuery)
       const xHandle = extractLikelyXHandle(trimmedQuery)
       if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
+      const ytHandle = extractLikelyYouTubeHandle(trimmedQuery)
+      if (ytHandle) profileInputs.add(`https://www.youtube.com/@${ytHandle}`)
+      const ytChannelId = extractLikelyYouTubeChannelId(trimmedQuery)
+      if (ytChannelId) profileInputs.add(`https://www.youtube.com/channel/${ytChannelId}`)
     }
     for (const profileInput of profileInputs) {
       const resolved = resolveProfileUrlToCandidates(profileInput, instance)
@@ -702,6 +960,23 @@ export function registerDiscoverHandlers(): void {
           description: candidate.description || "Profile feed",
           source: candidate.source === "rss" ? "url" : "rsshub",
           image: await inferDiscoverResultImage(candidate.feedUrl, candidate.siteUrl || profileInput),
+        })
+      }
+    }
+
+    // Probe YouTube/Bilibili user channels by keyword, so plain channel-name searches
+    // (e.g. "MrBeast") can produce direct subscribable feed candidates.
+    if (trimmedQuery && !/^https?:\/\//i.test(trimmedQuery) && !/^rsshub:\/\//i.test(trimmedQuery)) {
+      const videoCandidates = await probeVideoSourcesByKeyword(trimmedQuery, instance)
+      for (const candidate of videoCandidates) {
+        if (results.some((r) => r.url === candidate.feedUrl)) continue
+        results.push({
+          title: candidate.title,
+          url: candidate.feedUrl,
+          siteUrl: inferVideoProbeSiteUrl(candidate.feedUrl),
+          description: candidate.description,
+          source: "rsshub",
+          image: candidate.image || await inferDiscoverResultImage(candidate.feedUrl),
         })
       }
     }
