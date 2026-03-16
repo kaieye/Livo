@@ -39,20 +39,20 @@ const FALLBACK_NITTER_INSTANCES = [
 ]
 
 const X_AVATAR_CACHE_TTL = 10 * 60 * 1000
-const YOUTUBE_AVATAR_CACHE_TTL = 10 * 60 * 1000
 const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
 const xAvatarCache = new Map<string, { expiresAt: number; image: string }>()
-const youtubeAvatarCache = new Map<string, { expiresAt: number; image: string }>()
+type DiscoverSearchResult = {
+  title: string
+  url: string
+  siteUrl: string
+  description: string
+  source: "curated" | "url" | "rsshub"
+  image?: string
+}
+
 const discoverSearchCache = new Map<string, {
   expiresAt: number
-  results: Array<{
-    title: string
-    url: string
-    siteUrl: string
-    description: string
-    source: "curated" | "url" | "rsshub"
-    image?: string
-  }>
+  results: DiscoverSearchResult[]
 }>()
 
 /** Return the configured RSSHub instance URL (no trailing slash) */
@@ -108,140 +108,6 @@ function extractLikelyXHandle(query: string): string | null {
   return clean
 }
 
-function extractLikelyYouTubeHandle(query: string): string | null {
-  const raw = query.trim()
-  if (!raw) return null
-  const clean = raw.replace(/^@+/, "")
-  if (!clean) return null
-  // YouTube handles allow letters, digits, underscore, dot and hyphen.
-  if (!/^[a-zA-Z0-9._-]{3,40}$/.test(clean)) return null
-  return clean
-}
-
-function extractLikelyYouTubeChannelId(query: string): string | null {
-  const clean = query.trim()
-  if (!clean) return null
-  // Typical YouTube channel id format starts with UC and is 24 chars.
-  if (!/^UC[a-zA-Z0-9_-]{20,30}$/.test(clean)) return null
-  return clean
-}
-
-function inferVideoProbeSiteUrl(feedUrl: string): string {
-  try {
-    const u = new URL(feedUrl)
-    const channelId = u.pathname.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
-    if (channelId) return `https://www.youtube.com/channel/${decodeURIComponent(channelId)}`
-
-    const user = u.pathname.match(/\/youtube\/user\/([^/?#]+)/i)?.[1]
-    if (user) {
-      const decoded = decodeURIComponent(user)
-      if (decoded.startsWith("@")) return `https://www.youtube.com/${decoded}`
-      return `https://www.youtube.com/@${decoded}`
-    }
-  } catch {
-    // Ignore malformed feed URL.
-  }
-  return "https://www.youtube.com"
-}
-
-function normalizeYouTubeImageUrl(raw: string): string {
-  const cleaned = decodeBasicHtmlEntities((raw || "").trim())
-  if (!cleaned) return ""
-  if (cleaned.startsWith("//")) return `https:${cleaned}`
-  return cleaned
-}
-
-function extractYouTubeChannelKey(feedUrl: string, siteUrl?: string): { cacheKey: string; profileUrl: string } | null {
-  const candidates = [feedUrl, siteUrl || ""].filter(Boolean)
-
-  for (const candidate of candidates) {
-    try {
-      const u = new URL(candidate)
-      const path = u.pathname || ""
-
-      const rsshubChannel = path.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
-      if (rsshubChannel) {
-        const channelId = decodeURIComponent(rsshubChannel)
-        return {
-          cacheKey: `channel:${channelId.toLowerCase()}`,
-          profileUrl: `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`,
-        }
-      }
-
-      const rsshubUser = path.match(/\/youtube\/user\/([^/?#]+)/i)?.[1]
-      if (rsshubUser) {
-        const decoded = decodeURIComponent(rsshubUser)
-        const handle = decoded.replace(/^@+/, "")
-        if (handle) {
-          return {
-            cacheKey: `handle:${handle.toLowerCase()}`,
-            profileUrl: `https://www.youtube.com/@${encodeURIComponent(handle)}`,
-          }
-        }
-      }
-
-      const directChannel = path.match(/^\/channel\/([^/?#]+)/i)?.[1]
-      if (directChannel) {
-        const channelId = decodeURIComponent(directChannel)
-        return {
-          cacheKey: `channel:${channelId.toLowerCase()}`,
-          profileUrl: `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`,
-        }
-      }
-
-      const directHandle = path.match(/^\/@([^/?#]+)/i)?.[1]
-      if (directHandle) {
-        const handle = decodeURIComponent(directHandle)
-        return {
-          cacheKey: `handle:${handle.toLowerCase()}`,
-          profileUrl: `https://www.youtube.com/@${encodeURIComponent(handle)}`,
-        }
-      }
-    } catch {
-      // Ignore malformed URL candidate.
-    }
-  }
-
-  return null
-}
-
-function extractYouTubeAvatarFromHtml(html: string): string {
-  const raw =
-    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
-    || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)?.[1]
-    || ""
-  return normalizeYouTubeImageUrl(raw)
-}
-
-async function fetchYouTubeAvatarByProfile(profileUrl: string, cacheKey: string): Promise<string> {
-  const now = Date.now()
-  const cached = youtubeAvatarCache.get(cacheKey)
-  if (cached && cached.expiresAt > now) return cached.image
-
-  try {
-    const res = await fetch(profileUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(3500),
-    })
-    if (!res.ok) return ""
-    const html = await res.text()
-    const image = extractYouTubeAvatarFromHtml(html)
-    if (!image) return ""
-    youtubeAvatarCache.set(cacheKey, {
-      expiresAt: now + YOUTUBE_AVATAR_CACHE_TTL,
-      image,
-    })
-    return image
-  } catch {
-    return ""
-  }
-}
-
 async function fetchXAvatarByUsername(username: string): Promise<string> {
   const clean = extractLikelyXHandle(username)
   if (!clean) return ""
@@ -288,12 +154,6 @@ async function inferDiscoverResultImage(feedUrl: string, siteUrl?: string): Prom
       // Add a small cache-buster to reduce stale CDN/browser caches.
       return `https://unavatar.io/x/${encodeURIComponent(clean)}?v=${Date.now()}`
     }
-  }
-
-  const youtubeKey = extractYouTubeChannelKey(feedUrl, siteUrl)
-  if (youtubeKey) {
-    const image = await fetchYouTubeAvatarByProfile(youtubeKey.profileUrl, youtubeKey.cacheKey)
-    if (image) return image
   }
 
   const fromSite = (siteUrl || "").trim()
@@ -522,19 +382,131 @@ type BilibiliUserProbeCandidate = {
   feedUrl: string
 }
 
+type XUserProbeCandidate = {
+  username: string
+  title: string
+  description: string
+  image: string
+  feedUrl: string
+}
+
 function normalizeNameForMatch(input: string): string {
   return input
     .toLowerCase()
     .replace(/<[^>]+>/g, "")
-    .replace(/[\s\p{P}\p{S}_.-]+/gu, "")
+    .replace(/[@\s_.-]+/g, "")
     .trim()
+}
+
+function stripPlatformSuffix(input: string): string {
+  return input
+    .replace(/\s*-\s*(youtube|bilibili|x|twitter|instagram|rss)\s*$/i, "")
+    .trim()
+}
+
+function normalizeDiscoverMatchValue(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[\s_.\-\/|]+/g, "")
+    .trim()
+}
+
+function computeMatchTier(query: string, candidate: string): number {
+  const q = normalizeDiscoverMatchValue(query)
+  const c = normalizeDiscoverMatchValue(candidate)
+  if (!q || !c) return 0
+  if (c === q) return 3
+  if (c.startsWith(q)) return 2
+  if (c.includes(q)) return 1
+  return 0
+}
+
+function detectResultPlatform(url: string): "youtube" | "bilibili" | "twitter" | "instagram" | "other" {
+  try {
+    const u = new URL(url)
+    const p = u.pathname.toLowerCase()
+    if (p.includes("/youtube/")) return "youtube"
+    if (p.includes("/bilibili/")) return "bilibili"
+    if (p.includes("/twitter/") || /(x\.com|twitter\.com|nitter)/i.test(u.hostname)) return "twitter"
+    if (p.includes("/instagram/") || p.includes("/picnob") || p.includes("/pixnoy") || p.includes("/piokok")) return "instagram"
+  } catch {
+    // Ignore malformed URL and fallback to "other".
+  }
+  return "other"
+}
+
+function computeDiscoverResultScore(query: string, result: DiscoverSearchResult): number {
+  const title = (result.title || "").trim()
+  const titleBase = stripPlatformSuffix(title)
+  const description = (result.description || "").trim()
+  const sourceBoost = result.source === "curated" ? 30 : result.source === "rsshub" ? 20 : 10
+  const exactTitleBoost = computeMatchTier(query, titleBase)
+  const fullTitleBoost = computeMatchTier(query, title)
+  const descriptionBoost = computeMatchTier(query, description)
+  const urlBoost = computeMatchTier(query, result.url)
+  const siteBoost = computeMatchTier(query, result.siteUrl)
+  return exactTitleBoost * 1000 + fullTitleBoost * 400 + descriptionBoost * 180 + urlBoost * 140 + siteBoost * 100 + sourceBoost
+}
+
+function computeDiscoverPrimaryTier(query: string, result: DiscoverSearchResult): number {
+  const title = (result.title || "").trim()
+  const titleBase = stripPlatformSuffix(title)
+  return Math.max(
+    computeMatchTier(query, titleBase),
+    computeMatchTier(query, title),
+    computeMatchTier(query, result.description),
+    computeMatchTier(query, result.url),
+    computeMatchTier(query, result.siteUrl),
+  )
+}
+
+function buildAliasDedupKey(result: DiscoverSearchResult): string | null {
+  const platform = detectResultPlatform(result.url)
+  if (platform === "other") return null
+  const normalizedTitle = normalizeDiscoverMatchValue(stripPlatformSuffix(result.title || ""))
+  if (!normalizedTitle) return null
+  return `${platform}:${normalizedTitle}`
+}
+
+function dedupeAndSortDiscoverResults(query: string, results: DiscoverSearchResult[]): DiscoverSearchResult[] {
+  const ranked = results
+    .map((result) => ({
+      result,
+      primaryTier: computeDiscoverPrimaryTier(query, result),
+      score: computeDiscoverResultScore(query, result),
+      aliasTier: computeMatchTier(query, stripPlatformSuffix(result.title || "")),
+    }))
+    .sort((a, b) => {
+      // Explicit priority: exact > prefix > contains.
+      if (b.primaryTier !== a.primaryTier) return b.primaryTier - a.primaryTier
+      if (b.score !== a.score) return b.score - a.score
+      return a.result.title.length - b.result.title.length
+    })
+
+  const seenUrl = new Set<string>()
+  const seenAlias = new Set<string>()
+  const deduped: DiscoverSearchResult[] = []
+  for (const item of ranked) {
+    const urlKey = item.result.url.trim().toLowerCase()
+    if (seenUrl.has(urlKey)) continue
+
+    const aliasKey = buildAliasDedupKey(item.result)
+    // Alias dedupe only applies for exact-match aliases to keep candidate list rich.
+    if (aliasKey && item.aliasTier >= 3 && seenAlias.has(aliasKey)) continue
+
+    seenUrl.add(urlKey)
+    if (aliasKey && item.aliasTier >= 3) seenAlias.add(aliasKey)
+    deduped.push(item.result)
+  }
+  return deduped.slice(0, 500)
 }
 
 function isUsernameMatch(query: string, candidateName: string): boolean {
   const q = normalizeNameForMatch(query)
   const c = normalizeNameForMatch(candidateName)
   if (!q || !c) return false
-  return c.includes(q) || q.includes(c)
+  return c.includes(q)
 }
 
 function flattenTextRuns(node: any): string {
@@ -557,163 +529,85 @@ function collectChannelRenderers(node: any, out: any[]): void {
   }
 }
 
-function collectVideoRenderers(node: any, out: any[]): void {
-  if (!node) return
-  if (Array.isArray(node)) {
-    for (const n of node) collectVideoRenderers(n, out)
-    return
-  }
-  if (typeof node !== "object") return
-  if (node.videoRenderer) out.push(node.videoRenderer)
-  for (const key of Object.keys(node)) {
-    collectVideoRenderers(node[key], out)
-  }
+function extractYouTubeHandleFromChannelRenderer(renderer: any): string {
+  const canonical =
+    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl
+    || renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+    || ""
+  const matched = String(canonical).match(/\/@([^/?#]+)/)
+  return matched?.[1] ? decodeURIComponent(matched[1]).trim() : ""
 }
 
-function extractYouTubeInitialData(html: string): any | null {
-  const markers = ["var ytInitialData =", "window[\"ytInitialData\"] ="]
-  for (const marker of markers) {
-    const markerIdx = html.indexOf(marker)
-    if (markerIdx === -1) continue
-    const start = html.indexOf("{", markerIdx)
-    if (start === -1) continue
-    let depth = 0
-    let inString = false
-    let escaped = false
-    for (let i = start; i < html.length; i++) {
-      const ch = html[i]
-      if (inString) {
-        if (escaped) {
-          escaped = false
-        } else if (ch === "\\") {
-          escaped = true
-        } else if (ch === "\"") {
-          inString = false
-        }
-        continue
-      }
-
-      if (ch === "\"") {
-        inString = true
-        continue
-      }
-      if (ch === "{") depth++
-      if (ch === "}") depth--
-      if (depth === 0) {
-        const jsonText = html.slice(start, i + 1)
-        try {
-          return JSON.parse(jsonText)
-        } catch {
-          break
-        }
-      }
-    }
-  }
+function extractYouTubeUserRouteFromChannelRenderer(renderer: any): string | null {
+  const canonical =
+    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl
+    || renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+    || ""
+  const path = String(canonical).trim()
+  if (!path.startsWith("/")) return null
+  const atMatch = path.match(/^\/@([^/?#]+)/)
+  if (atMatch?.[1]) return `/youtube/user/@${encodeURIComponent(decodeURIComponent(atMatch[1]).trim())}`
+  const userMatch = path.match(/^\/(?:user|c)\/([^/?#]+)/i)
+  if (userMatch?.[1]) return `/youtube/user/${encodeURIComponent(decodeURIComponent(userMatch[1]).trim())}`
   return null
 }
 
+function looksLikeYouTubeChannelId(input: string): boolean {
+  return /^UC[a-zA-Z0-9_-]{20,}$/.test(input.trim())
+}
+
 async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbeCandidate[]> {
-  const rsshubBase = getRSSHubInstance()
-  const seen = new Set<string>()
-  const out: VideoProbeCandidate[] = []
-
-  const addCandidate = (channelId: string, name: string, description: string, imageRaw: string) => {
-    if (!channelId || seen.has(channelId)) return
-    seen.add(channelId)
-    out.push({
-      platform: "youtube",
-      title: `${name} - YouTube`,
-      description: description || "YouTube channel",
-      image: normalizeYouTubeImageUrl(imageRaw),
-      feedUrl: `${rsshubBase}/youtube/channel/${encodeURIComponent(channelId)}`,
+  if (looksLikeYouTubeChannelId(query)) return []
+  const endpoint = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`
+  try {
+    const res = await fetch(endpoint, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(4000),
     })
-  }
+    if (!res.ok) return []
+    const html = await res.text()
+    const m =
+      html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/) ||
+      html.match(/window\["ytInitialData"\] = (\{[\s\S]*?\});<\/script>/)
+    if (!m?.[1]) return []
 
-  const processData = (data: any) => {
-    const channelRenderers: any[] = []
-    collectChannelRenderers(data, channelRenderers)
-    for (const r of channelRenderers) {
+    const data = JSON.parse(m[1])
+    const renderers: any[] = []
+    collectChannelRenderers(data, renderers)
+
+    const seen = new Set<string>()
+    const out: VideoProbeCandidate[] = []
+    for (const r of renderers) {
       const channelId = (r.channelId || "").trim()
-      if (!channelId) continue
+      if (!channelId || seen.has(channelId)) continue
+      seen.add(channelId)
       const name = flattenTextRuns(r.title) || channelId
-      const description = flattenTextRuns(r.descriptionSnippet) || ""
+      const handle = extractYouTubeHandleFromChannelRenderer(r)
+      const route = extractYouTubeUserRouteFromChannelRenderer(r)
+      if (!route) continue
+      // Username-only search: channel ID is not used as a search key.
+      // Keep the filter soft to avoid dropping relevant candidates for CJK names.
+      const searchable = [name, handle, flattenTextRuns(r.descriptionSnippet)].filter(Boolean).join(" ")
+      if (!isUsernameMatch(query, searchable) && out.length >= 30) continue
+      const description = flattenTextRuns(r.descriptionSnippet) || "YouTube channel"
       const thumbs = r.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
       const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
-      addCandidate(channelId, name, description, image)
-    }
-    const videoRenderers: any[] = []
-    collectVideoRenderers(data, videoRenderers)
-    for (const r of videoRenderers) {
-      for (const run of ((r.ownerText?.runs || []) as Array<any>)) {
-        const browseId = String(run?.navigationEndpoint?.browseEndpoint?.browseId || "").trim()
-        if (!/^UC[a-zA-Z0-9_-]{20,30}$/.test(browseId)) continue
-        const name = String(run?.text || "").trim() || browseId
-        const thumbs = r.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer?.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
-        const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
-        addCandidate(browseId, name, "", image)
-      }
-    }
-  }
-
-  // Method 1: InnerTube API (structured JSON, more reliable than HTML scraping).
-  // IMPORTANT: Do NOT set gl/hl to CN — YouTube returns empty results for gl=CN (blocked region).
-  // Try channel-only filter first, then unfiltered for broader coverage.
-  for (const params of ["EgIQAg==", undefined] as Array<string | undefined>) {
-    if (out.length > 0) break
-    try {
-      const body: Record<string, any> = {
-        context: { client: { clientName: "WEB", clientVersion: "2.20240716.00.00" } },
-        query,
-      }
-      if (params) body.params = params
-      const res = await fetch("https://www.youtube.com/youtubei/v1/search", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "X-YouTube-Client-Name": "1",
-          "X-YouTube-Client-Version": "2.20240716.00.00",
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(6000),
+      out.push({
+        platform: "youtube",
+        title: `${name} - YouTube`,
+        description: handle ? `${description} (@${handle})` : description,
+        image,
+        feedUrl: `${getRSSHubInstance()}${route}`,
       })
-      if (res.ok) {
-        const data = await res.json() as any
-        processData(data)
-      }
-    } catch {
-      // Try next approach.
+      if (out.length >= 120) break
     }
+    return out
+  } catch {
+    return []
   }
-
-  // Method 2: HTML scraping fallback (if InnerTube failed or returned nothing).
-  if (out.length === 0) {
-    try {
-      const searchUrl = new URL("https://www.youtube.com/results")
-      searchUrl.searchParams.set("search_query", query)
-      searchUrl.searchParams.set("sp", "EgIQAg==")
-      const res = await fetch(searchUrl.toString(), {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
-        },
-        signal: AbortSignal.timeout(6000),
-      })
-      if (res.ok) {
-        const html = await res.text()
-        const data = extractYouTubeInitialData(html)
-        if (data) processData(data)
-      }
-    } catch {
-      // Ignore scraping failures.
-    }
-  }
-
-  if (out.length === 0) return []
-  const matched = out.filter((candidate) => isUsernameMatch(query, candidate.title))
-  if (matched.length > 0) return matched.slice(0, 6)
-  return out.slice(0, 6)
 }
 
 async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string): Promise<Array<{
@@ -726,6 +620,7 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string)
   const results: VideoProbeCandidate[] = []
   const clean = query.trim().replace(/^@/, "")
   if (!clean) return results
+  if (looksLikeYouTubeChannelId(clean)) return results
   const uidMatch = clean.match(/^(?:uid[:\s-]*)?(\d{3,})$/i)
   const bilibiliUid = uidMatch?.[1] || null
 
@@ -747,7 +642,6 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string)
     const routes = [
       `/youtube/user/@${clean}`,
       `/youtube/user/${clean}`,
-      `/youtube/channel/${clean}`,
     ]
     const attempts = routes.map(async (route) => {
       const feedUrl = `${rsshubInstance}${route}`
@@ -762,10 +656,9 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string)
       }
     })
     const yt = await Promise.any(attempts)
-    const ytName = (yt.title || "").replace(/\s*-\s*YouTube$/i, "").trim()
-    if (isUsernameMatch(clean, ytName) || isUsernameMatch(clean, yt.title || "")) {
-      results.push(yt)
-    }
+    // If a direct RSSHub route resolves, trust it and keep the candidate.
+    // This avoids dropping valid channels when UI query is handle/ID but title is localized.
+    results.push(yt)
   } catch {
     // Ignore YouTube probe failures.
   }
@@ -784,8 +677,8 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string)
       title: user.title,
       description: user.description,
       image: user.image,
-      // Video tab should keep video route.
-      feedUrl: user.feedUrl.replace(/\/bilibili\/user\/dynamic\//i, "/bilibili/user/video/"),
+      // Username search defaults to dynamic route, and the UI can still choose view when subscribing.
+      feedUrl: user.feedUrl,
     }
     if (!results.some((x) => x.feedUrl === candidate.feedUrl)) results.push(candidate)
   }
@@ -793,10 +686,9 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string)
 }
 
 async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string): Promise<BilibiliUserProbeCandidate[]> {
-  const clean = query.trim()
+  const clean = query.trim().replace(/^@+/, "")
   if (!clean) return []
-  const q = clean.toLowerCase()
-  const out: BilibiliUserProbeCandidate[] = []
+  const candidates: Array<BilibiliUserProbeCandidate & { score: number }> = []
   const seen = new Set<string>()
   try {
     const endpoint = `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(clean)}`
@@ -817,22 +709,25 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
         }
       }
       if (json.code === 0) {
-        for (const user of (json.data?.result || []).slice(0, 6)) {
+        for (const user of (json.data?.result || []).slice(0, 80)) {
           const mid = user.mid ? String(user.mid) : ""
           if (!mid || seen.has(mid)) continue
           seen.add(mid)
           const uname = (user.uname || `UID ${mid}`).replace(/<[^>]+>/g, "").trim()
           const usign = (user.usign || "Bilibili user").replace(/<[^>]+>/g, "").trim()
-          // Hard filter: candidate must contain the input string.
-          const searchable = `${uname} ${usign} ${mid}`.toLowerCase()
-          if (!searchable.includes(q)) continue
-          out.push({
+          const nameTier = computeMatchTier(clean, uname)
+          const signTier = computeMatchTier(clean, usign)
+          const midTier = computeMatchTier(clean, mid)
+          const score = nameTier * 1000 + signTier * 200 + midTier * 120
+          if (score <= 0) continue
+          candidates.push({
             uid: mid,
             title: `${uname} - Bilibili`,
             description: usign,
             image: user.upic || "",
             // Social tab should use dynamic route.
             feedUrl: `${rsshubInstance}/bilibili/user/dynamic/${mid}`,
+            score,
           })
         }
       }
@@ -840,7 +735,80 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
   } catch {
     // Ignore Bilibili search failures.
   }
-  return out
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 100)
+    .map(({ score: _score, ...candidate }) => candidate)
+}
+
+async function probeXUsersByKeyword(query: string, rsshubInstance: string): Promise<XUserProbeCandidate[]> {
+  const clean = query.trim().replace(/^@+/, "")
+  if (!clean) return []
+
+  const out: XUserProbeCandidate[] = []
+  const seen = new Set<string>()
+  const pushCandidate = async (usernameRaw: string, description = "X user route") => {
+    const username = usernameRaw.trim().replace(/^@+/, "")
+    if (!username) return
+    const key = username.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    const image = (await fetchXAvatarByUsername(username)) || `https://unavatar.io/x/${encodeURIComponent(username)}`
+    out.push({
+      username,
+      title: `${username} - X`,
+      description,
+      image,
+      feedUrl: `${rsshubInstance}/x/user/${encodeURIComponent(username)}`,
+    })
+  }
+
+  // If input already looks like a username, always keep it as a high-priority candidate.
+  const directHandle = extractLikelyXHandle(clean)
+  if (directHandle) {
+    await pushCandidate(directHandle)
+  }
+
+  // Use Nitter user-search pages as a lightweight source for username candidates.
+  for (const instance of FALLBACK_NITTER_INSTANCES) {
+    try {
+      const endpoint = `${instance.replace(/\/+$/, "")}/search?f=users&q=${encodeURIComponent(clean)}`
+      const res = await fetch(endpoint, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(3500),
+      })
+      if (!res.ok) continue
+      const html = await res.text()
+      const regex = /href=["']\/([^"'\/?#]+)(?:\/?)["'][^>]*class=["'][^"']*username[^"']*["']/gi
+      let matched: RegExpExecArray | null
+      while ((matched = regex.exec(html)) !== null) {
+        const username = decodeURIComponent(matched[1] || "").trim()
+        if (!username) continue
+        await pushCandidate(username, "X user search result")
+        if (out.length >= 30) break
+      }
+      if (out.length >= 30) break
+    } catch {
+      // Ignore single instance failure.
+    }
+  }
+
+  const normalizedQuery = normalizeNameForMatch(clean)
+  const scored = out
+    .map((candidate) => {
+      const score = computeMatchTier(clean, candidate.username)
+      const fallbackScore = normalizedQuery && normalizeNameForMatch(candidate.title).includes(normalizedQuery) ? 1 : 0
+      return { candidate, score: score || fallbackScore }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 60)
+    .map((item) => item.candidate)
+
+  return scored
 }
 
 async function fetchInstagramAvatarByUsername(username: string): Promise<string | undefined> {
@@ -893,14 +861,7 @@ export function registerDiscoverHandlers(): void {
       return cached.results
     }
 
-    const results: Array<{
-      title: string
-      url: string
-      siteUrl: string
-      description: string
-      source: "curated" | "url" | "rsshub"
-      image?: string
-    }> = []
+    const results: DiscoverSearchResult[] = []
 
     // Search curated feeds
     const curated = searchCuratedFeeds(query)
@@ -934,6 +895,35 @@ export function registerDiscoverHandlers(): void {
       })
     }
 
+    // Include video-source candidates from keyword search. This supports
+    // YouTube handles/IDs/usernames and Bilibili UID/name lookups.
+    const videoCandidates = await probeVideoSourcesByKeyword(query, instance)
+    for (const candidate of videoCandidates) {
+      if (results.some((r) => r.url === candidate.feedUrl)) continue
+      results.push({
+        title: candidate.title,
+        url: candidate.feedUrl,
+        siteUrl: candidate.feedUrl,
+        description: candidate.description || (candidate.platform === "youtube" ? "YouTube channel" : "Bilibili user"),
+        source: "rsshub",
+        image: candidate.image || await inferDiscoverResultImage(candidate.feedUrl),
+      })
+    }
+
+    // Include X user candidates from keyword search, so results are not YouTube-only.
+    const xCandidates = await probeXUsersByKeyword(query, instance)
+    for (const candidate of xCandidates) {
+      if (results.some((r) => r.url === candidate.feedUrl)) continue
+      results.push({
+        title: candidate.title,
+        url: candidate.feedUrl,
+        siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
+        description: candidate.description,
+        source: "rsshub",
+        image: candidate.image,
+      })
+    }
+
     const trimmedQuery = query.trim()
 
     // Resolve profile-like inputs (and plain X handles) to direct subscribable feed links.
@@ -943,10 +933,6 @@ export function registerDiscoverHandlers(): void {
       profileInputs.add(trimmedQuery)
       const xHandle = extractLikelyXHandle(trimmedQuery)
       if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
-      const ytHandle = extractLikelyYouTubeHandle(trimmedQuery)
-      if (ytHandle) profileInputs.add(`https://www.youtube.com/@${ytHandle}`)
-      const ytChannelId = extractLikelyYouTubeChannelId(trimmedQuery)
-      if (ytChannelId) profileInputs.add(`https://www.youtube.com/channel/${ytChannelId}`)
     }
     for (const profileInput of profileInputs) {
       const resolved = resolveProfileUrlToCandidates(profileInput, instance)
@@ -960,23 +946,6 @@ export function registerDiscoverHandlers(): void {
           description: candidate.description || "Profile feed",
           source: candidate.source === "rss" ? "url" : "rsshub",
           image: await inferDiscoverResultImage(candidate.feedUrl, candidate.siteUrl || profileInput),
-        })
-      }
-    }
-
-    // Probe YouTube/Bilibili user channels by keyword, so plain channel-name searches
-    // (e.g. "MrBeast") can produce direct subscribable feed candidates.
-    if (trimmedQuery && !/^https?:\/\//i.test(trimmedQuery) && !/^rsshub:\/\//i.test(trimmedQuery)) {
-      const videoCandidates = await probeVideoSourcesByKeyword(trimmedQuery, instance)
-      for (const candidate of videoCandidates) {
-        if (results.some((r) => r.url === candidate.feedUrl)) continue
-        results.push({
-          title: candidate.title,
-          url: candidate.feedUrl,
-          siteUrl: inferVideoProbeSiteUrl(candidate.feedUrl),
-          description: candidate.description,
-          source: "rsshub",
-          image: candidate.image || await inferDiscoverResultImage(candidate.feedUrl),
         })
       }
     }
@@ -1019,14 +988,16 @@ export function registerDiscoverHandlers(): void {
       }
     }
 
+    const finalResults = dedupeAndSortDiscoverResults(query, results)
+
     if (cacheKey) {
       discoverSearchCache.set(cacheKey, {
         expiresAt: Date.now() + DISCOVER_SEARCH_CACHE_TTL,
-        results,
+        results: finalResults,
       })
     }
 
-    return results
+    return finalResults
   })
 
   // Get RSSHub routes 鈥?prepend instance URL to make them subscribable
@@ -1108,18 +1079,21 @@ export function registerDiscoverHandlers(): void {
   })
 
   // Quick probe for a YouTube channel via RSSHub 鈥?returns channel name + avatar
-  // Supports: channel ID, @handle, or plain username
+  // Supports: @handle or plain username (channel ID intentionally disabled)
   ipcMain.handle("youtube:probe-channel", async (_event, query: string) => {
     const instance = getRSSHubInstance()
     const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
     const clean = query.trim().replace(/^@/, "")
     if (!clean) return { valid: false, query }
 
+    if (looksLikeYouTubeChannelId(clean)) {
+      return { valid: false, query: clean }
+    }
+
     // Try multiple RSSHub route patterns
     const routes = [
       `/youtube/user/@${clean}`,    // @handle format
       `/youtube/user/${clean}`,     // plain username
-      `/youtube/channel/${clean}`,  // channel ID (UC...)
     ]
 
     // Try all instance+route combinations in parallel for faster results

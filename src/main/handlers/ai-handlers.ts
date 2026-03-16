@@ -24,15 +24,33 @@ function createOpenAIClient(config: AIConfig): OpenAI {
   })
 }
 
+function validateAIConfig(config: AIConfig): string | null {
+  const apiKey = (config.apiKey || "").trim()
+  const model = (config.model || "").trim()
+  const baseUrl = (config.baseUrl || "").trim()
+
+  if (config.provider !== "ollama" && !apiKey) {
+    return "璇峰厛鍦ㄨ缃腑閰嶇疆 AI API Key"
+  }
+  if (!model) {
+    return "璇峰厛閰嶇疆 AI 妯″瀷"
+  }
+  if (config.provider === "custom") {
+    if (!baseUrl) return "Custom provider requires API base URL"
+    if (!apiKey) return "Custom provider requires API Key"
+    if (!model) return "Custom provider requires model"
+  }
+  return null
+}
+
 export function registerAIHandlers(): void {
   // Summarize content
   ipcMain.handle(IPC.AI_SUMMARIZE, async (_event, content: string, language?: string) => {
     const settings = getSettings()
     const aiConfig = settings.ai
 
-    if (!aiConfig.apiKey && aiConfig.provider !== "ollama") {
-      return { success: false, error: "璇峰厛鍦ㄨ缃腑閰嶇疆 AI API Key" }
-    }
+    const configError = validateAIConfig(aiConfig)
+    if (configError) return { success: false, error: configError }
 
     try {
       const client = createOpenAIClient(aiConfig)
@@ -68,9 +86,8 @@ export function registerAIHandlers(): void {
     const settings = getSettings()
     const aiConfig = settings.ai
 
-    if (!aiConfig.apiKey && aiConfig.provider !== "ollama") {
-      return { success: false, error: "璇峰厛鍦ㄨ缃腑閰嶇疆 AI API Key" }
-    }
+    const configError = validateAIConfig(aiConfig)
+    if (configError) return { success: false, error: configError }
 
     try {
       const client = createOpenAIClient(aiConfig)
@@ -111,9 +128,8 @@ Rules:
     const settings = getSettings()
     const aiConfig = settings.ai
 
-    if (!aiConfig.apiKey && aiConfig.provider !== "ollama") {
-      return { success: false, error: "璇峰厛鍦ㄨ缃腑閰嶇疆 AI API Key" }
-    }
+    const configError = validateAIConfig(aiConfig)
+    if (configError) return { success: false, error: configError }
 
     try {
       const client = createOpenAIClient(aiConfig)
@@ -141,9 +157,8 @@ Rules:
       const settings = getSettings()
       const aiConfig = settings.ai
 
-      if (!aiConfig.apiKey && aiConfig.provider !== "ollama") {
-        return { success: false, error: "璇峰厛鍦ㄨ缃腑閰嶇疆 AI API Key" }
-      }
+      const configError = validateAIConfig(aiConfig)
+      if (configError) return { success: false, error: configError }
 
       try {
         const client = createOpenAIClient(aiConfig)

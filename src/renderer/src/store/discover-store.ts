@@ -31,6 +31,8 @@ interface DiscoverState {
   setSubscribing: (url: string, subscribing: boolean) => void
 }
 
+let latestSearchRequestSeq = 0
+
 export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   isOpen: false,
   categories: [],
@@ -71,15 +73,21 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   },
 
   search: async (query) => {
-    if (!query.trim()) {
+    const trimmed = query.trim()
+    if (!trimmed) {
       set({ searchResults: [], isSearching: false })
       return
     }
+
+    const searchSeq = ++latestSearchRequestSeq
     set({ isSearching: true })
     try {
-      const results = await window.api.discover.search(query)
+      const results = await window.api.discover.search(trimmed)
+      if (searchSeq !== latestSearchRequestSeq) return
+      if (useDiscoverStore.getState().searchQuery.trim() !== trimmed) return
       set({ searchResults: results, isSearching: false })
     } catch {
+      if (searchSeq !== latestSearchRequestSeq) return
       set({ isSearching: false })
     }
   },

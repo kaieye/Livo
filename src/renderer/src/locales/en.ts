@@ -389,7 +389,7 @@
     allFeeds: "All",
     starred: "Starred",
     aiAssistant: "AI Assistant",
-    discover: "Discover",
+    discover: "Add Subscription",
     search: "Search",
     addFeed: "Add Feed",
     importOPML: "Import OPML",
@@ -415,7 +415,7 @@
     subscribe: "Subscribe",
     removeRecommended: "Remove Recommended",
     noFeedsInCategory: "No feeds in this folder",
-    addFeedHint: "Click + to add a feed",
+    addFeedHint: "Use Add Subscription to start",
     importSuccess: "Import complete! {{imported}} succeeded, {{skipped}} skipped",
     importFailed: "Import failed",
     importErrors: ", {{errors}} failed",
@@ -499,7 +499,7 @@
 
   // Discover
   discover: {
-    title: "Discover",
+    title: "Add Subscription",
     searchPlaceholder: "Search feeds, enter URL or keywords...",
     searchResults: "Search Results",
     noSearchResults: "No matching feeds found",
@@ -576,7 +576,7 @@
     label_toggle_readability: "Get Original",
     label_scroll_top: "Scroll to Top",
     label_refresh_all: "Refresh All",
-    label_toggle_discover: "Open Discover",
+    label_toggle_discover: "Open Add Subscription",
     label_import_opml: "Import OPML",
     label_export_opml: "Export OPML",
     // Descriptions
@@ -603,7 +603,7 @@
     desc_toggle_readability: "Toggle Readability mode",
     desc_scroll_top: "Scroll to article top",
     desc_refresh_all: "Refresh all feeds",
-    desc_toggle_discover: "Toggle discover panel",
+    desc_toggle_discover: "Toggle add subscription panel",
     desc_import_opml: "Import OPML file",
     desc_export_opml: "Export OPML file",
   },

@@ -13,6 +13,11 @@ export function AISettings() {
 
   const ai = settings.ai
   const providerConfig = AI_PROVIDERS[ai.provider]
+  const isCustomProvider = ai.provider === "custom"
+  const isApiKeyMissing = ai.provider !== "ollama" && !ai.apiKey.trim()
+  const isBaseUrlMissing = isCustomProvider && !(ai.baseUrl || "").trim()
+  const isModelMissing = isCustomProvider && !ai.model.trim()
+  const disableTestConnection = isTesting || isApiKeyMissing || isBaseUrlMissing || isModelMissing
 
   const handleProviderChange = (provider: AIProvider) => {
     const config = AI_PROVIDERS[provider]
@@ -78,13 +83,16 @@ export function AISettings() {
       {/* API Key */}
       {ai.provider !== "ollama" && (
         <div>
-          <label className="block text-sm font-medium mb-1.5">{t("settings.apiKey")}</label>
+          <label className="block text-sm font-medium mb-1.5">
+            {t("settings.apiKey")}{isCustomProvider ? " *" : ""}
+          </label>
           <div className="relative">
             <input
               type={showKey ? "text" : "password"}
               value={ai.apiKey}
               onChange={(e) => updateSettings({ ai: { ...ai, apiKey: e.target.value } })}
               placeholder={t("settings.apiKeyPlaceholder", { provider: providerConfig.name })}
+              required={isCustomProvider}
               className="w-full px-3 py-2.5 pr-10 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
             <button
@@ -100,12 +108,16 @@ export function AISettings() {
 
       {/* Base URL */}
       <div>
-        <label className="block text-sm font-medium mb-1.5">{t("settings.baseUrl")}</label>
+        <label className="block text-sm font-medium mb-1.5">
+          {isCustomProvider ? t("settings.baseUrl").replace(/\s*\([^)]*\)/g, "") : t("settings.baseUrl")}
+          {isCustomProvider ? " *" : ""}
+        </label>
         <input
           type="text"
           value={ai.baseUrl || ""}
           onChange={(e) => updateSettings({ ai: { ...ai, baseUrl: e.target.value } })}
           placeholder={providerConfig.defaultBaseUrl || t("settings.baseUrlPlaceholder")}
+          required={isCustomProvider}
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
         />
         <p className="text-xs text-text-tertiary mt-1">
@@ -115,11 +127,14 @@ export function AISettings() {
 
       {/* Model */}
       <div>
-        <label className="block text-sm font-medium mb-1.5">{t("settings.model")}</label>
+        <label className="block text-sm font-medium mb-1.5">
+          {t("settings.model")}{isCustomProvider ? " *" : ""}
+        </label>
         {providerConfig.models.length > 0 ? (
           <select
             value={ai.model}
             onChange={(e) => updateSettings({ ai: { ...ai, model: e.target.value } })}
+            required={isCustomProvider}
             className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
           >
             {providerConfig.models.map((m) => (
@@ -134,6 +149,7 @@ export function AISettings() {
             value={ai.model}
             onChange={(e) => updateSettings({ ai: { ...ai, model: e.target.value } })}
             placeholder={t("settings.modelPlaceholder")}
+            required={isCustomProvider}
             className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
           />
         )}
@@ -197,7 +213,7 @@ export function AISettings() {
       <div>
         <button
           onClick={handleTestConnection}
-          disabled={isTesting || (!ai.apiKey && ai.provider !== "ollama")}
+          disabled={disableTestConnection}
           className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
         >
           {isTesting ? t("settings.testing") : t("settings.testConnection")}

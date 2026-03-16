@@ -351,7 +351,7 @@ export const AI_PROVIDERS = {
     models: ["llama3.2", "llama3.1", "mistral", "qwen2.5", "gemma2"],
   },
   custom: {
-    name: "Custom (OpenAI Compatible)",
+    name: "Custom",
     defaultBaseUrl: "",
     models: [],
   },

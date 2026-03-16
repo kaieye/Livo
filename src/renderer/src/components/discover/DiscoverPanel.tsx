@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { useDiscoverStore } from "../../store/discover-store"
 import { useFeedStore } from "../../store/feed-store"
@@ -58,6 +58,10 @@ const CATEGORY_COLORS: Record<string, string> = {
   reading: "from-stone-500/20 to-zinc-500/20 text-stone-600 dark:text-stone-400",
 }
 
+const SEARCH_RESULTS_MIN_PAGE_SIZE = 6
+const SEARCH_RESULTS_ESTIMATED_ROW_HEIGHT = 78
+const SEARCH_RESULTS_PAGER_RESERVED_HEIGHT = 92
+
 function inferResultTitleFromUrl(url: string): string {
   try {
     const u = new URL(url)
@@ -113,6 +117,9 @@ export function DiscoverPanel() {
     title: string
     preferredView: FeedViewType
   } | null>(null)
+  const [searchPageSize, setSearchPageSize] = useState(12)
+  const [searchPage, setSearchPage] = useState(1)
+  const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync subscribedUrls with existing user feeds
@@ -134,6 +141,29 @@ export function DiscoverPanel() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    setSearchPage(1)
+  }, [searchQuery])
+
+  useEffect(() => {
+    const hasQuery = searchQuery.trim().length > 0
+    if (!hasQuery) return
+
+    const updatePageSize = () => {
+      const top = searchResultsTopRef.current?.getBoundingClientRect().top ?? 220
+      const availableHeight = window.innerHeight - top - SEARCH_RESULTS_PAGER_RESERVED_HEIGHT
+      const nextSize = Math.max(
+        SEARCH_RESULTS_MIN_PAGE_SIZE,
+        Math.floor(availableHeight / SEARCH_RESULTS_ESTIMATED_ROW_HEIGHT),
+      )
+      setSearchPageSize(nextSize)
+    }
+
+    updatePageSize()
+    window.addEventListener("resize", updatePageSize)
+    return () => window.removeEventListener("resize", updatePageSize)
+  }, [searchQuery])
 
   const inferViewFromUrl = useCallback((targetUrl: string): FeedViewType => {
     const lower = (targetUrl || "").toLowerCase()
@@ -212,25 +242,48 @@ export function DiscoverPanel() {
   const isSubscribing = (url: string) => subscribingUrls.has(url)
   const hasSearchQuery = searchQuery.trim().length > 0
   const showCenteredSearch = !selectedCategory
+  const totalSearchPages = Math.max(1, Math.ceil(searchResults.length / searchPageSize))
+
+  useEffect(() => {
+    setSearchPage((prev) => Math.min(prev, totalSearchPages))
+  }, [totalSearchPages])
+
+  useEffect(() => {
+    if (!hasSearchQuery) return
+    searchResultsTopRef.current?.scrollIntoView({ block: "start", behavior: "smooth" })
+  }, [searchPage, hasSearchQuery])
+
+  const pagedSearchResults = useMemo(() => {
+    const start = (searchPage - 1) * searchPageSize
+    return searchResults.slice(start, start + searchPageSize)
+  }, [searchPage, searchPageSize, searchResults])
 
   const searchBar = (
-    <div className="relative">
-      <Search
-        size={16}
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-      />
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => handleSearch(e.target.value)}
-        placeholder={t("discover.searchPlaceholder")}
-        className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
-      />
-      {isSearching && hasSearchQuery && (
-        <div className="absolute left-3 right-3 -bottom-1 h-0.5 overflow-hidden rounded-full bg-accent/10">
-          <div className="h-full w-1/3 bg-accent/70 search-progress-slide" />
-        </div>
-      )}
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-secondary dark:text-text-dark-secondary">
+        <span className="px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">YouTube</span>
+        <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium">X</span>
+        <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-medium">Bilibili</span>
+        <span className="opacity-80">按精确匹配 / 前缀匹配 / 包含匹配排序</span>
+      </div>
+      <div className="relative">
+        <Search
+          size={16}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+        />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder={t("discover.searchPlaceholder")}
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
+        />
+        {isSearching && hasSearchQuery && (
+          <div className="absolute left-3 right-3 -bottom-1 h-0.5 overflow-hidden rounded-full bg-accent/10">
+            <div className="h-full w-1/3 bg-accent/70 search-progress-slide" />
+          </div>
+        )}
+      </div>
     </div>
   )
 
@@ -268,13 +321,13 @@ export function DiscoverPanel() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {showCenteredSearch ? (
-          <div className="w-full max-w-3xl mx-auto pt-[18vh]">{searchBar}</div>
+          <div className="w-full pt-[18vh]">{searchBar}</div>
         ) : (
-          <div className="w-full max-w-3xl mx-auto mb-4">{searchBar}</div>
+          <div className="w-full mb-4">{searchBar}</div>
         )}
 
         {subscribeHint && (
-          <div className="w-full max-w-3xl mx-auto mt-2 mb-3 rounded-lg border border-emerald-300/60 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+          <div className="w-full mt-2 mb-3 rounded-lg border border-emerald-300/60 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
             {subscribeHint}
           </div>
         )}
@@ -282,6 +335,7 @@ export function DiscoverPanel() {
         {/* Search results */}
         {hasSearchQuery ? (
           <div className="space-y-3">
+            <div ref={searchResultsTopRef} />
             <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
               {t("discover.searchResults")} {searchResults.length > 0 && `(${searchResults.length})`}
             </h3>
@@ -311,7 +365,7 @@ export function DiscoverPanel() {
               </div>
             ) : (
               <div className="space-y-2">
-                {searchResults.map((result) => (
+                {pagedSearchResults.map((result) => (
                   <FeedCard
                     key={result.url}
                     title={getDisplayTitle(result)}
@@ -330,6 +384,29 @@ export function DiscoverPanel() {
                     onSubscribe={() => handleToggleSubscribe(result.url, result.title)}
                   />
                 ))}
+                {searchResults.length > searchPageSize && (
+                  <div className="mt-3 sticky bottom-0 z-10 py-2 flex items-center justify-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary bg-white/90 dark:bg-surface-dark/90 backdrop-blur-sm rounded-lg">
+                    <button
+                      type="button"
+                      disabled={searchPage <= 1}
+                      onClick={() => setSearchPage((prev) => Math.max(1, prev - 1))}
+                      className="px-2 py-1 rounded-md border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                    >
+                      Prev
+                    </button>
+                    <span>
+                      {searchPage} / {totalSearchPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={searchPage >= totalSearchPages}
+                      onClick={() => setSearchPage((prev) => Math.min(totalSearchPages, prev + 1))}
+                      className="px-2 py-1 rounded-md border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

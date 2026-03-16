@@ -1,4 +1,4 @@
-﻿import { memo, startTransition, useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { memo, startTransition, useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { useFeedStore } from "../../store/feed-store"
 import { useEntryStore } from "../../store/entry-store"
@@ -254,14 +254,6 @@ function formatInstagramFeedTitle(candidateTitle: string | undefined, usernameOr
   return `${cleaned || fallback} - Ins`
 }
 
-function normalizeCandidateTitle(title: string | undefined, feedUrl: string): string {
-  const cleaned = (title || "").trim()
-  if (!cleaned || cleaned === feedUrl) return inferFeedTitleFromUrl(feedUrl)
-  const bilibiliMatch = cleaned.match(/^(.+?)\s+的\s+bilibili\s+/i)
-  if (bilibiliMatch?.[1]) return `${bilibiliMatch[1].trim()} - Bilibili`
-  return cleaned
-}
-
 function extractBilibiliUidFromInput(input: string): string | null {
   const trimmed = input.trim()
   if (!trimmed) return null
@@ -270,25 +262,6 @@ function extractBilibiliUidFromInput(input: string): string | null {
   const routeUid = trimmed.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
   if (routeUid?.[1]) return routeUid[1]
   return null
-}
-
-function normalizeMatchKey(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s*-\s*(youtube|bilibili)\s*$/i, "")
-    .replace(/[@\s_.-]+/g, "")
-    .trim()
-}
-
-function scoreVideoCandidateMatch(query: string, title: string): number {
-  const q = normalizeMatchKey(query)
-  const t = normalizeMatchKey(title)
-  if (!q || !t) return 0
-  if (t === q) return 300
-  if (t.startsWith(q)) return 200
-  if (t.includes(q)) return 100
-  return 0
 }
 
 function loadPersistedEmptyFolders(): Array<{ name: string; view: FeedViewType | null }> {
@@ -317,9 +290,13 @@ export function Sidebar({ width }: { width?: number }) {
     [feeds, activeView]
   )
   const [allFeedsSearch, setAllFeedsSearch] = useState("")
+  const showGlobalFeedSearch = true
   const allFeedsSearchLower = allFeedsSearch.trim().toLowerCase()
+  const [searchExpandedCategories, setSearchExpandedCategories] = useState<Set<string>>(new Set())
+  const [searchHighlightedFeedIds, setSearchHighlightedFeedIds] = useState<Set<string>>(new Set())
+  const searchHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const displayFeeds = useMemo(() => {
-    if (activeView !== null || !allFeedsSearchLower) return filteredFeeds
+    if (!allFeedsSearchLower) return filteredFeeds
     return filteredFeeds.filter((f) => {
       const title = f.title?.toLowerCase() || ""
       const url = f.url?.toLowerCase() || ""
@@ -459,7 +436,7 @@ export function Sidebar({ width }: { width?: number }) {
     return t("sidebar.newFolderName")
   }
 
-  // Global window-level listeners 闂?added once, check ref to see if drag is active
+  // Global window-level listeners �?added once, check ref to see if drag is active
   useEffect(() => {
     const onMove = (ev: PointerEvent) => {
       if (!dragOverlayRef.current) return
@@ -531,39 +508,15 @@ export function Sidebar({ width }: { width?: number }) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start drag 闂?just sets state; window listeners handle move/up
+  // Start drag �?just sets state; window listeners handle move/up
   const handleDragPointerStart = useCallback((feedId: string, label: string, e: React.PointerEvent) => {
     e.preventDefault()
     setDragFeedId(feedId)
     setDragOverlay({ label, x: e.clientX, y: e.clientY })
     dragOverlayRef.current = { feedId, startY: e.clientY, pointerId: e.pointerId }
   }, [])
-  // Twitter user search state
-  const [twitterSearch, setTwitterSearch] = useState("")
-  const [twitterSearching, setTwitterSearching] = useState(false)
-  const [twitterSearchResult, setTwitterSearchResult] = useState<{ msg: string; ok: boolean } | null>(null)
-  const [twitterCandidate, setTwitterCandidate] = useState<{ username: string; title: string; description: string; image: string; valid: boolean; loading: boolean; alreadyFollowed: boolean; hasSpaces?: boolean; feedUrl?: string } | null>(null)
-  const [socialBiliCandidates, setSocialBiliCandidates] = useState<Array<{ uid: string; title: string; description: string; image: string; feedUrl: string; alreadyFollowed: boolean }>>([])
-  const [twitterInputFocused, setTwitterInputFocused] = useState(false)
-  const twitterDropdownRef = useRef<HTMLDivElement | null>(null)
   const rsshubInstance = useSettingsStore((s) => s.settings.general.rsshubInstance) || "https://rsshub.pseudoyu.com"
   const { addFeed } = useFeedStore()
-
-  // YouTube channel search state
-  const [youtubeSearch, setYoutubeSearch] = useState("")
-  const [youtubeSearching, setYoutubeSearching] = useState(false)
-  const [youtubeSearchResult, setYoutubeSearchResult] = useState<{ msg: string; ok: boolean } | null>(null)
-  const [youtubeCandidate, setYoutubeCandidate] = useState<{ query: string; title: string; description: string; image: string; valid: boolean; loading: boolean; alreadySubscribed: boolean; feedRoute?: string; feedUrl?: string } | null>(null)
-  const [videoCandidates, setVideoCandidates] = useState<Array<{
-    platform: "youtube" | "bilibili"
-    title: string
-    description: string
-    image: string
-    feedUrl: string
-    alreadySubscribed: boolean
-  }>>([])
-  const [youtubeInputFocused, setYoutubeInputFocused] = useState(false)
-  const youtubeDropdownRef = useRef<HTMLDivElement | null>(null)
 
   // Instagram user search state
   const [instagramSearch, setInstagramSearch] = useState("")
@@ -572,46 +525,6 @@ export function Sidebar({ width }: { width?: number }) {
   const [instagramCandidate, setInstagramCandidate] = useState<{ username: string; title: string; description: string; image: string; valid: boolean; loading: boolean; alreadySubscribed: boolean; feedUrl?: string; isDirectUrl?: boolean } | null>(null)
   const [instagramInputFocused, setInstagramInputFocused] = useState(false)
   const instagramDropdownRef = useRef<HTMLDivElement | null>(null)
-  const getTwitterUsernameFromUrl = useCallback((value: string): string | null => {
-    try {
-      const parsed = new URL(value)
-      const host = parsed.hostname.toLowerCase()
-      if (!(host === "x.com" || host === "www.x.com" || host === "twitter.com" || host === "www.twitter.com")) return null
-      const segment = parsed.pathname.split("/").filter(Boolean)[0] || ""
-      if (!segment) return null
-      return segment.replace(/^@/, "")
-    } catch {
-      return null
-    }
-  }, [])
-  const isTwitterProfileUrl = useCallback((value: string): boolean => {
-    const user = getTwitterUsernameFromUrl(value)
-    if (!user) return false
-    const reserved = new Set(["home", "explore", "search", "i", "messages", "settings", "compose", "notifications", "login", "signup", "tos", "privacy", "about", "intent", "hashtag"])
-    return !reserved.has(user.toLowerCase())
-  }, [getTwitterUsernameFromUrl])
-  const getTwitterUsernameFromFeedUrl = useCallback((value: string): string | null => {
-    try {
-      const parsed = new URL(value)
-      const host = parsed.hostname.toLowerCase()
-      const pathLike = getPathLikeFromFeedUrl(value)
-
-      // RSSHub route: /twitter/user/{username}
-      const rsshubMatch = pathLike.match(/\/twitter\/user\/([^/?#]+)/i)
-      if (rsshubMatch?.[1]) return decodeURIComponent(rsshubMatch[1]).replace(/^@/, "")
-
-      // Nitter RSS route: /{username}/rss
-      if (host.includes("nitter")) {
-        const parts = parsed.pathname.split("/").filter(Boolean)
-        if (parts.length >= 2 && parts[1].toLowerCase() === "rss") {
-          return decodeURIComponent(parts[0]).replace(/^@/, "")
-        }
-      }
-    } catch {
-      // Ignore parse failures.
-    }
-    return null
-  }, [])
   const getInstagramUsernameFromUrl = useCallback((value: string): string | null => {
     try {
       const parsed = new URL(value)
@@ -657,32 +570,6 @@ export function Sidebar({ width }: { width?: number }) {
     if (feed.category === RECOMMENDED_CATEGORY) return false
     return (feed.view ?? FeedViewType.Articles) === targetView
   }, [])
-  const twitterMatchedFeeds = useMemo(() => {
-    if (!twitterInputFocused) return []
-    const q = twitterSearch.trim().toLowerCase()
-    if (!q) return []
-    return displayFeeds
-      .filter((f) => f.category !== RECOMMENDED_CATEGORY)
-      .filter((f) => f.title.toLowerCase().includes(q))
-      .slice(0, 6)
-  }, [displayFeeds, twitterInputFocused, twitterSearch])
-  const youtubeMatchedFeeds = useMemo(() => {
-    if (!youtubeInputFocused) return []
-    const q = youtubeSearch.trim().toLowerCase()
-    if (!q) return []
-    return displayFeeds
-      .filter((f) => f.category !== RECOMMENDED_CATEGORY)
-      .filter((f) => {
-        const title = f.title.toLowerCase()
-        const url = (f.url || "").toLowerCase()
-        return title.includes(q) || url.includes(q)
-      })
-      .slice(0, 6)
-  }, [displayFeeds, youtubeInputFocused, youtubeSearch])
-  const videoSearchCandidates = useMemo(
-    () => videoCandidates.filter((c) => !c.alreadySubscribed),
-    [videoCandidates],
-  )
   const instagramMatchedFeeds = useMemo(() => {
     if (!instagramInputFocused) return []
     const q = instagramSearch.trim().toLowerCase()
@@ -715,484 +602,6 @@ export function Sidebar({ width }: { width?: number }) {
       // Ignore storage errors
     }
   }, [emptyFolders])
-
-  // Debounced validation of Twitter username
-  useEffect(() => {
-    const input = twitterSearch.trim()
-    if (!input) {
-      setTwitterCandidate(null)
-      return
-    }
-    const isUrlInput = /^https?:\/\/\S+$/i.test(input)
-    if (isUrlInput && isTwitterProfileUrl(input)) {
-      const urlUser = getTwitterUsernameFromUrl(input) || input
-      setTwitterCandidate({ username: urlUser, title: `@${urlUser}`, description: "", image: "", valid: false, loading: true, alreadyFollowed: false })
-      const timer = setTimeout(async () => {
-        try {
-          const resolved = await window.api.discover.resolveProfileUrl(input)
-          if (!resolved.candidates.length) {
-            setTwitterCandidate((prev) => {
-              if (!prev || prev.username !== urlUser) return prev
-              return { username: urlUser, title: `@${urlUser}`, description: tWithDefault("sidebar.twitterUserNotFound", "User not found", "User not found"), image: "", valid: false, loading: false, alreadyFollowed: false }
-            })
-            return
-          }
-          let picked = resolved.candidates[0]
-          let pickedValid = false
-          for (const candidate of resolved.candidates) {
-            const probe = await window.api.discover.validateFeed(candidate.feedUrl)
-            if (probe.valid) {
-              picked = candidate
-              pickedValid = true
-              break
-            }
-          }
-          setTwitterCandidate((prev) => {
-            if (!prev || prev.username !== urlUser) return prev
-            const lowerUser = urlUser.toLowerCase()
-            const followed = feeds.some((f) => {
-              if (f.url === picked.feedUrl && f.category !== RECOMMENDED_CATEGORY) return true
-              const feedUser = getTwitterUsernameFromFeedUrl(f.url)
-              return !!(feedUser && feedUser.toLowerCase() === lowerUser && f.category !== RECOMMENDED_CATEGORY)
-            })
-            return {
-              username: urlUser,
-              title: formatTwitterFeedTitle(picked.title, urlUser),
-              description: pickedValid ? (picked.description || "") : tWithDefault("sidebar.twitterFollowFailed", "Follow failed, check username or network", "Follow failed, check username or network"),
-              image: `https://unavatar.io/x/${encodeURIComponent(urlUser)}`,
-              valid: pickedValid,
-              loading: false,
-              alreadyFollowed: followed,
-              feedUrl: picked.feedUrl,
-            }
-          })
-        } catch {
-          setTwitterCandidate((prev) => {
-            if (!prev || prev.username !== urlUser) return prev
-            return { ...prev, loading: false, valid: false, description: tWithDefault("sidebar.twitterValidationError", "Validation failed, try again", "Validation failed, try again") }
-          })
-        }
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-
-    const raw = input.replace(/^@/, "")
-    if (!/^[a-zA-Z0-9_ ]{1,30}$/.test(raw)) {
-      setTwitterCandidate(null)
-      return
-    }
-    // Support searching by display name (e.g. "sam altman") via built-in X recommendations.
-    const normalizedRaw = raw.trim().toLowerCase()
-    const recommendedTwitter = RECOMMENDED_SOCIAL_FEEDS.find((feed) => {
-      if (!feed.isRSSHub) return false
-      const user = extractTwitterUsernameFromRoute(feed.url)
-      if (!user) return false
-      const haystack = `${feed.title} ${feed.description} ${user}`.toLowerCase()
-      return !!normalizedRaw && haystack.includes(normalizedRaw)
-    })
-    const recommendedUsername = extractTwitterUsernameFromRoute(recommendedTwitter?.url || "")
-
-    // Extract clean username (no spaces) for RSSHub, keep original for display
-    const cleanUsername = raw.replace(/\s+/g, "")
-    const inputHasSpaces = raw !== cleanUsername
-    // Prioritize display-name match over raw compacted username.
-    const finalUsername = recommendedUsername || (/^[a-zA-Z0-9_]{1,15}$/.test(cleanUsername) ? cleanUsername : "")
-    if (!finalUsername) {
-      setTwitterCandidate(null)
-      return
-    }
-    // Show loading candidate immediately
-    setTwitterCandidate({
-      username: finalUsername,
-      title: recommendedTwitter?.title || `@${finalUsername}`,
-      description: "",
-      image: "",
-      valid: false,
-      loading: true,
-      alreadyFollowed: false,
-      hasSpaces: inputHasSpaces,
-    })
-    const timer = setTimeout(async () => {
-      try {
-        const result = await window.api.discover.probeTwitterUser(finalUsername)
-        // Only update if input hasn't changed
-        setTwitterCandidate((prev) => {
-          if (!prev || prev.username !== finalUsername) return prev
-          if (result.valid) {
-            // Case-insensitive check against existing feeds
-            const lowerUser = finalUsername.toLowerCase()
-            const followed = feeds.some((f) => {
-              const feedUser = getTwitterUsernameFromFeedUrl(f.url)
-              return !!(feedUser && feedUser.toLowerCase() === lowerUser && f.category !== RECOMMENDED_CATEGORY)
-            })
-            return { username: finalUsername, title: formatTwitterFeedTitle(result.title || recommendedTwitter?.title, finalUsername), description: result.description || "", image: result.image || "", valid: true, loading: false, alreadyFollowed: followed, hasSpaces: inputHasSpaces }
-          }
-          return {
-            username: finalUsername,
-            title: recommendedTwitter?.title || `@${finalUsername}`,
-            description: inputHasSpaces && !recommendedUsername
-              ? tWithDefault("sidebar.twitterDisplayNameHint", "This looks like a display name. Enter the exact @username", "This looks like a display name. Enter the exact @username")
-              : tWithDefault("sidebar.twitterUserNotFound", "User not found", "User not found"),
-            image: "",
-            valid: false,
-            loading: false,
-            alreadyFollowed: false,
-            hasSpaces: inputHasSpaces,
-          }
-        })
-      } catch {
-        setTwitterCandidate((prev) => {
-          if (!prev || prev.username !== finalUsername) return prev
-          return {
-            ...prev,
-            loading: false,
-            valid: false,
-            description: tWithDefault("sidebar.twitterValidationError", "Validation failed, try again", "Validation failed, try again"),
-          }
-        })
-      }
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [twitterSearch, rsshubInstance, t, feeds, tWithDefault, isTwitterProfileUrl, getTwitterUsernameFromUrl, getTwitterUsernameFromFeedUrl])
-
-  // Debounced Bilibili candidate probe in Social view (UID / profile URL / keyword)
-  useEffect(() => {
-    const input = twitterSearch.trim()
-    if (activeView !== FeedViewType.SocialMedia || !input) {
-      setSocialBiliCandidates([])
-      return
-    }
-
-    const timer = setTimeout(async () => {
-      const candidates: Array<{ uid: string; title: string; description: string; image: string; feedUrl: string; alreadyFollowed: boolean }> = []
-      const seen = new Set<string>()
-      const inputLower = input.toLowerCase()
-      const base = (rsshubInstance || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
-      const pushCandidate = (uid: string, title: string, description: string, image: string, force = false) => {
-        if (!uid || seen.has(uid)) return
-        const normalizedTitle = title || `UID ${uid} - Bilibili`
-        const normalizedDescription = description || `UID ${uid}`
-        const searchable = `${uid} ${normalizedTitle} ${normalizedDescription}`.toLowerCase()
-        // Hard rule for keyword search: candidate must include the typed string.
-        if (!force && !searchable.includes(inputLower)) return
-        seen.add(uid)
-        const feedUrl = `${base}/bilibili/user/dynamic/${uid}`
-        const alreadyFollowed = feeds.some((f) => {
-          if (f.category === RECOMMENDED_CATEGORY) return false
-          if ((f.url || "") === feedUrl) return true
-          const existingUid = extractBilibiliUidFromInput(f.url || "")
-          if (existingUid !== uid) return false
-          return (f.view ?? FeedViewType.Articles) === FeedViewType.SocialMedia
-        })
-        candidates.push({
-          uid,
-          title: normalizedTitle,
-          description: normalizedDescription,
-          image: image || "",
-          feedUrl,
-          alreadyFollowed,
-        })
-      }
-
-      try {
-        const maybeUid = extractBilibiliUidFromInput(input)
-        if (maybeUid) {
-          const probe = await window.api.discover.probeBilibiliUid(maybeUid)
-          if (probe.valid) {
-            pushCandidate(
-              probe.uid,
-              probe.title || `${probe.uid} - Bilibili`,
-              probe.description || `UID ${probe.uid}`,
-              probe.image || "",
-              true,
-            )
-          } else {
-            pushCandidate(maybeUid, `${maybeUid} - Bilibili`, `UID ${maybeUid}`, "", true)
-          }
-        } else if (/^https?:\/\/(?:www\.)?space\.bilibili\.com\/\d+/i.test(input)) {
-          const resolved = await window.api.discover.resolveProfileUrl(input)
-          const bilibiliCandidates = (resolved.candidates || [])
-            .filter((c) => /\/bilibili\/user\/(?:video|dynamic)\/\d+/i.test(c.feedUrl))
-          for (const c of bilibiliCandidates) {
-            const uid = extractBilibiliUidFromInput(c.feedUrl || "")
-            if (!uid) continue
-            pushCandidate(uid, c.title || `${uid} - Bilibili`, c.description || "", "", true)
-          }
-        } else if (input.length >= 2) {
-          const probed = await window.api.discover.probeBilibiliUsers(input)
-          for (const c of probed.candidates || []) {
-            const uid = c.uid || extractBilibiliUidFromInput(c.feedUrl || "") || extractBilibiliUidFromInput(c.description || "")
-            if (!uid) continue
-            pushCandidate(uid, c.title || `${uid} - Bilibili`, c.description || "", c.image || "")
-          }
-        }
-      } catch {
-        // Ignore probe errors and keep existing candidates.
-      }
-
-      setSocialBiliCandidates(candidates.slice(0, 6))
-    }, 420)
-
-    return () => clearTimeout(timer)
-  }, [activeView, twitterSearch, rsshubInstance, feeds])
-
-  // Debounced validation of YouTube channel/username
-  useEffect(() => {
-    const input = youtubeSearch.trim()
-    if (!input) {
-      setYoutubeCandidate(null)
-      setVideoCandidates([])
-      return
-    }
-
-    const isRsshubProtocolUrl = /^rsshub:\/\/\S+/i.test(input)
-    const isHttpUrl = /^https?:\/\/\S+$/i.test(input)
-    const isDirectFeedUrl = isHttpUrl || isRsshubProtocolUrl
-    const isYouTubeUrl = /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i.test(input)
-    const raw = input.replace(/^@/, "")
-    const bilibiliUid = extractBilibiliUidFromInput(input)
-    if (!isYouTubeUrl && !isDirectFeedUrl && raw.length < 2) {
-      setYoutubeCandidate(null)
-      setVideoCandidates([])
-      return
-    }
-
-    // Local fast-path for Bilibili UID / RSSHub bilibili routes to avoid "no match".
-    if (!isDirectFeedUrl && bilibiliUid) {
-      const feedUrl = `${(rsshubInstance || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")}/bilibili/user/video/${bilibiliUid}`
-      setVideoCandidates([])
-      setYoutubeCandidate({ query: input, title: input, description: "", image: "", valid: false, loading: true, alreadySubscribed: false })
-      void (async () => {
-        let title = `UID ${bilibiliUid} - Bilibili`
-        let description = `UID ${bilibiliUid}`
-        let image = ""
-        let resolvedFeedUrl = feedUrl
-        try {
-          const probe = await window.api.discover.probeBilibiliUid(bilibiliUid)
-          if (probe.valid) {
-            title = probe.title || title
-            description = probe.description || description
-            image = probe.image || image
-            resolvedFeedUrl = probe.feedUrl || resolvedFeedUrl
-          }
-        } catch {
-          // Fall back to UID candidate.
-        }
-        const alreadySubscribed = feedsRef.current.some((f) => f.url === resolvedFeedUrl && f.category !== RECOMMENDED_CATEGORY)
-        setYoutubeCandidate((prev) => (prev && prev.query === input ? null : prev))
-        setVideoCandidates([{
-          platform: "bilibili",
-          title,
-          description,
-          image,
-          feedUrl: resolvedFeedUrl,
-          alreadySubscribed,
-        }])
-      })()
-      return
-    }
-
-    // Show loading immediately
-    setYoutubeCandidate({ query: input, title: input, description: "", image: "", valid: false, loading: true, alreadySubscribed: false })
-    setVideoCandidates([])
-    const timer = setTimeout(async () => {
-      const validateFeedWithTimeout = async (url: string, timeoutMs = 4500) => {
-        return await Promise.race([
-          window.api.discover.validateFeed(url),
-          new Promise<{ valid: false; error: string }>((resolve) =>
-            setTimeout(() => resolve({ valid: false, error: "validate timeout" }), timeoutMs),
-          ),
-        ])
-      }
-
-      try {
-        if (isDirectFeedUrl) {
-          setVideoCandidates([])
-          const resolvedTarget = await resolveUrlSubscriptionTarget(input, FeedViewType.Videos, input)
-          if (!resolvedTarget.ok) {
-            setYoutubeCandidate((prev) => {
-              if (!prev || prev.query !== input) return prev
-              return {
-                query: input,
-                title: input,
-                description: resolvedTarget.error,
-                image: "",
-                valid: false,
-                loading: false,
-                alreadySubscribed: false,
-              }
-            })
-            return
-          }
-
-          const subscribed = feedsRef.current.some((f) => f.url === resolvedTarget.targetUrl && f.category !== RECOMMENDED_CATEGORY)
-          const fallbackTitle = normalizeCandidateTitle(resolvedTarget.targetTitle, resolvedTarget.targetUrl)
-          const directUid = extractBilibiliUidFromInput(resolvedTarget.targetUrl)
-          if (directUid) {
-            let title = fallbackTitle
-            let description = resolvedTarget.targetUrl
-            let image = ""
-            let targetUrl = resolvedTarget.targetUrl
-            try {
-              const probe = await window.api.discover.probeBilibiliUid(directUid)
-              if (probe.valid) {
-                title = probe.title || title
-                description = probe.description || description
-                image = probe.image || image
-                targetUrl = probe.feedUrl || targetUrl
-              }
-            } catch {
-              // Keep fallback candidate.
-            }
-            setYoutubeCandidate((prev) => {
-              if (!prev || prev.query !== input) return prev
-              return {
-                query: input,
-                title,
-                description,
-                image,
-                valid: true,
-                loading: false,
-                alreadySubscribed: subscribed,
-                feedUrl: targetUrl,
-              }
-            })
-            return
-          }
-          // Do not block UI on generic feed probing; render candidate immediately.
-          setYoutubeCandidate((prev) => {
-            if (!prev || prev.query !== input) return prev
-            return {
-              query: input,
-              title: fallbackTitle,
-              description: resolvedTarget.targetUrl,
-              image: "",
-              valid: true,
-              loading: false,
-              alreadySubscribed: subscribed,
-              feedUrl: resolvedTarget.targetUrl,
-            }
-          })
-          void (async () => {
-            try {
-              const probe = await window.api.discover.validateFeed(resolvedTarget.targetUrl)
-              if (!probe.valid) return
-              const finalTitle = normalizeCandidateTitle(probe.title || fallbackTitle, resolvedTarget.targetUrl)
-              setYoutubeCandidate((prev) => {
-                if (!prev || prev.query !== input || prev.feedUrl !== resolvedTarget.targetUrl) return prev
-                return {
-                  ...prev,
-                  title: finalTitle,
-                  image: probe.image || prev.image,
-                }
-              })
-            } catch {
-              // Keep optimistic candidate if probe fails.
-            }
-          })()
-          return
-        }
-
-        if (isYouTubeUrl) {
-          setVideoCandidates([])
-          const resolved = await window.api.discover.resolveProfileUrl(input)
-          if (!resolved.candidates.length) {
-            setYoutubeCandidate((prev) => {
-              if (!prev || prev.query !== input) return prev
-              return {
-                query: input,
-                title: input,
-                description: tWithDefault("sidebar.youtubeChannelNotFound", "Channel not found", "Channel not found"),
-                image: "",
-                valid: false,
-                loading: false,
-                alreadySubscribed: false,
-              }
-            })
-            return
-          }
-
-          let picked = resolved.candidates[0]
-          let pickedImage = ""
-          let pickedValid = false
-          for (const candidate of resolved.candidates) {
-            const probe = await validateFeedWithTimeout(candidate.feedUrl)
-            if (probe.valid) {
-              picked = candidate
-              pickedImage = probe.image || ""
-              pickedValid = true
-              break
-            }
-          }
-
-          setYoutubeCandidate((prev) => {
-            if (!prev || prev.query !== input) return prev
-            const subscribed = feedsRef.current.some((f) => f.url === picked.feedUrl && f.category !== RECOMMENDED_CATEGORY)
-            return {
-              query: input,
-              title: picked.title || input,
-              description: pickedValid
-                ? (picked.description || "")
-                : tWithDefault("sidebar.youtubeSubscribeFailed", "Subscribe failed, check channel name or network", "Subscribe failed, check channel name or network"),
-              image: pickedImage,
-              valid: pickedValid,
-              loading: false,
-              alreadySubscribed: subscribed,
-              feedUrl: picked.feedUrl,
-            }
-          })
-          return
-        }
-
-        const result = await window.api.discover.probeVideoSources(raw)
-        if (!result.valid || !result.candidates.length) {
-          setYoutubeCandidate((prev) => {
-            if (!prev || prev.query !== input) return prev
-            return {
-              query: input,
-              title: raw,
-              description: tWithDefault("sidebar.youtubeChannelNotFound", "Channel not found", "Channel not found"),
-              image: "",
-              valid: false,
-              loading: false,
-              alreadySubscribed: false,
-            }
-          })
-          return
-        }
-        setYoutubeCandidate(null)
-        setVideoCandidates(
-          result.candidates
-            .map((c: {
-              platform: "youtube" | "bilibili"
-              title: string
-              description: string
-              image: string
-              feedUrl: string
-            }) => ({
-              ...c,
-              alreadySubscribed: feedsRef.current.some((f) => f.url === c.feedUrl && f.category !== RECOMMENDED_CATEGORY),
-            }))
-            .sort(
-              (a: { title: string }, b: { title: string }) =>
-                scoreVideoCandidateMatch(raw, b.title) - scoreVideoCandidateMatch(raw, a.title),
-            ),
-        )
-      } catch {
-        setVideoCandidates([])
-        setYoutubeCandidate((prev) => {
-          if (!prev || prev.query !== input) return prev
-          return {
-            ...prev,
-            loading: false,
-            valid: false,
-            description: tWithDefault("sidebar.youtubeValidationError", "Validation failed, try again", "Validation failed, try again"),
-          }
-        })
-      }
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [youtubeSearch, rsshubInstance, t, tWithDefault])
 
   // Debounced validation of Instagram username
   useEffect(() => {
@@ -1450,6 +859,37 @@ export function Sidebar({ width }: { width?: number }) {
     [displayFeeds],
   )
 
+  useEffect(() => {
+    if (searchHighlightTimerRef.current) {
+      clearTimeout(searchHighlightTimerRef.current)
+      searchHighlightTimerRef.current = null
+    }
+
+    if (!allFeedsSearchLower) {
+      setSearchExpandedCategories(new Set())
+      setSearchHighlightedFeedIds(new Set())
+      return
+    }
+
+    const matchedFeeds = displayFeeds.filter((f) => f.category !== RECOMMENDED_CATEGORY)
+    const matchedCategories = new Set(matchedFeeds.map((f) => getFeedFolderName(f)))
+    const matchedFeedIds = new Set(matchedFeeds.map((f) => f.id))
+
+    setSearchExpandedCategories(matchedCategories)
+    setSearchHighlightedFeedIds(matchedFeedIds)
+
+    searchHighlightTimerRef.current = setTimeout(() => {
+      setSearchHighlightedFeedIds(new Set())
+      searchHighlightTimerRef.current = null
+    }, 2000)
+  }, [allFeedsSearchLower, displayFeeds, getFeedFolderName])
+
+  useEffect(() => {
+    return () => {
+      if (searchHighlightTimerRef.current) clearTimeout(searchHighlightTimerRef.current)
+    }
+  }, [])
+
   const handleImportOPML = async () => {
     setIsImporting(true)
     setImportResult(null)
@@ -1544,23 +984,6 @@ export function Sidebar({ width }: { width?: number }) {
     await removeFeed(feedId)
   }, [feeds, recommendedUrls, updateFeed, removeFeed])
 
-  const handleTwitterUnfollow = async (username: string) => {
-    const lowerUser = username.toLowerCase()
-    const matchedFeed = feeds.find((f) => {
-      const feedUser = getTwitterUsernameFromFeedUrl(f.url)
-      return !!(feedUser && feedUser.toLowerCase() === lowerUser)
-    })
-    if (!matchedFeed) return
-    await unsubscribeFeed(matchedFeed.id)
-    setTwitterSearchResult({
-      msg: tWithDefault("sidebar.twitterUnfollowSuccess", "Unfollowed @{{user}}", "Unfollowed @{{user}}", { user: username }),
-      ok: true,
-    })
-    // Update candidate to reflect unfollowed state
-    setTwitterCandidate((prev) => prev ? { ...prev, alreadyFollowed: false } : null)
-    setTimeout(() => setTwitterSearchResult(null), 3000)
-  }
-
   const resolveUrlSubscriptionTarget = useCallback(
     async (
       inputUrl: string,
@@ -1625,333 +1048,6 @@ export function Sidebar({ width }: { width?: number }) {
     },
     [rsshubInstance],
   )
-
-  const handleTwitterFollow = async (username?: string) => {
-    const input = (username || twitterSearch.trim()).trim()
-    const isUrlInput = /^https?:\/\/\S+$/i.test(input)
-    const isTwitterUrl = /^https?:\/\/\S+$/i.test(input) && isTwitterProfileUrl(input)
-    const raw = (isTwitterUrl ? (getTwitterUsernameFromUrl(input) || input) : input).replace(/^@/, "").replace(/\s+/g, "")
-    if (!isUrlInput && (!raw || !/^[a-zA-Z0-9_]{1,15}$/.test(raw))) {
-      setTwitterSearchResult({
-        msg: tWithDefault("sidebar.twitterInvalidUser", "Please enter a valid Twitter username", "Please enter a valid Twitter username"),
-        ok: false,
-      })
-      setTimeout(() => setTwitterSearchResult(null), 3000)
-      return
-    }
-    // Check if already subscribed (case-insensitive)
-    const lowerRaw = raw.toLowerCase()
-    const alreadyExists = feeds.some((f) => {
-      const feedUser = getTwitterUsernameFromFeedUrl(f.url)
-      return !!(feedUser && feedUser.toLowerCase() === lowerRaw && f.category !== RECOMMENDED_CATEGORY)
-    })
-    if (alreadyExists) {
-      setTwitterSearchResult({
-        msg: tWithDefault("sidebar.twitterAlreadyFollowed", "Already following this user", "Already following this user"),
-        ok: false,
-      })
-      setTimeout(() => setTwitterSearchResult(null), 3000)
-      return
-    }
-    setTwitterSearching(true)
-    setTwitterSearchResult(null)
-    setTwitterCandidate(null)
-    try {
-      let feedUrl = twitterCandidate?.feedUrl || `rsshub://twitter/user/${encodeURIComponent(raw)}`
-      let title = twitterCandidate?.valid ? twitterCandidate.title : raw
-      let targetView = FeedViewType.SocialMedia
-      if (isUrlInput) {
-        const resolvedTarget = await resolveUrlSubscriptionTarget(input, FeedViewType.SocialMedia, title)
-        if (!resolvedTarget.ok) {
-          setTwitterSearchResult({ msg: resolvedTarget.error, ok: false })
-          setTwitterSearching(false)
-          setTimeout(() => setTwitterSearchResult(null), 3000)
-          return
-        }
-        feedUrl = resolvedTarget.targetUrl
-        title = resolvedTarget.targetTitle || title
-        targetView = resolvedTarget.targetView
-      } else if (isTwitterUrl) {
-        const resolvedTarget = await resolveUrlSubscriptionTarget(input, FeedViewType.SocialMedia, title)
-        if (resolvedTarget.ok) {
-          feedUrl = resolvedTarget.targetUrl
-          title = resolvedTarget.targetTitle || title
-          targetView = resolvedTarget.targetView
-        }
-      }
-      title = formatTwitterFeedTitle(title, raw)
-      const existing = feeds.find((f) => f.url === feedUrl)
-      if (existing && existing.category === RECOMMENDED_CATEGORY) {
-        await updateFeed(existing.id, { category: "", folder: "", view: targetView, title })
-        setTwitterSearchResult({
-          msg: tWithDefault("sidebar.twitterFollowSuccess", "Now following @{{user}}", "Now following @{{user}}", { user: raw }),
-          ok: true,
-        })
-        setTwitterSearch("")
-        setTwitterSearching(false)
-        setTimeout(() => setTwitterSearchResult(null), 3000)
-        return
-      }
-      const result = await addFeed(feedUrl, undefined, targetView, title)
-      if (result.success) {
-        setTwitterSearchResult({
-          msg: tWithDefault("sidebar.twitterFollowSuccess", "Now following @{{user}}", "Now following @{{user}}", { user: raw }),
-          ok: true,
-        })
-        setTwitterSearch("")
-      } else {
-        setTwitterSearchResult({
-          msg: result.error || tWithDefault("sidebar.twitterFollowFailed", "Follow failed, check username or network", "Follow failed, check username or network"),
-          ok: false,
-        })
-      }
-    } catch {
-      setTwitterSearchResult({
-        msg: tWithDefault("sidebar.twitterFollowFailed", "Follow failed, check username or network", "Follow failed, check username or network"),
-        ok: false,
-      })
-    }
-    setTwitterSearching(false)
-    setTimeout(() => setTwitterSearchResult(null), 3000)
-  }
-
-  const handleSocialBilibiliFollow = async (candidate: { uid: string; title: string; description: string; image: string; feedUrl: string; alreadyFollowed: boolean }) => {
-    if (candidate.alreadyFollowed) return
-    try {
-      const existingSameRoute = feeds.find((f) =>
-        f.url === candidate.feedUrl && f.category !== RECOMMENDED_CATEGORY,
-      )
-      if (existingSameRoute) {
-        await updateFeed(existingSameRoute.id, {
-          title: candidate.title,
-          view: FeedViewType.SocialMedia,
-          imageUrl: candidate.image || existingSameRoute.imageUrl,
-        })
-      } else {
-        const recommendedSameRoute = feeds.find((f) =>
-          f.url === candidate.feedUrl && f.category === RECOMMENDED_CATEGORY,
-        )
-        if (recommendedSameRoute) {
-          await updateFeed(recommendedSameRoute.id, {
-            category: "",
-            title: candidate.title,
-            view: FeedViewType.SocialMedia,
-            imageUrl: candidate.image || recommendedSameRoute.imageUrl,
-          })
-        } else {
-          const result = await addFeed(candidate.feedUrl, undefined, FeedViewType.SocialMedia, candidate.title)
-          if (!result.success) {
-            setTwitterSearchResult({
-              msg: result.error || tWithDefault("sidebar.twitterFollowFailed", "Follow failed, check username or network", "Follow failed, check username or network"),
-              ok: false,
-            })
-            setTimeout(() => setTwitterSearchResult(null), 3000)
-            return
-          }
-        }
-      }
-      setTwitterSearchResult({
-        msg: tWithDefault("sidebar.twitterFollowSuccess", "Now following {{user}}", "Now following {{user}}", { user: candidate.title }),
-        ok: true,
-      })
-      setSocialBiliCandidates((prev) => prev.map((c) => c.uid === candidate.uid ? { ...c, alreadyFollowed: true } : c))
-      setTwitterSearch("")
-      setTimeout(() => setTwitterSearchResult(null), 3000)
-    } catch {
-      setTwitterSearchResult({
-        msg: tWithDefault("sidebar.twitterFollowFailed", "Follow failed, check username or network", "Follow failed, check username or network"),
-        ok: false,
-      })
-      setTimeout(() => setTwitterSearchResult(null), 3000)
-    }
-  }
-
-  const handleVideoCandidateSubscribe = async (candidate: {
-    platform: "youtube" | "bilibili"
-    title: string
-    description: string
-    image: string
-    feedUrl: string
-    alreadySubscribed: boolean
-  }) => {
-    if (candidate.alreadySubscribed) return
-    const existing = feeds.find((f) => f.url === candidate.feedUrl)
-    if (existing && existing.category === RECOMMENDED_CATEGORY) {
-      await updateFeed(existing.id, { category: "", imageUrl: candidate.image || existing.imageUrl })
-      setYoutubeSearchResult({ msg: tWithDefault("sidebar.youtubeSubscribeSuccess", "Subscribed to {{channel}}", "Subscribed to {{channel}}", { channel: candidate.title }), ok: true })
-    } else if (!existing) {
-      const result = await addFeed(candidate.feedUrl, undefined, FeedViewType.Videos, candidate.title)
-      if (result.success) {
-        await syncFeedAvatarFromCandidate(candidate.feedUrl, candidate.image)
-      }
-      setYoutubeSearchResult({
-        msg: result.success
-          ? tWithDefault("sidebar.youtubeSubscribeSuccess", "Subscribed to {{channel}}", "Subscribed to {{channel}}", { channel: candidate.title })
-          : (result.error || tWithDefault("sidebar.youtubeSubscribeFailed", "Subscribe failed, check channel name or network", "Subscribe failed, check channel name or network")),
-        ok: !!result.success,
-      })
-    } else if (candidate.image && existing.imageUrl !== candidate.image) {
-      await updateFeed(existing.id, { imageUrl: candidate.image })
-    }
-    setVideoCandidates((prev) => prev.map((c) => c.feedUrl === candidate.feedUrl ? { ...c, alreadySubscribed: true } : c))
-    setTimeout(() => setYoutubeSearchResult(null), 3000)
-  }
-
-  const handleYouTubeUnsubscribe = async (query: string, candidateFeedUrl?: string) => {
-    let matchedFeed = candidateFeedUrl
-      ? feeds.find((f) => f.url === candidateFeedUrl && f.category !== RECOMMENDED_CATEGORY)
-      : undefined
-
-    if (!matchedFeed) {
-      const lowerQuery = query.toLowerCase().replace(/^@/, "")
-      matchedFeed = feeds.find((f) => {
-        const m = f.url.match(/\/youtube\/(user|channel)\/([^/?#]+)/i)
-        return !!(m && m[2].toLowerCase().replace(/^@/, "") === lowerQuery && f.category !== RECOMMENDED_CATEGORY)
-      })
-    }
-
-    if (!matchedFeed) return
-    await unsubscribeFeed(matchedFeed.id)
-    setYoutubeSearchResult({
-      msg: tWithDefault("sidebar.youtubeUnsubscribeSuccess", "Unsubscribed from {{channel}}", "Unsubscribed from {{channel}}", { channel: query }),
-      ok: true,
-    })
-    setYoutubeCandidate((prev) => prev ? { ...prev, alreadySubscribed: false } : null)
-    setTimeout(() => setYoutubeSearchResult(null), 3000)
-  }
-
-  const handleYouTubeSubscribe = async (query?: string) => {
-    const input = (query || youtubeSearch.trim()).trim()
-    const isRsshubProtocolUrl = /^rsshub:\/\/\S+/i.test(input)
-    const isHttpUrl = /^https?:\/\/\S+$/i.test(input)
-    const isDirectFeedUrl = isHttpUrl || isRsshubProtocolUrl
-    const isYouTubeUrl = /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i.test(input)
-    const raw = input.replace(/^@/, "")
-    if (!isYouTubeUrl && !isDirectFeedUrl && (!raw || raw.length < 2)) {
-      setYoutubeSearchResult({
-        msg: tWithDefault("sidebar.youtubeInvalidChannel", "Please enter a valid YouTube channel name", "Please enter a valid YouTube channel name"),
-        ok: false,
-      })
-      setTimeout(() => setYoutubeSearchResult(null), 3000)
-      return
-    }
-    setYoutubeSearching(true)
-    setYoutubeSearchResult(null)
-    const candidateImage = youtubeCandidate?.image || ""
-    setYoutubeCandidate(null)
-    try {
-      let feedUrl = youtubeCandidate?.feedUrl || ""
-      let title = youtubeCandidate?.valid ? youtubeCandidate.title : raw
-
-      if (isDirectFeedUrl) {
-        const resolvedTarget = await resolveUrlSubscriptionTarget(input, FeedViewType.Videos, title)
-        if (!resolvedTarget.ok) {
-          setYoutubeSearchResult({
-            msg: resolvedTarget.error,
-            ok: false,
-          })
-          setYoutubeSearching(false)
-          setTimeout(() => setYoutubeSearchResult(null), 3000)
-          return
-        }
-        feedUrl = resolvedTarget.targetUrl
-        title = resolvedTarget.targetTitle || title
-      } else if (isYouTubeUrl) {
-        const resolved = await window.api.discover.resolveProfileUrl(input)
-        let picked = resolved.candidates[0]
-        for (const c of resolved.candidates) {
-          const probe = await window.api.discover.validateFeed(c.feedUrl)
-          if (probe.valid) {
-            picked = c
-            break
-          }
-        }
-        if (!picked) {
-          setYoutubeSearchResult({
-            msg: "Detected YouTube profile URL, but no reachable feed source is available right now.",
-            ok: false,
-          })
-          setYoutubeSearching(false)
-          setTimeout(() => setYoutubeSearchResult(null), 3000)
-          return
-        }
-        feedUrl = picked.feedUrl
-        title = picked.title || raw
-      } else {
-        const route = youtubeCandidate?.feedRoute || `/youtube/user/@${raw}`
-        feedUrl = youtubeCandidate?.feedUrl || `${rsshubInstance}${route}`
-      }
-
-      const lowerRaw = raw.toLowerCase()
-      const alreadyExists = feeds.some((f) => {
-        if (f.url === feedUrl && f.category !== RECOMMENDED_CATEGORY) return true
-        const m = f.url.match(/\/youtube\/(user|channel)\/([^/?#]+)/i)
-        return !!(m && m[2].toLowerCase().replace(/^@/, "") === lowerRaw && f.category !== RECOMMENDED_CATEGORY)
-      })
-      if (alreadyExists) {
-        setYoutubeSearchResult({
-          msg: t("sidebar.youtubeAlreadySubscribed"),
-          ok: false,
-        })
-        setYoutubeSearching(false)
-        setTimeout(() => setYoutubeSearchResult(null), 3000)
-        return
-      }
-
-      const existing = feeds.find((f) => f.url === feedUrl)
-      if (existing && existing.category === RECOMMENDED_CATEGORY) {
-        await updateFeed(existing.id, { category: "", imageUrl: candidateImage || existing.imageUrl })
-        setYoutubeSearchResult({
-          msg: tWithDefault("sidebar.youtubeSubscribeSuccess", "Subscribed to {{channel}}", "Subscribed to {{channel}}", { channel: raw }),
-          ok: true,
-        })
-        setYoutubeSearch("")
-        setYoutubeSearching(false)
-        setTimeout(() => setYoutubeSearchResult(null), 3000)
-        return
-      }
-      if (!existing) {
-        // If a recommended source exists with a different instance URL, move/update it instead of creating duplicates.
-        const existingRecommended = feeds.find((f) => {
-          if (f.category !== RECOMMENDED_CATEGORY) return false
-          const m = f.url.match(/\/youtube\/(user|channel)\/([^/?#]+)/i)
-          return !!(m && decodeURIComponent(m[2]).toLowerCase().replace(/^@/, "") === lowerRaw)
-        })
-        if (existingRecommended) {
-          await updateFeed(existingRecommended.id, { url: feedUrl, category: "", imageUrl: candidateImage || existingRecommended.imageUrl })
-          setYoutubeSearchResult({
-            msg: tWithDefault("sidebar.youtubeSubscribeSuccess", "Subscribed to {{channel}}", "Subscribed to {{channel}}", { channel: raw }),
-            ok: true,
-          })
-          setYoutubeSearch("")
-          setYoutubeSearching(false)
-          setTimeout(() => setYoutubeSearchResult(null), 3000)
-          return
-        }
-      }
-      const result = await addFeed(feedUrl, undefined, FeedViewType.Videos, title)
-      if (result.success) {
-        await syncFeedAvatarFromCandidate(feedUrl, candidateImage)
-        setYoutubeSearchResult({
-          msg: tWithDefault("sidebar.youtubeSubscribeSuccess", "Subscribed to {{channel}}", "Subscribed to {{channel}}", { channel: raw }),
-          ok: true,
-        })
-        setYoutubeSearch("")
-      } else {
-        setYoutubeSearchResult({
-          msg: result.error || tWithDefault("sidebar.youtubeSubscribeFailed", "Subscribe failed, check channel name or network", "Subscribe failed, check channel name or network"),
-          ok: false,
-        })
-      }
-    } catch {
-      setYoutubeSearchResult({
-        msg: tWithDefault("sidebar.youtubeSubscribeFailed", "Subscribe failed, check channel name or network", "Subscribe failed, check channel name or network"),
-        ok: false,
-      })
-    }
-    setYoutubeSearching(false)
-    setTimeout(() => setYoutubeSearchResult(null), 3000)
-  }
 
   const handleInstagramUnsubscribe = async (username: string) => {
     if (/^(?:https?:\/\/|rsshub:\/\/)\S+/i.test(username)) {
@@ -2340,7 +1436,7 @@ export function Sidebar({ width }: { width?: number }) {
             <span className="flex-1 text-left truncate">{t("sidebar.starred")}</span>
           </button>
 
-          {activeView === null && (
+          {showGlobalFeedSearch && (
             <div className="mt-1 px-1">
               <div className="relative">
                 <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary dark:text-text-dark-tertiary pointer-events-none" />
@@ -2348,330 +1444,20 @@ export function Sidebar({ width }: { width?: number }) {
                   value={allFeedsSearch}
                   onChange={(e) => setAllFeedsSearch(e.target.value)}
                   placeholder={t("sidebar.searchFeeds", {
-                    defaultValue: i18nDefault("Search subscriptions", "Search subscriptions"),
+                    defaultValue: i18nDefault("Search subscribed feeds in this column", "Search subscribed feeds in this column"),
                   })}
                   className="w-full text-xs pl-7 pr-2 py-1.5 border rounded-lg bg-white dark:bg-surface-dark dark:border-border-dark focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-text-tertiary dark:placeholder:text-text-dark-tertiary"
                   onKeyDown={(e) => {
                     if (e.key === "Escape") setAllFeedsSearch("")
+                    if (e.key === "Enter") {
+                      const firstMatched = displayFeeds.find((f) => f.category !== RECOMMENDED_CATEGORY)
+                      if (firstMatched) {
+                        handleSelectFeed(firstMatched.id)
+                      }
+                    }
                   }}
                 />
               </div>
-            </div>
-          )}
-
-          {/* Twitter user search - only in Social Media view */}
-          {activeView === FeedViewType.SocialMedia && (
-            <div className="mt-1 px-1" ref={twitterDropdownRef}>
-              <div className="relative">
-                <div className="relative">
-                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary dark:text-text-dark-tertiary pointer-events-none" />
-                  <input
-                    value={twitterSearch}
-                    onChange={(e) => setTwitterSearch(e.target.value)}
-                    placeholder={tWithDefault("sidebar.twitterSearchPlaceholder", "Enter X @username / Bilibili UID", "Enter X @username / Bilibili UID")}
-                    className="w-full text-xs pl-7 pr-2 py-1.5 border rounded-lg bg-white dark:bg-surface-dark dark:border-border-dark focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-text-tertiary dark:placeholder:text-text-dark-tertiary"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        if (twitterCandidate?.valid) {
-                          handleTwitterFollow(twitterCandidate.username)
-                        } else if (socialBiliCandidates.length > 0) {
-                          void handleSocialBilibiliFollow(socialBiliCandidates[0])
-                        } else {
-                          handleTwitterFollow()
-                        }
-                      } else if (e.key === "Escape") {
-                        setTwitterSearch("")
-                        setTwitterCandidate(null)
-                        setSocialBiliCandidates([])
-                      }
-                    }}
-                    onFocus={() => setTwitterInputFocused(true)}
-                    onBlur={() => { setTimeout(() => setTwitterInputFocused(false), 200) }}
-                    disabled={twitterSearching}
-                  />
-                </div>
-                {/* Candidate dropdown */}
-                {twitterInputFocused && (twitterCandidate || twitterMatchedFeeds.length > 0 || socialBiliCandidates.length > 0) && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border bg-white dark:bg-surface-dark dark:border-border-dark shadow-lg overflow-hidden">
-                    {twitterMatchedFeeds.length > 0 && (
-                      <div className="border-b border-border dark:border-border-dark">
-                        <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
-                          {t("common.subscribed")}
-                        </div>
-                        {twitterMatchedFeeds.map((feed) => (
-                          <button
-                            key={feed.id}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              handleSelectFeed(feed.id)
-                              setTwitterInputFocused(false)
-                            }}
-                          >
-                            <FeedIcon imageUrl={feed.imageUrl} siteUrl={feed.siteUrl} feedUrl={feed.url} title={feed.title} size={18} />
-                            <span className="flex-1 text-xs truncate">{getSidebarFeedDisplayTitle(feed)}</span>
-                            <span className="text-[11px] text-text-tertiary">{feed.unreadCount}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {socialBiliCandidates.length > 0 && (
-                      <div className="border-b border-border dark:border-border-dark">
-                        <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
-                          {tWithDefault("sidebar.youtubeSearching", "Candidates", "Candidates")}
-                        </div>
-                        {socialBiliCandidates.map((candidate) => (
-                          <div key={`social-bili:${candidate.uid}`} className="flex items-center gap-2.5 w-full px-3 py-2.5 text-left hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors">
-                            <FeedIcon
-                              imageUrl={candidate.image}
-                              feedUrl={candidate.feedUrl}
-                              title={candidate.title}
-                              size={32}
-                              accentClass="bg-blue-500/10 text-blue-500"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium truncate">{candidate.title}</div>
-                              <div className="text-[11px] text-text-tertiary dark:text-text-dark-tertiary truncate">
-                                Bilibili · {candidate.description?.slice(0, 48)}
-                              </div>
-                            </div>
-                            {candidate.alreadyFollowed ? (
-                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex-shrink-0">
-                                {t("common.subscribed")}
-                              </span>
-                            ) : (
-                              <button
-                                className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-accent text-white hover:bg-accent/80 flex-shrink-0 transition-colors"
-                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); void handleSocialBilibiliFollow(candidate) }}
-                              >
-                                <Plus size={11} />
-                                {tWithDefault("sidebar.twitterFollow", "Follow", "Follow")}
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {twitterCandidate && (
-                      twitterCandidate.loading ? (
-                        <div className="flex items-center gap-2 px-3 py-2.5">
-                          <RefreshCw size={14} className="animate-spin text-text-tertiary" />
-                          <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                            {(() => {
-                              const q = (twitterSearch || twitterCandidate.username || "").trim().replace(/^@+/, "")
-                              return i18nDefault(
-                                `正在查找 @${q || "user"}...`,
-                                `Looking up @${q || "user"}...`,
-                              )
-                            })()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2.5 w-full px-3 py-2.5 text-left">
-                          {twitterCandidate.image ? (
-                            <img
-                              src={twitterCandidate.image}
-                              alt=""
-                              className="w-8 h-8 rounded-full object-cover flex-shrink-0 bg-surface-tertiary"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
-                            />
-                          ) : (
-                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/10 text-accent flex-shrink-0">
-                              <MessageCircle size={15} />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium truncate">{formatTwitterFeedTitle(twitterCandidate.title, twitterCandidate.username)}</div>
-                            <div className="text-[11px] text-text-tertiary dark:text-text-dark-tertiary truncate">@{twitterCandidate.username}</div>
-                          </div>
-                          {twitterCandidate.alreadyFollowed ? (
-                            <button
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-red-100 hover:dark:bg-red-900/30 hover:text-red-600 hover:dark:text-red-400 flex-shrink-0 transition-colors"
-                              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleTwitterUnfollow(twitterCandidate.username) }}
-                            >
-                              <XIcon size={11} />
-                              {tWithDefault("sidebar.twitterUnfollow", "Unfollow", "Unfollow")}
-                            </button>
-                          ) : (
-                            <button
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-accent text-white hover:bg-accent/80 flex-shrink-0 transition-colors"
-                              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleTwitterFollow(twitterCandidate.username) }}
-                            >
-                              <Plus size={11} />
-                              {tWithDefault("sidebar.twitterFollow", "Follow", "Follow")}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-              {/* Subscribing spinner */}
-              {twitterSearching && (
-                <div className="flex items-center gap-1.5 mt-1 px-1">
-                  <RefreshCw size={12} className="animate-spin text-accent" />
-                  <span className="text-[11px] text-text-secondary dark:text-text-dark-secondary">{tWithDefault("sidebar.twitterSubscribing", "Subscribing...", "Subscribing...")}</span>
-                </div>
-              )}
-              {twitterSearchResult && (
-                <p className={`mt-1 px-1 text-[11px] ${twitterSearchResult.ok ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
-                  {twitterSearchResult.msg}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* YouTube channel search 闂?only in Videos view */}
-          {activeView === FeedViewType.Videos && (
-            <div className="mt-1 px-1" ref={youtubeDropdownRef}>
-              <div className="relative">
-                <div className="relative">
-                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary dark:text-text-dark-tertiary pointer-events-none" />
-                  <input
-                    value={youtubeSearch}
-                    onChange={(e) => setYoutubeSearch(e.target.value)}
-                    placeholder={tWithDefault("sidebar.youtubeSearchPlaceholder", "Enter YouTube channel or @handle", "Enter YouTube channel or @handle")}
-                    className="w-full text-xs pl-7 pr-2 py-1.5 border rounded-lg bg-white dark:bg-surface-dark dark:border-border-dark focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-text-tertiary dark:placeholder:text-text-dark-tertiary"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        if (youtubeCandidate?.valid) {
-                          handleYouTubeSubscribe(youtubeCandidate.query)
-                        } else if (videoSearchCandidates.length > 0) {
-                          void handleVideoCandidateSubscribe(videoSearchCandidates[0])
-                        } else {
-                          handleYouTubeSubscribe()
-                        }
-                      } else if (e.key === "Escape") {
-                        setYoutubeSearch("")
-                        setYoutubeCandidate(null)
-                        setVideoCandidates([])
-                      }
-                    }}
-                    onFocus={() => setYoutubeInputFocused(true)}
-                    onBlur={() => { setTimeout(() => setYoutubeInputFocused(false), 200) }}
-                    disabled={youtubeSearching}
-                  />
-                </div>
-                {/* Candidate dropdown */}
-                {youtubeInputFocused && ((youtubeCandidate && !youtubeCandidate.alreadySubscribed) || youtubeMatchedFeeds.length > 0 || videoSearchCandidates.length > 0) && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border bg-white dark:bg-surface-dark dark:border-border-dark shadow-lg overflow-hidden">
-                    {youtubeMatchedFeeds.length > 0 && (
-                      <div className="border-b border-border dark:border-border-dark">
-                        <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
-                          {t("common.subscribed")}
-                        </div>
-                        {youtubeMatchedFeeds.map((feed) => (
-                          <button
-                            key={feed.id}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              handleSelectFeed(feed.id)
-                              setYoutubeInputFocused(false)
-                            }}
-                          >
-                            <FeedIcon imageUrl={feed.imageUrl} siteUrl={feed.siteUrl} feedUrl={feed.url} title={feed.title} size={18} />
-                            <span className="flex-1 text-xs truncate">{getSidebarFeedDisplayTitle(feed)}</span>
-                            <span className="text-[11px] text-text-tertiary">{feed.unreadCount}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {videoSearchCandidates.length > 0 && (
-                      <div className="border-b border-border dark:border-border-dark">
-                        <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
-                          {tWithDefault("sidebar.youtubeSearching", "Candidates", "Candidates")}
-                        </div>
-                        {videoSearchCandidates.map((candidate) => (
-                          <div key={`${candidate.platform}:${candidate.feedUrl}`} className="flex items-center gap-2.5 w-full px-3 py-2.5 text-left hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors">
-                            <FeedIcon
-                              imageUrl={candidate.image}
-                              feedUrl={candidate.feedUrl}
-                              title={candidate.title}
-                              size={32}
-                              accentClass={candidate.platform === "youtube" ? "bg-red-500/10 text-red-500" : "bg-blue-500/10 text-blue-500"}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium truncate">{candidate.title}</div>
-                              <div className="text-[11px] text-text-tertiary dark:text-text-dark-tertiary truncate">
-                                {candidate.platform === "youtube" ? "YouTube" : "Bilibili"} · {candidate.description?.slice(0, 48)}
-                              </div>
-                            </div>
-                            <button
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-accent text-white hover:bg-accent/80 flex-shrink-0 transition-colors"
-                              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); void handleVideoCandidateSubscribe(candidate) }}
-                            >
-                              <Plus size={11} />
-                              {tWithDefault("sidebar.youtubeSubscribe", "Subscribe", "Subscribe")}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {youtubeCandidate && !youtubeCandidate.alreadySubscribed && (
-                      youtubeCandidate.loading ? (
-                        <div className="flex items-center gap-2 px-3 py-2.5">
-                          <RefreshCw size={14} className="animate-spin text-text-tertiary" />
-                          <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                            {(() => {
-                              const q = (youtubeCandidate.query || youtubeSearch || "").trim()
-                              return i18nDefault(
-                                `Looking up ${q || "channel"}...`,
-                                `Looking up ${q || "channel"}...`,
-                              )
-                            })()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2.5 w-full px-3 py-2.5 text-left">
-                          <FeedIcon
-                            imageUrl={youtubeCandidate.image}
-                            feedUrl={youtubeCandidate.feedUrl}
-                            title={youtubeCandidate.title || youtubeCandidate.query}
-                            size={32}
-                            accentClass="bg-red-500/10 text-red-500"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium truncate">{youtubeCandidate.title}</div>
-                            <div className="text-[11px] text-text-tertiary dark:text-text-dark-tertiary truncate">{youtubeCandidate.description?.slice(0, 60)}</div>
-                          </div>
-                          {youtubeCandidate.alreadySubscribed ? (
-                            <button
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-red-100 hover:dark:bg-red-900/30 hover:text-red-600 hover:dark:text-red-400 flex-shrink-0 transition-colors"
-                              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleYouTubeUnsubscribe(youtubeCandidate.query, youtubeCandidate.feedUrl) }}
-                            >
-                              <XIcon size={11} />
-                              {tWithDefault("sidebar.youtubeUnsubscribe", "Unsubscribe", "Unsubscribe")}
-                            </button>
-                          ) : (
-                            <button
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-accent text-white hover:bg-accent/80 flex-shrink-0 transition-colors"
-                              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleYouTubeSubscribe(youtubeCandidate.query) }}
-                            >
-                              <Plus size={11} />
-                              {tWithDefault("sidebar.youtubeSubscribe", "Subscribe", "Subscribe")}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-              {youtubeSearching && (
-                <div className="flex items-center gap-1.5 mt-1 px-1">
-                  <RefreshCw size={12} className="animate-spin text-accent" />
-                  <span className="text-[11px] text-text-secondary dark:text-text-dark-secondary">{tWithDefault("sidebar.youtubeSubscribing", "Subscribing...", "Subscribing...")}</span>
-                </div>
-              )}
-              {youtubeSearchResult && (
-                <p className={`mt-1 px-1 text-[11px] ${youtubeSearchResult.ok ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
-                  {youtubeSearchResult.msg}
-                </p>
-              )}
             </div>
           )}
 
@@ -2730,10 +1516,12 @@ export function Sidebar({ width }: { width?: number }) {
                 dragFeedId={dragFeedId}
                 dropTarget={dropTarget}
                 onDragStart={handleDragPointerStart}
+                autoExpand={searchExpandedCategories.has(category)}
+                highlightedFeedIds={searchHighlightedFeedIds}
               />
             ))}
 
-            {/* Recommended feeds section 闂?only shown when enabled in settings */}
+            {/* Recommended feeds section �?only shown when enabled in settings */}
             {showRecommended && recommendedFeeds.length > 0 && (
               <RecommendedSection
                 feeds={recommendedFeeds}
@@ -2749,7 +1537,7 @@ export function Sidebar({ width }: { width?: number }) {
                 <p className="mt-1">{t("sidebar.addFeedHint")}</p>
               </div>
             )}
-            {userVisibleFeedCount === 0 && activeView === null && allFeedsSearchLower && (
+            {userVisibleFeedCount === 0 && allFeedsSearchLower && (
               <div className="text-center py-6 text-text-secondary dark:text-text-dark-secondary text-xs">
                 <p>{t("common.noResults", { defaultValue: i18nDefault("No matching subscriptions", "No matching subscriptions") })}</p>
               </div>
@@ -2804,13 +1592,6 @@ export function Sidebar({ width }: { width?: number }) {
 
           <div className="flex gap-1">
             <button
-              onClick={() => setDiscoverOpen(true)}
-              className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary"
-              title={t("sidebar.addFeed")}
-            >
-              <Plus size={18} />
-            </button>
-            <button
               onClick={handleImportOPML}
               disabled={isImporting}
               className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary disabled:opacity-50"
@@ -2862,7 +1643,7 @@ export function Sidebar({ width }: { width?: number }) {
           onMouseLeave={() => setContextMenu(null)}
         >
           {contextMenu.isRecommended ? (
-            /* Recommended feed 闂?subscribe or read actions only (built-in, cannot delete) */
+            /* Recommended feed �?subscribe or read actions only (built-in, cannot delete) */
             <>
               <button
                 className="w-full text-left px-3 py-2 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 text-accent"
@@ -2949,7 +1730,7 @@ export function Sidebar({ width }: { width?: number }) {
               </button>
             </>
           ) : (
-            /* User feed 闂?normal actions */
+            /* User feed �?normal actions */
             <>
               <button
                 className="w-full text-left px-3 py-2 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2"
@@ -3244,7 +2025,7 @@ export function Sidebar({ width }: { width?: number }) {
         </div>
       )}
 
-      {/* Drag overlay 闂?follows mouse exactly */}
+      {/* Drag overlay �?follows mouse exactly */}
       {dragOverlay && (
         <div
           id="feed-drag-overlay"
@@ -3271,6 +2052,8 @@ type FeedCategoryProps = {
   dragFeedId: string | null
   dropTarget: string | null
   onDragStart: (feedId: string, label: string, e: React.PointerEvent) => void
+  autoExpand: boolean
+  highlightedFeedIds: Set<string>
 }
 
 const FeedCategory = memo(function FeedCategory({
@@ -3283,6 +2066,8 @@ const FeedCategory = memo(function FeedCategory({
   dragFeedId,
   dropTarget,
   onDragStart,
+  autoExpand,
+  highlightedFeedIds,
 }: FeedCategoryProps) {
   const [expanded, setExpanded] = useState(true)
   const isDropHover = dropTarget === category && dragFeedId !== null
@@ -3308,6 +2093,10 @@ const FeedCategory = memo(function FeedCategory({
     setTimeout(() => setExpanded(true), 400)
   }
   if (!isDropHover) wasDropHover.current = false
+
+  useEffect(() => {
+    if (autoExpand) setExpanded(true)
+  }, [autoExpand])
 
   return (
     <div
@@ -3351,6 +2140,7 @@ const FeedCategory = memo(function FeedCategory({
               {virtualFeedItems.map((item) => {
                 const feed = feeds[item.index]
                 if (!feed) return null
+                const isSearchHighlighted = highlightedFeedIds.has(feed.id)
                 return (
                   <div
                     key={feed.id}
@@ -3364,7 +2154,7 @@ const FeedCategory = memo(function FeedCategory({
                     <button
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
-                      className={`sidebar-item w-full group ${selectedFeedId === feed.id ? "sidebar-item-active" : ""}`}
+                      className={`sidebar-item w-full group transition-all duration-300 ${selectedFeedId === feed.id ? "sidebar-item-active" : ""} ${isSearchHighlighted ? "ring-1 ring-accent/50 bg-accent/10" : ""}`}
                     >
                       <GripVertical
                         size={12}
@@ -3387,36 +2177,39 @@ const FeedCategory = memo(function FeedCategory({
             </div>
           ) : (
             <div className="space-y-0.5">
-              {feeds.map((feed) => (
-                <div
-                  key={feed.id}
-                  className={`transition-all duration-200 ${
-                    dragFeedId === feed.id ? "opacity-40 scale-95" : "opacity-100"
-                  }`}
-                >
-                  <button
-                    onClick={() => onSelect(feed.id)}
-                    onContextMenu={(e) => onContextMenu(e, feed.id)}
-                    className={`sidebar-item w-full group ${selectedFeedId === feed.id ? "sidebar-item-active" : ""}`}
+              {feeds.map((feed) => {
+                const isSearchHighlighted = highlightedFeedIds.has(feed.id)
+                return (
+                  <div
+                    key={feed.id}
+                    className={`transition-all duration-200 ${
+                      dragFeedId === feed.id ? "opacity-40 scale-95" : "opacity-100"
+                    }`}
                   >
-                    {/* Drag grip 闂?pointer-based drag for smooth following */}
-                    <GripVertical
-                      size={12}
-                      className="flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab active:cursor-grabbing -ml-1 mr-0 touch-none"
-                      onPointerDown={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        onDragStart(feed.id, feed.title, e)
-                      }}
-                    />
-                    <FeedIcon imageUrl={feed.imageUrl} siteUrl={feed.siteUrl} feedUrl={feed.url} title={feed.title} size={20} />
-                    <span className="flex-1 text-left truncate">{getSidebarFeedDisplayTitle(feed)}</span>
-                    <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                      {feed.unreadCount}
-                    </span>
-                  </button>
-                </div>
-              ))}
+                    <button
+                      onClick={() => onSelect(feed.id)}
+                      onContextMenu={(e) => onContextMenu(e, feed.id)}
+                      className={`sidebar-item w-full group transition-all duration-300 ${selectedFeedId === feed.id ? "sidebar-item-active" : ""} ${isSearchHighlighted ? "ring-1 ring-accent/50 bg-accent/10" : ""}`}
+                    >
+                      {/* Drag grip �?pointer-based drag for smooth following */}
+                      <GripVertical
+                        size={12}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab active:cursor-grabbing -ml-1 mr-0 touch-none"
+                        onPointerDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onDragStart(feed.id, feed.title, e)
+                        }}
+                      />
+                      <FeedIcon imageUrl={feed.imageUrl} siteUrl={feed.siteUrl} feedUrl={feed.url} title={feed.title} size={20} />
+                      <span className="flex-1 text-left truncate">{getSidebarFeedDisplayTitle(feed)}</span>
+                      <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                        {feed.unreadCount}
+                      </span>
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -3484,7 +2277,7 @@ const RecommendedSection = memo(function RecommendedSection({
   )
 })
 
-/** Smart feed icon with fallback chain: imageUrl 闂?favicon from siteUrl 闂?initials 闂?RSS icon */
+/** Smart feed icon with fallback chain: imageUrl �?favicon from siteUrl �?initials �?RSS icon */
 type FeedIconProps = {
   imageUrl?: string
   siteUrl?: string

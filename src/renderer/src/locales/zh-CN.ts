@@ -387,7 +387,7 @@
     allFeeds: "全部",
     starred: "收藏",
     aiAssistant: "AI 助手",
-    discover: "发现",
+    discover: "添加订阅",
     search: "搜索",
     addFeed: "添加订阅",
     importOPML: "导入 OPML",
@@ -413,7 +413,7 @@
     subscribe: "订阅此源",
     removeRecommended: "移除推荐",
     noFeedsInCategory: "该文件夹下暂无订阅",
-    addFeedHint: "点击 + 添加订阅源",
+    addFeedHint: "点击“添加订阅”开始订阅",
     importSuccess: "导入完成！成功 {{imported}} 个，跳过 {{skipped}} 个",
     importFailed: "导入失败",
     importErrors: "，失败 {{errors}} 个",
@@ -497,7 +497,7 @@
 
   // Discover
   discover: {
-    title: "发现",
+    title: "添加订阅",
     searchPlaceholder: "搜索订阅源、输入 URL 或关键词...",
     searchResults: "搜索结果",
     noSearchResults: "未找到匹配的订阅源",
@@ -574,7 +574,7 @@
     label_toggle_readability: "Readability",
     label_scroll_top: "回到顶部",
     label_refresh_all: "刷新全部",
-    label_toggle_discover: "打开发现",
+    label_toggle_discover: "打开添加订阅",
     label_import_opml: "导入 OPML",
     label_export_opml: "导出 OPML",
     // Descriptions
@@ -601,7 +601,7 @@
     desc_toggle_readability: "切换 Readability 模式",
     desc_scroll_top: "滚动到文章顶部",
     desc_refresh_all: "刷新所有订阅源",
-    desc_toggle_discover: "切换发现面板",
+    desc_toggle_discover: "切换添加订阅面板",
     desc_import_opml: "导入 OPML 文件",
     desc_export_opml: "导出 OPML 文件",
   },
