@@ -116,12 +116,13 @@ async function fetchXAvatarByUsername(username: string): Promise<string> {
   if (cached && cached.expiresAt > now) return cached.image
   try {
     const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
-    const res = await fetch(profileUrl, {
+    // Use session fetch to respect proxy settings
+    const res = await session.defaultSession.fetch(profileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
-      signal: AbortSignal.timeout(1200),
     })
     if (!res.ok) return ""
     const html = await res.text()
@@ -749,16 +750,17 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
 
   const out: XUserProbeCandidate[] = []
   const seen = new Set<string>()
-  const pushCandidate = async (usernameRaw: string, description = "X user route") => {
+  const pushCandidate = async (usernameRaw: string, displayName = "", description = "X user") => {
     const username = usernameRaw.trim().replace(/^@+/, "")
     if (!username) return
     const key = username.toLowerCase()
     if (seen.has(key)) return
     seen.add(key)
     const image = (await fetchXAvatarByUsername(username)) || `https://unavatar.io/x/${encodeURIComponent(username)}`
+    const title = displayName ? `${displayName} (@${username}) - X` : `${username} - X`
     out.push({
       username,
-      title: `${username} - X`,
+      title,
       description,
       image,
       feedUrl: `${rsshubInstance}/x/user/${encodeURIComponent(username)}`,
@@ -771,16 +773,66 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
     await pushCandidate(directHandle)
   }
 
-  // Use Nitter user-search pages as a lightweight source for username candidates.
+  // Try X search via session fetch (respects proxy)
+  try {
+    const searchUrl = `https://x.com/search?q=${encodeURIComponent(clean)}&f=user`
+    const res = await session.defaultSession.fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+      },
+    })
+    if (res.ok) {
+      const html = await res.text()
+      // Extract user data from the page
+      // X embeds user data in script tags as JSON
+      const userDataMatch = html.match(/<script[^>]*>window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/i)
+      if (userDataMatch?.[1]) {
+        try {
+          const data = JSON.parse(userDataMatch[1])
+          const users = data?.entities?.users?.users || {}
+          for (const [id, user] of Object.entries(users) as [string, any][]) {
+            const screenName = user?.screen_name
+            if (!screenName || seen.has(screenName.toLowerCase())) continue
+            const name = user?.name || ""
+            const desc = user?.description || ""
+            await pushCandidate(screenName, name, desc)
+            if (out.length >= 20) break
+          }
+        } catch {
+          // JSON parse failed, try regex fallback
+        }
+      }
+
+      // Fallback: regex extraction from HTML
+      if (out.length === 0) {
+        // Match patterns like href="/username" with user context
+        const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?:[^>]*>){1,5}(?:[^<]*<[^>]*>){0,3}([^<]{1,50})<\/a>/g
+        let match
+        while ((match = userLinkRegex.exec(html)) !== null) {
+          const username = match[1]
+          if (username && !seen.has(username.toLowerCase())) {
+            await pushCandidate(username)
+            if (out.length >= 20) break
+          }
+        }
+      }
+    }
+  } catch {
+    // X search failed, continue with Nitter fallback
+  }
+
+  // Fallback: Use Nitter user-search pages (most instances are down, but try anyway)
   for (const instance of FALLBACK_NITTER_INSTANCES) {
+    if (out.length >= 10) break
     try {
       const endpoint = `${instance.replace(/\/+$/, "")}/search?f=users&q=${encodeURIComponent(clean)}`
-      const res = await fetch(endpoint, {
+      const res = await session.defaultSession.fetch(endpoint, {
         headers: {
-          "User-Agent": "Mozilla/5.0",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        signal: AbortSignal.timeout(3500),
       })
       if (!res.ok) continue
       const html = await res.text()
@@ -789,10 +841,9 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       while ((matched = regex.exec(html)) !== null) {
         const username = decodeURIComponent(matched[1] || "").trim()
         if (!username) continue
-        await pushCandidate(username, "X user search result")
+        await pushCandidate(username, "", "X user search result")
         if (out.length >= 30) break
       }
-      if (out.length >= 30) break
     } catch {
       // Ignore single instance failure.
     }
@@ -801,7 +852,9 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   const normalizedQuery = normalizeNameForMatch(clean)
   const scored = out
     .map((candidate) => {
-      const score = computeMatchTier(clean, candidate.username)
+      const usernameMatch = computeMatchTier(clean, candidate.username)
+      const nameMatch = computeMatchTier(clean, candidate.title)
+      const score = Math.max(usernameMatch, nameMatch)
       const fallbackScore = normalizedQuery && normalizeNameForMatch(candidate.title).includes(normalizedQuery) ? 1 : 0
       return { candidate, score: score || fallbackScore }
     })
@@ -818,12 +871,13 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
   if (!clean) return undefined
   const profileUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/`
   try {
-    const res = await fetch(profileUrl, {
+    // Use session fetch to respect proxy settings
+    const res = await session.defaultSession.fetch(profileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
-      signal: AbortSignal.timeout(5000),
     })
     if (!res.ok) return undefined
     const html = await res.text()
