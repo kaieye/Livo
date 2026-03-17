@@ -36,6 +36,9 @@ const FALLBACK_RSSHUB_INSTANCES = [
 ]
 const FALLBACK_NITTER_INSTANCES = [
   "https://nitter.net",
+  "https://nitter.poast.org",
+  "https://nitter.privacydev.net",
+  "https://nitter.d420.de",
 ]
 
 const X_AVATAR_CACHE_TTL = 10 * 60 * 1000
@@ -612,7 +615,7 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
   }
 }
 
-async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string): Promise<Array<{
+async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string, platform: "all" | "youtube" | "bilibili" | "x" = "all"): Promise<Array<{
   platform: "youtube" | "bilibili"
   title: string
   description: string
@@ -623,67 +626,38 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string)
   const clean = query.trim().replace(/^@/, "")
   if (!clean) return results
   if (looksLikeYouTubeChannelId(clean)) return results
-  const uidMatch = clean.match(/^(?:uid[:\s-]*)?(\d{3,})$/i)
-  const bilibiliUid = uidMatch?.[1] || null
 
-  // 0) Bilibili UID direct lookup has highest priority
-  if (bilibiliUid) {
-    const name = await fetchBilibiliNameByUid(bilibiliUid)
-    const image = (await fetchBilibiliAvatarByUid(bilibiliUid)) || ""
-    results.push({
-      platform: "bilibili",
-      title: `${name || `UID ${bilibiliUid}`} - Bilibili`,
-      description: `UID ${bilibiliUid}`,
-      image,
-      feedUrl: `${rsshubInstance}/bilibili/user/video/${bilibiliUid}`,
-    })
+  // Run searches in parallel based on selected platform
+  const searchPromises: Promise<VideoProbeCandidate[]>[] = []
+
+  if (platform === "all" || platform === "youtube") {
+    searchPromises.push(searchYouTubeChannelsByKeyword(clean))
+  } else {
+    searchPromises.push(Promise.resolve([]))
   }
 
-  // 1) YouTube direct candidate (handle/user/channel-like)
-  try {
-    const routes = [
-      `/youtube/user/@${clean}`,
-      `/youtube/user/${clean}`,
-    ]
-    const attempts = routes.map(async (route) => {
-      const feedUrl = `${rsshubInstance}${route}`
-      const parsed = await fastParser.parseURL(feedUrl)
-      const image = (parsed as any).image?.url || (parsed as any).itunes?.image || ""
-      return {
-        platform: "youtube" as const,
-        title: parsed.title || `${clean} - YouTube`,
-        description: parsed.description || "YouTube",
-        image,
-        feedUrl,
-      }
-    })
-    const yt = await Promise.any(attempts)
-    // If a direct RSSHub route resolves, trust it and keep the candidate.
-    // This avoids dropping valid channels when UI query is handle/ID but title is localized.
-    results.push(yt)
-  } catch {
-    // Ignore YouTube probe failures.
+  if (platform === "all" || platform === "bilibili") {
+    searchPromises.push(probeBilibiliUsersByKeyword(clean, rsshubInstance).then(users => users.map(user => ({
+      platform: "bilibili" as const,
+      title: user.title,
+      description: user.description,
+      image: user.image,
+      feedUrl: user.feedUrl,
+    }))))
+  } else {
+    searchPromises.push(Promise.resolve([]))
   }
 
-  // 2) YouTube search by keyword (username/channel name)
-  const ytSearchCandidates = await searchYouTubeChannelsByKeyword(clean)
+  const [ytSearchCandidates, biliCandidates] = await Promise.all(searchPromises)
+
   for (const c of ytSearchCandidates) {
     if (!results.some((x) => x.feedUrl === c.feedUrl)) results.push(c)
   }
 
-  // 3) Bilibili user search candidates
-  const biliUsers = await probeBilibiliUsersByKeyword(clean, rsshubInstance)
-  for (const user of biliUsers) {
-    const candidate: VideoProbeCandidate = {
-      platform: "bilibili",
-      title: user.title,
-      description: user.description,
-      image: user.image,
-      // Username search defaults to dynamic route, and the UI can still choose view when subscribing.
-      feedUrl: user.feedUrl,
-    }
+  for (const candidate of biliCandidates) {
     if (!results.some((x) => x.feedUrl === candidate.feedUrl)) results.push(candidate)
   }
+
   return results
 }
 
@@ -747,16 +721,17 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
 async function probeXUsersByKeyword(query: string, rsshubInstance: string): Promise<XUserProbeCandidate[]> {
   const clean = query.trim().replace(/^@+/, "")
   if (!clean) return []
+  console.log(`[X Search] Starting search for "${clean}"`)
 
   const out: XUserProbeCandidate[] = []
   const seen = new Set<string>()
-  const pushCandidate = async (usernameRaw: string, displayName = "", description = "X user") => {
+  const pushCandidate = (usernameRaw: string, displayName = "", description = "X user", sourceScore = 1) => {
     const username = usernameRaw.trim().replace(/^@+/, "")
-    if (!username) return
+    if (!username) return 0
     const key = username.toLowerCase()
-    if (seen.has(key)) return
+    if (seen.has(key)) return 0
     seen.add(key)
-    const image = (await fetchXAvatarByUsername(username)) || `https://unavatar.io/x/${encodeURIComponent(username)}`
+    const image = `https://unavatar.io/x/${encodeURIComponent(username)}`
     const title = displayName ? `${displayName} (@${username}) - X` : `${username} - X`
     out.push({
       username,
@@ -764,18 +739,79 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       description,
       image,
       feedUrl: `${rsshubInstance}/x/user/${encodeURIComponent(username)}`,
-    })
+      sourceScore,
+    } as XUserProbeCandidate & { sourceScore?: number })
+    return 1
   }
 
   // If input already looks like a username, always keep it as a high-priority candidate.
   const directHandle = extractLikelyXHandle(clean)
   if (directHandle) {
-    await pushCandidate(directHandle)
+    console.log(`[X Search] Input looks like a handle: @${directHandle}`)
+    pushCandidate(directHandle, "", "", 3)
   }
 
-  // Try X search via session fetch (respects proxy)
+  // Try Nitter instances for display name search (works without login)
+  for (const nitterInstance of FALLBACK_NITTER_INSTANCES) {
+    try {
+      const searchUrl = `${nitterInstance}/search?f=users&q=${encodeURIComponent(clean)}`
+      console.log(`[X Search] Trying Nitter: ${searchUrl}`)
+      const res = await session.defaultSession.fetch(searchUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      })
+      console.log(`[X Search] Nitter status: ${res.status}`)
+      if (res.ok) {
+        const html = await res.text()
+        console.log(`[X Search] Nitter HTML length: ${html.length}`)
+
+        // Nitter search results contain user profiles in specific patterns
+        // Look for profile links: <a class="profile-link" href="/username">
+        const profileLinkRegex = /<a[^>]*class="[^"]*profile-card[^"]*"[^>]*href="\/([a-zA-Z0-9_]{1,15})"/gi
+        let match
+        while ((match = profileLinkRegex.exec(html)) !== null) {
+          const username = match[1]
+          if (username && !seen.has(username.toLowerCase())) {
+            // Try to extract display name from the card
+            const cardStart = html.lastIndexOf('<', match.index)
+            const cardEnd = html.indexOf('</a>', match.index)
+            const cardHtml = html.slice(Math.max(0, cardStart), cardEnd > 0 ? cardEnd + 4 : html.length)
+            const nameMatch = cardHtml.match(/<div[^>]*class="[^"]*fullname[^"]*"[^>]*>([^<]+)</i)
+            const displayName = nameMatch ? nameMatch[1].trim() : ""
+            console.log(`[X Search] Found via Nitter: @${username} (${displayName})`)
+            pushCandidate(username, displayName, "", 2)
+            if (out.length >= 10) break
+          }
+        }
+
+        // Alternative pattern: generic user links
+        if (out.length === 0) {
+          const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home)[^"]*")/gi
+          const excludePaths = ["search", "home", "explore", "i", "settings", "about", "privacy", "terms"]
+          while ((match = userLinkRegex.exec(html)) !== null) {
+            const username = match[1]
+            if (excludePaths.includes(username.toLowerCase())) continue
+            if (username && !seen.has(username.toLowerCase())) {
+              console.log(`[X Search] Found via Nitter (alt): @${username}`)
+              pushCandidate(username, "", "", 1)
+              if (out.length >= 10) break
+            }
+          }
+        }
+
+        if (out.length > 0) break // Found results, no need to try other instances
+      }
+    } catch (e) {
+      console.log(`[X Search] Nitter error:`, e)
+    }
+  }
+
+  // Try X.com search (requires login for most results, but may work for some queries)
   try {
     const searchUrl = `https://x.com/search?q=${encodeURIComponent(clean)}&f=user`
+    console.log(`[X Search] Trying X.com: ${searchUrl}`)
     const res = await session.defaultSession.fetch(searchUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -783,86 +819,68 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
         "Accept-Language": "en-US,en;q=0.5",
       },
     })
+    console.log(`[X Search] X.com status: ${res.status}`)
     if (res.ok) {
       const html = await res.text()
-      // Extract user data from the page
-      // X embeds user data in script tags as JSON
-      const userDataMatch = html.match(/<script[^>]*>window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/i)
-      if (userDataMatch?.[1]) {
+      console.log(`[X Search] X.com HTML length: ${html.length}`)
+
+      // Try to extract user data from __INITIAL_STATE__
+      const stateMatch = html.match(/<script[^>]*>window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/i)
+      if (stateMatch?.[1]) {
         try {
-          const data = JSON.parse(userDataMatch[1])
+          const data = JSON.parse(stateMatch[1])
           const users = data?.entities?.users?.users || {}
+          console.log(`[X Search] Found ${Object.keys(users).length} users in __INITIAL_STATE__`)
           for (const [id, user] of Object.entries(users) as [string, any][]) {
             const screenName = user?.screen_name
             if (!screenName || seen.has(screenName.toLowerCase())) continue
             const name = user?.name || ""
             const desc = user?.description || ""
-            await pushCandidate(screenName, name, desc)
+            pushCandidate(screenName, name, desc, 2)
             if (out.length >= 20) break
           }
-        } catch {
-          // JSON parse failed, try regex fallback
+        } catch (e) {
+          console.log(`[X Search] Failed to parse __INITIAL_STATE__`)
         }
       }
 
-      // Fallback: regex extraction from HTML
+      // Fallback: extract from HTML meta tags and links
       if (out.length === 0) {
-        // Match patterns like href="/username" with user context
-        const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?:[^>]*>){1,5}(?:[^<]*<[^>]*>){0,3}([^<]{1,50})<\/a>/g
+        // Look for user profile links in the HTML
+        const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home|status|hashtag)[^"]*")/gi
         let match
+        const excludePaths = ["search", "home", "explore", "i", "status", "hashtag", "settings", "notifications", "messages", "bookmarks", "lists", "compose", "intent", "share"]
         while ((match = userLinkRegex.exec(html)) !== null) {
           const username = match[1]
+          if (excludePaths.includes(username.toLowerCase())) continue
           if (username && !seen.has(username.toLowerCase())) {
-            await pushCandidate(username)
-            if (out.length >= 20) break
+            console.log(`[X Search] Found via HTML: @${username}`)
+            pushCandidate(username, "", "", 1)
+            if (out.length >= 10) break
           }
         }
       }
     }
-  } catch {
-    // X search failed, continue with Nitter fallback
+  } catch (e) {
+    console.log(`[X Search] X.com error:`, e)
   }
 
-  // Fallback: Use Nitter user-search pages (most instances are down, but try anyway)
-  for (const instance of FALLBACK_NITTER_INSTANCES) {
-    if (out.length >= 10) break
-    try {
-      const endpoint = `${instance.replace(/\/+$/, "")}/search?f=users&q=${encodeURIComponent(clean)}`
-      const res = await session.defaultSession.fetch(endpoint, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-      })
-      if (!res.ok) continue
-      const html = await res.text()
-      const regex = /href=["']\/([^"'\/?#]+)(?:\/?)["'][^>]*class=["'][^"']*username[^"']*["']/gi
-      let matched: RegExpExecArray | null
-      while ((matched = regex.exec(html)) !== null) {
-        const username = decodeURIComponent(matched[1] || "").trim()
-        if (!username) continue
-        await pushCandidate(username, "", "X user search result")
-        if (out.length >= 30) break
-      }
-    } catch {
-      // Ignore single instance failure.
-    }
-  }
+  console.log(`[X Search] Total candidates: ${out.length}`)
 
-  const normalizedQuery = normalizeNameForMatch(clean)
+  // Use sourceScore for sorting
   const scored = out
-    .map((candidate) => {
-      const usernameMatch = computeMatchTier(clean, candidate.username)
-      const nameMatch = computeMatchTier(clean, candidate.title)
-      const score = Math.max(usernameMatch, nameMatch)
-      const fallbackScore = normalizedQuery && normalizeNameForMatch(candidate.title).includes(normalizedQuery) ? 1 : 0
-      return { candidate, score: score || fallbackScore }
+    .map((candidate: any) => {
+      const sourceScore = candidate.sourceScore || 1
+      return { candidate, score: sourceScore }
     })
-    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 60)
-    .map((item) => item.candidate)
+    .slice(0, 20)
+    .map((item) => {
+      const { sourceScore, ...rest } = item.candidate as any
+      return rest as XUserProbeCandidate
+    })
 
+  console.log(`[X Search] Final results: ${scored.length}`)
   return scored
 }
 
@@ -909,81 +927,105 @@ export function registerDiscoverHandlers(): void {
     return CURATED_FEEDS
   })
 
+  type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x"
+
   // Search feeds by query (check curated feeds + try as URL)
-  ipcMain.handle("discover:search", async (_event, query: string) => {
-    const cacheKey = query.trim().toLowerCase()
+  ipcMain.handle("discover:search", async (_event, query: string, platform: DiscoverSearchPlatform = "all") => {
+    const cacheKey = `${query.trim().toLowerCase()}:${platform}`
     const cached = discoverSearchCache.get(cacheKey)
     if (cacheKey && cached && cached.expiresAt > Date.now()) {
       return cached.results
     }
 
+    console.log(`[Discover Search] ========== START SEARCH ==========`)
+    console.log(`[Discover Search] Query: "${query}", Platform: "${platform}"`)
+    const startTime = Date.now()
     const results: DiscoverSearchResult[] = []
 
-    // Search curated feeds
-    const curated = searchCuratedFeeds(query)
-    for (const feed of curated) {
-      results.push({
-        title: feed.title,
-        url: feed.url,
-        siteUrl: feed.siteUrl,
-        description: feed.description,
-        source: "curated",
-        image: feed.imageUrl || await inferDiscoverResultImage(feed.url, feed.siteUrl),
-      })
+    // Search curated feeds (fast, local) - only for "all" or matching platform
+    if (platform === "all") {
+      const curated = searchCuratedFeeds(query)
+      console.log(`[Discover Search] Curated feeds: ${curated.length}`)
+      for (const feed of curated) {
+        results.push({
+          title: feed.title,
+          url: feed.url,
+          siteUrl: feed.siteUrl,
+          description: feed.description,
+          source: "curated",
+          image: feed.imageUrl || "",
+        })
+      }
+
+      // Search RSSHub routes (fast, local)
+      const q = query.toLowerCase()
+      const matchingRoutes = RSSHUB_ROUTES.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.description.toLowerCase().includes(q)
+      )
+      console.log(`[Discover Search] RSSHub routes: ${matchingRoutes.length}`)
+      const instance = getRSSHubInstance()
+      for (const route of matchingRoutes.slice(0, 20)) {
+        results.push({
+          title: route.name,
+          url: `${instance}${route.url}`,
+          siteUrl: `${instance}${route.url}`,
+          description: `${route.description} (RSSHub)`,
+          source: "rsshub",
+          image: "",
+        })
+      }
     }
 
-    // Search RSSHub routes
-    const q = query.toLowerCase()
-    const matchingRoutes = RSSHUB_ROUTES.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.description.toLowerCase().includes(q)
-    )
     const instance = getRSSHubInstance()
-    for (const route of matchingRoutes) {
-      results.push({
-        title: route.name,
-        url: `${instance}${route.url}`,
-        siteUrl: `${instance}${route.url}`,
-        description: `${route.description} (RSSHub)`,
-        source: "rsshub",
-        image: await inferDiscoverResultImage(`${instance}${route.url}`),
-      })
+
+    // Run platform-specific searches based on selected platform
+    const searchPromises: Promise<void>[] = []
+
+    if (platform === "all" || platform === "youtube" || platform === "bilibili") {
+      searchPromises.push(
+        probeVideoSourcesByKeyword(query, instance, platform).then((videoCandidates) => {
+          console.log(`[Discover Search] Video candidates: ${videoCandidates.length}`)
+          for (const candidate of videoCandidates) {
+            if (results.some((r) => r.url === candidate.feedUrl)) return
+            results.push({
+              title: candidate.title,
+              url: candidate.feedUrl,
+              siteUrl: candidate.feedUrl,
+              description: candidate.description || (candidate.platform === "youtube" ? "YouTube channel" : "Bilibili user"),
+              source: "rsshub",
+              image: candidate.image || "",
+            })
+          }
+        })
+      )
     }
 
-    // Include video-source candidates from keyword search. This supports
-    // YouTube handles/IDs/usernames and Bilibili UID/name lookups.
-    const videoCandidates = await probeVideoSourcesByKeyword(query, instance)
-    for (const candidate of videoCandidates) {
-      if (results.some((r) => r.url === candidate.feedUrl)) continue
-      results.push({
-        title: candidate.title,
-        url: candidate.feedUrl,
-        siteUrl: candidate.feedUrl,
-        description: candidate.description || (candidate.platform === "youtube" ? "YouTube channel" : "Bilibili user"),
-        source: "rsshub",
-        image: candidate.image || await inferDiscoverResultImage(candidate.feedUrl),
-      })
+    if (platform === "all" || platform === "x") {
+      searchPromises.push(
+        probeXUsersByKeyword(query, instance).then((xCandidates) => {
+          console.log(`[Discover Search] X candidates: ${xCandidates.length}`)
+          for (const candidate of xCandidates) {
+            if (results.some((r) => r.url === candidate.feedUrl)) return
+            results.push({
+              title: candidate.title,
+              url: candidate.feedUrl,
+              siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
+              description: candidate.description,
+              source: "rsshub",
+              image: candidate.image,
+            })
+          }
+        })
+      )
     }
 
-    // Include X user candidates from keyword search, so results are not YouTube-only.
-    const xCandidates = await probeXUsersByKeyword(query, instance)
-    for (const candidate of xCandidates) {
-      if (results.some((r) => r.url === candidate.feedUrl)) continue
-      results.push({
-        title: candidate.title,
-        url: candidate.feedUrl,
-        siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
-        description: candidate.description,
-        source: "rsshub",
-        image: candidate.image,
-      })
-    }
+    await Promise.all(searchPromises)
 
     const trimmedQuery = query.trim()
 
-    // Resolve profile-like inputs (and plain X handles) to direct subscribable feed links.
-    // Example: "Elonmusk" -> "https://.../twitter/user/Elonmusk".
+    // Resolve profile-like inputs (fast)
     const profileInputs = new Set<string>()
     if (trimmedQuery) {
       profileInputs.add(trimmedQuery)
@@ -994,14 +1036,13 @@ export function registerDiscoverHandlers(): void {
       const resolved = resolveProfileUrlToCandidates(profileInput, instance)
       for (const candidate of resolved.candidates) {
         if (results.some((r) => r.url === candidate.feedUrl)) continue
-        const displayTitle = await inferDiscoverResultTitle(candidate.feedUrl, candidate.title)
         results.push({
-          title: displayTitle,
+          title: candidate.title,
           url: candidate.feedUrl,
           siteUrl: candidate.siteUrl || profileInput,
           description: candidate.description || "Profile feed",
           source: candidate.source === "rss" ? "url" : "rsshub",
-          image: await inferDiscoverResultImage(candidate.feedUrl, candidate.siteUrl || profileInput),
+          image: "", // Skip image fetch for speed
         })
       }
     }
@@ -1045,6 +1086,10 @@ export function registerDiscoverHandlers(): void {
     }
 
     const finalResults = dedupeAndSortDiscoverResults(query, results)
+
+    console.log(`[Discover Search] Final results: ${finalResults.length}`)
+    console.log(`[Discover Search] Elapsed: ${Date.now() - startTime}ms`)
+    console.log(`[Discover Search] ========== END SEARCH ==========`)
 
     if (cacheKey) {
       discoverSearchCache.set(cacheKey, {

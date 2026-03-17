@@ -76,7 +76,7 @@ const api = {
   discover: {
     categories: () => ipcRenderer.invoke("discover:categories"),
     popular: (category?: string) => ipcRenderer.invoke("discover:popular", category),
-    search: (query: string) => ipcRenderer.invoke("discover:search", query),
+    search: (query: string, platform?: "all" | "youtube" | "bilibili" | "x") => ipcRenderer.invoke("discover:search", query, platform),
     rsshubRoutes: (category?: string) => ipcRenderer.invoke("discover:rsshub-routes", category),
     rsshubInstance: () => ipcRenderer.invoke("discover:rsshub-instance"),
     validateFeed: (url: string) => ipcRenderer.invoke("discover:validate-feed", url),

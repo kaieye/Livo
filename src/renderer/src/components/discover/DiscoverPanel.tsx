@@ -1,66 +1,23 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useTranslation } from "react-i18next"
-import { useDiscoverStore } from "../../store/discover-store"
+import { useDiscoverStore, DiscoverSearchPlatform } from "../../store/discover-store"
 import { useFeedStore } from "../../store/feed-store"
-import { TRENDING_FEEDS, FEED_BUNDLES } from "../../../../shared/discover-data"
 import { FeedViewType } from "../../../../shared/types"
 import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
 import {
   Search,
   X,
-  ArrowLeft,
   Loader2,
   Plus,
   Check,
   ExternalLink,
   Rss,
   Globe,
-  Cpu,
-  Code,
-  Newspaper,
-  Palette,
-  PenLine,
-  TrendingUp,
-  Radio,
-  Gamepad2,
-  FlaskConical,
-  Users,
-  BookOpen,
   Sparkles,
-  Zap,
+  Youtube,
 } from "lucide-react"
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  tech: <Cpu size={20} />,
-  programming: <Code size={20} />,
-  news: <Newspaper size={20} />,
-  design: <Palette size={20} />,
-  blog: <PenLine size={20} />,
-  finance: <TrendingUp size={20} />,
-  media: <Radio size={20} />,
-  acg: <Gamepad2 size={20} />,
-  science: <FlaskConical size={20} />,
-  social: <Users size={20} />,
-  reading: <BookOpen size={20} />,
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  tech: "from-blue-500/20 to-cyan-500/20 text-blue-600 dark:text-blue-400",
-  programming: "from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400",
-  news: "from-red-500/20 to-orange-500/20 text-red-600 dark:text-red-400",
-  design: "from-pink-500/20 to-fuchsia-500/20 text-pink-600 dark:text-pink-400",
-  blog: "from-violet-500/20 to-purple-500/20 text-violet-600 dark:text-violet-400",
-  finance: "from-amber-500/20 to-yellow-500/20 text-amber-600 dark:text-amber-400",
-  media: "from-indigo-500/20 to-blue-500/20 text-indigo-600 dark:text-indigo-400",
-  acg: "from-rose-500/20 to-pink-500/20 text-rose-600 dark:text-rose-400",
-  science: "from-teal-500/20 to-cyan-500/20 text-teal-600 dark:text-teal-400",
-  social: "from-sky-500/20 to-blue-500/20 text-sky-600 dark:text-sky-400",
-  reading: "from-stone-500/20 to-zinc-500/20 text-stone-600 dark:text-stone-400",
-}
-
-const SEARCH_RESULTS_MIN_PAGE_SIZE = 6
-const SEARCH_RESULTS_ESTIMATED_ROW_HEIGHT = 78
-const SEARCH_RESULTS_PAGER_RESERVED_HEIGHT = 92
+const SEARCH_RESULTS_PAGE_SIZE = 6
 
 function inferResultTitleFromUrl(url: string): string {
   try {
@@ -91,19 +48,15 @@ function getDisplayTitle(result: { title: string; url: string }): string {
 
 export function DiscoverPanel() {
   const {
-    categories,
-    selectedCategory,
-    feeds,
-    rsshubRoutes,
     searchQuery,
+    searchPlatform,
     searchResults,
     isSearching,
-    isLoading,
     subscribingUrls,
     setOpen,
-    selectCategory,
     search,
     setSearchQuery,
+    setSearchPlatform,
     setSubscribing,
   } = useDiscoverStore()
 
@@ -117,23 +70,23 @@ export function DiscoverPanel() {
     title: string
     preferredView: FeedViewType
   } | null>(null)
-  const [searchPageSize, setSearchPageSize] = useState(12)
   const [searchPage, setSearchPage] = useState(1)
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Platform selector options
+  const platformOptions: { value: DiscoverSearchPlatform; label: string; icon: React.ReactNode }[] = [
+    { value: "all", label: t("common.all"), icon: <Globe size={14} /> },
+    { value: "youtube", label: "YouTube", icon: <Youtube size={14} /> },
+    { value: "bilibili", label: "Bilibili", icon: <span className="text-xs font-bold">B</span> },
+    { value: "x", label: "X", icon: <span className="text-xs font-bold">X</span> },
+  ]
 
   // Sync subscribedUrls with existing user feeds
   useEffect(() => {
     const urls = new Set(userFeeds.map((f) => f.url))
     setSubscribedUrls(urls)
   }, [userFeeds])
-
-  useEffect(() => {
-    // Load initial data
-    if (!selectedCategory && categories.length > 0) {
-      selectCategory(null)
-    }
-  }, [categories.length])
 
   useEffect(() => {
     return () => {
@@ -144,25 +97,6 @@ export function DiscoverPanel() {
 
   useEffect(() => {
     setSearchPage(1)
-  }, [searchQuery])
-
-  useEffect(() => {
-    const hasQuery = searchQuery.trim().length > 0
-    if (!hasQuery) return
-
-    const updatePageSize = () => {
-      const top = searchResultsTopRef.current?.getBoundingClientRect().top ?? 220
-      const availableHeight = window.innerHeight - top - SEARCH_RESULTS_PAGER_RESERVED_HEIGHT
-      const nextSize = Math.max(
-        SEARCH_RESULTS_MIN_PAGE_SIZE,
-        Math.floor(availableHeight / SEARCH_RESULTS_ESTIMATED_ROW_HEIGHT),
-      )
-      setSearchPageSize(nextSize)
-    }
-
-    updatePageSize()
-    window.addEventListener("resize", updatePageSize)
-    return () => window.removeEventListener("resize", updatePageSize)
   }, [searchQuery])
 
   const inferViewFromUrl = useCallback((targetUrl: string): FeedViewType => {
@@ -241,8 +175,7 @@ export function DiscoverPanel() {
   const isSubscribed = (url: string) => subscribedUrls.has(url)
   const isSubscribing = (url: string) => subscribingUrls.has(url)
   const hasSearchQuery = searchQuery.trim().length > 0
-  const showCenteredSearch = !selectedCategory
-  const totalSearchPages = Math.max(1, Math.ceil(searchResults.length / searchPageSize))
+  const totalSearchPages = Math.max(1, Math.ceil(searchResults.length / SEARCH_RESULTS_PAGE_SIZE))
 
   useEffect(() => {
     setSearchPage((prev) => Math.min(prev, totalSearchPages))
@@ -254,59 +187,62 @@ export function DiscoverPanel() {
   }, [searchPage, hasSearchQuery])
 
   const pagedSearchResults = useMemo(() => {
-    const start = (searchPage - 1) * searchPageSize
-    return searchResults.slice(start, start + searchPageSize)
-  }, [searchPage, searchPageSize, searchResults])
+    const start = (searchPage - 1) * SEARCH_RESULTS_PAGE_SIZE
+    return searchResults.slice(start, start + SEARCH_RESULTS_PAGE_SIZE)
+  }, [searchPage, searchResults])
 
   const searchBar = (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-secondary dark:text-text-dark-secondary">
-        <span className="px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">YouTube</span>
-        <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium">X</span>
-        <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-medium">Bilibili</span>
-        <span className="opacity-80">按精确匹配 / 前缀匹配 / 包含匹配排序</span>
+    <div className="space-y-2.5 max-w-2xl mx-auto">
+      <div className="flex items-center gap-2">
+        {/* Platform selector */}
+        <div className="flex items-center gap-1 text-[11px]">
+          {platformOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setSearchPlatform(option.value)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+                searchPlatform === option.value
+                  ? "bg-accent text-white font-medium"
+                  : "bg-surface-secondary dark:bg-surface-dark-secondary text-text-secondary dark:text-text-dark-secondary hover:bg-accent/10"
+              }`}
+            >
+              {option.icon}
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="relative">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-        />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder={t("discover.searchPlaceholder")}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
-        />
-        {isSearching && hasSearchQuery && (
-          <div className="absolute left-3 right-3 -bottom-1 h-0.5 overflow-hidden rounded-full bg-accent/10">
-            <div className="h-full w-1/3 bg-accent/70 search-progress-slide" />
-          </div>
-        )}
+      <div className="relative flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder={t("discover.searchPlaceholder")}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
+          />
+          {isSearching && hasSearchQuery && (
+            <div className="absolute left-3 right-3 -bottom-1 h-0.5 overflow-hidden rounded-full bg-accent/10">
+              <div className="h-full w-1/3 bg-accent/70 search-progress-slide" />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-surface-dark overflow-hidden">
+    <div className="relative flex-1 flex flex-col min-w-0 bg-white dark:bg-surface-dark overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 border-b bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 px-6 py-3">
-          {selectedCategory && (
-            <button
-              onClick={() => selectCategory(null)}
-              className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
-            >
-              <ArrowLeft size={18} />
-            </button>
-          )}
           <div className="flex items-center gap-2">
             <Sparkles size={20} className="text-accent" />
-            <h2 className="text-lg font-semibold">
-              {selectedCategory
-                ? categories.find((c) => c.id === selectedCategory)?.name || t("discover.title")
-                : t("discover.title")}
-            </h2>
+            <h2 className="text-lg font-semibold">{t("discover.title")}</h2>
           </div>
           <div className="flex-1" />
           <button
@@ -320,11 +256,7 @@ export function DiscoverPanel() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {showCenteredSearch ? (
-          <div className="w-full pt-[18vh]">{searchBar}</div>
-        ) : (
-          <div className="w-full mb-4">{searchBar}</div>
-        )}
+        <div className="w-full pt-[18vh]">{searchBar}</div>
 
         {subscribeHint && (
           <div className="w-full mt-2 mb-3 rounded-lg border border-emerald-300/60 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
@@ -333,8 +265,8 @@ export function DiscoverPanel() {
         )}
 
         {/* Search results */}
-        {hasSearchQuery ? (
-          <div className="space-y-3">
+        {hasSearchQuery && (
+          <div className="space-y-3 mt-4 max-w-2xl mx-auto">
             <div ref={searchResultsTopRef} />
             <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
               {t("discover.searchResults")} {searchResults.length > 0 && `(${searchResults.length})`}
@@ -364,241 +296,59 @@ export function DiscoverPanel() {
                 <p className="text-xs mt-1">{t("discover.tryFullLink")}</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {pagedSearchResults.map((result) => (
-                  <FeedCard
-                    key={result.url}
-                    title={getDisplayTitle(result)}
-                    url={result.url}
-                    description={result.description}
-                    imageUrl={result.image}
-                    badge={
-                      result.source === "rsshub"
-                        ? "RSSHub"
-                        : result.source === "url"
-                          ? "URL"
-                          : undefined
-                    }
-                    subscribed={isSubscribed(result.url)}
-                    subscribing={isSubscribing(result.url)}
-                    onSubscribe={() => handleToggleSubscribe(result.url, result.title)}
-                  />
-                ))}
-                {searchResults.length > searchPageSize && (
-                  <div className="mt-3 sticky bottom-0 z-10 py-2 flex items-center justify-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary bg-white/90 dark:bg-surface-dark/90 backdrop-blur-sm rounded-lg">
-                    <button
-                      type="button"
-                      disabled={searchPage <= 1}
-                      onClick={() => setSearchPage((prev) => Math.max(1, prev - 1))}
-                      className="px-2 py-1 rounded-md border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-                    >
-                      Prev
-                    </button>
-                    <span>
-                      {searchPage} / {totalSearchPages}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={searchPage >= totalSearchPages}
-                      onClick={() => setSearchPage((prev) => Math.min(totalSearchPages, prev + 1))}
-                      className="px-2 py-1 rounded-md border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ) : !selectedCategory ? (
-          /* Category grid */
-          <div>
-            {/* 🔥 Trending / Recommended */}
-            <div className="mb-8">
-              <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary mb-3 flex items-center gap-1.5">
-                <Sparkles size={14} className="text-accent" />
-                {t("discover.recommended")}
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {TRENDING_FEEDS.map((feed) => (
-                  <div
-                    key={feed.url}
-                    className="flex items-start gap-3 p-3 rounded-xl border bg-gradient-to-br from-accent/[0.03] to-transparent hover:border-accent/30 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-accent mb-0.5">{feed.reason}</div>
-                      <div className="font-medium text-sm truncate">{feed.title}</div>
-                      <div className="text-xs text-text-tertiary line-clamp-1 mt-0.5">{feed.description}</div>
-                    </div>
-                    <button
-                      onClick={() => handleToggleSubscribe(feed.url, feed.title)}
-                      disabled={isSubscribing(feed.url)}
-                      className={`flex-shrink-0 p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                        isSubscribed(feed.url)
-                          ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400"
-                          : "bg-accent/10 text-accent hover:bg-accent/20"
-                      }`}
-                    >
-                      {isSubscribing(feed.url) ? <Loader2 size={14} className="animate-spin" /> : isSubscribed(feed.url) ? <Check size={14} /> : <Plus size={14} />}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick-start bundles */}
-            <div className="mb-8">
-              <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary mb-3 flex items-center gap-1.5">
-                <Zap size={14} className="text-amber-500" />
-                {t("discover.quickBundles")}
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {FEED_BUNDLES.map((bundle) => (
-                  <button
-                    key={bundle.id}
-                    onClick={async () => {
-                      for (const f of bundle.feeds) {
-                        if (!isSubscribed(f.url) && !isSubscribing(f.url)) {
-                          await handleSubscribe(f.url, f.title)
-                        }
-                      }
-                    }}
-                    className="text-left p-3 rounded-xl border hover:border-accent/30 hover:bg-accent/[0.02] transition-colors"
-                  >
-                    <div className="font-medium text-sm">{bundle.name}</div>
-                    <div className="text-xs text-text-tertiary mt-0.5">{bundle.description}</div>
-                    <div className="text-[10px] text-accent mt-1.5">{t("discover.feedCount", { count: bundle.feeds.length })}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary mb-4">
-              {t("discover.browseCategories")}
-            </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => selectCategory(cat.id)}
-                  className={`flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br ${CATEGORY_COLORS[cat.id] || "from-gray-500/20 to-gray-500/20 text-gray-600"} hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 text-left`}
-                >
-                  <div className="flex-shrink-0">
-                    {CATEGORY_ICONS[cat.id] || <Globe size={20} />}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm">{cat.name}</div>
-                    <div className="text-xs opacity-70 truncate">{cat.description}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Popular RSSHub routes */}
-            <div className="mb-8">
-              <div className="flex items-center gap-2 mb-4">
-                <Zap size={16} className="text-accent" />
-                <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
-                  {t("discover.rsshubRoutes")}
-                </h3>
-                <span className="text-xs text-text-tertiary">{t("discover.rsshubRoutesHint")}</span>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-                {rsshubRoutes.slice(0, 12).map((route) => (
-                  <FeedCard
-                    key={route.url}
-                    title={route.name}
-                    url={route.url}
-                    description={route.description}
-                    badge="RSSHub"
-                    compact
-                    subscribed={isSubscribed(route.url)}
-                    subscribing={isSubscribing(route.url)}
-                    onSubscribe={() => handleToggleSubscribe(route.url, route.name)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Featured feeds */}
-            <div>
-              <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary mb-4">
-                {t("discover.featuredFeeds")}
-              </h3>
-              <div className="space-y-2">
-                {feeds.slice(0, 10).map((feed) => (
-                  <FeedCard
-                    key={feed.url}
-                    title={feed.title}
-                    url={feed.url}
-                    description={feed.description}
-                    imageUrl={feed.imageUrl}
-                    language={feed.language}
-                    subscribed={isSubscribed(feed.url)}
-                    subscribing={isSubscribing(feed.url)}
-                    onSubscribe={() => handleToggleSubscribe(feed.url, feed.title)}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Category detail */
-          <div>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 size={24} className="animate-spin text-accent" />
-              </div>
-            ) : (
               <>
-                {/* Curated feeds for category */}
-                <div className="space-y-2 mb-8">
-                  <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary mb-3">
-                    {t("discover.curatedFeeds")} ({feeds.length})
-                  </h3>
-                  {feeds.map((feed) => (
+                {/* Results - single column with fixed height */}
+                <div className="space-y-2" style={{ minHeight: `${SEARCH_RESULTS_PAGE_SIZE * 70}px` }}>
+                  {pagedSearchResults.map((result) => (
                     <FeedCard
-                      key={feed.url}
-                      title={feed.title}
-                      url={feed.url}
-                      description={feed.description}
-                      imageUrl={feed.imageUrl}
-                      language={feed.language}
-                      subscribed={isSubscribed(feed.url)}
-                      subscribing={isSubscribing(feed.url)}
-                      onSubscribe={() => handleToggleSubscribe(feed.url, feed.title)}
+                      key={result.url}
+                      title={getDisplayTitle(result)}
+                      url={result.url}
+                      description={result.description}
+                      imageUrl={result.image}
+                      subscribed={isSubscribed(result.url)}
+                      subscribing={isSubscribing(result.url)}
+                      onSubscribe={() => handleToggleSubscribe(result.url, result.title)}
                     />
                   ))}
-                  {feeds.length === 0 && (
-                    <p className="text-sm text-text-tertiary text-center py-8">{t("discover.noCategoryFeeds")}</p>
-                  )}
+                  {/* Placeholders to maintain fixed height */}
+                  {pagedSearchResults.length < SEARCH_RESULTS_PAGE_SIZE &&
+                    Array.from({ length: SEARCH_RESULTS_PAGE_SIZE - pagedSearchResults.length }).map((_, idx) => (
+                      <div key={`placeholder-${idx}`} className="h-[66px]" />
+                    ))}
                 </div>
 
-                {/* RSSHub routes for category */}
-                {rsshubRoutes.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Zap size={14} className="text-accent" />
-                      <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
-                        {t("discover.rsshubCategory")}
-                      </h3>
-                    </div>
-                    <div className="space-y-2">
-                      {rsshubRoutes.map((route) => (
-                        <FeedCard
-                          key={route.url}
-                          title={route.name}
-                          url={route.url}
-                          description={route.description}
-                          badge="RSSHub"
-                          subscribed={isSubscribed(route.url)}
-                          subscribing={isSubscribing(route.url)}
-                          onSubscribe={() => handleToggleSubscribe(route.url, route.name)}
-                        />
-                      ))}
+                {/* Pagination - always visible at fixed position */}
+                {searchResults.length > SEARCH_RESULTS_PAGE_SIZE && (
+                  <div className="pt-4 pb-2">
+                    <div className="flex items-center justify-center gap-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+                      <button
+                        type="button"
+                        disabled={searchPage <= 1}
+                        onClick={() => setSearchPage((prev) => Math.max(1, prev - 1))}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+                      >
+                        {t("common.prevPage")}
+                      </button>
+                      <span className="tabular-nums font-medium min-w-[60px] text-center">
+                        {searchPage} / {totalSearchPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={searchPage >= totalSearchPages}
+                        onClick={() => setSearchPage((prev) => Math.min(totalSearchPages, prev + 1))}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+                      >
+                        {t("common.nextPage")}
+                      </button>
                     </div>
                   </div>
                 )}
+
+                {/* Additional content below pagination */}
+                <div className="pt-4 pb-8">
+                  {/* Add more content here */}
+                </div>
               </>
             )}
           </div>
@@ -662,7 +412,8 @@ export function DiscoverPanel() {
           </div>
         </div>
       )}
-    </div>
+
+      </div>
   )
 }
 

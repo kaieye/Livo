@@ -1,6 +1,8 @@
 import { create } from "zustand"
 import type { DiscoverCategory, DiscoverFeed, RSSHubRoute } from "../../../shared/discover-data"
 
+export type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x"
+
 interface DiscoverSearchResult {
   title: string
   url: string
@@ -17,6 +19,7 @@ interface DiscoverState {
   feeds: DiscoverFeed[]
   rsshubRoutes: RSSHubRoute[]
   searchQuery: string
+  searchPlatform: DiscoverSearchPlatform
   searchResults: DiscoverSearchResult[]
   isSearching: boolean
   isLoading: boolean
@@ -25,8 +28,9 @@ interface DiscoverState {
   setOpen: (open: boolean) => void
   loadCategories: () => Promise<void>
   selectCategory: (categoryId: string | null) => Promise<void>
-  search: (query: string) => Promise<void>
+  search: (query: string, platform?: DiscoverSearchPlatform) => Promise<void>
   setSearchQuery: (query: string) => void
+  setSearchPlatform: (platform: DiscoverSearchPlatform) => void
   loadRSSHubRoutes: (category?: string) => Promise<void>
   setSubscribing: (url: string, subscribing: boolean) => void
 }
@@ -40,6 +44,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   feeds: [],
   rsshubRoutes: [],
   searchQuery: "",
+  searchPlatform: "all",
   searchResults: [],
   isSearching: false,
   isLoading: false,
@@ -72,17 +77,18 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
     }
   },
 
-  search: async (query) => {
+  search: async (query, platform) => {
     const trimmed = query.trim()
     if (!trimmed) {
       set({ searchResults: [], isSearching: false })
       return
     }
 
+    const searchPlatform = platform || get().searchPlatform
     const searchSeq = ++latestSearchRequestSeq
     set({ isSearching: true })
     try {
-      const results = await window.api.discover.search(trimmed)
+      const results = await window.api.discover.search(trimmed, searchPlatform)
       if (searchSeq !== latestSearchRequestSeq) return
       if (useDiscoverStore.getState().searchQuery.trim() !== trimmed) return
       set({ searchResults: results, isSearching: false })
@@ -93,6 +99,15 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   },
 
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  setSearchPlatform: (platform) => {
+    set({ searchPlatform: platform })
+    // Re-search with new platform if there's a query
+    const query = get().searchQuery.trim()
+    if (query) {
+      get().search(query, platform)
+    }
+  },
 
   loadRSSHubRoutes: async (category) => {
     try {
