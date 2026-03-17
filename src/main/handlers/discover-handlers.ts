@@ -1,4 +1,4 @@
-import { ipcMain } from "electron"
+import { ipcMain, session } from "electron"
 import {
   CURATED_FEEDS,
   DISCOVER_CATEGORIES,
@@ -560,12 +560,13 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
   if (looksLikeYouTubeChannelId(query)) return []
   const endpoint = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`
   try {
-    const res = await fetch(endpoint, {
+    // Use Electron session fetch to respect system proxy settings
+    const res = await session.defaultSession.fetch(endpoint, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
-      signal: AbortSignal.timeout(4000),
     })
     if (!res.ok) return []
     const html = await res.text()
@@ -692,14 +693,15 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
   const seen = new Set<string>()
   try {
     const endpoint = `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(clean)}`
-    const res = await fetch(endpoint, {
+    // Use Electron session fetch for consistent network behavior
+    const res = await session.defaultSession.fetch(endpoint, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
         "Referer": "https://www.bilibili.com/",
         "Origin": "https://www.bilibili.com",
       },
-      signal: AbortSignal.timeout(3500),
     })
     if (res.ok) {
       const json = await res.json() as {
