@@ -16,6 +16,7 @@ import { getSettings } from "./settings-handlers"
 import { getYouTubeAccountState } from "../services/account-session"
 import { resolveYouTubeProfileToOfficialFeed } from "../services/youtube-profile-resolver"
 import { normalizeRsshubProtocolUrl, toRsshubProtocolUrl } from "../services/rsshub-url"
+import { resolveFeedAvatar } from "../services/feed-avatar"
 import RssParser from "rss-parser"
 
 /** A lightweight RSS parser with a short timeout 鈥?used for quick probes. */
@@ -51,6 +52,7 @@ type DiscoverSearchResult = {
   description: string
   source: "curated" | "url" | "rsshub"
   image?: string
+  followers?: string
 }
 
 const discoverSearchCache = new Map<string, {
@@ -884,12 +886,146 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   return scored
 }
 
+/** Format follower count number to human-readable string like "1.2M" */
+function formatFollowerCount(count: number): string {
+  if (count >= 1_000_000_000) {
+    return (count / 1_000_000_000).toFixed(1).replace(/\.0$/, "") + "B"
+  }
+  if (count >= 1_000_000) {
+    return (count / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M"
+  }
+  if (count >= 1_000) {
+    return (count / 1_000).toFixed(1).replace(/\.0$/, "") + "K"
+  }
+  return count.toString()
+}
+
+function decodeHtmlEntities(input: string): string {
+  if (!input) return ""
+  return input
+    .replace(/&quot;/gi, "\"")
+    .replace(/&apos;/gi, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_m, dec) => {
+      const code = Number(dec)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _m
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => {
+      const code = Number.parseInt(hex, 16)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _m
+    })
+}
+
+function cleanInstagramDisplayName(rawTitle: string | undefined, username: string): string {
+  const decoded = decodeHtmlEntities((rawTitle || "").trim())
+  if (!decoded) return ""
+  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return decoded
+    .replace(new RegExp(`\\s*\\(@?${escapedUser}\\)\\s*`, "i"), " ")
+    .replace(/\s*[•·]\s*Instagram photos and videos\s*$/i, "")
+    .replace(/\s*-\s*Instagram\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function normalizeImageUrl(input: string): string {
+  return decodeHtmlEntities((input || "").trim()).replace(/\\\//g, "/")
+}
+
+function isInstagramLetterFallbackAvatar(url?: string): boolean {
+  const raw = (url || "").trim().toLowerCase()
+  if (!raw.startsWith("data:image/svg+xml")) return false
+  return raw.includes("833ab4") || raw.includes("e1306c") || raw.includes("f77737")
+}
+
+async function tryConvertImageUrlToDataUri(imageUrl: string): Promise<string | undefined> {
+  const normalizedUrl = normalizeImageUrl(imageUrl)
+  if (!/^https?:\/\//i.test(normalizedUrl)) return undefined
+  try {
+    const res = await session.defaultSession.fetch(normalizedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": "https://www.instagram.com/",
+        "Origin": "https://www.instagram.com",
+        "x-ig-app-id": "936619743392459",
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return undefined
+    const contentType = (res.headers.get("content-type") || "").toLowerCase()
+    if (contentType && !contentType.startsWith("image/")) return undefined
+    const arrayBuffer = await res.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    if (buffer.length < 64) return undefined
+    const ext = normalizedUrl.split(".").pop()?.split("?")[0]?.toLowerCase()
+    const mime = contentType.startsWith("image/")
+      ? contentType.split(";")[0]
+      : ext === "jpg" || ext === "jpeg"
+      ? "image/jpeg"
+      : ext === "png"
+      ? "image/png"
+      : ext === "webp"
+      ? "image/webp"
+      : ext === "gif"
+      ? "image/gif"
+      : "image/jpeg"
+    return `data:${mime};base64,${buffer.toString("base64")}`
+  } catch {
+    return undefined
+  }
+}
+
 async function fetchInstagramAvatarByUsername(username: string): Promise<string | undefined> {
   const clean = username.trim().replace(/^@/, "")
   if (!clean) return undefined
+
+  // Method 1: Use Instagram's public JSON endpoint (no auth required)
+  try {
+    const jsonUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/?__a=1&__d=dis`
+    const jsonRes = await session.defaultSession.fetch(jsonUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.5",
+        "X-IG-App-ID": "936619743392459",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    })
+    if (jsonRes.ok) {
+      const text = await jsonRes.text()
+      let jsonText = text
+      // Handle JSONP wrapper: for (;;);{...}
+      if (jsonText.startsWith("for (;;);")) {
+        jsonText = jsonText.substring("for (;;);".length)
+      }
+      try {
+        const json = JSON.parse(jsonText) as {
+          graphql?: { user?: { profile_pic_url?: string; profile_pic_url_hd?: string } }
+          logging_page_id?: string
+        }
+        const avatarUrl = json?.graphql?.user?.profile_pic_url_hd
+          || json?.graphql?.user?.profile_pic_url
+        if (avatarUrl && /^https?:\/\//i.test(avatarUrl)) {
+          const normalizedAvatarUrl = normalizeImageUrl(avatarUrl)
+          console.log(`[Instagram Avatar] Found via __a=1 for ${clean}: ${normalizedAvatarUrl.substring(0, 80)}...`)
+          const inlined = await tryConvertImageUrlToDataUri(normalizedAvatarUrl)
+          if (inlined) return inlined
+          return normalizedAvatarUrl
+        }
+      } catch {
+        console.log(`[Instagram Avatar] __a=1 JSON parse failed for ${clean}`)
+      }
+    }
+  } catch (e) {
+    console.log(`[Instagram Avatar] __a=1 failed for ${clean}:`, e)
+  }
+
+  // Method 2: Parse profile page HTML for og:image
   const profileUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/`
   try {
-    // Use session fetch to respect proxy settings
     const res = await session.defaultSession.fetch(profileUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -899,18 +1035,367 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
     })
     if (!res.ok) return undefined
     const html = await res.text()
-    const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
-    if (og?.[1] && /^https?:\/\//i.test(og[1])) return og[1]
-    const hd = html.match(/"profile_pic_url_hd":"(https?:\\\/\\\/[^"]+)"/i)
-    if (hd?.[1]) {
-      const decoded = hd[1].replace(/\\\//g, "/")
-      if (/^https?:\/\//i.test(decoded)) return decoded
+
+    // Try og:image meta tag
+    let avatarUrl: string | undefined
+    const ogPatterns = [
+      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+      /<meta[^>]+name=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']og:image["']/i,
+    ]
+    for (const pattern of ogPatterns) {
+      const og = html.match(pattern)
+      if (og?.[1] && /^https?:\/\//i.test(og[1])) {
+        avatarUrl = normalizeImageUrl(og[1])
+        break
+      }
     }
-  } catch {
-    // Ignore avatar fallback failures.
+
+    // Try JSON-LD structured data
+    if (!avatarUrl) {
+      const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
+      if (jsonLdMatch?.[1]) {
+        try {
+          const jsonLd = JSON.parse(jsonLdMatch[1])
+          const imageUrl = jsonLd?.image?.url || jsonLd?.image?.[0]?.url || jsonLd?.image?.[0]
+          if (typeof imageUrl === "string" && /^https?:\/\//i.test(imageUrl)) avatarUrl = normalizeImageUrl(imageUrl)
+        } catch {
+          // JSON parse failed, continue
+        }
+      }
+    }
+
+    // Try profile_pic_url_hd in scripts
+    if (!avatarUrl) {
+      const hd = html.match(/"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"/i)
+      if (hd?.[1]) {
+        const decoded = normalizeImageUrl(hd[1])
+        if (/^https?:\/\//i.test(decoded)) avatarUrl = decoded
+      }
+    }
+
+    if (avatarUrl) {
+      console.log(`[Instagram Avatar] Found via HTML parse for ${clean}: ${avatarUrl.substring(0, 80)}...`)
+      // Try to fetch avatar image and convert to base64 data URI
+      // Instagram CDN requires specific headers to avoid 403
+      try {
+        const avatarRes = await session.defaultSession.fetch(avatarUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+            "Referer": "https://www.instagram.com/",
+            "Origin": "https://www.instagram.com",
+            "x-ig-app-id": "936619743392459",
+          },
+        })
+        if (avatarRes.ok) {
+          const contentType = (avatarRes.headers.get("content-type") || "").toLowerCase()
+          if (contentType && !contentType.startsWith("image/")) {
+            console.log(`[Instagram Avatar] Avatar response is not image for ${clean}: ${contentType}`)
+            return undefined
+          }
+          const arrayBuffer = await avatarRes.arrayBuffer()
+          const buffer = Buffer.from(arrayBuffer)
+          if (buffer.length < 64) return undefined
+          const extension = avatarUrl.split(".").pop()?.split("?")[0]?.toLowerCase()
+          const mimeType = contentType.startsWith("image/")
+            ? contentType.split(";")[0]
+            : extension === "jpg" || extension === "jpeg"
+            ? "image/jpeg"
+            : extension === "png"
+            ? "image/png"
+            : extension === "webp"
+            ? "image/webp"
+            : extension === "gif"
+            ? "image/gif"
+            : "image/jpeg"
+          const base64 = buffer.toString("base64")
+          console.log(`[Instagram Avatar] Converted to base64 for ${clean} (${buffer.length} bytes)`)
+          return `data:${mimeType};base64,${base64}`
+        } else {
+          console.log(`[Instagram Avatar] Avatar fetch failed for ${clean}: ${avatarRes.status}`)
+        }
+      } catch (e) {
+        console.log(`[Instagram Avatar] Avatar fetch error for ${clean}:`, e)
+      }
+      return avatarUrl
+    }
+
+    // Try picuki.com (Instagram第三方查看器) as alternative source
+    try {
+      const picukiUrl = `https://www.picuki.com/profile/${encodeURIComponent(clean)}`
+      const picukiRes = await session.defaultSession.fetch(picukiUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+      })
+      if (picukiRes.ok) {
+        const picukiHtml = await picukiRes.text()
+        // Try to extract profile image from picuki
+        const picukiAvatarMatch = picukiHtml.match(/<img[^>]+class="[^"]*profile[^"]*"[^>]+src=["']([^"']+)["']/i)
+          || picukiHtml.match(/<img[^>]+src=["']([^"']*picuki[^"']*profile[^"']*)["'][^>]*class=["'][^"']*profile[^"']*["']/i)
+          || picukiHtml.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+        if (picukiAvatarMatch?.[1] && /^https?:\/\//i.test(picukiAvatarMatch[1])) {
+          const avatarFromPicuki = picukiAvatarMatch[1]
+          console.log(`[Instagram Avatar] Found via picuki for ${clean}: ${avatarFromPicuki.substring(0, 80)}...`)
+          // Try to fetch as base64
+          try {
+            const res = await session.defaultSession.fetch(avatarFromPicuki, {
+              headers: {
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+              },
+            })
+            if (res.ok) {
+              const arrayBuffer = await res.arrayBuffer()
+              const buffer = Buffer.from(arrayBuffer)
+              const ext = avatarFromPicuki.split(".").pop()?.split("?")[0]?.toLowerCase()
+              const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg"
+              return `data:${mime};base64,${buffer.toString("base64")}`
+            }
+          } catch {
+            // Ignore and continue to fallback avatar
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[Instagram Avatar] picuki failed for ${clean}:`, e)
+    }
+
+    console.log(`[Instagram Avatar] No avatar found for ${clean}`)
+    return undefined
+  } catch (e) {
+    console.log(`[Instagram Avatar] HTML parse failed for ${clean}:`, e)
   }
+
   return undefined
+}
+
+// Extract likely Instagram username from query
+function extractLikelyInstagramHandle(query: string): string | null {
+  const clean = query.trim().replace(/^@+/, "")
+  if (!clean) return null
+  // Instagram username: 1-30 chars, letters/digits/underscores/periods
+  if (!/^[a-zA-Z0-9_.]{1,30}$/.test(clean)) return null
+  return clean
+}
+
+type InstagramUserProbeCandidate = {
+  username: string
+  title: string
+  description: string
+  image: string
+  feedUrl: string
+  followers?: string
+}
+
+async function probeInstagramUsersByKeyword(query: string, rsshubInstance: string): Promise<InstagramUserProbeCandidate[]> {
+  const clean = query.trim().replace(/^@+/, "")
+  if (!clean) return []
+  console.log(`[Instagram Search] Starting search for "${clean}"`)
+
+  const out: InstagramUserProbeCandidate[] = []
+  const seen = new Set<string>()
+
+  const fetchFeedAvatarFromFeed = async (username: string): Promise<string | undefined> => {
+    const route = `/instagram/user/${encodeURIComponent(username)}`
+    const instances = [rsshubInstance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== rsshubInstance)]
+    const attempts = instances.map(async (inst) => {
+      const feedUrl = `${inst}${route}`
+      const fetched = await fetchAndParseFeed(feedUrl)
+      const data = fetched.data
+      if (!data) return undefined
+      const imageUrl = getFeedImageUrl(data)
+      if (imageUrl) {
+        const normalizedFeedImage = normalizeImageUrl(imageUrl)
+        if (/^https?:\/\//i.test(normalizedFeedImage)) return normalizedFeedImage
+      }
+      const resolved = await resolveFeedAvatar(feedUrl, imageUrl)
+      if (!resolved || isInstagramLetterFallbackAvatar(resolved)) return undefined
+      const normalizedResolved = normalizeImageUrl(resolved)
+      return normalizedResolved
+    })
+    try {
+      const result = await Promise.any(attempts)
+      return result || undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  // Fetch avatar for a username by probing the RSSHub feed (same source as when subscribing)
+  const fetchAvatar = async (username: string): Promise<string> => {
+    try {
+      const feedAvatar = await fetchFeedAvatarFromFeed(username)
+      if (feedAvatar) return feedAvatar
+    } catch (e) {
+      console.log(`[Instagram Avatar] RSSHub parser fetch failed for ${username}:`, e)
+    }
+
+    // Fallback: try Instagram HTML avatar (may fail due to CDN restrictions)
+    try {
+      const avatar = await fetchInstagramAvatarByUsername(username)
+      if (avatar) return avatar
+    } catch {
+      // Ignore
+    }
+
+    // Fallback: unavatar usually works for public Instagram profile pictures.
+    try {
+      const unavatarUrl = `https://unavatar.io/instagram/${encodeURIComponent(username)}?fallback=false`
+      const inlined = await tryConvertImageUrlToDataUri(unavatarUrl)
+      if (inlined) return inlined
+    } catch {
+      // Ignore
+    }
+
+    // Last fallback: styled SVG avatar (no external network request needed)
+    // Instagram gradient: #833AB4 → #E1306C → #F77737
+    const initial = username.charAt(0).toUpperCase()
+    const svgAvatar = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+      <defs>
+        <linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#833AB4"/>
+          <stop offset="50%" stop-color="#E1306C"/>
+          <stop offset="100%" stop-color="#F77737"/>
+        </linearGradient>
+      </defs>
+      <rect width="128" height="128" rx="32" fill="url(#ig)"/>
+      <text x="64" y="82" text-anchor="middle" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="56" font-weight="700">${initial}</text>
+    </svg>`)}`
+    return svgAvatar
+  }
+
+  const pushCandidate = async (usernameRaw: string, displayName = "", description = "Instagram user", sourceScore = 1) => {
+    const username = usernameRaw.trim().replace(/^@+/, "")
+    if (!username) return 0
+    const key = username.toLowerCase()
+    if (seen.has(key)) return 0
+    seen.add(key)
+    const image = await fetchAvatar(username)
+    const title = displayName ? `${displayName} (@${username}) - Instagram` : `${username} - Instagram`
+    out.push({
+      username,
+      title,
+      description,
+      image,
+      feedUrl: `${rsshubInstance}/instagram/user/${encodeURIComponent(username)}`,
+    } as InstagramUserProbeCandidate & { sourceScore?: number })
+    return 1
+  }
+
+  // If input already looks like a username, always keep it as a high-priority candidate
+  const directHandle = extractLikelyInstagramHandle(clean)
+  if (directHandle) {
+    console.log(`[Instagram Search] Input looks like a handle: @${directHandle}`)
+    await pushCandidate(directHandle, "", "", 3)
+  }
+
+  // Try to fetch profile info if it looks like a valid username
+  if (directHandle) {
+    try {
+      const profileUrl = `https://www.instagram.com/${encodeURIComponent(directHandle)}/`
+      console.log(`[Instagram Search] Trying to fetch profile: ${profileUrl}`)
+      const res = await session.defaultSession.fetch(profileUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+      })
+      if (res.ok) {
+        const html = await res.text()
+        // Try to extract display name from meta tags
+        const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
+          || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1]
+        const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+          || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1]
+
+        // Try to extract followers from JSON-LD structured data
+        let followersFromJsonLd: string | undefined
+        const jsonLdScripts = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+        if (jsonLdScripts) {
+          for (const script of jsonLdScripts) {
+            const jsonMatch = script.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
+            if (jsonMatch?.[1]) {
+              try {
+                const jsonLd = JSON.parse(jsonMatch[1])
+                // Instagram uses @type: "Profile" with followedBy count
+                const followedBy = jsonLd?.aggregateRating?.ratingCount
+                  || jsonLd?.interactionStatistic?.find((s: { interactionType: string; userInteractionCount: number }) =>
+                    s?.interactionType?.includes("Follow"))?.userInteractionCount
+                  || jsonLd?.aggregateRating?.reviewCount
+                if (followedBy && typeof followedBy === "number") {
+                  followersFromJsonLd = formatFollowerCount(followedBy)
+                  break
+                }
+              } catch {
+                // JSON parse failed, continue to next script
+              }
+            }
+          }
+        }
+
+        // Also try to extract from window._sharedData if available
+        if (!followersFromJsonLd) {
+          const sharedDataMatch = html.match(/window\._sharedData\s*=\s*({.+?});\s*<\/script>/i)
+          if (sharedDataMatch?.[1]) {
+            try {
+              const sharedData = JSON.parse(sharedDataMatch[1])
+              const entryData = sharedData?.entry_data?.ProfilePage?.[0]?.graphql?.user
+              if (entryData) {
+                const count = entryData.edge_followed_by?.count || entryData.follower_count
+                if (count) {
+                  followersFromJsonLd = formatFollowerCount(count)
+                }
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+
+        if (ogTitle || ogDesc || followersFromJsonLd) {
+          // Extract follower count from og:description (e.g., "1.2M followers")
+          let followers: string | undefined
+          if (ogDesc) {
+            const followersMatch = ogDesc.match(/([\d.]+[KMB]?)\s*followers?/i)
+            if (followersMatch) {
+              followers = followersMatch[1] + " followers"
+            }
+          }
+          // Use JSON-LD followers if og:description didn't have it
+          followers = followers || followersFromJsonLd
+          const displayName = cleanInstagramDisplayName(ogTitle, directHandle)
+          if (displayName && displayName.toLowerCase() !== directHandle.toLowerCase()) {
+            console.log(`[Instagram Search] Found display name: ${displayName}`)
+            // Update the first candidate with better info
+            const first = out[0]
+            if (first) {
+              first.title = `${displayName} (@${directHandle}) - Instagram`
+              first.description = followers ? `${followers}` : (ogDesc || "Instagram user")
+              first.followers = followers
+            }
+          } else if (followers) {
+            // Even without display name, update with follower count
+            const first = out[0]
+            if (first) {
+              first.description = followers
+              first.followers = followers
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[Instagram Search] Profile fetch error:`, e)
+    }
+  }
+
+  console.log(`[Instagram Search] Total candidates: ${out.length}`)
+  return out
 }
 
 export function registerDiscoverHandlers(): void {
@@ -927,13 +1412,14 @@ export function registerDiscoverHandlers(): void {
     return CURATED_FEEDS
   })
 
-  type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x"
+  type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x" | "instagram"
 
   // Search feeds by query (check curated feeds + try as URL)
   ipcMain.handle("discover:search", async (_event, query: string, platform: DiscoverSearchPlatform = "all") => {
     const cacheKey = `${query.trim().toLowerCase()}:${platform}`
+    const shouldUseCache = platform !== "instagram"
     const cached = discoverSearchCache.get(cacheKey)
-    if (cacheKey && cached && cached.expiresAt > Date.now()) {
+    if (shouldUseCache && cacheKey && cached && cached.expiresAt > Date.now()) {
       return cached.results
     }
 
@@ -1021,29 +1507,51 @@ export function registerDiscoverHandlers(): void {
       )
     }
 
+    if (platform === "all" || platform === "instagram") {
+      searchPromises.push(
+        probeInstagramUsersByKeyword(query, instance).then((igCandidates) => {
+          console.log(`[Discover Search] Instagram candidates: ${igCandidates.length}`)
+          for (const candidate of igCandidates) {
+            if (results.some((r) => r.url === candidate.feedUrl)) return
+            results.push({
+              title: candidate.title,
+              url: candidate.feedUrl,
+              siteUrl: `https://www.instagram.com/${encodeURIComponent(candidate.username)}/`,
+              description: candidate.description,
+              source: "rsshub",
+              image: candidate.image,
+              followers: candidate.followers,
+            })
+          }
+        })
+      )
+    }
+
     await Promise.all(searchPromises)
 
     const trimmedQuery = query.trim()
 
     // Resolve profile-like inputs (fast)
-    const profileInputs = new Set<string>()
-    if (trimmedQuery) {
-      profileInputs.add(trimmedQuery)
-      const xHandle = extractLikelyXHandle(trimmedQuery)
-      if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
-    }
-    for (const profileInput of profileInputs) {
-      const resolved = resolveProfileUrlToCandidates(profileInput, instance)
-      for (const candidate of resolved.candidates) {
-        if (results.some((r) => r.url === candidate.feedUrl)) continue
-        results.push({
-          title: candidate.title,
-          url: candidate.feedUrl,
-          siteUrl: candidate.siteUrl || profileInput,
-          description: candidate.description || "Profile feed",
-          source: candidate.source === "rss" ? "url" : "rsshub",
-          image: "", // Skip image fetch for speed
-        })
+    if (platform !== "instagram") {
+      const profileInputs = new Set<string>()
+      if (trimmedQuery) {
+        profileInputs.add(trimmedQuery)
+        const xHandle = extractLikelyXHandle(trimmedQuery)
+        if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
+      }
+      for (const profileInput of profileInputs) {
+        const resolved = resolveProfileUrlToCandidates(profileInput, instance)
+        for (const candidate of resolved.candidates) {
+          if (results.some((r) => r.url === candidate.feedUrl)) continue
+          results.push({
+            title: candidate.title,
+            url: candidate.feedUrl,
+            siteUrl: candidate.siteUrl || profileInput,
+            description: candidate.description || "Profile feed",
+            source: candidate.source === "rss" ? "url" : "rsshub",
+            image: "", // Skip image fetch for speed
+          })
+        }
       }
     }
 
@@ -1051,7 +1559,7 @@ export function registerDiscoverHandlers(): void {
     const looksLikeUrl =
       /^rsshub:\/\//i.test(trimmedQuery) ||
       /^https?:\/\//i.test(trimmedQuery) ||
-      (trimmedQuery.includes(".") && !trimmedQuery.includes(" "))
+      ((platform !== "instagram") && trimmedQuery.includes(".") && !trimmedQuery.includes(" "))
     if (looksLikeUrl) {
       const feedUrl = normalizeDiscoverQueryToFeedUrl(trimmedQuery, instance)
       try {
@@ -1091,7 +1599,7 @@ export function registerDiscoverHandlers(): void {
     console.log(`[Discover Search] Elapsed: ${Date.now() - startTime}ms`)
     console.log(`[Discover Search] ========== END SEARCH ==========`)
 
-    if (cacheKey) {
+    if (shouldUseCache && cacheKey) {
       discoverSearchCache.set(cacheKey, {
         expiresAt: Date.now() + DISCOVER_SEARCH_CACHE_TTL,
         results: finalResults,
@@ -1345,16 +1853,17 @@ export function registerDiscoverHandlers(): void {
     const attempts = allInstances.flatMap((inst) =>
       routes.map(async (route) => {
         const feedUrl = `${inst}${route}`
-        const parsed = await fastParser.parseURL(feedUrl)
-        const image =
-          getFeedImageUrl(parsed)
+        const fetched = await fetchAndParseFeed(feedUrl)
+        const data = fetched.data
+        if (!data) throw new Error("Empty feed data")
+        const image = await resolveFeedAvatar(feedUrl, getFeedImageUrl(data))
           || await profileAvatarPromise
-          || `https://unavatar.io/instagram/${encodeURIComponent(clean)}`
+          || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${clean.charAt(0).toUpperCase()}</text></svg>`)}`
         return {
           valid: true as const,
           username: clean,
-          title: parsed.title || `@${clean}`,
-          description: parsed.description || "",
+          title: data.title || `@${clean}`,
+          description: data.description || "",
           image,
           feedUrl: toRsshubProtocolUrl(feedUrl),
         }

@@ -89,13 +89,24 @@ export function registerFeedHandlers(): void {
           updateFeed(existingFeed.id, updates)
           const mergedFeed = { ...existingFeed, ...updates }
           // Existing subscriptions (especially promoted from Recommended) may have no data yet.
-          // Bootstrap a forced refresh so users can see entries immediately after subscribing.
-          await bootstrapFeedEntries(mergedFeed, normalizedUrl, mergedFeed.view)
+          // For social feeds, do a short blocking refresh first to improve "subscribe -> has entries"
+          // responsiveness, then continue in background if still empty.
+          if (shouldDeferBootstrap(normalizedUrl, mergedFeed.view)) {
+            await bootstrapFeedEntriesQuick(mergedFeed, normalizedUrl, mergedFeed.view)
+            if (!hasAnyEntries(mergedFeed.id)) void bootstrapFeedEntries(mergedFeed, normalizedUrl, mergedFeed.view)
+          } else {
+            await bootstrapFeedEntries(mergedFeed, normalizedUrl, mergedFeed.view)
+          }
           const refreshed = getFeedById(existingFeed.id)
           return { success: true, feed: refreshed ? toRendererFeed(refreshed) : mergedFeed }
         }
 
-        await bootstrapFeedEntries(existingFeed, normalizedUrl, existingFeed.view)
+        if (shouldDeferBootstrap(normalizedUrl, existingFeed.view)) {
+          await bootstrapFeedEntriesQuick(existingFeed, normalizedUrl, existingFeed.view)
+          if (!hasAnyEntries(existingFeed.id)) void bootstrapFeedEntries(existingFeed, normalizedUrl, existingFeed.view)
+        } else {
+          await bootstrapFeedEntries(existingFeed, normalizedUrl, existingFeed.view)
+        }
         const refreshed = getFeedById(existingFeed.id)
         if (refreshed) return { success: true, feed: toRendererFeed(refreshed) }
         return { success: true, feed: existingFeed }
@@ -171,7 +182,12 @@ export function registerFeedHandlers(): void {
       // If quick add skipped/failed parsing, force a synchronous refresh once so
       // newly added subscriptions can show entries immediately.
       if (!parsed) {
-        await bootstrapFeedEntries(feed, normalizedUrl, detectedView)
+        if (shouldDeferBootstrap(normalizedUrl, detectedView)) {
+          await bootstrapFeedEntriesQuick(feed, normalizedUrl, detectedView)
+          if (!hasAnyEntries(feed.id)) void bootstrapFeedEntries(feed, normalizedUrl, detectedView)
+        } else {
+          await bootstrapFeedEntries(feed, normalizedUrl, detectedView)
+        }
         const refreshed = getFeedById(feed.id)
         return { success: true, feed: refreshed ? toRendererFeed(refreshed) : feed }
       }
@@ -494,6 +510,19 @@ async function bootstrapFeedEntries(feed: Feed, normalizedUrl: string, view?: Fe
   await withTimeout(refreshSingleFeed(feed, { force: true }), bootstrapTimeoutMs).catch(() => {})
 }
 
+async function bootstrapFeedEntriesQuick(feed: Feed, normalizedUrl: string, view?: FeedViewType): Promise<void> {
+  const quickTimeoutMs = Math.min(7000, getBootstrapRefreshTimeoutMs(normalizedUrl, view))
+  await withTimeout(refreshSingleFeed(feed, { force: true }), quickTimeoutMs).catch(() => {})
+}
+
+function hasAnyEntries(feedId: string): boolean {
+  return getEntries({
+    feedId,
+    limit: 1,
+    skipDedupe: true,
+  }).length > 0
+}
+
 // ---- Helper functions ----
 
 /** Detect view type from parsed feed content */
@@ -566,6 +595,17 @@ function getBootstrapRefreshTimeoutMs(url: string, view?: FeedViewType): number 
     return 45000
   }
   return 18000
+}
+
+function shouldDeferBootstrap(url: string, view?: FeedViewType): boolean {
+  const raw = (url || "").toLowerCase()
+  const isSocialRoute =
+    /\/(?:twitter|x)\/user\//i.test(raw) ||
+    /\/instagram\/user\//i.test(raw) ||
+    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
+    /\/pixnoy\/user\//i.test(raw) ||
+    /\/piokok\/user\//i.test(raw)
+  return isSocialRoute || view === FeedViewType.SocialMedia || view === FeedViewType.Pictures
 }
 
 function getFeedImageUrl(parsed: any): string | undefined {

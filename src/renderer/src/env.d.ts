@@ -1,5 +1,10 @@
 import type { ElectronAPI } from "../../preload/index"
 
+declare module "*.svg" {
+  const content: string
+  export default content
+}
+
 declare global {
   interface Window {
     api: ElectronAPI & {

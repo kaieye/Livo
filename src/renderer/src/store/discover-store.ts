@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import type { DiscoverCategory, DiscoverFeed, RSSHubRoute } from "../../../shared/discover-data"
 
-export type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x"
+export type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x" | "instagram"
 
 interface DiscoverSearchResult {
   title: string
@@ -10,6 +10,7 @@ interface DiscoverSearchResult {
   description: string
   source: "curated" | "url" | "rsshub"
   image?: string
+  followers?: string
 }
 
 interface DiscoverState {

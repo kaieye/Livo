@@ -14,8 +14,31 @@ import {
   Rss,
   Globe,
   Sparkles,
-  Youtube,
 } from "lucide-react"
+
+// Platform icon SVGs
+const platformIcons: Record<string, React.ReactNode> = {
+  youtube: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  ),
+  bilibili: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/>
+    </svg>
+  ),
+  x: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  ),
+  instagram: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>
+    </svg>
+  ),
+}
 
 const SEARCH_RESULTS_PAGE_SIZE = 6
 
@@ -44,6 +67,36 @@ function getDisplayTitle(result: { title: string; url: string }): string {
   const title = (result.title || "").trim()
   if (title && title !== result.url) return title
   return inferResultTitleFromUrl(result.url)
+}
+
+function extractInstagramUsernameFromFeedUrl(feedUrl: string): string | null {
+  try {
+    const u = new URL(feedUrl)
+    const m = u.pathname.match(/\/instagram\/user\/([^/?#]+)/i)
+    if (m?.[1]) return decodeURIComponent(m[1]).replace(/^@+/, "")
+  } catch {
+    // Ignore malformed URL.
+  }
+  return null
+}
+
+function buildDiscoverAvatarFallbacks(imageUrl: string | undefined, feedUrl: string): string[] {
+  const out: string[] = []
+  if (imageUrl) out.push(imageUrl)
+
+  const igUser = extractInstagramUsernameFromFeedUrl(feedUrl)
+  if (igUser) {
+    out.push(`https://unavatar.io/instagram/${encodeURIComponent(igUser)}?fallback=false`)
+    out.push(`https://unavatar.io/${encodeURIComponent(`instagram.com/${igUser}`)}?fallback=false`)
+  }
+
+  const seen = new Set<string>()
+  return out.filter((x) => {
+    const key = x.trim()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export function DiscoverPanel() {
@@ -76,10 +129,11 @@ export function DiscoverPanel() {
 
   // Platform selector options
   const platformOptions: { value: DiscoverSearchPlatform; label: string; icon: React.ReactNode }[] = [
-    { value: "all", label: t("common.all"), icon: <Globe size={14} /> },
-    { value: "youtube", label: "YouTube", icon: <Youtube size={14} /> },
-    { value: "bilibili", label: "Bilibili", icon: <span className="text-xs font-bold">B</span> },
-    { value: "x", label: "X", icon: <span className="text-xs font-bold">X</span> },
+    { value: "all", label: t("common.all"), icon: <Globe size={16} /> },
+    { value: "youtube", label: "YouTube", icon: platformIcons.youtube },
+    { value: "bilibili", label: "Bilibili", icon: platformIcons.bilibili },
+    { value: "x", label: "X", icon: platformIcons.x },
+    { value: "instagram", label: "Instagram", icon: platformIcons.instagram },
   ]
 
   // Sync subscribedUrls with existing user feeds
@@ -103,7 +157,7 @@ export function DiscoverPanel() {
     const lower = (targetUrl || "").toLowerCase()
     if (/\/twitter\/user\//i.test(lower) || /\/bilibili\/user\/dynamic\//i.test(lower)) return FeedViewType.SocialMedia
     if (/\/youtube\//i.test(lower) || /\/bilibili\/user\/video\//i.test(lower)) return FeedViewType.Videos
-    if (/\/instagram\//i.test(lower) || /\/picnob\//i.test(lower) || /\/pixnoy\//i.test(lower) || /\/piokok\//i.test(lower)) return FeedViewType.Pictures
+    if (/\/instagram\//i.test(lower) || /\/picnob\//i.test(lower) || /\/pixnoy\//i.test(lower) || /\/piokok\//i.test(lower) || /\/imginn\//i.test(lower)) return FeedViewType.Pictures
     return FeedViewType.Articles
   }, [])
 
@@ -195,12 +249,12 @@ export function DiscoverPanel() {
     <div className="space-y-2.5 max-w-2xl mx-auto">
       <div className="flex items-center gap-2">
         {/* Platform selector */}
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex items-center gap-1.5 text-[11px]">
           {platformOptions.map((option) => (
             <button
               key={option.value}
               onClick={() => setSearchPlatform(option.value)}
-              className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full transition-colors ${
                 searchPlatform === option.value
                   ? "bg-accent text-white font-medium"
                   : "bg-surface-secondary dark:bg-surface-dark-secondary text-text-secondary dark:text-text-dark-secondary hover:bg-accent/10"
@@ -306,6 +360,7 @@ export function DiscoverPanel() {
                       url={result.url}
                       description={result.description}
                       imageUrl={result.image}
+                      followers={result.followers}
                       subscribed={isSubscribed(result.url)}
                       subscribing={isSubscribing(result.url)}
                       onSubscribe={() => handleToggleSubscribe(result.url, result.title)}
@@ -429,6 +484,7 @@ function FeedCard({
   subscribed,
   subscribing,
   onSubscribe,
+  followers,
 }: {
   title: string
   url: string
@@ -440,8 +496,16 @@ function FeedCard({
   subscribed: boolean
   subscribing: boolean
   onSubscribe: () => void
+  followers?: string
 }) {
   const { t } = useTranslation()
+  const avatarCandidates = useMemo(() => buildDiscoverAvatarFallbacks(imageUrl, url), [imageUrl, url])
+  const [avatarSrc, setAvatarSrc] = useState<string>(avatarCandidates[0] || "")
+
+  useEffect(() => {
+    setAvatarSrc(avatarCandidates[0] || "")
+  }, [avatarCandidates])
+
   return (
     <div
       className={`group flex items-center gap-3 rounded-xl border bg-white dark:bg-surface-dark-secondary hover:border-accent/30 transition-all duration-200 ${
@@ -449,27 +513,37 @@ function FeedCard({
       }`}
     >
       {/* Icon */}
-      {imageUrl ? (
+      {avatarSrc ? (
         <img
-          src={imageUrl}
+          src={avatarSrc}
           alt=""
           className={`flex-shrink-0 rounded-lg object-cover ${compact ? "w-8 h-8" : "w-10 h-10"}`}
           loading="lazy"
+          onError={(e) => {
+            const current = e.currentTarget.currentSrc || e.currentTarget.src
+            const idx = avatarCandidates.findIndex((candidate) => candidate === current)
+            const next = idx >= 0 ? avatarCandidates[idx + 1] : avatarCandidates[1]
+            if (next) {
+              setAvatarSrc(next)
+              return
+            }
+            setAvatarSrc("")
+          }}
         />
-      ) : (
-        <div
-          className={`flex-shrink-0 rounded-lg bg-accent/10 flex items-center justify-center ${
-            compact ? "w-8 h-8" : "w-10 h-10"
-          }`}
-        >
-          <Rss size={compact ? 14 : 16} className="text-accent" />
-        </div>
-      )}
+      ) : null}
+      <div
+        className={`flex-shrink-0 rounded-lg bg-accent/10 flex items-center justify-center ${
+          compact ? "w-8 h-8" : "w-10 h-10"
+        }`}
+        style={{ display: avatarSrc ? "none" : "flex" }}
+      >
+        <Rss size={compact ? 14 : 16} className="text-accent" />
+      </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`font-medium truncate ${compact ? "text-xs" : "text-sm"}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`block min-w-0 font-medium truncate ${compact ? "text-xs" : "text-sm"}`}>
             {title}
           </span>
           {badge && (
@@ -488,7 +562,7 @@ function FeedCard({
             compact ? "text-[10px]" : "text-xs"
           }`}
         >
-          {description}
+          {followers || description}
         </p>
       </div>
 
