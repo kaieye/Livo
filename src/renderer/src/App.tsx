@@ -6,6 +6,7 @@ import { useSettingsStore } from "./store/settings-store"
 import { useActionsStore } from "./store/actions-store"
 import { SettingsDialog } from "./components/settings/SettingsDialog"
 import { QuickSearchPanel, useQuickSearchStore } from "./components/search/QuickSearch"
+import { AIChatPanel } from "./components/ai/AIChatPanel"
 import { ShortcutHelpDialog, useShortcutHelpStore } from "./components/shortcuts/ShortcutHelp"
 import { CornerPlayer } from "./components/media/MediaPlayer"
 import { useInitRecommendedFeeds } from "./hooks/useInitRecommendedFeeds"
@@ -100,6 +101,7 @@ export default function App() {
       <Layout />
       <SettingsDialog />
       <QuickSearchPanel />
+      <AIChatPanel />
       <ShortcutHelpDialog />
       <CornerPlayer />
       <TextContextMenu />

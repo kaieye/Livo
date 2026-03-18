@@ -3,9 +3,7 @@ import { Sidebar } from "./Sidebar"
 import { EntryList } from "../entry/EntryList"
 import { EntryContent } from "../entry/EntryContent"
 import { WideViewContent } from "../entry/WideViewContent"
-import { AIChatPanel } from "../ai/AIChatPanel"
 import { DiscoverPanel } from "../discover/DiscoverPanel"
-import { useAIChatStore } from "../../store/ai-chat-store"
 import { useDiscoverStore } from "../../store/discover-store"
 import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
@@ -36,7 +34,6 @@ const ENTRY_LIST_MIN = 260
 const ENTRY_LIST_MAX = 640
 
 export function Layout() {
-  const isPanelOpen = useAIChatStore((s) => s.isPanelOpen)
   const isDiscoverOpen = useDiscoverStore((s) => s.isOpen)
   const activeView = useFeedStore((s) => s.activeView)
   const selectedFeedId = useFeedStore((s) => s.selectedFeedId)
@@ -169,7 +166,6 @@ export function Layout() {
         /* 2-column layout for Social Media / Videos */
         <div className="flex flex-1 min-w-0">
           <WideViewContent />
-          {isPanelOpen && <AIChatPanel />}
         </div>
       ) : (
         <>
@@ -182,7 +178,6 @@ export function Layout() {
           {/* Entry Content */}
           <div className="flex flex-1 min-w-0">
             <EntryContent />
-            {isPanelOpen && <AIChatPanel />}
           </div>
         </>
       )}

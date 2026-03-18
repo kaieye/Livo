@@ -331,6 +331,7 @@ export function Sidebar({ width }: { width?: number }) {
   const { isPanelOpen, setPanelOpen } = useAIChatStore()
   const { isOpen: isDiscoverOpen, setOpen: setDiscoverOpen } = useDiscoverStore()
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
+  const isSearchOpen = useQuickSearchStore((s) => s.isOpen)
   const toggleShortcutHelp = useShortcutHelpStore((s) => s.toggle)
   const [isImporting, setIsImporting] = useState(false)
   const [showImportProgress, setShowImportProgress] = useState(false)
@@ -1549,7 +1550,7 @@ export function Sidebar({ width }: { width?: number }) {
         <div className="border-t p-2 space-y-1">
           <button
             onClick={() => setPanelOpen(!isPanelOpen)}
-            className="sidebar-item w-full text-text-secondary dark:text-text-dark-secondary"
+            className={`sidebar-item w-full ${isPanelOpen ? "sidebar-item-active" : "text-text-secondary dark:text-text-dark-secondary"}`}
           >
             <MessageSquare size={18} />
             <span className="flex-1 text-left">{t("sidebar.aiAssistant")}</span>
@@ -1565,7 +1566,7 @@ export function Sidebar({ width }: { width?: number }) {
 
           <button
             onClick={toggleSearch}
-            className="sidebar-item w-full text-text-secondary dark:text-text-dark-secondary"
+            className={`sidebar-item w-full ${isSearchOpen ? "sidebar-item-active" : "text-text-secondary dark:text-text-dark-secondary"}`}
           >
             <Search size={18} />
             <span className="flex-1 text-left">{t("sidebar.search")}</span>
