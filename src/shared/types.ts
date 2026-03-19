@@ -1,4 +1,4 @@
-// Shared types between main and renderer
+﻿// Shared types between main and renderer
 
 export enum FeedViewType {
   Articles = 0,
@@ -19,7 +19,7 @@ export interface ViewDefinition {
 export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   [FeedViewType.Articles]: {
     id: FeedViewType.Articles,
-    name: "文章",
+    name: "鏂囩珷",
     icon: "FileText",
     color: "text-lime-600",
     gridMode: false,
@@ -27,7 +27,7 @@ export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   },
   [FeedViewType.SocialMedia]: {
     id: FeedViewType.SocialMedia,
-    name: "推文",
+    name: "社交媒体",
     icon: "MessageCircle",
     color: "text-sky-500",
     gridMode: false,
@@ -35,7 +35,7 @@ export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   },
   [FeedViewType.Videos]: {
     id: FeedViewType.Videos,
-    name: "视频",
+    name: "瑙嗛",
     icon: "Play",
     color: "text-red-500",
     gridMode: true,
@@ -43,7 +43,7 @@ export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   },
   [FeedViewType.Pictures]: {
     id: FeedViewType.Pictures,
-    name: "图片",
+    name: "鍥剧墖",
     icon: "Image",
     color: "text-pink-500",
     gridMode: true,

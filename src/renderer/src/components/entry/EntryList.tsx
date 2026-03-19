@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, type SyntheticEvent } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, type SyntheticEvent, type UIEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useEntryStore } from "../../store/entry-store"
@@ -1254,7 +1254,23 @@ function cleanRelativeTime(date: Date | string | number): string {
 }
 
 export function EntryList({ width }: { width?: number }) {
-  const { entries, selectedEntry, isLoading, loadEntries, clearListCache, selectEntry, markAllRead, markAboveRead, markBelowRead, searchQuery, setSearchQuery, search } =
+  const {
+    entries,
+    selectedEntry,
+    isLoading,
+    isLoadingMore,
+    hasMoreEntries,
+    loadEntries,
+    loadMoreEntries,
+    clearListCache,
+    selectEntry,
+    markAllRead,
+    markAboveRead,
+    markBelowRead,
+    searchQuery,
+    setSearchQuery,
+    search,
+  } =
     useEntryStore()
   const { selectedFeedId, feeds, activeView, refreshFeed, refreshMultiple, refreshAll, isRefreshing, refreshProgress } = useFeedStore()
   const { settings } = useSettingsStore()
@@ -1454,6 +1470,7 @@ export function EntryList({ width }: { width?: number }) {
   }, [entryIndexById, groupedRenderEntries, renderEntries, settings.general.groupByDate, useVirtualSocialList])
   const isGridMode = viewDef?.gridMode ?? false
   const listScrollRef = useRef<HTMLDivElement>(null)
+  const lastScrollScopeRef = useRef<string>("")
   const useVirtualLinearList = !isGridMode && activeView !== FeedViewType.SocialMedia
   const virtualizerEntries = useMemo(
     () => useVirtualLinearList ? renderEntries : [],
@@ -1508,6 +1525,28 @@ export function EntryList({ width }: { width?: number }) {
     getItemKey: (index) => socialRows[index]?.key ?? index,
   })
   const socialVirtualRows = socialListVirtualizer.getVirtualItems()
+
+  useEffect(() => {
+    const nextScope = `${activeView ?? "all"}:${selectedFeedId ?? "all"}`
+    if (lastScrollScopeRef.current === nextScope) return
+    lastScrollScopeRef.current = nextScope
+    const el = listScrollRef.current
+    if (!el) return
+    el.scrollTo({ top: 0, behavior: "auto" })
+  }, [activeView, selectedFeedId])
+
+  const handleListScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const hasScrolledEnough = el.scrollTop > 120
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 600
+
+    if (isGridMode && hasMoreGridEntries && hasScrolledEnough && nearBottom) {
+      setGridVisibleCount((prev) => Math.min(prev + GRID_LOAD_MORE_COUNT, renderEntries.length))
+    }
+    if (!searchQuery.trim() && hasMoreEntries && !isLoadingMore && hasScrolledEnough && nearBottom) {
+      void loadMoreEntries()
+    }
+  }, [hasMoreEntries, hasMoreGridEntries, isGridMode, isLoadingMore, loadMoreEntries, renderEntries.length, searchQuery])
 
 
   const renderLinearEntry = useCallback((entry: Entry) => {
@@ -1638,12 +1677,7 @@ export function EntryList({ width }: { width?: number }) {
         ref={listScrollRef}
         className="flex-1 overflow-y-auto"
         id="entry-list-scroll"
-        onScroll={isGridMode && hasMoreGridEntries ? (e) => {
-          const el = e.currentTarget
-          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 400) {
-            setGridVisibleCount((prev) => Math.min(prev + GRID_LOAD_MORE_COUNT, renderEntries.length))
-          }
-        } : undefined}
+        onScroll={handleListScroll}
       >
         {isLoading && !hasStaleEntriesWhileLoading ? (
           <SkeletonList
@@ -1784,6 +1818,12 @@ export function EntryList({ width }: { width?: number }) {
               {renderLinearEntry(entry)}
             </div>
           ))
+        )}
+
+        {isLoadingMore && (
+          <div className="flex items-center justify-center py-4 text-text-tertiary">
+            <Loader2 size={16} className="animate-spin" />
+          </div>
         )}
 
         {/* Context Menu */}

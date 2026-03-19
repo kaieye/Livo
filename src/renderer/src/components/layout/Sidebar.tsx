@@ -1,4 +1,4 @@
-import { memo, startTransition, useState, useMemo, useCallback, useRef, useEffect } from "react"
+﻿import { memo, startTransition, useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { useFeedStore } from "../../store/feed-store"
 import { useEntryStore } from "../../store/entry-store"
@@ -99,8 +99,7 @@ function formatTwitterFeedTitle(candidateTitle: string | undefined, username: st
   }
   const stripHandleFragment = (value: string): string =>
     value
-      .replace(/\s*[\/\s]*@?[a-zA-Z0-9_]{1,15}\s*$/i, "")
-      .replace(/\s*\|\s*@?[a-zA-Z0-9_]{1,15}\s*$/i, "")
+      .replace(/\s*(?:\/|\||\uFF0F)\s*@?[a-zA-Z0-9_]{1,15}\s*$/i, "")
       .replace(/\s*\(\s*@?[a-zA-Z0-9_]{1,15}\s*\)\s*$/i, "")
       .trim()
   const escapedUser = fallback.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -131,7 +130,7 @@ function formatTwitterFeedTitle(candidateTitle: string | undefined, username: st
   }
   // Drop trailing or inline handle segments like " / @elonmusk" (including full-width slash).
   cleaned = cleaned
-    .replace(/\s*[\/\s]*@?[a-zA-Z0-9_]{1,15}\b/g, "")
+    .replace(/\s*(?:\/|\||\uFF0F)\s*@?[a-zA-Z0-9_]{1,15}\b/g, "")
     .trim()
   // Normalize "Display Name / @username - X" to "Display Name - X".
   const slashParts = cleaned.split(/[\/]/).map((part) => part.trim()).filter(Boolean)
@@ -437,7 +436,7 @@ export function Sidebar({ width }: { width?: number }) {
     return t("sidebar.newFolderName")
   }
 
-  // Global window-level listeners �?added once, check ref to see if drag is active
+  // Global window-level listeners 锟?added once, check ref to see if drag is active
   useEffect(() => {
     const onMove = (ev: PointerEvent) => {
       if (!dragOverlayRef.current) return
@@ -509,7 +508,7 @@ export function Sidebar({ width }: { width?: number }) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start drag �?just sets state; window listeners handle move/up
+  // Start drag 锟?just sets state; window listeners handle move/up
   const handleDragPointerStart = useCallback((feedId: string, label: string, e: React.PointerEvent) => {
     e.preventDefault()
     setDragFeedId(feedId)
@@ -1522,7 +1521,7 @@ export function Sidebar({ width }: { width?: number }) {
               />
             ))}
 
-            {/* Recommended feeds section �?only shown when enabled in settings */}
+            {/* Recommended feeds section 锟?only shown when enabled in settings */}
             {showRecommended && recommendedFeeds.length > 0 && (
               <RecommendedSection
                 feeds={recommendedFeeds}
@@ -1644,7 +1643,7 @@ export function Sidebar({ width }: { width?: number }) {
           onMouseLeave={() => setContextMenu(null)}
         >
           {contextMenu.isRecommended ? (
-            /* Recommended feed �?subscribe or read actions only (built-in, cannot delete) */
+            /* Recommended feed 锟?subscribe or read actions only (built-in, cannot delete) */
             <>
               <button
                 className="w-full text-left px-3 py-2 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 text-accent"
@@ -1731,7 +1730,7 @@ export function Sidebar({ width }: { width?: number }) {
               </button>
             </>
           ) : (
-            /* User feed �?normal actions */
+            /* User feed 锟?normal actions */
             <>
               <button
                 className="w-full text-left px-3 py-2 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2"
@@ -2026,7 +2025,7 @@ export function Sidebar({ width }: { width?: number }) {
         </div>
       )}
 
-      {/* Drag overlay �?follows mouse exactly */}
+      {/* Drag overlay 锟?follows mouse exactly */}
       {dragOverlay && (
         <div
           id="feed-drag-overlay"
@@ -2192,7 +2191,7 @@ const FeedCategory = memo(function FeedCategory({
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
                       className={`sidebar-item w-full group transition-all duration-300 ${selectedFeedId === feed.id ? "sidebar-item-active" : ""} ${isSearchHighlighted ? "ring-1 ring-accent/50 bg-accent/10" : ""}`}
                     >
-                      {/* Drag grip �?pointer-based drag for smooth following */}
+                      {/* Drag grip 锟?pointer-based drag for smooth following */}
                       <GripVertical
                         size={12}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab active:cursor-grabbing -ml-1 mr-0 touch-none"
@@ -2278,7 +2277,7 @@ const RecommendedSection = memo(function RecommendedSection({
   )
 })
 
-/** Smart feed icon with fallback chain: imageUrl �?favicon from siteUrl �?initials �?RSS icon */
+/** Smart feed icon with fallback chain: imageUrl 锟?favicon from siteUrl 锟?initials 锟?RSS icon */
 type FeedIconProps = {
   imageUrl?: string
   siteUrl?: string

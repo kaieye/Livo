@@ -4,6 +4,8 @@ import { useFeedStore } from "./store/feed-store"
 import { useEntryStore } from "./store/entry-store"
 import { useSettingsStore } from "./store/settings-store"
 import { useActionsStore } from "./store/actions-store"
+import { FeedViewType } from "../../shared/types"
+import { getEntryLoadLimit } from "./lib/entry-load-limit"
 import { SettingsDialog } from "./components/settings/SettingsDialog"
 import { QuickSearchPanel, useQuickSearchStore } from "./components/search/QuickSearch"
 import { AIChatPanel } from "./components/ai/AIChatPanel"
@@ -17,6 +19,26 @@ export default function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const loadRules = useActionsStore((s) => s.loadRules)
   const clearListCache = useEntryStore((s) => s.clearListCache)
+
+  const reloadEntriesForCurrentScope = () => {
+    const { selectedFeedId, activeView, feeds } = useFeedStore.getState()
+    const { loadEntries } = useEntryStore.getState()
+    const limit = getEntryLoadLimit(activeView)
+    const viewFeedIds = activeView !== null
+      ? feeds
+          .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
+          .map((f) => f.id)
+      : []
+    if (selectedFeedId === "starred") {
+      void loadEntries({ starred: true, limit })
+    } else if (selectedFeedId) {
+      void loadEntries({ feedId: selectedFeedId, limit })
+    } else if (viewFeedIds.length > 0) {
+      void loadEntries({ feedIds: viewFeedIds, limit })
+    } else {
+      void loadEntries({ limit })
+    }
+  }
 
   // Auto-subscribe recommended feeds on first launch
   useInitRecommendedFeeds()
@@ -33,31 +55,16 @@ export default function App() {
     if (window.api?.on) {
       cleanup = window.api.on("feeds:updated", () => {
         loadFeeds()
+        clearListCache()
+        reloadEntriesForCurrentScope()
       })
       // Re-fetch entries when video durations are enriched in the background
       cleanupEnriched = window.api.on("entries:enriched", () => {
-        // Use stores directly to get current context and reload appropriately
-        const { selectedFeedId } = useFeedStore.getState()
-        const { loadEntries } = useEntryStore.getState()
-        if (selectedFeedId === "starred") {
-          loadEntries({ starred: true })
-        } else if (selectedFeedId) {
-          loadEntries({ feedId: selectedFeedId })
-        } else {
-          loadEntries()
-        }
+        reloadEntriesForCurrentScope()
       })
       cleanupRepaired = window.api.on("entries:repaired", () => {
-        const { selectedFeedId } = useFeedStore.getState()
-        const { loadEntries } = useEntryStore.getState()
         clearListCache()
-        if (selectedFeedId === "starred") {
-          loadEntries({ starred: true })
-        } else if (selectedFeedId) {
-          loadEntries({ feedId: selectedFeedId })
-        } else {
-          loadEntries()
-        }
+        reloadEntriesForCurrentScope()
       })
     }
 

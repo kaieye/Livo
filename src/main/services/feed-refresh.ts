@@ -63,14 +63,17 @@ function isVideoDurationEnrichmentEnabled(): boolean {
 /** Default data-maintenance constants (overridden by settings at call site) */
 const DEFAULT_FRESHNESS_TTL_MINUTES = 10
 const DEFAULT_CONCURRENCY = 8
-// Set to 0 to disable hard timeout and let upstream/network decide completion.
-const DEFAULT_FEED_REFRESH_TIMEOUT_MS = 0
+const DEFAULT_FEED_REFRESH_TIMEOUT_MS = 12000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS = 15 * 60 * 1000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS = 90 * 60 * 1000
 
 function isInstagramFeedUrl(feedUrl: string | undefined): boolean {
   const raw = (feedUrl || "").toLowerCase()
   return /(?:^|\/)(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//.test(raw)
+}
+
+function getRefreshTimeoutMs(feedUrl: string | undefined): number {
+  return isInstagramFeedUrl(feedUrl) ? 16000 : DEFAULT_FEED_REFRESH_TIMEOUT_MS
 }
 
 /**
@@ -228,7 +231,7 @@ export async function refreshSingleFeed(feed: Feed, options?: { force?: boolean 
 
     const result = await withTimeout(
       fetchAndParseFeed(normalizedFeedUrl, conditionalHeaders),
-      DEFAULT_FEED_REFRESH_TIMEOUT_MS,
+      getRefreshTimeoutMs(feed.url),
       normalizedFeedUrl,
     )
 
@@ -246,7 +249,8 @@ export async function refreshSingleFeed(feed: Feed, options?: { force?: boolean 
 
     const parsed = result.data!
 
-    const feedImageUrl = await resolveFeedAvatar(normalizedFeedUrl, getFeedImageUrl(parsed))
+    const parsedFeedImage = getFeedImageUrl(parsed)
+    const feedImageUrl = await resolveFeedAvatar(normalizedFeedUrl, parsedFeedImage || feed.imageUrl)
     const selectedFeedAvatar = pickBestFeedAvatar(feed.url, feed.imageUrl, feedImageUrl)
 
     updateFeed(feed.id, {

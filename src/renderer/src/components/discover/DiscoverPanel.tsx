@@ -99,6 +99,37 @@ function buildDiscoverAvatarFallbacks(imageUrl: string | undefined, feedUrl: str
   })
 }
 
+function canonicalizeDiscoverRoute(inputUrl: string): string {
+  const raw = (inputUrl || "").trim()
+  if (!raw) return ""
+
+  let routeWithQuery = ""
+  const rsshubMatch = raw.match(/^rsshub:\/\/+(.+)$/i)
+  if (rsshubMatch?.[1]) {
+    routeWithQuery = rsshubMatch[1].replace(/^\/+/, "")
+  } else {
+    try {
+      const u = new URL(raw)
+      routeWithQuery = `${u.pathname.replace(/^\/+/, "")}${u.search || ""}`
+    } catch {
+      return raw.toLowerCase()
+    }
+  }
+
+  const [pathPart = "", queryPart = ""] = routeWithQuery.split("?", 2)
+  let path = pathPart.toLowerCase()
+  path = path.replace(/^(picnob(?:\.info)?|pixnoy|piokok)\/user\//i, "instagram/user/")
+  path = path.replace(/^(?:x|twitter)\/user\/([^/?#]+)/i, (_m, user: string) => `twitter/user/${decodeURIComponent(user).replace(/^@/, "").toLowerCase()}`)
+
+  if (/^instagram\/user\//i.test(path) || /^twitter\/user\//i.test(path)) {
+    const search = new URLSearchParams(queryPart || "")
+    search.delete("limit")
+    const q = search.toString()
+    return `${path}${q ? `?${q}` : ""}`
+  }
+  return `${path}${queryPart ? `?${queryPart}` : ""}`
+}
+
 export function DiscoverPanel() {
   const {
     searchQuery,
@@ -113,7 +144,7 @@ export function DiscoverPanel() {
     setSubscribing,
   } = useDiscoverStore()
 
-  const { addFeed, feeds: userFeeds, removeFeed } = useFeedStore()
+  const { addFeed, feeds: userFeeds, removeFeed, refreshFeed } = useFeedStore()
   const { t } = useTranslation()
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -123,6 +154,7 @@ export function DiscoverPanel() {
     title: string
     preferredView: FeedViewType
   } | null>(null)
+  const [selectedSubscribeView, setSelectedSubscribeView] = useState<FeedViewType | null>(null)
   const [searchPage, setSearchPage] = useState(1)
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -138,7 +170,12 @@ export function DiscoverPanel() {
 
   // Sync subscribedUrls with existing user feeds
   useEffect(() => {
-    const urls = new Set(userFeeds.map((f) => f.url))
+    const urls = new Set<string>()
+    for (const feed of userFeeds) {
+      urls.add(feed.url)
+      const canonical = canonicalizeDiscoverRoute(feed.url)
+      if (canonical) urls.add(`route:${canonical}`)
+    }
     setSubscribedUrls(urls)
   }, [userFeeds])
 
@@ -152,6 +189,14 @@ export function DiscoverPanel() {
   useEffect(() => {
     setSearchPage(1)
   }, [searchQuery])
+
+  useEffect(() => {
+    if (pendingSubscribe) {
+      setSelectedSubscribeView(pendingSubscribe.preferredView)
+    } else {
+      setSelectedSubscribeView(null)
+    }
+  }, [pendingSubscribe])
 
   const inferViewFromUrl = useCallback((targetUrl: string): FeedViewType => {
     const lower = (targetUrl || "").toLowerCase()
@@ -190,8 +235,24 @@ export function DiscoverPanel() {
     try {
       const result = await addFeed(url, undefined, targetView, title)
       if (result.success) {
-        setSubscribedUrls((prev) => new Set(prev).add(url))
+        setSubscribedUrls((prev) => {
+          const next = new Set(prev)
+          next.add(url)
+          const canonical = canonicalizeDiscoverRoute(url)
+          if (canonical) next.add(`route:${canonical}`)
+          return next
+        })
         showSubscribedToHint(url, result.feed)
+        const feedId = result.feed?.id
+        if (feedId) {
+          // Run the same path as manual "refresh feed" so users don't need extra clicks.
+          void (async () => {
+            await new Promise((r) => setTimeout(r, 1200))
+            await refreshFeed(feedId)
+            await new Promise((r) => setTimeout(r, 2500))
+            await refreshFeed(feedId)
+          })()
+        }
       }
     } finally {
       setSubscribing(url, false)
@@ -199,7 +260,12 @@ export function DiscoverPanel() {
   }
 
   const handleUnsubscribe = async (url: string) => {
-    const feed = userFeeds.find((f) => f.url === url)
+    const targetCanonical = canonicalizeDiscoverRoute(url)
+    const feed = userFeeds.find((f) => {
+      if (f.url === url) return true
+      if (!targetCanonical) return false
+      return canonicalizeDiscoverRoute(f.url) === targetCanonical
+    })
     if (!feed) return
     setSubscribing(url, true)
     try {
@@ -207,6 +273,8 @@ export function DiscoverPanel() {
       setSubscribedUrls((prev) => {
         const next = new Set(prev)
         next.delete(url)
+        const canonical = canonicalizeDiscoverRoute(url)
+        if (canonical) next.delete(`route:${canonical}`)
         return next
       })
     } finally {
@@ -227,6 +295,7 @@ export function DiscoverPanel() {
   }
 
   const isSubscribed = (url: string) => subscribedUrls.has(url)
+    || subscribedUrls.has(`route:${canonicalizeDiscoverRoute(url)}`)
   const isSubscribing = (url: string) => subscribingUrls.has(url)
   const hasSearchQuery = searchQuery.trim().length > 0
   const totalSearchPages = Math.max(1, Math.ceil(searchResults.length / SEARCH_RESULTS_PAGE_SIZE))
@@ -416,10 +485,10 @@ export function DiscoverPanel() {
           onClick={() => setPendingSubscribe(null)}
         >
           <div
-            className="w-[420px] max-w-[92vw] rounded-2xl border bg-white dark:bg-surface-dark-secondary shadow-2xl p-4"
+            className="w-[460px] max-w-[94vw] rounded-2xl border border-black/5 bg-white dark:bg-surface-dark-secondary shadow-2xl p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="text-base font-semibold">{t("discover.chooseColumnTitle")}</h3>
               <button
                 onClick={() => setPendingSubscribe(null)}
@@ -428,40 +497,51 @@ export function DiscoverPanel() {
                 <X size={16} />
               </button>
             </div>
-            <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-3">
+            <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-4">
               {t("discover.chooseColumnDesc", { title: pendingSubscribe.title })}
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               {([FeedViewType.Articles, FeedViewType.SocialMedia, FeedViewType.Videos, FeedViewType.Pictures] as const).map((viewId) => {
                 const isPreferred = pendingSubscribe.preferredView === viewId
+                const isSelected = selectedSubscribeView === viewId
                 return (
                   <button
                     key={viewId}
-                    onClick={async () => {
-                      const payload = pendingSubscribe
-                      setPendingSubscribe(null)
-                      await handleSubscribe(payload.url, payload.title, viewId)
-                    }}
-                    className={`text-left rounded-xl border px-3 py-2.5 text-sm transition-colors ${
-                      isPreferred
-                        ? "border-accent bg-accent/10"
+                    onClick={() => setSelectedSubscribeView(viewId)}
+                    className={`text-left rounded-xl border px-3 py-3 text-sm transition-all ${
+                      isSelected
+                        ? "border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(255,106,0,0.2)]"
                         : "hover:border-accent/40 hover:bg-accent/[0.03]"
                     }`}
                   >
-                    <div className="font-medium">{t(VIEW_TYPE_I18N_KEYS[viewId] || "viewTypes.articles")}</div>
-                    <div className="text-[11px] text-text-tertiary mt-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium">{t(VIEW_TYPE_I18N_KEYS[viewId] || "viewTypes.articles")}</div>
+                    </div>
+                    <div className="text-[11px] text-text-tertiary mt-1">
                       {isPreferred ? t("discover.recommendedColumn") : t("discover.tapToAdd")}
                     </div>
                   </button>
                 )
               })}
             </div>
-            <div className="mt-3 flex justify-end">
+            <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 onClick={() => setPendingSubscribe(null)}
                 className="px-3 py-1.5 rounded-lg text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
               >
                 {t("common.cancel")}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!pendingSubscribe) return
+                  const payload = pendingSubscribe
+                  const selectedView = selectedSubscribeView ?? payload.preferredView
+                  setPendingSubscribe(null)
+                  await handleSubscribe(payload.url, payload.title, selectedView)
+                }}
+                className="px-3.5 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent-hover active:scale-[0.99] transition-all"
+              >
+                {t("common.confirm")}
               </button>
             </div>
           </div>

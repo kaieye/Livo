@@ -1,4 +1,4 @@
-export function formatFeedTitle(feedUrl: string, parsedTitle?: string, fallbackTitle?: string): string {
+﻿export function formatFeedTitle(feedUrl: string, parsedTitle?: string, fallbackTitle?: string): string {
   const title = (parsedTitle || fallbackTitle || "").trim()
 
   const bilibiliName = extractBilibiliNameFromTitle(title)
@@ -47,14 +47,14 @@ function extractBilibiliNameFromTitle(title: string): string {
   if (!title) return ""
 
   // Common RSSHub title patterns:
-  // "影视飓风 的 bilibili 空间"
-  // "影视飓风 的 bilibili 投稿"
-  const m1 = title.match(/^(.+?)\s+的\s+bilibili\s+/i)
+  // "褰辫椋撻 鐨?bilibili 绌洪棿"
+  // "褰辫椋撻 鐨?bilibili 鎶曠"
+  const m1 = title.match(/^(.+?)\s+鐨刓s+bilibili\s+/i)
   if (m1?.[1]) return m1[1].trim()
 
   // Fallback: remove common suffix markers
   const m2 = title
-    .replace(/\s*的\s*bilibili\s*(空间|投稿|视频|动态)\s*$/i, "")
+    .replace(/\s*bilibili\s*(?:space|\u7A7A\u95F4|\u6295\u7A3F|\u89C6\u9891|\u52A8\u6001)?\s*$/i, "")
     .trim()
   if (m2 && m2 !== title) return m2
 
@@ -83,8 +83,7 @@ function extractTwitterNameFromTitle(title: string): string {
   if (!cleaned || /^https?:\/\/\S+$/i.test(cleaned)) return ""
   const stripHandleFragment = (value: string): string =>
     value
-      .replace(/\s*[\/／⁄∕]\s*@?[a-zA-Z0-9_]{1,15}\s*$/i, "")
-      .replace(/\s*\|\s*@?[a-zA-Z0-9_]{1,15}\s*$/i, "")
+      .replace(/\s*(?:\/|\||\uFF0F)\s*@?[a-zA-Z0-9_]{1,15}\s*$/i, "")
       .replace(/\s*\(\s*@?[a-zA-Z0-9_]{1,15}\s*\)\s*$/i, "")
       .trim()
 
@@ -198,3 +197,4 @@ function extractInstagramUsernameFromFeedUrl(feedUrl: string): string {
   }
   return ""
 }
+

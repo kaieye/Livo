@@ -2,7 +2,10 @@ import { create } from "zustand"
 import type { Entry } from "../../../shared/types"
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
+const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
 const ENTRY_LIST_CACHE_VERSION = 3
+const DEFAULT_ENTRY_PAGE_SIZE = 10
+const MAX_ENTRY_PAGE_SIZE = 1000
 const entryListCache = new Map<string, { entries: Entry[]; cachedAt: number }>()
 const entryListInFlight = new Map<string, Promise<Entry[]>>()
 
@@ -97,6 +100,7 @@ function buildListCacheKey(options?: {
   starred?: boolean
   unreadOnly?: boolean
   limit?: number
+  offset?: number
 }): string {
   const feedIds = [...(options?.feedIds || [])].sort()
   return JSON.stringify({
@@ -105,14 +109,37 @@ function buildListCacheKey(options?: {
     feedIds,
     starred: !!options?.starred,
     unreadOnly: !!options?.unreadOnly,
-    limit: options?.limit ?? 1000,
+    limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
+    offset: options?.offset ?? 0,
   })
+}
+
+function sortEntriesByPublishedDesc(entries: Entry[]): Entry[] {
+  return [...entries].sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+}
+
+function mergeEntriesById(prev: Entry[], next: Entry[]): Entry[] {
+  if (next.length === 0) return prev
+  const byId = new Map<string, Entry>()
+  for (const entry of prev) byId.set(entry.id, entry)
+  for (const entry of next) byId.set(entry.id, entry)
+  return sortEntriesByPublishedDesc(Array.from(byId.values()))
 }
 
 interface EntryState {
   entries: Entry[]
   selectedEntry: Entry | null
   isLoading: boolean
+  isLoadingMore: boolean
+  hasMoreEntries: boolean
+  paginationQueryKey: string
+  paginationOptions: {
+    feedId?: string
+    feedIds?: string[]
+    starred?: boolean
+    unreadOnly?: boolean
+  } | null
+  paginationPageSize: number
   searchQuery: string
 
   // Actions
@@ -130,6 +157,7 @@ interface EntryState {
     unreadOnly?: boolean
     limit?: number
   }) => Promise<void>
+  loadMoreEntries: () => Promise<void>
   clearListCache: () => void
   refreshEntryMedia: (entryId: string, feedId: string) => Promise<Entry | null>
   selectEntry: (entry: Entry | null) => Promise<void>
@@ -146,27 +174,66 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   entries: [],
   selectedEntry: null,
   isLoading: false,
+  isLoadingMore: false,
+  hasMoreEntries: false,
+  paginationQueryKey: "",
+  paginationOptions: null,
+  paginationPageSize: 0,
   searchQuery: "",
 
   loadEntries: async (options) => {
-    const cacheKey = buildListCacheKey(options)
+    const pageSize = Math.max(1, Math.min(options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE))
+    const normalizedOptions = {
+      feedId: options?.feedId,
+      feedIds: options?.feedIds,
+      starred: options?.starred,
+      unreadOnly: options?.unreadOnly,
+      limit: pageSize,
+      offset: 0,
+    }
+    const queryKey = JSON.stringify({
+      feedId: normalizedOptions.feedId || "",
+      feedIds: [...(normalizedOptions.feedIds || [])].sort(),
+      starred: !!normalizedOptions.starred,
+      unreadOnly: !!normalizedOptions.unreadOnly,
+      pageSize,
+    })
+    set({
+      paginationQueryKey: queryKey,
+      paginationOptions: {
+        feedId: normalizedOptions.feedId,
+        feedIds: normalizedOptions.feedIds,
+        starred: normalizedOptions.starred,
+        unreadOnly: normalizedOptions.unreadOnly,
+      },
+      paginationPageSize: pageSize,
+    })
+
+    const cacheKey = buildListCacheKey(normalizedOptions)
     const cached = entryListCache.get(cacheKey)
-    if (cached && Date.now() - cached.cachedAt < ENTRY_LIST_CACHE_TTL_MS) {
-      set({ entries: cached.entries, isLoading: false })
+    const ttl = cached?.entries?.length ? ENTRY_LIST_CACHE_TTL_MS : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+    if (cached && Date.now() - cached.cachedAt < ttl) {
+      set({
+        entries: cached.entries,
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: cached.entries.length >= pageSize,
+      })
       return
     }
 
-    set({ isLoading: true })
+    set({ isLoading: true, isLoadingMore: false, hasMoreEntries: false })
     try {
       const existing = entryListInFlight.get(cacheKey)
       const entriesPromise =
         existing ??
         window.api.entries.list({
-          feedId: options?.feedId,
-          feedIds: options?.feedIds,
-          starred: options?.starred,
-          unreadOnly: options?.unreadOnly,
-          limit: options?.limit ?? 1000,
+          feedId: normalizedOptions.feedId,
+          feedIds: normalizedOptions.feedIds,
+          starred: normalizedOptions.starred,
+          unreadOnly: normalizedOptions.unreadOnly,
+          limit: normalizedOptions.limit,
+          offset: 0,
           compact: true,
           maxContentLength: 520,
           skipDedupe: false,
@@ -178,16 +245,24 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         })
       if (!existing) entryListInFlight.set(cacheKey, entriesPromise)
       const entries = await entriesPromise
-      set({ entries, isLoading: false })
+      const isLatestQuery = get().paginationQueryKey === queryKey
+      if (!isLatestQuery) return
+      set({
+        entries: sortEntriesByPublishedDesc(entries),
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: entries.length >= pageSize,
+      })
     } catch {
-      set({ isLoading: false })
+      set({ isLoading: false, isLoadingMore: false })
     }
   },
 
   prefetchEntries: async (options) => {
     const cacheKey = buildListCacheKey(options)
     const cached = entryListCache.get(cacheKey)
-    if (cached && Date.now() - cached.cachedAt < ENTRY_LIST_CACHE_TTL_MS) return
+    const ttl = cached?.entries?.length ? ENTRY_LIST_CACHE_TTL_MS : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+    if (cached && Date.now() - cached.cachedAt < ttl) return
     if (entryListInFlight.has(cacheKey)) {
       await entryListInFlight.get(cacheKey)
       return
@@ -198,7 +273,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       feedIds: options?.feedIds,
       starred: options?.starred,
       unreadOnly: options?.unreadOnly,
-      limit: options?.limit ?? 1000,
+      limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
       compact: true,
       maxContentLength: 520,
       skipDedupe: false,
@@ -210,6 +285,63 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     })
     entryListInFlight.set(cacheKey, promise)
     await promise
+  },
+
+  loadMoreEntries: async () => {
+    const state = get()
+    if (state.isLoading || state.isLoadingMore || !state.hasMoreEntries) return
+    const baseOptions = state.paginationOptions
+    const pageSize = Math.max(1, Math.min(state.paginationPageSize || DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE))
+    if (!baseOptions) return
+
+    const offset = state.entries.length
+    const pageOptions = {
+      ...baseOptions,
+      limit: pageSize,
+      offset,
+    }
+    const cacheKey = buildListCacheKey(pageOptions)
+    const cached = entryListCache.get(cacheKey)
+    const ttl = cached?.entries?.length ? ENTRY_LIST_CACHE_TTL_MS : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+
+    set({ isLoadingMore: true })
+
+    try {
+      let nextPage: Entry[]
+      if (cached && Date.now() - cached.cachedAt < ttl) {
+        nextPage = cached.entries
+      } else {
+        const existing = entryListInFlight.get(cacheKey)
+        const promise =
+          existing ??
+          window.api.entries.list({
+            feedId: pageOptions.feedId,
+            feedIds: pageOptions.feedIds,
+            starred: pageOptions.starred,
+            unreadOnly: pageOptions.unreadOnly,
+            limit: pageOptions.limit,
+            offset: pageOptions.offset,
+            compact: true,
+            maxContentLength: 520,
+            skipDedupe: false,
+          }).then((entries) => {
+            entryListCache.set(cacheKey, { entries, cachedAt: Date.now() })
+            return entries
+          }).finally(() => {
+            entryListInFlight.delete(cacheKey)
+          })
+        if (!existing) entryListInFlight.set(cacheKey, promise)
+        nextPage = await promise
+      }
+
+      set((current) => ({
+        entries: mergeEntriesById(current.entries, nextPage),
+        isLoadingMore: false,
+        hasMoreEntries: nextPage.length >= pageSize,
+      }))
+    } catch {
+      set({ isLoadingMore: false })
+    }
   },
 
   clearListCache: () => {
@@ -321,12 +453,19 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       await get().loadEntries()
       return
     }
-    set({ isLoading: true })
+    set({
+      isLoading: true,
+      isLoadingMore: false,
+      hasMoreEntries: false,
+      paginationQueryKey: "",
+      paginationOptions: null,
+      paginationPageSize: 0,
+    })
     try {
       const entries = await window.api.entries.search(query)
-      set({ entries: dedupeEntriesForClient(entries), isLoading: false })
+      set({ entries: dedupeEntriesForClient(entries), isLoading: false, isLoadingMore: false, hasMoreEntries: false })
     } catch {
-      set({ isLoading: false })
+      set({ isLoading: false, isLoadingMore: false })
     }
   },
 

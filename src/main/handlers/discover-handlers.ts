@@ -940,6 +940,21 @@ function isInstagramLetterFallbackAvatar(url?: string): boolean {
   return raw.includes("833ab4") || raw.includes("e1306c") || raw.includes("f77737")
 }
 
+async function withSoftTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), timeoutMs)
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch(() => {
+        clearTimeout(timer)
+        resolve(undefined)
+      })
+  })
+}
+
 async function tryConvertImageUrlToDataUri(imageUrl: string): Promise<string | undefined> {
   const normalizedUrl = normalizeImageUrl(imageUrl)
   if (!/^https?:\/\//i.test(normalizedUrl)) return undefined
@@ -1219,7 +1234,7 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
       return normalizedResolved
     })
     try {
-      const result = await Promise.any(attempts)
+      const result = await withSoftTimeout(Promise.any(attempts), 3000)
       return result || undefined
     } catch {
       return undefined
@@ -1229,7 +1244,7 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
   // Fetch avatar for a username by probing the RSSHub feed (same source as when subscribing)
   const fetchAvatar = async (username: string): Promise<string> => {
     try {
-      const feedAvatar = await fetchFeedAvatarFromFeed(username)
+      const feedAvatar = await withSoftTimeout(fetchFeedAvatarFromFeed(username), 3000)
       if (feedAvatar) return feedAvatar
     } catch (e) {
       console.log(`[Instagram Avatar] RSSHub parser fetch failed for ${username}:`, e)
@@ -1237,7 +1252,7 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
 
     // Fallback: try Instagram HTML avatar (may fail due to CDN restrictions)
     try {
-      const avatar = await fetchInstagramAvatarByUsername(username)
+      const avatar = await withSoftTimeout(fetchInstagramAvatarByUsername(username), 2500)
       if (avatar) return avatar
     } catch {
       // Ignore
@@ -1305,6 +1320,7 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.5",
         },
+        signal: AbortSignal.timeout(2800),
       })
       if (res.ok) {
         const html = await res.text()

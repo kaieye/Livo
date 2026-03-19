@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, session } from "electron"
+﻿import { ipcMain, dialog, BrowserWindow, session } from "electron"
 import { v4 as uuidv4 } from "uuid"
 import { readFileSync, writeFileSync } from "fs"
 import { IPC, FeedViewType, type Feed, type FeedWithCount } from "../../shared/types"
@@ -53,6 +53,7 @@ export function registerFeedHandlers(): void {
       const rsshubInstance = getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
       const normalizedUrl = normalizeRsshubProtocolUrl(storedUrl, rsshubInstance)
       const normalizedLegacyUrl = normalizeRsshubProtocolUrl(legacyStoredUrl, rsshubInstance)
+      const deferBootstrap = shouldDeferBootstrap(normalizedUrl, view)
       const existingFeed =
         getFeedByUrl(storedUrl) ||
         getFeedByUrl(normalizedUrl) ||
@@ -92,8 +93,7 @@ export function registerFeedHandlers(): void {
           // For social feeds, do a short blocking refresh first to improve "subscribe -> has entries"
           // responsiveness, then continue in background if still empty.
           if (shouldDeferBootstrap(normalizedUrl, mergedFeed.view)) {
-            await bootstrapFeedEntriesQuick(mergedFeed, normalizedUrl, mergedFeed.view)
-            if (!hasAnyEntries(mergedFeed.id)) void bootstrapFeedEntries(mergedFeed, normalizedUrl, mergedFeed.view)
+            queueBootstrapRefresh(mergedFeed, normalizedUrl, mergedFeed.view)
           } else {
             await bootstrapFeedEntries(mergedFeed, normalizedUrl, mergedFeed.view)
           }
@@ -102,8 +102,7 @@ export function registerFeedHandlers(): void {
         }
 
         if (shouldDeferBootstrap(normalizedUrl, existingFeed.view)) {
-          await bootstrapFeedEntriesQuick(existingFeed, normalizedUrl, existingFeed.view)
-          if (!hasAnyEntries(existingFeed.id)) void bootstrapFeedEntries(existingFeed, normalizedUrl, existingFeed.view)
+          queueBootstrapRefresh(existingFeed, normalizedUrl, existingFeed.view)
         } else {
           await bootstrapFeedEntries(existingFeed, normalizedUrl, existingFeed.view)
         }
@@ -113,25 +112,27 @@ export function registerFeedHandlers(): void {
       }
 
       let parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>['data'] | null = null
-      try {
-        const initialFetchTimeoutMs = getInitialFetchTimeoutMs(normalizedUrl, view)
-        const result = await withTimeout(fetchAndParseFeed(normalizedUrl), initialFetchTimeoutMs)
-        parsed = result.data
-      } catch {
-        // Feed fetch failed/slow (e.g. RSSHub timeout) — still create the feed entry
-        // so users can subscribe and it will be fetched on next refresh
+      if (!deferBootstrap) {
+        try {
+          const initialFetchTimeoutMs = getInitialFetchTimeoutMs(normalizedUrl, view)
+          const result = await withTimeout(fetchAndParseFeed(normalizedUrl), initialFetchTimeoutMs)
+          parsed = result.data
+        } catch {
+          // Feed fetch failed/slow (e.g. RSSHub timeout) — still create the feed entry
+          // so users can subscribe and it will be fetched on next refresh
+        }
       }
-
-      // Auto-detect view type from route/content.
-      // For explicit platform video routes, enforce the route view to avoid UI default overriding.
+// Auto-detect view type from route/content.
+      // Respect explicit user-selected view first.
       const routeView = detectRouteViewFromUrl(normalizedUrl)
       const detectedView =
-        routeView ??
-        (view ?? detectViewTypeFromUrlOrContent(normalizedUrl, parsed))
-      const feedImageUrl = await resolveFeedAvatar(
-        normalizedUrl,
-        parsed ? getFeedImageUrl(parsed) : undefined,
-      )
+        (view ?? routeView ?? detectViewTypeFromUrlOrContent(normalizedUrl, parsed))
+      const feedImageUrl = (deferBootstrap && !parsed)
+        ? getImmediateFeedAvatar(normalizedUrl)
+        : await resolveFeedAvatar(
+          normalizedUrl,
+          parsed ? getFeedImageUrl(parsed) : undefined,
+        )
 
       const isRecommended = (category || "") === RECOMMENDED_CATEGORY
       const userFolder = isRecommended ? "" : (category || "")
@@ -183,8 +184,7 @@ export function registerFeedHandlers(): void {
       // newly added subscriptions can show entries immediately.
       if (!parsed) {
         if (shouldDeferBootstrap(normalizedUrl, detectedView)) {
-          await bootstrapFeedEntriesQuick(feed, normalizedUrl, detectedView)
-          if (!hasAnyEntries(feed.id)) void bootstrapFeedEntries(feed, normalizedUrl, detectedView)
+          queueBootstrapRefresh(feed, normalizedUrl, detectedView)
         } else {
           await bootstrapFeedEntries(feed, normalizedUrl, detectedView)
         }
@@ -319,7 +319,7 @@ export function registerFeedHandlers(): void {
   // Import OPML
   ipcMain.handle(IPC.FEED_IMPORT_OPML, async () => {
     const result = await dialog.showOpenDialog({
-      title: "瀵煎叆 OPML 鏂囦欢",
+      title: "Import OPML file",
       filters: [
         { name: "OPML Files", extensions: ["opml", "xml"] },
         { name: "All Files", extensions: ["*"] },
@@ -336,7 +336,7 @@ export function registerFeedHandlers(): void {
       const opmlFeeds = parseOPML(content)
 
       if (opmlFeeds.length === 0) {
-        return { success: false, error: "OPML 鏂囦欢涓病鏈夋壘鍒拌闃呮簮" }
+        return { success: false, error: "No valid feeds found in OPML file" }
       }
 
       let imported = 0
@@ -384,7 +384,7 @@ export function registerFeedHandlers(): void {
             const result = await fetchAndParseFeed(fetchUrl, { skipFallback: true })
             parsed = result.data
           } catch {
-            // Feed fetch failed 鈥?still import with OPML metadata
+            // Feed fetch failed — still import with OPML metadata
           }
 
           const feed: Feed = {
@@ -445,7 +445,7 @@ export function registerFeedHandlers(): void {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (err) {
-      return { success: false, error: `璇诲彇鏂囦欢澶辫触: ${String(err)}` }
+      return { success: false, error: `鐠囪褰囬弬鍥︽婢惰精瑙? ${String(err)}` }
     }
   })
 
@@ -457,7 +457,7 @@ export function registerFeedHandlers(): void {
     }
 
     const result = await dialog.showSaveDialog({
-      title: "瀵煎嚭 OPML 鏂囦欢",
+      title: "Export OPML file",
       defaultPath: "livo-subscriptions.opml",
       filters: [
         { name: "OPML Files", extensions: ["opml"] },
@@ -474,7 +474,7 @@ export function registerFeedHandlers(): void {
       writeFileSync(result.filePath, opml, "utf-8")
       return { success: true, count: feeds.length }
     } catch (err) {
-      return { success: false, error: `淇濆瓨鏂囦欢澶辫触: ${String(err)}` }
+      return { success: false, error: `Failed to export OPML: ${String(err)}` }
     }
   })
 
@@ -521,6 +521,42 @@ function hasAnyEntries(feedId: string): boolean {
     limit: 1,
     skipDedupe: true,
   }).length > 0
+}
+
+function queueBootstrapRefresh(feed: Feed, normalizedUrl: string, view?: FeedViewType): void {
+  void (async () => {
+    // Retry a few rounds in background for unstable social upstreams so users
+    // don't have to manually click refresh after subscribing.
+    for (let round = 0; round < 3; round++) {
+      if (round === 0) {
+        await bootstrapFeedEntriesQuick(feed, normalizedUrl, view).catch(() => {})
+      } else {
+        await bootstrapFeedEntries(feed, normalizedUrl, view).catch(() => {})
+      }
+
+      const refreshed = getFeedById(feed.id)
+      const hasEntries = hasAnyEntries(feed.id)
+      const hasAvatar = !!(refreshed?.imageUrl || "").trim()
+
+      const win = BrowserWindow.getAllWindows()[0]
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("feeds:updated", {
+          feedId: feed.id,
+          background: true,
+          round: round + 1,
+          hasEntries,
+          hasAvatar,
+        })
+      }
+
+      if (hasEntries && hasAvatar) break
+      await delayMs(2000 * (round + 1))
+    }
+  })().catch(() => {})
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 // ---- Helper functions ----
@@ -608,6 +644,19 @@ function shouldDeferBootstrap(url: string, view?: FeedViewType): boolean {
   return isSocialRoute || view === FeedViewType.SocialMedia || view === FeedViewType.Pictures
 }
 
+function getImmediateFeedAvatar(url: string): string | undefined {
+  const raw = (url || "").trim()
+  if (!raw) return undefined
+  const ig = raw.match(/\/instagram\/user\/([^/?#]+)/i)
+    || raw.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
+    || raw.match(/\/pixnoy\/user\/([^/?#]+)/i)
+    || raw.match(/\/piokok\/user\/([^/?#]+)/i)
+  const username = ig?.[1] ? decodeURIComponent(ig[1]).replace(/^@+/, "") : ""
+  if (!username) return undefined
+  const initial = username.charAt(0).toUpperCase()
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#833AB4"/><stop offset="50%" stop-color="#E1306C"/><stop offset="100%" stop-color="#F77737"/></linearGradient></defs><rect width="128" height="128" rx="32" fill="url(#ig)"/><text x="64" y="82" text-anchor="middle" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="56" font-weight="700">${initial}</text></svg>`)}`
+}
+
 function getFeedImageUrl(parsed: any): string | undefined {
   const imageUrl =
     (parsed["image"] as { url?: string } | undefined)?.url ||
@@ -646,6 +695,9 @@ function detectRouteViewFromUrl(url: string): FeedViewType | null {
   }
   return null
 }
+
+
+
 
 
 

@@ -3,8 +3,55 @@ import type { FeedWithCount } from "../../../shared/types"
 import { FeedViewType } from "../../../shared/types"
 import { useSettingsStore } from "./settings-store"
 import { useEntryStore } from "./entry-store"
+import { getEntryLoadLimit } from "../lib/entry-load-limit"
 
 const RECOMMENDED_CATEGORY = "Recommended"
+
+function isSlowSocialFeed(feed?: Partial<FeedWithCount>): boolean {
+  const rawUrl = String(feed?.url || "").toLowerCase()
+  const view = feed?.view
+  if (view === FeedViewType.SocialMedia || view === FeedViewType.Pictures) return true
+  return (
+    /\/instagram\/user\//i.test(rawUrl) ||
+    /\/picnob(?:\.info)?\/user\//i.test(rawUrl) ||
+    /\/pixnoy\/user\//i.test(rawUrl) ||
+    /\/piokok\/user\//i.test(rawUrl) ||
+    /\/(?:twitter|x)\/user\//i.test(rawUrl)
+  )
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function reloadEntriesForCurrentScope(state: {
+  selectedFeedId: string | null
+  activeView: FeedViewType | null
+  feeds: FeedWithCount[]
+}): Promise<void> {
+  const { clearListCache, loadEntries } = useEntryStore.getState()
+  const limit = getEntryLoadLimit(state.activeView)
+  const viewFeedIds = state.activeView !== null
+    ? state.feeds
+        .filter((f) => (f.view ?? FeedViewType.Articles) === state.activeView)
+        .map((f) => f.id)
+    : []
+
+  clearListCache()
+  if (state.selectedFeedId === "starred") {
+    await loadEntries({ starred: true, limit })
+    return
+  }
+  if (state.selectedFeedId) {
+    await loadEntries({ feedId: state.selectedFeedId, limit })
+    return
+  }
+  if (viewFeedIds.length > 0) {
+    await loadEntries({ feedIds: viewFeedIds, limit })
+    return
+  }
+  await loadEntries({ limit })
+}
 
 interface FeedState {
   refreshProgress: {
@@ -63,8 +110,9 @@ export const useFeedStore = create<FeedState>((set, get) => ({
       // Avoid stale empty list cache for newly added subscriptions.
       useEntryStore.getState().clearListCache()
       await get().loadFeeds()
+      const shouldSkipWarmup = isSlowSocialFeed(result.feed)
       const newFeedId = result.feed?.id
-      if (newFeedId) {
+      if (newFeedId && !shouldSkipWarmup) {
         try {
           const unreadEntries = await window.api.entries.list({
             feedId: newFeedId,
@@ -89,6 +137,22 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         } catch {
           // Keep UI on list() result when recount fails.
         }
+      }
+      if (newFeedId && shouldSkipWarmup) {
+        // For slow social feeds (Instagram/X), emulate manual refresh in background
+        // so users don't have to click refresh after subscribing.
+        void (async () => {
+          for (let round = 0; round < 3; round++) {
+            await delayMs(1200 + round * 1800)
+            try {
+              await window.api.feeds.refresh(newFeedId)
+              await get().loadFeeds()
+              await reloadEntriesForCurrentScope(get())
+            } catch {
+              // Continue next round.
+            }
+          }
+        })()
       }
     }
     return result
@@ -160,6 +224,8 @@ export const useFeedStore = create<FeedState>((set, get) => ({
       if (!patched) {
         await get().loadFeeds()
       }
+      // Refresh entry list for the currently visible scope to avoid stale empty cache.
+      await reloadEntriesForCurrentScope(get())
     } finally {
       set({ isRefreshing: false })
     }
@@ -217,6 +283,7 @@ export const useFeedStore = create<FeedState>((set, get) => ({
       if (needsFallbackReload) {
         await get().loadFeeds()
       }
+      await reloadEntriesForCurrentScope(get())
     } finally {
       set({ isRefreshing: false })
     }

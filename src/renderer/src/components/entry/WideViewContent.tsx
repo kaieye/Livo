@@ -10,7 +10,7 @@
  * - Social media: click shows animated overlay with full entry content;
  *   double-click opens in browser; Escape closes overlay
  */
-import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, memo, type SyntheticEvent } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, memo, type SyntheticEvent, type UIEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useEntryStore } from "../../store/entry-store"
@@ -1054,7 +1054,21 @@ function resolveEntryBrowserOpenUrl(entry: Entry): string {
 import { SocialMediaItem, GridCard, ViewRecommendations } from "./EntryList"
 
 export function WideViewContent() {
-  const { entries, isLoading, loadEntries, selectEntry, markAllRead, markAboveRead, markBelowRead, searchQuery, setSearchQuery, search } =
+  const {
+    entries,
+    isLoading,
+    isLoadingMore,
+    hasMoreEntries,
+    loadEntries,
+    loadMoreEntries,
+    selectEntry,
+    markAllRead,
+    markAboveRead,
+    markBelowRead,
+    searchQuery,
+    setSearchQuery,
+    search,
+  } =
     useEntryStore()
   const { selectedFeedId, feeds, activeView, refreshFeed, refreshMultiple, refreshAll, isRefreshing, refreshProgress } = useFeedStore()
   const { settings } = useSettingsStore()
@@ -1234,14 +1248,6 @@ export function WideViewContent() {
     if (!isPicturesAllView) return
     setMasonryRenderLimit(MASONRY_INITIAL_RENDER)
   }, [isPicturesAllView, selectedFeedId, activeView])
-  useEffect(() => {
-    if (!isPicturesAllView) return
-    if (masonryRenderLimit >= masonryCards.length) return
-    const timer = window.setTimeout(() => {
-      setMasonryRenderLimit((prev) => Math.min(prev + MASONRY_RENDER_BATCH, masonryCards.length))
-    }, 50)
-    return () => window.clearTimeout(timer)
-  }, [isPicturesAllView, masonryRenderLimit, masonryCards.length])
   const visibleMasonryCards = useMemo(
     () => isPicturesAllView ? masonryCards.slice(0, masonryRenderLimit) : [],
     [isPicturesAllView, masonryCards, masonryRenderLimit],
@@ -1266,27 +1272,40 @@ export function WideViewContent() {
     setSocialRenderLimit(SOCIAL_INITIAL_RENDER_COUNT)
   }, [isTimelineView, shouldUseVirtualTimeline, selectedFeedId, activeView])
 
-  useEffect(() => {
-    if (!isTimelineView || shouldUseVirtualTimeline) return
-    if (socialRenderLimit >= timelineEntries.length) return
-    const timer = window.setTimeout(() => {
-      setSocialRenderLimit((prev) => Math.min(prev + SOCIAL_RENDER_BATCH, timelineEntries.length))
-    }, 40)
-    return () => window.clearTimeout(timer)
-  }, [isTimelineView, shouldUseVirtualTimeline, socialRenderLimit, timelineEntries.length])
-
-  const handleTimelineScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+  const handleTimelineScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
     if (!isTimelineView || shouldUseVirtualTimeline) return
     if (socialRenderLimit >= timelineEntries.length) return
     const el = e.currentTarget
+    const hasScrolledEnough = el.scrollTop > 120
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 800
-    if (!nearBottom) return
+    if (!nearBottom || !hasScrolledEnough) return
     setSocialRenderLimit((prev) => Math.min(prev + SOCIAL_RENDER_BATCH, timelineEntries.length))
   }, [isTimelineView, shouldUseVirtualTimeline, socialRenderLimit, timelineEntries.length])
+
+  const handleMasonryScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    if (!isPicturesAllView) return
+    if (masonryRenderLimit >= masonryCards.length) return
+    const el = e.currentTarget
+    const hasScrolledEnough = el.scrollTop > 120
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 900
+    if (!nearBottom || !hasScrolledEnough) return
+    setMasonryRenderLimit((prev) => Math.min(prev + MASONRY_RENDER_BATCH, masonryCards.length))
+  }, [isPicturesAllView, masonryCards.length, masonryRenderLimit])
+
+  const handlePagedEntryScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const hasScrolledEnough = el.scrollTop > 120
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 700
+    if (!nearBottom || !hasScrolledEnough) return
+    if (searchQuery.trim()) return
+    if (!hasMoreEntries || isLoadingMore) return
+    void loadMoreEntries()
+  }, [hasMoreEntries, isLoadingMore, loadMoreEntries, searchQuery])
 
   // Measure container width for masonry / grid.
   // Keep updates synchronous with ResizeObserver to avoid one-frame stale widths on window resize.
   const containerRef = useRef<HTMLDivElement>(null)
+  const lastScrollScopeRef = useRef<string>("")
   const viewKey = `${activeView ?? "all"}:${selectedFeedId ?? ""}`
   const [containerWidth, setContainerWidth] = useState(() => rememberedContainerWidthByView.get(viewKey) ?? 0)
   const timelineVirtualizer = useVirtualizer({
@@ -1297,6 +1316,15 @@ export function WideViewContent() {
     getItemKey: (index) => timelineEntries[index]?.id ?? index,
   })
   const virtualTimelineItems = timelineVirtualizer.getVirtualItems()
+
+  useEffect(() => {
+    const nextScope = `${activeView ?? "all"}:${selectedFeedId ?? "all"}`
+    if (lastScrollScopeRef.current === nextScope) return
+    lastScrollScopeRef.current = nextScope
+    const el = containerRef.current
+    if (!el) return
+    el.scrollTo({ top: 0, behavior: "auto" })
+  }, [activeView, selectedFeedId])
 
   useLayoutEffect(() => {
     if (activeView !== FeedViewType.Videos && !isPicturesAllView) return
@@ -1597,6 +1625,8 @@ export function WideViewContent() {
         }`}
         onScroll={(e) => {
           handleTimelineScroll(e)
+          handleMasonryScroll(e)
+          handlePagedEntryScroll(e)
         }}
       >
         {shouldShowLoadingSkeleton ? (
@@ -1739,6 +1769,12 @@ export function WideViewContent() {
             {!shouldUseVirtualTimeline && renderedTimelineEntries.length < timelineEntries.length && (
               <div className="py-3 text-center text-xs text-text-tertiary">
                 {`Loading ${renderedTimelineEntries.length}/${timelineEntries.length}...`}
+              </div>
+            )}
+            {isLoadingMore && (
+              <div className="py-3 text-center text-xs text-text-tertiary inline-flex w-full items-center justify-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading more...</span>
               </div>
             )}
           </div>
