@@ -18,6 +18,7 @@ import { resolveYouTubeProfileToOfficialFeed } from "../services/youtube-profile
 import { normalizeRsshubProtocolUrl, toRsshubProtocolUrl } from "../services/rsshub-url"
 import { resolveFeedAvatar } from "../services/feed-avatar"
 import RssParser from "rss-parser"
+import * as https from "node:https"
 
 /** A lightweight RSS parser with a short timeout 鈥?used for quick probes. */
 const fastParser = new RssParser({
@@ -43,8 +44,13 @@ const FALLBACK_NITTER_INSTANCES = [
 ]
 
 const X_AVATAR_CACHE_TTL = 10 * 60 * 1000
+const X_FOLLOWER_CACHE_TTL = 10 * 60 * 1000
+const YOUTUBE_SUBSCRIBER_CACHE_TTL = 10 * 60 * 1000
+const YOUTUBE_SUBSCRIBER_MISS_CACHE_TTL = 30 * 1000
 const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
 const xAvatarCache = new Map<string, { expiresAt: number; image: string }>()
+const xFollowerCache = new Map<string, { expiresAt: number; followers?: string }>()
+const youtubeSubscriberCache = new Map<string, { expiresAt: number; followers?: string }>()
 type DiscoverSearchResult = {
   title: string
   url: string
@@ -111,6 +117,16 @@ function extractLikelyXHandle(query: string): string | null {
   // X/Twitter username constraint: up to 15 chars, letters/digits/underscore.
   if (!/^[a-zA-Z0-9_]{1,15}$/.test(clean)) return null
   return clean
+}
+
+function extractLikelyXHandleFromKeywords(query: string): string | null {
+  const compact = query
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/[\s.-]+/g, "")
+  if (!compact) return null
+  if (!/^[a-zA-Z0-9_]{1,15}$/.test(compact)) return null
+  return compact
 }
 
 async function fetchXAvatarByUsername(username: string): Promise<string> {
@@ -379,6 +395,7 @@ type VideoProbeCandidate = {
   description: string
   image: string
   feedUrl: string
+  followers?: string
 }
 type BilibiliUserProbeCandidate = {
   uid: string
@@ -386,6 +403,7 @@ type BilibiliUserProbeCandidate = {
   description: string
   image: string
   feedUrl: string
+  followers?: string
 }
 
 type XUserProbeCandidate = {
@@ -394,6 +412,7 @@ type XUserProbeCandidate = {
   description: string
   image: string
   feedUrl: string
+  followers?: string
 }
 
 function normalizeNameForMatch(input: string): string {
@@ -491,17 +510,34 @@ function dedupeAndSortDiscoverResults(query: string, results: DiscoverSearchResu
     })
 
   const seenUrl = new Set<string>()
+  const dedupedByUrlIndex = new Map<string, number>()
   const seenAlias = new Set<string>()
   const deduped: DiscoverSearchResult[] = []
   for (const item of ranked) {
     const urlKey = item.result.url.trim().toLowerCase()
-    if (seenUrl.has(urlKey)) continue
+    if (seenUrl.has(urlKey)) {
+      const existingIndex = dedupedByUrlIndex.get(urlKey)
+      if (existingIndex !== undefined) {
+        const existing = deduped[existingIndex]
+        const incoming = item.result
+        if (incoming.followers && !existing.followers) existing.followers = incoming.followers
+        if ((!existing.image || !existing.image.trim()) && incoming.image) existing.image = incoming.image
+        if (
+          (!existing.description || /rsshub x\/twitter user route/i.test(existing.description)) &&
+          incoming.description
+        ) {
+          existing.description = incoming.description
+        }
+      }
+      continue
+    }
 
     const aliasKey = buildAliasDedupKey(item.result)
     // Alias dedupe only applies for exact-match aliases to keep candidate list rich.
     if (aliasKey && item.aliasTier >= 3 && seenAlias.has(aliasKey)) continue
 
     seenUrl.add(urlKey)
+    dedupedByUrlIndex.set(urlKey, deduped.length)
     if (aliasKey && item.aliasTier >= 3) seenAlias.add(aliasKey)
     deduped.push(item.result)
   }
@@ -519,6 +555,45 @@ function flattenTextRuns(node: any): string {
   if (!node) return ""
   if (typeof node.simpleText === "string") return node.simpleText
   if (Array.isArray(node.runs)) return node.runs.map((r: any) => r?.text || "").join("").trim()
+  return ""
+}
+
+function parseYouTubeSubscriberLabel(raw: string): string | undefined {
+  const text = raw.replace(/\s+/g, " ").trim()
+  if (!text || text.startsWith("@")) return undefined
+
+  // Keep full matched phrase so we preserve locale style (e.g. "1.2M subscribers", "3.4万位订阅者", "3.4萬位訂閱者").
+  const patterns = [
+    /([\d.,]+(?:\s*[KMB])?)\s*subscribers?/i,
+    /([\d.,]+(?:\s*[KMB])?)\s*subscriber/i,
+    /([\d.,]+(?:\s*[万亿萬億])?)\s*(?:位)?(?:订阅者|訂閱者)/i,
+    /(?:订阅者|訂閱者)(?:数|數)?\s*([\d.,]+(?:\s*[万亿萬億])?)/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match) {
+      const phrase = match[0].trim()
+      const hasNumber = /\d/.test(phrase)
+      if (hasNumber) return phrase
+    }
+  }
+
+  return undefined
+}
+
+function extractYouTubeSubscriberText(renderer: any): string {
+  const candidates = [
+    flattenTextRuns(renderer?.subscriberCountText),
+    String(renderer?.subscriberCountText?.accessibility?.accessibilityData?.label || ""),
+    flattenTextRuns(renderer?.longBylineText),
+  ]
+
+  for (const candidate of candidates) {
+    const parsed = parseYouTubeSubscriberLabel(candidate || "")
+    if (parsed) return parsed
+  }
+
   return ""
 }
 
@@ -558,6 +633,102 @@ function extractYouTubeUserRouteFromChannelRenderer(renderer: any): string | nul
   return null
 }
 
+function extractYouTubeChannelPathFromChannelRenderer(renderer: any): string | null {
+  const canonical =
+    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl
+    || renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+    || ""
+  let path = String(canonical).trim()
+  if (!path) return null
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      path = new URL(path).pathname
+    } catch {
+      return null
+    }
+  }
+  if (!path.startsWith("/")) return null
+  const atMatch = path.match(/^\/@[^/?#]+/i)
+  if (atMatch?.[0]) return atMatch[0]
+  const channelMatch = path.match(/^\/channel\/[^/?#]+/i)
+  if (channelMatch?.[0]) return channelMatch[0]
+  const userMatch = path.match(/^\/(?:user|c)\/[^/?#]+/i)
+  if (userMatch?.[0]) return userMatch[0]
+  return null
+}
+
+function decodeEscapedUnicode(input: string): string {
+  return input
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_m, code) => String.fromCharCode(Number.parseInt(code, 16)))
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_m, code) => String.fromCharCode(Number.parseInt(code, 16)))
+    .replace(/\\\//g, "/")
+    .replace(/\\"/g, "\"")
+}
+
+async function fetchYouTubeFollowersByChannelPath(path: string): Promise<string | undefined> {
+  const normalizedPath = path.trim()
+  if (!normalizedPath.startsWith("/")) return undefined
+  const key = normalizedPath.toLowerCase()
+  const now = Date.now()
+  const cached = youtubeSubscriberCache.get(key)
+  if (cached && cached.expiresAt > now) return cached.followers
+
+  try {
+    const pathsToTry = [normalizedPath, `${normalizedPath.replace(/\/+$/, "")}/about`]
+    for (const pagePath of pathsToTry) {
+      const res = await session.defaultSession.fetch(`https://www.youtube.com${pagePath}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+          "Cookie": "CONSENT=YES+",
+        },
+      })
+      if (!res.ok) continue
+      const html = await res.text()
+      const rawCandidates: string[] = []
+
+      const patterns = [
+        /"subscriberCountText"\s*:\s*\{"simpleText"\s*:\s*"([^"]+)"/i,
+        /"subscriberCountText"\s*:\s*\{"runs"\s*:\s*\[\s*\{"text"\s*:\s*"([^"]+)"/i,
+        /"accessibilityData"\s*:\s*\{"label"\s*:\s*"([^"]*subscribers?[^"]*)"/i,
+        /\\\"subscriberCountText\\\"\s*:\s*\\\{\\\"simpleText\\\"\s*:\s*\\\"([^\\\"]+)\\\"/i,
+        /\\\"subscriberCountText\\\"\s*:\s*\\\{\\\"runs\\\"\s*:\s*\\\[\s*\\\{\\\"text\\\"\s*:\s*\\\"([^\\\"]+)\\\"/i,
+      ]
+
+      for (const pattern of patterns) {
+        const m = html.match(pattern)
+        if (m?.[1]) rawCandidates.push(m[1].trim())
+      }
+
+      // Generic extraction from decoded page source for structural variations.
+      const decodedHtml = decodeEscapedUnicode(html)
+      const genericPatterns = [
+        /([\d][\d.,]*\s*[KMB]?)\s*subscribers?/i,
+        /([\d][\d.,]*\s*[万亿萬億]?)\s*(?:位)?(?:订阅者|訂閱者)/i,
+        /(?:订阅者|訂閱者)(?:数|數)?\s*[:：]?\s*([\d][\d.,]*\s*[万亿萬億]?)/i,
+      ]
+      for (const pattern of genericPatterns) {
+        const m = decodedHtml.match(pattern)
+        if (m?.[0]) rawCandidates.push(m[0].trim())
+      }
+
+      for (const raw of rawCandidates) {
+        const parsed = parseYouTubeSubscriberLabel(decodeEscapedUnicode(raw))
+        if (parsed) {
+          youtubeSubscriberCache.set(key, { expiresAt: now + YOUTUBE_SUBSCRIBER_CACHE_TTL, followers: parsed })
+          return parsed
+        }
+      }
+    }
+  } catch {
+    // Ignore network failures; fall back to description text.
+  }
+
+  youtubeSubscriberCache.set(key, { expiresAt: now + YOUTUBE_SUBSCRIBER_MISS_CACHE_TTL })
+  return undefined
+}
+
 function looksLikeYouTubeChannelId(input: string): boolean {
   return /^UC[a-zA-Z0-9_-]{20,}$/.test(input.trim())
 }
@@ -587,6 +758,7 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
 
     const seen = new Set<string>()
     const out: VideoProbeCandidate[] = []
+    const pendingFollowerFetches: Array<{ index: number; channelPath: string }> = []
     for (const r of renderers) {
       const channelId = (r.channelId || "").trim()
       if (!channelId || seen.has(channelId)) continue
@@ -594,12 +766,15 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
       const name = flattenTextRuns(r.title) || channelId
       const handle = extractYouTubeHandleFromChannelRenderer(r)
       const route = extractYouTubeUserRouteFromChannelRenderer(r)
+      const channelPath = extractYouTubeChannelPathFromChannelRenderer(r)
       if (!route) continue
       // Username-only search: channel ID is not used as a search key.
       // Keep the filter soft to avoid dropping relevant candidates for CJK names.
       const searchable = [name, handle, flattenTextRuns(r.descriptionSnippet)].filter(Boolean).join(" ")
       if (!isUsernameMatch(query, searchable) && out.length >= 30) continue
       const description = flattenTextRuns(r.descriptionSnippet) || "YouTube channel"
+      const subscriberText = extractYouTubeSubscriberText(r)
+      const followers = subscriberText || undefined
       const thumbs = r.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
       const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
       out.push({
@@ -608,8 +783,21 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
         description: handle ? `${description} (@${handle})` : description,
         image,
         feedUrl: `${getRSSHubInstance()}${route}`,
+        followers,
       })
+      if (!followers && channelPath && pendingFollowerFetches.length < 12) {
+        pendingFollowerFetches.push({ index: out.length - 1, channelPath })
+      }
       if (out.length >= 120) break
+    }
+
+    if (pendingFollowerFetches.length > 0) {
+      await Promise.all(
+        pendingFollowerFetches.map(async ({ index, channelPath }) => {
+          const followers = await fetchYouTubeFollowersByChannelPath(channelPath)
+          if (followers && out[index]) out[index].followers = followers
+        })
+      )
     }
     return out
   } catch {
@@ -623,6 +811,7 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string,
   description: string
   image: string
   feedUrl: string
+  followers?: string
 }>> {
   const results: VideoProbeCandidate[] = []
   const clean = query.trim().replace(/^@/, "")
@@ -645,6 +834,7 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string,
       description: user.description,
       image: user.image,
       feedUrl: user.feedUrl,
+      followers: user.followers,
     }))))
   } else {
     searchPromises.push(Promise.resolve([]))
@@ -684,7 +874,7 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
       const json = await res.json() as {
         code?: number
         data?: {
-          result?: Array<{ mid?: number; uname?: string; usign?: string; upic?: string }>
+          result?: Array<{ mid?: number; uname?: string; usign?: string; upic?: string; fans?: number | string }>
         }
       }
       if (json.code === 0) {
@@ -699,6 +889,11 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
           const midTier = computeMatchTier(clean, mid)
           const score = nameTier * 1000 + signTier * 200 + midTier * 120
           if (score <= 0) continue
+          const rawFans = typeof user.fans === "string" ? Number(user.fans) : user.fans
+          const followers =
+            typeof rawFans === "number" && Number.isFinite(rawFans) && rawFans >= 0
+              ? `${formatFollowerCount(rawFans)} 粉丝`
+              : undefined
           candidates.push({
             uid: mid,
             title: `${uname} - Bilibili`,
@@ -706,6 +901,7 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
             image: user.upic || "",
             // Social tab should use dynamic route.
             feedUrl: `${rsshubInstance}/bilibili/user/dynamic/${mid}`,
+            followers,
             score,
           })
         }
@@ -726,13 +922,29 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   console.log(`[X Search] Starting search for "${clean}"`)
 
   const out: XUserProbeCandidate[] = []
-  const seen = new Set<string>()
-  const pushCandidate = (usernameRaw: string, displayName = "", description = "X user", sourceScore = 1) => {
+  const candidateIndexByKey = new Map<string, number>()
+  const pushCandidate = (
+    usernameRaw: string,
+    displayName = "",
+    description = "X user",
+    sourceScore = 1,
+    followers?: string,
+  ) => {
     const username = usernameRaw.trim().replace(/^@+/, "")
     if (!username) return 0
     const key = username.toLowerCase()
-    if (seen.has(key)) return 0
-    seen.add(key)
+    const existingIndex = candidateIndexByKey.get(key)
+    if (existingIndex !== undefined) {
+      const existing = out[existingIndex] as (XUserProbeCandidate & { sourceScore?: number }) | undefined
+      if (!existing) return 0
+      const existingScore = existing.sourceScore || 1
+      const nextTitle = displayName ? `${displayName} (@${username}) - X` : `${username} - X`
+      if (followers && !existing.followers) existing.followers = followers
+      if (description && (existing.description === "X user" || !existing.description)) existing.description = description
+      if (displayName && !/\(@/.test(existing.title)) existing.title = nextTitle
+      if (sourceScore > existingScore) existing.sourceScore = sourceScore
+      return 0
+    }
     const image = `https://unavatar.io/x/${encodeURIComponent(username)}`
     const title = displayName ? `${displayName} (@${username}) - X` : `${username} - X`
     out.push({
@@ -741,8 +953,10 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       description,
       image,
       feedUrl: `${rsshubInstance}/x/user/${encodeURIComponent(username)}`,
+      followers,
       sourceScore,
     } as XUserProbeCandidate & { sourceScore?: number })
+    candidateIndexByKey.set(key, out.length - 1)
     return 1
   }
 
@@ -750,7 +964,14 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   const directHandle = extractLikelyXHandle(clean)
   if (directHandle) {
     console.log(`[X Search] Input looks like a handle: @${directHandle}`)
-    pushCandidate(directHandle, "", "", 3)
+    pushCandidate(directHandle, "", "X user", 3)
+  } else {
+    // Also support keyword input like "elon musk" -> "elonmusk".
+    const compactHandle = extractLikelyXHandleFromKeywords(clean)
+    if (compactHandle) {
+      console.log(`[X Search] Input compacted to handle candidate: @${compactHandle}`)
+      pushCandidate(compactHandle, "", "X user", 2)
+    }
   }
 
   // Try Nitter instances for display name search (works without login)
@@ -775,15 +996,17 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
         let match
         while ((match = profileLinkRegex.exec(html)) !== null) {
           const username = match[1]
-          if (username && !seen.has(username.toLowerCase())) {
+          if (username) {
             // Try to extract display name from the card
             const cardStart = html.lastIndexOf('<', match.index)
             const cardEnd = html.indexOf('</a>', match.index)
             const cardHtml = html.slice(Math.max(0, cardStart), cardEnd > 0 ? cardEnd + 4 : html.length)
             const nameMatch = cardHtml.match(/<div[^>]*class="[^"]*fullname[^"]*"[^>]*>([^<]+)</i)
             const displayName = nameMatch ? nameMatch[1].trim() : ""
+            const followersMatch = cardHtml.match(/([\d][\d.,]*\s*[KMB]?)\s*followers?/i)
+            const followers = followersMatch ? normalizeXFollowersLabel(followersMatch[0]) : undefined
             console.log(`[X Search] Found via Nitter: @${username} (${displayName})`)
-            pushCandidate(username, displayName, "", 2)
+            pushCandidate(username, displayName, "", 2, followers)
             if (out.length >= 10) break
           }
         }
@@ -793,13 +1016,13 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
           const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home)[^"]*")/gi
           const excludePaths = ["search", "home", "explore", "i", "settings", "about", "privacy", "terms"]
           while ((match = userLinkRegex.exec(html)) !== null) {
-            const username = match[1]
-            if (excludePaths.includes(username.toLowerCase())) continue
-            if (username && !seen.has(username.toLowerCase())) {
-              console.log(`[X Search] Found via Nitter (alt): @${username}`)
-              pushCandidate(username, "", "", 1)
-              if (out.length >= 10) break
-            }
+          const username = match[1]
+          if (excludePaths.includes(username.toLowerCase())) continue
+          if (username) {
+            console.log(`[X Search] Found via Nitter (alt): @${username}`)
+            pushCandidate(username, "", "", 1)
+            if (out.length >= 10) break
+          }
           }
         }
 
@@ -835,10 +1058,15 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
           console.log(`[X Search] Found ${Object.keys(users).length} users in __INITIAL_STATE__`)
           for (const [id, user] of Object.entries(users) as [string, any][]) {
             const screenName = user?.screen_name
-            if (!screenName || seen.has(screenName.toLowerCase())) continue
+            if (!screenName) continue
             const name = user?.name || ""
             const desc = user?.description || ""
-            pushCandidate(screenName, name, desc, 2)
+            const followersCount = Number(user?.followers_count)
+            const followers =
+              Number.isFinite(followersCount) && followersCount > 0
+                ? `${formatFollowerCount(followersCount)} followers`
+                : undefined
+            pushCandidate(screenName, name, desc, 2, followers)
             if (out.length >= 20) break
           }
         } catch (e) {
@@ -855,7 +1083,7 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
         while ((match = userLinkRegex.exec(html)) !== null) {
           const username = match[1]
           if (excludePaths.includes(username.toLowerCase())) continue
-          if (username && !seen.has(username.toLowerCase())) {
+          if (username) {
             console.log(`[X Search] Found via HTML: @${username}`)
             pushCandidate(username, "", "", 1)
             if (out.length >= 10) break
@@ -882,6 +1110,20 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       return rest as XUserProbeCandidate
     })
 
+  const missingFollowers = scored
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate }) => !candidate.followers)
+    .slice(0, 8)
+
+  if (missingFollowers.length > 0) {
+    await Promise.all(
+      missingFollowers.map(async ({ candidate, index }) => {
+        const followers = await withSoftTimeout(fetchXFollowersByUsername(candidate.username), 16000)
+        if (followers && scored[index]) scored[index].followers = followers
+      })
+    )
+  }
+
   console.log(`[X Search] Final results: ${scored.length}`)
   return scored
 }
@@ -898,6 +1140,285 @@ function formatFollowerCount(count: number): string {
     return (count / 1_000).toFixed(1).replace(/\.0$/, "") + "K"
   }
   return count.toString()
+}
+
+function normalizeXFollowersLabel(raw: string): string | undefined {
+  const text = raw.replace(/\s+/g, " ").trim()
+  if (!text) return undefined
+  const numberFirst = text.match(/([\d][\d.,]*\s*[KMB]?)\s*followers?/i)
+  if (numberFirst?.[1]) {
+    const value = Number(numberFirst[1].replace(/[, ]/g, "").replace(/[KMB]$/i, ""))
+    if (Number.isFinite(value) && value <= 0) return undefined
+    return `${numberFirst[1].trim()} followers`
+  }
+  const wordFirst = text.match(/followers?\s*[:：]?\s*([\d][\d.,]*\s*[KMB]?)/i)
+  if (wordFirst?.[1]) {
+    const value = Number(wordFirst[1].replace(/[, ]/g, "").replace(/[KMB]$/i, ""))
+    if (Number.isFinite(value) && value <= 0) return undefined
+    return `${wordFirst[1].trim()} followers`
+  }
+  return undefined
+}
+
+async function fetchTextViaNodeHttps(url: string, timeoutMs = 8000): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/plain,text/html;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+      },
+      (res) => {
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          resolve(undefined)
+          res.resume()
+          return
+        }
+        let data = ""
+        res.setEncoding("utf8")
+        res.on("data", (chunk) => {
+          data += chunk
+        })
+        res.on("end", () => resolve(data))
+      }
+    )
+    req.setTimeout(timeoutMs, () => {
+      req.destroy()
+      resolve(undefined)
+    })
+    req.on("error", () => resolve(undefined))
+  })
+}
+
+async function fetchXFollowersViaJinaNode(usernameRaw: string): Promise<string | undefined> {
+  const username = usernameRaw.trim().replace(/^@+/, "")
+  if (!username) return undefined
+  for (const mirrorUrl of [
+    `https://r.jina.ai/http://x.com/${encodeURIComponent(username)}`,
+    `https://r.jina.ai/http://mobile.x.com/${encodeURIComponent(username)}`,
+  ]) {
+    const text = await fetchTextViaNodeHttps(mirrorUrl, 10000)
+    if (!text) continue
+    const decodedText = decodeHtmlEntities(text)
+    const patterns = [
+      /([\d][\d.,]*\s*[KMB]?)\s*followers?/i,
+      /followers?\s*[:：]?\s*([\d][\d.,]*\s*[KMB]?)/i,
+    ]
+    for (const pattern of patterns) {
+      const m = decodedText.match(pattern)
+      const raw = m?.[0] || m?.[1] || ""
+      const followers = normalizeXFollowersLabel(raw)
+      if (followers) return followers
+    }
+  }
+  return undefined
+}
+
+async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | undefined> {
+  const username = usernameRaw.trim().replace(/^@+/, "")
+  if (!username) return undefined
+  const cacheKey = username.toLowerCase()
+  const now = Date.now()
+  const cached = xFollowerCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) return cached.followers
+
+  // Preferred source: official mobile profile page (usually contains server-rendered follower stats).
+  for (const profileUrl of [
+    `https://mobile.x.com/${encodeURIComponent(username)}`,
+    `https://x.com/${encodeURIComponent(username)}?lang=en`,
+  ]) {
+    try {
+      const res = await session.defaultSession.fetch(profileUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+        signal: AbortSignal.timeout(2500),
+      })
+      if (!res.ok) continue
+      const html = await res.text()
+      const decoded = decodeHtmlEntities(html)
+
+      const patterns = [
+        // e.g. "219.3M Followers" / "219.3M followers"
+        /([\d][\d.,]*\s*[KMB]?)\s*followers?/i,
+        // e.g. "Followers: 219.3M"
+        /followers?\s*[:：]?\s*([\d][\d.,]*\s*[KMB]?)/i,
+        // e.g. href="/elonmusk/followers"...>219.3M</span>
+        /\/followers["'][^>]*>[\s\S]{0,240}?>([\d][\d.,]*\s*[KMB]?)</i,
+      ]
+
+      for (const pattern of patterns) {
+        const m = decoded.match(pattern)
+        const raw = m?.[0] || m?.[1] || ""
+        const followers = normalizeXFollowersLabel(raw)
+        if (followers) {
+          xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+          return followers
+        }
+      }
+    } catch {
+      // Continue to next official source.
+    }
+  }
+
+  // Preferred source: public syndication endpoint (no login required).
+  try {
+    const endpoint = `https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names=${encodeURIComponent(username)}`
+    const res = await session.defaultSession.fetch(endpoint, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://x.com/",
+      },
+      signal: AbortSignal.timeout(2500),
+    })
+    if (res.ok) {
+      const data = (await res.json()) as Array<{ followers_count?: number }>
+      const followersCount = Number(data?.[0]?.followers_count)
+      if (Number.isFinite(followersCount) && followersCount > 0) {
+        const followers = `${formatFollowerCount(followersCount)} followers`
+        xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+        return followers
+      }
+    }
+  } catch {
+    // Ignore and continue with Nitter fallback.
+  }
+
+  // Fallback source: parse profile page metadata/state from x.com directly.
+  try {
+    const profileUrl = `https://x.com/${encodeURIComponent(username)}`
+    const res = await session.defaultSession.fetch(profileUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+      },
+      signal: AbortSignal.timeout(2500),
+    })
+    if (res.ok) {
+      const html = await res.text()
+      const decoded = decodeHtmlEntities(html)
+
+      // 1) og:description often includes follower count text.
+      const ogDescMatch =
+        decoded.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+        decoded.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)
+      const ogDesc = (ogDescMatch?.[1] || "").trim()
+      const ogFollowers =
+        normalizeXFollowersLabel(ogDesc) ||
+        (() => {
+          const m = ogDesc.match(/([\d][\d.,]*\s*[KMB]?)\s*followers?/i)
+          return m?.[0]?.trim()
+        })()
+      if (ogFollowers) {
+        xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers: ogFollowers })
+        return ogFollowers
+      }
+
+      // 2) JSON state may include followers_count as raw number.
+      const numericPatterns = [
+        /"followers_count"\s*:\s*(\d{1,12})/i,
+        /\\\"followers_count\\\"\s*:\s*(\d{1,12})/i,
+      ]
+      for (const pattern of numericPatterns) {
+        const m = decoded.match(pattern)
+        const count = Number(m?.[1])
+        if (Number.isFinite(count) && count > 0) {
+          const followers = `${formatFollowerCount(count)} followers`
+          xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+          return followers
+        }
+      }
+    }
+  } catch {
+    // Ignore and continue with Nitter fallback.
+  }
+
+  // Fallback source (network-bypass): server-side fetched mirror of x.com page.
+  // Useful when local environment can open X in browser but Electron main-process requests are blocked.
+  for (const mirrorUrl of [
+    `https://r.jina.ai/http://x.com/${encodeURIComponent(username)}`,
+    `https://r.jina.ai/http://mobile.x.com/${encodeURIComponent(username)}`,
+  ]) {
+    try {
+      const res = await session.defaultSession.fetch(mirrorUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/plain,text/html;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+        signal: AbortSignal.timeout(3500),
+      })
+      if (!res.ok) continue
+      const text = decodeHtmlEntities(await res.text())
+      const patterns = [
+        /([\d][\d.,]*\s*[KMB]?)\s*followers?/i,
+        /followers?\s*[:：]?\s*([\d][\d.,]*\s*[KMB]?)/i,
+      ]
+      for (const pattern of patterns) {
+        const m = text.match(pattern)
+        const raw = m?.[0] || m?.[1] || ""
+        const followers = normalizeXFollowersLabel(raw)
+        if (followers) {
+          xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+          return followers
+        }
+      }
+    } catch {
+      // Continue to next fallback source.
+    }
+  }
+
+  // Final fallback: use Node https client for environments where Electron fetch path differs from browser/proxy behavior.
+  const jinaFollowers = await fetchXFollowersViaJinaNode(username)
+  if (jinaFollowers) {
+    xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers: jinaFollowers })
+    return jinaFollowers
+  }
+
+  for (const nitterInstance of FALLBACK_NITTER_INSTANCES) {
+    try {
+      const profileUrl = `${nitterInstance}/${encodeURIComponent(username)}`
+      const res = await session.defaultSession.fetch(profileUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+        },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!res.ok) continue
+
+      const html = await res.text()
+      const decoded = decodeHtmlEntities(html)
+      const patterns = [
+        /([\d][\d.,]*\s*[KMB]?)\s*followers?/i,
+        /title=["']followers["'][^>]*>\s*<span[^>]*>\s*([\d][\d.,]*\s*[KMB]?)\s*</i,
+      ]
+      let followers: string | undefined
+      for (const pattern of patterns) {
+        const m = decoded.match(pattern)
+        const raw = m?.[0] || m?.[1] || ""
+        followers = normalizeXFollowersLabel(raw)
+        if (followers) break
+      }
+      if (followers) {
+        xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+        return followers
+      }
+    } catch {
+      // Ignore single-instance failures and continue to next instance.
+    }
+  }
+
+  xFollowerCache.set(cacheKey, { expiresAt: now + 30 * 1000 })
+  return undefined
 }
 
 function decodeHtmlEntities(input: string): string {
@@ -1490,7 +2011,7 @@ export function registerDiscoverHandlers(): void {
         probeVideoSourcesByKeyword(query, instance, platform).then((videoCandidates) => {
           console.log(`[Discover Search] Video candidates: ${videoCandidates.length}`)
           for (const candidate of videoCandidates) {
-            if (results.some((r) => r.url === candidate.feedUrl)) return
+            if (results.some((r) => r.url === candidate.feedUrl)) continue
             results.push({
               title: candidate.title,
               url: candidate.feedUrl,
@@ -1498,6 +2019,7 @@ export function registerDiscoverHandlers(): void {
               description: candidate.description || (candidate.platform === "youtube" ? "YouTube channel" : "Bilibili user"),
               source: "rsshub",
               image: candidate.image || "",
+              followers: candidate.followers,
             })
           }
         })
@@ -1508,17 +2030,25 @@ export function registerDiscoverHandlers(): void {
       searchPromises.push(
         probeXUsersByKeyword(query, instance).then((xCandidates) => {
           console.log(`[Discover Search] X candidates: ${xCandidates.length}`)
-          for (const candidate of xCandidates) {
-            if (results.some((r) => r.url === candidate.feedUrl)) return
-            results.push({
-              title: candidate.title,
-              url: candidate.feedUrl,
-              siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
-              description: candidate.description,
-              source: "rsshub",
-              image: candidate.image,
-            })
+          const enhance = async () => {
+            for (const candidate of xCandidates) {
+              let followers = candidate.followers
+              if (!followers) {
+                followers = await withSoftTimeout(fetchXFollowersViaJinaNode(candidate.username), 12000)
+              }
+              if (results.some((r) => r.url === candidate.feedUrl)) continue
+              results.push({
+                title: candidate.title,
+                url: candidate.feedUrl,
+                siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
+                description: followers || candidate.description,
+                source: "rsshub",
+                image: candidate.image,
+                followers,
+              })
+            }
           }
+          return enhance()
         })
       )
     }
@@ -1528,7 +2058,7 @@ export function registerDiscoverHandlers(): void {
         probeInstagramUsersByKeyword(query, instance).then((igCandidates) => {
           console.log(`[Discover Search] Instagram candidates: ${igCandidates.length}`)
           for (const candidate of igCandidates) {
-            if (results.some((r) => r.url === candidate.feedUrl)) return
+            if (results.some((r) => r.url === candidate.feedUrl)) continue
             results.push({
               title: candidate.title,
               url: candidate.feedUrl,
@@ -1554,18 +2084,32 @@ export function registerDiscoverHandlers(): void {
         profileInputs.add(trimmedQuery)
         const xHandle = extractLikelyXHandle(trimmedQuery)
         if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
+        const compactXHandle = extractLikelyXHandleFromKeywords(trimmedQuery)
+        if (compactXHandle) profileInputs.add(`https://x.com/${compactXHandle}`)
       }
       for (const profileInput of profileInputs) {
         const resolved = resolveProfileUrlToCandidates(profileInput, instance)
         for (const candidate of resolved.candidates) {
           if (results.some((r) => r.url === candidate.feedUrl)) continue
+          let followers: string | undefined
+          if (resolved.platform === "x") {
+            const usernameFromFeed = candidate.feedUrl.match(/\/(?:x|twitter)\/user\/([^/?#]+)/i)?.[1]
+            const username =
+              usernameFromFeed
+                ? decodeURIComponent(usernameFromFeed).replace(/^@+/, "").trim()
+                : ""
+            if (username) {
+              followers = await withSoftTimeout(fetchXFollowersByUsername(username), 16000)
+            }
+          }
           results.push({
             title: candidate.title,
             url: candidate.feedUrl,
             siteUrl: candidate.siteUrl || profileInput,
-            description: candidate.description || "Profile feed",
+            description: followers || candidate.description || "Profile feed",
             source: candidate.source === "rss" ? "url" : "rsshub",
             image: "", // Skip image fetch for speed
+            followers,
           })
         }
       }
@@ -1605,6 +2149,29 @@ export function registerDiscoverHandlers(): void {
             source: "url",
             image: await inferDiscoverResultImage(feedUrl, feedUrl),
           })
+        }
+      }
+    }
+
+    // Final safety net for X: resolve query -> handle and force-fill followers on matching x/user result.
+    if (platform === "x") {
+      const handle =
+        extractLikelyXHandle(trimmedQuery) ||
+        extractLikelyXHandleFromKeywords(trimmedQuery)
+      if (handle) {
+        const forcedFollowers = await withSoftTimeout(fetchXFollowersViaJinaNode(handle), 12000)
+        if (forcedFollowers) {
+          const encodedHandle = encodeURIComponent(handle.toLowerCase())
+          for (const result of results) {
+            const m = result.url.match(/\/(?:x|twitter)\/user\/([^/?#]+)/i)
+            const resultUser = m?.[1] ? decodeURIComponent(m[1]).replace(/^@+/, "").toLowerCase() : ""
+            if (resultUser === handle.toLowerCase() || result.url.toLowerCase().includes(`/x/user/${encodedHandle}`) || result.url.toLowerCase().includes(`/twitter/user/${encodedHandle}`)) {
+              result.followers = forcedFollowers
+              if (!result.description || /x user|rsshub x\/twitter user route/i.test(result.description)) {
+                result.description = forcedFollowers
+              }
+            }
+          }
         }
       }
     }

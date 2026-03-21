@@ -298,7 +298,7 @@
   // Feed View Types
   viewTypes: {
     articles: "文章",
-    socialMedia: "社交媒体",
+    socialMedia: "推文",
     videos: "视频",
     pictures: "图片",
   },
