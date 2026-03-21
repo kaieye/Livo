@@ -33,6 +33,7 @@ import {
 import { formatDistanceToNow, format } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
 import { ContextMenu, type ContextMenuAction } from "../ui/ContextMenu"
+import { FeedViewType } from "../../../../shared/types"
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -126,6 +127,26 @@ function stripDuplicateMediaFromHtml(
   }
 
   return root.innerHTML
+}
+
+function htmlContainsImage(html: string, imageUrl: string): boolean {
+  if (!html || !imageUrl) return false
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<div id="__root__">${html}</div>`, "text/html")
+  const root = doc.getElementById("__root__")
+  if (!root) return false
+
+  const targetKey = normalizeMediaKey(imageUrl)
+  if (!targetKey) return false
+
+  return Array.from(root.querySelectorAll("img")).some((img) => {
+    const src =
+      img.getAttribute("src") ||
+      img.getAttribute("data-src") ||
+      img.getAttribute("data-original") ||
+      ""
+    return !!src && normalizeMediaKey(src) === targetKey
+  })
 }
 
 export function EntryContent() {
@@ -477,6 +498,17 @@ export function EntryContent() {
     return null
   }, [selectedEntry])
 
+  const currentFeed = useMemo(
+    () => selectedEntry ? feeds.find((f) => f.id === selectedEntry.feedId) : null,
+    [selectedEntry, feeds]
+  )
+  const authorAvatarUrl = selectedEntry?.authorAvatar || currentFeed?.imageUrl || ""
+  const shouldShowFeaturedImage = useMemo(() => {
+    if (!selectedEntry?.imageUrl || videoMedia) return false
+    if ((currentFeed?.view ?? FeedViewType.Articles) !== FeedViewType.Articles) return true
+    return !htmlContainsImage(selectedEntry.content || "", selectedEntry.imageUrl)
+  }, [currentFeed?.view, selectedEntry?.content, selectedEntry?.imageUrl, videoMedia])
+
   // Memoize sanitized HTML so scroll-triggered re-renders don't recreate DOM
   // (which would destroy playing <video> and <iframe> elements)
   const sanitizedContent = useMemo(() => {
@@ -489,23 +521,17 @@ export function EntryContent() {
     ].filter(Boolean)
 
     const dedupedHtml = stripDuplicateMediaFromHtml(selectedEntry.content, {
-      duplicateImageKeys: !videoMedia ? imageKeys : [],
+      duplicateImageKeys: !videoMedia && currentFeed?.view !== FeedViewType.Articles ? imageKeys : [],
       removeEmbeddedVideos: !!videoMedia,
     })
 
     return sanitizeHTML(dedupedHtml)
-  }, [selectedEntry?.content, selectedEntry?.imageUrl, selectedEntry?.media, videoMedia])
+  }, [currentFeed?.view, selectedEntry?.content, selectedEntry?.imageUrl, selectedEntry?.media, videoMedia])
 
   const sanitizedReadable = useMemo(() => {
     if (!readableContent) return ""
     return sanitizeHTML(readableContent)
   }, [readableContent])
-
-  const currentFeed = useMemo(
-    () => selectedEntry ? feeds.find((f) => f.id === selectedEntry.feedId) : null,
-    [selectedEntry, feeds]
-  )
-  const authorAvatarUrl = selectedEntry?.authorAvatar || currentFeed?.imageUrl || ""
 
   const handlePlayAudio = useCallback(() => {
     if (!audioMedia || !selectedEntry) return
@@ -772,7 +798,7 @@ export function EntryContent() {
           )}
 
           {/* Featured image */}
-          {selectedEntry.imageUrl && !videoMedia && (
+          {shouldShowFeaturedImage && (
             <div className="mb-8 -mx-2 overflow-hidden rounded-xl">
               <img
                 src={selectedEntry.imageUrl}
