@@ -1,12 +1,12 @@
 import { BrowserWindow } from "electron"
 import { getAllFeeds, updateFeed, insertEntries, cleanupEntries, type CleanupOptions } from "../database"
-import { fetchAndParseFeed } from "./rss-parser"
 import { extractMedia, deriveImageUrl, extractContent, extractAuthorAvatar } from "./feed-utils"
 import { getSettings } from "../handlers/settings-handlers"
 import { DEFAULT_RSSHUB_INSTANCE } from "../../shared/discover-data"
 import type { Feed, Entry } from "../../shared/types"
 import { FeedViewType } from "../../shared/types"
 import { queueVideoDurationEnrich, enrichAllVideoFeeds } from "./video-duration"
+import { resolveFeedPayload } from "./feed-source-provider"
 import {
   canonicalizeInstagramFeedUrl,
   ensureInstagramUserFeedLimit,
@@ -49,9 +49,11 @@ function pickBestFeedAvatar(feedUrl: string | undefined, existing: string | unde
   const next = (incoming || "").trim()
   if (!current) return next
   if (!next) return current
+  if (current === next) return current
   // Instagram/Picnob avatar URLs are often signed/expiring.
   // Prefer the latest fetched value so old expired URLs get replaced.
   if (isInstagramLikeFeed(feedUrl)) return next
+  if (!isPlaceholderAvatar(next)) return next
   if (isPlaceholderAvatar(current) && !isPlaceholderAvatar(next)) return next
   return current
 }
@@ -73,7 +75,10 @@ function isInstagramFeedUrl(feedUrl: string | undefined): boolean {
 }
 
 function getRefreshTimeoutMs(feedUrl: string | undefined): number {
-  return isInstagramFeedUrl(feedUrl) ? 16000 : DEFAULT_FEED_REFRESH_TIMEOUT_MS
+  // Instagram refreshes may fan out across many RSSHub candidates and route
+  // variants before we can pick the freshest result, so they need a wider
+  // timeout budget than normal feeds.
+  return isInstagramFeedUrl(feedUrl) ? 40000 : DEFAULT_FEED_REFRESH_TIMEOUT_MS
 }
 
 /**
@@ -89,8 +94,10 @@ function filterForeignEntries(
 ): Entry[] {
   const rawFeedUrl = (feedUrl || "").toLowerCase()
   const isTwitterFeed = /\/(?:twitter|x)\/user\//i.test(rawFeedUrl)
-  if (isTwitterFeed) {
+  const isInstagramMirrorFeed = /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//i.test(rawFeedUrl)
+  if (isTwitterFeed || isInstagramMirrorFeed) {
     // Twitter fallbacks may return x.com / twitter.com / nitter links interchangeably.
+    // Instagram fallbacks may return instagram/picnob/pixnoy/piokok links interchangeably.
     // Keep them all instead of strict same-domain filtering.
     return entries
   }
@@ -222,41 +229,34 @@ export async function refreshSingleFeed(feed: Feed, options?: { force?: boolean 
       feed = { ...feed, url: feedUrlToStore }
     }
 
-    const conditionalHeaders = options?.force
-      ? {}
-      : {
-          etag: feed.etag,
-          lastModified: feed.lastModified,
-        }
-
     const result = await withTimeout(
-      fetchAndParseFeed(normalizedFeedUrl, conditionalHeaders),
+      resolveFeedPayload(feed, { force: options?.force }),
       getRefreshTimeoutMs(feed.url),
       normalizedFeedUrl,
     )
 
     // 304 Not Modified 鈥?no need to parse entries
-    if (result.notModified) {
+    if (result.notModified || !result.parsed) {
       updateFeed(feed.id, {
         lastFetched: now,
         errorCount: 0,
-        // Preserve / update the conditional headers
         etag: result.etag || feed.etag,
         lastModified: result.lastModified || feed.lastModified,
       })
       return 0
     }
 
-    const parsed = result.data!
+    const parsed = result.parsed
 
     const parsedFeedImage = getFeedImageUrl(parsed)
-    const feedImageUrl = await resolveFeedAvatar(normalizedFeedUrl, parsedFeedImage || feed.imageUrl)
+    const feedImageUrl = await resolveFeedAvatar(normalizedFeedUrl, parsedFeedImage, feed.imageUrl)
     const selectedFeedAvatar = pickBestFeedAvatar(feed.url, feed.imageUrl, feedImageUrl)
 
     updateFeed(feed.id, {
       title: formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title),
       description: parsed.description,
-      // Preserve existing avatar unless it is a placeholder/default and we now have a better one.
+      // Keep avatars fresh when upstream exposes a newer image, while still
+      // avoiding regressions back to placeholder/default assets.
       imageUrl: selectedFeedAvatar,
       lastFetched: now,
       errorCount: 0,

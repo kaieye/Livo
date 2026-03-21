@@ -11,6 +11,7 @@ import { registerDiscoverHandlers } from "./handlers/discover-handlers"
 import { registerVideoHandlers } from "./handlers/video-handlers"
 import { registerAccountHandlers } from "./handlers/account-handlers"
 import { startAutoRefresh } from "./services/feed-refresh"
+import { startAggregatorJobs } from "./services/aggregator-jobs"
 import { IPC } from "../shared/types"
 
 let mainWindow: BrowserWindow | null = null
@@ -165,6 +166,10 @@ app.whenReady().then(async () => {
 
   // Create window first
   createWindow()
+
+  // Warm and maintain a local aggregator cache for high-risk feeds so the UI
+  // can consume recent snapshots instead of relying on live fetches every time.
+  startAggregatorJobs()
 
   // Now start auto-refresh with data maintenance options
   startAutoRefresh(settings.general.refreshInterval, mainWindow, {

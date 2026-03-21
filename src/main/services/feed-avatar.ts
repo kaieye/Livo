@@ -166,15 +166,21 @@ async function fetchBilibiliAvatar(uid: string): Promise<string | undefined> {
 }
 
 /**
- * Resolve a best-effort feed avatar from known platform APIs when feed XML has no image.
+ * Resolve a best-effort feed avatar.
+ * Prefer the latest non-placeholder image exposed by the feed itself, and
+ * otherwise probe platform-specific sources that may change over time.
  */
-export async function resolveFeedAvatar(feedUrl: string, currentImageUrl?: string): Promise<string | undefined> {
-  if (currentImageUrl && !isPlaceholderAvatar(currentImageUrl)) return currentImageUrl
+export async function resolveFeedAvatar(
+  feedUrl: string,
+  incomingImageUrl?: string,
+  existingImageUrl?: string,
+): Promise<string | undefined> {
+  if (incomingImageUrl && !isPlaceholderAvatar(incomingImageUrl)) return incomingImageUrl
 
   const bilibiliUid = extractBilibiliUid(feedUrl)
   if (bilibiliUid) {
     const resolved = await fetchBilibiliAvatar(bilibiliUid)
-    return resolved || currentImageUrl
+    return resolved || incomingImageUrl || existingImageUrl
   }
 
   const instagramUsername = extractInstagramUsername(feedUrl)
@@ -186,5 +192,5 @@ export async function resolveFeedAvatar(feedUrl: string, currentImageUrl?: strin
     return svgAvatar
   }
 
-  return currentImageUrl
+  return incomingImageUrl || existingImageUrl
 }

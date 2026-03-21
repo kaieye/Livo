@@ -931,10 +931,23 @@ export async function fetchAndParseFeed(
       pushUnique(`${b}/piokok/user/${encodeURIComponent(instagramUser)}`)
     }
 
-    // Instagram/Picnob routes on public instances are often slower than Twitter routes.
-    // Avoid fast timeouts here to reduce false negatives and short-window fallbacks.
-    const mergedFeed = await mergeAllRsshubFallbackFeeds(candidates, false)
-    if (mergedFeed) return { data: mergedFeed, notModified: false }
+    // Instagram/Picnob routes on public instances are often slow and uneven:
+    // some nodes are fresh but thin, while others are richer but delayed.
+    // Prefer a quick freshest pick first, then fall back to a slower merge only
+    // when the fast result still looks thin/stale.
+    const bestFeedFast = await pickBestRsshubFallbackFeed(candidates, true)
+    if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
+      return { data: bestFeedFast, notModified: false }
+    }
+
+    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(candidates, false)
+    const improved = pickBetterNullableFeed(bestFeedFast || null, mergedFeedSlow)
+    if (improved) return { data: improved, notModified: false }
+
+    const bestFeedSlow = await pickBestRsshubFallbackFeed(candidates, false)
+    if (bestFeedSlow) {
+      return { data: pickBetterFeed(bestFeedFast || null, bestFeedSlow), notModified: false }
+    }
   }
 
   // Bilibili dynamic routes are frequently anti-crawler throttled on public RSSHub nodes.

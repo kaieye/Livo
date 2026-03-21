@@ -41,6 +41,7 @@ export function getSettings(): AppSettings {
         ai: { ...DEFAULT_SETTINGS.ai, ...(saved.ai || {}) },
         general: { ...DEFAULT_SETTINGS.general, ...(saved.general || {}) },
         data: { ...DEFAULT_SETTINGS.data, ...(saved.data || {}) },
+        aggregator: { ...DEFAULT_SETTINGS.aggregator, ...(saved.aggregator || {}) },
         translation: { ...DEFAULT_SETTINGS.translation, ...(saved.translation || {}) },
       }
       // Migrate legacy English default system prompt to concise Chinese default.
@@ -79,6 +80,7 @@ export function registerSettingsHandlers(): void {
       ai: { ...current.ai, ...(newSettings.ai || {}) },
       general: { ...current.general, ...(newSettings.general || {}) },
       data: { ...(current.data || {}), ...(newSettings.data || {}) },
+      aggregator: { ...(current.aggregator || {}), ...(newSettings.aggregator || {}) },
       translation: { ...current.translation, ...(newSettings.translation || {}) },
     }
     saveSettings(merged)

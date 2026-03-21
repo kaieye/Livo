@@ -66,8 +66,21 @@ export interface Feed {
   lastFetched?: number
   etag?: string
   lastModified?: string
+  fetchSource?: "auto" | "direct" | "local-agent" | "private-aggregator"
+  upstreamUrl?: string
+  remoteFeedId?: string
   errorCount: number
   createdAt: number
+}
+
+export interface AggregatorSettings {
+  mode: "disabled" | "prefer-local-agent" | "prefer-remote" | "remote-only"
+  endpoint: string
+  apiKey: string
+  deviceId: string
+  pollIntervalSeconds: number
+  pushEnabled: boolean
+  cacheRetentionDays: number
 }
 
 export interface MediaItem {
@@ -196,6 +209,7 @@ export interface AppSettings {
     refreshConcurrency: number
     enrichVideoDuration: boolean
   }
+  aggregator: AggregatorSettings
   translation: {
     enabled: boolean
     targetLanguage: string
@@ -262,6 +276,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
     freshnessTTL: 10,
     refreshConcurrency: 5,
     enrichVideoDuration: false,
+  },
+  aggregator: {
+    mode: "prefer-local-agent",
+    endpoint: "",
+    apiKey: "",
+    deviceId: "",
+    pollIntervalSeconds: 900,
+    pushEnabled: false,
+    cacheRetentionDays: 7,
   },
   translation: {
     enabled: false,

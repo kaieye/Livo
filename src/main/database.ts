@@ -803,6 +803,9 @@ export async function initDatabase(): Promise<void> {
       const feedSiteHosts = new Map<string, string>()
       for (const feed of data.feeds) {
         if (!feed.siteUrl) continue
+        const rawFeedUrl = (feed.url || "").toLowerCase()
+        const isSocialMirrorFeed = /\/(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//i.test(rawFeedUrl)
+        if (isSocialMirrorFeed) continue
         try {
           const host = new URL(feed.siteUrl).hostname.replace(/^www\./, "")
           if (host) feedSiteHosts.set(feed.id, host)

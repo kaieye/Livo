@@ -1302,6 +1302,16 @@ export function WideViewContent() {
     void loadMoreEntries()
   }, [hasMoreEntries, isLoadingMore, loadMoreEntries, searchQuery])
 
+  useEffect(() => {
+    if (!isPicturesAllView) return
+    if (searchQuery.trim()) return
+    if (!hasMoreEntries || isLoadingMore) return
+    // If initial viewport has too few image cards to produce scrolling,
+    // prefetch additional pages so user can see more results immediately.
+    if (masonryCards.length >= MASONRY_INITIAL_RENDER) return
+    void loadMoreEntries()
+  }, [isPicturesAllView, searchQuery, hasMoreEntries, isLoadingMore, masonryCards.length, loadMoreEntries])
+
   // Measure container width for masonry / grid.
   // Keep updates synchronous with ResizeObserver to avoid one-frame stale widths on window resize.
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1780,7 +1790,13 @@ export function WideViewContent() {
           </div>
         ) : isPicturesAllView ? (
           /* Pictures grid: show first image from each post, ordered left-to-right */
-          <div className="h-full p-4 box-border overflow-y-auto">
+          <div
+            className="h-full p-4 box-border overflow-y-auto"
+            onScroll={(e) => {
+              handleMasonryScroll(e)
+              handlePagedEntryScroll(e)
+            }}
+          >
             <div className="flex gap-2.5">
               {(() => {
                 // Round-robin distribute cards into columns for left-to-right chronological order
