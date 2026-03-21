@@ -351,6 +351,12 @@ export function DiscoverPanel() {
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                handleSearchNow()
+              }
+            }}
             placeholder={t("discover.searchPlaceholder")}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-text-tertiary"
           />
