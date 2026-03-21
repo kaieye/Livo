@@ -225,10 +225,16 @@ export function DiscoverPanel() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
       searchTimerRef.current = setTimeout(() => {
         search(query)
-      }, 180)
+      }, 3000)
     },
     [search, setSearchQuery]
   )
+
+  const handleSearchNow = useCallback(() => {
+    const trimmed = searchQuery.trim()
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    search(trimmed)
+  }, [search, searchQuery])
 
   const handleSubscribe = async (url: string, title: string, targetView?: FeedViewType) => {
     setSubscribing(url, true)
@@ -354,6 +360,14 @@ export function DiscoverPanel() {
             </div>
           )}
         </div>
+        <button
+          type="button"
+          onClick={handleSearchNow}
+          disabled={!searchQuery.trim() || isSearching}
+          className="h-[42px] px-3 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {t("common.search")}
+        </button>
       </div>
     </div>
   )
