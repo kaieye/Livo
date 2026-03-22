@@ -154,7 +154,7 @@
     aiPersonaPromptPlaceholder: "Example: answer concisely and professionally, provide conclusion first, then steps.",
     aiPersonaPromptDesc: "Preset system prompt for AI chat. It will be appended automatically in every conversation.",
     aiNotice: "🎉 No login, no subscription needed",
-    aiNoticeDesc: "Configure your own AI API Key to use all AI features including summary, translation and chat. Supports OpenAI, Anthropic, DeepSeek, and Ollama local models.",
+    aiNoticeDesc: "Configure your own AI API Key to use all AI features including summary, translation and chat. Supports OpenAI, Anthropic, DeepSeek, and MiniMax.",
 
     // Translation Settings
     enableTranslation: "Enable Translation",
@@ -253,7 +253,7 @@
     feature_localStorage: "Local Storage",
     feature_localStorageDesc: "Data stays on your device",
     feature_multiModel: "Multi-Model Support",
-    feature_multiModelDesc: "OpenAI/Anthropic/DeepSeek/Ollama",
+    feature_multiModelDesc: "OpenAI/Anthropic/DeepSeek/MiniMax",
     feature_darkMode: "Dark Mode",
     feature_darkModeDesc: "Follow system or manual toggle",
     openSourceFree: "Open Source & Free",

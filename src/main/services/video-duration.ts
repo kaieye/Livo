@@ -95,7 +95,7 @@ async function fetchYouTubeDuration(videoId: string): Promise<number | undefined
       }
     }
   } catch {
-    // Silently fail 鈥?duration is optional
+    // Silently fail - duration is optional
   }
   return undefined
 }
@@ -161,7 +161,7 @@ export async function fetchVideoDurations(
 /**
  * Enrich video entries for a given feed with duration data.
  * Finds video media items lacking duration, fetches from YouTube/Bilibili,
- * and updates entries in the database. Fire-and-forget 鈥?errors are silenced.
+ * and updates entries in the database. Fire-and-forget - errors are silenced.
  */
 export async function enrichVideoDurations(feedId: string): Promise<number> {
   const now = Date.now()

@@ -9,7 +9,7 @@
  *   2. Query Invidious API for direct streaming URLs
  *   3. Pick the best quality combined (audio+video) mp4 stream
  *   4. Return the direct URL for native <video> playback
- *   5. Falls back gracefully 鈥?caller opens browser if resolution fails
+ *   5. Falls back gracefully - caller opens browser if resolution fails
  */
 
 import { net } from "electron"
@@ -50,7 +50,7 @@ interface InvidiousFormatStream {
   type: string       // e.g. "video/mp4; codecs=\"avc1.64001F, mp4a.40.2\""
   quality: string    // e.g. "720p", "360p"
   container: string  // "mp4", "webm"
-  /** Resolution height in pixels (e.g. 720) 鈥?present on some instances */
+/** Resolution height in pixels (e.g. 720) - present on some instances */
   resolution?: string
 }
 
@@ -72,7 +72,7 @@ interface PipedVideoResponse {
   audioStreams?: PipedStream[]
   videoStreams?: PipedStream[]
   title?: string
-  /** HLS manifest URL 鈥?usable by <video> directly */
+/** HLS manifest URL - usable by <video> directly */
   hls?: string
 }
 

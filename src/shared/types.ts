@@ -369,7 +369,7 @@ export const AI_PROVIDERS = {
     models: ["glm-4-plus", "glm-4-long", "glm-4-flash", "glm-4", "glm-4v-plus", "glm-4v"],
   },
   ollama: {
-    name: "Ollama (Local)",
+    name: "MiniMax",
     defaultBaseUrl: "http://localhost:11434/v1",
     models: ["llama3.2", "llama3.1", "mistral", "qwen2.5", "gemma2"],
   },

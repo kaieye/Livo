@@ -152,7 +152,7 @@
     aiPersonaPromptPlaceholder: "例如：请用简洁、专业、带步骤的方式回答；优先给结论再给解释。",
     aiPersonaPromptDesc: "用于 AI 对话的预设系统提示词。保存后每次对话都会自动附加。",
     aiNotice: "🎉 无需登录，无需订阅",
-    aiNoticeDesc: "配置你自己的 AI API Key 即可使用所有 AI 功能，包括摘要、翻译和对话。支持 OpenAI、Anthropic、DeepSeek 等，也支持 Ollama 本地模型。",
+    aiNoticeDesc: "配置你自己的 AI API Key 即可使用所有 AI 功能，包括摘要、翻译和对话。支持 OpenAI、Anthropic、DeepSeek 等，也支持 MiniMax。",
 
     // Translation Settings
     enableTranslation: "启用翻译",
@@ -251,7 +251,7 @@
     feature_localStorage: "本地存储",
     feature_localStorageDesc: "数据完全在本机",
     feature_multiModel: "多模型支持",
-    feature_multiModelDesc: "OpenAI/Anthropic/DeepSeek/Ollama",
+    feature_multiModelDesc: "OpenAI/Anthropic/DeepSeek/MiniMax",
     feature_darkMode: "暗色模式",
     feature_darkModeDesc: "跟随系统或手动切换",
     openSourceFree: "开源免费",

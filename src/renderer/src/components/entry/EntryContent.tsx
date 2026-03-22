@@ -184,6 +184,7 @@ export function EntryContent() {
   const [isReadabilityMode, setIsReadabilityMode] = useState(false)
   const [isFetchingReadable, setIsFetchingReadable] = useState(false)
   const [readabilityError, setReadabilityError] = useState<string | null>(null)
+  const [embeddedPageUrl, setEmbeddedPageUrl] = useState<string | null>(null)
   const [externalLinkWarning, setExternalLinkWarning] = useState<{url: string; hostname: string; isSuspicious: boolean} | null>(null)
   const [articleMenu, setArticleMenu] = useState<{ visible: boolean; x: number; y: number }>({
     visible: false,
@@ -226,6 +227,7 @@ export function EntryContent() {
       setIsReadabilityMode(false)
       setIsFetchingReadable(false)
       setReadabilityError(null)
+      setEmbeddedPageUrl(null)
 
       // Scroll to top
       scrollRef.current?.scrollTo({ top: 0 })
@@ -516,12 +518,12 @@ export function EntryContent() {
     const imageKeys = [
       selectedEntry.imageUrl || "",
       ...(selectedEntry.media || [])
-        .filter((m) => m.type === "photo")
+        .filter((m) => m.type === "photo" || (videoMedia ? m.type === "video" : false))
         .flatMap((m) => [m.url || "", m.previewUrl || ""]),
     ].filter(Boolean)
 
     const dedupedHtml = stripDuplicateMediaFromHtml(selectedEntry.content, {
-      duplicateImageKeys: !videoMedia && currentFeed?.view !== FeedViewType.Articles ? imageKeys : [],
+      duplicateImageKeys: videoMedia || currentFeed?.view !== FeedViewType.Articles ? imageKeys : [],
       removeEmbeddedVideos: !!videoMedia,
     })
 
@@ -542,6 +544,10 @@ export function EntryContent() {
       cover: selectedEntry.imageUrl || currentFeed?.imageUrl,
     })
   }, [audioMedia, selectedEntry, currentFeed, playerPlay])
+
+  const handleOpenBilibiliInPage = useCallback((url: string) => {
+    setEmbeddedPageUrl(url)
+  }, [])
 
   // Navigate to next/prev entry
   const currentIndex = selectedEntry
@@ -598,6 +604,18 @@ export function EntryContent() {
 
       {/* Toolbar */}
       <div className="flex-shrink-0 flex items-center gap-0.5 px-3 py-1.5 border-b bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm sticky top-0 z-10">
+        {embeddedPageUrl && (
+          <>
+            <ToolbarButton
+              onClick={() => setEmbeddedPageUrl(null)}
+              title={t("common.back", { defaultValue: "返回" })}
+            >
+              <X size={16} />
+            </ToolbarButton>
+            <div className="w-px h-4 bg-border dark:bg-border-dark mx-1" />
+          </>
+        )}
+
         <ToolbarButton
           onClick={() => toggleStar(selectedEntry.id)}
           title={selectedEntry.isStarred ? t("entry.unstar") : t("entry.star")}
@@ -714,30 +732,39 @@ export function EntryContent() {
       </div>
 
       {/* Content */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto scroll-smooth"
-        onContextMenu={(e) => {
-          const selectedText = window.getSelection?.()?.toString().trim() || ""
-          // If text is selected, let text context menu handle copy actions.
-          if (selectedText) return
-          e.preventDefault()
-          e.stopPropagation()
-          setArticleMenu({ visible: true, x: e.clientX, y: e.clientY })
-        }}
-      >
-        <article
-          ref={contentRef}
-          data-context-select-scope="article"
-          className={`${contentWidthClass} mx-auto px-8 py-6 mb-32 transition-all duration-300 ${
-            isTransitioning ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
-          }`}
-          style={{
-            lineHeight: settings.general.contentLineHeight,
-            fontFamily: settings.general.contentFontFamily,
-            ...contentWidthStyle,
+      {embeddedPageUrl ? (
+        <div className="flex-1 min-h-0 bg-black">
+          <webview
+            src={embeddedPageUrl}
+            className="w-full h-full"
+            useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+          />
+        </div>
+      ) : (
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto scroll-smooth"
+          onContextMenu={(e) => {
+            const selectedText = window.getSelection?.()?.toString().trim() || ""
+            // If text is selected, let text context menu handle copy actions.
+            if (selectedText) return
+            e.preventDefault()
+            e.stopPropagation()
+            setArticleMenu({ visible: true, x: e.clientX, y: e.clientY })
           }}
         >
+          <article
+            ref={contentRef}
+            data-context-select-scope="article"
+            className={`${contentWidthClass} mx-auto px-8 py-6 mb-32 transition-all duration-300 ${
+              isTransitioning ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
+            }`}
+            style={{
+              lineHeight: settings.general.contentLineHeight,
+              fontFamily: settings.general.contentFontFamily,
+              ...contentWidthStyle,
+            }}
+          >
           {/* Title */}
           <h1 className="text-[1.7rem] font-bold leading-normal mb-4">{selectedEntry.title}</h1>
 
@@ -819,6 +846,7 @@ export function EntryContent() {
                 url={videoMedia.url}
                 poster={selectedEntry.imageUrl}
                 title={selectedEntry.title}
+                onOpenBilibiliInPage={handleOpenBilibiliInPage}
               />
             </div>
           )}
@@ -920,8 +948,9 @@ export function EntryContent() {
               <ChevronDown size={16} />
             </button>
           </div>
-        </article>
-      </div>
+          </article>
+        </div>
+      )}
 
       {/* External link warning modal */}
       {externalLinkWarning && (

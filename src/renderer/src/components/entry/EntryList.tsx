@@ -1249,8 +1249,8 @@ function entriesLikelySamePost(a: Entry, b: Entry): boolean {
 function cleanRelativeTime(date: Date | string | number): string {
   const d = date instanceof Date ? date : new Date(date)
   const result = formatDistanceToNow(d, { addSuffix: true, locale: getDateLocale() })
-  // Remove "濠电姷鏁告慨浼村垂瑜版帗鍋夐柕蹇嬪€曞婵囥亜閹炬鍟弳?" (Chinese) and "about " (English) prefixes for cleaner display
-  return result.replace(/^濠电姷鏁告慨浼村垂瑜版帗鍋夐柕蹇嬪€曞婵囥亜閹炬鍟弳鐥媠*/g, "").replace(/^about\s*/gi, "")
+  // Remove verbose prefixes for cleaner display.
+  return result.replace(/^about\s*/gi, "").replace(/^大约\s*/g, "")
 }
 
 export function EntryList({ width }: { width?: number }) {
@@ -1373,7 +1373,7 @@ export function EntryList({ width }: { width?: number }) {
   )
   const receiveRecommended = settings.general.showRecommended
 
-  // Filter entries by active view (when showing all feeds) 闂?exclude recommended feeds
+  // Filter entries by active view (when showing all feeds) - exclude recommended feeds
   const baseFilteredEntries = useMemo(() => {
     const filtered = selectedFeedId
       ? entries
@@ -1580,20 +1580,15 @@ export function EntryList({ width }: { width?: number }) {
               onClick={async () => {
                 if (selectedFeedId && selectedFeedId !== "starred") {
                   await refreshFeed(selectedFeedId)
-                  clearListCache()
-                  loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
                 } else if (activeView !== null) {
                   const viewFeedIds = feeds
                     .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
                     .map((f) => f.id)
                   await refreshMultiple(viewFeedIds)
-                  clearListCache()
-                  loadEntries({ limit: entryLoadLimit })
                 } else {
                   await refreshAll()
-                  clearListCache()
-                  loadEntries({ limit: entryLoadLimit })
                 }
+                reloadCurrentListFresh()
               }}
               disabled={isRefreshing}
               className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary disabled:opacity-50"
@@ -1687,7 +1682,7 @@ export function EntryList({ width }: { width?: number }) {
           />
         ) : renderEntries.length === 0 ? (
           selectedFeedId && selectedFeedId !== "starred" ? (
-            /* A specific feed is selected but has no entries 闂?offer refresh */
+            /* A specific feed is selected but has no entries - offer refresh */
             <div className="flex flex-col items-center justify-center py-12 text-text-secondary dark:text-text-dark-secondary">
               <Inbox size={40} className="mb-3 text-text-tertiary" />
               <p className="text-sm">{t("entryList.noArticles")}</p>
@@ -2203,12 +2198,12 @@ export function GridCard({
       <div className="p-2">
         {(() => {
           const displayTitle = entry.title || (entry.summary || entry.content || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-          return displayTitle ? (
-            <h3 className={`text-xs leading-snug line-clamp-2 ${entry.isRead ? "text-text-secondary dark:text-text-dark-secondary" : "font-medium"}`}>
-              {displayTitle}
-            </h3>
-          ) : null
-        })()}
+        return displayTitle ? (
+          <h3 className={`text-xs leading-snug truncate whitespace-nowrap ${entry.isRead ? "text-text-secondary dark:text-text-dark-secondary" : "font-medium"}`}>
+            {displayTitle}
+          </h3>
+        ) : null
+      })()}
         <div className="flex items-center justify-between mt-1 text-[10px] text-text-tertiary">
           <div className="flex items-center gap-1 min-w-0">
             <span className="w-4 h-4 rounded-full overflow-hidden bg-surface-tertiary dark:bg-surface-dark-tertiary flex-shrink-0 flex items-center justify-center text-[9px] uppercase text-text-secondary dark:text-text-dark-secondary">
@@ -2638,10 +2633,10 @@ export function SocialMediaItem({
         setTweetSummary(result.summary)
         tweetSummaryCache.set(entry.id, result.summary)
       } else {
-        setTweetSummary(`闂?${result.error}`)
+        setTweetSummary(`Error: ${result.error}`)
       }
     } catch (err) {
-      setTweetSummary(`闂?${String(err)}`)
+      setTweetSummary(`Error: ${String(err)}`)
     }
     setIsSummarizingTweet(false)
   }, [tweetTextContent, showTweetSummary, tweetSummary, settings.general?.language, entry.id])
@@ -2875,7 +2870,7 @@ export function SocialMediaItem({
             </div>
           )}
 
-          {/* AI Translation result 闂?bilingual paragraph-by-paragraph */}
+          {/* AI Translation result - bilingual paragraph-by-paragraph */}
           {showTweetTranslation && (
             <div className="mt-2 rounded-lg border border-accent/20 bg-accent/5 p-2.5" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-1.5 text-xs font-medium text-accent mb-1.5">
@@ -2945,7 +2940,7 @@ export function SocialMediaItem({
             </div>
           )}
 
-          {/* Inline AI action buttons 闂?below content */}
+          {/* Inline AI action buttons - below content */}
           {tweetTextContent && (
             <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <button
@@ -3083,7 +3078,7 @@ function SocialActionBar({
   )
 }
 
-/** Parse social media platform handle from URL 闂?supports X/Twitter, Telegram, Bluesky, Threads, Truth Social */
+/** Parse social media platform handle from URL - supports X/Twitter, Telegram, Bluesky, Threads, Truth Social */
 function parseSocialHandle(url: string): { type: "x" | "telegram" | "bluesky" | "threads" | "truth" | "other"; handle?: string } {
   // X / Twitter including Nitter mirrors.
   try {

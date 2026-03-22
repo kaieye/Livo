@@ -69,6 +69,67 @@ function getDisplayTitle(result: { title: string; url: string }): string {
   return inferResultTitleFromUrl(result.url)
 }
 
+function isInstagramDiscoverResult(feedUrl: string): boolean {
+  try {
+    const u = new URL(feedUrl)
+    return /\/instagram\/user\//i.test(u.pathname)
+  } catch {
+    return /\/instagram\/user\//i.test(feedUrl)
+  }
+}
+
+function normalizeFollowersLabel(raw?: string): string | undefined {
+  const text = (raw || "").trim()
+  if (!text) return undefined
+  if (/followers?/i.test(text) || /粉丝/.test(text)) return text
+  const count = text.match(/([\d]+(?:[.,]\d+)?\s*[kmb]?)/i)?.[1]?.trim()
+  if (count) return `${count} followers`
+  return undefined
+}
+
+function extractFollowersFromText(raw?: string): string | undefined {
+  const text = (raw || "").trim()
+  if (!text) return undefined
+  const withWord = text.match(/([\d]+(?:[.,]\d+)?\s*[kmb]?\s*(?:followers?|粉丝))/i)?.[1]
+  if (withWord) return withWord.trim()
+  const countOnly = text.match(/^\s*([\d]+(?:[.,]\d+)?\s*[kmb]?)\s*$/i)?.[1]
+  if (countOnly) return `${countOnly.trim()} followers`
+  return undefined
+}
+
+function normalizeInstagramCardContent(params: {
+  title: string
+  url: string
+  description: string
+  followers?: string
+}): { title: string; description: string; followers?: string } {
+  const { title, url, description, followers } = params
+  const usernameFromUrl = extractInstagramUsernameFromFeedUrl(url)
+  const userFromParen = title.match(/\(@([a-z0-9._]{1,30})\)/i)?.[1]
+  const userFromSimple = title.match(/^@?([a-z0-9._]{1,30})\s*-\s*(?:instagram|ins)\b/i)?.[1]
+  const username = (userFromParen || userFromSimple || usernameFromUrl || "").trim()
+  const displayNameFromTitle =
+    title.match(/^(.*?)\s*\(@[a-z0-9._]{1,30}\)\s*-\s*instagram\b/i)?.[1]?.trim() ||
+    title.replace(/\s*-\s*(?:instagram|ins)\s*$/i, "").replace(/^@/, "").trim()
+
+  const normalizedTitle = username
+    ? (displayNameFromTitle && displayNameFromTitle.toLowerCase() !== username.toLowerCase()
+      ? `${displayNameFromTitle} (@${username}) - Instagram`
+      : `@${username} - Instagram`)
+    : title
+
+  const followersLabel = normalizeFollowersLabel(followers) || normalizeFollowersLabel(extractFollowersFromText(description))
+  const cleanedDescription = followersLabel
+    ? description.replace(/[\s,，]*[\d]+(?:[.,]\d+)?\s*[kmb]?\s*(?:followers?|粉丝)[\s,，]*/ig, " ").replace(/\s+/g, " ").trim()
+    : description
+
+  return {
+    title: normalizedTitle,
+    description: cleanedDescription || description,
+    followers: followersLabel,
+  }
+}
+
 function extractInstagramUsernameFromFeedUrl(feedUrl: string): string | null {
   try {
     const u = new URL(feedUrl)
@@ -601,6 +662,16 @@ function FeedCard({
   const { t } = useTranslation()
   const avatarCandidates = useMemo(() => buildDiscoverAvatarFallbacks(imageUrl, url), [imageUrl, url])
   const [avatarSrc, setAvatarSrc] = useState<string>(avatarCandidates[0] || "")
+  const isInstagram = useMemo(() => isInstagramDiscoverResult(url), [url])
+  const normalizedInstagram = useMemo(
+    () => isInstagram
+      ? normalizeInstagramCardContent({ title, url, description, followers })
+      : null,
+    [description, followers, isInstagram, title, url],
+  )
+  const displayTitle = normalizedInstagram?.title || title
+  const displayDescription = normalizedInstagram?.description || description
+  const displayFollowers = normalizedInstagram?.followers || followers
 
   useEffect(() => {
     setAvatarSrc(avatarCandidates[0] || "")
@@ -644,8 +715,17 @@ function FeedCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`block min-w-0 font-medium truncate ${compact ? "text-xs" : "text-sm"}`}>
-            {title}
+            {displayTitle}
           </span>
+          {isInstagram && displayFollowers && (
+            <span
+              className={`flex-shrink-0 rounded-full border border-accent/30 bg-gradient-to-r from-accent/15 to-orange-400/15 text-accent font-semibold ${
+                compact ? "text-[9px] px-1.5 py-0.5" : "text-[10px] px-2 py-0.5"
+              }`}
+            >
+              {displayFollowers}
+            </span>
+          )}
           {badge && (
             <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent/10 text-accent">
               {badge}
@@ -662,7 +742,7 @@ function FeedCard({
             compact ? "text-[10px]" : "text-xs"
           }`}
         >
-          {followers || description}
+          {isInstagram ? displayDescription : (displayFollowers || displayDescription)}
         </p>
       </div>
 

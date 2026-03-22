@@ -366,15 +366,18 @@ export function VideoPlayer({
   url,
   poster,
   title,
+  onOpenBilibiliInPage,
 }: {
   url: string
   poster?: string
   title?: string
+  onOpenBilibiliInPage?: (url: string) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showInlineEmbed, setShowInlineEmbed] = useState(false)
   const bilibiliOpenInPage = useSettingsStore((s) => s.settings.general.bilibiliOpenInPage)
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(url)
   const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
@@ -405,14 +408,22 @@ export function VideoPlayer({
     return () => document.removeEventListener("fullscreenchange", handleFS)
   }, [])
 
-  const handleOpenVideo = useCallback(() => {
-    setShowModal(true)
-  }, [])
-
   // Try to get an iframe embed URL
   const iframeSrc = transformVideoUrl(url)
   const bilibiliWebviewUrl = shouldUseBilibiliWebview ? buildBilibiliInAppPlayerUrl(url) : null
   const bilibiliPageUrl = isBilibiliVideo && bilibiliOpenInPage ? normalizeBilibiliVideoUrl(url) : null
+
+  const handleOpenVideo = useCallback(() => {
+    if (bilibiliPageUrl && onOpenBilibiliInPage) {
+      onOpenBilibiliInPage(bilibiliPageUrl)
+      return
+    }
+    if (shouldUseBilibiliWebview && bilibiliWebviewUrl) {
+      setShowInlineEmbed(true)
+      return
+    }
+    setShowModal(true)
+  }, [bilibiliPageUrl, onOpenBilibiliInPage, shouldUseBilibiliWebview, bilibiliWebviewUrl])
 
   if (iframeSrc) {
     return (
@@ -421,7 +432,13 @@ export function VideoPlayer({
           className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
           onClick={handleOpenVideo}
         >
-          {poster ? (
+          {showInlineEmbed && shouldUseBilibiliWebview && bilibiliWebviewUrl ? (
+            <webview
+              src={bilibiliWebviewUrl}
+              className="w-full h-full bg-black"
+              useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            />
+          ) : poster ? (
             <img src={poster} alt="" className="w-full h-full object-cover" />
           ) : (
             <iframe
@@ -432,15 +449,17 @@ export function VideoPlayer({
               allow="autoplay; encrypted-media; accelerometer; clipboard-write; gyroscope; picture-in-picture"
             />
           )}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center">
-              <Play size={24} className="text-white ml-1" fill="white" />
+          {!showInlineEmbed && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center">
+                <Play size={24} className="text-white ml-1" fill="white" />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Full-screen video modal */}
-        {showModal && (
+        {showModal && !showInlineEmbed && (
           <div
             className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
             onClick={(e) => {

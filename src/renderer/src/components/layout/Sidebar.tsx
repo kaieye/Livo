@@ -60,6 +60,10 @@ const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
 
 const EMPTY_FOLDERS_STORAGE_KEY = "livo-empty-folders"
 
+function isWideLayoutView(view: FeedViewType | null): boolean {
+  return view === FeedViewType.SocialMedia || view === FeedViewType.Videos || view === FeedViewType.Pictures
+}
+
 function getPathLikeFromFeedUrl(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl)
@@ -957,6 +961,16 @@ export function Sidebar({ width }: { width?: number }) {
     if (isDiscoverOpen) setDiscoverOpen(false)
     setUiActiveView(view)
     if (activeView === view) return
+
+    const layoutModeChanged = isWideLayoutView(activeView) !== isWideLayoutView(view)
+
+    // When layout mode changes (3-column <-> wide), switch immediately to avoid one-frame stale layout flicker.
+    if (layoutModeChanged) {
+      startTransition(() => {
+        setActiveView(view)
+      })
+      return
+    }
 
     // Let pointer feedback paint first, then switch the expensive content tree.
     if (viewSwitchRafRef.current !== null) window.cancelAnimationFrame(viewSwitchRafRef.current)

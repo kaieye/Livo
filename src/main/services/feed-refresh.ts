@@ -171,7 +171,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, context: string)
 }
 
 export interface RefreshOptions {
-  /** Minutes 鈥?feeds fetched more recently than this are skipped */
+/** Minutes - feeds fetched more recently than this are skipped */
   freshnessTTL?: number
   /** Number of feeds to fetch in parallel */
   concurrency?: number
@@ -235,7 +235,7 @@ export async function refreshSingleFeed(feed: Feed, options?: { force?: boolean 
       normalizedFeedUrl,
     )
 
-    // 304 Not Modified 鈥?no need to parse entries
+    // 304 Not Modified - no need to parse entries
     if (result.notModified || !result.parsed) {
       updateFeed(feed.id, {
         lastFetched: now,

@@ -1,8 +1,8 @@
 ﻿/**
- * WideViewContent 锟?Full-width content panel for Social Media / Videos views.
+ * WideViewContent - Full-width content panel for Social Media / Videos views.
  *
  * These views use a 2-column layout: sidebar + content.
- * There is NO separate entry-list or entry-detail panel 锟?the content
+ * There is NO separate entry-list or entry-detail panel - the content
  * fills the entire remaining area after the sidebar.
  *
  * Interaction model:
@@ -1158,7 +1158,7 @@ export function WideViewContent() {
   )
   const receiveRecommended = settings.general.showRecommended
 
-  // Filter entries by active view (when showing all feeds) 锟?exclude recommended feeds
+  // Filter entries by active view (when showing all feeds) - exclude recommended feeds
   const baseFilteredEntries = useMemo(() => {
     const filtered = selectedFeedId
       ? selectedFeedId === "starred"
@@ -1501,7 +1501,7 @@ export function WideViewContent() {
                 title={t("common.back")}
               >
                 <ChevronLeft size={16} />
-                杩斿洖
+                {t("common.back")}
               </button>
             </div>
           ) : (
@@ -1517,17 +1517,15 @@ export function WideViewContent() {
               onClick={async () => {
                 if (selectedFeedId && selectedFeedId !== "starred") {
                   await refreshFeed(selectedFeedId)
-                  loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
                 } else if (activeView !== null) {
                   const viewFeedIds = feeds
                     .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
                     .map((f) => f.id)
                   await refreshMultiple(viewFeedIds)
-                  loadEntries({ limit: entryLoadLimit })
                 } else {
                   await refreshAll()
-                  loadEntries({ limit: entryLoadLimit })
                 }
+                reloadCurrentList()
               }}
               disabled={isRefreshing}
               className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary disabled:opacity-50"
@@ -1603,29 +1601,31 @@ export function WideViewContent() {
                 {t("entryList.unread")}
               </button>
             </div>
-          </div>
-        )}
 
-        {isRefreshing && refreshProgress && refreshProgress.total > 0 && (
-          <div className="mt-2 space-y-1">
-            <div className="flex items-center justify-between text-[11px] text-text-tertiary">
-              <span>{`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}</span>
-              <span>{`${refreshProgress.percent}%`}</span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary overflow-hidden">
+            {isRefreshing && refreshProgress && refreshProgress.total > 0 && (
               <div
-                className="h-full bg-accent transition-[width] duration-200"
-                style={{ width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%` }}
-              />
-            </div>
-            {refreshProgress.feedTitle && (
-              <div className="text-[11px] truncate text-text-tertiary">{refreshProgress.feedTitle}</div>
+                className="flex items-center gap-2 min-w-[220px] max-w-[360px] flex-1"
+                title={refreshProgress.feedTitle || ""}
+              >
+                <span className="text-[11px] text-text-tertiary whitespace-nowrap">
+                  {`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}
+                </span>
+                <div className="h-1.5 flex-1 rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary overflow-hidden">
+                  <div
+                    className="h-full bg-accent transition-[width] duration-200"
+                    style={{ width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-text-tertiary w-9 text-right shrink-0">
+                  {`${refreshProgress.percent}%`}
+                </span>
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Content area 锟?fills remaining space */}
+      {/* Content area - fills remaining space */}
       <div
         ref={containerRef}
         className={`flex-1 ${
@@ -1845,31 +1845,34 @@ export function WideViewContent() {
                 : renderEntries
 
               return (
-                <div className="h-full flex flex-col">
+                <div className="h-full min-h-0 flex flex-col">
                   <div
-                    className="flex-1 pb-3"
+                    className="flex-1 min-h-0 overflow-y-auto pb-3"
                     style={{ scrollbarGutter: "stable both-edges" }}
-                  >
-                    <div
-                    ref={videoGridRef}
-                    className="grid gap-4"
-                    style={{
-                      gridTemplateColumns: `repeat(${videoColumnCount}, minmax(0, 1fr))`,
+                    onScroll={(e) => {
+                      handlePagedEntryScroll(e)
                     }}
                   >
-                    {displayEntries.map((entry) => (
-                      <GridCard
-                        key={entry.id}
-                        entry={entry}
-                        isActive={false}
-                        onSelect={() => handleVideoClick(entry)}
-                        feedTitle={feedById.get(entry.feedId)?.title}
-                        feedImage={feedById.get(entry.feedId)?.imageUrl}
-                        isVideo={true}
-                        onContextMenu={(e) => showMenu(e, entry.id)}
-                      />
-                    ))}
-                  </div>
+                    <div
+                      ref={videoGridRef}
+                      className="grid gap-4"
+                      style={{
+                        gridTemplateColumns: `repeat(${videoColumnCount}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {displayEntries.map((entry) => (
+                        <GridCard
+                          key={entry.id}
+                          entry={entry}
+                          isActive={false}
+                          onSelect={() => handleVideoClick(entry)}
+                          feedTitle={feedById.get(entry.feedId)?.title}
+                          feedImage={feedById.get(entry.feedId)?.imageUrl}
+                          isVideo={true}
+                          onContextMenu={(e) => showMenu(e, entry.id)}
+                        />
+                      ))}
+                    </div>
                   </div>
 
                   {/* Pagination controls */}
@@ -1948,7 +1951,7 @@ export function WideViewContent() {
 }
 
 
-// 閳光偓閳光偓閳光偓 Video Modal 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
+// Video Modal
 
 function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => void; feeds: { id: string; title?: string }[] }) {
   const { t } = useTranslation()
@@ -1967,7 +1970,7 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
     }
 
     for (const url of urls) {
-      // Bilibili 锟?use full site player in app window for reliable login/quality switching
+      // Bilibili - use full site player in app window for reliable login/quality switching
       const biliMatch = url.match(/bilibili\.com\/video\/(BV[a-zA-Z0-9]+)/)
       if (biliMatch) {
         if (bilibiliOpenInPage) {
@@ -1991,7 +1994,7 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
     }
 
     for (const url of urls) {
-      // YouTube 锟?needs Invidious proxy resolution
+      // YouTube - needs Invidious proxy resolution
       const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/)
       if (ytMatch) {
         return { type: "youtube" as const, url, videoId: ytMatch[1] }
@@ -2010,14 +2013,14 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
   }, [bilibiliOpenInPage, entry])
 
   // State for YouTube proxy resolution
-  // "resolving" 锟?trying Invidious; "resolved" 锟?got direct URL; "iframe" 锟?use embed
+  // "resolving" - trying Invidious; "resolved" - got direct URL; "iframe" - use embed
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [useIframeFallback, setUseIframeFallback] = useState(false)
 
   // For YouTube: check login status first.
-  // If logged in 锟?skip slow Invidious and go straight to iframe (cookies work).
-  // If not logged in 锟?try Invidious proxy, then fall back to iframe.
+  // If logged in - skip slow Invidious and go straight to iframe (cookies work).
+  // If not logged in - try Invidious proxy, then fall back to iframe.
   useEffect(() => {
     if (videoSource.type !== "youtube") return
     let cancelled = false
@@ -2030,7 +2033,7 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
         // Check if user has linked their YouTube account
         const status = await window.api.video.ytStatus()
         if (status.loggedIn) {
-          // Logged in 锟?iframe with youtube.com (carries cookies), skip proxy
+          // Logged in - iframe with youtube.com (carries cookies), skip proxy
           if (!cancelled) {
             setUseIframeFallback(true)
             setResolving(false)
@@ -2039,7 +2042,7 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
         }
       } catch { /* ignore, proceed to proxy */ }
 
-      // Not logged in 锟?try Invidious/Piped proxy for direct URL
+      // Not logged in - try Invidious/Piped proxy for direct URL
       try {
         const result = await window.api.video.resolve(videoSource.url)
         if (cancelled) return
@@ -2084,15 +2087,15 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-8 lg:p-12"
+      className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 lg:p-6"
       onClick={onClose}
     >
       <div
-        className={`w-full ${videoSource.type === "bilibili" ? "max-w-7xl" : "max-w-5xl"} flex flex-col max-h-[90vh]`}
+        className={`w-full ${videoSource.type === "bilibili" ? "max-w-[77vw]" : "max-w-[74vw]"} flex flex-col max-h-[75vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Video player 锟?16:9 aspect ratio */}
-        <div className={`bg-black overflow-hidden flex-shrink-0 ${videoSource.type === "bilibili" ? "rounded-xl h-[72vh]" : "relative w-full aspect-video rounded-t-xl"}`}>
+        {/* Video player - 16:9 aspect ratio */}
+        <div className={`bg-black overflow-hidden flex-shrink-0 ${videoSource.type === "bilibili" ? "rounded-xl h-[66vh]" : "relative w-full aspect-video rounded-t-xl"}`}>
           {/* Direct video file */}
           {videoSource.type === "direct" && (
             <video
@@ -2130,11 +2133,11 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
                 {entry.title && <h3 className="text-base font-semibold leading-snug">{entry.title}</h3>}
                 <div className="flex items-center gap-2 mt-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
                   {feedTitle && <span>{feedTitle}</span>}
-                  <span>路</span>
+                  <span>·</span>
                   <span>{timeAgo}</span>
                   {entry.url && (
                     <>
-                      <span>路</span>
+                      <span>·</span>
                       <a
                         href={entry.url}
                         target="_blank"
@@ -2165,15 +2168,15 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
             </div>
           )}
 
-          {/* YouTube 锟?loading / resolving state */}
+          {/* YouTube - loading / resolving state */}
           {videoSource.type === "youtube" && resolving && (
             <div className="w-full h-full flex flex-col items-center justify-center text-white gap-3">
               <Loader2 size={32} className="animate-spin opacity-60" />
-              <span className="text-sm opacity-60">姝ｅ湪瑙ｆ瀽瑙嗛鍦板潃...</span>
+              <span className="text-sm opacity-60">正在解析视频地址...</span>
             </div>
           )}
 
-          {/* YouTube 锟?resolved via Invidious, play with native video */}
+          {/* YouTube - resolved via Invidious, play with native video */}
           {videoSource.type === "youtube" && resolvedUrl && !resolving && !useIframeFallback && (
             <video
               src={resolvedUrl}
@@ -2182,14 +2185,14 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
               autoPlay
               preload="metadata"
               onError={() => {
-                // Direct URL failed (expired, geo-blocked, etc.) 锟?switch to iframe fallback
+                // Direct URL failed (expired, geo-blocked, etc.) - switch to iframe fallback
                 setResolvedUrl(null)
                 setUseIframeFallback(true)
               }}
             />
           )}
 
-          {/* YouTube 锟?iframe fallback (UA spoofed in main process to bypass bot detection) */}
+          {/* YouTube - iframe fallback (UA spoofed in main process to bypass bot detection) */}
           {videoSource.type === "youtube" && useIframeFallback && !resolving && youtubeIframeSrc && (
             <iframe
               src={youtubeIframeSrc}
@@ -2202,15 +2205,15 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
 
         {/* Info area below video */}
         {videoSource.type !== "bilibili" && (
-          <div className="bg-white dark:bg-surface-dark rounded-b-xl p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-surface-dark rounded-b-xl p-5 min-h-[132px] max-h-[22vh] overflow-y-auto">
             {entry.title && <h3 className="text-base font-semibold leading-snug">{entry.title}</h3>}
             <div className="flex items-center gap-2 mt-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
               {feedTitle && <span>{feedTitle}</span>}
-              <span>路</span>
+              <span>·</span>
               <span>{timeAgo}</span>
               {entry.url && (
                 <>
-                  <span>路</span>
+                  <span>·</span>
                   <a
                     href={entry.url}
                     target="_blank"
@@ -2245,7 +2248,7 @@ function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => vo
   )
 }
 
-// 閳光偓閳光偓閳光偓 Context Menu Wrapper 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
+// Context Menu Wrapper
 
 function WideViewContextMenuWrapper({
   entry,
@@ -2292,7 +2295,7 @@ function WideViewContextMenuWrapper({
   return <ContextMenu x={x} y={y} onClose={onClose} actions={actions} />
 }
 
-// 閳光偓閳光偓閳光偓 Social Media Overlay 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
+// Social Media Overlay
 // Wide overlay: slides up on top of the timeline,
 // shows AuthorHeader + full content + all media individually.
 
@@ -2366,8 +2369,8 @@ function SocialOverlay({
   const avatarUrl = avatarCandidates[avatarCandidateIndex] || ""
   const avatarLetter = (entry.author || feed?.title || "?")[0]
 
-  // Full sanitized content 锟?strip media tags to avoid duplication with the media gallery below
-  // Content width mapping 锟?matches EntryContent
+  // Full sanitized content - strip media tags to avoid duplication with the media gallery below
+  // Content width mapping - matches EntryContent
   const contentWidthClasses = useMemo(() => ({
     narrow: "max-w-[500px]",
     normal: "max-w-[680px]",
@@ -2656,7 +2659,7 @@ function SocialOverlay({
     }, photo?.previewUrl)
   }, [markOverlayPhotoFailed])
 
-  // 閳光偓閳光偓閳光偓 AI Translation & Summary 閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓
+  // AI Translation & Summary
   const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
   const [summary, setSummary] = useState<string | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
@@ -2719,12 +2722,12 @@ function SocialOverlay({
 
   return (
     <div className="absolute inset-0 z-[50] flex flex-col overflow-hidden">
-      {/* Backdrop 锟?click to close */}
+      {/* Backdrop - click to close */}
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
 
-      {/* Content 锟?slides up, scrollable */}
+      {/* Content - slides up, scrollable */}
       <div className="relative z-10 flex-1 overflow-y-auto bg-white dark:bg-surface-dark">
-        {/* Sticky action bar 锟?always visible at top */}
+        {/* Sticky action bar - always visible at top */}
         <div className="sticky top-0 z-20 bg-white/95 dark:bg-surface-dark/95 backdrop-blur-sm border-b border-border/10 dark:border-border-dark/10">
           <div className={`${contentWidthClass} mx-auto px-4 py-2 flex items-center justify-between`} style={contentWidthStyle}>
             <button
@@ -2777,10 +2780,10 @@ function SocialOverlay({
                 }}
                 disabled={!browserOpenUrl}
                 className="flex items-center gap-1 text-xs text-accent disabled:text-text-tertiary disabled:cursor-not-allowed hover:underline disabled:no-underline"
-                title={t("common.openInBrowser", { defaultValue: "鍦ㄦ祻瑙堝櫒涓墦寮€" })}
+                title={t("common.openInBrowser", { defaultValue: "在浏览器中打开" })}
               >
                 <ExternalLink size={12} />
-                {t("common.openInBrowser", { defaultValue: "鍦ㄦ祻瑙堝櫒涓墦寮€" })}
+                {t("common.openInBrowser", { defaultValue: "在浏览器中打开" })}
               </button>
             </div>
           </div>
@@ -2796,7 +2799,7 @@ function SocialOverlay({
           }}
         >
 
-          {/* AI Summary 锟?displayed at the top, before content */}
+          {/* AI Summary - displayed at the top, before content */}
           {showSummary && (
             <div className="rounded-xl border border-amber-300/30 bg-amber-50/50 dark:bg-amber-900/10 p-4">
               <div className="flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">
@@ -2841,7 +2844,7 @@ function SocialOverlay({
             </div>
           </div>
 
-          {/* Full content 锟?bilingual mode when translation is active */}
+          {/* Full content - bilingual mode when translation is active */}
           {showTranslation && translatedParagraphs.length > 0 ? (
             <div
               className="space-y-0"

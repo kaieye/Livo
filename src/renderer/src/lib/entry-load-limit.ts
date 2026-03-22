@@ -1,7 +1,13 @@
 import { FeedViewType } from "../../../shared/types"
 
 export function getEntryLoadLimit(view: FeedViewType | null): number {
-  // Unified first-page size across all views; subsequent pages are loaded on scroll.
-  void view
-  return 10
+  // Grid views need a larger first batch; otherwise the list may not become scrollable,
+  // which prevents infinite loading from ever triggering.
+  switch (view) {
+    case FeedViewType.Videos:
+    case FeedViewType.Pictures:
+      return 40
+    default:
+      return 20
+  }
 }

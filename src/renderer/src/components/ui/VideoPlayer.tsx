@@ -1,5 +1,5 @@
 /**
- * VideoPlayer 鈥?Inline video player component for social media and entry views.
+ * VideoPlayer - Inline video player component for social media and entry views.
  * Video player with preview image, play button overlay,
  * and native HTML5 video controls.
  */
@@ -169,7 +169,7 @@ export function VideoPlayer({
   const handlePlay = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     if (videoError) {
-      // Codec not supported 鈥?open in browser
+      // Codec not supported - open in browser
       if (src) window.open(src, "_blank")
       return
     }
@@ -281,7 +281,7 @@ export function VideoPlayer({
     return `${m}:${sec.toString().padStart(2, "0")}`
   }
 
-  // If it's an embeddable URL (YouTube, etc.), don't render inline 鈥?the parent should handle embedding
+  // If it's an embeddable URL (YouTube, etc.), don't render inline - the parent should handle embedding
   const isDirectVideo = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src)
 
   if (!isDirectVideo) {
@@ -355,7 +355,7 @@ export function VideoPlayer({
       style={{ width, height }}
       onClick={handlePlay}
     >
-      {/* Video element 鈥?only load when user clicks play to avoid mass ffmpeg errors */}
+      {/* Video element - only load when user clicks play to avoid mass ffmpeg errors */}
       {hasStarted && !videoError ? (
         <video
           ref={videoRef}
@@ -403,15 +403,15 @@ export function VideoPlayer({
         </>
       )}
 
-      {/* Error overlay 鈥?unsupported codec, offer to open in browser */}
+      {/* Error overlay - unsupported codec, offer to open in browser */}
       {videoError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-2 cursor-pointer">
           <ExternalLink size={20} />
-          <span className="text-xs opacity-80">鏍煎紡涓嶆敮鎸侊紝鐐瑰嚮鍦ㄦ祻瑙堝櫒涓墦寮€</span>
+          <span className="text-xs opacity-80">格式不支持，点击在浏览器中打开</span>
         </div>
       )}
 
-      {/* Play overlay 鈥?shown when not actively playing and no error */}
+      {/* Play overlay - shown when not actively playing and no error */}
       {!isPlaying && !videoError && !isStarting && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors cursor-pointer">
           <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
@@ -420,7 +420,7 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Controls overlay 鈥?always visible when playing, interactive progress bar */}
+      {/* Controls overlay - always visible when playing, interactive progress bar */}
       {hasStarted && (
         <div
           className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 transition-opacity ${

@@ -20,7 +20,7 @@ import { resolveFeedAvatar } from "../services/feed-avatar"
 import RssParser from "rss-parser"
 import * as https from "node:https"
 
-/** A lightweight RSS parser with a short timeout 鈥?used for quick probes. */
+/** A lightweight RSS parser with a short timeout - used for quick probes. */
 const fastParser = new RssParser({
   timeout: 15000,
   headers: {
@@ -2192,7 +2192,7 @@ export function registerDiscoverHandlers(): void {
     return finalResults
   })
 
-  // Get RSSHub routes 鈥?prepend instance URL to make them subscribable
+// Get RSSHub routes - prepend instance URL to make them subscribable
   ipcMain.handle("discover:rsshub-routes", (_event, category?: string) => {
     const routes = category
       ? RSSHUB_ROUTES.filter((r) => r.category === category)
@@ -2237,7 +2237,7 @@ export function registerDiscoverHandlers(): void {
     }
   })
 
-  // Quick probe for a Twitter user via RSSHub 鈥?returns name + avatar fast
+// Quick probe for a Twitter user via RSSHub - returns name + avatar fast
   // Tries the configured instance first, then fallback instances
   ipcMain.handle("twitter:probe-user", async (_event, username: string) => {
     const clean = username.trim().replace(/^@/, "")
@@ -2270,7 +2270,7 @@ export function registerDiscoverHandlers(): void {
     return { valid: false, username: clean }
   })
 
-  // Quick probe for a YouTube channel via RSSHub 鈥?returns channel name + avatar
+// Quick probe for a YouTube channel via RSSHub - returns channel name + avatar
   // Supports: @handle or plain username (channel ID intentionally disabled)
   ipcMain.handle("youtube:probe-channel", async (_event, query: string) => {
     const instance = getRSSHubInstance()

@@ -15,7 +15,7 @@ import { writeFileSync, existsSync, mkdirSync } from "fs"
 import { IPC } from "../../shared/types"
 import { resolveVideoUrl } from "../services/video-proxy"
 
-/** Mobile Chrome UA 鈥?Google shows plain email+password login */
+/** Mobile Chrome UA - Google shows plain email+password login */
 const MOBILE_UA =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
 const DESKTOP_UA =
