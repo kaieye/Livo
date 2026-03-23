@@ -16,7 +16,6 @@ import {
   Maximize2,
   Minimize2,
   Download,
-  Gauge,
 } from "lucide-react"
 import { create } from "zustand"
 import { useSettingsStore } from "../../store/settings-store"
@@ -77,7 +76,7 @@ export function CornerPlayer() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [volume, setVolume] = useState(1)
+  const [volume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showRateMenu, setShowRateMenu] = useState(false)
@@ -365,7 +364,7 @@ export function isVideoUrl(url: string): boolean {
 export function VideoPlayer({
   url,
   poster,
-  title,
+  title: _title,
   onOpenBilibiliInPage,
 }: {
   url: string
@@ -374,22 +373,13 @@ export function VideoPlayer({
   onOpenBilibiliInPage?: (url: string) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [_isPlaying, setIsPlaying] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showInlineEmbed, setShowInlineEmbed] = useState(false)
   const bilibiliOpenInPage = useSettingsStore((s) => s.settings.general.bilibiliOpenInPage)
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(url)
   const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
-
-  const togglePlay = () => {
-    if (!videoRef.current) return
-    if (isPlaying) {
-      videoRef.current.pause()
-    } else {
-      videoRef.current.play().catch(() => {})
-    }
-  }
 
   const toggleFullscreen = () => {
     if (!videoRef.current) return

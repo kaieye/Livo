@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
-import { useSettingsStore } from "../../store/settings-store"
+import { useAISettingKey, useGeneralSettingsShallowSelector, useTranslationSettingKey } from "../../store/settings-store"
 import { useAIChatStore } from "../../store/ai-chat-store"
 import { useStoreShallow } from "../../store/helpers"
 import { useRegisterCommand } from "../../hooks/useRegisterCommand"
@@ -37,6 +37,7 @@ import { formatDistanceToNow, format } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
 import { ContextMenu, type ContextMenuAction } from "../ui/ContextMenu"
 import { FeedViewType } from "../../../../shared/types"
+import { HOTKEY_OVERLAY_SCOPES } from "../../lib/hotkey-scope"
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -157,6 +158,7 @@ export function EntryContent() {
     selectedEntry,
     isSelectedEntryHydrating,
     toggleStar,
+    markRead,
     entries,
     selectEntry,
     prefetchEntryDetails,
@@ -164,12 +166,22 @@ export function EntryContent() {
     selectedEntry: s.selectedEntry,
     isSelectedEntryHydrating: s.isSelectedEntryHydrating,
     toggleStar: s.toggleStar,
+    markRead: s.markRead,
     entries: s.entries,
     selectEntry: s.selectEntry,
     prefetchEntryDetails: s.prefetchEntryDetails,
   }))
   const feeds = useFeedStore((s) => s.feeds)
-  const settings = useSettingsStore((s) => s.settings)
+  const general = useGeneralSettingsShallowSelector((settings) => ({
+    contentWidth: settings.contentWidth,
+    contentMaxWidth: settings.contentMaxWidth,
+    contentLineHeight: settings.contentLineHeight,
+    contentFontFamily: settings.contentFontFamily,
+    fontSize: settings.fontSize,
+    language: settings.language,
+  }))
+  const translationTargetLanguage = useTranslationSettingKey("targetLanguage")
+  const aiApiKey = useAISettingKey("apiKey")
   const { setPanelOpen } = useAIChatStore()
   const playerPlay = usePlayerStore((s) => s.play)
   const { t } = useTranslation()
@@ -182,12 +194,12 @@ export function EntryContent() {
     custom: "", // handled via inline style
   }), [])
 
-  const contentWidthClass = settings.general.contentWidth === "custom"
+  const contentWidthClass = general.contentWidth === "custom"
     ? ""
-    : (contentWidthClasses[settings.general.contentWidth] || contentWidthClasses.normal)
+    : (contentWidthClasses[general.contentWidth] || contentWidthClasses.normal)
 
-  const contentWidthStyle = settings.general.contentWidth === "custom"
-    ? { maxWidth: `${settings.general.contentMaxWidth || 680}px` }
+  const contentWidthStyle = general.contentWidth === "custom"
+    ? { maxWidth: `${general.contentMaxWidth || 680}px` }
     : undefined
 
   // Per-entry state — keyed by entry ID, reset on switch
@@ -250,7 +262,7 @@ export function EntryContent() {
       scrollRef.current?.scrollTo({ top: 0 })
 
     }
-  }, [selectedEntry?.id])
+  }, [selectedEntry])
 
   // Reading progress tracking
   useEffect(() => {
@@ -265,7 +277,7 @@ export function EntryContent() {
 
     el.addEventListener("scroll", handleScroll, { passive: true })
     return () => el.removeEventListener("scroll", handleScroll)
-  }, [selectedEntry?.id])
+  }, [selectedEntry])
 
   // Intercept external link clicks with warning
   useEffect(() => {
@@ -291,7 +303,7 @@ export function EntryContent() {
 
     container.addEventListener("click", handleClick)
     return () => container.removeEventListener("click", handleClick)
-  }, [selectedEntry?.id])
+  }, [selectedEntry])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -315,7 +327,7 @@ export function EntryContent() {
     setSummary(null)
     const result = await window.api.ai.summarize(
       selectedEntry.content,
-      settings.general.language
+      general.language
     )
     setIsSummarizing(false)
     if (result.success) {
@@ -323,7 +335,7 @@ export function EntryContent() {
     } else {
       setSummary(`${t("common.error")}: ${result.error}`)
     }
-  }, [selectedEntry?.content, selectedEntry?.id, settings.general.language])
+  }, [general.language, selectedEntry?.content, t])
 
   const handleTranslate = useCallback(async () => {
     if (!selectedEntry?.content) return
@@ -342,7 +354,7 @@ export function EntryContent() {
     // Do translation paragraph by paragraph
     setIsTranslating(true)
     setShowTranslation(true)
-    const targetLang = settings.translation.targetLanguage || "zh-CN"
+    const targetLang = translationTargetLanguage || "zh-CN"
     const results: string[] = []
 
     for (let i = 0; i < paragraphs.length; i++) {
@@ -366,7 +378,14 @@ export function EntryContent() {
     }
 
     setIsTranslating(false)
-  }, [selectedEntry?.content, selectedEntry?.id, showTranslation, translatedParagraphs.length, paragraphs, settings.translation.targetLanguage])
+  }, [
+    paragraphs,
+    selectedEntry?.content,
+    translationTargetLanguage,
+    showTranslation,
+    t,
+    translatedParagraphs.length,
+  ])
 
   const handleCopyLink = useCallback(async () => {
     if (!selectedEntry?.url) return
@@ -554,6 +573,8 @@ export function EntryContent() {
   useRegisterCommand({
     id: "entry:prev",
     shortcutId: "prev-entry",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry || !hasPrev) return false
       const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
@@ -566,6 +587,8 @@ export function EntryContent() {
   useRegisterCommand({
     id: "entry:next",
     shortcutId: "next-entry",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry || !hasNext) return false
       const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
@@ -578,6 +601,8 @@ export function EntryContent() {
   useRegisterCommand({
     id: "entry:toggle-star",
     shortcutId: "toggle-star",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry) return false
       const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
@@ -588,14 +613,100 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
+    id: "entry:toggle-read",
+    shortcutId: "toggle-read",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (e) => {
+      if (!selectedEntry) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      void markRead(selectedEntry.id, !selectedEntry.isRead)
+    },
+  })
+
+  useRegisterCommand({
     id: "entry:open-browser",
     shortcutId: "open-browser",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry?.url) return false
       const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       window.open(selectedEntry.url, "_blank")
+    },
+  })
+
+  useRegisterCommand({
+    id: "entry:copy-link",
+    shortcutId: "copy-link",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (e) => {
+      if (!selectedEntry?.url) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      void handleCopyLink()
+    },
+  })
+
+  useRegisterCommand({
+    id: "reading:ai-summarize",
+    shortcutId: "ai-summarize",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (e) => {
+      if (!selectedEntry?.content) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      void handleSummarize()
+    },
+  })
+
+  useRegisterCommand({
+    id: "reading:ai-translate",
+    shortcutId: "ai-translate",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (e) => {
+      if (!selectedEntry?.content) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      void handleTranslate()
+    },
+  })
+
+  useRegisterCommand({
+    id: "reading:ai-chat",
+    shortcutId: "ai-chat",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (e) => {
+      if (!selectedEntry) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      handleOpenAIChat()
+    },
+  })
+
+  useRegisterCommand({
+    id: "reading:toggle-readability",
+    shortcutId: "toggle-readability",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (e) => {
+      if (!selectedEntry?.url) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      void handleReadability()
     },
   })
 
@@ -608,7 +719,7 @@ export function EntryContent() {
     ].filter(Boolean) as string[]
     if (nearbyIds.length === 0) return
     void prefetchEntryDetails(nearbyIds)
-  }, [currentIndex, entries, prefetchEntryDetails, selectedEntry?.id])
+  }, [currentIndex, entries, prefetchEntryDetails, selectedEntry])
 
   // Empty state
   if (!selectedEntry) {
@@ -675,8 +786,8 @@ export function EntryContent() {
 
         <ToolbarButton
           onClick={handleSummarize}
-          disabled={isSummarizing || !settings.ai.apiKey}
-          title={settings.ai.apiKey ? t("entry.summarize") : t("entry.configureAIKey")}
+          disabled={isSummarizing || !aiApiKey}
+          title={aiApiKey ? t("entry.summarize") : t("entry.configureAIKey")}
         >
           {isSummarizing ? (
             <Loader2 size={16} className="animate-spin text-accent" />
@@ -687,9 +798,9 @@ export function EntryContent() {
 
         <ToolbarButton
           onClick={handleTranslate}
-          disabled={isTranslating || !settings.ai.apiKey}
+          disabled={isTranslating || !aiApiKey}
           active={showTranslation}
-          title={settings.ai.apiKey ? t("entry.translate") : t("entry.configureAIKey")}
+          title={aiApiKey ? t("entry.translate") : t("entry.configureAIKey")}
         >
           {isTranslating ? (
             <Loader2 size={16} className="animate-spin text-accent" />
@@ -700,7 +811,7 @@ export function EntryContent() {
 
         <ToolbarButton
           onClick={handleOpenAIChat}
-          disabled={!settings.ai.apiKey}
+          disabled={!aiApiKey}
           title="AI Chat"
         >
           <MessageSquare size={16} />
@@ -820,8 +931,8 @@ export function EntryContent() {
               isTransitioning ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
             }`}
             style={{
-              lineHeight: settings.general.contentLineHeight,
-              fontFamily: settings.general.contentFontFamily,
+              lineHeight: general.contentLineHeight,
+              fontFamily: general.contentFontFamily,
               ...contentWidthStyle,
             }}
           >
@@ -926,7 +1037,7 @@ export function EntryContent() {
               </div>
               <div
                 className="entry-content"
-                style={{ fontSize: `${settings.general.fontSize}px` }}
+                style={{ fontSize: `${general.fontSize}px` }}
                 dangerouslySetInnerHTML={{ __html: sanitizedReadable }}
               />
             </div>
@@ -936,14 +1047,14 @@ export function EntryContent() {
                 paragraphs={paragraphs}
                 translations={translatedParagraphs}
                 isTranslating={isTranslating}
-                fontSize={settings.general.fontSize}
-                lineHeight={settings.general.contentLineHeight}
-                fontFamily={settings.general.contentFontFamily}
+                fontSize={general.fontSize}
+                lineHeight={general.contentLineHeight}
+                fontFamily={general.contentFontFamily}
               />
             ) : (
               <div
                 className="entry-content"
-                style={{ fontSize: `${settings.general.fontSize}px` }}
+                style={{ fontSize: `${general.fontSize}px` }}
                 dangerouslySetInnerHTML={{ __html: sanitizedContent }}
               />
             )

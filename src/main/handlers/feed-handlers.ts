@@ -1,4 +1,4 @@
-﻿import { ipcMain, dialog, BrowserWindow, session } from "electron"
+import { ipcMain, dialog, BrowserWindow, session as _session } from "electron"
 import { v4 as uuidv4 } from "uuid"
 import { readFileSync, writeFileSync } from "fs"
 import { IPC, FeedViewType, type Feed, type FeedWithCount } from "../../shared/types"
@@ -7,7 +7,7 @@ import { refreshSingleFeed } from "../services/feed-refresh"
 import { getSettings } from "./settings-handlers"
 import { DEFAULT_RSSHUB_INSTANCE } from "../../shared/discover-data"
 import { parseOPML, generateOPML } from "../services/opml-parser"
-import { extractMedia, deriveImageUrl, extractContent, extractAuthorAvatar } from "../services/feed-utils"
+import { deriveImageUrl } from "../services/feed-utils"
 import { queueVideoDurationEnrich } from "../services/video-duration"
 import {
   canonicalizeInstagramFeedUrl,
@@ -566,7 +566,6 @@ function delayMs(ms: number): Promise<void> {
 // ---- Helper functions ----
 
 /** Detect view type from parsed feed content */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function detectViewType(parsed: any): FeedViewType {
   const items = (parsed as { items?: Array<Record<string, unknown>> }).items || []
 

@@ -118,10 +118,6 @@ interface FetchTextOptions {
   conditionalTimeoutMs?: number
 }
 
-function stripHtmlTags(input: string): string {
-  return (input || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-}
-
 function isPlaceholderMirrorPostUrl(url: string): boolean {
   const raw = (url || "").trim().toLowerCase()
   if (!raw) return false
@@ -249,24 +245,6 @@ function countItemImageSignals(item: Record<string, any>): number {
 
   count += countContentImageCandidates(String(item["content:encoded"] || item.content || item.description || ""))
   return count
-}
-
-function toRsshubProtocolUrl(feedUrl: string): string | null {
-  const raw = (feedUrl || "").trim()
-  if (!raw) return null
-  const protocolMatch = raw.match(/^rsshub:\/\/+(.+)$/i)
-  if (protocolMatch?.[1]) return `rsshub://${protocolMatch[1].replace(/^\/+/, "")}`
-  try {
-    const parsed = new URL(raw)
-    const route = parsed.pathname.replace(/^\/+/, "")
-    if (!route) return null
-    if (!/^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu)\//i.test(route)) {
-      return null
-    }
-    return `rsshub://${route}${parsed.search || ""}`
-  } catch {
-    return null
-  }
 }
 
 function extractTwitterUsernameFromFeedUrl(feedUrl: string): string | null {
@@ -618,14 +596,6 @@ function itemHasImageSignal(item: Record<string, any>): boolean {
     }
   }
 
-  return false
-}
-
-function feedHasImageSignal(feed: RssParser.Output<Record<string, any>> | null): boolean {
-  if (!feed) return false
-  for (const item of feed.items || []) {
-    if (itemHasImageSignal(item as Record<string, any>)) return true
-  }
   return false
 }
 

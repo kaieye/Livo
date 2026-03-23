@@ -11,6 +11,13 @@ const resources = {
 
 // Initialize i18n
 export const initI18n = async (language: string = "zh-CN") => {
+  if (i18n.isInitialized) {
+    if (i18n.language !== language) {
+      await i18n.changeLanguage(language)
+    }
+    return i18n
+  }
+
   await i18n.use(initReactI18next).init({
     resources,
     lng: language,

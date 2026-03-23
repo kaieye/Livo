@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, nativeTheme, session, protocol } from "electron"
-import { join, basename } from "path"
-import { existsSync, readFileSync } from "fs"
+import { join } from "path"
+import { existsSync } from "fs"
 import { initDatabase, getDatabase } from "./database"
 import { registerFeedHandlers } from "./handlers/feed-handlers"
 import { registerEntryHandlers } from "./handlers/entry-handlers"
@@ -16,6 +16,13 @@ import { IPC } from "../shared/types"
 
 let mainWindow: BrowserWindow | null = null
 const isDev = !app.isPackaged
+let pendingProtocolUrl: string | null = null
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
 
 if (isDev) {
   process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true"
@@ -28,6 +35,15 @@ function safeOpenExternal(url: string): void {
   } catch {
     // Ignore invalid external URLs from third-party pages.
   }
+}
+
+function focusMainWindow() {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 function createWindow(): void {
@@ -52,6 +68,10 @@ function createWindow(): void {
 
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show()
+    if (pendingProtocolUrl) {
+      console.warn("[protocol] pending deep link received:", pendingProtocolUrl)
+      pendingProtocolUrl = null
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -126,9 +146,26 @@ function createWindow(): void {
   })
 }
 
+app.on("second-instance", (_event, argv) => {
+  const protocolArg = argv.find((arg) => /^livo:\/\//i.test(arg))
+  if (protocolArg) {
+    pendingProtocolUrl = protocolArg
+  }
+  focusMainWindow()
+})
+
+app.on("open-url", (event, url) => {
+  event.preventDefault()
+  pendingProtocolUrl = url
+  focusMainWindow()
+})
+
 app.whenReady().then(async () => {
   if (process.platform === "win32") {
     app.setAppUserModelId("com.livo.app")
+  }
+  if (app.isPackaged) {
+    app.setAsDefaultProtocolClient("livo")
   }
 
   // Register custom protocol for local cached images (must be before any window is created)

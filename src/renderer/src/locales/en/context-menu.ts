@@ -1,0 +1,15 @@
+export const enContextMenu = {
+  markRead: "Mark as Read",
+  markUnread: "Mark as Unread",
+  markAboveRead: "Mark Above as Read",
+  markBelowRead: "Mark Below as Read",
+  star: "Star",
+  unstar: "Unstar",
+  openInBrowser: "Open in Browser",
+  copyLink: "Copy Link",
+  copyTitle: "Copy Title",
+  share: "Share",
+  sharePoster: "Share Poster",
+  saveToReadwise: "Save to Readwise",
+  saveToInstapaper: "Save to Instapaper",
+}

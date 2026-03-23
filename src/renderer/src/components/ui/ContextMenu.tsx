@@ -15,11 +15,9 @@ import {
   Share2,
   Image as ImageIcon,
   FileText,
-  BookmarkPlus,
-  Bookmark,
-  X,
 } from "lucide-react"
 import type { Entry } from "../../../../shared/types"
+import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
 
 export interface ContextMenuAction {
   id: string
@@ -41,6 +39,7 @@ interface ContextMenuProps {
 
 export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+  useOverlayHotkeyScope("context-menu", true)
 
   // Adjust position if menu overflows viewport
   const [pos, setPos] = useState({ x, y })

@@ -12,19 +12,36 @@
     "preview": "set ELECTRON_RUN_AS_NODE=& electron-vite preview",
     "start": "set ELECTRON_RUN_AS_NODE=& electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
+    "prepare": "simple-git-hooks",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint electron.vite.config.ts vite.config.web.ts tailwind.config.ts postcss.config.cjs eslint.config.mjs scripts src",
+    "lint:fix": "eslint electron.vite.config.ts vite.config.web.ts tailwind.config.ts postcss.config.cjs eslint.config.mjs scripts src --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:win": "electron-vite build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:win": "electron-vite build && electron-builder --config electron-builder.config.mjs --win",
+    "build:mac": "electron-vite build && electron-builder --config electron-builder.config.mjs --mac",
+    "build:linux": "electron-vite build && electron-builder --config electron-builder.config.mjs --linux",
     "dev:web": "vite --config vite.config.web.ts",
     "build:web": "vite build --config vite.config.web.ts",
     "preview:web": "vite preview --config vite.config.web.ts"
   },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx,json,css,md}": [
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,ts,tsx}": [
+      "eslint --fix"
+    ]
+  },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
+    "@tanstack/react-query": "^5.95.0",
     "@tanstack/react-virtual": "^3.13.2",
     "date-fns": "^4.1.0",
     "i18next": "^23.7.6",
@@ -35,6 +52,8 @@
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^1.0.1",
+    "@electron/fuses": "^2.1.0",
+    "@eslint/js": "^9.39.4",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
@@ -45,47 +64,22 @@
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "lint-staged": "^16.4.0",
     "lucide-react": "^0.460.0",
     "postcss": "^8.4.49",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^7.1.0",
+    "simple-git-hooks": "^2.13.1",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.57.1",
     "vitest": "^3.2.4",
     "zustand": "^5.0.2"
-  },
-  "build": {
-    "appId": "com.livo.app",
-    "productName": "Livo",
-    "directories": {
-      "buildResources": "build"
-    },
-    "files": [
-      "out/**/*"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icon.ico"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "build/icon.icns"
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "icon": "build/icon.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
   }
 }

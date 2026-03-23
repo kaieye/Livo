@@ -3,7 +3,11 @@ import { useTranslation } from "react-i18next"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
-import { useSettingsStore } from "../../store/settings-store"
+import {
+  useGeneralSettingKey,
+  useGeneralSettingsShallowSelector,
+  useTranslationSettingKey,
+} from "../../store/settings-store"
 import { useDiscoverStore } from "../../store/discover-store"
 import { FeedViewType, VIEW_DEFINITIONS } from "../../../../shared/types"
 import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
@@ -16,13 +20,12 @@ import {
 } from "../../../../shared/discover-data"
 import { sanitizeHTML } from "../../utils/sanitize"
 import { RECOMMENDED_CATEGORY } from "../../hooks/useInitRecommendedFeeds"
-import { RelativeTime } from "../ui/RelativeTime"
 import { SkeletonList } from "../ui/Skeleton"
 import { ContextMenu, useEntryContextMenu, useEntryContextActions } from "../ui/ContextMenu"
 import { SharePoster } from "../ui/SharePoster"
 import { VideoPlayer, pauseInlineVideos } from "../ui/VideoPlayer"
-import { blurhashToDataURL, blurhashToAverageColor } from "../../lib/blurhash"
-import { getImageProxyFallbackUrls, getProxiedImageUrl, getThumbnailUrl } from "../../lib/image-proxy"
+import { blurhashToAverageColor } from "../../lib/blurhash"
+import { getImageProxyFallbackUrls, getThumbnailUrl } from "../../lib/image-proxy"
 import { groupEntriesByDate } from "../../lib/date-groups"
 import { useAsyncSocialDedupe } from "../../hooks/useAsyncSocialDedupe"
 import { canonicalizeSocialUrl, normalizeSocialHandle, extractFirstHttpUrl, extractFirstNonMediaUrl } from "../../lib/social-url"
@@ -31,8 +34,8 @@ import { getEntryLoadLimit } from "../../lib/entry-load-limit"
 import { formatDistanceToNow } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
 import { transformVideoUrl } from "../media/MediaPlayer"
-import { Search, CheckCheck, Star, Loader2, Inbox, Play, ExternalLink, Plus, Film, Check, X, FileText, Users, MessageCircle, Rss, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw, MoreHorizontal, Eye, EyeOff, Globe, Copy, BookmarkPlus, ArrowUp, ArrowDown, Share2, Languages, Sparkles } from "lucide-react"
-import type { Entry, FeedWithCount } from "../../../../shared/types"
+import { Search, CheckCheck, Star, Loader2, Inbox, Play, Plus, Check, FileText, Users, ChevronDown, ChevronUp, RefreshCw, MoreHorizontal, Eye, EyeOff, Globe, Languages, Sparkles } from "lucide-react"
+import type { Entry } from "../../../../shared/types"
 import type { MediaItem } from "../../../../shared/types"
 
 function isPicnobMirrorHost(host: string): boolean {
@@ -196,38 +199,6 @@ function normalizePicnobMirrorRequestUrl(url: string): string {
   }
 }
 
-function swapPicnobMirrorHost(url: string): string {
-  const raw = (url || "").trim()
-  if (!raw) return ""
-  try {
-    const parsed = new URL(raw)
-    const host = parsed.hostname.toLowerCase()
-
-    // Swap between picnob.info and pixnoy.com
-    if (host === "media.picnob.info") {
-      parsed.hostname = "media.pixnoy.com"
-      return parsed.toString()
-    }
-    if (host === "media.pixnoy.com") {
-      parsed.hostname = "media.picnob.info"
-      return parsed.toString()
-    }
-
-    // Swap between piokok.com and picnob.com
-    if (host.includes("piokok.com")) {
-      parsed.hostname = host.replace("piokok.com", "picnob.com")
-      return parsed.toString()
-    }
-    if (host.includes("picnob.com") && !host.includes("picnob.info")) {
-      parsed.hostname = host.replace("picnob.com", "piokok.com")
-      return parsed.toString()
-    }
-  } catch {
-    // Ignore malformed URL.
-  }
-  return raw
-}
-
 function normalizeMediaCompareKey(url: string): string {
   const raw = decodeMediaUrl(url || "").trim()
   if (!raw) return ""
@@ -249,28 +220,6 @@ function normalizeMediaCompareKey(url: string): string {
     return `${parsed.origin.toLowerCase()}${pathname}${parsed.search || ""}`
   } catch {
     return raw.split("#")[0].trim()
-  }
-}
-
-function normalizePixnoyPtImageUrl(url: string): string {
-  const raw = (url || "").trim()
-  if (!raw) return ""
-  try {
-    const parsed = new URL(raw)
-    const host = parsed.hostname.toLowerCase()
-    if (!/pixnoy|picnob/i.test(host)) return raw
-    if (!/\/p\/pt_/i.test(parsed.pathname)) return raw
-
-    const encoded = parsed.searchParams.get("o") || ""
-    if (!encoded) return raw
-    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/")
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-    const decoded = atob(padded)
-    const match = decoded.match(/https?:\/\/[^\s"'<>]+/i)
-    if (match?.[0]) return match[0]
-    return /^https?:\/\//i.test(decoded) ? decoded : raw
-  } catch {
-    return raw
   }
 }
 
@@ -416,10 +365,6 @@ function resolveEntryBrowserOpenUrl(entry: Entry): string {
   const igPostUrl = buildInstagramPostUrlFromMedia()
   if (igPostUrl) return canonicalizeSocialUrl(igPostUrl)
   return ""
-}
-
-function getOptionalPreviewUrl(media: { url: string } | MediaItem): string {
-  return "previewUrl" in media && typeof media.previewUrl === "string" ? media.previewUrl : ""
 }
 
 function isDecorativeSocialImageUrl(url: string): boolean {
@@ -596,16 +541,6 @@ function extractImagesFromHtml(html: string): string[] {
   }
 }
 
-function getMediaCoverUrl(entry: Entry): string {
-  const photos = entry.media?.filter((m) => m.type === "photo").map(decodeMediaUrls) || []
-  const fromMedia = decodeMediaUrl(photos[0]?.previewUrl || photos[0]?.url || "")
-  if (fromMedia && isLikelyImageByUrl(fromMedia)) return fromMedia
-  const fromEntry = decodeMediaUrl(entry.imageUrl || "")
-  if (fromEntry && isLikelyImageByUrl(fromEntry)) return fromEntry
-  const fromContent = extractImagesFromHtml(entry.content || entry.summary || "")[0] || ""
-  return decodeMediaUrl(fromContent)
-}
-
 function cleanSocialTextHtml(html: string): string {
   if (!html) return ""
   let safe = sanitizeHTML(html)
@@ -711,88 +646,6 @@ function extractPixnoyOriginUrl(url: string): string {
   } catch {
     return ""
   }
-}
-
-function isPicnobMirrorProxyUrl(url: string): boolean {
-  const raw = (url || "").trim()
-  if (!raw) return false
-  try {
-    const parsed = new URL(raw)
-    const host = parsed.hostname.toLowerCase()
-    return isPicnobMirrorHost(host) && parsed.pathname === "/get"
-  } catch {
-    return false
-  }
-}
-
-function getPhotoSourceQualityScore(photo: { url: string; previewUrl?: string }): number {
-  const url = decodeMediaUrl(photo.url || "")
-  const preview = decodeMediaUrl(photo.previewUrl || "")
-  const primary = url || preview
-  if (!primary) return -10
-  const nowEpochSeconds = Math.floor(Date.now() / 1000)
-  const getExpiryScore = (value: string): number => {
-    if (!value) return 0
-    const parseOe = (u: string): number => {
-      try {
-        const p = new URL(u)
-        const oe = (p.searchParams.get("oe") || "").trim()
-        if (!oe) return 0
-        const n = Number.parseInt(oe, 16)
-        return Number.isFinite(n) ? n : 0
-      } catch {
-        return 0
-      }
-    }
-    const direct = parseOe(value)
-    if (direct > 0) return direct
-    const nested = extractPixnoyOriginUrl(value)
-    if (!nested) return 0
-    return parseOe(nested)
-  }
-  let score = 0
-  if (!isPicnobMirrorProxyUrl(primary)) score += 5
-  if (preview && !isPicnobMirrorProxyUrl(preview)) score += 2
-  if (/cdninstagram|fbcdn\.net|scontent\./i.test(primary)) score += 3
-  if (isPicnobMirrorProxyUrl(primary)) score -= 3
-
-  const expiry = Math.max(getExpiryScore(url), getExpiryScore(preview))
-  if (expiry > 0) {
-    if (expiry < nowEpochSeconds) score -= 20
-    else score += 8 + Math.min(12, (expiry - nowEpochSeconds) / (24 * 60 * 60))
-  }
-
-  const queryLen = (() => {
-    try {
-      const p = new URL(primary)
-      return p.search.length
-    } catch {
-      return 0
-    }
-  })()
-  if (queryLen > 0) score += Math.min(3, queryLen / 120)
-  return score
-}
-
-function getInstagramAvatarUrl(siteUrl?: string, feedUrl?: string): string | null {
-  const candidates = [siteUrl, feedUrl].filter(Boolean) as string[]
-  for (const url of candidates) {
-    try {
-      const parsed = new URL(url)
-      const host = parsed.hostname.toLowerCase()
-      if (host === "instagram.com" || host === "www.instagram.com") {
-        const username = parsed.pathname.split("/").filter(Boolean)[0]
-        if (username && /^[a-zA-Z0-9._]+$/.test(username)) {
-          return `https://unavatar.io/instagram/${username}?fallback=false`
-        }
-      }
-    } catch {}
-    const rsshub = url.match(/\/instagram\/user\/([^/?#]+)/i)
-    if (rsshub?.[1]) return `https://unavatar.io/instagram/${decodeURIComponent(rsshub[1])}?fallback=false`
-    const picnob = url.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
-    if (picnob?.[1]) return `https://unavatar.io/instagram/${decodeURIComponent(picnob[1])}?fallback=false`
-  }
-  return null
 }
 
 function isGenericInstagramIconUrl(url: string): boolean {
@@ -1200,51 +1053,6 @@ function collapseCoverOnlyBeforeVideoEntries(entries: Entry[]): Entry[] {
   return compacted
 }
 
-function renderQualityScore(entry: Entry): number {
-  const media = entry.media || []
-  let score = 0
-  for (const m of media) {
-    const url = decodeMediaUrl(m.url || "")
-    const preview = decodeMediaUrl(m.previewUrl || "")
-    const key = normalizeMediaCompareKey(url || preview)
-    if (!key) continue
-    score += 2
-    if (preview && !isPicnobMirrorProxyUrl(preview)) score += 2
-    if (url && !isPicnobMirrorProxyUrl(url)) score += 1
-    if ((url || preview).includes("cdninstagram") || (url || preview).includes("scontent.")) score += 1
-    if (preview && /[?&]ig_cache_key=/i.test(preview)) score += 1
-    if (url && /[?&]ig_cache_key=/i.test(url)) score += 1
-  }
-  return score
-}
-
-function countLikelyRenderableImages(entry: Entry): number {
-  return countRenderableImages(entry)
-}
-
-function timelineEntryScore(entry: Entry): number {
-  const likelyImages = countLikelyRenderableImages(entry)
-  const quality = renderQualityScore(entry)
-  const hasVideo = (entry.media || []).some((m) => m.type === "video") ? 12000 : 0
-  return hasVideo + quality * 5000 + likelyImages * 500 + (entry.media?.length || 0) * 10 + ((entry.content || entry.summary || "").length || 0)
-}
-
-function entriesLikelySamePost(a: Entry, b: Entry): boolean {
-  if (a.feedId !== b.feedId) return false
-  const delta = Math.abs((a.publishedAt || 0) - (b.publishedAt || 0))
-  if (delta > 24 * 60 * 60 * 1000) return false
-
-  const aTitle = normalizeLooseText(a.title || "")
-  const bTitle = normalizeLooseText(b.title || "")
-  const titleMatch = !!aTitle && !!bTitle && (aTitle === bTitle || aTitle.includes(bTitle) || bTitle.includes(aTitle))
-
-  const aContent = normalizeLooseText((a.content || a.summary || "").slice(0, 280))
-  const bContent = normalizeLooseText((b.content || b.summary || "").slice(0, 280))
-  const contentMatch = !!aContent && !!bContent && (aContent === bContent || aContent.includes(bContent) || bContent.includes(aContent))
-
-  return titleMatch || contentMatch
-}
-
 /** Clean relative time by stripping verbose locale prefixes like the English "about" prefix. */
 function cleanRelativeTime(date: Date | string | number): string {
   const d = date instanceof Date ? date : new Date(date)
@@ -1273,12 +1081,13 @@ export function EntryList({ width }: { width?: number }) {
   } =
     useEntryStore()
   const { selectedFeedId, feeds, activeView, refreshFeed, refreshMultiple, refreshAll, isRefreshing, refreshProgress } = useFeedStore()
-  const { settings } = useSettingsStore()
+  const general = useGeneralSettingsShallowSelector((settings) => ({
+    showRecommended: settings.showRecommended,
+    groupByDate: settings.groupByDate,
+    dimRead: settings.dimRead,
+    imageProxy: settings.imageProxy,
+  }))
   const { t } = useTranslation()
-  const filteredFeeds = useMemo(
-    () => activeView === null ? feeds : feeds.filter((f) => (f.view ?? FeedViewType.Articles) === activeView),
-    [feeds, activeView]
-  )
   const [filterMode, setFilterMode] = useState<"all" | "unread">("all")
   const entryLoadLimit = useMemo(() => getEntryLoadLimit(activeView), [activeView])
 
@@ -1371,7 +1180,7 @@ export function EntryList({ width }: { width?: number }) {
     () => new Set(feeds.filter((f) => f.category === RECOMMENDED_CATEGORY).map((f) => f.id)),
     [feeds],
   )
-  const receiveRecommended = settings.general.showRecommended
+  const receiveRecommended = general.showRecommended
 
   // Filter entries by active view (when showing all feeds) - exclude recommended feeds
   const baseFilteredEntries = useMemo(() => {
@@ -1439,13 +1248,13 @@ export function EntryList({ width }: { width?: number }) {
     [renderEntries],
   )
   const groupedRenderEntries = useMemo(
-    () => settings.general.groupByDate ? groupEntriesByDate(renderEntries) : [],
-    [renderEntries, settings.general.groupByDate],
+    () => general.groupByDate ? groupEntriesByDate(renderEntries) : [],
+    [general.groupByDate, renderEntries],
   )
   const useVirtualSocialList = activeView === FeedViewType.SocialMedia
   const socialRows = useMemo(() => {
     if (!useVirtualSocialList) return []
-    if (settings.general.groupByDate) {
+    if (general.groupByDate) {
       return groupedRenderEntries.flatMap((group) => [
         {
           key: `header:${group.labelKey}:${group.label}`,
@@ -1467,7 +1276,7 @@ export function EntryList({ width }: { width?: number }) {
       entry,
       entryIndex: index,
     }))
-  }, [entryIndexById, groupedRenderEntries, renderEntries, settings.general.groupByDate, useVirtualSocialList])
+  }, [entryIndexById, general.groupByDate, groupedRenderEntries, renderEntries, useVirtualSocialList])
   const isGridMode = viewDef?.gridMode ?? false
   const listScrollRef = useRef<HTMLDivElement>(null)
   const lastScrollScopeRef = useRef<string>("")
@@ -1556,12 +1365,12 @@ export function EntryList({ width }: { width?: number }) {
         isActive={selectedEntry?.id === entry.id}
         onSelect={() => selectEntry(entry)}
         feedTitle={feedById.get(entry.feedId)?.title}
-        dimRead={settings.general.dimRead}
-        imageProxy={settings.general.imageProxy}
+        dimRead={general.dimRead}
+        imageProxy={general.imageProxy}
         onContextMenu={(e) => showMenu(e, entry.id)}
       />
     )
-  }, [feedById, selectEntry, selectedEntry?.id, settings.general.dimRead, settings.general.imageProxy, showMenu])
+  }, [feedById, general.dimRead, general.imageProxy, selectEntry, selectedEntry?.id, showMenu])
 
   return (
     <div
@@ -1742,7 +1551,7 @@ export function EntryList({ width }: { width?: number }) {
                       onMarkAboveRead={() => markAboveRead(item.entry.id)}
                       onMarkBelowRead={() => markBelowRead(item.entry.id)}
                       onContextMenu={(e) => showMenu(e, item.entry.id)}
-                      dimRead={settings.general.dimRead}
+                dimRead={general.dimRead}
                       onMediaAllFailed={() => handleEntryMediaAllFailed(item.entry)}
                     />
                   )}
@@ -2250,10 +2059,10 @@ export const SocialMediaItem = memo(function SocialMediaItem({
   feedImage,
   feedSiteUrl,
   feedUrl,
-  entryIndex,
-  totalEntries,
-  onMarkAboveRead,
-  onMarkBelowRead,
+  entryIndex: _entryIndex,
+  totalEntries: _totalEntries,
+  onMarkAboveRead: _onMarkAboveRead,
+  onMarkBelowRead: _onMarkBelowRead,
   onContextMenu,
   dimRead,
   onOpenBilibiliInPage,
@@ -2539,7 +2348,8 @@ export const SocialMediaItem = memo(function SocialMediaItem({
   const avatarLetter = (entry.author || feedTitle || "?")[0]
 
   // AI translation & summary state (per-tweet, with LRU cache persistence)
-  const settings = useSettingsStore((s) => s.settings)
+  const language = useGeneralSettingKey("language")
+  const targetLanguage = useTranslationSettingKey("targetLanguage")
   const [tweetTranslatedParagraphs, setTweetTranslatedParagraphs] = useState<string[]>(() => tweetTranslationCache.get(entry.id) ?? [])
   const [tweetSummary, setTweetSummary] = useState<string | null>(() => tweetSummaryCache.get(entry.id) ?? null)
   const [isTranslatingTweet, setIsTranslatingTweet] = useState(false)
@@ -2568,7 +2378,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     // Split plain text by newlines so bilingual translation interleaves per paragraph
     const lines = plain.split(/\n+/).map((l) => l.trim()).filter(Boolean)
     return lines.length > 0 ? lines : [plain]
-  }, [entry.content, entry.summary, entry.title])
+  }, [entry.content, entry.summary, entry.title, sanitizedContent])
 
   const handleTranslateTweet = useCallback(async () => {
     if (tweetParagraphs.length === 0) return
@@ -2585,7 +2395,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     // Do translation paragraph by paragraph
     setIsTranslatingTweet(true)
     setShowTweetTranslation(true)
-    const targetLang = settings.translation?.targetLanguage || settings.general?.language || "zh-CN"
+    const targetLang = targetLanguage || language || "zh-CN"
     const results: string[] = []
     for (let i = 0; i < tweetParagraphs.length; i++) {
       const plainText = tweetParagraphs[i].replace(/<[^>]*>/g, "").trim()
@@ -2607,7 +2417,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     }
     tweetTranslationCache.set(entry.id, results)
     setIsTranslatingTweet(false)
-  }, [tweetParagraphs, showTweetTranslation, tweetTranslatedParagraphs.length, settings.translation?.targetLanguage, settings.general?.language, entry.id])
+  }, [entry.id, language, showTweetTranslation, targetLanguage, tweetParagraphs, tweetTranslatedParagraphs.length])
 
   const handleSummarizeTweet = useCallback(async () => {
     if (!tweetTextContent) return
@@ -2627,7 +2437,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     try {
       const result = await window.api.ai.summarize(
         tweetTextContent,
-        settings.general?.language || "zh-CN"
+        language || "zh-CN"
       )
       if (result.success) {
         setTweetSummary(result.summary)
@@ -2639,7 +2449,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
       setTweetSummary(`Error: ${String(err)}`)
     }
     setIsSummarizingTweet(false)
-  }, [tweetTextContent, showTweetSummary, tweetSummary, settings.general?.language, entry.id])
+  }, [entry.id, language, showTweetSummary, tweetSummary, tweetTextContent])
 
   // Hover action bar state
   const [showActionBar, setShowActionBar] = useState(false)
@@ -3470,7 +3280,7 @@ export function ViewRecommendations({ viewType }: { viewType: FeedViewType }) {
   const { addFeed, updateFeed, feeds: userFeeds } = useFeedStore()
   const { setOpen } = useDiscoverStore()
   const { t } = useTranslation()
-  const rsshubInstance = useSettingsStore((s) => s.settings.general.rsshubInstance) || DEFAULT_RSSHUB_INSTANCE
+  const rsshubInstance = useGeneralSettingKey("rsshubInstance") || DEFAULT_RSSHUB_INSTANCE
   const [subscribingUrls, setSubscribingUrls] = useState<Set<string>>(new Set())
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const rsshubBase = rsshubInstance.replace(/\/+$/, "")

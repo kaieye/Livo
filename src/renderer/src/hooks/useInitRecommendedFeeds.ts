@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useFeedStore } from "../store/feed-store"
-import { useSettingsStore } from "../store/settings-store"
+import { useGeneralSettingKey } from "../store/settings-store"
 import { FeedViewType } from "../../../shared/types"
 import {
   RECOMMENDED_ARTICLE_FEEDS,
@@ -121,16 +121,16 @@ function normalizePlatformFeedTitle(url: string, rawTitle: string): string {
 export function useInitRecommendedFeeds(): void {
   const loadFeeds = useFeedStore((s) => s.loadFeeds)
   const feeds = useFeedStore((s) => s.feeds)
-  const showRecommended = useSettingsStore((s) => s.settings.general.showRecommended)
+  const showRecommended = useGeneralSettingKey("showRecommended")
+  const rsshubInstance = useGeneralSettingKey("rsshubInstance")
   const initialized = useRef(false)
   const titlesSynced = useRef(false)
 
   useEffect(() => {
     if (!showRecommended) return
+    const normalizedRsshubInstance = (rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
     const syncRecommendedTitles = async (): Promise<boolean> => {
-      const settings = await window.api.settings.get().catch(() => null)
-      const rsshubInstance = (settings?.general?.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
-      const titleMap = getRecommendedTitleMap(rsshubInstance)
+      const titleMap = getRecommendedTitleMap(normalizedRsshubInstance)
       const currentFeeds = useFeedStore.getState().feeds
       let changed = false
       for (const feed of currentFeeds) {
@@ -151,10 +151,8 @@ export function useInitRecommendedFeeds(): void {
     if (storedVersion >= RECOMMENDED_VERSION && titlesSynced.current) return
 
     const init = async () => {
-      const settings = await window.api.settings.get().catch(() => null)
-      const rsshubInstance = (settings?.general?.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
-      const recommendedUrls = getRecommendedUrls(rsshubInstance)
-      const titleMap = getRecommendedTitleMap(rsshubInstance)
+      const recommendedUrls = getRecommendedUrls(normalizedRsshubInstance)
+      const titleMap = getRecommendedTitleMap(normalizedRsshubInstance)
 
       // Remove stale recommended feeds that are no longer in the list
       const feedsAfterMigration = useFeedStore.getState().feeds
@@ -257,5 +255,5 @@ export function useInitRecommendedFeeds(): void {
         console.error(e)
       }
     })()
-  }, [loadFeeds, feeds, showRecommended])
+  }, [feeds, loadFeeds, rsshubInstance, showRecommended])
 }

@@ -7,7 +7,7 @@
  * - Switches to absolute date after 29 days
  * - Dynamic refresh intervals: 1s (< 1min), 1min (< 1hr), 1hr (< 1day), 1day (< threshold)
  */
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { format } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
@@ -55,7 +55,7 @@ export function RelativeTime({
   className?: string
 }) {
   const { t } = useTranslation()
-  const dateObj = date instanceof Date ? date : new Date(date)
+  const dateObj = useMemo(() => (date instanceof Date ? date : new Date(date)), [date])
   const [text, setText] = useState(() => formatRelative(dateObj, t))
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 

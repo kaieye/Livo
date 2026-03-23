@@ -6,6 +6,7 @@ import { X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { DEFAULT_SHORTCUTS, SHORTCUT_CATEGORY_LABELS, type ShortcutCategory } from "../../../../shared/shortcuts"
 import { create } from "zustand"
+import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
 
 // ====== State ======
 interface ShortcutHelpState {
@@ -25,6 +26,7 @@ export const useShortcutHelpStore = create<ShortcutHelpState>((set, get) => ({
 // ====== Component ======
 export function ShortcutHelpDialog() {
   const { isOpen, close } = useShortcutHelpStore()
+  useOverlayHotkeyScope("shortcut-help", isOpen)
   const { t } = useTranslation()
 
   if (!isOpen) return null

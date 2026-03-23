@@ -2,7 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import App from "./App"
 import { ErrorBoundary } from "./components/ErrorBoundary"
-import { I18nProvider } from "./providers/I18nProvider"
+import { RootProviders } from "./providers/RootProviders"
 import "./styles/tokens.css"
 import "./styles/globals.css"
 
@@ -10,9 +10,9 @@ try {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <ErrorBoundary>
-        <I18nProvider>
+        <RootProviders>
           <App />
-        </I18nProvider>
+        </RootProviders>
       </ErrorBoundary>
     </React.StrictMode>
   )

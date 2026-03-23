@@ -1,10 +1,9 @@
-import { useSettingsStore } from "../../store/settings-store"
+import { useSettingSection, useSettingsActions } from "../../store/settings-store"
 import { useTranslation } from "react-i18next"
-import { useState, useMemo } from "react"
 
 export function ReadingSettings() {
-  const { settings, updateSettings } = useSettingsStore()
-  const general = settings.general
+  const general = useSettingSection("general")
+  const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
 
   const contentWidthOptions = [
@@ -12,14 +11,6 @@ export function ReadingSettings() {
     { key: "normal" as const, label: t("settings.contentWidth_normal"), desc: t("settings.contentWidthDesc_normal"), px: 680 },
     { key: "wide" as const, label: t("settings.contentWidth_wide"), desc: t("settings.contentWidthDesc_wide"), px: 900 },
     { key: "custom" as const, label: t("settings.contentWidth_custom"), desc: t("settings.contentWidthDesc_custom") },
-  ]
-
-  const lineHeightOptions = [
-    { value: "1.25", label: `${t("settings.lineHeight_compact")} (1.25)` },
-    { value: "1.5", label: `${t("settings.lineHeight_compact")} (1.5)` },
-    { value: "1.75", label: `${t("settings.lineHeight_compact")} (1.75)` },
-    { value: "2", label: `${t("settings.lineHeight_loose")} (2.0)` },
-    { value: "2.25", label: `${t("settings.lineHeight_loose")} (2.25)` },
   ]
 
   const fontFamilyOptions = [
@@ -47,7 +38,7 @@ export function ReadingSettings() {
             <button
               key={option.key}
               onClick={() => {
-                updateSettings({ general: { ...general, contentWidth: option.key } })
+                void updateSettingsSection("general", { contentWidth: option.key })
               }}
               className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
                 general.contentWidth === option.key
@@ -78,7 +69,7 @@ export function ReadingSettings() {
             step={10}
             value={general.contentMaxWidth || 680}
             onChange={(e) =>
-              updateSettings({ general: { ...general, contentMaxWidth: Number(e.target.value) } })
+              void updateSettingsSection("general", { contentMaxWidth: Number(e.target.value) })
             }
             className="w-full accent-accent"
           />
@@ -108,7 +99,7 @@ export function ReadingSettings() {
           step={0.05}
           value={general.contentLineHeight}
           onChange={(e) =>
-            updateSettings({ general: { ...general, contentLineHeight: Number(e.target.value) } })
+            void updateSettingsSection("general", { contentLineHeight: Number(e.target.value) })
           }
           className="w-full accent-accent"
         />
@@ -133,7 +124,7 @@ export function ReadingSettings() {
         <select
           value={general.uiFontFamily}
           onChange={(e) =>
-            updateSettings({ general: { ...general, uiFontFamily: e.target.value } })
+            void updateSettingsSection("general", { uiFontFamily: e.target.value })
           }
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
         >
@@ -156,7 +147,7 @@ export function ReadingSettings() {
         <select
           value={general.contentFontFamily}
           onChange={(e) =>
-            updateSettings({ general: { ...general, contentFontFamily: e.target.value } })
+            void updateSettingsSection("general", { contentFontFamily: e.target.value })
           }
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
           style={{ fontFamily: general.contentFontFamily }}

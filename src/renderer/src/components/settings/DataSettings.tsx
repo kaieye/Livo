@@ -1,4 +1,4 @@
-import { useSettingsStore } from "../../store/settings-store"
+import { useSettingSection, useSettingsActions } from "../../store/settings-store"
 import { useTranslation } from "react-i18next"
 import { useState, useEffect, useCallback } from "react"
 import { Database, Trash2, BarChart3, Loader2 } from "lucide-react"
@@ -24,8 +24,9 @@ function formatBytes(bytes: number): string {
 }
 
 export function DataSettings() {
-  const { settings, updateSettings } = useSettingsStore()
-  const dataSettings = settings.data ?? {
+  const data = useSettingSection("data")
+  const { updateSettingsSection } = useSettingsActions()
+  const dataSettings = data ?? {
     entriesPerFeed: 128,
     maxEntryAgeDays: 90,
     freshnessTTL: 10,
@@ -70,7 +71,7 @@ export function DataSettings() {
   }
 
   const updateData = (updates: Partial<typeof dataSettings>) => {
-    updateSettings({ data: { ...dataSettings, ...updates } })
+    void updateSettingsSection("data", updates)
   }
 
   return (

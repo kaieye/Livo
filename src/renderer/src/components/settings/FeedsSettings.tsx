@@ -422,7 +422,7 @@ export function FeedsSettings() {
                     onChange={(e) => setEditView(Number(e.target.value) as FeedViewType)}
                     className="w-16 px-1 py-0.5 text-xs border rounded bg-white dark:bg-surface-dark dark:border-border-dark focus:outline-none"
                   >
-                    {Object.entries(VIEW_DEFINITIONS).map(([k, v]) => (
+                    {Object.entries(VIEW_DEFINITIONS).map(([k]) => (
                       <option key={k} value={k}>
                         {t(VIEW_TYPE_I18N_KEYS[Number(k)] || "viewTypes.articles")}
                       </option>

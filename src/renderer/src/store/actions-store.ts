@@ -2,7 +2,7 @@
  * Zustand store for managing automation rules (Actions).
  */
 import { createAppStore } from "./helpers"
-import type { ActionRule, ActionCondition, ActionEffect } from "../../../shared/actions"
+import type { ActionRule } from "../../../shared/actions"
 
 interface ActionsState {
   rules: ActionRule[]

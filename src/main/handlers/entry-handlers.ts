@@ -1,5 +1,4 @@
 ﻿import { ipcMain } from "electron"
-import type { Entry } from "../../shared/types"
 import { IPC } from "../../shared/types"
 import {
   getEntries,

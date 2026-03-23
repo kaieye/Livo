@@ -1,9 +1,13 @@
-﻿import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import { AlertCircle, Check, Loader2 } from "lucide-react"
 import { FeedViewType, type AccountProvider } from "../../../../shared/types"
 import { DEFAULT_RSSHUB_INSTANCE } from "../../../../shared/discover-data"
+import { useAccountStatusQuery } from "../../hooks/useAccountStatusQuery"
 import { RECOMMENDED_CATEGORY } from "../../hooks/useInitRecommendedFeeds"
+import { fetchAccountStatus } from "../../lib/account-status"
+import { queryKeys } from "../../lib/query-keys"
 import { useFeedStore } from "../../store/feed-store"
 
 interface AccountCardConfig {
@@ -11,13 +15,6 @@ interface AccountCardConfig {
   name: string
   colorClass: string
   description: string
-}
-
-interface AccountStatusResult {
-  provider: AccountProvider
-  linked: boolean
-  displayName: string | null
-  error?: string
 }
 
 interface PendingBilibiliCreator {
@@ -133,36 +130,9 @@ const ACCOUNT_CARDS: AccountCardConfig[] = [
   },
 ]
 
-async function checkAccountStatus(provider: AccountProvider): Promise<AccountStatusResult> {
-  if (window.api.accounts) {
-    const next = await window.api.accounts.status(provider)
-    return {
-      provider,
-      linked: next.linked,
-      displayName: next.displayName ?? null,
-      error: next.error,
-    }
-  }
-
-  if (provider === "youtube") {
-    const yt = await window.api.video.ytStatus()
-    return {
-      provider,
-      linked: yt.loggedIn,
-      displayName: yt.name ?? null,
-    }
-  }
-
-  return {
-    provider,
-    linked: false,
-    displayName: null,
-    error: "当前版本未注入 accounts API，请重启应用后重试",
-  }
-}
-
 export function AccountsSettings() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [selfChecking, setSelfChecking] = useState(false)
   const [selfCheckSummary, setSelfCheckSummary] = useState<string | null>(null)
   const [selfCheckRows, setSelfCheckRows] = useState<Array<{ name: string; pass: boolean; detail: string }>>([])
@@ -176,7 +146,10 @@ export function AccountsSettings() {
       const results = await Promise.all(
         ACCOUNT_CARDS.map(async (card) => {
           try {
-            const status = await checkAccountStatus(card.provider)
+            const status = await queryClient.fetchQuery({
+              queryKey: queryKeys.accounts.status(card.provider),
+              queryFn: () => fetchAccountStatus(card.provider),
+            })
             const pass = status.linked && !!status.displayName
             const detail = pass
               ? `通过: ${status.displayName}`
@@ -202,7 +175,7 @@ export function AccountsSettings() {
     } finally {
       setSelfChecking(false)
     }
-  }, [])
+  }, [queryClient])
 
   return (
     <div className="space-y-8">
@@ -247,13 +220,11 @@ export function AccountsSettings() {
 }
 
 function AccountCard({ config }: { config: AccountCardConfig }) {
+  const queryClient = useQueryClient()
   const feeds = useFeedStore((s) => s.feeds)
   const loadFeeds = useFeedStore((s) => s.loadFeeds)
+  const statusQuery = useAccountStatusQuery(config.provider)
 
-  const [status, setStatus] = useState<{ linked: boolean; displayName: string | null }>({
-    linked: false,
-    displayName: null,
-  })
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -262,7 +233,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
   const [manualName, setManualName] = useState("")
   const [pendingCreators, setPendingCreators] = useState<PendingBilibiliCreator[] | null>(null)
   const [pendingRsshubBase, setPendingRsshubBase] = useState<string | null>(null)
-  const [pendingRouteType, setPendingRouteType] = useState<BilibiliRouteType>("video")
+  const [, setPendingRouteType] = useState<BilibiliRouteType>("video")
   const [previewStats, setPreviewStats] = useState<{ total: number; canImport: number; exists: number } | null>(null)
   const [selectedCreatorMids, setSelectedCreatorMids] = useState<number[]>([])
   const [selectedImportViews, setSelectedImportViews] = useState<FeedViewType[]>([FeedViewType.Videos])
@@ -270,21 +241,19 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     () => loadBilibiliFollowingsCache()?.updatedAt ?? null,
   )
   const [importProgress, setImportProgress] = useState<BilibiliImportProgress | null>(null)
-  const reloadStatus = useCallback(async () => {
+  const status = statusQuery.data ?? { linked: false, displayName: null }
+  const isStatusLoading = statusQuery.isLoading && !statusQuery.data
+  const refreshStatus = useCallback(async () => {
     try {
-      const next = await checkAccountStatus(config.provider)
-      setStatus({
-        linked: next.linked,
-        displayName: next.displayName,
-      })
+      const next = await fetchAccountStatus(config.provider)
+      queryClient.setQueryData(queryKeys.accounts.status(config.provider), next)
+      return next
     } catch {
-      setStatus({ linked: false, displayName: null })
+      const fallback = { provider: config.provider, linked: false, displayName: null, error: undefined }
+      queryClient.setQueryData(queryKeys.accounts.status(config.provider), fallback)
+      return fallback
     }
-  }, [config.provider])
-
-  useEffect(() => {
-    void reloadStatus()
-  }, [reloadStatus])
+  }, [config.provider, queryClient])
 
   const handleLink = useCallback(async () => {
     setLoading(true)
@@ -298,7 +267,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           : { success: false, error: "当前版本未注入 accounts API，请重启应用后重试" }
       if (result.success) {
         setFeedback("关联成功")
-        await reloadStatus()
+        await refreshStatus()
       } else {
         setFeedback("关联失败，请重试")
         setErrorDetail(result.error ?? null)
@@ -310,7 +279,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       setLoading(false)
       setTimeout(() => setFeedback(null), 3000)
     }
-  }, [config.provider, reloadStatus])
+  }, [config.provider, refreshStatus])
 
   const handleUnlink = useCallback(async () => {
     setLoading(true)
@@ -324,7 +293,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           : { success: false, error: "当前版本未注入 accounts API，请重启应用后重试" }
       if (result.success) {
         setFeedback("已取消关联")
-        await reloadStatus()
+        await refreshStatus()
       } else {
         setFeedback("取消关联失败")
         setErrorDetail(result.error ?? null)
@@ -336,18 +305,14 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       setLoading(false)
       setTimeout(() => setFeedback(null), 3000)
     }
-  }, [config.provider, reloadStatus])
+  }, [config.provider, refreshStatus])
 
   const handleCheck = useCallback(async () => {
     setLoading(true)
     setFeedback(null)
     setErrorDetail(null)
     try {
-      const next = await checkAccountStatus(config.provider)
-      setStatus({
-        linked: next.linked,
-        displayName: next.displayName,
-      })
+      const next = await refreshStatus()
       if (next.linked && next.displayName) {
         setFeedback("检查结果：已关联成功")
       } else {
@@ -361,7 +326,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       setLoading(false)
       setTimeout(() => setFeedback(null), 3000)
     }
-  }, [config.provider])
+  }, [refreshStatus])
 
   const handleSaveName = useCallback(async () => {
     const name = manualName.trim()
@@ -384,7 +349,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
         return
       }
       setFeedback("账号名已保存，正在重新检查...")
-      await reloadStatus()
+      await refreshStatus()
       setManualName("")
     } catch (err) {
       setFeedback("保存账号名失败")
@@ -393,7 +358,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       setLoading(false)
       setTimeout(() => setFeedback(null), 3000)
     }
-  }, [config.provider, manualName, reloadStatus])
+  }, [config.provider, manualName, refreshStatus])
 
   const applyPreviewCreators = useCallback(
     (
@@ -674,6 +639,11 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
             <div className="flex items-center gap-1.5 text-xs text-text-secondary">
               <Loader2 size={14} className="animate-spin" />
               处理中...
+            </div>
+          ) : isStatusLoading ? (
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <Loader2 size={14} className="animate-spin" />
+              正在检查状态...
             </div>
           ) : status.linked && status.displayName ? (
             <button

@@ -1056,7 +1056,7 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
           const data = JSON.parse(stateMatch[1])
           const users = data?.entities?.users?.users || {}
           console.log(`[X Search] Found ${Object.keys(users).length} users in __INITIAL_STATE__`)
-          for (const [id, user] of Object.entries(users) as [string, any][]) {
+          for (const [, user] of Object.entries(users) as [string, any][]) {
             const screenName = user?.screen_name
             if (!screenName) continue
             const name = user?.name || ""
@@ -1069,7 +1069,7 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
             pushCandidate(screenName, name, desc, 2, followers)
             if (out.length >= 20) break
           }
-        } catch (e) {
+        } catch (_e) {
           console.log(`[X Search] Failed to parse __INITIAL_STATE__`)
         }
       }
@@ -1100,13 +1100,12 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   // Use sourceScore for sorting
   const scored = out
     .map((candidate: any) => {
-      const sourceScore = candidate.sourceScore || 1
-      return { candidate, score: sourceScore }
+      return { candidate, score: candidate.sourceScore || 1 }
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 20)
     .map((item) => {
-      const { sourceScore, ...rest } = item.candidate as any
+      const { sourceScore: _sourceScore, ...rest } = item.candidate as any
       return rest as XUserProbeCandidate
     })
 
@@ -1805,7 +1804,7 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
     return svgAvatar
   }
 
-  const pushCandidate = async (usernameRaw: string, displayName = "", description = "Instagram user", sourceScore = 1) => {
+  const pushCandidate = async (usernameRaw: string, displayName = "", description = "Instagram user", _sourceScore = 1) => {
     const username = usernameRaw.trim().replace(/^@+/, "")
     if (!username) return 0
     const key = username.toLowerCase()

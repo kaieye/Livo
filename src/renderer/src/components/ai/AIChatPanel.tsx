@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { useAIChatStore } from "../../store/ai-chat-store"
 import { useEntryStore } from "../../store/entry-store"
 import { X, Send, Trash2, Loader2, Bot, User, GripHorizontal } from "lucide-react"
+import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
 
 const STORAGE_KEY = "ai-chat-panel-ratio"
 
@@ -65,6 +66,7 @@ function pixelsToRatio(x: number, y: number, width: number, height: number): Pan
 
 export function AIChatPanel() {
   const { messages, isLoading, currentStreamContent, isPanelOpen, sendMessage, clearMessages, setPanelOpen } = useAIChatStore()
+  useOverlayHotkeyScope("ai-chat", isPanelOpen)
   const selectedEntry = useEntryStore((s) => s.selectedEntry)
   const [input, setInput] = useState("")
   const { t } = useTranslation()

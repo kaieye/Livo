@@ -20,11 +20,6 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
   const [dataUrl, setDataUrl] = useState<string>("")
   const [isGenerating, setIsGenerating] = useState(true)
 
-  // Generate poster on mount
-  useEffect(() => {
-    generatePoster()
-  }, [entry])
-
   const generatePoster = useCallback(async () => {
     setIsGenerating(true)
     const canvas = canvasRef.current
@@ -131,6 +126,11 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
     setDataUrl(canvas.toDataURL("image/png"))
     setIsGenerating(false)
   }, [entry, feedTitle])
+
+  // Generate poster on mount and whenever content changes
+  useEffect(() => {
+    void generatePoster()
+  }, [generatePoster])
 
   const handleSave = useCallback(() => {
     if (!dataUrl) return

@@ -1,9 +1,16 @@
 import { useEffect } from "react"
-import { useSettingsStore } from "../store/settings-store"
+import { getSettingsSnapshot, useGeneralSettingsShallowSelector } from "../store/settings-store"
 import { applyAppearanceSettings } from "../lib/appearance"
 
 export function useApplyAppearanceSettings() {
-  const general = useSettingsStore((state) => state.settings.general)
+  const general = useGeneralSettingsShallowSelector((settings) => ({
+    theme: settings.theme,
+    accentColor: settings.accentColor,
+    reduceMotion: settings.reduceMotion,
+    uiFontFamily: settings.uiFontFamily,
+    contentFontFamily: settings.contentFontFamily,
+    customCSS: settings.customCSS,
+  }))
 
   useEffect(() => {
     applyAppearanceSettings(general)
@@ -13,7 +20,7 @@ export function useApplyAppearanceSettings() {
     if (general.theme !== "system") return
 
     const media = window.matchMedia("(prefers-color-scheme: dark)")
-    const listener = () => applyAppearanceSettings(useSettingsStore.getState().settings.general)
+    const listener = () => applyAppearanceSettings(getSettingsSnapshot().general)
     media.addEventListener("change", listener)
     return () => media.removeEventListener("change", listener)
   }, [general.theme])

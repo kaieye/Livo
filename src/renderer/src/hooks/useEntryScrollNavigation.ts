@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from "react"
 
+import { HOTKEY_OVERLAY_SCOPES } from "../lib/hotkey-scope"
 import { useRegisterCommand } from "./useRegisterCommand"
 
 export function useEntryScrollNavigation({
@@ -57,6 +58,8 @@ export function useEntryScrollNavigation({
   useRegisterCommand({
     id: "reading:scroll-top",
     shortcutId: "scroll-top",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (event) => {
       if (!enabled) return false
       event.preventDefault()
@@ -68,6 +71,8 @@ export function useEntryScrollNavigation({
   useRegisterCommand({
     id: "reading:scroll-down",
     shortcutId: "scroll-down-reading",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (event) => {
       if (!enabled) return false
       event.preventDefault()
@@ -78,6 +83,8 @@ export function useEntryScrollNavigation({
   useRegisterCommand({
     id: "reading:scroll-up",
     shortcutId: "scroll-up-reading",
+    scopes: ["content"],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (event) => {
       if (!enabled) return false
       event.preventDefault()

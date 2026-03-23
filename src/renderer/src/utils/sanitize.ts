@@ -205,7 +205,7 @@ export function isExternalUrl(url: string): boolean {
  * Show an external link warning before navigating.
  * Returns the URL if user confirms, null if cancelled.
  */
-export function createExternalLinkWarning(url: string, siteName?: string): {
+export function createExternalLinkWarning(url: string): {
   url: string
   hostname: string
   isSuspicious: boolean

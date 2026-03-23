@@ -216,7 +216,7 @@ export async function insertEntry(entry: Entry): Promise<boolean> {
     if (existing) return false
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     const tx = getDB().transaction("entries", "readwrite")
     const store = tx.objectStore("entries")
     const request = store.add(entry)

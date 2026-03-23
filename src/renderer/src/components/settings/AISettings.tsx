@@ -1,17 +1,17 @@
-import { useSettingsStore } from "../../store/settings-store"
+import { useSettingSection, useSettingsActions } from "../../store/settings-store"
 import { useTranslation } from "react-i18next"
 import { AI_PROVIDERS, type AIProvider } from "../../../../shared/types"
 import { useState } from "react"
 import { Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react"
 
 export function AISettings() {
-  const { settings, updateSettings } = useSettingsStore()
+  const ai = useSettingSection("ai")
+  const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
   const [showKey, setShowKey] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isTesting, setIsTesting] = useState(false)
 
-  const ai = settings.ai
   const providerConfig = AI_PROVIDERS[ai.provider]
   const isCustomProvider = ai.provider === "custom"
   const isApiKeyMissing = ai.provider !== "ollama" && !ai.apiKey.trim()
@@ -21,14 +21,14 @@ export function AISettings() {
 
   const handleProviderChange = (provider: AIProvider) => {
     const config = AI_PROVIDERS[provider]
-    updateSettings({
-      ai: {
-        ...ai,
-        provider,
-        baseUrl: "",
-        model: config.models[0] || "",
-        apiKey: provider === "ollama" ? "ollama" : ai.apiKey,
-      },
+    void updateSettingsSection("ai", {
+      provider,
+      baseUrl: "",
+      model: config.models[0] || "",
+      apiKey: provider === "ollama" ? "ollama" : ai.apiKey,
+      enableSystemPrompt: ai.enableSystemPrompt,
+      systemPromptTemplate: ai.systemPromptTemplate,
+      chatPersonaPrompt: ai.chatPersonaPrompt,
     })
   }
 
@@ -90,7 +90,7 @@ export function AISettings() {
             <input
               type={showKey ? "text" : "password"}
               value={ai.apiKey}
-              onChange={(e) => updateSettings({ ai: { ...ai, apiKey: e.target.value } })}
+              onChange={(e) => void updateSettingsSection("ai", { apiKey: e.target.value })}
               placeholder={t("settings.apiKeyPlaceholder", { provider: providerConfig.name })}
               required={isCustomProvider}
               className="w-full px-3 py-2.5 pr-10 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
@@ -115,7 +115,7 @@ export function AISettings() {
         <input
           type="text"
           value={ai.baseUrl || ""}
-          onChange={(e) => updateSettings({ ai: { ...ai, baseUrl: e.target.value } })}
+          onChange={(e) => void updateSettingsSection("ai", { baseUrl: e.target.value })}
           placeholder={providerConfig.defaultBaseUrl || t("settings.baseUrlPlaceholder")}
           required={isCustomProvider}
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
@@ -133,7 +133,7 @@ export function AISettings() {
         {providerConfig.models.length > 0 ? (
           <select
             value={ai.model}
-            onChange={(e) => updateSettings({ ai: { ...ai, model: e.target.value } })}
+            onChange={(e) => void updateSettingsSection("ai", { model: e.target.value })}
             required={isCustomProvider}
             className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
           >
@@ -147,7 +147,7 @@ export function AISettings() {
           <input
             type="text"
             value={ai.model}
-            onChange={(e) => updateSettings({ ai: { ...ai, model: e.target.value } })}
+            onChange={(e) => void updateSettingsSection("ai", { model: e.target.value })}
             placeholder={t("settings.modelPlaceholder")}
             required={isCustomProvider}
             className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
@@ -164,7 +164,7 @@ export function AISettings() {
           </p>
         </div>
         <button
-          onClick={() => updateSettings({ ai: { ...ai, enableSystemPrompt: !ai.enableSystemPrompt } })}
+          onClick={() => void updateSettingsSection("ai", { enableSystemPrompt: !ai.enableSystemPrompt })}
           className={`relative w-11 h-6 rounded-full transition-colors ${
             ai.enableSystemPrompt ? "bg-accent" : "bg-gray-300 dark:bg-gray-600"
           }`}
@@ -182,7 +182,7 @@ export function AISettings() {
         <label className="block text-sm font-medium mb-1.5">{t("settings.systemPromptTemplate", { defaultValue: "系统提示词模板" })}</label>
         <textarea
           value={ai.systemPromptTemplate || ""}
-          onChange={(e) => updateSettings({ ai: { ...ai, systemPromptTemplate: e.target.value } })}
+          onChange={(e) => void updateSettingsSection("ai", { systemPromptTemplate: e.target.value })}
           placeholder={t("settings.systemPromptTemplatePlaceholder", { defaultValue: "可使用 {{context}} 和 {{persona}} 两个占位符" })}
           rows={7}
           disabled={!ai.enableSystemPrompt}
@@ -198,7 +198,7 @@ export function AISettings() {
         <label className="block text-sm font-medium mb-1.5">{t("settings.aiPersonaPrompt", { defaultValue: "AI 个性化 Prompt" })}</label>
         <textarea
           value={ai.chatPersonaPrompt || ""}
-          onChange={(e) => updateSettings({ ai: { ...ai, chatPersonaPrompt: e.target.value } })}
+          onChange={(e) => void updateSettingsSection("ai", { chatPersonaPrompt: e.target.value })}
           placeholder={t("settings.aiPersonaPromptPlaceholder", { defaultValue: "例如：请用简洁、专业、带步骤的方式回答；优先给结论再给解释。" })}
           rows={5}
           disabled={!ai.enableSystemPrompt}

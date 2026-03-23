@@ -10,6 +10,8 @@ import { useFeedStore } from "../../store/feed-store"
 import { useStoreShallow } from "../../store/helpers"
 import { FeedViewType } from "../../../../shared/types"
 import { getEntryLoadLimit } from "../../lib/entry-load-limit"
+import { useLayoutFocusTarget } from "../../hooks/useLayoutFocusTarget"
+import { useFocusableHotkeyScope } from "../../hooks/useHotkeyScope"
 
 const RECOMMENDED_CATEGORY = "Recommended"
 
@@ -35,6 +37,7 @@ const ENTRY_LIST_MIN = 260
 const ENTRY_LIST_MAX = 640
 
 export function Layout() {
+  const contentFocusRef = useRef<HTMLDivElement>(null)
   const { isDiscoverOpen } = useStoreShallow(useDiscoverStore, (s) => ({ isDiscoverOpen: s.isOpen }))
   const { activeView, selectedFeedId, feeds } = useStoreShallow(useFeedStore, (s) => ({
     activeView: s.activeView,
@@ -45,6 +48,8 @@ export function Layout() {
     selectEntry: s.selectEntry,
     prefetchEntries: s.prefetchEntries,
   }))
+  const isContentFocusHighlighted = useLayoutFocusTarget("content", contentFocusRef)
+  useFocusableHotkeyScope("content", contentFocusRef)
 
   // Clear stale detail content when switching view/feed scope.
   useEffect(() => {
@@ -165,27 +170,35 @@ export function Layout() {
       {/* Resize handle: sidebar ↔ main */}
       <ResizeHandle onMouseDown={(e) => handleMouseDown("sidebar", e)} />
 
-      {isDiscoverOpen ? (
-        <DiscoverPanel />
-      ) : isWideView ? (
-        /* 2-column layout for Social Media / Videos */
-        <div className="flex flex-1 min-w-0">
-          <WideViewContent />
-        </div>
-      ) : (
-        <>
-          {/* Entry List */}
-          <EntryList width={entryListWidth} />
-
-          {/* Resize handle: entry list ↔ content */}
-          <ResizeHandle onMouseDown={(e) => handleMouseDown("entryList", e)} />
-
-          {/* Entry Content */}
+      <div
+        ref={contentFocusRef}
+        tabIndex={-1}
+        className={`flex flex-1 min-w-0 outline-none transition-shadow duration-300 ${
+          isContentFocusHighlighted ? "shadow-[inset_0_0_0_2px_rgba(255,92,0,0.45)]" : ""
+        }`}
+      >
+        {isDiscoverOpen ? (
+          <DiscoverPanel />
+        ) : isWideView ? (
+          /* 2-column layout for Social Media / Videos */
           <div className="flex flex-1 min-w-0">
-            <EntryContent />
+            <WideViewContent />
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            {/* Entry List */}
+            <EntryList width={entryListWidth} />
+
+            {/* Resize handle: entry list ↔ content */}
+            <ResizeHandle onMouseDown={(e) => handleMouseDown("entryList", e)} />
+
+            {/* Entry Content */}
+            <div className="flex flex-1 min-w-0">
+              <EntryContent />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

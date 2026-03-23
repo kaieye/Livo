@@ -14,19 +14,18 @@ import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { useTranslation } from "react-i18next"
 import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
-import { useSettingsStore } from "../../store/settings-store"
+import { useGeneralSettingKey, useGeneralSettingsShallowSelector, useTranslationSettingKey } from "../../store/settings-store"
 import { FeedViewType, VIEW_DEFINITIONS, type Entry } from "../../../../shared/types"
 import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
 import { transformVideoUrl } from "../media/MediaPlayer"
 import { sanitizeHTML } from "../../utils/sanitize"
 import { RECOMMENDED_CATEGORY } from "../../hooks/useInitRecommendedFeeds"
-import { formatDistanceToNow, type Locale } from "date-fns"
+import { formatDistanceToNow } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
 import { SkeletonList } from "../ui/Skeleton"
 import { ContextMenu, useEntryContextMenu, useEntryContextActions } from "../ui/ContextMenu"
 import { ScrollArea } from "../ui/ScrollArea"
 import { SharePoster } from "../ui/SharePoster"
-import { VideoPlayer } from "../ui/VideoPlayer"
 import { usePictureMasonry } from "../../hooks/usePictureMasonry"
 import { useTimelineView } from "../../hooks/useTimelineView"
 import { useVideoGrid } from "../../hooks/useVideoGrid"
@@ -41,7 +40,7 @@ import {
   rememberedMasonrySizeByUrl,
   type MasonryCardData,
 } from "../../lib/picture-masonry"
-import { Loader2, Inbox, RefreshCw, X, ChevronLeft, ChevronRight, ExternalLink, Share2, Languages, Sparkles, Play } from "lucide-react"
+import { Loader2, Inbox, RefreshCw, X, ExternalLink } from "lucide-react"
 import { PictureMasonry } from "./PictureMasonry"
 import { TimelineSection } from "./TimelineSection"
 import { VideoGridSection } from "./VideoGridSection"
@@ -91,69 +90,6 @@ function isDescriptionRedundant(title: string, descriptionHtml: string): boolean
   return rawS === rawT || rawS.startsWith(rawT) || rawT.startsWith(rawS)
 }
 
-function hasVisualSignal(entry: Entry): boolean {
-  if ((entry.media?.length || 0) > 0) return true
-  if (entry.imageUrl) return true
-  const html = `${entry.content || ""}\n${entry.summary || ""}`
-  return /<img\b/i.test(html)
-}
-
-function countLikelyRenderableImages(entry: Entry): number {
-  const keys = new Set<string>()
-  for (const m of entry.media || []) {
-    const preview = decodeMediaUrl(m.previewUrl || "")
-    const original = decodeMediaUrl(m.url || "")
-    if (preview && isLikelyImageByUrl(preview)) keys.add(normalizeImageCacheKey(preview))
-    if (original && isLikelyImageByUrl(original)) keys.add(normalizeImageCacheKey(original))
-  }
-  const imageUrl = decodeMediaUrl(entry.imageUrl || "")
-  if (imageUrl && isLikelyImageByUrl(imageUrl)) keys.add(normalizeImageCacheKey(imageUrl))
-  for (const url of extractImagesFromHtml(entry.content || entry.summary || "")) {
-    const decoded = decodeMediaUrl(url)
-    if (decoded && isLikelyImageByUrl(decoded)) keys.add(normalizeImageCacheKey(decoded))
-  }
-  return keys.size
-}
-
-function getMediaRenderWeight(url: string): number {
-  const raw = decodeMediaUrl(url || "").toLowerCase()
-  if (!raw) return 0
-  if (raw.includes("media.picnob.info/get")) return 0
-  if (/sp\d+\.pixnoy\.com\/p\/pt/i.test(raw)) return 4
-  if (raw.includes("pixnoy.com/p/pt")) return 3
-  if (raw.includes("media.pixnoy.com/get")) return 2
-  if (/cdninstagram|fbcdn\.net|scontent\./i.test(raw)) return 1
-  if (isLikelyImageByUrl(raw)) return 1
-  return 0
-}
-
-function renderQualityScore(entry: Entry): number {
-  const seen = new Set<string>()
-  const urls: string[] = []
-  for (const m of entry.media || []) {
-    if (m.previewUrl) urls.push(m.previewUrl)
-    if (m.url) urls.push(m.url)
-  }
-  if (entry.imageUrl) urls.push(entry.imageUrl)
-  for (const u of extractImagesFromHtml(entry.content || entry.summary || "")) urls.push(u)
-
-  let score = 0
-  for (const u of urls) {
-    const decoded = decodeMediaUrl(u)
-    const key = normalizeImageCacheKey(decoded)
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    score += getMediaRenderWeight(decoded)
-  }
-  return score
-}
-
-function timelineEntryScore(entry: Entry): number {
-  const likelyImages = countLikelyRenderableImages(entry)
-  const quality = renderQualityScore(entry)
-  const hasVideo = (entry.media || []).some((m) => m.type === "video") ? 12000 : 0
-  return hasVideo + quality * 5000 + likelyImages * 500 + (entry.media?.length || 0) * 10 + ((entry.content || entry.summary || "").length || 0)
-}
 /** Split HTML content into paragraph blocks for bilingual display */
 function splitIntoParagraphs(html: string): string[] {
   const blocks = html
@@ -286,7 +222,6 @@ function isRenderableVideoMediaItem(media?: { url?: string; previewUrl?: string 
   if (preview && isDirectVideoUrl(preview)) return true
   return false
 }
-  const hasVideo = (entry: Entry): boolean => (entry.media || []).some((m) => m.type === "video" && isRenderableVideoMediaItem(m))
 
 function extractImagesFromHtml(html: string): string[] {
   if (!html || !html.includes("<")) return []
@@ -455,23 +390,6 @@ function getPhotoDedupeKeys(url: string, previewUrl?: string): string[] {
   return keys
 }
 
-function buildMediaFallbackCandidates(primaryUrl: string, coverUrl: string, mirrorOriginUrl: string): string[] {
-  const proxyFallbacks = getImageProxyFallbackUrls(mirrorOriginUrl || coverUrl || primaryUrl, {
-    width: 1280,
-    quality: 85,
-    format: "jpg",
-  })
-  const candidates = [primaryUrl, coverUrl, mirrorOriginUrl, ...proxyFallbacks].filter(Boolean)
-  const unique: string[] = []
-  for (const url of candidates) {
-    if (!/^https?:\/\//i.test(url)) continue
-    const normalized = normalizeImageCacheKey(url)
-    if (!normalized || unique.some((existing) => normalizeImageCacheKey(existing) === normalized)) continue
-    unique.push(url)
-  }
-  return unique
-}
-
 function normalizeNitterImageUrl(url: string): string {
   const raw = (url || "").trim()
   if (!raw) return ""
@@ -557,28 +475,6 @@ function normalizePicnobMirrorRequestUrl(url: string): string {
     }
     if (!/^https?:\/\//i.test(nested)) return raw
     return `${parsed.origin}/get?url=${encodeURIComponent(nested)}`
-  } catch {
-    return raw
-  }
-}
-
-function normalizePixnoyPtImageUrl(url: string): string {
-  const raw = (url || "").trim()
-  if (!raw) return ""
-  try {
-    const parsed = new URL(raw)
-    const host = parsed.hostname.toLowerCase()
-    if (!/pixnoy|picnob/i.test(host)) return raw
-    if (!/\/p\/pt_/i.test(parsed.pathname)) return raw
-
-    const encoded = parsed.searchParams.get("o") || ""
-    if (!encoded) return raw
-    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/")
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-    const decoded = atob(padded)
-    const match = decoded.match(/https?:\/\/[^\s"'<>]+/i)
-    if (match?.[0]) return match[0]
-    return /^https?:\/\//i.test(decoded) ? decoded : raw
   } catch {
     return raw
   }
@@ -834,27 +730,6 @@ function advanceOverlayPhotoFallback(
   onExhausted?.(img)
 }
 
-function getInstagramAvatarUrl(siteUrl?: string, feedUrl?: string): string | null {
-  const candidates = [siteUrl, feedUrl].filter(Boolean) as string[]
-  for (const url of candidates) {
-    try {
-      const parsed = new URL(url)
-      const host = parsed.hostname.toLowerCase()
-      if (host === "instagram.com" || host === "www.instagram.com") {
-        const username = parsed.pathname.split("/").filter(Boolean)[0]
-        if (username && /^[a-zA-Z0-9._]+$/.test(username)) {
-          return `https://unavatar.io/instagram/${username}?fallback=false`
-        }
-      }
-    } catch {}
-    const rsshub = url.match(/\/instagram\/user\/([^/?#]+)/i)
-    if (rsshub?.[1]) return `https://unavatar.io/instagram/${decodeURIComponent(rsshub[1])}?fallback=false`
-    const picnob = url.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
-    if (picnob?.[1]) return `https://unavatar.io/instagram/${decodeURIComponent(picnob[1])}?fallback=false`
-  }
-  return null
-}
-
 function isGenericInstagramIconUrl(url: string): boolean {
   const raw = (url || "").trim()
   const src = raw.toLowerCase()
@@ -1000,7 +875,15 @@ export function WideViewContent() {
   } =
     useEntryStore()
   const { selectedFeedId, feeds, activeView, refreshFeed, refreshMultiple, refreshAll, isRefreshing, refreshProgress } = useFeedStore()
-  const { settings } = useSettingsStore()
+  const general = useGeneralSettingsShallowSelector((settings) => ({
+    showRecommended: settings.showRecommended,
+    language: settings.language,
+    groupByDate: settings.groupByDate,
+    videoPagination: settings.videoPagination,
+    videosPerPage: settings.videosPerPage,
+    bilibiliOpenInPage: settings.bilibiliOpenInPage,
+    dimRead: settings.dimRead,
+  }))
   const { t } = useTranslation()
   const [filterMode, setFilterMode] = useState<"all" | "unread">("all")
   const [masonryProbeVersion, setMasonryProbeVersion] = useState(0)
@@ -1109,7 +992,7 @@ export function WideViewContent() {
     feedById,
     activeView,
     selectedFeedId,
-    showRecommended: settings.general.showRecommended,
+    showRecommended: general.showRecommended,
     isLoading,
   })
   const isPicturesAllView = activeView === FeedViewType.Pictures && !selectedFeedId
@@ -1160,9 +1043,13 @@ export function WideViewContent() {
       })
     }
     return result
-  }, [isPicturesAllView, renderEntries, masonryProbeVersion])
+    void masonryProbeVersion
+  }, [isPicturesAllView, masonryProbeVersion, renderEntries])
 
-  const dateLocale = useMemo(() => getDateLocale(), [settings.general.language])
+  const dateLocale = useMemo(() => {
+    void general.language
+    return getDateLocale()
+  }, [general.language])
   // Measure container width for masonry / grid.
   // Keep updates synchronous with ResizeObserver to avoid one-frame stale widths on window resize.
   const containerRef = useRef<HTMLDivElement>(null)
@@ -1180,7 +1067,7 @@ export function WideViewContent() {
   } = useTimelineView({
     enabled: isTimelineView,
     entries: timelineEntries,
-    groupByDate: settings.general.groupByDate,
+    groupByDate: general.groupByDate,
     scrollElementRef: containerRef,
     cacheKey: `${viewKey}:timeline`,
   })
@@ -1268,8 +1155,8 @@ export function WideViewContent() {
     activeView,
     entries: renderEntries,
     videoColumnCount,
-    videoPaginationEnabled: settings.general.videoPagination,
-    configuredVideosPerPage: Number(settings.general.videosPerPage) || 20,
+    videoPaginationEnabled: general.videoPagination,
+    configuredVideosPerPage: Number(general.videosPerPage) || 20,
     inlineBilibiliOpen: !!inlineBilibili,
     containerRef,
     videoGridRef,
@@ -1307,7 +1194,7 @@ export function WideViewContent() {
   const handleVideoClick = useCallback(
     (entry: Entry) => {
       selectEntry(entry) // marks read
-      const shouldInlineBilibili = settings.general.bilibiliOpenInPage
+      const shouldInlineBilibili = general.bilibiliOpenInPage
       const bilibiliUrl = shouldInlineBilibili ? resolveBilibiliVideoPageUrl(entry) : null
       if (bilibiliUrl) {
         setVideoEntry(null)
@@ -1317,7 +1204,7 @@ export function WideViewContent() {
       setInlineBilibili(null)
       setVideoEntry(entry)
     },
-    [selectEntry, settings.general.bilibiliOpenInPage],
+    [general.bilibiliOpenInPage, selectEntry],
   )
 
   // Click handler: single-click opens the social overlay, double-click opens the browser.
@@ -1365,10 +1252,10 @@ export function WideViewContent() {
 
   useEffect(() => {
     const canStayInline = activeView === FeedViewType.Videos || activeView === FeedViewType.SocialMedia
-    if (!canStayInline || !settings.general.bilibiliOpenInPage) {
+    if (!canStayInline || !general.bilibiliOpenInPage) {
       setInlineBilibili(null)
     }
-  }, [activeView, settings.general.bilibiliOpenInPage])
+  }, [activeView, general.bilibiliOpenInPage])
 
   useEffect(() => {
     // Switching subscription/feed should always exit full-page inline player.
@@ -1468,7 +1355,7 @@ export function WideViewContent() {
             timelineIndexById={timelineIndexById}
             feedMetaByEntryId={timelineFeedMetaByEntryId}
             activeEntryId={socialEntry?.id}
-            dimRead={settings.general.dimRead}
+            dimRead={general.dimRead}
             isLoadingMore={isLoadingMore}
             onSelectEntry={handleSocialClick}
             onDoubleClickEntry={handleSocialDoubleClick}
@@ -1574,7 +1461,7 @@ export function WideViewContent() {
 
 function VideoModal({ entry, onClose, feeds }: { entry: Entry; onClose: () => void; feeds: { id: string; title?: string }[] }) {
   const { t } = useTranslation()
-  const bilibiliOpenInPage = useSettingsStore((s) => s.settings.general.bilibiliOpenInPage)
+  const bilibiliOpenInPage = useGeneralSettingKey("bilibiliOpenInPage")
   const feedTitle = feeds.find((f) => f.id === entry.feedId)?.title
 
   // Classify the video source: direct mp4, Bilibili iframe, YouTube (needs proxy), or unknown
@@ -1928,7 +1815,15 @@ function SocialOverlay({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const settings = useSettingsStore((s) => s.settings)
+  const general = useGeneralSettingsShallowSelector((settings) => ({
+    contentWidth: settings.contentWidth,
+    contentMaxWidth: settings.contentMaxWidth,
+    contentLineHeight: settings.contentLineHeight,
+    contentFontFamily: settings.contentFontFamily,
+    fontSize: settings.fontSize,
+    language: settings.language,
+  }))
+  const targetLanguage = useTranslationSettingKey("targetLanguage")
   const timeAgo = formatDistanceToNow(new Date(entry.publishedAt), {
     addSuffix: true,
     locale: getDateLocale(),
@@ -1961,11 +1856,11 @@ function SocialOverlay({
     wide: "max-w-[900px]",
     custom: "",
   }), [])
-  const contentWidthClass = settings.general.contentWidth === "custom"
+  const contentWidthClass = general.contentWidth === "custom"
     ? ""
-    : (contentWidthClasses[settings.general.contentWidth] || contentWidthClasses.normal)
-  const contentWidthStyle = settings.general.contentWidth === "custom"
-    ? { maxWidth: `${settings.general.contentMaxWidth || 680}px` }
+    : (contentWidthClasses[general.contentWidth] || contentWidthClasses.normal)
+  const contentWidthStyle = general.contentWidth === "custom"
+    ? { maxWidth: `${general.contentMaxWidth || 680}px` }
     : undefined
 
   const fullContent = useMemo(() => {
@@ -2231,7 +2126,7 @@ function SocialOverlay({
     // Do translation paragraph by paragraph
     setIsTranslating(true)
     setShowTranslation(true)
-    const targetLang = settings.translation?.targetLanguage || settings.general?.language || "zh-CN"
+    const targetLang = targetLanguage || general.language || "zh-CN"
     const results: string[] = []
     for (let i = 0; i < paragraphs.length; i++) {
       const plainText = paragraphs[i].replace(/<[^>]*>/g, "").trim()
@@ -2253,7 +2148,7 @@ function SocialOverlay({
       setTranslatedParagraphs([...results])
     }
     setIsTranslating(false)
-  }, [paragraphs, showTranslation, translatedParagraphs.length, settings.translation?.targetLanguage, settings.general?.language, t])
+  }, [general.language, paragraphs, showTranslation, t, targetLanguage, translatedParagraphs.length])
 
   const handleSummarize = useCallback(async () => {
     if (!plainContent) return
@@ -2263,7 +2158,7 @@ function SocialOverlay({
     setIsSummarizing(true)
     setShowSummary(true)
     try {
-      const result = await window.api.ai.summarize(plainContent, settings.general?.language || "zh-CN")
+      const result = await window.api.ai.summarize(plainContent, general.language || "zh-CN")
       if (result.success) {
         setSummary(result.summary)
       } else {
@@ -2273,7 +2168,7 @@ function SocialOverlay({
       setSummary(`\u274c ${String(err)}`)
     }
     setIsSummarizing(false)
-  }, [plainContent, showSummary, summary, settings.general?.language])
+  }, [general.language, plainContent, showSummary, summary])
 
   return (
     <SocialOverlayView
@@ -2290,8 +2185,8 @@ function SocialOverlay({
       browserOpenUrl={browserOpenUrl}
       onTranslate={handleTranslate}
       onSummarize={handleSummarize}
-      lineHeight={settings.general.contentLineHeight}
-      fontFamily={settings.general.contentFontFamily}
+      lineHeight={general.contentLineHeight}
+      fontFamily={general.contentFontFamily}
       avatarUrl={avatarUrl}
       avatarImageFailed={avatarImageFailed}
       avatarLetter={avatarLetter}
@@ -2301,7 +2196,7 @@ function SocialOverlay({
       translatedParagraphs={translatedParagraphs}
       paragraphs={paragraphs}
       fullContent={fullContent}
-      fontSize={settings.general.fontSize || 16}
+      fontSize={general.fontSize || 16}
       displayPhotos={displayPhotos}
       videos={videosWithCover}
       previewIdx={previewIdx}

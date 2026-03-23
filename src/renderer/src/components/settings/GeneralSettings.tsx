@@ -1,4 +1,4 @@
-import { useSettingsStore } from "../../store/settings-store"
+import { useSettingSection, useSettingsActions } from "../../store/settings-store"
 import { useTranslation } from "react-i18next"
 import { changeLanguage } from "../../i18n"
 import { Check, GripVertical, Eye, EyeOff, RotateCcw } from "lucide-react"
@@ -14,9 +14,9 @@ const ACCENT_COLORS = Object.entries(ACCENT_COLOR_MAP).map(([name, palette]) => 
 }))
 
 export function GeneralSettings() {
-  const { settings, updateSettings } = useSettingsStore()
-  const general = settings.general
-  const { t, i18n } = useTranslation()
+  const general = useSettingSection("general")
+  const { updateSettingsSection } = useSettingsActions()
+  const { t } = useTranslation()
   const [languageChanged, setLanguageChanged] = useState(false)
 
   const languageOptions = [
@@ -28,7 +28,7 @@ export function GeneralSettings() {
   ]
 
   const handleLanguageChange = async (newLanguage: string) => {
-    await updateSettings({ general: { ...general, language: newLanguage } })
+    await updateSettingsSection("general", { language: newLanguage })
     try {
       await changeLanguage(newLanguage)
       setLanguageChanged(true)
@@ -56,7 +56,7 @@ export function GeneralSettings() {
             <button
               key={theme.key}
               onClick={() => {
-                updateSettings({ general: { ...general, theme: theme.key } })
+                void updateSettingsSection("general", { theme: theme.key })
               }}
               className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
                 general.theme === theme.key
@@ -79,7 +79,7 @@ export function GeneralSettings() {
           {ACCENT_COLORS.map((ac) => (
             <button
               key={ac.name}
-              onClick={() => updateSettings({ general: { ...general, accentColor: ac.name } })}
+              onClick={() => void updateSettingsSection("general", { accentColor: ac.name })}
               className={`w-8 h-8 rounded-full border-2 transition-all ${
                 general.accentColor === ac.name ? "border-text scale-110 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-surface-dark" : "border-transparent hover:scale-105"
               }`}
@@ -125,7 +125,7 @@ export function GeneralSettings() {
           max={24}
           value={general.fontSize}
           onChange={(e) =>
-            updateSettings({ general: { ...general, fontSize: Number(e.target.value) } })
+            void updateSettingsSection("general", { fontSize: Number(e.target.value) })
           }
           className="w-full accent-accent"
         />
@@ -143,7 +143,7 @@ export function GeneralSettings() {
         <select
           value={general.refreshInterval}
           onChange={(e) =>
-            updateSettings({ general: { ...general, refreshInterval: Number(e.target.value) } })
+            void updateSettingsSection("general", { refreshInterval: Number(e.target.value) })
           }
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
         >
@@ -168,7 +168,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.markReadOnScroll}
-          onChange={(v) => updateSettings({ general: { ...general, markReadOnScroll: v } })}
+          onChange={(v) => void updateSettingsSection("general", { markReadOnScroll: v })}
         />
       </div>
 
@@ -184,7 +184,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.dimRead}
-          onChange={(v) => updateSettings({ general: { ...general, dimRead: v } })}
+          onChange={(v) => void updateSettingsSection("general", { dimRead: v })}
         />
       </div>
 
@@ -200,7 +200,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.groupByDate}
-          onChange={(v) => updateSettings({ general: { ...general, groupByDate: v } })}
+          onChange={(v) => void updateSettingsSection("general", { groupByDate: v })}
         />
       </div>
 
@@ -216,7 +216,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.renderMarkAsRead}
-          onChange={(v) => updateSettings({ general: { ...general, renderMarkAsRead: v } })}
+          onChange={(v) => void updateSettingsSection("general", { renderMarkAsRead: v })}
         />
       </div>
 
@@ -232,7 +232,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.videoPagination}
-          onChange={(v) => updateSettings({ general: { ...general, videoPagination: v } })}
+          onChange={(v) => void updateSettingsSection("general", { videoPagination: v })}
         />
       </div>
 
@@ -248,7 +248,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.bilibiliOpenInPage}
-          onChange={(v) => updateSettings({ general: { ...general, bilibiliOpenInPage: v } })}
+          onChange={(v) => void updateSettingsSection("general", { bilibiliOpenInPage: v })}
         />
       </div>
 
@@ -264,7 +264,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.imageProxy}
-          onChange={(v) => updateSettings({ general: { ...general, imageProxy: v } })}
+          onChange={(v) => void updateSettingsSection("general", { imageProxy: v })}
         />
       </div>
 
@@ -280,7 +280,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.showRecommended}
-          onChange={(v) => updateSettings({ general: { ...general, showRecommended: v } })}
+          onChange={(v) => void updateSettingsSection("general", { showRecommended: v })}
         />
       </div>
 
@@ -299,7 +299,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.opaqueSidebar}
-          onChange={(v) => updateSettings({ general: { ...general, opaqueSidebar: v } })}
+          onChange={(v) => void updateSettingsSection("general", { opaqueSidebar: v })}
         />
       </div>
 
@@ -315,7 +315,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.reduceMotion}
-          onChange={(v) => updateSettings({ general: { ...general, reduceMotion: v } })}
+          onChange={(v) => void updateSettingsSection("general", { reduceMotion: v })}
         />
       </div>
 
@@ -331,7 +331,7 @@ export function GeneralSettings() {
         </div>
         <ToggleSwitch
           checked={general.renderInlineStyle}
-          onChange={(v) => updateSettings({ general: { ...general, renderInlineStyle: v } })}
+          onChange={(v) => void updateSettingsSection("general", { renderInlineStyle: v })}
         />
       </div>
 
@@ -347,7 +347,7 @@ export function GeneralSettings() {
           ]).map((opt) => (
             <button
               key={opt.key}
-              onClick={() => updateSettings({ general: { ...general, thumbnailRatio: opt.key } })}
+              onClick={() => void updateSettingsSection("general", { thumbnailRatio: opt.key })}
               className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
                 general.thumbnailRatio === opt.key
                   ? "border-accent bg-accent/5 text-accent font-medium"
@@ -372,7 +372,7 @@ export function GeneralSettings() {
           type="url"
           value={general.rsshubInstance || "https://rsshub.pseudoyu.com"}
           onChange={(e) =>
-            updateSettings({ general: { ...general, rsshubInstance: e.target.value.trim() } })
+            void updateSettingsSection("general", { rsshubInstance: e.target.value.trim() })
           }
           placeholder="https://rsshub.pseudoyu.com"
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
@@ -395,7 +395,7 @@ export function GeneralSettings() {
         </p>
         <textarea
           value={general.customCSS || ""}
-          onChange={(e) => updateSettings({ general: { ...general, customCSS: e.target.value } })}
+          onChange={(e) => void updateSettingsSection("general", { customCSS: e.target.value })}
           placeholder={`${t("settings.customCSSPlaceholder")}\n.entry-content {\n  /* your styles */\n}`}
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono resize-y"
           rows={5}
@@ -407,9 +407,9 @@ export function GeneralSettings() {
 
 /** View Tabs Configuration — toggle visibility and drag to reorder */
 function ViewTabsConfig() {
-  const { settings, updateSettings } = useSettingsStore()
+  const general = useSettingSection("general")
+  const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
-  const general = settings.general
 
   // Ensure viewTabs exist and append newly introduced views for old configs.
   const viewTabs = (() => {
@@ -437,8 +437,8 @@ function ViewTabsConfig() {
     const visibleCount = next.filter((t) => t.visible).length
     if (next[idx].visible && visibleCount <= 1) return
     next[idx] = { ...next[idx], visible: !next[idx].visible }
-    updateSettings({ general: { ...general, viewTabs: next } })
-  }, [viewTabs, general, updateSettings])
+    void updateSettingsSection("general", { viewTabs: next })
+  }, [updateSettingsSection, viewTabs])
 
   const handlePointerDragStart = useCallback((idx: number, label: string, e: React.PointerEvent) => {
     e.preventDefault()
@@ -470,7 +470,7 @@ function ViewTabsConfig() {
           const next = [...viewTabs]
           const [moved] = next.splice(from, 1)
           next.splice(currentOverIdx, 0, moved)
-          updateSettings({ general: { ...general, viewTabs: next } })
+          void updateSettingsSection("general", { viewTabs: next })
         }
         return null
       })
@@ -483,11 +483,11 @@ function ViewTabsConfig() {
 
     document.addEventListener("pointermove", onMove)
     document.addEventListener("pointerup", onUp)
-  }, [viewTabs, general, updateSettings])
+  }, [updateSettingsSection, viewTabs])
 
   const handleReset = useCallback(() => {
-    updateSettings({ general: { ...general, viewTabs: DEFAULT_SETTINGS.general.viewTabs } })
-  }, [general, updateSettings])
+    void updateSettingsSection("general", { viewTabs: DEFAULT_SETTINGS.general.viewTabs })
+  }, [updateSettingsSection])
 
   const VIEW_COLOR_MAP: Record<number, string> = {
     [FeedViewType.Articles]: "text-lime-600",

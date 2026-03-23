@@ -17,7 +17,6 @@ import {
   PowerOff,
   ChevronDown,
   ChevronRight,
-  Copy,
   Download,
   Upload,
   Edit3,

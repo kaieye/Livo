@@ -11,9 +11,11 @@ import { FeedsSettings } from "./FeedsSettings"
 import { ReadingSettings } from "./ReadingSettings"
 import { DataSettings } from "./DataSettings"
 import { AccountsSettings } from "./AccountsSettings"
+import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
 
 export function SettingsDialog() {
   const { isOpen, setOpen, activeTab, setActiveTab } = useSettingsStore()
+  useOverlayHotkeyScope("settings", isOpen)
   const { t } = useTranslation()
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const dragStateRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null)

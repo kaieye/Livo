@@ -1,5 +1,10 @@
 import type { AppSettings } from "../../../shared/types"
 
+type AppearanceSettings = Pick<
+  AppSettings["general"],
+  "theme" | "reduceMotion" | "accentColor" | "uiFontFamily" | "contentFontFamily" | "customCSS"
+>
+
 export const ACCENT_COLOR_MAP: Record<string, { color: string; hover: string; soft: string }> = {
   orange: { color: "#FF8C00", hover: "#FF9F2F", soft: "#FFF1E6" },
   red: { color: "#EF4444", hover: "#F87171", soft: "#FEE2E2" },
@@ -43,7 +48,7 @@ function ensureCustomStyleElement(): HTMLStyleElement {
   return styleEl
 }
 
-export function applyAppearanceSettings(settings: AppSettings["general"]): void {
+export function applyAppearanceSettings(settings: AppearanceSettings): void {
   const root = document.documentElement
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
   const shouldUseDark = settings.theme === "dark" || (settings.theme === "system" && prefersDark)

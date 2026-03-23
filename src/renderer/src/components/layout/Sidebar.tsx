@@ -24,7 +24,6 @@ import {
   CheckCheck,
   MessageSquare,
   Edit3,
-  Check,
   X as XIcon,
   Upload,
   Download,
@@ -32,7 +31,6 @@ import {
   MessageCircle,
   Image,
   Play,
-  Bell,
   LayoutGrid,
   Compass,
   Keyboard,
@@ -42,13 +40,12 @@ import {
   GripVertical,
   Link,
   Pencil,
-  ExternalLink,
-  Film,
 } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAIChatStore } from "../../store/ai-chat-store"
 import { useDiscoverStore } from "../../store/discover-store"
 import { useLayoutFocusTarget } from "../../hooks/useLayoutFocusTarget"
+import { useFocusableHotkeyScope } from "../../hooks/useHotkeyScope"
 import { useQuickSearchStore } from "../search/QuickSearch"
 import { useShortcutHelpStore } from "../shortcuts/ShortcutHelp"
 
@@ -72,25 +69,6 @@ function getPathLikeFromFeedUrl(rawUrl: string): string {
       return `/${parsed.hostname}${parsed.pathname}`
     }
     return parsed.pathname
-  } catch {
-    return rawUrl
-  }
-}
-
-function inferFeedTitleFromUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl)
-    const pathLike = getPathLikeFromFeedUrl(rawUrl)
-    const host = url.hostname.replace(/^www\./i, "")
-    const bilibiliMatch = pathLike.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
-    if (bilibiliMatch?.[1]) return `UID ${bilibiliMatch[1]} - Bilibili`
-    const twitterMatch = pathLike.match(/\/twitter\/user\/([^/?#]+)/i)
-    if (twitterMatch?.[1]) return `${decodeURIComponent(twitterMatch[1]).replace(/^@/, "")} - X`
-    const instagramMatch = pathLike.match(/\/instagram\/user\/([^/?#]+)/i)
-    if (instagramMatch?.[1]) return `${decodeURIComponent(instagramMatch[1]).replace(/^@/, "")} - Ins`
-    const picnobMatch = pathLike.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
-    if (picnobMatch?.[1]) return `${decodeURIComponent(picnobMatch[1]).replace(/^@/, "")} - Ins`
-    return `${host} - RSS`
   } catch {
     return rawUrl
   }
@@ -221,7 +199,7 @@ function extractInstagramNameFromUrl(value: string): string {
 
 function extractInstagramUsernameFromFeedRoute(value: string): string | null {
   try {
-    const u = new URL(value)
+    new URL(value)
     const pathLike = getPathLikeFromFeedUrl(value)
     const instagram = pathLike.match(/\/instagram\/user\/([^/?#]+)/i)
     if (instagram?.[1]) return decodeURIComponent(instagram[1]).replace(/^@/, "")
@@ -258,16 +236,6 @@ function formatInstagramFeedTitle(candidateTitle: string | undefined, usernameOr
   return `${cleaned || fallback} - Ins`
 }
 
-function extractBilibiliUidFromInput(input: string): string | null {
-  const trimmed = input.trim()
-  if (!trimmed) return null
-  const directUid = trimmed.match(/^(?:uid[:\s-]*)?(\d{3,})$/i)
-  if (directUid?.[1]) return directUid[1]
-  const routeUid = trimmed.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
-  if (routeUid?.[1]) return routeUid[1]
-  return null
-}
-
 function loadPersistedEmptyFolders(): Array<{ name: string; view: FeedViewType | null }> {
   try {
     const raw = localStorage.getItem(EMPTY_FOLDERS_STORAGE_KEY)
@@ -289,6 +257,7 @@ function loadPersistedEmptyFolders(): Array<{ name: string; view: FeedViewType |
 export function Sidebar({ width }: { width?: number }) {
   const navFocusRef = useRef<HTMLElement>(null)
   const isSidebarFocusHighlighted = useLayoutFocusTarget("sidebar", navFocusRef)
+  useFocusableHotkeyScope("sidebar", navFocusRef)
   const { feeds, selectedFeedId, activeView, setSelectedFeed, setActiveView, loadFeeds, refreshAll, refreshFeed, refreshMultiple, isRefreshing, removeFeed, updateFeed, importOPML, exportOPML } = useFeedStore()
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
@@ -310,7 +279,7 @@ export function Sidebar({ width }: { width?: number }) {
       const category = f.category?.toLowerCase() || ""
       return title.includes(allFeedsSearchLower) || url.includes(allFeedsSearchLower) || siteUrl.includes(allFeedsSearchLower) || category.includes(allFeedsSearchLower)
     })
-  }, [activeView, filteredFeeds, allFeedsSearchLower])
+  }, [filteredFeeds, allFeedsSearchLower])
   const { markAllRead } = useEntryStore()
   const setSettingsOpen = useSettingsStore((s) => s.setOpen)
   const settingsLoaded = useSettingsStore((s) => s.isLoaded)
@@ -360,7 +329,6 @@ export function Sidebar({ width }: { width?: number }) {
   const [dragFeedId, setDragFeedId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const dropTargetRef = useRef<string | null>(null) // Track drop target in ref for immediate access
-  const dragNodeRef = useRef<HTMLDivElement | null>(null)
   const [dragOverlay, setDragOverlay] = useState<{ label: string; x: number; y: number } | null>(null)
   const dragOverlayRef = useRef<{ feedId: string; startY: number; pointerId: number } | null>(null)
 
@@ -513,7 +481,7 @@ export function Sidebar({ width }: { width?: number }) {
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onUp)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Start drag 锟?just sets state; window listeners handle move/up
   const handleDragPointerStart = useCallback((feedId: string, label: string, e: React.PointerEvent) => {
@@ -527,11 +495,9 @@ export function Sidebar({ width }: { width?: number }) {
 
   // Instagram user search state
   const [instagramSearch, setInstagramSearch] = useState("")
-  const [instagramSearching, setInstagramSearching] = useState(false)
-  const [instagramSearchResult, setInstagramSearchResult] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [, setInstagramSearching] = useState(false)
+  const [, setInstagramSearchResult] = useState<{ msg: string; ok: boolean } | null>(null)
   const [instagramCandidate, setInstagramCandidate] = useState<{ username: string; title: string; description: string; image: string; valid: boolean; loading: boolean; alreadySubscribed: boolean; feedUrl?: string; isDirectUrl?: boolean } | null>(null)
-  const [instagramInputFocused, setInstagramInputFocused] = useState(false)
-  const instagramDropdownRef = useRef<HTMLDivElement | null>(null)
   const getInstagramUsernameFromUrl = useCallback((value: string): string | null => {
     try {
       const parsed = new URL(value)
@@ -577,16 +543,6 @@ export function Sidebar({ width }: { width?: number }) {
     if (feed.category === RECOMMENDED_CATEGORY) return false
     return (feed.view ?? FeedViewType.Articles) === targetView
   }, [])
-  const instagramMatchedFeeds = useMemo(() => {
-    if (!instagramInputFocused) return []
-    const q = instagramSearch.trim().toLowerCase()
-    if (!q) return []
-    return displayFeeds
-      .filter((f) => f.category !== RECOMMENDED_CATEGORY)
-      .filter((f) => f.title.toLowerCase().includes(q))
-      .slice(0, 6)
-  }, [displayFeeds, instagramInputFocused, instagramSearch])
-
   const recommendedUrls = useMemo(() => {
     const base = (rsshubInstance || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
     const all = [
@@ -846,7 +802,7 @@ export function Sidebar({ width }: { width?: number }) {
       recommendedFeeds: groupedRecommendedFeeds,
       totalUnread: unread,
     }
-  }, [activeView, defaultFolderNames, displayFeeds, emptyFolders, filteredFeeds, getFeedFolderName])
+  }, [activeView, defaultFolderNames, displayFeeds, emptyFolders, getFeedFolderName])
 
   const viewCounts = useMemo(() => {
     // Count feeds per view type for badges; exclude recommended feeds.
@@ -1063,10 +1019,10 @@ export function Sidebar({ width }: { width?: number }) {
         targetView,
       }
     },
-    [rsshubInstance],
+    [],
   )
 
-  const handleInstagramUnsubscribe = async (username: string) => {
+  const _handleInstagramUnsubscribe = async (username: string) => {
     if (/^(?:https?:\/\/|rsshub:\/\/)\S+/i.test(username)) {
       const normalized = normalizeRsshubProtocolInput(username)
       const matchedByUrl = feeds.find((f) => f.url === normalized)
@@ -1101,7 +1057,7 @@ export function Sidebar({ width }: { width?: number }) {
     setTimeout(() => setInstagramSearchResult(null), 3000)
   }
 
-  const handleInstagramSubscribe = async (username?: string, preferredView: FeedViewType = FeedViewType.SocialMedia) => {
+  const _handleInstagramSubscribe = async (username?: string, preferredView: FeedViewType = FeedViewType.SocialMedia) => {
     const input = (username || instagramSearch.trim()).trim()
     const candidateImage = (instagramCandidate?.image || "").trim()
     const isHttpUrlInput = /^https?:\/\/\S+$/i.test(input)
@@ -2350,8 +2306,6 @@ const FeedIcon = memo(function FeedIcon({ imageUrl, siteUrl, feedUrl, title, siz
   const [imgFailed, setImgFailed] = useState(false)
   const [faviconFailed, setFaviconFailed] = useState(false)
   const [twitterFailed, setTwitterFailed] = useState(false)
-  const [instagramFailed, setInstagramFailed] = useState(false)
-
   const instagramUsername = useMemo(() => {
     const extract = (value?: string): string | null => {
       if (!value) return null

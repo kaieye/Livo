@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, Eraser, CheckSquare } from "lucide-react"
+import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
 
 type EditableTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElement
 
@@ -18,12 +19,6 @@ function getInputSelectionText(el: HTMLInputElement | HTMLTextAreaElement): stri
   const end = el.selectionEnd ?? 0
   if (end <= start) return ""
   return el.value.slice(start, end)
-}
-
-function isEditableElement(el: HTMLElement | null): el is EditableTarget {
-  if (!el) return false
-  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return true
-  return el.isContentEditable
 }
 
 function getEditableFromTarget(target: EventTarget | null): EditableTarget | null {
@@ -57,6 +52,7 @@ export function TextContextMenu() {
     selectedText: string
     selectScope: HTMLElement | null
   }>({ visible: false, x: 0, y: 0, editable: null, selectedText: "", selectScope: null })
+  useOverlayHotkeyScope("context-menu", state.visible)
 
   const [pos, setPos] = useState({ x: 0, y: 0 })
 

@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useTranslation } from "react-i18next"
-import { useDiscoverStore, DiscoverSearchPlatform } from "../../store/discover-store"
+import { useDebouncedValue } from "../../hooks/useDebouncedValue"
+import { useDiscoverSearchQuery } from "../../hooks/useDiscoverSearchQuery"
+import type { DiscoverSearchPlatform } from "../../lib/discover-search"
+import { useDiscoverStore } from "../../store/discover-store"
 import { useFeedStore } from "../../store/feed-store"
+import { useStoreShallow } from "../../store/helpers"
 import { FeedViewType } from "../../../../shared/types"
 import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
 import {
@@ -194,21 +198,31 @@ function canonicalizeDiscoverRoute(inputUrl: string): string {
 export function DiscoverPanel() {
   const {
     searchQuery,
+    submittedSearchQuery,
     searchPlatform,
-    searchResults,
-    isSearching,
     subscribingUrls,
     setOpen,
-    search,
+    submitSearch,
+    clearSearch,
     setSearchQuery,
     setSearchPlatform,
     setSubscribing,
-  } = useDiscoverStore()
+  } = useStoreShallow(useDiscoverStore, (state) => ({
+    searchQuery: state.searchQuery,
+    submittedSearchQuery: state.submittedSearchQuery,
+    searchPlatform: state.searchPlatform,
+    subscribingUrls: state.subscribingUrls,
+    setOpen: state.setOpen,
+    submitSearch: state.submitSearch,
+    clearSearch: state.clearSearch,
+    setSearchQuery: state.setSearchQuery,
+    setSearchPlatform: state.setSearchPlatform,
+    setSubscribing: state.setSubscribing,
+  }))
 
   const { addFeed, feeds: userFeeds, removeFeed, refreshFeed } = useFeedStore()
   const { t } = useTranslation()
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [subscribeHint, setSubscribeHint] = useState<string>("")
   const [pendingSubscribe, setPendingSubscribe] = useState<{
     url: string
@@ -219,6 +233,13 @@ export function DiscoverPanel() {
   const [searchPage, setSearchPage] = useState(1)
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 3000)
+  const searchQueryResult = useDiscoverSearchQuery(submittedSearchQuery, searchPlatform)
+  const searchResults = useMemo(
+    () => searchQuery.trim() ? (searchQueryResult.data ?? []) : [],
+    [searchQuery, searchQueryResult.data],
+  )
+  const isSearching = searchQuery.trim().length > 0 && (searchQueryResult.isPending || searchQueryResult.isFetching)
 
   // Platform selector options
   const platformOptions: { value: DiscoverSearchPlatform; label: string; icon: React.ReactNode }[] = [
@@ -243,13 +264,20 @@ export function DiscoverPanel() {
   useEffect(() => {
     return () => {
       if (subscribeHintTimerRef.current) clearTimeout(subscribeHintTimerRef.current)
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     }
   }, [])
 
   useEffect(() => {
     setSearchPage(1)
   }, [searchQuery])
+
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      submitSearch(debouncedSearchQuery)
+      return
+    }
+    clearSearch()
+  }, [clearSearch, debouncedSearchQuery, submitSearch])
 
   useEffect(() => {
     if (pendingSubscribe) {
@@ -283,19 +311,13 @@ export function DiscoverPanel() {
   const handleSearch = useCallback(
     (query: string) => {
       setSearchQuery(query)
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-      searchTimerRef.current = setTimeout(() => {
-        search(query)
-      }, 3000)
     },
-    [search, setSearchQuery]
+    [setSearchQuery]
   )
 
   const handleSearchNow = useCallback(() => {
-    const trimmed = searchQuery.trim()
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    search(trimmed)
-  }, [search, searchQuery])
+    submitSearch(searchQuery)
+  }, [searchQuery, submitSearch])
 
   const handleSubscribe = async (url: string, title: string, targetView?: FeedViewType) => {
     setSubscribing(url, true)

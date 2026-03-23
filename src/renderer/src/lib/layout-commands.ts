@@ -1,4 +1,5 @@
 import { registerCommand } from "./command-registry"
+import { HOTKEY_OVERLAY_SCOPES } from "./hotkey-scope"
 import { requestLayoutFocus } from "./layout-focus"
 
 export type LayoutCommandId = "focus-sidebar" | "focus-content"
@@ -20,6 +21,7 @@ export function registerLayoutCommands() {
     registerCommand({
       id: `layout:${id}`,
       shortcutId: id,
+      blockedScopes: HOTKEY_OVERLAY_SCOPES,
       handler: (event) => {
         event.preventDefault()
         runLayoutCommand(id)

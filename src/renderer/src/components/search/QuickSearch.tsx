@@ -20,6 +20,7 @@ import { formatDistanceToNow } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
 import { FeedViewType, type Entry, type FeedWithCount } from "../../../../shared/types"
 import { create } from "zustand"
+import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
 
 // ====== Quick Search Store ======
 interface QuickSearchState {
@@ -41,6 +42,7 @@ type SearchType = "all" | "feed" | "entry"
 
 export function QuickSearchPanel() {
   const { isOpen, close } = useQuickSearchStore()
+  useOverlayHotkeyScope("quick-search", isOpen)
   const { t } = useTranslation()
   const { feeds, activeView, setSelectedFeed, setActiveView } = useFeedStore()
   const { loadEntries, selectEntry } = useEntryStore()

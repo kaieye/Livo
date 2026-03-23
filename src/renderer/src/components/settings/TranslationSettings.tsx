@@ -1,10 +1,10 @@
-import { useSettingsStore } from "../../store/settings-store"
+import { useSettingSection, useSettingsActions } from "../../store/settings-store"
 import { useTranslation } from "react-i18next"
 
 export function TranslationSettings() {
-  const { settings, updateSettings } = useSettingsStore()
+  const translation = useSettingSection("translation")
+  const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
-  const translation = settings.translation
 
   return (
     <div className="space-y-6">
@@ -24,11 +24,7 @@ export function TranslationSettings() {
           </p>
         </div>
         <button
-          onClick={() =>
-            updateSettings({
-              translation: { ...translation, enabled: !translation.enabled },
-            })
-          }
+          onClick={() => void updateSettingsSection("translation", { enabled: !translation.enabled })}
           className={`relative w-11 h-6 rounded-full transition-colors ${
             translation.enabled ? "bg-accent" : "bg-gray-300 dark:bg-gray-600"
           }`}
@@ -46,11 +42,7 @@ export function TranslationSettings() {
         <label className="block text-sm font-medium mb-1.5">{t("settings.targetLanguage")}</label>
         <select
           value={translation.targetLanguage}
-          onChange={(e) =>
-            updateSettings({
-              translation: { ...translation, targetLanguage: e.target.value },
-            })
-          }
+          onChange={(e) => void updateSettingsSection("translation", { targetLanguage: e.target.value })}
           className="w-full px-3 py-2.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
         >
           <option value="zh-CN">简体中文</option>
@@ -75,11 +67,7 @@ export function TranslationSettings() {
           </p>
         </div>
         <button
-          onClick={() =>
-            updateSettings({
-              translation: { ...translation, autoTranslate: !translation.autoTranslate },
-            })
-          }
+          onClick={() => void updateSettingsSection("translation", { autoTranslate: !translation.autoTranslate })}
           className={`relative w-11 h-6 rounded-full transition-colors ${
             translation.autoTranslate ? "bg-accent" : "bg-gray-300 dark:bg-gray-600"
           }`}

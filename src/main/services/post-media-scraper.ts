@@ -779,7 +779,7 @@ async function extractPhotosFromBrowserPage(url: string): Promise<MediaItem[]> {
       await new Promise((resolve) => setTimeout(resolve, 4000))
 
       // Click through carousel navigation to load all images
-      const carouselResults = await win.webContents.executeJavaScript(`(async () => {
+      await win.webContents.executeJavaScript(`(async () => {
         const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
         const results = []
         const seenUrls = new Set()
@@ -1081,7 +1081,7 @@ async function extractPhotosFromInstagramBrowser(postUrl: string): Promise<Media
   })
 
   // Listen to console messages from the BrowserWindow
-  win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+  win.webContents.on('console-message', (_event, _level, message, _line, _sourceId) => {
     if (message.includes('[IG Browser]') || message.includes('[Instagram]')) {
       console.log(message)
     }

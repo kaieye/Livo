@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron"
 import { getAllFeeds, updateFeed, insertEntries, cleanupEntries, type CleanupOptions } from "../database"
-import { extractMedia, deriveImageUrl, extractContent, extractAuthorAvatar } from "./feed-utils"
+import { deriveImageUrl } from "./feed-utils"
 import { getSettings } from "../handlers/settings-handlers"
 import { DEFAULT_RSSHUB_INSTANCE } from "../../shared/discover-data"
 import type { Feed, Entry } from "../../shared/types"
