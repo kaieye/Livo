@@ -1,0 +1,34 @@
+:root {
+  --color-accent: #ff5c00;
+  --color-accent-hover: #ff7a33;
+  --color-accent-soft: #fff0e6;
+  --color-accent-rgb: 255 92 0;
+
+  --color-surface: 255 255 255;
+  --color-surface-secondary: 245 245 247;
+  --color-surface-tertiary: 232 232 237;
+
+  --color-text: 29 29 31;
+  --color-text-secondary: 110 110 115;
+  --color-text-tertiary: 174 174 178;
+
+  --color-sidebar: 245 245 247;
+  --color-sidebar-hover: 232 232 237;
+
+  --color-border: 210 210 215;
+}
+
+:root.dark {
+  --color-surface: 28 28 30;
+  --color-surface-secondary: 44 44 46;
+  --color-surface-tertiary: 58 58 60;
+
+  --color-text: 245 245 247;
+  --color-text-secondary: 161 161 166;
+  --color-text-tertiary: 110 110 115;
+
+  --color-sidebar: 28 28 30;
+  --color-sidebar-hover: 44 44 46;
+
+  --color-border: 56 56 58;
+}

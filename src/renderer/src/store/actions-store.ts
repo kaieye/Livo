@@ -1,7 +1,7 @@
 /**
  * Zustand store for managing automation rules (Actions).
  */
-import { create } from "zustand"
+import { createAppStore } from "./helpers"
 import type { ActionRule, ActionCondition, ActionEffect } from "../../../shared/actions"
 
 interface ActionsState {
@@ -35,7 +35,7 @@ function saveToStorage(rules: ActionRule[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(rules))
 }
 
-export const useActionsStore = create<ActionsState>((set, get) => ({
+export const useActionsStore = createAppStore<ActionsState>((set, get) => ({
   rules: [],
   isLoaded: false,
 

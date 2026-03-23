@@ -4,6 +4,7 @@ import { useFeedStore } from "./store/feed-store"
 import { useEntryStore } from "./store/entry-store"
 import { useSettingsStore } from "./store/settings-store"
 import { useActionsStore } from "./store/actions-store"
+import { useStoreShallow } from "./store/helpers"
 import { FeedViewType } from "../../shared/types"
 import { getEntryLoadLimit } from "./lib/entry-load-limit"
 import { SettingsDialog } from "./components/settings/SettingsDialog"
@@ -13,12 +14,16 @@ import { ShortcutHelpDialog, useShortcutHelpStore } from "./components/shortcuts
 import { CornerPlayer } from "./components/media/MediaPlayer"
 import { useInitRecommendedFeeds } from "./hooks/useInitRecommendedFeeds"
 import { TextContextMenu } from "./components/ui/TextContextMenu"
+import { registerLayoutCommands } from "./lib/layout-commands"
+import { handleRegisteredShortcutEvent, registerCommand } from "./lib/command-registry"
+import { useApplyAppearanceSettings } from "./hooks/useApplyAppearanceSettings"
 
 export default function App() {
-  const loadFeeds = useFeedStore((s) => s.loadFeeds)
-  const loadSettings = useSettingsStore((s) => s.loadSettings)
-  const loadRules = useActionsStore((s) => s.loadRules)
-  const clearListCache = useEntryStore((s) => s.clearListCache)
+  const { loadFeeds } = useStoreShallow(useFeedStore, (s) => ({ loadFeeds: s.loadFeeds }))
+  const { loadSettings } = useStoreShallow(useSettingsStore, (s) => ({ loadSettings: s.loadSettings }))
+  const { loadRules } = useStoreShallow(useActionsStore, (s) => ({ loadRules: s.loadRules }))
+  const { clearListCache } = useStoreShallow(useEntryStore, (s) => ({ clearListCache: s.clearListCache }))
+  useApplyAppearanceSettings()
 
   const reloadEntriesForCurrentScope = () => {
     const { selectedFeedId, activeView, feeds } = useFeedStore.getState()
@@ -76,31 +81,43 @@ export default function App() {
   }, [clearListCache, loadFeeds, loadSettings, loadRules])
 
   // Global keyboard shortcuts
-  const toggleSearch = useQuickSearchStore((s) => s.toggle)
-  const toggleShortcutHelp = useShortcutHelpStore((s) => s.toggle)
+  const { toggleSearch } = useStoreShallow(useQuickSearchStore, (s) => ({ toggleSearch: s.toggle }))
+  const { toggleShortcutHelp } = useStoreShallow(useShortcutHelpStore, (s) => ({ toggleShortcutHelp: s.toggle }))
 
   useEffect(() => {
-    const handleGlobalShortcut = (e: KeyboardEvent) => {
-      // Don't capture when focusing input/textarea (except for global shortcuts)
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-
-      // Cmd/Ctrl+K → Quick Search
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    const unregisterLayoutCommands = registerLayoutCommands()
+    const unregisterSearch = registerCommand({
+      id: "global:quick-search",
+      shortcutId: "quick-search",
+      handler: (e) => {
         e.preventDefault()
         toggleSearch()
-        return
-      }
-
-      // ? → Shortcut help (only if not in input)
-      if (e.key === "?" && !isInput && !e.ctrlKey && !e.metaKey) {
+      },
+    })
+    const unregisterShortcuts = registerCommand({
+      id: "global:show-shortcuts",
+      shortcutId: "show-shortcuts",
+      handler: (e) => {
+        const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+        if (isInput) return false
         e.preventDefault()
         toggleShortcutHelp()
+      },
+    })
+
+    const handleGlobalShortcut = (e: KeyboardEvent) => {
+      if (handleRegisteredShortcutEvent(e)) {
         return
       }
     }
 
     window.addEventListener("keydown", handleGlobalShortcut)
-    return () => window.removeEventListener("keydown", handleGlobalShortcut)
+    return () => {
+      window.removeEventListener("keydown", handleGlobalShortcut)
+      unregisterShortcuts()
+      unregisterSearch()
+      unregisterLayoutCommands()
+    }
   }, [toggleSearch, toggleShortcutHelp])
 
   return (

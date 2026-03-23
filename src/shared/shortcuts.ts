@@ -45,6 +45,8 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   { id: "prev-feed", label: "上一个订阅源", keys: "Alt+K", category: "navigation", description: "切换到上一个订阅源" },
   { id: "go-all", label: "查看全部", keys: "G A", category: "navigation", description: "切换到全部文章视图" },
   { id: "go-starred", label: "查看收藏", keys: "G S", category: "navigation", description: "切换到收藏视图" },
+  { id: "focus-sidebar", label: "聚焦侧边栏", keys: "Alt+1", category: "navigation", description: "将焦点移动到订阅侧边栏" },
+  { id: "focus-content", label: "聚焦内容区", keys: "Alt+2", category: "navigation", description: "将焦点移动到主内容区" },
 
   // Entry actions
   { id: "toggle-star", label: "收藏/取消收藏", keys: "S", category: "entry", description: "切换当前文章的收藏状态" },
@@ -59,6 +61,8 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   { id: "ai-chat", label: "AI 对话", keys: "Alt+C", category: "reading", description: "打开 AI 对话面板" },
   { id: "toggle-readability", label: "Readability", keys: "Alt+R", category: "reading", description: "切换 Readability 模式" },
   { id: "scroll-top", label: "回到顶部", keys: "Home", category: "reading", description: "滚动到文章顶部" },
+  { id: "scroll-down-reading", label: "向下滚动", keys: "PageDown", category: "reading", description: "平滑向下滚动当前内容" },
+  { id: "scroll-up-reading", label: "向上滚动", keys: "PageUp", category: "reading", description: "平滑向上滚动当前内容" },
 
   // Subscription
   { id: "refresh-all", label: "刷新全部", keys: "Ctrl+R", category: "subscription", description: "刷新所有订阅源" },

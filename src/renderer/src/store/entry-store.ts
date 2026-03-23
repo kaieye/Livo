@@ -1,4 +1,4 @@
-import { create } from "zustand"
+import { createAppStore } from "./helpers"
 import type { Entry } from "../../../shared/types"
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
@@ -8,6 +8,8 @@ const DEFAULT_ENTRY_PAGE_SIZE = 10
 const MAX_ENTRY_PAGE_SIZE = 1000
 const entryListCache = new Map<string, { entries: Entry[]; cachedAt: number }>()
 const entryListInFlight = new Map<string, Promise<Entry[]>>()
+const entryDetailCache = new Map<string, Entry>()
+const entryDetailInFlight = new Map<string, Promise<Entry | null>>()
 
 function isPicnobMirrorHost(host: string): boolean {
   const lower = host.toLowerCase()
@@ -129,6 +131,7 @@ function mergeEntriesById(prev: Entry[], next: Entry[]): Entry[] {
 interface EntryState {
   entries: Entry[]
   selectedEntry: Entry | null
+  isSelectedEntryHydrating: boolean
   isLoading: boolean
   isLoadingMore: boolean
   hasMoreEntries: boolean
@@ -161,6 +164,7 @@ interface EntryState {
   clearListCache: () => void
   refreshEntryMedia: (entryId: string, feedId: string) => Promise<Entry | null>
   selectEntry: (entry: Entry | null) => Promise<void>
+  prefetchEntryDetails: (entryIds: string[]) => Promise<void>
   markRead: (entryId: string, isRead: boolean) => Promise<void>
   markAllRead: (feedId?: string) => Promise<void>
   markAboveRead: (entryId: string) => Promise<void>
@@ -170,9 +174,35 @@ interface EntryState {
   setSearchQuery: (query: string) => void
 }
 
-export const useEntryStore = create<EntryState>((set, get) => ({
+async function fetchEntryDetail(entryId: string): Promise<Entry | null> {
+  if (!entryId) return null
+  const cached = entryDetailCache.get(entryId)
+  if (cached) return cached
+
+  const existing = entryDetailInFlight.get(entryId)
+  if (existing) return existing
+
+  const request = window.api.entries
+    .get(entryId)
+    .then((entry) => {
+      if (entry) {
+        entryDetailCache.set(entryId, entry)
+      }
+      return entry
+    })
+    .catch(() => null)
+    .finally(() => {
+      entryDetailInFlight.delete(entryId)
+    })
+
+  entryDetailInFlight.set(entryId, request)
+  return request
+}
+
+export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   entries: [],
   selectedEntry: null,
+  isSelectedEntryHydrating: false,
   isLoading: false,
   isLoadingMore: false,
   hasMoreEntries: false,
@@ -362,6 +392,8 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     const refreshed = await window.api.entries.get(entryId).catch(() => null)
     if (!refreshed) return null
 
+    entryDetailCache.set(entryId, refreshed)
+
     set((state) => ({
       entries: state.entries.map((entry) => (entry.id === entryId ? refreshed : entry)),
       selectedEntry: state.selectedEntry?.id === entryId ? refreshed : state.selectedEntry,
@@ -371,24 +403,54 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   },
 
   selectEntry: async (entry) => {
-    set({ selectedEntry: entry })
+    if (!entry) {
+      set({ selectedEntry: null, isSelectedEntryHydrating: false })
+      return
+    }
+
+    const cachedEntry = entryDetailCache.get(entry.id)
+    set({
+      selectedEntry: cachedEntry ?? entry,
+      isSelectedEntryHydrating: !cachedEntry,
+    })
     if (entry && !entry.isRead) {
       await window.api.entries.markRead(entry.id, true)
       // Update local state
       set((state) => ({
         entries: state.entries.map((e) => (e.id === entry.id ? { ...e, isRead: true } : e)),
-        selectedEntry: entry ? { ...entry, isRead: true } : null,
+        selectedEntry:
+          state.selectedEntry?.id === entry.id ? { ...state.selectedEntry, isRead: true } : state.selectedEntry,
       }))
-    }
-    if (entry) {
-      const fullEntry = await window.api.entries.get(entry.id).catch(() => null)
-      if (fullEntry) {
-        set((state) => {
-          if (state.selectedEntry?.id !== entry.id) return state
-          return { ...state, selectedEntry: fullEntry }
-        })
+      const cached = entryDetailCache.get(entry.id)
+      if (cached) {
+        entryDetailCache.set(entry.id, { ...cached, isRead: true })
       }
     }
+    const fullEntry = await fetchEntryDetail(entry.id)
+    set((state) => {
+      if (state.selectedEntry?.id !== entry.id) return state
+      return {
+        ...state,
+        selectedEntry: fullEntry ?? state.selectedEntry,
+        isSelectedEntryHydrating: false,
+      }
+    })
+  },
+
+  prefetchEntryDetails: async (entryIds) => {
+    const ids = Array.from(new Set(entryIds.filter(Boolean)))
+    if (ids.length === 0) return
+    await Promise.allSettled(
+      ids.map(async (id) => {
+        if (entryDetailCache.has(id)) return
+        const detail = await fetchEntryDetail(id)
+        if (!detail) return
+        set((state) => ({
+          entries: state.entries.map((entry) => (entry.id === id ? detail : entry)),
+          selectedEntry: state.selectedEntry?.id === id ? detail : state.selectedEntry,
+        }))
+      }),
+    )
   },
 
   markRead: async (entryId, isRead) => {
@@ -397,6 +459,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       entries: state.entries.map((e) => (e.id === entryId ? { ...e, isRead } : e)),
       selectedEntry: state.selectedEntry?.id === entryId ? { ...state.selectedEntry, isRead } : state.selectedEntry,
     }))
+    const cached = entryDetailCache.get(entryId)
+    if (cached) {
+      entryDetailCache.set(entryId, { ...cached, isRead })
+    }
   },
 
   markAllRead: async (feedId) => {
@@ -445,6 +511,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
           ? { ...state.selectedEntry, isStarred: result.isStarred }
           : state.selectedEntry,
     }))
+    const cached = entryDetailCache.get(entryId)
+    if (cached) {
+      entryDetailCache.set(entryId, { ...cached, isStarred: result.isStarred })
+    }
   },
 
   search: async (query) => {

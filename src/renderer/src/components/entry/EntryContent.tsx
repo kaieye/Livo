@@ -4,6 +4,9 @@ import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
 import { useSettingsStore } from "../../store/settings-store"
 import { useAIChatStore } from "../../store/ai-chat-store"
+import { useStoreShallow } from "../../store/helpers"
+import { useRegisterCommand } from "../../hooks/useRegisterCommand"
+import { useEntryScrollNavigation } from "../../hooks/useEntryScrollNavigation"
 import { usePlayerStore } from "../media/MediaPlayer"
 import { VideoPlayer, transformVideoUrl } from "../media/MediaPlayer"
 import { sanitizeHTML, isExternalUrl, createExternalLinkWarning } from "../../utils/sanitize"
@@ -150,7 +153,21 @@ function htmlContainsImage(html: string, imageUrl: string): boolean {
 }
 
 export function EntryContent() {
-  const { selectedEntry, toggleStar, entries, selectEntry } = useEntryStore()
+  const {
+    selectedEntry,
+    isSelectedEntryHydrating,
+    toggleStar,
+    entries,
+    selectEntry,
+    prefetchEntryDetails,
+  } = useStoreShallow(useEntryStore, (s) => ({
+    selectedEntry: s.selectedEntry,
+    isSelectedEntryHydrating: s.isSelectedEntryHydrating,
+    toggleStar: s.toggleStar,
+    entries: s.entries,
+    selectEntry: s.selectEntry,
+    prefetchEntryDetails: s.prefetchEntryDetails,
+  }))
   const feeds = useFeedStore((s) => s.feeds)
   const settings = useSettingsStore((s) => s.settings)
   const { setPanelOpen } = useAIChatStore()
@@ -276,61 +293,15 @@ export function EntryContent() {
     return () => container.removeEventListener("click", handleClick)
   }, [selectedEntry?.id])
 
-  // Keyboard shortcuts
   useEffect(() => {
-    if (!selectedEntry) return
-
     const handleKey = (e: KeyboardEvent) => {
-      // Don't capture when focusing input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return
-
-      const currentIndex = entries.findIndex((e) => e.id === selectedEntry.id)
-
-      switch (e.key) {
-        case "j":
-        case "ArrowDown":
-          if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-            // Next entry (only j without modifier)
-            if (e.key === "j" && currentIndex < entries.length - 1) {
-              e.preventDefault()
-              selectEntry(entries[currentIndex + 1])
-            }
-          }
-          break
-        case "k":
-        case "ArrowUp":
-          if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-            if (e.key === "k" && currentIndex > 0) {
-              e.preventDefault()
-              selectEntry(entries[currentIndex - 1])
-            }
-          }
-          break
-        case "s":
-          if (!e.ctrlKey && !e.metaKey) {
-            e.preventDefault()
-            toggleStar(selectedEntry.id)
-          }
-          break
-        case "o":
-          if (!e.ctrlKey && !e.metaKey && selectedEntry.url) {
-            e.preventDefault()
-            window.open(selectedEntry.url, "_blank")
-          }
-          break
-        case "Escape":
-          setPanelOpen(false)
-          break
-      }
+      if (e.key !== "Escape") return
+      setPanelOpen(false)
     }
 
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
-  }, [selectedEntry, entries, selectEntry, toggleStar, setPanelOpen])
+  }, [setPanelOpen])
 
   // Content paragraphs (memoized)
   const paragraphs = useMemo(() => {
@@ -555,6 +526,13 @@ export function EntryContent() {
     : -1
   const hasPrev = currentIndex > 0
   const hasNext = currentIndex >= 0 && currentIndex < entries.length - 1
+  const showEntryDetailFallback =
+    isSelectedEntryHydrating &&
+    !embeddedPageUrl &&
+    !selectedEntry?.content &&
+    !selectedEntry?.summary &&
+    !selectedEntry?.imageUrl &&
+    !videoMedia
 
   const goToEntry = useCallback(
     (dir: "prev" | "next") => {
@@ -563,6 +541,74 @@ export function EntryContent() {
     },
     [currentIndex, entries, hasPrev, hasNext, selectEntry]
   )
+  const { showKeepScrollingHint, dismissKeepScrollingHint } = useEntryScrollNavigation({
+    enabled: !!selectedEntry && !embeddedPageUrl,
+    scrollRef,
+    onNextEntry: () => {
+      if (hasNext) {
+        goToEntry("next")
+      }
+    },
+  })
+
+  useRegisterCommand({
+    id: "entry:prev",
+    shortcutId: "prev-entry",
+    handler: (e) => {
+      if (!selectedEntry || !hasPrev) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      goToEntry("prev")
+    },
+  })
+
+  useRegisterCommand({
+    id: "entry:next",
+    shortcutId: "next-entry",
+    handler: (e) => {
+      if (!selectedEntry || !hasNext) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      goToEntry("next")
+    },
+  })
+
+  useRegisterCommand({
+    id: "entry:toggle-star",
+    shortcutId: "toggle-star",
+    handler: (e) => {
+      if (!selectedEntry) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      void toggleStar(selectedEntry.id)
+    },
+  })
+
+  useRegisterCommand({
+    id: "entry:open-browser",
+    shortcutId: "open-browser",
+    handler: (e) => {
+      if (!selectedEntry?.url) return false
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (isInput) return false
+      e.preventDefault()
+      window.open(selectedEntry.url, "_blank")
+    },
+  })
+
+  useEffect(() => {
+    if (!selectedEntry || currentIndex < 0) return
+    const nearbyIds = [
+      entries[currentIndex - 1]?.id,
+      entries[currentIndex + 1]?.id,
+      entries[currentIndex + 2]?.id,
+    ].filter(Boolean) as string[]
+    if (nearbyIds.length === 0) return
+    void prefetchEntryDetails(nearbyIds)
+  }, [currentIndex, entries, prefetchEntryDetails, selectedEntry?.id])
 
   // Empty state
   if (!selectedEntry) {
@@ -753,6 +799,20 @@ export function EntryContent() {
             setArticleMenu({ visible: true, x: e.clientX, y: e.clientY })
           }}
         >
+          {showKeepScrollingHint && hasNext && (
+            <div className="sticky bottom-6 z-10 flex justify-center pointer-events-none">
+              <button
+                type="button"
+                onClick={() => {
+                  dismissKeepScrollingHint()
+                  goToEntry("next")
+                }}
+                className="pointer-events-auto rounded-full border border-border/40 bg-white/90 dark:bg-surface-dark/90 px-4 py-2 text-xs text-text-secondary shadow-sm backdrop-blur-sm hover:text-text"
+              >
+                已到底部，再按 PageDown 或点这里跳到下一篇
+              </button>
+            </div>
+          )}
           <article
             ref={contentRef}
             data-context-select-scope="article"
@@ -887,6 +947,8 @@ export function EntryContent() {
                 dangerouslySetInnerHTML={{ __html: sanitizedContent }}
               />
             )
+          ) : showEntryDetailFallback ? (
+            <EntryDetailFallback title={selectedEntry.title} />
           ) : (
             <div className="text-text-secondary dark:text-text-dark-secondary text-center py-12">
               {isFetchingReadable ? (
@@ -1004,6 +1066,26 @@ export function EntryContent() {
           actions={articleMenuActions}
         />
       )}
+    </div>
+  )
+}
+
+function EntryDetailFallback({ title }: { title: string }) {
+  return (
+    <div className="space-y-5 animate-in fade-in-0 duration-200">
+      <div className="rounded-xl border border-border/60 bg-surface-secondary/70 dark:bg-surface-dark-secondary/70 px-4 py-3 text-sm text-text-secondary dark:text-text-dark-secondary">
+        正在准备完整内容…
+      </div>
+      <div className="space-y-3 animate-pulse">
+        <div className="h-4 w-40 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="h-3.5 w-full rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="h-3.5 w-[92%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="h-3.5 w-[84%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="h-40 w-full rounded-2xl bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="h-3.5 w-full rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="h-3.5 w-[88%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+      </div>
+      <p className="text-xs text-text-tertiary dark:text-text-dark-tertiary">{title}</p>
     </div>
   )
 }

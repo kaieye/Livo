@@ -48,6 +48,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useAIChatStore } from "../../store/ai-chat-store"
 import { useDiscoverStore } from "../../store/discover-store"
+import { useLayoutFocusTarget } from "../../hooks/useLayoutFocusTarget"
 import { useQuickSearchStore } from "../search/QuickSearch"
 import { useShortcutHelpStore } from "../shortcuts/ShortcutHelp"
 
@@ -286,6 +287,8 @@ function loadPersistedEmptyFolders(): Array<{ name: string; view: FeedViewType |
 }
 
 export function Sidebar({ width }: { width?: number }) {
+  const navFocusRef = useRef<HTMLElement>(null)
+  const isSidebarFocusHighlighted = useLayoutFocusTarget("sidebar", navFocusRef)
   const { feeds, selectedFeedId, activeView, setSelectedFeed, setActiveView, loadFeeds, refreshAll, refreshFeed, refreshMultiple, isRefreshing, removeFeed, updateFeed, importOPML, exportOPML } = useFeedStore()
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
@@ -1424,7 +1427,13 @@ export function Sidebar({ width }: { width?: number }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+        <nav
+          ref={navFocusRef}
+          tabIndex={-1}
+          className={`flex-1 overflow-y-auto px-2 py-2 space-y-1 outline-none transition-shadow duration-300 ${
+            isSidebarFocusHighlighted ? "shadow-[inset_0_0_0_2px_rgba(255,92,0,0.55)]" : ""
+          }`}
+        >
           {/* All feeds in current view */}
           <button
             onClick={() => handleSelectFeed(null)}

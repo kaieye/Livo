@@ -19,7 +19,7 @@ export interface ViewDefinition {
 export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   [FeedViewType.Articles]: {
     id: FeedViewType.Articles,
-    name: "鏂囩珷",
+    name: "文章",
     icon: "FileText",
     color: "text-lime-600",
     gridMode: false,
@@ -35,7 +35,7 @@ export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   },
   [FeedViewType.Videos]: {
     id: FeedViewType.Videos,
-    name: "瑙嗛",
+    name: "视频",
     icon: "Play",
     color: "text-red-500",
     gridMode: true,
@@ -43,7 +43,7 @@ export const VIEW_DEFINITIONS: Record<FeedViewType, ViewDefinition> = {
   },
   [FeedViewType.Pictures]: {
     id: FeedViewType.Pictures,
-    name: "鍥剧墖",
+    name: "图片",
     icon: "Image",
     color: "text-pink-500",
     gridMode: true,

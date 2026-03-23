@@ -3,6 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
+
   * {
     @apply border-border dark:border-border-dark;
   }
@@ -13,7 +21,7 @@
 
   body {
     @apply h-full bg-white text-text dark:bg-surface-dark dark:text-text-dark-primary;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-family: var(--font-ui), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   }
 
   #root {
@@ -62,6 +70,7 @@
 /* Entry content styling */
 .entry-content {
   @apply prose prose-sm dark:prose-invert max-w-none;
+  font-family: var(--font-content), var(--font-ui), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   word-break: break-word;
   overflow-wrap: break-word;
   hyphens: auto;

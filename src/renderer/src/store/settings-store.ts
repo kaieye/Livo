@@ -1,6 +1,6 @@
-import { create } from "zustand"
+import { createAppStore } from "./helpers"
 import type { AppSettings } from "../../../shared/types"
-import { DEFAULT_SETTINGS } from "../../../shared/types"
+import { cloneDefaultSettings, mergeSettings, normalizeSettings } from "../../../shared/settings"
 
 interface SettingsState {
   settings: AppSettings
@@ -10,12 +10,13 @@ interface SettingsState {
 
   loadSettings: () => Promise<void>
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>
+  updateSettingsSection: <K extends keyof AppSettings>(section: K, updates: Partial<AppSettings[K]>) => Promise<void>
   setOpen: (open: boolean) => void
   setActiveTab: (tab: SettingsState["activeTab"]) => void
 }
 
-export const useSettingsStore = create<SettingsState>((set, get) => ({
-  settings: DEFAULT_SETTINGS,
+export const useSettingsStore = createAppStore<SettingsState>((set, get) => ({
+  settings: cloneDefaultSettings(),
   isLoaded: false,
   isOpen: false,
   activeTab: "general",
@@ -23,18 +24,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     try {
       const settings = await window.api.settings.get()
-      set({ settings, isLoaded: true })
+      set({ settings: normalizeSettings(settings), isLoaded: true })
     } catch {
       // Use defaults
-      set({ isLoaded: true })
+      set({ settings: cloneDefaultSettings(), isLoaded: true })
     }
   },
 
   updateSettings: async (updates) => {
+    const optimistic = mergeSettings(get().settings, updates)
+    set({ settings: optimistic })
     const result = await window.api.settings.set(updates)
     if (result.success) {
-      set({ settings: result.settings })
+      set({ settings: normalizeSettings(result.settings) })
     }
+  },
+
+  updateSettingsSection: async (section, updates) => {
+    await get().updateSettings({ [section]: updates } as Partial<AppSettings>)
   },
 
   setOpen: (open) => set({ isOpen: open }),

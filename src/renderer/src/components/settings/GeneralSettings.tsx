@@ -2,20 +2,16 @@ import { useSettingsStore } from "../../store/settings-store"
 import { useTranslation } from "react-i18next"
 import { changeLanguage } from "../../i18n"
 import { Check, GripVertical, Eye, EyeOff, RotateCcw } from "lucide-react"
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useCallback, useRef } from "react"
 import { FeedViewType, VIEW_DEFINITIONS, DEFAULT_SETTINGS } from "../../../../shared/types"
 import { VIEW_TYPE_I18N_KEYS } from "../../lib/view-type-keys"
+import { ACCENT_COLOR_MAP } from "../../lib/appearance"
 
-const ACCENT_COLORS = [
-  { name: "orange", color: "#FF8C00", labelKey: "settings.accentColor_orange" },
-  { name: "red", color: "#EF4444", labelKey: "settings.accentColor_red" },
-  { name: "rose", color: "#F43F5E", labelKey: "settings.accentColor_rose" },
-  { name: "purple", color: "#A855F7", labelKey: "settings.accentColor_purple" },
-  { name: "blue", color: "#3B82F6", labelKey: "settings.accentColor_blue" },
-  { name: "teal", color: "#14B8A6", labelKey: "settings.accentColor_teal" },
-  { name: "green", color: "#22C55E", labelKey: "settings.accentColor_green" },
-  { name: "yellow", color: "#EAB308", labelKey: "settings.accentColor_yellow" },
-]
+const ACCENT_COLORS = Object.entries(ACCENT_COLOR_MAP).map(([name, palette]) => ({
+  name,
+  color: palette.color,
+  labelKey: `settings.accentColor_${name}`,
+}))
 
 export function GeneralSettings() {
   const { settings, updateSettings } = useSettingsStore()
@@ -42,37 +38,6 @@ export function GeneralSettings() {
     }
   }
 
-  // Apply accent color to CSS variable
-  useEffect(() => {
-    const accent = ACCENT_COLORS.find((c) => c.name === general.accentColor)
-    if (accent) {
-      document.documentElement.style.setProperty("--color-accent", accent.color)
-      document.documentElement.style.setProperty("--color-accent-hover", accent.color + "dd")
-    } else if (general.accentColor?.startsWith("#")) {
-      document.documentElement.style.setProperty("--color-accent", general.accentColor)
-      document.documentElement.style.setProperty("--color-accent-hover", general.accentColor + "dd")
-    }
-  }, [general.accentColor])
-
-  // Apply custom CSS
-  useEffect(() => {
-    let styleEl = document.getElementById("livo-custom-css")
-    if (!styleEl) {
-      styleEl = document.createElement("style")
-      styleEl.id = "livo-custom-css"
-      document.head.appendChild(styleEl)
-    }
-    styleEl.textContent = general.customCSS || ""
-    return () => {
-      // Don't remove on unmount — keep custom CSS active
-    }
-  }, [general.customCSS])
-
-  // Apply reduce motion
-  useEffect(() => {
-    document.documentElement.classList.toggle("reduce-motion", !!general.reduceMotion)
-  }, [general.reduceMotion])
-
   return (
     <div className="space-y-6">
       {/* Theme */}
@@ -92,15 +57,6 @@ export function GeneralSettings() {
               key={theme.key}
               onClick={() => {
                 updateSettings({ general: { ...general, theme: theme.key } })
-                // Apply immediately
-                if (theme.key === "dark") {
-                  document.documentElement.classList.add("dark")
-                } else if (theme.key === "light") {
-                  document.documentElement.classList.remove("dark")
-                } else {
-                  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-                  document.documentElement.classList.toggle("dark", prefersDark)
-                }
               }}
               className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
                 general.theme === theme.key

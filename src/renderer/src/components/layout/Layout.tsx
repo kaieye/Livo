@@ -7,6 +7,7 @@ import { DiscoverPanel } from "../discover/DiscoverPanel"
 import { useDiscoverStore } from "../../store/discover-store"
 import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
+import { useStoreShallow } from "../../store/helpers"
 import { FeedViewType } from "../../../../shared/types"
 import { getEntryLoadLimit } from "../../lib/entry-load-limit"
 
@@ -34,12 +35,16 @@ const ENTRY_LIST_MIN = 260
 const ENTRY_LIST_MAX = 640
 
 export function Layout() {
-  const isDiscoverOpen = useDiscoverStore((s) => s.isOpen)
-  const activeView = useFeedStore((s) => s.activeView)
-  const selectedFeedId = useFeedStore((s) => s.selectedFeedId)
-  const feeds = useFeedStore((s) => s.feeds)
-  const selectEntry = useEntryStore((s) => s.selectEntry)
-  const prefetchEntries = useEntryStore((s) => s.prefetchEntries)
+  const { isDiscoverOpen } = useStoreShallow(useDiscoverStore, (s) => ({ isDiscoverOpen: s.isOpen }))
+  const { activeView, selectedFeedId, feeds } = useStoreShallow(useFeedStore, (s) => ({
+    activeView: s.activeView,
+    selectedFeedId: s.selectedFeedId,
+    feeds: s.feeds,
+  }))
+  const { selectEntry, prefetchEntries } = useStoreShallow(useEntryStore, (s) => ({
+    selectEntry: s.selectEntry,
+    prefetchEntries: s.prefetchEntries,
+  }))
 
   // Clear stale detail content when switching view/feed scope.
   useEffect(() => {

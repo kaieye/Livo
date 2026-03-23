@@ -6,7 +6,8 @@
 
 import type { ElectronAPI } from "../preload/index"
 import type { Feed, Entry, FeedWithCount, FeedViewType, AppSettings, AccountProvider } from "../shared/types"
-import { DEFAULT_SETTINGS, FeedViewType as FVT } from "../shared/types"
+import { FeedViewType as FVT } from "../shared/types"
+import { mergeSettings, normalizeSettings } from "../shared/settings"
 import { resolveProfileUrlToCandidates } from "../shared/profile-resolver"
 import {
   CURATED_FEEDS,
@@ -873,17 +874,11 @@ export function createWebAPI(): ElectronAPI {
 
     settings: {
       get: async (): Promise<AppSettings> => {
-        return getSettings()
+        return normalizeSettings(await getSettings())
       },
       set: async (updates: Partial<AppSettings>) => {
         const current = await getSettings()
-        const merged: AppSettings = {
-          ...current,
-          ...updates,
-          ai: { ...current.ai, ...(updates.ai || {}) },
-          general: { ...current.general, ...(updates.general || {}) },
-          translation: { ...current.translation, ...(updates.translation || {}) },
-        }
+        const merged = mergeSettings(current, updates)
         await saveSettings(merged)
         return { success: true, settings: merged }
       },

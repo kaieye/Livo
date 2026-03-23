@@ -10,9 +10,8 @@
  * - Social media: click shows animated overlay with full entry content;
  *   double-click opens in browser; Escape closes overlay
  */
-import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, memo, type SyntheticEvent, type UIEvent } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, type SyntheticEvent, type UIEvent } from "react"
 import { useTranslation } from "react-i18next"
-import { useVirtualizer } from "@tanstack/react-virtual"
 import { useEntryStore } from "../../store/entry-store"
 import { useFeedStore } from "../../store/feed-store"
 import { useSettingsStore } from "../../store/settings-store"
@@ -25,15 +24,29 @@ import { formatDistanceToNow, type Locale } from "date-fns"
 import { getDateLocale } from "../../lib/date-locale"
 import { SkeletonList } from "../ui/Skeleton"
 import { ContextMenu, useEntryContextMenu, useEntryContextActions } from "../ui/ContextMenu"
+import { ScrollArea } from "../ui/ScrollArea"
 import { SharePoster } from "../ui/SharePoster"
 import { VideoPlayer } from "../ui/VideoPlayer"
-import { groupEntriesByDate } from "../../lib/date-groups"
-import { useAsyncSocialDedupe } from "../../hooks/useAsyncSocialDedupe"
+import { usePictureMasonry } from "../../hooks/usePictureMasonry"
+import { useTimelineView } from "../../hooks/useTimelineView"
+import { useVideoGrid } from "../../hooks/useVideoGrid"
+import { useOverlayMediaGallery } from "../../hooks/useOverlayMediaGallery"
+import { useLayoutFocusTarget } from "../../hooks/useLayoutFocusTarget"
+import { useSocialOverlayAvatar } from "../../hooks/useSocialOverlayAvatar"
+import { useWideViewEntries } from "../../hooks/useWideViewEntries"
 import { canonicalizeSocialUrl, extractFirstHttpUrl, extractFirstNonMediaUrl } from "../../lib/social-url"
 import { getImageProxyFallbackUrls } from "../../lib/image-proxy"
 import { getEntryLoadLimit } from "../../lib/entry-load-limit"
-import { blurhashToAverageColor } from "../../lib/blurhash"
-import { Search, CheckCheck, Loader2, Inbox, RefreshCw, X, ChevronLeft, ChevronRight, ExternalLink, Share2, Eye, EyeOff, Languages, Sparkles, Play, Image } from "lucide-react"
+import {
+  rememberedMasonrySizeByUrl,
+  type MasonryCardData,
+} from "../../lib/picture-masonry"
+import { Loader2, Inbox, RefreshCw, X, ChevronLeft, ChevronRight, ExternalLink, Share2, Languages, Sparkles, Play } from "lucide-react"
+import { PictureMasonry } from "./PictureMasonry"
+import { TimelineSection } from "./TimelineSection"
+import { VideoGridSection } from "./VideoGridSection"
+import { SocialOverlayView } from "./SocialOverlayView"
+import { WideViewHeader } from "./WideViewHeader"
 
 function getVideoColumnCount(containerWidth: number): number {
   return containerWidth >= 1600 ? 5 :
@@ -50,114 +63,8 @@ function getMasonryColumnCount(containerWidth: number): number {
 
 const MASONRY_INITIAL_RENDER = 30
 const MASONRY_RENDER_BATCH = 40
-const MASONRY_FIRST_SCREEN_COUNT = 18
-const MASONRY_FIRST_SCREEN_READY_TIMEOUT = 180
-
-interface MasonryCardData {
-  id: string
-  feedId: string
-  firstImage: string
-  width?: number
-  height?: number
-  blurhash?: string
-  photoCount: number
-  publishedAt: number
-}
-
-const MasonryCard = memo(function MasonryCard({
-  data,
-  feedTitle,
-  feedImage,
-  onClick,
-  onContextMenu,
-  locale,
-  eager,
-}: {
-  data: MasonryCardData
-  feedTitle?: string
-  feedImage?: string
-  onClick: () => void
-  onContextMenu: (e: React.MouseEvent) => void
-  locale: Locale | undefined
-  eager?: boolean
-}) {
-  const timeAgo = useMemo(() => {
-    if (!data.publishedAt) return ""
-    return formatDistanceToNow(new Date(data.publishedAt), { addSuffix: true, locale })
-  }, [data.publishedAt, locale])
-  const hasAspectRatio = !!(data.width && data.height)
-  const aspectRatio = hasAspectRatio ? `${data.width} / ${data.height}` : undefined
-  const placeholderColor = data.blurhash ? blurhashToAverageColor(data.blurhash) : undefined
-
-  return (
-    <div
-      className="cursor-pointer group"
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-    >
-      <div
-        className="relative rounded-xl overflow-hidden bg-surface-tertiary dark:bg-surface-dark-tertiary"
-        style={{
-          aspectRatio,
-          backgroundColor: placeholderColor,
-        }}
-      >
-        <img
-          src={data.firstImage}
-          alt=""
-          className={hasAspectRatio
-            ? "absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-            : "block h-auto w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"}
-          loading={eager ? "eager" : "lazy"}
-          fetchPriority={eager ? "high" : "auto"}
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            const parent = e.currentTarget.closest(".group") as HTMLElement | null
-            if (parent) parent.style.display = "none"
-          }}
-        />
-        {/* Feed avatar + time + photo count overlay */}
-        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/60 to-transparent">
-          <div className="flex items-end gap-1.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {feedImage ? (
-                <img
-                  src={feedImage}
-                  alt=""
-                  className="w-4 h-4 rounded-full object-cover flex-shrink-0"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => { e.currentTarget.style.display = "none" }}
-                />
-              ) : null}
-              <span className="text-[11px] text-white/90 truncate font-medium min-w-0">
-                {feedTitle || ""}
-              </span>
-            </div>
-            <div className="ml-auto flex flex-col items-end flex-shrink-0">
-              {data.photoCount > 1 && (
-                <span className="flex items-center gap-0.5 text-[10px] text-white/80">
-                  <Image size={9} />
-                  {data.photoCount}
-                </span>
-              )}
-              {timeAgo && (
-                <span className="text-[10px] text-white/60 whitespace-nowrap">{timeAgo}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-})
-
-const SOCIAL_INITIAL_RENDER_COUNT = 24
-const SOCIAL_RENDER_BATCH = 80
 
 const rememberedContainerWidthByView = new Map<string, number>()
-const rememberedMasonrySizeByUrl = new Map<string, { width: number; height: number }>()
-const pendingMasonryProbeUrls = new Set<string>()
 
 function normalizeLooseText(value: string): string {
   return (value || "")
@@ -1073,7 +980,7 @@ function resolveEntryBrowserOpenUrl(entry: Entry): string {
   if (igPostUrl) return canonicalizeSocialUrl(igPostUrl)
   return ""
 }
-import { SocialMediaItem, GridCard, ViewRecommendations } from "./EntryList"
+import { ViewRecommendations } from "./EntryList"
 
 export function WideViewContent() {
   const {
@@ -1096,7 +1003,7 @@ export function WideViewContent() {
   const { settings } = useSettingsStore()
   const { t } = useTranslation()
   const [filterMode, setFilterMode] = useState<"all" | "unread">("all")
-  const [, setMasonryProbeVersion] = useState(0)
+  const [masonryProbeVersion, setMasonryProbeVersion] = useState(0)
   const baseEntryLoadLimit = useMemo(() => getEntryLoadLimit(activeView), [activeView])
   const [entryLoadLimit, setEntryLoadLimit] = useState(baseEntryLoadLimit)
 
@@ -1107,12 +1014,7 @@ export function WideViewContent() {
   // Social media overlay state.
   const [socialEntry, setSocialEntry] = useState<Entry | null>(null)
 
-  // Video pagination state
-  const [videoPage, setVideoPage] = useState(0)
-  const [adaptiveVideosPerPage, setAdaptiveVideosPerPage] = useState<number | null>(null)
   const videoGridRef = useRef<HTMLDivElement>(null)
-  const [socialRenderLimit, setSocialRenderLimit] = useState(SOCIAL_INITIAL_RENDER_COUNT)
-
   // Context menu state
   const { menuState, showMenu, hideMenu } = useEntryContextMenu()
   // Share poster state
@@ -1146,7 +1048,6 @@ export function WideViewContent() {
     } else {
       loadEntries({ unreadOnly: filterMode === "unread", limit: entryLoadLimit })
     }
-    setVideoPage(0) // Reset pagination on data change
   }, [selectedFeedId, filterMode, loadEntries, viewFeedIds, entryLoadLimit])
 
   const handleSearch = useCallback(
@@ -1173,73 +1074,46 @@ export function WideViewContent() {
       loadEntries({ unreadOnly: filterMode === "unread", limit: entryLoadLimit })
     }
   }, [entryLoadLimit, filterMode, loadEntries, selectedFeedId, viewFeedIds])
-
-  // Build a set of recommended feed IDs so we can exclude their entries
-  const recommendedFeedIds = useMemo(
-    () => new Set(feeds.filter((f) => f.category === RECOMMENDED_CATEGORY).map((f) => f.id)),
-    [feeds],
-  )
-  const receiveRecommended = settings.general.showRecommended
-
-  // Filter entries by active view (when showing all feeds) - exclude recommended feeds
-  const baseFilteredEntries = useMemo(() => {
-    const filtered = selectedFeedId
-      ? selectedFeedId === "starred"
-        ? entries
-        : entries.filter((entry) => entry.feedId === selectedFeedId)
-      : activeView !== null
-        ? entries.filter((entry) => {
-            const feed = feedById.get(entry.feedId)
-            if (!feed) return false
-            if (feed.showInAll === false) return false
-            if (!receiveRecommended && recommendedFeedIds.has(entry.feedId)) return false
-            return (feed.view ?? FeedViewType.Articles) === activeView
-          })
-        : entries.filter((entry) => {
-            const feed = feedById.get(entry.feedId)
-            if (!feed) return false
-            if (feed.showInAll === false) return false
-            if (!receiveRecommended && recommendedFeedIds.has(entry.feedId)) return false
-            return true
-          })
-
-    let finalFiltered = filtered
-    if (!selectedFeedId && activeView === null && entries.length > 0 && filtered.length === 0) {
-      finalFiltered = entries.filter((entry) => {
-        const feed = feedById.get(entry.feedId)
-        if (!feed) return false
-        if (feed.showInAll === false) return false
-        if (!receiveRecommended && recommendedFeedIds.has(entry.feedId)) return false
-        return true
-      })
+  const handleSearchQueryChange = useCallback((value: string) => {
+    setSearchQuery(value)
+    if (!value.trim()) {
+      reloadCurrentList()
     }
-    return finalFiltered
-  }, [activeView, entries, feedById, receiveRecommended, recommendedFeedIds, selectedFeedId])
-  // Picture feed entries must bypass social dedupe. Merging near-duplicate entries in this view
-  // can incorrectly concatenate media from different posts.
-  const shouldDedupeSocialEntries = activeView === FeedViewType.SocialMedia
-  const { entries: viewFilteredEntries, isProcessing: isSocialDedupeProcessing } = useAsyncSocialDedupe(
-    baseFilteredEntries,
-    {
-      enabled: shouldDedupeSocialEntries,
-      cacheKey: `${activeView ?? "all"}:${selectedFeedId ?? "all"}`,
-    },
-  )
-  const hasStaleEntriesWhileLoading =
-    (isLoading || isSocialDedupeProcessing) && viewFilteredEntries.length === 0 && entries.length > 0
-  const baseRenderEntries = hasStaleEntriesWhileLoading ? entries : viewFilteredEntries
-  const renderEntries = baseRenderEntries
-  const shouldShowLoadingSkeleton =
-    isLoading
-    && renderEntries.length === 0
-  const timelineEntries = renderEntries
-  const timelineIndexById = useMemo(
-    () => new Map(timelineEntries.map((entry, index) => [entry.id, index] as const)),
-    [timelineEntries],
-  )
+  }, [reloadCurrentList, setSearchQuery])
+  const handleRefreshCurrentView = useCallback(async () => {
+    if (selectedFeedId && selectedFeedId !== "starred") {
+      await refreshFeed(selectedFeedId)
+    } else if (activeView !== null) {
+      const currentViewFeedIds = feeds
+        .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
+        .map((f) => f.id)
+      await refreshMultiple(currentViewFeedIds)
+    } else {
+      await refreshAll()
+    }
+    reloadCurrentList()
+  }, [activeView, feeds, refreshAll, refreshFeed, refreshMultiple, reloadCurrentList, selectedFeedId])
+
+  const {
+    renderEntries,
+    timelineEntries,
+    shouldShowLoadingSkeleton,
+    timelineIndexById,
+    timelineFeedMetaByEntryId,
+    videoFeedMetaByEntryId,
+    renderEntryById,
+    renderEntryIndexById,
+  } = useWideViewEntries({
+    entries,
+    feeds,
+    feedById,
+    activeView,
+    selectedFeedId,
+    showRecommended: settings.general.showRecommended,
+    isLoading,
+  })
   const isPicturesAllView = activeView === FeedViewType.Pictures && !selectedFeedId
   const isTimelineView = activeView === FeedViewType.SocialMedia || (activeView === FeedViewType.Pictures && !!selectedFeedId)
-
   // Pre-compute masonry card data to avoid per-render extraction
   const masonryCards = useMemo<MasonryCardData[]>(() => {
     if (!isPicturesAllView) return []
@@ -1286,89 +1160,33 @@ export function WideViewContent() {
       })
     }
     return result
-  }, [isPicturesAllView, renderEntries])
+  }, [isPicturesAllView, renderEntries, masonryProbeVersion])
 
-  // Progressive masonry rendering
-  const [masonryRenderLimit, setMasonryRenderLimit] = useState(MASONRY_INITIAL_RENDER)
-  const [isMasonryFirstScreenReady, setIsMasonryFirstScreenReady] = useState(false)
-  useEffect(() => {
-    if (!isPicturesAllView) return
-    setMasonryRenderLimit(MASONRY_INITIAL_RENDER)
-  }, [isPicturesAllView, selectedFeedId, activeView])
-  const visibleMasonryCards = useMemo(
-    () => isPicturesAllView ? masonryCards.slice(0, masonryRenderLimit) : [],
-    [isPicturesAllView, masonryCards, masonryRenderLimit],
-  )
-  useEffect(() => {
-    if (!isPicturesAllView) return
-    const cardsToProbe = visibleMasonryCards.filter((card) => !card.width || !card.height)
-    if (cardsToProbe.length === 0) return
-
-    let cancelled = false
-    for (const card of cardsToProbe) {
-      const url = card.firstImage
-      if (!url || rememberedMasonrySizeByUrl.has(url) || pendingMasonryProbeUrls.has(url)) continue
-
-      pendingMasonryProbeUrls.add(url)
-      const probe = new window.Image()
-      probe.decoding = "async"
-      probe.referrerPolicy = "no-referrer"
-      probe.onload = () => {
-        pendingMasonryProbeUrls.delete(url)
-        if (cancelled) return
-        if (probe.naturalWidth > 0 && probe.naturalHeight > 0) {
-          rememberedMasonrySizeByUrl.set(url, { width: probe.naturalWidth, height: probe.naturalHeight })
-          setMasonryProbeVersion((prev) => prev + 1)
-        }
-      }
-      probe.onerror = () => {
-        pendingMasonryProbeUrls.delete(url)
-      }
-      probe.src = url
-    }
-
-    return () => {
-      cancelled = true
-    }
-  }, [isPicturesAllView, visibleMasonryCards])
   const dateLocale = useMemo(() => getDateLocale(), [settings.general.language])
-  const shouldUseVirtualTimeline = isTimelineView && !settings.general.groupByDate
-  const renderedTimelineEntries = useMemo(() => {
-    if (!isTimelineView || shouldUseVirtualTimeline) return timelineEntries
-    return timelineEntries.slice(0, socialRenderLimit)
-  }, [isTimelineView, shouldUseVirtualTimeline, socialRenderLimit, timelineEntries])
-  const groupedRenderedTimelineEntries = useMemo(
-    () => settings.general.groupByDate ? groupEntriesByDate(renderedTimelineEntries) : [],
-    [settings.general.groupByDate, renderedTimelineEntries],
-  )
+  // Measure container width for masonry / grid.
+  // Keep updates synchronous with ResizeObserver to avoid one-frame stale widths on window resize.
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isContentFocusHighlighted = useLayoutFocusTarget("content", containerRef)
+  const lastScrollScopeRef = useRef<string>("")
+  const viewKey = `${activeView ?? "all"}:${selectedFeedId ?? ""}`
+  const [containerWidth, setContainerWidth] = useState(() => rememberedContainerWidthByView.get(viewKey) ?? 0)
+  const {
+    shouldUseVirtualTimeline,
+    renderedEntries: renderedTimelineEntries,
+    groupedEntries: groupedRenderedTimelineEntries,
+    virtualizer: timelineVirtualizer,
+    virtualItems: virtualTimelineItems,
+    handleScroll: handleTimelineScroll,
+  } = useTimelineView({
+    enabled: isTimelineView,
+    entries: timelineEntries,
+    groupByDate: settings.general.groupByDate,
+    scrollElementRef: containerRef,
+    cacheKey: `${viewKey}:timeline`,
+  })
   useEffect(() => {
     setEntryLoadLimit(baseEntryLoadLimit)
   }, [baseEntryLoadLimit, activeView, selectedFeedId, filterMode])
-
-  useEffect(() => {
-    if (!isTimelineView || shouldUseVirtualTimeline) return
-    setSocialRenderLimit(SOCIAL_INITIAL_RENDER_COUNT)
-  }, [isTimelineView, shouldUseVirtualTimeline, selectedFeedId, activeView])
-
-  const handleTimelineScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
-    if (!isTimelineView || shouldUseVirtualTimeline) return
-    if (socialRenderLimit >= timelineEntries.length) return
-    const el = e.currentTarget
-    const hasScrolledEnough = el.scrollTop > 120
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 800
-    if (!nearBottom || !hasScrolledEnough) return
-    setSocialRenderLimit((prev) => Math.min(prev + SOCIAL_RENDER_BATCH, timelineEntries.length))
-  }, [isTimelineView, shouldUseVirtualTimeline, socialRenderLimit, timelineEntries.length])
-
-  const handleMasonryScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
-    if (!isPicturesAllView) return
-    if (masonryRenderLimit >= masonryCards.length) return
-    const el = e.currentTarget
-    const hasScrolledEnough = el.scrollTop > 120
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 900
-    if (!nearBottom || !hasScrolledEnough) return
-    setMasonryRenderLimit((prev) => Math.min(prev + MASONRY_RENDER_BATCH, masonryCards.length))
-  }, [isPicturesAllView, masonryCards.length, masonryRenderLimit])
 
   const handlePagedEntryScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget
@@ -1389,21 +1207,6 @@ export function WideViewContent() {
     if (masonryCards.length >= MASONRY_INITIAL_RENDER) return
     void loadMoreEntries()
   }, [isPicturesAllView, searchQuery, hasMoreEntries, isLoadingMore, masonryCards.length, loadMoreEntries])
-
-  // Measure container width for masonry / grid.
-  // Keep updates synchronous with ResizeObserver to avoid one-frame stale widths on window resize.
-  const containerRef = useRef<HTMLDivElement>(null)
-  const lastScrollScopeRef = useRef<string>("")
-  const viewKey = `${activeView ?? "all"}:${selectedFeedId ?? ""}`
-  const [containerWidth, setContainerWidth] = useState(() => rememberedContainerWidthByView.get(viewKey) ?? 0)
-  const timelineVirtualizer = useVirtualizer({
-    count: shouldUseVirtualTimeline ? timelineEntries.length : 0,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => 560,
-    overscan: 2,
-    getItemKey: (index) => timelineEntries[index]?.id ?? index,
-  })
-  const virtualTimelineItems = timelineVirtualizer.getVirtualItems()
 
   useEffect(() => {
     const nextScope = `${activeView ?? "all"}:${selectedFeedId ?? "all"}`
@@ -1461,70 +1264,44 @@ export function WideViewContent() {
   }, [viewKey, activeView, isPicturesAllView])
 
   const videoColumnCount = useMemo(() => getVideoColumnCount(containerWidth), [containerWidth])
+  const { viewModel: videoViewModel, goPrevPage, goNextPage } = useVideoGrid({
+    activeView,
+    entries: renderEntries,
+    videoColumnCount,
+    videoPaginationEnabled: settings.general.videoPagination,
+    configuredVideosPerPage: Number(settings.general.videosPerPage) || 20,
+    inlineBilibiliOpen: !!inlineBilibili,
+    containerRef,
+    videoGridRef,
+    pageScopeKey: `${activeView ?? "all"}:${selectedFeedId ?? "all"}:${filterMode}`,
+  })
   const masonryColumnCount = useMemo(() => getMasonryColumnCount(containerWidth), [containerWidth])
-  const firstScreenMasonryCards = useMemo(
-    () => visibleMasonryCards.slice(0, Math.max(masonryColumnCount * 3, MASONRY_FIRST_SCREEN_COUNT)),
-    [masonryColumnCount, visibleMasonryCards],
-  )
-  useEffect(() => {
-    if (!isPicturesAllView) {
-      setIsMasonryFirstScreenReady(false)
-      return
-    }
-    if (containerWidth <= 0) {
-      setIsMasonryFirstScreenReady(false)
-      return
-    }
-    if (firstScreenMasonryCards.length === 0) {
-      setIsMasonryFirstScreenReady(true)
-      return
-    }
-
-    const ready = firstScreenMasonryCards.every((card) => (card.width && card.height) || rememberedMasonrySizeByUrl.has(card.firstImage))
-    if (ready) {
-      setIsMasonryFirstScreenReady(true)
-      return
-    }
-
-    setIsMasonryFirstScreenReady(false)
-    const timer = window.setTimeout(() => {
-      setIsMasonryFirstScreenReady(true)
-    }, MASONRY_FIRST_SCREEN_READY_TIMEOUT)
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [activeView, containerWidth, firstScreenMasonryCards, isPicturesAllView, selectedFeedId])
-
-  useLayoutEffect(() => {
-    if (activeView !== FeedViewType.Videos || inlineBilibili || !settings.general.videoPagination) {
-      setAdaptiveVideosPerPage(null)
-      return
-    }
-
-    const containerEl = containerRef.current
-    if (!containerEl) return
-
-    const measure = () => {
-      const horizontalPadding = 48 // p-6
-      const verticalPadding = 48 // p-6
-      const paginationReserve = 64
-      const gridGap = 16
-      const availableWidth = Math.max(0, containerEl.clientWidth - horizontalPadding)
-      const columnCount = Math.max(1, videoColumnCount)
-      const estimatedCardWidth = Math.max(120, (availableWidth - gridGap * (columnCount - 1)) / columnCount)
-      const estimatedCardHeight = estimatedCardWidth * 0.75 + 64
-      const firstCard = videoGridRef.current?.querySelector("button")
-      const measuredCardHeight = firstCard?.getBoundingClientRect().height || estimatedCardHeight
-      const availableHeight = Math.max(0, containerEl.clientHeight - verticalPadding - paginationReserve)
-      // Use ceil so the page tends to fill the viewport instead of leaving a large blank area.
-      const rows = Math.max(1, Math.ceil(availableHeight / Math.max(1, measuredCardHeight + gridGap)))
-      const nextPerPage = Math.max(columnCount, rows * columnCount)
-      setAdaptiveVideosPerPage((prev) => prev === nextPerPage ? prev : nextPerPage)
-    }
-
-    const frame = window.requestAnimationFrame(measure)
-    return () => window.cancelAnimationFrame(frame)
-  }, [activeView, inlineBilibili, settings.general.videoPagination, videoColumnCount, containerWidth, renderEntries.length])
+  const {
+    renderLimit: masonryRenderLimit,
+    setRenderLimit: setMasonryRenderLimit,
+    visibleCards: visibleMasonryCards,
+    columns: masonryColumns,
+    isFirstScreenReady: isMasonryFirstScreenReady,
+    isContentVisible: isMasonryContentVisible,
+  } = usePictureMasonry({
+    enabled: isPicturesAllView,
+    cards: masonryCards,
+    entries: renderEntries,
+    columnCount: masonryColumnCount,
+    containerWidth,
+    scopeKey: `${activeView ?? "all"}:${selectedFeedId ?? "all"}`,
+    decodeMediaUrl,
+    onCacheUpdated: () => setMasonryProbeVersion((prev) => prev + 1),
+  })
+  const handleMasonryScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    if (!isPicturesAllView) return
+    if (masonryRenderLimit >= masonryCards.length) return
+    const el = e.currentTarget
+    const hasScrolledEnough = el.scrollTop > 120
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 900
+    if (!nearBottom || !hasScrolledEnough) return
+    setMasonryRenderLimit((prev) => Math.min(prev + MASONRY_RENDER_BATCH, masonryCards.length))
+  }, [isPicturesAllView, masonryCards.length, masonryRenderLimit, setMasonryRenderLimit])
 
   // Click handler: for Bilibili (open-in-page ON), play inline in current page; otherwise open modal
   const handleVideoClick = useCallback(
@@ -1600,149 +1377,36 @@ export function WideViewContent() {
 
   return (
     <div className="flex flex-col flex-1 min-w-0 bg-white dark:bg-surface-dark">
-      {/* Header bar: social media view uses a minimal header without search/filter */}
-      <div className={`flex-shrink-0 px-6 pt-3 pb-2 border-b ${activeView === FeedViewType.SocialMedia || activeView === FeedViewType.Pictures ? "" : "space-y-2.5"}`}>
-        <div className="flex items-center justify-between">
-          {inlineBilibili ? (
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <button
-                className="inline-flex items-center gap-1.5 text-base font-semibold px-3 py-1.5 rounded-md border border-surface-tertiary dark:border-surface-dark-tertiary bg-surface-secondary/70 dark:bg-surface-dark-secondary/70 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-                onClick={() => setInlineBilibili(null)}
-                title={t("common.back")}
-              >
-                <ChevronLeft size={16} />
-                {t("common.back")}
-              </button>
-            </div>
-          ) : (
-            <h2 className="text-lg font-bold truncate flex items-center gap-2 leading-tight">
-              {viewDef && <span className={viewDef.color}>{title}</span>}
-              {!viewDef && title}
-            </h2>
-          )}
-          {!inlineBilibili && (
-            <div className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary">
-            {/* Refresh */}
-            <button
-              onClick={async () => {
-                if (selectedFeedId && selectedFeedId !== "starred") {
-                  await refreshFeed(selectedFeedId)
-                } else if (activeView !== null) {
-                  const viewFeedIds = feeds
-                    .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
-                    .map((f) => f.id)
-                  await refreshMultiple(viewFeedIds)
-                } else {
-                  await refreshAll()
-                }
-                reloadCurrentList()
-              }}
-              disabled={isRefreshing}
-              className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary disabled:opacity-50"
-              title={t("common.refresh")}
-            >
-              <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
-            </button>
-            {/* Unread toggle */}
-            <button
-              onClick={() => setFilterMode(filterMode === "unread" ? "all" : "unread")}
-              className={`p-1.5 rounded-lg transition-colors ${
-                filterMode === "unread"
-                  ? "text-accent bg-accent/10"
-                  : "hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-              }`}
-              title={filterMode === "unread" ? t("common.all") : t("entryList.unread")}
-            >
-              {filterMode === "unread" ? <Eye size={16} /> : <EyeOff size={16} />}
-            </button>
-            {/* Mark all read */}
-            <button
-              onClick={() => markAllRead(selectedFeedId || undefined)}
-              className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-              title={t("common.markAllRead")}
-            >
-              <CheckCheck size={16} />
-            </button>
-            </div>
-          )}
-        </div>
-
-        {/* Search and filter are shown only for non-social views */}
-        {activeView !== FeedViewType.SocialMedia && activeView !== FeedViewType.Pictures && !inlineBilibili && (
-          <div className="flex items-center gap-3 mt-2">
-            {/* Search */}
-            <form onSubmit={handleSearch} className="relative flex-1 max-w-xs">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  const value = e.target.value
-                  setSearchQuery(value)
-                  if (!value.trim()) {
-                    reloadCurrentList()
-                  }
-                }}
-                placeholder={t("entryList.searchArticles")}
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg border bg-surface-secondary dark:bg-surface-dark-secondary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-            </form>
-
-            {/* Filter tabs */}
-            <div className="flex gap-1 text-xs">
-              <button
-                onClick={() => setFilterMode("all")}
-                className={`px-3 py-1 rounded-full transition-colors ${
-                  filterMode === "all"
-                    ? "bg-accent text-white"
-                    : "bg-surface-secondary dark:bg-surface-dark-secondary hover:bg-surface-tertiary dark:hover:bg-surface-dark-tertiary"
-                }`}
-              >
-                {t("common.all")}
-              </button>
-              <button
-                onClick={() => setFilterMode("unread")}
-                className={`px-3 py-1 rounded-full transition-colors ${
-                  filterMode === "unread"
-                    ? "bg-accent text-white"
-                    : "bg-surface-secondary dark:bg-surface-dark-secondary hover:bg-surface-tertiary dark:hover:bg-surface-dark-tertiary"
-                }`}
-              >
-                {t("entryList.unread")}
-              </button>
-            </div>
-
-            {isRefreshing && refreshProgress && refreshProgress.total > 0 && (
-              <div
-                className="flex items-center gap-2 min-w-[220px] max-w-[360px] flex-1"
-                title={refreshProgress.feedTitle || ""}
-              >
-                <span className="text-[11px] text-text-tertiary whitespace-nowrap">
-                  {`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}
-                </span>
-                <div className="h-1.5 flex-1 rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary overflow-hidden">
-                  <div
-                    className="h-full bg-accent transition-[width] duration-200"
-                    style={{ width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%` }}
-                  />
-                </div>
-                <span className="text-[11px] text-text-tertiary w-9 text-right shrink-0">
-                  {`${refreshProgress.percent}%`}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <WideViewHeader
+        activeView={activeView}
+        inlineBilibili={!!inlineBilibili}
+        title={title}
+        viewDef={viewDef}
+        filterMode={filterMode}
+        isRefreshing={isRefreshing}
+        refreshProgress={refreshProgress}
+        searchQuery={searchQuery}
+        onBack={() => setInlineBilibili(null)}
+        onRefresh={handleRefreshCurrentView}
+        onToggleUnreadFilter={() => setFilterMode(filterMode === "unread" ? "all" : "unread")}
+        onMarkAllRead={() => markAllRead(selectedFeedId || undefined)}
+        onSearch={handleSearch}
+        onSearchQueryChange={handleSearchQueryChange}
+        onSetFilterMode={setFilterMode}
+      />
 
       {/* Content area - fills remaining space */}
-      <div
+      <ScrollArea
         ref={containerRef}
-        className={`flex-1 ${
+        rootClassName={`flex-1 min-h-0 transition-shadow duration-300 ${
+          isContentFocusHighlighted ? "shadow-[inset_0_0_0_2px_rgba(255,92,0,0.55)]" : ""
+        }`}
+        viewportClassName={`h-full ${
           activeView === FeedViewType.Videos || isPicturesAllView || ((activeView === FeedViewType.SocialMedia) && !!inlineBilibili)
             ? "overflow-hidden"
             : "overflow-y-auto"
         }`}
+        tabIndex={-1}
         onScroll={(e) => {
           handleTimelineScroll(e)
           handleMasonryScroll(e)
@@ -1793,115 +1457,31 @@ export function WideViewContent() {
           </div>
         ) : isTimelineView ? (
           /* Social media timeline: centered full-width layout */
-          <div className="py-2">
-            {shouldUseVirtualTimeline ? (
-              <div
-                className="relative"
-                style={{ height: `${timelineVirtualizer.getTotalSize()}px` }}
-              >
-                {virtualTimelineItems.map((item) => {
-                  const entry = timelineEntries[item.index]
-                  if (!entry) return null
-                  return (
-                    <div
-                      key={entry.id}
-                      data-index={item.index}
-                      ref={timelineVirtualizer.measureElement}
-                      className="absolute left-0 top-0 w-full"
-                      style={{ transform: `translateY(${item.start}px)` }}
-                    >
-                      <SocialMediaItem
-                        entry={entry}
-                        isActive={socialEntry?.id === entry.id}
-                        onSelect={() => handleSocialClick(entry)}
-                        onDoubleClick={() => handleSocialDoubleClick(entry)}
-                        feedTitle={feedById.get(entry.feedId)?.title}
-                        feedImage={feedById.get(entry.feedId)?.imageUrl}
-                        feedSiteUrl={feedById.get(entry.feedId)?.siteUrl}
-                        feedUrl={feedById.get(entry.feedId)?.url}
-                        entryIndex={item.index}
-                        totalEntries={timelineEntries.length}
-                        onMarkAboveRead={() => markAboveRead(entry.id)}
-                        onMarkBelowRead={() => markBelowRead(entry.id)}
-                        onContextMenu={(e) => showMenu(e, entry.id)}
-                        dimRead={settings.general.dimRead}
-                        onOpenBilibiliInPage={handleSocialBilibiliOpenInPage}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            ) : settings.general.groupByDate ? (
-              groupedRenderedTimelineEntries.map((group) => (
-                <div key={group.labelKey + group.label}>
-                  <div className="sticky top-0 z-[1] h-9 flex items-center border-b border-transparent bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm">
-                    <div className="m-auto flex w-full max-w-[clamp(45ch,60vw,65ch)] select-none gap-3 pl-2 text-base font-bold text-text dark:text-text-dark">
-                      <span>{t(group.labelKey, group.labelKey === "entryList.daysAgo" ? { days: group.label.match(/\d+/)?.[0] } : undefined) || group.label}</span>
-                    </div>
-                  </div>
-                  {group.entries.map((entry) => {
-                    const globalIndex = timelineIndexById.get(entry.id) ?? 0
-                    return (
-                      <SocialMediaItem
-                        key={entry.id}
-                        entry={entry}
-                        isActive={socialEntry?.id === entry.id}
-                        onSelect={() => handleSocialClick(entry)}
-                        onDoubleClick={() => handleSocialDoubleClick(entry)}
-                        feedTitle={feedById.get(entry.feedId)?.title}
-                        feedImage={feedById.get(entry.feedId)?.imageUrl}
-                        feedSiteUrl={feedById.get(entry.feedId)?.siteUrl}
-                        feedUrl={feedById.get(entry.feedId)?.url}
-                        entryIndex={globalIndex}
-                        totalEntries={timelineEntries.length}
-                        onMarkAboveRead={() => markAboveRead(entry.id)}
-                        onMarkBelowRead={() => markBelowRead(entry.id)}
-                        onContextMenu={(e) => showMenu(e, entry.id)}
-                        dimRead={settings.general.dimRead}
-                        onOpenBilibiliInPage={handleSocialBilibiliOpenInPage}
-                      />
-                    )
-                  })}
-                </div>
-              ))
-            ) : (
-              renderedTimelineEntries.map((entry) => (
-                <SocialMediaItem
-                  key={entry.id}
-                  entry={entry}
-                  isActive={socialEntry?.id === entry.id}
-                  onSelect={() => handleSocialClick(entry)}
-                  onDoubleClick={() => handleSocialDoubleClick(entry)}
-                  feedTitle={feedById.get(entry.feedId)?.title}
-                  feedImage={feedById.get(entry.feedId)?.imageUrl}
-                  feedSiteUrl={feedById.get(entry.feedId)?.siteUrl}
-                  feedUrl={feedById.get(entry.feedId)?.url}
-                  entryIndex={timelineIndexById.get(entry.id) ?? 0}
-                  totalEntries={timelineEntries.length}
-                  onMarkAboveRead={() => markAboveRead(entry.id)}
-                  onMarkBelowRead={() => markBelowRead(entry.id)}
-                  onContextMenu={(e) => showMenu(e, entry.id)}
-                  dimRead={settings.general.dimRead}
-                  onOpenBilibiliInPage={handleSocialBilibiliOpenInPage}
-                />
-              ))
-            )}
-            {!shouldUseVirtualTimeline && renderedTimelineEntries.length < timelineEntries.length && (
-              <div className="py-3 text-center text-xs text-text-tertiary">
-                {`Loading ${renderedTimelineEntries.length}/${timelineEntries.length}...`}
-              </div>
-            )}
-            {isLoadingMore && (
-              <div className="py-3 text-center text-xs text-text-tertiary inline-flex w-full items-center justify-center gap-2">
-                <Loader2 size={14} className="animate-spin" />
-                <span>Loading more...</span>
-              </div>
-            )}
-          </div>
+          <TimelineSection
+            shouldUseVirtualTimeline={shouldUseVirtualTimeline}
+            virtualItems={virtualTimelineItems}
+            totalVirtualSize={timelineVirtualizer.getTotalSize()}
+            measureElement={timelineVirtualizer.measureElement}
+            timelineEntries={timelineEntries}
+            renderedEntries={renderedTimelineEntries}
+            groupedEntries={groupedRenderedTimelineEntries}
+            timelineIndexById={timelineIndexById}
+            feedMetaByEntryId={timelineFeedMetaByEntryId}
+            activeEntryId={socialEntry?.id}
+            dimRead={settings.general.dimRead}
+            isLoadingMore={isLoadingMore}
+            onSelectEntry={handleSocialClick}
+            onDoubleClickEntry={handleSocialDoubleClick}
+            onMarkAboveRead={markAboveRead}
+            onMarkBelowRead={markBelowRead}
+            onContextMenuEntry={showMenu}
+            onOpenBilibiliInPage={handleSocialBilibiliOpenInPage}
+          />
         ) : isPicturesAllView ? (
           /* Pictures grid: show first image from each post, ordered left-to-right */
-          <div
-            className="h-full p-4 box-border overflow-y-auto"
+          <ScrollArea
+            rootClassName="h-full"
+            viewportClassName="h-full overflow-y-auto p-4 box-border"
             onScroll={(e) => {
               handleMasonryScroll(e)
               handlePagedEntryScroll(e)
@@ -1910,123 +1490,45 @@ export function WideViewContent() {
             {!isMasonryFirstScreenReady ? (
               <SkeletonList count={Math.max(8, masonryColumnCount * 4)} type="grid" />
             ) : (
-              <>
-                <div className="flex gap-2.5">
-                  {(() => {
-                    // Round-robin distribute cards into columns for left-to-right chronological order
-                    const cols: typeof visibleMasonryCards[] = Array.from({ length: masonryColumnCount }, () => [])
-                    visibleMasonryCards.forEach((card, i) => cols[i % masonryColumnCount].push(card))
-                    return cols.map((colCards, colIdx) => (
-                      <div key={colIdx} className="flex-1 flex flex-col gap-2.5 min-w-0">
-                        {colCards.map((card, rowIdx) => {
-                          const feed = feedById.get(card.feedId)
-                          return (
-                            <MasonryCard
-                              key={card.id}
-                              data={card}
-                              feedTitle={feed?.title}
-                              feedImage={feed?.imageUrl}
-                              eager={rowIdx < 2}
-                              onClick={() => {
-                                const entry = renderEntries.find((e) => e.id === card.id)
-                                if (entry) handleSocialClick(entry)
-                              }}
-                              onContextMenu={(e) => showMenu(e, card.id)}
-                              locale={dateLocale}
-                            />
-                          )
-                        })}
-                      </div>
-                    ))
-                  })()}
-                </div>
-                {visibleMasonryCards.length < masonryCards.length && (
-                  <div className="py-3 text-center text-xs text-text-tertiary">
-                    {`${visibleMasonryCards.length}/${masonryCards.length}...`}
-                  </div>
-                )}
-              </>
+              <PictureMasonry
+                columns={masonryColumns}
+                isReady={isMasonryFirstScreenReady}
+                isVisible={isMasonryContentVisible}
+                allCount={masonryCards.length}
+                visibleCount={visibleMasonryCards.length}
+                feedById={feedById}
+                entryById={renderEntryById}
+                locale={dateLocale}
+                onClickEntry={handleSocialClick}
+                onContextMenu={showMenu}
+              />
             )}
-          </div>
+          </ScrollArea>
         ) : activeView === FeedViewType.Videos ? (
           /* Video grid with optional pagination */
           <div className={inlineBilibili ? "h-full" : "h-full p-6 box-border"}>
-            {(() => {
-              const videoPagination = settings.general.videoPagination
-              const videosPerPage = Math.max(1, Number(settings.general.videosPerPage) || 20)
-              const totalVideos = renderEntries.length
-              const totalPages = videoPagination ? Math.ceil(totalVideos / videosPerPage) : 1
-              const currentPage = videoPagination ? Math.min(videoPage, Math.max(0, totalPages - 1)) : 0
-              const displayEntries = videoPagination
-                ? renderEntries.slice(currentPage * videosPerPage, (currentPage + 1) * videosPerPage)
-                : renderEntries
-
-              return (
-                <div className="h-full min-h-0 flex flex-col">
-                  <div
-                    className="flex-1 min-h-0 overflow-y-auto pb-3"
-                    style={{ scrollbarGutter: "stable both-edges" }}
-                    onScroll={(e) => {
-                      handlePagedEntryScroll(e)
-                    }}
-                  >
-                    <div
-                      ref={videoGridRef}
-                      className="grid gap-4"
-                      style={{
-                        gridTemplateColumns: `repeat(${videoColumnCount}, minmax(0, 1fr))`,
-                      }}
-                    >
-                      {displayEntries.map((entry) => (
-                        <GridCard
-                          key={entry.id}
-                          entry={entry}
-                          isActive={false}
-                          onSelect={() => handleVideoClick(entry)}
-                          feedTitle={feedById.get(entry.feedId)?.title}
-                          feedImage={feedById.get(entry.feedId)?.imageUrl}
-                          isVideo={true}
-                          onContextMenu={(e) => showMenu(e, entry.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Pagination controls */}
-                  {videoPagination && totalPages > 1 && (
-                    <div className="shrink-0 flex items-center justify-center gap-3 pt-3 pb-1 border-t border-surface-tertiary dark:border-surface-dark-tertiary bg-white dark:bg-surface-dark">
-                      <button
-                        onClick={() => setVideoPage(Math.max(0, currentPage - 1))}
-                        disabled={currentPage === 0}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-                      >
-                        <ChevronLeft size={16} />
-                        {t("common.prevPage")}
-                      </button>
-                      <span className="text-sm text-text-secondary dark:text-text-dark-secondary">
-                        {currentPage + 1} / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setVideoPage(Math.min(totalPages - 1, currentPage + 1))}
-                        disabled={currentPage >= totalPages - 1}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-                      >
-                        {t("common.nextPage")}
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+            <VideoGridSection
+              videoGridRef={videoGridRef}
+              videoColumnCount={videoColumnCount}
+              entries={videoViewModel.displayEntries}
+              feedMetaByEntryId={videoFeedMetaByEntryId}
+              videoPagination={videoViewModel.videoPagination}
+              currentPage={videoViewModel.currentPage}
+              totalPages={videoViewModel.totalPages}
+              onSelectEntry={handleVideoClick}
+              onContextMenuEntry={showMenu}
+              onPrevPage={goPrevPage}
+              onNextPage={goNextPage}
+              onScroll={handlePagedEntryScroll}
+            />
           </div>
         ) : null}
 
         {/* Context Menu */}
         {menuState.visible && menuState.entryId && (() => {
-          const menuEntry = renderEntries.find((e) => e.id === menuState.entryId)
+          const menuEntry = renderEntryById.get(menuState.entryId)
           if (!menuEntry) return null
-          const menuIndex = renderEntries.findIndex((e) => e.id === menuState.entryId)
+          const menuIndex = renderEntryIndexById.get(menuState.entryId) ?? -1
           return (
             <WideViewContextMenuWrapper
               entry={menuEntry}
@@ -2050,7 +1552,7 @@ export function WideViewContent() {
             onClose={() => setPosterEntry(null)}
           />
         )}
-      </div>
+      </ScrollArea>
 
       {/* Video player modal */}
       {videoEntry && <VideoModal entry={videoEntry} onClose={() => setVideoEntry(null)} feeds={feeds} />}
@@ -2432,59 +1934,24 @@ function SocialOverlay({
     locale: getDateLocale(),
   })
 
-  // Smart avatar: prefer unavatar.io for Twitter/X feeds
-  const twitterAvatar = useMemo(() => {
-    const urls = [feed?.siteUrl, feed?.url].filter(Boolean) as string[]
-    for (const u of urls) {
-      try {
-        const { hostname, pathname } = new URL(u)
-        if (hostname === "x.com" || hostname === "twitter.com" || hostname === "www.x.com" || hostname === "www.twitter.com") {
-          const username = pathname.split("/").filter(Boolean)[0]
-          if (username && /^[a-zA-Z0-9_]+$/.test(username)) {
-            return `https://unavatar.io/x/${username}`
-          }
-        }
-      } catch {}
-      const m = u.match(/\/twitter\/user\/([a-zA-Z0-9_]+)/i)
-      if (m) return `https://unavatar.io/x/${m[1]}`
-    }
-    return null
-  }, [feed?.siteUrl, feed?.url])
-  const [avatarImageFailed, setAvatarImageFailed] = useState(false)
-  const cleanAuthorAvatar = useMemo(() => {
-    const candidate = normalizeInstagramUnavatar(entry.authorAvatar || "")
-    return candidate && !isGenericInstagramIconUrl(candidate) ? candidate : ""
-  }, [entry.authorAvatar])
-  const cleanFeedImage = useMemo(() => {
-    const candidate = normalizeInstagramUnavatar(feed?.imageUrl || "")
-    return candidate && !isGenericInstagramIconUrl(candidate) ? candidate : ""
-  }, [feed?.imageUrl])
-  const avatarCandidates = useMemo(() => {
-    const candidates = [
-      twitterAvatar || "",
-      cleanAuthorAvatar,
-      extractPixnoyOriginUrl(cleanAuthorAvatar),
-      cleanFeedImage,
-      extractPixnoyOriginUrl(cleanFeedImage),
-    ]
-    const unique: string[] = []
-    for (const c of candidates) {
-      const candidate = (c || "").trim()
-      if (!candidate) continue
-      if (!/^https?:\/\//i.test(candidate)) continue
-      const key = normalizeImageCacheKey(candidate)
-      if (unique.some((u) => normalizeImageCacheKey(u) === key)) continue
-      unique.push(candidate)
-    }
-    return unique
-  }, [twitterAvatar, cleanAuthorAvatar, cleanFeedImage])
-  const [avatarCandidateIndex, setAvatarCandidateIndex] = useState(0)
-  useEffect(() => {
-    setAvatarImageFailed(false)
-    setAvatarCandidateIndex(0)
-  }, [entry.id, avatarCandidates])
-  const avatarUrl = avatarCandidates[avatarCandidateIndex] || ""
-  const avatarLetter = (entry.author || feed?.title || "?")[0]
+  const {
+    avatarUrl,
+    avatarLetter,
+    avatarImageFailed,
+    handleAvatarError,
+  } = useSocialOverlayAvatar({
+    entryId: entry.id,
+    author: entry.author,
+    feedTitle: feed?.title,
+    authorAvatar: entry.authorAvatar,
+    feedImageUrl: feed?.imageUrl,
+    feedSiteUrl: feed?.siteUrl,
+    feedUrl: feed?.url,
+    normalizeInstagramUnavatar,
+    isGenericInstagramIconUrl,
+    extractPixnoyOriginUrl,
+    normalizeImageCacheKey,
+  })
 
   // Full sanitized content - strip media tags to avoid duplication with the media gallery below
   // Content width mapping - matches EntryContent
@@ -2729,52 +2196,23 @@ function SocialOverlay({
   }, [videos, photos, relatedEntryFallback, entry.imageUrl, entry.content, entry.summary, entry.url])
   const displayPhotos = hasBilibiliPageVideo ? [] : photos
 
-  // Lightbox for individual media in overlay
-  const [previewIdx, setPreviewIdx] = useState<number | null>(null)
-  const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [failedOverlayPhotoTokens, setFailedOverlayPhotoTokens] = useState<Set<string>>(new Set())
-  const getOverlayPhotoToken = useCallback((photo?: { url?: string; previewUrl?: string }): string => {
-    if (!photo) return ""
-    const key = getPhotoDedupeKey(photo.url || "", photo.previewUrl || "")
-    if (key) return key
-    return normalizeImageCacheKey(photo.url || photo.previewUrl || "")
-  }, [])
-  const getOverlayPhotoInitialSrc = useCallback((photo?: { url?: string; previewUrl?: string }): string => {
-    if (!photo) return ""
-    // Prefer previewUrl (mirror/proxy URL) when available — CDN signed URLs expire quickly.
-    // decodeMediaUrl unwraps mirror URLs to CDN URLs, so use decodeUrlEntities instead.
-    if (photo.previewUrl) {
-      const raw = decodeUrlEntities(photo.previewUrl)
-      if (raw && /^https?:\/\//i.test(raw)) return raw
-    }
-    return decodeMediaUrl(photo.url || "")
-  }, [])
-  useEffect(() => {
-    setFailedOverlayPhotoTokens(new Set())
-    setPreviewIdx(null)
-    setLightboxOpen(false)
-  }, [entry.id])
-
-  const markOverlayPhotoFailed = useCallback((photo?: { url?: string; previewUrl?: string }) => {
-    const token = getOverlayPhotoToken(photo)
-    if (!token) return
-    setFailedOverlayPhotoTokens((prev) => {
-      if (prev.has(token)) return prev
-      const next = new Set(prev)
-      next.add(token)
-      return next
-    })
-  }, [getOverlayPhotoToken])
-
-  const handleOverlayPhotoError = useCallback((
-    photo: { url?: string; previewUrl?: string } | undefined,
-    e: SyntheticEvent<HTMLImageElement>,
-  ) => {
-    advanceOverlayPhotoFallback(e, photo?.url || photo?.previewUrl || "", (img) => {
-      img.style.display = "none"
-      markOverlayPhotoFailed(photo)
-    }, photo?.previewUrl)
-  }, [markOverlayPhotoFailed])
+  const {
+    previewIdx,
+    setPreviewIdx,
+    lightboxOpen,
+    setLightboxOpen,
+    failedPhotoTokens: failedOverlayPhotoTokens,
+    getPhotoToken: getOverlayPhotoToken,
+    getPhotoInitialSrc: getOverlayPhotoInitialSrc,
+    handlePhotoError: handleOverlayPhotoError,
+  } = useOverlayMediaGallery({
+    entryId: entry.id,
+    getPhotoDedupeKey,
+    normalizeImageCacheKey,
+    decodeUrlEntities,
+    decodeMediaUrl,
+    advanceOverlayPhotoFallback,
+  })
 
   // AI Translation & Summary
   const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
@@ -2838,335 +2276,42 @@ function SocialOverlay({
   }, [plainContent, showSummary, summary, settings.general?.language])
 
   return (
-    <div className="absolute inset-0 z-[50] flex flex-col overflow-hidden">
-      {/* Backdrop - click to close */}
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-
-      {/* Content - slides up, scrollable */}
-      <div className="relative z-10 flex-1 overflow-y-auto bg-white dark:bg-surface-dark">
-        {/* Sticky action bar - always visible at top */}
-        <div className="sticky top-0 z-20 bg-white/95 dark:bg-surface-dark/95 backdrop-blur-sm border-b border-border/10 dark:border-border-dark/10">
-          <div className={`${contentWidthClass} mx-auto px-4 py-2 flex items-center justify-between`} style={contentWidthStyle}>
-            <button
-              onClick={onClose}
-              className="flex items-center gap-1 px-2 py-1.5 -ml-2 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary text-text-secondary transition-colors"
-            >
-              <ChevronLeft size={18} />
-              <span className="text-sm">{t("common.back")}</span>
-            </button>
-            <div className="flex items-center gap-2">
-              {/* AI action buttons */}
-              {plainContent && (
-                <>
-                  <button
-                    onClick={handleTranslate}
-                    disabled={isTranslating}
-                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                      showTranslation && translatedParagraphs.length > 0
-                        ? "text-accent bg-accent/10"
-                        : "text-text-secondary hover:text-accent hover:bg-accent/5"
-                    }`}
-                    title={t("social.translateTweet")}
-                  >
-                    {isTranslating ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
-                    <span>{t("social.translateTweet")}</span>
-                  </button>
-                  <button
-                    onClick={handleSummarize}
-                    disabled={isSummarizing}
-                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                      showSummary && summary
-                        ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20"
-                        : "text-text-secondary hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/10"
-                    }`}
-                    title={t("social.summarizeTweet")}
-                  >
-                    {isSummarizing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    <span>{t("social.summarizeTweet")}</span>
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => {
-                  if (!browserOpenUrl) return
-                  if (window.api?.app?.openExternal) {
-                    void window.api.app.openExternal(browserOpenUrl)
-                  } else {
-                    window.open(browserOpenUrl, "_blank")
-                  }
-                }}
-                disabled={!browserOpenUrl}
-                className="flex items-center gap-1 text-xs text-accent disabled:text-text-tertiary disabled:cursor-not-allowed hover:underline disabled:no-underline"
-                title={t("common.openInBrowser", { defaultValue: "在浏览器中打开" })}
-              >
-                <ExternalLink size={12} />
-                {t("common.openInBrowser", { defaultValue: "在浏览器中打开" })}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          data-context-select-scope="article"
-          className={`${contentWidthClass} mx-auto space-y-5 pt-4 pb-12 px-4`}
-          style={{
-            lineHeight: settings.general.contentLineHeight,
-            fontFamily: settings.general.contentFontFamily,
-            ...contentWidthStyle,
-          }}
-        >
-
-          {/* AI Summary - displayed at the top, before content */}
-          {showSummary && (
-            <div className="rounded-xl border border-amber-300/30 bg-amber-50/50 dark:bg-amber-900/10 p-4">
-              <div className="flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">
-                <Sparkles size={14} />
-                {t("social.aiSummary")}
-              </div>
-              {isSummarizing ? (
-                <div className="flex items-center gap-2 text-sm text-text-secondary">
-                  <Loader2 size={14} className="animate-spin" />
-                  {t("entry.generatingSummary")}
-                </div>
-              ) : (
-                <p className="text-sm leading-relaxed whitespace-pre-line">{summary}</p>
-              )}
-            </div>
-          )}
-
-          {/* Author header */}
-          <div className="flex items-center gap-3">
-            {avatarUrl && !avatarImageFailed ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                className="w-10 h-10 rounded-full object-cover"
-                onError={() => {
-                  const nextIndex = avatarCandidateIndex + 1
-                  if (nextIndex < avatarCandidates.length) {
-                    setAvatarCandidateIndex(nextIndex)
-                    return
-                  }
-                  setAvatarImageFailed(true)
-                }}
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary flex items-center justify-center text-sm font-bold text-text-secondary">
-                {avatarLetter}
-              </div>
-            )}
-            <div>
-              <div className="font-semibold text-base">{entry.author || feed?.title}</div>
-              <div className="text-xs text-text-secondary dark:text-text-dark-secondary">{timeAgo}</div>
-            </div>
-          </div>
-
-          {/* Full content - bilingual mode when translation is active */}
-          {showTranslation && translatedParagraphs.length > 0 ? (
-            <div
-              className="space-y-0"
-              style={{ fontSize: `${settings.general.fontSize}px` }}
-            >
-              {paragraphs.map((para, i) => {
-                const translated = translatedParagraphs[i]
-                const isLoading = isTranslating && i === translatedParagraphs.length
-                const plainText = para.replace(/<[^>]*>/g, "").trim()
-                if (!plainText) return null
-                return (
-                  <div
-                    key={i}
-                    className="group border-l-2 border-transparent hover:border-accent/30 transition-colors pl-0 hover:pl-3"
-                  >
-                    {/* Original */}
-                    {para.includes("<") ? (
-                      <div
-                        className="entry-content !mb-0 prose dark:prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: para }}
-                      />
-                    ) : (
-                      <p className="whitespace-pre-line !mb-0">{para}</p>
-                    )}
-                    {/* Translation */}
-                    {translated ? (
-                      <div className="relative mt-1 mb-4">
-                        <div className="flex items-start gap-2">
-                          <Languages size={12} className="text-accent/50 mt-1 flex-shrink-0" />
-                          <div
-                            className="entry-content !mb-0 text-accent/80 dark:text-orange-300/80"
-                            style={{ fontSize: `${(settings.general.fontSize || 16) - 1}px` }}
-                            dangerouslySetInnerHTML={{ __html: translated }}
-                          />
-                        </div>
-                      </div>
-                    ) : isLoading ? (
-                      <div className="flex items-center gap-2 mt-1 mb-4 text-xs text-text-tertiary">
-                        <Loader2 size={12} className="animate-spin" />
-                        {t("entry.translating")}
-                      </div>
-                    ) : (
-                      <div className="mb-4" />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ) : fullContent ? (
-            <div
-              className="prose dark:prose-invert max-w-none"
-              style={{ fontSize: `${settings.general.fontSize}px` }}
-              dangerouslySetInnerHTML={{ __html: fullContent }}
-            />
-          ) : plainContent ? (
-            <p
-              className="whitespace-pre-line"
-              style={{ fontSize: `${settings.general.fontSize}px` }}
-            >
-              {plainContent}
-            </p>
-          ) : null}
-
-          {/* Photos carousel */}
-          {displayPhotos.length > 0 && (
-            <div className="relative group/carousel">
-              {/* Fixed-height image area so arrows stay in place */}
-              <div className="relative overflow-hidden" style={{ height: "70vh" }}>
-                <div
-                  className="flex h-full transition-transform duration-300 ease-in-out"
-                  style={{ transform: `translateX(-${(previewIdx ?? 0) * 100}%)` }}
-                >
-                  {displayPhotos.map((photo, i) => {
-                    const token = getOverlayPhotoToken(photo)
-                    const isFailed = !!token && failedOverlayPhotoTokens.has(token)
-                    return (
-                      <div key={`slide-${i}`} className="flex-shrink-0 w-full h-full flex items-center justify-center">
-                        {isFailed ? (
-                          <div className="flex min-h-[180px] w-full max-w-full items-center justify-center rounded-lg bg-surface-tertiary text-sm text-text-tertiary dark:bg-surface-dark-tertiary dark:text-text-dark-tertiary">
-                            图片加载失败
-                          </div>
-                        ) : (
-                          <img
-                            src={getOverlayPhotoInitialSrc(photo)}
-                            alt=""
-                            className="max-w-full max-h-full rounded-lg cursor-zoom-in object-contain"
-                            loading={i <= (previewIdx ?? 0) + 1 ? "eager" : "lazy"}
-                            referrerPolicy="no-referrer"
-                            onClick={() => setLightboxOpen(true)}
-                            onLoad={(e) => { e.currentTarget.style.display = "" }}
-                            onError={(e) => handleOverlayPhotoError(photo, e)}
-                          />
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Left / Right arrows — inside fixed-height container */}
-                {displayPhotos.length > 1 && (previewIdx ?? 0) > 0 && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPreviewIdx(Math.max(0, (previewIdx ?? 0) - 1)) }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white hover:bg-black/60 opacity-0 group-hover/carousel:opacity-100 transition-opacity"
-                  >
-                    <ChevronLeft size={22} />
-                  </button>
-                )}
-                {displayPhotos.length > 1 && (previewIdx ?? 0) < displayPhotos.length - 1 && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPreviewIdx(Math.min(displayPhotos.length - 1, (previewIdx ?? 0) + 1)) }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white hover:bg-black/60 opacity-0 group-hover/carousel:opacity-100 transition-opacity"
-                  >
-                    <ChevronRight size={22} />
-                  </button>
-                )}
-              </div>
-
-              {/* Dot indicators */}
-              {displayPhotos.length > 1 && (
-                <div className="flex items-center justify-center gap-1.5 mt-3">
-                  {displayPhotos.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPreviewIdx(i)}
-                      className={`w-2 h-2 rounded-full transition-colors ${
-                        i === (previewIdx ?? 0)
-                          ? "bg-accent"
-                          : "bg-text-tertiary/40 hover:bg-text-tertiary/60"
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {videosWithCover.map((video, i) => (
-            <div key={`video-${i}`} className="mt-3">
-              <VideoPlayer
-                src={video.url}
-                previewImage={video.previewUrl}
-                className="w-full aspect-video rounded-lg"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Photo lightbox within overlay */}
-      {lightboxOpen && displayPhotos[(previewIdx ?? 0)] && (
-        <div
-          className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center"
-          onClick={() => setLightboxOpen(false)}
-        >
-          {(() => {
-            const idx = previewIdx ?? 0
-            const previewPhoto = displayPhotos[idx]
-            const previewToken = getOverlayPhotoToken(previewPhoto)
-            const previewFailed = !!previewToken && failedOverlayPhotoTokens.has(previewToken)
-            return previewFailed ? (
-              <div
-                className="flex min-h-[240px] min-w-[240px] max-w-[90vw] max-h-[90vh] items-center justify-center rounded-lg bg-surface-tertiary text-sm text-text-tertiary dark:bg-surface-dark-tertiary dark:text-text-dark-tertiary"
-                onClick={(e) => e.stopPropagation()}
-              >
-                图片加载失败
-              </div>
-            ) : (
-              <img
-                key={`overlay-preview-${entry.id}-${idx}-${previewPhoto.url}`}
-                src={getOverlayPhotoInitialSrc(previewPhoto)}
-                alt=""
-                className="max-w-[90vw] max-h-[90vh] object-contain"
-                referrerPolicy="no-referrer"
-                onLoad={(e) => {
-                  e.currentTarget.style.display = ""
-                }}
-                onError={(e) => handleOverlayPhotoError(previewPhoto, e)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            )
-          })()}
-          <button
-            onClick={() => setLightboxOpen(false)}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-          >
-            <X size={20} />
-          </button>
-          {displayPhotos.length > 1 && (previewIdx ?? 0) > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setPreviewIdx((previewIdx ?? 0) - 1) }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            >
-              <ChevronLeft size={24} />
-            </button>
-          )}
-          {displayPhotos.length > 1 && (previewIdx ?? 0) < displayPhotos.length - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setPreviewIdx((previewIdx ?? 0) + 1) }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            >
-              <ChevronRight size={24} />
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+    <SocialOverlayView
+      onClose={onClose}
+      contentWidthClass={contentWidthClass}
+      contentWidthStyle={contentWidthStyle}
+      plainContent={plainContent}
+      isTranslating={isTranslating}
+      showTranslation={showTranslation}
+      translatedParagraphCount={translatedParagraphs.length}
+      isSummarizing={isSummarizing}
+      showSummary={showSummary}
+      summary={summary}
+      browserOpenUrl={browserOpenUrl}
+      onTranslate={handleTranslate}
+      onSummarize={handleSummarize}
+      lineHeight={settings.general.contentLineHeight}
+      fontFamily={settings.general.contentFontFamily}
+      avatarUrl={avatarUrl}
+      avatarImageFailed={avatarImageFailed}
+      avatarLetter={avatarLetter}
+      authorName={entry.author || feed?.title || ""}
+      timeAgo={timeAgo}
+      onAvatarError={handleAvatarError}
+      translatedParagraphs={translatedParagraphs}
+      paragraphs={paragraphs}
+      fullContent={fullContent}
+      fontSize={settings.general.fontSize || 16}
+      displayPhotos={displayPhotos}
+      videos={videosWithCover}
+      previewIdx={previewIdx}
+      lightboxOpen={lightboxOpen}
+      failedPhotoTokens={failedOverlayPhotoTokens}
+      getPhotoToken={getOverlayPhotoToken}
+      getPhotoInitialSrc={getOverlayPhotoInitialSrc}
+      onPhotoError={handleOverlayPhotoError}
+      onSetPreviewIdx={setPreviewIdx}
+      onSetLightboxOpen={setLightboxOpen}
+    />
   )
 }

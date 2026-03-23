@@ -1,4 +1,4 @@
-import { create } from "zustand"
+import { createAppStore } from "./helpers"
 import type { DiscoverCategory, DiscoverFeed, RSSHubRoute } from "../../../shared/discover-data"
 
 export type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x" | "instagram"
@@ -79,7 +79,7 @@ interface DiscoverState {
 
 let latestSearchRequestSeq = 0
 
-export const useDiscoverStore = create<DiscoverState>((set, get) => ({
+export const useDiscoverStore = createAppStore<DiscoverState>((set, get) => ({
   isOpen: false,
   categories: [],
   selectedCategory: null,

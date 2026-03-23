@@ -3,24 +3,8 @@ import ReactDOM from "react-dom/client"
 import App from "./App"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { I18nProvider } from "./providers/I18nProvider"
+import "./styles/tokens.css"
 import "./styles/globals.css"
-
-console.log("[Livo] Renderer starting...")
-
-// Apply dark mode based on system preference
-const prefersDark = window.matchMedia("(prefers-color-scheme: dark)")
-if (prefersDark.matches) {
-  document.documentElement.classList.add("dark")
-}
-prefersDark.addEventListener("change", (e) => {
-  if (e.matches) {
-    document.documentElement.classList.add("dark")
-  } else {
-    document.documentElement.classList.remove("dark")
-  }
-})
-
-console.log("[Livo] Mounting React app...")
 
 try {
   ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -32,7 +16,6 @@ try {
       </ErrorBoundary>
     </React.StrictMode>
   )
-  console.log("[Livo] React app mounted successfully")
 } catch (err) {
   console.error("[Livo] Failed to mount React app:", err)
   document.getElementById("root")!.innerHTML = `

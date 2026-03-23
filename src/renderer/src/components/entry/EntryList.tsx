@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, type SyntheticEvent, type UIEvent } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect, memo, type SyntheticEvent, type UIEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useEntryStore } from "../../store/entry-store"
@@ -2024,7 +2024,7 @@ function EntryCard({
 }
 
 /** Grid card for media/video view */
-export function GridCard({
+export const GridCard = memo(function GridCard({
   entry,
   isActive,
   onSelect,
@@ -2239,9 +2239,9 @@ export function GridCard({
       </div>
     </button>
   )
-}
+})
 
-export function SocialMediaItem({
+export const SocialMediaItem = memo(function SocialMediaItem({
   entry,
   isActive,
   onSelect,
@@ -2975,7 +2975,7 @@ export function SocialMediaItem({
       </div>
     </article>
   )
-}
+})
 
 /** Floating action bar on social media items. */
 function SocialActionBar({

@@ -1,4 +1,4 @@
-import { create } from "zustand"
+import { createAppStore } from "./helpers"
 import type { FeedWithCount } from "../../../shared/types"
 import { FeedViewType } from "../../../shared/types"
 import { useSettingsStore } from "./settings-store"
@@ -86,7 +86,7 @@ interface FeedState {
   exportOPML: () => Promise<{ success: boolean; count?: number; error?: string; canceled?: boolean }>
 }
 
-export const useFeedStore = create<FeedState>((set, get) => ({
+export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   refreshProgress: null,
   feeds: [],
   selectedFeedId: null,

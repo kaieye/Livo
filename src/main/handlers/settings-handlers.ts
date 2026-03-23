@@ -5,22 +5,10 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs"
 import {
   IPC,
   type AppSettings,
-  DEFAULT_SETTINGS,
-  DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
 } from "../../shared/types"
+import { cloneDefaultSettings, mergeSettings, normalizeSettings } from "../../shared/settings"
 
 let cachedSettings: AppSettings | null = null
-
-function isLegacyDefaultSystemPromptTemplate(template: string | undefined): boolean {
-  const normalized = (template || "").trim().replace(/\s+/g, " ")
-  if (!normalized) return false
-  return (
-    normalized.includes("AI assistant")
-    && normalized.includes("{{context}}")
-    && normalized.includes("{{persona}}")
-    && normalized.includes("RSS feed content")
-  )
-}
 
 function getSettingsPath(): string {
   const userDataPath = app.getPath("userData")
@@ -35,27 +23,15 @@ export function getSettings(): AppSettings {
     try {
       const raw = readFileSync(settingsPath, "utf-8")
       const saved = JSON.parse(raw) as Partial<AppSettings>
-      cachedSettings = {
-        ...DEFAULT_SETTINGS,
-        ...saved,
-        ai: { ...DEFAULT_SETTINGS.ai, ...(saved.ai || {}) },
-        general: { ...DEFAULT_SETTINGS.general, ...(saved.general || {}) },
-        data: { ...DEFAULT_SETTINGS.data, ...(saved.data || {}) },
-        aggregator: { ...DEFAULT_SETTINGS.aggregator, ...(saved.aggregator || {}) },
-        translation: { ...DEFAULT_SETTINGS.translation, ...(saved.translation || {}) },
-      }
-      // Migrate legacy English default system prompt to concise Chinese default.
-      if (isLegacyDefaultSystemPromptTemplate(cachedSettings.ai.systemPromptTemplate)) {
-        cachedSettings.ai.systemPromptTemplate = DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE
-      }
+      cachedSettings = normalizeSettings(saved)
       return cachedSettings!
     } catch {
-      cachedSettings = { ...DEFAULT_SETTINGS }
+      cachedSettings = cloneDefaultSettings()
       return cachedSettings
     }
   }
 
-  cachedSettings = { ...DEFAULT_SETTINGS }
+  cachedSettings = cloneDefaultSettings()
   return cachedSettings
 }
 
@@ -74,15 +50,7 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle(IPC.SETTINGS_SET, (_event, newSettings: Partial<AppSettings>) => {
     const current = getSettings()
-    const merged = {
-      ...current,
-      ...newSettings,
-      ai: { ...current.ai, ...(newSettings.ai || {}) },
-      general: { ...current.general, ...(newSettings.general || {}) },
-      data: { ...(current.data || {}), ...(newSettings.data || {}) },
-      aggregator: { ...(current.aggregator || {}), ...(newSettings.aggregator || {}) },
-      translation: { ...current.translation, ...(newSettings.translation || {}) },
-    }
+    const merged = mergeSettings(current, newSettings)
     saveSettings(merged)
     return { success: true, settings: merged }
   })

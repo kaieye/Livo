@@ -4,7 +4,8 @@
  */
 
 import type { Feed, Entry } from "../shared/types"
-import { FeedViewType, type AppSettings, DEFAULT_SETTINGS } from "../shared/types"
+import { FeedViewType, type AppSettings } from "../shared/types"
+import { cloneDefaultSettings, normalizeSettings } from "../shared/settings"
 
 const DB_NAME = "livo-web"
 const DB_VERSION = 1
@@ -315,9 +316,9 @@ export async function getSettings(): Promise<AppSettings> {
     const request = store.get("app-settings")
     request.onsuccess = () => {
       if (request.result) {
-        resolve({ ...DEFAULT_SETTINGS, ...request.result.value })
+        resolve(normalizeSettings(request.result.value))
       } else {
-        resolve({ ...DEFAULT_SETTINGS })
+        resolve(cloneDefaultSettings())
       }
     }
     request.onerror = () => reject(request.error)

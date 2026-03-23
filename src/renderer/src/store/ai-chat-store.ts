@@ -1,4 +1,4 @@
-import { create } from "zustand"
+import { createAppStore } from "./helpers"
 import { useSettingsStore } from "./settings-store"
 
 interface ChatMessage {
@@ -39,7 +39,7 @@ function renderSystemPrompt(template: string, context?: string, personaPrompt?: 
     .trim()
 }
 
-export const useAIChatStore = create<AIChatState>((set, get) => ({
+export const useAIChatStore = createAppStore<AIChatState>((set, get) => ({
   messages: [],
   isLoading: false,
   isPanelOpen: false,
