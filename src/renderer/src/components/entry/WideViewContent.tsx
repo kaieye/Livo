@@ -50,11 +50,16 @@ function getMasonryColumnCount(containerWidth: number): number {
 
 const MASONRY_INITIAL_RENDER = 30
 const MASONRY_RENDER_BATCH = 40
+const MASONRY_FIRST_SCREEN_COUNT = 18
+const MASONRY_FIRST_SCREEN_READY_TIMEOUT = 180
 
 interface MasonryCardData {
   id: string
   feedId: string
   firstImage: string
+  width?: number
+  height?: number
+  blurhash?: string
   photoCount: number
   publishedAt: number
 }
@@ -66,6 +71,7 @@ const MasonryCard = memo(function MasonryCard({
   onClick,
   onContextMenu,
   locale,
+  eager,
 }: {
   data: MasonryCardData
   feedTitle?: string
@@ -73,11 +79,15 @@ const MasonryCard = memo(function MasonryCard({
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
   locale: Locale | undefined
+  eager?: boolean
 }) {
   const timeAgo = useMemo(() => {
     if (!data.publishedAt) return ""
     return formatDistanceToNow(new Date(data.publishedAt), { addSuffix: true, locale })
   }, [data.publishedAt, locale])
+  const hasAspectRatio = !!(data.width && data.height)
+  const aspectRatio = hasAspectRatio ? `${data.width} / ${data.height}` : undefined
+  const placeholderColor = data.blurhash ? blurhashToAverageColor(data.blurhash) : undefined
 
   return (
     <div
@@ -85,12 +95,22 @@ const MasonryCard = memo(function MasonryCard({
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
-      <div className="relative rounded-xl overflow-hidden bg-surface-tertiary dark:bg-surface-dark-tertiary">
+      <div
+        className="relative rounded-xl overflow-hidden bg-surface-tertiary dark:bg-surface-dark-tertiary"
+        style={{
+          aspectRatio,
+          backgroundColor: placeholderColor,
+        }}
+      >
         <img
           src={data.firstImage}
           alt=""
-          className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-          loading="lazy"
+          className={hasAspectRatio
+            ? "absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            : "block h-auto w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"}
+          loading={eager ? "eager" : "lazy"}
+          fetchPriority={eager ? "high" : "auto"}
+          decoding="async"
           referrerPolicy="no-referrer"
           onError={(e) => {
             const parent = e.currentTarget.closest(".group") as HTMLElement | null
@@ -136,6 +156,8 @@ const SOCIAL_INITIAL_RENDER_COUNT = 24
 const SOCIAL_RENDER_BATCH = 80
 
 const rememberedContainerWidthByView = new Map<string, number>()
+const rememberedMasonrySizeByUrl = new Map<string, { width: number; height: number }>()
+const pendingMasonryProbeUrls = new Set<string>()
 
 function normalizeLooseText(value: string): string {
   return (value || "")
@@ -1074,6 +1096,7 @@ export function WideViewContent() {
   const { settings } = useSettingsStore()
   const { t } = useTranslation()
   const [filterMode, setFilterMode] = useState<"all" | "unread">("all")
+  const [, setMasonryProbeVersion] = useState(0)
   const baseEntryLoadLimit = useMemo(() => getEntryLoadLimit(activeView), [activeView])
   const [entryLoadLimit, setEntryLoadLimit] = useState(baseEntryLoadLimit)
 
@@ -1223,6 +1246,9 @@ export function WideViewContent() {
     const result: MasonryCardData[] = []
     for (const entry of renderEntries) {
       let firstImage = ""
+      let firstImageWidth: number | undefined
+      let firstImageHeight: number | undefined
+      let firstImageBlurhash: string | undefined
       let photoCount = 0
       for (const m of entry.media || []) {
         if (m.type !== "photo") continue
@@ -1230,20 +1256,41 @@ export function WideViewContent() {
         if (!url || !isLikelyImageByUrl(url) || isDecorativeSocialImageUrl(url)) continue
         if (hasTinyDecorativeDimensions(m.width, m.height)) continue
         photoCount++
-        if (!firstImage) firstImage = url
+        if (!firstImage) {
+          const rememberedSize = rememberedMasonrySizeByUrl.get(url)
+          firstImage = url
+          firstImageWidth = m.width || rememberedSize?.width
+          firstImageHeight = m.height || rememberedSize?.height
+          firstImageBlurhash = m.blurhash
+        }
       }
       if (!firstImage) {
         const fallback = decodeMediaUrl(entry.imageUrl || "")
-        if (fallback && isLikelyImageByUrl(fallback) && !isDecorativeSocialImageUrl(fallback)) firstImage = fallback
+        if (fallback && isLikelyImageByUrl(fallback) && !isDecorativeSocialImageUrl(fallback)) {
+          const rememberedSize = rememberedMasonrySizeByUrl.get(fallback)
+          firstImage = fallback
+          firstImageWidth = rememberedSize?.width
+          firstImageHeight = rememberedSize?.height
+        }
       }
       if (!firstImage) continue
-      result.push({ id: entry.id, feedId: entry.feedId, firstImage, photoCount, publishedAt: entry.publishedAt || 0 })
+      result.push({
+        id: entry.id,
+        feedId: entry.feedId,
+        firstImage,
+        width: firstImageWidth,
+        height: firstImageHeight,
+        blurhash: firstImageBlurhash,
+        photoCount,
+        publishedAt: entry.publishedAt || 0,
+      })
     }
     return result
   }, [isPicturesAllView, renderEntries])
 
   // Progressive masonry rendering
   const [masonryRenderLimit, setMasonryRenderLimit] = useState(MASONRY_INITIAL_RENDER)
+  const [isMasonryFirstScreenReady, setIsMasonryFirstScreenReady] = useState(false)
   useEffect(() => {
     if (!isPicturesAllView) return
     setMasonryRenderLimit(MASONRY_INITIAL_RENDER)
@@ -1252,7 +1299,38 @@ export function WideViewContent() {
     () => isPicturesAllView ? masonryCards.slice(0, masonryRenderLimit) : [],
     [isPicturesAllView, masonryCards, masonryRenderLimit],
   )
+  useEffect(() => {
+    if (!isPicturesAllView) return
+    const cardsToProbe = visibleMasonryCards.filter((card) => !card.width || !card.height)
+    if (cardsToProbe.length === 0) return
 
+    let cancelled = false
+    for (const card of cardsToProbe) {
+      const url = card.firstImage
+      if (!url || rememberedMasonrySizeByUrl.has(url) || pendingMasonryProbeUrls.has(url)) continue
+
+      pendingMasonryProbeUrls.add(url)
+      const probe = new window.Image()
+      probe.decoding = "async"
+      probe.referrerPolicy = "no-referrer"
+      probe.onload = () => {
+        pendingMasonryProbeUrls.delete(url)
+        if (cancelled) return
+        if (probe.naturalWidth > 0 && probe.naturalHeight > 0) {
+          rememberedMasonrySizeByUrl.set(url, { width: probe.naturalWidth, height: probe.naturalHeight })
+          setMasonryProbeVersion((prev) => prev + 1)
+        }
+      }
+      probe.onerror = () => {
+        pendingMasonryProbeUrls.delete(url)
+      }
+      probe.src = url
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [isPicturesAllView, visibleMasonryCards])
   const dateLocale = useMemo(() => getDateLocale(), [settings.general.language])
   const shouldUseVirtualTimeline = isTimelineView && !settings.general.groupByDate
   const renderedTimelineEntries = useMemo(() => {
@@ -1384,6 +1462,38 @@ export function WideViewContent() {
 
   const videoColumnCount = useMemo(() => getVideoColumnCount(containerWidth), [containerWidth])
   const masonryColumnCount = useMemo(() => getMasonryColumnCount(containerWidth), [containerWidth])
+  const firstScreenMasonryCards = useMemo(
+    () => visibleMasonryCards.slice(0, Math.max(masonryColumnCount * 3, MASONRY_FIRST_SCREEN_COUNT)),
+    [masonryColumnCount, visibleMasonryCards],
+  )
+  useEffect(() => {
+    if (!isPicturesAllView) {
+      setIsMasonryFirstScreenReady(false)
+      return
+    }
+    if (containerWidth <= 0) {
+      setIsMasonryFirstScreenReady(false)
+      return
+    }
+    if (firstScreenMasonryCards.length === 0) {
+      setIsMasonryFirstScreenReady(true)
+      return
+    }
+
+    const ready = firstScreenMasonryCards.every((card) => (card.width && card.height) || rememberedMasonrySizeByUrl.has(card.firstImage))
+    if (ready) {
+      setIsMasonryFirstScreenReady(true)
+      return
+    }
+
+    setIsMasonryFirstScreenReady(false)
+    const timer = window.setTimeout(() => {
+      setIsMasonryFirstScreenReady(true)
+    }, MASONRY_FIRST_SCREEN_READY_TIMEOUT)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [activeView, containerWidth, firstScreenMasonryCards, isPicturesAllView, selectedFeedId])
 
   useLayoutEffect(() => {
     if (activeView !== FeedViewType.Videos || inlineBilibili || !settings.general.videoPagination) {
@@ -1797,38 +1907,45 @@ export function WideViewContent() {
               handlePagedEntryScroll(e)
             }}
           >
-            <div className="flex gap-2.5">
-              {(() => {
-                // Round-robin distribute cards into columns for left-to-right chronological order
-                const cols: typeof visibleMasonryCards[] = Array.from({ length: masonryColumnCount }, () => [])
-                visibleMasonryCards.forEach((card, i) => cols[i % masonryColumnCount].push(card))
-                return cols.map((colCards, colIdx) => (
-                  <div key={colIdx} className="flex-1 flex flex-col gap-2.5 min-w-0">
-                    {colCards.map((card) => {
-                      const feed = feedById.get(card.feedId)
-                      return (
-                        <MasonryCard
-                          key={card.id}
-                          data={card}
-                          feedTitle={feed?.title}
-                          feedImage={feed?.imageUrl}
-                          onClick={() => {
-                            const entry = renderEntries.find((e) => e.id === card.id)
-                            if (entry) handleSocialClick(entry)
-                          }}
-                          onContextMenu={(e) => showMenu(e, card.id)}
-                          locale={dateLocale}
-                        />
-                      )
-                    })}
+            {!isMasonryFirstScreenReady ? (
+              <SkeletonList count={Math.max(8, masonryColumnCount * 4)} type="grid" />
+            ) : (
+              <>
+                <div className="flex gap-2.5">
+                  {(() => {
+                    // Round-robin distribute cards into columns for left-to-right chronological order
+                    const cols: typeof visibleMasonryCards[] = Array.from({ length: masonryColumnCount }, () => [])
+                    visibleMasonryCards.forEach((card, i) => cols[i % masonryColumnCount].push(card))
+                    return cols.map((colCards, colIdx) => (
+                      <div key={colIdx} className="flex-1 flex flex-col gap-2.5 min-w-0">
+                        {colCards.map((card, rowIdx) => {
+                          const feed = feedById.get(card.feedId)
+                          return (
+                            <MasonryCard
+                              key={card.id}
+                              data={card}
+                              feedTitle={feed?.title}
+                              feedImage={feed?.imageUrl}
+                              eager={rowIdx < 2}
+                              onClick={() => {
+                                const entry = renderEntries.find((e) => e.id === card.id)
+                                if (entry) handleSocialClick(entry)
+                              }}
+                              onContextMenu={(e) => showMenu(e, card.id)}
+                              locale={dateLocale}
+                            />
+                          )
+                        })}
+                      </div>
+                    ))
+                  })()}
+                </div>
+                {visibleMasonryCards.length < masonryCards.length && (
+                  <div className="py-3 text-center text-xs text-text-tertiary">
+                    {`${visibleMasonryCards.length}/${masonryCards.length}...`}
                   </div>
-                ))
-              })()}
-            </div>
-            {visibleMasonryCards.length < masonryCards.length && (
-              <div className="py-3 text-center text-xs text-text-tertiary">
-                {`${visibleMasonryCards.length}/${masonryCards.length}...`}
-              </div>
+                )}
+              </>
             )}
           </div>
         ) : activeView === FeedViewType.Videos ? (
