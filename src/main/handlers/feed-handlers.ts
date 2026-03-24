@@ -94,6 +94,7 @@ export function registerFeedHandlers(): void {
         if (existingFeed) {
           const wantsRecommended = (category || '') === RECOMMENDED_CATEGORY
           const updates: Partial<Feed> = {}
+          const routeView = detectRouteViewFromUrl(normalizedUrl)
 
           // If user subscribes a feed that already exists in Recommended,
           // promote it into normal subscriptions so it appears in the sidebar list.
@@ -105,8 +106,11 @@ export function registerFeedHandlers(): void {
             updates.folder = category || ''
           }
 
-          // Respect explicit view/title from caller when reusing an existing feed.
-          if (typeof view === 'number' && existingFeed.view !== view) {
+          // Route-specific feeds should always use the matching view, even if an
+          // older caller passes a stale explicit view.
+          if (routeView !== null && existingFeed.view !== routeView) {
+            updates.view = routeView
+          } else if (typeof view === 'number' && existingFeed.view !== view) {
             updates.view = view
           }
           if (title?.trim()) {
@@ -183,11 +187,11 @@ export function registerFeedHandlers(): void {
           }
         }
         // Auto-detect view type from route/content.
-        // Respect explicit user-selected view first.
+        // Route-derived view wins over any stale explicit selection.
         const routeView = detectRouteViewFromUrl(normalizedUrl)
         const detectedView =
-          view ??
           routeView ??
+          view ??
           detectViewTypeFromUrlOrContent(normalizedUrl, parsed)
         const feedImageUrl =
           deferBootstrap && !parsed
@@ -785,13 +789,18 @@ function getInitialFetchTimeoutMs(url: string, view?: FeedViewType): number {
     /\/instagram\/user\//i.test(raw) ||
     /\/picnob(?:\.info)?\/user\//i.test(raw) ||
     /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw)
+    /\/piokok\/user\//i.test(raw) ||
+    /\/bilibili\/user\/dynamic\//i.test(raw)
+  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
   if (
     isSocialRoute ||
     view === FeedViewType.SocialMedia ||
     view === FeedViewType.Pictures
   ) {
     return 18000
+  }
+  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
+    return 45000
   }
   return 6000
 }
@@ -806,7 +815,9 @@ function getBootstrapRefreshTimeoutMs(
     /\/instagram\/user\//i.test(raw) ||
     /\/picnob(?:\.info)?\/user\//i.test(raw) ||
     /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw)
+    /\/piokok\/user\//i.test(raw) ||
+    /\/bilibili\/user\/dynamic\//i.test(raw)
+  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
 
   if (
     isSocialRoute ||
@@ -814,6 +825,9 @@ function getBootstrapRefreshTimeoutMs(
     view === FeedViewType.Pictures
   ) {
     return 45000
+  }
+  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
+    return 120000
   }
   return 18000
 }
@@ -825,7 +839,8 @@ function shouldDeferBootstrap(url: string, view?: FeedViewType): boolean {
     /\/instagram\/user\//i.test(raw) ||
     /\/picnob(?:\.info)?\/user\//i.test(raw) ||
     /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw)
+    /\/piokok\/user\//i.test(raw) ||
+    /\/bilibili\/user\/dynamic\//i.test(raw)
   return (
     isSocialRoute ||
     view === FeedViewType.SocialMedia ||
@@ -876,6 +891,9 @@ function detectRouteViewFromUrl(url: string): FeedViewType | null {
     const u = new URL(url)
     const path = u.pathname.toLowerCase()
     if (/\/bilibili\/user\/video\//.test(path)) return FeedViewType.Videos
+    if (/\/bilibili\/user\/dynamic\//.test(path))
+      return FeedViewType.SocialMedia
+    if (/\/bilibili\/user\/article\//.test(path)) return FeedViewType.Articles
     if (/\/youtube\//.test(path)) return FeedViewType.Videos
     if (/\/instagram\//.test(path)) return FeedViewType.SocialMedia
   } catch {

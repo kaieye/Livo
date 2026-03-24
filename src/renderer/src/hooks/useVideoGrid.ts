@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type RefObject,
+} from 'react'
 
-import { FeedViewType, type Entry } from "../../../shared/types"
+import { FeedViewType, type Entry } from '../../../shared/types'
 
 export function useVideoGrid({
   activeView,
@@ -24,14 +31,20 @@ export function useVideoGrid({
   pageScopeKey: string
 }) {
   const [currentPage, setCurrentPage] = useState(0)
-  const [adaptiveVideosPerPage, setAdaptiveVideosPerPage] = useState<number | null>(null)
+  const [adaptiveVideosPerPage, setAdaptiveVideosPerPage] = useState<
+    number | null
+  >(null)
 
   useEffect(() => {
     setCurrentPage(0)
   }, [pageScopeKey])
 
   useLayoutEffect(() => {
-    if (activeView !== FeedViewType.Videos || inlineBilibiliOpen || !videoPaginationEnabled) {
+    if (
+      activeView !== FeedViewType.Videos ||
+      inlineBilibiliOpen ||
+      !videoPaginationEnabled
+    ) {
       setAdaptiveVideosPerPage(null)
       return
     }
@@ -44,27 +57,60 @@ export function useVideoGrid({
       const verticalPadding = 48
       const paginationReserve = 64
       const gridGap = 16
-      const availableWidth = Math.max(0, containerEl.clientWidth - horizontalPadding)
+      const availableWidth = Math.max(
+        0,
+        containerEl.clientWidth - horizontalPadding,
+      )
       const columnCount = Math.max(1, videoColumnCount)
-      const estimatedCardWidth = Math.max(120, (availableWidth - gridGap * (columnCount - 1)) / columnCount)
+      const estimatedCardWidth = Math.max(
+        120,
+        (availableWidth - gridGap * (columnCount - 1)) / columnCount,
+      )
       const estimatedCardHeight = estimatedCardWidth * 0.75 + 64
-      const firstCard = videoGridRef.current?.querySelector("button")
-      const measuredCardHeight = firstCard?.getBoundingClientRect().height || estimatedCardHeight
-      const availableHeight = Math.max(0, containerEl.clientHeight - verticalPadding - paginationReserve)
-      const rows = Math.max(1, Math.ceil(availableHeight / Math.max(1, measuredCardHeight + gridGap)))
-      const nextPerPage = Math.max(columnCount, rows * columnCount)
-      setAdaptiveVideosPerPage((prev) => prev === nextPerPage ? prev : nextPerPage)
+      const firstCard = videoGridRef.current?.querySelector('button')
+      const measuredCardHeight =
+        firstCard?.getBoundingClientRect().height || estimatedCardHeight
+      const availableHeight = Math.max(
+        0,
+        containerEl.clientHeight - verticalPadding - paginationReserve,
+      )
+      const rows = Math.max(
+        1,
+        Math.ceil(availableHeight / Math.max(1, measuredCardHeight + gridGap)),
+      )
+      const configuredPerPage = Math.max(1, configuredVideosPerPage)
+      const nextPerPage = Math.max(
+        columnCount,
+        Math.min(configuredPerPage, rows * columnCount),
+      )
+      setAdaptiveVideosPerPage((prev) =>
+        prev === nextPerPage ? prev : nextPerPage,
+      )
     }
 
     const frame = window.requestAnimationFrame(measure)
     return () => window.cancelAnimationFrame(frame)
-  }, [activeView, containerRef, inlineBilibiliOpen, videoColumnCount, videoGridRef, videoPaginationEnabled, entries.length])
+  }, [
+    activeView,
+    configuredVideosPerPage,
+    containerRef,
+    inlineBilibiliOpen,
+    videoColumnCount,
+    videoGridRef,
+    videoPaginationEnabled,
+    entries.length,
+  ])
 
   const viewModel = useMemo(() => {
-    const perPage = adaptiveVideosPerPage ?? Math.max(1, configuredVideosPerPage)
+    const perPage =
+      adaptiveVideosPerPage ?? Math.max(1, configuredVideosPerPage)
     const totalItems = entries.length
-    const totalPages = videoPaginationEnabled ? Math.max(1, Math.ceil(totalItems / perPage)) : 1
-    const safePage = videoPaginationEnabled ? Math.min(currentPage, Math.max(0, totalPages - 1)) : 0
+    const totalPages = videoPaginationEnabled
+      ? Math.max(1, Math.ceil(totalItems / perPage))
+      : 1
+    const safePage = videoPaginationEnabled
+      ? Math.min(currentPage, Math.max(0, totalPages - 1))
+      : 0
     const displayEntries = videoPaginationEnabled
       ? entries.slice(safePage * perPage, (safePage + 1) * perPage)
       : entries
@@ -77,7 +123,13 @@ export function useVideoGrid({
       currentPage: safePage,
       displayEntries,
     }
-  }, [adaptiveVideosPerPage, configuredVideosPerPage, currentPage, entries, videoPaginationEnabled])
+  }, [
+    adaptiveVideosPerPage,
+    configuredVideosPerPage,
+    currentPage,
+    entries,
+    videoPaginationEnabled,
+  ])
 
   useEffect(() => {
     if (!viewModel.videoPagination) return

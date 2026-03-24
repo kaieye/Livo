@@ -41,4 +41,34 @@ describe('normalizeExistingFeedTitles', () => {
     expect(changed).toBe(false)
     expect(feeds[0].title).toBe('OpenAI Blog')
   })
+
+  it('migrates bilibili social subscriptions from video route to dynamic route', () => {
+    const feeds = [
+      makeFeed({
+        url: 'https://rsshub.app/bilibili/user/video/123',
+        title: '丁汇实录 - Bilibili',
+        view: FeedViewType.SocialMedia,
+      }),
+    ]
+
+    const changed = normalizeExistingFeedTitles(feeds)
+
+    expect(changed).toBe(true)
+    expect(feeds[0].url).toBe('https://rsshub.app/bilibili/user/dynamic/123')
+  })
+
+  it('fixes bilibili dynamic subscriptions that were saved with videos view', () => {
+    const feeds = [
+      makeFeed({
+        url: 'https://rsshub.app/bilibili/user/dynamic/123',
+        title: '丁汇实录 - Bilibili',
+        view: FeedViewType.Videos,
+      }),
+    ]
+
+    const changed = normalizeExistingFeedTitles(feeds)
+
+    expect(changed).toBe(true)
+    expect(feeds[0].view).toBe(FeedViewType.SocialMedia)
+  })
 })

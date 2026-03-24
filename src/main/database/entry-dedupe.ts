@@ -19,7 +19,19 @@ export function mergeTextFromEntry(target: Entry, source: Entry): boolean {
   let changed = false
   const srcTitle = (source.title || '').normalize('NFKC')
   const tgtTitle = (target.title || '').normalize('NFKC')
-  if (srcTitle.length > tgtTitle.length) {
+
+  const isStatLikeTitle = (value: string): boolean => {
+    const normalized = (value || '').normalize('NFKC').trim()
+    if (!normalized) return true
+    if (/[\p{Script=Han}A-Za-z]/u.test(normalized)) return false
+    return /^(?:\d+(?:\.\d+)?(?:万|亿)?)+(?::\d{1,2}){1,2}$/u.test(normalized)
+  }
+
+  const shouldPreferSourceTitle =
+    srcTitle.length > tgtTitle.length ||
+    (isStatLikeTitle(tgtTitle) && !isStatLikeTitle(srcTitle))
+
+  if (shouldPreferSourceTitle && srcTitle && srcTitle !== tgtTitle) {
     target.title = source.title
     changed = true
   }
@@ -37,7 +49,20 @@ export function mergeEntryData(
 ): boolean {
   let changed = false
 
+  const preferredTitleBeforeMerge = existing.title
+  if (mergeTextFromEntry(existing, incoming)) {
+    changed = true
+  }
+
   if ((incoming.publishedAt || 0) > (existing.publishedAt || 0)) {
+    existing.publishedAt = incoming.publishedAt
+    changed = true
+    options?.onPublishedAtAdvanced?.()
+  } else if (
+    existing.title !== preferredTitleBeforeMerge &&
+    incoming.publishedAt &&
+    incoming.publishedAt !== existing.publishedAt
+  ) {
     existing.publishedAt = incoming.publishedAt
     changed = true
     options?.onPublishedAtAdvanced?.()
@@ -66,6 +91,16 @@ export function mergeEntryData(
   }
   if (incoming.authorAvatar && !existing.authorAvatar) {
     existing.authorAvatar = incoming.authorAvatar
+    changed = true
+  }
+  if (
+    (incoming.author || '').trim() &&
+    (!(existing.author || '').trim() ||
+      (existing.author || '').includes('投稿视频') ||
+      (existing.author || '').includes('视频分享')) &&
+    incoming.author !== existing.author
+  ) {
+    existing.author = incoming.author
     changed = true
   }
   if (incoming.imageUrl && incoming.imageUrl !== existing.imageUrl) {

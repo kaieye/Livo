@@ -1,26 +1,33 @@
-import RssParser from "rss-parser"
-import https from "https"
-import http from "http"
-import { session } from "electron"
+import RssParser from 'rss-parser'
+import https from 'https'
+import http from 'http'
+import { session } from 'electron'
+import { fetchBilibiliDynamicFeedFromOfficialApi } from './bilibili-dynamic'
+import {
+  fetchBilibiliVideoFeedFromSpacePage,
+  mapParsedDynamicFeedToVideoFeed,
+} from './bilibili-video-feed'
 
 const parser = new RssParser({
   timeout: 20000,
   headers: {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/rss+xml, application/xml, application/atom+xml, text/xml, */*",
-    "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept:
+      'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
   },
   customFields: {
     item: [
-      ["content:encoded", "content:encoded"],
+      ['content:encoded', 'content:encoded'],
       // NOTE: Do NOT add ["content", "content"] here — it overwrites rss-parser's
       // built-in Atom handling and turns the content string into an xml2js object
       // { _: "html", $: { type: "html" } }, breaking image extraction from HTML body.
-      ["description", "description"],
-      ["summary", "summary"],
-      ["media:content", "media:content"],
-      ["media:thumbnail", "media:thumbnail"],
-      ["media:group", "media:group"],
+      ['description', 'description'],
+      ['summary', 'summary'],
+      ['media:content', 'media:content'],
+      ['media:thumbnail', 'media:thumbnail'],
+      ['media:group', 'media:group'],
     ],
   },
 })
@@ -45,33 +52,35 @@ export interface FetchFeedResult {
 }
 
 const TWITTER_RSSHUB_FALLBACKS = [
-  "https://rsshub.pseudoyu.com",
-  "https://rsshub.app",
-  "https://rsshub.rssforever.com",
-  "https://rsshub-instance.zeabur.app",
+  'https://rsshub.pseudoyu.com',
+  'https://rsshub.app',
+  'https://rsshub.rssforever.com',
+  'https://rsshub-instance.zeabur.app',
 ]
 const TWITTER_NITTER_FALLBACKS = [
-  "https://nitter.net",
-  "https://nitter.poast.org",
-  "https://nitter.privacydev.net",
-  "https://nitter.space",
-  "https://nitter.1d4.us",
+  'https://nitter.net',
+  'https://nitter.poast.org',
+  'https://nitter.privacydev.net',
+  'https://nitter.space',
+  'https://nitter.1d4.us',
 ]
 
 const INSTAGRAM_MOBILE_UA =
-  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
 
 async function getInstagramSessionCookie(): Promise<string | null> {
   try {
-    const cookies = await session.defaultSession.cookies.get({ domain: "instagram.com" })
-    const sessionid = cookies.find((c) => c.name === "sessionid")
-    const dsUserId = cookies.find((c) => c.name === "ds_user_id")
+    const cookies = await session.defaultSession.cookies.get({
+      domain: 'instagram.com',
+    })
+    const sessionid = cookies.find((c) => c.name === 'sessionid')
+    const dsUserId = cookies.find((c) => c.name === 'ds_user_id')
     if (sessionid?.value) {
       const cookieParts = [`sessionid=${sessionid.value}`]
       if (dsUserId?.value) {
         cookieParts.push(`ds_user_id=${dsUserId.value}`)
       }
-      return cookieParts.join("; ")
+      return cookieParts.join('; ')
     }
   } catch {
     // Ignore cookie retrieval errors.
@@ -82,9 +91,9 @@ async function getInstagramSessionCookie(): Promise<string | null> {
 function isInstagramRelatedUrl(url: string): boolean {
   const lower = url.toLowerCase()
   return (
-    lower.includes("instagram.com") ||
-    lower.includes("cdninstagram.com") ||
-    lower.includes("fbcdn.net") ||
+    lower.includes('instagram.com') ||
+    lower.includes('cdninstagram.com') ||
+    lower.includes('fbcdn.net') ||
     /\/instagram\//i.test(lower) ||
     /\/picnob\//i.test(lower) ||
     /\/pixnoy\//i.test(lower) ||
@@ -93,17 +102,22 @@ function isInstagramRelatedUrl(url: string): boolean {
 }
 
 const FEED_REQUEST_HEADERS: Record<string, string> = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Accept": "application/rss+xml, application/xml, application/atom+xml, text/xml, */*",
-  "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  Accept:
+    'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
+  'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
 }
 
-function buildRequestHeaders(url: string, extraHeaders?: Record<string, string>): Record<string, string> {
+function buildRequestHeaders(
+  url: string,
+  extraHeaders?: Record<string, string>,
+): Record<string, string> {
   const headers = { ...FEED_REQUEST_HEADERS, ...extraHeaders }
 
   // For Instagram-related URLs, use mobile User-Agent
   if (isInstagramRelatedUrl(url)) {
-    headers["User-Agent"] = INSTAGRAM_MOBILE_UA
+    headers['User-Agent'] = INSTAGRAM_MOBILE_UA
   }
 
   return headers
@@ -119,41 +133,46 @@ interface FetchTextOptions {
 }
 
 function isPlaceholderMirrorPostUrl(url: string): boolean {
-  const raw = (url || "").trim().toLowerCase()
+  const raw = (url || '').trim().toLowerCase()
   if (!raw) return false
-  return /https?:\/\/(?:www\.)?(?:pixnoy|picnob|piokok)\.com\/post\/[^/?#]+\/undefined(?:[?#]|$)/i.test(raw)
+  return /https?:\/\/(?:www\.)?(?:pixnoy|picnob|piokok)\.com\/post\/[^/?#]+\/undefined(?:[?#]|$)/i.test(
+    raw,
+  )
 }
 
 function isPicnobMirrorHost(host: string): boolean {
   const lower = host.toLowerCase()
   return (
-    lower === "media.picnob.info" ||
-    lower === "media.pixnoy.com" ||
-    lower.includes("piokok.com") ||
-    lower.includes("picnob.com") ||
-    lower.includes("pixnoy.com") ||
-    lower.includes("pixwox.com") ||
-    lower.includes("sp1.pixnoy.com") ||
-    lower.includes("sp2.pixnoy.com") ||
-    lower.includes("sp3.pixnoy.com") ||
-    lower.includes("sp4.pixnoy.com") ||
-    lower.includes("sp5.pixnoy.com")
+    lower === 'media.picnob.info' ||
+    lower === 'media.pixnoy.com' ||
+    lower.includes('piokok.com') ||
+    lower.includes('picnob.com') ||
+    lower.includes('pixnoy.com') ||
+    lower.includes('pixwox.com') ||
+    lower.includes('sp1.pixnoy.com') ||
+    lower.includes('sp2.pixnoy.com') ||
+    lower.includes('sp3.pixnoy.com') ||
+    lower.includes('sp4.pixnoy.com') ||
+    lower.includes('sp5.pixnoy.com')
   )
 }
 
 function collectMediaContentNodes(item: Record<string, any>): unknown[] {
   const nodes: unknown[] = []
-  const direct = item["media:content"] as unknown
+  const direct = item['media:content'] as unknown
   if (direct) nodes.push(...(Array.isArray(direct) ? direct : [direct]))
 
-  const groups = item["media:group"] as unknown
+  const groups = item['media:group'] as unknown
   if (groups) {
     const groupList = Array.isArray(groups) ? groups : [groups]
     for (const group of groupList) {
-      if (!group || typeof group !== "object") continue
+      if (!group || typeof group !== 'object') continue
       const groupRec = group as Record<string, unknown>
-      const groupContent = groupRec["media:content"] as unknown
-      if (groupContent) nodes.push(...(Array.isArray(groupContent) ? groupContent : [groupContent]))
+      const groupContent = groupRec['media:content'] as unknown
+      if (groupContent)
+        nodes.push(
+          ...(Array.isArray(groupContent) ? groupContent : [groupContent]),
+        )
     }
   }
 
@@ -161,39 +180,42 @@ function collectMediaContentNodes(item: Record<string, any>): unknown[] {
 }
 
 function isLikelyImageCandidateUrl(url: string): boolean {
-  const raw = (url || "").trim().toLowerCase()
+  const raw = (url || '').trim().toLowerCase()
   if (!raw || isPlaceholderMirrorPostUrl(raw)) return false
   return (
     /\.(jpg|jpeg|png|webp|gif|bmp|avif)(?:\?[^\s"'<>]*)?$/i.test(raw) ||
-    raw.includes("cdninstagram") ||
-    raw.includes("scontent.") ||
-    raw.includes("fbcdn.net") ||
-    raw.includes("pbs.twimg.com/media/") ||
-    raw.includes("twimg.com/media/") ||
-    raw.includes("/pic/media%2f") ||
-    raw.includes("/pic/orig/media%2f") ||
-    raw.includes("/p/pt_")
+    raw.includes('cdninstagram') ||
+    raw.includes('scontent.') ||
+    raw.includes('fbcdn.net') ||
+    raw.includes('pbs.twimg.com/media/') ||
+    raw.includes('twimg.com/media/') ||
+    raw.includes('/pic/media%2f') ||
+    raw.includes('/pic/orig/media%2f') ||
+    raw.includes('/p/pt_')
   )
 }
 
 function countContentImageCandidates(content: string): number {
-  const raw = String(content || "")
+  const raw = String(content || '')
   if (!raw) return 0
 
   const candidates = new Set<string>()
   const push = (value: string) => {
-    const normalized = String(value || "").trim()
-    if (normalized && isLikelyImageCandidateUrl(normalized)) candidates.add(normalized)
+    const normalized = String(value || '').trim()
+    if (normalized && isLikelyImageCandidateUrl(normalized))
+      candidates.add(normalized)
   }
 
-  for (const match of raw.matchAll(/<(?:img|source)\b[^>]+(?:src|data-src|data-original|data-lazy-src)=["']([^"']+)["']/gi)) {
-    push(match[1] || "")
+  for (const match of raw.matchAll(
+    /<(?:img|source)\b[^>]+(?:src|data-src|data-original|data-lazy-src)=["']([^"']+)["']/gi,
+  )) {
+    push(match[1] || '')
   }
 
   for (const match of raw.matchAll(/srcset=["']([^"']+)["']/gi)) {
-    const srcset = match[1] || ""
-    for (const part of srcset.split(",")) {
-      push(part.trim().split(/\s+/)[0] || "")
+    const srcset = match[1] || ''
+    for (const part of srcset.split(',')) {
+      push(part.trim().split(/\s+/)[0] || '')
     }
   }
 
@@ -209,62 +231,82 @@ function countItemImageSignals(item: Record<string, any>): number {
   let count = 0
   const seen = new Set<string>()
   const push = (value: string) => {
-    const normalized = String(value || "").trim()
+    const normalized = String(value || '').trim()
     if (!normalized || seen.has(normalized)) return
     seen.add(normalized)
     count += 1
   }
 
   for (const media of collectMediaContentNodes(item)) {
-    const rec = (media && typeof media === "object") ? media as Record<string, any> : null
-    const attrs = rec?.$ && typeof rec.$ === "object" ? rec.$ : rec
-    const url = String(attrs?.url || "")
-    const type = String(attrs?.type || "").toLowerCase()
-    const medium = String(attrs?.medium || "").toLowerCase()
-    if (url && (type.startsWith("image/") || medium === "image" || isLikelyImageCandidateUrl(url))) {
+    const rec =
+      media && typeof media === 'object' ? (media as Record<string, any>) : null
+    const attrs = rec?.$ && typeof rec.$ === 'object' ? rec.$ : rec
+    const url = String(attrs?.url || '')
+    const type = String(attrs?.type || '').toLowerCase()
+    const medium = String(attrs?.medium || '').toLowerCase()
+    if (
+      url &&
+      (type.startsWith('image/') ||
+        medium === 'image' ||
+        isLikelyImageCandidateUrl(url))
+    ) {
       push(url)
     }
   }
 
-  const thumb = item["media:thumbnail"] as unknown
+  const thumb = item['media:thumbnail'] as unknown
   if (thumb) {
     const thumbs = Array.isArray(thumb) ? thumb : [thumb]
     for (const media of thumbs) {
-      const rec = (media && typeof media === "object") ? media as Record<string, any> : null
-      const attrs = rec?.$ && typeof rec.$ === "object" ? rec.$ : rec
-      const url = String(attrs?.url || "")
+      const rec =
+        media && typeof media === 'object'
+          ? (media as Record<string, any>)
+          : null
+      const attrs = rec?.$ && typeof rec.$ === 'object' ? rec.$ : rec
+      const url = String(attrs?.url || '')
       if (url) push(url)
     }
   }
 
-  const enclosureType = String(item.enclosure?.type || "").toLowerCase()
-  const enclosureUrl = String(item.enclosure?.url || "")
-  if (enclosureUrl && (enclosureType.startsWith("image/") || isLikelyImageCandidateUrl(enclosureUrl))) {
+  const enclosureType = String(item.enclosure?.type || '').toLowerCase()
+  const enclosureUrl = String(item.enclosure?.url || '')
+  if (
+    enclosureUrl &&
+    (enclosureType.startsWith('image/') ||
+      isLikelyImageCandidateUrl(enclosureUrl))
+  ) {
     push(enclosureUrl)
   }
 
-  count += countContentImageCandidates(String(item["content:encoded"] || item.content || item.description || ""))
+  count += countContentImageCandidates(
+    String(item['content:encoded'] || item.content || item.description || ''),
+  )
   return count
 }
 
 function extractTwitterUsernameFromFeedUrl(feedUrl: string): string | null {
   try {
     const u = new URL(feedUrl)
-    if (u.protocol.toLowerCase() === "rsshub:") {
-      const host = (u.hostname || "").toLowerCase()
-      const parts = u.pathname.split("/").filter(Boolean)
-      if ((host === "twitter" || host === "x") && parts[0]?.toLowerCase() === "user" && parts[1]) {
-        return decodeURIComponent(parts[1]).replace(/^@/, "").toLowerCase()
+    if (u.protocol.toLowerCase() === 'rsshub:') {
+      const host = (u.hostname || '').toLowerCase()
+      const parts = u.pathname.split('/').filter(Boolean)
+      if (
+        (host === 'twitter' || host === 'x') &&
+        parts[0]?.toLowerCase() === 'user' &&
+        parts[1]
+      ) {
+        return decodeURIComponent(parts[1]).replace(/^@/, '').toLowerCase()
       }
     }
 
     const rsshubMatch = u.pathname.match(/\/(?:twitter|x)\/user\/([^/?#]+)/i)
-    if (rsshubMatch?.[1]) return decodeURIComponent(rsshubMatch[1]).replace(/^@/, "").toLowerCase()
+    if (rsshubMatch?.[1])
+      return decodeURIComponent(rsshubMatch[1]).replace(/^@/, '').toLowerCase()
 
-    if (u.hostname.toLowerCase().includes("nitter")) {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts.length >= 2 && parts[1].toLowerCase() === "rss") {
-        return decodeURIComponent(parts[0]).replace(/^@/, "").toLowerCase()
+    if (u.hostname.toLowerCase().includes('nitter')) {
+      const parts = u.pathname.split('/').filter(Boolean)
+      if (parts.length >= 2 && parts[1].toLowerCase() === 'rss') {
+        return decodeURIComponent(parts[0]).replace(/^@/, '').toLowerCase()
       }
     }
   } catch {
@@ -276,19 +318,19 @@ function extractTwitterUsernameFromFeedUrl(feedUrl: string): string | null {
 function extractTwitterUserRoutePathAndQuery(feedUrl: string): string | null {
   try {
     const u = new URL(feedUrl)
-    if (u.protocol.toLowerCase() === "rsshub:") {
-      const host = (u.hostname || "").toLowerCase()
-      if (host === "twitter" || host === "x") {
-        const path = `/${host}${u.pathname || ""}`.replace(/\/+/g, "/")
+    if (u.protocol.toLowerCase() === 'rsshub:') {
+      const host = (u.hostname || '').toLowerCase()
+      if (host === 'twitter' || host === 'x') {
+        const path = `/${host}${u.pathname || ''}`.replace(/\/+/g, '/')
         if (/^\/(?:twitter|x)\/user\//i.test(path)) {
-          return `${path}${u.search || ""}`
+          return `${path}${u.search || ''}`
         }
       }
     }
 
     const match = u.pathname.match(/(\/(?:twitter|x)\/user\/[^?#]+)/i)
     if (match?.[1]) {
-      return `${match[1]}${u.search || ""}`
+      return `${match[1]}${u.search || ''}`
     }
   } catch {
     // Ignore invalid URL.
@@ -299,30 +341,40 @@ function extractTwitterUserRoutePathAndQuery(feedUrl: string): string | null {
 function extractInstagramUsernameFromFeedUrl(feedUrl: string): string | null {
   try {
     const u = new URL(feedUrl)
-    if (u.protocol.toLowerCase() === "rsshub:") {
-      const host = (u.hostname || "").toLowerCase()
-      const parts = u.pathname.split("/").filter(Boolean)
-      if ((host === "instagram" || host === "picnob" || host === "picnob.info") && parts[0]?.toLowerCase() === "user" && parts[1]) {
-        return decodeURIComponent(parts[1]).replace(/^@/, "")
+    if (u.protocol.toLowerCase() === 'rsshub:') {
+      const host = (u.hostname || '').toLowerCase()
+      const parts = u.pathname.split('/').filter(Boolean)
+      if (
+        (host === 'instagram' || host === 'picnob' || host === 'picnob.info') &&
+        parts[0]?.toLowerCase() === 'user' &&
+        parts[1]
+      ) {
+        return decodeURIComponent(parts[1]).replace(/^@/, '')
       }
     }
 
-    const path = u.pathname || ""
+    const path = u.pathname || ''
     const instagramMatch = path.match(/\/instagram\/user\/([^/?#]+)/i)
-    if (instagramMatch?.[1]) return decodeURIComponent(instagramMatch[1]).replace(/^@/, "")
+    if (instagramMatch?.[1])
+      return decodeURIComponent(instagramMatch[1]).replace(/^@/, '')
     const picnobMatch = path.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
-    if (picnobMatch?.[1]) return decodeURIComponent(picnobMatch[1]).replace(/^@/, "")
+    if (picnobMatch?.[1])
+      return decodeURIComponent(picnobMatch[1]).replace(/^@/, '')
     const pixnoyMatch = path.match(/\/pixnoy\/user\/([^/?#]+)/i)
-    if (pixnoyMatch?.[1]) return decodeURIComponent(pixnoyMatch[1]).replace(/^@/, "")
+    if (pixnoyMatch?.[1])
+      return decodeURIComponent(pixnoyMatch[1]).replace(/^@/, '')
     const piokokMatch = path.match(/\/piokok\/user\/([^/?#]+)/i)
-    if (piokokMatch?.[1]) return decodeURIComponent(piokokMatch[1]).replace(/^@/, "")
+    if (piokokMatch?.[1])
+      return decodeURIComponent(piokokMatch[1]).replace(/^@/, '')
   } catch {
     // Ignore invalid URL.
   }
   return null
 }
 
-function getLatestItemTimestamp(feed: RssParser.Output<Record<string, any>>): number {
+function getLatestItemTimestamp(
+  feed: RssParser.Output<Record<string, any>>,
+): number {
   let latest = 0
   for (const item of feed.items || []) {
     const iso = item.isoDate || item.pubDate
@@ -362,7 +414,9 @@ function pickBetterFeed(
   return incomingQuality > currentQuality ? incoming : current
 }
 
-function isLikelyThinOrStaleFeed(feed: RssParser.Output<Record<string, any>> | null): boolean {
+function isLikelyThinOrStaleFeed(
+  feed: RssParser.Output<Record<string, any>> | null,
+): boolean {
   if (!feed) return true
   const count = feed.items?.length || 0
   if (count <= 3) return true
@@ -382,25 +436,31 @@ function pickBetterNullableFeed(
 }
 
 function getFeedItemKey(item: Record<string, any>): string {
-  const link = String(item.link || "").trim()
+  const link = String(item.link || '').trim()
 
   const extractInstagramAssetIdFromUrl = (rawUrl: string): string => {
-    const raw = (rawUrl || "").trim()
-    if (!raw) return ""
+    const raw = (rawUrl || '').trim()
+    if (!raw) return ''
     try {
       const parsed = new URL(raw)
       const host = parsed.hostname.toLowerCase()
-      if (isPicnobMirrorHost(host) && parsed.pathname === "/get") {
-        const nested = parsed.searchParams.get("url") || ""
+      if (isPicnobMirrorHost(host) && parsed.pathname === '/get') {
+        const nested = parsed.searchParams.get('url') || ''
         if (nested) return extractInstagramAssetIdFromUrl(nested)
       }
-      if ((host.includes("pixnoy") || host.includes("picnob") || host.includes("piokok")) && parsed.searchParams.has("o")) {
-        const encoded = parsed.searchParams.get("o") || ""
+      if (
+        (host.includes('pixnoy') ||
+          host.includes('picnob') ||
+          host.includes('piokok')) &&
+        parsed.searchParams.has('o')
+      ) {
+        const encoded = parsed.searchParams.get('o') || ''
         if (encoded) {
-          const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/")
-          const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
+          const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
+          const padded =
+            normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
           try {
-            const decoded = Buffer.from(padded, "base64").toString("utf-8")
+            const decoded = Buffer.from(padded, 'base64').toString('utf-8')
             const nestedMatch = decoded.match(/https?:\/\/\S+/i)
             const nested = nestedMatch?.[0] || decoded
             const nestedId = extractInstagramAssetIdFromUrl(nested)
@@ -420,36 +480,43 @@ function getFeedItemKey(item: Record<string, any>): string {
     }
     const directMatch = raw.match(/_(\d{14,})_/)
     if (directMatch?.[1]) return directMatch[1]
-    return ""
+    return ''
   }
 
-  const extractInstagramAssetIdFromItem = (record: Record<string, any>): string => {
+  const extractInstagramAssetIdFromItem = (
+    record: Record<string, any>,
+  ): string => {
     const candidates: string[] = []
     const maybePush = (value: unknown): void => {
-      if (typeof value === "string" && value.trim()) candidates.push(value.trim())
+      if (typeof value === 'string' && value.trim())
+        candidates.push(value.trim())
     }
     maybePush(record.link)
     maybePush(record.enclosure?.url)
 
-    const mediaContent = record["media:content"] as unknown
+    const mediaContent = record['media:content'] as unknown
     if (mediaContent) {
-      const mediaList = Array.isArray(mediaContent) ? mediaContent : [mediaContent]
+      const mediaList = Array.isArray(mediaContent)
+        ? mediaContent
+        : [mediaContent]
       for (const media of mediaList) {
-        if (!media || typeof media !== "object") continue
+        if (!media || typeof media !== 'object') continue
         const rec = media as Record<string, any>
-        const attrs = rec.$ && typeof rec.$ === "object" ? rec.$ : rec
+        const attrs = rec.$ && typeof rec.$ === 'object' ? rec.$ : rec
         maybePush(attrs?.url)
       }
     }
 
-    const thumb = record["media:thumbnail"] as unknown
-    if (thumb && typeof thumb === "object") {
+    const thumb = record['media:thumbnail'] as unknown
+    if (thumb && typeof thumb === 'object') {
       const rec = thumb as Record<string, any>
-      const attrs = rec.$ && typeof rec.$ === "object" ? rec.$ : rec
+      const attrs = rec.$ && typeof rec.$ === 'object' ? rec.$ : rec
       maybePush(attrs?.url)
     }
 
-    const content = String(record["content:encoded"] || record.content || record.description || "")
+    const content = String(
+      record['content:encoded'] || record.content || record.description || '',
+    )
     for (const m of content.match(/https?:\/\/[^\s"'<>]+/g) || []) {
       candidates.push(m)
     }
@@ -458,47 +525,60 @@ function getFeedItemKey(item: Record<string, any>): string {
       const id = extractInstagramAssetIdFromUrl(candidate)
       if (id) return id
     }
-    return ""
+    return ''
   }
 
   const instagramAssetId = extractInstagramAssetIdFromItem(item)
   if (instagramAssetId) {
     return `iga:${instagramAssetId}`
   }
-  
+
   // For Instagram/Picnob feeds, try to extract post ID from URL first
   // This handles cases where different RSSHub instances return different URL formats
   // (e.g., picnob.com/post/xxx vs picnob.info/post/xxx vs instagram.com/p/xxx)
   if (link) {
-    const picnobMatch = link.match(/\/(?:picnob\.com\/post\/|picnob\.info\/post\/|pixnoy\.com\/post\/|pixwox\.com\/post\/|piokok\.com\/post\/|instagram\.com\/p\/|instagram\.com\/reel\/|dumpor\.com\/v\/)([a-zA-Z0-9_-]+)/i)
+    const picnobMatch = link.match(
+      /\/(?:picnob\.com\/post\/|picnob\.info\/post\/|pixnoy\.com\/post\/|pixwox\.com\/post\/|piokok\.com\/post\/|instagram\.com\/p\/|instagram\.com\/reel\/|dumpor\.com\/v\/)([a-zA-Z0-9_-]+)/i,
+    )
     if (picnobMatch?.[1]) {
       return `ig:${picnobMatch[1]}`
     }
     return `u:${link}`
   }
-  
+
   // Try to extract post ID from content/description if no link
-  const content = String(item["content:encoded"] || item.content || item.description || "")
-  const contentLinkMatch = content.match(/https:\/\/(?:www\.)?(?:picnob\.com\/post\/|picnob\.info\/post\/|pixnoy\.com\/post\/|pixwox\.com\/post\/|piokok\.com\/post\/|instagram\.com\/p\/|instagram\.com\/reel\/|dumpor\.com\/v\/)([a-zA-Z0-9_-]+)/i)
+  const content = String(
+    item['content:encoded'] || item.content || item.description || '',
+  )
+  const contentLinkMatch = content.match(
+    /https:\/\/(?:www\.)?(?:picnob\.com\/post\/|picnob\.info\/post\/|pixnoy\.com\/post\/|pixwox\.com\/post\/|piokok\.com\/post\/|instagram\.com\/p\/|instagram\.com\/reel\/|dumpor\.com\/v\/)([a-zA-Z0-9_-]+)/i,
+  )
   if (contentLinkMatch?.[1]) {
     return `ig:${contentLinkMatch[1]}`
   }
-  
-  const title = String(item.title || "").trim().toLowerCase()
-  const iso = String(item.isoDate || item.pubDate || "").trim()
+
+  const title = String(item.title || '')
+    .trim()
+    .toLowerCase()
+  const iso = String(item.isoDate || item.pubDate || '').trim()
   return `t:${title}\n${iso}`
 }
 
 function scoreFeedItemRichness(item: Record<string, any>): number {
-  const contentLen = String(item["content:encoded"] || item.content || item.description || "").length
-  const summaryLen = String(item.contentSnippet || item.summary || "").length
+  const contentLen = String(
+    item['content:encoded'] || item.content || item.description || '',
+  ).length
+  const summaryLen = String(item.contentSnippet || item.summary || '').length
   const mediaCount = collectMediaContentNodes(item).length
   const imageSignalCount = countItemImageSignals(item)
-  const thumbnail = item["media:thumbnail"] ? 1 : 0
+  const thumbnail = item['media:thumbnail'] ? 1 : 0
   const enclosure = item.enclosure?.url ? 1 : 0
 
   let placeholderPenalty = 0
-  if (item.enclosure?.url && isPlaceholderMirrorPostUrl(String(item.enclosure.url))) {
+  if (
+    item.enclosure?.url &&
+    isPlaceholderMirrorPostUrl(String(item.enclosure.url))
+  ) {
     placeholderPenalty += 600
   }
 
@@ -506,19 +586,32 @@ function scoreFeedItemRichness(item: Record<string, any>): number {
   if (mediaContent.length > 0) {
     const list = mediaContent
     for (const media of list) {
-      const rec = (media && typeof media === "object") ? media as Record<string, any> : null
-      const attrs = rec?.$ && typeof rec.$ === "object" ? rec.$ : rec
-      const url = String(attrs?.url || "")
+      const rec =
+        media && typeof media === 'object'
+          ? (media as Record<string, any>)
+          : null
+      const attrs = rec?.$ && typeof rec.$ === 'object' ? rec.$ : rec
+      const url = String(attrs?.url || '')
       if (url && isPlaceholderMirrorPostUrl(url)) placeholderPenalty += 600
     }
   }
 
-  const content = String(item["content:encoded"] || item.content || item.description || "")
+  const content = String(
+    item['content:encoded'] || item.content || item.description || '',
+  )
   for (const candidate of content.match(/https?:\/\/[^\s"'<>]+/g) || []) {
     if (isPlaceholderMirrorPostUrl(candidate)) placeholderPenalty += 400
   }
 
-  return mediaCount * 300 + imageSignalCount * 220 + thumbnail * 180 + enclosure * 140 + contentLen + summaryLen - placeholderPenalty
+  return (
+    mediaCount * 300 +
+    imageSignalCount * 220 +
+    thumbnail * 180 +
+    enclosure * 140 +
+    contentLen +
+    summaryLen -
+    placeholderPenalty
+  )
 }
 
 function mergeFeedsPreferRicher(
@@ -529,7 +622,10 @@ function mergeFeedsPreferRicher(
   const put = (item: Record<string, any>) => {
     const key = getFeedItemKey(item)
     const existing = merged.get(key)
-    if (!existing || scoreFeedItemRichness(item) >= scoreFeedItemRichness(existing)) {
+    if (
+      !existing ||
+      scoreFeedItemRichness(item) >= scoreFeedItemRichness(existing)
+    ) {
       merged.set(key, item)
     }
   }
@@ -557,38 +653,44 @@ function itemHasImageSignal(item: Record<string, any>): boolean {
   if (mediaContent.length > 0) {
     const list = mediaContent
     for (const media of list) {
-      const rec = (media && typeof media === "object") ? media as Record<string, any> : null
-      const attrs = rec?.$ && typeof rec.$ === "object" ? rec.$ : rec
-      const url = String(attrs?.url || "")
-      const type = String(attrs?.type || "").toLowerCase()
-      const medium = String(attrs?.medium || "").toLowerCase()
+      const rec =
+        media && typeof media === 'object'
+          ? (media as Record<string, any>)
+          : null
+      const attrs = rec?.$ && typeof rec.$ === 'object' ? rec.$ : rec
+      const url = String(attrs?.url || '')
+      const type = String(attrs?.type || '').toLowerCase()
+      const medium = String(attrs?.medium || '').toLowerCase()
       if (
-        url
-        && !isPlaceholderMirrorPostUrl(url)
-        && (type.startsWith("image/") || medium === "image" || isLikelyImageCandidateUrl(url))
+        url &&
+        !isPlaceholderMirrorPostUrl(url) &&
+        (type.startsWith('image/') ||
+          medium === 'image' ||
+          isLikelyImageCandidateUrl(url))
       ) {
         return true
       }
     }
   }
 
-  const thumb = item["media:thumbnail"] as unknown
+  const thumb = item['media:thumbnail'] as unknown
   if (thumb) return true
 
-  const enclosureType = String(item.enclosure?.type || "").toLowerCase()
-  const enclosureUrl = String(item.enclosure?.url || "")
+  const enclosureType = String(item.enclosure?.type || '').toLowerCase()
+  const enclosureUrl = String(item.enclosure?.url || '')
   if (
-    !isPlaceholderMirrorPostUrl(enclosureUrl)
-    && (
-      (enclosureType.startsWith("image/") && enclosureUrl)
-      || /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/i.test(enclosureUrl)
-    )
+    !isPlaceholderMirrorPostUrl(enclosureUrl) &&
+    ((enclosureType.startsWith('image/') && enclosureUrl) ||
+      /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/i.test(enclosureUrl))
   ) {
     return true
   }
 
-  const content = String(item["content:encoded"] || item.content || item.description || "")
-  if (/(?:data-src|data-original|data-lazy-src|srcset)\s*=/i.test(content)) return true
+  const content = String(
+    item['content:encoded'] || item.content || item.description || '',
+  )
+  if (/(?:data-src|data-original|data-lazy-src|srcset)\s*=/i.test(content))
+    return true
   const contentCandidates = content.match(/https?:\/\/[^\s"'<>]+/g) || []
   for (const candidate of contentCandidates) {
     if (isLikelyImageCandidateUrl(candidate)) {
@@ -605,7 +707,10 @@ async function pickBestRsshubFallbackFeed(
 ): Promise<RssParser.Output<Record<string, any>> | null> {
   let bestFeed: RssParser.Output<Record<string, any>> | null = null
   const fetchOptions = fast
-    ? { attemptTimeouts: FAST_FETCH_TIMEOUTS, conditionalTimeoutMs: FAST_CONDITIONAL_TIMEOUT_MS }
+    ? {
+        attemptTimeouts: FAST_FETCH_TIMEOUTS,
+        conditionalTimeoutMs: FAST_CONDITIONAL_TIMEOUT_MS,
+      }
     : undefined
   const tasks = candidates.map(async (candidate) => {
     try {
@@ -627,7 +732,10 @@ async function mergeAllRsshubFallbackFeeds(
   fast = false,
 ): Promise<RssParser.Output<Record<string, any>> | null> {
   const fetchOptions = fast
-    ? { attemptTimeouts: FAST_FETCH_TIMEOUTS, conditionalTimeoutMs: FAST_CONDITIONAL_TIMEOUT_MS }
+    ? {
+        attemptTimeouts: FAST_FETCH_TIMEOUTS,
+        conditionalTimeoutMs: FAST_CONDITIONAL_TIMEOUT_MS,
+      }
     : undefined
   const tasks = candidates.map(async (candidate) => {
     try {
@@ -650,13 +758,17 @@ function buildRsshubFallbackCandidates(feedUrl: string): string[] {
     const parsed = new URL(feedUrl)
     const host = parsed.hostname.toLowerCase()
     const pathAndQuery = `${parsed.pathname}${parsed.search}`
-    const looksLikeRsshubRoute = /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu)\//i.test(parsed.pathname)
-    if (!pathAndQuery || (!host.includes("rsshub") && !looksLikeRsshubRoute)) return [feedUrl]
+    const looksLikeRsshubRoute =
+      /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu)\//i.test(
+        parsed.pathname,
+      )
+    if (!pathAndQuery || (!host.includes('rsshub') && !looksLikeRsshubRoute))
+      return [feedUrl]
 
     const candidates = new Set<string>()
     candidates.add(feedUrl)
     for (const base of TWITTER_RSSHUB_FALLBACKS) {
-      candidates.add(`${base.replace(/\/+$/, "")}${pathAndQuery}`)
+      candidates.add(`${base.replace(/\/+$/, '')}${pathAndQuery}`)
     }
     return [...candidates]
   } catch {
@@ -668,8 +780,10 @@ function isRsshubLikeUrl(feedUrl: string): boolean {
   try {
     const parsed = new URL(feedUrl)
     const host = parsed.hostname.toLowerCase()
-    if (host.includes("rsshub")) return true
-    return /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu)\//i.test(parsed.pathname)
+    if (host.includes('rsshub')) return true
+    return /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu)\//i.test(
+      parsed.pathname,
+    )
   } catch {
     return false
   }
@@ -678,9 +792,22 @@ function isRsshubLikeUrl(feedUrl: string): boolean {
 function isBilibiliDynamicUrl(feedUrl: string): boolean {
   try {
     const parsed = new URL(feedUrl)
-    return /\/bilibili\/user\/dynamic\//i.test(parsed.pathname)
+    return /(?:^|\/)bilibili\/user\/dynamic\//i.test(
+      `${parsed.hostname}${parsed.pathname}`,
+    )
   } catch {
-    return /\/bilibili\/user\/dynamic\//i.test(feedUrl)
+    return /(?:^|\/)bilibili\/user\/dynamic\//i.test(feedUrl)
+  }
+}
+
+function isBilibiliVideoUrl(feedUrl: string): boolean {
+  try {
+    const parsed = new URL(feedUrl)
+    return /(?:^|\/)bilibili\/user\/video\//i.test(
+      `${parsed.hostname}${parsed.pathname}`,
+    )
+  } catch {
+    return /(?:^|\/)bilibili\/user\/video\//i.test(feedUrl)
   }
 }
 
@@ -694,35 +821,66 @@ async function fetchWithConditional(
   lastModified?: string,
   timeoutMs = DEFAULT_CONDITIONAL_TIMEOUT_MS,
   cookie?: string | null,
-): Promise<{ body: string | null; notModified: boolean; etag?: string; lastModified?: string }> {
+): Promise<{
+  body: string | null
+  notModified: boolean
+  etag?: string
+  lastModified?: string
+}> {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url)
-    const transport = parsedUrl.protocol === "https:" ? https : http
+    const transport = parsedUrl.protocol === 'https:' ? https : http
 
     const headers: Record<string, string> = { ...FEED_REQUEST_HEADERS }
-    if (etag) headers["If-None-Match"] = etag
-    if (lastModified) headers["If-Modified-Since"] = lastModified
-    if (cookie) headers["Cookie"] = cookie
+    if (etag) headers['If-None-Match'] = etag
+    if (lastModified) headers['If-Modified-Since'] = lastModified
+    if (cookie) headers['Cookie'] = cookie
 
     // Use mobile UA for Instagram
     if (isInstagramRelatedUrl(url)) {
-      headers["User-Agent"] = INSTAGRAM_MOBILE_UA
+      headers['User-Agent'] = INSTAGRAM_MOBILE_UA
     }
 
     const req = transport.get(
-      { hostname: parsedUrl.hostname, port: parsedUrl.port, path: parsedUrl.pathname + parsedUrl.search, headers, timeout: timeoutMs },
+      {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port,
+        path: parsedUrl.pathname + parsedUrl.search,
+        headers,
+        timeout: timeoutMs,
+      },
       (res) => {
         // Follow redirects
-        if (res.statusCode && [301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        if (
+          res.statusCode &&
+          [301, 302, 307, 308].includes(res.statusCode) &&
+          res.headers.location
+        ) {
           const redirectUrl = new URL(res.headers.location, url).href
           // For redirect, re-fetch cookie for the new URL
           const isRedirectInstagram = isInstagramRelatedUrl(redirectUrl)
           if (isRedirectInstagram && !cookie) {
             getInstagramSessionCookie().then((newCookie) => {
-              fetchWithConditional(redirectUrl, etag, lastModified, timeoutMs, newCookie).then(resolve).catch(reject)
+              fetchWithConditional(
+                redirectUrl,
+                etag,
+                lastModified,
+                timeoutMs,
+                newCookie,
+              )
+                .then(resolve)
+                .catch(reject)
             })
           } else {
-            fetchWithConditional(redirectUrl, etag, lastModified, timeoutMs, cookie).then(resolve).catch(reject)
+            fetchWithConditional(
+              redirectUrl,
+              etag,
+              lastModified,
+              timeoutMs,
+              cookie,
+            )
+              .then(resolve)
+              .catch(reject)
           }
           res.resume()
           return
@@ -730,32 +888,45 @@ async function fetchWithConditional(
 
         if (res.statusCode === 304) {
           res.resume()
-          resolve({ body: null, notModified: true, etag: res.headers.etag, lastModified: res.headers["last-modified"] })
+          resolve({
+            body: null,
+            notModified: true,
+            etag: res.headers.etag,
+            lastModified: res.headers['last-modified'],
+          })
           return
         }
 
         const chunks: Buffer[] = []
-        res.on("data", (chunk) => chunks.push(chunk))
-        res.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf-8")
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf-8')
           resolve({
             body,
             notModified: false,
             etag: res.headers.etag,
-            lastModified: res.headers["last-modified"],
+            lastModified: res.headers['last-modified'],
           })
         })
-        res.on("error", reject)
-      }
+        res.on('error', reject)
+      },
     )
-    req.on("timeout", () => { req.destroy(); reject(new Error("Request timed out")) })
-    req.on("error", reject)
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error('Request timed out'))
+    })
+    req.on('error', reject)
   })
 }
 
-async function fetchFeedText(url: string, options?: FetchTextOptions): Promise<string> {
+async function fetchFeedText(
+  url: string,
+  options?: FetchTextOptions,
+): Promise<string> {
   // Prefer Electron network stack, which follows app/session proxy and cert settings.
-  const timeouts = options?.attemptTimeouts?.length ? options.attemptTimeouts : DEFAULT_FETCH_TIMEOUTS
+  const timeouts = options?.attemptTimeouts?.length
+    ? options.attemptTimeouts
+    : DEFAULT_FETCH_TIMEOUTS
   let lastError: unknown = null
 
   for (const timeout of timeouts) {
@@ -772,7 +943,7 @@ async function fetchFeedText(url: string, options?: FetchTextOptions): Promise<s
       }
 
       const res = await session.defaultSession.fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers,
         signal: AbortSignal.timeout(timeout),
       })
@@ -797,7 +968,7 @@ async function fetchFeedText(url: string, options?: FetchTextOptions): Promise<s
       options?.conditionalTimeoutMs ?? DEFAULT_CONDITIONAL_TIMEOUT_MS,
       cookie,
     )
-    if (!fallback.body) throw new Error("Empty response body")
+    if (!fallback.body) throw new Error('Empty response body')
     return fallback.body
   } catch (error) {
     lastError = error
@@ -806,7 +977,10 @@ async function fetchFeedText(url: string, options?: FetchTextOptions): Promise<s
   throw new Error(`Failed to fetch feed text: ${String(lastError)}`)
 }
 
-async function parseFeedUrl(url: string, options?: FetchTextOptions): Promise<RssParser.Output<Record<string, any>>> {
+async function parseFeedUrl(
+  url: string,
+  options?: FetchTextOptions,
+): Promise<RssParser.Output<Record<string, any>>> {
   const text = await fetchFeedText(url, options)
   return parser.parseString(text)
 }
@@ -819,8 +993,8 @@ export async function fetchAndParseFeed(
   let feedUrl = url.trim()
 
   // If it looks like a URL without protocol, add https
-  if (!feedUrl.startsWith("http://") && !feedUrl.startsWith("https://")) {
-    feedUrl = "https://" + feedUrl
+  if (!feedUrl.startsWith('http://') && !feedUrl.startsWith('https://')) {
+    feedUrl = 'https://' + feedUrl
   }
   const rsshubCandidates = buildRsshubFallbackCandidates(feedUrl)
 
@@ -836,17 +1010,21 @@ export async function fetchAndParseFeed(
 
     pushUnique(feedUrl)
     for (const base of TWITTER_RSSHUB_FALLBACKS) {
-      const b = base.replace(/\/+$/, "")
+      const b = base.replace(/\/+$/, '')
       if (originalRoute) {
         pushUnique(`${b}${originalRoute}`)
-        pushUnique(`${b}${originalRoute.replace(/^\/(?:twitter|x)\//i, "/twitter/")}`)
-        pushUnique(`${b}${originalRoute.replace(/^\/(?:twitter|x)\//i, "/x/")}`)
+        pushUnique(
+          `${b}${originalRoute.replace(/^\/(?:twitter|x)\//i, '/twitter/')}`,
+        )
+        pushUnique(`${b}${originalRoute.replace(/^\/(?:twitter|x)\//i, '/x/')}`)
       }
       pushUnique(`${b}/twitter/user/${encodeURIComponent(twitterUser)}`)
       pushUnique(`${b}/x/user/${encodeURIComponent(twitterUser)}`)
     }
     for (const base of TWITTER_NITTER_FALLBACKS) {
-      pushUnique(`${base.replace(/\/+$/, "")}/${encodeURIComponent(twitterUser)}/rss`)
+      pushUnique(
+        `${base.replace(/\/+$/, '')}/${encodeURIComponent(twitterUser)}/rss`,
+      )
     }
 
     // Fast path first for responsiveness.
@@ -858,11 +1036,18 @@ export async function fetchAndParseFeed(
 
     // Slow path retry for unstable / throttled instances.
     const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(candidates, false)
-    const improved = pickBetterNullableFeed(bestFeedFast || null, mergedFeedSlow)
+    const improved = pickBetterNullableFeed(
+      bestFeedFast || null,
+      mergedFeedSlow,
+    )
     if (improved) return { data: improved, notModified: false }
 
     const bestFeedSlow = await pickBestRsshubFallbackFeed(candidates, false)
-    if (bestFeedSlow) return { data: pickBetterFeed(bestFeedFast || null, bestFeedSlow), notModified: false }
+    if (bestFeedSlow)
+      return {
+        data: pickBetterFeed(bestFeedFast || null, bestFeedSlow),
+        notModified: false,
+      }
     // Do not throw here: fall through to generic RSS fetch/fallback logic below.
   }
 
@@ -878,20 +1063,24 @@ export async function fetchAndParseFeed(
     const bases = new Set<string>([...TWITTER_RSSHUB_FALLBACKS])
     try {
       const parsed = new URL(feedUrl)
-      const base = `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, "")
+      const base = `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, '')
       bases.add(base)
     } catch {
       // Ignore invalid URL.
     }
 
     for (const base of bases) {
-      const b = base.replace(/\/+$/, "")
+      const b = base.replace(/\/+$/, '')
       pushUnique(`${b}/instagram/user/${encodeURIComponent(instagramUser)}`)
 
       // Route-parameter / query-parameter variants to request larger windows when supported.
       // Some instances/routes cap default item count very low (e.g. ~8) unless explicit params are provided.
-      pushUnique(`${b}/instagram/user/${encodeURIComponent(instagramUser)}/count=100`)
-      pushUnique(`${b}/instagram/user/${encodeURIComponent(instagramUser)}?limit=100`)
+      pushUnique(
+        `${b}/instagram/user/${encodeURIComponent(instagramUser)}/count=100`,
+      )
+      pushUnique(
+        `${b}/instagram/user/${encodeURIComponent(instagramUser)}?limit=100`,
+      )
 
       // Try mirror routes (picnob, pixnoy, piokok) which may provide all carousel images
       // unlike the official Instagram route which typically only provides the first image
@@ -911,20 +1100,123 @@ export async function fetchAndParseFeed(
     }
 
     const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(candidates, false)
-    const improved = pickBetterNullableFeed(bestFeedFast || null, mergedFeedSlow)
+    const improved = pickBetterNullableFeed(
+      bestFeedFast || null,
+      mergedFeedSlow,
+    )
     if (improved) return { data: improved, notModified: false }
 
     const bestFeedSlow = await pickBestRsshubFallbackFeed(candidates, false)
     if (bestFeedSlow) {
-      return { data: pickBetterFeed(bestFeedFast || null, bestFeedSlow), notModified: false }
+      return {
+        data: pickBetterFeed(bestFeedFast || null, bestFeedSlow),
+        notModified: false,
+      }
     }
   }
 
   // Bilibili dynamic routes are frequently anti-crawler throttled on public RSSHub nodes.
-  // Try fallback RSSHub instances only.
+  // Prefer a quick freshest pick first, then widen the timeout budget and merge
+  // slower instances when the fast result is missing or too thin.
   if (isBilibiliDynamicUrl(feedUrl)) {
-    const bestFeed = await pickBestRsshubFallbackFeed(rsshubCandidates, true)
-    if (bestFeed) return { data: bestFeed, notModified: false }
+    const bestFeedFast = await pickBestRsshubFallbackFeed(
+      rsshubCandidates,
+      true,
+    )
+    if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
+      return { data: bestFeedFast, notModified: false }
+    }
+
+    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
+      rsshubCandidates,
+      false,
+    )
+    const improved = pickBetterNullableFeed(
+      bestFeedFast || null,
+      mergedFeedSlow,
+    )
+    if (improved) return { data: improved, notModified: false }
+
+    const bestFeedSlow = await pickBestRsshubFallbackFeed(
+      rsshubCandidates,
+      false,
+    )
+    if (bestFeedSlow) {
+      return {
+        data: pickBetterFeed(bestFeedFast || null, bestFeedSlow),
+        notModified: false,
+      }
+    }
+
+    try {
+      const officialFeed =
+        await fetchBilibiliDynamicFeedFromOfficialApi(feedUrl)
+      if (officialFeed) {
+        return { data: officialFeed, notModified: false }
+      }
+    } catch {
+      // Keep generic fallback path below.
+    }
+  }
+
+  if (isBilibiliVideoUrl(feedUrl)) {
+    const bestFeedFast = await pickBestRsshubFallbackFeed(
+      rsshubCandidates,
+      true,
+    )
+    if (bestFeedFast && (bestFeedFast.items?.length || 0) > 0) {
+      return { data: bestFeedFast, notModified: false }
+    }
+
+    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
+      rsshubCandidates,
+      false,
+    )
+    const improved = pickBetterNullableFeed(
+      bestFeedFast || null,
+      mergedFeedSlow,
+    )
+    if (improved && (improved.items?.length || 0) > 0) {
+      return { data: improved, notModified: false }
+    }
+
+    const bestFeedSlow = await pickBestRsshubFallbackFeed(
+      rsshubCandidates,
+      false,
+    )
+    if (bestFeedSlow && (bestFeedSlow.items?.length || 0) > 0) {
+      return {
+        data: pickBetterFeed(bestFeedFast || null, bestFeedSlow),
+        notModified: false,
+      }
+    }
+
+    try {
+      const spaceFeed = await fetchBilibiliVideoFeedFromSpacePage(feedUrl)
+      if (spaceFeed && (spaceFeed.items?.length || 0) > 0) {
+        return { data: spaceFeed, notModified: false }
+      }
+    } catch {
+      // Keep generic fallback path below.
+    }
+
+    try {
+      const uid = feedUrl.match(/\/bilibili\/user\/video\/(\d+)/i)?.[1]
+      if (uid) {
+        const dynamicFeed = await fetchBilibiliDynamicFeedFromOfficialApi(
+          feedUrl.replace('/user/video/', '/user/dynamic/'),
+        )
+        const filteredVideoFeed = mapParsedDynamicFeedToVideoFeed(
+          uid,
+          dynamicFeed,
+        )
+        if (filteredVideoFeed && (filteredVideoFeed.items?.length || 0) > 0) {
+          return { data: filteredVideoFeed, notModified: false }
+        }
+      }
+    } catch {
+      // Keep generic fallback path below.
+    }
   }
 
   // Use conditional GET if ETag or Last-Modified are available
@@ -938,13 +1230,27 @@ export async function fetchAndParseFeed(
     }
 
     if (hasConditional) {
-      const result = await fetchWithConditional(feedUrl, options?.etag, options?.lastModified)
+      const result = await fetchWithConditional(
+        feedUrl,
+        options?.etag,
+        options?.lastModified,
+      )
       if (result.notModified) {
-        return { data: null, notModified: true, etag: result.etag, lastModified: result.lastModified }
+        return {
+          data: null,
+          notModified: true,
+          etag: result.etag,
+          lastModified: result.lastModified,
+        }
       }
       // Parse the fetched body
       const parsed = await parser.parseString(result.body!)
-      return { data: parsed, notModified: false, etag: result.etag, lastModified: result.lastModified }
+      return {
+        data: parsed,
+        notModified: false,
+        etag: result.etag,
+        lastModified: result.lastModified,
+      }
     }
 
     // No conditional headers — plain fetch
@@ -977,7 +1283,14 @@ export async function fetchAndParseFeed(
     }
 
     // Try common RSS paths if direct URL fails
-    const commonPaths = ["/feed", "/rss", "/atom.xml", "/feed.xml", "/rss.xml", "/index.xml"]
+    const commonPaths = [
+      '/feed',
+      '/rss',
+      '/atom.xml',
+      '/feed.xml',
+      '/rss.xml',
+      '/index.xml',
+    ]
 
     for (const path of commonPaths) {
       try {

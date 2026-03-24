@@ -50,6 +50,25 @@ function isBilibiliFeedUrl(feedUrl: string): boolean {
 function extractBilibiliNameFromTitle(title: string): string {
   if (!title) return ''
 
+  const collapseRepeatedName = (input: string): string => {
+    const normalized = String(input || '').trim()
+    if (!normalized) return normalized
+    const length = normalized.length
+    if (length % 2 !== 0) return normalized
+    const half = normalized.slice(0, length / 2)
+    return half && half === normalized.slice(length / 2) ? half : normalized
+  }
+
+  const fullPageTitle = title.match(
+    /^(.+?)投稿视频\s*-\s*(.+?)视频分享\s*-\s*哔哩哔哩视频$/i,
+  )
+  if (fullPageTitle?.[1]) {
+    const lead = fullPageTitle[1].trim()
+    const repeated = fullPageTitle[2]?.trim()
+    if (lead && (!repeated || repeated === lead))
+      return collapseRepeatedName(lead)
+  }
+
   // Common RSSHub title patterns:
   // "褰辫椋撻 鐨?bilibili 绌洪棿"
   // "褰辫椋撻 鐨?bilibili 鎶曠"
@@ -58,13 +77,17 @@ function extractBilibiliNameFromTitle(title: string): string {
 
   // Fallback: remove common suffix markers
   const m2 = title
+    .replace(/\s*投稿视频\s*-\s*/gi, '')
+    .replace(/\s*视频分享\s*-\s*哔哩哔哩视频\s*$/gi, '')
     .replace(
       /\s*bilibili\s*(?:space|\u7A7A\u95F4|\u6295\u7A3F|\u89C6\u9891|\u52A8\u6001)?\s*$/i,
       '',
     )
     .replace(/\s*[-\u2013\u2014:|/]+\s*$/g, '')
+    .replace(/\s*\u7684\s*$/u, '')
     .trim()
-  if (m2 && m2 !== title) return m2
+  const deduped = collapseRepeatedName(m2)
+  if (deduped && deduped !== title) return deduped
 
   return ''
 }

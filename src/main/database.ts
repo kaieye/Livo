@@ -173,7 +173,7 @@ export async function initDatabase(): Promise<void> {
         const isSocialMirrorFeed =
           /\/(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//i.test(
             rawFeedUrl,
-          )
+          ) || /\/bilibili\/user\/(?:dynamic|video|article)\//i.test(rawFeedUrl)
         if (isSocialMirrorFeed) continue
         try {
           const host = new URL(feed.siteUrl).hostname.replace(/^www\./, '')
@@ -379,6 +379,29 @@ export function getEntries(options: {
     summary: trimCompactContent(entry.summary, maxSummaryLength),
     media: entry.media || [],
   }))
+}
+
+export function getOrphanEntries(): Entry[] {
+  const validFeedIds = new Set(data.feeds.map((feed) => feed.id))
+  return data.entries.filter((entry) => !validFeedIds.has(entry.feedId))
+}
+
+export function reassignEntriesToFeed(
+  fromFeedId: string,
+  toFeedId: string,
+): number {
+  if (!fromFeedId || !toFeedId || fromFeedId === toFeedId) return 0
+  let changed = 0
+  data.entries = data.entries.map((entry) => {
+    if (entry.feedId !== fromFeedId) return entry
+    changed += 1
+    return { ...entry, feedId: toFeedId }
+  })
+  if (changed > 0) {
+    rebuildIndexes()
+    scheduleSave()
+  }
+  return changed
 }
 
 export function getEntryById(id: string): Entry | undefined {

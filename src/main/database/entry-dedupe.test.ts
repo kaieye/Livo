@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Entry } from '../../shared/types'
-import { dedupeEntriesForRead, dedupeEntriesInPlace } from './entry-dedupe'
+import {
+  dedupeEntriesForRead,
+  dedupeEntriesInPlace,
+  mergeEntryData,
+} from './entry-dedupe'
 
 function createEntry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -68,5 +72,30 @@ describe('entry dedupe helpers', () => {
     expect(result.changed).toBe(true)
     expect(result.entries).toHaveLength(1)
     expect(result.entries[0].summary).toBe('better summary')
+  })
+
+  it('prefers incoming meaningful titles and author labels when merging existing entries', () => {
+    const now = Date.now()
+    const existing = createEntry({
+      title: '47113427:45',
+      author: '月球大叔投稿视频-月球大叔',
+      publishedAt: now,
+    })
+    const incoming = createEntry({
+      id: 'incoming',
+      title: '2025硅谷 Agent 落地现状',
+      author: '月球大叔',
+      url: existing.url,
+      publishedAt: now - 5 * 60 * 1000,
+    })
+
+    const changed = mergeEntryData(existing, incoming, {
+      onPublishedAtAdvanced: () => {},
+    })
+
+    expect(changed).toBe(true)
+    expect(existing.title).toBe('2025硅谷 Agent 落地现状')
+    expect(existing.author).toBe('月球大叔')
+    expect(existing.publishedAt).toBe(incoming.publishedAt)
   })
 })

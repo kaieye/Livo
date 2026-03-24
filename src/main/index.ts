@@ -28,6 +28,7 @@ import { IPC } from '../shared/types'
 import { registerAppMenu } from './menu'
 import { checkForAppUpdates } from './services/update-check'
 import { AppTray } from './services/tray'
+import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili-orphan-recovery'
 
 const isDev = !app.isPackaged
 const windowManager = new WindowManager({
@@ -88,6 +89,7 @@ app.whenReady().then(async () => {
 
   // Initialize database
   await initDatabase()
+  await recoverOrphanBilibiliDynamicFeeds()
 
   // Register IPC handlers
   registerFeedHandlers()

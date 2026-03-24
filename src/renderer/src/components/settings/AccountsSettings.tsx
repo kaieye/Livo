@@ -37,8 +37,8 @@ const BILIBILI_IMPORT_VIEW_OPTIONS: Array<{
   view: FeedViewType
   label: string
 }> = [
-  { view: FeedViewType.Videos, label: '视频' },
   { view: FeedViewType.SocialMedia, label: '社交媒体' },
+  { view: FeedViewType.Videos, label: '视频' },
 ]
 
 const BILIBILI_RSSHUB_FALLBACK_INSTANCES = [
@@ -551,8 +551,9 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           ),
         ]
 
-        // Use configured instance + video route directly for preview/import template.
-        // This avoids slow per-UID probing during preview.
+        // Use configured instance + dynamic route as the default import template.
+        // This better matches users' expectation of "following updates", while
+        // still allowing them to opt into the video route explicitly.
         const routeType: BilibiliRouteType = 'video'
         const rsshubBase = allBases[0] || configuredBase
 
@@ -889,7 +890,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               <div className="mt-2 space-y-2">
                 <div className="rounded border border-border bg-white/70 p-2 dark:bg-surface-dark-secondary/70">
                   <p className="mb-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
-                    导入到栏目（可多选）
+                    导入到栏目（可多选，默认勾选视频）
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
                     {BILIBILI_IMPORT_VIEW_OPTIONS.map((opt) => {
