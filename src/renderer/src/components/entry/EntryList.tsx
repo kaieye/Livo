@@ -1261,6 +1261,7 @@ export function EntryList({ width }: { width?: number }) {
                           feedTitle={feedById.get(entry.feedId)?.title}
                           feedImage={feedById.get(entry.feedId)?.imageUrl}
                           isVideo={activeView === FeedViewType.Videos}
+                          showSummary={activeView !== FeedViewType.Videos}
                         />
                       ))}
                       {rowEntries.length === 1 && <div aria-hidden="true" />}
@@ -1555,6 +1556,7 @@ export const GridCard = memo(function GridCard({
   feedTitle,
   feedImage,
   isVideo,
+  showSummary = true,
 }: {
   entry: Entry
   isActive: boolean
@@ -1563,6 +1565,7 @@ export const GridCard = memo(function GridCard({
   feedTitle?: string
   feedImage?: string
   isVideo?: boolean
+  showSummary?: boolean
 }) {
   const { t } = useTranslation()
   const photoCovers = useMemo(() => {
@@ -1745,6 +1748,26 @@ export const GridCard = memo(function GridCard({
             </h3>
           ) : null
         })()}
+        {isVideo &&
+          showSummary &&
+          (() => {
+            const cleanSummary = cleanSocialPlainText(
+              entry.summary || entry.content || '',
+            )
+              .replace(/\s+/g, ' ')
+              .trim()
+            if (
+              !cleanSummary ||
+              isSummaryRedundant(entry.title || '', cleanSummary)
+            ) {
+              return null
+            }
+            return (
+              <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-text-secondary dark:text-text-dark-secondary">
+                {cleanSummary}
+              </p>
+            )
+          })()}
         <div className="mt-1 flex items-center justify-between text-[10px] text-text-tertiary">
           <div className="flex min-w-0 items-center gap-1">
             <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-tertiary text-[9px] uppercase text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary">

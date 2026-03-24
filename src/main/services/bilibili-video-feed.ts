@@ -191,8 +191,98 @@ interface BilibiliVideoApiResponse {
   }
 }
 
+function trimBilibiliMetaDescription(value: string | undefined): string {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  return raw
+    .replace(/,\s*视频播放量[\s\S]*$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function fetchBilibiliVideoMetadataFromPage(
+  videoUrl: string,
+): Promise<Partial<BilibiliVideoCard> | null> {
+  try {
+    const response = await session.defaultSession.fetch(videoUrl, {
+      method: 'GET',
+      headers: {
+        Referer: 'https://www.bilibili.com/',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) return null
+    const html = await response.text()
+    const stateMatch = html.match(
+      /window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/u,
+    )
+    let videoData: Record<string, any> | null = null
+    if (stateMatch?.[1]) {
+      try {
+        const state = JSON.parse(stateMatch[1]) as Record<string, any>
+        if (state?.videoData && typeof state.videoData === 'object') {
+          videoData = state.videoData as Record<string, any>
+        }
+      } catch {
+        // Ignore malformed inline state.
+      }
+    }
+
+    const metaTitle =
+      html.match(
+        /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] ||
+      html.match(/<title>([^<]+)<\/title>/i)?.[1] ||
+      ''
+    const metaDescription =
+      html.match(
+        /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] ||
+      html.match(
+        /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] ||
+      ''
+    const metaImage =
+      html.match(
+        /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] || ''
+
+    return {
+      title:
+        String(videoData?.title || '').trim() ||
+        String(metaTitle || '')
+          .replace(/_哔哩哔哩_bilibili$/i, '')
+          .trim() ||
+        undefined,
+      descriptionText:
+        String(videoData?.desc || '').trim() ||
+        trimBilibiliMetaDescription(metaDescription) ||
+        undefined,
+      publishedAtMs:
+        Number.isFinite(videoData?.pubdate) && (videoData?.pubdate || 0) > 0
+          ? Number(videoData?.pubdate) * 1000
+          : undefined,
+      durationText: formatDuration(
+        Number.isFinite(videoData?.duration)
+          ? Number(videoData?.duration)
+          : undefined,
+      ),
+      cover: toAbsoluteUrl(String(videoData?.pic || metaImage || '')),
+      authorName: String(videoData?.owner?.name || '').trim() || undefined,
+      authorAvatar: toAbsoluteUrl(String(videoData?.owner?.face || '')),
+    }
+  } catch {
+    return null
+  }
+}
+
 async function fetchBilibiliVideoMetadataByBvid(
   bvid: string,
+  videoUrl?: string,
 ): Promise<Partial<BilibiliVideoCard> | null> {
   try {
     const response = await session.defaultSession.fetch(
@@ -209,9 +299,13 @@ async function fetchBilibiliVideoMetadataByBvid(
         signal: AbortSignal.timeout(15000),
       },
     )
-    if (!response.ok) return null
+    if (!response.ok) {
+      return videoUrl ? fetchBilibiliVideoMetadataFromPage(videoUrl) : null
+    }
     const payload = (await response.json()) as BilibiliVideoApiResponse
-    if (payload.code !== 0 || !payload.data) return null
+    if (payload.code !== 0 || !payload.data) {
+      return videoUrl ? fetchBilibiliVideoMetadataFromPage(videoUrl) : null
+    }
     const data = payload.data
     return {
       title: String(data.title || '').trim() || undefined,
@@ -226,7 +320,7 @@ async function fetchBilibiliVideoMetadataByBvid(
       authorAvatar: toAbsoluteUrl(data.owner?.face),
     }
   } catch {
-    return null
+    return videoUrl ? fetchBilibiliVideoMetadataFromPage(videoUrl) : null
   }
 }
 
@@ -245,7 +339,7 @@ async function enrichBilibiliVideoCards(
       const card = results[currentIndex]
       const bvid = extractBvid(card.link)
       if (!bvid) continue
-      const metadata = await fetchBilibiliVideoMetadataByBvid(bvid)
+      const metadata = await fetchBilibiliVideoMetadataByBvid(bvid, card.link)
       if (!metadata) continue
       results[currentIndex] = {
         ...card,

@@ -1,7 +1,7 @@
-import { memo } from "react"
+import { memo } from 'react'
 
-import type { Entry } from "../../../../shared/types"
-import { GridCard, SocialMediaItem } from "./EntryList"
+import type { Entry } from '../../../../shared/types'
+import { GridCard, SocialMediaItem } from './EntryList'
 
 interface FeedMeta {
   title?: string
@@ -77,6 +77,7 @@ export const VideoEntryCard = memo(function VideoEntryCard({
       feedTitle={feedMeta?.title}
       feedImage={feedMeta?.imageUrl}
       isVideo={true}
+      showSummary={false}
       onContextMenu={(e) => onContextMenuEntry(e, entry.id)}
     />
   )
