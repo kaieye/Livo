@@ -57,6 +57,10 @@ export function logWarn(message: string, ...details: unknown[]): void {
   writeLog('warn', [message, ...details.map(toMessage)].join(' '))
 }
 
+export function logWarnQuiet(message: string, ...details: unknown[]): void {
+  writeLog('warn', [message, ...details.map(toMessage)].join(' '))
+}
+
 export function logError(message: string, ...details: unknown[]): void {
   console.error(message, ...details)
   writeLog('error', [message, ...details.map(toMessage)].join(' '))

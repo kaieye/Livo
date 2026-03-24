@@ -23,6 +23,7 @@ import {
 import { resolveFeedAvatar } from './feed-avatar'
 import { formatFeedTitle } from './feed-title'
 import { buildEntriesFromParsedItems } from './entry-builder'
+import { logWarnQuiet } from './logger'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshAllInFlight: Promise<void> | null = null
@@ -187,6 +188,7 @@ function isKnownInstagramUpstreamFailure(error: unknown): boolean {
   return (
     message.includes('feed not recognized as rss') ||
     message.includes('challenge_required') ||
+    message.includes('[refresh] timeout after') ||
     message.includes('err_connection_closed') ||
     message.includes('http 403') ||
     message.includes('http 429') ||
@@ -402,11 +404,11 @@ export async function refreshSingleFeed(
     } catch (error) {
       const knownInstagramFailure =
         isInstagramFeedUrl(feed.url) && isKnownInstagramUpstreamFailure(error)
-      if (!knownInstagramFailure) {
-        console.warn(
-          `[refresh] failed: ${feed.title} (${normalizedFeedUrl})`,
-          error,
-        )
+      const refreshMessage = `[refresh] failed: ${feed.title} (${normalizedFeedUrl})`
+      if (knownInstagramFailure) {
+        logWarnQuiet(refreshMessage, error)
+      } else {
+        console.warn(refreshMessage, error)
       }
       updateFeed(feed.id, {
         errorCount: feed.errorCount + 1,
