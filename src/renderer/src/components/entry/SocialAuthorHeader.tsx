@@ -1,4 +1,6 @@
-import { memo } from "react"
+import { memo } from 'react'
+
+import { CachedImage } from '../ui/CachedImage'
 
 export const SocialAuthorHeader = memo(function SocialAuthorHeader({
   avatarUrl,
@@ -18,20 +20,22 @@ export const SocialAuthorHeader = memo(function SocialAuthorHeader({
   return (
     <div className="flex items-center gap-3">
       {avatarUrl && !avatarImageFailed ? (
-        <img
+        <CachedImage
           src={avatarUrl}
           alt=""
-          className="w-10 h-10 rounded-full object-cover"
+          className="h-10 w-10 rounded-full object-cover"
           onError={onAvatarError}
         />
       ) : (
-        <div className="w-10 h-10 rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary flex items-center justify-center text-sm font-bold text-text-secondary">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-tertiary text-sm font-bold text-text-secondary dark:bg-surface-dark-tertiary">
           {avatarLetter}
         </div>
       )}
       <div>
-        <div className="font-semibold text-base">{authorName}</div>
-        <div className="text-xs text-text-secondary dark:text-text-dark-secondary">{timeAgo}</div>
+        <div className="text-base font-semibold">{authorName}</div>
+        <div className="text-xs text-text-secondary dark:text-text-dark-secondary">
+          {timeAgo}
+        </div>
       </div>
     </div>
   )

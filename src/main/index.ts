@@ -1,22 +1,47 @@
-import { app, BrowserWindow, ipcMain, shell, nativeTheme, session, protocol } from "electron"
-import { join } from "path"
-import { existsSync } from "fs"
-import { initDatabase, getDatabase } from "./database"
-import { registerFeedHandlers } from "./handlers/feed-handlers"
-import { registerEntryHandlers } from "./handlers/entry-handlers"
-import { registerAIHandlers } from "./handlers/ai-handlers"
-import { registerSettingsHandlers, getSettings } from "./handlers/settings-handlers"
-import { registerReadabilityHandlers } from "./handlers/readability-handlers"
-import { registerDiscoverHandlers } from "./handlers/discover-handlers"
-import { registerVideoHandlers } from "./handlers/video-handlers"
-import { registerAccountHandlers } from "./handlers/account-handlers"
-import { startAutoRefresh } from "./services/feed-refresh"
-import { startAggregatorJobs } from "./services/aggregator-jobs"
-import { IPC } from "../shared/types"
+import { app, ipcMain, session, protocol } from 'electron'
+import { join } from 'path'
+import { initDatabase, getDatabase } from './database'
+import { registerFeedHandlers } from './handlers/feed-handlers'
+import { registerEntryHandlers } from './handlers/entry-handlers'
+import { registerAIHandlers } from './handlers/ai-handlers'
+import {
+  registerSettingsHandlers,
+  getSettings,
+} from './handlers/settings-handlers'
+import { registerReadabilityHandlers } from './handlers/readability-handlers'
+import { registerDiscoverHandlers } from './handlers/discover-handlers'
+import { registerVideoHandlers } from './handlers/video-handlers'
+import { registerAccountHandlers } from './handlers/account-handlers'
+import { startAutoRefresh } from './services/feed-refresh'
+import { startAggregatorJobs } from './services/aggregator-jobs'
+import { logError, readRecentLogs } from './services/logger'
+import {
+  clearApplicationCache,
+  getAppCacheDirectoryPath,
+  getLogDirectory,
+  getUserDataDirectoryPath,
+  openDirectory,
+} from './services/app-shell'
+import { applyProxySettings } from './services/proxy'
+import { WindowManager } from './window-manager'
+import { IPC } from '../shared/types'
+import { registerAppMenu } from './menu'
+import { checkForAppUpdates } from './services/update-check'
+import { AppTray } from './services/tray'
 
-let mainWindow: BrowserWindow | null = null
 const isDev = !app.isPackaged
-let pendingProtocolUrl: string | null = null
+const windowManager = new WindowManager({
+  isDev,
+  preloadPath: join(__dirname, '../preload/index.mjs'),
+  getCacheImagePath: (fileName) =>
+    join(app.getPath('userData'), 'cache', 'images', fileName),
+  shouldMinimizeToTray: () => getSettings().general.minimizeToTray,
+  shouldStartInTray: () => getSettings().general.startInTray,
+  onVisibilityChanged: () => {
+    tray?.refreshMenu()
+  },
+})
+let tray: AppTray | null = null
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
@@ -25,160 +50,36 @@ if (!gotSingleInstanceLock) {
 }
 
 if (isDev) {
-  process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true"
+  process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 }
 
-function safeOpenExternal(url: string): void {
-  try {
-    if (!/^https?:\/\//i.test(url)) return
-    void shell.openExternal(url).catch(() => {})
-  } catch {
-    // Ignore invalid external URLs from third-party pages.
-  }
-}
-
-function focusMainWindow() {
-  if (!mainWindow) return
-  if (mainWindow.isMinimized()) {
-    mainWindow.restore()
-  }
-  mainWindow.show()
-  mainWindow.focus()
-}
-
-function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
-    show: false,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 16 },
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: join(__dirname, "../preload/index.mjs"),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false,
-      webviewTag: true,
-    },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1C1C1E" : "#FFFFFF",
-  })
-
-  mainWindow.on("ready-to-show", () => {
-    mainWindow?.show()
-    if (pendingProtocolUrl) {
-      console.warn("[protocol] pending deep link received:", pendingProtocolUrl)
-      pendingProtocolUrl = null
-    }
-  })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    const referrerUrl = details.referrer?.url || ""
-    const fromBilibiliPlayer = /player\.bilibili\.com/i.test(referrerUrl)
-    if (fromBilibiliPlayer && /bilibili\.com/i.test(details.url)) {
-      return { action: "deny" }
-    }
-    safeOpenExternal(details.url)
-    return { action: "deny" }
-  })
-
-  // Open DevTools in development
-  if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: "detach" })
-  }
-
-  // Load renderer
-  if (isDev && process.env["ELECTRON_RENDERER_URL"]) {
-    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"])
-  } else {
-    const filePath = join(__dirname, "../renderer/index.html")
-    mainWindow.loadFile(filePath)
-  }
-
-  mainWindow.webContents.on("did-fail-load", (_e, code, desc) => {
-    console.error("Failed to load:", code, desc)
-  })
-  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    if (sourceId.startsWith("devtools://")) return
-    const tag = level >= 2 ? "error" : "log"
-    console[tag](`[renderer:${level}] ${message} (${sourceId}:${line})`)
-  })
-
-  mainWindow.webContents.on("render-process-gone", (_event, details) => {
-    console.error("[window] renderer process gone:", details.reason, details.exitCode)
-  })
-
-  mainWindow.webContents.on("unresponsive", () => {
-    console.error("[window] renderer became unresponsive")
-  })
-
-  mainWindow.webContents.on("did-finish-load", () => {
-    const win = mainWindow
-    if (!win || win.isDestroyed()) return
-
-    // Startup watchdog:
-    // If renderer JS fails early, index.html fallback text stays as "Loading Livo...".
-    // Detect this state and force a reload once to recover from transient startup failures.
-    setTimeout(() => {
-      const current = mainWindow
-      if (!current || current.isDestroyed()) return
-      void current.webContents
-        .executeJavaScript(
-          `(() => {
-            const root = document.getElementById('root');
-            const text = (root?.textContent || '').trim();
-            return text.includes('Loading Livo');
-          })()`,
-          true,
-        )
-        .then((stillLoading) => {
-          if (stillLoading) {
-            console.error("[window] startup watchdog: renderer stuck on loading screen, reloading...")
-            void current.webContents.reloadIgnoringCache()
-          }
-        })
-        .catch(() => {
-          // Ignore watchdog check errors
-        })
-    }, 8000)
-  })
-}
-
-app.on("second-instance", (_event, argv) => {
+app.on('second-instance', (_event, argv) => {
   const protocolArg = argv.find((arg) => /^livo:\/\//i.test(arg))
   if (protocolArg) {
-    pendingProtocolUrl = protocolArg
+    windowManager.setPendingProtocolUrl(protocolArg)
   }
-  focusMainWindow()
+  windowManager.focusMainWindow()
 })
 
-app.on("open-url", (event, url) => {
+app.on('open-url', (event, url) => {
   event.preventDefault()
-  pendingProtocolUrl = url
-  focusMainWindow()
+  windowManager.setPendingProtocolUrl(url)
+  windowManager.focusMainWindow()
 })
 
 app.whenReady().then(async () => {
-  if (process.platform === "win32") {
-    app.setAppUserModelId("com.livo.app")
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.livo.app')
   }
   if (app.isPackaged) {
-    app.setAsDefaultProtocolClient("livo")
+    app.setAsDefaultProtocolClient('livo')
   }
 
   // Register custom protocol for local cached images (must be before any window is created)
-  protocol.registerFileProtocol("livo-cache", (request, callback) => {
-    const fileName = request.url.replace("livo-cache://", "")
-    // Security: prevent directory traversal attacks
-    if (fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) {
-      callback({ error: -6 })
-      return
-    }
-    const cacheDir = join(app.getPath("userData"), "cache", "images")
-    const filePath = join(cacheDir, fileName)
-    if (existsSync(filePath)) {
+  protocol.registerFileProtocol('livo-cache', (request, callback) => {
+    const fileName = request.url.replace('livo-cache://', '')
+    const filePath = windowManager.resolveCacheFile(fileName)
+    if (filePath) {
       callback({ path: filePath })
     } else {
       callback({ error: -6 }) // net::ERR_FILE_NOT_FOUND
@@ -200,9 +101,42 @@ app.whenReady().then(async () => {
 
   // Start auto-refresh AFTER window is created, so mainWindow is available for IPC
   const settings = getSettings()
+  await applyProxySettings(settings)
 
   // Create window first
-  createWindow()
+  const mainWindow = windowManager.createMainWindow()
+  tray = new AppTray({
+    showWindow: () => windowManager.focusMainWindow(),
+    hideWindow: () => windowManager.hideMainWindow(),
+    refreshAll: () => windowManager.sendAppCommand({ type: 'refresh-all' }),
+    openSettings: () =>
+      windowManager.sendAppCommand({ type: 'open-settings', tab: 'general' }),
+    checkForUpdates: () =>
+      windowManager.sendAppCommand({ type: 'open-settings', tab: 'about' }),
+    quit: () => {
+      windowManager.prepareForQuit()
+      app.quit()
+    },
+    isWindowVisible: () => windowManager.isMainWindowVisible(),
+  })
+  tray.ensureCreated()
+  registerAppMenu({
+    windowManager,
+    isDev,
+    openDataDirectory: () => {
+      void openDirectory(getUserDataDirectoryPath())
+    },
+    openCacheDirectory: () => {
+      void openDirectory(getAppCacheDirectoryPath())
+    },
+    openLogsDirectory: () => {
+      void openDirectory(getLogDirectory())
+    },
+    checkForUpdates: () => {
+      void checkForAppUpdates(true)
+      windowManager.sendAppCommand({ type: 'open-settings', tab: 'about' })
+    },
+  })
 
   // Warm and maintain a local aggregator cache for high-risk feeds so the UI
   // can consume recent snapshots instead of relying on live fetches every time.
@@ -221,29 +155,29 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeSendHeaders(
     {
       urls: [
-        "*://*.twimg.com/*",
-        "*://pbs.twimg.com/*",
-        "*://video.twimg.com/*",
-        "*://*.x.com/*",
-        "*://*.cdninstagram.com/*",
-        "*://*.fbcdn.net/*",
-        "*://*.instagram.com/*",
-        "*://*.picnob.info/*",
-        "*://*.picnob.com/*",
-        "*://*.pixnoy.com/*",
-        "*://*.piokok.com/*",
-        "*://*.pixwox.com/*",
-        "*://*.dumpor.com/*",
-        "*://media.picnob.info/*",
-        "*://media.picnob.com/*",
-        "*://media.pixnoy.com/*",
-        "*://media.piokok.com/*",
-        "*://*.hdslb.com/*",
-        "*://*.youtube.com/*",
-        "*://*.youtube-nocookie.com/*",
-        "*://*.googlevideo.com/*",
-        "*://*.ytimg.com/*",
-        "*://accounts.google.com/*",
+        '*://*.twimg.com/*',
+        '*://pbs.twimg.com/*',
+        '*://video.twimg.com/*',
+        '*://*.x.com/*',
+        '*://*.cdninstagram.com/*',
+        '*://*.fbcdn.net/*',
+        '*://*.instagram.com/*',
+        '*://*.picnob.info/*',
+        '*://*.picnob.com/*',
+        '*://*.pixnoy.com/*',
+        '*://*.piokok.com/*',
+        '*://*.pixwox.com/*',
+        '*://*.dumpor.com/*',
+        '*://media.picnob.info/*',
+        '*://media.picnob.com/*',
+        '*://media.pixnoy.com/*',
+        '*://media.piokok.com/*',
+        '*://*.hdslb.com/*',
+        '*://*.youtube.com/*',
+        '*://*.youtube-nocookie.com/*',
+        '*://*.googlevideo.com/*',
+        '*://*.ytimg.com/*',
+        '*://accounts.google.com/*',
       ],
     },
     (details, callback) => {
@@ -251,40 +185,42 @@ app.whenReady().then(async () => {
 
       // Twitter/X: add proper Referer so pbs.twimg.com / video.twimg.com return images correctly.
       // Without this, Twitter's CDN may reject requests with 403 or return empty responses.
-      if (url.includes("twimg.com") || url.includes("x.com")) {
-        details.requestHeaders["Referer"] = "https://twitter.com/"
-        details.requestHeaders["referer"] = "https://twitter.com/"
+      if (url.includes('twimg.com') || url.includes('x.com')) {
+        details.requestHeaders['Referer'] = 'https://twitter.com/'
+        details.requestHeaders['referer'] = 'https://twitter.com/'
       }
 
       // Instagram/Picnob mirrors: set Instagram Referer to reduce hotlink blocking on avatar/media URLs.
       if (
-        /cdninstagram\.com|fbcdn\.net|instagram\.com|picnob\.info|picnob\.com|pixnoy\.com|piokok\.com|pixwox\.com|dumpor\.com/i.test(url) ||
+        /cdninstagram\.com|fbcdn\.net|instagram\.com|picnob\.info|picnob\.com|pixnoy\.com|piokok\.com|pixwox\.com|dumpor\.com/i.test(
+          url,
+        ) ||
         /https?:\/\/[^/]*scontent[^/]*\./i.test(url)
       ) {
-        details.requestHeaders["Referer"] = "https://www.instagram.com/"
-        details.requestHeaders["referer"] = "https://www.instagram.com/"
+        details.requestHeaders['Referer'] = 'https://www.instagram.com/'
+        details.requestHeaders['referer'] = 'https://www.instagram.com/'
       }
 
       // Bilibili CDN images (hdslb) may require site Referer to avoid hotlink rejection.
-      if (url.includes("hdslb.com")) {
-        details.requestHeaders["Referer"] = "https://www.bilibili.com/"
-        details.requestHeaders["referer"] = "https://www.bilibili.com/"
+      if (url.includes('hdslb.com')) {
+        details.requestHeaders['Referer'] = 'https://www.bilibili.com/'
+        details.requestHeaders['referer'] = 'https://www.bilibili.com/'
       }
 
       // YouTube / Google: spoof User-Agent to look like vanilla Chrome
       if (
-        url.includes("youtube.com") ||
-        url.includes("youtube-nocookie.com") ||
-        url.includes("googlevideo.com") ||
-        url.includes("ytimg.com") ||
-        url.includes("accounts.google.com")
+        url.includes('youtube.com') ||
+        url.includes('youtube-nocookie.com') ||
+        url.includes('googlevideo.com') ||
+        url.includes('ytimg.com') ||
+        url.includes('accounts.google.com')
       ) {
-        const ua = details.requestHeaders["User-Agent"] || ""
+        const ua = details.requestHeaders['User-Agent'] || ''
         // Remove Electron/X.Y.Z and AppName/X.Y.Z tokens
-        details.requestHeaders["User-Agent"] = ua
-          .replace(/\s*Electron\/[\d.]+/gi, "")
-          .replace(/\s*Livo\/[\d.]+/gi, "")
-          .replace(/\s*electron-vite[\w-]*\/[\d.]+/gi, "")
+        details.requestHeaders['User-Agent'] = ua
+          .replace(/\s*Electron\/[\d.]+/gi, '')
+          .replace(/\s*Livo\/[\d.]+/gi, '')
+          .replace(/\s*electron-vite[\w-]*\/[\d.]+/gi, '')
       }
 
       callback({ requestHeaders: details.requestHeaders })
@@ -294,9 +230,10 @@ app.whenReady().then(async () => {
   // Force cache for remote images/videos so thumbnails and previews don't re-load every time.
   // Many feed/media origins return no-cache headers; rewrite them to allow disk cache reuse.
   session.defaultSession.webRequest.onHeadersReceived(
-    { urls: ["*://*/*"] },
+    { urls: ['*://*/*'] },
     (details, callback) => {
-      const isMediaResource = details.resourceType === "image" || details.resourceType === "media"
+      const isMediaResource =
+        details.resourceType === 'image' || details.resourceType === 'media'
       if (!isMediaResource) {
         callback({ responseHeaders: details.responseHeaders })
         return
@@ -317,23 +254,29 @@ app.whenReady().then(async () => {
 
       // Do not cache failed media responses; avoid sticky broken thumbnails.
       if (statusCode < 200 || statusCode >= 300) {
-        setHeader("Cache-Control", "no-store, max-age=0")
-        setHeader("Pragma", "no-cache")
-        setHeader("Expires", "0")
+        setHeader('Cache-Control', 'no-store, max-age=0')
+        setHeader('Pragma', 'no-cache')
+        setHeader('Expires', '0')
         callback({ responseHeaders: headers })
         return
       }
 
       // Keep image caches longer than video byte ranges (success responses only).
-      if (details.resourceType === "image") {
-        setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400")
+      if (details.resourceType === 'image') {
+        setHeader(
+          'Cache-Control',
+          'public, max-age=604800, stale-while-revalidate=86400',
+        )
       } else {
-        setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=3600")
+        setHeader(
+          'Cache-Control',
+          'public, max-age=86400, stale-while-revalidate=3600',
+        )
       }
 
-      deleteHeader("Pragma")
+      deleteHeader('Pragma')
       // Let Cache-Control govern caching behavior.
-      deleteHeader("Expires")
+      deleteHeader('Expires')
 
       callback({ responseHeaders: headers })
     },
@@ -342,17 +285,63 @@ app.whenReady().then(async () => {
   // Return app version
   ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion())
   ipcMain.handle(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
-    safeOpenExternal(url)
+    windowManager.safeOpenExternal(url)
     return { success: true }
   })
+  ipcMain.handle(
+    IPC.APP_REPORT_ERROR,
+    (
+      _event,
+      payload: {
+        source: string
+        message: string
+        stack?: string
+        componentStack?: string
+      },
+    ) => {
+      logError('[app-report-error]', payload)
+      return { success: true }
+    },
+  )
+  ipcMain.handle(IPC.APP_READ_RECENT_LOGS, (_event, maxLines?: number) => {
+    return {
+      success: true,
+      content: readRecentLogs(typeof maxLines === 'number' ? maxLines : 200),
+    }
+  })
+  ipcMain.handle(IPC.APP_OPEN_DATA_DIRECTORY, () => {
+    return openDirectory(getUserDataDirectoryPath())
+  })
+  ipcMain.handle(IPC.APP_OPEN_CACHE_DIRECTORY, () => {
+    return openDirectory(getAppCacheDirectoryPath())
+  })
+  ipcMain.handle(IPC.APP_OPEN_LOGS_DIRECTORY, () => {
+    return openDirectory(getLogDirectory())
+  })
+  ipcMain.handle(IPC.APP_CLEAR_CACHE, async () => {
+    return clearApplicationCache()
+  })
+  ipcMain.handle(IPC.APP_CHECK_FOR_UPDATES, async () => {
+    return checkForAppUpdates()
+  })
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  app.on('activate', () => {
+    if (!windowManager.hasMainWindow()) {
+      windowManager.createMainWindow()
+    } else {
+      windowManager.focusMainWindow()
+    }
+    tray?.refreshMenu()
   })
 })
 
-app.on("window-all-closed", () => {
+app.on('before-quit', () => {
+  windowManager.prepareForQuit()
+  tray?.destroy()
+})
+
+app.on('window-all-closed', () => {
   const db = getDatabase()
   if (db) db.close()
-  if (process.platform !== "darwin") app.quit()
+  if (process.platform !== 'darwin') app.quit()
 })

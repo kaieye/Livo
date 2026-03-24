@@ -3,8 +3,8 @@
  * Supports a compact corner audio player.
  * and inline video player for video entries.
  */
-import { useState, useRef, useEffect, useCallback } from "react"
-import { useTranslation } from "react-i18next"
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Play,
   Pause,
@@ -16,14 +16,18 @@ import {
   Maximize2,
   Minimize2,
   Download,
-} from "lucide-react"
-import { create } from "zustand"
-import { useSettingsStore } from "../../store/settings-store"
+} from 'lucide-react'
+import { create } from 'zustand'
+import { useSettingsStore } from '../../store/settings-store'
+import {
+  buildBilibiliInAppPlayerUrl,
+  normalizeBilibiliVideoUrl,
+} from '../../lib/bilibili-video'
 
 // ====== Player Store ======
 interface PlayOptions {
   url: string
-  type?: "audio" | "video"
+  type?: 'audio' | 'video'
   title?: string
   artist?: string
   feedTitle?: string
@@ -33,7 +37,7 @@ interface PlayOptions {
 interface PlayerState {
   /** Currently playing media URL */
   url: string | null
-  type: "audio" | "video"
+  type: 'audio' | 'video'
   title: string
   feedTitle: string
   cover: string
@@ -47,25 +51,24 @@ interface PlayerState {
 
 export const usePlayerStore = create<PlayerState>((set) => ({
   url: null,
-  type: "audio",
-  title: "",
-  feedTitle: "",
-  cover: "",
+  type: 'audio',
+  title: '',
+  feedTitle: '',
+  cover: '',
   isVisible: false,
 
   play: (options: PlayOptions) =>
     set({
       url: options.url,
-      type: options.type || "audio",
-      title: options.title || "",
-      feedTitle: options.artist || options.feedTitle || "",
-      cover: options.cover || "",
+      type: options.type || 'audio',
+      title: options.title || '',
+      feedTitle: options.artist || options.feedTitle || '',
+      cover: options.cover || '',
       isVisible: true,
     }),
   stop: () =>
-    set({ url: null, isVisible: false, title: "", feedTitle: "", cover: "" }),
-  hide: () =>
-    set({ isVisible: false }),
+    set({ url: null, isVisible: false, title: '', feedTitle: '', cover: '' }),
+  hide: () => set({ isVisible: false }),
 }))
 
 // ====== Corner Audio Player ======
@@ -111,10 +114,16 @@ export function CornerPlayer() {
     setIsPlaying(!isPlaying)
   }, [isPlaying])
 
-  const seek = useCallback((seconds: number) => {
-    if (!audioRef.current) return
-    audioRef.current.currentTime = Math.max(0, Math.min(audioRef.current.currentTime + seconds, duration))
-  }, [duration])
+  const seek = useCallback(
+    (seconds: number) => {
+      if (!audioRef.current) return
+      audioRef.current.currentTime = Math.max(
+        0,
+        Math.min(audioRef.current.currentTime + seconds, duration),
+      )
+    },
+    [duration],
+  )
 
   const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
@@ -128,18 +137,21 @@ export function CornerPlayer() {
     }
   }, [])
 
-  const handleSeekBar = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value)
-    if (audioRef.current) {
-      audioRef.current.currentTime = time
-    }
-    setCurrentTime(time)
-  }, [])
+  const handleSeekBar = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const time = parseFloat(e.target.value)
+      if (audioRef.current) {
+        audioRef.current.currentTime = time
+      }
+      setCurrentTime(time)
+    },
+    [],
+  )
 
   const handleClose = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause()
-      audioRef.current.src = ""
+      audioRef.current.src = ''
     }
     setIsPlaying(false)
     stop()
@@ -147,20 +159,20 @@ export function CornerPlayer() {
 
   const handleDownload = useCallback(() => {
     if (!url) return
-    const a = document.createElement("a")
+    const a = document.createElement('a')
     a.href = url
-    a.download = title || "audio"
-    a.target = "_blank"
+    a.download = title || 'audio'
+    a.target = '_blank'
     a.click()
   }, [url, title])
 
-  if (!isVisible || !url || type !== "audio") return null
+  if (!isVisible || !url || type !== 'audio') return null
 
   const formatTime = (s: number) => {
-    if (!isFinite(s)) return "0:00"
+    if (!isFinite(s)) return '0:00'
     const m = Math.floor(s / 60)
     const sec = Math.floor(s % 60)
-    return `${m}:${sec.toString().padStart(2, "0")}`
+    return `${m}:${sec.toString().padStart(2, '0')}`
   }
 
   const rates = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -176,27 +188,27 @@ export function CornerPlayer() {
         onPause={() => setIsPlaying(false)}
       />
 
-      <div className="fixed bottom-4 right-4 z-50 w-[340px] bg-white dark:bg-surface-dark-secondary rounded-2xl shadow-2xl border overflow-hidden animate-in">
+      <div className="animate-in fixed bottom-4 right-4 z-50 w-[340px] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-surface-dark-secondary">
         {/* Track info */}
-        <div className="px-4 pt-3 pb-1">
-          <h4 className="text-sm font-medium truncate">{title}</h4>
-          <p className="text-xs text-text-tertiary truncate">{feedTitle}</p>
+        <div className="px-4 pb-1 pt-3">
+          <h4 className="truncate text-sm font-medium">{title}</h4>
+          <p className="truncate text-xs text-text-tertiary">{feedTitle}</p>
         </div>
 
         {/* Progress bar */}
-        <div className="px-4 mt-1">
+        <div className="mt-1 px-4">
           <input
             type="range"
             min={0}
             max={duration || 0}
             value={currentTime}
             onChange={handleSeekBar}
-            className="w-full h-1 rounded-full appearance-none cursor-pointer accent-accent bg-surface-tertiary dark:bg-surface-dark-tertiary"
+            className="h-1 w-full cursor-pointer appearance-none rounded-full bg-surface-tertiary accent-accent dark:bg-surface-dark-tertiary"
             style={{
               background: `linear-gradient(to right, var(--color-accent) ${(currentTime / (duration || 1)) * 100}%, var(--color-surface-tertiary, #e5e5e5) ${(currentTime / (duration || 1)) * 100}%)`,
             }}
           />
-          <div className="flex justify-between text-[10px] text-text-tertiary mt-0.5">
+          <div className="mt-0.5 flex justify-between text-[10px] text-text-tertiary">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
@@ -204,37 +216,52 @@ export function CornerPlayer() {
 
         {/* Controls */}
         <div className="flex items-center justify-center gap-2 px-4 pb-3 pt-1">
-          <button onClick={() => seek(-10)} className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors" title={t("media.rewind10")}>
+          <button
+            onClick={() => seek(-10)}
+            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            title={t('media.rewind10')}
+          >
             <SkipBack size={16} />
           </button>
           <button
             onClick={togglePlay}
-            className="p-2.5 rounded-full bg-accent text-white hover:bg-accent-hover transition-colors"
+            className="rounded-full bg-accent p-2.5 text-white transition-colors hover:bg-accent-hover"
           >
-            {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+            {isPlaying ? (
+              <Pause size={18} />
+            ) : (
+              <Play size={18} className="ml-0.5" />
+            )}
           </button>
-          <button onClick={() => seek(10)} className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors" title={t("media.forward10")}>
+          <button
+            onClick={() => seek(10)}
+            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            title={t('media.forward10')}
+          >
             <SkipForward size={16} />
           </button>
 
-          <div className="w-px h-5 bg-border dark:bg-border-dark mx-1" />
+          <div className="mx-1 h-5 w-px bg-border dark:bg-border-dark" />
 
           {/* Playback rate */}
           <div className="relative">
             <button
               onClick={() => setShowRateMenu(!showRateMenu)}
-              className="px-1.5 py-1 rounded text-xs font-mono hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
-              title={t("media.playbackSpeed")}
+              className="rounded px-1.5 py-1 font-mono text-xs transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              title={t('media.playbackSpeed')}
             >
               {playbackRate}x
             </button>
             {showRateMenu && (
-              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white dark:bg-surface-dark-secondary border rounded-lg shadow-lg py-1 min-w-[48px]">
+              <div className="absolute bottom-full left-1/2 mb-1 min-w-[48px] -translate-x-1/2 rounded-lg border bg-white py-1 shadow-lg dark:bg-surface-dark-secondary">
                 {rates.map((r) => (
                   <button
                     key={r}
-                    onClick={() => { setPlaybackRate(r); setShowRateMenu(false) }}
-                    className={`block w-full text-center px-2 py-1 text-xs hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary ${r === playbackRate ? "text-accent font-medium" : ""}`}
+                    onClick={() => {
+                      setPlaybackRate(r)
+                      setShowRateMenu(false)
+                    }}
+                    className={`block w-full px-2 py-1 text-center text-xs hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary ${r === playbackRate ? 'font-medium text-accent' : ''}`}
                   >
                     {r}x
                   </button>
@@ -246,8 +273,8 @@ export function CornerPlayer() {
           {/* Volume */}
           <button
             onClick={() => setIsMuted(!isMuted)}
-            className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
-            title={isMuted ? t("media.unmute") : t("media.mute")}
+            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            title={isMuted ? t('media.unmute') : t('media.mute')}
           >
             {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
@@ -255,8 +282,8 @@ export function CornerPlayer() {
           {/* Download */}
           <button
             onClick={handleDownload}
-            className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
-            title={t("media.download")}
+            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            title={t('media.download')}
           >
             <Download size={16} />
           </button>
@@ -264,8 +291,8 @@ export function CornerPlayer() {
           {/* Close */}
           <button
             onClick={handleClose}
-            className="p-1.5 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors text-text-tertiary"
-            title={t("media.closePlayer")}
+            className="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            title={t('media.closePlayer')}
           >
             <X size={16} />
           </button>
@@ -282,7 +309,9 @@ export function transformVideoUrl(url: string): string | null {
   if (!url) return null
 
   // YouTube
-  const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/)
+  const youtubeMatch = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/,
+  )
   if (youtubeMatch) {
     return `https://www.youtube-nocookie.com/embed/${youtubeMatch[1]}?controls=1&autoplay=0&mute=0`
   }
@@ -320,42 +349,6 @@ export function transformVideoUrl(url: string): string | null {
   return null
 }
 
-function buildBilibiliInAppPlayerUrl(rawUrl: string, mini = false): string {
-  const bvidMatch = rawUrl.match(/(?:\/video\/|[?&]bvid=)(BV[a-zA-Z0-9]+)/i)
-  if (bvidMatch?.[1]) {
-    return `https://www.bilibili.com/blackboard/newplayer.html?${new URLSearchParams({
-      isOutside: "true",
-      autoplay: "true",
-      danmaku: "true",
-      muted: mini ? "true" : "false",
-      highQuality: "true",
-      bvid: bvidMatch[1],
-    }).toString()}`
-  }
-  const aidMatch = rawUrl.match(/(?:\/video\/av|[?&]aid=)(\d+)/i)
-  if (aidMatch?.[1]) {
-    return `https://www.bilibili.com/blackboard/newplayer.html?${new URLSearchParams({
-      isOutside: "true",
-      autoplay: "true",
-      danmaku: "true",
-      muted: mini ? "true" : "false",
-      highQuality: "true",
-      aid: aidMatch[1],
-    }).toString()}`
-  }
-  return rawUrl
-}
-
-function normalizeBilibiliVideoUrl(rawUrl: string): string {
-  const bvidMatch = rawUrl.match(/(?:\/video\/|[?&]bvid=)(BV[a-zA-Z0-9]+)/i)
-  if (bvidMatch?.[1]) return `https://www.bilibili.com/video/${bvidMatch[1]}`
-
-  const aidMatch = rawUrl.match(/(?:\/video\/av|[?&]aid=)(\d+)/i)
-  if (aidMatch?.[1]) return `https://www.bilibili.com/video/av${aidMatch[1]}`
-
-  return rawUrl
-}
-
 /** Check if a URL is a known video platform */
 export function isVideoUrl(url: string): boolean {
   return transformVideoUrl(url) !== null
@@ -377,7 +370,9 @@ export function VideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showInlineEmbed, setShowInlineEmbed] = useState(false)
-  const bilibiliOpenInPage = useSettingsStore((s) => s.settings.general.bilibiliOpenInPage)
+  const bilibiliOpenInPage = useSettingsStore(
+    (s) => s.settings.general.bilibiliOpenInPage,
+  )
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(url)
   const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
 
@@ -394,14 +389,19 @@ export function VideoPlayer({
 
   useEffect(() => {
     const handleFS = () => setIsFullscreen(!!document.fullscreenElement)
-    document.addEventListener("fullscreenchange", handleFS)
-    return () => document.removeEventListener("fullscreenchange", handleFS)
+    document.addEventListener('fullscreenchange', handleFS)
+    return () => document.removeEventListener('fullscreenchange', handleFS)
   }, [])
 
   // Try to get an iframe embed URL
   const iframeSrc = transformVideoUrl(url)
-  const bilibiliWebviewUrl = shouldUseBilibiliWebview ? buildBilibiliInAppPlayerUrl(url) : null
-  const bilibiliPageUrl = isBilibiliVideo && bilibiliOpenInPage ? normalizeBilibiliVideoUrl(url) : null
+  const bilibiliWebviewUrl = shouldUseBilibiliWebview
+    ? buildBilibiliInAppPlayerUrl(url, { includeOutsideFlag: true })
+    : null
+  const bilibiliPageUrl =
+    isBilibiliVideo && bilibiliOpenInPage
+      ? normalizeBilibiliVideoUrl(url)
+      : null
 
   const handleOpenVideo = useCallback(() => {
     if (bilibiliPageUrl && onOpenBilibiliInPage) {
@@ -413,36 +413,41 @@ export function VideoPlayer({
       return
     }
     setShowModal(true)
-  }, [bilibiliPageUrl, onOpenBilibiliInPage, shouldUseBilibiliWebview, bilibiliWebviewUrl])
+  }, [
+    bilibiliPageUrl,
+    onOpenBilibiliInPage,
+    shouldUseBilibiliWebview,
+    bilibiliWebviewUrl,
+  ])
 
   if (iframeSrc) {
     return (
       <>
         <div
-          className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
+          className="group relative aspect-video cursor-pointer overflow-hidden rounded-xl bg-black"
           onClick={handleOpenVideo}
         >
           {showInlineEmbed && shouldUseBilibiliWebview && bilibiliWebviewUrl ? (
             <webview
               src={bilibiliWebviewUrl}
-              className="w-full h-full bg-black"
+              className="h-full w-full bg-black"
               useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             />
           ) : poster ? (
-            <img src={poster} alt="" className="w-full h-full object-cover" />
+            <img src={poster} alt="" className="h-full w-full object-cover" />
           ) : (
             <iframe
               src={iframeSrc}
-              className="w-full h-full pointer-events-none"
+              className="pointer-events-none h-full w-full"
               sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
               allowFullScreen
               allow="autoplay; encrypted-media; accelerometer; clipboard-write; gyroscope; picture-in-picture"
             />
           )}
           {!showInlineEmbed && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center">
-                <Play size={24} className="text-white ml-1" fill="white" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60">
+                <Play size={24} className="ml-1 text-white" fill="white" />
               </div>
             </div>
           )}
@@ -451,30 +456,33 @@ export function VideoPlayer({
         {/* Full-screen video modal */}
         {showModal && !showInlineEmbed && (
           <div
-            className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
               setShowModal(false)
             }}
           >
-            <div className="w-full max-w-5xl aspect-video" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="aspect-video w-full max-w-5xl"
+              onClick={(e) => e.stopPropagation()}
+            >
               {shouldUseBilibiliWebview && bilibiliWebviewUrl ? (
                 <webview
                   src={bilibiliWebviewUrl}
-                  className="w-full h-full rounded-xl bg-black"
+                  className="h-full w-full rounded-xl bg-black"
                   useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                 />
               ) : bilibiliPageUrl ? (
                 <webview
                   src={bilibiliPageUrl}
-                  className="w-full h-full rounded-xl bg-black"
+                  className="h-full w-full rounded-xl bg-black"
                   useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                 />
               ) : (
                 <iframe
-                  src={iframeSrc.replace("autoplay=0", "autoplay=1")}
-                  className="w-full h-full rounded-xl"
+                  src={iframeSrc.replace('autoplay=0', 'autoplay=1')}
+                  className="h-full w-full rounded-xl"
                   sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
                   allowFullScreen
                   allow="autoplay; encrypted-media; accelerometer; clipboard-write; gyroscope; picture-in-picture"
@@ -483,7 +491,7 @@ export function VideoPlayer({
             </div>
             <button
               onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
             >
               <X size={20} />
             </button>
@@ -494,7 +502,7 @@ export function VideoPlayer({
   }
 
   return (
-    <div className="relative rounded-xl overflow-hidden bg-black group">
+    <div className="group relative overflow-hidden rounded-xl bg-black">
       <video
         ref={videoRef}
         src={url}
@@ -505,10 +513,10 @@ export function VideoPlayer({
         onPause={() => setIsPlaying(false)}
         preload="metadata"
       />
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           onClick={toggleFullscreen}
-          className="p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
+          className="rounded-lg bg-black/50 p-1.5 text-white transition-colors hover:bg-black/70"
         >
           {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>

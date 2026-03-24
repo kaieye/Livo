@@ -1,18 +1,20 @@
-﻿import { ipcMain } from "electron"
-import { app } from "electron"
-import { join } from "path"
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs"
+﻿import { ipcMain } from 'electron'
+import { app } from 'electron'
+import { join } from 'path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { IPC, type AppSettings } from '../../shared/types'
 import {
-  IPC,
-  type AppSettings,
-} from "../../shared/types"
-import { cloneDefaultSettings, mergeSettings, normalizeSettings } from "../../shared/settings"
+  cloneDefaultSettings,
+  mergeSettings,
+  normalizeSettings,
+} from '../../shared/settings'
+import { applyProxySettings } from '../services/proxy'
 
 let cachedSettings: AppSettings | null = null
 
 function getSettingsPath(): string {
-  const userDataPath = app.getPath("userData")
-  return join(userDataPath, "data", "settings.json")
+  const userDataPath = app.getPath('userData')
+  return join(userDataPath, 'data', 'settings.json')
 }
 
 export function getSettings(): AppSettings {
@@ -21,7 +23,7 @@ export function getSettings(): AppSettings {
   const settingsPath = getSettingsPath()
   if (existsSync(settingsPath)) {
     try {
-      const raw = readFileSync(settingsPath, "utf-8")
+      const raw = readFileSync(settingsPath, 'utf-8')
       const saved = JSON.parse(raw) as Partial<AppSettings>
       cachedSettings = normalizeSettings(saved)
       return cachedSettings!
@@ -37,7 +39,7 @@ export function getSettings(): AppSettings {
 
 function saveSettings(settings: AppSettings): void {
   const settingsPath = getSettingsPath()
-  const dir = join(settingsPath, "..")
+  const dir = join(settingsPath, '..')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
   cachedSettings = settings
@@ -48,13 +50,14 @@ export function registerSettingsHandlers(): void {
     return getSettings()
   })
 
-  ipcMain.handle(IPC.SETTINGS_SET, (_event, newSettings: Partial<AppSettings>) => {
-    const current = getSettings()
-    const merged = mergeSettings(current, newSettings)
-    saveSettings(merged)
-    return { success: true, settings: merged }
-  })
+  ipcMain.handle(
+    IPC.SETTINGS_SET,
+    async (_event, newSettings: Partial<AppSettings>) => {
+      const current = getSettings()
+      const merged = mergeSettings(current, newSettings)
+      saveSettings(merged)
+      await applyProxySettings(merged)
+      return { success: true, settings: merged }
+    },
+  )
 }
-
-
-

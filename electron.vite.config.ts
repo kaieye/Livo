@@ -1,36 +1,18 @@
-import { resolve } from "path"
-import { defineConfig, externalizeDepsPlugin } from "electron-vite"
-import react from "@vitejs/plugin-react"
-import { getBuildTimestamp, getGitCommitHash } from "./scripts/build/metadata.mjs"
-
-const gitCommitHash = getGitCommitHash()
-const buildTimestamp = getBuildTimestamp()
+import { resolve } from 'path'
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import {
+  createRendererSharedConfig,
+  createSharedDefines,
+} from './scripts/build/vite-shared'
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    define: {
-      __LIVO_BUILD_COMMIT__: JSON.stringify(gitCommitHash),
-      __LIVO_BUILD_TIME__: JSON.stringify(buildTimestamp),
-    },
+    define: createSharedDefines(),
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    define: {
-      __LIVO_BUILD_COMMIT__: JSON.stringify(gitCommitHash),
-      __LIVO_BUILD_TIME__: JSON.stringify(buildTimestamp),
-    },
+    define: createSharedDefines(),
   },
-  renderer: {
-    resolve: {
-      alias: {
-        "@renderer": resolve("src/renderer/src"),
-      },
-    },
-    define: {
-      __LIVO_BUILD_COMMIT__: JSON.stringify(gitCommitHash),
-      __LIVO_BUILD_TIME__: JSON.stringify(buildTimestamp),
-    },
-    plugins: [react()],
-  },
+  renderer: createRendererSharedConfig(resolve('.')),
 })

@@ -1,15 +1,23 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useTranslation } from "react-i18next"
-import { useEntryStore } from "../../store/entry-store"
-import { useFeedStore } from "../../store/feed-store"
-import { useAISettingKey, useGeneralSettingsShallowSelector, useTranslationSettingKey } from "../../store/settings-store"
-import { useAIChatStore } from "../../store/ai-chat-store"
-import { useStoreShallow } from "../../store/helpers"
-import { useRegisterCommand } from "../../hooks/useRegisterCommand"
-import { useEntryScrollNavigation } from "../../hooks/useEntryScrollNavigation"
-import { usePlayerStore } from "../media/MediaPlayer"
-import { VideoPlayer, transformVideoUrl } from "../media/MediaPlayer"
-import { sanitizeHTML, isExternalUrl, createExternalLinkWarning } from "../../utils/sanitize"
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useEntryStore } from '../../store/entry-store'
+import { useFeedStore } from '../../store/feed-store'
+import {
+  useAISettingKey,
+  useGeneralSettingsShallowSelector,
+  useTranslationSettingKey,
+} from '../../store/settings-store'
+import { useAIChatStore } from '../../store/ai-chat-store'
+import { useStoreShallow } from '../../store/helpers'
+import { useRegisterCommand } from '../../hooks/useRegisterCommand'
+import { useEntryScrollNavigation } from '../../hooks/useEntryScrollNavigation'
+import { usePlayerStore } from '../media/MediaPlayer'
+import { VideoPlayer, transformVideoUrl } from '../media/MediaPlayer'
+import {
+  sanitizeHTML,
+  isExternalUrl,
+  createExternalLinkWarning,
+} from '../../utils/sanitize'
 import {
   Star,
   ExternalLink,
@@ -32,63 +40,50 @@ import {
   AlertTriangle,
   X,
   CheckSquare,
-} from "lucide-react"
-import { formatDistanceToNow, format } from "date-fns"
-import { getDateLocale } from "../../lib/date-locale"
-import { ContextMenu, type ContextMenuAction } from "../ui/ContextMenu"
-import { FeedViewType } from "../../../../shared/types"
-import { HOTKEY_OVERLAY_SCOPES } from "../../lib/hotkey-scope"
+} from 'lucide-react'
+import { formatDistanceToNow, format } from 'date-fns'
+import { getDateLocale } from '../../lib/date-locale'
+import { ContextMenu, type ContextMenuAction } from '../ui/ContextMenu'
+import { FeedViewType } from '../../../../shared/types'
+import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
+import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
-  const text = html.replace(/<[^>]*>/g, "").trim()
+  const text = html.replace(/<[^>]*>/g, '').trim()
   // CJK: ~400 chars/min, Latin: ~200 words/min
-  const cjkCount = (text.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []).length
-  const wordCount = text.replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g, "").split(/\s+/).filter(Boolean).length
+  const cjkCount = (
+    text.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []
+  ).length
+  const wordCount = text
+    .replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g, '')
+    .split(/\s+/)
+    .filter(Boolean).length
   return Math.max(1, Math.round(cjkCount / 400 + wordCount / 200))
-}
-
-/** Split HTML content into paragraph blocks for bilingual display */
-function splitIntoParagraphs(html: string): string[] {
-  // Split by block-level tags
-  const blocks = html
-    .split(/(<\/(?:p|div|h[1-6]|li|blockquote|pre|table|tr|section|article|figure)>)/i)
-    .reduce<string[]>((acc, part, i, arr) => {
-      if (i % 2 === 0 && i + 1 < arr.length) {
-        acc.push(part + arr[i + 1])
-      } else if (i % 2 === 0 && i === arr.length - 1 && part.trim()) {
-        acc.push(part)
-      }
-      return acc
-    }, [])
-    .map((b) => b.trim())
-    .filter((b) => b.length > 0 && b.replace(/<[^>]*>/g, "").trim().length > 0)
-
-  return blocks.length > 0 ? blocks : [html]
 }
 
 function normalizeMediaKey(url: string): string {
   const decoded = url
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&apos;/g, "'")
     .trim()
-  if (!decoded) return ""
+  if (!decoded) return ''
   try {
     const u = new URL(decoded, window.location.href)
-    const host = u.hostname.toLowerCase().replace(/^www\./, "")
-    const path = u.pathname.replace(/\/+$/, "")
+    const host = u.hostname.toLowerCase().replace(/^www\./, '')
+    const path = u.pathname.replace(/\/+$/, '')
     return `${host}${path}`
   } catch {
     return decoded
       .toLowerCase()
-      .replace(/^https?:\/\//, "")
-      .replace(/^www\./, "")
-      .replace(/[?#].*$/, "")
-      .replace(/\/+$/, "")
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/[?#].*$/, '')
+      .replace(/\/+$/, '')
   }
 }
 
@@ -101,8 +96,11 @@ function stripDuplicateMediaFromHtml(
 ): string {
   if (!html) return html
   const parser = new DOMParser()
-  const doc = parser.parseFromString(`<div id="__root__">${html}</div>`, "text/html")
-  const root = doc.getElementById("__root__")
+  const doc = parser.parseFromString(
+    `<div id="__root__">${html}</div>`,
+    'text/html',
+  )
+  const root = doc.getElementById('__root__')
   if (!root) return html
 
   const imageKeySet = new Set(
@@ -110,13 +108,13 @@ function stripDuplicateMediaFromHtml(
   )
 
   if (imageKeySet.size > 0) {
-    const imgs = Array.from(root.querySelectorAll("img"))
+    const imgs = Array.from(root.querySelectorAll('img'))
     for (const img of imgs) {
       const src =
-        img.getAttribute("src") ||
-        img.getAttribute("data-src") ||
-        img.getAttribute("data-original") ||
-        ""
+        img.getAttribute('src') ||
+        img.getAttribute('data-src') ||
+        img.getAttribute('data-original') ||
+        ''
       if (!src) continue
       const key = normalizeMediaKey(src)
       if (imageKeySet.has(key)) {
@@ -126,7 +124,9 @@ function stripDuplicateMediaFromHtml(
   }
 
   if (options.removeEmbeddedVideos) {
-    const mediaNodes = root.querySelectorAll("video, iframe, embed, object, audio, source, picture")
+    const mediaNodes = root.querySelectorAll(
+      'video, iframe, embed, object, audio, source, picture',
+    )
     mediaNodes.forEach((node) => node.remove())
   }
 
@@ -136,19 +136,22 @@ function stripDuplicateMediaFromHtml(
 function htmlContainsImage(html: string, imageUrl: string): boolean {
   if (!html || !imageUrl) return false
   const parser = new DOMParser()
-  const doc = parser.parseFromString(`<div id="__root__">${html}</div>`, "text/html")
-  const root = doc.getElementById("__root__")
+  const doc = parser.parseFromString(
+    `<div id="__root__">${html}</div>`,
+    'text/html',
+  )
+  const root = doc.getElementById('__root__')
   if (!root) return false
 
   const targetKey = normalizeMediaKey(imageUrl)
   if (!targetKey) return false
 
-  return Array.from(root.querySelectorAll("img")).some((img) => {
+  return Array.from(root.querySelectorAll('img')).some((img) => {
     const src =
-      img.getAttribute("src") ||
-      img.getAttribute("data-src") ||
-      img.getAttribute("data-original") ||
-      ""
+      img.getAttribute('src') ||
+      img.getAttribute('data-src') ||
+      img.getAttribute('data-original') ||
+      ''
     return !!src && normalizeMediaKey(src) === targetKey
   })
 }
@@ -180,27 +183,32 @@ export function EntryContent() {
     fontSize: settings.fontSize,
     language: settings.language,
   }))
-  const translationTargetLanguage = useTranslationSettingKey("targetLanguage")
-  const aiApiKey = useAISettingKey("apiKey")
+  const translationTargetLanguage = useTranslationSettingKey('targetLanguage')
+  const aiApiKey = useAISettingKey('apiKey')
   const { setPanelOpen } = useAIChatStore()
   const playerPlay = usePlayerStore((s) => s.play)
   const { t } = useTranslation()
 
   // Content width mapping — supports custom px value
-  const contentWidthClasses = useMemo(() => ({
-    narrow: "max-w-[500px]",
-    normal: "max-w-[680px]",
-    wide: "max-w-[900px]",
-    custom: "", // handled via inline style
-  }), [])
+  const contentWidthClasses = useMemo(
+    () => ({
+      narrow: 'max-w-[500px]',
+      normal: 'max-w-[680px]',
+      wide: 'max-w-[900px]',
+      custom: '', // handled via inline style
+    }),
+    [],
+  )
 
-  const contentWidthClass = general.contentWidth === "custom"
-    ? ""
-    : (contentWidthClasses[general.contentWidth] || contentWidthClasses.normal)
+  const contentWidthClass =
+    general.contentWidth === 'custom'
+      ? ''
+      : contentWidthClasses[general.contentWidth] || contentWidthClasses.normal
 
-  const contentWidthStyle = general.contentWidth === "custom"
-    ? { maxWidth: `${general.contentMaxWidth || 680}px` }
-    : undefined
+  const contentWidthStyle =
+    general.contentWidth === 'custom'
+      ? { maxWidth: `${general.contentMaxWidth || 680}px` }
+      : undefined
 
   // Per-entry state — keyed by entry ID, reset on switch
   const [summary, setSummary] = useState<string | null>(null)
@@ -214,8 +222,16 @@ export function EntryContent() {
   const [isFetchingReadable, setIsFetchingReadable] = useState(false)
   const [readabilityError, setReadabilityError] = useState<string | null>(null)
   const [embeddedPageUrl, setEmbeddedPageUrl] = useState<string | null>(null)
-  const [externalLinkWarning, setExternalLinkWarning] = useState<{url: string; hostname: string; isSuspicious: boolean} | null>(null)
-  const [articleMenu, setArticleMenu] = useState<{ visible: boolean; x: number; y: number }>({
+  const [externalLinkWarning, setExternalLinkWarning] = useState<{
+    url: string
+    hostname: string
+    isSuspicious: boolean
+  } | null>(null)
+  const [articleMenu, setArticleMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+  }>({
     visible: false,
     x: 0,
     y: 0,
@@ -260,7 +276,6 @@ export function EntryContent() {
 
       // Scroll to top
       scrollRef.current?.scrollTo({ top: 0 })
-
     }
   }, [selectedEntry])
 
@@ -275,8 +290,8 @@ export function EntryContent() {
       setReadPercent(max > 0 ? Math.round((scrollTop / max) * 100) : 0)
     }
 
-    el.addEventListener("scroll", handleScroll, { passive: true })
-    return () => el.removeEventListener("scroll", handleScroll)
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
   }, [selectedEntry])
 
   // Intercept external link clicks with warning
@@ -285,9 +300,11 @@ export function EntryContent() {
     if (!container) return
 
     const handleClick = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null
+      const anchor = (e.target as HTMLElement).closest(
+        'a[href]',
+      ) as HTMLAnchorElement | null
       if (!anchor) return
-      const href = anchor.getAttribute("href")
+      const href = anchor.getAttribute('href')
       if (!href) return
       if (isExternalUrl(href)) {
         e.preventDefault()
@@ -296,29 +313,29 @@ export function EntryContent() {
         if (info.isSuspicious) {
           setExternalLinkWarning(info)
         } else {
-          window.open(href, "_blank")
+          window.open(href, '_blank')
         }
       }
     }
 
-    container.addEventListener("click", handleClick)
-    return () => container.removeEventListener("click", handleClick)
+    container.addEventListener('click', handleClick)
+    return () => container.removeEventListener('click', handleClick)
   }, [selectedEntry])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return
+      if (e.key !== 'Escape') return
       setPanelOpen(false)
     }
 
-    window.addEventListener("keydown", handleKey)
-    return () => window.removeEventListener("keydown", handleKey)
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
   }, [setPanelOpen])
 
   // Content paragraphs (memoized)
   const paragraphs = useMemo(() => {
     if (!selectedEntry?.content) return []
-    return splitIntoParagraphs(selectedEntry.content)
+    return splitHtmlIntoParagraphs(selectedEntry.content)
   }, [selectedEntry?.content])
 
   const handleSummarize = useCallback(async () => {
@@ -327,13 +344,13 @@ export function EntryContent() {
     setSummary(null)
     const result = await window.api.ai.summarize(
       selectedEntry.content,
-      general.language
+      general.language,
     )
     setIsSummarizing(false)
     if (result.success) {
       setSummary(result.summary)
     } else {
-      setSummary(`${t("common.error")}: ${result.error}`)
+      setSummary(`${t('common.error')}: ${result.error}`)
     }
   }, [general.language, selectedEntry?.content, t])
 
@@ -354,13 +371,13 @@ export function EntryContent() {
     // Do translation paragraph by paragraph
     setIsTranslating(true)
     setShowTranslation(true)
-    const targetLang = translationTargetLanguage || "zh-CN"
+    const targetLang = translationTargetLanguage || 'zh-CN'
     const results: string[] = []
 
     for (let i = 0; i < paragraphs.length; i++) {
-      const plainText = paragraphs[i].replace(/<[^>]*>/g, "").trim()
+      const plainText = paragraphs[i].replace(/<[^>]*>/g, '').trim()
       if (!plainText || plainText.length < 5) {
-        results.push("") // skip very short/empty blocks
+        results.push('') // skip very short/empty blocks
         continue
       }
       try {
@@ -368,10 +385,14 @@ export function EntryContent() {
         if (result.success) {
           results.push(result.translation)
         } else {
-          results.push(`<span class="text-red-400 text-xs">${t("entry.translateFailed")}</span>`)
+          results.push(
+            `<span class="text-red-400 text-xs">${t('entry.translateFailed')}</span>`,
+          )
         }
       } catch {
-        results.push(`<span class="text-red-400 text-xs">${t("entry.translateFailed")}</span>`)
+        results.push(
+          `<span class="text-red-400 text-xs">${t('entry.translateFailed')}</span>`,
+        )
       }
       // Update progressively
       setTranslatedParagraphs([...results])
@@ -400,7 +421,7 @@ export function EntryContent() {
 
   const handleReadability = useCallback(async () => {
     if (!selectedEntry?.url) return
-    window.open(selectedEntry.url, "_blank")
+    window.open(selectedEntry.url, '_blank')
   }, [selectedEntry?.url])
 
   const handleSelectCurrentArticle = useCallback(() => {
@@ -418,40 +439,55 @@ export function EntryContent() {
     if (!selectedEntry) return []
     return [
       {
-        id: "select-all",
-        label: t("contextMenu.selectAll", { defaultValue: "全选" }),
+        id: 'select-all',
+        label: t('contextMenu.selectAll', { defaultValue: '全选' }),
         icon: <CheckSquare size={14} />,
         onClick: handleSelectCurrentArticle,
       },
       {
-        id: "ai-translate",
-        label: t("entry.translate", { defaultValue: "AI 翻译" }),
+        id: 'ai-translate',
+        label: t('entry.translate', { defaultValue: 'AI 翻译' }),
         icon: <Languages size={14} />,
-        onClick: () => { void handleTranslate() },
+        onClick: () => {
+          void handleTranslate()
+        },
         disabled: !selectedEntry.content,
       },
       {
-        id: "ai-summary",
-        label: t("entry.summarize", { defaultValue: "AI 摘要" }),
+        id: 'ai-summary',
+        label: t('entry.summarize', { defaultValue: 'AI 摘要' }),
         icon: <Sparkles size={14} />,
-        onClick: () => { void handleSummarize() },
+        onClick: () => {
+          void handleSummarize()
+        },
         disabled: !selectedEntry.content,
       },
       {
-        id: "fetch-original",
-        label: t("entry.readability", { defaultValue: "获取原文" }),
+        id: 'fetch-original',
+        label: t('entry.readability', { defaultValue: '获取原文' }),
         icon: <BookType size={14} />,
-        onClick: () => { void handleReadability() },
+        onClick: () => {
+          void handleReadability()
+        },
         disabled: isFetchingReadable || !selectedEntry.url,
         separator: true,
       },
       {
-        id: "toggle-star",
+        id: 'toggle-star',
         label: selectedEntry.isStarred
-          ? t("entry.unstar", { defaultValue: "取消收藏" })
-          : t("entry.star", { defaultValue: "收藏" }),
-        icon: <Star size={14} className={selectedEntry.isStarred ? "text-yellow-500 fill-yellow-500" : ""} />,
-        onClick: () => { void toggleStar(selectedEntry.id) },
+          ? t('entry.unstar', { defaultValue: '取消收藏' })
+          : t('entry.star', { defaultValue: '收藏' }),
+        icon: (
+          <Star
+            size={14}
+            className={
+              selectedEntry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''
+            }
+          />
+        ),
+        onClick: () => {
+          void toggleStar(selectedEntry.id)
+        },
       },
     ]
   }, [
@@ -466,13 +502,13 @@ export function EntryContent() {
   ])
 
   const scrollToTop = useCallback(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
   // Audio media detection
   const audioMedia = useMemo(() => {
     if (!selectedEntry) return null
-    const audio = selectedEntry.media?.find((m) => m.type === "audio")
+    const audio = selectedEntry.media?.find((m) => m.type === 'audio')
     if (audio) return audio
     return null
   }, [selectedEntry])
@@ -482,46 +518,69 @@ export function EntryContent() {
     if (!selectedEntry) return null
     // Check if entry URL itself is a video platform link
     if (selectedEntry.url && transformVideoUrl(selectedEntry.url)) {
-      return { url: selectedEntry.url, type: "video" as const }
+      return { url: selectedEntry.url, type: 'video' as const }
     }
     // Check media attachments
-    const video = selectedEntry.media?.find((m) => m.type === "video")
+    const video = selectedEntry.media?.find((m) => m.type === 'video')
     if (video) return video
     return null
   }, [selectedEntry])
 
   const currentFeed = useMemo(
-    () => selectedEntry ? feeds.find((f) => f.id === selectedEntry.feedId) : null,
-    [selectedEntry, feeds]
+    () =>
+      selectedEntry ? feeds.find((f) => f.id === selectedEntry.feedId) : null,
+    [selectedEntry, feeds],
   )
-  const authorAvatarUrl = selectedEntry?.authorAvatar || currentFeed?.imageUrl || ""
+  const authorAvatarUrl =
+    selectedEntry?.authorAvatar || currentFeed?.imageUrl || ''
   const shouldShowFeaturedImage = useMemo(() => {
     if (!selectedEntry?.imageUrl || videoMedia) return false
-    if ((currentFeed?.view ?? FeedViewType.Articles) !== FeedViewType.Articles) return true
-    return !htmlContainsImage(selectedEntry.content || "", selectedEntry.imageUrl)
-  }, [currentFeed?.view, selectedEntry?.content, selectedEntry?.imageUrl, videoMedia])
+    if ((currentFeed?.view ?? FeedViewType.Articles) !== FeedViewType.Articles)
+      return true
+    return !htmlContainsImage(
+      selectedEntry.content || '',
+      selectedEntry.imageUrl,
+    )
+  }, [
+    currentFeed?.view,
+    selectedEntry?.content,
+    selectedEntry?.imageUrl,
+    videoMedia,
+  ])
 
   // Memoize sanitized HTML so scroll-triggered re-renders don't recreate DOM
   // (which would destroy playing <video> and <iframe> elements)
   const sanitizedContent = useMemo(() => {
-    if (!selectedEntry?.content) return ""
+    if (!selectedEntry?.content) return ''
     const imageKeys = [
-      selectedEntry.imageUrl || "",
+      selectedEntry.imageUrl || '',
       ...(selectedEntry.media || [])
-        .filter((m) => m.type === "photo" || (videoMedia ? m.type === "video" : false))
-        .flatMap((m) => [m.url || "", m.previewUrl || ""]),
+        .filter(
+          (m) =>
+            m.type === 'photo' || (videoMedia ? m.type === 'video' : false),
+        )
+        .flatMap((m) => [m.url || '', m.previewUrl || '']),
     ].filter(Boolean)
 
     const dedupedHtml = stripDuplicateMediaFromHtml(selectedEntry.content, {
-      duplicateImageKeys: videoMedia || currentFeed?.view !== FeedViewType.Articles ? imageKeys : [],
+      duplicateImageKeys:
+        videoMedia || currentFeed?.view !== FeedViewType.Articles
+          ? imageKeys
+          : [],
       removeEmbeddedVideos: !!videoMedia,
     })
 
     return sanitizeHTML(dedupedHtml)
-  }, [currentFeed?.view, selectedEntry?.content, selectedEntry?.imageUrl, selectedEntry?.media, videoMedia])
+  }, [
+    currentFeed?.view,
+    selectedEntry?.content,
+    selectedEntry?.imageUrl,
+    selectedEntry?.media,
+    videoMedia,
+  ])
 
   const sanitizedReadable = useMemo(() => {
-    if (!readableContent) return ""
+    if (!readableContent) return ''
     return sanitizeHTML(readableContent)
   }, [readableContent])
 
@@ -554,58 +613,65 @@ export function EntryContent() {
     !videoMedia
 
   const goToEntry = useCallback(
-    (dir: "prev" | "next") => {
-      if (dir === "prev" && hasPrev) selectEntry(entries[currentIndex - 1])
-      if (dir === "next" && hasNext) selectEntry(entries[currentIndex + 1])
+    (dir: 'prev' | 'next') => {
+      if (dir === 'prev' && hasPrev) selectEntry(entries[currentIndex - 1])
+      if (dir === 'next' && hasNext) selectEntry(entries[currentIndex + 1])
     },
-    [currentIndex, entries, hasPrev, hasNext, selectEntry]
+    [currentIndex, entries, hasPrev, hasNext, selectEntry],
   )
-  const { showKeepScrollingHint, dismissKeepScrollingHint } = useEntryScrollNavigation({
-    enabled: !!selectedEntry && !embeddedPageUrl,
-    scrollRef,
-    onNextEntry: () => {
-      if (hasNext) {
-        goToEntry("next")
-      }
-    },
-  })
+  const { showKeepScrollingHint, dismissKeepScrollingHint } =
+    useEntryScrollNavigation({
+      enabled: !!selectedEntry && !embeddedPageUrl,
+      scrollRef,
+      onNextEntry: () => {
+        if (hasNext) {
+          goToEntry('next')
+        }
+      },
+    })
 
   useRegisterCommand({
-    id: "entry:prev",
-    shortcutId: "prev-entry",
-    scopes: ["content"],
+    id: 'entry:prev',
+    shortcutId: 'prev-entry',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry || !hasPrev) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
-      goToEntry("prev")
+      goToEntry('prev')
     },
   })
 
   useRegisterCommand({
-    id: "entry:next",
-    shortcutId: "next-entry",
-    scopes: ["content"],
+    id: 'entry:next',
+    shortcutId: 'next-entry',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry || !hasNext) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
-      goToEntry("next")
+      goToEntry('next')
     },
   })
 
   useRegisterCommand({
-    id: "entry:toggle-star",
-    shortcutId: "toggle-star",
-    scopes: ["content"],
+    id: 'entry:toggle-star',
+    shortcutId: 'toggle-star',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       void toggleStar(selectedEntry.id)
@@ -613,13 +679,15 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
-    id: "entry:toggle-read",
-    shortcutId: "toggle-read",
-    scopes: ["content"],
+    id: 'entry:toggle-read',
+    shortcutId: 'toggle-read',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       void markRead(selectedEntry.id, !selectedEntry.isRead)
@@ -627,27 +695,31 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
-    id: "entry:open-browser",
-    shortcutId: "open-browser",
-    scopes: ["content"],
+    id: 'entry:open-browser',
+    shortcutId: 'open-browser',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry?.url) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
-      window.open(selectedEntry.url, "_blank")
+      window.open(selectedEntry.url, '_blank')
     },
   })
 
   useRegisterCommand({
-    id: "entry:copy-link",
-    shortcutId: "copy-link",
-    scopes: ["content"],
+    id: 'entry:copy-link',
+    shortcutId: 'copy-link',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry?.url) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       void handleCopyLink()
@@ -655,13 +727,15 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
-    id: "reading:ai-summarize",
-    shortcutId: "ai-summarize",
-    scopes: ["content"],
+    id: 'reading:ai-summarize',
+    shortcutId: 'ai-summarize',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry?.content) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       void handleSummarize()
@@ -669,13 +743,15 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
-    id: "reading:ai-translate",
-    shortcutId: "ai-translate",
-    scopes: ["content"],
+    id: 'reading:ai-translate',
+    shortcutId: 'ai-translate',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry?.content) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       void handleTranslate()
@@ -683,13 +759,15 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
-    id: "reading:ai-chat",
-    shortcutId: "ai-chat",
-    scopes: ["content"],
+    id: 'reading:ai-chat',
+    shortcutId: 'ai-chat',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       handleOpenAIChat()
@@ -697,13 +775,15 @@ export function EntryContent() {
   })
 
   useRegisterCommand({
-    id: "reading:toggle-readability",
-    shortcutId: "toggle-readability",
-    scopes: ["content"],
+    id: 'reading:toggle-readability',
+    shortcutId: 'toggle-readability',
+    scopes: ['content'],
     blockedScopes: HOTKEY_OVERLAY_SCOPES,
     handler: (e) => {
       if (!selectedEntry?.url) return false
-      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
       if (isInput) return false
       e.preventDefault()
       void handleReadability()
@@ -724,14 +804,38 @@ export function EntryContent() {
   // Empty state
   if (!selectedEntry) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-surface-secondary dark:bg-surface-dark">
+      <div className="flex flex-1 items-center justify-center bg-surface-secondary dark:bg-surface-dark">
         <div className="text-center text-text-secondary dark:text-text-dark-secondary">
-          <BookOpen size={48} className="mx-auto mb-4 text-text-tertiary" strokeWidth={1.5} />
-          <p className="text-lg font-medium">{t("entry.selectArticle")}</p>
-          <p className="text-sm mt-1 text-text-tertiary">{t("entry.selectArticleHint")}</p>
-          <div className="mt-6 text-xs text-text-tertiary space-y-1">
-            <p><kbd className="px-1.5 py-0.5 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary text-[10px]">J</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary text-[10px]">K</kbd> {t("entry.navUpDown")}</p>
-            <p><kbd className="px-1.5 py-0.5 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary text-[10px]">S</kbd> {t("entry.starHint")}  <kbd className="px-1.5 py-0.5 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary text-[10px]">O</kbd> {t("entry.browserOpenHint")}</p>
+          <BookOpen
+            size={48}
+            className="mx-auto mb-4 text-text-tertiary"
+            strokeWidth={1.5}
+          />
+          <p className="text-lg font-medium">{t('entry.selectArticle')}</p>
+          <p className="mt-1 text-sm text-text-tertiary">
+            {t('entry.selectArticleHint')}
+          </p>
+          <div className="mt-6 space-y-1 text-xs text-text-tertiary">
+            <p>
+              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+                J
+              </kbd>{' '}
+              /{' '}
+              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+                K
+              </kbd>{' '}
+              {t('entry.navUpDown')}
+            </p>
+            <p>
+              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+                S
+              </kbd>{' '}
+              {t('entry.starHint')}{' '}
+              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+                O
+              </kbd>{' '}
+              {t('entry.browserOpenHint')}
+            </p>
           </div>
         </div>
       </div>
@@ -742,17 +846,21 @@ export function EntryContent() {
     addSuffix: true,
     locale: getDateLocale(),
   })
-  const fullDate = format(new Date(selectedEntry.publishedAt), t("entry.dateFormat"), {
-    locale: getDateLocale(),
-  })
+  const fullDate = format(
+    new Date(selectedEntry.publishedAt),
+    t('entry.dateFormat'),
+    {
+      locale: getDateLocale(),
+    },
+  )
   const readingTime = selectedEntry.content
     ? estimateReadingTime(selectedEntry.content)
     : 0
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-surface-dark relative">
+    <div className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-surface-dark">
       {/* Reading progress bar */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] z-20">
+      <div className="absolute left-0 right-0 top-0 z-20 h-[2px]">
         <div
           className="h-full bg-accent transition-all duration-150 ease-out"
           style={{ width: `${readPercent}%` }}
@@ -760,34 +868,36 @@ export function EntryContent() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex-shrink-0 flex items-center gap-0.5 px-3 py-1.5 border-b bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm sticky top-0 z-10">
+      <div className="sticky top-0 z-10 flex flex-shrink-0 items-center gap-0.5 border-b bg-white/80 px-3 py-1.5 backdrop-blur-sm dark:bg-surface-dark/80">
         {embeddedPageUrl && (
           <>
             <ToolbarButton
               onClick={() => setEmbeddedPageUrl(null)}
-              title={t("common.back", { defaultValue: "返回" })}
+              title={t('common.back', { defaultValue: '返回' })}
             >
               <X size={16} />
             </ToolbarButton>
-            <div className="w-px h-4 bg-border dark:bg-border-dark mx-1" />
+            <div className="mx-1 h-4 w-px bg-border dark:bg-border-dark" />
           </>
         )}
 
         <ToolbarButton
           onClick={() => toggleStar(selectedEntry.id)}
-          title={selectedEntry.isStarred ? t("entry.unstar") : t("entry.star")}
+          title={selectedEntry.isStarred ? t('entry.unstar') : t('entry.star')}
           active={selectedEntry.isStarred}
         >
           <Star
             size={16}
-            className={selectedEntry.isStarred ? "text-yellow-500 fill-yellow-500" : ""}
+            className={
+              selectedEntry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''
+            }
           />
         </ToolbarButton>
 
         <ToolbarButton
           onClick={handleSummarize}
           disabled={isSummarizing || !aiApiKey}
-          title={aiApiKey ? t("entry.summarize") : t("entry.configureAIKey")}
+          title={aiApiKey ? t('entry.summarize') : t('entry.configureAIKey')}
         >
           {isSummarizing ? (
             <Loader2 size={16} className="animate-spin text-accent" />
@@ -800,7 +910,7 @@ export function EntryContent() {
           onClick={handleTranslate}
           disabled={isTranslating || !aiApiKey}
           active={showTranslation}
-          title={aiApiKey ? t("entry.translate") : t("entry.configureAIKey")}
+          title={aiApiKey ? t('entry.translate') : t('entry.configureAIKey')}
         >
           {isTranslating ? (
             <Loader2 size={16} className="animate-spin text-accent" />
@@ -821,7 +931,11 @@ export function EntryContent() {
           onClick={handleReadability}
           disabled={isFetchingReadable || !selectedEntry.url}
           active={isReadabilityMode}
-          title={isReadabilityMode ? t("entry.readabilityBack") : t("entry.readability")}
+          title={
+            isReadabilityMode
+              ? t('entry.readabilityBack')
+              : t('entry.readability')
+          }
         >
           {isFetchingReadable ? (
             <Loader2 size={16} className="animate-spin text-accent" />
@@ -831,12 +945,12 @@ export function EntryContent() {
         </ToolbarButton>
 
         {audioMedia && (
-          <ToolbarButton onClick={handlePlayAudio} title={t("entry.playAudio")}>
+          <ToolbarButton onClick={handlePlayAudio} title={t('entry.playAudio')}>
             <Play size={16} className="text-purple-500" />
           </ToolbarButton>
         )}
 
-        <ToolbarButton onClick={handleCopyLink} title={t("entry.copyLink")}>
+        <ToolbarButton onClick={handleCopyLink} title={t('entry.copyLink')}>
           {linkCopied ? (
             <Check size={16} className="text-green-500" />
           ) : (
@@ -845,13 +959,21 @@ export function EntryContent() {
         </ToolbarButton>
 
         {/* Separator */}
-        <div className="w-px h-4 bg-border dark:bg-border-dark mx-1" />
+        <div className="mx-1 h-4 w-px bg-border dark:bg-border-dark" />
 
         {/* Nav buttons */}
-        <ToolbarButton onClick={() => goToEntry("prev")} disabled={!hasPrev} title={t("entry.prevArticleShortcut")}>
+        <ToolbarButton
+          onClick={() => goToEntry('prev')}
+          disabled={!hasPrev}
+          title={t('entry.prevArticleShortcut')}
+        >
           <ChevronUp size={16} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => goToEntry("next")} disabled={!hasNext} title={t("entry.nextArticleShortcut")}>
+        <ToolbarButton
+          onClick={() => goToEntry('next')}
+          disabled={!hasNext}
+          title={t('entry.nextArticleShortcut')}
+        >
           <ChevronDown size={16} />
         </ToolbarButton>
 
@@ -861,8 +983,8 @@ export function EntryContent() {
         {readPercent > 0 && (
           <button
             onClick={scrollToTop}
-            className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-accent transition-colors px-1.5 py-0.5 rounded"
-            title={t("entry.scrollToTop")}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-text-tertiary transition-colors hover:text-accent"
+            title={t('entry.scrollToTop')}
           >
             <ReadProgressCircle percent={readPercent} />
             <span>{readPercent}%</span>
@@ -871,15 +993,15 @@ export function EntryContent() {
 
         {selectedEntry.url && (
           <ToolbarButton
-            onClick={() => window.open(selectedEntry.url, "_blank")}
-            title={t("entry.openInBrowser")}
+            onClick={() => window.open(selectedEntry.url, '_blank')}
+            title={t('entry.openInBrowser')}
           >
             <ExternalLink size={16} />
           </ToolbarButton>
         )}
 
         {/* Read status */}
-        <div className="flex items-center gap-1 text-xs text-text-tertiary ml-1">
+        <div className="ml-1 flex items-center gap-1 text-xs text-text-tertiary">
           {selectedEntry.isRead ? (
             <CheckCircle2 size={14} className="text-green-500" />
           ) : (
@@ -890,10 +1012,10 @@ export function EntryContent() {
 
       {/* Content */}
       {embeddedPageUrl ? (
-        <div className="flex-1 min-h-0 bg-black">
+        <div className="min-h-0 flex-1 bg-black">
           <webview
             src={embeddedPageUrl}
-            className="w-full h-full"
+            className="h-full w-full"
             useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
           />
         </div>
@@ -902,7 +1024,8 @@ export function EntryContent() {
           ref={scrollRef}
           className="flex-1 overflow-y-auto scroll-smooth"
           onContextMenu={(e) => {
-            const selectedText = window.getSelection?.()?.toString().trim() || ""
+            const selectedText =
+              window.getSelection?.()?.toString().trim() || ''
             // If text is selected, let text context menu handle copy actions.
             if (selectedText) return
             e.preventDefault()
@@ -911,14 +1034,14 @@ export function EntryContent() {
           }}
         >
           {showKeepScrollingHint && hasNext && (
-            <div className="sticky bottom-6 z-10 flex justify-center pointer-events-none">
+            <div className="pointer-events-none sticky bottom-6 z-10 flex justify-center">
               <button
                 type="button"
                 onClick={() => {
                   dismissKeepScrollingHint()
-                  goToEntry("next")
+                  goToEntry('next')
                 }}
-                className="pointer-events-auto rounded-full border border-border/40 bg-white/90 dark:bg-surface-dark/90 px-4 py-2 text-xs text-text-secondary shadow-sm backdrop-blur-sm hover:text-text"
+                className="pointer-events-auto rounded-full border border-border/40 bg-white/90 px-4 py-2 text-xs text-text-secondary shadow-sm backdrop-blur-sm hover:text-text dark:bg-surface-dark/90"
               >
                 已到底部，再按 PageDown 或点这里跳到下一篇
               </button>
@@ -927,8 +1050,10 @@ export function EntryContent() {
           <article
             ref={contentRef}
             data-context-select-scope="article"
-            className={`${contentWidthClass} mx-auto px-8 py-6 mb-32 transition-all duration-300 ${
-              isTransitioning ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
+            className={`${contentWidthClass} mx-auto mb-32 px-8 py-6 transition-all duration-300 ${
+              isTransitioning
+                ? 'translate-y-4 opacity-0'
+                : 'translate-y-0 opacity-100'
             }`}
             style={{
               lineHeight: general.contentLineHeight,
@@ -936,191 +1061,195 @@ export function EntryContent() {
               ...contentWidthStyle,
             }}
           >
-          {/* Title */}
-          <h1 className="text-[1.7rem] font-bold leading-normal mb-4">{selectedEntry.title}</h1>
+            {/* Title */}
+            <h1 className="mb-4 text-[1.7rem] font-bold leading-normal">
+              {selectedEntry.title}
+            </h1>
 
-          {/* Meta */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-text-secondary dark:text-text-dark-secondary mb-8">
-            {selectedEntry.author && (
-              <span className="flex items-center gap-1">
-                {authorAvatarUrl ? (
-                  <img
-                    src={authorAvatarUrl}
-                    alt=""
-                    className="w-4 h-4 rounded-full object-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      ;(e.target as HTMLImageElement).style.display = "none"
-                    }}
-                  />
-                ) : (
-                  <User size={12} className="text-text-tertiary" />
-                )}
-                {selectedEntry.author}
-              </span>
-            )}
-            <span className="flex items-center gap-1" title={fullDate}>
-              <Calendar size={12} className="text-text-tertiary" />
-              {timeAgo}
-            </span>
-            {readingTime > 0 && (
-              <span className="flex items-center gap-1">
-                <Clock size={12} className="text-text-tertiary" />
-                {t("entry.readingTime", { minutes: readingTime })}
-              </span>
-            )}
-          </div>
-
-          {/* AI Summary */}
-          {(isSummarizing || summary) && (
-            <div className="mb-8 p-4 rounded-xl bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/15 transition-all duration-300 animate-in fade-in-0 slide-in-from-top-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-accent mb-2">
-                <Sparkles size={16} />
-                {t("entry.aiSummaryTitle")}
-              </div>
-              {isSummarizing ? (
-                <div className="flex items-center gap-2 text-sm text-text-secondary">
-                  <Loader2 size={14} className="animate-spin" />
-                  {t("entry.generatingSummary")}
-                </div>
-              ) : (
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{summary}</p>
-              )}
-            </div>
-          )}
-
-          {readabilityError && !isReadabilityMode && (
-            <div className="mb-6 rounded-lg border border-amber-300/40 bg-amber-50/60 dark:bg-amber-900/15 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              {readabilityError}
-            </div>
-          )}
-
-          {/* Featured image */}
-          {shouldShowFeaturedImage && (
-            <div className="mb-8 -mx-2 overflow-hidden rounded-xl">
-              <img
-                src={selectedEntry.imageUrl}
-                alt=""
-                className="w-full object-cover max-h-[400px] transition-transform duration-500 hover:scale-[1.02]"
-                loading="lazy"
-                onError={(e) => {
-                  ;(e.target as HTMLImageElement).style.display = "none"
-                }}
-              />
-            </div>
-          )}
-
-          {/* Video player — prioritized like Folo-dev MediaLayout */}
-          {videoMedia && (
-            <div className="mb-8 -mx-2">
-              <VideoPlayer
-                url={videoMedia.url}
-                poster={selectedEntry.imageUrl}
-                title={selectedEntry.title}
-                onOpenBilibiliInPage={handleOpenBilibiliInPage}
-              />
-            </div>
-          )}
-
-          {/* Article content — readability / bilingual / plain */}
-          {isReadabilityMode && readableContent ? (
-            <div>
-              <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs">
-                <BookType size={14} />
-                <span>{t("entry.readabilityMode")}</span>
-                <button
-                  onClick={() => setIsReadabilityMode(false)}
-                  className="ml-auto hover:underline"
-                >
-                  {t("entry.readabilityBack2")}
-                </button>
-              </div>
-              <div
-                className="entry-content"
-                style={{ fontSize: `${general.fontSize}px` }}
-                dangerouslySetInnerHTML={{ __html: sanitizedReadable }}
-              />
-            </div>
-          ) : selectedEntry.content ? (
-            showTranslation ? (
-              <BilingualContent
-                paragraphs={paragraphs}
-                translations={translatedParagraphs}
-                isTranslating={isTranslating}
-                fontSize={general.fontSize}
-                lineHeight={general.contentLineHeight}
-                fontFamily={general.contentFontFamily}
-              />
-            ) : (
-              <div
-                className="entry-content"
-                style={{ fontSize: `${general.fontSize}px` }}
-                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-              />
-            )
-          ) : showEntryDetailFallback ? (
-            <EntryDetailFallback title={selectedEntry.title} />
-          ) : (
-            <div className="text-text-secondary dark:text-text-dark-secondary text-center py-12">
-              {isFetchingReadable ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 size={24} className="animate-spin text-accent" />
-                  <p className="text-sm">{t("entry.fetchingContent")}</p>
-                </div>
-              ) : (
-                <>
-                  <p>{t("entry.noContent")}</p>
-                  {selectedEntry.url && (
-                    <div className="mt-3 space-y-2">
-                      <button
-                        onClick={handleReadability}
-                        className="text-accent hover:underline text-sm inline-flex items-center gap-1"
-                      >
-                        <BookType size={14} />
-                        {t("entry.tryFetchContent")}
-                      </button>
-                      <br />
-                      <a
-                        href={selectedEntry.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent hover:underline text-sm inline-block"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          window.open(selectedEntry.url, "_blank")
-                        }}
-                      >
-                        {t("entry.readInBrowser")}
-                      </a>
-                    </div>
+            {/* Meta */}
+            <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+              {selectedEntry.author && (
+                <span className="flex items-center gap-1">
+                  {authorAvatarUrl ? (
+                    <img
+                      src={authorAvatarUrl}
+                      alt=""
+                      className="h-4 w-4 rounded-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        ;(e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  ) : (
+                    <User size={12} className="text-text-tertiary" />
                   )}
-                </>
+                  {selectedEntry.author}
+                </span>
+              )}
+              <span className="flex items-center gap-1" title={fullDate}>
+                <Calendar size={12} className="text-text-tertiary" />
+                {timeAgo}
+              </span>
+              {readingTime > 0 && (
+                <span className="flex items-center gap-1">
+                  <Clock size={12} className="text-text-tertiary" />
+                  {t('entry.readingTime', { minutes: readingTime })}
+                </span>
               )}
             </div>
-          )}
 
-          {/* End of article — navigate */}
-          <div className="mt-16 pt-8 border-t flex items-center justify-between text-sm text-text-secondary dark:text-text-dark-secondary">
-            <button
-              disabled={!hasPrev}
-              onClick={() => goToEntry("prev")}
-              className="flex items-center gap-1 hover:text-accent transition-colors disabled:opacity-30 disabled:cursor-default"
-            >
-              <ChevronUp size={16} />
-              {t("entry.prevArticle")}
-            </button>
-            <span className="text-xs text-text-tertiary">
-              {currentIndex + 1} / {entries.length}
-            </span>
-            <button
-              disabled={!hasNext}
-              onClick={() => goToEntry("next")}
-              className="flex items-center gap-1 hover:text-accent transition-colors disabled:opacity-30 disabled:cursor-default"
-            >
-              {t("entry.nextArticle")}
-              <ChevronDown size={16} />
-            </button>
-          </div>
+            {/* AI Summary */}
+            {(isSummarizing || summary) && (
+              <div className="animate-in fade-in-0 slide-in-from-top-2 mb-8 rounded-xl border border-accent/15 bg-gradient-to-br from-accent/5 to-accent/10 p-4 transition-all duration-300">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-accent">
+                  <Sparkles size={16} />
+                  {t('entry.aiSummaryTitle')}
+                </div>
+                {isSummarizing ? (
+                  <div className="flex items-center gap-2 text-sm text-text-secondary">
+                    <Loader2 size={14} className="animate-spin" />
+                    {t('entry.generatingSummary')}
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                    {summary}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {readabilityError && !isReadabilityMode && (
+              <div className="mb-6 rounded-lg border border-amber-300/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-300">
+                {readabilityError}
+              </div>
+            )}
+
+            {/* Featured image */}
+            {shouldShowFeaturedImage && (
+              <div className="-mx-2 mb-8 overflow-hidden rounded-xl">
+                <img
+                  src={selectedEntry.imageUrl}
+                  alt=""
+                  className="max-h-[400px] w-full object-cover transition-transform duration-500 hover:scale-[1.02]"
+                  loading="lazy"
+                  onError={(e) => {
+                    ;(e.target as HTMLImageElement).style.display = 'none'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Video player — prioritized like Folo-dev MediaLayout */}
+            {videoMedia && (
+              <div className="-mx-2 mb-8">
+                <VideoPlayer
+                  url={videoMedia.url}
+                  poster={selectedEntry.imageUrl}
+                  title={selectedEntry.title}
+                  onOpenBilibiliInPage={handleOpenBilibiliInPage}
+                />
+              </div>
+            )}
+
+            {/* Article content — readability / bilingual / plain */}
+            {isReadabilityMode && readableContent ? (
+              <div>
+                <div className="mb-4 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
+                  <BookType size={14} />
+                  <span>{t('entry.readabilityMode')}</span>
+                  <button
+                    onClick={() => setIsReadabilityMode(false)}
+                    className="ml-auto hover:underline"
+                  >
+                    {t('entry.readabilityBack2')}
+                  </button>
+                </div>
+                <div
+                  className="entry-content"
+                  style={{ fontSize: `${general.fontSize}px` }}
+                  dangerouslySetInnerHTML={{ __html: sanitizedReadable }}
+                />
+              </div>
+            ) : selectedEntry.content ? (
+              showTranslation ? (
+                <BilingualContent
+                  paragraphs={paragraphs}
+                  translations={translatedParagraphs}
+                  isTranslating={isTranslating}
+                  fontSize={general.fontSize}
+                  lineHeight={general.contentLineHeight}
+                  fontFamily={general.contentFontFamily}
+                />
+              ) : (
+                <div
+                  className="entry-content"
+                  style={{ fontSize: `${general.fontSize}px` }}
+                  dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+                />
+              )
+            ) : showEntryDetailFallback ? (
+              <EntryDetailFallback title={selectedEntry.title} />
+            ) : (
+              <div className="py-12 text-center text-text-secondary dark:text-text-dark-secondary">
+                {isFetchingReadable ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 size={24} className="animate-spin text-accent" />
+                    <p className="text-sm">{t('entry.fetchingContent')}</p>
+                  </div>
+                ) : (
+                  <>
+                    <p>{t('entry.noContent')}</p>
+                    {selectedEntry.url && (
+                      <div className="mt-3 space-y-2">
+                        <button
+                          onClick={handleReadability}
+                          className="inline-flex items-center gap-1 text-sm text-accent hover:underline"
+                        >
+                          <BookType size={14} />
+                          {t('entry.tryFetchContent')}
+                        </button>
+                        <br />
+                        <a
+                          href={selectedEntry.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block text-sm text-accent hover:underline"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            window.open(selectedEntry.url, '_blank')
+                          }}
+                        >
+                          {t('entry.readInBrowser')}
+                        </a>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* End of article — navigate */}
+            <div className="mt-16 flex items-center justify-between border-t pt-8 text-sm text-text-secondary dark:text-text-dark-secondary">
+              <button
+                disabled={!hasPrev}
+                onClick={() => goToEntry('prev')}
+                className="flex items-center gap-1 transition-colors hover:text-accent disabled:cursor-default disabled:opacity-30"
+              >
+                <ChevronUp size={16} />
+                {t('entry.prevArticle')}
+              </button>
+              <span className="text-xs text-text-tertiary">
+                {currentIndex + 1} / {entries.length}
+              </span>
+              <button
+                disabled={!hasNext}
+                onClick={() => goToEntry('next')}
+                className="flex items-center gap-1 transition-colors hover:text-accent disabled:cursor-default disabled:opacity-30"
+              >
+                {t('entry.nextArticle')}
+                <ChevronDown size={16} />
+              </button>
+            </div>
           </article>
         </div>
       )}
@@ -1128,41 +1257,46 @@ export function EntryContent() {
       {/* External link warning modal */}
       {externalLinkWarning && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-surface-dark-secondary rounded-xl shadow-2xl p-5 mx-4 max-w-sm w-full animate-in">
-            <div className="flex items-center gap-2 text-amber-500 mb-3">
+          <div className="animate-in mx-4 w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl dark:bg-surface-dark-secondary">
+            <div className="mb-3 flex items-center gap-2 text-amber-500">
               <AlertTriangle size={20} />
-              <h3 className="font-semibold">{t("entry.externalLinkWarning")}</h3>
-              <button onClick={() => setExternalLinkWarning(null)} className="ml-auto p-1 rounded hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary">
+              <h3 className="font-semibold">
+                {t('entry.externalLinkWarning')}
+              </h3>
+              <button
+                onClick={() => setExternalLinkWarning(null)}
+                className="ml-auto rounded p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              >
                 <X size={16} />
               </button>
             </div>
-            <p className="text-sm text-text-secondary dark:text-text-dark-secondary mb-1">
-              {t("entry.externalLinkDesc")}
+            <p className="mb-1 text-sm text-text-secondary dark:text-text-dark-secondary">
+              {t('entry.externalLinkDesc')}
             </p>
-            <p className="text-xs font-mono bg-surface-secondary dark:bg-surface-dark-tertiary rounded px-2 py-1.5 mb-3 break-all text-red-500">
+            <p className="mb-3 break-all rounded bg-surface-secondary px-2 py-1.5 font-mono text-xs text-red-500 dark:bg-surface-dark-tertiary">
               {externalLinkWarning.hostname}
             </p>
             {externalLinkWarning.isSuspicious && (
-              <p className="text-xs text-red-500 mb-3 flex items-center gap-1">
+              <p className="mb-3 flex items-center gap-1 text-xs text-red-500">
                 <AlertTriangle size={12} />
-                {t("entry.suspiciousLink")}
+                {t('entry.suspiciousLink')}
               </p>
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => setExternalLinkWarning(null)}
-                className="flex-1 px-3 py-2 text-sm rounded-lg border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="flex-1 rounded-lg border px-3 py-2 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
               >
-                {t("common.cancel")}
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => {
-                  window.open(externalLinkWarning.url, "_blank")
+                  window.open(externalLinkWarning.url, '_blank')
                   setExternalLinkWarning(null)
                 }}
-                className="flex-1 px-3 py-2 text-sm rounded-lg bg-accent text-white hover:bg-accent/90"
+                className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm text-white hover:bg-accent/90"
               >
-                {t("common.continueAccess")}
+                {t('common.continueAccess')}
               </button>
             </div>
           </div>
@@ -1183,11 +1317,11 @@ export function EntryContent() {
 
 function EntryDetailFallback({ title }: { title: string }) {
   return (
-    <div className="space-y-5 animate-in fade-in-0 duration-200">
-      <div className="rounded-xl border border-border/60 bg-surface-secondary/70 dark:bg-surface-dark-secondary/70 px-4 py-3 text-sm text-text-secondary dark:text-text-dark-secondary">
+    <div className="animate-in fade-in-0 space-y-5 duration-200">
+      <div className="rounded-xl border border-border/60 bg-surface-secondary/70 px-4 py-3 text-sm text-text-secondary dark:bg-surface-dark-secondary/70 dark:text-text-dark-secondary">
         正在准备完整内容…
       </div>
-      <div className="space-y-3 animate-pulse">
+      <div className="animate-pulse space-y-3">
         <div className="h-4 w-40 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
         <div className="h-3.5 w-full rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
         <div className="h-3.5 w-[92%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
@@ -1196,7 +1330,9 @@ function EntryDetailFallback({ title }: { title: string }) {
         <div className="h-3.5 w-full rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
         <div className="h-3.5 w-[88%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
       </div>
-      <p className="text-xs text-text-tertiary dark:text-text-dark-tertiary">{title}</p>
+      <p className="dark:text-text-dark-tertiary text-xs text-text-tertiary">
+        {title}
+      </p>
     </div>
   )
 }
@@ -1219,17 +1355,20 @@ function BilingualContent({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="space-y-0" style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily }}>
+    <div
+      className="space-y-0"
+      style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily }}
+    >
       {paragraphs.map((para, i) => {
         const translated = translations[i]
         const isLoading = isTranslating && i === translations.length
-        const plainText = para.replace(/<[^>]*>/g, "").trim()
+        const plainText = para.replace(/<[^>]*>/g, '').trim()
         if (!plainText) return null
 
         return (
           <div
             key={i}
-            className="group border-l-2 border-transparent hover:border-accent/30 transition-colors pl-0 hover:pl-3"
+            className="group border-l-2 border-transparent pl-0 transition-colors hover:border-accent/30 hover:pl-3"
           >
             {/* Original */}
             <div
@@ -1239,9 +1378,12 @@ function BilingualContent({
 
             {/* Translation */}
             {translated ? (
-              <div className="relative mt-1 mb-4">
+              <div className="relative mb-4 mt-1">
                 <div className="flex items-start gap-2">
-                  <Languages size={12} className="text-accent/50 mt-1 flex-shrink-0" />
+                  <Languages
+                    size={12}
+                    className="mt-1 flex-shrink-0 text-accent/50"
+                  />
                   <div
                     className="entry-content !mb-0 text-accent/80 dark:text-orange-300/80"
                     style={{ fontSize: `${fontSize - 1}px` }}
@@ -1250,9 +1392,9 @@ function BilingualContent({
                 </div>
               </div>
             ) : isLoading ? (
-              <div className="flex items-center gap-2 mt-1 mb-4 text-xs text-text-tertiary">
+              <div className="mb-4 mt-1 flex items-center gap-2 text-xs text-text-tertiary">
                 <Loader2 size={12} className="animate-spin" />
-                {t("entry.translating")}
+                {t('entry.translating')}
               </div>
             ) : (
               <div className="mb-4" />
@@ -1282,11 +1424,7 @@ function ToolbarButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`p-1.5 rounded-lg transition-all duration-150 text-text-secondary dark:text-text-dark-secondary
-        hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary hover:text-text dark:hover:text-text-dark-primary
-        disabled:opacity-30 disabled:cursor-default
-        ${active ? "bg-accent/10 !text-accent" : ""}
-      `}
+      className={`rounded-lg p-1.5 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text disabled:cursor-default disabled:opacity-30 dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary ${active ? 'bg-accent/10 !text-accent' : ''} `}
       title={title}
     >
       {children}
@@ -1302,7 +1440,15 @@ function ReadProgressCircle({ percent }: { percent: number }) {
 
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" className="rotate-[-90deg]">
-      <circle cx="7" cy="7" r={r} fill="none" stroke="currentColor" strokeWidth="1.5" opacity={0.15} />
+      <circle
+        cx="7"
+        cy="7"
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        opacity={0.15}
+      />
       <circle
         cx="7"
         cy="7"

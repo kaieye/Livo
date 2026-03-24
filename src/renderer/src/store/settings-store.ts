@@ -1,18 +1,25 @@
-import { createAppStore, useStoreShallow } from "./helpers"
-import type { AppSettings } from "../../../shared/types"
-import { cloneDefaultSettings, mergeSettings, normalizeSettings } from "../../../shared/settings"
+import { createAppStore, useStoreShallow } from './helpers'
+import type { AppSettings, SettingsTabId } from '../../../shared/types'
+import {
+  cloneDefaultSettings,
+  mergeSettings,
+  normalizeSettings,
+} from '../../../shared/settings'
 
 interface SettingsState {
   settings: AppSettings
   isLoaded: boolean
   isOpen: boolean
-  activeTab: "general" | "reading" | "subscriptions" | "ai" | "translation" | "actions" | "accounts" | "data" | "about"
+  activeTab: SettingsTabId
 
   loadSettings: () => Promise<void>
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>
-  updateSettingsSection: <K extends keyof AppSettings>(section: K, updates: Partial<AppSettings[K]>) => Promise<void>
+  updateSettingsSection: <K extends keyof AppSettings>(
+    section: K,
+    updates: Partial<AppSettings[K]>,
+  ) => Promise<void>
   setOpen: (open: boolean) => void
-  setActiveTab: (tab: SettingsState["activeTab"]) => void
+  setActiveTab: (tab: SettingsTabId) => void
 }
 
 type SettingsSelector<T> = (settings: AppSettings) => T
@@ -21,7 +28,7 @@ export const useSettingsStore = createAppStore<SettingsState>((set, get) => ({
   settings: cloneDefaultSettings(),
   isLoaded: false,
   isOpen: false,
-  activeTab: "general",
+  activeTab: 'general',
 
   loadSettings: async () => {
     try {
@@ -58,54 +65,60 @@ export function useSettingsSelector<T>(selector: SettingsSelector<T>): T {
   return useSettingsStore((state) => selector(state.settings))
 }
 
-export function useSettingsShallowSelector<T>(selector: SettingsSelector<T>): T {
+export function useSettingsShallowSelector<T>(
+  selector: SettingsSelector<T>,
+): T {
   return useStoreShallow(useSettingsStore, (state) => selector(state.settings))
 }
 
-export function useSettingSection<K extends keyof AppSettings>(section: K): AppSettings[K] {
+export function useSettingSection<K extends keyof AppSettings>(
+  section: K,
+): AppSettings[K] {
   return useSettingsSelector((settings) => settings[section])
 }
 
-export function useGeneralSettingKey<K extends keyof AppSettings["general"]>(
+export function useGeneralSettingKey<K extends keyof AppSettings['general']>(
   key: K,
-): AppSettings["general"][K] {
+): AppSettings['general'][K] {
   return useSettingsSelector((settings) => settings.general[key])
 }
 
 export function useGeneralSettingsSelector<T>(
-  selector: (general: AppSettings["general"]) => T,
+  selector: (general: AppSettings['general']) => T,
 ): T {
   return useSettingsSelector((settings) => selector(settings.general))
 }
 
 export function useGeneralSettingsShallowSelector<T>(
-  selector: (general: AppSettings["general"]) => T,
+  selector: (general: AppSettings['general']) => T,
 ): T {
   return useSettingsShallowSelector((settings) => selector(settings.general))
 }
 
-export function useAISettingKey<K extends keyof AppSettings["ai"]>(
+export function useAISettingKey<K extends keyof AppSettings['ai']>(
   key: K,
-): AppSettings["ai"][K] {
+): AppSettings['ai'][K] {
   return useSettingsSelector((settings) => settings.ai[key])
 }
 
 export function useAISettingsShallowSelector<T>(
-  selector: (ai: AppSettings["ai"]) => T,
+  selector: (ai: AppSettings['ai']) => T,
 ): T {
   return useSettingsShallowSelector((settings) => selector(settings.ai))
 }
 
-export function useTranslationSettingKey<K extends keyof AppSettings["translation"]>(
-  key: K,
-): AppSettings["translation"][K] {
+export function useTranslationSettingKey<
+  K extends keyof AppSettings['translation'],
+>(key: K): AppSettings['translation'][K] {
   return useSettingsSelector((settings) => settings.translation[key])
 }
 
 export function useTranslationSettingsShallowSelector<T>(
-  selector: (translation: AppSettings["translation"]) => T,
+  selector: (translation: AppSettings['translation']) => T,
 ): T {
-  return useSettingsShallowSelector((settings) => selector(settings.translation))
+  return useSettingsShallowSelector((settings) =>
+    selector(settings.translation),
+  )
 }
 
 export function useSettingsActions() {

@@ -1,14 +1,14 @@
-import { useCallback, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
-import { useTranslation } from "react-i18next"
-import { AlertCircle, Check, Loader2 } from "lucide-react"
-import { FeedViewType, type AccountProvider } from "../../../../shared/types"
-import { DEFAULT_RSSHUB_INSTANCE } from "../../../../shared/discover-data"
-import { useAccountStatusQuery } from "../../hooks/useAccountStatusQuery"
-import { RECOMMENDED_CATEGORY } from "../../hooks/useInitRecommendedFeeds"
-import { fetchAccountStatus } from "../../lib/account-status"
-import { queryKeys } from "../../lib/query-keys"
-import { useFeedStore } from "../../store/feed-store"
+import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { FeedViewType, type AccountProvider } from '../../../../shared/types'
+import { DEFAULT_RSSHUB_INSTANCE } from '../../../../shared/discover-data'
+import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
+import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
+import { accountStatusQueryOptions } from '../../lib/query-definitions'
+import type { AccountStatusResult } from '../../lib/account-status'
+import { useFeedStore } from '../../store/feed-store'
 
 interface AccountCardConfig {
   provider: AccountProvider
@@ -31,20 +31,23 @@ interface BilibiliImportProgress {
   failed: number
 }
 
-type BilibiliRouteType = "video" | "dynamic"
+type BilibiliRouteType = 'video' | 'dynamic'
 
-const BILIBILI_IMPORT_VIEW_OPTIONS: Array<{ view: FeedViewType; label: string }> = [
-  { view: FeedViewType.Videos, label: "视频" },
-  { view: FeedViewType.SocialMedia, label: "社交媒体" },
+const BILIBILI_IMPORT_VIEW_OPTIONS: Array<{
+  view: FeedViewType
+  label: string
+}> = [
+  { view: FeedViewType.Videos, label: '视频' },
+  { view: FeedViewType.SocialMedia, label: '社交媒体' },
 ]
 
 const BILIBILI_RSSHUB_FALLBACK_INSTANCES = [
-  "https://rsshub.pseudoyu.com",
-  "https://rsshub.app",
-  "https://rsshub.rssforever.com",
-  "https://rsshub-instance.zeabur.app",
+  'https://rsshub.pseudoyu.com',
+  'https://rsshub.app',
+  'https://rsshub.rssforever.com',
+  'https://rsshub-instance.zeabur.app',
 ]
-const BILIBILI_FOLLOWINGS_CACHE_KEY = "livo.bilibili.followings.cache.v1"
+const BILIBILI_FOLLOWINGS_CACHE_KEY = 'livo.bilibili.followings.cache.v1'
 
 interface BilibiliFollowingsCache {
   creators: Array<{ mid: number; uname: string }>
@@ -58,13 +61,24 @@ function loadBilibiliFollowingsCache(): BilibiliFollowingsCache | null {
     const raw = localStorage.getItem(BILIBILI_FOLLOWINGS_CACHE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<BilibiliFollowingsCache>
-    if (!Array.isArray(parsed.creators) || !parsed.rsshubBase || !parsed.routeType || !parsed.updatedAt) return null
+    if (
+      !Array.isArray(parsed.creators) ||
+      !parsed.rsshubBase ||
+      !parsed.routeType ||
+      !parsed.updatedAt
+    )
+      return null
     return {
       creators: parsed.creators
-        .map((x) => ({ mid: Number(x.mid), uname: String(x.uname || "").trim() }))
-        .filter((x) => Number.isFinite(x.mid) && x.mid > 0 && x.uname.length > 0),
-      rsshubBase: String(parsed.rsshubBase).replace(/\/+$/, ""),
-      routeType: parsed.routeType === "dynamic" ? "dynamic" : "video",
+        .map((x) => ({
+          mid: Number(x.mid),
+          uname: String(x.uname || '').trim(),
+        }))
+        .filter(
+          (x) => Number.isFinite(x.mid) && x.mid > 0 && x.uname.length > 0,
+        ),
+      rsshubBase: String(parsed.rsshubBase).replace(/\/+$/, ''),
+      routeType: parsed.routeType === 'dynamic' ? 'dynamic' : 'video',
       updatedAt: Number(parsed.updatedAt),
     }
   } catch {
@@ -83,50 +97,61 @@ function saveBilibiliFollowingsCache(cache: BilibiliFollowingsCache): void {
 function extractBilibiliUidFromFeedUrl(rawUrl: string): number | null {
   try {
     const parsed = new URL(rawUrl)
-    const m = parsed.pathname.match(/\/bilibili\/user\/(?:video|dynamic|article)\/(\d+)/i)
+    const m = parsed.pathname.match(
+      /\/bilibili\/user\/(?:video|dynamic|article)\/(\d+)/i,
+    )
     if (!m?.[1]) return null
     const uid = Number(m[1])
     return Number.isFinite(uid) && uid > 0 ? uid : null
   } catch {
-    const m = rawUrl.match(/\/bilibili\/user\/(?:video|dynamic|article)\/(\d+)/i)
+    const m = rawUrl.match(
+      /\/bilibili\/user\/(?:video|dynamic|article)\/(\d+)/i,
+    )
     if (!m?.[1]) return null
     const uid = Number(m[1])
     return Number.isFinite(uid) && uid > 0 ? uid : null
   }
 }
 
-function buildBilibiliImportUrl(base: string, uid: number, view: FeedViewType): string {
-  const normalizedBase = base.replace(/\/+$/, "")
-  if (view === FeedViewType.Articles) return `${normalizedBase}/bilibili/user/article/${uid}`
-  if (view === FeedViewType.Videos) return `${normalizedBase}/bilibili/user/video/${uid}`
-  if (view === FeedViewType.SocialMedia) return `${normalizedBase}/bilibili/user/dynamic/${uid}`
+function buildBilibiliImportUrl(
+  base: string,
+  uid: number,
+  view: FeedViewType,
+): string {
+  const normalizedBase = base.replace(/\/+$/, '')
+  if (view === FeedViewType.Articles)
+    return `${normalizedBase}/bilibili/user/article/${uid}`
+  if (view === FeedViewType.Videos)
+    return `${normalizedBase}/bilibili/user/video/${uid}`
+  if (view === FeedViewType.SocialMedia)
+    return `${normalizedBase}/bilibili/user/dynamic/${uid}`
   return `${normalizedBase}/bilibili/user/video/${uid}`
 }
 
 const ACCOUNT_CARDS: AccountCardConfig[] = [
   {
-    provider: "youtube",
-    name: "YouTube",
-    colorClass: "text-red-500",
-    description: "用于关联 YouTube 会话并获取账号名称。",
+    provider: 'youtube',
+    name: 'YouTube',
+    colorClass: 'text-red-500',
+    description: '用于关联 YouTube 会话并获取账号名称。',
   },
   {
-    provider: "x",
-    name: "X / Twitter",
-    colorClass: "text-slate-700 dark:text-slate-200",
-    description: "用于关联 X 会话并获取账号名称。",
+    provider: 'x',
+    name: 'X / Twitter',
+    colorClass: 'text-slate-700 dark:text-slate-200',
+    description: '用于关联 X 会话并获取账号名称。',
   },
   {
-    provider: "instagram",
-    name: "Instagram",
-    colorClass: "text-pink-500",
-    description: "用于关联 Instagram 会话并获取账号名称。",
+    provider: 'instagram',
+    name: 'Instagram',
+    colorClass: 'text-pink-500',
+    description: '用于关联 Instagram 会话并获取账号名称。',
   },
   {
-    provider: "bilibili",
-    name: "Bilibili",
-    colorClass: "text-sky-500",
-    description: "用于关联 Bilibili 会话，可一键导入关注列表。",
+    provider: 'bilibili',
+    name: 'Bilibili',
+    colorClass: 'text-sky-500',
+    description: '用于关联 Bilibili 会话，可一键导入关注列表。',
   },
 ]
 
@@ -135,7 +160,9 @@ export function AccountsSettings() {
   const queryClient = useQueryClient()
   const [selfChecking, setSelfChecking] = useState(false)
   const [selfCheckSummary, setSelfCheckSummary] = useState<string | null>(null)
-  const [selfCheckRows, setSelfCheckRows] = useState<Array<{ name: string; pass: boolean; detail: string }>>([])
+  const [selfCheckRows, setSelfCheckRows] = useState<
+    Array<{ name: string; pass: boolean; detail: string }>
+  >([])
 
   const handleSelfCheck = useCallback(async () => {
     setSelfChecking(true)
@@ -146,14 +173,14 @@ export function AccountsSettings() {
       const results = await Promise.all(
         ACCOUNT_CARDS.map(async (card) => {
           try {
-            const status = await queryClient.fetchQuery({
-              queryKey: queryKeys.accounts.status(card.provider),
-              queryFn: () => fetchAccountStatus(card.provider),
-            })
+            const status = await queryClient.fetchQuery(
+              accountStatusQueryOptions(card.provider),
+            )
             const pass = status.linked && !!status.displayName
             const detail = pass
               ? `通过: ${status.displayName}`
-              : status.error ?? (status.linked ? "已登录但未获取到账号名" : "未关联")
+              : (status.error ??
+                (status.linked ? '已登录但未获取到账号名' : '未关联'))
             return { name: card.name, pass, detail }
           } catch (err) {
             return {
@@ -179,20 +206,24 @@ export function AccountsSettings() {
 
   return (
     <div className="space-y-8">
-      <p className="text-sm text-text-secondary dark:text-text-dark-secondary">{t("settings.accountsDesc")}</p>
+      <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+        {t('settings.accountsDesc')}
+      </p>
 
-      <div className="rounded-xl border bg-white dark:bg-surface-dark-secondary p-4 space-y-3">
+      <div className="space-y-3 rounded-xl border bg-white p-4 dark:bg-surface-dark-secondary">
         <div className="flex items-center gap-2">
           <button
             onClick={handleSelfCheck}
             disabled={selfChecking}
-            className="px-3 py-2 text-xs rounded-lg bg-accent text-white disabled:opacity-60 flex items-center gap-1.5"
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs text-white disabled:opacity-60"
           >
             {selfChecking && <Loader2 size={14} className="animate-spin" />}
             一键自检
           </button>
           {selfCheckSummary && (
-            <span className={`text-xs ${selfCheckSummary.includes("通过") ? "text-green-600" : "text-red-500"}`}>
+            <span
+              className={`text-xs ${selfCheckSummary.includes('通过') ? 'text-green-600' : 'text-red-500'}`}
+            >
               {selfCheckSummary}
             </span>
           )}
@@ -200,10 +231,14 @@ export function AccountsSettings() {
         {selfCheckRows.length > 0 && (
           <div className="space-y-1">
             {selfCheckRows.map((row) => (
-              <div key={row.name} className="text-xs flex items-start gap-2">
-                <span className={row.pass ? "text-green-600" : "text-red-500"}>{row.pass ? "✓" : "✕"}</span>
-                <span className="font-medium min-w-24">{row.name}</span>
-                <span className="text-text-secondary dark:text-text-dark-secondary">{row.detail}</span>
+              <div key={row.name} className="flex items-start gap-2 text-xs">
+                <span className={row.pass ? 'text-green-600' : 'text-red-500'}>
+                  {row.pass ? '✓' : '✕'}
+                </span>
+                <span className="min-w-24 font-medium">{row.name}</span>
+                <span className="text-text-secondary dark:text-text-dark-secondary">
+                  {row.detail}
+                </span>
               </div>
             ))}
           </div>
@@ -230,27 +265,44 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
   const [previewing, setPreviewing] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
-  const [manualName, setManualName] = useState("")
-  const [pendingCreators, setPendingCreators] = useState<PendingBilibiliCreator[] | null>(null)
-  const [pendingRsshubBase, setPendingRsshubBase] = useState<string | null>(null)
-  const [, setPendingRouteType] = useState<BilibiliRouteType>("video")
-  const [previewStats, setPreviewStats] = useState<{ total: number; canImport: number; exists: number } | null>(null)
-  const [selectedCreatorMids, setSelectedCreatorMids] = useState<number[]>([])
-  const [selectedImportViews, setSelectedImportViews] = useState<FeedViewType[]>([FeedViewType.Videos])
-  const [followingsCacheUpdatedAt, setFollowingsCacheUpdatedAt] = useState<number | null>(
-    () => loadBilibiliFollowingsCache()?.updatedAt ?? null,
+  const [manualName, setManualName] = useState('')
+  const [pendingCreators, setPendingCreators] = useState<
+    PendingBilibiliCreator[] | null
+  >(null)
+  const [pendingRsshubBase, setPendingRsshubBase] = useState<string | null>(
+    null,
   )
-  const [importProgress, setImportProgress] = useState<BilibiliImportProgress | null>(null)
+  const [, setPendingRouteType] = useState<BilibiliRouteType>('video')
+  const [previewStats, setPreviewStats] = useState<{
+    total: number
+    canImport: number
+    exists: number
+  } | null>(null)
+  const [selectedCreatorMids, setSelectedCreatorMids] = useState<number[]>([])
+  const [selectedImportViews, setSelectedImportViews] = useState<
+    FeedViewType[]
+  >([FeedViewType.Videos])
+  const [followingsCacheUpdatedAt, setFollowingsCacheUpdatedAt] = useState<
+    number | null
+  >(() => loadBilibiliFollowingsCache()?.updatedAt ?? null)
+  const [importProgress, setImportProgress] =
+    useState<BilibiliImportProgress | null>(null)
   const status = statusQuery.data ?? { linked: false, displayName: null }
   const isStatusLoading = statusQuery.isLoading && !statusQuery.data
   const refreshStatus = useCallback(async () => {
+    const queryOptions = accountStatusQueryOptions(config.provider)
     try {
-      const next = await fetchAccountStatus(config.provider)
-      queryClient.setQueryData(queryKeys.accounts.status(config.provider), next)
+      const next = await queryClient.fetchQuery(queryOptions)
+      queryClient.setQueryData(queryOptions.queryKey, next)
       return next
     } catch {
-      const fallback = { provider: config.provider, linked: false, displayName: null, error: undefined }
-      queryClient.setQueryData(queryKeys.accounts.status(config.provider), fallback)
+      const fallback: AccountStatusResult = {
+        provider: config.provider,
+        linked: false,
+        displayName: null,
+        error: undefined,
+      }
+      queryClient.setQueryData(queryOptions.queryKey, fallback)
       return fallback
     }
   }, [config.provider, queryClient])
@@ -262,18 +314,21 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     try {
       const result = window.api.accounts
         ? await window.api.accounts.link(config.provider)
-        : config.provider === "youtube"
+        : config.provider === 'youtube'
           ? await window.api.video.ytLogin()
-          : { success: false, error: "当前版本未注入 accounts API，请重启应用后重试" }
+          : {
+              success: false,
+              error: '当前版本未注入 accounts API，请重启应用后重试',
+            }
       if (result.success) {
-        setFeedback("关联成功")
+        setFeedback('关联成功')
         await refreshStatus()
       } else {
-        setFeedback("关联失败，请重试")
+        setFeedback('关联失败，请重试')
         setErrorDetail(result.error ?? null)
       }
     } catch (err) {
-      setFeedback("关联失败，请重试")
+      setFeedback('关联失败，请重试')
       setErrorDetail(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
@@ -288,18 +343,21 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     try {
       const result = window.api.accounts
         ? await window.api.accounts.unlink(config.provider)
-        : config.provider === "youtube"
+        : config.provider === 'youtube'
           ? await window.api.video.ytLogout()
-          : { success: false, error: "当前版本未注入 accounts API，请重启应用后重试" }
+          : {
+              success: false,
+              error: '当前版本未注入 accounts API，请重启应用后重试',
+            }
       if (result.success) {
-        setFeedback("已取消关联")
+        setFeedback('已取消关联')
         await refreshStatus()
       } else {
-        setFeedback("取消关联失败")
+        setFeedback('取消关联失败')
         setErrorDetail(result.error ?? null)
       }
     } catch (err) {
-      setFeedback("取消关联失败")
+      setFeedback('取消关联失败')
       setErrorDetail(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
@@ -314,13 +372,15 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     try {
       const next = await refreshStatus()
       if (next.linked && next.displayName) {
-        setFeedback("检查结果：已关联成功")
+        setFeedback('检查结果：已关联成功')
       } else {
-        setFeedback("检查结果：未关联成功")
-        setErrorDetail(next.error ?? (next.linked ? "已登录但未获取到账号名" : "未关联"))
+        setFeedback('检查结果：未关联成功')
+        setErrorDetail(
+          next.error ?? (next.linked ? '已登录但未获取到账号名' : '未关联'),
+        )
       }
     } catch (err) {
-      setFeedback("检查关联失败")
+      setFeedback('检查关联失败')
       setErrorDetail(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
@@ -331,7 +391,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
   const handleSaveName = useCallback(async () => {
     const name = manualName.trim()
     if (!name) {
-      setFeedback("请先输入账号名")
+      setFeedback('请先输入账号名')
       return
     }
     setLoading(true)
@@ -339,20 +399,23 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     setErrorDetail(null)
     try {
       if (!window.api.accounts) {
-        setFeedback("当前版本不支持手动保存账号名")
+        setFeedback('当前版本不支持手动保存账号名')
         return
       }
-      const result = await window.api.accounts.setDisplayName(config.provider, name)
+      const result = await window.api.accounts.setDisplayName(
+        config.provider,
+        name,
+      )
       if (!result.success) {
-        setFeedback("保存账号名失败")
+        setFeedback('保存账号名失败')
         setErrorDetail(result.error ?? null)
         return
       }
-      setFeedback("账号名已保存，正在重新检查...")
+      setFeedback('账号名已保存，正在重新检查...')
       await refreshStatus()
-      setManualName("")
+      setManualName('')
     } catch (err) {
-      setFeedback("保存账号名失败")
+      setFeedback('保存账号名失败')
       setErrorDetail(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
@@ -379,7 +442,11 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       const nextSelected: number[] = []
       for (const creator of creators) {
         const isExisting = existingUids.has(creator.mid)
-        nextPending.push({ mid: creator.mid, uname: creator.uname, exists: isExisting })
+        nextPending.push({
+          mid: creator.mid,
+          uname: creator.uname,
+          exists: isExisting,
+        })
         if (isExisting) {
           exists += 1
         } else {
@@ -401,97 +468,125 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       } catch {
         // Keep raw base string when URL parsing fails.
       }
-      const cacheHint = fromCache ? "（缓存）" : ""
-      setFeedback(`预览完成${cacheHint}：共 ${creators.length} 个关注，可新增 ${canImport}，已存在 ${exists}，导入模板 ${routeType}@${templateHost}`)
+      const cacheHint = fromCache ? '（缓存）' : ''
+      setFeedback(
+        `预览完成${cacheHint}：共 ${creators.length} 个关注，可新增 ${canImport}，已存在 ${exists}，导入模板 ${routeType}@${templateHost}`,
+      )
     },
     [feeds],
   )
 
-  const handlePreviewBilibiliFollowings = useCallback(async (forceRefresh = false) => {
-    if (config.provider !== "bilibili") return
+  const handlePreviewBilibiliFollowings = useCallback(
+    async (forceRefresh = false) => {
+      if (config.provider !== 'bilibili') return
 
-    setPreviewing(true)
-    setFeedback(null)
-    setErrorDetail(null)
-    setPendingCreators(null)
-    setPendingRsshubBase(null)
-    setPendingRouteType("video")
-    setPreviewStats(null)
-    setSelectedCreatorMids([])
+      setPreviewing(true)
+      setFeedback(null)
+      setErrorDetail(null)
+      setPendingCreators(null)
+      setPendingRsshubBase(null)
+      setPendingRouteType('video')
+      setPreviewStats(null)
+      setSelectedCreatorMids([])
 
-    try {
-      if (!forceRefresh) {
-        const cache = loadBilibiliFollowingsCache()
-        if (cache && cache.creators.length > 0) {
-          applyPreviewCreators(cache.creators, cache.rsshubBase, cache.routeType, true, cache.updatedAt)
+      try {
+        if (!forceRefresh) {
+          const cache = loadBilibiliFollowingsCache()
+          if (cache && cache.creators.length > 0) {
+            applyPreviewCreators(
+              cache.creators,
+              cache.rsshubBase,
+              cache.routeType,
+              true,
+              cache.updatedAt,
+            )
+            return
+          }
+        }
+
+        const accountsApi = (
+          window.api as unknown as { accounts?: Record<string, unknown> }
+        ).accounts
+        const followingsFn =
+          accountsApi && typeof accountsApi['bilibiliFollowings'] === 'function'
+            ? (accountsApi['bilibiliFollowings'] as () => Promise<{
+                success: boolean
+                creators?: Array<{ mid: number; uname: string }>
+                error?: string
+              }>)
+            : null
+
+        if (!followingsFn) {
+          const available = accountsApi
+            ? Object.keys(accountsApi).join(', ')
+            : 'none'
+          setFeedback('当前运行进程未注入 B站关注列表接口')
+          setErrorDetail(
+            `请完全重启应用主进程后重试。accounts methods: ${available || 'none'}`,
+          )
           return
         }
+
+        const followingsResult = await followingsFn()
+        if (!followingsResult.success) {
+          setFeedback('预览失败')
+          setErrorDetail(followingsResult.error ?? '读取关注列表失败')
+          return
+        }
+
+        const creators = followingsResult.creators ?? []
+        if (creators.length === 0) {
+          setFeedback('未读取到关注列表')
+          return
+        }
+
+        const settings = await window.api.settings.get().catch(() => null)
+        const configuredBase = (
+          settings?.general?.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
+        ).replace(/\/+$/, '')
+        const allBases = [
+          configuredBase,
+          ...BILIBILI_RSSHUB_FALLBACK_INSTANCES.filter(
+            (x) => x !== configuredBase,
+          ),
+        ]
+
+        // Use configured instance + video route directly for preview/import template.
+        // This avoids slow per-UID probing during preview.
+        const routeType: BilibiliRouteType = 'video'
+        const rsshubBase = allBases[0] || configuredBase
+
+        const now = Date.now()
+        saveBilibiliFollowingsCache({
+          creators,
+          rsshubBase,
+          routeType,
+          updatedAt: now,
+        })
+        applyPreviewCreators(creators, rsshubBase, routeType, false, now)
+      } catch (err) {
+        setFeedback('预览失败')
+        setErrorDetail(err instanceof Error ? err.message : String(err))
+      } finally {
+        setPreviewing(false)
+        setTimeout(() => setFeedback(null), 5000)
       }
-
-      const accountsApi = (window.api as unknown as { accounts?: Record<string, unknown> }).accounts
-      const followingsFn =
-        accountsApi && typeof accountsApi["bilibiliFollowings"] === "function"
-          ? (accountsApi["bilibiliFollowings"] as () => Promise<{ success: boolean; creators?: Array<{ mid: number; uname: string }>; error?: string }>)
-          : null
-
-      if (!followingsFn) {
-        const available = accountsApi ? Object.keys(accountsApi).join(", ") : "none"
-        setFeedback("当前运行进程未注入 B站关注列表接口")
-        setErrorDetail(`请完全重启应用主进程后重试。accounts methods: ${available || "none"}`)
-        return
-      }
-
-      const followingsResult = await followingsFn()
-      if (!followingsResult.success) {
-        setFeedback("预览失败")
-        setErrorDetail(followingsResult.error ?? "读取关注列表失败")
-        return
-      }
-
-      const creators = followingsResult.creators ?? []
-      if (creators.length === 0) {
-        setFeedback("未读取到关注列表")
-        return
-      }
-
-      const settings = await window.api.settings.get().catch(() => null)
-      const configuredBase = (settings?.general?.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
-      const allBases = [configuredBase, ...BILIBILI_RSSHUB_FALLBACK_INSTANCES.filter((x) => x !== configuredBase)]
-
-      // Use configured instance + video route directly for preview/import template.
-      // This avoids slow per-UID probing during preview.
-      const routeType: BilibiliRouteType = "video"
-      const rsshubBase = allBases[0] || configuredBase
-
-      const now = Date.now()
-      saveBilibiliFollowingsCache({
-        creators,
-        rsshubBase,
-        routeType,
-        updatedAt: now,
-      })
-      applyPreviewCreators(creators, rsshubBase, routeType, false, now)
-    } catch (err) {
-      setFeedback("预览失败")
-      setErrorDetail(err instanceof Error ? err.message : String(err))
-    } finally {
-      setPreviewing(false)
-      setTimeout(() => setFeedback(null), 5000)
-    }
-  }, [applyPreviewCreators, config.provider])
+    },
+    [applyPreviewCreators, config.provider],
+  )
 
   const handleImportBilibiliFollowings = useCallback(async () => {
-    if (config.provider !== "bilibili") return
+    if (config.provider !== 'bilibili') return
     if (!pendingCreators || !pendingRsshubBase) {
-      setFeedback("请先预览后再导入")
+      setFeedback('请先预览后再导入')
       return
     }
     if (selectedCreatorMids.length === 0) {
-      setFeedback("请至少勾选一个要导入的关注")
+      setFeedback('请至少勾选一个要导入的关注')
       return
     }
     if (selectedImportViews.length === 0) {
-      setFeedback("请至少选择一个导入栏目")
+      setFeedback('请至少选择一个导入栏目')
       return
     }
 
@@ -500,8 +595,15 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     setErrorDetail(null)
 
     try {
-      const allBases = [pendingRsshubBase, ...BILIBILI_RSSHUB_FALLBACK_INSTANCES.filter((x) => x !== pendingRsshubBase)]
-      const selectedCreators = pendingCreators.filter((creator) => selectedCreatorMids.includes(creator.mid))
+      const allBases = [
+        pendingRsshubBase,
+        ...BILIBILI_RSSHUB_FALLBACK_INSTANCES.filter(
+          (x) => x !== pendingRsshubBase,
+        ),
+      ]
+      const selectedCreators = pendingCreators.filter((creator) =>
+        selectedCreatorMids.includes(creator.mid),
+      )
       const CONCURRENCY = 10
       let imported = 0
       let skipped = 0
@@ -523,15 +625,15 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       }
 
       const queue = [...selectedCreators]
-      const markProgress = (result: "imported" | "skipped" | "failed") => {
+      const markProgress = (result: 'imported' | 'skipped' | 'failed') => {
         setImportProgress((prev) => {
           if (!prev) return prev
           return {
             ...prev,
             completed: Math.min(prev.total, prev.completed + 1),
-            imported: prev.imported + (result === "imported" ? 1 : 0),
-            skipped: prev.skipped + (result === "skipped" ? 1 : 0),
-            failed: prev.failed + (result === "failed" ? 1 : 0),
+            imported: prev.imported + (result === 'imported' ? 1 : 0),
+            skipped: prev.skipped + (result === 'skipped' ? 1 : 0),
+            failed: prev.failed + (result === 'failed' ? 1 : 0),
           }
         })
       }
@@ -541,17 +643,30 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           if (!creator) continue
 
           for (const targetView of selectedImportViews) {
-            const canonicalUrl = buildBilibiliImportUrl(pendingRsshubBase, creator.mid, targetView)
+            const canonicalUrl = buildBilibiliImportUrl(
+              pendingRsshubBase,
+              creator.mid,
+              targetView,
+            )
             const fallbackUrls = allBases
-              .flatMap((base) => [buildBilibiliImportUrl(base, creator.mid, targetView)])
+              .flatMap((base) => [
+                buildBilibiliImportUrl(base, creator.mid, targetView),
+              ])
               .filter((url, idx, arr) => arr.indexOf(url) === idx)
-            const existing = existingByUidAndView.get(`${creator.mid}:${targetView}`)
+            const existing = existingByUidAndView.get(
+              `${creator.mid}:${targetView}`,
+            )
 
             if (existing) {
               skipped += 1
-              const updates: { category?: string; view?: FeedViewType; url?: string; title?: string } = {}
+              const updates: {
+                category?: string
+                view?: FeedViewType
+                url?: string
+                title?: string
+              } = {}
               if (existing.category === RECOMMENDED_CATEGORY) {
-                updates.category = ""
+                updates.category = ''
                 movedOutOfRecommended += 1
               }
               if (existing.view !== targetView) {
@@ -567,14 +682,22 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               if (Object.keys(updates).length > 0) {
                 await window.api.feeds.update(existing.id, updates)
               }
-              markProgress("skipped")
+              markProgress('skipped')
               continue
             }
 
             const preferredTitle = `${creator.uname} - Bilibili`
             let added = false
-            for (const targetUrl of [canonicalUrl, ...fallbackUrls.filter((x) => x !== canonicalUrl)]) {
-              const result = await window.api.feeds.add(targetUrl, undefined, targetView, preferredTitle) as {
+            for (const targetUrl of [
+              canonicalUrl,
+              ...fallbackUrls.filter((x) => x !== canonicalUrl),
+            ]) {
+              const result = (await window.api.feeds.add(
+                targetUrl,
+                undefined,
+                targetView,
+                preferredTitle,
+              )) as {
                 success: boolean
                 error?: string
                 feed?: { id: string }
@@ -582,59 +705,80 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               if (!result.success) continue
               imported += 1
               added = true
-              markProgress("imported")
+              markProgress('imported')
               break
             }
             if (!added) {
               failed += 1
-              markProgress("failed")
+              markProgress('failed')
             }
           }
         }
       }
 
-      const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length || 1) }, () => runWorker())
+      const workers = Array.from(
+        { length: Math.min(CONCURRENCY, queue.length || 1) },
+        () => runWorker(),
+      )
       await Promise.all(workers)
 
       await loadFeeds()
       setPendingCreators(null)
       setPendingRsshubBase(null)
-      setPendingRouteType("video")
+      setPendingRouteType('video')
       setPreviewStats(null)
       setSelectedCreatorMids([])
-      setFeedback(`导入完成：新增 ${imported}，已存在 ${skipped}，转正式订阅 ${movedOutOfRecommended}，失败 ${failed}`)
+      setFeedback(
+        `导入完成：新增 ${imported}，已存在 ${skipped}，转正式订阅 ${movedOutOfRecommended}，失败 ${failed}`,
+      )
     } catch (err) {
-      setFeedback("导入失败")
+      setFeedback('导入失败')
       setErrorDetail(err instanceof Error ? err.message : String(err))
     } finally {
       setImporting(false)
-      setImportProgress((prev) => prev ? { ...prev, completed: prev.total } : prev)
+      setImportProgress((prev) =>
+        prev ? { ...prev, completed: prev.total } : prev,
+      )
       setTimeout(() => setFeedback(null), 5000)
     }
-  }, [config.provider, feeds, loadFeeds, pendingCreators, pendingRsshubBase, selectedCreatorMids, selectedImportViews])
+  }, [
+    config.provider,
+    feeds,
+    loadFeeds,
+    pendingCreators,
+    pendingRsshubBase,
+    selectedCreatorMids,
+    selectedImportViews,
+  ])
 
   return (
-    <div className="rounded-xl border bg-white dark:bg-surface-dark-secondary overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50">
-        <span className={`text-sm font-semibold ${config.colorClass}`}>{config.name}</span>
+    <div className="overflow-hidden rounded-xl border bg-white dark:bg-surface-dark-secondary">
+      <div className="flex items-center gap-3 border-b bg-surface-secondary/50 px-4 py-3 dark:bg-surface-dark-tertiary/50">
+        <span className={`text-sm font-semibold ${config.colorClass}`}>
+          {config.name}
+        </span>
         <span
-          className={`text-xs px-2 py-0.5 rounded-full ${
+          className={`rounded-full px-2 py-0.5 text-xs ${
             status.linked && status.displayName
-              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-              : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
           }`}
         >
-          {status.linked && status.displayName ? "已关联" : "未关联"}
+          {status.linked && status.displayName ? '已关联' : '未关联'}
         </span>
       </div>
 
       <div className="px-4 py-3.5">
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-3">{config.description}</p>
+        <p className="mb-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+          {config.description}
+        </p>
         {status.displayName && (
-          <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-3">账号: {status.displayName}</p>
+          <p className="mb-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+            账号: {status.displayName}
+          </p>
         )}
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           {loading ? (
             <div className="flex items-center gap-1.5 text-xs text-text-secondary">
               <Loader2 size={14} className="animate-spin" />
@@ -648,14 +792,14 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           ) : status.linked && status.displayName ? (
             <button
               onClick={handleUnlink}
-              className="px-4 py-2 text-xs rounded-lg border text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+              className="rounded-lg border border-red-200 px-4 py-2 text-xs text-red-500 transition-colors hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
             >
               取消关联
             </button>
           ) : (
             <button
               onClick={handleLink}
-              className="px-4 py-2 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors font-medium"
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
             >
               关联账号
             </button>
@@ -664,51 +808,62 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           <button
             onClick={handleCheck}
             disabled={loading}
-            className="px-3 py-2 text-xs rounded-lg border border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors disabled:opacity-60"
+            className="rounded-lg border border-border px-3 py-2 text-xs transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
           >
             检查关联
           </button>
 
-          {config.provider === "bilibili" && (
+          {config.provider === 'bilibili' && (
             <button
               onClick={() => void handlePreviewBilibiliFollowings(false)}
               disabled={loading || importing || previewing}
-              className="px-3 py-2 text-xs rounded-lg border border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
             >
-              {(importing || previewing) && <Loader2 size={12} className="animate-spin" />}
+              {(importing || previewing) && (
+                <Loader2 size={12} className="animate-spin" />
+              )}
               预览关注导入
             </button>
           )}
-          {config.provider === "bilibili" && (
+          {config.provider === 'bilibili' && (
             <button
               onClick={() => void handlePreviewBilibiliFollowings(true)}
               disabled={loading || importing || previewing}
-              className="px-3 py-2 text-xs rounded-lg border border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors disabled:opacity-60"
+              className="rounded-lg border border-border px-3 py-2 text-xs transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
             >
               刷新关注缓存
             </button>
           )}
 
           {feedback && (
-            <div className={`flex items-center gap-1 text-xs ${feedback.includes("成功") || feedback.includes("完成") ? "text-green-500" : "text-red-500"}`}>
-              {feedback.includes("成功") || feedback.includes("完成") ? <Check size={14} /> : <AlertCircle size={14} />}
+            <div
+              className={`flex items-center gap-1 text-xs ${feedback.includes('成功') || feedback.includes('完成') ? 'text-green-500' : 'text-red-500'}`}
+            >
+              {feedback.includes('成功') || feedback.includes('完成') ? (
+                <Check size={14} />
+              ) : (
+                <AlertCircle size={14} />
+              )}
               {feedback}
             </div>
           )}
         </div>
 
-        {errorDetail && <p className="text-xs text-red-500 mt-2">{errorDetail}</p>}
-        {config.provider === "bilibili" && importProgress && (
-          <div className="mt-2 rounded-md border border-border bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 p-2">
+        {errorDetail && (
+          <p className="mt-2 text-xs text-red-500">{errorDetail}</p>
+        )}
+        {config.provider === 'bilibili' && importProgress && (
+          <div className="mt-2 rounded-md border border-border bg-surface-secondary/50 p-2 dark:bg-surface-dark-tertiary/50">
             <div className="flex items-center justify-between text-xs text-text-secondary dark:text-text-dark-secondary">
               <span>
                 导入进度：{importProgress.completed}/{importProgress.total}
               </span>
               <span>
-                新增 {importProgress.imported} · 跳过 {importProgress.skipped} · 失败 {importProgress.failed}
+                新增 {importProgress.imported} · 跳过 {importProgress.skipped} ·
+                失败 {importProgress.failed}
               </span>
             </div>
-            <div className="mt-1.5 h-1.5 rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary overflow-hidden">
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary">
               <div
                 className="h-full bg-accent transition-[width] duration-200"
                 style={{
@@ -718,27 +873,32 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
             </div>
           </div>
         )}
-        {config.provider === "bilibili" && followingsCacheUpdatedAt && (
-          <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2">
+        {config.provider === 'bilibili' && followingsCacheUpdatedAt && (
+          <p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">
             关注缓存时间：{new Date(followingsCacheUpdatedAt).toLocaleString()}
           </p>
         )}
-        {config.provider === "bilibili" && previewStats && (
-          <div className="mt-3 p-2.5 rounded-md border border-border bg-surface-secondary/60 dark:bg-surface-dark-tertiary/60">
+        {config.provider === 'bilibili' && previewStats && (
+          <div className="mt-3 rounded-md border border-border bg-surface-secondary/60 p-2.5 dark:bg-surface-dark-tertiary/60">
             <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
-              预览结果：共 {previewStats.total} 个关注，可新增 {previewStats.canImport}，已存在 {previewStats.exists}，已勾选 {selectedCreatorMids.length}
+              预览结果：共 {previewStats.total} 个关注，可新增{' '}
+              {previewStats.canImport}，已存在 {previewStats.exists}，已勾选{' '}
+              {selectedCreatorMids.length}
             </p>
             {pendingCreators && pendingCreators.length > 0 && (
               <div className="mt-2 space-y-2">
-                <div className="rounded border border-border bg-white/70 dark:bg-surface-dark-secondary/70 p-2">
-                  <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-1.5">
+                <div className="rounded border border-border bg-white/70 p-2 dark:bg-surface-dark-secondary/70">
+                  <p className="mb-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
                     导入到栏目（可多选）
                   </p>
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex flex-wrap items-center gap-3">
                     {BILIBILI_IMPORT_VIEW_OPTIONS.map((opt) => {
                       const checked = selectedImportViews.includes(opt.view)
                       return (
-                        <label key={opt.view} className="inline-flex items-center gap-1.5 text-xs">
+                        <label
+                          key={opt.view}
+                          className="inline-flex items-center gap-1.5 text-xs"
+                        >
                           <input
                             type="checkbox"
                             checked={checked}
@@ -763,42 +923,64 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setSelectedCreatorMids(pendingCreators.filter((c) => !c.exists).map((c) => c.mid))}
+                    onClick={() =>
+                      setSelectedCreatorMids(
+                        pendingCreators
+                          .filter((c) => !c.exists)
+                          .map((c) => c.mid),
+                      )
+                    }
                     disabled={loading || importing || previewing}
-                    className="px-2 py-1 text-xs rounded border border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary disabled:opacity-60"
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
                   >
                     全选可导入
                   </button>
                   <button
                     onClick={() => setSelectedCreatorMids([])}
                     disabled={loading || importing || previewing}
-                    className="px-2 py-1 text-xs rounded border border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary disabled:opacity-60"
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
                   >
                     清空选择
                   </button>
                 </div>
-                <div className="max-h-56 overflow-auto rounded border border-border bg-white/70 dark:bg-surface-dark-secondary/70 p-2 space-y-1">
+                <div className="max-h-56 space-y-1 overflow-auto rounded border border-border bg-white/70 p-2 dark:bg-surface-dark-secondary/70">
                   {pendingCreators.map((creator) => {
                     const checked = selectedCreatorMids.includes(creator.mid)
                     return (
-                      <label key={creator.mid} className="flex items-center justify-between gap-2 text-xs">
-                        <span className="flex items-center gap-2 min-w-0">
+                      <label
+                        key={creator.mid}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={creator.exists || loading || importing || previewing}
+                            disabled={
+                              creator.exists ||
+                              loading ||
+                              importing ||
+                              previewing
+                            }
                             onChange={(e) => {
                               const isChecked = e.target.checked
                               setSelectedCreatorMids((prev) =>
-                                isChecked ? [...prev, creator.mid] : prev.filter((mid) => mid !== creator.mid),
+                                isChecked
+                                  ? [...prev, creator.mid]
+                                  : prev.filter((mid) => mid !== creator.mid),
                               )
                             }}
                           />
                           <span className="truncate">{creator.uname}</span>
-                          <span className="text-text-secondary">({creator.mid})</span>
+                          <span className="text-text-secondary">
+                            ({creator.mid})
+                          </span>
                         </span>
-                        <span className={creator.exists ? "text-amber-600" : "text-green-600"}>
-                          {creator.exists ? "已订阅" : "可导入"}
+                        <span
+                          className={
+                            creator.exists ? 'text-amber-600' : 'text-green-600'
+                          }
+                        >
+                          {creator.exists ? '已订阅' : '可导入'}
                         </span>
                       </label>
                     )
@@ -809,8 +991,14 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
             <div className="mt-2 flex items-center gap-2">
               <button
                 onClick={handleImportBilibiliFollowings}
-                disabled={loading || importing || previewing || selectedCreatorMids.length === 0 || selectedImportViews.length === 0}
-                className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-60"
+                disabled={
+                  loading ||
+                  importing ||
+                  previewing ||
+                  selectedCreatorMids.length === 0 ||
+                  selectedImportViews.length === 0
+                }
+                className="rounded-md bg-accent px-3 py-1.5 text-xs text-white disabled:opacity-60"
               >
                 确认导入
               </button>
@@ -818,12 +1006,12 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
                 onClick={() => {
                   setPendingCreators(null)
                   setPendingRsshubBase(null)
-                  setPendingRouteType("video")
+                  setPendingRouteType('video')
                   setPreviewStats(null)
                   setSelectedCreatorMids([])
                 }}
                 disabled={loading || importing || previewing}
-                className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary disabled:opacity-60"
+                className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
               >
                 取消
               </button>
@@ -837,13 +1025,13 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               value={manualName}
               onChange={(e) => setManualName(e.target.value)}
               placeholder="手动输入账号名（自动识别失败时）"
-              className="flex-1 px-2.5 py-1.5 text-xs rounded-md border bg-surface-secondary dark:bg-surface-dark-tertiary focus:outline-none focus:ring-2 focus:ring-accent/40"
+              className="flex-1 rounded-md border bg-surface-secondary px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-surface-dark-tertiary"
               disabled={loading}
             />
             <button
               onClick={handleSaveName}
               disabled={loading || !manualName.trim()}
-              className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-60"
+              className="rounded-md bg-accent px-3 py-1.5 text-xs text-white disabled:opacity-60"
             >
               保存账号名
             </button>

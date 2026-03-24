@@ -1,25 +1,34 @@
-import { resolve } from "path"
-import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"
+import { resolve } from 'path'
+import { defineConfig } from 'vite'
+import {
+  createRendererSharedConfig,
+  createWebIndexHtmlPlugin,
+} from './scripts/build/vite-shared'
 
 /**
  * Vite configuration for the Web platform build.
  * Builds the same renderer app but with a browser-compatible API layer.
  */
+const sharedRendererConfig = createRendererSharedConfig(__dirname)
+
 export default defineConfig({
-  root: resolve(__dirname, "src/web"),
-  resolve: {
-    alias: {
-      "@renderer": resolve(__dirname, "src/renderer/src"),
-    },
-  },
-  plugins: [react()],
+  root: resolve(__dirname, 'src/web'),
+  ...sharedRendererConfig,
+  plugins: [
+    ...(sharedRendererConfig.plugins ?? []),
+    createWebIndexHtmlPlugin({
+      title: 'Livo - Web',
+      description:
+        'Livo web app for reading RSS feeds with AI features and local-first data.',
+    }),
+  ],
   build: {
-    outDir: resolve(__dirname, "dist-web"),
+    ...sharedRendererConfig.build,
+    outDir: resolve(__dirname, 'dist-web'),
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
+    ...sharedRendererConfig.server,
     open: true,
   },
 })

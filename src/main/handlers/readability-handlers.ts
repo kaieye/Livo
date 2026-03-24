@@ -1,12 +1,14 @@
-﻿import { ipcMain } from "electron"
-import { fetchReadableContent, resolveRelativeUrls } from "../services/readability"
+import { ipcMain } from 'electron'
+import { IPC } from '../../shared/types'
+import {
+  fetchReadableContent,
+  resolveRelativeUrls,
+} from '../services/readability'
 
 export function registerReadabilityHandlers(): void {
-  ipcMain.handle("readability:fetch", async (_event, url: string) => {
+  ipcMain.handle(IPC.READABILITY_FETCH, async (_event, url: string) => {
     try {
       const result = await fetchReadableContent(url)
-
-      // Resolve relative URLs in the extracted content
       const content = resolveRelativeUrls(result.content, url)
 
       return {
@@ -20,11 +22,8 @@ export function registerReadabilityHandlers(): void {
     } catch (error) {
       return {
         success: false,
-        error: `鏃犳硶鑾峰彇鍘熸枃: ${String(error)}`,
+        error: `无法获取原文: ${String(error)}`,
       }
     }
   })
 }
-
-
-

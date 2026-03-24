@@ -1,12 +1,14 @@
-import { useEffect, type PropsWithChildren } from "react"
-import { FeedViewType } from "../../../shared/types"
-import { useInitRecommendedFeeds } from "../hooks/useInitRecommendedFeeds"
-import { getEntryLoadLimit } from "../lib/entry-load-limit"
-import { useEntryStore } from "../store/entry-store"
-import { useFeedStore } from "../store/feed-store"
-import { useSettingsStore } from "../store/settings-store"
-import { useActionsStore } from "../store/actions-store"
-import { useStoreShallow } from "../store/helpers"
+import { useEffect, type PropsWithChildren } from 'react'
+import { FeedViewType } from '../../../shared/types'
+import { applyAfterReadyCallbacks } from '../initialize/queue'
+import { useInitRecommendedFeeds } from '../hooks/useInitRecommendedFeeds'
+import { getEntryLoadLimit } from '../lib/entry-load-limit'
+import { recordAppMetric } from '../lib/performance-metrics'
+import { useEntryStore } from '../store/entry-store'
+import { useFeedStore } from '../store/feed-store'
+import { useSettingsStore } from '../store/settings-store'
+import { useActionsStore } from '../store/actions-store'
+import { useStoreShallow } from '../store/helpers'
 
 let bootstrapPromise: Promise<void> | null = null
 
@@ -14,13 +16,14 @@ function reloadEntriesForCurrentScope() {
   const { selectedFeedId, activeView, feeds } = useFeedStore.getState()
   const { loadEntries } = useEntryStore.getState()
   const limit = getEntryLoadLimit(activeView)
-  const viewFeedIds = activeView !== null
-    ? feeds
-        .filter((feed) => (feed.view ?? FeedViewType.Articles) === activeView)
-        .map((feed) => feed.id)
-    : []
+  const viewFeedIds =
+    activeView !== null
+      ? feeds
+          .filter((feed) => (feed.view ?? FeedViewType.Articles) === activeView)
+          .map((feed) => feed.id)
+      : []
 
-  if (selectedFeedId === "starred") {
+  if (selectedFeedId === 'starred') {
     void loadEntries({ starred: true, limit })
     return
   }
@@ -39,10 +42,18 @@ function reloadEntriesForCurrentScope() {
 }
 
 export function AppBootstrapProvider({ children }: PropsWithChildren) {
-  const { loadFeeds } = useStoreShallow(useFeedStore, (state) => ({ loadFeeds: state.loadFeeds }))
-  const { loadSettings } = useStoreShallow(useSettingsStore, (state) => ({ loadSettings: state.loadSettings }))
-  const { loadRules } = useStoreShallow(useActionsStore, (state) => ({ loadRules: state.loadRules }))
-  const { clearListCache } = useStoreShallow(useEntryStore, (state) => ({ clearListCache: state.clearListCache }))
+  const { loadFeeds } = useStoreShallow(useFeedStore, (state) => ({
+    loadFeeds: state.loadFeeds,
+  }))
+  const { loadSettings } = useStoreShallow(useSettingsStore, (state) => ({
+    loadSettings: state.loadSettings,
+  }))
+  const { loadRules } = useStoreShallow(useActionsStore, (state) => ({
+    loadRules: state.loadRules,
+  }))
+  const { clearListCache } = useStoreShallow(useEntryStore, (state) => ({
+    clearListCache: state.clearListCache,
+  }))
 
   useInitRecommendedFeeds()
 
@@ -52,20 +63,28 @@ export function AppBootstrapProvider({ children }: PropsWithChildren) {
         loadSettings(),
         loadFeeds(),
         loadRules(),
-      ]).then(() => undefined)
+      ]).then(() => {
+        applyAfterReadyCallbacks()
+        document.documentElement.dataset.appReady = 'true'
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            recordAppMetric('app.bootstrapReady', performance.now())
+          })
+        })
+      })
     }
 
     if (!window.api?.on) return
 
-    const cleanupFeedsUpdated = window.api.on("feeds:updated", () => {
+    const cleanupFeedsUpdated = window.api.on('feeds:updated', () => {
       loadFeeds()
       clearListCache()
       reloadEntriesForCurrentScope()
     })
-    const cleanupEntriesEnriched = window.api.on("entries:enriched", () => {
+    const cleanupEntriesEnriched = window.api.on('entries:enriched', () => {
       reloadEntriesForCurrentScope()
     })
-    const cleanupEntriesRepaired = window.api.on("entries:repaired", () => {
+    const cleanupEntriesRepaired = window.api.on('entries:repaired', () => {
       clearListCache()
       reloadEntriesForCurrentScope()
     })

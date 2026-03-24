@@ -1,10 +1,12 @@
-import { type PropsWithChildren } from "react"
-import { AppBootstrapProvider } from "./AppBootstrapProvider"
-import { GlobalShortcutsProvider } from "./GlobalShortcutsProvider"
-import { I18nProvider } from "./I18nProvider"
-import { QueryProvider } from "./QueryProvider"
-import { QueryVisibilityRefreshProvider } from "./QueryVisibilityRefreshProvider"
-import { SettingSyncProvider } from "./SettingSyncProvider"
+import { type PropsWithChildren } from 'react'
+import { AppCommandProvider } from './AppCommandProvider'
+import { AppBootstrapProvider } from './AppBootstrapProvider'
+import { GlobalShortcutsProvider } from './GlobalShortcutsProvider'
+import { I18nProvider } from './I18nProvider'
+import { PerformanceMetricsProvider } from './PerformanceMetricsProvider'
+import { QueryProvider } from './QueryProvider'
+import { QueryVisibilityRefreshProvider } from './QueryVisibilityRefreshProvider'
+import { SettingSyncProvider } from './SettingSyncProvider'
 
 export function RootProviders({ children }: PropsWithChildren) {
   return (
@@ -13,7 +15,12 @@ export function RootProviders({ children }: PropsWithChildren) {
         <QueryVisibilityRefreshProvider>
           <SettingSyncProvider>
             <AppBootstrapProvider>
-              <GlobalShortcutsProvider>{children}</GlobalShortcutsProvider>
+              <AppCommandProvider>
+                <GlobalShortcutsProvider>
+                  <PerformanceMetricsProvider />
+                  {children}
+                </GlobalShortcutsProvider>
+              </AppCommandProvider>
             </AppBootstrapProvider>
           </SettingSyncProvider>
         </QueryVisibilityRefreshProvider>
