@@ -1,0 +1,66 @@
+{
+	"app":	{
+		"bundleName":	"com.livo.harmony",
+		"vendor":	"Livo",
+		"versionCode":	1000000,
+		"versionName":	"1.0.0",
+		"icon":	"$media:icon",
+		"label":	"$string:app_name",
+		"apiReleaseType":	"Release",
+		"compileSdkVersion":	"6.0.2.130",
+		"targetAPIVersion":	50000012,
+		"minAPIVersion":	50000012,
+		"compileSdkType":	"HarmonyOS",
+		"targetMinorAPIVersion":	0,
+		"targetPatchAPIVersion":	0,
+		"appEnvironments":	[],
+		"bundleType":	"app",
+		"buildMode":	"debug",
+		"debug":	true,
+		"iconId":	16777217,
+		"labelId":	16777216
+	},
+	"module":	{
+		"name":	"entry",
+		"type":	"entry",
+		"description":	"$string:module_desc",
+		"mainElement":	"EntryAbility",
+		"deviceTypes":	["phone"],
+		"deliveryWithInstall":	true,
+		"installationFree":	false,
+		"pages":	"$profile:main_pages",
+		"requestPermissions":	[{
+				"name":	"ohos.permission.INTERNET",
+				"reason":	"$string:internet_reason",
+				"usedScene":	{
+					"abilities":	["EntryAbility"],
+					"when":	"inuse"
+				},
+				"reasonId":	16777222
+			}],
+		"abilities":	[{
+				"name":	"EntryAbility",
+				"srcEntry":	"./ets/entryability/EntryAbility.ets",
+				"description":	"$string:entryability_desc",
+				"icon":	"$media:icon",
+				"label":	"$string:entryability_label",
+				"startWindowIcon":	"$media:startIcon",
+				"startWindowBackground":	"$color:start_window_background",
+				"exported":	true,
+				"skills":	[{
+						"entities":	["entity.system.home"],
+						"actions":	["action.system.home"]
+					}],
+				"descriptionId":	16777220,
+				"iconId":	16777217,
+				"labelId":	16777221,
+				"startWindowIconId":	16777225,
+				"startWindowBackgroundId":	16777224
+			}],
+		"packageName":	"entry",
+		"virtualMachine":	"ark12.0.2.0",
+		"compileMode":	"esmodule",
+		"dependencies":	[],
+		"descriptionId":	16777223
+	}
+}

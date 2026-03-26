@@ -1,0 +1,12 @@
+{
+  "src": [
+    "pages/Index",
+    "pages/Subscriptions",
+    "pages/Discover",
+    "pages/DiscoverSubscribeConfig",
+    "pages/DiscoverPreview",
+    "pages/ArticleDetail",
+    "pages/Settings",
+    "pages/FeedDetail"
+  ]
+}

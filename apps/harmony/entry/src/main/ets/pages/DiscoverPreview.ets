@@ -1,0 +1,389 @@
+import router from '@ohos.router'
+import promptAction from '@ohos.promptAction'
+import { AppRepository } from '../common/data/AppRepository'
+import { Entry, Feed, FeedViewType } from '../common/models/LivoModels'
+import { FeedDraft } from '../common/repositories/FeedRepository'
+import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
+import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+
+@Entry
+@Component
+struct DiscoverPreview {
+  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State targetUrl: string = ''
+  @State targetTitle: string = ''
+  @State targetSiteUrl: string = ''
+  @State targetDescription: string = ''
+  @State targetCategory: string = ''
+  @State targetView: FeedViewType = FeedViewType.Articles
+  @State sourceKind: string = ''
+  @State previewPayload: FeedRefreshPayload | undefined = undefined
+  @State previewError: string = ''
+  @State isLoading: boolean = false
+  @State isSubmitting: boolean = false
+  @State existingFeed: Feed | undefined = undefined
+
+  aboutToAppear(): void {
+    void this.loadPage()
+  }
+
+  private params(): Record<string, string> {
+    return router.getParams() as Record<string, string>
+  }
+
+  private viewLabel(view: FeedViewType): string {
+    switch (view) {
+      case FeedViewType.SocialMedia:
+        return '社交'
+      case FeedViewType.Pictures:
+        return '图片'
+      case FeedViewType.Videos:
+        return '视频'
+      default:
+        return '文章'
+    }
+  }
+
+  private hostOf(value: string): string {
+    const matched = value.match(/^https?:\/\/([^/]+)/i)
+    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
+  }
+
+  private avatarFallback(): string {
+    const title = (this.previewPayload?.feedTitle || this.targetTitle || '?').trim()
+    return title ? title.substring(0, 1).toUpperCase() : '?'
+  }
+
+  private heroDescription(): string {
+    return this.previewPayload?.description || this.targetDescription || this.previewPayload?.siteUrl || this.targetSiteUrl
+  }
+
+  private previewEntries(): Entry[] {
+    return this.previewPayload?.entries.slice(0, 6) ?? []
+  }
+
+  private resolvedAvatarUrl(): string {
+    if (this.previewPayload?.imageUrl) {
+      return this.previewPayload.imageUrl
+    }
+    const host = this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
+    if (host) {
+      return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`
+    }
+    return ''
+  }
+
+  @Builder
+  private FeedAvatar() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.resolvedAvatarUrl()) {
+        Image(this.resolvedAvatarUrl())
+          .width(56)
+          .height(56)
+          .borderRadius(18)
+          .backgroundColor(this.theme.elevated)
+      } else {
+        Row()
+          .width(56)
+          .height(56)
+          .borderRadius(18)
+          .backgroundColor(this.theme.accent)
+
+        Text(this.avatarFallback())
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#FFFFFF')
+      }
+    }
+  }
+
+  @Builder
+  private HeaderSection() {
+    Row() {
+      Text('‹')
+        .fontSize(28)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
+        .width(40)
+        .height(40)
+        .textAlign(TextAlign.Center)
+        .borderRadius(999)
+        .backgroundColor(this.theme.elevated)
+        .onClick(() => router.back())
+
+      Blank()
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private HeroCard() {
+    Column({ space: 14 }) {
+      Row({ space: 14 }) {
+        this.FeedAvatar()
+
+        Column({ space: 6 }) {
+          Text(this.previewPayload?.feedTitle || this.targetTitle)
+            .fontSize(28)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl))
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
+            .maxLines(1)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+
+      if (this.heroDescription()) {
+        Text(this.heroDescription())
+          .fontSize(15)
+          .lineHeight(24)
+          .fontColor(this.theme.textSecondary)
+          .width('100%')
+      }
+    }
+    .width('100%')
+    .padding(20)
+    .backgroundColor(this.theme.surface)
+    .borderRadius(28)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private PreviewSection() {
+    Column({ space: 12 }) {
+      Row() {
+        Text('内容预览')
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textPrimary)
+      }
+      .width('100%')
+
+      Column({ space: 10 }) {
+        ForEach(this.previewEntries(), (entry: Entry, index: number) => {
+          Column({ space: 8 }) {
+            Row({ space: 8 }) {
+              Text(`${index + 1}`)
+                .fontSize(11)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(this.theme.accent)
+                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                .backgroundColor(this.theme.elevated)
+                .borderRadius(999)
+
+              Text(entry.author || '未知作者')
+                .fontSize(11)
+                .fontColor(this.theme.textMuted)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+              Blank()
+
+              Text(`${entry.readingTimeMinutes} 分钟`)
+                .fontSize(11)
+                .fontColor(this.theme.textMuted)
+            }
+            .width('100%')
+
+            Text(entry.title)
+              .fontSize(17)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.theme.textPrimary)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+            Text(entry.summary)
+              .fontSize(13)
+              .lineHeight(21)
+              .fontColor(this.theme.textSecondary)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+          .padding(16)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(22)
+          .alignItems(HorizontalAlign.Start)
+        }, (entry: Entry) => entry.id)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  private normalizeUrl(value: string): string {
+    return value.trim().replace(/\/+$/, '').toLowerCase()
+  }
+
+  private feedMatchesTarget(feed: Feed, targetUrl: string, siteUrl: string): boolean {
+    const normalizedTarget = this.normalizeUrl(targetUrl)
+    const normalizedSite = this.normalizeUrl(siteUrl)
+    return this.normalizeUrl(feed.url) === normalizedTarget
+      || (!!feed.siteUrl && this.normalizeUrl(feed.siteUrl) === normalizedTarget)
+      || (!!siteUrl && this.normalizeUrl(feed.url) === normalizedSite)
+      || (!!feed.siteUrl && !!siteUrl && this.normalizeUrl(feed.siteUrl) === normalizedSite)
+  }
+
+  private async findExistingFeed(targetUrl: string, siteUrl: string): Promise<Feed | undefined> {
+    const feeds = await AppRepository.feedEntities()
+    return feeds.find((feed: Feed) => this.feedMatchesTarget(feed, targetUrl, siteUrl))
+  }
+
+  private async loadPage(): Promise<void> {
+    const settings = await AppRepository.settings()
+    this.theme = await ThemeService.resolvePalette(settings)
+
+    const params = this.params()
+    this.targetUrl = params.targetUrl ?? ''
+    this.targetTitle = params.targetTitle ?? ''
+    this.targetSiteUrl = params.siteUrl ?? ''
+    this.targetDescription = params.description ?? ''
+    this.targetCategory = params.category ?? ''
+    this.sourceKind = params.sourceKind ?? ''
+    const parsedView = Number(params.view ?? FeedViewType.Articles)
+    this.targetView = parsedView as FeedViewType
+
+    if (!this.targetUrl) {
+      this.previewError = '订阅源参数缺失'
+      return
+    }
+
+    this.isLoading = true
+    this.previewError = ''
+    try {
+      const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
+      this.previewPayload = payload
+      this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl)
+      if (!this.targetTitle) {
+        this.targetTitle = payload.feedTitle
+      }
+      if (!this.targetSiteUrl) {
+        this.targetSiteUrl = payload.siteUrl
+      }
+      if (!this.targetDescription) {
+        this.targetDescription = payload.description
+      }
+    } catch (e) {
+      this.previewError = e instanceof Error ? e.message : '预览失败'
+    } finally {
+      this.isLoading = false
+    }
+  }
+
+  private async submit(): Promise<void> {
+    if (!this.previewPayload || !this.targetUrl) {
+      return
+    }
+
+    this.isSubmitting = true
+    try {
+      const draft: FeedDraft = {
+        title: this.previewPayload.feedTitle || this.targetTitle || this.targetUrl,
+        url: this.targetUrl,
+        siteUrl: this.previewPayload.siteUrl || this.targetSiteUrl,
+        description: this.previewPayload.description || this.targetDescription,
+        category: this.targetCategory || this.viewLabel(this.targetView),
+        view: this.targetView,
+        showInAll: this.existingFeed ? this.existingFeed.showInAll : true,
+      }
+
+      if (this.existingFeed) {
+        await AppRepository.updateFeed(this.existingFeed.id, draft)
+        await AppRepository.refreshFeed(this.existingFeed.id)
+        promptAction.showToast({ message: '订阅已更新' })
+      } else {
+        const created = await AppRepository.createFeed(draft)
+        await AppRepository.refreshFeed(created.id)
+        promptAction.showToast({ message: '订阅已添加' })
+      }
+
+      router.back()
+    } catch (_) {
+      promptAction.showToast({ message: '添加失败，请检查链接或网络' })
+    } finally {
+      this.isSubmitting = false
+    }
+  }
+
+  build() {
+    Column({ space: 0 }) {
+      if (this.isLoading) {
+        Column({ space: 12 }) {
+          LoadingProgress().width(42).height(42).color(this.theme.accent)
+          Text('正在加载订阅预览...')
+            .fontSize(14)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+      } else if (this.previewError) {
+        Column({ space: 16 }) {
+          this.HeaderSection()
+
+          Column({ space: 10 }) {
+            Text('预览失败')
+              .fontSize(20)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#EF4444')
+
+            Text(this.previewError)
+              .fontSize(14)
+              .fontColor(this.theme.textSecondary)
+              .lineHeight(22)
+          }
+          .width('100%')
+          .padding(20)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(24)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .padding(18)
+      } else if (this.previewPayload) {
+        Scroll() {
+          Column({ space: 18 }) {
+            this.HeaderSection()
+            this.HeroCard()
+            this.PreviewSection()
+            Row().height(104).width('100%')
+          }
+          .width('100%')
+          .padding({ left: 18, right: 18, top: 20, bottom: 24 })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+      }
+
+      if (this.previewPayload && !this.isLoading) {
+        Row({ space: 10 }) {
+          Button(this.isSubmitting ? '处理中...' : (this.existingFeed ? '更新订阅' : '添加订阅'))
+            .type(ButtonType.Capsule)
+            .backgroundColor(this.theme.accent)
+            .fontColor('#FFFFFF')
+            .enabled(!this.isSubmitting)
+            .layoutWeight(1)
+            .height(54)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .onClick(() => { void this.submit() })
+        }
+        .width('100%')
+        .padding({ left: 18, right: 18, top: 12, bottom: 18 })
+        .backgroundColor(this.theme.background)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
+  }
+}

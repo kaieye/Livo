@@ -1,0 +1,337 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Command, Search, X } from 'lucide-react'
+import { DEFAULT_SHORTCUTS } from '../../../../shared/shortcuts'
+import { useSettingsStore } from '../../store/settings-store'
+import { useQuickSearchStore } from '../search/QuickSearch'
+import { useShortcutHelpStore } from '../shortcuts/shortcut-help-store'
+import { useDiscoverStore } from '../../store/discover-store'
+import { useFeedStore } from '../../store/feed-store'
+import { useAIChatStore } from '../../store/ai-chat-store'
+import { useUpdateStore } from '../../store/update-store'
+import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
+import { useOverlayStackItem, useOverlayStackStore } from '../../store/overlay-stack-store'
+import { runLayoutCommand } from '../../lib/layout-commands'
+
+import { create } from 'zustand'
+
+type CommandAction = {
+  id: string
+  title: string
+  section: string
+  keywords: string[]
+  shortcutId?: string
+  run: () => void
+}
+
+interface CommandPaletteState {
+  isOpen: boolean
+  open: () => void
+  close: () => void
+  toggle: () => void
+}
+
+export const useCommandPaletteStore = create<CommandPaletteState>((set, get) => ({
+  isOpen: false,
+  open: () => {
+    useOverlayStackStore.getState().open('command-palette')
+    set({ isOpen: true })
+  },
+  close: () => {
+    useOverlayStackStore.getState().close('command-palette')
+    set({ isOpen: false })
+  },
+  toggle: () => {
+    const next = !get().isOpen
+    if (next) {
+      useOverlayStackStore.getState().open('command-palette')
+    } else {
+      useOverlayStackStore.getState().close('command-palette')
+    }
+    set({ isOpen: next })
+  },
+}))
+
+export function CommandPalette() {
+  const { isOpen, close } = useCommandPaletteStore()
+  const { zIndex, isTop } = useOverlayStackItem('command-palette', isOpen)
+  useOverlayHotkeyScope('command-palette', isOpen)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+
+  const actions = useMemo<CommandAction[]>(
+    () => [
+      {
+        id: 'open-settings',
+        title: '打开设置',
+        section: '界面',
+        keywords: ['settings', 'preferences'],
+        shortcutId: 'open-settings',
+        run: () => useSettingsStore.getState().setOpen(true),
+      },
+      {
+        id: 'open-data-settings',
+        title: '打开数据设置',
+        section: '界面',
+        keywords: ['data', 'cache', 'diagnostics'],
+        run: () => {
+          const store = useSettingsStore.getState()
+          store.setActiveTab('data')
+          store.setOpen(true)
+        },
+      },
+      {
+        id: 'open-search',
+        title: '打开快速搜索',
+        section: '搜索',
+        keywords: ['search', 'find'],
+        shortcutId: 'quick-search',
+        run: () => useQuickSearchStore.getState().open(),
+      },
+      {
+        id: 'open-discover',
+        title: '打开发现',
+        section: '订阅',
+        keywords: ['discover', 'feeds'],
+        shortcutId: 'toggle-discover',
+        run: () => useDiscoverStore.getState().setOpen(true),
+      },
+      {
+        id: 'refresh-all',
+        title: '刷新全部订阅',
+        section: '订阅',
+        keywords: ['refresh', 'sync'],
+        shortcutId: 'refresh-all',
+        run: () => {
+          void useFeedStore.getState().refreshAll()
+        },
+      },
+      {
+        id: 'check-updates',
+        title: '检查更新',
+        section: '系统',
+        keywords: ['update', 'release', 'version'],
+        run: () => {
+          const store = useSettingsStore.getState()
+          store.setActiveTab('about')
+          store.setOpen(true)
+          void useUpdateStore.getState().checkForUpdates(true)
+        },
+      },
+      {
+        id: 'open-ai-chat',
+        title: '打开 AI 助手',
+        section: '界面',
+        keywords: ['ai', 'chat'],
+        run: () => useAIChatStore.getState().setPanelOpen(true),
+      },
+      {
+        id: 'show-shortcuts',
+        title: '显示快捷键帮助',
+        section: '界面',
+        keywords: ['shortcut', 'help', 'keyboard'],
+        shortcutId: 'show-shortcuts',
+        run: () => useShortcutHelpStore.getState().open(),
+      },
+      {
+        id: 'focus-sidebar',
+        title: '聚焦侧边栏',
+        section: '导航',
+        keywords: ['sidebar', 'focus'],
+        shortcutId: 'focus-sidebar',
+        run: () => runLayoutCommand('focus-sidebar'),
+      },
+      {
+        id: 'focus-content',
+        title: '聚焦内容区',
+        section: '导航',
+        keywords: ['content', 'focus'],
+        shortcutId: 'focus-content',
+        run: () => runLayoutCommand('focus-content'),
+      },
+      {
+        id: 'open-data-directory',
+        title: '打开数据目录',
+        section: '系统',
+        keywords: ['data directory', 'folder', 'storage'],
+        run: () => {
+          void window.api.app.openDataDirectory()
+        },
+      },
+      {
+        id: 'open-cache-directory',
+        title: '打开缓存目录',
+        section: '系统',
+        keywords: ['cache directory', 'folder'],
+        run: () => {
+          void window.api.app.openCacheDirectory()
+        },
+      },
+      {
+        id: 'open-logs-directory',
+        title: '打开日志目录',
+        section: '系统',
+        keywords: ['logs directory', 'folder'],
+        run: () => {
+          void window.api.app.openLogsDirectory()
+        },
+      },
+    ],
+    [],
+  )
+
+  const shortcutLabelMap = useMemo(
+    () => new Map(DEFAULT_SHORTCUTS.map((shortcut) => [shortcut.id, shortcut.keys])),
+    [],
+  )
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredActions = useMemo(() => {
+    if (!normalizedQuery) return actions
+    return actions.filter((action) => {
+      const haystack = [action.title, ...action.keywords].join(' ').toLowerCase()
+      return haystack.includes(normalizedQuery)
+    })
+  }, [actions, normalizedQuery])
+
+  const groupedActions = useMemo(() => {
+    const groups = new Map<string, CommandAction[]>()
+    for (const action of filteredActions) {
+      const existing = groups.get(action.section)
+      if (existing) {
+        existing.push(action)
+      } else {
+        groups.set(action.section, [action])
+      }
+    }
+    return Array.from(groups.entries())
+  }, [filteredActions])
+
+  useEffect(() => {
+    if (!isOpen) return
+    setQuery('')
+    setSelectedIndex(0)
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 30)
+    return () => window.clearTimeout(timer)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (!isTop) return
+        event.preventDefault()
+        close()
+        return
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setSelectedIndex((index) =>
+          Math.min(index + 1, Math.max(filteredActions.length - 1, 0)),
+        )
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setSelectedIndex((index) => Math.max(index - 1, 0))
+      }
+      if (event.key === 'Enter') {
+        const target = filteredActions[selectedIndex]
+        if (!target) return
+        event.preventDefault()
+        target.run()
+        close()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [close, filteredActions, isOpen, isTop, selectedIndex])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="fixed inset-0 flex items-start justify-center bg-black/35 pt-[12vh]"
+      style={{ zIndex }}
+      onClick={close}
+    >
+      <div
+        className="w-[560px] max-w-[92vw] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-surface-dark-secondary"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b px-4 py-3">
+          <Command size={18} className="text-accent" />
+          <Search size={16} className="text-text-tertiary" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setSelectedIndex(0)
+            }}
+            placeholder="搜索动作..."
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-tertiary"
+          />
+          <button
+            onClick={close}
+            className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="max-h-[52vh] overflow-y-auto py-2">
+          {filteredActions.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-text-tertiary">
+              没有匹配的命令
+            </div>
+          ) : (
+            groupedActions.map(([section, sectionActions]) => (
+              <div key={section} className="pb-2">
+                <div className="px-4 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
+                  {section}
+                </div>
+                {sectionActions.map((action) => {
+                  const index = filteredActions.findIndex((item) => item.id === action.id)
+                  const shortcutLabel = action.shortcutId
+                    ? shortcutLabelMap.get(action.shortcutId)
+                    : null
+                  return (
+                    <button
+                      key={action.id}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      onClick={() => {
+                        action.run()
+                        close()
+                      }}
+                      className={`flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left text-sm transition-colors ${
+                        selectedIndex === index
+                          ? 'bg-accent/10 text-accent'
+                          : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate">{action.title}</div>
+                        <div className="truncate text-xs text-text-tertiary">
+                          {action.keywords[0]}
+                        </div>
+                      </div>
+                      {shortcutLabel ? (
+                        <span className="shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] text-text-tertiary dark:border-surface-dark-tertiary">
+                          {shortcutLabel}
+                        </span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="border-t px-4 py-2 text-xs text-text-tertiary">
+          使用上下方向键选择，回车执行，Esc 关闭
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@livo/harmony",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/harmony-cli.mjs studio",
+    "studio": "node scripts/harmony-cli.mjs studio",
+    "doctor": "node scripts/harmony-cli.mjs doctor",
+    "prepare": "node scripts/harmony-cli.mjs prepare",
+    "build:debug": "node scripts/harmony-cli.mjs build:debug",
+    "build:release": "node scripts/harmony-cli.mjs build:release",
+    "install:debug": "node scripts/harmony-cli.mjs install:debug",
+    "run:debug": "node scripts/harmony-cli.mjs run:debug"
+  }
+}

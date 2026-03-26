@@ -1,0 +1,32 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "Livo"
+    },
+    {
+      "name": "app_label",
+      "value": "Livo"
+    },
+    {
+      "name": "app_description",
+      "value": "Livo HarmonyOS NEXT 阅读器"
+    },
+    {
+      "name": "module_desc",
+      "value": "Livo 鸿蒙主模块"
+    },
+    {
+      "name": "entryability_label",
+      "value": "Livo"
+    },
+    {
+      "name": "entryability_desc",
+      "value": "Livo Harmony 主入口"
+    },
+    {
+      "name": "internet_reason",
+      "value": "Livo 需要访问网络以拉取 RSS 订阅内容"
+    }
+  ]
+}
