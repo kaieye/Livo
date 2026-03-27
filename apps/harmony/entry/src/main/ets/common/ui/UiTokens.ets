@@ -33,9 +33,9 @@ export const LIST_ROW_META_SIZE: number = 12
 export const LIST_ROW_DIVIDER_INSET: number = 16
 export const LIST_ACTION_HEIGHT: number = 32
 
-export const BOTTOM_TAB_BAR_WIDTH: string = '94%'
-export const BOTTOM_TAB_BAR_HEIGHT: number = 66
-export const BOTTOM_TAB_FLOAT_GAP: number = 12
-export const BOTTOM_TAB_TOTAL_HEIGHT: number = 94
-export const BOTTOM_TAB_ITEM_HEIGHT: number = 56
-export const BOTTOM_TAB_LABEL_SIZE: number = 11
+export const BOTTOM_TAB_BAR_WIDTH: string = '90%'
+export const BOTTOM_TAB_BAR_HEIGHT: number = 57
+export const BOTTOM_TAB_FLOAT_GAP: number = 18
+export const BOTTOM_TAB_TOTAL_HEIGHT: number = 73
+export const BOTTOM_TAB_ITEM_HEIGHT: number = 57
+export const BOTTOM_TAB_LABEL_SIZE: number = 12
