@@ -17,6 +17,7 @@ export struct BottomTabs {
   @Prop activeTab: RootTabId = 'home'
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop useTabsController: boolean = false
+  @State pressedTabId: RootTabId | '' = ''
   onTabRequest: (tabId: RootTabId) => void = () => {}
 
   private isActive(tabId: RootTabId): boolean {
@@ -45,18 +46,22 @@ export struct BottomTabs {
 
   private itemOffset(tabId: RootTabId): number {
     if (this.isActive(tabId)) {
-      return 0
+      return -3
     }
 
     return 0
   }
 
   private itemOpacity(tabId: RootTabId): number {
-    return this.isActive(tabId) ? 1 : 0.84
+    return this.isActive(tabId) ? 1 : 0.88
   }
 
   private itemScale(tabId: RootTabId): number {
-    return this.isActive(tabId) ? 1 : 1
+    if (this.pressedTabId === tabId) {
+      return 0.98
+    }
+
+    return 1
   }
 
   private dockBorderColor(): string {
@@ -73,14 +78,6 @@ export struct BottomTabs {
 
   private dockBackgroundColor(): string {
     return this.theme.isDark ? 'rgba(20,22,28,0.96)' : 'rgba(255,255,255,0.96)'
-  }
-
-  private activeBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(118,162,255,0.12)' : 'rgba(47,107,255,0.08)'
-  }
-
-  private activeBorderColor(): string {
-    return this.theme.isDark ? 'rgba(118,162,255,0.14)' : 'rgba(47,107,255,0.10)'
   }
 
   private labelWeight(tabId: RootTabId): number {
@@ -130,16 +127,6 @@ export struct BottomTabs {
   }
 
   @Builder
-  private ActivePlate() {
-    Row()
-      .width('72%')
-      .height(46)
-      .backgroundColor(this.activeBackgroundColor())
-      .borderRadius(999)
-      .border({ width: 0.8, color: this.activeBorderColor() })
-  }
-
-  @Builder
   private DockShell() {
     Stack({ alignContent: Alignment.Top }) {
       Row()
@@ -172,27 +159,21 @@ export struct BottomTabs {
 
   @Builder
   private TabButton(tab: RootTabDefinition) {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.isActive(tab.id)) {
-        this.ActivePlate()
+    Column({ space: 3 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        this.Icon(tab.id)
       }
+      .width(28)
+      .height(28)
 
-      Column({ space: 3 }) {
-        Stack({ alignContent: Alignment.Center }) {
-          this.Icon(tab.id)
-        }
-        .width(28)
-        .height(28)
-
-        Text(tab.label)
-          .fontSize(BOTTOM_TAB_LABEL_SIZE)
-          .fontWeight(this.labelWeight(tab.id))
-          .fontColor(this.labelColor(tab.id))
-          .animation({ duration: 160, curve: Curve.EaseOut })
-      }
-      .alignItems(HorizontalAlign.Center)
-      .justifyContent(FlexAlign.Center)
+      Text(tab.label)
+        .fontSize(BOTTOM_TAB_LABEL_SIZE)
+        .fontWeight(this.labelWeight(tab.id))
+        .fontColor(this.labelColor(tab.id))
+        .animation({ duration: 160, curve: Curve.EaseOut })
     }
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(FlexAlign.Center)
     .width(this.itemWidth())
     .height(BOTTOM_TAB_ITEM_HEIGHT)
     .scale({ x: this.itemScale(tab.id), y: this.itemScale(tab.id) })
@@ -200,6 +181,18 @@ export struct BottomTabs {
     .opacity(this.itemOpacity(tab.id))
     .animation({ duration: 160, curve: Curve.EaseOut })
     .clickEffect({ level: ClickEffectLevel.LIGHT })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.pressedTabId = tab.id
+        return
+      }
+
+      if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        if (this.pressedTabId === tab.id) {
+          this.pressedTabId = ''
+        }
+      }
+    })
     .onClick(() => {
       void this.navigate(tab.id)
     })

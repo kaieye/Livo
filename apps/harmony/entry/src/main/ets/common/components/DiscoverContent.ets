@@ -110,23 +110,48 @@ function normalizeDiscoverFlowRouteParams(params?: DiscoverFlowRouteParams): Dis
 export struct DiscoverContent {
   @State query: string = ''
   @State searchPlatform: DiscoverSearchPlatform = 'all'
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.currentPalette()
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
+  @State hasLoaded: boolean = false
+  @State isLoadingPage: boolean = false
   @Prop showBottomTabs: boolean = true
-  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.darkPalette()
+  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
   private searchSession: number = 0
 
   aboutToAppear(): void {
+    if (!this.showBottomTabs) {
+      this.theme = this.inheritedTheme
+      if (this.hasLoaded || this.isLoadingPage) {
+        this.onReady()
+        return
+      }
+    }
+
     void this.loadData()
   }
 
   private async loadData(): Promise<void> {
-    const settings = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(settings)
-    this.onReady()
+    if (this.isLoadingPage) {
+      return
+    }
+
+    this.isLoadingPage = true
+    try {
+      if (this.showBottomTabs) {
+        const settings = await AppRepository.settings()
+        this.theme = await ThemeService.resolvePalette(settings)
+      } else {
+        this.theme = this.inheritedTheme
+      }
+
+      this.hasLoaded = true
+      this.onReady()
+    } finally {
+      this.isLoadingPage = false
+    }
   }
 
   private syncInheritedTheme(): void {

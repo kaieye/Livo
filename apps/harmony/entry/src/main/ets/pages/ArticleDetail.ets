@@ -15,11 +15,12 @@ struct ArticleDetail {
   @State actionHint: string = ''
   @State aiSummary: string = ''
   @State aiEnabled: boolean = false
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.currentPalette()
   @State isUpgradingLegacyContent: boolean = false
   private upgradedEntryIds: Set<string> = new Set<string>()
 
   aboutToAppear(): void {
+    this.theme = ThemeService.currentPalette()
     void this.loadEntry(true)
   }
 

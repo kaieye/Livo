@@ -38,21 +38,45 @@ const FOURTH_GROUP: SettingItem[] = [
 export struct SettingsContent {
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State saveHint: string = '设置将写入本地 Preferences'
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.currentPalette()
+  @State hasLoaded: boolean = false
+  @State isLoading: boolean = false
   @Prop showBottomTabs: boolean = true
-  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.darkPalette()
+  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onReady: () => void = () => {}
 
   aboutToAppear(): void {
+    if (!this.showBottomTabs) {
+      this.theme = this.inheritedTheme
+      if (this.hasLoaded || this.isLoading) {
+        this.onReady()
+        return
+      }
+    }
+
     void this.loadSettings()
   }
 
   private async loadSettings(): Promise<void> {
-    this.config = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(this.config)
-    this.saveHint = '已加载本地配置'
-    this.onReady()
+    if (this.isLoading) {
+      return
+    }
+
+    this.isLoading = true
+    try {
+      this.config = await AppRepository.settings()
+      if (this.showBottomTabs) {
+        this.theme = await ThemeService.resolvePalette(this.config)
+      } else {
+        this.theme = this.inheritedTheme
+      }
+      this.saveHint = '已加载本地配置'
+      this.hasLoaded = true
+      this.onReady()
+    } finally {
+      this.isLoading = false
+    }
   }
 
   private syncInheritedTheme(): void {

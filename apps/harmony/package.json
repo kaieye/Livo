@@ -7,7 +7,7 @@
     "dev": "node scripts/harmony-cli.mjs studio",
     "studio": "node scripts/harmony-cli.mjs studio",
     "doctor": "node scripts/harmony-cli.mjs doctor",
-    "prepare": "node scripts/harmony-cli.mjs prepare",
+    "prepare": "node scripts/harmony-cli.mjs doctor",
     "build:debug": "node scripts/harmony-cli.mjs build:debug",
     "build:release": "node scripts/harmony-cli.mjs build:release",
     "install:debug": "node scripts/harmony-cli.mjs install:debug",

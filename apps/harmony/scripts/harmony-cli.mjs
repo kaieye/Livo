@@ -3,7 +3,7 @@
 import { execFileSync, execSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -22,7 +22,9 @@ function printTitle(title) {
 
 function candidateStudioPaths() {
   return [
-    process.env.DEVECO_STUDIO_HOME ? join(process.env.DEVECO_STUDIO_HOME, 'bin', 'devecostudio.bat') : '',
+    process.env.DEVECO_STUDIO_HOME
+      ? join(process.env.DEVECO_STUDIO_HOME, 'bin', 'devecostudio.bat')
+      : '',
     'D:\\Program Files\\Huawei\\DevEco Studio\\bin\\devecostudio.bat',
     'C:\\Program Files\\Huawei\\DevEco Studio\\bin\\devecostudio.bat',
     `${process.env.ProgramFiles || 'C:\\Program Files'}\\Huawei\\DevEco Studio\\bin\\devecostudio.bat`,
@@ -49,7 +51,7 @@ function toShortWindowsPath(targetPath) {
       .trim()
 
     return output || targetPath
-  } catch (_error) {
+  } catch {
     return targetPath
   }
 }
@@ -120,27 +122,67 @@ function findHdc(sdkHome) {
   return existsSync(hdc) ? hdc : null
 }
 
+function toEnvSdkHome(sdkHome) {
+  if (!sdkHome) {
+    return null
+  }
+
+  const normalized = sdkHome.replace(/[\\/]+$/, '')
+  if (normalized.endsWith('\\default') || normalized.endsWith('/default')) {
+    return resolve(normalized, '..')
+  }
+
+  return normalized
+}
+
 function buildEnv() {
   const studio = findStudio()
   const sdkHome = findSdkHome(studio)
+  const envSdkHome = toEnvSdkHome(sdkHome)
   const hvigorw = findHvigorw(studio)
   const hdc = findHdc(sdkHome)
   const nodeHome = dirname(process.execPath)
   const nodeHomeForEnv = toShortWindowsPath(nodeHome)
+  const system32 = process.env.SystemRoot
+    ? join(process.env.SystemRoot, 'System32')
+    : 'C:\\Windows\\System32'
+  const cmdPath = join(system32, 'cmd.exe')
 
   const env = { ...process.env }
+  const pathKey = Object.prototype.hasOwnProperty.call(env, 'Path')
+    ? 'Path'
+    : 'PATH'
+  const existingPath = env[pathKey] || env.PATH || env.Path || ''
+  const pathSegments = existingPath.split(delimiter).filter(Boolean)
+  const prependUniquePath = (targetPath) => {
+    if (!targetPath) {
+      return
+    }
+    const normalizedTarget = targetPath.toLowerCase()
+    const hasTarget = pathSegments.some(
+      (segment) => segment.toLowerCase() === normalizedTarget,
+    )
+    if (!hasTarget) {
+      pathSegments.unshift(targetPath)
+    }
+  }
+
   env.NODE_HOME = env.NODE_HOME || nodeHomeForEnv
-  env.PATH = env.PATH ? `${nodeHome};${env.PATH}` : nodeHome
-  if (sdkHome) {
-    env.DEVECO_SDK_HOME = sdkHome
-    env.OHOS_SDK_HOME = sdkHome
+  prependUniquePath(system32)
+  prependUniquePath(nodeHome)
+  if (envSdkHome) {
+    env.DEVECO_SDK_HOME = envSdkHome
+    env.OHOS_SDK_HOME = envSdkHome
   }
   if (hdc) {
     const toolchainDir = dirname(hdc)
-    env.PATH = env.PATH ? `${toolchainDir};${env.PATH}` : toolchainDir
+    prependUniquePath(toolchainDir)
   }
+  env.ComSpec = env.ComSpec || cmdPath
+  env.PATH = pathSegments.join(delimiter)
+  env.Path = env.PATH
 
-  return { studio, sdkHome, hvigorw, hdc, env }
+  return { studio, sdkHome, envSdkHome, hvigorw, hdc, env }
 }
 
 function checkRequiredFiles() {
@@ -163,12 +205,13 @@ function hasSdkComponents(sdkHome) {
 }
 
 function runDoctor() {
-  const { studio, sdkHome, hvigorw, hdc } = buildEnv()
+  const { studio, sdkHome, envSdkHome, hvigorw, hdc } = buildEnv()
   printTitle(`${projectName} doctor`)
 
   console.log(`Project: ${appRoot}`)
   console.log(`DevEco Studio: ${studio || 'not found'}`)
   console.log(`DEVECO_SDK_HOME: ${sdkHome || 'not found'}`)
+  console.log(`DEVECO_SDK_HOME(env): ${envSdkHome || 'not found'}`)
   console.log(`hvigorw: ${hvigorw || 'not found'}`)
   console.log(`hdc: ${hdc || 'not found'}`)
 
@@ -178,15 +221,23 @@ function runDoctor() {
   }
 
   printTitle('SDK Check')
-  console.log(hasSdkComponents(sdkHome) ? 'OK SDK core directories found' : 'MISS SDK components incomplete')
+  console.log(
+    hasSdkComponents(sdkHome)
+      ? 'OK SDK core directories found'
+      : 'MISS SDK components incomplete',
+  )
 
   if (!studio) {
-    console.log('\nSuggestion: install DevEco Studio or set DEVECO_STUDIO_HOME.')
+    console.log(
+      '\nSuggestion: install DevEco Studio or set DEVECO_STUDIO_HOME.',
+    )
   }
   if (!sdkHome) {
     console.log('Suggestion: set DEVECO_SDK_HOME to the Harmony SDK root.')
   } else if (!hasSdkComponents(sdkHome)) {
-    console.log('Suggestion: open DevEco Studio SDK Manager and complete the OpenHarmony SDK installation.')
+    console.log(
+      'Suggestion: open DevEco Studio SDK Manager and complete the OpenHarmony SDK installation.',
+    )
   }
 }
 
@@ -203,7 +254,9 @@ function runPrepare() {
 function openStudio() {
   const { studio } = buildEnv()
   if (!studio) {
-    throw new Error('DevEco Studio not found. Run `pnpm --dir apps/harmony doctor` first.')
+    throw new Error(
+      'DevEco Studio not found. Run `pnpm --dir apps/harmony doctor` first.',
+    )
   }
 
   spawnSync(studio, [appRoot], {
@@ -216,10 +269,14 @@ function openStudio() {
 function runHvigor(taskName, extraArgs = []) {
   const { hvigorw, env, sdkHome } = buildEnv()
   if (!hvigorw) {
-    throw new Error('hvigorw not found. Run `pnpm --dir apps/harmony doctor` first.')
+    throw new Error(
+      'hvigorw not found. Run `pnpm --dir apps/harmony doctor` first.',
+    )
   }
   if (!sdkHome || !hasSdkComponents(sdkHome)) {
-    throw new Error('Harmony SDK is incomplete. Open DevEco Studio SDK Manager first.')
+    throw new Error(
+      'Harmony SDK is incomplete. Open DevEco Studio SDK Manager first.',
+    )
   }
 
   const command = [
@@ -241,10 +298,40 @@ function runHvigor(taskName, extraArgs = []) {
 
 function findDebugHap() {
   const candidates = [
-    join(appRoot, 'entry', 'build', 'default', 'outputs', 'default', 'entry-default-signed.hap'),
-    join(appRoot, 'entry', 'build', 'outputs', 'default', 'entry-default-signed.hap'),
-    join(appRoot, 'entry', 'build', 'default', 'outputs', 'default', 'entry-default-unsigned.hap'),
-    join(appRoot, 'entry', 'build', 'outputs', 'default', 'entry-default-unsigned.hap'),
+    join(
+      appRoot,
+      'entry',
+      'build',
+      'default',
+      'outputs',
+      'default',
+      'entry-default-signed.hap',
+    ),
+    join(
+      appRoot,
+      'entry',
+      'build',
+      'outputs',
+      'default',
+      'entry-default-signed.hap',
+    ),
+    join(
+      appRoot,
+      'entry',
+      'build',
+      'default',
+      'outputs',
+      'default',
+      'entry-default-unsigned.hap',
+    ),
+    join(
+      appRoot,
+      'entry',
+      'build',
+      'outputs',
+      'default',
+      'entry-default-unsigned.hap',
+    ),
   ]
 
   return candidates.find((item) => existsSync(item)) || null
@@ -253,12 +340,16 @@ function findDebugHap() {
 function installDebug() {
   const { hdc, env } = buildEnv()
   if (!hdc) {
-    throw new Error('hdc not found. Run `pnpm --dir apps/harmony doctor` first.')
+    throw new Error(
+      'hdc not found. Run `pnpm --dir apps/harmony doctor` first.',
+    )
   }
 
   const hap = findDebugHap()
   if (!hap) {
-    throw new Error('Debug HAP not found. Run `pnpm --dir apps/harmony build:debug` first.')
+    throw new Error(
+      'Debug HAP not found. Run `pnpm --dir apps/harmony build:debug` first.',
+    )
   }
 
   execFileSync(hdc, ['install', '-r', hap], {
@@ -271,14 +362,20 @@ function installDebug() {
 function runDebug() {
   const { hdc, env } = buildEnv()
   if (!hdc) {
-    throw new Error('hdc not found. Run `pnpm --dir apps/harmony doctor` first.')
+    throw new Error(
+      'hdc not found. Run `pnpm --dir apps/harmony doctor` first.',
+    )
   }
 
-  execFileSync(hdc, ['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'com.livo.harmony'], {
-    cwd: appRoot,
-    stdio: 'inherit',
-    env,
-  })
+  execFileSync(
+    hdc,
+    ['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'com.livo.harmony'],
+    {
+      cwd: appRoot,
+      stdio: 'inherit',
+      env,
+    },
+  )
 }
 
 function main() {

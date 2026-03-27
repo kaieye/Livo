@@ -27,8 +27,11 @@ struct Index {
   @State searchQuery: string = ''
   @State showSearch: boolean = false
   @State mode: SubscriptionMode = 'articles'
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.currentPalette()
+  @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
+  @State highlightedRootTabId: RootTabId = 'home'
+  private pendingRootTabId: RootTabId = 'home'
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -37,6 +40,7 @@ struct Index {
   }
 
   private async loadInitialData(): Promise<void> {
+    this.theme = ThemeService.currentPalette()
     const settings = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(settings)
     this.featuredEntries = await AppRepository.featuredEntries()
@@ -58,17 +62,8 @@ struct Index {
     }
   }
 
-  private async refreshRootTheme(): Promise<void> {
-    const settings = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(settings)
-  }
-
-  private visibleRootTabId(): RootTabId {
-    return this.activeRootTabId
-  }
-
-  private visibleRootTabIndex(): number {
-    return rootTabIndexForId(this.visibleRootTabId())
+  private refreshRootTheme(): void {
+    this.theme = ThemeService.currentPalette()
   }
 
   private syncRequestedRootTab(): void {
@@ -78,20 +73,21 @@ struct Index {
     }
 
     this.activeRootTabId = requestedTab
-    rootTabsController.changeIndex(rootTabIndexForId(requestedTab))
+    this.highlightedRootTabId = requestedTab
+    this.pendingRootTabId = requestedTab
+    this.rootTabIndex = rootTabIndexForId(requestedTab)
   }
 
   private requestRootTabSwitch(tabId: RootTabId): void {
-    if (tabId === this.activeRootTabId) {
+    const nextIndex = rootTabIndexForId(tabId)
+    if (tabId === this.highlightedRootTabId && nextIndex === this.rootTabIndex) {
       return
     }
 
+    this.highlightedRootTabId = tabId
+    this.pendingRootTabId = tabId
     this.activeRootTabId = tabId
-    rootTabsController.changeIndex(rootTabIndexForId(tabId))
-  }
-
-  private commitVisibleTabIfNeeded(tabId: RootTabId): void {
-    this.activeRootTabId = tabId
+    this.rootTabIndex = nextIndex
   }
 
   private openEntry(entryId: string): void {
@@ -143,10 +139,10 @@ struct Index {
 
   @Builder
   private EntryCard(entry: EntryCardModel) {
-    Column({ space: 10 }) {
+    Column({ space: 8 }) {
       Row({ space: 6 }) {
         Text(entry.feedTitle)
-          .fontSize(13)
+          .fontSize(12)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.accent)
           .maxLines(1)
@@ -159,79 +155,30 @@ struct Index {
         Text(entry.publishedLabel)
           .fontSize(12)
           .fontColor(this.theme.textMuted)
-
-        if (entry.readingLabel) {
-          Row({ space: 4 }) {
-            Text('·')
-              .fontSize(12)
-              .fontColor(this.theme.textMuted)
-            Text(entry.readingLabel)
-              .fontSize(12)
-              .fontColor(this.theme.textMuted)
-          }
-        }
       }
       .width('100%')
 
       Text(entry.title)
-        .fontSize(16)
+        .fontSize(15)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.theme.textPrimary)
-        .lineHeight(24)
+        .lineHeight(22)
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      if (entry.summary && entry.summary.length > 50) {
-        Text(entry.summary)
-          .fontSize(14)
-          .lineHeight(22)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-
-      Row({ space: 8 }) {
-        if (entry.tags.length > 0) {
-          ForEach(entry.tags.slice(0, 2), (tag: string) => {
-            Text(`#${tag}`)
-              .fontSize(12)
-              .fontColor(this.theme.textSecondary)
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor(this.theme.elevated)
-              .borderRadius(8)
-          }, (tag: string) => tag)
-        }
-
-        if (entry.author) {
-          Text(entry.author)
-            .fontSize(12)
-            .fontColor(this.theme.textSecondary)
-            .margin({ left: 8 })
-        }
-      }
     }
     .alignItems(HorizontalAlign.Start)
-    .padding(18)
+    .padding({ left: 14, right: 14, top: 14, bottom: 14 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(24)
+    .borderRadius(20)
     .border({ width: 0.8, color: this.theme.divider })
     .shadow({
-      radius: this.theme.isDark ? 12 : 18,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.22)' : 'rgba(15,23,42,0.06)',
+      radius: this.theme.isDark ? 10 : 14,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
       offsetX: 0,
-      offsetY: 6,
+      offsetY: 4,
     })
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => this.openEntry(entry.id))
-  }
-
-  @Builder
-  private EntrySeparator() {
-    Row()
-      .width('100%')
-      .height(0.5)
-      .backgroundColor(this.theme.divider)
-      .margin({ left: 16, right: 16 })
   }
 
   @Builder
@@ -293,15 +240,10 @@ struct Index {
       .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12, bottom: 6 })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
-        List({ space: 14 }) {
+        List({ space: 10 }) {
           ForEach(this.filteredEntries(), (entry: EntryCardModel, index: number) => {
             ListItem() {
-              Column() {
-                this.EntryCard(entry)
-                if (index < this.filteredEntries().length - 1) {
-                  this.EntrySeparator()
-                }
-              }
+              this.EntryCard(entry)
             }
             .width('100%')
             .transition(livoMotion.enterSoft(index * 18 + 40))
@@ -359,7 +301,7 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      Tabs({ index: this.visibleRootTabIndex(), controller: rootTabsController }) {
+      Tabs({ controller: rootTabsController, index: this.rootTabIndex }) {
         TabContent() {
           this.HomeRootPage()
         }
@@ -369,9 +311,6 @@ struct Index {
           SubscriptionsContent({
             showBottomTabs: false,
             inheritedTheme: this.theme,
-            onReady: () => {
-              this.commitVisibleTabIfNeeded('subscriptions')
-            },
           })
         }
         .tabBar(this.EmptyTabBar())
@@ -380,9 +319,6 @@ struct Index {
           DiscoverContent({
             showBottomTabs: false,
             inheritedTheme: this.theme,
-            onReady: () => {
-              this.commitVisibleTabIfNeeded('discover')
-            },
           })
         }
         .tabBar(this.EmptyTabBar())
@@ -391,9 +327,6 @@ struct Index {
           SettingsContent({
             showBottomTabs: false,
             inheritedTheme: this.theme,
-            onReady: () => {
-              this.commitVisibleTabIfNeeded('settings')
-            },
             onThemeChange: (theme: ThemePalette) => {
               this.theme = theme
             },
@@ -405,17 +338,34 @@ struct Index {
       .barPosition(BarPosition.End)
       .barHeight(0)
       .scrollable(false)
+      .onAnimationStart((index: number, targetIndex: number) => {
+        if (index === targetIndex) {
+          return
+        }
+
+        const targetTabId = rootTabIdForIndex(targetIndex)
+        this.rootTabIndex = targetIndex
+        this.activeRootTabId = targetTabId
+        if (this.pendingRootTabId === targetTabId || this.highlightedRootTabId === targetTabId) {
+          this.highlightedRootTabId = targetTabId
+        }
+        this.refreshRootTheme()
+      })
       .onChange((index: number) => {
         const nextTabId = rootTabIdForIndex(index)
+        this.rootTabIndex = index
         this.activeRootTabId = nextTabId
-        void this.refreshRootTheme()
+        if (nextTabId === this.pendingRootTabId || nextTabId === this.highlightedRootTabId) {
+          this.highlightedRootTabId = nextTabId
+        }
+        this.refreshRootTheme()
       })
       .width('100%')
       .height('100%')
       .backgroundColor(this.theme.background)
 
       BottomTabs({
-        activeTab: this.activeRootTabId,
+        activeTab: this.highlightedRootTabId,
         theme: this.theme,
         useTabsController: true,
         onTabRequest: (tabId: RootTabId) => {

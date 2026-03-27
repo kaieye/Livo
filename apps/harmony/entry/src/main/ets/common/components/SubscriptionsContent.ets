@@ -24,22 +24,47 @@ type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 export struct SubscriptionsContent {
   @State feeds: FeedCardModel[] = []
   @State mode: SubscriptionMode = 'articles'
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.currentPalette()
   @State sourceHint: string = '正在加载订阅内容...'
+  @State hasLoaded: boolean = false
+  @State isLoading: boolean = false
   @Prop showBottomTabs: boolean = true
-  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.darkPalette()
+  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onReady: () => void = () => {}
 
   aboutToAppear(): void {
+    if (!this.showBottomTabs) {
+      this.theme = this.inheritedTheme
+      if (this.hasLoaded || this.isLoading) {
+        this.onReady()
+        return
+      }
+    }
+
     void this.loadPageData()
   }
 
   private async loadPageData(): Promise<void> {
-    const settings = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(settings)
-    this.feeds = await AppRepository.feeds()
-    this.sourceHint = '已加载本地订阅内容'
-    this.onReady()
+    if (this.isLoading) {
+      return
+    }
+
+    this.isLoading = true
+    try {
+      if (this.showBottomTabs) {
+        const settings = await AppRepository.settings()
+        this.theme = await ThemeService.resolvePalette(settings)
+      } else {
+        this.theme = this.inheritedTheme
+      }
+
+      this.feeds = await AppRepository.feeds()
+      this.sourceHint = '已加载本地订阅内容'
+      this.hasLoaded = true
+      this.onReady()
+    } finally {
+      this.isLoading = false
+    }
   }
 
   private syncInheritedTheme(): void {

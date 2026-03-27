@@ -51,54 +51,52 @@ const LIGHT_PALETTE: ThemePalette = {
 }
 
 export class ThemeService {
-  static darkPalette(): ThemePalette {
+  private static cachedPalette: ThemePalette = DARK_PALETTE
+
+  private static clonePalette(source: ThemePalette): ThemePalette {
     return {
-      isDark: DARK_PALETTE.isDark,
-      background: DARK_PALETTE.background,
-      surface: DARK_PALETTE.surface,
-      elevated: DARK_PALETTE.elevated,
-      textPrimary: DARK_PALETTE.textPrimary,
-      textSecondary: DARK_PALETTE.textSecondary,
-      textMuted: DARK_PALETTE.textMuted,
-      divider: DARK_PALETTE.divider,
-      accent: DARK_PALETTE.accent,
-      accentText: DARK_PALETTE.accentText,
-      tabBarBackground: DARK_PALETTE.tabBarBackground,
-      tabBarInactive: DARK_PALETTE.tabBarInactive,
-      dragHandle: DARK_PALETTE.dragHandle,
+      isDark: source.isDark,
+      background: source.background,
+      surface: source.surface,
+      elevated: source.elevated,
+      textPrimary: source.textPrimary,
+      textSecondary: source.textSecondary,
+      textMuted: source.textMuted,
+      divider: source.divider,
+      accent: source.accent,
+      accentText: source.accentText,
+      tabBarBackground: source.tabBarBackground,
+      tabBarInactive: source.tabBarInactive,
+      dragHandle: source.dragHandle,
     }
+  }
+
+  static currentPalette(): ThemePalette {
+    return ThemeService.clonePalette(ThemeService.cachedPalette)
+  }
+
+  static darkPalette(): ThemePalette {
+    return ThemeService.clonePalette(DARK_PALETTE)
   }
 
   static lightPalette(): ThemePalette {
-    return {
-      isDark: LIGHT_PALETTE.isDark,
-      background: LIGHT_PALETTE.background,
-      surface: LIGHT_PALETTE.surface,
-      elevated: LIGHT_PALETTE.elevated,
-      textPrimary: LIGHT_PALETTE.textPrimary,
-      textSecondary: LIGHT_PALETTE.textSecondary,
-      textMuted: LIGHT_PALETTE.textMuted,
-      divider: LIGHT_PALETTE.divider,
-      accent: LIGHT_PALETTE.accent,
-      accentText: LIGHT_PALETTE.accentText,
-      tabBarBackground: LIGHT_PALETTE.tabBarBackground,
-      tabBarInactive: LIGHT_PALETTE.tabBarInactive,
-      dragHandle: LIGHT_PALETTE.dragHandle,
-    }
+    return ThemeService.clonePalette(LIGHT_PALETTE)
   }
 
   static async resolvePalette(settings: HarmonySettings): Promise<ThemePalette> {
+    let resolved: ThemePalette
     if (settings.themeMode === 'dark') {
-      return ThemeService.darkPalette()
+      resolved = ThemeService.darkPalette()
+    } else if (settings.themeMode === 'light') {
+      resolved = ThemeService.lightPalette()
+    } else {
+      resolved = (await ThemeService.isSystemDarkMode())
+        ? ThemeService.darkPalette()
+        : ThemeService.lightPalette()
     }
 
-    if (settings.themeMode === 'light') {
-      return ThemeService.lightPalette()
-    }
-
-    return (await ThemeService.isSystemDarkMode())
-      ? ThemeService.darkPalette()
-      : ThemeService.lightPalette()
+    ThemeService.cachedPalette = ThemeService.clonePalette(resolved)
+    return resolved
   }
 
   private static async isSystemDarkMode(): Promise<boolean> {
