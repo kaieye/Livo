@@ -1,6 +1,6 @@
-import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
 import { AppRepository } from '../common/data/AppRepository'
+import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { Entry, Feed, FeedViewType } from '../common/models/LivoModels'
 import { FeedDraft } from '../common/repositories/FeedRepository'
 import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
@@ -28,7 +28,7 @@ struct DiscoverPreview {
   }
 
   private params(): Record<string, string> {
-    return router.getParams() as Record<string, string>
+    return getStringParams()
   }
 
   private viewLabel(view: FeedViewType): string {
@@ -109,7 +109,7 @@ struct DiscoverPreview {
         .textAlign(TextAlign.Center)
         .borderRadius(999)
         .backgroundColor(this.theme.elevated)
-        .onClick(() => router.back())
+        .onClick(() => { void goBack() })
 
       Blank()
     }
@@ -305,7 +305,7 @@ struct DiscoverPreview {
         promptAction.showToast({ message: '订阅已添加' })
       }
 
-      router.back()
+      void goBack()
     } catch (_) {
       promptAction.showToast({ message: '添加失败，请检查链接或网络' })
     } finally {

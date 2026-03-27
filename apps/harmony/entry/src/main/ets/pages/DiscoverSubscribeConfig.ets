@@ -1,5 +1,5 @@
-import router from '@ohos.router'
 import { AppRepository } from '../common/data/AppRepository'
+import { getStringParams, goBack, openDiscoverPreview } from '../common/navigation/AppRouter'
 import { FeedViewType } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 
@@ -28,7 +28,7 @@ struct DiscoverSubscribeConfig {
     const settings = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(settings)
 
-    const params = router.getParams() as Record<string, string>
+    const params = getStringParams()
     this.targetUrl = params.targetUrl ?? ''
     this.targetTitle = params.targetTitle ?? ''
     this.targetSiteUrl = params.siteUrl ?? ''
@@ -88,17 +88,14 @@ struct DiscoverSubscribeConfig {
   }
 
   private continueToPreview(): void {
-    router.pushUrl({
-      url: 'pages/DiscoverPreview',
-      params: {
-        targetUrl: this.mappedTargetUrl(),
-        targetTitle: this.targetTitle,
-        view: `${this.selectedView}`,
-        siteUrl: this.targetSiteUrl,
-        description: this.targetDescription,
-        sourceKind: this.sourceKind,
-        category: '',
-      },
+    void openDiscoverPreview({
+      targetUrl: this.mappedTargetUrl(),
+      targetTitle: this.targetTitle,
+      targetView: this.selectedView,
+      siteUrl: this.targetSiteUrl,
+      description: this.targetDescription,
+      sourceKind: this.sourceKind,
+      category: '',
     })
   }
 
@@ -114,7 +111,7 @@ struct DiscoverSubscribeConfig {
         .textAlign(TextAlign.Center)
         .borderRadius(999)
         .backgroundColor(this.theme.elevated)
-        .onClick(() => router.back())
+        .onClick(() => { void goBack() })
 
       Blank()
     }

@@ -36,6 +36,16 @@ function stripHtml(value: string): string {
   return decodeHtml(value).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 }
 
+function normalizeRichContent(value: string, fallback: string): string {
+  const raw = stripCdata(value).trim()
+  if (!raw) {
+    return fallback
+  }
+
+  const decoded = decodeHtml(raw).trim()
+  return decoded || fallback
+}
+
 function stripCdata(value: string): string {
   return value.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '')
 }
@@ -281,7 +291,7 @@ function parseRssItems(feedId: string, xml: string): ParsedItem[] {
     const summary = stripHtml(description) || '这条内容暂时没有摘要。'
     const author = stripHtml(pickFirst(itemBlock, ['author', 'dc:creator'])) || '未知作者'
     const pubDate = stripHtml(pickFirst(itemBlock, ['pubDate', 'published', 'updated']))
-    const content = stripHtml(description) ? stripHtml(description) : summary
+    const content = normalizeRichContent(description, summary)
     
     const parsedItem: ParsedItem = {
       id: createEntryId(feedId, link, title, index),
@@ -308,7 +318,7 @@ function parseAtomItems(feedId: string, xml: string): ParsedItem[] {
     const authorBlock = pickTag(entryBlock, 'author')
     const author = stripHtml(pickTag(authorBlock, 'name') || pickTag(entryBlock, 'name') || pickTag(entryBlock, 'dc:creator')) || '未知作者'
     const pubDate = stripHtml(pickFirst(entryBlock, ['published', 'updated']))
-    const content = stripHtml(contentBlock) ? stripHtml(contentBlock) : summary
+    const content = normalizeRichContent(contentBlock, summary)
 
     const parsedItem: ParsedItem = {
       id: createEntryId(feedId, link, title, index),

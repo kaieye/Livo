@@ -1,195 +1,233 @@
-import router from '@ohos.router'
+import { ROOT_TABS, RootTabId, RootTabDefinition, openRootTab, rootTabIndexForId } from '../navigation/AppRouter'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { livoMotion } from '../ui/Motion'
+import {
+  BOTTOM_TAB_BAR_HEIGHT,
+  BOTTOM_TAB_BAR_WIDTH,
+  BOTTOM_TAB_ITEM_HEIGHT,
+  BOTTOM_TAB_LABEL_SIZE,
+  BOTTOM_TAB_TOTAL_HEIGHT,
+  CHIP_RADIUS,
+} from '../ui/UiTokens'
 
-export type RootTabId = 'home' | 'subscriptions' | 'discover' | 'settings'
-
-interface TabDefinition {
-  id: RootTabId
-  label: string
-  route: string
-}
-
-const ROOT_TABS: TabDefinition[] = [
-  { id: 'home', label: '首页', route: 'pages/Index' },
-  { id: 'subscriptions', label: '订阅', route: 'pages/Subscriptions' },
-  { id: 'discover', label: '发现', route: 'pages/Discover' },
-  { id: 'settings', label: '设置', route: 'pages/Settings' },
-]
+export const rootTabsController: TabsController = new TabsController()
 
 @Component
 export struct BottomTabs {
   @Prop activeTab: RootTabId = 'home'
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @Prop useTabsController: boolean = false
+  onTabRequest: (tabId: RootTabId) => void = () => {}
 
   private isActive(tabId: RootTabId): boolean {
     return this.activeTab === tabId
   }
 
+  private itemWidth(): string {
+    return `${100 / ROOT_TABS.length}%`
+  }
+
   private labelColor(tabId: RootTabId): string {
-    return this.isActive(tabId) ? this.theme.accent : this.theme.tabBarInactive
+    return this.isActive(tabId) ? this.activeColor() : this.inactiveColor()
   }
 
   private iconColor(tabId: RootTabId): string {
-    return this.isActive(tabId) ? this.theme.accent : this.theme.tabBarInactive
+    return this.isActive(tabId) ? this.activeColor() : this.inactiveColor()
   }
 
-  private async navigate(route: string, tabId: RootTabId): Promise<void> {
+  private activeColor(): string {
+    return this.theme.isDark ? '#76A2FF' : '#2F6BFF'
+  }
+
+  private inactiveColor(): string {
+    return this.theme.isDark ? '#A3A8B3' : '#9B9BA1'
+  }
+
+  private itemOffset(tabId: RootTabId): number {
+    if (this.isActive(tabId)) {
+      return 0
+    }
+
+    return 0
+  }
+
+  private itemOpacity(tabId: RootTabId): number {
+    return this.isActive(tabId) ? 1 : 0.84
+  }
+
+  private itemScale(tabId: RootTabId): number {
+    return this.isActive(tabId) ? 1 : 1
+  }
+
+  private dockBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.96)'
+  }
+
+  private dockShadowColor(): string {
+    return this.theme.isDark ? 'rgba(0,0,0,0.24)' : 'rgba(15,23,42,0.06)'
+  }
+
+  private dockHighlightColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.92)'
+  }
+
+  private dockBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.96)' : 'rgba(255,255,255,0.96)'
+  }
+
+  private activeBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(118,162,255,0.12)' : 'rgba(47,107,255,0.08)'
+  }
+
+  private activeBorderColor(): string {
+    return this.theme.isDark ? 'rgba(118,162,255,0.14)' : 'rgba(47,107,255,0.10)'
+  }
+
+  private labelWeight(tabId: RootTabId): number {
+    return this.isActive(tabId) ? FontWeight.Medium : FontWeight.Regular
+  }
+
+  private tabIcon(tabId: RootTabId): Resource {
+    if (tabId === 'home') {
+      return this.isActive(tabId) ? $r('app.media.nav_home_active') : $r('app.media.nav_home_inactive')
+    }
+    if (tabId === 'subscriptions') {
+      return this.isActive(tabId) ? $r('app.media.nav_subscriptions_active') : $r('app.media.nav_subscriptions_inactive')
+    }
+    if (tabId === 'discover') {
+      return this.isActive(tabId) ? $r('app.media.nav_discover_active') : $r('app.media.nav_discover_inactive')
+    }
+    return this.isActive(tabId) ? $r('app.media.nav_settings_active') : $r('app.media.nav_settings_inactive')
+  }
+
+  private async navigate(tabId: RootTabId): Promise<void> {
     if (this.activeTab === tabId) {
       return
     }
 
+    if (this.useTabsController) {
+      this.onTabRequest(tabId)
+      return
+    }
+
     try {
-      await router.replaceUrl({ url: route })
+      await openRootTab(tabId, true)
     } catch (_) {
       try {
-        await router.pushUrl({ url: route })
+        await openRootTab(tabId, false)
       } catch (_) {
       }
     }
   }
 
   @Builder
-  private HomeIcon(tabId: RootTabId) {
-    Column({ space: 0 }) {
-      Row()
-        .width(16)
-        .height(8)
-        .backgroundColor(this.iconColor(tabId))
-        .borderRadius({ topLeft: 999, topRight: 999, bottomLeft: 4, bottomRight: 4 })
-
-      Row()
-        .width(20)
-        .height(12)
-        .backgroundColor(this.iconColor(tabId))
-        .borderRadius(5)
-        .margin({ top: -1 })
-    }
-    .width(24)
-    .height(24)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-  }
-
-  @Builder
-  private BagIcon(tabId: RootTabId) {
-    Stack({ alignContent: Alignment.Center }) {
-      Column({ space: 0 }) {
-        Row()
-          .width(14)
-          .height(5)
-          .border({
-            width: 2,
-            color: this.iconColor(tabId),
-          })
-          .borderRadius({ topLeft: 999, topRight: 999, bottomLeft: 0, bottomRight: 0 })
-
-        Row()
-          .width(20)
-          .height(14)
-          .border({ width: 2, color: this.iconColor(tabId) })
-          .borderRadius(5)
-          .margin({ top: -1 })
-      }
-    }
-    .width(24)
-    .height(24)
-  }
-
-  @Builder
-  private SearchIcon(tabId: RootTabId) {
-    Stack({ alignContent: Alignment.Center }) {
-      Row()
-        .width(16)
-        .height(16)
-        .borderRadius(999)
-        .border({ width: 2, color: this.iconColor(tabId) })
-        .margin({ left: -4, top: -4 })
-
-      Row()
-        .width(8)
-        .height(2.5)
-        .borderRadius(999)
-        .backgroundColor(this.iconColor(tabId))
-        .rotate({ angle: 45 })
-        .margin({ left: 8, top: 8 })
-    }
-    .width(24)
-    .height(24)
-  }
-
-  @Builder
-  private SettingsIcon(tabId: RootTabId) {
-    Stack({ alignContent: Alignment.Center }) {
-      Row()
-        .width(18)
-        .height(18)
-        .borderRadius(999)
-        .border({ width: 2, color: this.iconColor(tabId) })
-
-      Row()
-        .width(6)
-        .height(6)
-        .borderRadius(999)
-        .backgroundColor(this.iconColor(tabId))
-    }
-    .width(24)
-    .height(24)
-  }
-
-  @Builder
   private Icon(tabId: RootTabId) {
-    if (tabId === 'home') {
-      this.HomeIcon(tabId)
-    } else if (tabId === 'subscriptions') {
-      this.BagIcon(tabId)
-    } else if (tabId === 'discover') {
-      this.SearchIcon(tabId)
-    } else {
-      this.SettingsIcon(tabId)
+    Image(this.tabIcon(tabId))
+      .width(24)
+      .height(24)
+      .objectFit(ImageFit.Contain)
+      .animation({ duration: 160, curve: Curve.EaseOut })
+  }
+
+  @Builder
+  private ActivePlate() {
+    Row()
+      .width('72%')
+      .height(46)
+      .backgroundColor(this.activeBackgroundColor())
+      .borderRadius(999)
+      .border({ width: 0.8, color: this.activeBorderColor() })
+  }
+
+  @Builder
+  private DockShell() {
+    Stack({ alignContent: Alignment.Top }) {
+      Row()
+        .width(BOTTOM_TAB_BAR_WIDTH)
+        .height(BOTTOM_TAB_BAR_HEIGHT)
+        .backgroundColor(this.dockBackgroundColor())
+        .backdropBlur(this.theme.isDark ? 10 : 20)
+        .borderRadius(CHIP_RADIUS)
+        .offset({ x: 0, y: 6 })
+        .border({ width: 0.6, color: this.dockBorderColor() })
+        .shadow({
+          radius: 14,
+          color: this.dockShadowColor(),
+          offsetX: 0,
+          offsetY: 4,
+        })
+        .transition(livoMotion.enterFromBottom())
+
+      Row()
+        .width('32%')
+        .height(1.5)
+        .borderRadius(CHIP_RADIUS)
+        .backgroundColor(this.dockHighlightColor())
+        .margin({ top: 11 })
+        .opacity(this.theme.isDark ? 0.45 : 0.95)
     }
+    .width('100%')
+    .height(BOTTOM_TAB_TOTAL_HEIGHT)
+  }
+
+  @Builder
+  private TabButton(tab: RootTabDefinition) {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.isActive(tab.id)) {
+        this.ActivePlate()
+      }
+
+      Column({ space: 3 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          this.Icon(tab.id)
+        }
+        .width(28)
+        .height(28)
+
+        Text(tab.label)
+          .fontSize(BOTTOM_TAB_LABEL_SIZE)
+          .fontWeight(this.labelWeight(tab.id))
+          .fontColor(this.labelColor(tab.id))
+          .animation({ duration: 160, curve: Curve.EaseOut })
+      }
+      .alignItems(HorizontalAlign.Center)
+      .justifyContent(FlexAlign.Center)
+    }
+    .width(this.itemWidth())
+    .height(BOTTOM_TAB_ITEM_HEIGHT)
+    .scale({ x: this.itemScale(tab.id), y: this.itemScale(tab.id) })
+    .translate({ y: this.itemOffset(tab.id) })
+    .opacity(this.itemOpacity(tab.id))
+    .animation({ duration: 160, curve: Curve.EaseOut })
+    .clickEffect({ level: ClickEffectLevel.LIGHT })
+    .onClick(() => {
+      void this.navigate(tab.id)
+    })
   }
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Row()
-        .width('94%')
-        .height(64)
-        .backgroundColor(this.theme.tabBarBackground)
-        .backdropBlur(24)
-        .borderRadius(999)
-        .border({ width: 0.6, color: this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)' })
-        .shadow({
-          radius: 14,
-          color: this.theme.isDark ? 'rgba(0, 0, 0, 0.30)' : 'rgba(15, 23, 42, 0.16)',
-          offsetX: 0,
-          offsetY: 6,
-        })
+        .width('100%')
+        .height(BOTTOM_TAB_TOTAL_HEIGHT)
+        .backgroundColor(this.theme.background)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+
+      this.DockShell()
 
       Column() {
         Row({ space: 0 }) {
-          ForEach(ROOT_TABS, (tab: TabDefinition) => {
-            Column({ space: 3 }) {
-              this.Icon(tab.id)
-
-              Text(tab.label)
-                .fontSize(11)
-                .fontWeight(this.isActive(tab.id) ? FontWeight.Medium : FontWeight.Regular)
-                .fontColor(this.labelColor(tab.id))
-            }
-            .width('25%')
-            .height(42)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(HorizontalAlign.Center)
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .onClick(() => { void this.navigate(tab.route, tab.id) })
-          }, (tab: TabDefinition) => tab.id)
+          ForEach(ROOT_TABS, (tab: RootTabDefinition) => {
+            this.TabButton(tab)
+          }, (tab: RootTabDefinition) => tab.id)
         }
         .width('100%')
       }
       .width('100%')
-      .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+      .padding({ left: 18, right: 18, top: 10, bottom: 10 })
     }
     .width('100%')
-    .padding({ bottom: 12 })
+    .height(BOTTOM_TAB_TOTAL_HEIGHT)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

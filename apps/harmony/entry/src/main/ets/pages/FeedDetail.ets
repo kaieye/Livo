@@ -1,5 +1,5 @@
-import router from '@ohos.router'
 import { AppRepository } from '../common/data/AppRepository'
+import { getStringParams, goBack, openArticleDetail } from '../common/navigation/AppRouter'
 import { EntryCardModel, FeedCardModel } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 
@@ -14,7 +14,7 @@ struct FeedDetail {
 
   aboutToAppear(): void {
     console.info('Livo Harmony FeedDetail aboutToAppear')
-    const params = router.getParams() as Record<string, string>
+    const params = getStringParams()
     if (params && params.feedId) {
       this.feedId = params.feedId
       void this.loadData()
@@ -44,10 +44,7 @@ struct FeedDetail {
   }
 
   private openEntry(entryId: string): void {
-    router.pushUrl({
-      url: 'pages/ArticleDetail',
-      params: { entryId },
-    })
+    void openArticleDetail(entryId)
   }
 
   @Builder
@@ -136,7 +133,7 @@ struct FeedDetail {
         .fontColor([this.theme.textPrimary])
         .padding(8)
         .clickEffect({ level: ClickEffectLevel.LIGHT })
-        .onClick(() => router.back())
+        .onClick(() => { void goBack() })
 
       if (this.feed) {
         if (this.feed.imageUrl) {

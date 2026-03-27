@@ -1,8 +1,20 @@
-import router from '@ohos.router'
 import { AppRepository } from '../common/data/AppRepository'
-import { BottomTabs } from '../common/components/BottomTabs'
+import { BottomTabs, rootTabsController } from '../common/components/BottomTabs'
+import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIdForIndex, rootTabIndexForId } from '../common/navigation/AppRouter'
+import { ContentModeRail } from '../common/components/ContentModeRail'
+import { PageHeader } from '../common/components/PageHeader'
 import { EntryCardModel } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { livoMotion } from '../common/ui/Motion'
+import {
+  CARD_RADIUS_MD,
+  INPUT_RADIUS,
+  META_FONT_SIZE,
+  PAGE_HORIZONTAL_PADDING,
+} from '../common/ui/UiTokens'
+import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
+import { DiscoverContent } from '../common/components/DiscoverContent'
+import { SettingsContent } from '../common/components/SettingsContent'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 
@@ -16,9 +28,11 @@ struct Index {
   @State showSearch: boolean = false
   @State mode: SubscriptionMode = 'articles'
   @State theme: ThemePalette = ThemeService.darkPalette()
+  @State activeRootTabId: RootTabId = 'home'
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
+    this.syncRequestedRootTab()
     void this.loadInitialData()
   }
 
@@ -44,11 +58,44 @@ struct Index {
     }
   }
 
+  private async refreshRootTheme(): Promise<void> {
+    const settings = await AppRepository.settings()
+    this.theme = await ThemeService.resolvePalette(settings)
+  }
+
+  private visibleRootTabId(): RootTabId {
+    return this.activeRootTabId
+  }
+
+  private visibleRootTabIndex(): number {
+    return rootTabIndexForId(this.visibleRootTabId())
+  }
+
+  private syncRequestedRootTab(): void {
+    const requestedTab = getRequestedRootTabId()
+    if (!requestedTab) {
+      return
+    }
+
+    this.activeRootTabId = requestedTab
+    rootTabsController.changeIndex(rootTabIndexForId(requestedTab))
+  }
+
+  private requestRootTabSwitch(tabId: RootTabId): void {
+    if (tabId === this.activeRootTabId) {
+      return
+    }
+
+    this.activeRootTabId = tabId
+    rootTabsController.changeIndex(rootTabIndexForId(tabId))
+  }
+
+  private commitVisibleTabIfNeeded(tabId: RootTabId): void {
+    this.activeRootTabId = tabId
+  }
+
   private openEntry(entryId: string): void {
-    router.pushUrl({
-      url: 'pages/ArticleDetail',
-      params: { entryId },
-    })
+    void openArticleDetail(entryId)
   }
 
   private filteredEntries(): EntryCardModel[] {
@@ -68,19 +115,6 @@ struct Index {
     return list
   }
 
-  private modeIndex(): number {
-    switch (this.mode) {
-      case 'social': return 1
-      case 'pictures': return 2
-      case 'videos': return 3
-      default: return 0
-    }
-  }
-
-  private modeHighlightOffsetPercent(): string {
-    return `${this.modeIndex() * 25}%`
-  }
-
   private getModeTitle(mode: SubscriptionMode): string {
     switch (mode) {
       case 'articles': return '文章'
@@ -91,76 +125,25 @@ struct Index {
     }
   }
 
-  @Builder
-  private ModeIcon(mode: SubscriptionMode, active: boolean) {
-    if (mode === 'articles') {
-      Image(active ? $r('app.media.sub_articles_active') : $r('app.media.sub_articles_inactive'))
-        .width(16).height(16).objectFit(ImageFit.Contain)
-    } else if (mode === 'social') {
-      Image(active ? $r('app.media.sub_social_active') : $r('app.media.sub_social_inactive'))
-        .width(16).height(16).objectFit(ImageFit.Contain)
-    } else if (mode === 'pictures') {
-      Image(active ? $r('app.media.sub_pictures_active') : $r('app.media.sub_pictures_inactive'))
-        .width(16).height(16).objectFit(ImageFit.Contain)
-    } else {
-      Image(active ? $r('app.media.sub_videos_active') : $r('app.media.sub_videos_inactive'))
-        .width(16).height(16).objectFit(ImageFit.Contain)
+  private headerSubtitle(): string {
+    switch (this.mode) {
+      case 'social': return 'Social Stream'
+      case 'pictures': return 'Visual Digest'
+      case 'videos': return 'Video Radar'
+      default: return 'Daily Brief'
     }
   }
 
   @Builder
-  private ModeTab(mode: SubscriptionMode) {
-    Row({ space: 6 }) {
-      this.ModeIcon(mode, this.mode === mode)
-      
-      Text(this.getModeTitle(mode))
-        .fontSize(14)
-        .fontWeight(this.mode === mode ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.mode === mode ? '#FFFFFF' : this.theme.textSecondary)
-        .animation({ duration: 220, curve: Curve.EaseInOut })
-    }
-    .layoutWeight(1)
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .onClick(() => { this.mode = mode })
-  }
-
-  @Builder
-  private ModeRail() {
-    Stack({ alignContent: Alignment.Start }) {
-      Row() {
-        Row()
-          .width('100%')
-          .height('100%')
-          .borderRadius(14)
-          .backgroundColor(this.theme.accent)
-          .shadow({ radius: 8, color: 'rgba(255, 106, 0, 0.25)', offsetY: 2 })
-      }
-      .width('25%')
-      .height('100%')
-      .padding(4)
-      .offset({ x: this.modeHighlightOffsetPercent(), y: 0 })
-      .animation({ duration: 280, curve: Curve.FastOutSlowIn })
-
-      Row() {
-        this.ModeTab('articles')
-        this.ModeTab('social')
-        this.ModeTab('pictures')
-        this.ModeTab('videos')
-      }
-      .width('100%')
-      .height('100%')
-    }
-    .width('100%')
-    .height(46)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(18)
+  private EmptyTabBar() {
+    Row()
+      .width(0)
+      .height(0)
   }
 
   @Builder
   private EntryCard(entry: EntryCardModel) {
-    Column({ space: 8 }) {
-      // Feed 信息行
+    Column({ space: 10 }) {
       Row({ space: 6 }) {
         Text(entry.feedTitle)
           .fontSize(13)
@@ -190,7 +173,6 @@ struct Index {
       }
       .width('100%')
 
-      // 标题
       Text(entry.title)
         .fontSize(16)
         .fontWeight(FontWeight.Bold)
@@ -199,7 +181,6 @@ struct Index {
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      // 摘要（可选）
       if (entry.summary && entry.summary.length > 50) {
         Text(entry.summary)
           .fontSize(14)
@@ -209,7 +190,6 @@ struct Index {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
 
-      // 标签和作者
       Row({ space: 8 }) {
         if (entry.tags.length > 0) {
           ForEach(entry.tags.slice(0, 2), (tag: string) => {
@@ -231,8 +211,16 @@ struct Index {
       }
     }
     .alignItems(HorizontalAlign.Start)
-    .padding({ left: 16, right: 16, top: 16, bottom: 16 })
-    .borderRadius(16)
+    .padding(18)
+    .backgroundColor(this.theme.surface)
+    .borderRadius(24)
+    .border({ width: 0.8, color: this.theme.divider })
+    .shadow({
+      radius: this.theme.isDark ? 12 : 18,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.22)' : 'rgba(15,23,42,0.06)',
+      offsetX: 0,
+      offsetY: 6,
+    })
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => this.openEntry(entry.id))
   }
@@ -246,69 +234,66 @@ struct Index {
       .margin({ left: 16, right: 16 })
   }
 
-  build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-        List({ space: 14 }) {
-          ListItem() {
-            Column({ space: 14 }) {
-              Row() {
-                Text('今日推荐')
-                  .fontSize(28)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(this.theme.textPrimary)
+  @Builder
+  private HomeRootPage() {
+    Column() {
+      Column({ space: 14 }) {
+        PageHeader({
+          title: '今日推荐',
+          subtitle: this.headerSubtitle(),
+          theme: this.theme,
+          trailingSymbol: $r('sys.symbol.magnifyingglass'),
+          onTrailingClick: () => {
+            this.showSearch = !this.showSearch
+          },
+        })
 
-                Blank()
+        ContentModeRail({
+          mode: this.mode,
+          theme: this.theme,
+          onChange: (mode: SubscriptionMode) => {
+            this.mode = mode
+          },
+        })
 
-                SymbolGlyph($r('sys.symbol.magnifyingglass'))
-                  .fontSize(26)
-                  .fontColor([this.theme.textPrimary])
-                  .padding(8)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT })
-                  .onClick(() => { this.showSearch = !this.showSearch })
-              }
-              .width('100%')
-              .padding({ top: 12 })
+        Row() {
+          Text(this.isRefreshing ? '正在刷新内容...' : this.feedSourceLabel)
+            .fontSize(META_FONT_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .layoutWeight(1)
 
-              this.ModeRail()
+          Text(`${this.filteredEntries().length} 条`)
+            .fontSize(META_FONT_SIZE)
+            .fontColor(this.theme.textMuted)
+        }
+        .width('100%')
+        .padding({ left: 4, right: 4 })
+        .transition(livoMotion.enterRise(60))
 
-              Row() {
-                Text(this.feedSourceLabel)
-                  .fontSize(12)
-                  .fontColor(this.theme.textSecondary)
-                  .layoutWeight(1)
+        if (this.showSearch) {
+          TextInput({ text: this.searchQuery, placeholder: '搜索标题、摘要或来源' })
+            .backgroundColor(this.theme.surface)
+            .fontColor(this.theme.textPrimary)
+            .borderRadius(INPUT_RADIUS)
+            .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+            .border({ width: 0.8, color: this.theme.divider })
+            .onChange((value: string) => {
+              this.searchQuery = value
+            })
+            .transition(livoMotion.enterSoft(80))
 
-                Button(this.isRefreshing ? '刷新中' : '刷新')
-                  .type(ButtonType.Capsule)
-                  .backgroundColor(this.theme.elevated)
-                  .fontColor(this.theme.textPrimary)
-                  .enabled(!this.isRefreshing)
-                  .clickEffect({ level: ClickEffectLevel.LIGHT })
-                  .onClick(() => { void this.refreshFeaturedEntries() })
-              }
-              .width('100%')
-              .padding({ left: 4, right: 4 })
-
-              if (this.showSearch) {
-                TextInput({ text: this.searchQuery, placeholder: '搜索标题、摘要或来源' })
-                  .backgroundColor(this.theme.surface)
-                  .fontColor(this.theme.textPrimary)
-                  .borderRadius(18)
-                  .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-                  .onChange((value: string) => { this.searchQuery = value })
-
-                if (this.searchQuery.trim()) {
-                  Text(`搜索结果：${this.filteredEntries().length} 条`)
-                    .fontSize(12)
-                    .fontColor(this.theme.textSecondary)
-                }
-              }
-            }
-            .width('100%')
-            .padding({ top: 12, bottom: 6 })
+          if (this.searchQuery.trim()) {
+            Text(`搜索结果：${this.filteredEntries().length} 条`)
+              .fontSize(META_FONT_SIZE)
+              .fontColor(this.theme.textSecondary)
           }
-          .width('100%')
+        }
+      }
+      .width('100%')
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12, bottom: 6 })
 
+      Refresh({ refreshing: $$this.isRefreshing }) {
+        List({ space: 14 }) {
           ForEach(this.filteredEntries(), (entry: EntryCardModel, index: number) => {
             ListItem() {
               Column() {
@@ -319,17 +304,28 @@ struct Index {
               }
             }
             .width('100%')
+            .transition(livoMotion.enterSoft(index * 18 + 40))
           }, (entry: EntryCardModel) => entry.id)
 
           if (this.filteredEntries().length === 0) {
             ListItem() {
-              Text('还没有可展示的条目，请先到订阅页添加或刷新订阅源。')
-                .fontSize(14)
-                .fontColor(this.theme.textSecondary)
-                .padding(18)
-                .backgroundColor(this.theme.surface)
-                .borderRadius(20)
-                .width('100%')
+              Column({ space: 8 }) {
+                Text('还没有可展示的条目')
+                  .fontSize(18)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.theme.textPrimary)
+
+                Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+                  .fontSize(14)
+                  .lineHeight(22)
+                  .fontColor(this.theme.textSecondary)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .padding(20)
+              .backgroundColor(this.theme.surface)
+              .borderRadius(CARD_RADIUS_MD)
+              .border({ width: 0.8, color: this.theme.divider })
+              .width('100%')
             }
           }
 
@@ -339,18 +335,98 @@ struct Index {
         }
         .width('100%')
         .height('100%')
-        .padding({ left: 18, right: 18 })
+        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
       }
       .width('100%')
-      .height('100%')
-
-      BottomTabs({ activeTab: 'home', theme: this.theme })
-        .align(Alignment.Bottom)
+      .layoutWeight(1)
+      .onRefreshing(() => {
+        if (!this.isRefreshing) {
+          void this.refreshFeaturedEntries()
+        }
+      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+  }
+
+  onPageShow(): void {
+    this.syncRequestedRootTab()
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Tabs({ index: this.visibleRootTabIndex(), controller: rootTabsController }) {
+        TabContent() {
+          this.HomeRootPage()
+        }
+        .tabBar(this.EmptyTabBar())
+
+        TabContent() {
+          SubscriptionsContent({
+            showBottomTabs: false,
+            inheritedTheme: this.theme,
+            onReady: () => {
+              this.commitVisibleTabIfNeeded('subscriptions')
+            },
+          })
+        }
+        .tabBar(this.EmptyTabBar())
+
+        TabContent() {
+          DiscoverContent({
+            showBottomTabs: false,
+            inheritedTheme: this.theme,
+            onReady: () => {
+              this.commitVisibleTabIfNeeded('discover')
+            },
+          })
+        }
+        .tabBar(this.EmptyTabBar())
+
+        TabContent() {
+          SettingsContent({
+            showBottomTabs: false,
+            inheritedTheme: this.theme,
+            onReady: () => {
+              this.commitVisibleTabIfNeeded('settings')
+            },
+            onThemeChange: (theme: ThemePalette) => {
+              this.theme = theme
+            },
+          })
+        }
+        .tabBar(this.EmptyTabBar())
+      }
+      .vertical(false)
+      .barPosition(BarPosition.End)
+      .barHeight(0)
+      .scrollable(false)
+      .onChange((index: number) => {
+        const nextTabId = rootTabIdForIndex(index)
+        this.activeRootTabId = nextTabId
+        void this.refreshRootTheme()
+      })
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+
+      BottomTabs({
+        activeTab: this.activeRootTabId,
+        theme: this.theme,
+        useTabsController: true,
+        onTabRequest: (tabId: RootTabId) => {
+          this.requestRootTabSwitch(tabId)
+        },
+      })
+      .align(Alignment.Bottom)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

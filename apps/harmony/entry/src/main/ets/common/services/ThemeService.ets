@@ -29,7 +29,7 @@ const DARK_PALETTE: ThemePalette = {
   divider: '#2A2A30',
   accent: '#FF6A00',
   accentText: '#FFFFFF',
-  tabBarBackground: 'rgba(8, 8, 10, 0.88)',
+  tabBarBackground: '#0B0B0F',
   tabBarInactive: '#D1D1D6',
   dragHandle: 'rgba(255, 255, 255, 0.22)',
 }

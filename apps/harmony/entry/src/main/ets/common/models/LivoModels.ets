@@ -90,7 +90,25 @@ export interface EntryCardModel {
 
 export interface ArticleDetailModel extends EntryCardModel {
   contentParagraphs: string[]
+  contentBlocks: ArticleContentBlock[]
+  articleUrl: string
   siteUrl: string
+}
+
+export interface ArticleContentBlock {
+  id: string
+  type: 'paragraph' | 'image'
+  text: string
+  imageUrl: string
+}
+
+export function isLegacyPlainArticleContent(content: string): boolean {
+  const normalized = (content || '').trim()
+  if (!normalized) {
+    return false
+  }
+
+  return !/<[a-z][\s\S]*>/i.test(normalized) && !/\[\[IMG_\d+\]\]/.test(normalized)
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -219,7 +237,11 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
 
 export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailModel {
   const card = toEntryCardModel(entry, feed)
-  const paragraphs = entry.content.split('\n').filter((paragraph: string) => paragraph.trim().length > 0)
+  const blocks = buildArticleContentBlocks(entry.content, entry.url || feed.siteUrl || feed.url)
+  const paragraphs = blocks
+    .filter((block: ArticleContentBlock) => block.type === 'paragraph')
+    .map((block: ArticleContentBlock) => block.text)
+
   return {
     id: card.id,
     feedId: card.feedId,
@@ -236,6 +258,174 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     isRead: card.isRead,
     isStarred: card.isStarred,
     contentParagraphs: paragraphs,
+    contentBlocks: blocks,
+    articleUrl: entry.url,
     siteUrl: feed.siteUrl ?? feed.url,
   }
+}
+
+function decodeBasicHtml(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, '\'')
+    .replace(/&nbsp;/g, ' ')
+}
+
+function resolveAbsoluteUrl(baseUrl: string, value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (trimmed.startsWith('//')) {
+    return `https:${trimmed}`
+  }
+
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) {
+    return trimmed
+  }
+
+  const base = (baseUrl || '').trim()
+  if (!base) {
+    return trimmed
+  }
+
+  const originMatch = base.match(/^(https?:\/\/[^/]+)(\/.*)?$/i)
+  const origin = originMatch?.[1] ?? ''
+  const basePath = originMatch?.[2] ?? '/'
+
+  if (!origin) {
+    return trimmed
+  }
+
+  if (trimmed.startsWith('/')) {
+    return `${origin}${trimmed}`
+  }
+
+  const normalizedBaseDir = basePath.includes('/')
+    ? basePath.replace(/\/[^/]*$/, '/')
+    : '/'
+
+  return `${origin}${normalizedBaseDir}${trimmed}`.replace(/([^:]\/)\/+/g, '$1')
+}
+
+function extractImageUrl(tag: string, baseUrl: string): string {
+  const srcMatch = tag.match(/\b(?:data-src|data-original|src)=["']([^"']+)["']/i)
+  return srcMatch?.[1] ? resolveAbsoluteUrl(baseUrl, decodeBasicHtml(srcMatch[1])) : ''
+}
+
+function pushParagraphBlocks(source: string, blocks: ArticleContentBlock[], startIndex: number): number {
+  const segments = source
+    .split(/\n{2,}/)
+    .map((item: string) => item.replace(/[ \t]+\n/g, '\n').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter((item: string) => item.length > 0)
+
+  let index = startIndex
+  segments.forEach((text: string) => {
+    const refinedParagraphs = splitDenseParagraph(text)
+    refinedParagraphs.forEach((paragraph: string) => {
+      blocks.push({
+        id: `paragraph-${index}`,
+        type: 'paragraph',
+        text: paragraph,
+        imageUrl: '',
+      })
+      index += 1
+    })
+  })
+  return index
+}
+
+function splitDenseParagraph(text: string): string[] {
+  const normalized = text.trim()
+  if (!normalized) {
+    return []
+  }
+
+  const numberedParts = normalized
+    .replace(/([。！？!?])\s*(\d+[、.．])/g, '$1\n\n$2')
+    .replace(/([。！？!?])\s*((?:其|另|再)次[，,]?)/g, '$1\n\n$2')
+    .split(/\n{2,}/)
+    .map((item: string) => item.trim())
+    .filter((item: string) => item.length > 0)
+
+  const result: string[] = []
+  numberedParts.forEach((part: string) => {
+    if (part.length <= 110) {
+      result.push(part)
+      return
+    }
+
+    let current = ''
+    const sentences = part.match(/[^。！？!?]+[。！？!?]?/g) ?? [part]
+    sentences.forEach((sentence: string) => {
+      const next = `${current}${sentence}`.trim()
+      if (current && next.length > 110) {
+        result.push(current.trim())
+        current = sentence.trim()
+      } else {
+        current = next
+      }
+    })
+    if (current.trim()) {
+      result.push(current.trim())
+    }
+  })
+
+  return result.length > 0 ? result : [normalized]
+}
+
+function buildArticleContentBlocks(content: string, baseUrl: string): ArticleContentBlock[] {
+  const raw = (content || '').trim()
+  if (!raw) {
+    return []
+  }
+
+  const imageUrls: string[] = []
+  let normalized = decodeBasicHtml(raw)
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<img\b[^>]*>/gi, (tag: string) => {
+      const imageUrl = extractImageUrl(tag, baseUrl)
+      if (!imageUrl) {
+        return '\n\n'
+      }
+      const imageIndex = imageUrls.length
+      imageUrls.push(imageUrl)
+      return `\n\n[[IMG_${imageIndex}]]\n\n`
+    })
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<(?:\/p|\/div|\/section|\/article|\/blockquote|\/h[1-6]|\/ul|\/ol|\/li|\/pre|\/tr)>/gi, '\n\n')
+    .replace(/<(?:p|div|section|article|blockquote|h[1-6]|ul|ol|pre|tr)\b[^>]*>/gi, '')
+    .replace(/<li\b[^>]*>/gi, '\n• ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\r/g, '')
+
+  const parts = normalized.split(/(\[\[IMG_\d+\]\])/g)
+  const blocks: ArticleContentBlock[] = []
+  let blockIndex = 0
+
+  parts.forEach((part: string) => {
+    const imageMatch = part.match(/^\[\[IMG_(\d+)\]\]$/)
+    if (imageMatch?.[1]) {
+      const imageUrl = imageUrls[Number(imageMatch[1])] ?? ''
+      if (imageUrl) {
+        blocks.push({
+          id: `image-${blockIndex}`,
+          type: 'image',
+          text: '',
+          imageUrl,
+        })
+        blockIndex += 1
+      }
+      return
+    }
+
+    blockIndex = pushParagraphBlocks(part, blocks, blockIndex)
+  })
+
+  return blocks
 }
