@@ -2,6 +2,7 @@ import { SymbolGlyphModifier } from '@kit.ArkUI'
 import { AppRepository } from '../data/AppRepository'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeMode } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 interface AppearanceOption {
@@ -29,9 +30,14 @@ const LANGUAGE_OPTIONS: AppearanceOption[] = [
 
 const ROW_MIN_HEIGHT: number = 56
 const ROW_ICON_SIZE: number = 22
-const ROW_TITLE_SIZE: number = 16
-const ROW_SUBTITLE_SIZE: number = 13
-const ROW_TIPS_SIZE: number = 14
+const PANEL_HEADER_TITLE_SIZE: number = 20
+const ROW_TITLE_SIZE: number = 15
+const ROW_SUBTITLE_SIZE: number = 12
+const ROW_TIPS_SIZE: number = 12
+const PANEL_HANDLE_TOP_PADDING: number = 14
+const PANEL_HANDLE_BOTTOM_PADDING: number = 6
+const PANEL_HEADER_SPACING: number = 8
+const ROW_TEXT_SPACING: number = 2
 
 @Component
 export struct AppearanceSettingsPanel {
@@ -164,16 +170,30 @@ export struct AppearanceSettingsPanel {
 
   @Builder
   private Header() {
-    Column() {
-      Row()
-        .width(40)
-        .height(4)
-        .borderRadius(999)
-        .backgroundColor(this.theme.dragHandle)
+    Column({ space: PANEL_HEADER_SPACING }) {
+      Column() {
+        Row()
+          .width(40)
+          .height(4)
+          .borderRadius(999)
+          .backgroundColor(this.theme.dragHandle)
+      }
+      .width('100%')
+      .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+      .alignItems(HorizontalAlign.Center)
+
+      Row() {
+        Text('外观')
+          .fontSize(PANEL_HEADER_TITLE_SIZE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textPrimary)
+          .width('100%')
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Start)
     }
     .width('100%')
-    .padding({ top: 10, bottom: 6 })
-    .alignItems(HorizontalAlign.Center)
+    .transition(livoMotion.enterRise(20))
   }
 
   @Builder
@@ -226,8 +246,9 @@ export struct AppearanceSettingsPanel {
       SymbolGlyph($r('sys.symbol.circle_righthalf_inset_filled'))
         .fontSize(ROW_ICON_SIZE)
         .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(0))
 
-      Column({ space: 2 }) {
+      Column({ space: ROW_TEXT_SPACING }) {
         Text('主题模式')
           .fontSize(ROW_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
@@ -272,8 +293,9 @@ export struct AppearanceSettingsPanel {
       SymbolGlyph($r('sys.symbol.arrow_clockwise'))
         .fontSize(ROW_ICON_SIZE)
         .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(1))
 
-      Column({ space: 2 }) {
+      Column({ space: ROW_TEXT_SPACING }) {
         Text('刷新间隔')
           .fontSize(ROW_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
@@ -308,8 +330,9 @@ export struct AppearanceSettingsPanel {
       SymbolGlyph($r('sys.symbol.translate'))
         .fontSize(ROW_ICON_SIZE)
         .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(2))
 
-      Column({ space: 2 }) {
+      Column({ space: ROW_TEXT_SPACING }) {
         Text('界面语言')
           .fontSize(ROW_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
@@ -344,8 +367,9 @@ export struct AppearanceSettingsPanel {
       SymbolGlyph(icon)
         .fontSize(ROW_ICON_SIZE)
         .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(3))
 
-      Column({ space: 2 }) {
+      Column({ space: ROW_TEXT_SPACING }) {
         Text(title)
           .fontSize(ROW_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
@@ -388,6 +412,7 @@ export struct AppearanceSettingsPanel {
       .backgroundColor(this.theme.surface)
       .borderRadius(CARD_RADIUS_LG)
       .border({ width: 0.8, color: this.theme.divider })
+      .transition(livoMotion.enterSoft(40))
 
       Column() {
         this.ToggleRow(
@@ -418,6 +443,7 @@ export struct AppearanceSettingsPanel {
       .backgroundColor(this.theme.surface)
       .borderRadius(CARD_RADIUS_LG)
       .border({ width: 0.8, color: this.theme.divider })
+      .transition(livoMotion.enterSoft(70))
     }
     .width('100%')
   }
@@ -433,11 +459,13 @@ export struct AppearanceSettingsPanel {
           .width('100%')
       }
       .width('100%')
-      .alignItems(HorizontalAlign.Center)
+      .constraintSize({ minHeight: '100%' })
+      .justifyContent(FlexAlign.Start)
+      .alignItems(HorizontalAlign.Start)
       .padding({
         left: PAGE_HORIZONTAL_PADDING,
         right: PAGE_HORIZONTAL_PADDING,
-        top: 2,
+        top: 0,
         bottom: 12,
       })
     }

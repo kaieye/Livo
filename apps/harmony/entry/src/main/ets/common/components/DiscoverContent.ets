@@ -741,9 +741,9 @@ export struct DiscoverContent {
       .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 8 })
       .alignItems(HorizontalAlign.Start)
 
-      Scroll() {
-        Column({ space: 14 }) {
-          if (this.directUrlResult()) {
+      List({ space: 14 }) {
+        if (this.directUrlResult()) {
+          ListItem() {
             Column({ space: 12 }) {
               this.SectionHeader('地址结果', 1)
               this.DirectUrlRow(this.directUrlResult())
@@ -751,27 +751,40 @@ export struct DiscoverContent {
             .width('100%')
             .alignItems(HorizontalAlign.Start)
           }
+        }
 
+        ListItem() {
           this.CandidateSection('识别结果', this.resolvedCandidates())
-          this.CandidateSection('候选订阅', this.keywordCandidates())
-          this.SearchResultSection()
-          this.RecommendedFallbackSection()
+        }
 
-          if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote) {
+        ListItem() {
+          this.CandidateSection('候选订阅', this.keywordCandidates())
+        }
+
+        ListItem() {
+          this.SearchResultSection()
+        }
+
+        ListItem() {
+          this.RecommendedFallbackSection()
+        }
+
+        if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote) {
+          ListItem() {
             this.NoResultState()
           }
+        }
 
+        ListItem() {
           Row().height(18).width('100%')
         }
-        .width('100%')
-        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: PAGE_BOTTOM_GAP })
-        .justifyContent(FlexAlign.Start)
-        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
       .layoutWeight(1)
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: PAGE_BOTTOM_GAP })
       .scrollBar(BarState.Off)
       .backgroundColor(this.theme.background)
+      .edgeEffect(EdgeEffect.Spring)
 
       if (this.showBottomTabs) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })

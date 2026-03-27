@@ -1,18 +1,20 @@
 import { AppRepository } from '../data/AppRepository'
 import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
+import {
+  AboutSettingsPanel,
+  DataControlSettingsPanel,
+  GeneralSettingsPanel,
+  PrivacySettingsPanel,
+} from './SettingsSecondaryPanels'
 import { PageHeader } from './PageHeader'
 import { SettingListRow } from './SettingListRow'
-import {
-  openAboutSettings,
-  openDataControlSettings,
-  openGeneralSettings,
-  openPrivacySettings
-} from '../navigation/AppRouter'
-import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeMode } from '../models/LivoModels'
+import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
+
+type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about'
 
 interface SettingItem {
   title: string
@@ -95,7 +97,8 @@ export struct SettingsContent {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State hasLoaded: boolean = false
   @State isLoading: boolean = false
-  @State showAppearanceSheet: boolean = false
+  @State activeSheet: SettingsSheetKey = ''
+  @State showSettingsSheet: boolean = false
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onThemeChange: (theme: ThemePalette) => void = () => {}
@@ -158,6 +161,16 @@ export struct SettingsContent {
     this.config = settings
   }
 
+  private openSheet(sheet: SettingsSheetKey): void {
+    this.activeSheet = sheet
+    this.showSettingsSheet = true
+  }
+
+  private closeSheet(): void {
+    this.activeSheet = ''
+    this.showSettingsSheet = false
+  }
+
   private themeLabel(): string {
     switch (this.config.themeMode) {
       case 'light':
@@ -207,37 +220,28 @@ export struct SettingsContent {
   }
 
   private resolveHint(item: SettingItem): string {
-    if (item.title === '外观') {
-      return this.themeLabel()
-    }
-    if (item.title === '自动化') {
-      return this.config.autoRefresh ? '开启' : '关闭'
-    }
-    if (item.title === '关于') {
-      return 'Livo'
-    }
     return item.hint ?? ''
   }
 
   private handleSettingTap(item: SettingItem): void {
     if (item.title === '外观') {
-      this.showAppearanceSheet = true
+      this.openSheet('appearance')
       return
     }
     if (item.title === '通用') {
-      void openGeneralSettings()
+      this.openSheet('general')
       return
     }
     if (item.title === '数据控制') {
-      void openDataControlSettings()
+      this.openSheet('data-control')
       return
     }
     if (item.title === '隐私') {
-      void openPrivacySettings()
+      this.openSheet('privacy')
       return
     }
     if (item.title === '关于') {
-      void openAboutSettings()
+      this.openSheet('about')
     }
   }
 
@@ -245,28 +249,18 @@ export struct SettingsContent {
     Stack({ alignContent: Alignment.Bottom }) {
       List({ space: 24 }) {
         ListItem() {
-          Column({ space: 8 }) {
+          Column() {
             PageHeader({
               title: '设置',
               theme: this.theme,
             })
-
-            Text('调整主题、订阅、自动化与本地数据行为')
-              .fontSize(13)
-              .fontColor(this.theme.textSecondary)
-              .padding({ left: 2, right: 2 })
-
-            Text(this.saveHint)
-              .fontSize(12)
-              .fontColor(this.theme.textMuted)
-              .padding({ left: 2, right: 2 })
           }
           .width('100%')
           .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
         }
 
         ListItem() {
-          Column({ space: 16 }) {
+          Column({ space: 10 }) {
             this.Group(PRIMARY_GROUP, 30)
             this.Group(SECOND_GROUP, 50)
             this.Group(THIRD_GROUP, 70)
@@ -294,36 +288,58 @@ export struct SettingsContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .bindSheet($$this.showAppearanceSheet, this.AppearanceSheet(), {
+    .bindSheet($$this.showSettingsSheet, this.ActiveSheet(), {
       detents: [SheetSize.MEDIUM, SheetSize.LARGE],
       dragBar: false,
+      showClose: false,
       backgroundColor: this.theme.background,
       keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
       onWillDismiss: () => {
-        this.showAppearanceSheet = false
+        this.closeSheet()
       }
     })
   }
 
   @Builder
-  private AppearanceSheet() {
+  private ActiveSheet() {
     Column() {
-      AppearanceSettingsPanel({
-        showBackButton: false,
-        onSettingsChange: (settings: HarmonySettings) => {
-          this.handleAppearanceSettingsChange(settings)
-        },
-        onThemeChange: (theme: ThemePalette) => {
-          this.theme = theme
-          this.onThemeChange(theme)
-        },
-        onClose: () => {
-          this.showAppearanceSheet = false
-        },
-      })
+      if (this.activeSheet === 'appearance') {
+        AppearanceSettingsPanel({
+          showBackButton: false,
+          onSettingsChange: (settings: HarmonySettings) => {
+            this.handleAppearanceSettingsChange(settings)
+          },
+          onThemeChange: (theme: ThemePalette) => {
+            this.theme = theme
+            this.onThemeChange(theme)
+          },
+          onClose: () => {
+            this.closeSheet()
+          },
+        })
+      } else if (this.activeSheet === 'general') {
+        GeneralSettingsPanel({
+          onSettingsChange: (settings: HarmonySettings) => {
+            this.config = settings
+          },
+        })
+      } else if (this.activeSheet === 'data-control') {
+        DataControlSettingsPanel({
+          onSettingsChange: (settings: HarmonySettings) => {
+            this.config = settings
+          },
+        })
+      } else if (this.activeSheet === 'privacy') {
+        PrivacySettingsPanel()
+      } else if (this.activeSheet === 'about') {
+        AboutSettingsPanel()
+      }
     }
     .width('100%')
     .height('100%')
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
   }
+
 }

@@ -1,7 +1,7 @@
 import { AppRepository } from '../common/data/AppRepository'
 import window from '@ohos.window'
-import { BottomTabs, rootTabsController } from '../common/components/BottomTabs'
-import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIdForIndex, rootTabIndexForId } from '../common/navigation/AppRouter'
+import { BottomTabs } from '../common/components/BottomTabs'
+import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
 import { PageHeader } from '../common/components/PageHeader'
 import { EntryCardModel } from '../common/models/LivoModels'
@@ -34,7 +34,10 @@ struct Index {
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
   @State highlightedRootTabId: RootTabId = 'home'
+  @State previousRootTabId: RootTabId = 'home'
+  @State isRootTransitioning: boolean = false
   private pendingRootTabId: RootTabId = 'home'
+  private rootTransitionVersion: number = 0
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -94,6 +97,8 @@ struct Index {
       return
     }
 
+    this.previousRootTabId = requestedTab
+    this.isRootTransitioning = false
     this.activeRootTabId = requestedTab
     this.highlightedRootTabId = requestedTab
     this.pendingRootTabId = requestedTab
@@ -108,12 +113,113 @@ struct Index {
 
     this.highlightedRootTabId = tabId
     this.pendingRootTabId = tabId
+    this.startRootTabTransition(tabId, nextIndex)
+  }
+
+  private startRootTabTransition(tabId: RootTabId, nextIndex: number): void {
+    const currentTabId = this.activeRootTabId
+    const currentIndex = this.rootTabIndex
+    if (currentTabId === tabId && currentIndex === nextIndex) {
+      return
+    }
+
+    this.rootTransitionVersion += 1
+    const version = this.rootTransitionVersion
+    this.previousRootTabId = currentTabId
+    this.isRootTransitioning = true
     this.activeRootTabId = tabId
     this.rootTabIndex = nextIndex
+    this.refreshRootTheme()
+
+    setTimeout(() => {
+      if (version !== this.rootTransitionVersion) {
+        return
+      }
+
+      this.previousRootTabId = tabId
+      this.isRootTransitioning = false
+      if (this.highlightedRootTabId !== this.activeRootTabId) {
+        this.highlightedRootTabId = this.activeRootTabId
+      }
+    }, livoMotion.rootSceneDuration())
   }
 
   private openEntry(entryId: string): void {
     void openArticleDetail(entryId)
+  }
+
+  private sceneVisible(tabId: RootTabId): Visibility {
+    if (tabId === this.activeRootTabId) {
+      return Visibility.Visible
+    }
+
+    if (this.isRootTransitioning && tabId === this.previousRootTabId) {
+      return Visibility.Visible
+    }
+
+    return Visibility.Hidden
+  }
+
+  private sceneOffset(tabId: RootTabId): number {
+    return livoMotion.rootSceneOffset(this.rootTabIndex, rootTabIndexForId(tabId))
+  }
+
+  private sceneOpacity(tabId: RootTabId): number {
+    return livoMotion.rootSceneOpacity(tabId === this.activeRootTabId)
+  }
+
+  private sceneScale(tabId: RootTabId): number {
+    return livoMotion.rootSceneScale(tabId === this.activeRootTabId)
+  }
+
+  private sceneZIndex(tabId: RootTabId): number {
+    if (tabId === this.activeRootTabId) {
+      return 2
+    }
+
+    if (this.isRootTransitioning && tabId === this.previousRootTabId) {
+      return 1
+    }
+
+    return 0
+  }
+
+  @Builder
+  private RootScene(tabId: RootTabId) {
+    Stack() {
+      if (tabId === 'home') {
+        this.HomeRootPage()
+      } else if (tabId === 'subscriptions') {
+        SubscriptionsContent({
+          showBottomTabs: false,
+          inheritedTheme: this.theme,
+        })
+      } else if (tabId === 'discover') {
+        DiscoverContent({
+          showBottomTabs: false,
+          inheritedTheme: this.theme,
+        })
+      } else {
+        SettingsContent({
+          showBottomTabs: false,
+          inheritedTheme: this.theme,
+          onThemeChange: (theme: ThemePalette) => {
+            this.theme = theme
+            void this.applySystemBarStyle(theme)
+          },
+        })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .visibility(this.sceneVisible(tabId))
+    .opacity(this.sceneOpacity(tabId))
+    .translate({ x: this.sceneOffset(tabId) })
+    .zIndex(this.sceneZIndex(tabId))
+    .animation({
+      duration: livoMotion.rootSceneDuration(),
+      curve: livoMotion.rootSceneCurve(),
+    })
   }
 
   private filteredEntries(): EntryCardModel[] {
@@ -141,13 +247,6 @@ struct Index {
       case 'videos': return '视频'
       default: return ''
     }
-  }
-
-  @Builder
-  private EmptyTabBar() {
-    Row()
-      .width(0)
-      .height(0)
   }
 
   @Builder
@@ -312,66 +411,12 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      Tabs({ controller: rootTabsController, index: this.rootTabIndex }) {
-        TabContent() {
-          this.HomeRootPage()
-        }
-        .tabBar(this.EmptyTabBar())
-
-        TabContent() {
-          SubscriptionsContent({
-            showBottomTabs: false,
-            inheritedTheme: this.theme,
-          })
-        }
-        .tabBar(this.EmptyTabBar())
-
-        TabContent() {
-          DiscoverContent({
-            showBottomTabs: false,
-            inheritedTheme: this.theme,
-          })
-        }
-        .tabBar(this.EmptyTabBar())
-
-        TabContent() {
-          SettingsContent({
-            showBottomTabs: false,
-            inheritedTheme: this.theme,
-            onThemeChange: (theme: ThemePalette) => {
-              this.theme = theme
-              void this.applySystemBarStyle(theme)
-            },
-          })
-        }
-        .tabBar(this.EmptyTabBar())
+      Stack() {
+        this.RootScene('home')
+        this.RootScene('subscriptions')
+        this.RootScene('discover')
+        this.RootScene('settings')
       }
-      .vertical(false)
-      .barPosition(BarPosition.End)
-      .barHeight(0)
-      .scrollable(false)
-      .onAnimationStart((index: number, targetIndex: number) => {
-        if (index === targetIndex) {
-          return
-        }
-
-        const targetTabId = rootTabIdForIndex(targetIndex)
-        this.rootTabIndex = targetIndex
-        this.activeRootTabId = targetTabId
-        if (this.pendingRootTabId === targetTabId || this.highlightedRootTabId === targetTabId) {
-          this.highlightedRootTabId = targetTabId
-        }
-        this.refreshRootTheme()
-      })
-      .onChange((index: number) => {
-        const nextTabId = rootTabIdForIndex(index)
-        this.rootTabIndex = index
-        this.activeRootTabId = nextTabId
-        if (nextTabId === this.pendingRootTabId || nextTabId === this.highlightedRootTabId) {
-          this.highlightedRootTabId = nextTabId
-        }
-        this.refreshRootTheme()
-      })
       .width('100%')
       .height('100%')
       .padding({ top: this.topAvoidArea })

@@ -11,6 +11,7 @@ import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
   META_FONT_SIZE,
+  PAGE_BOTTOM_GAP,
   LIST_ROW_DIVIDER_INSET,
   LIST_ROW_HORIZONTAL_PADDING,
   LIST_ROW_TITLE_SIZE,
@@ -185,103 +186,107 @@ export struct SubscriptionsContent {
     .transition(livoMotion.enterScale(index * 18 + 30))
   }
 
-  @Builder
-  private FeedSection() {
-    Column({ space: 12 }) {
-      Text('订阅源')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textMuted)
-        .padding({ left: 4 })
-
-      if (this.filteredFeeds().length === 0) {
-        Column({ space: 10 }) {
-          Text(`您还没有收藏任何${this.headerTitle()}源`)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-
-          Text('先添加对应类型的订阅源，或者刷新现有订阅后再回来看看。')
-            .fontSize(14)
-            .lineHeight(22)
-            .fontColor(this.theme.textSecondary)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(18)
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_MD)
-        .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterScale(70))
-      } else {
-        Column() {
-          ForEach(this.filteredFeeds(), (feed: FeedCardModel, index: number) => {
-            this.FeedRow(feed, index, index < this.filteredFeeds().length - 1)
-          }, (feed: FeedCardModel) => feed.id)
-        }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .border({ width: 0.8, color: this.theme.divider })
-        .clip(true)
-        .transition(livoMotion.enterScale(70))
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      List({ space: 14 }) {
-        ListItem() {
-          Column({ space: 16 }) {
-            PageHeader({
-              title: '订阅库',
-              theme: this.theme,
-            })
+      Column() {
+        Column({ space: 16 }) {
+          PageHeader({
+            title: '订阅库',
+            theme: this.theme,
+          })
 
-            ContentModeRail({
-              mode: this.mode,
-              theme: this.theme,
-              onChange: (mode: SubscriptionMode) => {
-                this.mode = mode
-              },
-            })
+          ContentModeRail({
+            mode: this.mode,
+            theme: this.theme,
+            onChange: (mode: SubscriptionMode) => {
+              this.mode = mode
+            },
+          })
 
-            Row() {
-              Text(`${this.filteredFeeds().length} 个订阅源`)
-                .fontSize(META_FONT_SIZE)
-                .fontColor(this.theme.textSecondary)
+          Row() {
+            Text(`${this.filteredFeeds().length} 个订阅源`)
+              .fontSize(META_FONT_SIZE)
+              .fontColor(this.theme.textSecondary)
 
-              Blank()
+            Blank()
 
-              Text(this.sourceHint)
-                .fontSize(META_FONT_SIZE)
-                .fontColor(this.theme.textMuted)
-            }
-            .width('100%')
-            .padding({ left: 4, right: 4 })
-            .transition(livoMotion.enterRise(50))
+            Text(this.sourceHint)
+              .fontSize(META_FONT_SIZE)
+              .fontColor(this.theme.textMuted)
           }
           .width('100%')
+          .padding({ left: 4, right: 4 })
+          .transition(livoMotion.enterRise(50))
         }
         .width('100%')
+        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
 
-        ListItem() {
-          this.FeedSection()
-        }
+        Scroll() {
+          Column({ space: 14 }) {
+            Text('订阅源')
+              .fontSize(15)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textMuted)
+              .padding({ left: 4 })
+              .width('100%')
 
-        ListItem() {
-          Row().height(76).width('100%')
+            if (this.filteredFeeds().length === 0) {
+              Column({ space: 10 }) {
+                Text(`您还没有收藏任何${this.headerTitle()}源`)
+                  .fontSize(18)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.theme.textPrimary)
+
+                Text('先添加对应类型的订阅源，或者刷新现有订阅后再回来看看。')
+                  .fontSize(14)
+                  .lineHeight(22)
+                  .fontColor(this.theme.textSecondary)
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
+              .padding(18)
+              .backgroundColor(this.theme.surface)
+              .borderRadius(CARD_RADIUS_MD)
+              .border({ width: 0.8, color: this.theme.divider })
+              .transition(livoMotion.enterScale(70))
+            } else {
+              Column() {
+                ForEach(this.filteredFeeds(), (feed: FeedCardModel, index: number) => {
+                  this.FeedRow(
+                    feed,
+                    index,
+                    index < this.filteredFeeds().length - 1,
+                  )
+                }, (feed: FeedCardModel) => feed.id)
+              }
+              .width('100%')
+              .backgroundColor(this.theme.surface)
+              .borderRadius(CARD_RADIUS_LG)
+              .border({ width: 0.8, color: this.theme.divider })
+              .clip(true)
+              .transition(livoMotion.enterScale(70))
+            }
+
+            Row().height(88).width('100%')
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .justifyContent(FlexAlign.Start)
+          .constraintSize({ minHeight: '100%' })
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: PAGE_BOTTOM_GAP })
         }
+        .width('100%')
+        .layoutWeight(1)
+        .nestedScroll({
+          scrollForward: NestedScrollMode.SELF_FIRST,
+          scrollBackward: NestedScrollMode.SELF_FIRST,
+        })
+        .scrollBar(BarState.Off)
+        .backgroundColor(this.theme.background)
+        .edgeEffect(EdgeEffect.Spring)
       }
       .width('100%')
       .height('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
-      .scrollBar(BarState.Off)
-      .backgroundColor(this.theme.background)
-      .edgeEffect(EdgeEffect.Spring)
 
       if (this.showBottomTabs) {
         BottomTabs({ activeTab: 'subscriptions', theme: this.theme })
