@@ -1,37 +1,91 @@
 import { AppRepository } from '../data/AppRepository'
 import { BottomTabs } from './BottomTabs'
+import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
 import { PageHeader } from './PageHeader'
 import { SettingListRow } from './SettingListRow'
+import {
+  openAboutSettings,
+  openDataControlSettings,
+  openGeneralSettings,
+  openPrivacySettings
+} from '../navigation/AppRouter'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeMode } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
 
 interface SettingItem {
   title: string
-  icon: string
-  color: string
+  symbol: Resource
+  symbolColor: string
+  subtitle: string
+  hint?: string
 }
 
 const PRIMARY_GROUP: SettingItem[] = [
-  { title: '通用', icon: '◎', color: '#FF4571' },
-  { title: '外观', icon: '◔', color: '#8B5CF6' },
-  { title: '数据控制', icon: '◫', color: '#3B82F6' },
-  { title: '账户', icon: '◉', color: '#FF7A1A' },
+  {
+    title: '通用',
+    symbol: $r('sys.symbol.gearshape'),
+    symbolColor: '#4F5D75',
+    subtitle: '语言、刷新与基础偏好'
+  },
+  {
+    title: '外观',
+    symbol: $r('sys.symbol.brush_fill'),
+    symbolColor: '#6C63FF',
+    subtitle: '主题、字号与阅读观感'
+  },
+  {
+    title: '数据控制',
+    symbol: $r('sys.symbol.externaldrive_fill'),
+    symbolColor: '#3D7BFF',
+    subtitle: '本地数据、缓存与同步控制'
+  },
+  {
+    title: '账户',
+    symbol: $r('sys.symbol.square_and_pencil'),
+    symbolColor: '#FF8C42',
+    subtitle: '账户连接与个人资料'
+  },
 ]
 
 const SECOND_GROUP: SettingItem[] = [
-  { title: '自动化', icon: '✦', color: '#9333EA' },
-  { title: '列表', icon: '◌', color: '#0EA5E9' },
+  {
+    title: '自动化',
+    symbol: $r('sys.symbol.bolt_filled_on_circle'),
+    symbolColor: '#7A5AF8',
+    subtitle: '自动刷新与智能摘要'
+  },
+  {
+    title: '列表',
+    symbol: $r('sys.symbol.list_bullet_square_fill'),
+    symbolColor: '#3B82F6',
+    subtitle: '列表密度与内容呈现'
+  },
 ]
 
 const THIRD_GROUP: SettingItem[] = [
-  { title: '订阅', icon: '◍', color: '#FF7A1A' },
+  {
+    title: '订阅',
+    symbol: $r('sys.symbol.folder_fill'),
+    symbolColor: '#FF8A3D',
+    subtitle: '订阅源导入、整理与同步'
+  },
 ]
 
 const FOURTH_GROUP: SettingItem[] = [
-  { title: '隐私', icon: '◈', color: '#6366F1' },
-  { title: '关于', icon: '⬢', color: '#FBBF24' },
+  {
+    title: '隐私',
+    symbol: $r('sys.symbol.person_shield_fill'),
+    symbolColor: '#5B6CFF',
+    subtitle: '代理、权限与本地隐私'
+  },
+  {
+    title: '关于',
+    symbol: $r('sys.symbol.info_circle'),
+    symbolColor: '#7B8794',
+    subtitle: '版本信息与项目说明'
+  },
 ]
 
 @Component
@@ -41,6 +95,7 @@ export struct SettingsContent {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State hasLoaded: boolean = false
   @State isLoading: boolean = false
+  @State showAppearanceSheet: boolean = false
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onThemeChange: (theme: ThemePalette) => void = () => {}
@@ -99,6 +154,10 @@ export struct SettingsContent {
     })
   }
 
+  private handleAppearanceSettingsChange(settings: HarmonySettings): void {
+    this.config = settings
+  }
+
   private themeLabel(): string {
     switch (this.config.themeMode) {
       case 'light':
@@ -110,164 +169,108 @@ export struct SettingsContent {
     }
   }
 
-  private quickToggleTheme(): void {
-    const next: ThemeMode = this.config.themeMode === 'dark' ? 'light' : 'dark'
-    this.syncSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: next,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    })
-  }
-
-  private applyThemeMode(themeMode: ThemeMode): void {
-    this.syncSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    })
-  }
-
   @Builder
-  private SettingRow(item: SettingItem, showDivider: boolean) {
+  private SettingRow(item: SettingItem, delay: number) {
     SettingListRow({
       title: item.title,
-      icon: item.icon,
-      iconColor: item.color,
+      symbol: item.symbol,
+      symbolColor: item.symbolColor,
+      subtitle: this.resolveSubtitle(item),
+      hint: this.resolveHint(item),
       theme: this.theme,
-      showDivider,
+      onTap: () => this.handleSettingTap(item),
     })
+      .transition(livoMotion.enterScale(delay))
   }
 
   @Builder
   private Group(items: SettingItem[], delay: number) {
-    Column() {
+    Column({ space: 10 }) {
       ForEach(items, (item: SettingItem, index: number) => {
-        this.SettingRow(item, index < items.length - 1)
+        this.SettingRow(item, delay + index * 12)
       }, (item: SettingItem) => item.title)
     }
     .width('100%')
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
-    .clip(true)
-    .transition(livoMotion.enterScale(delay))
   }
 
-  @Builder
-  private QuickActions() {
-    Column({ space: 10 }) {
-      Text('快捷控制')
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-
-      Column({ space: 8 }) {
-        Text('主题模式')
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textSecondary)
-
-        Row({ space: 8 }) {
-          Button('浅色')
-            .type(ButtonType.Capsule)
-            .backgroundColor(this.config.themeMode === 'light' ? this.theme.accent : this.theme.elevated)
-            .fontColor(this.config.themeMode === 'light' ? this.theme.accentText : this.theme.textPrimary)
-            .clickEffect({ level: ClickEffectLevel.MIDDLE })
-            .onClick(() => this.applyThemeMode('light'))
-
-          Button('深色')
-            .type(ButtonType.Capsule)
-            .backgroundColor(this.config.themeMode === 'dark' ? this.theme.accent : this.theme.elevated)
-            .fontColor(this.config.themeMode === 'dark' ? this.theme.accentText : this.theme.textPrimary)
-            .clickEffect({ level: ClickEffectLevel.MIDDLE })
-            .onClick(() => this.applyThemeMode('dark'))
-
-          Button('跟随系统')
-            .type(ButtonType.Capsule)
-            .backgroundColor(this.config.themeMode === 'system' ? this.theme.accent : this.theme.elevated)
-            .fontColor(this.config.themeMode === 'system' ? this.theme.accentText : this.theme.textPrimary)
-            .clickEffect({ level: ClickEffectLevel.MIDDLE })
-            .onClick(() => this.applyThemeMode('system'))
-        }
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-
-      Row({ space: 8 }) {
-        Button(this.config.autoRefresh ? '关闭自动刷新' : '开启自动刷新')
-          .type(ButtonType.Capsule)
-          .backgroundColor(this.theme.accent)
-          .fontColor(this.theme.accentText)
-          .clickEffect({ level: ClickEffectLevel.MIDDLE })
-          .onClick(() => {
-            this.syncSettings({
-              autoRefresh: !this.config.autoRefresh,
-              aiSummaryEnabled: this.config.aiSummaryEnabled,
-              imageProxyEnabled: this.config.imageProxyEnabled,
-              refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-              themeMode: this.config.themeMode,
-              language: this.config.language,
-              remoteFeedUrl: this.config.remoteFeedUrl,
-            })
-          })
-
-        Button('切换主题')
-          .type(ButtonType.Capsule)
-          .backgroundColor(this.theme.elevated)
-          .fontColor(this.theme.textPrimary)
-          .clickEffect({ level: ClickEffectLevel.MIDDLE })
-          .onClick(() => this.quickToggleTheme())
-      }
+  private resolveSubtitle(item: SettingItem): string {
+    if (item.title === '外观') {
+      return `${item.subtitle} · 当前${this.themeLabel()}`
     }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(18)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
-    .clip(true)
-    .transition(livoMotion.enterScale(120))
+    if (item.title === '通用') {
+      return `${item.subtitle} · ${this.config.language}`
+    }
+    if (item.title === '自动化') {
+      return `${item.subtitle} · ${this.config.autoRefresh ? '已开启' : '已关闭'}`
+    }
+    return item.subtitle
+  }
+
+  private resolveHint(item: SettingItem): string {
+    if (item.title === '外观') {
+      return this.themeLabel()
+    }
+    if (item.title === '自动化') {
+      return this.config.autoRefresh ? '开启' : '关闭'
+    }
+    if (item.title === '关于') {
+      return 'Livo'
+    }
+    return item.hint ?? ''
+  }
+
+  private handleSettingTap(item: SettingItem): void {
+    if (item.title === '外观') {
+      this.showAppearanceSheet = true
+      return
+    }
+    if (item.title === '通用') {
+      void openGeneralSettings()
+      return
+    }
+    if (item.title === '数据控制') {
+      void openDataControlSettings()
+      return
+    }
+    if (item.title === '隐私') {
+      void openPrivacySettings()
+      return
+    }
+    if (item.title === '关于') {
+      void openAboutSettings()
+    }
   }
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       List({ space: 24 }) {
         ListItem() {
-          Column({ space: 10 }) {
+          Column({ space: 8 }) {
             PageHeader({
               title: '设置',
               theme: this.theme,
             })
 
-            Text(`${this.themeLabel()} · ${this.config.language} · 每 ${this.config.refreshIntervalMinutes} 分钟刷新`)
-              .fontSize(12)
+            Text('调整主题、订阅、自动化与本地数据行为')
+              .fontSize(13)
               .fontColor(this.theme.textSecondary)
-              .padding({ left: 4, right: 4 })
+              .padding({ left: 2, right: 2 })
 
             Text(this.saveHint)
               .fontSize(12)
               .fontColor(this.theme.textMuted)
-              .padding({ left: 4, right: 4 })
+              .padding({ left: 2, right: 2 })
           }
           .width('100%')
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12 })
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
         }
 
         ListItem() {
-          Column({ space: 18 }) {
+          Column({ space: 16 }) {
             this.Group(PRIMARY_GROUP, 30)
             this.Group(SECOND_GROUP, 50)
             this.Group(THIRD_GROUP, 70)
             this.Group(FOURTH_GROUP, 90)
-            this.QuickActions()
           }
           .width('100%')
           .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
@@ -291,5 +294,36 @@ export struct SettingsContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .bindSheet($$this.showAppearanceSheet, this.AppearanceSheet(), {
+      detents: [SheetSize.MEDIUM, SheetSize.LARGE],
+      dragBar: false,
+      backgroundColor: this.theme.background,
+      keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
+      scrollSizeMode: ScrollSizeMode.CONTINUOUS,
+      onWillDismiss: () => {
+        this.showAppearanceSheet = false
+      }
+    })
+  }
+
+  @Builder
+  private AppearanceSheet() {
+    Column() {
+      AppearanceSettingsPanel({
+        showBackButton: false,
+        onSettingsChange: (settings: HarmonySettings) => {
+          this.handleAppearanceSettingsChange(settings)
+        },
+        onThemeChange: (theme: ThemePalette) => {
+          this.theme = theme
+          this.onThemeChange(theme)
+        },
+        onClose: () => {
+          this.showAppearanceSheet = false
+        },
+      })
+    }
+    .width('100%')
+    .height('100%')
   }
 }

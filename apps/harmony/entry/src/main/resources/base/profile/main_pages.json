@@ -7,6 +7,11 @@
     "pages/DiscoverPreview",
     "pages/ArticleDetail",
     "pages/Settings",
+    "pages/GeneralSettings",
+    "pages/AppearanceSettings",
+    "pages/DataControlSettings",
+    "pages/PrivacySettings",
+    "pages/AboutSettings",
     "pages/FeedDetail"
   ]
 }

@@ -49,6 +49,7 @@ export struct PageHeader {
       }
     }
     .width('100%')
+    .constraintSize({ minHeight: 40 })
     .padding({ top: 2, bottom: 2 })
     .alignItems(VerticalAlign.Center)
     .transition(livoMotion.enterRise(20))

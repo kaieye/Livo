@@ -11,6 +11,7 @@ import {
   CARD_RADIUS_MD,
   INPUT_RADIUS,
   META_FONT_SIZE,
+  PAGE_TOP_PADDING,
   PAGE_HORIZONTAL_PADDING,
 } from '../common/ui/UiTokens'
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
@@ -248,7 +249,7 @@ struct Index {
         }
       }
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12, bottom: 6 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
         List({ space: 10 }) {

@@ -9,6 +9,11 @@ export interface RouteDefinition {
   discoverPreview: string
   articleDetail: string
   settings: string
+  generalSettings: string
+  appearanceSettings: string
+  dataControlSettings: string
+  privacySettings: string
+  aboutSettings: string
   feedDetail: string
 }
 
@@ -20,6 +25,11 @@ export const ROUTES: RouteDefinition = {
   discoverPreview: 'pages/DiscoverPreview',
   articleDetail: 'pages/ArticleDetail',
   settings: 'pages/Settings',
+  generalSettings: 'pages/GeneralSettings',
+  appearanceSettings: 'pages/AppearanceSettings',
+  dataControlSettings: 'pages/DataControlSettings',
+  privacySettings: 'pages/PrivacySettings',
+  aboutSettings: 'pages/AboutSettings',
   feedDetail: 'pages/FeedDetail',
 }
 
@@ -205,6 +215,26 @@ export async function openFeedDetail(feedId: string): Promise<void> {
   const params = new FeedDetailParams()
   params.feedId = feedId
   await router.pushUrl(createRouterOptions(ROUTES.feedDetail, params))
+}
+
+export async function openAppearanceSettings(): Promise<void> {
+  await router.pushUrl(createRouterOptions(ROUTES.appearanceSettings))
+}
+
+export async function openGeneralSettings(): Promise<void> {
+  await router.pushUrl(createRouterOptions(ROUTES.generalSettings))
+}
+
+export async function openDataControlSettings(): Promise<void> {
+  await router.pushUrl(createRouterOptions(ROUTES.dataControlSettings))
+}
+
+export async function openPrivacySettings(): Promise<void> {
+  await router.pushUrl(createRouterOptions(ROUTES.privacySettings))
+}
+
+export async function openAboutSettings(): Promise<void> {
+  await router.pushUrl(createRouterOptions(ROUTES.aboutSettings))
 }
 
 export async function openDiscoverPreview(params: DiscoverPreviewRouteParams): Promise<void> {

@@ -16,6 +16,7 @@ import {
   LIST_ROW_TITLE_SIZE,
   LIST_ROW_VERTICAL_PADDING,
   PAGE_HORIZONTAL_PADDING,
+  PAGE_TOP_PADDING,
 } from '../ui/UiTokens'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
@@ -277,7 +278,7 @@ export struct SubscriptionsContent {
       }
       .width('100%')
       .height('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
       .scrollBar(BarState.Off)
       .backgroundColor(this.theme.background)
       .edgeEffect(EdgeEffect.Spring)
