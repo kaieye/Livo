@@ -237,7 +237,6 @@ export struct SubscriptionsContent {
           Column({ space: 16 }) {
             PageHeader({
               title: '订阅库',
-              subtitle: `${this.headerTitle()}内容`,
               theme: this.theme,
             })
 
@@ -291,6 +290,5 @@ export struct SubscriptionsContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

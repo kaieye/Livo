@@ -3,6 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
+  BOTTOM_TAB_FLOAT_GAP,
   BOTTOM_TAB_BAR_WIDTH,
   BOTTOM_TAB_ITEM_HEIGHT,
   BOTTOM_TAB_LABEL_SIZE,
@@ -17,6 +18,7 @@ export struct BottomTabs {
   @Prop activeTab: RootTabId = 'home'
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop useTabsController: boolean = false
+  @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @State pressedTabId: RootTabId | '' = ''
   onTabRequest: (tabId: RootTabId) => void = () => {}
 
@@ -26,6 +28,10 @@ export struct BottomTabs {
 
   private itemWidth(): string {
     return `${100 / ROOT_TABS.length}%`
+  }
+
+  private containerHeight(): number {
+    return BOTTOM_TAB_TOTAL_HEIGHT + this.bottomAvoidArea
   }
 
   private labelColor(tabId: RootTabId): string {
@@ -69,7 +75,7 @@ export struct BottomTabs {
   }
 
   private dockShadowColor(): string {
-    return this.theme.isDark ? 'rgba(0,0,0,0.24)' : 'rgba(15,23,42,0.06)'
+    return this.theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(15,23,42,0.1)'
   }
 
   private dockHighlightColor(): string {
@@ -135,13 +141,13 @@ export struct BottomTabs {
         .backgroundColor(this.dockBackgroundColor())
         .backdropBlur(this.theme.isDark ? 10 : 20)
         .borderRadius(CHIP_RADIUS)
-        .offset({ x: 0, y: 6 })
+        .offset({ x: 0, y: 4 })
         .border({ width: 0.6, color: this.dockBorderColor() })
         .shadow({
-          radius: 14,
+          radius: 20,
           color: this.dockShadowColor(),
           offsetX: 0,
-          offsetY: 4,
+          offsetY: 8,
         })
         .transition(livoMotion.enterFromBottom())
 
@@ -200,12 +206,6 @@ export struct BottomTabs {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      Row()
-        .width('100%')
-        .height(BOTTOM_TAB_TOTAL_HEIGHT)
-        .backgroundColor(this.theme.background)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-
       this.DockShell()
 
       Column() {
@@ -217,10 +217,10 @@ export struct BottomTabs {
         .width('100%')
       }
       .width('100%')
-      .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+      .padding({ left: 18, right: 18, top: 8, bottom: BOTTOM_TAB_FLOAT_GAP + 8 + this.bottomAvoidArea })
     }
     .width('100%')
-    .height(BOTTOM_TAB_TOTAL_HEIGHT)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    .height(this.containerHeight())
+    .backgroundColor(Color.Transparent)
   }
 }

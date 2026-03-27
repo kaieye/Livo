@@ -733,7 +733,6 @@ export struct DiscoverContent {
       Column({ space: 14 }) {
         PageHeader({
           title: '添加订阅',
-          subtitle: 'Feed Discovery',
           theme: this.theme,
         })
         this.SearchPanel()
@@ -783,7 +782,6 @@ export struct DiscoverContent {
     .backgroundColor(this.theme.background)
     .justifyContent(FlexAlign.Start)
     .alignItems(HorizontalAlign.Start)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
   @Builder

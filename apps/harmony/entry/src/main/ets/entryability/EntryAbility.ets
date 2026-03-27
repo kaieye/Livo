@@ -7,6 +7,20 @@ import { AppRepository } from '../common/data/AppRepository'
 import { AppContextService } from '../common/services/AppContextService'
 
 export default class EntryAbility extends UIAbility {
+  private async applySystemBarStyle(mainWindow: window.Window, isDark: boolean = false): Promise<void> {
+    await mainWindow.setWindowSystemBarProperties({
+      statusBarColor: '#00000000',
+      navigationBarColor: '#00000000',
+      isStatusBarLightIcon: isDark,
+    })
+  }
+
+  private syncAvoidArea(mainWindow: window.Window): void {
+    const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
+    AppStorage.setOrCreate('topAvoidArea', px2vp(avoidArea.topRect.height))
+    AppStorage.setOrCreate('bottomAvoidArea', px2vp(avoidArea.bottomRect.height))
+  }
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     console.info(
       `Livo EntryAbility onCreate: ${want.bundleName ?? ''}, ${launchParam.launchReason}`,
@@ -23,6 +37,24 @@ export default class EntryAbility extends UIAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     console.info('Livo EntryAbility onWindowStageCreate')
+
+    void windowStage.getMainWindow().then(async (mainWindow: window.Window) => {
+      try {
+        await mainWindow.setWindowLayoutFullScreen(true)
+        await this.applySystemBarStyle(mainWindow)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : `${error}`
+        console.error(`Failed to configure immersive window: ${message}`)
+      }
+
+      AppStorage.setOrCreate('WindowClass', mainWindow)
+      this.syncAvoidArea(mainWindow)
+      mainWindow.on('avoidAreaChange', () => {
+        this.syncAvoidArea(mainWindow)
+      })
+    }).catch((error: Error) => {
+      console.error(`Failed to get main window: ${error.message}`)
+    })
 
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {

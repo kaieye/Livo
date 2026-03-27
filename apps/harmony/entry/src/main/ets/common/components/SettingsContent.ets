@@ -244,7 +244,6 @@ export struct SettingsContent {
           Column({ space: 10 }) {
             PageHeader({
               title: '设置',
-              subtitle: 'Preferences',
               theme: this.theme,
             })
 
@@ -292,6 +291,5 @@ export struct SettingsContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

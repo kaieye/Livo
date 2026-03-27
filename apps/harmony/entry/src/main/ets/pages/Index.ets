@@ -1,4 +1,5 @@
 import { AppRepository } from '../common/data/AppRepository'
+import window from '@ohos.window'
 import { BottomTabs, rootTabsController } from '../common/components/BottomTabs'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIdForIndex, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
@@ -21,6 +22,7 @@ type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 @Entry
 @Component
 struct Index {
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State featuredEntries: EntryCardModel[] = []
   @State feedSourceLabel: string = '准备加载本地内容'
   @State isRefreshing: boolean = false
@@ -41,8 +43,10 @@ struct Index {
 
   private async loadInitialData(): Promise<void> {
     this.theme = ThemeService.currentPalette()
+    void this.applySystemBarStyle(this.theme)
     const settings = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(settings)
+    void this.applySystemBarStyle(this.theme)
     this.featuredEntries = await AppRepository.featuredEntries()
     this.feedSourceLabel = '本地内容已加载'
     if (settings.autoRefresh) {
@@ -64,6 +68,23 @@ struct Index {
 
   private refreshRootTheme(): void {
     this.theme = ThemeService.currentPalette()
+    void this.applySystemBarStyle(this.theme)
+  }
+
+  private async applySystemBarStyle(theme: ThemePalette): Promise<void> {
+    const mainWindow = AppStorage.get<window.Window>('WindowClass')
+    if (!mainWindow) {
+      return
+    }
+
+    try {
+      await mainWindow.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        navigationBarColor: '#00000000',
+        isStatusBarLightIcon: theme.isDark,
+      })
+    } catch (_) {
+    }
   }
 
   private syncRequestedRootTab(): void {
@@ -118,15 +139,6 @@ struct Index {
       case 'pictures': return '图片'
       case 'videos': return '视频'
       default: return ''
-    }
-  }
-
-  private headerSubtitle(): string {
-    switch (this.mode) {
-      case 'social': return 'Social Stream'
-      case 'pictures': return 'Visual Digest'
-      case 'videos': return 'Video Radar'
-      default: return 'Daily Brief'
     }
   }
 
@@ -187,7 +199,6 @@ struct Index {
       Column({ space: 14 }) {
         PageHeader({
           title: '今日推荐',
-          subtitle: this.headerSubtitle(),
           theme: this.theme,
           trailingSymbol: $r('sys.symbol.magnifyingglass'),
           onTrailingClick: () => {
@@ -292,7 +303,6 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   onPageShow(): void {
@@ -329,6 +339,7 @@ struct Index {
             inheritedTheme: this.theme,
             onThemeChange: (theme: ThemePalette) => {
               this.theme = theme
+              void this.applySystemBarStyle(theme)
             },
           })
         }
@@ -362,6 +373,7 @@ struct Index {
       })
       .width('100%')
       .height('100%')
+      .padding({ top: this.topAvoidArea })
       .backgroundColor(this.theme.background)
 
       BottomTabs({
@@ -377,6 +389,5 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
