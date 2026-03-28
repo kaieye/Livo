@@ -1,4 +1,5 @@
 import { AppRepository } from '../common/data/AppRepository'
+import { KeyboardAvoidMode } from '@kit.ArkUI'
 import window from '@ohos.window'
 import { BottomTabs } from '../common/components/BottomTabs'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
@@ -26,11 +27,13 @@ const MODE_SCENE_DURATION: number = 240
 @Component
 struct Index {
   @StorageProp('topAvoidArea') topAvoidArea: number = 0
+  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @State featuredEntries: EntryCardModel[] = []
   @State feedSourceLabel: string = '准备加载本地内容'
   @State isRefreshing: boolean = false
   @State searchQuery: string = ''
   @State showSearch: boolean = false
+  private searchInputController: TextInputController = new TextInputController()
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
   @State previousMode: SubscriptionMode = 'articles'
@@ -45,11 +48,15 @@ struct Index {
   private pendingRootTabId: RootTabId = 'home'
   private rootTransitionVersion: number = 0
   private modeTransitionVersion: number = 0
-
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
     this.syncRequestedRootTab()
+    this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
     void this.loadInitialData()
+  }
+
+  aboutToDisappear(): void {
+    this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
   }
 
   private async loadInitialData(): Promise<void> {
@@ -268,24 +275,141 @@ struct Index {
   }
 
   private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
-    let list = this.featuredEntries.filter((entry: EntryCardModel) =>
+    return this.featuredEntries.filter((entry: EntryCardModel) =>
       entry.viewLabel === this.getModeTitle(mode)
     )
-
-    const keyword = this.searchQuery.trim().toLowerCase()
-    if (keyword) {
-      list = list.filter((entry: EntryCardModel) =>
-        entry.title.toLowerCase().includes(keyword)
-        || entry.summary.toLowerCase().includes(keyword)
-        || entry.feedTitle.toLowerCase().includes(keyword)
-      )
-    }
-
-    return list
   }
 
   private filteredEntries(): EntryCardModel[] {
     return this.filteredEntriesFor(this.mode)
+  }
+
+  private searchAllEntries(): EntryCardModel[] {
+    const keyword = this.searchQuery.trim().toLowerCase()
+    if (!keyword) {
+      return []
+    }
+
+    return this.featuredEntries.filter((entry: EntryCardModel) =>
+      entry.title.toLowerCase().includes(keyword)
+      || entry.summary.toLowerCase().includes(keyword)
+      || entry.feedTitle.toLowerCase().includes(keyword)
+    )
+  }
+
+  private getMatchedContent(text: string, keyword: string, maxLength: number = 60): string {
+    if (!keyword || !text) {
+      return ''
+    }
+    const lowerText = text.toLowerCase()
+    const lowerKeyword = keyword.toLowerCase()
+    const index = lowerText.indexOf(lowerKeyword)
+    if (index === -1) {
+      return ''
+    }
+    const start = Math.max(0, index - 20)
+    const end = Math.min(text.length, index + keyword.length + 30)
+    let result = text.slice(start, end)
+    if (start > 0) {
+      result = '...' + result
+    }
+    if (end < text.length) {
+      result = result + '...'
+    }
+    return result
+  }
+
+  private findHighlightIndex(text: string, keyword: string): number {
+    if (!keyword || !text) {
+      return -1
+    }
+    return text.toLowerCase().indexOf(keyword.toLowerCase())
+  }
+
+  private getMatchedContentPrefix(text: string, keyword: string): string {
+    if (!keyword || !text) {
+      return ''
+    }
+    const lowerText = text.toLowerCase()
+    const lowerKeyword = keyword.toLowerCase()
+    const index = lowerText.indexOf(lowerKeyword)
+    if (index === -1) {
+      return ''
+    }
+    const start = Math.max(0, index - 20)
+    let prefix = text.slice(start, index)
+    if (start > 0) {
+      prefix = '...' + prefix
+    }
+    return prefix
+  }
+
+  private getMatchedContentSuffix(text: string, keyword: string): string {
+    if (!keyword || !text) {
+      return ''
+    }
+    const lowerText = text.toLowerCase()
+    const lowerKeyword = keyword.toLowerCase()
+    const index = lowerText.indexOf(lowerKeyword)
+    if (index === -1) {
+      return ''
+    }
+    const end = Math.min(text.length, index + keyword.length + 30)
+    let suffix = text.slice(index + keyword.length, end)
+    if (end < text.length) {
+      suffix = suffix + '...'
+    }
+    return suffix
+  }
+
+  @Builder
+  private HighlightTitle(title: string, keyword: string) {
+    if (!keyword || this.findHighlightIndex(title, keyword) < 0) {
+      Text(title)
+        .fontSize(14)
+        .fontColor(this.theme.textPrimary)
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .layoutWeight(1)
+    } else {
+      Text() {
+        Span(title.slice(0, this.findHighlightIndex(title, keyword)))
+          .fontSize(14)
+          .fontColor(this.theme.textPrimary)
+        Span(title.slice(
+          this.findHighlightIndex(title, keyword),
+          this.findHighlightIndex(title, keyword) + keyword.length
+        ))
+          .fontSize(14)
+          .fontColor(this.theme.accent)
+          .fontWeight(FontWeight.Medium)
+        Span(title.slice(this.findHighlightIndex(title, keyword) + keyword.length))
+          .fontSize(14)
+          .fontColor(this.theme.textPrimary)
+      }
+      .maxLines(2)
+      .textOverflow({ overflow: TextOverflow.Ellipsis })
+      .layoutWeight(1)
+    }
+  }
+
+  @Builder
+  private HighlightSummary(summary: string, keyword: string) {
+    Text() {
+      Span(this.getMatchedContentPrefix(summary, keyword))
+        .fontSize(12)
+        .fontColor(this.theme.textSecondary)
+      Span(keyword)
+        .fontSize(12)
+        .fontColor(this.theme.accent)
+        .fontWeight(FontWeight.Medium)
+      Span(this.getMatchedContentSuffix(summary, keyword))
+        .fontSize(12)
+        .fontColor(this.theme.textSecondary)
+    }
+    .maxLines(2)
+    .textOverflow({ overflow: TextOverflow.Ellipsis })
+    .width('100%')
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
@@ -336,6 +460,39 @@ struct Index {
       case 'videos': return '视频'
       default: return ''
     }
+  }
+
+  private updateKeyboardAvoidMode(mode: KeyboardAvoidMode): void {
+    try {
+      this.getUIContext().setKeyboardAvoidMode(mode)
+    } catch (_) {
+    }
+  }
+
+  private openSearch(): void {
+    if (this.showSearch) {
+      return
+    }
+
+    this.updateKeyboardAvoidMode(KeyboardAvoidMode.NONE)
+    this.showSearch = true
+
+    setTimeout(() => {
+      const focusController = this.getUIContext().getFocusController()
+      focusController.requestFocus('home_search_input')
+    }, 140)
+  }
+
+  private closeSearch(): void {
+    if (!this.showSearch) {
+      return
+    }
+
+    this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
+    animateTo({ duration: 260, curve: Curve.EaseIn }, () => {
+      this.showSearch = false
+      this.searchQuery = ''
+    })
   }
 
   @Builder
@@ -452,7 +609,11 @@ struct Index {
           theme: this.theme,
           trailingSymbol: $r('sys.symbol.magnifyingglass'),
           onTrailingClick: () => {
-            this.showSearch = !this.showSearch
+            if (this.showSearch) {
+              this.closeSearch()
+              return
+            }
+            this.openSearch()
           },
         })
 
@@ -477,25 +638,6 @@ struct Index {
         .width('100%')
         .padding({ left: 4, right: 4 })
         .transition(livoMotion.enterRise(60))
-
-        if (this.showSearch) {
-          TextInput({ text: this.searchQuery, placeholder: '搜索标题、摘要或来源' })
-            .backgroundColor(this.theme.surface)
-            .fontColor(this.theme.textPrimary)
-            .borderRadius(INPUT_RADIUS)
-            .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-            .border({ width: 0.8, color: this.theme.divider })
-            .onChange((value: string) => {
-              this.searchQuery = value
-            })
-            .transition(livoMotion.enterSoft(80))
-
-          if (this.searchQuery.trim()) {
-            Text(`搜索结果：${this.filteredEntries().length} 条`)
-              .fontSize(META_FONT_SIZE)
-              .fontColor(this.theme.textSecondary)
-          }
-        }
       }
       .width('100%')
       .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
@@ -540,15 +682,140 @@ struct Index {
       .padding({ top: this.topAvoidArea })
       .backgroundColor(this.theme.background)
 
-      BottomTabs({
-        activeTab: this.highlightedRootTabId,
-        theme: this.theme,
-        useTabsController: true,
-        onTabRequest: (tabId: RootTabId) => {
-          this.requestRootTabSwitch(tabId)
-        },
-      })
-      .align(Alignment.Bottom)
+      if (!(this.activeRootTabId === 'discover' && this.discoverOverlayLevel > 0)) {
+        BottomTabs({
+          activeTab: this.highlightedRootTabId,
+          theme: this.theme,
+          useTabsController: true,
+          onTabRequest: (tabId: RootTabId) => {
+            this.requestRootTabSwitch(tabId)
+          },
+        })
+      }
+
+      if (this.showSearch) {
+        Column() {
+          Column({ space: 10 }) {
+            Row({ space: 8 }) {
+              SymbolGlyph($r('sys.symbol.magnifyingglass'))
+                .fontSize(20)
+                .fontColor([this.theme.textSecondary])
+              TextInput({ text: this.searchQuery, placeholder: '搜索标题、摘要或来源', controller: this.searchInputController })
+                .backgroundColor('transparent')
+                .fontColor(this.theme.textPrimary)
+                .padding(0)
+                .layoutWeight(1)
+                .defaultFocus(true)
+                .id('home_search_input')
+                .textAlign(TextAlign.Center)
+                .onChange((value: string) => {
+                  this.searchQuery = value
+                })
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+            .backgroundColor(this.theme.surface)
+            .borderRadius(INPUT_RADIUS)
+            .border({ width: 0.8, color: this.theme.divider })
+            .shadow({ radius: 14, color: 'rgba(0,0,0,0.08)', offsetY: 4 })
+            .gesture(
+              PanGesture({ direction: PanDirection.Down })
+                .onActionEnd((event: GestureEvent) => {
+                  if (event.offsetY > 30) {
+                    this.closeSearch()
+                  }
+                })
+            )
+
+            if (this.searchQuery.trim()) {
+              List({ space: 8 }) {
+                ForEach(this.searchAllEntries(), (entry: EntryCardModel, index: number) => {
+                  ListItem() {
+                    Column({ space: 6 }) {
+                      Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
+                        this.HighlightTitle(entry.title, this.searchQuery.trim())
+
+                        Text(entry.feedTitle)
+                          .fontSize(11)
+                          .fontColor(this.theme.textMuted)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .flexShrink(0)
+                          .margin({ left: 8, top: 2 })
+                      }
+                      .width('100%')
+
+                      if (entry.summary && entry.summary.trim()) {
+                        if (this.getMatchedContent(entry.summary, this.searchQuery.trim())) {
+                          this.HighlightSummary(entry.summary, this.searchQuery.trim())
+                        } else {
+                          Text(entry.summary)
+                            .fontSize(12)
+                            .fontColor(this.theme.textSecondary)
+                            .maxLines(2)
+                            .textOverflow({ overflow: TextOverflow.Ellipsis })
+                            .width('100%')
+                        }
+                      }
+                    }
+                    .width('100%')
+                    .alignItems(HorizontalAlign.Start)
+                    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                    .backgroundColor(this.theme.surface)
+                    .borderRadius(12)
+                    .clickEffect({ level: ClickEffectLevel.LIGHT })
+                    .onClick(() => {
+                      this.closeSearch()
+                      this.openEntry(entry.id)
+                    })
+                  }
+                }, (entry: EntryCardModel) => `${entry.id}_${this.searchQuery}`)
+
+                if (this.searchAllEntries().length === 0) {
+                  ListItem() {
+                    Text('没有找到相关内容')
+                      .fontSize(14)
+                      .fontColor(this.theme.textSecondary)
+                      .padding(16)
+                  }
+                }
+              }
+              .width('100%')
+              .height(Math.min(this.searchAllEntries().length, 3) * 90 + (Math.min(this.searchAllEntries().length, 3) - 1) * 8 + 16)
+              .backgroundColor(this.theme.surface)
+              .borderRadius(INPUT_RADIUS)
+              .border({ width: 0.8, color: this.theme.divider })
+              .shadow({ radius: 14, color: 'rgba(0,0,0,0.08)', offsetY: 4 })
+              .padding({ left: 8, right: 8, top: 8, bottom: 8 })
+              .scrollBar(BarState.Off)
+              .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+              .alignListItem(ListItemAlign.Start)
+            }
+          }
+          .width('100%')
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
+          .transition(
+            TransitionEffect.asymmetric(
+              TransitionEffect.translate({ y: -20 })
+                .combine(TransitionEffect.opacity(0))
+                .animation({ duration: 260, curve: Curve.EaseOut }),
+              TransitionEffect.translate({ y: -20 })
+                .combine(TransitionEffect.opacity(0))
+                .animation({ duration: 260, curve: Curve.EaseIn })
+            )
+          )
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ top: this.topAvoidArea })
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Center)
+        .backgroundColor('rgba(0,0,0,0.15)')
+        .onClick(() => {
+          this.closeSearch()
+        })
+        .zIndex(10)
+      }
     }
     .width('100%')
     .height('100%')
