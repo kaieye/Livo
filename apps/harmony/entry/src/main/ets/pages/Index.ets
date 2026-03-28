@@ -19,6 +19,8 @@ import { DiscoverContent } from '../common/components/DiscoverContent'
 import { SettingsContent } from '../common/components/SettingsContent'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
+const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
+const MODE_SCENE_DURATION: number = 240
 
 @Entry
 @Component
@@ -30,6 +32,10 @@ struct Index {
   @State searchQuery: string = ''
   @State showSearch: boolean = false
   @State mode: SubscriptionMode = 'articles'
+  @State renderedMode: SubscriptionMode = 'articles'
+  @State previousMode: SubscriptionMode = 'articles'
+  @State isModeTransitioning: boolean = false
+  @State modeTransitionDirection: number = 1
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
@@ -38,6 +44,7 @@ struct Index {
   @State isRootTransitioning: boolean = false
   private pendingRootTabId: RootTabId = 'home'
   private rootTransitionVersion: number = 0
+  private modeTransitionVersion: number = 0
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -222,9 +229,47 @@ struct Index {
     })
   }
 
-  private filteredEntries(): EntryCardModel[] {
+  private modeIndex(mode: SubscriptionMode): number {
+    return SUBSCRIPTION_MODES.indexOf(mode)
+  }
+
+  private requestModeSwitch(nextMode: SubscriptionMode): void {
+    if (nextMode === this.mode) {
+      return
+    }
+
+    this.mode = nextMode
+    this.startModeTransition(nextMode)
+  }
+
+  private startModeTransition(nextMode: SubscriptionMode): void {
+    const currentMode = this.renderedMode
+    if (currentMode === nextMode) {
+      this.previousMode = nextMode
+      this.isModeTransitioning = false
+      return
+    }
+
+    this.modeTransitionVersion += 1
+    const version = this.modeTransitionVersion
+    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(currentMode) ? 1 : -1
+    this.previousMode = currentMode
+    this.renderedMode = nextMode
+    this.isModeTransitioning = true
+
+    setTimeout(() => {
+      if (version !== this.modeTransitionVersion) {
+        return
+      }
+
+      this.previousMode = nextMode
+      this.isModeTransitioning = false
+    }, MODE_SCENE_DURATION)
+  }
+
+  private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     let list = this.featuredEntries.filter((entry: EntryCardModel) =>
-      entry.viewLabel === this.getModeTitle(this.mode)
+      entry.viewLabel === this.getModeTitle(mode)
     )
 
     const keyword = this.searchQuery.trim().toLowerCase()
@@ -237,6 +282,50 @@ struct Index {
     }
 
     return list
+  }
+
+  private filteredEntries(): EntryCardModel[] {
+    return this.filteredEntriesFor(this.mode)
+  }
+
+  private modeSceneVisible(mode: SubscriptionMode): Visibility {
+    if (mode === this.renderedMode) {
+      return Visibility.Visible
+    }
+
+    if (this.isModeTransitioning && mode === this.previousMode) {
+      return Visibility.Visible
+    }
+
+    return Visibility.Hidden
+  }
+
+  private modeSceneOpacity(mode: SubscriptionMode): number {
+    return mode === this.renderedMode ? 1 : 0
+  }
+
+  private modeSceneOffset(mode: SubscriptionMode): number {
+    if (mode === this.renderedMode) {
+      return 0
+    }
+
+    if (!this.isModeTransitioning || mode !== this.previousMode) {
+      return 0
+    }
+
+    return this.modeTransitionDirection > 0 ? -16 : 16
+  }
+
+  private modeSceneZIndex(mode: SubscriptionMode): number {
+    if (mode === this.renderedMode) {
+      return 2
+    }
+
+    if (this.isModeTransitioning && mode === this.previousMode) {
+      return 1
+    }
+
+    return 0
   }
 
   private getModeTitle(mode: SubscriptionMode): string {
@@ -294,6 +383,67 @@ struct Index {
   }
 
   @Builder
+  private EntryList(mode: SubscriptionMode) {
+    List({ space: 10 }) {
+      ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel, index: number) => {
+        ListItem() {
+          this.EntryCard(entry)
+        }
+        .width('100%')
+        .transition(livoMotion.enterSoft(index * 18 + 40))
+      }, (entry: EntryCardModel) => entry.id)
+
+      if (this.filteredEntriesFor(mode).length === 0) {
+        ListItem() {
+          Column({ space: 8 }) {
+            Text('还没有可展示的条目')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.theme.textPrimary)
+
+            Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+              .fontSize(14)
+              .lineHeight(22)
+              .fontColor(this.theme.textSecondary)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .padding(20)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_MD)
+          .border({ width: 0.8, color: this.theme.divider })
+          .width('100%')
+        }
+      }
+
+      ListItem() {
+        Row().height(100).width('100%')
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring)
+  }
+
+  @Builder
+  private ModeEntriesScene(mode: SubscriptionMode) {
+    Stack() {
+      this.EntryList(mode)
+    }
+    .width('100%')
+    .height('100%')
+    .visibility(this.modeSceneVisible(mode))
+    .opacity(this.modeSceneOpacity(mode))
+    .translate({ x: this.modeSceneOffset(mode) })
+    .zIndex(this.modeSceneZIndex(mode))
+    .animation({
+      duration: MODE_SCENE_DURATION,
+      curve: Curve.EaseInOut,
+    })
+  }
+
+  @Builder
   private HomeRootPage() {
     Column() {
       Column({ space: 14 }) {
@@ -310,7 +460,7 @@ struct Index {
           mode: this.mode,
           theme: this.theme,
           onChange: (mode: SubscriptionMode) => {
-            this.mode = mode
+            this.requestModeSwitch(mode)
           },
         })
 
@@ -351,46 +501,14 @@ struct Index {
       .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
-        List({ space: 10 }) {
-          ForEach(this.filteredEntries(), (entry: EntryCardModel, index: number) => {
-            ListItem() {
-              this.EntryCard(entry)
-            }
-            .width('100%')
-            .transition(livoMotion.enterSoft(index * 18 + 40))
-          }, (entry: EntryCardModel) => entry.id)
-
-          if (this.filteredEntries().length === 0) {
-            ListItem() {
-              Column({ space: 8 }) {
-                Text('还没有可展示的条目')
-                  .fontSize(18)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(this.theme.textPrimary)
-
-                Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
-                  .fontSize(14)
-                  .lineHeight(22)
-                  .fontColor(this.theme.textSecondary)
-              }
-              .alignItems(HorizontalAlign.Start)
-              .padding(20)
-              .backgroundColor(this.theme.surface)
-              .borderRadius(CARD_RADIUS_MD)
-              .border({ width: 0.8, color: this.theme.divider })
-              .width('100%')
-            }
-          }
-
-          ListItem() {
-            Row().height(100).width('100%')
-          }
+        Stack() {
+          this.ModeEntriesScene('articles')
+          this.ModeEntriesScene('social')
+          this.ModeEntriesScene('pictures')
+          this.ModeEntriesScene('videos')
         }
         .width('100%')
         .height('100%')
-        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
       }
       .width('100%')
       .layoutWeight(1)
