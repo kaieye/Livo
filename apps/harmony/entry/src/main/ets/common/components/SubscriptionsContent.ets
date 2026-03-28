@@ -21,11 +21,17 @@ import {
 } from '../ui/UiTokens'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
+const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
+const MODE_SCENE_DURATION: number = 240
 
 @Component
 export struct SubscriptionsContent {
   @State feeds: FeedCardModel[] = []
   @State mode: SubscriptionMode = 'articles'
+  @State renderedMode: SubscriptionMode = 'articles'
+  @State previousMode: SubscriptionMode = 'articles'
+  @State isModeTransitioning: boolean = false
+  @State modeTransitionDirection: number = 1
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State sourceHint: string = '正在加载订阅内容...'
   @State hasLoaded: boolean = false
@@ -33,6 +39,8 @@ export struct SubscriptionsContent {
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onReady: () => void = () => {}
+  private modeTransitionVersion: number = 0
+
 
   aboutToAppear(): void {
     if (!this.showBottomTabs) {
@@ -75,8 +83,8 @@ export struct SubscriptionsContent {
     }
   }
 
-  private headerTitle(): string {
-    switch (this.mode) {
+  private headerTitle(mode: SubscriptionMode = this.mode): string {
+    switch (mode) {
       case 'social':
         return '社交'
       case 'pictures':
@@ -88,13 +96,96 @@ export struct SubscriptionsContent {
     }
   }
 
-  private modeLabel(): string {
-    return this.headerTitle()
+  private modeLabel(mode: SubscriptionMode = this.mode): string {
+    return this.headerTitle(mode)
+  }
+
+  private filteredFeedsFor(mode: SubscriptionMode): FeedCardModel[] {
+    return this.feeds.filter((feed: FeedCardModel) => feed.viewLabel === this.modeLabel(mode))
   }
 
   private filteredFeeds(): FeedCardModel[] {
-    return this.feeds.filter((feed: FeedCardModel) => feed.viewLabel === this.modeLabel())
+    return this.filteredFeedsFor(this.mode)
   }
+
+  private modeIndex(mode: SubscriptionMode): number {
+    return SUBSCRIPTION_MODES.indexOf(mode)
+  }
+
+  private requestModeSwitch(nextMode: SubscriptionMode): void {
+    if (nextMode === this.mode) {
+      return
+    }
+
+    this.mode = nextMode
+    this.startModeTransition(nextMode)
+  }
+
+  private startModeTransition(nextMode: SubscriptionMode): void {
+    const currentMode = this.renderedMode
+    if (currentMode === nextMode) {
+      this.previousMode = nextMode
+      this.isModeTransitioning = false
+      return
+    }
+
+    this.modeTransitionVersion += 1
+    const version = this.modeTransitionVersion
+    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(currentMode) ? 1 : -1
+    this.previousMode = currentMode
+    this.renderedMode = nextMode
+    this.isModeTransitioning = true
+
+    setTimeout(() => {
+      if (version !== this.modeTransitionVersion) {
+        return
+      }
+
+      this.previousMode = nextMode
+      this.isModeTransitioning = false
+    }, MODE_SCENE_DURATION)
+  }
+
+  private modeSceneVisible(mode: SubscriptionMode): Visibility {
+    if (mode === this.renderedMode) {
+      return Visibility.Visible
+    }
+
+    if (this.isModeTransitioning && mode === this.previousMode) {
+      return Visibility.Visible
+    }
+
+    return Visibility.Hidden
+  }
+
+  private modeSceneOpacity(mode: SubscriptionMode): number {
+    return mode === this.renderedMode ? 1 : 0
+  }
+
+  private modeSceneOffset(mode: SubscriptionMode): number {
+    if (mode === this.renderedMode) {
+      return 0
+    }
+
+    if (!this.isModeTransitioning || mode !== this.previousMode) {
+      return 0
+    }
+
+    return this.modeTransitionDirection > 0 ? -16 : 16
+  }
+
+  private modeSceneZIndex(mode: SubscriptionMode): number {
+    if (mode === this.renderedMode) {
+      return 2
+    }
+
+    if (this.isModeTransitioning && mode === this.previousMode) {
+      return 1
+    }
+
+    return 0
+  }
+
 
   private deriveFallbackIcon(siteUrl: string): string {
     const trimmed = siteUrl.trim()
@@ -186,7 +277,87 @@ export struct SubscriptionsContent {
     .transition(livoMotion.enterScale(index * 18 + 30))
   }
 
+  @Builder
+  private FeedSection(mode: SubscriptionMode) {
+    Column({ space: 14 }) {
+      Text('订阅源')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textMuted)
+        .padding({ left: 4 })
+        .width('100%')
+
+      if (this.filteredFeedsFor(mode).length === 0) {
+        Column({ space: 10 }) {
+          Text(`您还没有收藏任何${this.headerTitle(mode)}源`)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+
+          Text('先添加对应类型的订阅源，或者刷新现有订阅后再回来看看。')
+            .fontSize(14)
+            .lineHeight(22)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding(18)
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_MD)
+        .border({ width: 0.8, color: this.theme.divider })
+        .transition(livoMotion.enterScale(70))
+      } else {
+        Column() {
+          ForEach(this.filteredFeedsFor(mode), (feed: FeedCardModel, index: number) => {
+            this.FeedRow(
+              feed,
+              index,
+              index < this.filteredFeedsFor(mode).length - 1,
+            )
+          }, (feed: FeedCardModel) => feed.id)
+        }
+        .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
+        .clip(true)
+        .transition(livoMotion.enterScale(70))
+      }
+
+      Row().height(88).width('100%')
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Start)
+    .constraintSize({ minHeight: '100%' })
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: PAGE_BOTTOM_GAP })
+  }
+
+  @Builder
+  private ModeFeedsScene(mode: SubscriptionMode) {
+    Scroll() {
+      this.FeedSection(mode)
+    }
+    .width('100%')
+    .height('100%')
+    .nestedScroll({
+      scrollForward: NestedScrollMode.SELF_FIRST,
+      scrollBackward: NestedScrollMode.SELF_FIRST,
+    })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring)
+    .visibility(this.modeSceneVisible(mode))
+    .opacity(this.modeSceneOpacity(mode))
+    .translate({ x: this.modeSceneOffset(mode) })
+    .zIndex(this.modeSceneZIndex(mode))
+    .animation({
+      duration: MODE_SCENE_DURATION,
+      curve: Curve.EaseInOut,
+    })
+  }
+
   build() {
+
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
         Column({ space: 16 }) {
@@ -199,9 +370,10 @@ export struct SubscriptionsContent {
             mode: this.mode,
             theme: this.theme,
             onChange: (mode: SubscriptionMode) => {
-              this.mode = mode
+              this.requestModeSwitch(mode)
             },
           })
+
 
           Row() {
             Text(`${this.filteredFeeds().length} 个订阅源`)
@@ -221,69 +393,16 @@ export struct SubscriptionsContent {
         .width('100%')
         .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
 
-        Scroll() {
-          Column({ space: 14 }) {
-            Text('订阅源')
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.theme.textMuted)
-              .padding({ left: 4 })
-              .width('100%')
-
-            if (this.filteredFeeds().length === 0) {
-              Column({ space: 10 }) {
-                Text(`您还没有收藏任何${this.headerTitle()}源`)
-                  .fontSize(18)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(this.theme.textPrimary)
-
-                Text('先添加对应类型的订阅源，或者刷新现有订阅后再回来看看。')
-                  .fontSize(14)
-                  .lineHeight(22)
-                  .fontColor(this.theme.textSecondary)
-              }
-              .width('100%')
-              .alignItems(HorizontalAlign.Start)
-              .padding(18)
-              .backgroundColor(this.theme.surface)
-              .borderRadius(CARD_RADIUS_MD)
-              .border({ width: 0.8, color: this.theme.divider })
-              .transition(livoMotion.enterScale(70))
-            } else {
-              Column() {
-                ForEach(this.filteredFeeds(), (feed: FeedCardModel, index: number) => {
-                  this.FeedRow(
-                    feed,
-                    index,
-                    index < this.filteredFeeds().length - 1,
-                  )
-                }, (feed: FeedCardModel) => feed.id)
-              }
-              .width('100%')
-              .backgroundColor(this.theme.surface)
-              .borderRadius(CARD_RADIUS_LG)
-              .border({ width: 0.8, color: this.theme.divider })
-              .clip(true)
-              .transition(livoMotion.enterScale(70))
-            }
-
-            Row().height(88).width('100%')
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .justifyContent(FlexAlign.Start)
-          .constraintSize({ minHeight: '100%' })
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: PAGE_BOTTOM_GAP })
+        Stack() {
+          this.ModeFeedsScene('articles')
+          this.ModeFeedsScene('social')
+          this.ModeFeedsScene('pictures')
+          this.ModeFeedsScene('videos')
         }
         .width('100%')
         .layoutWeight(1)
-        .nestedScroll({
-          scrollForward: NestedScrollMode.SELF_FIRST,
-          scrollBackward: NestedScrollMode.SELF_FIRST,
-        })
-        .scrollBar(BarState.Off)
         .backgroundColor(this.theme.background)
-        .edgeEffect(EdgeEffect.Spring)
+
       }
       .width('100%')
       .height('100%')

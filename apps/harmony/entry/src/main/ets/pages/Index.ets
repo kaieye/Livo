@@ -33,6 +33,7 @@ struct Index {
   @State isRefreshing: boolean = false
   @State searchQuery: string = ''
   @State showSearch: boolean = false
+  @State searchExpanded: boolean = false
   private searchInputController: TextInputController = new TextInputController()
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
@@ -492,6 +493,7 @@ struct Index {
     animateTo({ duration: 260, curve: Curve.EaseIn }, () => {
       this.showSearch = false
       this.searchQuery = ''
+      this.searchExpanded = false
     })
   }
 
@@ -711,6 +713,20 @@ struct Index {
                 .onChange((value: string) => {
                   this.searchQuery = value
                 })
+                .onClick(() => {
+                  if (this.searchExpanded) {
+                    animateTo({ duration: 300, curve: Curve.EaseOut }, () => {
+                      this.searchExpanded = false
+                    })
+                  }
+                })
+                .onBlur(() => {
+                  if (!this.searchExpanded && this.searchQuery.trim()) {
+                    animateTo({ duration: 300, curve: Curve.EaseOut }, () => {
+                      this.searchExpanded = true
+                    })
+                  }
+                })
             }
             .width('100%')
             .padding({ left: 16, right: 16, top: 14, bottom: 14 })
@@ -728,68 +744,83 @@ struct Index {
             )
 
             if (this.searchQuery.trim()) {
-              List({ space: 8 }) {
-                ForEach(this.searchAllEntries(), (entry: EntryCardModel, index: number) => {
-                  ListItem() {
-                    Column({ space: 6 }) {
-                      Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
-                        this.HighlightTitle(entry.title, this.searchQuery.trim())
+              Stack({ alignContent: Alignment.Bottom }) {
+                List({ space: 8 }) {
+                  ForEach(this.searchAllEntries(), (entry: EntryCardModel, index: number) => {
+                    ListItem() {
+                      Column({ space: 6 }) {
+                        Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
+                          this.HighlightTitle(entry.title, this.searchQuery.trim())
 
-                        Text(entry.feedTitle)
-                          .fontSize(11)
-                          .fontColor(this.theme.textMuted)
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          .flexShrink(0)
-                          .margin({ left: 8, top: 2 })
-                      }
-                      .width('100%')
-
-                      if (entry.summary && entry.summary.trim()) {
-                        if (this.getMatchedContent(entry.summary, this.searchQuery.trim())) {
-                          this.HighlightSummary(entry.summary, this.searchQuery.trim())
-                        } else {
-                          Text(entry.summary)
-                            .fontSize(12)
-                            .fontColor(this.theme.textSecondary)
-                            .maxLines(2)
+                          Text(entry.feedTitle)
+                            .fontSize(11)
+                            .fontColor(this.theme.textMuted)
+                            .maxLines(1)
                             .textOverflow({ overflow: TextOverflow.Ellipsis })
-                            .width('100%')
+                            .flexShrink(0)
+                            .margin({ left: 8, top: 2 })
+                        }
+                        .width('100%')
+
+                        if (entry.summary && entry.summary.trim()) {
+                          if (this.getMatchedContent(entry.summary, this.searchQuery.trim())) {
+                            this.HighlightSummary(entry.summary, this.searchQuery.trim())
+                          } else {
+                            Text(entry.summary)
+                              .fontSize(12)
+                              .fontColor(this.theme.textSecondary)
+                              .maxLines(2)
+                              .textOverflow({ overflow: TextOverflow.Ellipsis })
+                              .width('100%')
+                          }
                         }
                       }
+                      .width('100%')
+                      .alignItems(HorizontalAlign.Start)
+                      .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                      .backgroundColor(this.theme.surface)
+                      .borderRadius(12)
+                      .clickEffect({ level: ClickEffectLevel.LIGHT })
+                      .onClick(() => {
+                        this.closeSearch()
+                        this.openEntry(entry.id)
+                      })
                     }
-                    .width('100%')
-                    .alignItems(HorizontalAlign.Start)
-                    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-                    .backgroundColor(this.theme.surface)
-                    .borderRadius(12)
-                    .clickEffect({ level: ClickEffectLevel.LIGHT })
-                    .onClick(() => {
-                      this.closeSearch()
-                      this.openEntry(entry.id)
-                    })
-                  }
-                }, (entry: EntryCardModel) => `${entry.id}_${this.searchQuery}`)
+                    .transition(
+                      TransitionEffect.OPACITY.animation({ duration: 200, curve: Curve.EaseOut, delay: index * 30 })
+                    )
+                  }, (entry: EntryCardModel) => `${entry.id}_${this.searchQuery}`)
 
-                if (this.searchAllEntries().length === 0) {
-                  ListItem() {
-                    Text('没有找到相关内容')
-                      .fontSize(14)
-                      .fontColor(this.theme.textSecondary)
-                      .padding(16)
+                  if (this.searchAllEntries().length === 0) {
+                    ListItem() {
+                      Text('没有找到相关内容')
+                        .fontSize(14)
+                        .fontColor(this.theme.textSecondary)
+                        .padding(16)
+                    }
                   }
                 }
+                .width('100%')
+                .height(this.searchExpanded ? Math.min(this.searchAllEntries().length, 6) * 90 + (Math.min(this.searchAllEntries().length, 6) - 1) * 8 + 16 : Math.min(this.searchAllEntries().length, 3) * 90 + (Math.min(this.searchAllEntries().length, 3) - 1) * 8 + 16)
+                .backgroundColor(this.theme.surface)
+                .borderRadius(this.searchExpanded ? 16 : INPUT_RADIUS)
+                .border({ width: 0.8, color: this.theme.divider })
+                .shadow({ radius: 14, color: 'rgba(0,0,0,0.08)', offsetY: 4 })
+                .padding({ left: 8, right: 8, top: 8, bottom: 8 })
+                .scrollBar(BarState.Off)
+                .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+                .alignListItem(ListItemAlign.Start)
+                .onScroll(() => {
+                  if (!this.searchExpanded) {
+                    this.searchInputController.stopEditing()
+                    animateTo({ duration: 400, curve: Curve.FastOutSlowIn }, () => {
+                      this.searchExpanded = true
+                    })
+                  }
+                })
               }
-              .width('100%')
-              .height(Math.min(this.searchAllEntries().length, 3) * 90 + (Math.min(this.searchAllEntries().length, 3) - 1) * 8 + 16)
-              .backgroundColor(this.theme.surface)
-              .borderRadius(INPUT_RADIUS)
-              .border({ width: 0.8, color: this.theme.divider })
-              .shadow({ radius: 14, color: 'rgba(0,0,0,0.08)', offsetY: 4 })
-              .padding({ left: 8, right: 8, top: 8, bottom: 8 })
-              .scrollBar(BarState.Off)
-              .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-              .alignListItem(ListItemAlign.Start)
+              .clip(true)
+              .animation({ duration: 400, curve: Curve.FastOutSlowIn })
             }
           }
           .width('100%')

@@ -334,6 +334,24 @@ function parseAtomItems(feedId: string, xml: string): ParsedItem[] {
   })
 }
 
+// RSSHub 备选实例列表（按优先级排序）
+const RSSHUB_INSTANCES = [
+  'https://rsshub.pseudoyu.com',
+  'https://rsshub.app',
+  'https://rsshub.rssforever.com',
+  'https://rsshub-instance.zeabur.app',
+  'https://rss.shab.fun',
+  'https://rsshub.ktachibana.party',
+  'https://rsshub.liumingye.cn',
+  'https://rsshub.feeded.xyz',
+]
+
+// RSSHub 实例尝试结果
+interface RssHubInstanceResult {
+  response: http.HttpResponse
+  request: http.HttpRequest
+}
+
 export class RssFeedService {
   static async previewFeedUrl(url: string): Promise<FeedRefreshPayload> {
     const dummyFeed: Feed = {
@@ -349,13 +367,195 @@ export class RssFeedService {
     return RssFeedService.fetchFeedEntries(dummyFeed)
   }
 
-  static async fetchFeedEntries(feed: Feed): Promise<FeedRefreshPayload> {
-    const request = http.createHttp()
+  /**
+   * 将 YouTube 官方 RSS URL 转换为 RSSHub 代理 URL
+   */
+  private static convertYouTubeToRssHub(url: string): string | null {
     try {
+      // 手动解析 URL，因为 ArkTS 不支持 URL 构造函数
+      const lowerUrl = url.toLowerCase()
+      if (!lowerUrl.includes('youtube.com/feeds/videos.xml')) {
+        return null
+      }
+      
+      // 提取 channel_id 参数
+      const channelIdMatch = url.match(/[?&]channel_id=([^&]+)/)
+      if (channelIdMatch && channelIdMatch[1]) {
+        const channelId = channelIdMatch[1]
+        // 使用 RSSHub 代理 YouTube RSS
+        return `${RSSHUB_INSTANCES[0]}/youtube/channel/${channelId}`
+      }
+    } catch (e) {
+      console.error('[RssFeedService] Error converting YouTube URL:', e)
+    }
+    return null
+  }
+
+  /**
+   * 检查 URL 是否是 RSSHub 路由
+   */
+  private static isRssHubUrl(url: string): boolean {
+    const lowerUrl = url.toLowerCase()
+    for (const instance of RSSHUB_INSTANCES) {
+      if (lowerUrl.startsWith(instance.toLowerCase())) {
+        return true
+      }
+    }
+    // 检查是否包含常见的 RSSHub 路由
+    return lowerUrl.includes('/bilibili/') || 
+           lowerUrl.includes('/twitter/') || 
+           lowerUrl.includes('/youtube/') ||
+           lowerUrl.includes('/instagram/')
+  }
+
+  /**
+   * 提取 RSSHub 路由路径
+   */
+  private static extractRssHubRoute(url: string): string | null {
+    try {
+      // 尝试从各个实例中提取路由
+      for (const instance of RSSHUB_INSTANCES) {
+        const instanceLower = instance.toLowerCase()
+        const urlLower = url.toLowerCase()
+        const index = urlLower.indexOf(instanceLower)
+        if (index !== -1) {
+          const route = url.substring(index + instance.length)
+          if (route.startsWith('/')) {
+            return route
+          }
+        }
+      }
+      
+      // 如果不是标准实例，尝试提取路径部分
+      const pathMatch = url.match(/https?:\/\/[^/]+(\/[^?#]+)/)
+      if (pathMatch && pathMatch[1]) {
+        return pathMatch[1]
+      }
+    } catch (e) {
+      console.error('[RssFeedService] Error extracting RSSHub route:', e)
+    }
+    return null
+  }
+
+  /**
+   * 尝试多个 RSSHub 实例，返回成功的响应和请求对象
+   */
+  private static async tryRssHubInstances(
+    route: string, 
+    headers: Record<string, string>
+  ): Promise<RssHubInstanceResult | null> {
+    const errors: string[] = []
+    let bestResult: RssHubInstanceResult | null = null
+    let bestStatusCode = 0
+    
+    for (const instance of RSSHUB_INSTANCES) {
+      const url = `${instance}${route}`
+      console.info(`[RssFeedService] Trying RSSHub instance: ${url}`)
+      
+      // 为每个实例创建特定的请求头（使用 Object.keys 避免 for...in）
+      const instanceHeaders: Record<string, string> = {}
+      const headerKeys = Object.keys(headers)
+      for (let i = 0; i < headerKeys.length; i++) {
+        const key = headerKeys[i]
+        // 跳过 Accept-Encoding 头部，可能导致鸿蒙解压问题
+        if (key !== 'Accept-Encoding') {
+          instanceHeaders[key] = headers[key]
+        }
+      }
+      // 添加 Referer，模拟从该实例的主页访问
+      instanceHeaders['Referer'] = instance
+      
+      const request = http.createHttp()
+      try {
+        console.info(`[RssFeedService] Request headers:`, JSON.stringify(instanceHeaders))
+        
+        const response = await request.request(url, {
+          method: http.RequestMethod.GET,
+          connectTimeout: 8000,
+          readTimeout: 8000,
+          header: instanceHeaders,
+        })
+        
+        console.info(`[RssFeedService] Instance ${instance} response: ${response.responseCode}`)
+        console.info(`[RssFeedService] Response headers:`, JSON.stringify(response.header))
+        console.info(`[RssFeedService] Response content-type: ${response.header['Content-Type'] ?? response.header['content-type']}`)
+        console.info(`[RssFeedService] Response length: ${String(response.result).length}`)
+        
+        // 如果是错误响应，输出前500个字符
+        if (response.responseCode >= 400) {
+          const preview = String(response.result).substring(0, 500)
+          console.warn(`[RssFeedService] Error response preview: ${preview}`)
+        }
+        // 200 是最佳结果，直接返回
+        if (response.responseCode === 200) {
+          console.info(`[RssFeedService] Success with instance: ${instance}`)
+          // 如果之前有保存的结果，销毁它
+          if (bestResult) {
+            bestResult.request.destroy()
+          }
+          const result: RssHubInstanceResult = {
+            response: response,
+            request: request
+          }
+          return result
+        }
+        
+        // 保存最好的非200响应（比如304可能也是有效的）
+        if (response.responseCode > bestStatusCode && response.responseCode < 400) {
+          if (bestResult) {
+            bestResult.request.destroy()
+          }
+          bestStatusCode = response.responseCode
+          bestResult = {
+            response: response,
+            request: request
+          }
+          console.info(`[RssFeedService] Saved best result so far: ${instance} (${response.responseCode})`)
+        } else {
+          request.destroy()
+        }
+        
+        const errorMsg = `Instance ${instance} returned ${response.responseCode}`
+        console.warn(`[RssFeedService] ${errorMsg}`)
+        errors.push(errorMsg)
+      } catch (e) {
+        const errorMsg = `Instance ${instance} failed: ${e}`
+        console.warn(`[RssFeedService] ${errorMsg}`)
+        errors.push(errorMsg)
+        request.destroy()
+      }
+    }
+    
+    // 如果有保存的最佳结果，返回它
+    if (bestResult) {
+      console.info(`[RssFeedService] Returning best result with status ${bestStatusCode}`)
+      return bestResult
+    }
+    
+    console.error(`[RssFeedService] All RSSHub instances failed:`, errors.join('; '))
+    return null
+  }
+
+  static async fetchFeedEntries(feed: Feed): Promise<FeedRefreshPayload> {
+    let mainRequest = http.createHttp()
+    let activeRequest = mainRequest
+    
+    try {
+      // 尝试将 YouTube 官方 RSS 转换为 RSSHub 代理
+      let actualUrl = feed.url
+      const rsshubUrl = RssFeedService.convertYouTubeToRssHub(feed.url)
+      if (rsshubUrl) {
+        console.info(`[RssFeedService] Converting YouTube RSS to RSSHub: ${rsshubUrl}`)
+        actualUrl = rsshubUrl
+      }
+
       const headers: Record<string, string> = {}
-      headers['Accept'] = 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*'
       headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8'
+      headers['Accept'] = 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*'
+      headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+      headers['Connection'] = 'keep-alive'
+      headers['Cache-Control'] = 'no-cache'
+      headers['Pragma'] = 'no-cache'
 
       if (feed.etag) {
         headers['If-None-Match'] = feed.etag
@@ -365,14 +565,49 @@ export class RssFeedService {
         headers['If-Modified-Since'] = feed.lastModified
       }
 
-      let response = await request.request(feed.url, {
-        method: http.RequestMethod.GET,
-        connectTimeout: 10000,
-        readTimeout: 10000,
-        header: headers,
-      })
+      console.info(`[RssFeedService] Fetching feed: ${actualUrl}`)
+      console.info(`[RssFeedService] Original URL: ${feed.url}`)
+
+      let response: http.HttpResponse
+      
+      // 如果是 RSSHub URL，尝试多个实例
+      if (RssFeedService.isRssHubUrl(actualUrl)) {
+        const route = RssFeedService.extractRssHubRoute(actualUrl)
+        if (route) {
+          console.info(`[RssFeedService] Detected RSSHub route: ${route}`)
+          const result = await RssFeedService.tryRssHubInstances(route, headers)
+          
+          if (!result) {
+            throw new Error('All RSSHub instances failed')
+          }
+          
+          response = result.response
+          activeRequest = result.request
+          // 销毁原始的 mainRequest，因为我们使用了新的 request
+          if (mainRequest !== activeRequest) {
+            mainRequest.destroy()
+          }
+        } else {
+          // 无法提取路由，使用原始 URL
+          response = await mainRequest.request(actualUrl, {
+            method: http.RequestMethod.GET,
+            connectTimeout: 15000,
+            readTimeout: 15000,
+            header: headers,
+          })
+        }
+      } else {
+        // 不是 RSSHub URL，使用原始 URL
+        response = await mainRequest.request(actualUrl, {
+          method: http.RequestMethod.GET,
+          connectTimeout: 15000,
+          readTimeout: 15000,
+          header: headers,
+        })
+      }
 
       if (response.responseCode === 304) {
+        console.info(`[RssFeedService] Feed not modified (304): ${feed.url}`)
         return {
           etag: feed.etag ?? '',
           lastModified: feed.lastModified ?? '',
@@ -385,38 +620,59 @@ export class RssFeedService {
       }
 
       if (response.responseCode !== 200) {
+        console.error(`[RssFeedService] HTTP error ${response.responseCode} for ${actualUrl}`)
+        console.error(`[RssFeedService] Response headers:`, JSON.stringify(response.header))
         throw new Error(`RSS request failed with status ${response.responseCode}`)
       }
 
-      let requestUrl = feed.url
+      let requestUrl = actualUrl
       let xml = String(response.result)
       const contentType = String(response.header['Content-Type'] ?? response.header['content-type'] ?? '').toLowerCase()
 
+      console.info(`[RssFeedService] Response content-type: ${contentType}`)
+      console.info(`[RssFeedService] Response length: ${xml.length}`)
+
       if (contentType.includes('text/html') || looksLikeHtmlDocument(xml)) {
+        console.info(`[RssFeedService] Detected HTML, attempting RSS discovery`)
         const discoveredFeedUrl = discoverFeedUrlFromHtml(xml, requestUrl)
         if (discoveredFeedUrl && discoveredFeedUrl !== requestUrl) {
-          response = await request.request(discoveredFeedUrl, {
+          console.info(`[RssFeedService] Discovered RSS feed: ${discoveredFeedUrl}`)
+          const discoveryRequest = http.createHttp()
+          const discoveryResponse = await discoveryRequest.request(discoveredFeedUrl, {
             method: http.RequestMethod.GET,
-            connectTimeout: 10000,
-            readTimeout: 10000,
+            connectTimeout: 15000,
+            readTimeout: 15000,
             header: headers,
           })
-          if (response.responseCode !== 200) {
-            throw new Error(`RSS request failed with status ${response.responseCode}`)
+          if (discoveryResponse.responseCode !== 200) {
+            console.error(`[RssFeedService] Discovered feed HTTP error ${discoveryResponse.responseCode}`)
+            discoveryRequest.destroy()
+            throw new Error(`RSS request failed with status ${discoveryResponse.responseCode}`)
           }
           requestUrl = discoveredFeedUrl
-          xml = String(response.result)
+          xml = String(discoveryResponse.result)
+          console.info(`[RssFeedService] Successfully fetched discovered feed`)
+          discoveryRequest.destroy()
+        } else {
+          console.warn(`[RssFeedService] No RSS feed discovered in HTML`)
         }
       }
 
       const rssItems = parseRssItems(feed.id, xml)
       const items = rssItems.length > 0 ? rssItems : parseAtomItems(feed.id, xml)
+      
+      console.info(`[RssFeedService] Parsed ${items.length} items (RSS: ${rssItems.length})`)
+      
       const resolvedSiteUrl = parseFeedSiteUrl(xml, requestUrl) || feed.siteUrl || ''
       const resolvedImageUrl = parseFeedImageUrl(xml, resolvedSiteUrl || requestUrl) || feed.imageUrl || ''
       const resolvedDescription = parseFeedDescription(xml) || feed.description || ''
       const resolvedTitle = parseFeedTitle(xml) || feed.title
 
+      console.info(`[RssFeedService] Feed title: ${resolvedTitle}`)
+      console.info(`[RssFeedService] Site URL: ${resolvedSiteUrl}`)
+
       if (items.length === 0) {
+        console.error(`[RssFeedService] No entries parsed from feed`)
         throw new Error('RSS parsed without entries')
       }
 
@@ -448,7 +704,7 @@ export class RssFeedService {
         entries,
       }
     } finally {
-      request.destroy()
+      activeRequest.destroy()
     }
   }
 }

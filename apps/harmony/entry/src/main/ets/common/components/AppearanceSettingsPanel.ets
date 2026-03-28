@@ -168,33 +168,6 @@ export struct AppearanceSettingsPanel {
     })
   }
 
-  @Builder
-  private Header() {
-    Column({ space: PANEL_HEADER_SPACING }) {
-      Column() {
-        Row()
-          .width(40)
-          .height(4)
-          .borderRadius(999)
-          .backgroundColor(this.theme.dragHandle)
-      }
-      .width('100%')
-      .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
-      .alignItems(HorizontalAlign.Center)
-
-      Row() {
-        Text('外观')
-          .fontSize(PANEL_HEADER_TITLE_SIZE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
-    }
-    .width('100%')
-    .transition(livoMotion.enterRise(20))
-  }
 
   @Builder
   private DividerLine() {
@@ -399,6 +372,22 @@ export struct AppearanceSettingsPanel {
   }
 
   @Builder
+  private SheetHandle() {
+    if (!this.showBackButton) {
+      Column() {
+        Row()
+          .width(40)
+          .height(5)
+          .borderRadius(999)
+          .backgroundColor(this.theme.dragHandle)
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
+      .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+    }
+  }
+
+  @Builder
   private SettingsGroup() {
     Column({ space: 14 }) {
       Column() {
@@ -451,7 +440,7 @@ export struct AppearanceSettingsPanel {
   build() {
     Scroll() {
       Column({ space: 14 }) {
-        this.Header()
+        this.SheetHandle()
         this.SettingsGroup()
 
         Row()

@@ -59,6 +59,23 @@ export class EntryRepository {
     return entries
   }
 
+  static async listStarred(limit: number = 100): Promise<Entry[]> {
+    const store = await AppDatabaseService.getStore()
+    const predicates = new relationalStore.RdbPredicates('entries')
+    predicates.equalTo('is_starred', 1)
+    predicates.orderByDesc('published_at')
+    predicates.limitAs(limit)
+    const result = await store.query(predicates)
+    const entries: Entry[] = []
+
+    while (result.goToNextRow()) {
+      entries.push(mapEntry(result))
+    }
+
+    result.close()
+    return entries
+  }
+
   static async listByFeed(feedId: string): Promise<Entry[]> {
     const store = await AppDatabaseService.getStore()
     const predicates = new relationalStore.RdbPredicates('entries')

@@ -17,6 +17,7 @@ struct ArticleDetail {
   @State aiEnabled: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State isUpgradingLegacyContent: boolean = false
+  @State starScale: number = 1
   private upgradedEntryIds: Set<string> = new Set<string>()
 
   aboutToAppear(): void {
@@ -40,6 +41,22 @@ struct ArticleDetail {
       await AppRepository.markRead(entryId, true)
     }
 
+    const params = getStringParams()
+    const entryJson = params?.entryJson as string
+
+    if (entryJson) {
+      try {
+        const parsed = JSON.parse(entryJson) as ArticleDetailModel
+        if (parsed) {
+          this.entry = parsed
+          this.actionHint = ''
+          return
+        }
+      } catch (e) {
+        console.error('Failed to parse entryJson', e)
+      }
+    }
+
     this.entry = await AppRepository.entryById(entryId)
     const upgraded = await this.upgradeLegacyEntryIfNeeded()
     const settings = await AppRepository.settings()
@@ -59,20 +76,19 @@ struct ArticleDetail {
       return
     }
 
+    animateTo({ duration: 150, curve: Curve.EaseOut }, () => {
+      this.starScale = 1.4
+    })
+
     await AppRepository.toggleStar(entryId)
     await this.loadEntry(false)
-    this.actionHint = '收藏状态已更新'
-  }
+    this.actionHint = this.entry?.isStarred ? '已收藏' : '已取消收藏'
 
-  private async toggleRead(): Promise<void> {
-    const entryId = this.entryId()
-    if (!entryId || !this.entry) {
-      return
-    }
-
-    await AppRepository.markRead(entryId, !this.entry.isRead)
-    await this.loadEntry(false)
-    this.actionHint = this.entry?.isRead ? '已标记为已读' : '已标记为未读'
+    setTimeout(() => {
+      animateTo({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
+        this.starScale = 1.0
+      })
+    }, 150)
   }
 
   private async upgradeLegacyEntryIfNeeded(): Promise<boolean> {
@@ -165,30 +181,50 @@ struct ArticleDetail {
 
   build() {
     Column() {
+      // 顶部导航栏
       Row() {
-        this.HeaderAction('返回', false, () => { void goBack() })
+        Text('‹')
+          .fontSize(28)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .width(40)
+          .height(40)
+          .textAlign(TextAlign.Center)
+          .onClick(() => { void goBack() })
 
         Blank()
 
-        this.HeaderAction('收藏', !!this.entry?.isStarred, () => { void this.toggleStar() })
-        this.HeaderAction(this.entry?.isRead ? '未读' : '已读', false, () => { void this.toggleRead() })
+        SymbolGlyph($r('sys.symbol.lightbulb'))
+          .fontSize(24)
+          .fontColor([this.theme.accent, this.theme.textSecondary])
+          .renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
+          .padding(8)
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => { this.actionHint = 'AI 助手功能开发中...' })
+
+        SymbolGlyph($r('sys.symbol.share'))
+          .fontSize(22)
+          .fontColor([this.theme.textSecondary])
+          .padding(8)
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => { this.actionHint = '分享功能开发中...' })
+
+        SymbolGlyph($r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'))
+          .fontSize(22)
+          .fontColor([this.entry?.isStarred ? this.theme.accent : this.theme.textSecondary])
+          .padding(8)
+          .scale({ x: this.starScale, y: this.starScale })
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => { void this.toggleStar() })
       }
       .width('100%')
-      .padding({ left: 18, right: 18, top: 18, bottom: 10 })
+      .padding({ left: 18, right: 18, top: 48, bottom: 10 })
+      .alignItems(VerticalAlign.Center)
 
-      Scroll() {
-        Column({ space: 18 }) {
-          if (this.entry) {
+      if (this.entry) {
+        Scroll() {
+          Column({ space: 18 }) {
             Column({ space: 12 }) {
-              Row({ space: 8 }) {
-                this.MetaBadge(this.entry!.viewLabel, true)
-                this.MetaBadge(this.entry!.feedTitle)
-                if (this.entry!.isStarred) {
-                  this.MetaBadge('已收藏')
-                }
-              }
-              .width('100%')
-
               Text(this.entry!.title)
                 .fontSize(28)
                 .lineHeight(38)
@@ -196,32 +232,11 @@ struct ArticleDetail {
                 .fontColor(this.theme.textPrimary)
                 .width('100%')
 
-              Text(`${this.entry!.author} · ${this.entry!.publishedLabel} · ${this.entry!.readingLabel}`)
+              Text(`${this.entry!.author} · ${this.entry!.publishedLabel}`)
                 .fontSize(13)
                 .lineHeight(20)
                 .fontColor(this.theme.textSecondary)
                 .width('100%')
-
-              if (this.actionHint) {
-                Text(this.actionHint)
-                  .fontSize(11)
-                  .fontColor(this.theme.accent)
-                  .width('100%')
-              }
-
-              if (this.isUpgradingLegacyContent) {
-                Row({ space: 8 }) {
-                  LoadingProgress()
-                    .width(16)
-                    .height(16)
-                    .color(this.theme.accent)
-
-                  Text('正在尝试重建段落与图片...')
-                    .fontSize(12)
-                    .fontColor(this.theme.textSecondary)
-                }
-                .width('100%')
-              }
             }
             .width('100%')
             .padding({ left: 18, right: 18, top: 6, bottom: 2 })
@@ -284,44 +299,45 @@ struct ArticleDetail {
                   Text(paragraph)
                     .fontSize(16)
                     .lineHeight(29)
-                    .fontColor(this.theme.textSecondary)
+                    .fontColor(this.theme.textPrimary)
                     .width('100%')
                     .textAlign(TextAlign.Start)
                 }, (paragraph: string, index: number) => `${index}-${paragraph}`)
               }
 
-              Text(`原始来源：${this.entry!.siteUrl}`)
-                .fontSize(13)
-                .fontColor(this.theme.textMuted)
-                .width('100%')
+              if (this.entry!.siteUrl) {
+                Text(`原始来源：${this.entry!.siteUrl}`)
+                  .fontSize(13)
+                  .fontColor(this.theme.textMuted)
+                  .width('100%')
+              }
             }
             .width('100%')
             .alignItems(HorizontalAlign.Start)
             .padding({ left: 18, right: 18, top: 12, bottom: 22 })
             .margin({ top: 4, bottom: 16 })
-          } else {
-            Column({ space: 12 }) {
-              Text('未找到内容')
-                .fontSize(24)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.theme.textPrimary)
-
-              Text('请从订阅页重新进入一个条目。')
-                .fontSize(15)
-                .fontColor(this.theme.textSecondary)
-            }
-            .width('100%')
-            .padding(20)
-            .backgroundColor(this.theme.surface)
-            .borderRadius(24)
           }
+          .width('100%')
+          .padding({ bottom: 12 })
+          .alignItems(HorizontalAlign.Start)
+        }
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
+      } else {
+        Column({ space: 12 }) {
+          Text('未找到内容')
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+
+          Text('请从订阅页重新进入一个条目。')
+            .fontSize(15)
+            .fontColor(this.theme.textSecondary)
         }
         .width('100%')
-        .padding({ bottom: 12 })
-        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
       }
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
     }
     .width('100%')
     .height('100%')

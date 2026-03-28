@@ -109,8 +109,6 @@ struct DiscoverSubscribeConfig {
         .width(40)
         .height(40)
         .textAlign(TextAlign.Center)
-        .borderRadius(999)
-        .backgroundColor(this.theme.elevated)
         .onClick(() => { void goBack() })
 
       Blank()

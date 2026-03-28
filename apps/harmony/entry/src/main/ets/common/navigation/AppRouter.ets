@@ -152,6 +152,7 @@ export class RouterOptions {
 
 class EntryDetailParams {
   entryId: string = ''
+  entryJson?: string = ''
 }
 
 class FeedDetailParams {
@@ -205,9 +206,12 @@ export function getRequestedRootTabId(): RootTabId | undefined {
   return undefined
 }
 
-export async function openArticleDetail(entryId: string): Promise<void> {
+export async function openArticleDetail(entryId: string, entryJson?: string): Promise<void> {
   const params = new EntryDetailParams()
   params.entryId = entryId
+  if (entryJson) {
+    params.entryJson = entryJson
+  }
   await router.pushUrl(createRouterOptions(ROUTES.articleDetail, params))
 }
 

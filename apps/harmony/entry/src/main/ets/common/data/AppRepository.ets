@@ -133,6 +133,22 @@ export class AppRepository {
 
     return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feedMap.get(entry.feedId))))
   }
+
+  static async starredEntries(): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    const entries = await EntryRepository.listStarred(100)
+    const feeds = await FeedRepository.list()
+    const feedMap = new Map<string, Feed>()
+    feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
+
+    return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feedMap.get(entry.feedId))))
+  }
+
+  static async entryEntitiesByFeed(feedId: string): Promise<Entry[]> {
+    await AppRepository.bootstrap()
+    return EntryRepository.listByFeed(feedId)
+  }
+
   static async entriesByFeed(feedId: string): Promise<EntryCardModel[]> {
     await AppRepository.bootstrap()
     const entriesPromise = EntryRepository.listByFeed(feedId)

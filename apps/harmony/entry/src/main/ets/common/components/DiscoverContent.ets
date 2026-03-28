@@ -1,9 +1,10 @@
 import promptAction from '@ohos.promptAction'
 import { AppRepository } from '../data/AppRepository'
+import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { PageHeader } from './PageHeader'
-import { Entry, Feed, FeedViewType } from '../models/LivoModels'
+import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
 import { FeedDraft } from '../repositories/FeedRepository'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import {
@@ -22,9 +23,11 @@ import {
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { FeedDetailView } from './FeedDetailView'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
+  CARD_RADIUS_SM,
   CHIP_FONT_SIZE,
   CHIP_RADIUS,
   INPUT_RADIUS,
@@ -43,6 +46,7 @@ import {
 
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
 const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
+const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 
 interface DirectUrlResult {
   targetUrl: string
@@ -59,6 +63,12 @@ class DiscoverFlowRouteParams {
   description: string = ''
   sourceKind: string = ''
   category: string = ''
+}
+
+class EntryDetailParams {
+  entry: Entry | undefined = undefined
+  feedTitle: string = ''
+  feedImageUrl: string = ''
 }
 
 interface ConfigOption {
@@ -117,6 +127,7 @@ export struct DiscoverContent {
   @State isLoadingPage: boolean = false
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
   private searchSession: number = 0
@@ -786,7 +797,7 @@ export struct DiscoverContent {
       .backgroundColor(this.theme.background)
       .edgeEffect(EdgeEffect.Spring)
 
-      if (this.showBottomTabs) {
+      if (this.showBottomTabs && this.discoverOverlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })
       }
     }
@@ -798,27 +809,43 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private DiscoverDestinations(name: string, params?: DiscoverFlowRouteParams) {
+  private DiscoverDestinations(name: string, params?: DiscoverFlowRouteParams | EntryDetailParams) {
     if (name === DISCOVER_ROUTE_SUBSCRIBE_CONFIG) {
-      DiscoverSubscribeConfigDestination({
-        targetUrl: normalizeDiscoverFlowRouteParams(params).targetUrl,
-        targetTitle: normalizeDiscoverFlowRouteParams(params).targetTitle,
-        targetSiteUrl: normalizeDiscoverFlowRouteParams(params).siteUrl,
-        targetDescription: normalizeDiscoverFlowRouteParams(params).description,
-        sourceKind: normalizeDiscoverFlowRouteParams(params).sourceKind,
-        initialSelectedView: normalizeDiscoverFlowRouteParams(params).targetView,
-        theme: this.theme,
-      })
+      NavDestination() {
+        DiscoverSubscribeConfigDestination({
+          targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
+          targetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
+          targetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
+          targetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
+          sourceKind: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).sourceKind,
+          initialSelectedView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
+          theme: this.theme,
+        })
+      }
+      .hideTitleBar(true)
     } else if (name === DISCOVER_ROUTE_PREVIEW) {
-      DiscoverPreviewDestination({
-        targetUrl: normalizeDiscoverFlowRouteParams(params).targetUrl,
-        initialTargetTitle: normalizeDiscoverFlowRouteParams(params).targetTitle,
-        initialTargetSiteUrl: normalizeDiscoverFlowRouteParams(params).siteUrl,
-        initialTargetDescription: normalizeDiscoverFlowRouteParams(params).description,
-        targetCategory: normalizeDiscoverFlowRouteParams(params).category,
-        targetView: normalizeDiscoverFlowRouteParams(params).targetView,
-        theme: this.theme,
-      })
+      NavDestination() {
+        DiscoverPreviewDestination({
+          targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
+          initialTargetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
+          initialTargetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
+          initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
+          targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
+          targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
+          theme: this.theme,
+        })
+      }
+      .hideTitleBar(true)
+    } else if (name === DISCOVER_ROUTE_ENTRY_DETAIL) {
+      NavDestination() {
+        DiscoverEntryDetailDestination({
+          entry: (params as EntryDetailParams)?.entry,
+          feedTitle: (params as EntryDetailParams)?.feedTitle ?? '',
+          feedImageUrl: (params as EntryDetailParams)?.feedImageUrl ?? '',
+          theme: this.theme,
+        })
+      }
+      .hideTitleBar(true)
     }
   }
 
@@ -839,6 +866,7 @@ export struct DiscoverContent {
 @Component
 struct DiscoverSubscribeConfigDestination {
   @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
+  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Prop targetUrl: string = ''
   @Prop targetTitle: string = ''
   @Prop targetSiteUrl: string = ''
@@ -847,25 +875,103 @@ struct DiscoverSubscribeConfigDestination {
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @State selectedView: FeedViewType = FeedViewType.Articles
+  @State customTitle: string = ''
+  @State customCategory: string = ''
+  @State hideInTimeline: boolean = false
+  @State isEditMode: boolean = false
+  @State hasChanges: boolean = false
+  @State existingFeed: Feed | undefined = undefined
 
   aboutToAppear(): void {
     this.selectedView = this.initialSelectedView
-  }
-
-  private options(): ConfigOption[] {
-    if (this.isBilibiliSource()) {
-      return [
-        { view: FeedViewType.SocialMedia, label: '社交', description: '订阅 Bilibili 动态更新' },
-        { view: FeedViewType.Videos, label: '视频', description: '订阅 Bilibili 视频更新' },
-      ]
+    this.customTitle = this.targetTitle
+    this.isEditMode = this.sourceKind === '编辑'
+    
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    if (currentLevel < 1) {
+      AppStorage.setOrCreate('discoverOverlayLevel', 1)
     }
 
+    if (this.isEditMode) {
+      void this.loadExistingFeed()
+    }
+  }
+
+  private async loadExistingFeed(): Promise<void> {
+    const feeds = await AppRepository.feedEntities()
+    this.existingFeed = feeds.find((feed: Feed) => 
+      this.normalizeUrl(feed.url) === this.normalizeUrl(this.targetUrl)
+    )
+
+    if (this.existingFeed) {
+      this.customTitle = this.existingFeed.title
+      this.customCategory = this.existingFeed.category || ''
+      this.selectedView = this.existingFeed.view
+      this.hideInTimeline = !this.existingFeed.showInAll
+    }
+  }
+
+  private normalizeUrl(url: string): string {
+    return url.trim().replace(/\/+$/, '').toLowerCase()
+  }
+
+  private checkForChanges(): void {
+    if (!this.existingFeed) {
+      this.hasChanges = false
+      return
+    }
+
+    this.hasChanges = 
+      this.customTitle !== this.existingFeed.title ||
+      this.customCategory !== this.existingFeed.category ||
+      this.selectedView !== this.existingFeed.view ||
+      this.hideInTimeline !== !this.existingFeed.showInAll
+  }
+
+  private viewOptions(): ConfigOption[] {
     return [
-      { view: FeedViewType.Articles, label: '文章', description: '适合博客、资讯和长文内容' },
-      { view: FeedViewType.SocialMedia, label: '社交', description: '适合动态流、短内容和讨论' },
-      { view: FeedViewType.Pictures, label: '图片', description: '适合图片集、摄影和视觉内容' },
-      { view: FeedViewType.Videos, label: '视频', description: '适合频道更新、视频和播客' },
+      { view: FeedViewType.Articles, label: '文章', description: '' },
+      { view: FeedViewType.SocialMedia, label: '社交', description: '' },
+      { view: FeedViewType.Pictures, label: '图片', description: '' },
+      { view: FeedViewType.Videos, label: '视频', description: '' },
     ]
+  }
+
+  private getViewLabel(view: FeedViewType): string {
+    switch (view) {
+      case FeedViewType.Articles:
+        return '文章'
+      case FeedViewType.SocialMedia:
+        return '社交'
+      case FeedViewType.Pictures:
+        return '图片'
+      case FeedViewType.Videos:
+        return '视频'
+      default:
+        return '文章'
+    }
+  }
+
+  private getViewIcon(view: FeedViewType): Resource {
+    switch (view) {
+      case FeedViewType.Articles:
+        return $r('app.media.sub_articles_inactive')
+      case FeedViewType.SocialMedia:
+        return $r('app.media.sub_social_inactive')
+      case FeedViewType.Pictures:
+        return $r('app.media.sub_pictures_inactive')
+      case FeedViewType.Videos:
+        return $r('app.media.sub_videos_inactive')
+      default:
+        return $r('app.media.sub_articles_inactive')
+    }
+  }
+
+  private getViewIconColor(view: FeedViewType): string {
+    if (this.selectedView === view) {
+      return this.theme.textPrimary
+    }
+    return this.theme.isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)'
   }
 
   private isBilibiliSource(): boolean {
@@ -902,119 +1008,507 @@ struct DiscoverSubscribeConfigDestination {
     return this.targetUrl
   }
 
-  private continueToPreview(): void {
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_PREVIEW,
-      createDiscoverFlowRouteParams(
-        this.mappedTargetUrl(),
-        this.targetTitle,
-        this.selectedView,
-        this.targetSiteUrl,
-        this.targetDescription,
-        this.sourceKind,
-        '',
-      ),
-      true,
-    )
+  private hostOf(url: string): string {
+    const matched = url.match(/^https?:\/\/([^/]+)/i)
+    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
+  }
+
+  private faviconUrl(): string {
+    const host = this.hostOf(this.targetSiteUrl || this.targetUrl)
+    return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128` : ''
+  }
+
+  private async handleUnsubscribe(): Promise<void> {
+    if (!this.existingFeed) {
+      return
+    }
+
+    try {
+      await AppRepository.removeFeed(this.existingFeed.id)
+      
+      promptAction.showToast({
+        message: '已取消订阅',
+        duration: 2000,
+      })
+
+      // 返回到发现页面
+      AppStorage.setOrCreate('discoverOverlayLevel', 0)
+      this.discoverPathStack.clear()
+    } catch (e) {
+      promptAction.showToast({
+        message: `取消订阅失败: ${e}`,
+        duration: 3000,
+      })
+    }
+  }
+
+  private async handleSave(): Promise<void> {
+    if (!this.existingFeed) {
+      return
+    }
+
+    try {
+      const draft: FeedDraft = {
+        url: this.targetUrl,
+        title: this.customTitle || this.targetTitle,
+        siteUrl: this.targetSiteUrl,
+        description: this.targetDescription,
+        category: this.customCategory,
+        view: this.selectedView,
+        showInAll: !this.hideInTimeline,
+      }
+
+      await AppRepository.updateFeed(this.existingFeed.id, draft)
+      
+      promptAction.showToast({
+        message: '保存成功',
+        duration: 2000,
+      })
+
+      // 返回到预览页面
+      AppStorage.setOrCreate('discoverOverlayLevel', 1)
+      this.discoverPathStack.pop(true)
+    } catch (e) {
+      promptAction.showToast({
+        message: `保存失败: ${e}`,
+        duration: 3000,
+      })
+    }
+  }
+
+  private async handleSubscribe(): Promise<void> {
+    try {
+      const draft: FeedDraft = {
+        url: this.mappedTargetUrl(),
+        title: this.customTitle || this.targetTitle,
+        siteUrl: this.targetSiteUrl,
+        description: this.targetDescription,
+        category: this.customCategory,
+        view: this.selectedView,
+        showInAll: !this.hideInTimeline,
+      }
+
+      await AppRepository.createFeed(draft)
+      
+      promptAction.showToast({
+        message: '订阅成功',
+        duration: 2000,
+      })
+
+      // 返回到发现页面
+      AppStorage.setOrCreate('discoverOverlayLevel', 0)
+      this.discoverPathStack.clear()
+    } catch (e) {
+      promptAction.showToast({
+        message: `订阅失败: ${e}`,
+        duration: 3000,
+      })
+    }
   }
 
   @Builder
-  private HeaderSection() {
+  private TopBar() {
     Row() {
+      // 返回箭头按钮
       Text('‹')
-        .fontSize(28)
+        .fontSize(32)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
-        .width(40)
-        .height(40)
+        .width(44)
+        .height(44)
         .textAlign(TextAlign.Center)
-        .borderRadius(999)
-        .backgroundColor(this.theme.elevated)
         .onClick(() => {
+          AppStorage.setOrCreate('discoverOverlayLevel', 0)
           this.discoverPathStack.pop(true)
         })
 
-      Blank()
-    }
-    .width('100%')
-  }
-
-  @Builder
-  private OptionCard(option: ConfigOption) {
-    Column({ space: 6 }) {
-      Text(option.label)
+      // 标题
+      Text(`订阅 - ${this.targetTitle}`)
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
-        .fontColor(this.selectedView === option.view ? '#FFFFFF' : this.theme.textPrimary)
-        .width('100%')
+        .fontColor(this.theme.textPrimary)
+        .layoutWeight(1)
+        .textAlign(TextAlign.Center)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      Text(option.description)
-        .fontSize(12)
-        .lineHeight(20)
-        .fontColor(this.selectedView === option.view ? 'rgba(255,255,255,0.82)' : this.theme.textSecondary)
-        .width('100%')
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(this.selectedView === option.view ? this.theme.accent : this.theme.surface)
-    .borderRadius(22)
-    .alignItems(HorizontalAlign.Start)
-    .animation({ duration: 180, curve: Curve.EaseInOut })
-    .onClick(() => {
-      this.selectedView = option.view
-    })
-  }
-
-  build() {
-    Column({ space: 14 }) {
-      this.HeaderSection()
-
-      Column({ space: 6 }) {
-        Text('订阅到哪个栏目')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-
-        Text(this.targetTitle || '选择一个最合适的栏目，然后继续预览。')
-          .fontSize(14)
-          .fontColor(this.theme.textSecondary)
-          .width('100%')
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-
-      Column({ space: 12 }) {
-        ForEach(this.options(), (option: ConfigOption) => {
-          this.OptionCard(option)
-        }, (option: ConfigOption) => `${option.view}`)
-      }
-      .width('100%')
-
-      Blank()
-
-      Button('继续')
-        .type(ButtonType.Capsule)
-        .width('100%')
-        .height(54)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .backgroundColor(this.theme.accent)
-        .fontColor('#FFFFFF')
+      // 订阅按钮
+      Button('订阅')
+        .type(ButtonType.Normal)
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .height(36)
+        .padding({ left: 20, right: 20 })
+        .backgroundColor('transparent')
+        .fontColor('#FF6B35')
         .onClick(() => {
-          this.continueToPreview()
+          void this.handleSubscribe()
         })
     }
     .width('100%')
+    .padding({ left: 8, right: 8, top: 12, bottom: 8 })
+    .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  private FeedInfoCard() {
+    Column({ space: 12 }) {
+      // 头像和基本信息
+      Row({ space: 12 }) {
+        // 头像
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.faviconUrl()) {
+            Image(this.faviconUrl())
+              .width(56)
+              .height(56)
+              .borderRadius(14)
+              .backgroundColor(this.theme.elevated)
+          } else {
+            Row()
+              .width(56)
+              .height(56)
+              .borderRadius(14)
+              .backgroundColor(this.theme.accent)
+
+            Text(this.targetTitle.substring(0, 1).toUpperCase())
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#FFFFFF')
+          }
+        }
+
+        // 标题和URL
+        Column({ space: 4 }) {
+          Text(this.targetTitle)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(this.targetUrl)
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+      }
+      .width('100%')
+
+      // 完整描述
+      if (this.targetDescription) {
+        Text(this.targetDescription)
+          .fontSize(14)
+          .lineHeight(20)
+          .fontColor(this.theme.textSecondary)
+          .width('100%')
+      }
+    }
+    .width('100%')
+    .padding(16)
+    .backgroundColor(this.theme.surface)
+    .borderRadius(16)
+  }
+
+  @Builder
+  private ConfigSection(title: string, description: string) {
+    Column({ space: 8 }) {
+      Text(title)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.theme.textPrimary)
+
+      Text(description)
+        .fontSize(13)
+        .lineHeight(18)
+        .fontColor(this.theme.textSecondary)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private TextInputField(placeholder: string, value: string, onChange: (value: string) => void) {
+    TextInput({ text: value, placeholder: placeholder })
+      .backgroundColor(this.theme.elevated)
+      .fontColor(this.theme.textPrimary)
+      .placeholderColor(this.theme.textMuted)
+      .borderRadius(12)
+      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+      .width('100%')
+      .onChange((newValue: string) => {
+        onChange(newValue)
+        this.checkForChanges()
+      })
+  }
+
+  @Builder
+  private ToggleRow(label: string, description: string, value: boolean, onChange: (value: boolean) => void) {
+    Row() {
+      Column({ space: 4 }) {
+        Text(label)
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text(description)
+          .fontSize(12)
+          .lineHeight(16)
+          .fontColor(this.theme.textSecondary)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Toggle({ type: ToggleType.Switch, isOn: value })
+        .selectedColor(this.theme.accent)
+        .onChange((isOn: boolean) => {
+          onChange(isOn)
+          this.checkForChanges()
+        })
+    }
+    .width('100%')
+    .padding({ top: 8, bottom: 8 })
+  }
+
+  private indicatorColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.92)'
+  }
+
+  private indicatorBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)'
+  }
+
+  private indicatorShadowColor(): string {
+    return this.theme.isDark ? 'rgba(0,0,0,0.12)' : 'rgba(15,23,42,0.08)'
+  }
+
+  private activeTextColor(): string {
+    return this.theme.isDark ? '#F5F8FF' : '#14213D'
+  }
+
+  @Builder
+  private ViewTypeButton(option: ConfigOption) {
+    Row({ space: 6 }) {
+      // 图标
+      Image(this.getViewIcon(option.view))
+        .width(16)
+        .height(16)
+        .objectFit(ImageFit.Contain)
+
+      // 标签
+      Text(this.getViewLabel(option.view))
+        .fontSize(14)
+        .fontWeight(this.selectedView === option.view ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(this.selectedView === option.view ? this.activeTextColor() : this.theme.textSecondary)
+    }
+    .layoutWeight(1)
+    .height(38)
+    .justifyContent(FlexAlign.Center)
+    .borderRadius(CHIP_RADIUS)
+    .animation({ duration: 160, curve: Curve.EaseInOut })
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => {
+      this.selectedView = option.view
+      this.checkForChanges()
+    })
+  }
+
+  private viewOptionIndex(view: FeedViewType): number {
+    const options = this.viewOptions()
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].view === view) {
+        return i
+      }
+    }
+    return 0
+  }
+
+  @State railWidth: number = 0
+
+  private indicatorSlotWidth(): number {
+    if (this.railWidth <= 0) {
+      return 0
+    }
+    return (this.railWidth - 8) / this.viewOptions().length
+  }
+
+  private indicatorOffsetX(): number {
+    return this.indicatorSlotWidth() * this.viewOptionIndex(this.selectedView)
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
+        // 顶部导航栏
+        this.TopBar()
+
+        // 可滚动内容区域
+        Scroll() {
+          Column({ space: 20 }) {
+            // 订阅源信息卡片
+            this.FeedInfoCard()
+
+            // 标题配置
+            Column({ space: 12 }) {
+              this.ConfigSection('标题', '此订阅源的自定义标题，留空则使用默认标题。')
+              this.TextInputField('', this.customTitle, (value: string) => {
+                this.customTitle = value
+              })
+            }
+            .width('100%')
+
+            // 在时间线中隐藏
+            this.ToggleRow(
+              '在时间线中隐藏',
+              '开启后，此订阅将不再显示在主时间线中。',
+              this.hideInTimeline,
+              (value: boolean) => {
+                this.hideInTimeline = value
+              }
+            )
+
+            // 栏目类型选择
+            Column({ space: 12 }) {
+              this.ConfigSection('栏目', '')
+
+              Stack({ alignContent: Alignment.Center }) {
+                // Sliding indicator (same style as ContentModeRail on homepage)
+                Row() {
+                  Row()
+                    .width(this.indicatorSlotWidth())
+                    .height(38)
+                    .translate({ x: this.indicatorOffsetX() })
+                    .backgroundColor(this.indicatorColor())
+                    .borderRadius(CHIP_RADIUS)
+                    .border({ width: 0.6, color: this.indicatorBorderColor() })
+                    .shadow({
+                      radius: 8,
+                      color: this.indicatorShadowColor(),
+                      offsetX: 0,
+                      offsetY: 2,
+                    })
+                    .animation({ duration: 100, curve: Curve.EaseOut })
+                }
+                .width('100%')
+                .height('100%')
+                .justifyContent(FlexAlign.Start)
+
+                Row({ space: 0 }) {
+                  ForEach(this.viewOptions(), (option: ConfigOption) => {
+                    this.ViewTypeButton(option)
+                  }, (option: ConfigOption) => `view-${option.view}`)
+                }
+                .width('100%')
+                .height('100%')
+              }
+              .width('100%')
+              .height(46)
+              .padding(4)
+              .backgroundColor(this.theme.elevated)
+              .borderRadius(CARD_RADIUS_SM)
+              .border({ width: 0.8, color: this.theme.divider })
+              .onSizeChange((_, newValue) => {
+                if (typeof newValue.width === 'number') {
+                  this.railWidth = newValue.width
+                }
+              })
+            }
+            .width('100%')
+
+            // 底部留出空间给按钮
+            Row().height(this.isEditMode ? 80 : 20)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 8, bottom: 16 })
+        }
+        .layoutWeight(1)
+        .scrollBar(BarState.Auto)
+        .edgeEffect(EdgeEffect.Spring)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+
+      // 底部按钮区域
+      if (this.isEditMode) {
+        // 编辑模式：显示取消订阅和保存按钮
+        if (this.hasChanges) {
+          Row({ space: 12 }) {
+            Button('取消订阅')
+              .type(ButtonType.Capsule)
+              .layoutWeight(1)
+              .height(50)
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .backgroundColor(this.theme.elevated)
+              .fontColor('#EF4444')
+              .onClick(() => {
+                this.showUnsubscribeConfirm()
+              })
+
+            Button('保存')
+              .type(ButtonType.Capsule)
+              .layoutWeight(1)
+              .height(50)
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .backgroundColor(this.theme.accent)
+              .fontColor('#FFFFFF')
+              .onClick(() => {
+                void this.handleSave()
+              })
+          }
+          .width('90%')
+          .margin({ bottom: 24 })
+          .opacity(0.92)
+        } else {
+          Button('取消订阅')
+            .type(ButtonType.Capsule)
+            .width('80%')
+            .height(50)
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .backgroundColor(this.theme.elevated)
+            .fontColor('#EF4444')
+            .margin({ bottom: 24 })
+            .opacity(0.92)
+            .onClick(() => {
+              this.showUnsubscribeConfirm()
+            })
+        }
+      }
+    }
+    .width('100%')
     .height('100%')
-    .padding({ left: 18, right: 18, top: 20, bottom: 24 })
     .backgroundColor(this.theme.background)
+  }
+
+  // 取消订阅确认对话框
+  private showUnsubscribeConfirm(): void {
+    AlertDialog.show({
+      title: '取消订阅',
+      message: '确定要取消订阅这个订阅源吗？',
+      primaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      secondaryButton: {
+        value: '确定',
+        fontColor: '#EF4444',
+        action: () => {
+          void this.handleUnsubscribe()
+        }
+      }
+    })
   }
 }
 
 @Component
 struct DiscoverPreviewDestination {
   @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
+  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Prop targetUrl: string = ''
   @Prop initialTargetTitle: string = ''
   @Prop initialTargetSiteUrl: string = ''
@@ -1022,92 +1516,110 @@ struct DiscoverPreviewDestination {
   @Prop targetCategory: string = ''
   @Prop targetView: FeedViewType = FeedViewType.Articles
   @Prop theme: ThemePalette = ThemeService.darkPalette()
-  @State targetTitle: string = ''
-  @State targetSiteUrl: string = ''
-  @State targetDescription: string = ''
-  @State previewPayload: FeedRefreshPayload | undefined = undefined
-  @State previewError: string = ''
-  @State isLoading: boolean = false
-  @State isSubmitting: boolean = false
-  @State existingFeed: Feed | undefined = undefined
 
   aboutToAppear(): void {
-    this.targetTitle = this.initialTargetTitle
-    this.targetSiteUrl = this.initialTargetSiteUrl
-    this.targetDescription = this.initialTargetDescription
-    void this.loadPage()
+    AppStorage.setOrCreate('discoverOverlayLevel', 1)
   }
 
-  private viewLabel(view: FeedViewType): string {
-    switch (view) {
-      case FeedViewType.SocialMedia:
-        return '社交'
-      case FeedViewType.Pictures:
-        return '图片'
-      case FeedViewType.Videos:
-        return '视频'
-      default:
-        return '文章'
+  aboutToDisappear(): void {
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    if (currentLevel >= 1) {
+      AppStorage.setOrCreate('discoverOverlayLevel', currentLevel - 1)
     }
   }
 
-  private hostOf(value: string): string {
-    const matched = value.match(/^https?:\/\/([^/]+)/i)
-    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
+  private openEditConfigPage(feed: Feed): void {
+    AppStorage.setOrCreate('discoverOverlayLevel', 2)
+    this.discoverPathStack.pushPathByName(
+      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
+      createDiscoverFlowRouteParams(
+        this.targetUrl,
+        feed.title,
+        feed.view,
+        feed.siteUrl || this.initialTargetSiteUrl,
+        feed.description || this.initialTargetDescription,
+        '编辑',
+        feed.category || '',
+      ),
+      true,
+    )
   }
 
-  private avatarFallback(): string {
-    const title = (this.previewPayload?.feedTitle || this.targetTitle || '?').trim()
-    return title ? title.substring(0, 1).toUpperCase() : '?'
+  private openNewSubscribeConfigPage(payload: FeedRefreshPayload): void {
+    AppStorage.setOrCreate('discoverOverlayLevel', 2)
+    this.discoverPathStack.pushPathByName(
+      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
+      createDiscoverFlowRouteParams(
+        this.targetUrl,
+        payload.feedTitle || this.initialTargetTitle,
+        this.targetView,
+        payload.siteUrl || this.initialTargetSiteUrl,
+        payload.description || this.initialTargetDescription,
+        '',
+        this.targetCategory,
+      ),
+      true,
+    )
   }
 
-  private heroDescription(): string {
-    return this.previewPayload?.description || this.targetDescription || this.previewPayload?.siteUrl || this.targetSiteUrl
-  }
-
-  private previewEntries(): Entry[] {
-    return this.previewPayload?.entries.slice(0, 6) ?? []
-  }
-
-  private resolvedAvatarUrl(): string {
-    if (this.previewPayload?.imageUrl) {
-      return this.previewPayload.imageUrl
+  private openEntryDetail(entry: Entry): void {
+    console.info(`[DiscoverPreview] Opening entry: ${entry.title}`)
+    // 构造临时 Feed 以复用完整的 HTML 解析逻辑
+    const tempFeed: Feed = {
+      id: entry.feedId || 'preview',
+      title: '',
+      url: entry.url,
+      siteUrl: entry.url,
+      view: FeedViewType.Articles,
+      showInAll: true,
+      errorCount: 0,
+      createdAt: 0,
+      updatedAt: 0,
     }
-
-    const host = this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
-    if (host) {
-      return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`
-    }
-    return ''
+    const model = toArticleDetailModel(entry, tempFeed)
+    void openArticleDetail(entry.id || 'preview', JSON.stringify(model))
   }
 
-  @Builder
-  private FeedAvatar() {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.resolvedAvatarUrl()) {
-        Image(this.resolvedAvatarUrl())
-          .width(56)
-          .height(56)
-          .borderRadius(18)
-          .backgroundColor(this.theme.elevated)
-      } else {
-        Row()
-          .width(56)
-          .height(56)
-          .borderRadius(18)
-          .backgroundColor(this.theme.accent)
+  build() {
+    FeedDetailView({
+      targetUrl: this.targetUrl,
+      initialTargetTitle: this.initialTargetTitle,
+      initialTargetSiteUrl: this.initialTargetSiteUrl,
+      initialTargetDescription: this.initialTargetDescription,
+      targetCategory: this.targetCategory,
+      targetView: this.targetView,
+      theme: this.theme,
+      onBack: () => {
+        const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+        AppStorage.setOrCreate('discoverOverlayLevel', currentLevel > 1 ? currentLevel - 1 : 0)
+        this.discoverPathStack.pop(true)
+      },
+      onEdit: (feed: Feed) => { this.openEditConfigPage(feed) },
+      onSubscribe: (payload: FeedRefreshPayload) => { this.openNewSubscribeConfigPage(payload) },
+      onOpenArticle: (entry: Entry) => { this.openEntryDetail(entry) }
+    })
+  }
+}
 
-        Text(this.avatarFallback())
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FFFFFF')
-      }
-    }
+
+
+
+@Component
+struct DiscoverEntryDetailDestination {
+  @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
+  @Prop entry?: Entry = undefined
+  @Prop feedTitle: string = ''
+  @Prop feedImageUrl: string = ''
+  @Prop theme: ThemePalette = ThemeService.darkPalette()
+
+  private publishedLabel(): string {
+    return this.entry ? formatPublishedAt(this.entry.publishedAt) : ''
   }
 
   @Builder
   private HeaderSection() {
     Row() {
+      // 返回箭头按钮
       Text('‹')
         .fontSize(28)
         .fontWeight(FontWeight.Medium)
@@ -1115,8 +1627,6 @@ struct DiscoverPreviewDestination {
         .width(40)
         .height(40)
         .textAlign(TextAlign.Center)
-        .borderRadius(999)
-        .backgroundColor(this.theme.elevated)
         .onClick(() => {
           this.discoverPathStack.pop(true)
         })
@@ -1124,265 +1634,101 @@ struct DiscoverPreviewDestination {
       Blank()
     }
     .width('100%')
+    .padding({ left: 18, right: 18, top: 12, bottom: 10 })
   }
 
   @Builder
-  private HeroCard() {
-    Column({ space: 14 }) {
-      Row({ space: 14 }) {
-        this.FeedAvatar()
-
-        Column({ space: 6 }) {
-          Text(this.previewPayload?.feedTitle || this.targetTitle)
-            .fontSize(28)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          Text(this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl))
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-            .maxLines(1)
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
-
-      if (this.heroDescription()) {
-        Text(this.heroDescription())
-          .fontSize(15)
-          .lineHeight(24)
-          .fontColor(this.theme.textSecondary)
-          .width('100%')
-      }
-    }
-    .width('100%')
-    .padding(20)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(28)
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private PreviewSection() {
-    Column({ space: 12 }) {
-      Row() {
-        Text('内容预览')
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-      }
-      .width('100%')
-
-      Column({ space: 10 }) {
-        ForEach(this.previewEntries(), (entry: Entry, index: number) => {
-          Column({ space: 8 }) {
-            Row({ space: 8 }) {
-              Text(`${index + 1}`)
-                .fontSize(11)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.theme.accent)
-                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                .backgroundColor(this.theme.elevated)
-                .borderRadius(999)
-
-              Text(entry.author || '未知作者')
-                .fontSize(11)
-                .fontColor(this.theme.textMuted)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-              Blank()
-
-              Text(`${entry.readingTimeMinutes} 分钟`)
-                .fontSize(11)
-                .fontColor(this.theme.textMuted)
-            }
-            .width('100%')
-
-            Text(entry.title)
-              .fontSize(17)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.theme.textPrimary)
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            Text(entry.summary)
-              .fontSize(13)
-              .lineHeight(21)
-              .fontColor(this.theme.textSecondary)
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .width('100%')
-          .padding(16)
-          .backgroundColor(this.theme.surface)
-          .borderRadius(22)
-          .alignItems(HorizontalAlign.Start)
-        }, (entry: Entry) => entry.id)
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  private normalizeUrl(value: string): string {
-    return value.trim().replace(/\/+$/, '').toLowerCase()
-  }
-
-  private feedMatchesTarget(feed: Feed, targetUrl: string, siteUrl: string): boolean {
-    const normalizedTarget = this.normalizeUrl(targetUrl)
-    const normalizedSite = this.normalizeUrl(siteUrl)
-    return this.normalizeUrl(feed.url) === normalizedTarget
-      || (!!feed.siteUrl && this.normalizeUrl(feed.siteUrl) === normalizedTarget)
-      || (!!siteUrl && this.normalizeUrl(feed.url) === normalizedSite)
-      || (!!feed.siteUrl && !!siteUrl && this.normalizeUrl(feed.siteUrl) === normalizedSite)
-  }
-
-  private async findExistingFeed(targetUrl: string, siteUrl: string): Promise<Feed | undefined> {
-    const feeds = await AppRepository.feedEntities()
-    return feeds.find((feed: Feed) => this.feedMatchesTarget(feed, targetUrl, siteUrl))
-  }
-
-  private async loadPage(): Promise<void> {
-    if (!this.targetUrl) {
-      this.previewError = '订阅源参数缺失'
-      return
-    }
-
-    this.isLoading = true
-    this.previewError = ''
-    try {
-      const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
-      this.previewPayload = payload
-      this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl)
-      if (!this.targetTitle) {
-        this.targetTitle = payload.feedTitle
-      }
-      if (!this.targetSiteUrl) {
-        this.targetSiteUrl = payload.siteUrl
-      }
-      if (!this.targetDescription) {
-        this.targetDescription = payload.description
-      }
-    } catch (e) {
-      this.previewError = e instanceof Error ? e.message : '预览失败'
-    } finally {
-      this.isLoading = false
-    }
-  }
-
-  private async submit(): Promise<void> {
-    if (!this.previewPayload || !this.targetUrl) {
-      return
-    }
-
-    this.isSubmitting = true
-    try {
-      const draft: FeedDraft = {
-        title: this.previewPayload.feedTitle || this.targetTitle || this.targetUrl,
-        url: this.targetUrl,
-        siteUrl: this.previewPayload.siteUrl || this.targetSiteUrl,
-        description: this.previewPayload.description || this.targetDescription,
-        category: this.targetCategory || this.viewLabel(this.targetView),
-        view: this.targetView,
-        showInAll: this.existingFeed ? this.existingFeed.showInAll : true,
-      }
-
-      if (this.existingFeed) {
-        await AppRepository.updateFeed(this.existingFeed.id, draft)
-        await AppRepository.refreshFeed(this.existingFeed.id)
-        promptAction.showToast({ message: '订阅已更新' })
-      } else {
-        const created = await AppRepository.createFeed(draft)
-        await AppRepository.refreshFeed(created.id)
-        promptAction.showToast({ message: '订阅已添加' })
-      }
-
-      this.discoverPathStack.clear(true)
-    } catch (_) {
-      promptAction.showToast({ message: '添加失败，请检查链接或网络' })
-    } finally {
-      this.isSubmitting = false
-    }
+  private MetaBadge(text: string, active?: boolean) {
+    Text(text)
+      .fontSize(11)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(active ? '#FFFFFF' : this.theme.textSecondary)
+      .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+      .backgroundColor(active ? this.theme.accent : this.theme.elevated)
+      .borderRadius(999)
   }
 
   build() {
-    Column({ space: 0 }) {
-      if (this.isLoading) {
-        Column({ space: 12 }) {
-          LoadingProgress()
-            .width(42)
-            .height(42)
-            .color(this.theme.accent)
+    Column() {
+      this.HeaderSection()
 
-          Text('正在加载订阅预览...')
-            .fontSize(14)
+      if (this.entry) {
+        Scroll() {
+          Column({ space: 18 }) {
+            Column({ space: 12 }) {
+
+              Text(this.entry!.title)
+                .fontSize(28)
+                .lineHeight(38)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(this.theme.textPrimary)
+                .width('100%')
+
+              Text(`${this.entry!.author || '未知作者'} · ${this.publishedLabel()}`)
+                .fontSize(13)
+                .lineHeight(20)
+                .fontColor(this.theme.textSecondary)
+                .width('100%')
+            }
+            .width('100%')
+            .padding({ left: 18, right: 18, top: 6, bottom: 2 })
+            .alignItems(HorizontalAlign.Start)
+
+            Column({ space: 20 }) {
+              if (this.entry!.summary) {
+                Text(this.entry!.summary)
+                  .fontSize(16)
+                  .lineHeight(27)
+                  .fontColor(this.theme.textSecondary)
+                  .fontWeight(FontWeight.Medium)
+                  .width('100%')
+              }
+
+              if (this.entry!.content) {
+                ForEach(this.entry!.content.split('\n\n'), (paragraph: string) => {
+                  if (paragraph.trim()) {
+                    Text(paragraph)
+                      .fontSize(16)
+                      .lineHeight(29)
+                      .fontColor(this.theme.textPrimary)
+                      .width('100%')
+                      .textAlign(TextAlign.Start)
+                  }
+                }, (paragraph: string, index: number) => `${index}-${paragraph}`)
+              }
+
+              if (this.entry!.url) {
+                Text(`原始来源：${this.entry!.url}`)
+                  .fontSize(13)
+                  .fontColor(this.theme.textMuted)
+                  .width('100%')
+              }
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start)
+            .padding({ left: 18, right: 18, top: 12, bottom: 22 })
+            .margin({ top: 4, bottom: 16 })
+          }
+          .width('100%')
+          .padding({ bottom: 12 })
+          .alignItems(HorizontalAlign.Start)
+        }
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
+      } else {
+        Column({ space: 12 }) {
+          Text('未找到内容')
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+
+          Text('无法加载文章内容')
+            .fontSize(15)
             .fontColor(this.theme.textSecondary)
         }
         .width('100%')
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
-      } else if (this.previewError) {
-        Column({ space: 16 }) {
-          this.HeaderSection()
-
-          Column({ space: 10 }) {
-            Text('预览失败')
-              .fontSize(20)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#EF4444')
-
-            Text(this.previewError)
-              .fontSize(14)
-              .fontColor(this.theme.textSecondary)
-              .lineHeight(22)
-          }
-          .width('100%')
-          .padding(20)
-          .backgroundColor(this.theme.surface)
-          .borderRadius(CARD_RADIUS_LG)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(18)
-      } else if (this.previewPayload) {
-        Scroll() {
-          Column({ space: 14 }) {
-            this.HeaderSection()
-            this.HeroCard()
-            this.PreviewSection()
-            Row().height(104).width('100%')
-          }
-          .width('100%')
-          .padding({ left: 18, right: 18, top: 20, bottom: 24 })
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-      }
-
-      if (this.previewPayload && !this.isLoading) {
-        Row({ space: 10 }) {
-          Button(this.isSubmitting ? '处理中...' : (this.existingFeed ? '更新订阅' : '添加订阅'))
-            .type(ButtonType.Capsule)
-            .backgroundColor(this.theme.accent)
-            .fontColor('#FFFFFF')
-            .enabled(!this.isSubmitting)
-            .layoutWeight(1)
-            .height(54)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .onClick(() => {
-              void this.submit()
-            })
-        }
-        .width('100%')
-        .padding({ left: 18, right: 18, top: 12, bottom: 18 })
-        .backgroundColor(this.theme.background)
       }
     }
     .width('100%')

@@ -1,7 +1,8 @@
 import promptAction from '@ohos.promptAction'
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
-import { Entry, Feed, FeedViewType } from '../common/models/LivoModels'
+import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/LivoModels'
+
 import { FeedDraft } from '../common/repositories/FeedRepository'
 import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
@@ -19,7 +20,7 @@ struct DiscoverPreview {
   @State sourceKind: string = ''
   @State previewPayload: FeedRefreshPayload | undefined = undefined
   @State previewError: string = ''
-  @State isLoading: boolean = false
+  @State isLoading: boolean = true
   @State isSubmitting: boolean = false
   @State existingFeed: Feed | undefined = undefined
 
@@ -60,6 +61,10 @@ struct DiscoverPreview {
 
   private previewEntries(): Entry[] {
     return this.previewPayload?.entries.slice(0, 6) ?? []
+  }
+
+  private publishedLabel(entry: Entry): string {
+    return formatPublishedAt(entry.publishedAt)
   }
 
   private resolvedAvatarUrl(): string {
@@ -107,8 +112,6 @@ struct DiscoverPreview {
         .width(40)
         .height(40)
         .textAlign(TextAlign.Center)
-        .borderRadius(999)
-        .backgroundColor(this.theme.elevated)
         .onClick(() => { void goBack() })
 
       Blank()
@@ -167,17 +170,9 @@ struct DiscoverPreview {
       .width('100%')
 
       Column({ space: 10 }) {
-        ForEach(this.previewEntries(), (entry: Entry, index: number) => {
+        ForEach(this.previewEntries(), (entry: Entry) => {
           Column({ space: 8 }) {
             Row({ space: 8 }) {
-              Text(`${index + 1}`)
-                .fontSize(11)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.theme.accent)
-                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                .backgroundColor(this.theme.elevated)
-                .borderRadius(999)
-
               Text(entry.author || '未知作者')
                 .fontSize(11)
                 .fontColor(this.theme.textMuted)
@@ -186,7 +181,7 @@ struct DiscoverPreview {
 
               Blank()
 
-              Text(`${entry.readingTimeMinutes} 分钟`)
+              Text(this.publishedLabel(entry))
                 .fontSize(11)
                 .fontColor(this.theme.textMuted)
             }
@@ -238,27 +233,30 @@ struct DiscoverPreview {
   }
 
   private async loadPage(): Promise<void> {
-    const settings = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(settings)
-
-    const params = this.params()
-    this.targetUrl = params.targetUrl ?? ''
-    this.targetTitle = params.targetTitle ?? ''
-    this.targetSiteUrl = params.siteUrl ?? ''
-    this.targetDescription = params.description ?? ''
-    this.targetCategory = params.category ?? ''
-    this.sourceKind = params.sourceKind ?? ''
-    const parsedView = Number(params.view ?? FeedViewType.Articles)
-    this.targetView = parsedView as FeedViewType
-
-    if (!this.targetUrl) {
-      this.previewError = '订阅源参数缺失'
-      return
-    }
-
     this.isLoading = true
     this.previewError = ''
+    this.previewPayload = undefined
+    this.existingFeed = undefined
+
     try {
+      const settings = await AppRepository.settings()
+      this.theme = await ThemeService.resolvePalette(settings)
+
+      const params = this.params()
+      this.targetUrl = params.targetUrl ?? ''
+      this.targetTitle = params.targetTitle ?? ''
+      this.targetSiteUrl = params.siteUrl ?? ''
+      this.targetDescription = params.description ?? ''
+      this.targetCategory = params.category ?? ''
+      this.sourceKind = params.sourceKind ?? ''
+      const parsedView = Number(params.view ?? FeedViewType.Articles)
+      this.targetView = parsedView as FeedViewType
+
+      if (!this.targetUrl) {
+        this.previewError = '订阅源参数缺失'
+        return
+      }
+
       const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
       this.previewPayload = payload
       this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl)
@@ -315,6 +313,12 @@ struct DiscoverPreview {
 
   build() {
     Column({ space: 0 }) {
+      Column() {
+        this.HeaderSection()
+      }
+      .width('100%')
+      .padding({ left: 18, right: 18, top: 20, bottom: 12 })
+
       if (this.isLoading) {
         Column({ space: 12 }) {
           LoadingProgress().width(42).height(42).color(this.theme.accent)
@@ -324,11 +328,10 @@ struct DiscoverPreview {
         }
         .width('100%')
         .layoutWeight(1)
+        .padding({ left: 18, right: 18 })
         .justifyContent(FlexAlign.Center)
       } else if (this.previewError) {
         Column({ space: 16 }) {
-          this.HeaderSection()
-
           Column({ space: 10 }) {
             Text('预览失败')
               .fontSize(20)
@@ -347,21 +350,31 @@ struct DiscoverPreview {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding(18)
+        .padding({ left: 18, right: 18, bottom: 18 })
       } else if (this.previewPayload) {
         Scroll() {
           Column({ space: 18 }) {
-            this.HeaderSection()
             this.HeroCard()
             this.PreviewSection()
             Row().height(104).width('100%')
           }
           .width('100%')
-          .padding({ left: 18, right: 18, top: 20, bottom: 24 })
+          .padding({ left: 18, right: 18, top: 0, bottom: 24 })
         }
         .width('100%')
         .layoutWeight(1)
         .scrollBar(BarState.Off)
+      } else {
+        Column({ space: 12 }) {
+          LoadingProgress().width(42).height(42).color(this.theme.accent)
+          Text('正在初始化页面...')
+            .fontSize(14)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ left: 18, right: 18 })
+        .justifyContent(FlexAlign.Center)
       }
 
       if (this.previewPayload && !this.isLoading) {
@@ -386,4 +399,5 @@ struct DiscoverPreview {
     .height('100%')
     .backgroundColor(this.theme.background)
   }
+
 }

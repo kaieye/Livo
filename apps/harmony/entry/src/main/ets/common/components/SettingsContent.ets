@@ -6,6 +6,7 @@ import {
   DataControlSettingsPanel,
   GeneralSettingsPanel,
   PrivacySettingsPanel,
+  FavoritesPanel,
 } from './SettingsSecondaryPanels'
 import { PageHeader } from './PageHeader'
 import { SettingListRow } from './SettingListRow'
@@ -14,7 +15,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
 
-type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about'
+type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites'
 
 interface SettingItem {
   title: string
@@ -52,6 +53,12 @@ const PRIMARY_GROUP: SettingItem[] = [
 ]
 
 const SECOND_GROUP: SettingItem[] = [
+  {
+    title: '收藏',
+    symbol: $r('sys.symbol.star_fill'),
+    symbolColor: '#F59E0B',
+    subtitle: '查看并管理已收藏的推文与内容'
+  },
   {
     title: '自动化',
     symbol: $r('sys.symbol.bolt_filled_on_circle'),
@@ -171,6 +178,44 @@ export struct SettingsContent {
     this.showSettingsSheet = false
   }
 
+  private getSheetTitle(): string {
+    switch (this.activeSheet) {
+      case 'appearance': return '外观'
+      case 'general': return '通用'
+      case 'data-control': return '数据控制'
+      case 'privacy': return '隐私'
+      case 'about': return '关于'
+      case 'favorites': return '收藏'
+      default: return ''
+    }
+  }
+
+  private isHalfSheet(): boolean {
+    return this.activeSheet === 'appearance'
+  }
+
+  private currentSheetHeight(): SheetSize {
+    return this.isHalfSheet() ? SheetSize.MEDIUM : SheetSize.LARGE
+  }
+
+  private currentSheetDetents(): [SheetSize, SheetSize?, SheetSize?] {
+    return this.isHalfSheet()
+      ? [SheetSize.MEDIUM, SheetSize.LARGE]
+      : [SheetSize.LARGE]
+  }
+
+  private currentSheetDragBar(): boolean {
+    return !this.isHalfSheet()
+  }
+
+  private currentSheetTitle(): SheetTitleOptions | undefined {
+    if (this.isHalfSheet()) {
+      return undefined
+    }
+
+    return { title: this.getSheetTitle() }
+  }
+
   private themeLabel(): string {
     switch (this.config.themeMode) {
       case 'light':
@@ -224,6 +269,10 @@ export struct SettingsContent {
   }
 
   private handleSettingTap(item: SettingItem): void {
+    if (item.title === '收藏') {
+      this.openSheet('favorites')
+      return
+    }
     if (item.title === '外观') {
       this.openSheet('appearance')
       return
@@ -289,14 +338,19 @@ export struct SettingsContent {
     .height('100%')
     .backgroundColor(this.theme.background)
     .bindSheet($$this.showSettingsSheet, this.ActiveSheet(), {
-      detents: [SheetSize.MEDIUM, SheetSize.LARGE],
-      dragBar: false,
+      height: this.currentSheetHeight(),
+      detents: this.currentSheetDetents(),
+      dragBar: this.currentSheetDragBar(),
       showClose: false,
       backgroundColor: this.theme.background,
       keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
-      onWillDismiss: () => {
+      preferType: SheetType.BOTTOM,
+      enableOutsideInteractive: false,
+      title: this.currentSheetTitle(),
+      onWillDismiss: (dismiss: SheetDismiss) => {
         this.closeSheet()
+        dismiss.dismiss()
       }
     })
   }
@@ -334,6 +388,8 @@ export struct SettingsContent {
         PrivacySettingsPanel()
       } else if (this.activeSheet === 'about') {
         AboutSettingsPanel()
+      } else if (this.activeSheet === 'favorites') {
+        FavoritesPanel()
       }
     }
     .width('100%')
