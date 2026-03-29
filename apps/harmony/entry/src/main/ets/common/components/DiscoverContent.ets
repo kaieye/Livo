@@ -121,6 +121,8 @@ function normalizeDiscoverFlowRouteParams(params?: DiscoverFlowRouteParams): Dis
 export struct DiscoverContent {
   @State query: string = ''
   @State searchPlatform: DiscoverSearchPlatform = 'all'
+  @State showPlatformChips: boolean = false
+  @State isInteractingWithPlatformChips: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
@@ -483,6 +485,13 @@ export struct DiscoverContent {
       .backgroundColor(this.searchPlatform === platform ? this.theme.accent : this.theme.elevated)
       .borderRadius(CHIP_RADIUS)
       .animation({ duration: 180, curve: Curve.EaseInOut })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.isInteractingWithPlatformChips = true
+          return
+        }
+        this.isInteractingWithPlatformChips = false
+      })
       .onClick(() => {
         this.searchPlatform = platform
         void this.refreshRemoteResults()
@@ -491,16 +500,29 @@ export struct DiscoverContent {
 
   @Builder
   private SearchPanel() {
-    Column({ space: 12 }) {
-      Stack({ alignContent: Alignment.End }) {
-        TextInput({ text: this.query, placeholder: '输入 RSS 地址、主页链接或关键字' })
-          .backgroundColor(this.theme.elevated)
+    Column({ space: 8 }) {
+      Row({ space: 8 }) {
+        SymbolGlyph($r('sys.symbol.magnifyingglass'))
+          .fontSize(20)
+          .fontColor([this.theme.textSecondary])
+
+        TextInput({ text: this.query, placeholder: '搜索订阅源' })
+          .backgroundColor('transparent')
           .fontColor(this.theme.textPrimary)
           .placeholderColor(this.theme.textMuted)
           .caretColor(this.theme.textPrimary)
-          .borderRadius(INPUT_RADIUS)
-          .padding({ left: 16, right: this.query.trim() ? 44 : 16, top: 14, bottom: 14 })
-          .width('100%')
+          .padding(0)
+          .layoutWeight(1)
+          .onClick(() => {
+            this.showPlatformChips = true
+          })
+          .onBlur(() => {
+            setTimeout(() => {
+              if (!this.isInteractingWithPlatformChips) {
+                this.showPlatformChips = false
+              }
+            }, 80)
+          })
           .onChange((value: string) => {
             this.query = value
             void this.refreshRemoteResults()
@@ -516,7 +538,6 @@ export struct DiscoverContent {
             .textAlign(TextAlign.Center)
             .borderRadius(CHIP_RADIUS)
             .backgroundColor(this.theme.surface)
-            .margin({ right: 10 })
             .onClick(() => {
               this.query = ''
               this.remoteResults = []
@@ -525,25 +546,34 @@ export struct DiscoverContent {
         }
       }
       .width('100%')
+      .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+      .backgroundColor(this.theme.elevated)
+      .borderRadius(INPUT_RADIUS)
+      .border({ width: 0.8, color: this.theme.divider })
+      .shadow({
+        radius: 10,
+        color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
+        offsetY: 2,
+      })
 
-      Row({ space: 10 }) {
-        ForEach(this.platformOptions(), (platform: DiscoverSearchPlatform) => {
-          this.PlatformChip(platform)
-        }, (platform: DiscoverSearchPlatform) => platform)
+      Column() {
+        Row({ space: 10 }) {
+          ForEach(this.platformOptions(), (platform: DiscoverSearchPlatform) => {
+            this.PlatformChip(platform)
+          }, (platform: DiscoverSearchPlatform) => platform)
+        }
+        .width('100%')
       }
       .width('100%')
+      .height(this.showPlatformChips ? 36 : 0)
+      .opacity(this.showPlatformChips ? 1 : 0)
+      .translate({ y: this.showPlatformChips ? 0 : -10 })
+      .padding({ top: this.showPlatformChips ? 6 : 0 })
+      .clip(true)
+      .animation({ duration: 260, curve: Curve.FastOutSlowIn })
     }
     .width('100%')
-    .padding(18)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
-    .shadow({
-      radius: this.theme.isDark ? 10 : 16,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.05)',
-      offsetX: 0,
-      offsetY: 6,
-    })
+    .margin({ bottom: 6 })
     .transition(livoMotion.enterSoft(40))
   }
 
