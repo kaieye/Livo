@@ -212,6 +212,7 @@ struct Index {
       } else if (tabId === 'discover') {
         DiscoverContent({
           showBottomTabs: false,
+          reserveBottomTabInset: true,
           inheritedTheme: this.theme,
         })
       } else {

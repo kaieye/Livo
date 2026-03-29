@@ -19,7 +19,7 @@ export struct FeedDetailView {
   onBack: () => void = () => {}
   onEdit: (feed: Feed) => void = () => {}
   onSubscribe: (payload: FeedRefreshPayload) => void = () => {}
-  onOpenArticle: (entry: Entry) => void = () => {}
+  onOpenArticle: (entry: Entry, feed: Feed) => void = () => {}
 
   @State private targetTitle: string = ''
   @State private targetSiteUrl: string = ''
@@ -134,6 +134,27 @@ export struct FeedDetailView {
 
   private previewEntries(): Entry[] {
     return this.previewPayload?.entries.slice(0, 50) ?? []
+  }
+
+  private articleDetailFeed(entry: Entry): Feed {
+    if (this.existingFeed) {
+      return this.existingFeed
+    }
+
+    return {
+      id: entry.feedId || this.feedId || 'preview',
+      title: this.previewPayload?.feedTitle || this.targetTitle || '预览内容',
+      url: this.targetUrl || entry.url,
+      siteUrl: this.previewPayload?.siteUrl || this.targetSiteUrl || entry.url,
+      imageUrl: this.previewPayload?.imageUrl || '',
+      description: this.previewPayload?.description || this.targetDescription || '',
+      category: this.targetCategory || '未分类',
+      view: this.targetView,
+      showInAll: true,
+      errorCount: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    }
   }
 
   private resolvedAvatarUrl(): string {
@@ -296,7 +317,7 @@ export struct FeedDetailView {
     .transition(livoMotion.enterSoft(index * 18 + 40))
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
-      this.onOpenArticle(entry)
+      this.onOpenArticle(entry, this.articleDetailFeed(entry))
     })
   }
 

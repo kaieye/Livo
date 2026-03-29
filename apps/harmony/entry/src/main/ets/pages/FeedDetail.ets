@@ -1,6 +1,6 @@
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack, openArticleDetail, openDiscoverSubscribeConfig } from '../common/navigation/AppRouter'
-import { Entry, Feed, FeedCardModel, FeedViewType } from '../common/models/LivoModels'
+import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { FeedDetailView } from '../common/components/FeedDetailView'
 import { FeedRefreshPayload } from '../common/services/RssFeedService'
@@ -77,7 +77,10 @@ struct FeedDetail {
         onBack: () => { void goBack() },
         onEdit: (feed: Feed) => { this.openEditPage(feed) },
         onSubscribe: (payload: FeedRefreshPayload) => { this.handleSubscribe(payload) },
-        onOpenArticle: (entry: Entry) => { void openArticleDetail(entry.id) }
+        onOpenArticle: (entry: Entry, feed: Feed) => {
+          const model = toArticleDetailModel(entry, feed)
+          void openArticleDetail(entry.id || 'preview', JSON.stringify(model))
+        }
       })
     }
     .width('100%')

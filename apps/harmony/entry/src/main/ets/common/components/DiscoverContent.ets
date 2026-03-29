@@ -42,6 +42,8 @@ import {
   PAGE_HORIZONTAL_PADDING,
   PAGE_TOP_PADDING,
   SECTION_TITLE_FONT_SIZE,
+  BOTTOM_TAB_FLOAT_GAP,
+  BOTTOM_TAB_TOTAL_HEIGHT,
 } from '../ui/UiTokens'
 
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
@@ -124,8 +126,11 @@ export struct DiscoverContent {
   @State isSearchingRemote: boolean = false
   @State hasLoaded: boolean = false
   @State isLoadingPage: boolean = false
+  @State subscribedFeeds: Feed[] = []
   @Prop showBottomTabs: boolean = true
+  @Prop reserveBottomTabInset: boolean = false
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
@@ -156,6 +161,7 @@ export struct DiscoverContent {
       } else {
         this.theme = this.inheritedTheme
       }
+      this.subscribedFeeds = await AppRepository.feedEntities()
 
       this.hasLoaded = true
       this.onReady()
@@ -211,7 +217,9 @@ export struct DiscoverContent {
       return []
     }
 
-    return searchedRecommendedFeedsByPlatform(this.query, this.searchPlatform).slice(0, 10)
+    return searchedRecommendedFeedsByPlatform(this.query, this.searchPlatform)
+      .filter((feed: RecommendedFeed) => !this.isSubscribedRecommendedFeed(feed))
+      .slice(0, 10)
   }
 
   private searchResults(): ResolvedDiscoverCandidate[] {
@@ -223,7 +231,48 @@ export struct DiscoverContent {
   }
 
   private recommendedFallback(): RecommendedFeed[] {
-    return filteredRecommendedFeedsByPlatform(this.searchPlatform).slice(0, 8)
+    return filteredRecommendedFeedsByPlatform(this.searchPlatform)
+      .filter((feed: RecommendedFeed) => !this.isSubscribedRecommendedFeed(feed))
+      .slice(0, 8)
+  }
+
+  private normalizeFeedIdentity(value: string): string {
+    const normalized = value.trim().toLowerCase()
+    if (!normalized) {
+      return ''
+    }
+
+    return normalized
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/[?#].*$/, '')
+      .replace(/\/+$/, '')
+  }
+
+  private isSubscribedRecommendedFeed(feed: RecommendedFeed): boolean {
+    const recommendedUrl = this.normalizeFeedIdentity(feed.url)
+    const recommendedSiteUrl = this.normalizeFeedIdentity(feed.siteUrl)
+    const recommendedTitle = feed.title.trim().toLowerCase()
+
+    for (const subscribedFeed of this.subscribedFeeds) {
+      const subscribedUrl = this.normalizeFeedIdentity(subscribedFeed.url)
+      const subscribedSiteUrl = this.normalizeFeedIdentity(subscribedFeed.siteUrl ?? '')
+      const subscribedTitle = subscribedFeed.title.trim().toLowerCase()
+
+      if (recommendedUrl && subscribedUrl && recommendedUrl === subscribedUrl) {
+        return true
+      }
+
+      if (recommendedSiteUrl && subscribedSiteUrl && recommendedSiteUrl === subscribedSiteUrl) {
+        return true
+      }
+
+      if (recommendedTitle && subscribedTitle && recommendedTitle === subscribedTitle) {
+        return true
+      }
+    }
+
+    return false
   }
 
   private hasSearchResults(): boolean {
@@ -736,74 +785,112 @@ export struct DiscoverContent {
     .borderRadius(CARD_RADIUS_LG)
   }
 
+  private shouldReserveBottomDock(): boolean {
+    if (this.discoverOverlayLevel > 0) {
+      return false
+    }
+
+    if (this.showBottomTabs) {
+      return true
+    }
+
+    return this.reserveBottomTabInset
+  }
+
+  private discoverListBottomPadding(): number {
+    if (this.shouldReserveBottomDock()) {
+      return 24
+    }
+
+    return PAGE_BOTTOM_GAP
+  }
+
+  private discoverBottomSpacerHeight(): number {
+    if (this.shouldReserveBottomDock()) {
+      return 108 + this.bottomAvoidArea
+    }
+
+    return 24
+  }
+
+  private discoverListExternalGap(): number {
+    return 0
+  }
+
+  private discoverViewportBottomInset(): number {
+    return 0
+  }
+
   @Builder
   private DiscoverRoot() {
-    Column() {
-      Column({ space: 14 }) {
-        PageHeader({
-          title: '添加订阅',
-          theme: this.theme,
-        })
-        this.SearchPanel()
-      }
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 2 })
-      .alignItems(HorizontalAlign.Start)
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
+        Column({ space: 10 }) {
+          PageHeader({
+            title: '添加订阅',
+            theme: this.theme,
+          })
+          this.SearchPanel()
+        }
+        .width('100%')
+        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 0 })
+        .alignItems(HorizontalAlign.Start)
 
-      List({ space: 10 }) {
-        if (this.directUrlResult()) {
-          ListItem() {
-            Column({ space: 12 }) {
-              this.SectionHeader('地址结果')
-              this.DirectUrlRow(this.directUrlResult())
+        Scroll() {
+          Column({ space: 16 }) {
+            if (this.directUrlResult()) {
+              Column({ space: 12 }) {
+                this.SectionHeader('地址结果')
+                this.DirectUrlRow(this.directUrlResult())
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
             }
-            .width('100%')
-            .alignItems(HorizontalAlign.Start)
+
+            this.CandidateSection('识别结果', this.resolvedCandidates())
+            this.CandidateSection('候选订阅', this.keywordCandidates())
+            this.SearchResultSection()
+            this.RecommendedFallbackSection()
+
+            if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote) {
+              this.NoResultState()
+            }
+
+            Row()
+              .height(this.discoverBottomSpacerHeight())
+              .width('100%')
           }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .padding({
+            left: PAGE_HORIZONTAL_PADDING,
+            right: PAGE_HORIZONTAL_PADDING,
+            top: 0,
+            bottom: this.discoverListBottomPadding(),
+          })
+          .margin({ bottom: this.discoverListExternalGap() })
         }
-
-        ListItem() {
-          this.CandidateSection('识别结果', this.resolvedCandidates())
-        }
-
-        ListItem() {
-          this.CandidateSection('候选订阅', this.keywordCandidates())
-        }
-
-        ListItem() {
-          this.SearchResultSection()
-        }
-
-        ListItem() {
-          this.RecommendedFallbackSection()
-        }
-
-        if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote) {
-          ListItem() {
-            this.NoResultState()
-          }
-        }
-
-        ListItem() {
-          Row().height(18).width('100%')
-        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .backgroundColor(this.theme.background)
+        .edgeEffect(EdgeEffect.Spring)
+        .nestedScroll({
+          scrollForward: NestedScrollMode.SELF_FIRST,
+          scrollBackward: NestedScrollMode.SELF_FIRST,
+        })
       }
       .width('100%')
-      .layoutWeight(1)
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: PAGE_BOTTOM_GAP })
-      .scrollBar(BarState.Off)
-      .backgroundColor(this.theme.background)
-      .edgeEffect(EdgeEffect.Spring)
+      .height('100%')
 
       if (this.showBottomTabs && this.discoverOverlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })
+          .align(Alignment.Bottom)
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -1581,7 +1668,7 @@ struct DiscoverPreviewDestination {
       },
       onEdit: (feed: Feed) => { this.openEditConfigPage(feed) },
       onSubscribe: (payload: FeedRefreshPayload) => { this.openNewSubscribeConfigPage(payload) },
-      onOpenArticle: (entry: Entry) => { this.openEntryDetail(entry) }
+      onOpenArticle: (entry: Entry, _feed: Feed) => { this.openEntryDetail(entry) }
     })
   }
 }
