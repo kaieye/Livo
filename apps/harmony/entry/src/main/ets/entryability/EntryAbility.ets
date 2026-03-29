@@ -8,17 +8,26 @@ import { AppContextService } from '../common/services/AppContextService'
 
 export default class EntryAbility extends UIAbility {
   private async applySystemBarStyle(mainWindow: window.Window, isDark: boolean = false): Promise<void> {
-    await mainWindow.setWindowSystemBarProperties({
-      statusBarColor: '#00000000',
-      navigationBarColor: '#00000000',
-      isStatusBarLightIcon: isDark,
-    })
+    try {
+      await mainWindow.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        navigationBarColor: '#00000000',
+        isStatusBarLightIcon: isDark,
+      })
+    } catch (error) {
+      throw new Error(`设置系统栏样式失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
   }
 
   private syncAvoidArea(mainWindow: window.Window): void {
-    const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
-    AppStorage.setOrCreate('topAvoidArea', px2vp(avoidArea.topRect.height))
-    AppStorage.setOrCreate('bottomAvoidArea', px2vp(avoidArea.bottomRect.height))
+    try {
+      const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
+      const uiContext = mainWindow.getUIContext()
+      AppStorage.setOrCreate('topAvoidArea', uiContext.px2vp(avoidArea.topRect.height))
+      AppStorage.setOrCreate('bottomAvoidArea', uiContext.px2vp(avoidArea.bottomRect.height))
+    } catch (error) {
+      console.error(`Failed to sync avoid area: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {

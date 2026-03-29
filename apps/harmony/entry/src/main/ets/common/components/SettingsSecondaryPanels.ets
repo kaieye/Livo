@@ -3,25 +3,32 @@ import { AppRepository } from '../data/AppRepository'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 const PANEL_ROW_MIN_HEIGHT: number = 56
 const PANEL_ICON_SIZE: number = 22
-const PANEL_HEADER_TITLE_SIZE: number = 20
 const PANEL_TITLE_SIZE: number = 15
 const PANEL_SUBTITLE_SIZE: number = 12
 const PANEL_HINT_SIZE: number = 12
 const PANEL_HANDLE_TOP_PADDING: number = 10
 const PANEL_HANDLE_BOTTOM_PADDING: number = 8
-const PANEL_HEADER_SPACING: number = 4
-const PANEL_HEADER_MIN_HEIGHT: number = 36
-const PANEL_HEADER_TOP_PADDING: number = 0
-const PANEL_HEADER_BOTTOM_PADDING: number = 0
 const PANEL_ROW_TEXT_SPACING: number = 2
 const PANEL_GROUP_SPACING: number = 14
 const PANEL_SECTION_SPACING: number = 2
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 6
+
+@Builder
+function SettingsPanelHeader(title: string, theme: ThemePalette) {
+  PageHeader({
+    title,
+    theme,
+    titleSize: 20,
+    topPadding: 0,
+    bottomPadding: 0,
+  })
+}
 
 @Component
 export struct GeneralSettingsPanel {
@@ -56,22 +63,7 @@ export struct GeneralSettingsPanel {
 
   @Builder
   private PanelHeader() {
-    Column() {
-      Row() {
-        Text('通用')
-          .fontSize(PANEL_HEADER_TITLE_SIZE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
-    }
-    .width('100%')
-    .height(PANEL_HEADER_MIN_HEIGHT)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
+    SettingsPanelHeader('通用', this.theme)
   }
 
   @Builder
@@ -201,18 +193,7 @@ export struct FavoritesPanel {
 
   @Builder
   private PanelHeader() {
-    Column() {
-      Text('收藏')
-        .fontSize(PANEL_HEADER_TITLE_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-        .width('100%')
-    }
-    .width('100%')
-    .height(PANEL_HEADER_MIN_HEIGHT)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
+    SettingsPanelHeader('收藏', this.theme)
   }
 
   @Builder
@@ -428,22 +409,7 @@ export struct DataControlSettingsPanel {
 
   @Builder
   private PanelHeader() {
-    Column() {
-      Row() {
-        Text('数据控制')
-          .fontSize(PANEL_HEADER_TITLE_SIZE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
-    }
-    .width('100%')
-    .height(PANEL_HEADER_MIN_HEIGHT)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
+    SettingsPanelHeader('数据控制', this.theme)
   }
 
   @Builder
@@ -575,21 +541,9 @@ export struct PrivacySettingsPanel {
   @Builder
   private PanelHeader() {
     Column() {
-      Row() {
-        Text('隐私')
-          .fontSize(PANEL_HEADER_TITLE_SIZE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
+      SettingsPanelHeader('隐私', this.theme)
     }
     .width('100%')
-    .height(PANEL_HEADER_MIN_HEIGHT)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
     .transition(livoMotion.enterRise(20))
   }
 
@@ -695,21 +649,9 @@ export struct AboutSettingsPanel {
   @Builder
   private PanelHeader() {
     Column() {
-      Row() {
-        Text('关于')
-          .fontSize(PANEL_HEADER_TITLE_SIZE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
+      SettingsPanelHeader('关于', this.theme)
     }
     .width('100%')
-    .height(PANEL_HEADER_MIN_HEIGHT)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
     .transition(livoMotion.enterRise(20))
   }
 

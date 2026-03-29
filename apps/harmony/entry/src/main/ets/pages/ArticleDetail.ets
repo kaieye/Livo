@@ -1,12 +1,14 @@
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { ArticleAssistService } from '../common/services/ArticleAssistService'
+import { PageHeader } from '../common/components/PageHeader'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
   isLegacyPlainArticleContent,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 
 @Entry
 @Component
@@ -19,6 +21,10 @@ struct ArticleDetail {
   @State isUpgradingLegacyContent: boolean = false
   @State starScale: number = 1
   private upgradedEntryIds: Set<string> = new Set<string>()
+
+  private animateWithUiContext(options: AnimateParam, event: () => void): void {
+    this.getUIContext().animateTo(options, event)
+  }
 
   aboutToAppear(): void {
     this.theme = ThemeService.currentPalette()
@@ -76,7 +82,7 @@ struct ArticleDetail {
       return
     }
 
-    animateTo({ duration: 150, curve: Curve.EaseOut }, () => {
+    this.animateWithUiContext({ duration: 150, curve: Curve.EaseOut }, () => {
       this.starScale = 1.4
     })
 
@@ -85,7 +91,7 @@ struct ArticleDetail {
     this.actionHint = this.entry?.isStarred ? '已收藏' : '已取消收藏'
 
     setTimeout(() => {
-      animateTo({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
+      this.animateWithUiContext({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
         this.starScale = 1.0
       })
     }, 150)
@@ -181,45 +187,48 @@ struct ArticleDetail {
 
   build() {
     Column() {
-      // 顶部导航栏
-      Row() {
-        Text('‹')
-          .fontSize(28)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-          .width(40)
-          .height(40)
-          .textAlign(TextAlign.Center)
-          .onClick(() => { void goBack() })
+      Column({ space: 8 }) {
+        PageHeader({
+          title: '文章详情',
+          theme: this.theme,
+          showBackButton: true,
+          titleSize: 20,
+          topPadding: 0,
+          bottomPadding: 0,
+          onBack: () => { void goBack() },
+        })
 
-        Blank()
+        Row() {
+          Blank()
 
-        SymbolGlyph($r('sys.symbol.lightbulb'))
-          .fontSize(24)
-          .fontColor([this.theme.accent, this.theme.textSecondary])
-          .renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-          .padding(8)
-          .clickEffect({ level: ClickEffectLevel.LIGHT })
-          .onClick(() => { this.actionHint = 'AI 助手功能开发中...' })
+          SymbolGlyph($r('sys.symbol.lightbulb'))
+            .fontSize(24)
+            .fontColor([this.theme.accent, this.theme.textSecondary])
+            .renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
+            .padding(8)
+            .clickEffect({ level: ClickEffectLevel.LIGHT })
+            .onClick(() => { this.actionHint = 'AI 助手功能开发中...' })
 
-        SymbolGlyph($r('sys.symbol.share'))
-          .fontSize(22)
-          .fontColor([this.theme.textSecondary])
-          .padding(8)
-          .clickEffect({ level: ClickEffectLevel.LIGHT })
-          .onClick(() => { this.actionHint = '分享功能开发中...' })
+          SymbolGlyph($r('sys.symbol.share'))
+            .fontSize(22)
+            .fontColor([this.theme.textSecondary])
+            .padding(8)
+            .clickEffect({ level: ClickEffectLevel.LIGHT })
+            .onClick(() => { this.actionHint = '分享功能开发中...' })
 
-        SymbolGlyph($r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'))
-          .fontSize(22)
-          .fontColor([this.entry?.isStarred ? this.theme.accent : this.theme.textSecondary])
-          .padding(8)
-          .scale({ x: this.starScale, y: this.starScale })
-          .clickEffect({ level: ClickEffectLevel.LIGHT })
-          .onClick(() => { void this.toggleStar() })
+          SymbolGlyph($r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'))
+            .fontSize(22)
+            .fontColor([this.entry?.isStarred ? this.theme.accent : this.theme.textSecondary])
+            .padding(8)
+            .scale({ x: this.starScale, y: this.starScale })
+            .clickEffect({ level: ClickEffectLevel.LIGHT })
+            .onClick(() => { void this.toggleStar() })
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .padding({ left: 18, right: 18, top: 48, bottom: 10 })
-      .alignItems(VerticalAlign.Center)
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 48, bottom: 10 })
 
       if (this.entry) {
         Scroll() {
@@ -239,7 +248,7 @@ struct ArticleDetail {
                 .width('100%')
             }
             .width('100%')
-            .padding({ left: 18, right: 18, top: 6, bottom: 2 })
+            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 6, bottom: 2 })
             .alignItems(HorizontalAlign.Start)
 
             if (this.aiEnabled && this.aiSummary) {
@@ -260,7 +269,7 @@ struct ArticleDetail {
               .width('100%')
               .alignItems(HorizontalAlign.Start)
               .padding(16)
-              .margin({ left: 18, right: 18 })
+              .margin({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
               .borderRadius(20)
               .border({ width: 1, color: this.theme.divider })
             }
@@ -277,7 +286,7 @@ struct ArticleDetail {
                 }, (tag: string) => tag)
               }
               .width('100%')
-              .margin({ left: 18, right: 18 })
+              .margin({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
             }
 
             Column({ space: 20 }) {

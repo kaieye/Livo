@@ -1,4 +1,3 @@
-import promptAction from '@ohos.promptAction'
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/LivoModels'
@@ -6,6 +5,8 @@ import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/L
 import { FeedDraft } from '../common/repositories/FeedRepository'
 import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { PageHeader } from '../common/components/PageHeader'
+import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 
 @Entry
 @Component
@@ -104,19 +105,16 @@ struct DiscoverPreview {
 
   @Builder
   private HeaderSection() {
-    Row() {
-      Text('‹')
-        .fontSize(28)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .width(40)
-        .height(40)
-        .textAlign(TextAlign.Center)
-        .onClick(() => { void goBack() })
-
-      Blank()
-    }
-    .width('100%')
+    PageHeader({
+      title: this.previewPayload?.feedTitle || this.targetTitle || '订阅预览',
+      theme: this.theme,
+      showBackButton: true,
+      titleSize: 20,
+      topPadding: 0,
+      bottomPadding: 0,
+      onBack: () => { void goBack() },
+    })
+      .width('100%')
   }
 
   @Builder
@@ -296,18 +294,26 @@ struct DiscoverPreview {
       if (this.existingFeed) {
         await AppRepository.updateFeed(this.existingFeed.id, draft)
         await AppRepository.refreshFeed(this.existingFeed.id)
-        promptAction.showToast({ message: '订阅已更新' })
+        this.showToast('订阅已更新')
       } else {
         const created = await AppRepository.createFeed(draft)
         await AppRepository.refreshFeed(created.id)
-        promptAction.showToast({ message: '订阅已添加' })
+        this.showToast('订阅已添加')
       }
 
       void goBack()
     } catch (_) {
-      promptAction.showToast({ message: '添加失败，请检查链接或网络' })
+      this.showToast('添加失败，请检查链接或网络')
     } finally {
       this.isSubmitting = false
+    }
+  }
+
+  private showToast(message: string, duration: number = 2000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (error) {
+      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
     }
   }
 
@@ -317,7 +323,7 @@ struct DiscoverPreview {
         this.HeaderSection()
       }
       .width('100%')
-      .padding({ left: 18, right: 18, top: 20, bottom: 12 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 20, bottom: 12 })
 
       if (this.isLoading) {
         Column({ space: 12 }) {
@@ -328,7 +334,7 @@ struct DiscoverPreview {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: 18, right: 18 })
+        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
         .justifyContent(FlexAlign.Center)
       } else if (this.previewError) {
         Column({ space: 16 }) {

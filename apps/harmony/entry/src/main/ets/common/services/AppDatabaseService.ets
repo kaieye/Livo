@@ -70,22 +70,30 @@ export class AppDatabaseService {
 
   static async getStore(): Promise<relationalStore.RdbStore> {
     if (!AppDatabaseService.store) {
-      const context = AppContextService.getContext()
-      AppDatabaseService.store = await relationalStore.getRdbStore(context, STORE_CONFIG)
-      await AppDatabaseService.migrate(AppDatabaseService.store)
+      try {
+        const context = AppContextService.getContext()
+        AppDatabaseService.store = await relationalStore.getRdbStore(context, STORE_CONFIG)
+        await AppDatabaseService.migrate(AppDatabaseService.store)
+      } catch (error) {
+        throw new Error(`初始化数据库失败：${error instanceof Error ? error.message : 'unknown error'}`)
+      }
     }
 
     return AppDatabaseService.store
   }
 
   private static async migrate(store: relationalStore.RdbStore): Promise<void> {
-    await store.executeSql(CREATE_FEEDS_TABLE)
-    await store.executeSql(CREATE_ENTRIES_TABLE)
-    await AppDatabaseService.tryAddColumn(store, 'ALTER TABLE feeds ADD COLUMN image_url TEXT')
-    await store.executeSql(CREATE_FEED_URL_INDEX)
-    await store.executeSql(CREATE_ENTRIES_FEED_INDEX)
-    await store.executeSql(CREATE_ENTRIES_READ_INDEX)
-    await store.executeSql(CREATE_ENTRIES_STAR_INDEX)
+    try {
+      await store.executeSql(CREATE_FEEDS_TABLE)
+      await store.executeSql(CREATE_ENTRIES_TABLE)
+      await AppDatabaseService.tryAddColumn(store, 'ALTER TABLE feeds ADD COLUMN image_url TEXT')
+      await store.executeSql(CREATE_FEED_URL_INDEX)
+      await store.executeSql(CREATE_ENTRIES_FEED_INDEX)
+      await store.executeSql(CREATE_ENTRIES_READ_INDEX)
+      await store.executeSql(CREATE_ENTRIES_STAR_INDEX)
+    } catch (error) {
+      throw new Error(`执行数据库迁移失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
   }
 
   private static async tryAddColumn(

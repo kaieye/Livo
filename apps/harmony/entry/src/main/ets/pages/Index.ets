@@ -49,6 +49,10 @@ struct Index {
   private pendingRootTabId: RootTabId = 'home'
   private rootTransitionVersion: number = 0
   private modeTransitionVersion: number = 0
+
+  private animateWithUiContext(options: AnimateParam, event: () => void): void {
+    this.getUIContext().animateTo(options, event)
+  }
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
     this.syncRequestedRootTab()
@@ -505,7 +509,7 @@ struct Index {
     }
 
     this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
-    animateTo({ duration: 260, curve: Curve.EaseIn }, () => {
+    this.animateWithUiContext({ duration: 260, curve: Curve.EaseIn }, () => {
       this.showSearch = false
       this.searchQuery = ''
       this.searchExpanded = false
@@ -730,14 +734,14 @@ struct Index {
                 })
                 .onClick(() => {
                   if (this.searchExpanded) {
-                    animateTo({ duration: 300, curve: Curve.EaseOut }, () => {
+                    this.animateWithUiContext({ duration: 300, curve: Curve.EaseOut }, () => {
                       this.searchExpanded = false
                     })
                   }
                 })
                 .onBlur(() => {
                   if (!this.searchExpanded && this.searchQuery.trim()) {
-                    animateTo({ duration: 300, curve: Curve.EaseOut }, () => {
+                    this.animateWithUiContext({ duration: 300, curve: Curve.EaseOut }, () => {
                       this.searchExpanded = true
                     })
                   }
@@ -843,10 +847,10 @@ struct Index {
                 .scrollBar(BarState.Off)
                 .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
                 .alignListItem(ListItemAlign.Start)
-                .onScroll(() => {
+                .onWillScroll((_scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
                   if (!this.searchExpanded) {
                     this.searchInputController.stopEditing()
-                    animateTo({ duration: 400, curve: Curve.FastOutSlowIn }, () => {
+                    this.animateWithUiContext({ duration: 400, curve: Curve.FastOutSlowIn }, () => {
                       this.searchExpanded = true
                     })
                   }

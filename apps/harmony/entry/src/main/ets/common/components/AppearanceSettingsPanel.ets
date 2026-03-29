@@ -3,6 +3,7 @@ import { AppRepository } from '../data/AppRepository'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeAccent, ThemeMode } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 interface AppearanceOption {
@@ -39,16 +40,11 @@ const LANGUAGE_OPTIONS: AppearanceOption[] = [
 
 const ROW_MIN_HEIGHT: number = 56
 const ROW_ICON_SIZE: number = 22
-const PANEL_HEADER_TITLE_SIZE: number = 20
 const ROW_TITLE_SIZE: number = 15
 const ROW_SUBTITLE_SIZE: number = 12
 const ROW_TIPS_SIZE: number = 12
 const PANEL_HANDLE_TOP_PADDING: number = 10
 const PANEL_HANDLE_BOTTOM_PADDING: number = 8
-const PANEL_HEADER_SPACING: number = 4
-const PANEL_HEADER_MIN_HEIGHT: number = 36
-const PANEL_HEADER_TOP_PADDING: number = 0
-const PANEL_HEADER_BOTTOM_PADDING: number = 0
 const PANEL_SECTION_SPACING: number = 2
 const ROW_TEXT_SPACING: number = 2
 
@@ -507,17 +503,15 @@ export struct AppearanceSettingsPanel {
 
   @Builder
   private PanelHeader() {
-    Column() {
-      Text('外观')
-        .fontSize(PANEL_HEADER_TITLE_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-    }
-    .width('100%')
-    .height(PANEL_HEADER_MIN_HEIGHT)
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
-    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
+    PageHeader({
+      title: '外观',
+      theme: this.theme,
+      showBackButton: this.showBackButton,
+      titleSize: 20,
+      topPadding: 0,
+      bottomPadding: 0,
+    })
+      .width('100%')
   }
 
   @Builder

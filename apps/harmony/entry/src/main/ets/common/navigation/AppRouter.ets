@@ -1,4 +1,4 @@
-import router from '@ohos.router'
+import window from '@ohos.window'
 import { FeedViewType } from '../models/LivoModels'
 
 export interface RouteDefinition {
@@ -129,7 +129,12 @@ export function rootTabIdForIndex(index: number): RootTabId {
 }
 
 export function getStringParams(): Record<string, string> {
-  const rawParams = router.getParams() as Record<string, Object | string | number | boolean | undefined | null>
+  let rawParams: Record<string, Object | string | number | boolean | undefined | null>
+  try {
+    rawParams = getAppRouter().getParams() as Record<string, Object | string | number | boolean | undefined | null>
+  } catch (_error) {
+    return {}
+  }
   const normalized: Record<string, string> = {}
   if (!rawParams) {
     return normalized
@@ -183,6 +188,19 @@ function createRouterOptions(url: string, params?: Object): RouterOptions {
   return options
 }
 
+function getAppRouter() {
+  const mainWindow = AppStorage.get<window.Window>('WindowClass')
+  if (!mainWindow) {
+    throw new Error('应用主窗口尚未初始化')
+  }
+
+  try {
+    return mainWindow.getUIContext().getRouter()
+  } catch (error) {
+    throw new Error(`获取路由实例失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
+}
+
 function createRootTabRouteParams(tabId: RootTabId): RootTabRouteParams {
   const params = {} as RootTabRouteParams
   params.rootTab = tabId
@@ -190,17 +208,26 @@ function createRootTabRouteParams(tabId: RootTabId): RootTabRouteParams {
 }
 
 export async function goBack(): Promise<void> {
-  await router.back()
+  try {
+    getAppRouter().back()
+  } catch (error) {
+    throw new Error(`路由返回失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openRootTab(tabId: RootTabId, replace: boolean = true): Promise<void> {
   const options = createRouterOptions(ROUTES.home, createRootTabRouteParams(tabId))
-  if (replace) {
-    await router.replaceUrl(options)
-    return
-  }
+  const appRouter = getAppRouter()
+  try {
+    if (replace) {
+      await appRouter.replaceUrl(options)
+      return
+    }
 
-  await router.pushUrl(options)
+    await appRouter.pushUrl(options)
+  } catch (error) {
+    throw new Error(`打开根标签失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export function getRequestedRootTabId(): RootTabId | undefined {
@@ -219,13 +246,21 @@ export async function openArticleDetail(entryId: string, entryJson?: string): Pr
   if (entryJson) {
     params.entryJson = entryJson
   }
-  await router.pushUrl(createRouterOptions(ROUTES.articleDetail, params))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.articleDetail, params))
+  } catch (error) {
+    throw new Error(`打开文章详情失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openFeedDetail(feedId: string): Promise<void> {
   const params = new FeedDetailParams()
   params.feedId = feedId
-  await router.pushUrl(createRouterOptions(ROUTES.feedDetail, params))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.feedDetail, params))
+  } catch (error) {
+    throw new Error(`打开订阅详情失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openFeedDetailPreview(params: DiscoverPreviewRouteParams): Promise<void> {
@@ -237,27 +272,51 @@ export async function openFeedDetailPreview(params: DiscoverPreviewRouteParams):
   routeParams.description = params.description
   routeParams.sourceKind = params.sourceKind
   routeParams.category = params.category
-  await router.pushUrl(createRouterOptions(ROUTES.feedDetail, routeParams))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.feedDetail, routeParams))
+  } catch (error) {
+    throw new Error(`打开订阅预览失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openAppearanceSettings(): Promise<void> {
-  await router.pushUrl(createRouterOptions(ROUTES.appearanceSettings))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.appearanceSettings))
+  } catch (error) {
+    throw new Error(`打开外观设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openGeneralSettings(): Promise<void> {
-  await router.pushUrl(createRouterOptions(ROUTES.generalSettings))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.generalSettings))
+  } catch (error) {
+    throw new Error(`打开通用设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openDataControlSettings(): Promise<void> {
-  await router.pushUrl(createRouterOptions(ROUTES.dataControlSettings))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.dataControlSettings))
+  } catch (error) {
+    throw new Error(`打开数据控制设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openPrivacySettings(): Promise<void> {
-  await router.pushUrl(createRouterOptions(ROUTES.privacySettings))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.privacySettings))
+  } catch (error) {
+    throw new Error(`打开隐私设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openAboutSettings(): Promise<void> {
-  await router.pushUrl(createRouterOptions(ROUTES.aboutSettings))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.aboutSettings))
+  } catch (error) {
+    throw new Error(`打开关于页失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }
 
 export async function openDiscoverPreview(params: DiscoverPreviewRouteParams): Promise<void> {
@@ -275,5 +334,9 @@ export async function openDiscoverSubscribeConfig(
   routeParams.description = params.description
   routeParams.sourceKind = params.sourceKind
   routeParams.category = params.category
-  await router.pushUrl(createRouterOptions(ROUTES.discoverSubscribeConfig, routeParams))
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.discoverSubscribeConfig, routeParams))
+  } catch (error) {
+    throw new Error(`打开订阅配置失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
 }

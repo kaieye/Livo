@@ -589,21 +589,29 @@ export class RssFeedService {
           }
         } else {
           // 无法提取路由，使用原始 URL
+          try {
+            response = await mainRequest.request(actualUrl, {
+              method: http.RequestMethod.GET,
+              connectTimeout: 15000,
+              readTimeout: 15000,
+              header: headers,
+            })
+          } catch (error) {
+            throw new Error(`RSS request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+          }
+        }
+      } else {
+        // 不是 RSSHub URL，使用原始 URL
+        try {
           response = await mainRequest.request(actualUrl, {
             method: http.RequestMethod.GET,
             connectTimeout: 15000,
             readTimeout: 15000,
             header: headers,
           })
+        } catch (error) {
+          throw new Error(`RSS request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
         }
-      } else {
-        // 不是 RSSHub URL，使用原始 URL
-        response = await mainRequest.request(actualUrl, {
-          method: http.RequestMethod.GET,
-          connectTimeout: 15000,
-          readTimeout: 15000,
-          header: headers,
-        })
       }
 
       if (response.responseCode === 304) {
@@ -638,12 +646,18 @@ export class RssFeedService {
         if (discoveredFeedUrl && discoveredFeedUrl !== requestUrl) {
           console.info(`[RssFeedService] Discovered RSS feed: ${discoveredFeedUrl}`)
           const discoveryRequest = http.createHttp()
-          const discoveryResponse = await discoveryRequest.request(discoveredFeedUrl, {
-            method: http.RequestMethod.GET,
-            connectTimeout: 15000,
-            readTimeout: 15000,
-            header: headers,
-          })
+          let discoveryResponse: http.HttpResponse
+          try {
+            discoveryResponse = await discoveryRequest.request(discoveredFeedUrl, {
+              method: http.RequestMethod.GET,
+              connectTimeout: 15000,
+              readTimeout: 15000,
+              header: headers,
+            })
+          } catch (error) {
+            discoveryRequest.destroy()
+            throw new Error(`RSS discovery request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+          }
           if (discoveryResponse.responseCode !== 200) {
             console.error(`[RssFeedService] Discovered feed HTTP error ${discoveryResponse.responseCode}`)
             discoveryRequest.destroy()

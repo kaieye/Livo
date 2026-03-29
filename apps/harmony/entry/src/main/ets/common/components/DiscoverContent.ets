@@ -1,11 +1,10 @@
-import promptAction from '@ohos.promptAction'
 import { AppRepository } from '../data/AppRepository'
 import { openArticleDetail, openFeedDetailPreview } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
+import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
 import { PageHeader } from './PageHeader'
 import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
-import { FeedDraft } from '../repositories/FeedRepository'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import {
   discoverPlatformLabel,
@@ -902,6 +901,7 @@ export struct DiscoverContent {
           targetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
           targetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
           targetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
+          targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
           sourceKind: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).sourceKind,
           initialSelectedView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
           theme: this.theme,
@@ -943,635 +943,43 @@ struct DiscoverSubscribeConfigDestination {
   @Prop targetTitle: string = ''
   @Prop targetSiteUrl: string = ''
   @Prop targetDescription: string = ''
+  @Prop targetCategory: string = ''
   @Prop sourceKind: string = ''
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
   @Prop theme: ThemePalette = ThemeService.darkPalette()
-  @State selectedView: FeedViewType = FeedViewType.Articles
-  @State customTitle: string = ''
-  @State customCategory: string = ''
-  @State hideInTimeline: boolean = false
-  @State isEditMode: boolean = false
-  @State hasChanges: boolean = false
-  @State existingFeed: Feed | undefined = undefined
 
   aboutToAppear(): void {
-    this.selectedView = this.initialSelectedView
-    this.customTitle = this.targetTitle
-    this.isEditMode = this.sourceKind === '编辑'
-    
     const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
     if (currentLevel < 1) {
       AppStorage.setOrCreate('discoverOverlayLevel', 1)
     }
-
-    if (this.isEditMode) {
-      void this.loadExistingFeed()
-    }
-  }
-
-  private async loadExistingFeed(): Promise<void> {
-    const feeds = await AppRepository.feedEntities()
-    this.existingFeed = feeds.find((feed: Feed) => 
-      this.normalizeUrl(feed.url) === this.normalizeUrl(this.targetUrl)
-    )
-
-    if (this.existingFeed) {
-      this.customTitle = this.existingFeed.title
-      this.customCategory = this.existingFeed.category || ''
-      this.selectedView = this.existingFeed.view
-      this.hideInTimeline = !this.existingFeed.showInAll
-    }
-  }
-
-  private normalizeUrl(url: string): string {
-    return url.trim().replace(/\/+$/, '').toLowerCase()
-  }
-
-  private checkForChanges(): void {
-    if (!this.existingFeed) {
-      this.hasChanges = false
-      return
-    }
-
-    this.hasChanges = 
-      this.customTitle !== this.existingFeed.title ||
-      this.customCategory !== this.existingFeed.category ||
-      this.selectedView !== this.existingFeed.view ||
-      this.hideInTimeline !== !this.existingFeed.showInAll
-  }
-
-  private viewOptions(): ConfigOption[] {
-    return [
-      { view: FeedViewType.Articles, label: '文章', description: '' },
-      { view: FeedViewType.SocialMedia, label: '社交', description: '' },
-      { view: FeedViewType.Pictures, label: '图片', description: '' },
-      { view: FeedViewType.Videos, label: '视频', description: '' },
-    ]
-  }
-
-  private getViewLabel(view: FeedViewType): string {
-    switch (view) {
-      case FeedViewType.Articles:
-        return '文章'
-      case FeedViewType.SocialMedia:
-        return '社交'
-      case FeedViewType.Pictures:
-        return '图片'
-      case FeedViewType.Videos:
-        return '视频'
-      default:
-        return '文章'
-    }
-  }
-
-  private getViewIcon(view: FeedViewType): Resource {
-    switch (view) {
-      case FeedViewType.Articles:
-        return $r('app.media.sub_articles_inactive')
-      case FeedViewType.SocialMedia:
-        return $r('app.media.sub_social_inactive')
-      case FeedViewType.Pictures:
-        return $r('app.media.sub_pictures_inactive')
-      case FeedViewType.Videos:
-        return $r('app.media.sub_videos_inactive')
-      default:
-        return $r('app.media.sub_articles_inactive')
-    }
-  }
-
-  private getViewIconColor(view: FeedViewType): string {
-    if (this.selectedView === view) {
-      return this.theme.textPrimary
-    }
-    return this.theme.isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)'
-  }
-
-  private isBilibiliSource(): boolean {
-    const site = this.targetSiteUrl.toLowerCase()
-    const target = this.targetUrl.toLowerCase()
-    return site.includes('space.bilibili.com')
-      || site.includes('bilibili.com')
-      || target.includes('/bilibili/user/video/')
-      || target.includes('/bilibili/user/dynamic/')
-  }
-
-  private mappedTargetUrl(): string {
-    if (!this.isBilibiliSource()) {
-      return this.targetUrl
-    }
-
-    const matched = this.targetUrl.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
-    const uid = matched?.[1] ?? ''
-    if (!uid) {
-      return this.targetUrl
-    }
-
-    const instanceMatch = this.targetUrl.match(/^(https?:\/\/[^/]+)/i)
-    const instance = instanceMatch?.[1] ?? 'https://rsshub.pseudoyu.com'
-
-    if (this.selectedView === FeedViewType.SocialMedia) {
-      return `${instance}/bilibili/user/dynamic/${uid}`
-    }
-
-    if (this.selectedView === FeedViewType.Videos) {
-      return `${instance}/bilibili/user/video/${uid}`
-    }
-
-    return this.targetUrl
-  }
-
-  private hostOf(url: string): string {
-    const matched = url.match(/^https?:\/\/([^/]+)/i)
-    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
-  }
-
-  private faviconUrl(): string {
-    const host = this.hostOf(this.targetSiteUrl || this.targetUrl)
-    return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128` : ''
-  }
-
-  private async handleUnsubscribe(): Promise<void> {
-    if (!this.existingFeed) {
-      return
-    }
-
-    try {
-      await AppRepository.removeFeed(this.existingFeed.id)
-      
-      promptAction.showToast({
-        message: '已取消订阅',
-        duration: 2000,
-      })
-
-      // 返回到发现页面
-      AppStorage.setOrCreate('discoverOverlayLevel', 0)
-      this.discoverPathStack.clear()
-    } catch (e) {
-      promptAction.showToast({
-        message: `取消订阅失败: ${e}`,
-        duration: 3000,
-      })
-    }
-  }
-
-  private async handleSave(): Promise<void> {
-    if (!this.existingFeed) {
-      return
-    }
-
-    try {
-      const draft: FeedDraft = {
-        url: this.targetUrl,
-        title: this.customTitle || this.targetTitle,
-        siteUrl: this.targetSiteUrl,
-        description: this.targetDescription,
-        category: this.customCategory,
-        view: this.selectedView,
-        showInAll: !this.hideInTimeline,
-      }
-
-      await AppRepository.updateFeed(this.existingFeed.id, draft)
-      
-      promptAction.showToast({
-        message: '保存成功',
-        duration: 2000,
-      })
-
-      // 返回到预览页面
-      AppStorage.setOrCreate('discoverOverlayLevel', 1)
-      this.discoverPathStack.pop(true)
-    } catch (e) {
-      promptAction.showToast({
-        message: `保存失败: ${e}`,
-        duration: 3000,
-      })
-    }
-  }
-
-  private async handleSubscribe(): Promise<void> {
-    try {
-      const draft: FeedDraft = {
-        url: this.mappedTargetUrl(),
-        title: this.customTitle || this.targetTitle,
-        siteUrl: this.targetSiteUrl,
-        description: this.targetDescription,
-        category: this.customCategory,
-        view: this.selectedView,
-        showInAll: !this.hideInTimeline,
-      }
-
-      await AppRepository.createFeed(draft)
-      
-      promptAction.showToast({
-        message: '订阅成功',
-        duration: 2000,
-      })
-
-      // 返回到发现页面
-      AppStorage.setOrCreate('discoverOverlayLevel', 0)
-      this.discoverPathStack.clear()
-    } catch (e) {
-      promptAction.showToast({
-        message: `订阅失败: ${e}`,
-        duration: 3000,
-      })
-    }
-  }
-
-  @Builder
-  private TopBar() {
-    Row() {
-      // 返回箭头按钮
-      Text('‹')
-        .fontSize(32)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .width(44)
-        .height(44)
-        .textAlign(TextAlign.Center)
-        .onClick(() => {
-          AppStorage.setOrCreate('discoverOverlayLevel', 0)
-          this.discoverPathStack.pop(true)
-        })
-
-      // 标题
-      Text(`订阅 - ${this.targetTitle}`)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-        .layoutWeight(1)
-        .textAlign(TextAlign.Center)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      // 订阅按钮
-      Button('订阅')
-        .type(ButtonType.Normal)
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .height(36)
-        .padding({ left: 20, right: 20 })
-        .backgroundColor('transparent')
-        .fontColor('#FF6B35')
-        .onClick(() => {
-          void this.handleSubscribe()
-        })
-    }
-    .width('100%')
-    .padding({ left: 8, right: 8, top: 12, bottom: 8 })
-    .alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
-  private FeedInfoCard() {
-    Column({ space: 12 }) {
-      // 头像和基本信息
-      Row({ space: 12 }) {
-        // 头像
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.faviconUrl()) {
-            Image(this.faviconUrl())
-              .width(56)
-              .height(56)
-              .borderRadius(14)
-              .backgroundColor(this.theme.elevated)
-          } else {
-            Row()
-              .width(56)
-              .height(56)
-              .borderRadius(14)
-              .backgroundColor(this.theme.accent)
-
-            Text(this.targetTitle.substring(0, 1).toUpperCase())
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-          }
-        }
-
-        // 标题和URL
-        Column({ space: 4 }) {
-          Text(this.targetTitle)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          Text(this.targetUrl)
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-      }
-      .width('100%')
-
-      // 完整描述
-      if (this.targetDescription) {
-        Text(this.targetDescription)
-          .fontSize(14)
-          .lineHeight(20)
-          .fontColor(this.theme.textSecondary)
-          .width('100%')
-      }
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(16)
-  }
-
-  @Builder
-  private ConfigSection(title: string, description: string) {
-    Column({ space: 8 }) {
-      Text(title)
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-
-      Text(description)
-        .fontSize(13)
-        .lineHeight(18)
-        .fontColor(this.theme.textSecondary)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private TextInputField(placeholder: string, value: string, onChange: (value: string) => void) {
-    TextInput({ text: value, placeholder: placeholder })
-      .backgroundColor(this.theme.elevated)
-      .fontColor(this.theme.textPrimary)
-      .placeholderColor(this.theme.textMuted)
-      .borderRadius(12)
-      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .width('100%')
-      .onChange((newValue: string) => {
-        onChange(newValue)
-        this.checkForChanges()
-      })
-  }
-
-  @Builder
-  private ToggleRow(label: string, description: string, value: boolean, onChange: (value: boolean) => void) {
-    Row() {
-      Column({ space: 4 }) {
-        Text(label)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        Text(description)
-          .fontSize(12)
-          .lineHeight(16)
-          .fontColor(this.theme.textSecondary)
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
-
-      Toggle({ type: ToggleType.Switch, isOn: value })
-        .selectedColor(this.theme.accent)
-        .onChange((isOn: boolean) => {
-          onChange(isOn)
-          this.checkForChanges()
-        })
-    }
-    .width('100%')
-    .padding({ top: 8, bottom: 8 })
-  }
-
-  private indicatorColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.92)'
-  }
-
-  private indicatorBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)'
-  }
-
-  private indicatorShadowColor(): string {
-    return this.theme.isDark ? 'rgba(0,0,0,0.12)' : 'rgba(15,23,42,0.08)'
-  }
-
-  private activeTextColor(): string {
-    return this.theme.isDark ? '#F5F8FF' : '#14213D'
-  }
-
-  @Builder
-  private ViewTypeButton(option: ConfigOption) {
-    Row({ space: 6 }) {
-      // 图标
-      Image(this.getViewIcon(option.view))
-        .width(16)
-        .height(16)
-        .objectFit(ImageFit.Contain)
-
-      // 标签
-      Text(this.getViewLabel(option.view))
-        .fontSize(14)
-        .fontWeight(this.selectedView === option.view ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.selectedView === option.view ? this.activeTextColor() : this.theme.textSecondary)
-    }
-    .layoutWeight(1)
-    .height(38)
-    .justifyContent(FlexAlign.Center)
-    .borderRadius(CHIP_RADIUS)
-    .animation({ duration: 160, curve: Curve.EaseInOut })
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => {
-      this.selectedView = option.view
-      this.checkForChanges()
-    })
-  }
-
-  private viewOptionIndex(view: FeedViewType): number {
-    const options = this.viewOptions()
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].view === view) {
-        return i
-      }
-    }
-    return 0
-  }
-
-  @State railWidth: number = 0
-
-  private indicatorSlotWidth(): number {
-    if (this.railWidth <= 0) {
-      return 0
-    }
-    return (this.railWidth - 8) / this.viewOptions().length
-  }
-
-  private indicatorOffsetX(): number {
-    return this.indicatorSlotWidth() * this.viewOptionIndex(this.selectedView)
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-        // 顶部导航栏
-        this.TopBar()
-
-        // 可滚动内容区域
-        Scroll() {
-          Column({ space: 20 }) {
-            // 订阅源信息卡片
-            this.FeedInfoCard()
-
-            // 标题配置
-            Column({ space: 12 }) {
-              this.ConfigSection('标题', '此订阅源的自定义标题，留空则使用默认标题。')
-              this.TextInputField('', this.customTitle, (value: string) => {
-                this.customTitle = value
-              })
-            }
-            .width('100%')
-
-            // 在时间线中隐藏
-            this.ToggleRow(
-              '在时间线中隐藏',
-              '开启后，此订阅将不再显示在主时间线中。',
-              this.hideInTimeline,
-              (value: boolean) => {
-                this.hideInTimeline = value
-              }
-            )
-
-            // 栏目类型选择
-            Column({ space: 12 }) {
-              this.ConfigSection('栏目', '')
-
-              Stack({ alignContent: Alignment.Center }) {
-                // Sliding indicator (same style as ContentModeRail on homepage)
-                Row() {
-                  Row()
-                    .width(this.indicatorSlotWidth())
-                    .height(38)
-                    .translate({ x: this.indicatorOffsetX() })
-                    .backgroundColor(this.indicatorColor())
-                    .borderRadius(CHIP_RADIUS)
-                    .border({ width: 0.6, color: this.indicatorBorderColor() })
-                    .shadow({
-                      radius: 8,
-                      color: this.indicatorShadowColor(),
-                      offsetX: 0,
-                      offsetY: 2,
-                    })
-                    .animation({ duration: 100, curve: Curve.EaseOut })
-                }
-                .width('100%')
-                .height('100%')
-                .justifyContent(FlexAlign.Start)
-
-                Row({ space: 0 }) {
-                  ForEach(this.viewOptions(), (option: ConfigOption) => {
-                    this.ViewTypeButton(option)
-                  }, (option: ConfigOption) => `view-${option.view}`)
-                }
-                .width('100%')
-                .height('100%')
-              }
-              .width('100%')
-              .height(46)
-              .padding(4)
-              .backgroundColor(this.theme.elevated)
-              .borderRadius(CARD_RADIUS_SM)
-              .border({ width: 0.8, color: this.theme.divider })
-              .onSizeChange((_, newValue) => {
-                if (typeof newValue.width === 'number') {
-                  this.railWidth = newValue.width
-                }
-              })
-            }
-            .width('100%')
-
-            // 底部留出空间给按钮
-            Row().height(this.isEditMode ? 80 : 20)
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 16 })
-        }
-        .layoutWeight(1)
-        .scrollBar(BarState.Auto)
-        .edgeEffect(EdgeEffect.Spring)
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(this.theme.background)
-
-      // 底部按钮区域
-      if (this.isEditMode) {
-        // 编辑模式：显示取消订阅和保存按钮
-        if (this.hasChanges) {
-          Row({ space: 12 }) {
-            Button('取消订阅')
-              .type(ButtonType.Capsule)
-              .layoutWeight(1)
-              .height(50)
-              .fontSize(16)
-              .fontWeight(FontWeight.Bold)
-              .backgroundColor(this.theme.elevated)
-              .fontColor('#EF4444')
-              .onClick(() => {
-                this.showUnsubscribeConfirm()
-              })
-
-            Button('保存')
-              .type(ButtonType.Capsule)
-              .layoutWeight(1)
-              .height(50)
-              .fontSize(16)
-              .fontWeight(FontWeight.Bold)
-              .backgroundColor(this.theme.accent)
-              .fontColor('#FFFFFF')
-              .onClick(() => {
-                void this.handleSave()
-              })
-          }
-          .width('90%')
-          .margin({ bottom: 24 })
-          .opacity(0.92)
-        } else {
-          Button('取消订阅')
-            .type(ButtonType.Capsule)
-            .width('80%')
-            .height(50)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .backgroundColor(this.theme.elevated)
-            .fontColor('#EF4444')
-            .margin({ bottom: 24 })
-            .opacity(0.92)
-            .onClick(() => {
-              this.showUnsubscribeConfirm()
-            })
-        }
-      }
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
-  }
-
-  // 取消订阅确认对话框
-  private showUnsubscribeConfirm(): void {
-    AlertDialog.show({
-      title: '取消订阅',
-      message: '确定要取消订阅这个订阅源吗？',
-      primaryButton: {
-        value: '取消',
-        action: () => {}
+    FeedSubscribeConfigView({
+      targetUrl: this.targetUrl,
+      targetTitle: this.targetTitle,
+      targetSiteUrl: this.targetSiteUrl,
+      targetDescription: this.targetDescription,
+      targetCategory: this.targetCategory,
+      sourceKind: this.sourceKind,
+      initialSelectedView: this.initialSelectedView,
+      theme: this.theme,
+      onBack: () => {
+        AppStorage.setOrCreate('discoverOverlayLevel', 0)
+        this.discoverPathStack.pop(true)
       },
-      secondaryButton: {
-        value: '确定',
-        fontColor: '#EF4444',
-        action: () => {
-          void this.handleUnsubscribe()
-        }
+      onSubscribed: () => {
+        AppStorage.setOrCreate('discoverOverlayLevel', 0)
+        this.discoverPathStack.clear()
+      },
+      onSaved: () => {
+        AppStorage.setOrCreate('discoverOverlayLevel', 1)
+        this.discoverPathStack.pop(true)
+      },
+      onUnsubscribed: () => {
+        AppStorage.setOrCreate('discoverOverlayLevel', 0)
+        this.discoverPathStack.clear()
       }
     })
   }
@@ -1690,23 +1098,19 @@ struct DiscoverEntryDetailDestination {
 
   @Builder
   private HeaderSection() {
-    Row() {
-      // 返回箭头按钮
-      Text('‹')
-        .fontSize(28)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .width(40)
-        .height(40)
-        .textAlign(TextAlign.Center)
-        .onClick(() => {
-          this.discoverPathStack.pop(true)
-        })
-
-      Blank()
-    }
-    .width('100%')
-    .padding({ left: 18, right: 18, top: 12, bottom: 10 })
+    PageHeader({
+      title: this.feedTitle || '文章详情',
+      theme: this.theme,
+      showBackButton: true,
+      titleSize: 20,
+      topPadding: 0,
+      bottomPadding: 0,
+      onBack: () => {
+        this.discoverPathStack.pop(true)
+      },
+    })
+      .width('100%')
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12, bottom: 10 })
   }
 
   @Builder
@@ -1743,7 +1147,7 @@ struct DiscoverEntryDetailDestination {
                 .width('100%')
             }
             .width('100%')
-            .padding({ left: 18, right: 18, top: 6, bottom: 2 })
+            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 6, bottom: 2 })
             .alignItems(HorizontalAlign.Start)
 
             Column({ space: 20 }) {

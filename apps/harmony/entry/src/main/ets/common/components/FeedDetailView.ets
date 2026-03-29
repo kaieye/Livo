@@ -3,6 +3,8 @@ import { Entry, Feed, FeedCardModel, FeedViewType, formatPublishedAt } from '../
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { PageHeader } from './PageHeader'
+import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 @Component
 export struct FeedDetailView {
@@ -194,52 +196,23 @@ export struct FeedDetailView {
 
   @Builder
   private HeaderSection() {
-    Row() {
-      // 返回按钮
-      Text('‹')
-        .fontSize(28)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .width(40)
-        .height(40)
-        .textAlign(TextAlign.Center)
-        .onClick(() => { this.onBack() })
-
-      // 中间居中：头像 + 名称
-      if (!this.isLoading && this.previewPayload) {
-        Row({ space: 8 }) {
-          this.FeedAvatar(32, 10, 14)
-
-          Text(this.previewPayload?.feedTitle || this.targetTitle)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+    PageHeader({
+      title: this.previewPayload?.feedTitle || this.targetTitle || '订阅详情',
+      theme: this.theme,
+      showBackButton: true,
+      trailingText: !this.isLoading && this.existingFeed ? '编辑' : '',
+      titleSize: 20,
+      topPadding: 0,
+      bottomPadding: 0,
+      onBack: () => { this.onBack() },
+      onTrailingClick: () => {
+        if (this.existingFeed) {
+          this.onEdit(this.existingFeed)
         }
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-      } else {
-        Blank().layoutWeight(1)
-      }
-
-      // 右侧：编辑按钮或占位
-      if (!this.isLoading && this.existingFeed) {
-        Text('编辑')
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.accent)
-          .width(40)
-          .height(40)
-          .textAlign(TextAlign.Center)
-          .onClick(() => { this.onEdit(this.existingFeed!) })
-      } else {
-        Row().width(40).height(40)
-      }
-    }
-    .width('100%')
-    .padding({ left: 18, right: 18, top: 48, bottom: 10 })
-    .alignItems(VerticalAlign.Center)
+      },
+    })
+      .width('100%')
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 48, bottom: 10 })
   }
 
   @Builder

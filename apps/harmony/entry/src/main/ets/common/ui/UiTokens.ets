@@ -25,6 +25,9 @@ export const PANEL_PADDING: number = 18
 
 export const ACTION_BUTTON_SIZE: number = 40
 export const ACTION_ICON_SIZE: number = 22
+export const HEADER_BACK_SLOT_SIZE: number = 40
+export const HEADER_TITLE_GAP: number = 8
+export const HEADER_MIN_HEIGHT: number = 40
 
 export const LIST_ROW_HORIZONTAL_PADDING: number = 16
 export const LIST_ROW_VERTICAL_PADDING: number = 14
