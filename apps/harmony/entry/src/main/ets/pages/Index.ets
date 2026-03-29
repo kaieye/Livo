@@ -28,6 +28,8 @@ const MODE_SCENE_DURATION: number = 240
 struct Index {
   @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
+  @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
+  @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
   @State featuredEntries: EntryCardModel[] = []
   @State feedSourceLabel: string = '准备加载本地内容'
   @State isRefreshing: boolean = false
@@ -624,11 +626,15 @@ struct Index {
   @Builder
   private HomeRootPage() {
     Column() {
-      Column({ space: 14 }) {
+      Column({ space: 10 }) {
         PageHeader({
           title: '今日推荐',
           theme: this.theme,
           trailingSymbol: $r('sys.symbol.magnifyingglass'),
+          trailingButtonCircular: true,
+          trailingSymbolSize: 22,
+          trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
+          trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
           onTrailingClick: () => {
             if (this.showSearch) {
               this.closeSearch()
@@ -661,7 +667,7 @@ struct Index {
         .transition(livoMotion.enterRise(60))
       }
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 4 })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
         Stack() {
@@ -703,7 +709,11 @@ struct Index {
       .padding({ top: this.topAvoidArea })
       .backgroundColor(this.theme.background)
 
-      if (!(this.activeRootTabId === 'discover' && this.discoverOverlayLevel > 0)) {
+      if (!(
+        (this.activeRootTabId === 'discover' && this.discoverOverlayLevel > 0)
+        || (this.activeRootTabId === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
+        || (this.activeRootTabId === 'settings' && this.settingsOverlayLevel > 0)
+      )) {
         BottomTabs({
           activeTab: this.highlightedRootTabId,
           theme: this.theme,
@@ -749,10 +759,14 @@ struct Index {
             }
             .width('100%')
             .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .backgroundColor(this.theme.surface)
+            .backgroundColor(this.theme.elevated)
             .borderRadius(INPUT_RADIUS)
             .border({ width: 0.8, color: this.theme.divider })
-            .shadow({ radius: 14, color: 'rgba(0,0,0,0.08)', offsetY: 4 })
+            .shadow({
+              radius: 10,
+              color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
+              offsetY: 2,
+            })
             .gesture(
               PanGesture({ direction: PanDirection.Down })
                 .onActionEnd((event: GestureEvent) => {
@@ -842,7 +856,11 @@ struct Index {
                 .backgroundColor(this.theme.surface)
                 .borderRadius(this.searchExpanded ? 16 : INPUT_RADIUS)
                 .border({ width: 0.8, color: this.theme.divider })
-                .shadow({ radius: 14, color: 'rgba(0,0,0,0.08)', offsetY: 4 })
+                .shadow({
+                  radius: 10,
+                  color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
+                  offsetY: 2,
+                })
                 .padding({ left: 8, right: 8, top: 8, bottom: 8 })
                 .scrollBar(BarState.Off)
                 .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })

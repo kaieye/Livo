@@ -1,5 +1,5 @@
 import { AppRepository } from '../data/AppRepository'
-import { openArticleDetail, openFeedDetailPreview } from '../navigation/AppRouter'
+import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
@@ -45,6 +45,7 @@ import {
   BOTTOM_TAB_TOTAL_HEIGHT,
 } from '../ui/UiTokens'
 
+const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
 const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 
@@ -330,15 +331,20 @@ export struct DiscoverContent {
     sourceKind: string,
     category: string,
   ): void {
-    void openFeedDetailPreview({
-      targetUrl,
-      targetTitle,
-      targetView,
-      siteUrl,
-      description,
-      sourceKind,
-      category,
-    })
+    AppStorage.setOrCreate('discoverOverlayLevel', 1)
+    this.discoverPathStack.pushPathByName(
+      DISCOVER_ROUTE_PREVIEW,
+      createDiscoverFlowRouteParams(
+        targetUrl,
+        targetTitle,
+        targetView,
+        siteUrl,
+        description,
+        sourceKind,
+        category,
+      ),
+      true,
+    )
   }
 
   private openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate): void {
@@ -894,7 +900,20 @@ export struct DiscoverContent {
 
   @Builder
   private DiscoverDestinations(name: string, params?: DiscoverFlowRouteParams | EntryDetailParams) {
-    if (name === DISCOVER_ROUTE_SUBSCRIBE_CONFIG) {
+    if (name === DISCOVER_ROUTE_PREVIEW) {
+      NavDestination() {
+        DiscoverPreviewDestination({
+          targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
+          initialTargetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
+          initialTargetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
+          initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
+          targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
+          targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
+          theme: this.theme,
+        })
+      }
+      .hideTitleBar(true)
+    } else if (name === DISCOVER_ROUTE_SUBSCRIBE_CONFIG) {
       NavDestination() {
         DiscoverSubscribeConfigDestination({
           targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,

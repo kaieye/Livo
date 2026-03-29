@@ -1,5 +1,5 @@
 export const PAGE_HORIZONTAL_PADDING: number = 16
-export const PAGE_TOP_PADDING: number = 14
+export const PAGE_TOP_PADDING: number = 10
 export const PAGE_BOTTOM_GAP: number = 20
 
 export const SECTION_GAP_LG: number = 20

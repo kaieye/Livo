@@ -8,11 +8,13 @@ import {
   isLegacyPlainArticleContent,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
-import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
+import { HEADER_BACK_SLOT_SIZE, PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../common/ui/UiTokens'
 
 @Entry
 @Component
 struct ArticleDetail {
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
+  @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @State entry?: ArticleDetailModel = undefined
   @State actionHint: string = ''
   @State aiSummary: string = ''
@@ -144,19 +146,60 @@ struct ArticleDetail {
   }
 
   @Builder
-  private HeaderAction(label: string, accent?: boolean, onTap?: () => void) {
-    Button(label)
-      .type(ButtonType.Capsule)
-      .fontSize(14)
-      .fontWeight(FontWeight.Medium)
-      .backgroundColor(this.theme.elevated)
-      .fontColor(accent ? this.theme.accent : this.theme.textPrimary)
+  private HeaderIconAction(
+    symbol: Resource,
+    size: number,
+    onTap?: () => void,
+    symbolColors?: ResourceColor[],
+    backgroundColor?: string,
+  ) {
+    Row() {
+      SymbolGlyph(symbol)
+        .fontSize(size)
+        .fontColor(symbolColors ?? [this.theme.textSecondary])
+        .renderingStrategy(symbol === $r('sys.symbol.lightbulb')
+          ? SymbolRenderingStrategy.MULTIPLE_COLOR
+          : SymbolRenderingStrategy.SINGLE)
+    }
+      .width(HEADER_BACK_SLOT_SIZE)
+      .height(HEADER_BACK_SLOT_SIZE)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(backgroundColor ?? Color.Transparent)
+      .borderRadius(HEADER_BACK_SLOT_SIZE)
       .clickEffect({ level: ClickEffectLevel.LIGHT })
       .onClick(() => {
         if (onTap) {
           onTap()
         }
       })
+  }
+
+  @Builder
+  private HeaderActions() {
+    Row({ space: 4 }) {
+      this.HeaderIconAction(
+        $r('sys.symbol.lightbulb'),
+        24,
+        () => { this.actionHint = 'AI 助手功能开发中...' },
+        [this.theme.accent, this.theme.textSecondary],
+      )
+
+      this.HeaderIconAction(
+        $r('sys.symbol.share'),
+        22,
+        () => { this.actionHint = '分享功能开发中...' },
+      )
+
+      this.HeaderIconAction(
+        $r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'),
+        22,
+        () => { void this.toggleStar() },
+        [this.entry?.isStarred ? this.theme.accent : this.theme.textSecondary],
+        undefined,
+      )
+    }
+    .height(HEADER_BACK_SLOT_SIZE)
   }
 
   @Builder
@@ -192,43 +235,17 @@ struct ArticleDetail {
           title: '文章详情',
           theme: this.theme,
           showBackButton: true,
+          showTrailingBuilder: true,
           titleSize: 20,
           topPadding: 0,
           bottomPadding: 0,
           onBack: () => { void goBack() },
-        })
-
-        Row() {
-          Blank()
-
-          SymbolGlyph($r('sys.symbol.lightbulb'))
-            .fontSize(24)
-            .fontColor([this.theme.accent, this.theme.textSecondary])
-            .renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-            .padding(8)
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .onClick(() => { this.actionHint = 'AI 助手功能开发中...' })
-
-          SymbolGlyph($r('sys.symbol.share'))
-            .fontSize(22)
-            .fontColor([this.theme.textSecondary])
-            .padding(8)
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .onClick(() => { this.actionHint = '分享功能开发中...' })
-
-          SymbolGlyph($r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'))
-            .fontSize(22)
-            .fontColor([this.entry?.isStarred ? this.theme.accent : this.theme.textSecondary])
-            .padding(8)
-            .scale({ x: this.starScale, y: this.starScale })
-            .clickEffect({ level: ClickEffectLevel.LIGHT })
-            .onClick(() => { void this.toggleStar() })
+        }) {
+          this.HeaderActions()
         }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 48, bottom: 10 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 8 })
 
       if (this.entry) {
         Scroll() {
@@ -327,9 +344,11 @@ struct ArticleDetail {
             .margin({ top: 4, bottom: 16 })
           }
           .width('100%')
-          .padding({ bottom: 12 })
+          .padding({ bottom: this.bottomAvoidArea + 28 })
           .alignItems(HorizontalAlign.Start)
         }
+        .width('100%')
+        .layoutWeight(1)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
       } else {
@@ -350,6 +369,7 @@ struct ArticleDetail {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.topAvoidArea })
     .backgroundColor(this.theme.background)
   }
 }

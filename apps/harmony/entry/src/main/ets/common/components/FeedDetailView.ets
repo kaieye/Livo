@@ -4,7 +4,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { PageHeader } from './PageHeader'
-import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
 
 @Component
 export struct FeedDetailView {
@@ -212,7 +212,7 @@ export struct FeedDetailView {
       },
     })
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 48, bottom: 10 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 4 })
   }
 
   @Builder

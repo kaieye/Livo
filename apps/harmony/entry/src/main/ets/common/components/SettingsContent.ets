@@ -110,6 +110,7 @@ export struct SettingsContent {
   @State isLoading: boolean = false
   @State activeSheet: SettingsSheetKey = ''
   @State showSettingsSheet: boolean = false
+  @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onThemeChange: (theme: ThemePalette) => void = () => {}
@@ -179,10 +180,12 @@ export struct SettingsContent {
 
     this.activeSheet = sheet
     this.showSettingsSheet = true
+    AppStorage.setOrCreate('settingsOverlayLevel', 1)
   }
 
   private closeSheet(): void {
     this.showSettingsSheet = false
+    AppStorage.setOrCreate('settingsOverlayLevel', 0)
   }
 
   private initialSheetHeight(): number {
@@ -238,7 +241,7 @@ export struct SettingsContent {
 
   @Builder
   private Group(items: SettingItem[], delay: number) {
-    Column({ space: 10 }) {
+    Column({ space: 8 }) {
       ForEach(items, (item: SettingItem, index: number) => {
         this.SettingRow(item, delay + index * 12)
       }, (item: SettingItem) => item.title)
@@ -291,7 +294,7 @@ export struct SettingsContent {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      List({ space: 24 }) {
+      List({ space: 18 }) {
         ListItem() {
           Column() {
             PageHeader({
@@ -304,14 +307,14 @@ export struct SettingsContent {
         }
 
         ListItem() {
-          Column({ space: 10 }) {
+          Column({ space: 14 }) {
             this.Group(PRIMARY_GROUP, 30)
             this.Group(SECOND_GROUP, 50)
             this.Group(THIRD_GROUP, 70)
             this.Group(FOURTH_GROUP, 90)
           }
           .width('100%')
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 8 })
         }
 
         ListItem() {
@@ -324,7 +327,7 @@ export struct SettingsContent {
       .backgroundColor(this.theme.background)
       .edgeEffect(EdgeEffect.Spring)
 
-      if (this.showBottomTabs) {
+      if (this.showBottomTabs && !this.showSettingsSheet) {
         BottomTabs({ activeTab: 'settings', theme: this.theme })
           .align(Alignment.Bottom)
       }
@@ -343,6 +346,7 @@ export struct SettingsContent {
       onWillDismiss: () => {
         this.showSettingsSheet = false
         this.activeSheet = ''
+        AppStorage.setOrCreate('settingsOverlayLevel', 0)
       },
     })
   }

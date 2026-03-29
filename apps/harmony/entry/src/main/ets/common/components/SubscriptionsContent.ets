@@ -1,10 +1,13 @@
 import { AppRepository } from '../data/AppRepository'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
-import { openFeedDetail } from '../navigation/AppRouter'
+import { openArticleDetail } from '../navigation/AppRouter'
 import { ContentModeRail } from './ContentModeRail'
+import { FeedDetailView } from './FeedDetailView'
+import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
 import { PageHeader } from './PageHeader'
-import { FeedCardModel } from '../models/LivoModels'
+import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
+import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import {
@@ -23,6 +26,22 @@ import {
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SCENE_DURATION: number = 240
+const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
+const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
+
+class SubscriptionFeedDetailParams {
+  feedId: string = ''
+}
+
+class SubscriptionFeedConfigParams {
+  targetUrl: string = ''
+  targetTitle: string = ''
+  targetSiteUrl: string = ''
+  targetDescription: string = ''
+  targetCategory: string = ''
+  sourceKind: string = ''
+  initialSelectedView: FeedViewType = FeedViewType.Articles
+}
 
 @Component
 export struct SubscriptionsContent {
@@ -36,8 +55,11 @@ export struct SubscriptionsContent {
   @State sourceHint: string = '正在加载订阅内容...'
   @State hasLoaded: boolean = false
   @State isLoading: boolean = false
+  @State overlayLevel: number = 0
+  @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  private subscriptionPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
   private modeTransitionVersion: number = 0
 
@@ -263,7 +285,7 @@ export struct SubscriptionsContent {
       .padding({ left: LIST_ROW_HORIZONTAL_PADDING, right: LIST_ROW_HORIZONTAL_PADDING, top: LIST_ROW_VERTICAL_PADDING, bottom: LIST_ROW_VERTICAL_PADDING })
       .clickEffect({ level: ClickEffectLevel.MIDDLE })
       .onClick(() => {
-        void openFeedDetail(feed.id)
+        this.openFeedDetailPage(feed.id)
       })
 
       if (showDivider) {
@@ -356,14 +378,121 @@ export struct SubscriptionsContent {
     })
   }
 
-  build() {
+  private openFeedDetailPage(feedId: string): void {
+    const params = new SubscriptionFeedDetailParams()
+    params.feedId = feedId
+    this.overlayLevel = 1
+    AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
+    this.subscriptionPathStack.pushPathByName(SUBSCRIPTIONS_ROUTE_FEED_DETAIL, params, true)
+  }
 
+  private closeFeedDetailPage(): void {
+    this.overlayLevel = 0
+    AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
+    this.subscriptionPathStack.pop(true)
+  }
+
+  private createFeedConfigParams(feed: Feed): SubscriptionFeedConfigParams {
+    const params = new SubscriptionFeedConfigParams()
+    params.targetUrl = feed.url
+    params.targetTitle = feed.title
+    params.targetSiteUrl = feed.siteUrl || ''
+    params.targetDescription = feed.description || ''
+    params.targetCategory = feed.category || ''
+    params.sourceKind = '编辑'
+    params.initialSelectedView = feed.view as FeedViewType
+    return params
+  }
+
+  private openEditPage(feed: Feed): void {
+    this.overlayLevel = 2
+    AppStorage.setOrCreate('subscriptionsOverlayLevel', 2)
+    this.subscriptionPathStack.pushPathByName(
+      SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG,
+      this.createFeedConfigParams(feed),
+      true,
+    )
+  }
+
+  private openEntryDetail(entry: Entry, feed: Feed): void {
+    const model = toArticleDetailModel(entry, feed)
+    void openArticleDetail(entry.id || feed.id || 'entry', JSON.stringify(model))
+  }
+
+  @Builder
+  private FeedDetailDestination(params?: SubscriptionFeedDetailParams) {
+    FeedDetailView({
+      feedId: params?.feedId ?? '',
+      theme: this.theme,
+      onBack: () => { this.closeFeedDetailPage() },
+      onEdit: (feed: Feed) => { this.openEditPage(feed) },
+      onSubscribe: (_payload: FeedRefreshPayload) => {},
+      onOpenArticle: (entry: Entry, feed: Feed) => { this.openEntryDetail(entry, feed) },
+    })
+  }
+
+  @Builder
+  private FeedSubscribeConfigDestination(params?: SubscriptionFeedConfigParams) {
+    FeedSubscribeConfigView({
+      targetUrl: params?.targetUrl ?? '',
+      targetTitle: params?.targetTitle ?? '',
+      targetSiteUrl: params?.targetSiteUrl ?? '',
+      targetDescription: params?.targetDescription ?? '',
+      targetCategory: params?.targetCategory ?? '',
+      sourceKind: params?.sourceKind ?? '',
+      initialSelectedView: params?.initialSelectedView ?? FeedViewType.Articles,
+      theme: this.theme,
+      onBack: () => {
+        this.overlayLevel = 1
+        AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
+        this.subscriptionPathStack.pop(true)
+      },
+      onSubscribed: () => {
+        this.overlayLevel = 0
+        AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
+        this.subscriptionPathStack.clear()
+      },
+      onSaved: () => {
+        this.overlayLevel = 1
+        AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
+        this.subscriptionPathStack.pop(true)
+      },
+      onUnsubscribed: () => {
+        this.overlayLevel = 0
+        AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
+        this.subscriptionPathStack.clear()
+      },
+    })
+  }
+
+  @Builder
+  private Destinations(name: string, params?: SubscriptionFeedDetailParams | SubscriptionFeedConfigParams) {
+    if (name === SUBSCRIPTIONS_ROUTE_FEED_DETAIL) {
+      NavDestination() {
+        this.FeedDetailDestination(params as SubscriptionFeedDetailParams)
+      }
+      .hideTitleBar(true)
+    } else if (name === SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG) {
+      NavDestination() {
+        this.FeedSubscribeConfigDestination(params as SubscriptionFeedConfigParams)
+      }
+      .hideTitleBar(true)
+    }
+  }
+
+  @Builder
+  private SubscriptionsRoot() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
-        Column({ space: 16 }) {
+        Column({ space: 10 }) {
           PageHeader({
             title: '订阅库',
             theme: this.theme,
+            trailingSymbol: $r('sys.symbol.magnifyingglass'),
+            trailingButtonCircular: true,
+            trailingSymbolSize: 22,
+            trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
+            trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
           })
 
           ContentModeRail({
@@ -376,13 +505,13 @@ export struct SubscriptionsContent {
 
 
           Row() {
-            Text(`${this.filteredFeeds().length} 个订阅源`)
+            Text(this.sourceHint)
               .fontSize(META_FONT_SIZE)
               .fontColor(this.theme.textSecondary)
 
             Blank()
 
-            Text(this.sourceHint)
+            Text(`${this.filteredFeeds().length} 个订阅源`)
               .fontSize(META_FONT_SIZE)
               .fontColor(this.theme.textMuted)
           }
@@ -407,11 +536,24 @@ export struct SubscriptionsContent {
       .width('100%')
       .height('100%')
 
-      if (this.showBottomTabs) {
+      if (this.showBottomTabs && this.overlayLevel === 0) {
         BottomTabs({ activeTab: 'subscriptions', theme: this.theme })
           .align(Alignment.Bottom)
       }
     }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
+  }
+
+  build() {
+    Navigation(this.subscriptionPathStack) {
+      this.SubscriptionsRoot()
+    }
+    .hideToolBar(true)
+    .hideBackButton(true)
+    .mode(NavigationMode.Stack)
+    .navDestination(this.Destinations)
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
