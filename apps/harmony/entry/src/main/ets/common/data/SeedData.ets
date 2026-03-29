@@ -85,6 +85,7 @@ export function seedSettings(): HarmonySettings {
     imageProxyEnabled: DEFAULT_HARMONY_SETTINGS.imageProxyEnabled,
     refreshIntervalMinutes: DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes,
     themeMode: DEFAULT_HARMONY_SETTINGS.themeMode,
+    themeAccent: DEFAULT_HARMONY_SETTINGS.themeAccent,
     language: DEFAULT_HARMONY_SETTINGS.language,
     remoteFeedUrl: DEFAULT_HARMONY_SETTINGS.remoteFeedUrl,
   }

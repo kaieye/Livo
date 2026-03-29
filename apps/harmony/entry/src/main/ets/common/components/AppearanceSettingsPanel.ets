@@ -1,6 +1,6 @@
 import { SymbolGlyphModifier } from '@kit.ArkUI'
 import { AppRepository } from '../data/AppRepository'
-import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeMode } from '../models/LivoModels'
+import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeAccent, ThemeMode } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -8,12 +8,21 @@ import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 interface AppearanceOption {
   label: string
   value: string
+  color?: string
 }
 
 const THEME_MODE_OPTIONS: AppearanceOption[] = [
   { label: '跟随系统', value: 'system' },
   { label: '浅色', value: 'light' },
   { label: '深色', value: 'dark' },
+]
+
+const THEME_ACCENT_OPTIONS: AppearanceOption[] = [
+  { label: '流光橙', value: 'orange', color: '#FF6A00' },
+  { label: '星河蓝', value: 'blue', color: '#2563EB' },
+  { label: '珊瑚红', value: 'red', color: '#DC2626' },
+  { label: '莓果粉', value: 'pink', color: '#DB2777' },
+  { label: '森林绿', value: 'green', color: '#16A34A' },
 ]
 
 const REFRESH_INTERVAL_OPTIONS: AppearanceOption[] = [
@@ -48,43 +57,59 @@ export struct AppearanceSettingsPanel {
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State themeModeText: string = '跟随系统'
+  @State themeAccentText: string = '流光橙'
   @State refreshIntervalText: string = '30 分钟'
   @State languageText: string = '简体中文'
   @Prop showBackButton: boolean = true
+  @Prop initialSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
+  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
   onClose: () => void = () => {}
 
   aboutToAppear(): void {
+    this.applyResolvedState(this.initialSettings, this.inheritedTheme)
     void this.loadSettings()
   }
 
   private async loadSettings(): Promise<void> {
-    this.config = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(this.config)
-    this.themeModeText = this.resolveThemeLabel(this.config.themeMode)
-    this.refreshIntervalText = `${this.config.refreshIntervalMinutes} 分钟`
-    this.languageText = this.config.language === 'en' ? 'English' : '简体中文'
-    this.onSettingsChange(this.config)
-    this.onThemeChange(this.theme)
+    const saved = await AppRepository.settings()
+    const palette = await ThemeService.resolvePalette(saved)
+    this.applyResolvedState(saved, palette)
+  }
+
+  private applyResolvedState(settings: HarmonySettings, palette: ThemePalette): void {
+    this.config = settings
+    this.theme = palette
+    this.themeModeText = this.resolveThemeLabel(settings.themeMode)
+    this.themeAccentText = this.resolveAccentLabel(settings.themeAccent)
+    this.refreshIntervalText = `${settings.refreshIntervalMinutes} 分钟`
+    this.languageText = settings.language === 'en' ? 'English' : '简体中文'
+    this.onSettingsChange(settings)
+    this.onThemeChange(palette)
   }
 
   private syncSettings(next: HarmonySettings): void {
-    this.config = next
-    this.themeModeText = this.resolveThemeLabel(next.themeMode)
-    this.refreshIntervalText = `${next.refreshIntervalMinutes} 分钟`
-    this.languageText = next.language === 'en' ? 'English' : '简体中文'
-    this.onSettingsChange(next)
+    const optimisticTheme: ThemePalette = {
+      isDark: this.theme.isDark,
+      background: this.theme.background,
+      surface: this.theme.surface,
+      elevated: this.theme.elevated,
+      textPrimary: this.theme.textPrimary,
+      textSecondary: this.theme.textSecondary,
+      textMuted: this.theme.textMuted,
+      divider: this.theme.divider,
+      accent: this.resolveAccentColor(next.themeAccent),
+      accentText: '#FFFFFF',
+      tabBarBackground: this.theme.tabBarBackground,
+      tabBarInactive: this.theme.tabBarInactive,
+      dragHandle: this.theme.dragHandle,
+    }
+    this.applyResolvedState(next, optimisticTheme)
     void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
-      this.config = saved
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
-        this.theme = palette
-        this.onThemeChange(palette)
+        this.applyResolvedState(saved, palette)
       })
-      this.themeModeText = this.resolveThemeLabel(saved.themeMode)
-      this.refreshIntervalText = `${saved.refreshIntervalMinutes} 分钟`
-      this.languageText = saved.language === 'en' ? 'English' : '简体中文'
-      this.onSettingsChange(saved)
     }).catch((_error: Error) => {})
   }
 
@@ -99,6 +124,36 @@ export struct AppearanceSettingsPanel {
     }
   }
 
+  private resolveAccentLabel(themeAccent: ThemeAccent): string {
+    switch (themeAccent) {
+      case 'blue':
+        return '星河蓝'
+      case 'red':
+        return '珊瑚红'
+      case 'pink':
+        return '莓果粉'
+      case 'green':
+        return '森林绿'
+      default:
+        return '流光橙'
+    }
+  }
+
+  private resolveAccentColor(themeAccent: ThemeAccent): string {
+    switch (themeAccent) {
+      case 'blue':
+        return '#2563EB'
+      case 'red':
+        return '#DC2626'
+      case 'pink':
+        return '#DB2777'
+      case 'green':
+        return '#16A34A'
+      default:
+        return '#FF6A00'
+    }
+  }
+
   private applyThemeMode(value: string): void {
     this.syncSettings({
       autoRefresh: this.config.autoRefresh,
@@ -106,6 +161,20 @@ export struct AppearanceSettingsPanel {
       imageProxyEnabled: this.config.imageProxyEnabled,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
       themeMode: value as ThemeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    })
+  }
+
+  private applyThemeAccent(value: string): void {
+    this.syncSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: value as ThemeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
@@ -119,6 +188,7 @@ export struct AppearanceSettingsPanel {
       imageProxyEnabled: this.config.imageProxyEnabled,
       refreshIntervalMinutes: Number.isFinite(minutes) ? minutes : this.config.refreshIntervalMinutes,
       themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
@@ -131,6 +201,7 @@ export struct AppearanceSettingsPanel {
       imageProxyEnabled: this.config.imageProxyEnabled,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
       themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
       language: value,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
@@ -143,6 +214,7 @@ export struct AppearanceSettingsPanel {
       imageProxyEnabled: this.config.imageProxyEnabled,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
       themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
@@ -155,6 +227,7 @@ export struct AppearanceSettingsPanel {
       imageProxyEnabled: this.config.imageProxyEnabled,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
       themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
@@ -167,6 +240,7 @@ export struct AppearanceSettingsPanel {
       imageProxyEnabled: !this.config.imageProxyEnabled,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
       themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
@@ -187,6 +261,9 @@ export struct AppearanceSettingsPanel {
       ForEach(options, (option: AppearanceOption) => {
         MenuItem({
           content: option.label,
+          symbolStartIcon: option.color
+            ? new SymbolGlyphModifier($r('sys.symbol.paintpalette_fill')).fontColor([option.color])
+            : undefined,
           symbolEndIcon: selectedValue === option.value ? new SymbolGlyphModifier($r('sys.symbol.checkmark')) : undefined,
         })
           .selected(selectedValue === option.value)
@@ -392,6 +469,43 @@ export struct AppearanceSettingsPanel {
   }
 
   @Builder
+  private ThemeAccentRow() {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.paintpalette_fill'))
+        .fontSize(ROW_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(0.5))
+
+      Column({ space: ROW_TEXT_SPACING }) {
+        Text('主题色')
+          .fontSize(ROW_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text('统一强调色、选中态与操作按钮色彩')
+          .fontSize(ROW_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      this.MenuAction(
+        this.themeAccentText,
+        THEME_ACCENT_OPTIONS,
+        this.config.themeAccent,
+        (value: string) => this.applyThemeAccent(value)
+      )
+    }
+    .width('100%')
+    .constraintSize({ minHeight: ROW_MIN_HEIGHT })
+    .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
+  @Builder
   private PanelHeader() {
     Column() {
       Text('外观')
@@ -411,6 +525,8 @@ export struct AppearanceSettingsPanel {
     Column({ space: 14 }) {
       Column() {
         this.ThemeModeRow()
+        this.DividerLine()
+        this.ThemeAccentRow()
         this.DividerLine()
         this.RefreshIntervalRow()
         this.DividerLine()

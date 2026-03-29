@@ -112,6 +112,7 @@ export function isLegacyPlainArticleContent(content: string): boolean {
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type ThemeAccent = 'orange' | 'blue' | 'red' | 'pink' | 'green'
 
 export interface HarmonySettings {
   autoRefresh: boolean
@@ -119,6 +120,7 @@ export interface HarmonySettings {
   imageProxyEnabled: boolean
   refreshIntervalMinutes: number
   themeMode: ThemeMode
+  themeAccent: ThemeAccent
   language: string
   remoteFeedUrl: string
 }
@@ -135,6 +137,7 @@ export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
   imageProxyEnabled: false,
   refreshIntervalMinutes: 30,
   themeMode: 'system',
+  themeAccent: 'orange',
   language: 'zh-CN',
   remoteFeedUrl: 'https://sspai.com/feed',
 }

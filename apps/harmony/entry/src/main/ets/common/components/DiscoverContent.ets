@@ -1,6 +1,6 @@
 import promptAction from '@ohos.promptAction'
 import { AppRepository } from '../data/AppRepository'
-import { openArticleDetail } from '../navigation/AppRouter'
+import { openArticleDetail, openFeedDetailPreview } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { PageHeader } from './PageHeader'
@@ -45,7 +45,6 @@ import {
 } from '../ui/UiTokens'
 
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
-const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
 const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 
 interface DirectUrlResult {
@@ -283,11 +282,15 @@ export struct DiscoverContent {
     sourceKind: string,
     category: string,
   ): void {
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_PREVIEW,
-      createDiscoverFlowRouteParams(targetUrl, targetTitle, targetView, siteUrl, description, sourceKind, category),
-      true,
-    )
+    void openFeedDetailPreview({
+      targetUrl,
+      targetTitle,
+      targetView,
+      siteUrl,
+      description,
+      sourceKind,
+      category,
+    })
   }
 
   private openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate): void {
@@ -439,6 +442,8 @@ export struct DiscoverContent {
         TextInput({ text: this.query, placeholder: '输入 RSS 地址、主页链接或关键字' })
           .backgroundColor(this.theme.elevated)
           .fontColor(this.theme.textPrimary)
+          .placeholderColor(this.theme.textMuted)
+          .caretColor(this.theme.textPrimary)
           .borderRadius(INPUT_RADIUS)
           .padding({ left: 16, right: this.query.trim() ? 44 : 16, top: 14, bottom: 14 })
           .width('100%')
@@ -489,18 +494,12 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private SectionHeader(title: string, count: number) {
+  private SectionHeader(title: string) {
     Row() {
       Text(title)
         .fontSize(SECTION_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.theme.textPrimary)
-
-      Blank()
-
-      Text(`${count}`)
-        .fontSize(META_FONT_SIZE)
-        .fontColor(this.theme.textMuted)
     }
     .width('100%')
     .transition(livoMotion.enterFromRight(20))
@@ -638,7 +637,7 @@ export struct DiscoverContent {
   private CandidateSection(title: string, items: ResolvedDiscoverCandidate[]) {
     if (items.length > 0) {
       Column({ space: 12 }) {
-        this.SectionHeader(title, items.length)
+        this.SectionHeader(title)
 
         Column() {
           ForEach(items, (candidate: ResolvedDiscoverCandidate, index: number) => {
@@ -660,7 +659,7 @@ export struct DiscoverContent {
   private SearchResultSection() {
     if (this.hasSearchResults() || this.isSearchingRemote) {
       Column({ space: 12 }) {
-        this.SectionHeader('搜索结果', this.searchResults().length)
+        this.SectionHeader('搜索结果')
 
         if (this.isSearchingRemote && this.searchResults().length === 0) {
           Row({ space: 10 }) {
@@ -697,10 +696,9 @@ export struct DiscoverContent {
   @Builder
   private RecommendedFallbackSection() {
     if (!this.query.trim() && this.recommendedFallback().length > 0) {
-      Column({ space: 12 }) {
+      Column({ space: 8 }) {
         this.SectionHeader(
-          this.searchPlatform === 'all' ? '推荐来源' : `${discoverPlatformLabel(this.searchPlatform)} 推荐`,
-          this.recommendedFallback().length,
+          this.searchPlatform === 'all' ? '推荐订阅' : `${discoverPlatformLabel(this.searchPlatform)} 推荐订阅`,
         )
 
         Column() {
@@ -749,14 +747,14 @@ export struct DiscoverContent {
         this.SearchPanel()
       }
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 8 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 2 })
       .alignItems(HorizontalAlign.Start)
 
-      List({ space: 14 }) {
+      List({ space: 10 }) {
         if (this.directUrlResult()) {
           ListItem() {
             Column({ space: 12 }) {
-              this.SectionHeader('地址结果', 1)
+              this.SectionHeader('地址结果')
               this.DirectUrlRow(this.directUrlResult())
             }
             .width('100%')
@@ -819,19 +817,6 @@ export struct DiscoverContent {
           targetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
           sourceKind: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).sourceKind,
           initialSelectedView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
-          theme: this.theme,
-        })
-      }
-      .hideTitleBar(true)
-    } else if (name === DISCOVER_ROUTE_PREVIEW) {
-      NavDestination() {
-        DiscoverPreviewDestination({
-          targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
-          initialTargetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
-          initialTargetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
-          initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
-          targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
-          targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
           theme: this.theme,
         })
       }

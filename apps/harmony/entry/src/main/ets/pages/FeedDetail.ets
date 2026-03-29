@@ -9,14 +9,29 @@ import { FeedRefreshPayload } from '../common/services/RssFeedService'
 @Component
 struct FeedDetail {
   @State feedId: string = ''
+  @State targetUrl: string = ''
+  @State targetTitle: string = ''
+  @State targetSiteUrl: string = ''
+  @State targetDescription: string = ''
+  @State targetCategory: string = ''
+  @State targetView: FeedViewType = FeedViewType.Articles
+  @State sourceKind: string = ''
   @State theme: ThemePalette = ThemeService.darkPalette()
 
   aboutToAppear(): void {
     const params = getStringParams()
-    if (params && params.feedId) {
-      this.feedId = params.feedId
-      void this.loadSettings()
+    if (params) {
+      this.feedId = params.feedId ?? ''
+      this.targetUrl = params.targetUrl ?? ''
+      this.targetTitle = params.targetTitle ?? ''
+      this.targetSiteUrl = params.siteUrl ?? ''
+      this.targetDescription = params.description ?? ''
+      this.targetCategory = params.category ?? ''
+      this.sourceKind = params.sourceKind ?? ''
+      const parsedView = Number(params.view ?? FeedViewType.Articles)
+      this.targetView = parsedView as FeedViewType
     }
+    void this.loadSettings()
   }
 
   private async loadSettings(): Promise<void> {
@@ -37,15 +52,14 @@ struct FeedDetail {
   }
 
   private handleSubscribe(payload: FeedRefreshPayload): void {
-    // 已经订阅的不会显示订阅按钮，理论上这个入口不会触发，但如果是通过预览进来未订阅的可以复用配置页
     void openDiscoverSubscribeConfig({
-      targetUrl: payload.entries[0]?.feedId || '', // 这是一个 fallback，预览通常有 targetUrl
-      targetTitle: payload.feedTitle,
-      targetView: FeedViewType.Articles,
-      siteUrl: payload.siteUrl,
-      description: payload.description,
-      sourceKind: '',
-      category: '',
+      targetUrl: this.targetUrl,
+      targetTitle: payload.feedTitle || this.targetTitle,
+      targetView: this.targetView,
+      siteUrl: payload.siteUrl || this.targetSiteUrl,
+      description: payload.description || this.targetDescription,
+      sourceKind: this.sourceKind,
+      category: this.targetCategory,
     })
   }
 
@@ -53,6 +67,12 @@ struct FeedDetail {
     Column() {
       FeedDetailView({
         feedId: this.feedId,
+        targetUrl: this.targetUrl,
+        initialTargetTitle: this.targetTitle,
+        initialTargetSiteUrl: this.targetSiteUrl,
+        initialTargetDescription: this.targetDescription,
+        targetCategory: this.targetCategory,
+        targetView: this.targetView,
         theme: this.theme,
         onBack: () => { void goBack() },
         onEdit: (feed: Feed) => { this.openEditPage(feed) },

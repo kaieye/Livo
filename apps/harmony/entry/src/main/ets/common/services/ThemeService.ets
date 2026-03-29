@@ -1,5 +1,6 @@
+import ConfigurationConstant from '@ohos.app.ability.ConfigurationConstant'
 import resourceManager from '@ohos.resourceManager'
-import { HarmonySettings } from '../models/LivoModels'
+import { HarmonySettings, ThemeAccent } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
 
 export interface ThemePalette {
@@ -53,6 +54,21 @@ const LIGHT_PALETTE: ThemePalette = {
 export class ThemeService {
   private static cachedPalette: ThemePalette = DARK_PALETTE
 
+  private static resolveAccentColor(accent: ThemeAccent): string {
+    switch (accent) {
+      case 'blue':
+        return '#2563EB'
+      case 'red':
+        return '#DC2626'
+      case 'pink':
+        return '#DB2777'
+      case 'green':
+        return '#16A34A'
+      default:
+        return '#FF6A00'
+    }
+  }
+
   private static clonePalette(source: ThemePalette): ThemePalette {
     return {
       isDark: source.isDark,
@@ -95,8 +111,25 @@ export class ThemeService {
         : ThemeService.lightPalette()
     }
 
+    resolved.accent = ThemeService.resolveAccentColor(settings.themeAccent)
+    resolved.accentText = '#FFFFFF'
+    ThemeService.applyColorMode(settings)
+
     ThemeService.cachedPalette = ThemeService.clonePalette(resolved)
     return resolved
+  }
+
+  private static applyColorMode(settings: HarmonySettings): void {
+    try {
+      const context = AppContextService.getContext()
+      if (settings.themeMode === 'dark') {
+        context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK)
+      } else if (settings.themeMode === 'light') {
+        context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT)
+      } else {
+        context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET)
+      }
+    } catch (_error) {}
   }
 
   private static async isSystemDarkMode(): Promise<boolean> {

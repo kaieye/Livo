@@ -157,6 +157,13 @@ class EntryDetailParams {
 
 class FeedDetailParams {
   feedId: string = ''
+  targetUrl: string = ''
+  targetTitle: string = ''
+  view: string = ''
+  siteUrl: string = ''
+  description: string = ''
+  sourceKind: string = ''
+  category: string = ''
 }
 
 class DiscoverRouteParams {
@@ -221,6 +228,18 @@ export async function openFeedDetail(feedId: string): Promise<void> {
   await router.pushUrl(createRouterOptions(ROUTES.feedDetail, params))
 }
 
+export async function openFeedDetailPreview(params: DiscoverPreviewRouteParams): Promise<void> {
+  const routeParams = new FeedDetailParams()
+  routeParams.targetUrl = params.targetUrl
+  routeParams.targetTitle = params.targetTitle
+  routeParams.view = `${params.targetView}`
+  routeParams.siteUrl = params.siteUrl
+  routeParams.description = params.description
+  routeParams.sourceKind = params.sourceKind
+  routeParams.category = params.category
+  await router.pushUrl(createRouterOptions(ROUTES.feedDetail, routeParams))
+}
+
 export async function openAppearanceSettings(): Promise<void> {
   await router.pushUrl(createRouterOptions(ROUTES.appearanceSettings))
 }
@@ -242,15 +261,7 @@ export async function openAboutSettings(): Promise<void> {
 }
 
 export async function openDiscoverPreview(params: DiscoverPreviewRouteParams): Promise<void> {
-  const routeParams = new DiscoverRouteParams()
-  routeParams.targetUrl = params.targetUrl
-  routeParams.targetTitle = params.targetTitle
-  routeParams.view = `${params.targetView}`
-  routeParams.siteUrl = params.siteUrl
-  routeParams.description = params.description
-  routeParams.sourceKind = params.sourceKind
-  routeParams.category = params.category
-  await router.pushUrl(createRouterOptions(ROUTES.discoverPreview, routeParams))
+  await openFeedDetailPreview(params)
 }
 
 export async function openDiscoverSubscribeConfig(

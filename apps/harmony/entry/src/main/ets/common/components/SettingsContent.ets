@@ -363,6 +363,8 @@ export struct SettingsContent {
       if (this.activeSheet === 'appearance') {
         AppearanceSettingsPanel({
           showBackButton: false,
+          initialSettings: this.config,
+          inheritedTheme: this.theme,
           onSettingsChange: (settings: HarmonySettings) => {
             this.handleAppearanceSettingsChange(settings)
           },

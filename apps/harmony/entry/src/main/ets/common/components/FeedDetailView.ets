@@ -217,7 +217,7 @@ export struct FeedDetailView {
       }
     }
     .width('100%')
-    .padding({ left: 18, right: 18, top: 12, bottom: 12 })
+    .padding({ left: 18, right: 18, top: 48, bottom: 10 })
     .alignItems(VerticalAlign.Center)
   }
 

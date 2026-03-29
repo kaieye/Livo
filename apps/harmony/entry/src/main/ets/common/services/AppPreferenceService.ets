@@ -20,6 +20,7 @@ export class AppPreferenceService {
     const imageProxyEnabled = await pref.get('imageProxyEnabled', DEFAULT_HARMONY_SETTINGS.imageProxyEnabled)
     const refreshIntervalMinutes = await pref.get('refreshIntervalMinutes', DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes)
     const themeMode = await pref.get('themeMode', DEFAULT_HARMONY_SETTINGS.themeMode)
+    const themeAccent = await pref.get('themeAccent', DEFAULT_HARMONY_SETTINGS.themeAccent)
     const language = await pref.get('language', DEFAULT_HARMONY_SETTINGS.language)
     const remoteFeedUrl = await pref.get('remoteFeedUrl', DEFAULT_HARMONY_SETTINGS.remoteFeedUrl)
     return {
@@ -28,6 +29,7 @@ export class AppPreferenceService {
       imageProxyEnabled: imageProxyEnabled as boolean,
       refreshIntervalMinutes: refreshIntervalMinutes as number,
       themeMode: themeMode as 'light' | 'dark' | 'system',
+      themeAccent: themeAccent as 'orange' | 'blue' | 'red' | 'pink' | 'green',
       language: language as string,
       remoteFeedUrl: remoteFeedUrl as string,
     }
@@ -40,6 +42,7 @@ export class AppPreferenceService {
     await pref.put('imageProxyEnabled', next.imageProxyEnabled)
     await pref.put('refreshIntervalMinutes', next.refreshIntervalMinutes)
     await pref.put('themeMode', next.themeMode)
+    await pref.put('themeAccent', next.themeAccent)
     await pref.put('language', next.language)
     await pref.put('remoteFeedUrl', next.remoteFeedUrl)
     await pref.flush()

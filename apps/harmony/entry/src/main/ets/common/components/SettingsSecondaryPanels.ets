@@ -512,6 +512,7 @@ export struct DataControlSettingsPanel {
                 imageProxyEnabled: !this.config.imageProxyEnabled,
                 refreshIntervalMinutes: this.config.refreshIntervalMinutes,
                 themeMode: this.config.themeMode,
+                themeAccent: this.config.themeAccent,
                 language: this.config.language,
                 remoteFeedUrl: this.config.remoteFeedUrl,
               }
