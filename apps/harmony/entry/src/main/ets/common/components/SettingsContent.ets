@@ -99,6 +99,10 @@ const FOURTH_GROUP: SettingItem[] = [
 
 @Component
 export struct SettingsContent {
+  private static readonly SHEET_MIN_HEIGHT: number = 420
+  private static readonly SHEET_COMPACT_HEIGHT: number = 440
+  private static readonly SHEET_STANDARD_HEIGHT: number = 500
+  private static readonly SHEET_TALL_HEIGHT: number = 600
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State saveHint: string = '设置将写入本地 Preferences'
   @State theme: ThemePalette = ThemeService.currentPalette()
@@ -169,51 +173,42 @@ export struct SettingsContent {
   }
 
   private openSheet(sheet: SettingsSheetKey): void {
+    if (this.showSettingsSheet && this.activeSheet === sheet) {
+      return
+    }
+
     this.activeSheet = sheet
     this.showSettingsSheet = true
   }
 
   private closeSheet(): void {
-    this.activeSheet = ''
     this.showSettingsSheet = false
   }
 
-  private getSheetTitle(): string {
+  private initialSheetHeight(): number {
+    let preferredHeight = SettingsContent.SHEET_STANDARD_HEIGHT
     switch (this.activeSheet) {
-      case 'appearance': return '外观'
-      case 'general': return '通用'
-      case 'data-control': return '数据控制'
-      case 'privacy': return '隐私'
-      case 'about': return '关于'
-      case 'favorites': return '收藏'
-      default: return ''
+      case 'data-control':
+        preferredHeight = SettingsContent.SHEET_COMPACT_HEIGHT
+        break
+      case 'general':
+        preferredHeight = 450
+        break
+      case 'about':
+        preferredHeight = 460
+        break
+      case 'privacy':
+        preferredHeight = 520
+        break
+      case 'appearance':
+      case 'favorites':
+        preferredHeight = SettingsContent.SHEET_TALL_HEIGHT
+        break
+      default:
+        preferredHeight = SettingsContent.SHEET_STANDARD_HEIGHT
+        break
     }
-  }
-
-  private isHalfSheet(): boolean {
-    return this.activeSheet === 'appearance'
-  }
-
-  private currentSheetHeight(): SheetSize {
-    return this.isHalfSheet() ? SheetSize.MEDIUM : SheetSize.LARGE
-  }
-
-  private currentSheetDetents(): [SheetSize, SheetSize?, SheetSize?] {
-    return this.isHalfSheet()
-      ? [SheetSize.MEDIUM, SheetSize.LARGE]
-      : [SheetSize.LARGE]
-  }
-
-  private currentSheetDragBar(): boolean {
-    return !this.isHalfSheet()
-  }
-
-  private currentSheetTitle(): SheetTitleOptions | undefined {
-    if (this.isHalfSheet()) {
-      return undefined
-    }
-
-    return { title: this.getSheetTitle() }
+    return Math.max(SettingsContent.SHEET_MIN_HEIGHT, preferredHeight)
   }
 
   private themeLabel(): string {
@@ -337,22 +332,29 @@ export struct SettingsContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
-    .bindSheet($$this.showSettingsSheet, this.ActiveSheet(), {
-      height: this.currentSheetHeight(),
-      detents: this.currentSheetDetents(),
-      dragBar: this.currentSheetDragBar(),
+    .bindSheet($$this.showSettingsSheet, this.SettingsSheetOverlay(), {
+      detents: [this.initialSheetHeight(), SheetSize.LARGE],
+      dragBar: false,
       showClose: false,
       backgroundColor: this.theme.background,
       keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       scrollSizeMode: ScrollSizeMode.CONTINUOUS,
-      preferType: SheetType.BOTTOM,
-      enableOutsideInteractive: false,
-      title: this.currentSheetTitle(),
-      onWillDismiss: (dismiss: SheetDismiss) => {
-        this.closeSheet()
-        dismiss.dismiss()
-      }
+      preferType: SheetType.CENTER,
+      onWillDismiss: () => {
+        this.showSettingsSheet = false
+        this.activeSheet = ''
+      },
     })
+  }
+
+  @Builder
+  private SettingsSheetOverlay() {
+    Column() {
+      this.ActiveSheet()
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
   }
 
   @Builder

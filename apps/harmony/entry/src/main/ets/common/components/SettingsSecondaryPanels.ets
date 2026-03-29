@@ -11,10 +11,17 @@ const PANEL_HEADER_TITLE_SIZE: number = 20
 const PANEL_TITLE_SIZE: number = 15
 const PANEL_SUBTITLE_SIZE: number = 12
 const PANEL_HINT_SIZE: number = 12
-const PANEL_HANDLE_TOP_PADDING: number = 14
-const PANEL_HANDLE_BOTTOM_PADDING: number = 6
-const PANEL_HEADER_SPACING: number = 8
+const PANEL_HANDLE_TOP_PADDING: number = 10
+const PANEL_HANDLE_BOTTOM_PADDING: number = 8
+const PANEL_HEADER_SPACING: number = 4
+const PANEL_HEADER_MIN_HEIGHT: number = 36
+const PANEL_HEADER_TOP_PADDING: number = 0
+const PANEL_HEADER_BOTTOM_PADDING: number = 0
 const PANEL_ROW_TEXT_SPACING: number = 2
+const PANEL_GROUP_SPACING: number = 14
+const PANEL_SECTION_SPACING: number = 2
+const PANEL_ROW_PADDING_HORIZONTAL: number = 12
+const PANEL_ROW_PADDING_VERTICAL: number = 6
 
 @Component
 export struct GeneralSettingsPanel {
@@ -31,12 +38,25 @@ export struct GeneralSettingsPanel {
     this.config = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(this.config)
     this.saveHint = '已加载通用配置'
-    this.onSettingsChange(this.config)
+  }
+
+  @Builder
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
   }
 
   @Builder
   private PanelHeader() {
-    Column({ space: PANEL_HEADER_SPACING }) {
+    Column() {
       Row() {
         Text('通用')
           .fontSize(PANEL_HEADER_TITLE_SIZE)
@@ -46,9 +66,12 @@ export struct GeneralSettingsPanel {
       }
       .width('100%')
       .justifyContent(FlexAlign.Start)
-      .padding({ top: PANEL_HANDLE_TOP_PADDING })
     }
     .width('100%')
+    .height(PANEL_HEADER_MIN_HEIGHT)
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
   }
 
   @Builder
@@ -77,10 +100,19 @@ export struct GeneralSettingsPanel {
       Text(hint)
         .fontSize(PANEL_HINT_SIZE)
         .fontColor(this.theme.textSecondary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .width('100%')
     .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
   }
 
   @Builder
@@ -93,7 +125,8 @@ export struct GeneralSettingsPanel {
 
   build() {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
         this.PanelHeader()
 
         Column() {
@@ -153,27 +186,67 @@ export struct FavoritesPanel {
   }
 
   @Builder
-  private PanelHeader() {
-    Column({ space: PANEL_HEADER_SPACING }) {
-      Row() {
-        Text('收藏')
-          .fontSize(PANEL_HEADER_TITLE_SIZE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-
-        Blank()
-
-        if (!this.isLoading && this.starredEntries.length > 0) {
-          Text(`共 ${this.starredEntries.length} 条`)
-            .fontSize(13)
-            .fontColor(this.theme.textSecondary)
-        }
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Bottom)
-      .padding({ top: PANEL_HANDLE_TOP_PADDING })
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+  }
+
+  @Builder
+  private PanelHeader() {
+    Column() {
+      Text('收藏')
+        .fontSize(PANEL_HEADER_TITLE_SIZE)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.theme.textPrimary)
+        .width('100%')
+    }
+    .width('100%')
+    .height(PANEL_HEADER_MIN_HEIGHT)
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
+  }
+
+  @Builder
+  private StatusCard(symbol: Resource, title: string, subtitle: string) {
+    Row({ space: 12 }) {
+      SymbolGlyph(symbol)
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text(title)
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text(subtitle)
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
   }
 
   @Builder
@@ -226,9 +299,9 @@ export struct FavoritesPanel {
       }
     }
     .width('100%')
-    .padding(14)
+    .padding(16)
     .backgroundColor(this.theme.surface)
-    .borderRadius(20)
+    .borderRadius(CARD_RADIUS_LG)
     .border({ width: 0.8, color: this.theme.divider })
     .shadow({
       radius: this.theme.isDark ? 10 : 14,
@@ -245,30 +318,45 @@ export struct FavoritesPanel {
 
   build() {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
         this.PanelHeader()
+
+        Column() {
+          this.StatusCard(
+            $r('sys.symbol.star_fill'),
+            '收藏概览',
+            this.isLoading
+              ? '正在整理你已收藏的文章'
+              : this.starredEntries.length > 0
+                ? `当前共收藏 ${this.starredEntries.length} 条内容`
+                : '还没有收藏任何内容'
+          )
+        }
+        .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
+        .transition(livoMotion.enterSoft(20))
 
         if (this.isLoading) {
           Column() {
-            Text('正在加载收藏...')
-              .fontSize(14)
-              .fontColor(this.theme.textSecondary)
-              .padding({ top: 40, bottom: 40 })
+            this.StatusCard($r('sys.symbol.arrow_clockwise'), '正在加载收藏', '请稍等，Livo 正在同步你的收藏列表')
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Center)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_LG)
+          .border({ width: 0.8, color: this.theme.divider })
+          .transition(livoMotion.enterSoft(40))
         } else if (this.starredEntries.length === 0) {
-          Column({ space: 16 }) {
-            SymbolGlyph($r('sys.symbol.star'))
-              .fontSize(48)
-              .fontColor([this.theme.divider])
-            Text('暂无收藏内容')
-              .fontSize(15)
-              .fontColor(this.theme.textSecondary)
+          Column() {
+            this.StatusCard($r('sys.symbol.star'), '暂无收藏内容', '在文章详情里点亮星标后，会出现在这里')
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Center)
-          .padding({ top: 80, bottom: 40 })
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_LG)
+          .border({ width: 0.8, color: this.theme.divider })
+          .transition(livoMotion.enterSoft(40))
         } else {
           Column({ space: 12 }) {
             ForEach(this.starredEntries, (entry: EntryCardModel, index: number) => {
@@ -310,7 +398,6 @@ export struct DataControlSettingsPanel {
   private async loadSettings(): Promise<void> {
     this.config = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(this.config)
-    this.onSettingsChange(this.config)
   }
 
   private syncSettings(next: HarmonySettings): void {
@@ -326,8 +413,22 @@ export struct DataControlSettingsPanel {
   }
 
   @Builder
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+  }
+
+  @Builder
   private PanelHeader() {
-    Column({ space: PANEL_HEADER_SPACING }) {
+    Column() {
       Row() {
         Text('数据控制')
           .fontSize(PANEL_HEADER_TITLE_SIZE)
@@ -337,9 +438,12 @@ export struct DataControlSettingsPanel {
       }
       .width('100%')
       .justifyContent(FlexAlign.Start)
-      .padding({ top: PANEL_HANDLE_TOP_PADDING })
     }
     .width('100%')
+    .height(PANEL_HEADER_MIN_HEIGHT)
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
   }
 
   @Builder
@@ -377,22 +481,22 @@ export struct DataControlSettingsPanel {
     }
     .width('100%')
     .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onClick(() => onToggle())
   }
 
-  @Builder
-  private DividerLine() {
-    Row()
-      .width('92%')
-      .height(0.5)
-      .backgroundColor(this.theme.divider)
-  }
-
   build() {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
         this.PanelHeader()
 
         Column() {
@@ -454,8 +558,22 @@ export struct PrivacySettingsPanel {
   }
 
   @Builder
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+  }
+
+  @Builder
   private PanelHeader() {
-    Column({ space: PANEL_HEADER_SPACING }) {
+    Column() {
       Row() {
         Text('隐私')
           .fontSize(PANEL_HEADER_TITLE_SIZE)
@@ -465,55 +583,68 @@ export struct PrivacySettingsPanel {
       }
       .width('100%')
       .justifyContent(FlexAlign.Start)
-      .padding({ top: PANEL_HANDLE_TOP_PADDING })
     }
     .width('100%')
+    .height(PANEL_HEADER_MIN_HEIGHT)
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
     .transition(livoMotion.enterRise(20))
   }
 
   @Builder
-  private TextCard(title: string, content: string) {
-    Column({ space: PANEL_HEADER_SPACING }) {
-      Text(title)
-        .fontSize(PANEL_TITLE_SIZE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
+  private InfoRow(symbol: Resource, title: string, subtitle: string) {
+    Row({ space: 12 }) {
+      SymbolGlyph(symbol)
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
 
-      Text(content)
-        .fontSize(PANEL_SUBTITLE_SIZE)
-        .lineHeight(18)
-        .fontColor(this.theme.textSecondary)
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text(title)
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text(subtitle)
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .lineHeight(18)
+          .fontColor(this.theme.textSecondary)
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(16)
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({ left: PANEL_ROW_PADDING_HORIZONTAL, right: PANEL_ROW_PADDING_HORIZONTAL, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
+    .borderRadius(20)
+  }
+
+  @Builder
+  private DividerLine() {
+    Row()
+      .width('92%')
+      .height(0.5)
+      .backgroundColor(this.theme.divider)
   }
 
   build() {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
         this.PanelHeader()
 
-        Column({ space: 10 }) {
-          Column() {
-            this.TextCard('本地优先', '订阅源、文章状态与设置会优先保存在本机，不需要登录即可使用。')
-          }
-          .transition(livoMotion.enterSoft(40))
-
-          Column() {
-            this.TextCard('网络请求', '仅在刷新订阅、发现内容或加载远程媒体时才会访问网络。')
-          }
-          .transition(livoMotion.enterSoft(60))
-
-          Column() {
-            this.TextCard('代理与媒体', '如果你启用了图片代理，远程图片请求会经过代理地址再加载。')
-          }
-          .transition(livoMotion.enterSoft(80))
+        Column() {
+          this.InfoRow($r('sys.symbol.person_shield_fill'), '本地优先', '订阅源、文章状态与设置会优先保存在本机，不需要登录即可使用。')
+          this.DividerLine()
+          this.InfoRow($r('sys.symbol.link'), '网络请求', '仅在刷新订阅、发现内容或加载远程媒体时才会访问网络。')
+          this.DividerLine()
+          this.InfoRow($r('sys.symbol.externaldrive_fill'), '代理与媒体', '如果你启用了图片代理，远程图片请求会经过代理地址再加载。')
         }
         .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
 
         Row()
           .height(28)
@@ -547,8 +678,22 @@ export struct AboutSettingsPanel {
   }
 
   @Builder
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+  }
+
+  @Builder
   private PanelHeader() {
-    Column({ space: PANEL_HEADER_SPACING }) {
+    Column() {
       Row() {
         Text('关于')
           .fontSize(PANEL_HEADER_TITLE_SIZE)
@@ -558,9 +703,12 @@ export struct AboutSettingsPanel {
       }
       .width('100%')
       .justifyContent(FlexAlign.Start)
-      .padding({ top: PANEL_HANDLE_TOP_PADDING })
     }
     .width('100%')
+    .height(PANEL_HEADER_MIN_HEIGHT)
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: PANEL_HEADER_TOP_PADDING, bottom: PANEL_HEADER_BOTTOM_PADDING })
     .transition(livoMotion.enterRise(20))
   }
 
@@ -569,6 +717,7 @@ export struct AboutSettingsPanel {
     Row() {
       Text(title)
         .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
         .layoutWeight(1)
 
@@ -577,39 +726,80 @@ export struct AboutSettingsPanel {
         .fontColor(this.theme.textSecondary)
     }
     .width('100%')
-    .padding(16)
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({ left: PANEL_ROW_PADDING_HORIZONTAL, right: PANEL_ROW_PADDING_HORIZONTAL, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
+    .borderRadius(20)
+  }
+
+  @Builder
+  private DividerLine() {
+    Row()
+      .width('92%')
+      .height(0.5)
+      .backgroundColor(this.theme.divider)
+  }
+
+  @Builder
+  private SummaryCard() {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.info_circle'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text('Harmony 端信息')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text('当前页面展示应用与项目的基础信息')
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
   }
 
   build() {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
         this.PanelHeader()
 
-        Column({ space: 10 }) {
-          Column() {
-            this.InfoRow('应用名称', 'Livo')
-          }
-          .transition(livoMotion.enterSoft(40))
-
-          Column() {
-            this.InfoRow('Harmony 端', 'ArkTS / ArkUI')
-          }
-          .transition(livoMotion.enterSoft(60))
-
-          Column() {
-            this.InfoRow('数据策略', '本地优先')
-          }
-          .transition(livoMotion.enterSoft(80))
-
-          Column() {
-            this.InfoRow('项目状态', '开发中')
-          }
-          .transition(livoMotion.enterSoft(100))
+        Column() {
+          this.SummaryCard()
         }
         .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
+        .transition(livoMotion.enterSoft(20))
+
+        Column() {
+          this.InfoRow('应用名称', 'Livo')
+          this.DividerLine()
+          this.InfoRow('Harmony 端', 'ArkTS / ArkUI')
+          this.DividerLine()
+          this.InfoRow('数据策略', '本地优先')
+          this.DividerLine()
+          this.InfoRow('项目状态', '开发中')
+        }
+        .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
 
         Row()
           .height(28)

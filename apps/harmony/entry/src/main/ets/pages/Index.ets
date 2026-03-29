@@ -298,6 +298,20 @@ struct Index {
     )
   }
 
+  private hasSearchEmptyState(): boolean {
+    return !!this.searchQuery.trim() && this.searchAllEntries().length === 0
+  }
+
+  private searchPanelHeight(): number {
+    const resultCount = this.searchAllEntries().length
+    if (resultCount === 0) {
+      return 132
+    }
+
+    const visibleCount = this.searchExpanded ? Math.min(resultCount, 6) : Math.min(resultCount, 3)
+    return visibleCount * 90 + (visibleCount - 1) * 8 + 16
+  }
+
   private getMatchedContent(text: string, keyword: string, maxLength: number = 60): string {
     if (!keyword || !text) {
       return ''
@@ -791,17 +805,35 @@ struct Index {
                     )
                   }, (entry: EntryCardModel) => `${entry.id}_${this.searchQuery}`)
 
-                  if (this.searchAllEntries().length === 0) {
+                  if (this.hasSearchEmptyState()) {
                     ListItem() {
-                      Text('没有找到相关内容')
-                        .fontSize(14)
-                        .fontColor(this.theme.textSecondary)
-                        .padding(16)
+                      Column({ space: 8 }) {
+                        SymbolGlyph($r('sys.symbol.magnifyingglass'))
+                          .fontSize(24)
+                          .fontColor([this.theme.textMuted])
+
+                        Text('搜索不到内容')
+                          .fontSize(15)
+                          .fontWeight(FontWeight.Medium)
+                          .fontColor(this.theme.textPrimary)
+
+                        Text('换个关键词试试，或者搜索标题、摘要和来源')
+                          .fontSize(12)
+                          .fontColor(this.theme.textSecondary)
+                          .textAlign(TextAlign.Center)
+                          .maxLines(2)
+                      }
+                      .width('100%')
+                      .padding({ left: 20, right: 20, top: 24, bottom: 24 })
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(HorizontalAlign.Center)
+                      .backgroundColor(this.theme.surface)
+                      .borderRadius(12)
                     }
                   }
                 }
                 .width('100%')
-                .height(this.searchExpanded ? Math.min(this.searchAllEntries().length, 6) * 90 + (Math.min(this.searchAllEntries().length, 6) - 1) * 8 + 16 : Math.min(this.searchAllEntries().length, 3) * 90 + (Math.min(this.searchAllEntries().length, 3) - 1) * 8 + 16)
+                .height(this.searchPanelHeight())
                 .backgroundColor(this.theme.surface)
                 .borderRadius(this.searchExpanded ? 16 : INPUT_RADIUS)
                 .border({ width: 0.8, color: this.theme.divider })
