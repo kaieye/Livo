@@ -1,3 +1,6 @@
+import { selectArticleVideoUrls } from '../utils/ArticleVideoSource'
+import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
+
 export enum FeedViewType {
   Articles = 0,
   SocialMedia = 1,
@@ -41,6 +44,7 @@ export interface Entry {
   publishedAt: number
   readingTimeMinutes: number
   tags: string[]
+  mediaUrls?: string[]
   isRead: boolean
   isStarred: boolean
   createdAt: number
@@ -84,6 +88,7 @@ export interface EntryCardModel {
   feedCategory: string
   viewLabel: string
   viewBadgeColor: string
+  hasVideoMedia: boolean
   isRead: boolean
   isStarred: boolean
 }
@@ -97,9 +102,10 @@ export interface ArticleDetailModel extends EntryCardModel {
 
 export interface ArticleContentBlock {
   id: string
-  type: 'paragraph' | 'image'
+  type: 'paragraph' | 'image' | 'video'
   text: string
   imageUrl: string
+  videoUrl: string
 }
 
 export function isLegacyPlainArticleContent(content: string): boolean {
@@ -140,6 +146,40 @@ export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
   themeAccent: 'orange',
   language: 'zh-CN',
   remoteFeedUrl: 'https://sspai.com/feed',
+}
+
+export type AccountProvider = 'youtube' | 'x' | 'instagram' | 'bilibili'
+
+export interface AccountStatusResult {
+  provider: AccountProvider
+  linked: boolean
+  displayName: string
+  error: string
+}
+
+export interface AccountSelfCheckRow {
+  name: string
+  pass: boolean
+  detail: string
+}
+
+export interface AccountSelfCheckResult {
+  summary: string
+  rows: AccountSelfCheckRow[]
+}
+
+export interface PendingBilibiliCreator {
+  mid: number
+  uname: string
+  exists: boolean
+}
+
+export interface BilibiliImportProgress {
+  total: number
+  completed: number
+  imported: number
+  skipped: number
+  failed: number
 }
 
 export function viewDefinitionOf(view: FeedViewType): ViewDefinition {
@@ -219,6 +259,11 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
 
 export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
+  const hasVideoMedia = extractSupportedVideoUrls(
+    [entry.title, entry.summary, entry.content, entry.url, ...(entry.mediaUrls ?? [])].join('\n'),
+    entry.url || feed.siteUrl || feed.url,
+    entry.url,
+  ).length > 0
 
   return {
     id: entry.id,
@@ -233,6 +278,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     feedCategory: feed.category ?? '未分类',
     viewLabel: definition.label,
     viewBadgeColor: definition.badgeColor,
+    hasVideoMedia,
     isRead: entry.isRead,
     isStarred: entry.isStarred,
   }
@@ -240,7 +286,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
 
 export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailModel {
   const card = toEntryCardModel(entry, feed)
-  const blocks = buildArticleContentBlocks(entry.content, entry.url || feed.siteUrl || feed.url)
+  const blocks = buildArticleContentBlocks(entry.content, entry.url || feed.siteUrl || feed.url, entry.url, entry.mediaUrls ?? [])
   const paragraphs = blocks
     .filter((block: ArticleContentBlock) => block.type === 'paragraph')
     .map((block: ArticleContentBlock) => block.text)
@@ -258,6 +304,7 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     feedCategory: card.feedCategory,
     viewLabel: card.viewLabel,
     viewBadgeColor: card.viewBadgeColor,
+    hasVideoMedia: card.hasVideoMedia,
     isRead: card.isRead,
     isStarred: card.isStarred,
     contentParagraphs: paragraphs,
@@ -320,6 +367,112 @@ function extractImageUrl(tag: string, baseUrl: string): string {
   return srcMatch?.[1] ? resolveAbsoluteUrl(baseUrl, decodeBasicHtml(srcMatch[1])) : ''
 }
 
+function extractYouTubeVideoId(value: string): string {
+  const matched = (value || '').match(
+    /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i,
+  )
+  return matched?.[1] ?? ''
+}
+
+function extractBilibiliVideoToken(value: string): string {
+  const bvid = (value || '').match(/(?:\/video\/|[?&]bvid=)(BV[a-zA-Z0-9]+)/i)?.[1]
+  if (bvid) {
+    return `BV:${bvid}`
+  }
+
+  const aid = (value || '').match(/(?:\/video\/av|[?&]aid=)(\d+)/i)?.[1]
+  if (aid) {
+    return `AV:${aid}`
+  }
+
+  return ''
+}
+
+function isSupportedVideoUrl(value: string): boolean {
+  return isDirectVideoUrl(value) || !!extractYouTubeVideoId(value) || !!extractBilibiliVideoToken(value)
+}
+
+function normalizeSupportedVideoUrl(value: string): string {
+  const trimmed = (value || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (isDirectVideoUrl(trimmed)) {
+    return trimmed
+  }
+
+  const youTubeId = extractYouTubeVideoId(trimmed)
+  if (youTubeId) {
+    return `https://www.youtube.com/watch?v=${youTubeId}`
+  }
+
+  const bilibiliToken = extractBilibiliVideoToken(trimmed)
+  if (bilibiliToken.startsWith('BV:')) {
+    return `https://www.bilibili.com/video/${bilibiliToken.substring(3)}`
+  }
+  if (bilibiliToken.startsWith('AV:')) {
+    return `https://www.bilibili.com/video/av${bilibiliToken.substring(3)}`
+  }
+
+  return trimmed
+}
+
+function buildVideoPreviewUrl(videoUrl: string): string {
+  const youTubeId = extractYouTubeVideoId(videoUrl)
+  if (youTubeId) {
+    return `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`
+  }
+  return ''
+}
+
+function extractSupportedVideoUrls(content: string, baseUrl: string, articleUrl: string): string[] {
+  const results: string[] = []
+  const pushUrl = (value: string): void => {
+    const resolved = normalizeSupportedVideoUrl(resolveAbsoluteUrl(baseUrl, decodeBasicHtml(value)))
+    if (!resolved || !isSupportedVideoUrl(resolved) || results.includes(resolved)) {
+      return
+    }
+    results.push(resolved)
+  }
+
+  const normalizedArticleUrl = normalizeSupportedVideoUrl(articleUrl)
+  if (normalizedArticleUrl && isSupportedVideoUrl(normalizedArticleUrl)) {
+    results.push(normalizedArticleUrl)
+  }
+
+  const raw = decodeBasicHtml(content || '')
+  const attributeMatches = raw.matchAll(/\b(?:href|src|data-src)=["']([^"']+)["']/gi)
+  for (const matched of attributeMatches) {
+    if (matched[1]) {
+      pushUrl(matched[1])
+    }
+  }
+
+  const textMatches = raw.matchAll(
+    /https?:\/\/[^\s"'<>]+|(?:www\.)?(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/)[^\s"'<>]+/gi,
+  )
+  for (const matched of textMatches) {
+    if (!matched[0]) {
+      continue
+    }
+    const candidate = matched[0].startsWith('http') ? matched[0] : `https://${matched[0]}`
+    pushUrl(candidate)
+  }
+
+  return results
+}
+
+function createVideoContentBlock(id: string, videoUrl: string): ArticleContentBlock {
+  return {
+    id,
+    type: 'video',
+    text: '',
+    imageUrl: buildVideoPreviewUrl(videoUrl),
+    videoUrl,
+  }
+}
+
 function pushParagraphBlocks(source: string, blocks: ArticleContentBlock[], startIndex: number): number {
   const segments = source
     .split(/\n{2,}/)
@@ -330,16 +483,32 @@ function pushParagraphBlocks(source: string, blocks: ArticleContentBlock[], star
   segments.forEach((text: string) => {
     const refinedParagraphs = splitDenseParagraph(text)
     refinedParagraphs.forEach((paragraph: string) => {
+      if (isStandaloneVideoParagraph(paragraph)) {
+        return
+      }
       blocks.push({
         id: `paragraph-${index}`,
         type: 'paragraph',
         text: paragraph,
         imageUrl: '',
+        videoUrl: '',
       })
       index += 1
     })
   })
   return index
+}
+
+function isStandaloneVideoParagraph(text: string): boolean {
+  const normalized = (text || '')
+    .trim()
+    .replace(/^[("'\[{<\s]+|[)"'\]}>、，,。.!！？\s]+$/g, '')
+
+  if (!normalized) {
+    return false
+  }
+
+  return isSupportedVideoUrl(normalized) || isSupportedVideoUrl(normalizeSupportedVideoUrl(normalized))
 }
 
 function splitDenseParagraph(text: string): string[] {
@@ -381,10 +550,15 @@ function splitDenseParagraph(text: string): string[] {
   return result.length > 0 ? result : [normalized]
 }
 
-function buildArticleContentBlocks(content: string, baseUrl: string): ArticleContentBlock[] {
+function buildArticleContentBlocks(content: string, baseUrl: string, articleUrl: string, mediaUrls: string[] = []): ArticleContentBlock[] {
   const raw = (content || '').trim()
+  const videoUrls = selectArticleVideoUrls(
+    mediaUrls,
+    extractSupportedVideoUrls(raw, baseUrl, articleUrl),
+  )
+
   if (!raw) {
-    return []
+    return videoUrls.map((videoUrl: string, index: number) => createVideoContentBlock(`video-${index}`, videoUrl))
   }
 
   const imageUrls: string[] = []
@@ -411,6 +585,11 @@ function buildArticleContentBlocks(content: string, baseUrl: string): ArticleCon
   const blocks: ArticleContentBlock[] = []
   let blockIndex = 0
 
+  videoUrls.forEach((videoUrl: string) => {
+    blocks.push(createVideoContentBlock(`video-${blockIndex}`, videoUrl))
+    blockIndex += 1
+  })
+
   parts.forEach((part: string) => {
     const imageMatch = part.match(/^\[\[IMG_(\d+)\]\]$/)
     if (imageMatch?.[1]) {
@@ -421,6 +600,7 @@ function buildArticleContentBlocks(content: string, baseUrl: string): ArticleCon
           type: 'image',
           text: '',
           imageUrl,
+          videoUrl: '',
         })
         blockIndex += 1
       }

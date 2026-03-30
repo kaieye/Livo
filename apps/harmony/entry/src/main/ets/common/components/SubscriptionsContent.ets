@@ -37,6 +37,7 @@ class SubscriptionFeedConfigParams {
   targetUrl: string = ''
   targetTitle: string = ''
   targetSiteUrl: string = ''
+  targetImageUrl: string = ''
   targetDescription: string = ''
   targetCategory: string = ''
   sourceKind: string = ''
@@ -97,6 +98,12 @@ export struct SubscriptionsContent {
     } finally {
       this.isLoading = false
     }
+  }
+
+  private async refreshFeeds(): Promise<void> {
+    this.feeds = await AppRepository.feeds()
+    this.sourceHint = '已加载本地订阅内容'
+    this.hasLoaded = true
   }
 
   private syncInheritedTheme(): void {
@@ -397,6 +404,7 @@ export struct SubscriptionsContent {
     params.targetUrl = feed.url
     params.targetTitle = feed.title
     params.targetSiteUrl = feed.siteUrl || ''
+    params.targetImageUrl = feed.imageUrl || ''
     params.targetDescription = feed.description || ''
     params.targetCategory = feed.category || ''
     params.sourceKind = '编辑'
@@ -437,6 +445,7 @@ export struct SubscriptionsContent {
       targetUrl: params?.targetUrl ?? '',
       targetTitle: params?.targetTitle ?? '',
       targetSiteUrl: params?.targetSiteUrl ?? '',
+      targetImageUrl: params?.targetImageUrl ?? '',
       targetDescription: params?.targetDescription ?? '',
       targetCategory: params?.targetCategory ?? '',
       sourceKind: params?.sourceKind ?? '',
@@ -447,17 +456,20 @@ export struct SubscriptionsContent {
         AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
         this.subscriptionPathStack.pop(true)
       },
-      onSubscribed: () => {
+      onSubscribed: async () => {
+        await this.refreshFeeds()
         this.overlayLevel = 0
         AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
         this.subscriptionPathStack.clear()
       },
-      onSaved: () => {
+      onSaved: async () => {
+        await this.refreshFeeds()
         this.overlayLevel = 1
         AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
         this.subscriptionPathStack.pop(true)
       },
-      onUnsubscribed: () => {
+      onUnsubscribed: async () => {
+        await this.refreshFeeds()
         this.overlayLevel = 0
         AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
         this.subscriptionPathStack.clear()

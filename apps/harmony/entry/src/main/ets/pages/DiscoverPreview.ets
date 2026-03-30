@@ -285,6 +285,7 @@ struct DiscoverPreview {
         title: this.previewPayload.feedTitle || this.targetTitle || this.targetUrl,
         url: this.targetUrl,
         siteUrl: this.previewPayload.siteUrl || this.targetSiteUrl,
+        imageUrl: this.previewPayload.imageUrl || this.existingFeed?.imageUrl || '',
         description: this.previewPayload.description || this.targetDescription,
         category: this.targetCategory || this.viewLabel(this.targetView),
         view: this.targetView,

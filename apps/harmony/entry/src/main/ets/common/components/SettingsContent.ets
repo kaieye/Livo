@@ -1,6 +1,7 @@
 import { AppRepository } from '../data/AppRepository'
 import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
+import { AccountsSettingsPanel } from './AccountsSettingsPanel'
 import {
   AboutSettingsPanel,
   DataControlSettingsPanel,
@@ -15,7 +16,8 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
 
-type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites'
+type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts'
+const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 
 interface SettingItem {
   title: string
@@ -110,6 +112,7 @@ export struct SettingsContent {
   @State isLoading: boolean = false
   @State activeSheet: SettingsSheetKey = ''
   @State showSettingsSheet: boolean = false
+  @StorageProp(SETTINGS_ACTIVE_SHEET_KEY) @Watch('handleStoredActiveSheetChange') storedActiveSheet: SettingsSheetKey = ''
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
@@ -117,6 +120,13 @@ export struct SettingsContent {
   onReady: () => void = () => {}
 
   aboutToAppear(): void {
+    const restoreSheet = this.storedActiveSheet || AppStorage.get<SettingsSheetKey>(SETTINGS_ACTIVE_SHEET_KEY)
+    if (restoreSheet && !this.showSettingsSheet) {
+      this.activeSheet = restoreSheet
+      this.showSettingsSheet = true
+      AppStorage.setOrCreate('settingsOverlayLevel', 1)
+    }
+
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
       if (this.hasLoaded || this.isLoading) {
@@ -126,6 +136,20 @@ export struct SettingsContent {
     }
 
     void this.loadSettings()
+  }
+
+  private handleStoredActiveSheetChange(): void {
+    if (this.storedActiveSheet && !this.showSettingsSheet) {
+      this.activeSheet = this.storedActiveSheet
+      this.showSettingsSheet = true
+      AppStorage.setOrCreate('settingsOverlayLevel', 1)
+      return
+    }
+
+    if (!this.storedActiveSheet && this.showSettingsSheet && this.activeSheet === '') {
+      this.showSettingsSheet = false
+      AppStorage.setOrCreate('settingsOverlayLevel', 0)
+    }
   }
 
   private async loadSettings(): Promise<void> {
@@ -181,11 +205,13 @@ export struct SettingsContent {
     this.activeSheet = sheet
     this.showSettingsSheet = true
     AppStorage.setOrCreate('settingsOverlayLevel', 1)
+    AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, sheet)
   }
 
   private closeSheet(): void {
     this.showSettingsSheet = false
     AppStorage.setOrCreate('settingsOverlayLevel', 0)
+    AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
   }
 
   private initialSheetHeight(): number {
@@ -201,6 +227,9 @@ export struct SettingsContent {
         preferredHeight = 460
         break
       case 'privacy':
+        preferredHeight = 520
+        break
+      case 'accounts':
         preferredHeight = 520
         break
       case 'appearance':
@@ -269,6 +298,10 @@ export struct SettingsContent {
   private handleSettingTap(item: SettingItem): void {
     if (item.title === '收藏') {
       this.openSheet('favorites')
+      return
+    }
+    if (item.title === '账户') {
+      this.openSheet('accounts')
       return
     }
     if (item.title === '外观') {
@@ -347,6 +380,7 @@ export struct SettingsContent {
         this.showSettingsSheet = false
         this.activeSheet = ''
         AppStorage.setOrCreate('settingsOverlayLevel', 0)
+        AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
       },
     })
   }
@@ -398,6 +432,10 @@ export struct SettingsContent {
         AboutSettingsPanel()
       } else if (this.activeSheet === 'favorites') {
         FavoritesPanel()
+      } else if (this.activeSheet === 'accounts') {
+        AccountsSettingsPanel({
+          inheritedTheme: this.theme,
+        })
       }
     }
     .width('100%')

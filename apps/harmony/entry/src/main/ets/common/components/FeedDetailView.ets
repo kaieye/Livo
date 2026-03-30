@@ -1,10 +1,17 @@
+import http from '@ohos.net.http'
 import { AppRepository } from '../data/AppRepository'
 import { Entry, Feed, FeedCardModel, FeedViewType, formatPublishedAt } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { PageHeader } from './PageHeader'
 import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
+
+interface VideoPreviewCacheItem {
+  videoUrl: string
+  previewUrl: string
+}
 
 @Component
 export struct FeedDetailView {
@@ -31,6 +38,7 @@ export struct FeedDetailView {
   @State private isLoading: boolean = true
   @State private isRefreshing: boolean = false
   @State private existingFeed: Feed | undefined = undefined
+  @State private videoPreviewCache: VideoPreviewCacheItem[] = []
 
   aboutToAppear(): void {
     this.targetTitle = this.initialTargetTitle
@@ -64,12 +72,14 @@ export struct FeedDetailView {
             description: feed.description || '',
             entries: entries
           }
+          void this.hydrateVideoPreviews(entries)
         }
       } else if (this.targetUrl) {
         // Mode: Discover Preview
         this.existingFeed = await this.findExistingFeed(this.targetUrl, this.targetSiteUrl)
         const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
         this.previewPayload = payload
+        void this.hydrateVideoPreviews(payload.entries)
         
         // If it matches an existing entry, update it
         if (!this.existingFeed && payload.siteUrl) {
@@ -93,9 +103,11 @@ export struct FeedDetailView {
         if (this.previewPayload) {
           this.previewPayload.entries = entries
         }
+        void this.hydrateVideoPreviews(entries)
       } else if (this.targetUrl) {
         const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
         this.previewPayload = payload
+        void this.hydrateVideoPreviews(payload.entries)
       }
     } finally {
       this.isRefreshing = false
@@ -128,6 +140,169 @@ export struct FeedDetailView {
   private avatarFallback(): string {
     const title = (this.previewPayload?.feedTitle || this.targetTitle || '?').trim()
     return title ? title.substring(0, 1).toUpperCase() : '?'
+  }
+
+  private extractYouTubeVideoId(value: string): string {
+    const matched = (value || '').match(
+      /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i,
+    )
+    return matched?.[1] ?? ''
+  }
+
+  private extractBilibiliVideoToken(value: string): string {
+    const bvid = (value || '').match(/(?:\/video\/|[?&]bvid=)(BV[a-zA-Z0-9]+)/i)?.[1]
+    if (bvid) {
+      return `BV:${bvid}`
+    }
+
+    const aid = (value || '').match(/(?:\/video\/av|[?&]aid=)(\d+)/i)?.[1]
+    if (aid) {
+      return `AV:${aid}`
+    }
+
+    return ''
+  }
+
+  private normalizeVideoUrl(value: string): string {
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+
+    if (isDirectVideoUrl(trimmed)) {
+      return trimmed
+    }
+
+    const youTubeId = this.extractYouTubeVideoId(trimmed)
+    if (youTubeId) {
+      return `https://www.youtube.com/watch?v=${youTubeId}`
+    }
+
+    const bilibiliToken = this.extractBilibiliVideoToken(trimmed)
+    if (bilibiliToken.startsWith('BV:')) {
+      return `https://www.bilibili.com/video/${bilibiliToken.substring(3)}`
+    }
+    if (bilibiliToken.startsWith('AV:')) {
+      return `https://www.bilibili.com/video/av${bilibiliToken.substring(3)}`
+    }
+
+    return ''
+  }
+
+  private entryVideoUrl(entry: Entry): string {
+    const directMediaUrl = (entry.mediaUrls ?? []).find((url: string) => isDirectVideoUrl(url))
+    if (directMediaUrl) {
+      return directMediaUrl
+    }
+
+    const candidates: string[] = [entry.url, entry.content, entry.summary]
+    for (const candidate of candidates) {
+      const normalized = this.normalizeVideoUrl(candidate || '')
+      if (normalized) {
+        return normalized
+      }
+    }
+
+    const rawContent = `${entry.content || ''}\n${entry.summary || ''}`
+    const matched = rawContent.match(
+      /https?:\/\/[^\s"'<>]+|(?:www\.)?(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/)[^\s"'<>]+/i,
+    )?.[0] ?? ''
+    if (!matched) {
+      return ''
+    }
+    return this.normalizeVideoUrl(matched.startsWith('http') ? matched : `https://${matched}`)
+  }
+
+  private entryVideoPreviewUrl(entry: Entry): string {
+    const videoUrl = this.entryVideoUrl(entry)
+    const cached = this.videoPreviewCache.find((item: VideoPreviewCacheItem) => item.videoUrl === videoUrl)
+    if (cached?.previewUrl) {
+      return cached.previewUrl
+    }
+    const youTubeId = this.extractYouTubeVideoId(videoUrl)
+    if (youTubeId) {
+      return `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`
+    }
+    return ''
+  }
+
+  private entryVideoSourceLabel(entry: Entry): string {
+    const lower = this.entryVideoUrl(entry).toLowerCase()
+    if (isDirectVideoUrl(lower)) {
+      return '直链'
+    }
+    if (lower.includes('youtube.com')) {
+      return 'YouTube'
+    }
+    if (lower.includes('bilibili.com')) {
+      return 'Bilibili'
+    }
+    return ''
+  }
+
+  private async hydrateVideoPreviews(entries: Entry[]): Promise<void> {
+    for (const entry of entries) {
+      const videoUrl = this.entryVideoUrl(entry)
+      if (!videoUrl || this.entryVideoPreviewUrl(entry)) {
+        continue
+      }
+
+      const previewUrl = await this.fetchBilibiliVideoPreviewUrl(videoUrl)
+      if (!previewUrl) {
+        continue
+      }
+
+      const existingIndex = this.videoPreviewCache.findIndex((item: VideoPreviewCacheItem) => item.videoUrl === videoUrl)
+      const nextCache = [...this.videoPreviewCache]
+      const item: VideoPreviewCacheItem = { videoUrl, previewUrl }
+      if (existingIndex >= 0) {
+        nextCache[existingIndex] = item
+      } else {
+        nextCache.push(item)
+      }
+      this.videoPreviewCache = nextCache
+    }
+  }
+
+  private async fetchBilibiliVideoPreviewUrl(videoUrl: string): Promise<string> {
+    if (!videoUrl.toLowerCase().includes('bilibili.com')) {
+      return ''
+    }
+
+    const bvid = videoUrl.match(/\/video\/(BV[a-zA-Z0-9]+)/i)?.[1] ?? ''
+    if (!bvid) {
+      return ''
+    }
+
+    const request = http.createHttp()
+    try {
+      const response = await request.request(
+        `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`,
+        {
+          method: http.RequestMethod.GET,
+          connectTimeout: 5000,
+          readTimeout: 5000,
+          header: {
+            'User-Agent': 'Mozilla/5.0',
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': `https://www.bilibili.com/video/${bvid}`,
+            'Origin': 'https://www.bilibili.com',
+          },
+        },
+      )
+
+      if (response.responseCode !== 200) {
+        return ''
+      }
+
+      const payload = JSON.parse(String(response.result)) as Record<string, Object | string | number>
+      const data = payload['data'] as Record<string, string> | undefined
+      return typeof data?.['pic'] === 'string' ? data['pic'] : ''
+    } catch (_) {
+      return ''
+    } finally {
+      request.destroy()
+    }
   }
 
   private heroDescription(): string {
@@ -240,6 +415,27 @@ export struct FeedDetailView {
   @Builder
   private EntryCard(entry: Entry, index: number) {
     Column({ space: 8 }) {
+      if (this.entryVideoPreviewUrl(entry)) {
+        Stack({ alignContent: Alignment.TopStart }) {
+          Image(this.entryVideoPreviewUrl(entry))
+            .width('100%')
+            .height(172)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(16)
+
+          Text(this.entryVideoSourceLabel(entry) || '视频')
+            .fontSize(11)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF')
+            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+            .backgroundColor('rgba(17,24,39,0.72)')
+            .borderRadius(999)
+            .margin({ left: 12, top: 12 })
+        }
+        .width('100%')
+        .clip(true)
+      }
+
       Row({ space: 8 }) {
         Text(entry.author || '未知作者')
           .fontSize(11)
@@ -273,6 +469,13 @@ export struct FeedDetailView {
           .fontColor(this.theme.textSecondary)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+
+      if (this.entryVideoSourceLabel(entry)) {
+        Text(`${this.entryVideoSourceLabel(entry)} 视频源`)
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.accent)
       }
     }
     .width('100%')

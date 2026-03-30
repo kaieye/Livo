@@ -1,11 +1,16 @@
 import {
   ArticleDetailModel,
+  AccountProvider,
+  AccountStatusResult,
+  BilibiliImportProgress,
   DashboardMetric,
   Entry,
   EntryCardModel,
   Feed,
   FeedCardModel,
   FeedWithCount,
+  PendingBilibiliCreator,
+  FeedViewType,
   HarmonySettings,
   RemoteFeedResult,
   toArticleDetailModel,
@@ -16,6 +21,8 @@ import { FeedDraft, FeedRepository } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { seedSettings, SEED_ENTRIES, SEED_FEEDS } from './SeedData'
 import { AppPreferenceService } from '../services/AppPreferenceService'
+import { AccountSessionService } from '../services/AccountSessionService'
+import { BilibiliFollowingsService } from '../services/BilibiliFollowingsService'
 import { RssFeedService } from '../services/RssFeedService'
 
 function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardModel[] {
@@ -29,6 +36,8 @@ function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardM
 
   return result
 }
+
+const HOME_ENTRY_CANDIDATE_LIMIT: number = 400
 
 async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
   const unreadCount = await EntryRepository.countUnreadByFeed(feed.id)
@@ -126,7 +135,7 @@ export class AppRepository {
 
   static async featuredEntries(): Promise<EntryCardModel[]> {
     await AppRepository.bootstrap()
-    const entries = await EntryRepository.listRecent(20)
+    const entries = await EntryRepository.listRecent(HOME_ENTRY_CANDIDATE_LIMIT)
     const feeds = await FeedRepository.list()
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
@@ -178,6 +187,64 @@ export class AppRepository {
   static async settings(): Promise<HarmonySettings> {
     await AppRepository.bootstrap()
     return AppPreferenceService.loadSettings()
+  }
+
+  static async accountStatus(provider: AccountProvider): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.status(provider)
+  }
+
+  static async linkAccount(provider: AccountProvider): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.link(provider)
+  }
+
+  static accountLoginUrl(provider: AccountProvider): string {
+    return AccountSessionService.loginUrl(provider)
+  }
+
+  static async unlinkAccount(provider: AccountProvider): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.unlink(provider)
+  }
+
+  static async setAccountDisplayName(provider: AccountProvider, displayName: string): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.setDisplayName(provider, displayName)
+  }
+
+  static async bilibiliSessData(): Promise<string> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.bilibiliSessData()
+  }
+
+  static async setBilibiliSessData(sessdata: string): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.setBilibiliSessData(sessdata)
+  }
+
+  static async setBilibiliVerifiedLink(displayName: string, sessdata?: string): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.setBilibiliVerifiedLink(displayName, sessdata)
+  }
+
+  static async setVerifiedAccountLink(provider: AccountProvider, displayName: string): Promise<AccountStatusResult> {
+    await AppRepository.bootstrap()
+    return AccountSessionService.setVerifiedLink(provider, displayName)
+  }
+
+  static async previewBilibiliFollowings(): Promise<PendingBilibiliCreator[]> {
+    await AppRepository.bootstrap()
+    return BilibiliFollowingsService.preview()
+  }
+
+  static async importBilibiliFollowings(
+    creators: PendingBilibiliCreator[],
+    views: FeedViewType[],
+    onProgress: (progress: BilibiliImportProgress) => void,
+  ): Promise<void> {
+    await AppRepository.bootstrap()
+    await BilibiliFollowingsService.importCreators(creators, views, onProgress)
   }
 
   static async persistSettings(next: HarmonySettings): Promise<HarmonySettings> {

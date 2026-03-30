@@ -11,6 +11,7 @@ struct DiscoverSubscribeConfig {
   @State targetUrl: string = ''
   @State targetTitle: string = ''
   @State targetSiteUrl: string = ''
+  @State targetImageUrl: string = ''
   @State targetDescription: string = ''
   @State targetCategory: string = ''
   @State sourceKind: string = ''
@@ -28,6 +29,7 @@ struct DiscoverSubscribeConfig {
     this.targetUrl = params.targetUrl ?? ''
     this.targetTitle = params.targetTitle ?? ''
     this.targetSiteUrl = params.siteUrl ?? ''
+    this.targetImageUrl = params.imageUrl ?? ''
     this.targetDescription = params.description ?? ''
     this.targetCategory = params.category ?? ''
     this.sourceKind = params.sourceKind ?? ''
@@ -40,6 +42,7 @@ struct DiscoverSubscribeConfig {
         targetUrl: this.targetUrl,
         targetTitle: this.targetTitle,
         targetSiteUrl: this.targetSiteUrl,
+        targetImageUrl: this.targetImageUrl,
         targetDescription: this.targetDescription,
         targetCategory: this.targetCategory,
         sourceKind: this.sourceKind,

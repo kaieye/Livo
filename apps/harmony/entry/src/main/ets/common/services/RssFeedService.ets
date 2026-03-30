@@ -1,5 +1,6 @@
 import http from '@ohos.net.http'
 import { Entry, Feed, FeedViewType } from '../models/LivoModels'
+import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../utils/FeedMediaUrl'
 
 interface ParsedItem {
   id: string
@@ -10,6 +11,7 @@ interface ParsedItem {
   author: string
   publishedAt: number
   tags: string[]
+  mediaUrls: string[]
 }
 
 export interface FeedRefreshPayload {
@@ -281,7 +283,7 @@ function parseFeedImageUrl(xml: string, baseUrl: string): string {
   return ''
 }
 
-function parseRssItems(feedId: string, xml: string): ParsedItem[] {
+function parseRssItems(feedId: string, xml: string, baseUrl: string): ParsedItem[] {
   const itemMatches = xml.match(/<item[\s\S]*?<\/item>/gi) ?? []
 
   return itemMatches.map((itemBlock: string, index: number) => {
@@ -291,7 +293,8 @@ function parseRssItems(feedId: string, xml: string): ParsedItem[] {
     const summary = stripHtml(description) || '这条内容暂时没有摘要。'
     const author = stripHtml(pickFirst(itemBlock, ['author', 'dc:creator'])) || '未知作者'
     const pubDate = stripHtml(pickFirst(itemBlock, ['pubDate', 'published', 'updated']))
-    const content = normalizeRichContent(description, summary)
+    const mediaUrls = extractFeedMediaUrls(itemBlock, baseUrl)
+    const content = appendFeedMediaUrlsToContent(normalizeRichContent(description, summary), mediaUrls)
     
     const parsedItem: ParsedItem = {
       id: createEntryId(feedId, link, title, index),
@@ -302,12 +305,13 @@ function parseRssItems(feedId: string, xml: string): ParsedItem[] {
       author,
       publishedAt: parseDate(pubDate),
       tags: parseTags(itemBlock),
+      mediaUrls,
     }
     return parsedItem
   })
 }
 
-function parseAtomItems(feedId: string, xml: string): ParsedItem[] {
+function parseAtomItems(feedId: string, xml: string, baseUrl: string): ParsedItem[] {
   const entryMatches = xml.match(/<entry[\s\S]*?<\/entry>/gi) ?? []
 
   return entryMatches.map((entryBlock: string, index: number) => {
@@ -318,7 +322,8 @@ function parseAtomItems(feedId: string, xml: string): ParsedItem[] {
     const authorBlock = pickTag(entryBlock, 'author')
     const author = stripHtml(pickTag(authorBlock, 'name') || pickTag(entryBlock, 'name') || pickTag(entryBlock, 'dc:creator')) || '未知作者'
     const pubDate = stripHtml(pickFirst(entryBlock, ['published', 'updated']))
-    const content = normalizeRichContent(contentBlock, summary)
+    const mediaUrls = extractFeedMediaUrls(entryBlock, baseUrl)
+    const content = appendFeedMediaUrlsToContent(normalizeRichContent(contentBlock, summary), mediaUrls)
 
     const parsedItem: ParsedItem = {
       id: createEntryId(feedId, link, title, index),
@@ -329,6 +334,7 @@ function parseAtomItems(feedId: string, xml: string): ParsedItem[] {
       author,
       publishedAt: parseDate(pubDate),
       tags: parseAtomTags(entryBlock),
+      mediaUrls,
     }
     return parsedItem
   })
@@ -672,8 +678,8 @@ export class RssFeedService {
         }
       }
 
-      const rssItems = parseRssItems(feed.id, xml)
-      const items = rssItems.length > 0 ? rssItems : parseAtomItems(feed.id, xml)
+      const rssItems = parseRssItems(feed.id, xml, requestUrl)
+      const items = rssItems.length > 0 ? rssItems : parseAtomItems(feed.id, xml, requestUrl)
       
       console.info(`[RssFeedService] Parsed ${items.length} items (RSS: ${rssItems.length})`)
       
@@ -702,6 +708,7 @@ export class RssFeedService {
         publishedAt: item.publishedAt,
         readingTimeMinutes: estimateReadingMinutes(item.content),
         tags: item.tags,
+        mediaUrls: item.mediaUrls,
         isRead: false,
         isStarred: false,
         createdAt: now,

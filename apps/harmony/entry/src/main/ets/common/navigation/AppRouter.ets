@@ -8,6 +8,7 @@ export interface RouteDefinition {
   discoverSubscribeConfig: string
   discoverPreview: string
   articleDetail: string
+  accountLogin: string
   settings: string
   generalSettings: string
   appearanceSettings: string
@@ -24,6 +25,7 @@ export const ROUTES: RouteDefinition = {
   discoverSubscribeConfig: 'pages/DiscoverSubscribeConfig',
   discoverPreview: 'pages/DiscoverPreview',
   articleDetail: 'pages/ArticleDetail',
+  accountLogin: 'pages/AccountLogin',
   settings: 'pages/Settings',
   generalSettings: 'pages/GeneralSettings',
   appearanceSettings: 'pages/AppearanceSettings',
@@ -188,6 +190,12 @@ function createRouterOptions(url: string, params?: Object): RouterOptions {
   return options
 }
 
+class AccountLoginParams {
+  provider: string = ''
+  title: string = ''
+  loginUrl: string = ''
+}
+
 function getAppRouter() {
   const mainWindow = AppStorage.get<window.Window>('WindowClass')
   if (!mainWindow) {
@@ -252,6 +260,19 @@ export async function openArticleDetail(entryId: string, entryJson?: string): Pr
     throw new Error(`打开文章详情失败：${error instanceof Error ? error.message : 'unknown error'}`)
   }
 }
+
+export async function openAccountLogin(provider: string, title: string, loginUrl: string): Promise<void> {
+  const params = new AccountLoginParams()
+  params.provider = provider
+  params.title = title
+  params.loginUrl = loginUrl
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.accountLogin, params))
+  } catch (error) {
+    throw new Error(`打开账号关联页面失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
+}
+
 
 export async function openFeedDetail(feedId: string): Promise<void> {
   const params = new FeedDetailParams()

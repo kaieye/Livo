@@ -16,6 +16,7 @@ import {
   Maximize2,
   Minimize2,
   Download,
+  Loader2,
 } from 'lucide-react'
 import { create } from 'zustand'
 import { useSettingsStore } from '../../store/settings-store'
@@ -23,6 +24,11 @@ import {
   buildBilibiliInAppPlayerUrl,
   normalizeBilibiliVideoUrl,
 } from '../../lib/bilibili-video'
+import {
+  buildYoutubeIframeUrl,
+  extractYoutubeVideoId,
+  resolveYoutubePlayback,
+} from '../../lib/youtube-playback'
 
 // ====== Player Store ======
 interface PlayOptions {
@@ -370,11 +376,22 @@ export function VideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showInlineEmbed, setShowInlineEmbed] = useState(false)
+  const [isResolvingYoutube, setIsResolvingYoutube] = useState(false)
+  const [youtubePlayback, setYoutubePlayback] = useState<{
+    kind: 'direct' | 'iframe'
+    url: string
+  } | null>(null)
   const bilibiliOpenInPage = useSettingsStore(
     (s) => s.settings.general.bilibiliOpenInPage,
   )
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(url)
+  const isYouTubeVideo =
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)/i.test(url)
   const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
+  const youtubeVideoId = extractYoutubeVideoId(url)
+  const youtubeFallbackIframeUrl = youtubeVideoId
+    ? buildYoutubeIframeUrl(youtubeVideoId)
+    : null
 
   const toggleFullscreen = () => {
     if (!videoRef.current) return
@@ -392,6 +409,35 @@ export function VideoPlayer({
     document.addEventListener('fullscreenchange', handleFS)
     return () => document.removeEventListener('fullscreenchange', handleFS)
   }, [])
+
+  useEffect(() => {
+    if (!showModal || !isYouTubeVideo) return
+
+    let cancelled = false
+    setIsResolvingYoutube(true)
+    setYoutubePlayback(null)
+
+    void resolveYoutubePlayback(window.api.video, url)
+      .then((result) => {
+        if (cancelled) return
+        setYoutubePlayback(result)
+      })
+      .catch(() => {
+        if (cancelled || !youtubeFallbackIframeUrl) return
+        setYoutubePlayback({
+          kind: 'iframe',
+          url: youtubeFallbackIframeUrl,
+        })
+      })
+      .finally(() => {
+        if (cancelled) return
+        setIsResolvingYoutube(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isYouTubeVideo, showModal, url, youtubeFallbackIframeUrl])
 
   // Try to get an iframe embed URL
   const iframeSrc = transformVideoUrl(url)
@@ -479,6 +525,38 @@ export function VideoPlayer({
                   className="h-full w-full rounded-xl bg-black"
                   useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                 />
+              ) : isYouTubeVideo ? (
+                isResolvingYoutube ? (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-white">
+                    <Loader2 size={32} className="animate-spin opacity-60" />
+                    <span className="text-sm opacity-60">
+                      正在解析视频地址...
+                    </span>
+                  </div>
+                ) : youtubePlayback?.kind === 'direct' ? (
+                  <video
+                    src={youtubePlayback.url}
+                    className="h-full w-full rounded-xl bg-black"
+                    controls
+                    autoPlay
+                    preload="metadata"
+                    onError={() => {
+                      if (!youtubeFallbackIframeUrl) return
+                      setYoutubePlayback({
+                        kind: 'iframe',
+                        url: youtubeFallbackIframeUrl,
+                      })
+                    }}
+                  />
+                ) : youtubePlayback?.kind === 'iframe' ? (
+                  <iframe
+                    src={youtubePlayback.url}
+                    className="h-full w-full rounded-xl"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+                    allowFullScreen
+                    allow="autoplay; encrypted-media; accelerometer; clipboard-write; gyroscope; picture-in-picture"
+                  />
+                ) : null
               ) : (
                 <iframe
                   src={iframeSrc.replace('autoplay=0', 'autoplay=1')}
@@ -490,7 +568,11 @@ export function VideoPlayer({
               )}
             </div>
             <button
-              onClick={() => setShowModal(false)}
+              onClick={() => {
+                setShowModal(false)
+                setYoutubePlayback(null)
+                setIsResolvingYoutube(false)
+              }}
               className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
             >
               <X size={20} />

@@ -20,6 +20,7 @@ export struct FeedSubscribeConfigView {
   @Prop targetUrl: string = ''
   @Prop targetTitle: string = ''
   @Prop targetSiteUrl: string = ''
+  @Prop targetImageUrl: string = ''
   @Prop targetDescription: string = ''
   @Prop targetCategory: string = ''
   @Prop sourceKind: string = ''
@@ -27,9 +28,9 @@ export struct FeedSubscribeConfigView {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
   onBack: () => void = () => {}
-  onSubscribed: () => void = () => {}
-  onSaved: () => void = () => {}
-  onUnsubscribed: () => void = () => {}
+  onSubscribed: () => void | Promise<void> = () => {}
+  onSaved: () => void | Promise<void> = () => {}
+  onUnsubscribed: () => void | Promise<void> = () => {}
 
   @State selectedView: FeedViewType = FeedViewType.Articles
   @State customTitle: string = ''
@@ -163,13 +164,16 @@ export struct FeedSubscribeConfigView {
   }
 
   private faviconUrl(): string {
+    if (this.targetImageUrl.trim()) {
+      return this.targetImageUrl.trim()
+    }
     const host = this.hostOf(this.targetSiteUrl || this.targetUrl)
     return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128` : ''
   }
 
-  private runCompletion(action: () => void, label: string): void {
+  private async runCompletion(action: () => void | Promise<void>, label: string): Promise<void> {
     try {
-      action()
+      await action()
     } catch (error) {
       console.error(`${label} completion failed: ${error instanceof Error ? error.message : error}`)
     }
@@ -188,7 +192,7 @@ export struct FeedSubscribeConfigView {
       return
     }
 
-    this.runCompletion(this.onUnsubscribed, 'unsubscribe')
+    await this.runCompletion(this.onUnsubscribed, 'unsubscribe')
   }
 
   private async handleSave(): Promise<void> {
@@ -201,20 +205,22 @@ export struct FeedSubscribeConfigView {
         url: this.mappedTargetUrl(),
         title: this.customTitle || this.targetTitle,
         siteUrl: this.targetSiteUrl,
+        imageUrl: this.targetImageUrl || this.existingFeed?.imageUrl || '',
         description: this.targetDescription,
         category: this.customCategory,
         view: this.selectedView,
         showInAll: !this.hideInTimeline,
       }
 
-      await AppRepository.updateFeed(this.existingFeed.id, draft)
-      this.showToast('保存成功', 2000)
+      const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
+      const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
+      this.showToast(refreshResult.fallbackUsed ? '保存成功，内容将在稍后刷新' : '保存成功', 2000)
     } catch (e) {
       this.showToast(`保存失败: ${e}`, 3000)
       return
     }
 
-    this.runCompletion(this.onSaved, 'save')
+    await this.runCompletion(this.onSaved, 'save')
   }
 
   private async handleSubscribe(): Promise<void> {
@@ -223,6 +229,7 @@ export struct FeedSubscribeConfigView {
         url: this.mappedTargetUrl(),
         title: this.customTitle || this.targetTitle,
         siteUrl: this.targetSiteUrl,
+        imageUrl: this.targetImageUrl || this.existingFeed?.imageUrl || '',
         description: this.targetDescription,
         category: this.customCategory,
         view: this.selectedView,
@@ -230,18 +237,20 @@ export struct FeedSubscribeConfigView {
       }
 
       if (this.existingFeed) {
-        await AppRepository.updateFeed(this.existingFeed.id, draft)
-        this.showToast('订阅已更新', 2000)
+        const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
+        const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
+        this.showToast(refreshResult.fallbackUsed ? '订阅已更新，内容将在稍后刷新' : '订阅已更新', 2000)
       } else {
-        await AppRepository.createFeed(draft)
-        this.showToast('订阅成功', 2000)
+        const createdFeed = await AppRepository.createFeed(draft)
+        const refreshResult = await AppRepository.refreshFeed(createdFeed.id)
+        this.showToast(refreshResult.fallbackUsed ? '订阅成功，内容将在稍后刷新' : '订阅成功', 2000)
       }
     } catch (e) {
       this.showToast(`订阅失败: ${e}`, 3000)
       return
     }
 
-    this.runCompletion(this.onSubscribed, 'subscribe')
+    await this.runCompletion(this.onSubscribed, 'subscribe')
   }
 
   private showToast(message: string, duration: number = 2000): void {
@@ -452,7 +461,6 @@ export struct FeedSubscribeConfigView {
       .clickEffect({ level: ClickEffectLevel.MIDDLE })
       .onClick(() => {
         this.selectedView = option.view
-        void this.loadExistingFeed()
         this.checkForChanges()
       })
   }
@@ -556,11 +564,11 @@ export struct FeedSubscribeConfigView {
 
               Stack({ alignContent: Alignment.Center }) {
                 Row() {
-                  Row()
-                    .width(this.indicatorSlotWidth())
-                    .height(38)
-                    .translate({ x: this.indicatorOffsetX() })
-                    .backgroundColor(this.indicatorColor())
+                Row()
+                  .width(this.indicatorSlotWidth())
+                  .height(38)
+                  .translate({ x: this.indicatorOffsetX() })
+                  .backgroundColor(this.indicatorColor())
                     .borderRadius(CHIP_RADIUS)
                     .border({ width: 0.6, color: this.indicatorBorderColor() })
                     .shadow({
@@ -570,6 +578,7 @@ export struct FeedSubscribeConfigView {
                       offsetY: 2,
                     })
                     .animation({ duration: 100, curve: Curve.EaseOut })
+                    .hitTestBehavior(HitTestMode.None)
                 }
                 .width('100%')
                 .height('100%')

@@ -47,6 +47,7 @@ import { ContextMenu, type ContextMenuAction } from '../ui/ContextMenu'
 import { FeedViewType } from '../../../../shared/types'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
+import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -516,14 +517,7 @@ export function EntryContent() {
   // Video media detection — check URL and media attachments (like Folo-dev)
   const videoMedia = useMemo(() => {
     if (!selectedEntry) return null
-    // Check if entry URL itself is a video platform link
-    if (selectedEntry.url && transformVideoUrl(selectedEntry.url)) {
-      return { url: selectedEntry.url, type: 'video' as const }
-    }
-    // Check media attachments
-    const video = selectedEntry.media?.find((m) => m.type === 'video')
-    if (video) return video
-    return null
+    return resolvePreferredEntryVideo(selectedEntry)
   }, [selectedEntry])
 
   const currentFeed = useMemo(

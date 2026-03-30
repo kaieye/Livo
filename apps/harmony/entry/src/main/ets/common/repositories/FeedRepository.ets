@@ -6,6 +6,7 @@ export interface FeedDraft {
   title: string
   url: string
   siteUrl: string
+  imageUrl: string
   description: string
   category: string
   view: FeedViewType
@@ -169,7 +170,7 @@ export class FeedRepository {
       title: draft.title.trim(),
       url: draft.url.trim(),
       siteUrl: draft.siteUrl.trim(),
-      imageUrl: '',
+      imageUrl: draft.imageUrl.trim(),
       description: draft.description.trim(),
       category: draft.category.trim(),
       view: draft.view,
@@ -202,6 +203,7 @@ export class FeedRepository {
         title: draft.title.trim(),
         url: draft.url.trim(),
         site_url: draft.siteUrl.trim(),
+        image_url: draft.imageUrl.trim() || current.imageUrl || '',
         description: draft.description.trim(),
         category: draft.category.trim(),
         view: draft.view,

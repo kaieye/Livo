@@ -6,6 +6,7 @@
     "pages/DiscoverSubscribeConfig",
     "pages/DiscoverPreview",
     "pages/ArticleDetail",
+    "pages/AccountLogin",
     "pages/Settings",
     "pages/GeneralSettings",
     "pages/AppearanceSettings",

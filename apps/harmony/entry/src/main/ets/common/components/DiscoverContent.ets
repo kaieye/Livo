@@ -61,6 +61,7 @@ class DiscoverFlowRouteParams {
   targetTitle: string = ''
   targetView: FeedViewType = FeedViewType.Articles
   siteUrl: string = ''
+  imageUrl: string = ''
   description: string = ''
   sourceKind: string = ''
   category: string = ''
@@ -94,6 +95,7 @@ function createDiscoverFlowRouteParams(
   targetTitle: string,
   targetView: FeedViewType,
   siteUrl: string,
+  imageUrl: string,
   description: string,
   sourceKind: string,
   category: string,
@@ -103,6 +105,7 @@ function createDiscoverFlowRouteParams(
   params.targetTitle = targetTitle
   params.targetView = targetView
   params.siteUrl = siteUrl
+  params.imageUrl = imageUrl
   params.description = description
   params.sourceKind = sourceKind
   params.category = category
@@ -123,6 +126,8 @@ export struct DiscoverContent {
   @State searchPlatform: DiscoverSearchPlatform = 'all'
   @State showPlatformChips: boolean = false
   @State isInteractingWithPlatformChips: boolean = false
+  @State keepPlatformChipsOnBlur: boolean = false
+  @State isPlatformSwitchSearching: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
@@ -137,6 +142,8 @@ export struct DiscoverContent {
   @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
   private searchSession: number = 0
+  private platformSwitchSession: number = 0
+  private searchInputController: TextInputController = new TextInputController()
 
   aboutToAppear(): void {
     if (!this.showBottomTabs) {
@@ -324,6 +331,34 @@ export struct DiscoverContent {
     }
   }
 
+  private async handlePlatformSwitch(platform: DiscoverSearchPlatform): Promise<void> {
+    if (this.searchPlatform === platform) {
+      return
+    }
+
+    this.searchPlatform = platform
+    this.remoteResults = []
+
+    if (!this.query.trim()) {
+      return
+    }
+
+    const session = Date.now()
+    this.platformSwitchSession = session
+    this.isPlatformSwitchSearching = true
+
+    await Promise.all([
+      this.refreshRemoteResults(),
+      new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), 220)
+      }),
+    ])
+
+    if (this.platformSwitchSession === session) {
+      this.isPlatformSwitchSearching = false
+    }
+  }
+
   private openPreviewPage(
     targetUrl: string,
     targetTitle: string,
@@ -341,6 +376,7 @@ export struct DiscoverContent {
         targetTitle,
         targetView,
         siteUrl,
+        '',
         description,
         sourceKind,
         category,
@@ -357,6 +393,7 @@ export struct DiscoverContent {
         candidate.targetTitle,
         candidate.targetView,
         candidate.siteUrl,
+        candidate.imageUrl ?? '',
         candidate.description,
         candidate.sourceKind,
         this.resolvedPlatformLabel(candidate),
@@ -493,8 +530,7 @@ export struct DiscoverContent {
         this.isInteractingWithPlatformChips = false
       })
       .onClick(() => {
-        this.searchPlatform = platform
-        void this.refreshRemoteResults()
+        void this.handlePlatformSwitch(platform)
       })
   }
 
@@ -506,7 +542,7 @@ export struct DiscoverContent {
           .fontSize(20)
           .fontColor([this.theme.textSecondary])
 
-        TextInput({ text: this.query, placeholder: '搜索订阅源' })
+        TextInput({ text: this.query, placeholder: '搜索订阅源', controller: this.searchInputController })
           .backgroundColor('transparent')
           .fontColor(this.theme.textPrimary)
           .placeholderColor(this.theme.textMuted)
@@ -517,6 +553,10 @@ export struct DiscoverContent {
             this.showPlatformChips = true
           })
           .onBlur(() => {
+            if (this.keepPlatformChipsOnBlur) {
+              this.keepPlatformChipsOnBlur = false
+              return
+            }
             setTimeout(() => {
               if (!this.isInteractingWithPlatformChips) {
                 this.showPlatformChips = false
@@ -741,11 +781,11 @@ export struct DiscoverContent {
 
   @Builder
   private SearchResultSection() {
-    if (this.hasSearchResults() || this.isSearchingRemote) {
+    if (this.hasSearchResults() || this.isSearchingRemote || this.isPlatformSwitchSearching) {
       Column({ space: 12 }) {
         this.SectionHeader('搜索结果')
 
-        if (this.isSearchingRemote && this.searchResults().length === 0) {
+        if ((this.isSearchingRemote || this.isPlatformSwitchSearching) && this.searchResults().length === 0) {
           Row({ space: 10 }) {
             LoadingProgress()
               .width(20)
@@ -820,6 +860,45 @@ export struct DiscoverContent {
     .borderRadius(CARD_RADIUS_LG)
   }
 
+  private isSearchModeActive(): boolean {
+    return !!this.query.trim() || this.isSearchingRemote || this.isPlatformSwitchSearching
+  }
+
+  @Builder
+  private SearchModeContent() {
+    Column({ space: 14 }) {
+      this.SearchResultSection()
+
+      if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote && !this.isPlatformSwitchSearching) {
+        this.NoResultState()
+      }
+
+      Row()
+        .height(24)
+        .width('100%')
+    }
+    .width('100%')
+    .constraintSize({ minHeight: '100%' })
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Start)
+    .transition(livoMotion.enterSoft(30))
+  }
+
+  @Builder
+  private DiscoverDefaultContent() {
+    Column({ space: 16 }) {
+      this.RecommendedFallbackSection()
+
+      Row()
+        .height(this.discoverBottomSpacerHeight())
+        .width('100%')
+    }
+    .width('100%')
+    .constraintSize({ minHeight: '100%' })
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Start)
+  }
+
   private shouldReserveBottomDock(): boolean {
     if (this.discoverOverlayLevel > 0) {
       return false
@@ -871,32 +950,42 @@ export struct DiscoverContent {
         .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 0 })
         .alignItems(HorizontalAlign.Start)
 
-        Scroll() {
-          Column({ space: 16 }) {
-            if (this.directUrlResult()) {
-              Column({ space: 12 }) {
-                this.SectionHeader('地址结果')
-                this.DirectUrlRow(this.directUrlResult())
-              }
-              .width('100%')
-              .alignItems(HorizontalAlign.Start)
-            }
-
-            this.CandidateSection('识别结果', this.resolvedCandidates())
-            this.CandidateSection('候选订阅', this.keywordCandidates())
-            this.SearchResultSection()
-            this.RecommendedFallbackSection()
-
-            if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote) {
-              this.NoResultState()
-            }
-
-            Row()
-              .height(this.discoverBottomSpacerHeight())
-              .width('100%')
+        if (this.isSearchModeActive()) {
+          Scroll() {
+            this.SearchModeContent()
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          .backgroundColor(this.theme.background)
+          .edgeEffect(EdgeEffect.Spring)
+          .nestedScroll({
+            scrollForward: NestedScrollMode.SELF_FIRST,
+            scrollBackward: NestedScrollMode.SELF_FIRST,
+          })
+          .onWillScroll((_scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
+            this.keepPlatformChipsOnBlur = true
+            this.searchInputController.stopEditing()
+          })
+          .padding({
+            left: PAGE_HORIZONTAL_PADDING,
+            right: PAGE_HORIZONTAL_PADDING,
+            top: 6,
+            bottom: 16,
+          })
+        } else {
+          Scroll() {
+            this.DiscoverDefaultContent()
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          .backgroundColor(this.theme.background)
+          .edgeEffect(EdgeEffect.Spring)
+          .nestedScroll({
+            scrollForward: NestedScrollMode.SELF_FIRST,
+            scrollBackward: NestedScrollMode.SELF_FIRST,
+          })
           .padding({
             left: PAGE_HORIZONTAL_PADDING,
             right: PAGE_HORIZONTAL_PADDING,
@@ -905,15 +994,6 @@ export struct DiscoverContent {
           })
           .margin({ bottom: this.discoverListExternalGap() })
         }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .backgroundColor(this.theme.background)
-        .edgeEffect(EdgeEffect.Spring)
-        .nestedScroll({
-          scrollForward: NestedScrollMode.SELF_FIRST,
-          scrollBackward: NestedScrollMode.SELF_FIRST,
-        })
       }
       .width('100%')
       .height('100%')
@@ -949,6 +1029,7 @@ export struct DiscoverContent {
           targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
           targetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
           targetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
+          targetImageUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).imageUrl,
           targetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
           targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
           sourceKind: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).sourceKind,
@@ -991,24 +1072,19 @@ struct DiscoverSubscribeConfigDestination {
   @Prop targetUrl: string = ''
   @Prop targetTitle: string = ''
   @Prop targetSiteUrl: string = ''
+  @Prop targetImageUrl: string = ''
   @Prop targetDescription: string = ''
   @Prop targetCategory: string = ''
   @Prop sourceKind: string = ''
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
-  aboutToAppear(): void {
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    if (currentLevel < 1) {
-      AppStorage.setOrCreate('discoverOverlayLevel', 1)
-    }
-  }
-
   build() {
     FeedSubscribeConfigView({
       targetUrl: this.targetUrl,
       targetTitle: this.targetTitle,
       targetSiteUrl: this.targetSiteUrl,
+      targetImageUrl: this.targetImageUrl,
       targetDescription: this.targetDescription,
       targetCategory: this.targetCategory,
       sourceKind: this.sourceKind,
@@ -1046,17 +1122,6 @@ struct DiscoverPreviewDestination {
   @Prop targetView: FeedViewType = FeedViewType.Articles
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
-  aboutToAppear(): void {
-    AppStorage.setOrCreate('discoverOverlayLevel', 1)
-  }
-
-  aboutToDisappear(): void {
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    if (currentLevel >= 1) {
-      AppStorage.setOrCreate('discoverOverlayLevel', currentLevel - 1)
-    }
-  }
-
   private openEditConfigPage(feed: Feed): void {
     AppStorage.setOrCreate('discoverOverlayLevel', 2)
     this.discoverPathStack.pushPathByName(
@@ -1066,6 +1131,7 @@ struct DiscoverPreviewDestination {
         feed.title,
         feed.view,
         feed.siteUrl || this.initialTargetSiteUrl,
+        feed.imageUrl || '',
         feed.description || this.initialTargetDescription,
         '编辑',
         feed.category || '',
@@ -1083,6 +1149,7 @@ struct DiscoverPreviewDestination {
         payload.feedTitle || this.initialTargetTitle,
         this.targetView,
         payload.siteUrl || this.initialTargetSiteUrl,
+        payload.imageUrl || '',
         payload.description || this.initialTargetDescription,
         '',
         this.targetCategory,
