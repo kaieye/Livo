@@ -10,5 +10,5 @@ export function buildYouTubeWebFallbackUrl(videoUrl: string): string {
   if (!videoId) {
     return ''
   }
-  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?controls=1&autoplay=1&mute=0&playsinline=1&rel=0`
+  return `https://m.youtube.com/watch?v=${encodeURIComponent(videoId)}&playnext=0&autoplay=1`
 }

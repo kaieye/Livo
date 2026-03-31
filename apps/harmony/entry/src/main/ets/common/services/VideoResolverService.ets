@@ -1,26 +1,17 @@
 import http from '@ohos.net.http'
 import { buildYouTubeWebFallbackUrl } from '../utils/YouTubePlaybackUrl'
 import { resolveFirstNonEmpty } from '../utils/AsyncResolution'
+import {
+  InvidiousFormatStream,
+  PipedStream,
+  selectInvidiousPlayableUrl,
+  selectPipedPlayableUrl,
+} from '../utils/VideoPlayableSelection'
 
 export interface YouTubePlaybackResolution {
   playableUrl: string
   fallbackUrl: string
   sourceLabel: string
-}
-
-interface InvidiousFormatStream {
-  url?: string
-  type?: string
-  quality?: string
-  container?: string
-  resolution?: string
-}
-
-interface PipedStream {
-  url?: string
-  quality?: string
-  mimeType?: string
-  videoOnly?: boolean
 }
 
 const INVIDIOUS_INSTANCES: string[] = [
@@ -75,11 +66,11 @@ export class VideoResolverService {
     }
 
     return {
-        playableUrl: '',
-        fallbackUrl,
-        sourceLabel: 'youtube-web',
-      }
+      playableUrl: '',
+      fallbackUrl,
+      sourceLabel: 'youtube-web',
     }
+  }
 
   private static async resolveDirectPlayableUrl(videoId: string): Promise<string> {
     return Promise.race([
@@ -143,15 +134,7 @@ export class VideoResolverService {
             return ''
           }
 
-          const mp4Streams = formatStreams
-            .filter((item: InvidiousFormatStream) =>
-              item.container === 'mp4' || `${item.type ?? ''}`.includes('video/mp4'))
-            .sort((left: InvidiousFormatStream, right: InvidiousFormatStream) =>
-              VideoResolverService.qualityValue(right.quality ?? right.resolution ?? '') -
-              VideoResolverService.qualityValue(left.quality ?? left.resolution ?? ''))
-
-          const best = mp4Streams[0] ?? formatStreams[0]
-          return best?.url || ''
+          return selectInvidiousPlayableUrl(formatStreams)
         } catch (_) {
           return ''
         }
@@ -170,33 +153,12 @@ export class VideoResolverService {
 
           const payload = JSON.parse(raw) as Record<string, Object | string>
           const hls = typeof payload['hls'] === 'string' ? payload['hls'] : ''
-          if (hls) {
-            return hls
-          }
-
           const videoStreams = payload['videoStreams'] as PipedStream[] | undefined
-          if (!videoStreams || videoStreams.length === 0) {
-            return ''
-          }
-
-          const combined = videoStreams
-            .filter((item: PipedStream) =>
-              item.videoOnly !== true && `${item.mimeType ?? ''}`.includes('video/mp4'))
-            .sort((left: PipedStream, right: PipedStream) =>
-              VideoResolverService.qualityValue(right.quality ?? '') -
-              VideoResolverService.qualityValue(left.quality ?? ''))
-
-          const best = combined[0]
-          return best?.url || ''
+          return selectPipedPlayableUrl(hls, videoStreams ?? [])
         } catch (_) {
           return ''
         }
       }
     }))
-  }
-
-  private static qualityValue(label: string): number {
-    const matched = (label || '').match(/(\d+)/)
-    return matched?.[1] ? Number(matched[1]) : 0
   }
 }

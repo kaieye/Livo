@@ -6,7 +6,7 @@ import {
   extractFeedMediaUrls,
 } from '../entry/src/main/ets/common/utils/FeedMediaUrl.ts'
 
-test('extractFeedMediaUrls returns direct media files from rss item markup', () => {
+test('extractFeedMediaUrls keeps direct media files and supported video page urls from rss item markup', () => {
   const itemBlock = `
     <item>
       <title>Video item</title>
@@ -21,6 +21,7 @@ test('extractFeedMediaUrls returns direct media files from rss item markup', () 
     [
       'https://cdn.example.com/video.mp4',
       'https://feeds.example.com/streams/live.m3u8',
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     ],
   )
 })

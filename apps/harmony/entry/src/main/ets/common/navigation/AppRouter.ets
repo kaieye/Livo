@@ -8,6 +8,7 @@ export interface RouteDefinition {
   discoverSubscribeConfig: string
   discoverPreview: string
   articleDetail: string
+  videoPlayer: string
   accountLogin: string
   settings: string
   generalSettings: string
@@ -25,6 +26,7 @@ export const ROUTES: RouteDefinition = {
   discoverSubscribeConfig: 'pages/DiscoverSubscribeConfig',
   discoverPreview: 'pages/DiscoverPreview',
   articleDetail: 'pages/ArticleDetail',
+  videoPlayer: 'pages/VideoPlayer',
   accountLogin: 'pages/AccountLogin',
   settings: 'pages/Settings',
   generalSettings: 'pages/GeneralSettings',
@@ -196,6 +198,12 @@ class AccountLoginParams {
   loginUrl: string = ''
 }
 
+class VideoPlayerParams {
+  title: string = ''
+  videoUrl: string = ''
+  previewUrl: string = ''
+}
+
 function getAppRouter() {
   const mainWindow = AppStorage.get<window.Window>('WindowClass')
   if (!mainWindow) {
@@ -270,6 +278,18 @@ export async function openAccountLogin(provider: string, title: string, loginUrl
     await getAppRouter().pushUrl(createRouterOptions(ROUTES.accountLogin, params))
   } catch (error) {
     throw new Error(`打开账号关联页面失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
+}
+
+export async function openVideoPlayer(title: string, videoUrl: string, previewUrl: string = ''): Promise<void> {
+  const params = new VideoPlayerParams()
+  params.title = title
+  params.videoUrl = videoUrl
+  params.previewUrl = previewUrl
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.videoPlayer, params))
+  } catch (error) {
+    throw new Error(`打开视频播放页失败：${error instanceof Error ? error.message : 'unknown error'}`)
   }
 }
 

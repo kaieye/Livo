@@ -11,15 +11,36 @@ function dedupeUrls(urls: string[]): string[] {
   return result
 }
 
+function isSupportedVideoPageUrl(url: string): boolean {
+  return /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/|b23\.tv\/)/i.test(
+    url,
+  )
+}
+
 export function selectArticleVideoUrls(
+  articleUrl: string,
   feedMediaUrls: string[],
   extractedVideoUrls: string[],
 ): string[] {
-  const normalizedFeedMediaUrls = dedupeUrls(feedMediaUrls).filter(
-    (url: string) => isDirectVideoUrl(url),
+  const dedupedFeedMediaUrls = dedupeUrls(feedMediaUrls)
+  const normalizedFeedMediaUrls = dedupedFeedMediaUrls.filter((url: string) =>
+    isDirectVideoUrl(url),
   )
   if (normalizedFeedMediaUrls.length > 0) {
     return normalizedFeedMediaUrls
+  }
+
+  const normalizedArticleUrl = (articleUrl || '').trim()
+  if (
+    normalizedArticleUrl &&
+    (isDirectVideoUrl(normalizedArticleUrl) ||
+      isSupportedVideoPageUrl(normalizedArticleUrl))
+  ) {
+    return dedupeUrls([normalizedArticleUrl, ...extractedVideoUrls])
+  }
+
+  if (dedupedFeedMediaUrls.length > 0) {
+    return dedupedFeedMediaUrls
   }
 
   return dedupeUrls(extractedVideoUrls)

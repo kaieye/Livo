@@ -553,6 +553,7 @@ function splitDenseParagraph(text: string): string[] {
 function buildArticleContentBlocks(content: string, baseUrl: string, articleUrl: string, mediaUrls: string[] = []): ArticleContentBlock[] {
   const raw = (content || '').trim()
   const videoUrls = selectArticleVideoUrls(
+    articleUrl,
     mediaUrls,
     extractSupportedVideoUrls(raw, baseUrl, articleUrl),
   )

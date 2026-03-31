@@ -1,11 +1,14 @@
 import Want from '@ohos.app.ability.Want'
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
-import { getStringParams, goBack } from '../common/navigation/AppRouter'
+import { getStringParams, goBack, openVideoPlayer } from '../common/navigation/AppRouter'
 import { ArticleAssistService } from '../common/services/ArticleAssistService'
 import { AppContextService } from '../common/services/AppContextService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
 import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
+import { resolveArticleSourceUrl } from '../common/utils/ArticleSourceUrl'
+import { resolveYouTubePlaybackDisplay } from '../common/utils/YouTubePlaybackDisplay'
+import { resolveVideoPlaybackTarget } from '../common/utils/VideoPlaybackTarget'
 import {
   shouldOpenYouTubeExternallyOnFallback,
   shouldUseYouTubeWebFallback,
@@ -227,6 +230,23 @@ struct ArticleDetail {
     return isDirectVideoUrl(videoUrl)
   }
 
+  private sourceUrl(): string {
+    if (!this.entry) {
+      return ''
+    }
+
+    return resolveArticleSourceUrl({
+      articleUrl: this.entry.articleUrl,
+      siteUrl: this.entry.siteUrl,
+      contentBlocks: this.entry.contentBlocks,
+    })
+  }
+
+  private sourceLabel(): string {
+    const hasVideoBlock = !!this.entry?.contentBlocks.find((block: ArticleContentBlock) => block.type === 'video')
+    return hasVideoBlock ? '视频来源' : '原始来源'
+  }
+
   private shouldRenderSummary(): boolean {
     const summary = this.cleanText(this.entry?.summary ?? '')
     if (!summary) {
@@ -292,6 +312,15 @@ struct ArticleDetail {
   }
 
   private playVideo(block: ArticleContentBlock): void {
+    const playbackTarget = resolveVideoPlaybackTarget(
+      this.isYouTubeVideo(block.videoUrl),
+      this.isDirectVideoFile(block.videoUrl),
+    )
+    if (playbackTarget === 'dedicated') {
+      void openVideoPlayer(this.entry?.title || '视频播放', block.videoUrl, block.imageUrl || '')
+      return
+    }
+
     this.activeVideoBlockId = block.id
     this.activeVideoPlayableUrl = ''
     this.activeVideoFallbackUrl = ''
@@ -302,9 +331,6 @@ struct ArticleDetail {
       return
     }
     if (this.isYouTubeVideo(block.videoUrl)) {
-      this.activeVideoFallbackUrl = shouldUseYouTubeWebFallback()
-        ? VideoResolverService.buildWebFallbackUrl(block.videoUrl)
-        : ''
       this.isResolvingActiveVideo = true
       this.actionHint = '正在解析视频地址...'
       void this.resolveAndPlayYouTubeVideo(block.videoUrl)
@@ -330,11 +356,15 @@ struct ArticleDetail {
     }
 
     this.isResolvingActiveVideo = false
-    this.activeVideoPlayableUrl = resolution.playableUrl
-    this.activeVideoFallbackUrl = resolution.fallbackUrl
+    const displayState = resolveYouTubePlaybackDisplay(
+      resolution.playableUrl,
+      shouldUseYouTubeWebFallback() ? resolution.fallbackUrl : '',
+    )
+    this.activeVideoPlayableUrl = displayState.playableUrl
+    this.activeVideoFallbackUrl = displayState.fallbackUrl
 
-    if (resolution.playableUrl) {
-      this.actionHint = ''
+    if (displayState.playableUrl) {
+      this.actionHint = displayState.actionHint
       return
     }
 
@@ -346,8 +376,7 @@ struct ArticleDetail {
       return
     }
 
-    this.activeVideoFallbackUrl = ''
-    this.actionHint = '当前视频暂时无法解析直链，请稍后重试'
+    this.actionHint = displayState.actionHint
   }
 
   @Builder
@@ -493,6 +522,17 @@ struct ArticleDetail {
                   .javaScriptAccess(true)
                   .domStorageAccess(true)
                   .mixedMode(MixedMode.All)
+                  .onControllerAttached(() => {
+                    try {
+                      webview.WebCookieManager.putAcceptCookieEnabled(true)
+                      webview.WebCookieManager.putAcceptThirdPartyCookieEnabled(true)
+                      this.videoWebController.setCustomUserAgent(this.webVideoUserAgent)
+                    } catch (_error) {
+                    }
+                  })
+                  .onPageBegin((_event: OnPageBeginEvent) => {
+                    this.actionHint = '正在加载 YouTube 播放器...'
+                  })
                   .onPageEnd((_event: OnPageEndEvent) => {
                     this.actionHint = ''
                   })
@@ -703,8 +743,8 @@ struct ArticleDetail {
                 }, (paragraph: string, index: number) => `${index}-${paragraph}`)
               }
 
-              if (this.entry!.siteUrl) {
-                Text(`原始来源：${this.entry!.siteUrl}`)
+              if (this.sourceUrl()) {
+                Text(`${this.sourceLabel()}：${this.sourceUrl()}`)
                   .fontSize(13)
                   .fontColor(this.theme.textMuted)
                   .width('100%')

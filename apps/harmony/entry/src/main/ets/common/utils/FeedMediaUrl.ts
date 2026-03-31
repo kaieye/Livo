@@ -76,6 +76,17 @@ function dedupeUrls(urls: string[]): string[] {
   return result
 }
 
+function isSupportedVideoPageUrl(url: string): boolean {
+  const normalized = (url || '').trim().toLowerCase()
+  if (!normalized) {
+    return false
+  }
+
+  return /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/|b23\.tv\/)/i.test(
+    normalized,
+  )
+}
+
 export function isDirectVideoMimeType(mimeType: string): boolean {
   const normalized = (mimeType || '').trim().toLowerCase()
   return (
@@ -108,7 +119,11 @@ export function extractFeedMediaUrls(
     if (!resolved) {
       return
     }
-    if (!isDirectVideoMimeType(mimeType) && !isDirectVideoUrl(resolved)) {
+    if (
+      !isDirectVideoMimeType(mimeType) &&
+      !isDirectVideoUrl(resolved) &&
+      !isSupportedVideoPageUrl(resolved)
+    ) {
       return
     }
     if (!results.includes(resolved)) {

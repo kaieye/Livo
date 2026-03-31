@@ -10,6 +10,6 @@ test('shouldOpenYouTubeExternallyOnFallback disables in-app web fallback for you
   assert.equal(shouldOpenYouTubeExternallyOnFallback(), false)
 })
 
-test('shouldUseYouTubeWebFallback enables in-app embed fallback for youtube playback', () => {
+test('shouldUseYouTubeWebFallback enables in-app web fallback for youtube playback', () => {
   assert.equal(shouldUseYouTubeWebFallback(), true)
 })
