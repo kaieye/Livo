@@ -110,15 +110,15 @@ test('presentTweetEntryFromEntry formats published label when absent', () => {
   assert.equal(presented.username, '')
 })
 
-test('presentTweetEntryFromEntry recovers username from summary markup', () => {
+test('presentTweetEntryFromEntry does not infer username from summary mention', () => {
   const entry: TweetEntryLike = {
     id: 'entry-3',
-    title: 'Handle recovery',
+    title: 'Handle mention',
     summary:
       '<p>Thanks <a href="https://x.com/openai">@OpenAI</a> for this.</p>',
     content: '',
     author: 'OpenAI',
-    articleUrl: 'https://example.com/articles/handle-recovery',
+    articleUrl: 'https://example.com/articles/handle-mention',
     imageUrl: '',
     mediaUrls: [],
     publishedAt: Date.UTC(2024, 3, 2, 0, 0, 0),
@@ -126,7 +126,7 @@ test('presentTweetEntryFromEntry recovers username from summary markup', () => {
 
   const presented = presentTweetEntryFromEntry(entry, '')
 
-  assert.equal(presented.username, '@OpenAI')
+  assert.equal(presented.username, '')
   assert.equal(presented.displayName, 'OpenAI')
   assert.equal(presented.avatarUrl, '')
 })

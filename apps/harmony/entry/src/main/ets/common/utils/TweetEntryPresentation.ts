@@ -114,18 +114,6 @@ function extractUrlUsername(value: string): string {
   return ''
 }
 
-function extractHandleFromText(value: string): string {
-  const normalized = normalizeWhitespace(
-    stripHtml(decodeBasicHtml(value || '')),
-  )
-  if (!normalized) {
-    return ''
-  }
-
-  const matched = normalized.match(/(?:^|[^A-Za-z0-9_])@([A-Za-z0-9_]{1,30})\b/)
-  return matched?.[1] ? `@${matched[1]}` : ''
-}
-
 function extractDisplayName(source: {
   author?: string
   title?: string
@@ -142,8 +130,6 @@ function extractUsername(source: {
   articleUrl?: string
   feedImageUrl?: string
   avatarUrl?: string
-  summary?: string
-  content?: string
 }): string {
   const byUrl =
     extractUrlUsername(source.feedImageUrl) ||
@@ -153,11 +139,7 @@ function extractUsername(source: {
     return `@${byUrl}`
   }
 
-  return (
-    extractHandleFromText(source.summary || '') ||
-    extractHandleFromText(source.content || '') ||
-    ''
-  )
+  return ''
 }
 
 function extractMetrics(
@@ -192,8 +174,6 @@ function presentTweetEntryFromSource(source: {
   publishedLabel?: string
   mediaUrls?: string[]
   avatarUrl?: string
-  summary?: string
-  content?: string
 }): TweetEntryPresentation {
   const mediaUrls = uniqueUrls([
     ...(source.mediaUrls ?? []),
