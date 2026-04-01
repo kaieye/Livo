@@ -96,11 +96,13 @@ export struct TweetEntryCard {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          Text(this.presentation.username)
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (this.presentation.username.trim()) {
+            Text(this.presentation.username)
+              .fontSize(12)
+              .fontColor(this.theme.textMuted)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)

@@ -67,6 +67,10 @@ test('TweetEntryCard renders tweet-specific sections', () => {
     source,
     /presentation\.replyCount|presentation\.repostCount|presentation\.likeCount|presentation\.viewCount/,
   )
+  assert.match(
+    source,
+    /if \(this\.presentation\.username\.trim\(\)\) \{\s*Text\(this\.presentation\.username\)/s,
+  )
 })
 
 test('FeedSubscribeConfigView guards duplicate subscribe submissions and rechecks existing feed by url', () => {
