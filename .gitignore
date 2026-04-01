@@ -12,3 +12,4 @@ __pycache__/
 .env
 .env.local
 Folo-dev/
+.worktrees/
