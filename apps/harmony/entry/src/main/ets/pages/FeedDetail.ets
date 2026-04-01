@@ -12,11 +12,12 @@ struct FeedDetail {
   @State targetUrl: string = ''
   @State targetTitle: string = ''
   @State targetSiteUrl: string = ''
+  @State targetImageUrl: string = ''
   @State targetDescription: string = ''
   @State targetCategory: string = ''
   @State targetView: FeedViewType = FeedViewType.Articles
   @State sourceKind: string = ''
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.lightPalette()
 
   aboutToAppear(): void {
     const params = getStringParams()
@@ -25,6 +26,7 @@ struct FeedDetail {
       this.targetUrl = params.targetUrl ?? ''
       this.targetTitle = params.targetTitle ?? ''
       this.targetSiteUrl = params.siteUrl ?? ''
+      this.targetImageUrl = params.imageUrl ?? ''
       this.targetDescription = params.description ?? ''
       this.targetCategory = params.category ?? ''
       this.sourceKind = params.sourceKind ?? ''
@@ -45,6 +47,7 @@ struct FeedDetail {
       targetTitle: feed.title,
       targetView: feed.view as FeedViewType,
       siteUrl: feed.siteUrl || '',
+      imageUrl: feed.imageUrl || '',
       description: feed.description || '',
       sourceKind: '编辑',
       category: feed.category || '',
@@ -57,6 +60,7 @@ struct FeedDetail {
       targetTitle: payload.feedTitle || this.targetTitle,
       targetView: this.targetView,
       siteUrl: payload.siteUrl || this.targetSiteUrl,
+      imageUrl: payload.imageUrl || this.targetImageUrl,
       description: payload.description || this.targetDescription,
       sourceKind: this.sourceKind,
       category: this.targetCategory,
@@ -70,6 +74,7 @@ struct FeedDetail {
         targetUrl: this.targetUrl,
         initialTargetTitle: this.targetTitle,
         initialTargetSiteUrl: this.targetSiteUrl,
+        initialTargetImageUrl: this.targetImageUrl,
         initialTargetDescription: this.targetDescription,
         targetCategory: this.targetCategory,
         targetView: this.targetView,

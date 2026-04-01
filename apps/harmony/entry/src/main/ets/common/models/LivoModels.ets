@@ -1,5 +1,7 @@
 import { selectArticleVideoUrls } from '../utils/ArticleVideoSource'
+import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
+import { extractEntryGalleryImageUrls } from '../utils/PictureGallery'
 
 export enum FeedViewType {
   Articles = 0,
@@ -80,10 +82,15 @@ export interface EntryCardModel {
   feedId: string
   title: string
   summary: string
+  imageUrl: string
+  feedImageUrl: string
   author: string
+  articleUrl: string
+  publishedAt: number
   publishedLabel: string
   readingLabel: string
   tags: string[]
+  mediaUrls?: string[]
   feedTitle: string
   feedCategory: string
   viewLabel: string
@@ -239,6 +246,33 @@ export function formatPublishedAt(timestamp: number): string {
   return `${sameYear ? '' : `${target.getFullYear()}年`}${target.getMonth() + 1}月${target.getDate()}日 ${hours}:${minutes}`
 }
 
+export function selectPictureMediaUrls(mediaUrls: string[]): string[] {
+  const result: string[] = []
+
+  mediaUrls.forEach((url: string) => {
+    const trimmed = (url || '').trim()
+    if (!trimmed) {
+      return
+    }
+
+    const normalized = trimmed.toLowerCase()
+    const isImageUrl = /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)
+      || normalized.includes('cdninstagram')
+      || normalized.includes('scontent.')
+      || normalized.includes('fbcdn.net')
+      || normalized.includes('googleusercontent.com/')
+      || normalized.includes('ytimg.com/')
+
+    if (!isImageUrl || result.includes(trimmed)) {
+      return
+    }
+
+    result.push(trimmed)
+  })
+
+  return result
+}
+
 export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
   const definition = viewDefinitionOf(feed.view)
 
@@ -259,6 +293,13 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
 
 export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
+  const pictureMediaUrls = extractEntryGalleryImageUrls({
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feed.siteUrl ?? feed.url,
+    mediaUrls: entry.mediaUrls ?? [],
+  })
   const hasVideoMedia = extractSupportedVideoUrls(
     [entry.title, entry.summary, entry.content, entry.url, ...(entry.mediaUrls ?? [])].join('\n'),
     entry.url || feed.siteUrl || feed.url,
@@ -270,10 +311,22 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     feedId: entry.feedId,
     title: entry.title,
     summary: entry.summary,
+    imageUrl: resolveEntryCardImageUrl({
+      title: entry.title,
+      summary: entry.summary,
+      content: entry.content,
+      articleUrl: entry.url,
+      siteUrl: feed.siteUrl ?? feed.url,
+      mediaUrls: entry.mediaUrls ?? [],
+    }),
+    feedImageUrl: feed.imageUrl ?? '',
     author: entry.author,
+    articleUrl: entry.url,
+    publishedAt: entry.publishedAt,
     publishedLabel: formatPublishedAt(entry.publishedAt),
     readingLabel: `${entry.readingTimeMinutes} 分钟`,
     tags: entry.tags,
+    mediaUrls: selectPictureMediaUrls(pictureMediaUrls),
     feedTitle: feed.title,
     feedCategory: feed.category ?? '未分类',
     viewLabel: definition.label,
@@ -296,10 +349,15 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     feedId: card.feedId,
     title: card.title,
     summary: card.summary,
+    imageUrl: card.imageUrl,
+    feedImageUrl: card.feedImageUrl,
     author: card.author,
+    articleUrl: card.articleUrl,
+    publishedAt: card.publishedAt,
     publishedLabel: card.publishedLabel,
     readingLabel: card.readingLabel,
     tags: card.tags,
+    mediaUrls: card.mediaUrls,
     feedTitle: card.feedTitle,
     feedCategory: card.feedCategory,
     viewLabel: card.viewLabel,
@@ -309,7 +367,6 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     isStarred: card.isStarred,
     contentParagraphs: paragraphs,
     contentBlocks: blocks,
-    articleUrl: entry.url,
     siteUrl: feed.siteUrl ?? feed.url,
   }
 }

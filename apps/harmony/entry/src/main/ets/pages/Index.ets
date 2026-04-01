@@ -4,9 +4,12 @@ import window from '@ohos.window'
 import { BottomTabs } from '../common/components/BottomTabs'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
+import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 import { PageHeader } from '../common/components/PageHeader'
-import { EntryCardModel } from '../common/models/LivoModels'
+import { PictureEntryCard } from '../common/components/PictureEntryCard'
+import { Entry, EntryCardModel, selectPictureMediaUrls } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
 import { livoMotion } from '../common/ui/Motion'
 import {
   CARD_RADIUS_MD,
@@ -28,8 +31,10 @@ const MODE_SCENE_DURATION: number = 240
 struct Index {
   @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
+  @StorageProp('discoverHasForegroundOverlay') discoverHasForegroundOverlay: boolean = false
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
+  @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @State featuredEntries: EntryCardModel[] = []
   @State feedSourceLabel: string = '准备加载本地内容'
   @State isRefreshing: boolean = false
@@ -288,8 +293,49 @@ struct Index {
     )
   }
 
+  private handleFeedsChanged(): void {
+    void this.reloadFeaturedEntriesFromLocal()
+  }
+
+  private async reloadFeaturedEntriesFromLocal(): Promise<void> {
+    this.featuredEntries = await AppRepository.featuredEntries()
+    this.feedSourceLabel = '本地内容已同步'
+  }
+
   private filteredEntries(): EntryCardModel[] {
     return this.filteredEntriesFor(this.mode)
+  }
+
+  private pictureCaption(entry: EntryCardModel): string {
+    const title = (entry.title || '').trim()
+    if (title && title !== '远程条目') {
+      return title
+    }
+    return (entry.summary || '').trim()
+  }
+
+  private pictureGalleryUrls(entry: EntryCardModel): string[] {
+    return selectPictureMediaUrls(entry.mediaUrls ?? [])
+  }
+
+  private pictureCardEntry(entry: EntryCardModel): Entry {
+    return {
+      id: entry.id,
+      feedId: entry.feedId,
+      title: entry.title,
+      url: entry.articleUrl,
+      summary: entry.summary,
+      content: '',
+      author: entry.author,
+      publishedAt: entry.publishedAt,
+      readingTimeMinutes: 0,
+      tags: entry.tags,
+      mediaUrls: entry.mediaUrls ?? [],
+      isRead: entry.isRead,
+      isStarred: entry.isStarred,
+      createdAt: entry.publishedAt,
+      updatedAt: entry.publishedAt,
+    }
   }
 
   private searchAllEntries(): EntryCardModel[] {
@@ -607,9 +653,84 @@ struct Index {
   }
 
   @Builder
+  private PictureEntryList() {
+    List({ space: 12 }) {
+      ForEach(this.filteredEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
+        ListItem() {
+          PictureEntryCard({
+            entry: this.pictureCardEntry(entry),
+            index,
+            authorLabel: entry.author || entry.feedTitle,
+            feedImageUrl: entry.feedImageUrl,
+            caption: this.pictureCaption(entry),
+            pictureUrl: entry.imageUrl,
+            galleryUrls: this.pictureGalleryUrls(entry),
+            theme: this.theme,
+            onOpen: () => this.openEntry(entry.id),
+          })
+        }
+        .width('100%')
+      }, (entry: EntryCardModel) => entry.id)
+
+      if (this.filteredEntriesFor('pictures').length === 0) {
+        ListItem() {
+          Column({ space: 8 }) {
+            Text('还没有可展示的条目')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.theme.textPrimary)
+
+            Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+              .fontSize(14)
+              .lineHeight(22)
+              .fontColor(this.theme.textSecondary)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .padding(20)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_MD)
+          .border({ width: 0.8, color: this.theme.divider })
+          .width('100%')
+        }
+      }
+
+      ListItem() {
+        Row().height(100).width('100%')
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring)
+  }
+
+  @Builder
   private ModeEntriesScene(mode: SubscriptionMode) {
     Stack() {
-      this.EntryList(mode)
+      if (resolveHomeVideoSceneKind(mode) === 'grid') {
+        Scroll() {
+          Column({ space: 0 }) {
+            HomeVideoGrid({
+              entries: this.filteredEntriesFor(mode),
+              inheritedTheme: this.theme,
+              onOpenEntry: (entry: EntryCardModel) => {
+                this.openEntry(entry.id)
+              },
+            })
+          }
+          .width('100%')
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 100 })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
+      } else if (mode === 'pictures') {
+        this.PictureEntryList()
+      } else {
+        this.EntryList(mode)
+      }
     }
     .width('100%')
     .height('100%')
@@ -651,23 +772,9 @@ struct Index {
             this.requestModeSwitch(mode)
           },
         })
-
-        Row() {
-          Text(this.isRefreshing ? '正在刷新内容...' : this.feedSourceLabel)
-            .fontSize(META_FONT_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .layoutWeight(1)
-
-          Text(`${this.filteredEntries().length} 条`)
-            .fontSize(META_FONT_SIZE)
-            .fontColor(this.theme.textMuted)
-        }
-        .width('100%')
-        .padding({ left: 4, right: 4 })
-        .transition(livoMotion.enterRise(60))
       }
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 4 })
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 10 })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
         Stack() {
@@ -696,6 +803,14 @@ struct Index {
     this.syncRequestedRootTab()
   }
 
+  private shouldHideBottomTabs(): boolean {
+    return (
+      (this.activeRootTabId === 'discover' && this.discoverHasForegroundOverlay)
+      || (this.activeRootTabId === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
+      || (this.activeRootTabId === 'settings' && this.settingsOverlayLevel > 0)
+    )
+  }
+
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Stack() {
@@ -709,20 +824,17 @@ struct Index {
       .padding({ top: this.topAvoidArea })
       .backgroundColor(this.theme.background)
 
-      if (!(
-        (this.activeRootTabId === 'discover' && this.discoverOverlayLevel > 0)
-        || (this.activeRootTabId === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
-        || (this.activeRootTabId === 'settings' && this.settingsOverlayLevel > 0)
-      )) {
-        BottomTabs({
-          activeTab: this.highlightedRootTabId,
-          theme: this.theme,
-          useTabsController: true,
-          onTabRequest: (tabId: RootTabId) => {
-            this.requestRootTabSwitch(tabId)
-          },
-        })
-      }
+      BottomTabs({
+        activeTab: this.highlightedRootTabId,
+        theme: this.theme,
+        useTabsController: true,
+        onTabRequest: (tabId: RootTabId) => {
+          this.requestRootTabSwitch(tabId)
+        },
+      })
+        .visibility(this.shouldHideBottomTabs() ? Visibility.Hidden : Visibility.Visible)
+        .opacity(this.shouldHideBottomTabs() ? 0 : 1)
+        .animation({ duration: 90, curve: Curve.EaseOut })
 
       if (this.showSearch) {
         Column() {

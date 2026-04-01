@@ -1,6 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { AppDatabaseService } from '../services/AppDatabaseService'
+import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
 
 export interface FeedDraft {
   title: string
@@ -14,6 +15,7 @@ export interface FeedDraft {
 }
 
 export interface UpdateFetchStateParams {
+  url?: string
   title?: string
   siteUrl?: string
   imageUrl?: string
@@ -85,6 +87,54 @@ function createFeedId(url: string): string {
 }
 
 export class FeedRepository {
+  static async getByUrl(url: string): Promise<Feed | undefined> {
+    try {
+      const store = await AppDatabaseService.getStore()
+      const predicates = new relationalStore.RdbPredicates('feeds')
+      predicates.equalTo('url', url.trim())
+      predicates.limitAs(1)
+      const result = await store.query(predicates)
+
+      if (!result.goToNextRow()) {
+        result.close()
+        return undefined
+      }
+
+      const feed = mapFeed(result)
+      result.close()
+      return feed
+    } catch (error) {
+      throw new Error(`按 URL 读取订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
+  }
+
+  static async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
+    try {
+      const trimmed = siteUrl.trim()
+      if (!trimmed) {
+        return undefined
+      }
+
+      const store = await AppDatabaseService.getStore()
+      const predicates = new relationalStore.RdbPredicates('feeds')
+      predicates.equalTo('site_url', trimmed)
+      predicates.orderByDesc('updated_at')
+      predicates.limitAs(1)
+      const result = await store.query(predicates)
+
+      if (!result.goToNextRow()) {
+        result.close()
+        return undefined
+      }
+
+      const feed = mapFeed(result)
+      result.close()
+      return feed
+    } catch (error) {
+      throw new Error(`按站点读取订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
+  }
+
   static async list(): Promise<Feed[]> {
     try {
       const store = await AppDatabaseService.getStore()
@@ -165,13 +215,15 @@ export class FeedRepository {
 
   static async create(draft: FeedDraft): Promise<Feed> {
     const now = Date.now()
+    const normalizedUrl = draft.url.trim()
+    const normalizedSiteUrl = draft.siteUrl.trim()
     const feed: Feed = {
-      id: createFeedId(draft.url),
-      title: draft.title.trim(),
-      url: draft.url.trim(),
-      siteUrl: draft.siteUrl.trim(),
+      id: createFeedId(normalizedUrl),
+      title: normalizeSocialFeedTitle(draft.title.trim(), normalizedUrl, normalizedSiteUrl),
+      url: normalizedUrl,
+      siteUrl: normalizedSiteUrl,
       imageUrl: draft.imageUrl.trim(),
-      description: draft.description.trim(),
+      description: normalizeSocialFeedDescription(draft.description.trim(), normalizedUrl, normalizedSiteUrl),
       category: draft.category.trim(),
       view: draft.view,
       showInAll: draft.showInAll,
@@ -198,13 +250,15 @@ export class FeedRepository {
       const store = await AppDatabaseService.getStore()
       const predicates = new relationalStore.RdbPredicates('feeds')
       predicates.equalTo('id', feedId)
+      const nextUrl = draft.url.trim()
+      const nextSiteUrl = draft.siteUrl.trim()
 
       await store.update({
-        title: draft.title.trim(),
-        url: draft.url.trim(),
-        site_url: draft.siteUrl.trim(),
+        title: normalizeSocialFeedTitle(draft.title.trim(), nextUrl, nextSiteUrl),
+        url: nextUrl,
+        site_url: nextSiteUrl,
         image_url: draft.imageUrl.trim() || current.imageUrl || '',
-        description: draft.description.trim(),
+        description: normalizeSocialFeedDescription(draft.description.trim(), nextUrl, nextSiteUrl),
         category: draft.category.trim(),
         view: draft.view,
         show_in_all: boolToNumber(draft.showInAll),
@@ -222,14 +276,21 @@ export class FeedRepository {
     next: UpdateFetchStateParams,
   ): Promise<void> {
     try {
+      const current = await FeedRepository.getById(feedId)
+      if (!current) {
+        throw new Error('订阅源不存在')
+      }
       const store = await AppDatabaseService.getStore()
       const predicates = new relationalStore.RdbPredicates('feeds')
       predicates.equalTo('id', feedId)
+      const normalizedUrl = (next.url ?? current.url ?? '').trim()
+      const normalizedSiteUrl = (next.siteUrl ?? current.siteUrl ?? '').trim()
       await store.update({
-        title: next.title ?? '',
-        site_url: next.siteUrl ?? '',
+        url: normalizedUrl,
+        title: normalizeSocialFeedTitle(next.title ?? '', normalizedUrl, normalizedSiteUrl),
+        site_url: normalizedSiteUrl,
         image_url: next.imageUrl ?? '',
-        description: next.description ?? '',
+        description: normalizeSocialFeedDescription(next.description ?? '', normalizedUrl, normalizedSiteUrl),
         last_fetched: next.lastFetched ?? 0,
         etag: next.etag ?? '',
         last_modified: next.lastModified ?? '',

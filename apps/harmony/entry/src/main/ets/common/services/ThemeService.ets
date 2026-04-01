@@ -52,7 +52,7 @@ const LIGHT_PALETTE: ThemePalette = {
 }
 
 export class ThemeService {
-  private static cachedPalette: ThemePalette = DARK_PALETTE
+  private static cachedPalette: ThemePalette = LIGHT_PALETTE
 
   private static resolveAccentColor(accent: ThemeAccent): string {
     switch (accent) {
@@ -138,7 +138,7 @@ export class ThemeService {
       const configuration = await context.resourceManager.getConfiguration()
       return configuration.colorMode === resourceManager.ColorMode.DARK
     } catch (error) {
-      return true
+      return false
     }
   }
 }

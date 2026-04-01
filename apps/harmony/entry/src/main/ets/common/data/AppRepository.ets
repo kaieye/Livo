@@ -23,7 +23,14 @@ import { seedSettings, SEED_ENTRIES, SEED_FEEDS } from './SeedData'
 import { AppPreferenceService } from '../services/AppPreferenceService'
 import { AccountSessionService } from '../services/AccountSessionService'
 import { BilibiliFollowingsService } from '../services/BilibiliFollowingsService'
-import { RssFeedService } from '../services/RssFeedService'
+import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { canonicalInstagramFeedUrl, normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
+import {
+  resolveSocialFeedDisplayDescription,
+  resolveSocialFeedDisplayImageUrl,
+  resolveSocialFeedDisplayTitle,
+} from '../utils/SocialFeedPresentation'
+import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
 
 function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardModel[] {
   const result: EntryCardModel[] = []
@@ -41,13 +48,16 @@ const HOME_ENTRY_CANDIDATE_LIMIT: number = 400
 
 async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
   const unreadCount = await EntryRepository.countUnreadByFeed(feed.id)
+  const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+  const displayDescription = resolveSocialFeedDisplayDescription(feed.description || '', feed.url, feed.siteUrl || '')
+  const displayImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', displayTitle)
   return {
     id: feed.id,
-    title: feed.title,
+    title: displayTitle,
     url: feed.url,
     siteUrl: feed.siteUrl,
-    imageUrl: feed.imageUrl,
-    description: feed.description,
+    imageUrl: displayImageUrl,
+    description: displayDescription,
     category: feed.category,
     view: feed.view,
     showInAll: feed.showInAll,
@@ -66,7 +76,26 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
     return undefined
   }
 
-  return toEntryCardModel(entry, feed)
+  const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+  const displayDescription = resolveSocialFeedDisplayDescription(feed.description || '', feed.url, feed.siteUrl || '')
+  const displayImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', displayTitle)
+  return toEntryCardModel(entry, {
+    id: feed.id,
+    title: displayTitle,
+    url: feed.url,
+    siteUrl: feed.siteUrl,
+    imageUrl: displayImageUrl,
+    description: displayDescription,
+    category: feed.category,
+    view: feed.view,
+    showInAll: feed.showInAll,
+    lastFetched: feed.lastFetched,
+    etag: feed.etag,
+    lastModified: feed.lastModified,
+    errorCount: feed.errorCount,
+    createdAt: feed.createdAt,
+    updatedAt: feed.updatedAt,
+  })
 }
 
 export class AppRepository {
@@ -254,8 +283,29 @@ export class AppRepository {
 
   static async createFeed(draft: FeedDraft): Promise<FeedCardModel> {
     await AppRepository.bootstrap()
-    const feed = await FeedRepository.create(draft)
-    return toFeedCardModel(await feedWithCount(feed))
+    try {
+      const feed = await FeedRepository.create(draft)
+      return toFeedCardModel(await feedWithCount(feed))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error'
+      if (message.includes('constraint violation')) {
+        const existing = await FeedRepository.getByUrl(draft.url)
+        if (existing) {
+          return toFeedCardModel(await feedWithCount(existing))
+        }
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  static async feedEntityByUrl(url: string): Promise<Feed | undefined> {
+    await AppRepository.bootstrap()
+    return FeedRepository.getByUrl(url)
+  }
+
+  static async feedEntityBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
+    await AppRepository.bootstrap()
+    return FeedRepository.getBySiteUrl(siteUrl)
   }
 
   static async updateFeed(feedId: string, draft: FeedDraft): Promise<FeedCardModel> {
@@ -289,12 +339,17 @@ export class AppRepository {
 
     try {
       const payload = await RssFeedService.fetchFeedEntries(feed)
+      const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
+      const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
+      const nextTitle = normalizeSocialFeedTitle(payload.feedTitle || feed.title, nextUrl, nextSiteUrl)
+      const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
       await EntryRepository.upsertMany(payload.entries)
       await FeedRepository.updateFetchState(feedId, {
-        title: payload.feedTitle || feed.title,
-        siteUrl: payload.siteUrl || feed.siteUrl || '',
+        url: nextUrl,
+        title: nextTitle,
+        siteUrl: nextSiteUrl,
         imageUrl: payload.imageUrl || feed.imageUrl || '',
-        description: payload.description || feed.description || '',
+        description: nextDescription,
         lastFetched: Date.now(),
         etag: payload.etag,
         lastModified: payload.lastModified,
@@ -321,6 +376,33 @@ export class AppRepository {
       }
       return result
     }
+  }
+
+  static async seedFeedFromPreview(feedId: string, payload: FeedRefreshPayload): Promise<void> {
+    await AppRepository.bootstrap()
+    const feed = await FeedRepository.getById(feedId)
+
+    if (!feed) {
+      throw new Error('订阅源不存在')
+    }
+
+    const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
+    const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
+    const nextTitle = normalizeSocialFeedTitle(payload.feedTitle || feed.title, nextUrl, nextSiteUrl)
+    const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
+    await EntryRepository.removeByFeed(feedId)
+    await EntryRepository.upsertMany(rekeyPreviewEntries(feedId, payload.entries))
+    await FeedRepository.updateFetchState(feedId, {
+      url: nextUrl,
+      title: nextTitle,
+      siteUrl: nextSiteUrl,
+      imageUrl: payload.imageUrl || feed.imageUrl || '',
+      description: nextDescription,
+      lastFetched: Date.now(),
+      etag: payload.etag,
+      lastModified: payload.lastModified,
+      errorCount: 0,
+    })
   }
 
   static async refreshAllFeeds(): Promise<RemoteFeedResult> {

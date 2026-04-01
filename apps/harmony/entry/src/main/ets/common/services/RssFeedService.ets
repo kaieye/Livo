@@ -1,6 +1,7 @@
 import http from '@ohos.net.http'
 import { Entry, Feed, FeedViewType } from '../models/LivoModels'
 import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../utils/FeedMediaUrl'
+import { expandRssHubFallbackRoutes } from '../utils/RssHubFallbackRoute'
 
 interface ParsedItem {
   id: string
@@ -21,11 +22,24 @@ export interface FeedRefreshPayload {
   siteUrl: string
   imageUrl: string
   description: string
+  resolvedFeedUrl?: string
   entries: Entry[]
 }
 
-function decodeHtml(value: string): string {
+function decodeNumericEntities(value: string): string {
   return value
+    .replace(/&#x([0-9a-f]+);/gi, (matched: string, hex: string) => {
+      const code = parseInt(hex, 16)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : matched
+    })
+    .replace(/&#([0-9]+);/g, (matched: string, digits: string) => {
+      const code = parseInt(digits, 10)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : matched
+    })
+}
+
+function decodeHtml(value: string): string {
+  return decodeNumericEntities(value)
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
@@ -127,8 +141,8 @@ function estimateReadingMinutes(content: string): number {
   return Math.max(1, Math.ceil(plainText.length / 220))
 }
 
-function createEntryId(feedId: string, link: string, title: string, index: number): string {
-  const normalized = `${feedId}-${link || title || index}`.toLowerCase()
+function createEntryId(feedId: string, identity: string, link: string, title: string, index: number): string {
+  const normalized = `${feedId}-${identity || link || title || index}`.toLowerCase()
   const compact = normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   return compact || `${feedId}-${index}`
 }
@@ -289,6 +303,7 @@ function parseRssItems(feedId: string, xml: string, baseUrl: string): ParsedItem
   return itemMatches.map((itemBlock: string, index: number) => {
     const title = stripHtml(pickTag(itemBlock, 'title')) || `远程条目 ${index + 1}`
     const link = stripHtml(pickTag(itemBlock, 'link'))
+    const guid = stripHtml(pickTag(itemBlock, 'guid'))
     const description = pickFirst(itemBlock, ['content:encoded', 'description'])
     const summary = stripHtml(description) || '这条内容暂时没有摘要。'
     const author = stripHtml(pickFirst(itemBlock, ['author', 'dc:creator'])) || '未知作者'
@@ -297,7 +312,7 @@ function parseRssItems(feedId: string, xml: string, baseUrl: string): ParsedItem
     const content = appendFeedMediaUrlsToContent(normalizeRichContent(description, summary), mediaUrls)
     
     const parsedItem: ParsedItem = {
-      id: createEntryId(feedId, link, title, index),
+      id: createEntryId(feedId, guid, link, title, index),
       title,
       link,
       summary,
@@ -317,6 +332,7 @@ function parseAtomItems(feedId: string, xml: string, baseUrl: string): ParsedIte
   return entryMatches.map((entryBlock: string, index: number) => {
     const title = stripHtml(pickTag(entryBlock, 'title')) || `远程条目 ${index + 1}`
     const link = parseAtomLink(entryBlock)
+    const entryId = stripHtml(pickTag(entryBlock, 'id'))
     const contentBlock = pickFirst(entryBlock, ['content', 'summary'])
     const summary = stripHtml(contentBlock) || '这条内容暂时没有摘要。'
     const authorBlock = pickTag(entryBlock, 'author')
@@ -326,7 +342,7 @@ function parseAtomItems(feedId: string, xml: string, baseUrl: string): ParsedIte
     const content = appendFeedMediaUrlsToContent(normalizeRichContent(contentBlock, summary), mediaUrls)
 
     const parsedItem: ParsedItem = {
-      id: createEntryId(feedId, link, title, index),
+      id: createEntryId(feedId, entryId, link, title, index),
       title,
       link,
       summary,
@@ -356,6 +372,7 @@ const RSSHUB_INSTANCES = [
 interface RssHubInstanceResult {
   response: http.HttpResponse
   request: http.HttpRequest
+  finalUrl: string
 }
 
 export class RssFeedService {
@@ -447,91 +464,90 @@ export class RssFeedService {
    * 尝试多个 RSSHub 实例，返回成功的响应和请求对象
    */
   private static async tryRssHubInstances(
-    route: string, 
+    route: string,
     headers: Record<string, string>
   ): Promise<RssHubInstanceResult | null> {
     const errors: string[] = []
     let bestResult: RssHubInstanceResult | null = null
     let bestStatusCode = 0
-    
+    const routes = expandRssHubFallbackRoutes(route)
+
     for (const instance of RSSHUB_INSTANCES) {
-      const url = `${instance}${route}`
-      console.info(`[RssFeedService] Trying RSSHub instance: ${url}`)
-      
-      // 为每个实例创建特定的请求头（使用 Object.keys 避免 for...in）
-      const instanceHeaders: Record<string, string> = {}
-      const headerKeys = Object.keys(headers)
-      for (let i = 0; i < headerKeys.length; i++) {
-        const key = headerKeys[i]
-        // 跳过 Accept-Encoding 头部，可能导致鸿蒙解压问题
-        if (key !== 'Accept-Encoding') {
-          instanceHeaders[key] = headers[key]
+      for (const candidateRoute of routes) {
+        const url = `${instance}${candidateRoute}`
+        console.info(`[RssFeedService] Trying RSSHub instance: ${url}`)
+
+        const instanceHeaders: Record<string, string> = {}
+        const headerKeys = Object.keys(headers)
+        for (let i = 0; i < headerKeys.length; i++) {
+          const key = headerKeys[i]
+          if (key !== 'Accept-Encoding') {
+            instanceHeaders[key] = headers[key]
+          }
         }
-      }
-      // 添加 Referer，模拟从该实例的主页访问
-      instanceHeaders['Referer'] = instance
-      
-      const request = http.createHttp()
-      try {
-        console.info(`[RssFeedService] Request headers:`, JSON.stringify(instanceHeaders))
-        
-        const response = await request.request(url, {
-          method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
-          header: instanceHeaders,
-        })
-        
-        console.info(`[RssFeedService] Instance ${instance} response: ${response.responseCode}`)
-        console.info(`[RssFeedService] Response headers:`, JSON.stringify(response.header))
-        console.info(`[RssFeedService] Response content-type: ${response.header['Content-Type'] ?? response.header['content-type']}`)
-        console.info(`[RssFeedService] Response length: ${String(response.result).length}`)
-        
-        // 如果是错误响应，输出前500个字符
-        if (response.responseCode >= 400) {
-          const preview = String(response.result).substring(0, 500)
-          console.warn(`[RssFeedService] Error response preview: ${preview}`)
-        }
-        // 200 是最佳结果，直接返回
-        if (response.responseCode === 200) {
-          console.info(`[RssFeedService] Success with instance: ${instance}`)
-          // 如果之前有保存的结果，销毁它
-          if (bestResult) {
-            bestResult.request.destroy()
+        instanceHeaders['Referer'] = instance
+
+        const request = http.createHttp()
+        try {
+          console.info(`[RssFeedService] Request headers:`, JSON.stringify(instanceHeaders))
+
+          const response = await request.request(url, {
+            method: http.RequestMethod.GET,
+            connectTimeout: 8000,
+            readTimeout: 8000,
+            header: instanceHeaders,
+          })
+
+          console.info(`[RssFeedService] Instance ${instance} response: ${response.responseCode}`)
+          console.info(`[RssFeedService] Response headers:`, JSON.stringify(response.header))
+          console.info(`[RssFeedService] Response content-type: ${response.header['Content-Type'] ?? response.header['content-type']}`)
+          console.info(`[RssFeedService] Response length: ${String(response.result).length}`)
+
+          if (response.responseCode >= 400) {
+            const preview = String(response.result).substring(0, 500)
+            console.warn(`[RssFeedService] Error response preview: ${preview}`)
           }
-          const result: RssHubInstanceResult = {
-            response: response,
-            request: request
+
+          if (response.responseCode === 200) {
+            console.info(`[RssFeedService] Success with instance: ${instance} route: ${candidateRoute}`)
+            if (bestResult) {
+              bestResult.request.destroy()
+            }
+            const result: RssHubInstanceResult = {
+              response: response,
+              request: request,
+              finalUrl: url,
+            }
+            return result
           }
-          return result
-        }
-        
-        // 保存最好的非200响应（比如304可能也是有效的）
-        if (response.responseCode > bestStatusCode && response.responseCode < 400) {
-          if (bestResult) {
-            bestResult.request.destroy()
+
+          if (response.responseCode > bestStatusCode && response.responseCode < 400) {
+            if (bestResult) {
+              bestResult.request.destroy()
+            }
+            bestStatusCode = response.responseCode
+            bestResult = {
+              response: response,
+              request: request,
+              finalUrl: url,
+            }
+            console.info(`[RssFeedService] Saved best result so far: ${instance}${candidateRoute} (${response.responseCode})`)
+          } else {
+            request.destroy()
           }
-          bestStatusCode = response.responseCode
-          bestResult = {
-            response: response,
-            request: request
-          }
-          console.info(`[RssFeedService] Saved best result so far: ${instance} (${response.responseCode})`)
-        } else {
+
+          const errorMsg = `Instance ${instance}${candidateRoute} returned ${response.responseCode}`
+          console.warn(`[RssFeedService] ${errorMsg}`)
+          errors.push(errorMsg)
+        } catch (e) {
+          const errorMsg = `Instance ${instance}${candidateRoute} failed: ${e}`
+          console.warn(`[RssFeedService] ${errorMsg}`)
+          errors.push(errorMsg)
           request.destroy()
         }
-        
-        const errorMsg = `Instance ${instance} returned ${response.responseCode}`
-        console.warn(`[RssFeedService] ${errorMsg}`)
-        errors.push(errorMsg)
-      } catch (e) {
-        const errorMsg = `Instance ${instance} failed: ${e}`
-        console.warn(`[RssFeedService] ${errorMsg}`)
-        errors.push(errorMsg)
-        request.destroy()
       }
     }
-    
+
     // 如果有保存的最佳结果，返回它
     if (bestResult) {
       console.info(`[RssFeedService] Returning best result with status ${bestStatusCode}`)
@@ -589,6 +605,7 @@ export class RssFeedService {
           
           response = result.response
           activeRequest = result.request
+          actualUrl = result.finalUrl
           // 销毁原始的 mainRequest，因为我们使用了新的 request
           if (mainRequest !== activeRequest) {
             mainRequest.destroy()
@@ -629,6 +646,7 @@ export class RssFeedService {
           siteUrl: feed.siteUrl ?? '',
           imageUrl: feed.imageUrl ?? '',
           description: feed.description ?? '',
+          resolvedFeedUrl: feed.url,
           entries: [],
         }
       }
@@ -722,6 +740,7 @@ export class RssFeedService {
         siteUrl: resolvedSiteUrl,
         imageUrl: resolvedImageUrl,
         description: resolvedDescription,
+        resolvedFeedUrl: requestUrl,
         entries,
       }
     } finally {

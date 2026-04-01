@@ -2,6 +2,8 @@ import { AppRepository } from '../data/AppRepository'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { FeedDraft } from '../repositories/FeedRepository'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
+import { canonicalInstagramFeedUrl } from '../utils/SocialFeedTitles'
 import { PageHeader } from './PageHeader'
 import {
   CARD_RADIUS_SM,
@@ -40,6 +42,7 @@ export struct FeedSubscribeConfigView {
   @State hasChanges: boolean = false
   @State existingFeed: Feed | undefined = undefined
   @State railWidth: number = 0
+  @State isSubmitting: boolean = false
 
   aboutToAppear(): void {
     this.selectedView = this.initialSelectedView
@@ -51,10 +54,7 @@ export struct FeedSubscribeConfigView {
 
   private async loadExistingFeed(): Promise<void> {
     const feeds = await AppRepository.feedEntities()
-    const mappedUrl = this.normalizeUrl(this.mappedTargetUrl())
-    this.existingFeed = feeds.find((feed: Feed) =>
-      this.normalizeUrl(feed.url) === mappedUrl
-    )
+    this.existingFeed = feeds.find((feed: Feed) => this.feedMatchesTarget(feed))
 
     if (this.existingFeed) {
       this.customTitle = this.existingFeed.title
@@ -66,6 +66,21 @@ export struct FeedSubscribeConfigView {
 
   private normalizeUrl(url: string): string {
     return url.trim().replace(/\/+$/, '').toLowerCase()
+  }
+
+  private feedMatchesTarget(feed: Feed): boolean {
+    const normalizedFeedUrl = this.normalizeUrl(feed.url)
+    const normalizedFeedSiteUrl = this.normalizeUrl(feed.siteUrl || '')
+    const normalizedTargetUrl = this.normalizeUrl(this.targetUrl)
+    const normalizedMappedUrl = this.normalizeUrl(this.mappedTargetUrl())
+    const normalizedTargetSiteUrl = this.normalizeUrl(this.targetSiteUrl)
+
+    return normalizedFeedUrl === normalizedMappedUrl
+      || (!!normalizedTargetUrl && normalizedFeedUrl === normalizedTargetUrl)
+      || (!!normalizedFeedSiteUrl && normalizedFeedSiteUrl === normalizedMappedUrl)
+      || (!!normalizedTargetUrl && !!normalizedFeedSiteUrl && normalizedFeedSiteUrl === normalizedTargetUrl)
+      || (!!normalizedTargetSiteUrl && normalizedFeedUrl === normalizedTargetSiteUrl)
+      || (!!normalizedTargetSiteUrl && !!normalizedFeedSiteUrl && normalizedFeedSiteUrl === normalizedTargetSiteUrl)
   }
 
   private checkForChanges(): void {
@@ -158,6 +173,10 @@ export struct FeedSubscribeConfigView {
     return this.targetUrl
   }
 
+  private effectiveSubscribedUrl(targetUrl: string, siteUrl: string): string {
+    return canonicalInstagramFeedUrl(targetUrl, siteUrl) || targetUrl
+  }
+
   private hostOf(url: string): string {
     const matched = url.match(/^https?:\/\/([^/]+)/i)
     return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
@@ -213,6 +232,10 @@ export struct FeedSubscribeConfigView {
       }
 
       const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
+      const cachedPreview = DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
+      if (cachedPreview) {
+        await AppRepository.seedFeedFromPreview(updatedFeed.id, cachedPreview)
+      }
       const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
       this.showToast(refreshResult.fallbackUsed ? '保存成功，内容将在稍后刷新' : '保存成功', 2000)
     } catch (e) {
@@ -224,31 +247,66 @@ export struct FeedSubscribeConfigView {
   }
 
   private async handleSubscribe(): Promise<void> {
+    if (this.isSubmitting) {
+      return
+    }
+
+    this.isSubmitting = true
     try {
+      const cachedPreview = DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
+        ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
+        ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.targetSiteUrl)
+      const effectiveTargetUrl = this.effectiveSubscribedUrl(
+        cachedPreview?.resolvedFeedUrl?.trim() || this.mappedTargetUrl(),
+        cachedPreview?.siteUrl?.trim() || this.targetSiteUrl.trim(),
+      )
+      const effectiveSiteUrl = cachedPreview?.siteUrl?.trim() || this.targetSiteUrl.trim()
+      const latestExistingFeed = this.existingFeed
+        ?? await AppRepository.feedEntityByUrl(this.mappedTargetUrl())
+        ?? await AppRepository.feedEntityByUrl(effectiveTargetUrl)
+        ?? await AppRepository.feedEntityBySiteUrl(effectiveSiteUrl)
       const draft: FeedDraft = {
-        url: this.mappedTargetUrl(),
-        title: this.customTitle || this.targetTitle,
-        siteUrl: this.targetSiteUrl,
-        imageUrl: this.targetImageUrl || this.existingFeed?.imageUrl || '',
-        description: this.targetDescription,
+        url: effectiveTargetUrl,
+        title: this.customTitle || cachedPreview?.feedTitle || this.targetTitle,
+        siteUrl: effectiveSiteUrl,
+        imageUrl: cachedPreview?.imageUrl || this.targetImageUrl || latestExistingFeed?.imageUrl || '',
+        description: cachedPreview?.description || this.targetDescription,
         category: this.customCategory,
         view: this.selectedView,
         showInAll: !this.hideInTimeline,
       }
+      const hasSeededPreview = !!cachedPreview && (cachedPreview.entries?.length ?? 0) > 0
 
-      if (this.existingFeed) {
-        const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
-        const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
-        this.showToast(refreshResult.fallbackUsed ? '订阅已更新，内容将在稍后刷新' : '订阅已更新', 2000)
+      if (latestExistingFeed) {
+        const updatedFeed = await AppRepository.updateFeed(latestExistingFeed.id, draft)
+        if (cachedPreview) {
+          await AppRepository.seedFeedFromPreview(updatedFeed.id, cachedPreview)
+        }
+        if (!hasSeededPreview) {
+          const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
+          this.showToast(refreshResult.fallbackUsed ? '订阅已更新，内容将在稍后刷新' : '订阅已更新', 2000)
+        } else {
+          this.showToast('订阅已更新', 2000)
+        }
       } else {
         const createdFeed = await AppRepository.createFeed(draft)
-        const refreshResult = await AppRepository.refreshFeed(createdFeed.id)
-        this.showToast(refreshResult.fallbackUsed ? '订阅成功，内容将在稍后刷新' : '订阅成功', 2000)
+        if (cachedPreview) {
+          await AppRepository.seedFeedFromPreview(createdFeed.id, cachedPreview)
+        }
+        if (!hasSeededPreview) {
+          const refreshResult = await AppRepository.refreshFeed(createdFeed.id)
+          this.showToast(refreshResult.fallbackUsed ? '订阅成功，内容将在稍后刷新' : '订阅成功', 2000)
+        } else {
+          this.showToast('订阅成功', 2000)
+        }
       }
     } catch (e) {
       this.showToast(`订阅失败: ${e}`, 3000)
+      this.isSubmitting = false
       return
     }
+
+    this.isSubmitting = false
 
     await this.runCompletion(this.onSubscribed, 'subscribe')
   }
@@ -311,6 +369,9 @@ export struct FeedSubscribeConfigView {
         this.onBack()
       },
       onTrailingClick: () => {
+        if (this.isSubmitting) {
+          return
+        }
         if (this.isEditMode) {
           void this.handleSave()
           return

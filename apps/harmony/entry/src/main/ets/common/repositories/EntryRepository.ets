@@ -49,6 +49,19 @@ function parseTags(tagsJson: string): string[] {
   }
 }
 
+function parseMediaUrls(mediaUrlsJson: string): string[] {
+  if (!mediaUrlsJson.trim()) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(mediaUrlsJson) as string[]
+    return Array.isArray(parsed) ? parsed.filter((value: string) => !!value) : []
+  } catch (_error) {
+    return []
+  }
+}
+
 function mapEntry(result: relationalStore.ResultSet): Entry {
   return {
     id: resultString(result, 'id'),
@@ -63,6 +76,7 @@ function mapEntry(result: relationalStore.ResultSet): Entry {
     isStarred: numberToBool(resultLong(result, 'is_starred')),
     readingTimeMinutes: resultLong(result, 'reading_time_minutes'),
     tags: parseTags(resultString(result, 'tags_json')),
+    mediaUrls: parseMediaUrls(resultString(result, 'media_urls_json')),
     createdAt: resultLong(result, 'created_at'),
     updatedAt: resultLong(result, 'updated_at'),
   }
@@ -194,6 +208,17 @@ export class EntryRepository {
     }
   }
 
+  static async removeByFeed(feedId: string): Promise<void> {
+    try {
+      const store = await AppDatabaseService.getStore()
+      const predicates = new relationalStore.RdbPredicates('entries')
+      predicates.equalTo('feed_id', feedId)
+      await store.delete(predicates)
+    } catch (error) {
+      throw new Error(`删除订阅条目失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
+  }
+
   static async upsertMany(entries: Entry[]): Promise<void> {
     if (entries.length === 0) {
       return
@@ -217,6 +242,7 @@ export class EntryRepository {
             published_at: entry.publishedAt,
             reading_time_minutes: entry.readingTimeMinutes,
             tags_json: JSON.stringify(entry.tags),
+            media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
             is_read: boolToNumber(existing.isRead),
             is_starred: boolToNumber(existing.isStarred),
             updated_at: Date.now(),
@@ -235,6 +261,7 @@ export class EntryRepository {
             is_starred: boolToNumber(entry.isStarred),
             reading_time_minutes: entry.readingTimeMinutes,
             tags_json: JSON.stringify(entry.tags),
+            media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
             created_at: entry.createdAt,
             updated_at: entry.updatedAt,
           })

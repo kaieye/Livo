@@ -9,6 +9,11 @@ export struct AvatarTile {
   @Prop avatarSize: number = 38
   @Prop radius: number = 10
   @Prop textSize: number = 14
+  @State private imageLoadFailed: boolean = false
+
+  aboutToAppear(): void {
+    this.imageLoadFailed = false
+  }
 
   private initialsLabel(): string {
     const trimmed = this.fallbackLabel.trim()
@@ -20,13 +25,16 @@ export struct AvatarTile {
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
-      if (this.imageUrl) {
+      if (this.imageUrl && !this.imageLoadFailed) {
         Image(this.imageUrl)
           .width(this.avatarSize)
           .height(this.avatarSize)
           .borderRadius(this.radius)
           .backgroundColor(this.theme.elevated)
           .objectFit(ImageFit.Cover)
+          .onError(() => {
+            this.imageLoadFailed = true
+          })
       } else {
         Row()
           .width(this.avatarSize)

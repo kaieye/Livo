@@ -58,6 +58,7 @@ export struct SubscriptionsContent {
   @State isLoading: boolean = false
   @State overlayLevel: number = 0
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
+  @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   private subscriptionPathStack: NavPathStack = new NavPathStack()
@@ -110,6 +111,10 @@ export struct SubscriptionsContent {
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
     }
+  }
+
+  private handleFeedsChanged(): void {
+    void this.refreshFeeds()
   }
 
   private headerTitle(mode: SubscriptionMode = this.mode): string {

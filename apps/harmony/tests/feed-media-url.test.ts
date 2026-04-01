@@ -35,3 +35,23 @@ test('appendFeedMediaUrlsToContent appends media urls once and keeps existing co
     '<p>Hello</p>\n\nhttps://cdn.example.com/video.mp4',
   )
 })
+
+test('extractFeedMediaUrls keeps image media urls from rss metadata for picture feeds', () => {
+  const itemBlock = `
+    <item>
+      <title>Picture item</title>
+      <enclosure url="https://cdninstagram.com/photo/main" type="image/jpeg" />
+      <media:content url="https://scontent.cdninstagram.com/v/t51.2885-15/123456789_n.jpg?stp=dst-jpg_e35" medium="image" />
+      <media:thumbnail url="/thumbs/photo.webp" />
+    </item>
+  `
+
+  assert.deepEqual(
+    extractFeedMediaUrls(itemBlock, 'https://feeds.example.com/social.xml'),
+    [
+      'https://cdninstagram.com/photo/main',
+      'https://scontent.cdninstagram.com/v/t51.2885-15/123456789_n.jpg?stp=dst-jpg_e35',
+      'https://feeds.example.com/thumbs/photo.webp',
+    ],
+  )
+})

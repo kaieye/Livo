@@ -7,7 +7,7 @@ import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 @Entry
 @Component
 struct DiscoverSubscribeConfig {
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.lightPalette()
   @State targetUrl: string = ''
   @State targetTitle: string = ''
   @State targetSiteUrl: string = ''

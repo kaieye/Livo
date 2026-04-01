@@ -11,7 +11,7 @@ import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 @Entry
 @Component
 struct DiscoverPreview {
-  @State theme: ThemePalette = ThemeService.darkPalette()
+  @State theme: ThemePalette = ThemeService.lightPalette()
   @State targetUrl: string = ''
   @State targetTitle: string = ''
   @State targetSiteUrl: string = ''

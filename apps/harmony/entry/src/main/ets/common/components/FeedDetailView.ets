@@ -4,13 +4,43 @@ import { Entry, Feed, FeedCardModel, FeedViewType, formatPublishedAt } from '../
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
+import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
+import {
+  extractEntryGalleryImageUrls,
+  shouldUseCachedPicturePreview,
+} from '../utils/PictureGallery'
+import {
+  resolveSocialFeedDisplayDescription,
+  resolveSocialFeedDisplayImageUrl,
+  resolveSocialFeedDisplayTitle,
+} from '../utils/SocialFeedPresentation'
 import { PageHeader } from './PageHeader'
+import { PictureEntryCard } from './PictureEntryCard'
 import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
 
 interface VideoPreviewCacheItem {
   videoUrl: string
   previewUrl: string
+}
+
+interface PicturePreviewCardProps {
+  entry: Entry
+  index: number
+  authorLabel: string
+  feedImageUrl: string
+  caption: string
+  pictureUrl: string
+  galleryUrls: string[]
+  theme: ThemePalette
+  onOpen: () => void
+}
+
+interface DisplayFeedState {
+  title: string
+  imageUrl: string
+  description: string
 }
 
 @Component
@@ -19,6 +49,7 @@ export struct FeedDetailView {
   @Prop targetUrl: string = ''
   @Prop initialTargetTitle: string = ''
   @Prop initialTargetSiteUrl: string = ''
+  @Prop initialTargetImageUrl: string = ''
   @Prop initialTargetDescription: string = ''
   @Prop targetCategory: string = ''
   @Prop targetView: FeedViewType = FeedViewType.Articles
@@ -32,24 +63,31 @@ export struct FeedDetailView {
 
   @State private targetTitle: string = ''
   @State private targetSiteUrl: string = ''
+  @State private targetImageUrl: string = ''
   @State private targetDescription: string = ''
   @State private previewPayload: FeedRefreshPayload | undefined = undefined
   @State private previewError: string = ''
+  @State private previewNotice: string = ''
   @State private isLoading: boolean = true
   @State private isRefreshing: boolean = false
   @State private existingFeed: Feed | undefined = undefined
   @State private videoPreviewCache: VideoPreviewCacheItem[] = []
+  @State private heroAvatarCandidates: string[] = []
+  @State private heroAvatarIndex: number = 0
 
   aboutToAppear(): void {
     this.targetTitle = this.initialTargetTitle
     this.targetSiteUrl = this.initialTargetSiteUrl
+    this.targetImageUrl = this.initialTargetImageUrl
     this.targetDescription = this.initialTargetDescription
+    this.resetHeroAvatarCandidates()
     void this.loadData()
   }
 
   private async loadData(): Promise<void> {
     this.isLoading = true
     this.previewError = ''
+    this.previewNotice = ''
     
     try {
       if (this.feedId) {
@@ -57,33 +95,78 @@ export struct FeedDetailView {
         const feed = await AppRepository.feedEntityById(this.feedId)
         if (feed) {
           this.existingFeed = feed
-          this.targetTitle = feed.title
+          const displayFeed = this.displayFeedState(feed.title, feed.imageUrl || '', feed.description || '', feed.url, feed.siteUrl || '')
+          this.targetTitle = displayFeed.title
           this.targetSiteUrl = feed.siteUrl || ''
-          this.targetDescription = feed.description || ''
+          this.targetImageUrl = displayFeed.imageUrl
+          this.targetDescription = displayFeed.description
           
           const entries = await AppRepository.entryEntitiesByFeed(this.feedId)
+          const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(feed.url)
+          const shouldReseed = this.shouldReseedFromCachedPreview(entries, cachedPayload)
+          const persistedEntries = shouldReseed
+            ? await this.reseedSubscribedFeedFromCachedPreview(this.feedId, cachedPayload as FeedRefreshPayload)
+            : entries
+          const previewEntries = this.preferredPreviewEntries(persistedEntries, cachedPayload?.entries ?? [])
+          const payloadTitle = displayFeed.title || cachedPayload?.feedTitle || ''
+          const payloadDescription = displayFeed.description || cachedPayload?.description || ''
+          const payloadImageUrl = displayFeed.imageUrl || cachedPayload?.imageUrl || ''
           // For the shared view, we'll construct a pseudo-payload
           this.previewPayload = {
             etag: feed.etag || '',
             lastModified: feed.lastModified || '',
-            feedTitle: feed.title,
-            siteUrl: feed.siteUrl || '',
-            imageUrl: feed.imageUrl || '',
-            description: feed.description || '',
-            entries: entries
+            feedTitle: payloadTitle,
+            siteUrl: feed.siteUrl || cachedPayload?.siteUrl || '',
+            imageUrl: payloadImageUrl,
+            description: payloadDescription,
+            entries: previewEntries,
           }
-          void this.hydrateVideoPreviews(entries)
+          void this.hydrateVideoPreviews(previewEntries)
         }
       } else if (this.targetUrl) {
         // Mode: Discover Preview
         this.existingFeed = await this.findExistingFeed(this.targetUrl, this.targetSiteUrl)
-        const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
-        this.previewPayload = payload
-        void this.hydrateVideoPreviews(payload.entries)
-        
-        // If it matches an existing entry, update it
-        if (!this.existingFeed && payload.siteUrl) {
-           this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl)
+        const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
+        if (shouldUseCachedPicturePreview(this.isPicturesPreview(), cachedPayload)) {
+          const resolvedCachedPayload = cachedPayload as FeedRefreshPayload
+          DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, resolvedCachedPayload)
+          this.previewPayload = resolvedCachedPayload
+          this.targetTitle = resolvedCachedPayload.feedTitle || this.targetTitle
+          this.targetSiteUrl = resolvedCachedPayload.siteUrl || this.targetSiteUrl
+          this.targetImageUrl = resolvedCachedPayload.imageUrl || this.targetImageUrl
+          this.targetDescription = resolvedCachedPayload.description || this.targetDescription
+          this.resetHeroAvatarCandidates()
+          void this.hydrateVideoPreviews(resolvedCachedPayload.entries)
+
+          if (!this.existingFeed && resolvedCachedPayload.siteUrl) {
+            this.existingFeed = await this.findExistingFeed(this.targetUrl, resolvedCachedPayload.siteUrl)
+          }
+          return
+        }
+        try {
+          const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
+          DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
+          this.previewPayload = payload
+          this.targetTitle = payload.feedTitle || this.targetTitle
+          this.targetSiteUrl = payload.siteUrl || this.targetSiteUrl
+          this.targetImageUrl = payload.imageUrl || this.targetImageUrl
+          this.targetDescription = payload.description || this.targetDescription
+          this.resetHeroAvatarCandidates()
+          void this.hydrateVideoPreviews(payload.entries)
+
+          // If it matches an existing entry, update it
+          if (!this.existingFeed && payload.siteUrl) {
+             this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl)
+          }
+        } catch (e) {
+          const fallbackPayload = this.buildFallbackPreviewPayload()
+          if (this.shouldUseSoftPreviewFallback() && fallbackPayload) {
+            this.previewPayload = fallbackPayload
+            this.previewNotice = '暂时无法拉取实时预览，已先展示订阅源信息。订阅后会在“图片”栏目按图片流展示内容。'
+            this.resetHeroAvatarCandidates()
+          } else {
+            throw new Error(e instanceof Error ? e.message : '预览加载失败')
+          }
         }
       }
     } catch (e) {
@@ -99,19 +182,169 @@ export struct FeedDetailView {
     try {
       if (this.existingFeed) {
         await AppRepository.refreshFeed(this.existingFeed.id)
+        const refreshedFeed = await AppRepository.feedEntityById(this.existingFeed.id)
         const entries = await AppRepository.entryEntitiesByFeed(this.existingFeed.id)
-        if (this.previewPayload) {
-          this.previewPayload.entries = entries
+        if (refreshedFeed) {
+          this.existingFeed = refreshedFeed
+          const displayFeed = this.displayFeedState(
+            refreshedFeed.title,
+            refreshedFeed.imageUrl || '',
+            refreshedFeed.description || '',
+            refreshedFeed.url,
+            refreshedFeed.siteUrl || '',
+          )
+          this.targetTitle = displayFeed.title
+          this.targetSiteUrl = refreshedFeed.siteUrl || ''
+          this.targetImageUrl = displayFeed.imageUrl
+          this.targetDescription = displayFeed.description
+          const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(refreshedFeed.url)
+          const previewEntries = this.preferredPreviewEntries(entries, cachedPayload?.entries ?? [])
+          this.previewPayload = {
+            etag: refreshedFeed.etag || '',
+            lastModified: refreshedFeed.lastModified || '',
+            feedTitle: displayFeed.title || this.previewPayload?.feedTitle || '',
+            siteUrl: refreshedFeed.siteUrl || this.previewPayload?.siteUrl || '',
+            imageUrl: displayFeed.imageUrl || this.previewPayload?.imageUrl || '',
+            description: displayFeed.description || this.previewPayload?.description || '',
+            entries: previewEntries,
+          }
+          this.resetHeroAvatarCandidates()
+          void this.hydrateVideoPreviews(previewEntries)
+          return
         }
         void this.hydrateVideoPreviews(entries)
       } else if (this.targetUrl) {
-        const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
-        this.previewPayload = payload
-        void this.hydrateVideoPreviews(payload.entries)
+        try {
+          const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
+          DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
+          this.previewPayload = payload
+          this.previewNotice = ''
+          this.targetTitle = payload.feedTitle || this.targetTitle
+          this.targetSiteUrl = payload.siteUrl || this.targetSiteUrl
+          this.targetImageUrl = payload.imageUrl || this.targetImageUrl
+          this.targetDescription = payload.description || this.targetDescription
+          this.resetHeroAvatarCandidates()
+          void this.hydrateVideoPreviews(payload.entries)
+        } catch (e) {
+          const fallbackPayload = this.buildFallbackPreviewPayload()
+          if (this.shouldUseSoftPreviewFallback() && fallbackPayload) {
+            this.previewPayload = fallbackPayload
+            this.previewNotice = '暂时无法刷新实时预览，已保留订阅源信息。'
+            this.resetHeroAvatarCandidates()
+          } else {
+            throw new Error(e instanceof Error ? e.message : '预览刷新失败')
+          }
+        }
       }
     } finally {
       this.isRefreshing = false
     }
+  }
+
+  private shouldUseSoftPreviewFallback(): boolean {
+    if (this.targetView !== FeedViewType.Pictures) {
+      return false
+    }
+    return !!(this.targetTitle.trim() || this.targetSiteUrl.trim() || this.targetImageUrl.trim() || this.targetDescription.trim())
+  }
+
+  private buildFallbackPreviewPayload(): FeedRefreshPayload | undefined {
+    const title = (this.targetTitle || this.initialTargetTitle || '').trim()
+    const siteUrl = (this.targetSiteUrl || this.initialTargetSiteUrl || '').trim()
+    const imageUrl = (this.targetImageUrl || this.initialTargetImageUrl || this.existingFeed?.imageUrl || '').trim()
+    const description = (this.targetDescription || this.initialTargetDescription || '').trim()
+
+    if (!title && !siteUrl && !imageUrl && !description) {
+      return undefined
+    }
+
+    return {
+      etag: '',
+      lastModified: '',
+      feedTitle: title || this.targetUrl,
+      siteUrl,
+      imageUrl,
+      description,
+      entries: [],
+    }
+  }
+
+  private displayFeedState(
+    title: string,
+    imageUrl: string,
+    description: string,
+    feedUrl: string,
+    siteUrl: string,
+  ): DisplayFeedState {
+    const displayTitle = resolveSocialFeedDisplayTitle(title, feedUrl, siteUrl)
+    return {
+      title: displayTitle,
+      imageUrl: resolveSocialFeedDisplayImageUrl(imageUrl, feedUrl, siteUrl, displayTitle),
+      description: resolveSocialFeedDisplayDescription(description, feedUrl, siteUrl),
+    }
+  }
+
+  private latestPublishedAt(entries: Entry[]): number {
+    let latest = 0
+    entries.forEach((entry: Entry) => {
+      latest = Math.max(latest, entry.publishedAt || 0)
+    })
+    return latest
+  }
+
+  private previewRichness(entries: Entry[]): number {
+    let score = 0
+    entries.forEach((entry: Entry) => {
+      score += 1
+      if ((entry.mediaUrls?.length ?? 0) > 0) {
+        score += 2
+      }
+      if ((entry.summary || '').trim()) {
+        score += 1
+      }
+      if ((entry.content || '').trim()) {
+        score += 1
+      }
+    })
+    return score
+  }
+
+  private preferredPreviewEntries(localEntries: Entry[], cachedEntries: Entry[]): Entry[] {
+    if (localEntries.length === 0) {
+      return cachedEntries
+    }
+    if (cachedEntries.length === 0) {
+      return localEntries
+    }
+
+    const localLatest = this.latestPublishedAt(localEntries)
+    const cachedLatest = this.latestPublishedAt(cachedEntries)
+    if (cachedLatest > localLatest) {
+      return cachedEntries
+    }
+
+    if (cachedEntries.length > localEntries.length) {
+      return cachedEntries
+    }
+
+    if (this.previewRichness(cachedEntries) > this.previewRichness(localEntries)) {
+      return cachedEntries
+    }
+
+    return localEntries
+  }
+
+  private shouldReseedFromCachedPreview(localEntries: Entry[], cachedPayload: FeedRefreshPayload | undefined): boolean {
+    if (!cachedPayload || (cachedPayload.entries?.length ?? 0) === 0) {
+      return false
+    }
+
+    return this.preferredPreviewEntries(localEntries, cachedPayload.entries) === cachedPayload.entries
+  }
+
+  private async reseedSubscribedFeedFromCachedPreview(feedId: string, payload: FeedRefreshPayload): Promise<Entry[]> {
+    await AppRepository.seedFeedFromPreview(feedId, payload)
+    return AppRepository.entryEntitiesByFeed(feedId)
   }
 
   private normalizeUrl(value: string): string {
@@ -135,6 +368,81 @@ export struct FeedDetailView {
   private hostOf(value: string): string {
     const matched = value.match(/^https?:\/\/([^/]+)/i)
     return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
+  }
+
+  private dedupeUrls(urls: string[]): string[] {
+    const result: string[] = []
+    urls.forEach((url: string) => {
+      const trimmed = url.trim()
+      if (trimmed && !result.includes(trimmed)) {
+        result.push(trimmed)
+      }
+    })
+    return result
+  }
+
+  private extractInstagramUsername(value: string): string {
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+
+    const rsshubMatched = trimmed.match(/\/instagram\/user\/([^/?#]+)/i)?.[1] ?? ''
+    if (rsshubMatched) {
+      return decodeURIComponent(rsshubMatched).replace(/^@+/, '')
+    }
+
+    const siteMatched = trimmed.match(/instagram\.com\/([^/?#]+)/i)?.[1] ?? ''
+    if (siteMatched) {
+      return decodeURIComponent(siteMatched).replace(/^@+/, '')
+    }
+
+    return ''
+  }
+
+  private buildHeroAvatarCandidates(): string[] {
+    const candidates: string[] = []
+    const pushCandidate = (value: string): void => {
+      const trimmed = value.trim()
+      if (!trimmed) {
+        return
+      }
+      candidates.push(trimmed)
+    }
+
+    pushCandidate(this.previewPayload?.imageUrl || '')
+    pushCandidate(this.targetImageUrl)
+
+    const instagramUsername = this.extractInstagramUsername(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
+      || this.extractInstagramUsername(this.previewPayload?.feedTitle || this.targetTitle)
+    if (instagramUsername) {
+      pushCandidate(`https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`)
+      pushCandidate(`https://unavatar.io/${encodeURIComponent(`instagram.com/${instagramUsername}`)}?fallback=false`)
+    }
+
+    const host = this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
+    if (host) {
+      pushCandidate(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`)
+    }
+
+    return this.dedupeUrls(candidates)
+  }
+
+  private resetHeroAvatarCandidates(): void {
+    this.heroAvatarCandidates = this.buildHeroAvatarCandidates()
+    this.heroAvatarIndex = 0
+  }
+
+  private currentHeroAvatarUrl(): string {
+    return this.heroAvatarCandidates[this.heroAvatarIndex] ?? ''
+  }
+
+  private advanceHeroAvatar(): void {
+    if (this.heroAvatarIndex + 1 < this.heroAvatarCandidates.length) {
+      this.heroAvatarIndex += 1
+    } else {
+      this.heroAvatarIndex = this.heroAvatarCandidates.length
+    }
   }
 
   private avatarFallback(): string {
@@ -313,6 +621,63 @@ export struct FeedDetailView {
     return this.previewPayload?.entries.slice(0, 50) ?? []
   }
 
+  private isPicturesPreview(): boolean {
+    const currentView = this.existingFeed?.view ?? this.targetView
+    return currentView === FeedViewType.Pictures
+  }
+
+  private entryPictureUrl(entry: Entry): string {
+    return resolveEntryCardImageUrl({
+      title: entry.title,
+      summary: entry.summary,
+      content: entry.content,
+      articleUrl: entry.url,
+      siteUrl: this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl,
+      mediaUrls: entry.mediaUrls ?? [],
+    })
+  }
+
+  private entryGalleryUrls(entry: Entry): string[] {
+    return extractEntryGalleryImageUrls({
+      summary: entry.summary,
+      content: entry.content,
+      articleUrl: entry.url,
+      siteUrl: this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl,
+      mediaUrls: entry.mediaUrls ?? [],
+    })
+  }
+
+  private hasEntryPicture(entry: Entry): boolean {
+    return this.entryGalleryUrls(entry).length > 0 || !!this.entryPictureUrl(entry)
+  }
+
+  private galleryCaption(entry: Entry): string {
+    const title = (entry.title || '').trim()
+    if (title && title !== '远程条目') {
+      return title
+    }
+    return (entry.summary || '').trim()
+  }
+
+  private picturePreviewCardProps(entry: Entry, index: number): PicturePreviewCardProps {
+    const galleryUrls = this.entryGalleryUrls(entry)
+    const pictureUrl = this.entryPictureUrl(entry)
+
+    return {
+      entry,
+      index,
+      authorLabel: entry.author || this.heroTitle() || '未知来源',
+      feedImageUrl: this.resolvedAvatarUrl(),
+      caption: this.galleryCaption(entry),
+      pictureUrl,
+      galleryUrls,
+      theme: this.theme,
+      onOpen: () => {
+        this.onOpenArticle(entry, this.articleDetailFeed(entry))
+      },
+    }
+  }
+
   private articleDetailFeed(entry: Entry): Feed {
     if (this.existingFeed) {
       return this.existingFeed
@@ -335,14 +700,16 @@ export struct FeedDetailView {
   }
 
   private resolvedAvatarUrl(): string {
-    if (this.previewPayload?.imageUrl) {
-      return this.previewPayload.imageUrl
-    }
-    const host = this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
-    if (host) {
-      return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`
-    }
-    return ''
+    return this.currentHeroAvatarUrl()
+  }
+
+  private heroTitle(): string {
+    return this.previewPayload?.feedTitle || this.targetTitle || '订阅详情'
+  }
+
+  private heroHostLabel(): string {
+    const siteOrTarget = this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl
+    return this.hostOf(siteOrTarget) || siteOrTarget
   }
 
   @Builder
@@ -354,6 +721,10 @@ export struct FeedDetailView {
           .height(size)
           .borderRadius(radius)
           .backgroundColor(this.theme.elevated)
+          .objectFit(ImageFit.Cover)
+          .onError(() => {
+            this.advanceHeroAvatar()
+          })
       } else {
         Row()
           .width(size)
@@ -391,6 +762,39 @@ export struct FeedDetailView {
   }
 
   @Builder
+  private HeroCard() {
+    Column({ space: 14 }) {
+      this.FeedAvatar(88, 26, 28)
+
+      Column({ space: 6 }) {
+        Text(this.heroTitle())
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textPrimary)
+          .maxLines(2)
+          .textAlign(TextAlign.Center)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        if (this.heroHostLabel()) {
+          Text(this.heroHostLabel())
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .textAlign(TextAlign.Center)
+        }
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
+    }
+    .width('100%')
+    .padding({ left: 20, right: 20, top: 24, bottom: 24 })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(28)
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
   private DescriptionCard() {
     if (this.heroDescription()) {
       Column({ space: 8 }) {
@@ -409,6 +813,29 @@ export struct FeedDetailView {
       .backgroundColor(this.theme.surface)
       .borderRadius(20)
       .alignItems(HorizontalAlign.Start)
+    }
+  }
+
+  @Builder
+  private NoticeCard() {
+    if (this.previewNotice) {
+      Row({ space: 10 }) {
+        Text('预览说明')
+          .fontSize(12)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.accent)
+
+        Text(this.previewNotice)
+          .layoutWeight(1)
+          .fontSize(12)
+          .lineHeight(18)
+          .fontColor(this.theme.textSecondary)
+      }
+      .width('100%')
+      .padding(14)
+      .backgroundColor(this.theme.surface)
+      .borderRadius(18)
+      .border({ width: 0.8, color: this.theme.divider })
     }
   }
 
@@ -514,12 +941,34 @@ export struct FeedDetailView {
       }
       .width('100%')
 
-      Column({ space: 10 }) {
-        ForEach(this.previewEntries(), (entry: Entry, index: number) => {
-          this.EntryCard(entry, index)
-        }, (entry: Entry) => entry.id)
+      if (this.previewEntries().length > 0) {
+        Column({ space: 10 }) {
+          ForEach(this.previewEntries(), (entry: Entry, index: number) => {
+            if (this.isPicturesPreview()) {
+              PictureEntryCard(this.picturePreviewCardProps(entry, index))
+            } else {
+              this.EntryCard(entry, index)
+            }
+          }, (entry: Entry) => entry.id)
+        }
+        .width('100%')
+      } else if (this.isPicturesPreview()) {
+        Column({ space: 8 }) {
+          Text('图片流预览暂不可用')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+
+          Text('这个订阅源已识别为图片类来源。当前先展示订阅源信息，订阅后会在“图片”栏目按图片卡片方式展示。')
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .padding(16)
+        .backgroundColor(this.theme.surface)
+        .borderRadius(20)
       }
-      .width('100%')
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -565,7 +1014,9 @@ export struct FeedDetailView {
           Refresh({ refreshing: $$this.isRefreshing }) {
             Scroll() {
               Column({ space: 14 }) {
+                this.HeroCard()
                 this.DescriptionCard()
+                this.NoticeCard()
                 this.PreviewSection()
                 Row().height(100).width('100%')
               }
@@ -579,20 +1030,22 @@ export struct FeedDetailView {
           }
           .onRefreshing(() => { void this.refreshData() })
 
-          // 如果还没订阅，显示订阅按钮
-          if (!this.existingFeed && this.previewPayload) {
+          if (this.previewPayload) {
             Row() {
-              Button('订阅')
+              Button(this.existingFeed ? '已订阅' : '订阅')
                 .type(ButtonType.Capsule)
                 .width('80%')
                 .height(50)
                 .fontSize(16)
                 .fontWeight(FontWeight.Bold)
-                .backgroundColor(this.theme.accent)
-                .fontColor('#FFFFFF')
+                .backgroundColor(this.existingFeed ? this.theme.elevated : this.theme.accent)
+                .fontColor(this.existingFeed ? this.theme.textMuted : '#FFFFFF')
                 .shadow({ radius: 20, color: 'rgba(0,0,0,0.15)', offsetY: 8 })
+                .enabled(!this.existingFeed)
                 .onClick(() => {
-                  this.onSubscribe(this.previewPayload!)
+                  if (!this.existingFeed) {
+                    this.onSubscribe(this.previewPayload!)
+                  }
                 })
             }
             .width('100%')

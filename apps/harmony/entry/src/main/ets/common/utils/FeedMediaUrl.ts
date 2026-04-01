@@ -87,6 +87,25 @@ function isSupportedVideoPageUrl(url: string): boolean {
   )
 }
 
+function isDirectImageMimeType(mimeType: string): boolean {
+  const normalized = (mimeType || '').trim().toLowerCase()
+  return normalized.startsWith('image/')
+}
+
+function isDirectImageUrl(url: string): boolean {
+  const normalized = (url || '').trim().toLowerCase()
+  if (!normalized) {
+    return false
+  }
+
+  return (
+    /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized) ||
+    normalized.includes('cdninstagram') ||
+    normalized.includes('scontent.') ||
+    normalized.includes('fbcdn.net')
+  )
+}
+
 export function isDirectVideoMimeType(mimeType: string): boolean {
   const normalized = (mimeType || '').trim().toLowerCase()
   return (
@@ -120,6 +139,8 @@ export function extractFeedMediaUrls(
       return
     }
     if (
+      !isDirectImageMimeType(mimeType) &&
+      !isDirectImageUrl(resolved) &&
       !isDirectVideoMimeType(mimeType) &&
       !isDirectVideoUrl(resolved) &&
       !isSupportedVideoPageUrl(resolved)
@@ -142,6 +163,12 @@ export function extractFeedMediaUrls(
       extractAttribute(tag, 'url'),
       extractAttribute(tag, 'type') || extractAttribute(tag, 'medium'),
     )
+  })
+
+  const mediaThumbnailTags =
+    itemBlock.match(/<media:thumbnail\b[^>]*\/?>/gi) ?? []
+  mediaThumbnailTags.forEach((tag: string) => {
+    pushUrl(extractAttribute(tag, 'url'), 'image/thumbnail')
   })
 
   const atomEnclosureTags =

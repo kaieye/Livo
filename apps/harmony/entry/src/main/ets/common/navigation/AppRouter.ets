@@ -54,6 +54,7 @@ export interface DiscoverPreviewRouteParams {
   targetTitle: string
   targetView: FeedViewType
   siteUrl: string
+  imageUrl: string
   description: string
   sourceKind: string
   category: string
@@ -64,6 +65,7 @@ export interface DiscoverSubscribeConfigRouteParams {
   targetTitle: string
   targetView: FeedViewType
   siteUrl: string
+  imageUrl: string
   description: string
   sourceKind: string
   category: string
@@ -170,6 +172,7 @@ class FeedDetailParams {
   targetTitle: string = ''
   view: string = ''
   siteUrl: string = ''
+  imageUrl: string = ''
   description: string = ''
   sourceKind: string = ''
   category: string = ''
@@ -180,6 +183,7 @@ class DiscoverRouteParams {
   targetTitle: string = ''
   view: string = ''
   siteUrl: string = ''
+  imageUrl: string = ''
   description: string = ''
   sourceKind: string = ''
   category: string = ''
@@ -310,6 +314,7 @@ export async function openFeedDetailPreview(params: DiscoverPreviewRouteParams):
   routeParams.targetTitle = params.targetTitle
   routeParams.view = `${params.targetView}`
   routeParams.siteUrl = params.siteUrl
+  routeParams.imageUrl = params.imageUrl
   routeParams.description = params.description
   routeParams.sourceKind = params.sourceKind
   routeParams.category = params.category
@@ -372,6 +377,7 @@ export async function openDiscoverSubscribeConfig(
   routeParams.targetTitle = params.targetTitle
   routeParams.view = `${params.targetView}`
   routeParams.siteUrl = params.siteUrl
+  routeParams.imageUrl = params.imageUrl
   routeParams.description = params.description
   routeParams.sourceKind = params.sourceKind
   routeParams.category = params.category

@@ -139,6 +139,8 @@ export struct DiscoverContent {
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
+  @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
+  @StorageProp('discoverSearchDismissAt') @Watch('handleSearchDismissSignal') discoverSearchDismissAt: number = 0
   @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
   private searchSession: number = 0
@@ -231,6 +233,24 @@ export struct DiscoverContent {
       .slice(0, 10)
   }
 
+  private handleSearchDismissSignal(): void {
+    this.searchInputController.stopEditing()
+    this.showPlatformChips = false
+  }
+
+  private settleDiscoverRootVisible(): void {
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+    AppStorage.setOrCreate('discoverOverlayLevel', 0)
+  }
+
+  private handleFeedsChanged(): void {
+    void this.refreshSubscribedFeeds()
+  }
+
+  private async refreshSubscribedFeeds(): Promise<void> {
+    this.subscribedFeeds = await AppRepository.feedEntities()
+  }
+
   private searchResults(): ResolvedDiscoverCandidate[] {
     if (this.remoteResults.length > 0) {
       return this.remoteResults
@@ -297,8 +317,8 @@ export struct DiscoverContent {
 
   private async refreshRemoteResults(): Promise<void> {
     const trimmed = this.query.trim()
-    const session = Date.now()
-    this.searchSession = session
+    this.searchSession += 1
+    const session = this.searchSession
 
     if (!trimmed) {
       this.remoteResults = []
@@ -306,7 +326,7 @@ export struct DiscoverContent {
       return
     }
 
-    if (this.directUrlResult() || this.resolvedCandidates().length > 0) {
+    if (this.directUrlResult()) {
       this.remoteResults = []
       this.isSearchingRemote = false
       return
@@ -343,8 +363,8 @@ export struct DiscoverContent {
       return
     }
 
-    const session = Date.now()
-    this.platformSwitchSession = session
+    this.platformSwitchSession += 1
+    const session = this.platformSwitchSession
     this.isPlatformSwitchSearching = true
 
     await Promise.all([
@@ -364,10 +384,12 @@ export struct DiscoverContent {
     targetTitle: string,
     targetView: FeedViewType,
     siteUrl: string,
+    imageUrl: string,
     description: string,
     sourceKind: string,
     category: string,
   ): void {
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
     AppStorage.setOrCreate('discoverOverlayLevel', 1)
     this.discoverPathStack.pushPathByName(
       DISCOVER_ROUTE_PREVIEW,
@@ -376,7 +398,7 @@ export struct DiscoverContent {
         targetTitle,
         targetView,
         siteUrl,
-        '',
+        imageUrl,
         description,
         sourceKind,
         category,
@@ -408,6 +430,7 @@ export struct DiscoverContent {
       result.title,
       preferredViewForPlatform(this.searchPlatform),
       result.siteUrl,
+      '',
       result.description,
       '地址',
       discoverPlatformLabel(this.searchPlatform),
@@ -420,6 +443,7 @@ export struct DiscoverContent {
       candidate.targetTitle,
       candidate.targetView,
       candidate.siteUrl,
+      candidate.imageUrl ?? '',
       candidate.description,
       candidate.sourceKind,
       this.resolvedPlatformLabel(candidate),
@@ -1006,6 +1030,9 @@ export struct DiscoverContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .onAppear(() => {
+      this.settleDiscoverRootVisible()
+    })
   }
 
   @Builder
@@ -1016,6 +1043,7 @@ export struct DiscoverContent {
           targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
           initialTargetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
           initialTargetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
+          initialTargetImageUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).imageUrl,
           initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
           targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
           targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
@@ -1079,6 +1107,11 @@ struct DiscoverSubscribeConfigDestination {
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
+  private settleRootOverlayClosed(): void {
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+    AppStorage.setOrCreate('discoverOverlayLevel', 0)
+  }
+
   build() {
     FeedSubscribeConfigView({
       targetUrl: this.targetUrl,
@@ -1091,20 +1124,34 @@ struct DiscoverSubscribeConfigDestination {
       initialSelectedView: this.initialSelectedView,
       theme: this.theme,
       onBack: () => {
-        AppStorage.setOrCreate('discoverOverlayLevel', 0)
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+        AppStorage.setOrCreate('discoverOverlayLevel', 1)
         this.discoverPathStack.pop(true)
       },
       onSubscribed: () => {
-        AppStorage.setOrCreate('discoverOverlayLevel', 0)
+        AppStorage.setOrCreate('discoverSearchDismissAt', Date.now())
+        AppStorage.setOrCreate('feedsChangedAt', Date.now())
         this.discoverPathStack.clear()
+        this.settleRootOverlayClosed()
       },
       onSaved: () => {
+        AppStorage.setOrCreate('feedsChangedAt', Date.now())
         AppStorage.setOrCreate('discoverOverlayLevel', 1)
         this.discoverPathStack.pop(true)
       },
       onUnsubscribed: () => {
-        AppStorage.setOrCreate('discoverOverlayLevel', 0)
+        AppStorage.setOrCreate('feedsChangedAt', Date.now())
         this.discoverPathStack.clear()
+        this.settleRootOverlayClosed()
+      }
+    })
+    .onAppear(() => {
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+    })
+    .onDisAppear(() => {
+      const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+      if (currentLevel <= 1) {
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
       }
     })
   }
@@ -1117,6 +1164,7 @@ struct DiscoverPreviewDestination {
   @Prop targetUrl: string = ''
   @Prop initialTargetTitle: string = ''
   @Prop initialTargetSiteUrl: string = ''
+  @Prop initialTargetImageUrl: string = ''
   @Prop initialTargetDescription: string = ''
   @Prop targetCategory: string = ''
   @Prop targetView: FeedViewType = FeedViewType.Articles
@@ -1141,6 +1189,7 @@ struct DiscoverPreviewDestination {
   }
 
   private openNewSubscribeConfigPage(payload: FeedRefreshPayload): void {
+    DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
     AppStorage.setOrCreate('discoverOverlayLevel', 2)
     this.discoverPathStack.pushPathByName(
       DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
@@ -1181,11 +1230,13 @@ struct DiscoverPreviewDestination {
       targetUrl: this.targetUrl,
       initialTargetTitle: this.initialTargetTitle,
       initialTargetSiteUrl: this.initialTargetSiteUrl,
+      initialTargetImageUrl: this.initialTargetImageUrl,
       initialTargetDescription: this.initialTargetDescription,
       targetCategory: this.targetCategory,
       targetView: this.targetView,
       theme: this.theme,
       onBack: () => {
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
         const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
         AppStorage.setOrCreate('discoverOverlayLevel', currentLevel > 1 ? currentLevel - 1 : 0)
         this.discoverPathStack.pop(true)
@@ -1193,6 +1244,15 @@ struct DiscoverPreviewDestination {
       onEdit: (feed: Feed) => { this.openEditConfigPage(feed) },
       onSubscribe: (payload: FeedRefreshPayload) => { this.openNewSubscribeConfigPage(payload) },
       onOpenArticle: (entry: Entry, _feed: Feed) => { this.openEntryDetail(entry) }
+    })
+    .onAppear(() => {
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+    })
+    .onDisAppear(() => {
+      const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+      if (currentLevel <= 1) {
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+      }
     })
   }
 }

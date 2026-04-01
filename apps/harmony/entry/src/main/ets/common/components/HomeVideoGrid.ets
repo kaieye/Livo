@@ -1,0 +1,112 @@
+import { EntryCardModel } from '../models/LivoModels'
+import { ThemePalette, ThemeService } from '../services/ThemeService'
+import {
+  chunkHomeVideoEntries,
+  resolveHomeVideoCardSubtitle,
+  resolveHomeVideoCardTokens,
+  resolveHomeVideoGridColumns,
+} from '../utils/HomeVideoGrid'
+
+@Component
+export struct HomeVideoGrid {
+  @Prop entries: EntryCardModel[] = []
+  onOpenEntry: (entry: EntryCardModel) => void = () => {}
+  @State theme: ThemePalette = ThemeService.currentPalette()
+  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+
+  aboutToAppear(): void {
+    this.theme = this.inheritedTheme
+  }
+
+  private syncInheritedTheme(): void {
+    this.theme = this.inheritedTheme
+  }
+
+  private cardMeta(entry: EntryCardModel): string {
+    return resolveHomeVideoCardSubtitle({
+      feedTitle: entry.feedTitle,
+      author: entry.author,
+      publishedLabel: entry.publishedLabel,
+    })
+  }
+
+  private rows(): EntryCardModel[][] {
+    return chunkHomeVideoEntries(this.entries, resolveHomeVideoGridColumns())
+  }
+
+  private cardTokens() {
+    return resolveHomeVideoCardTokens({
+      isDark: this.theme.isDark,
+      elevated: this.theme.elevated,
+      textPrimary: this.theme.textPrimary,
+      textSecondary: this.theme.textSecondary,
+    })
+  }
+
+  @Builder
+  private VideoCard(entry: EntryCardModel) {
+    Column({ space: 8 }) {
+      if (entry.imageUrl) {
+        Image(entry.imageUrl)
+          .width('100%')
+          .aspectRatio(16 / 9)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(18)
+      } else {
+        Column()
+          .width('100%')
+          .aspectRatio(16 / 9)
+          .backgroundColor(this.cardTokens().placeholderBackground)
+          .borderRadius(18)
+      }
+
+      Column({ space: 4 }) {
+        Text(entry.title)
+          .width('100%')
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.cardTokens().titleColor)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        if (this.cardMeta(entry)) {
+          Text(this.cardMeta(entry))
+            .width('100%')
+            .fontSize(11)
+            .fontColor(this.cardTokens().metaColor)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .onClick(() => {
+      this.onOpenEntry(entry)
+    })
+  }
+
+  build() {
+    Column({ space: 12 }) {
+      ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
+        Row({ space: 12 }) {
+          ForEach(rowEntries, (entry: EntryCardModel) => {
+            Column() {
+              this.VideoCard(entry)
+            }
+            .layoutWeight(1)
+          }, (entry: EntryCardModel) => entry.id)
+
+          if (rowEntries.length < resolveHomeVideoGridColumns()) {
+            Blank()
+              .layoutWeight(1)
+          }
+        }
+        .width('100%')
+      }, (_rowEntries: EntryCardModel[], rowIndex: number) => `video-row-${rowIndex}`)
+    }
+    .width('100%')
+  }
+}
