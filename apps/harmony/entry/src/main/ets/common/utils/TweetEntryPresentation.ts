@@ -1,8 +1,11 @@
 export interface TweetEntryPresentation {
   displayName: string
   username: string
+  avatarUrl: string
   text: string
   mediaUrls: string[]
+  publishedLabel: string
+  articleUrl: string
   replyCount: string
   repostCount: string
   likeCount: string
@@ -32,6 +35,39 @@ function stripHtml(value: string): string {
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+function formatPublishedLabel(publishedAt: number | undefined): string {
+  if (!publishedAt || !Number.isFinite(publishedAt)) {
+    return ''
+  }
+
+  const target = new Date(publishedAt)
+  if (Number.isNaN(target.getTime())) {
+    return ''
+  }
+
+  const now = new Date()
+  const sameYear = target.getFullYear() === now.getFullYear()
+  const sameMonth = target.getMonth() === now.getMonth()
+  const sameDate = target.getDate() === now.getDate()
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const isYesterday =
+    target.getFullYear() === yesterday.getFullYear() &&
+    target.getMonth() === yesterday.getMonth() &&
+    target.getDate() === yesterday.getDate()
+  const hours = target.getHours().toString().padStart(2, '0')
+  const minutes = target.getMinutes().toString().padStart(2, '0')
+
+  if (sameYear && sameMonth && sameDate) {
+    return `今天 ${hours}:${minutes}`
+  }
+
+  if (isYesterday) {
+    return `昨天 ${hours}:${minutes}`
+  }
+
+  return `${sameYear ? '' : `${target.getFullYear()}年`}${target.getMonth() + 1}月${target.getDate()}日 ${hours}:${minutes}`
 }
 
 function extractText(summary: string, content: string): string {
@@ -133,7 +169,10 @@ function presentTweetEntryFromSource(source: {
   articleUrl?: string
   imageUrl?: string
   feedImageUrl?: string
+  publishedAt?: number
+  publishedLabel?: string
   mediaUrls?: string[]
+  avatarUrl?: string
 }): TweetEntryPresentation {
   const mediaUrls = uniqueUrls([
     ...(source.mediaUrls ?? []),
@@ -145,8 +184,16 @@ function presentTweetEntryFromSource(source: {
   return {
     displayName: extractDisplayName(source),
     username: extractUsername(source),
+    avatarUrl:
+      trimValue(source.avatarUrl) ||
+      trimValue(source.feedImageUrl) ||
+      trimValue(source.imageUrl),
     text: extractText(source.summary || '', source.content || ''),
     mediaUrls,
+    publishedLabel:
+      trimValue(source.publishedLabel) ||
+      formatPublishedLabel(source.publishedAt),
+    articleUrl: trimValue(source.articleUrl),
     replyCount: metrics.replyCount,
     repostCount: metrics.repostCount,
     likeCount: metrics.likeCount,
@@ -154,16 +201,24 @@ function presentTweetEntryFromSource(source: {
   }
 }
 
-export function presentTweetEntryFromEntry(entry: {
-  title?: string
-  summary?: string
-  content?: string
-  author?: string
-  articleUrl?: string
-  imageUrl?: string
-  mediaUrls?: string[]
-}): TweetEntryPresentation {
-  return presentTweetEntryFromSource(entry)
+export function presentTweetEntryFromEntry(
+  entry: {
+    title?: string
+    summary?: string
+    content?: string
+    author?: string
+    articleUrl?: string
+    imageUrl?: string
+    publishedAt?: number
+    publishedLabel?: string
+    mediaUrls?: string[]
+  },
+  avatarUrl: string,
+): TweetEntryPresentation {
+  return presentTweetEntryFromSource({
+    ...entry,
+    avatarUrl,
+  })
 }
 
 export function presentTweetEntryFromCard(card: {
@@ -174,7 +229,12 @@ export function presentTweetEntryFromCard(card: {
   articleUrl?: string
   imageUrl?: string
   feedImageUrl?: string
+  publishedAt?: number
+  publishedLabel?: string
   mediaUrls?: string[]
 }): TweetEntryPresentation {
-  return presentTweetEntryFromSource(card)
+  return presentTweetEntryFromSource({
+    ...card,
+    avatarUrl: card.feedImageUrl,
+  })
 }

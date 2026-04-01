@@ -16,6 +16,7 @@ test('presentTweetEntryFromEntry extracts x username, text, media, and metrics',
       content: '',
       author: 'OpenAI',
       articleUrl: 'https://x.com/OpenAI/status/1234567890',
+      publishedLabel: '2024-04-01 00:00',
       imageUrl: 'https://pbs.twimg.com/media/one.jpg',
       mediaUrls: [
         'https://pbs.twimg.com/media/one.jpg',
@@ -28,11 +29,14 @@ test('presentTweetEntryFromEntry extracts x username, text, media, and metrics',
 
   assert.equal(presented.displayName, 'OpenAI')
   assert.equal(presented.username, '@OpenAI')
+  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/OpenAI')
   assert.equal(presented.text, 'Codex is live now.')
   assert.deepEqual(presented.mediaUrls, [
     'https://pbs.twimg.com/media/one.jpg',
     'https://pbs.twimg.com/media/two.jpg',
   ])
+  assert.equal(presented.publishedLabel, '2024-04-01 00:00')
+  assert.equal(presented.articleUrl, 'https://x.com/OpenAI/status/1234567890')
   assert.equal(presented.replyCount, '12')
   assert.equal(presented.repostCount, '34')
   assert.equal(presented.likeCount, '56')
@@ -56,10 +60,13 @@ test('presentTweetEntryFromCard falls back cleanly when metrics are missing', ()
 
   assert.equal(presented.displayName, 'The Verge')
   assert.equal(presented.username, '@verge')
+  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/verge')
   assert.equal(presented.text, 'Plain text summary only')
   assert.deepEqual(presented.mediaUrls, [
     'https://pbs.twimg.com/media/card.jpg',
   ])
+  assert.equal(presented.publishedLabel, '3 小时前')
+  assert.equal(presented.articleUrl, 'https://x.com/verge/status/999')
   assert.equal(presented.replyCount, '')
   assert.equal(presented.repostCount, '')
   assert.equal(presented.likeCount, '')
