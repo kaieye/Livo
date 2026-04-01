@@ -19,6 +19,14 @@ const appRepositorySource = fs.readFileSync(
   'utf8',
 )
 
+const socialFeedAvatarServiceSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/services/SocialFeedAvatarService.ets',
+  ),
+  'utf8',
+)
+
 const discoverRemoteSearchServiceSource = fs.readFileSync(
   path.join(
     process.cwd(),
@@ -31,6 +39,14 @@ const feedDetailViewSource = fs.readFileSync(
   path.join(
     process.cwd(),
     'apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets',
+  ),
+  'utf8',
+)
+
+const discoverContentSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets',
   ),
   'utf8',
 )
@@ -55,7 +71,7 @@ test('FeedSubscribeConfigView guards duplicate subscribe submissions and recheck
   )
   assert.match(
     feedSubscribeViewSource,
-    /const effectiveTargetUrl = cachedPreview\?\.resolvedFeedUrl\?\.trim\(\) \|\| this\.mappedTargetUrl\(\)/,
+    /const effectiveTargetUrl = this\.effectiveSubscribedUrl\(\s*cachedPreview\?\.resolvedFeedUrl\?\.trim\(\) \|\| this\.mappedTargetUrl\(\),\s*cachedPreview\?\.siteUrl\?\.trim\(\) \|\| this\.targetSiteUrl\.trim\(\),\s*\)/,
   )
   assert.match(
     feedSubscribeViewSource,
@@ -162,5 +178,95 @@ test('Discover preview remembers the latest payload for subscription seeding', (
   assert.match(
     feedDetailViewSource,
     /DiscoverRemoteSearchService\.rememberPreviewPayload\(this\.targetUrl, payload\)/,
+  )
+})
+
+test('FeedDetailView builds instagram avatar candidates from resolved and subscribed feed urls', () => {
+  assert.match(
+    feedDetailViewSource,
+    /extractInstagramUsername\(this\.previewPayload\?\.resolvedFeedUrl \|\| ''\)/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /extractInstagramUsername\(this\.existingFeed\?\.url \|\| ''\)/,
+  )
+})
+
+test('FeedDetailView prefers cached preview image for subscribed instagram detail rendering', () => {
+  assert.match(
+    feedDetailViewSource,
+    /private preferredDisplayImageUrl\(primaryImageUrl: string, fallbackImageUrl: string\): string/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /const payloadImageUrl = this\.preferredDisplayImageUrl\(cachedPayload\?\.imageUrl \|\| '', displayFeed\.imageUrl\)/,
+  )
+})
+
+test('Harmony subscribes and detail view both resolve real instagram avatars', () => {
+  assert.match(
+    socialFeedAvatarServiceSource,
+    /static async fetchInstagramAvatar\(username: string\): Promise<string>/,
+  )
+  assert.match(
+    socialFeedAvatarServiceSource,
+    /extractMetaContent\(html, 'og:image'\)/,
+  )
+  assert.match(
+    appRepositorySource,
+    /const nextImageUrl = await SocialFeedAvatarService\.resolveFeedAvatar\(/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /await this\.hydrateSubscribedAvatar\(feed, payloadImageUrl\)/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /this\.resetHeroAvatarCandidates\(\)\s*await this\.hydrateSubscribedAvatar\(feed, payloadImageUrl\)/,
+  )
+})
+
+test('FeedDetailView dedupes picture preview entries before rendering', () => {
+  assert.match(
+    feedDetailViewSource,
+    /return this\.dedupePicturePreviewEntries\(entries\)\.slice\(0, 50\)/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /private dedupePicturePreviewEntries\(entries: Entry\[\]\): Entry\[\]/,
+  )
+})
+
+test('FeedDetailView hides subscribe button when feed already exists', () => {
+  assert.match(
+    feedDetailViewSource,
+    /if \(this\.previewPayload && !this\.existingFeed\)/,
+  )
+  assert.doesNotMatch(
+    feedDetailViewSource,
+    /Button\(this\.existingFeed \? '已订阅' : '订阅'\)/,
+  )
+})
+
+test('DiscoverContent highlights unsubscribed search results and shows subscribed state for existing feeds', () => {
+  assert.match(
+    discoverContentSource,
+    /private isSubscribedCandidate\(candidate: ResolvedDiscoverCandidate\): boolean/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private candidateActionLabel\(candidate: ResolvedDiscoverCandidate\): string/,
+  )
+  assert.match(
+    discoverContentSource,
+    /Button\(this\.candidateActionLabel\(candidate\)\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /\.backgroundColor\(this\.candidateActionBackground\(candidate\)\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /\.onClick\(\(\) => \{\s*this\.openSubscribeConfigPage\(candidate\)\s*\}\)/,
   )
 })

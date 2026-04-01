@@ -12,10 +12,12 @@ import {
   parseXProfilesFromSearchHtml,
 } from '../entry/src/main/ets/common/utils/DiscoverRemoteSearchParsing.ts'
 import {
+  extractInstagramUsername,
   formatInstagramFeedTitle,
   normalizeSocialFeedDescription,
   normalizeSocialFeedTitle,
 } from '../entry/src/main/ets/common/utils/SocialFeedTitles.ts'
+import { resolveSocialFeedDisplayImageUrl } from '../entry/src/main/ets/common/utils/SocialFeedPresentation.ts'
 
 test('extractXFollowersFromText parses compact follower labels', () => {
   assert.equal(
@@ -287,6 +289,39 @@ test('normalizeSocialFeedTitle and description keep instagram feeds readable', (
       'https://www.instagram.com/du_chenduling/',
     ),
     '陈都灵',
+  )
+})
+
+test('extractInstagramUsername recognizes picnob mirror user routes', () => {
+  assert.equal(
+    extractInstagramUsername(
+      'https://rsshub.pseudoyu.com/picnob/user/du_chenduling',
+    ),
+    'du_chenduling',
+  )
+  assert.equal(
+    extractInstagramUsername(
+      'https://rsshub.pseudoyu.com/pixnoy/user/du_chenduling',
+    ),
+    'du_chenduling',
+  )
+  assert.equal(
+    extractInstagramUsername(
+      'https://rsshub.pseudoyu.com/piokok/user/du_chenduling',
+    ),
+    'du_chenduling',
+  )
+})
+
+test('resolveSocialFeedDisplayImageUrl falls back to instagram avatar for picnob feeds', () => {
+  assert.equal(
+    resolveSocialFeedDisplayImageUrl(
+      '',
+      'https://rsshub.pseudoyu.com/picnob/user/du_chenduling',
+      'https://www.instagram.com/du_chenduling/',
+      '陈都灵',
+    ),
+    'https://unavatar.io/instagram/du_chenduling?fallback=false',
   )
 })
 

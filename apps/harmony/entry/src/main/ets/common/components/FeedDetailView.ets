@@ -7,10 +7,12 @@ import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
+import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import {
   extractEntryGalleryImageUrls,
   shouldUseCachedPicturePreview,
 } from '../utils/PictureGallery'
+import { extractInstagramUsername } from '../utils/SocialFeedTitles'
 import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
@@ -110,7 +112,8 @@ export struct FeedDetailView {
           const previewEntries = this.preferredPreviewEntries(persistedEntries, cachedPayload?.entries ?? [])
           const payloadTitle = displayFeed.title || cachedPayload?.feedTitle || ''
           const payloadDescription = displayFeed.description || cachedPayload?.description || ''
-          const payloadImageUrl = displayFeed.imageUrl || cachedPayload?.imageUrl || ''
+          const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
+          this.targetImageUrl = payloadImageUrl
           // For the shared view, we'll construct a pseudo-payload
           this.previewPayload = {
             etag: feed.etag || '',
@@ -121,6 +124,8 @@ export struct FeedDetailView {
             description: payloadDescription,
             entries: previewEntries,
           }
+          this.resetHeroAvatarCandidates()
+          await this.hydrateSubscribedAvatar(feed, payloadImageUrl)
           void this.hydrateVideoPreviews(previewEntries)
         }
       } else if (this.targetUrl) {
@@ -128,7 +133,7 @@ export struct FeedDetailView {
         this.existingFeed = await this.findExistingFeed(this.targetUrl, this.targetSiteUrl)
         const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
         if (shouldUseCachedPicturePreview(this.isPicturesPreview(), cachedPayload)) {
-          const resolvedCachedPayload = cachedPayload as FeedRefreshPayload
+          const resolvedCachedPayload = this.normalizedPreviewPayload(cachedPayload as FeedRefreshPayload, this.targetUrl)
           DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, resolvedCachedPayload)
           this.previewPayload = resolvedCachedPayload
           this.targetTitle = resolvedCachedPayload.feedTitle || this.targetTitle
@@ -144,7 +149,7 @@ export struct FeedDetailView {
           return
         }
         try {
-          const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
+          const payload = this.normalizedPreviewPayload(await RssFeedService.previewFeedUrl(this.targetUrl), this.targetUrl)
           DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
           this.previewPayload = payload
           this.targetTitle = payload.feedTitle || this.targetTitle
@@ -195,27 +200,29 @@ export struct FeedDetailView {
           )
           this.targetTitle = displayFeed.title
           this.targetSiteUrl = refreshedFeed.siteUrl || ''
-          this.targetImageUrl = displayFeed.imageUrl
           this.targetDescription = displayFeed.description
           const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(refreshedFeed.url)
           const previewEntries = this.preferredPreviewEntries(entries, cachedPayload?.entries ?? [])
+          const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
+          this.targetImageUrl = payloadImageUrl
           this.previewPayload = {
             etag: refreshedFeed.etag || '',
             lastModified: refreshedFeed.lastModified || '',
             feedTitle: displayFeed.title || this.previewPayload?.feedTitle || '',
             siteUrl: refreshedFeed.siteUrl || this.previewPayload?.siteUrl || '',
-            imageUrl: displayFeed.imageUrl || this.previewPayload?.imageUrl || '',
+            imageUrl: payloadImageUrl || this.previewPayload?.imageUrl || '',
             description: displayFeed.description || this.previewPayload?.description || '',
             entries: previewEntries,
           }
           this.resetHeroAvatarCandidates()
+          await this.hydrateSubscribedAvatar(refreshedFeed, payloadImageUrl)
           void this.hydrateVideoPreviews(previewEntries)
           return
         }
         void this.hydrateVideoPreviews(entries)
       } else if (this.targetUrl) {
         try {
-          const payload = await RssFeedService.previewFeedUrl(this.targetUrl)
+          const payload = this.normalizedPreviewPayload(await RssFeedService.previewFeedUrl(this.targetUrl), this.targetUrl)
           DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
           this.previewPayload = payload
           this.previewNotice = ''
@@ -282,6 +289,63 @@ export struct FeedDetailView {
       imageUrl: resolveSocialFeedDisplayImageUrl(imageUrl, feedUrl, siteUrl, displayTitle),
       description: resolveSocialFeedDisplayDescription(description, feedUrl, siteUrl),
     }
+  }
+
+  private normalizedPreviewPayload(payload: FeedRefreshPayload, fallbackUrl: string): FeedRefreshPayload {
+    const displayFeed = this.displayFeedState(
+      payload.feedTitle,
+      payload.imageUrl || '',
+      payload.description || '',
+      payload.resolvedFeedUrl || fallbackUrl,
+      payload.siteUrl || '',
+    )
+
+    return {
+      etag: payload.etag,
+      lastModified: payload.lastModified,
+      feedTitle: displayFeed.title,
+      siteUrl: payload.siteUrl || '',
+      imageUrl: displayFeed.imageUrl,
+      description: displayFeed.description,
+      resolvedFeedUrl: payload.resolvedFeedUrl,
+      entries: payload.entries,
+    }
+  }
+
+  private preferredDisplayImageUrl(primaryImageUrl: string, fallbackImageUrl: string): string {
+    const primary = (primaryImageUrl || '').trim()
+    if (primary) {
+      return primary
+    }
+
+    return (fallbackImageUrl || '').trim()
+  }
+
+  private async hydrateSubscribedAvatar(feed: Feed, currentImageUrl: string): Promise<void> {
+    const resolvedAvatar = await SocialFeedAvatarService.resolveFeedAvatar(
+      feed.url,
+      feed.siteUrl || '',
+      currentImageUrl,
+      feed.imageUrl || '',
+    )
+    if (!resolvedAvatar || resolvedAvatar === this.targetImageUrl) {
+      return
+    }
+
+    this.targetImageUrl = resolvedAvatar
+    if (this.previewPayload) {
+      this.previewPayload = {
+        etag: this.previewPayload.etag,
+        lastModified: this.previewPayload.lastModified,
+        feedTitle: this.previewPayload.feedTitle,
+        siteUrl: this.previewPayload.siteUrl,
+        imageUrl: resolvedAvatar,
+        description: this.previewPayload.description,
+        resolvedFeedUrl: this.previewPayload.resolvedFeedUrl,
+        entries: this.previewPayload.entries,
+      }
+    }
+    this.resetHeroAvatarCandidates()
   }
 
   private latestPublishedAt(entries: Entry[]): number {
@@ -381,25 +445,6 @@ export struct FeedDetailView {
     return result
   }
 
-  private extractInstagramUsername(value: string): string {
-    const trimmed = (value || '').trim()
-    if (!trimmed) {
-      return ''
-    }
-
-    const rsshubMatched = trimmed.match(/\/instagram\/user\/([^/?#]+)/i)?.[1] ?? ''
-    if (rsshubMatched) {
-      return decodeURIComponent(rsshubMatched).replace(/^@+/, '')
-    }
-
-    const siteMatched = trimmed.match(/instagram\.com\/([^/?#]+)/i)?.[1] ?? ''
-    if (siteMatched) {
-      return decodeURIComponent(siteMatched).replace(/^@+/, '')
-    }
-
-    return ''
-  }
-
   private buildHeroAvatarCandidates(): string[] {
     const candidates: string[] = []
     const pushCandidate = (value: string): void => {
@@ -413,8 +458,12 @@ export struct FeedDetailView {
     pushCandidate(this.previewPayload?.imageUrl || '')
     pushCandidate(this.targetImageUrl)
 
-    const instagramUsername = this.extractInstagramUsername(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
-      || this.extractInstagramUsername(this.previewPayload?.feedTitle || this.targetTitle)
+    const instagramUsername = extractInstagramUsername(this.previewPayload?.resolvedFeedUrl || '')
+      || extractInstagramUsername(this.existingFeed?.url || '')
+      || extractInstagramUsername(this.previewPayload?.siteUrl || '')
+      || extractInstagramUsername(this.existingFeed?.siteUrl || '')
+      || extractInstagramUsername(this.targetSiteUrl || this.targetUrl)
+      || extractInstagramUsername(this.previewPayload?.feedTitle || this.targetTitle)
     if (instagramUsername) {
       pushCandidate(`https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`)
       pushCandidate(`https://unavatar.io/${encodeURIComponent(`instagram.com/${instagramUsername}`)}?fallback=false`)
@@ -618,7 +667,50 @@ export struct FeedDetailView {
   }
 
   private previewEntries(): Entry[] {
-    return this.previewPayload?.entries.slice(0, 50) ?? []
+    const entries = this.previewPayload?.entries ?? []
+    if (!this.isPicturesPreview()) {
+      return entries.slice(0, 50)
+    }
+
+    return this.dedupePicturePreviewEntries(entries).slice(0, 50)
+  }
+
+  private normalizePreviewText(value: string): string {
+    return (value || '')
+      .trim()
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+  }
+
+  private dedupePicturePreviewEntries(entries: Entry[]): Entry[] {
+    const deduped = new Map<string, Entry>()
+
+    entries.forEach((entry: Entry) => {
+      const galleryUrls = this.entryGalleryUrls(entry)
+      const leadImageUrl = galleryUrls[0] || this.entryPictureUrl(entry)
+      const normalizedTitle = this.normalizePreviewText(entry.title || this.galleryCaption(entry))
+      const normalizedAuthor = this.normalizePreviewText(entry.author)
+      const publishedBucket = Math.floor((entry.publishedAt || 0) / (60 * 1000))
+      const key = `${normalizedAuthor}|${publishedBucket}|${normalizedTitle}|${leadImageUrl}`
+      const existing = deduped.get(key)
+
+      if (!existing) {
+        deduped.set(key, entry)
+        return
+      }
+
+      const existingGalleryCount = this.entryGalleryUrls(existing).length
+      const incomingGalleryCount = galleryUrls.length
+      const keepIncoming = incomingGalleryCount > existingGalleryCount
+        || (incomingGalleryCount === existingGalleryCount && (entry.publishedAt || 0) >= (existing.publishedAt || 0))
+
+      if (keepIncoming) {
+        deduped.set(key, entry)
+      }
+    })
+
+    return Array.from(deduped.values()).sort((left: Entry, right: Entry) => (right.publishedAt || 0) - (left.publishedAt || 0))
   }
 
   private isPicturesPreview(): boolean {
@@ -1030,22 +1122,19 @@ export struct FeedDetailView {
           }
           .onRefreshing(() => { void this.refreshData() })
 
-          if (this.previewPayload) {
+          if (this.previewPayload && !this.existingFeed) {
             Row() {
-              Button(this.existingFeed ? '已订阅' : '订阅')
+              Button('订阅')
                 .type(ButtonType.Capsule)
                 .width('80%')
                 .height(50)
                 .fontSize(16)
                 .fontWeight(FontWeight.Bold)
-                .backgroundColor(this.existingFeed ? this.theme.elevated : this.theme.accent)
-                .fontColor(this.existingFeed ? this.theme.textMuted : '#FFFFFF')
+                .backgroundColor(this.theme.accent)
+                .fontColor('#FFFFFF')
                 .shadow({ radius: 20, color: 'rgba(0,0,0,0.15)', offsetY: 8 })
-                .enabled(!this.existingFeed)
                 .onClick(() => {
-                  if (!this.existingFeed) {
-                    this.onSubscribe(this.previewPayload!)
-                  }
+                  this.onSubscribe(this.previewPayload!)
                 })
             }
             .width('100%')

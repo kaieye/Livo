@@ -24,6 +24,7 @@ import { AppPreferenceService } from '../services/AppPreferenceService'
 import { AccountSessionService } from '../services/AccountSessionService'
 import { BilibiliFollowingsService } from '../services/BilibiliFollowingsService'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { canonicalInstagramFeedUrl, normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
 import {
   resolveSocialFeedDisplayDescription,
@@ -343,12 +344,18 @@ export class AppRepository {
       const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
       const nextTitle = normalizeSocialFeedTitle(payload.feedTitle || feed.title, nextUrl, nextSiteUrl)
       const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
+      const nextImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+        nextUrl,
+        nextSiteUrl,
+        payload.imageUrl || '',
+        feed.imageUrl || '',
+      )
       await EntryRepository.upsertMany(payload.entries)
       await FeedRepository.updateFetchState(feedId, {
         url: nextUrl,
         title: nextTitle,
         siteUrl: nextSiteUrl,
-        imageUrl: payload.imageUrl || feed.imageUrl || '',
+        imageUrl: nextImageUrl,
         description: nextDescription,
         lastFetched: Date.now(),
         etag: payload.etag,
@@ -390,13 +397,19 @@ export class AppRepository {
     const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
     const nextTitle = normalizeSocialFeedTitle(payload.feedTitle || feed.title, nextUrl, nextSiteUrl)
     const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
+    const nextImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+      nextUrl,
+      nextSiteUrl,
+      payload.imageUrl || '',
+      feed.imageUrl || '',
+    )
     await EntryRepository.removeByFeed(feedId)
     await EntryRepository.upsertMany(rekeyPreviewEntries(feedId, payload.entries))
     await FeedRepository.updateFetchState(feedId, {
       url: nextUrl,
       title: nextTitle,
       siteUrl: nextSiteUrl,
-      imageUrl: payload.imageUrl || feed.imageUrl || '',
+      imageUrl: nextImageUrl,
       description: nextDescription,
       lastFetched: Date.now(),
       etag: payload.etag,

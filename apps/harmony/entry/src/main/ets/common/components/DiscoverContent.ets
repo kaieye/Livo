@@ -304,6 +304,44 @@ export struct DiscoverContent {
     return false
   }
 
+  private isSubscribedCandidate(candidate: ResolvedDiscoverCandidate): boolean {
+    const candidateUrl = this.normalizeFeedIdentity(candidate.targetUrl)
+    const candidateSiteUrl = this.normalizeFeedIdentity(candidate.siteUrl)
+    const candidateTitle = candidate.targetTitle.trim().toLowerCase()
+
+    for (const subscribedFeed of this.subscribedFeeds) {
+      const subscribedUrl = this.normalizeFeedIdentity(subscribedFeed.url)
+      const subscribedSiteUrl = this.normalizeFeedIdentity(subscribedFeed.siteUrl ?? '')
+      const subscribedTitle = subscribedFeed.title.trim().toLowerCase()
+
+      if (candidateUrl && subscribedUrl && candidateUrl === subscribedUrl) {
+        return true
+      }
+
+      if (candidateSiteUrl && subscribedSiteUrl && candidateSiteUrl === subscribedSiteUrl) {
+        return true
+      }
+
+      if (candidateTitle && subscribedTitle && candidateTitle === subscribedTitle) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  private candidateActionLabel(candidate: ResolvedDiscoverCandidate): string {
+    return this.isSubscribedCandidate(candidate) ? '已订阅' : '订阅'
+  }
+
+  private candidateActionBackground(candidate: ResolvedDiscoverCandidate): string {
+    return this.isSubscribedCandidate(candidate) ? this.theme.elevated : this.theme.accent
+  }
+
+  private candidateActionFontColor(candidate: ResolvedDiscoverCandidate): string {
+    return this.isSubscribedCandidate(candidate) ? this.theme.textPrimary : '#FFFFFF'
+  }
+
   private hasSearchResults(): boolean {
     return this.searchResults().length > 0
   }
@@ -757,13 +795,13 @@ export struct DiscoverContent {
           this.openCandidate(candidate)
         })
 
-        Button('订阅')
+        Button(this.candidateActionLabel(candidate))
           .type(ButtonType.Capsule)
           .fontSize(LIST_ROW_META_SIZE)
           .fontWeight(FontWeight.Medium)
           .height(LIST_ACTION_HEIGHT)
-          .backgroundColor(this.theme.elevated)
-          .fontColor(this.theme.textPrimary)
+          .backgroundColor(this.candidateActionBackground(candidate))
+          .fontColor(this.candidateActionFontColor(candidate))
           .onClick(() => {
             this.openSubscribeConfigPage(candidate)
           })

@@ -3,7 +3,7 @@ import {
   extractXUsername,
   normalizeSocialFeedDescription,
   normalizeSocialFeedTitle,
-} from './SocialFeedTitles'
+} from './SocialFeedTitles.ts'
 
 function trimValue(value: string | undefined): string {
   return (value || '').trim()

@@ -51,6 +51,21 @@ export function extractInstagramUsername(value: string): string {
     return decodeURIComponent(rsshub[1]).replace(/^@/, '').trim().toLowerCase()
   }
 
+  const picnob = pathLike.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
+  if (picnob?.[1]) {
+    return decodeURIComponent(picnob[1]).replace(/^@/, '').trim().toLowerCase()
+  }
+
+  const pixnoy = pathLike.match(/\/pixnoy\/user\/([^/?#]+)/i)
+  if (pixnoy?.[1]) {
+    return decodeURIComponent(pixnoy[1]).replace(/^@/, '').trim().toLowerCase()
+  }
+
+  const piokok = pathLike.match(/\/piokok\/user\/([^/?#]+)/i)
+  if (piokok?.[1]) {
+    return decodeURIComponent(piokok[1]).replace(/^@/, '').trim().toLowerCase()
+  }
+
   const dumpor = pathLike.match(/\/v\/([^/?#]+)/i)
   if (dumpor?.[1]) {
     return decodeURIComponent(dumpor[1]).replace(/^@/, '').trim().toLowerCase()
