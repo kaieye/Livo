@@ -51,6 +51,24 @@ const discoverContentSource = fs.readFileSync(
   'utf8',
 )
 
+test('TweetEntryCard renders tweet-specific sections', () => {
+  const source = fs.readFileSync(
+    'apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets',
+    'utf8',
+  )
+
+  assert.match(source, /export struct TweetEntryCard/)
+  assert.match(source, /presentation: TweetEntryPresentation/)
+  assert.match(source, /presentation\.displayName/)
+  assert.match(source, /presentation\.username/)
+  assert.match(source, /presentation\.text/)
+  assert.match(source, /presentation\.mediaUrls/)
+  assert.match(
+    source,
+    /presentation\.replyCount|presentation\.repostCount|presentation\.likeCount|presentation\.viewCount/,
+  )
+})
+
 test('FeedSubscribeConfigView guards duplicate subscribe submissions and rechecks existing feed by url', () => {
   assert.match(feedSubscribeViewSource, /@State isSubmitting: boolean = false/)
   assert.match(
@@ -268,5 +286,114 @@ test('DiscoverContent highlights unsubscribed search results and shows subscribe
   assert.match(
     discoverContentSource,
     /\.onClick\(\(\) => \{\s*this\.openSubscribeConfigPage\(candidate\)\s*\}\)/,
+  )
+})
+
+test('DiscoverContent dismisses search focus when the page reappears', () => {
+  assert.match(discoverContentSource, /private dismissSearchFocus\(\): void/)
+  assert.match(
+    discoverContentSource,
+    /this\.searchInputController\.stopEditing\(\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /aboutToAppear\(\): void \{\s*this\.dismissSearchFocus\(\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /\.onAppear\(\(\) => \{\s*this\.dismissSearchFocus\(\)/,
+  )
+})
+
+test('DiscoverService provides built-in recommended feeds for every discover chip platform', () => {
+  const discoverServiceSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets',
+    ),
+    'utf8',
+  )
+
+  const requiredMarkers = [
+    "siteUrl: 'https://www.youtube.com/",
+    "siteUrl: 'https://space.bilibili.com/",
+    "siteUrl: 'https://x.com/",
+    "siteUrl: 'https://www.instagram.com/",
+  ]
+
+  requiredMarkers.forEach((marker) => {
+    assert.match(
+      discoverServiceSource,
+      new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    )
+  })
+})
+
+test('DiscoverContent still uses platform-scoped recommended fallback helpers', () => {
+  const discoverServiceSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets',
+    ),
+    'utf8',
+  )
+
+  assert.match(
+    discoverContentSource,
+    /filteredRecommendedFeedsByPlatform\(this\.searchPlatform\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /searchedRecommendedFeedsByPlatform\(this\.query, this\.searchPlatform\)/,
+  )
+  assert.match(
+    discoverServiceSource,
+    /export function filteredRecommendedFeedsByPlatform\(platform: DiscoverSearchPlatform\)/,
+  )
+})
+
+test('Discover built-in recommendations carry avatar metadata into candidate rows', () => {
+  const discoverServiceSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets',
+    ),
+    'utf8',
+  )
+
+  assert.match(
+    discoverServiceSource,
+    /export interface RecommendedFeed \{[\s\S]*imageUrl\?: string[\s\S]*\}/,
+  )
+  assert.match(
+    discoverServiceSource,
+    /export interface RecommendedFeed \{[\s\S]*followers\?: string[\s\S]*\}/,
+  )
+  assert.match(
+    discoverServiceSource,
+    /export interface ResolvedDiscoverCandidate \{[\s\S]*followers\?: string[\s\S]*\}/,
+  )
+  assert.match(
+    discoverServiceSource,
+    /imageUrl: 'https:\/\/yt3\.googleusercontent\.com\//,
+  )
+  assert.match(
+    discoverServiceSource,
+    /imageUrl: 'https:\/\/i\d\.hdslb\.com\/bfs\/face\//,
+  )
+  assert.match(discoverServiceSource, /imageUrl: 'https:\/\/unavatar\.io\/x\//)
+  assert.match(
+    discoverServiceSource,
+    /imageUrl: 'https:\/\/unavatar\.io\/instagram\//,
+  )
+  assert.match(discoverContentSource, /imageUrl: feed\.imageUrl \|\| ''/)
+  assert.match(discoverContentSource, /followers: feed\.followers \|\| ''/)
+  assert.match(
+    discoverContentSource,
+    /private candidateMetaText\(candidate: ResolvedDiscoverCandidate\): string/,
+  )
+  assert.match(
+    discoverContentSource,
+    /Text\(this\.candidateMetaText\(candidate\)\)/,
   )
 })
