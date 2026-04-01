@@ -97,18 +97,36 @@ test('presentTweetEntryFromEntry formats published label when absent', () => {
     summary: '<p>Fallback date path.</p>',
     content: '',
     author: 'Fallback Author',
-    articleUrl: 'https://x.com/Fallback/status/42',
+    articleUrl: 'https://example.com/articles/42',
     imageUrl: '',
     mediaUrls: [],
     publishedAt: Date.UTC(2024, 3, 1, 0, 0, 0),
   }
 
-  const presented = presentTweetEntryFromEntry(
-    entry,
-    'https://unavatar.io/x/Fallback',
-  )
+  const presented = presentTweetEntryFromEntry(entry, '')
 
   assert.equal(presented.publishedLabel, '2024年4月1日 08:00')
-  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/Fallback')
-  assert.equal(presented.username, '@Fallback')
+  assert.equal(presented.avatarUrl, '')
+  assert.equal(presented.username, '')
+})
+
+test('presentTweetEntryFromEntry recovers username from summary markup', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-3',
+    title: 'Handle recovery',
+    summary:
+      '<p>Thanks <a href="https://x.com/openai">@OpenAI</a> for this.</p>',
+    content: '',
+    author: 'OpenAI',
+    articleUrl: 'https://example.com/articles/handle-recovery',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 2, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(entry, '')
+
+  assert.equal(presented.username, '@OpenAI')
+  assert.equal(presented.displayName, 'OpenAI')
+  assert.equal(presented.avatarUrl, '')
 })
