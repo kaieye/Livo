@@ -130,3 +130,22 @@ test('presentTweetEntryFromEntry does not infer username from summary mention', 
   assert.equal(presented.displayName, 'OpenAI')
   assert.equal(presented.avatarUrl, '')
 })
+
+test('presentTweetEntryFromEntry ignores official x status paths as usernames', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-4',
+    title: 'Official status path',
+    summary: '<p>Plain text body.</p>',
+    content: '',
+    author: 'OpenAI',
+    articleUrl: 'https://x.com/i/web/status/123',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 3, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(entry, '')
+
+  assert.equal(presented.username, '')
+  assert.equal(presented.articleUrl, 'https://x.com/i/web/status/123')
+})

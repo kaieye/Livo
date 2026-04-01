@@ -106,9 +106,36 @@ function extractUrlUsername(value: string): string {
     return decodeURIComponent(unavatarMatch[1]).replace(/^@/, '').trim()
   }
 
-  const xMatch = trimmed.match(/(?:x|twitter)\.com\/([^/?#]+)/i)
+  const xMatch = trimmed.match(
+    /^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([^/?#]+)/i,
+  )
   if (xMatch?.[1]) {
-    return decodeURIComponent(xMatch[1]).replace(/^@/, '').trim()
+    const candidate = decodeURIComponent(xMatch[1]).replace(/^@/, '').trim()
+    const reservedPrefixes = new Set([
+      'i',
+      'home',
+      'explore',
+      'search',
+      'notifications',
+      'messages',
+      'settings',
+      'compose',
+      'intent',
+      'share',
+      'hashtag',
+      'login',
+      'signup',
+      'account',
+      'oauth',
+      'tos',
+      'privacy',
+      'about',
+      'jobs',
+    ])
+    if (!candidate || reservedPrefixes.has(candidate.toLowerCase())) {
+      return ''
+    }
+    return candidate
   }
 
   return ''
