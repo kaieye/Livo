@@ -129,9 +129,11 @@ function extractUsername(source: {
   author?: string
   articleUrl?: string
   feedImageUrl?: string
+  avatarUrl?: string
 }): string {
   const byUrl =
     extractUrlUsername(source.feedImageUrl) ||
+    extractUrlUsername(source.avatarUrl) ||
     extractUrlUsername(source.articleUrl)
   if (byUrl) {
     return `@${byUrl}`
@@ -184,10 +186,7 @@ function presentTweetEntryFromSource(source: {
   return {
     displayName: extractDisplayName(source),
     username: extractUsername(source),
-    avatarUrl:
-      trimValue(source.avatarUrl) ||
-      trimValue(source.feedImageUrl) ||
-      trimValue(source.imageUrl),
+    avatarUrl: trimValue(source.avatarUrl) || trimValue(source.feedImageUrl),
     text: extractText(source.summary || '', source.content || ''),
     mediaUrls,
     publishedLabel:
