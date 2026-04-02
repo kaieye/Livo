@@ -16,23 +16,24 @@ interface DiscoverPreview_Params {
     isSubmitting?: boolean;
     existingFeed?: Feed | undefined;
 }
-import router from "@ohos:router";
-import promptAction from "@ohos:promptAction";
 import { AppRepository } from "@bundle:com.livo.harmony/entry/ets/common/data/AppRepository";
-import { FeedViewType } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
+import { getStringParams, goBack } from "@bundle:com.livo.harmony/entry/ets/common/navigation/AppRouter";
+import { FeedViewType, formatPublishedAt } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
 import type { Entry, Feed } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
 import type { FeedDraft } from '../common/repositories/FeedRepository';
 import { RssFeedService } from "@bundle:com.livo.harmony/entry/ets/common/services/RssFeedService";
 import type { FeedRefreshPayload } from "@bundle:com.livo.harmony/entry/ets/common/services/RssFeedService";
 import { ThemeService } from "@bundle:com.livo.harmony/entry/ets/common/services/ThemeService";
 import type { ThemePalette } from "@bundle:com.livo.harmony/entry/ets/common/services/ThemeService";
+import { PageHeader } from "@bundle:com.livo.harmony/entry/ets/common/components/PageHeader";
+import { PAGE_HORIZONTAL_PADDING } from "@bundle:com.livo.harmony/entry/ets/common/ui/UiTokens";
 class DiscoverPreview extends ViewPU {
     constructor(parent, params, __localStorage, elmtId = -1, paramsLambda = undefined, extraInfo) {
         super(parent, __localStorage, elmtId, extraInfo);
         if (typeof paramsLambda === "function") {
             this.paramsGenerator_ = paramsLambda;
         }
-        this.__theme = new ObservedPropertyObjectPU(ThemeService.darkPalette(), this, "theme");
+        this.__theme = new ObservedPropertyObjectPU(ThemeService.lightPalette(), this, "theme");
         this.__targetUrl = new ObservedPropertySimplePU('', this, "targetUrl");
         this.__targetTitle = new ObservedPropertySimplePU('', this, "targetTitle");
         this.__targetSiteUrl = new ObservedPropertySimplePU('', this, "targetSiteUrl");
@@ -42,7 +43,7 @@ class DiscoverPreview extends ViewPU {
         this.__sourceKind = new ObservedPropertySimplePU('', this, "sourceKind");
         this.__previewPayload = new ObservedPropertyObjectPU(undefined, this, "previewPayload");
         this.__previewError = new ObservedPropertySimplePU('', this, "previewError");
-        this.__isLoading = new ObservedPropertySimplePU(false, this, "isLoading");
+        this.__isLoading = new ObservedPropertySimplePU(true, this, "isLoading");
         this.__isSubmitting = new ObservedPropertySimplePU(false, this, "isSubmitting");
         this.__existingFeed = new ObservedPropertyObjectPU(undefined, this, "existingFeed");
         this.setInitiallyProvidedValue(params);
@@ -218,7 +219,7 @@ class DiscoverPreview extends ViewPU {
         void this.loadPage();
     }
     private params(): Record<string, string> {
-        return router.getParams() as Record<string, string>;
+        return getStringParams();
     }
     private viewLabel(view: FeedViewType): string {
         switch (view) {
@@ -245,6 +246,9 @@ class DiscoverPreview extends ViewPU {
     }
     private previewEntries(): Entry[] {
         return this.previewPayload?.entries.slice(0, 6) ?? [];
+    }
+    private publishedLabel(entry: Entry): string {
+        return formatPublishedAt(entry.publishedAt);
     }
     private resolvedAvatarUrl(): string {
         if (this.previewPayload?.imageUrl) {
@@ -298,27 +302,48 @@ class DiscoverPreview extends ViewPU {
     }
     private HeaderSection(parent = null) {
         this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Row.create();
-            Row.width('100%');
-        }, Row);
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Text.create('‹');
-            Text.fontSize(28);
-            Text.fontWeight(FontWeight.Medium);
-            Text.fontColor(this.theme.textPrimary);
-            Text.width(40);
-            Text.height(40);
-            Text.textAlign(TextAlign.Center);
-            Text.borderRadius(999);
-            Text.backgroundColor(this.theme.elevated);
-            Text.onClick(() => router.back());
-        }, Text);
-        Text.pop();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Blank.create();
-        }, Blank);
-        Blank.pop();
-        Row.pop();
+            __Common__.create();
+            __Common__.width('100%');
+        }, __Common__);
+        {
+            this.observeComponentCreation2((elmtId, isInitialRender) => {
+                if (isInitialRender) {
+                    let componentCall = new PageHeader(this, {
+                        title: this.previewPayload?.feedTitle || this.targetTitle || '订阅预览',
+                        theme: this.theme,
+                        showBackButton: true,
+                        titleSize: 20,
+                        topPadding: 0,
+                        bottomPadding: 0,
+                        onBack: () => { void goBack(); },
+                    }, undefined, elmtId, () => { }, { page: "entry/src/main/ets/pages/DiscoverPreview.ets", line: 108, col: 5 });
+                    ViewPU.create(componentCall);
+                    let paramsLambda = () => {
+                        return {
+                            title: this.previewPayload?.feedTitle || this.targetTitle || '订阅预览',
+                            theme: this.theme,
+                            showBackButton: true,
+                            titleSize: 20,
+                            topPadding: 0,
+                            bottomPadding: 0,
+                            onBack: () => { void goBack(); }
+                        };
+                    };
+                    componentCall.paramsGenerator_ = paramsLambda;
+                }
+                else {
+                    this.updateStateVarsOfChildByElmtId(elmtId, {
+                        title: this.previewPayload?.feedTitle || this.targetTitle || '订阅预览',
+                        theme: this.theme,
+                        showBackButton: true,
+                        titleSize: 20,
+                        topPadding: 0,
+                        bottomPadding: 0
+                    });
+                }
+            }, { name: "PageHeader" });
+        }
+        __Common__.pop();
     }
     private HeroCard(parent = null) {
         this.observeComponentCreation2((elmtId, isInitialRender) => {
@@ -403,7 +428,7 @@ class DiscoverPreview extends ViewPU {
         }, Column);
         this.observeComponentCreation2((elmtId, isInitialRender) => {
             ForEach.create();
-            const forEachItemGenFunction = (_item, index: number) => {
+            const forEachItemGenFunction = _item => {
                 const entry = _item;
                 this.observeComponentCreation2((elmtId, isInitialRender) => {
                     Column.create({ space: 8 });
@@ -418,16 +443,6 @@ class DiscoverPreview extends ViewPU {
                     Row.width('100%');
                 }, Row);
                 this.observeComponentCreation2((elmtId, isInitialRender) => {
-                    Text.create(`${index + 1}`);
-                    Text.fontSize(11);
-                    Text.fontWeight(FontWeight.Bold);
-                    Text.fontColor(this.theme.accent);
-                    Text.padding({ left: 8, right: 8, top: 4, bottom: 4 });
-                    Text.backgroundColor(this.theme.elevated);
-                    Text.borderRadius(999);
-                }, Text);
-                Text.pop();
-                this.observeComponentCreation2((elmtId, isInitialRender) => {
                     Text.create(entry.author || '未知作者');
                     Text.fontSize(11);
                     Text.fontColor(this.theme.textMuted);
@@ -440,7 +455,7 @@ class DiscoverPreview extends ViewPU {
                 }, Blank);
                 Blank.pop();
                 this.observeComponentCreation2((elmtId, isInitialRender) => {
-                    Text.create(`${entry.readingTimeMinutes} 分钟`);
+                    Text.create(this.publishedLabel(entry));
                     Text.fontSize(11);
                     Text.fontColor(this.theme.textMuted);
                 }, Text);
@@ -466,7 +481,7 @@ class DiscoverPreview extends ViewPU {
                 Text.pop();
                 Column.pop();
             };
-            this.forEachUpdateFunction(elmtId, this.previewEntries(), forEachItemGenFunction, (entry: Entry) => entry.id, true, false);
+            this.forEachUpdateFunction(elmtId, this.previewEntries(), forEachItemGenFunction, (entry: Entry) => entry.id, false, false);
         }, ForEach);
         ForEach.pop();
         Column.pop();
@@ -488,24 +503,26 @@ class DiscoverPreview extends ViewPU {
         return feeds.find((feed: Feed) => this.feedMatchesTarget(feed, targetUrl, siteUrl));
     }
     private async loadPage(): Promise<void> {
-        const settings = await AppRepository.settings();
-        this.theme = await ThemeService.resolvePalette(settings);
-        const params = this.params();
-        this.targetUrl = params.targetUrl ?? '';
-        this.targetTitle = params.targetTitle ?? '';
-        this.targetSiteUrl = params.siteUrl ?? '';
-        this.targetDescription = params.description ?? '';
-        this.targetCategory = params.category ?? '';
-        this.sourceKind = params.sourceKind ?? '';
-        const parsedView = Number(params.view ?? FeedViewType.Articles);
-        this.targetView = parsedView as FeedViewType;
-        if (!this.targetUrl) {
-            this.previewError = '订阅源参数缺失';
-            return;
-        }
         this.isLoading = true;
         this.previewError = '';
+        this.previewPayload = undefined;
+        this.existingFeed = undefined;
         try {
+            const settings = await AppRepository.settings();
+            this.theme = await ThemeService.resolvePalette(settings);
+            const params = this.params();
+            this.targetUrl = params.targetUrl ?? '';
+            this.targetTitle = params.targetTitle ?? '';
+            this.targetSiteUrl = params.siteUrl ?? '';
+            this.targetDescription = params.description ?? '';
+            this.targetCategory = params.category ?? '';
+            this.sourceKind = params.sourceKind ?? '';
+            const parsedView = Number(params.view ?? FeedViewType.Articles);
+            this.targetView = parsedView as FeedViewType;
+            if (!this.targetUrl) {
+                this.previewError = '订阅源参数缺失';
+                return;
+            }
             const payload = await RssFeedService.previewFeedUrl(this.targetUrl);
             this.previewPayload = payload;
             this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl);
@@ -536,6 +553,7 @@ class DiscoverPreview extends ViewPU {
                 title: this.previewPayload.feedTitle || this.targetTitle || this.targetUrl,
                 url: this.targetUrl,
                 siteUrl: this.previewPayload.siteUrl || this.targetSiteUrl,
+                imageUrl: this.previewPayload.imageUrl || this.existingFeed?.imageUrl || '',
                 description: this.previewPayload.description || this.targetDescription,
                 category: this.targetCategory || this.viewLabel(this.targetView),
                 view: this.targetView,
@@ -544,20 +562,28 @@ class DiscoverPreview extends ViewPU {
             if (this.existingFeed) {
                 await AppRepository.updateFeed(this.existingFeed.id, draft);
                 await AppRepository.refreshFeed(this.existingFeed.id);
-                promptAction.showToast({ message: '订阅已更新' });
+                this.showToast('订阅已更新');
             }
             else {
                 const created = await AppRepository.createFeed(draft);
                 await AppRepository.refreshFeed(created.id);
-                promptAction.showToast({ message: '订阅已添加' });
+                this.showToast('订阅已添加');
             }
-            router.back();
+            void goBack();
         }
         catch (_) {
-            promptAction.showToast({ message: '添加失败，请检查链接或网络' });
+            this.showToast('添加失败，请检查链接或网络');
         }
         finally {
             this.isSubmitting = false;
+        }
+    }
+    private showToast(message: string, duration: number = 2000): void {
+        try {
+            this.getUIContext().getPromptAction().showToast({ message, duration });
+        }
+        catch (error) {
+            console.error(`showToast failed: ${error instanceof Error ? error.message : error}`);
         }
     }
     initialRender() {
@@ -568,6 +594,13 @@ class DiscoverPreview extends ViewPU {
             Column.backgroundColor(this.theme.background);
         }, Column);
         this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.width('100%');
+            Column.padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 20, bottom: 12 });
+        }, Column);
+        this.HeaderSection.bind(this)();
+        Column.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
             If.create();
             if (this.isLoading) {
                 this.ifElseBranchUpdateFunction(0, () => {
@@ -575,6 +608,7 @@ class DiscoverPreview extends ViewPU {
                         Column.create({ space: 12 });
                         Column.width('100%');
                         Column.layoutWeight(1);
+                        Column.padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING });
                         Column.justifyContent(FlexAlign.Center);
                     }, Column);
                     this.observeComponentCreation2((elmtId, isInitialRender) => {
@@ -598,9 +632,8 @@ class DiscoverPreview extends ViewPU {
                         Column.create({ space: 16 });
                         Column.width('100%');
                         Column.layoutWeight(1);
-                        Column.padding(18);
+                        Column.padding({ left: 18, right: 18, bottom: 18 });
                     }, Column);
-                    this.HeaderSection.bind(this)();
                     this.observeComponentCreation2((elmtId, isInitialRender) => {
                         Column.create({ space: 10 });
                         Column.width('100%');
@@ -637,9 +670,8 @@ class DiscoverPreview extends ViewPU {
                     this.observeComponentCreation2((elmtId, isInitialRender) => {
                         Column.create({ space: 18 });
                         Column.width('100%');
-                        Column.padding({ left: 18, right: 18, top: 20, bottom: 24 });
+                        Column.padding({ left: 18, right: 18, top: 0, bottom: 24 });
                     }, Column);
-                    this.HeaderSection.bind(this)();
                     this.HeroCard.bind(this)();
                     this.PreviewSection.bind(this)();
                     this.observeComponentCreation2((elmtId, isInitialRender) => {
@@ -654,6 +686,26 @@ class DiscoverPreview extends ViewPU {
             }
             else {
                 this.ifElseBranchUpdateFunction(3, () => {
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        Column.create({ space: 12 });
+                        Column.width('100%');
+                        Column.layoutWeight(1);
+                        Column.padding({ left: 18, right: 18 });
+                        Column.justifyContent(FlexAlign.Center);
+                    }, Column);
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        LoadingProgress.create();
+                        LoadingProgress.width(42);
+                        LoadingProgress.height(42);
+                        LoadingProgress.color(this.theme.accent);
+                    }, LoadingProgress);
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        Text.create('正在初始化页面...');
+                        Text.fontSize(14);
+                        Text.fontColor(this.theme.textSecondary);
+                    }, Text);
+                    Text.pop();
+                    Column.pop();
                 });
             }
         }, If);

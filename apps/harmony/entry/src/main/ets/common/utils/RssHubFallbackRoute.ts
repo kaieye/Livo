@@ -14,6 +14,11 @@ function extractInstagramUsernameFromRoute(route: string): string {
   return matched?.[1] ? decodeURIComponent(matched[1]).replace(/^@+/, '') : ''
 }
 
+function extractXUsernameFromRoute(route: string): string {
+  const matched = route.trim().match(/^\/(?:x|twitter)\/user\/([^/?#]+)/i)
+  return matched?.[1] ? decodeURIComponent(matched[1]).replace(/^@+/, '') : ''
+}
+
 export function expandRssHubFallbackRoutes(route: string): string[] {
   const trimmed = route.trim()
   if (!trimmed) {
@@ -22,7 +27,19 @@ export function expandRssHubFallbackRoutes(route: string): string[] {
 
   const username = extractInstagramUsernameFromRoute(trimmed)
   if (!username) {
-    return [trimmed]
+    const xUsername = extractXUsernameFromRoute(trimmed)
+    if (!xUsername) {
+      return [trimmed]
+    }
+
+    const normalizedUsername = encodeURIComponent(xUsername)
+    const isTwitterRoute = /^\/twitter\/user\//i.test(trimmed)
+    return uniqueRoutes([
+      trimmed,
+      isTwitterRoute
+        ? `/x/user/${normalizedUsername}`
+        : `/twitter/user/${normalizedUsername}`,
+    ])
   }
 
   return uniqueRoutes([

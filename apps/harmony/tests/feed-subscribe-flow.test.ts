@@ -51,6 +51,14 @@ const discoverContentSource = fs.readFileSync(
   'utf8',
 )
 
+const seedDataSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/data/SeedData.ets',
+  ),
+  'utf8',
+)
+
 test('TweetEntryCard renders tweet-specific sections', () => {
   const source = fs.readFileSync(
     'apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets',
@@ -65,11 +73,139 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   assert.match(source, /presentation\.mediaUrls/)
   assert.match(
     source,
-    /presentation\.replyCount|presentation\.repostCount|presentation\.likeCount|presentation\.viewCount/,
+    /private usernameLabel\(\): string \{\s*return \(this\.presentation\.username \|\| ''\)\.trim\(\)\s*\}/s,
   )
   assert.match(
     source,
-    /if \(this\.presentation\.username\.trim\(\)\) \{\s*Text\(this\.presentation\.username\)/s,
+    /if \(this\.usernameLabel\(\)\) \{\s*Text\(this\.usernameLabel\(\)\)/s,
+  )
+  assert.match(source, /presentation\.kind === 'retweet'/)
+  assert.match(source, /presentation\.retweetByLabel/)
+  assert.match(source, /private QuoteCard\(\)/)
+  assert.match(source, /presentation\.kind === 'quote'/)
+  assert.match(source, /presentation\.quotedTweet/)
+  assert.doesNotMatch(source, /private ActionRow\(\)/)
+  assert.doesNotMatch(source, /private ActionItem\(/)
+  assert.match(source, /avatarSize:\s*17/)
+  assert.match(source, /showFallbackLabel:\s*false/)
+  assert.match(source, /Row\(\{ space: 8 \}\) \{\s*AvatarTile\(/s)
+  assert.match(source, /Text\(this\.presentation\.displayName \|\| '未知来源'\)/)
+  assert.match(source, /Column\(\{ space: 8 \}\) \{\s*this\.RetweetBanner\(\)\s*Row\(\{ space: 8 \}\)/s)
+  assert.match(
+    source,
+    /\.alignItems\(VerticalAlign\.Top\)\s*if \(this\.presentation\.text\) \{\s*Text\(this\.presentation\.text\)/s,
+  )
+  assert.doesNotMatch(
+    source,
+    /Text\(this\.presentation\.text\)[\s\S]{0,120}\.maxLines\(/s,
+  )
+})
+
+test('FeedDetailView routes x previews through TweetEntryCard', () => {
+  assert.match(
+    feedDetailViewSource,
+    /import \{ presentTweetEntryFromEntry \} from '\.\.\/utils\/TweetEntryPresentation'/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /import \{ TweetEntryCard \} from '\.\/TweetEntryCard'/,
+  )
+  assert.match(feedDetailViewSource, /private isXPreview\(\): boolean/)
+  assert.match(
+    feedDetailViewSource,
+    /presentTweetEntryFromEntry\(entry, this\.resolvedAvatarUrl\(\)\)/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /else if \(this\.isXPreview\(\)\) \{\s*TweetEntryCard\(\{/s,
+  )
+})
+
+test('Index routes x social cards through TweetEntryCard', () => {
+  const indexSource = fs.readFileSync(
+    path.join(process.cwd(), 'apps/harmony/entry/src/main/ets/pages/Index.ets'),
+    'utf8',
+  )
+
+  assert.match(
+    indexSource,
+    /import \{ TweetEntryCard \} from '\.\.\/common\/components\/TweetEntryCard'/,
+  )
+  assert.match(
+    indexSource,
+    /import \{ presentTweetEntryFromCard \} from '\.\.\/common\/utils\/TweetEntryPresentation'/,
+  )
+  assert.match(indexSource, /private isXSocialEntry\(entry: EntryCardModel\): boolean/)
+  assert.match(indexSource, /private SocialEntryCard\(entry: EntryCardModel\)/)
+  assert.match(indexSource, /presentTweetEntryFromCard\(entry\)/)
+  assert.match(
+    indexSource,
+    /if \(mode === 'social'\) \{\s*this\.SocialEntryCard\(entry\)\s*\} else \{\s*this\.EntryCard\(entry\)\s*\}/s,
+  )
+})
+
+test('Home and subscriptions mode scenes support horizontal swipe switching', () => {
+  const indexSource = fs.readFileSync(
+    path.join(process.cwd(), 'apps/harmony/entry/src/main/ets/pages/Index.ets'),
+    'utf8',
+  )
+  const subscriptionsContentSource = fs.readFileSync(
+    path.join(process.cwd(), 'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets'),
+    'utf8',
+  )
+
+  assert.match(indexSource, /const MODE_SWIPE_TRIGGER_OFFSET: number = 56/)
+  assert.match(indexSource, /private handleModeSwipe\(event: GestureEvent\): void/)
+  assert.match(indexSource, /PanGesture\(\{ direction: PanDirection\.Horizontal \}\)/)
+  assert.match(indexSource, /this\.handleModeSwipe\(event\)/)
+
+  assert.match(subscriptionsContentSource, /const MODE_SWIPE_TRIGGER_OFFSET: number = 56/)
+  assert.match(subscriptionsContentSource, /private handleModeSwipe\(event: GestureEvent\): void/)
+  assert.match(subscriptionsContentSource, /PanGesture\(\{ direction: PanDirection\.Horizontal \}\)/)
+  assert.match(subscriptionsContentSource, /this\.handleModeSwipe\(event\)/)
+})
+
+test('SubscriptionsContent keeps overlay storage in sync across detail and config destinations', () => {
+  const subscriptionsContentSource = fs.readFileSync(
+    path.join(process.cwd(), 'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets'),
+    'utf8',
+  )
+
+  assert.match(
+    subscriptionsContentSource,
+    /private syncOverlayLevel\(level: number\): void \{\s*this\.overlayLevel = level\s*AppStorage\.setOrCreate\('subscriptionsOverlayLevel', level\)\s*\}/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /private settleSubscriptionsRootVisible\(\): void \{\s*this\.syncOverlayLevel\(0\)\s*\}/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /FeedDetailView\(\{[\s\S]*onBack: \(\) => \{ this\.closeFeedDetailPage\(\) \}/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /\.onAppear\(\(\) => \{\s*this\.syncOverlayLevel\(1\)\s*\}\)/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /\.onDisAppear\(\(\) => \{\s*const currentLevel = AppStorage\.get<number>\('subscriptionsOverlayLevel'\) \?\? 0\s*if \(currentLevel <= 1\) \{\s*this\.syncOverlayLevel\(0\)\s*\}\s*\}\)/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /FeedSubscribeConfigView\(\{[\s\S]*onBack: \(\) => \{[\s\S]*this\.subscriptionPathStack\.pop\(true\)[\s\S]*\}/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /\.onAppear\(\(\) => \{\s*this\.syncOverlayLevel\(2\)\s*\}\)/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /\.onDisAppear\(\(\) => \{\s*const currentLevel = AppStorage\.get<number>\('subscriptionsOverlayLevel'\) \?\? 0\s*if \(currentLevel > 1\) \{\s*this\.syncOverlayLevel\(1\)\s*\} else \{\s*this\.syncOverlayLevel\(currentLevel\)\s*\}\s*\}\)/s,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /\.onAppear\(\(\) => \{\s*this\.settleSubscriptionsRootVisible\(\)\s*\}\)/s,
   )
 })
 
@@ -236,7 +372,7 @@ test('Harmony subscribes and detail view both resolve real instagram avatars', (
   )
   assert.match(
     appRepositorySource,
-    /const nextImageUrl = await SocialFeedAvatarService\.resolveFeedAvatar\(/,
+    /const nextResolvedImageUrl = await SocialFeedAvatarService\.resolveFeedAvatar\(/,
   )
   assert.match(
     feedDetailViewSource,
@@ -273,7 +409,35 @@ test('FeedDetailView hides subscribe button when feed already exists', () => {
 test('DiscoverContent highlights unsubscribed search results and shows subscribed state for existing feeds', () => {
   assert.match(
     discoverContentSource,
+    /import \{ extractInstagramUsername, extractXUsername \} from '\.\.\/utils\/SocialFeedTitles'/,
+  )
+  assert.match(
+    discoverContentSource,
     /private isSubscribedCandidate\(candidate: ResolvedDiscoverCandidate\): boolean/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private extractCanonicalFeedIdentity\(primaryUrl: string, secondaryUrl: string\): string/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private extractBilibiliIdentity\(value: string\): string/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private extractYouTubeIdentity\(value: string\): string/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private collectFeedIdentityKeys\(url: string, siteUrl: string, title: string\): string\[\]/,
+  )
+  assert.match(
+    discoverContentSource,
+    /return this\.isSubscribedFeedIdentity\(feed\.url, feed\.siteUrl, feed\.title\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /return this\.isSubscribedFeedIdentity\(candidate\.targetUrl, candidate\.siteUrl, candidate\.targetTitle\)/,
   )
   assert.match(
     discoverContentSource,
@@ -400,4 +564,33 @@ test('Discover built-in recommendations carry avatar metadata into candidate row
     discoverContentSource,
     /Text\(this\.candidateMetaText\(candidate\)\)/,
   )
+})
+
+test('AppRepository keeps better subscribed feed metadata when refresh payload is lower quality', () => {
+  assert.match(
+    appRepositorySource,
+    /resolvePreferredStoredFeedTitle\(feed\.title, payload\.feedTitle \|\| '', nextUrl, nextSiteUrl\)/,
+  )
+  assert.match(
+    appRepositorySource,
+    /resolvePreferredStoredFeedImageUrl\(feed\.imageUrl \|\| '', nextResolvedImageUrl\)/,
+  )
+})
+
+test('SeedData defines the four built-in default subscriptions for the home tabs', () => {
+  assert.match(seedDataSource, /title: '阮一峰的网络日志'/)
+  assert.match(seedDataSource, /url: 'https:\/\/www\.ruanyifeng\.com\/blog\/atom\.xml'/)
+  assert.match(seedDataSource, /view: FeedViewType\.Articles/)
+
+  assert.match(seedDataSource, /title: 'elonmusk'/)
+  assert.match(seedDataSource, /url: 'https:\/\/rsshub\.pseudoyu\.com\/x\/user\/elonmusk'/)
+  assert.match(seedDataSource, /view: FeedViewType\.SocialMedia/)
+
+  assert.match(seedDataSource, /title: 'du_chenduling'/)
+  assert.match(seedDataSource, /url: 'https:\/\/rsshub\.pseudoyu\.com\/instagram\/user\/du_chenduling'/)
+  assert.match(seedDataSource, /view: FeedViewType\.Pictures/)
+
+  assert.match(seedDataSource, /title: '影视飓风'/)
+  assert.match(seedDataSource, /url: 'https:\/\/rsshub\.pseudoyu\.com\/bilibili\/user\/video\/946974'/)
+  assert.match(seedDataSource, /view: FeedViewType\.Videos/)
 })

@@ -26,6 +26,7 @@ import {
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SCENE_DURATION: number = 240
+const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
 const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
 
@@ -65,8 +66,17 @@ export struct SubscriptionsContent {
   onReady: () => void = () => {}
   private modeTransitionVersion: number = 0
 
+  private syncOverlayLevel(level: number): void {
+    this.overlayLevel = level
+    AppStorage.setOrCreate('subscriptionsOverlayLevel', level)
+  }
+
+  private settleSubscriptionsRootVisible(): void {
+    this.syncOverlayLevel(0)
+  }
 
   aboutToAppear(): void {
+    this.overlayLevel = this.subscriptionsOverlayLevel
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
       if (this.hasLoaded || this.isLoading) {
@@ -178,6 +188,37 @@ export struct SubscriptionsContent {
       this.previousMode = nextMode
       this.isModeTransitioning = false
     }, MODE_SCENE_DURATION)
+  }
+
+  private adjacentMode(offsetX: number): SubscriptionMode | undefined {
+    const currentIndex = this.modeIndex(this.mode)
+    if (currentIndex < 0) {
+      return undefined
+    }
+
+    const nextIndex = offsetX < 0 ? currentIndex + 1 : currentIndex - 1
+    if (nextIndex < 0 || nextIndex >= SUBSCRIPTION_MODES.length) {
+      return undefined
+    }
+
+    return SUBSCRIPTION_MODES[nextIndex]
+  }
+
+  private handleModeSwipe(event: GestureEvent): void {
+    if (this.isModeTransitioning) {
+      return
+    }
+
+    const offsetX = event.offsetX
+    const offsetY = event.offsetY
+    if (Math.abs(offsetX) < MODE_SWIPE_TRIGGER_OFFSET || Math.abs(offsetX) <= Math.abs(offsetY)) {
+      return
+    }
+
+    const nextMode = this.adjacentMode(offsetX)
+    if (nextMode) {
+      this.requestModeSwitch(nextMode)
+    }
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
@@ -393,14 +434,12 @@ export struct SubscriptionsContent {
   private openFeedDetailPage(feedId: string): void {
     const params = new SubscriptionFeedDetailParams()
     params.feedId = feedId
-    this.overlayLevel = 1
-    AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
+    this.syncOverlayLevel(1)
     this.subscriptionPathStack.pushPathByName(SUBSCRIPTIONS_ROUTE_FEED_DETAIL, params, true)
   }
 
   private closeFeedDetailPage(): void {
-    this.overlayLevel = 0
-    AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
+    this.syncOverlayLevel(0)
     this.subscriptionPathStack.pop(true)
   }
 
@@ -418,8 +457,7 @@ export struct SubscriptionsContent {
   }
 
   private openEditPage(feed: Feed): void {
-    this.overlayLevel = 2
-    AppStorage.setOrCreate('subscriptionsOverlayLevel', 2)
+    this.syncOverlayLevel(2)
     this.subscriptionPathStack.pushPathByName(
       SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG,
       this.createFeedConfigParams(feed),
@@ -442,6 +480,15 @@ export struct SubscriptionsContent {
       onSubscribe: (_payload: FeedRefreshPayload) => {},
       onOpenArticle: (entry: Entry, feed: Feed) => { this.openEntryDetail(entry, feed) },
     })
+    .onAppear(() => {
+      this.syncOverlayLevel(1)
+    })
+    .onDisAppear(() => {
+      const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
+      if (currentLevel <= 1) {
+        this.syncOverlayLevel(0)
+      }
+    })
   }
 
   @Builder
@@ -457,28 +504,35 @@ export struct SubscriptionsContent {
       initialSelectedView: params?.initialSelectedView ?? FeedViewType.Articles,
       theme: this.theme,
       onBack: () => {
-        this.overlayLevel = 1
-        AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
+        this.syncOverlayLevel(1)
         this.subscriptionPathStack.pop(true)
       },
       onSubscribed: async () => {
         await this.refreshFeeds()
-        this.overlayLevel = 0
-        AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
+        this.syncOverlayLevel(0)
         this.subscriptionPathStack.clear()
       },
       onSaved: async () => {
         await this.refreshFeeds()
-        this.overlayLevel = 1
-        AppStorage.setOrCreate('subscriptionsOverlayLevel', 1)
+        this.syncOverlayLevel(1)
         this.subscriptionPathStack.pop(true)
       },
       onUnsubscribed: async () => {
         await this.refreshFeeds()
-        this.overlayLevel = 0
-        AppStorage.setOrCreate('subscriptionsOverlayLevel', 0)
+        this.syncOverlayLevel(0)
         this.subscriptionPathStack.clear()
       },
+    })
+    .onAppear(() => {
+      this.syncOverlayLevel(2)
+    })
+    .onDisAppear(() => {
+      const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
+      if (currentLevel > 1) {
+        this.syncOverlayLevel(1)
+      } else {
+        this.syncOverlayLevel(currentLevel)
+      }
     })
   }
 
@@ -548,6 +602,12 @@ export struct SubscriptionsContent {
         .width('100%')
         .layoutWeight(1)
         .backgroundColor(this.theme.background)
+        .gesture(
+          PanGesture({ direction: PanDirection.Horizontal })
+            .onActionEnd((event: GestureEvent) => {
+              this.handleModeSwipe(event)
+            })
+        )
 
       }
       .width('100%')
@@ -561,6 +621,9 @@ export struct SubscriptionsContent {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .onAppear(() => {
+      this.settleSubscriptionsRootVisible()
+    })
   }
 
   build() {

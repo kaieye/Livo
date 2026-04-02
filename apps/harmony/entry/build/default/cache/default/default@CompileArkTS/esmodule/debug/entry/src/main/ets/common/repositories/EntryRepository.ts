@@ -7,6 +7,32 @@ function boolToNumber(value: boolean): number {
 function numberToBool(value: number): boolean {
     return value === 1;
 }
+function resultColumnIndex(result: relationalStore.ResultSet, columnName: string): number {
+    try {
+        return result.getColumnIndex(columnName);
+    }
+    catch (_error) {
+        return -1;
+    }
+}
+function resultString(result: relationalStore.ResultSet, columnName: string): string {
+    try {
+        const columnIndex = resultColumnIndex(result, columnName);
+        return columnIndex >= 0 ? result.getString(columnIndex) : '';
+    }
+    catch (_error) {
+        return '';
+    }
+}
+function resultLong(result: relationalStore.ResultSet, columnName: string): number {
+    try {
+        const columnIndex = resultColumnIndex(result, columnName);
+        return columnIndex >= 0 ? result.getLong(columnIndex) : 0;
+    }
+    catch (_error) {
+        return 0;
+    }
+}
 function parseTags(tagsJson: string): string[] {
     if (!tagsJson.trim()) {
         return [];
@@ -19,92 +45,165 @@ function parseTags(tagsJson: string): string[] {
         return [];
     }
 }
+function parseMediaUrls(mediaUrlsJson: string): string[] {
+    if (!mediaUrlsJson.trim()) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(mediaUrlsJson) as string[];
+        return Array.isArray(parsed) ? parsed.filter((value: string) => !!value) : [];
+    }
+    catch (_error) {
+        return [];
+    }
+}
 function mapEntry(result: relationalStore.ResultSet): Entry {
     return {
-        id: result.getString(result.getColumnIndex('id')),
-        feedId: result.getString(result.getColumnIndex('feed_id')),
-        title: result.getString(result.getColumnIndex('title')),
-        url: result.getString(result.getColumnIndex('url')),
-        summary: result.getString(result.getColumnIndex('summary')),
-        content: result.getString(result.getColumnIndex('content')),
-        author: result.getString(result.getColumnIndex('author')),
-        publishedAt: result.getLong(result.getColumnIndex('published_at')),
-        isRead: numberToBool(result.getLong(result.getColumnIndex('is_read'))),
-        isStarred: numberToBool(result.getLong(result.getColumnIndex('is_starred'))),
-        readingTimeMinutes: result.getLong(result.getColumnIndex('reading_time_minutes')),
-        tags: parseTags(result.getString(result.getColumnIndex('tags_json'))),
-        createdAt: result.getLong(result.getColumnIndex('created_at')),
-        updatedAt: result.getLong(result.getColumnIndex('updated_at')),
+        id: resultString(result, 'id'),
+        feedId: resultString(result, 'feed_id'),
+        title: resultString(result, 'title'),
+        url: resultString(result, 'url'),
+        summary: resultString(result, 'summary'),
+        content: resultString(result, 'content'),
+        author: resultString(result, 'author'),
+        publishedAt: resultLong(result, 'published_at'),
+        isRead: numberToBool(resultLong(result, 'is_read')),
+        isStarred: numberToBool(resultLong(result, 'is_starred')),
+        readingTimeMinutes: resultLong(result, 'reading_time_minutes'),
+        tags: parseTags(resultString(result, 'tags_json')),
+        mediaUrls: parseMediaUrls(resultString(result, 'media_urls_json')),
+        createdAt: resultLong(result, 'created_at'),
+        updatedAt: resultLong(result, 'updated_at'),
     };
 }
 export class EntryRepository {
     static async listRecent(limit: number = 20): Promise<Entry[]> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.orderByDesc('published_at');
-        predicates.limitAs(limit);
-        const result = await store.query(predicates);
-        const entries: Entry[] = [];
-        while (result.goToNextRow()) {
-            entries.push(mapEntry(result));
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.orderByDesc('published_at');
+            predicates.limitAs(limit);
+            const result = await store.query(predicates);
+            const entries: Entry[] = [];
+            while (result.goToNextRow()) {
+                entries.push(mapEntry(result));
+            }
+            result.close();
+            return entries;
         }
-        result.close();
-        return entries;
+        catch (error) {
+            throw new Error(`读取最近条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+    }
+    static async listStarred(limit: number = 100): Promise<Entry[]> {
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('is_starred', 1);
+            predicates.orderByDesc('published_at');
+            predicates.limitAs(limit);
+            const result = await store.query(predicates);
+            const entries: Entry[] = [];
+            while (result.goToNextRow()) {
+                entries.push(mapEntry(result));
+            }
+            result.close();
+            return entries;
+        }
+        catch (error) {
+            throw new Error(`读取收藏条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async listByFeed(feedId: string): Promise<Entry[]> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('feed_id', feedId);
-        predicates.orderByDesc('published_at');
-        const result = await store.query(predicates);
-        const entries: Entry[] = [];
-        while (result.goToNextRow()) {
-            entries.push(mapEntry(result));
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('feed_id', feedId);
+            predicates.orderByDesc('published_at');
+            const result = await store.query(predicates);
+            const entries: Entry[] = [];
+            while (result.goToNextRow()) {
+                entries.push(mapEntry(result));
+            }
+            result.close();
+            return entries;
         }
-        result.close();
-        return entries;
+        catch (error) {
+            throw new Error(`读取订阅条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async getById(entryId: string): Promise<Entry | undefined> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('id', entryId);
-        predicates.limitAs(1);
-        const result = await store.query(predicates);
-        if (!result.goToNextRow()) {
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('id', entryId);
+            predicates.limitAs(1);
+            const result = await store.query(predicates);
+            if (!result.goToNextRow()) {
+                result.close();
+                return undefined;
+            }
+            const entry = mapEntry(result);
             result.close();
-            return undefined;
+            return entry;
         }
-        const entry = mapEntry(result);
-        result.close();
-        return entry;
+        catch (error) {
+            throw new Error(`读取条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async countUnread(): Promise<number> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('is_read', 0);
-        const result = await store.query(predicates, ['id']);
-        const count = result.rowCount;
-        result.close();
-        return count;
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('is_read', 0);
+            const result = await store.query(predicates, ['id']);
+            const count = result.rowCount;
+            result.close();
+            return count;
+        }
+        catch (error) {
+            throw new Error(`统计未读条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async countStarred(): Promise<number> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('is_starred', 1);
-        const result = await store.query(predicates, ['id']);
-        const count = result.rowCount;
-        result.close();
-        return count;
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('is_starred', 1);
+            const result = await store.query(predicates, ['id']);
+            const count = result.rowCount;
+            result.close();
+            return count;
+        }
+        catch (error) {
+            throw new Error(`统计收藏条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async countUnreadByFeed(feedId: string): Promise<number> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('feed_id', feedId);
-        predicates.equalTo('is_read', 0);
-        const result = await store.query(predicates, ['id']);
-        const count = result.rowCount;
-        result.close();
-        return count;
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('feed_id', feedId);
+            predicates.equalTo('is_read', 0);
+            const result = await store.query(predicates, ['id']);
+            const count = result.rowCount;
+            result.close();
+            return count;
+        }
+        catch (error) {
+            throw new Error(`统计订阅未读条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+    }
+    static async removeByFeed(feedId: string): Promise<void> {
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('feed_id', feedId);
+            await store.delete(predicates);
+        }
+        catch (error) {
+            throw new Error(`删除订阅条目失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async upsertMany(entries: Entry[]): Promise<void> {
         if (entries.length === 0) {
@@ -127,6 +226,7 @@ export class EntryRepository {
                         published_at: entry.publishedAt,
                         reading_time_minutes: entry.readingTimeMinutes,
                         tags_json: JSON.stringify(entry.tags),
+                        media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
                         is_read: boolToNumber(existing.isRead),
                         is_starred: boolToNumber(existing.isStarred),
                         updated_at: Date.now(),
@@ -146,6 +246,7 @@ export class EntryRepository {
                         is_starred: boolToNumber(entry.isStarred),
                         reading_time_minutes: entry.readingTimeMinutes,
                         tags_json: JSON.stringify(entry.tags),
+                        media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
                         created_at: entry.createdAt,
                         updated_at: entry.updatedAt,
                     });
@@ -157,25 +258,35 @@ export class EntryRepository {
         }
     }
     static async markRead(entryId: string, isRead: boolean): Promise<void> {
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('id', entryId);
-        await store.update({
-            is_read: boolToNumber(isRead),
-            updated_at: Date.now(),
-        }, predicates);
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('id', entryId);
+            await store.update({
+                is_read: boolToNumber(isRead),
+                updated_at: Date.now(),
+            }, predicates);
+        }
+        catch (error) {
+            throw new Error(`更新已读状态失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
     static async toggleStar(entryId: string): Promise<void> {
         const entry = await EntryRepository.getById(entryId);
         if (!entry) {
             throw new Error('条目不存在');
         }
-        const store = await AppDatabaseService.getStore();
-        const predicates = new relationalStore.RdbPredicates('entries');
-        predicates.equalTo('id', entryId);
-        await store.update({
-            is_starred: boolToNumber(!entry.isStarred),
-            updated_at: Date.now(),
-        }, predicates);
+        try {
+            const store = await AppDatabaseService.getStore();
+            const predicates = new relationalStore.RdbPredicates('entries');
+            predicates.equalTo('id', entryId);
+            await store.update({
+                is_starred: boolToNumber(!entry.isStarred),
+                updated_at: Date.now(),
+            }, predicates);
+        }
+        catch (error) {
+            throw new Error(`更新收藏状态失败：${error instanceof Error ? error.message : 'unknown error'}`);
+        }
     }
 }

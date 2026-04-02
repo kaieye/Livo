@@ -1,6 +1,12 @@
 import http from "@ohos:net.http";
 import { FeedViewType } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
-import type { DiscoverSearchPlatform, ResolvedDiscoverCandidate } from './DiscoverService';
+import { DEFAULT_RSSHUB_INSTANCE } from "@bundle:com.livo.harmony/entry/ets/common/services/DiscoverService";
+import type { DiscoverSearchPlatform, ResolvedDiscoverCandidate } from "@bundle:com.livo.harmony/entry/ets/common/services/DiscoverService";
+import { RssFeedService } from "@bundle:com.livo.harmony/entry/ets/common/services/RssFeedService";
+import type { FeedRefreshPayload } from "@bundle:com.livo.harmony/entry/ets/common/services/RssFeedService";
+import { buildInstagramCandidateFromProfile, buildInstagramProfileSeedFromProfile, buildXCandidateFromProfile, buildXProfileSeedFromProfile, extractXFollowersFromText, parseInstagramProfilesFromSearchHtml, parseXProfilesFromSearchHtml, } from "@bundle:com.livo.harmony/entry/ets/common/utils/DiscoverRemoteSearchParsing";
+import type { DiscoverRemoteProfileSeed, DiscoverRemoteViewMapping } from "@bundle:com.livo.harmony/entry/ets/common/utils/DiscoverRemoteSearchParsing";
+import { formatInstagramFeedTitle } from "@bundle:com.livo.harmony/entry/ets/common/utils/SocialFeedTitles";
 interface BilibiliSearchResult {
     mid?: number;
     uname?: string;
@@ -39,12 +45,29 @@ interface BilibiliAvatarPayload {
     code?: number;
     data?: BilibiliAvatarPayloadData;
 }
-function decodeBasicEntities(value: string): string {
+const SOCIAL_VIEW_MAPPING: DiscoverRemoteViewMapping = {
+    x: FeedViewType.SocialMedia,
+    instagram: FeedViewType.Pictures,
+};
+const RSSHUB_BASE_URL = DEFAULT_RSSHUB_INSTANCE.replace(/\/+$/, '');
+function decodeNumericEntities(value: string): string {
     return value
+        .replace(/&#x([0-9a-f]+);/gi, (matched: string, hex: string) => {
+        const code = parseInt(hex, 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : matched;
+    })
+        .replace(/&#([0-9]+);/g, (matched: string, digits: string) => {
+        const code = parseInt(digits, 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : matched;
+    });
+}
+function decodeBasicEntities(value: string): string {
+    return decodeNumericEntities(value)
         .replace(/\\u0026/g, '&')
         .replace(/\\u003d/g, '=')
         .replace(/\\u002F/g, '/')
         .replace(/\\u002f/g, '/')
+        .replace(/&#0*64;/gi, '@')
         .replace(/\\"/g, '"')
         .replace(/&#39;/g, '\'')
         .replace(/&quot;/g, '"')
@@ -139,11 +162,46 @@ function fallbackBilibiliQueryVariants(query: string): string[] {
 function dedupeCandidates(items: ResolvedDiscoverCandidate[]): ResolvedDiscoverCandidate[] {
     const result: ResolvedDiscoverCandidate[] = [];
     items.forEach((item: ResolvedDiscoverCandidate) => {
-        if (!result.some((candidate: ResolvedDiscoverCandidate) => candidate.targetUrl === item.targetUrl)) {
+        const existingIndex = result.findIndex((candidate: ResolvedDiscoverCandidate) => candidate.targetUrl === item.targetUrl);
+        if (existingIndex < 0) {
             result.push(item);
+            return;
+        }
+        if (scoreCandidateRichness(item) > scoreCandidateRichness(result[existingIndex])) {
+            result[existingIndex] = item;
         }
     });
     return result;
+}
+function scoreCandidateRichness(candidate: ResolvedDiscoverCandidate): number {
+    let score = 0;
+    if (candidate.imageUrl) {
+        score += 4;
+    }
+    if (candidate.description && !/^(?:X|Instagram|YouTube)\s+(?:用户|频道)$/.test(candidate.description)) {
+        score += 2;
+    }
+    if (candidate.sourceKind === 'X' && /followers/i.test(candidate.description)) {
+        score += 6;
+    }
+    return score;
+}
+function withRssHubBase(route: string): string {
+    return `${RSSHUB_BASE_URL}/${route.replace(/^\/+/, '')}`;
+}
+function withConfiguredRssHubCandidate(candidate: ResolvedDiscoverCandidate): ResolvedDiscoverCandidate {
+    if (!candidate.targetUrl.includes('/x/user/') && !candidate.targetUrl.includes('/instagram/user/')) {
+        return candidate;
+    }
+    return {
+        targetUrl: candidate.targetUrl.replace(/^https?:\/\/[^/]+/i, RSSHUB_BASE_URL),
+        targetTitle: candidate.targetTitle,
+        targetView: candidate.targetView,
+        description: candidate.description,
+        siteUrl: candidate.siteUrl,
+        sourceKind: candidate.sourceKind,
+        imageUrl: candidate.imageUrl,
+    };
 }
 function createResolvedCandidate(targetUrl: string, targetTitle: string, targetView: FeedViewType, description: string, siteUrl: string, sourceKind: string, imageUrl: string): ResolvedDiscoverCandidate {
     return {
@@ -156,9 +214,84 @@ function createResolvedCandidate(targetUrl: string, targetTitle: string, targetV
         imageUrl,
     };
 }
+function createInstagramProbeCandidate(username: string, payload: FeedRefreshPayload, imageUrl: string): ResolvedDiscoverCandidate {
+    return withConfiguredRssHubCandidate(createResolvedCandidate(withRssHubBase(`instagram/user/${encodeURIComponent(username)}`), formatInstagramFeedTitle(payload.feedTitle || username, username), FeedViewType.Pictures, payload.description?.trim() || `@${username}`, payload.siteUrl?.trim() || `https://www.instagram.com/${encodeURIComponent(username)}/`, 'Instagram', imageUrl.trim()));
+}
 function normalizeFollowerLabel(value: number | string | undefined): string {
     const label = formatFollowers(value);
     return label || 'Bilibili 用户';
+}
+function buildQueryVariants(query: string, maxLength: number): string[] {
+    const variants: string[] = [];
+    const pushVariant = (value: string): void => {
+        const trimmed = value.trim().replace(/^@+/, '');
+        if (!trimmed || trimmed.length > maxLength || variants.includes(trimmed)) {
+            return;
+        }
+        variants.push(trimmed);
+    };
+    pushVariant(query);
+    pushVariant(query.toLowerCase());
+    pushVariant(query.replace(/\s+/g, ''));
+    pushVariant(query.replace(/\s+/g, '').toLowerCase());
+    return variants;
+}
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+function buildProfileAnchorSnippet(profileUrl: string, username: string, title: string, imageUrl: string, followers: string): string {
+    const safeUrl = escapeHtml(profileUrl);
+    const safeImageUrl = imageUrl ? ` <img src="${escapeHtml(imageUrl)}" />` : '';
+    const safeUsername = username ? ` <span>@${escapeHtml(username)}</span>` : '';
+    const safeTitle = title ? ` <span>${escapeHtml(title)}</span>` : '';
+    const safeFollowers = followers ? ` <span>${escapeHtml(followers)}</span>` : '';
+    return `<a href="${safeUrl}">${safeImageUrl}${safeUsername}${safeTitle}${safeFollowers}</a>`;
+}
+function extractMetaContent(html: string, name: string): string {
+    const pattern = /<meta\b[^>]*>/gi;
+    let matched: RegExpExecArray | null = pattern.exec(html);
+    while (matched) {
+        const tag = matched[0] ?? '';
+        if (!new RegExp(`\\bproperty=(["'])${name}\\1`, 'i').test(tag)) {
+            matched = pattern.exec(html);
+            continue;
+        }
+        const content = tag.match(/\bcontent=(["'])([\s\S]*?)\1/i);
+        if (content?.[2]) {
+            return decodeBasicEntities(content[2]);
+        }
+        matched = pattern.exec(html);
+    }
+    return '';
+}
+function extractMetaNameContent(html: string, name: string): string {
+    const pattern = /<meta\b[^>]*>/gi;
+    let matched: RegExpExecArray | null = pattern.exec(html);
+    while (matched) {
+        const tag = matched[0] ?? '';
+        if (!new RegExp(`\\bname=(["'])${name}\\1`, 'i').test(tag)) {
+            matched = pattern.exec(html);
+            continue;
+        }
+        const content = tag.match(/\bcontent=(["'])([\s\S]*?)\1/i);
+        if (content?.[2]) {
+            return decodeBasicEntities(content[2]);
+        }
+        matched = pattern.exec(html);
+    }
+    return '';
+}
+function isGenericInstagramHtml(html: string, ogTitle: string): boolean {
+    const normalizedTitle = stripHtml(ogTitle).trim().toLowerCase();
+    if (!normalizedTitle || normalizedTitle === 'instagram') {
+        return true;
+    }
+    return /log into instagram/i.test(html)
+        || /create an account or log in to instagram/i.test(html);
 }
 function createParsedYouTubeChannel(channelId: string, title: string, imageUrl: string): ParsedYouTubeChannel {
     return {
@@ -185,6 +318,34 @@ function createBilibiliHtmlUserCard(uid: string, title: string, description: str
     };
 }
 export class DiscoverRemoteSearchService {
+    private static previewCache: Map<string, FeedRefreshPayload> = new Map<string, FeedRefreshPayload>();
+    private static cachePreviewPayload(targetUrl: string, payload: FeedRefreshPayload): void {
+        const trimmed = targetUrl.trim();
+        if (!trimmed) {
+            return;
+        }
+        DiscoverRemoteSearchService.previewCache.set(trimmed, payload);
+    }
+    static rememberPreviewPayload(targetUrl: string, payload: FeedRefreshPayload): void {
+        const trimmed = targetUrl.trim();
+        if (!trimmed) {
+            return;
+        }
+        DiscoverRemoteSearchService.cachePreviewPayload(trimmed, payload);
+        if (payload.resolvedFeedUrl?.trim()) {
+            DiscoverRemoteSearchService.cachePreviewPayload(payload.resolvedFeedUrl, payload);
+        }
+        if (payload.siteUrl?.trim()) {
+            DiscoverRemoteSearchService.cachePreviewPayload(payload.siteUrl, payload);
+        }
+    }
+    static cachedPreviewPayload(targetUrl: string): FeedRefreshPayload | undefined {
+        const trimmed = targetUrl.trim();
+        if (!trimmed) {
+            return undefined;
+        }
+        return DiscoverRemoteSearchService.previewCache.get(trimmed);
+    }
     static async search(query: string, platform: DiscoverSearchPlatform): Promise<ResolvedDiscoverCandidate[]> {
         const trimmed = query.trim();
         if (!trimmed) {
@@ -197,14 +358,163 @@ export class DiscoverRemoteSearchService {
         if (platform === 'all' || platform === 'bilibili') {
             tasks.push(DiscoverRemoteSearchService.searchBilibiliUsers(trimmed));
         }
-        const groups = await Promise.all(tasks);
+        if (platform === 'all' || platform === 'x') {
+            tasks.push(DiscoverRemoteSearchService.searchXUsers(trimmed));
+        }
+        if (platform === 'all' || platform === 'instagram') {
+            tasks.push(DiscoverRemoteSearchService.searchInstagramUsers(trimmed));
+        }
+        const groups = await Promise.allSettled(tasks);
         const merged: ResolvedDiscoverCandidate[] = [];
-        groups.forEach((group: ResolvedDiscoverCandidate[]) => {
-            group.forEach((item: ResolvedDiscoverCandidate) => {
+        groups.forEach((group: PromiseSettledResult<ResolvedDiscoverCandidate[]>) => {
+            if (group.status !== 'fulfilled') {
+                return;
+            }
+            group.value.forEach((item: ResolvedDiscoverCandidate) => {
                 merged.push(item);
             });
         });
         return dedupeCandidates(merged).slice(0, 12);
+    }
+    private static async searchXUsers(query: string): Promise<ResolvedDiscoverCandidate[]> {
+        const seeds: DiscoverRemoteProfileSeed[] = [];
+        for (const username of buildQueryVariants(query, 15)) {
+            const seed = await DiscoverRemoteSearchService.fetchXProfileSeed(username);
+            if (seed) {
+                seeds.push(seed);
+            }
+        }
+        return seeds.map((seed) => withConfiguredRssHubCandidate(buildXCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate));
+    }
+    private static async fetchXProfileSeed(username: string): Promise<DiscoverRemoteProfileSeed | undefined> {
+        const request = http.createHttp();
+        try {
+            const response = await request.request(`https://r.jina.ai/http://x.com/${encodeURIComponent(username)}`, {
+                method: http.RequestMethod.GET,
+                connectTimeout: 8000,
+                readTimeout: 8000,
+                header: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'text/plain,text/html;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                },
+            });
+            if (response.responseCode !== 200) {
+                return undefined;
+            }
+            const text = String(response.result);
+            if (/Page not found\s*\/\s*X/i.test(text) || /Hmm\.\.\.this page doesn[’']t exist/i.test(text)) {
+                return undefined;
+            }
+            const title = (text.match(/Title:\s*([^\n]+?)\s*\(@/i)?.[1] ?? '').trim();
+            const imageUrl = (text.match(/https:\/\/pbs\.twimg\.com\/profile_images\/[^\s)\]]+/i)?.[0] ?? '').trim();
+            const followers = extractXFollowersFromText(text);
+            const snippet = buildProfileAnchorSnippet(`https://x.com/${username}`, username, title, imageUrl, followers);
+            const profile = parseXProfilesFromSearchHtml(snippet, username)[0];
+            return profile ? buildXProfileSeedFromProfile(profile) : undefined;
+        }
+        catch (_) {
+            return undefined;
+        }
+        finally {
+            request.destroy();
+        }
+    }
+    private static async searchInstagramUsers(query: string): Promise<ResolvedDiscoverCandidate[]> {
+        const results: ResolvedDiscoverCandidate[] = [];
+        for (const username of buildQueryVariants(query, 30)) {
+            const candidate = await DiscoverRemoteSearchService.probeInstagramUser(username);
+            if (candidate) {
+                results.push(candidate);
+            }
+        }
+        return dedupeCandidates(results);
+    }
+    private static async probeInstagramUser(username: string): Promise<ResolvedDiscoverCandidate | undefined> {
+        const routeUrl = withRssHubBase(`instagram/user/${encodeURIComponent(username)}`);
+        try {
+            const payload = await RssFeedService.previewFeedUrl(routeUrl);
+            DiscoverRemoteSearchService.rememberPreviewPayload(routeUrl, payload);
+            return createInstagramProbeCandidate(username, payload, payload.imageUrl || '');
+        }
+        catch (_) {
+            const seed = await DiscoverRemoteSearchService.fetchInstagramProfileSeed(username);
+            if (!seed) {
+                return undefined;
+            }
+            return withConfiguredRssHubCandidate(buildInstagramCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate);
+        }
+    }
+    private static async fetchInstagramProfileSeed(username: string): Promise<DiscoverRemoteProfileSeed | undefined> {
+        const request = http.createHttp();
+        try {
+            const response = await request.request(`https://www.instagram.com/${encodeURIComponent(username)}/`, {
+                method: http.RequestMethod.GET,
+                connectTimeout: 8000,
+                readTimeout: 8000,
+                header: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                },
+            });
+            if (response.responseCode !== 200) {
+                return undefined;
+            }
+            const html = String(response.result);
+            const ogTitle = extractMetaContent(html, 'og:title');
+            if (isGenericInstagramHtml(html, ogTitle)) {
+                return await DiscoverRemoteSearchService.fetchInstagramMirrorProfileSeed(username);
+            }
+            const rawTitle = (decodeBasicEntities(ogTitle).match(/^(.*?)\s*\(@[^)]+\)/i)?.[1] ?? decodeBasicEntities(ogTitle)).trim();
+            const title = formatInstagramFeedTitle(rawTitle, username);
+            const imageUrl = extractMetaContent(html, 'og:image').trim();
+            const followers = extractXFollowersFromText(extractMetaContent(html, 'og:description'));
+            if (!title) {
+                return undefined;
+            }
+            const snippet = buildProfileAnchorSnippet(`https://www.instagram.com/${username}/`, username, title, imageUrl, followers);
+            const profile = parseInstagramProfilesFromSearchHtml(snippet, username)[0];
+            return profile ? buildInstagramProfileSeedFromProfile(profile) : undefined;
+        }
+        catch (_) {
+            return undefined;
+        }
+        finally {
+            request.destroy();
+        }
+    }
+    private static async fetchInstagramMirrorProfileSeed(username: string): Promise<DiscoverRemoteProfileSeed | undefined> {
+        const request = http.createHttp();
+        try {
+            const response = await request.request(`https://dumpor.io/v/${encodeURIComponent(username)}/`, {
+                method: http.RequestMethod.GET,
+                connectTimeout: 8000,
+                readTimeout: 8000,
+                header: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                },
+            });
+            if (response.responseCode !== 200) {
+                return undefined;
+            }
+            const html = String(response.result);
+            const ogTitle = extractMetaContent(html, 'og:title');
+            const metaDescription = extractMetaContent(html, 'og:description') || extractMetaNameContent(html, 'description');
+            const title = formatInstagramFeedTitle(ogTitle, username);
+            const followers = extractXFollowersFromText(metaDescription);
+            const snippet = buildProfileAnchorSnippet(`https://www.instagram.com/${username}/`, username, title, '', followers);
+            const profile = parseInstagramProfilesFromSearchHtml(snippet, username)[0];
+            return profile ? buildInstagramProfileSeedFromProfile(profile) : undefined;
+        }
+        catch (_) {
+            return undefined;
+        }
+        finally {
+            request.destroy();
+        }
     }
     private static async searchBilibiliUsers(query: string): Promise<ResolvedDiscoverCandidate[]> {
         const ranked: RankedBilibiliCandidate[] = [];
@@ -274,7 +584,7 @@ export class DiscoverRemoteSearchService {
                 if (score <= 0) {
                     return;
                 }
-                candidates.push(createRankedBilibiliCandidate(createResolvedCandidate(`https://rsshub.pseudoyu.com/bilibili/user/dynamic/${uid}`, title, FeedViewType.SocialMedia, baseDescription, `https://space.bilibili.com/${uid}`, 'Bilibili', imageUrl), score + 8));
+                candidates.push(createRankedBilibiliCandidate(createResolvedCandidate(withRssHubBase(`bilibili/user/dynamic/${uid}`), title, FeedViewType.SocialMedia, baseDescription, `https://space.bilibili.com/${uid}`, 'Bilibili', imageUrl), score + 8));
             });
             return candidates;
         }
@@ -314,7 +624,7 @@ export class DiscoverRemoteSearchService {
                     continue;
                 }
                 const imageUrl = await DiscoverRemoteSearchService.fetchBilibiliAvatarByUid(card.uid);
-                candidates.push(createRankedBilibiliCandidate(createResolvedCandidate(`https://rsshub.pseudoyu.com/bilibili/user/dynamic/${card.uid}`, card.title, FeedViewType.SocialMedia, card.description, `https://space.bilibili.com/${card.uid}`, 'Bilibili', imageUrl), score + 8));
+                candidates.push(createRankedBilibiliCandidate(createResolvedCandidate(withRssHubBase(`bilibili/user/dynamic/${card.uid}`), card.title, FeedViewType.SocialMedia, card.description, `https://space.bilibili.com/${card.uid}`, 'Bilibili', imageUrl), score + 8));
             }
             return candidates;
         }

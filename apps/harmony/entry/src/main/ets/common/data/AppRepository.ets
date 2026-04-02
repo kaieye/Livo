@@ -30,6 +30,8 @@ import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
   resolveSocialFeedDisplayTitle,
+  resolvePreferredStoredFeedImageUrl,
+  resolvePreferredStoredFeedTitle,
 } from '../utils/SocialFeedPresentation'
 import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
 
@@ -342,14 +344,15 @@ export class AppRepository {
       const payload = await RssFeedService.fetchFeedEntries(feed)
       const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
       const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
-      const nextTitle = normalizeSocialFeedTitle(payload.feedTitle || feed.title, nextUrl, nextSiteUrl)
+      const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
       const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
-      const nextImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+      const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
         nextUrl,
         nextSiteUrl,
         payload.imageUrl || '',
         feed.imageUrl || '',
       )
+      const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
       await EntryRepository.upsertMany(payload.entries)
       await FeedRepository.updateFetchState(feedId, {
         url: nextUrl,
@@ -395,14 +398,15 @@ export class AppRepository {
 
     const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
     const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
-    const nextTitle = normalizeSocialFeedTitle(payload.feedTitle || feed.title, nextUrl, nextSiteUrl)
+    const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
     const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
-    const nextImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+    const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
       nextUrl,
       nextSiteUrl,
       payload.imageUrl || '',
       feed.imageUrl || '',
     )
+    const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
     await EntryRepository.removeByFeed(feedId)
     await EntryRepository.upsertMany(rekeyPreviewEntries(feedId, payload.entries))
     await FeedRepository.updateFetchState(feedId, {

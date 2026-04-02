@@ -1,5 +1,6 @@
+import ConfigurationConstant from "@ohos:app.ability.ConfigurationConstant";
 import resourceManager from "@ohos:resourceManager";
-import type { HarmonySettings } from '../models/LivoModels';
+import type { HarmonySettings, ThemeAccent } from '../models/LivoModels';
 import { AppContextService } from "@bundle:com.livo.harmony/entry/ets/common/services/AppContextService";
 export interface ThemePalette {
     isDark: boolean;
@@ -18,79 +19,109 @@ export interface ThemePalette {
 }
 const DARK_PALETTE: ThemePalette = {
     isDark: true,
-    background: '#000000',
-    surface: '#1D1D22',
-    elevated: '#2A2A2F',
+    background: '#111418',
+    surface: '#1A1F25',
+    elevated: '#242A33',
     textPrimary: '#FFFFFF',
-    textSecondary: '#D1D1D6',
-    textMuted: '#8E8E93',
-    divider: '#2A2A30',
+    textSecondary: '#D3D8E1',
+    textMuted: '#8F98A7',
+    divider: '#313845',
     accent: '#FF6A00',
     accentText: '#FFFFFF',
-    tabBarBackground: 'rgba(8, 8, 10, 0.88)',
-    tabBarInactive: '#D1D1D6',
+    tabBarBackground: 'rgba(18, 22, 27, 0.92)',
+    tabBarInactive: '#C6CDD8',
     dragHandle: 'rgba(255, 255, 255, 0.22)',
 };
 const LIGHT_PALETTE: ThemePalette = {
     isDark: false,
-    background: '#F5F5F7',
-    surface: '#FFFFFF',
-    elevated: '#EEF1F6',
+    background: '#F3F5F8',
+    surface: '#FBFCFD',
+    elevated: '#EDF1F5',
     textPrimary: '#111111',
-    textSecondary: '#374151',
-    textMuted: '#6B7280',
-    divider: '#E5E7EB',
+    textSecondary: '#4B5563',
+    textMuted: '#7B8595',
+    divider: '#D8DFE7',
     accent: '#FF6A00',
     accentText: '#FFFFFF',
-    tabBarBackground: 'rgba(255, 255, 255, 0.88)',
+    tabBarBackground: 'rgba(248, 250, 252, 0.92)',
     tabBarInactive: '#6B7280',
     dragHandle: 'rgba(15, 23, 42, 0.18)',
 };
 export class ThemeService {
-    static darkPalette(): ThemePalette {
+    private static cachedPalette: ThemePalette = LIGHT_PALETTE;
+    private static resolveAccentColor(accent: ThemeAccent): string {
+        switch (accent) {
+            case 'blue':
+                return '#2563EB';
+            case 'red':
+                return '#DC2626';
+            case 'pink':
+                return '#DB2777';
+            case 'green':
+                return '#16A34A';
+            default:
+                return '#FF6A00';
+        }
+    }
+    private static clonePalette(source: ThemePalette): ThemePalette {
         return {
-            isDark: DARK_PALETTE.isDark,
-            background: DARK_PALETTE.background,
-            surface: DARK_PALETTE.surface,
-            elevated: DARK_PALETTE.elevated,
-            textPrimary: DARK_PALETTE.textPrimary,
-            textSecondary: DARK_PALETTE.textSecondary,
-            textMuted: DARK_PALETTE.textMuted,
-            divider: DARK_PALETTE.divider,
-            accent: DARK_PALETTE.accent,
-            accentText: DARK_PALETTE.accentText,
-            tabBarBackground: DARK_PALETTE.tabBarBackground,
-            tabBarInactive: DARK_PALETTE.tabBarInactive,
-            dragHandle: DARK_PALETTE.dragHandle,
+            isDark: source.isDark,
+            background: source.background,
+            surface: source.surface,
+            elevated: source.elevated,
+            textPrimary: source.textPrimary,
+            textSecondary: source.textSecondary,
+            textMuted: source.textMuted,
+            divider: source.divider,
+            accent: source.accent,
+            accentText: source.accentText,
+            tabBarBackground: source.tabBarBackground,
+            tabBarInactive: source.tabBarInactive,
+            dragHandle: source.dragHandle,
         };
+    }
+    static currentPalette(): ThemePalette {
+        return ThemeService.clonePalette(ThemeService.cachedPalette);
+    }
+    static darkPalette(): ThemePalette {
+        return ThemeService.clonePalette(DARK_PALETTE);
     }
     static lightPalette(): ThemePalette {
-        return {
-            isDark: LIGHT_PALETTE.isDark,
-            background: LIGHT_PALETTE.background,
-            surface: LIGHT_PALETTE.surface,
-            elevated: LIGHT_PALETTE.elevated,
-            textPrimary: LIGHT_PALETTE.textPrimary,
-            textSecondary: LIGHT_PALETTE.textSecondary,
-            textMuted: LIGHT_PALETTE.textMuted,
-            divider: LIGHT_PALETTE.divider,
-            accent: LIGHT_PALETTE.accent,
-            accentText: LIGHT_PALETTE.accentText,
-            tabBarBackground: LIGHT_PALETTE.tabBarBackground,
-            tabBarInactive: LIGHT_PALETTE.tabBarInactive,
-            dragHandle: LIGHT_PALETTE.dragHandle,
-        };
+        return ThemeService.clonePalette(LIGHT_PALETTE);
     }
     static async resolvePalette(settings: HarmonySettings): Promise<ThemePalette> {
+        let resolved: ThemePalette;
         if (settings.themeMode === 'dark') {
-            return ThemeService.darkPalette();
+            resolved = ThemeService.darkPalette();
         }
-        if (settings.themeMode === 'light') {
-            return ThemeService.lightPalette();
+        else if (settings.themeMode === 'light') {
+            resolved = ThemeService.lightPalette();
         }
-        return (await ThemeService.isSystemDarkMode())
-            ? ThemeService.darkPalette()
-            : ThemeService.lightPalette();
+        else {
+            resolved = (await ThemeService.isSystemDarkMode())
+                ? ThemeService.darkPalette()
+                : ThemeService.lightPalette();
+        }
+        resolved.accent = ThemeService.resolveAccentColor(settings.themeAccent);
+        resolved.accentText = '#FFFFFF';
+        ThemeService.applyColorMode(settings);
+        ThemeService.cachedPalette = ThemeService.clonePalette(resolved);
+        return resolved;
+    }
+    private static applyColorMode(settings: HarmonySettings): void {
+        try {
+            const context = AppContextService.getContext();
+            if (settings.themeMode === 'dark') {
+                context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+            }
+            else if (settings.themeMode === 'light') {
+                context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT);
+            }
+            else {
+                context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+            }
+        }
+        catch (_error) { }
     }
     private static async isSystemDarkMode(): Promise<boolean> {
         try {
@@ -99,7 +130,7 @@ export class ThemeService {
             return configuration.colorMode === resourceManager.ColorMode.DARK;
         }
         catch (error) {
-            return true;
+            return false;
         }
     }
 }

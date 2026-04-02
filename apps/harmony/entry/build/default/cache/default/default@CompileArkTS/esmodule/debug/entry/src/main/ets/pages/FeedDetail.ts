@@ -3,16 +3,24 @@ if (!("finalizeConstruction" in ViewPU.prototype)) {
 }
 interface FeedDetail_Params {
     feedId?: string;
-    feed?: FeedCardModel | undefined;
-    entries?: EntryCardModel[];
-    isRefreshing?: boolean;
+    targetUrl?: string;
+    targetTitle?: string;
+    targetSiteUrl?: string;
+    targetImageUrl?: string;
+    targetDescription?: string;
+    targetCategory?: string;
+    targetView?: FeedViewType;
+    sourceKind?: string;
     theme?: ThemePalette;
 }
-import router from "@ohos:router";
 import { AppRepository } from "@bundle:com.livo.harmony/entry/ets/common/data/AppRepository";
-import type { EntryCardModel, FeedCardModel } from '../common/models/LivoModels';
+import { getStringParams, goBack, openArticleDetail, openDiscoverSubscribeConfig } from "@bundle:com.livo.harmony/entry/ets/common/navigation/AppRouter";
+import { FeedViewType, toArticleDetailModel } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
+import type { Entry, Feed } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
 import { ThemeService } from "@bundle:com.livo.harmony/entry/ets/common/services/ThemeService";
 import type { ThemePalette } from "@bundle:com.livo.harmony/entry/ets/common/services/ThemeService";
+import { FeedDetailView } from "@bundle:com.livo.harmony/entry/ets/common/components/FeedDetailView";
+import type { FeedRefreshPayload } from '../common/services/RssFeedService';
 class FeedDetail extends ViewPU {
     constructor(parent, params, __localStorage, elmtId = -1, paramsLambda = undefined, extraInfo) {
         super(parent, __localStorage, elmtId, extraInfo);
@@ -20,10 +28,15 @@ class FeedDetail extends ViewPU {
             this.paramsGenerator_ = paramsLambda;
         }
         this.__feedId = new ObservedPropertySimplePU('', this, "feedId");
-        this.__feed = new ObservedPropertyObjectPU(undefined, this, "feed");
-        this.__entries = new ObservedPropertyObjectPU([], this, "entries");
-        this.__isRefreshing = new ObservedPropertySimplePU(false, this, "isRefreshing");
-        this.__theme = new ObservedPropertyObjectPU(ThemeService.darkPalette(), this, "theme");
+        this.__targetUrl = new ObservedPropertySimplePU('', this, "targetUrl");
+        this.__targetTitle = new ObservedPropertySimplePU('', this, "targetTitle");
+        this.__targetSiteUrl = new ObservedPropertySimplePU('', this, "targetSiteUrl");
+        this.__targetImageUrl = new ObservedPropertySimplePU('', this, "targetImageUrl");
+        this.__targetDescription = new ObservedPropertySimplePU('', this, "targetDescription");
+        this.__targetCategory = new ObservedPropertySimplePU('', this, "targetCategory");
+        this.__targetView = new ObservedPropertySimplePU(FeedViewType.Articles, this, "targetView");
+        this.__sourceKind = new ObservedPropertySimplePU('', this, "sourceKind");
+        this.__theme = new ObservedPropertyObjectPU(ThemeService.lightPalette(), this, "theme");
         this.setInitiallyProvidedValue(params);
         this.finalizeConstruction();
     }
@@ -31,14 +44,29 @@ class FeedDetail extends ViewPU {
         if (params.feedId !== undefined) {
             this.feedId = params.feedId;
         }
-        if (params.feed !== undefined) {
-            this.feed = params.feed;
+        if (params.targetUrl !== undefined) {
+            this.targetUrl = params.targetUrl;
         }
-        if (params.entries !== undefined) {
-            this.entries = params.entries;
+        if (params.targetTitle !== undefined) {
+            this.targetTitle = params.targetTitle;
         }
-        if (params.isRefreshing !== undefined) {
-            this.isRefreshing = params.isRefreshing;
+        if (params.targetSiteUrl !== undefined) {
+            this.targetSiteUrl = params.targetSiteUrl;
+        }
+        if (params.targetImageUrl !== undefined) {
+            this.targetImageUrl = params.targetImageUrl;
+        }
+        if (params.targetDescription !== undefined) {
+            this.targetDescription = params.targetDescription;
+        }
+        if (params.targetCategory !== undefined) {
+            this.targetCategory = params.targetCategory;
+        }
+        if (params.targetView !== undefined) {
+            this.targetView = params.targetView;
+        }
+        if (params.sourceKind !== undefined) {
+            this.sourceKind = params.sourceKind;
         }
         if (params.theme !== undefined) {
             this.theme = params.theme;
@@ -48,16 +76,26 @@ class FeedDetail extends ViewPU {
     }
     purgeVariableDependenciesOnElmtId(rmElmtId) {
         this.__feedId.purgeDependencyOnElmtId(rmElmtId);
-        this.__feed.purgeDependencyOnElmtId(rmElmtId);
-        this.__entries.purgeDependencyOnElmtId(rmElmtId);
-        this.__isRefreshing.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetUrl.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetTitle.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetSiteUrl.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetImageUrl.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetDescription.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetCategory.purgeDependencyOnElmtId(rmElmtId);
+        this.__targetView.purgeDependencyOnElmtId(rmElmtId);
+        this.__sourceKind.purgeDependencyOnElmtId(rmElmtId);
         this.__theme.purgeDependencyOnElmtId(rmElmtId);
     }
     aboutToBeDeleted() {
         this.__feedId.aboutToBeDeleted();
-        this.__feed.aboutToBeDeleted();
-        this.__entries.aboutToBeDeleted();
-        this.__isRefreshing.aboutToBeDeleted();
+        this.__targetUrl.aboutToBeDeleted();
+        this.__targetTitle.aboutToBeDeleted();
+        this.__targetSiteUrl.aboutToBeDeleted();
+        this.__targetImageUrl.aboutToBeDeleted();
+        this.__targetDescription.aboutToBeDeleted();
+        this.__targetCategory.aboutToBeDeleted();
+        this.__targetView.aboutToBeDeleted();
+        this.__sourceKind.aboutToBeDeleted();
         this.__theme.aboutToBeDeleted();
         SubscriberManager.Get().delete(this.id__());
         this.aboutToBeDeletedInternal();
@@ -69,26 +107,61 @@ class FeedDetail extends ViewPU {
     set feedId(newValue: string) {
         this.__feedId.set(newValue);
     }
-    private __feed: ObservedPropertyObjectPU<FeedCardModel | undefined>;
-    get feed() {
-        return this.__feed.get();
+    private __targetUrl: ObservedPropertySimplePU<string>;
+    get targetUrl() {
+        return this.__targetUrl.get();
     }
-    set feed(newValue: FeedCardModel | undefined) {
-        this.__feed.set(newValue);
+    set targetUrl(newValue: string) {
+        this.__targetUrl.set(newValue);
     }
-    private __entries: ObservedPropertyObjectPU<EntryCardModel[]>;
-    get entries() {
-        return this.__entries.get();
+    private __targetTitle: ObservedPropertySimplePU<string>;
+    get targetTitle() {
+        return this.__targetTitle.get();
     }
-    set entries(newValue: EntryCardModel[]) {
-        this.__entries.set(newValue);
+    set targetTitle(newValue: string) {
+        this.__targetTitle.set(newValue);
     }
-    private __isRefreshing: ObservedPropertySimplePU<boolean>;
-    get isRefreshing() {
-        return this.__isRefreshing.get();
+    private __targetSiteUrl: ObservedPropertySimplePU<string>;
+    get targetSiteUrl() {
+        return this.__targetSiteUrl.get();
     }
-    set isRefreshing(newValue: boolean) {
-        this.__isRefreshing.set(newValue);
+    set targetSiteUrl(newValue: string) {
+        this.__targetSiteUrl.set(newValue);
+    }
+    private __targetImageUrl: ObservedPropertySimplePU<string>;
+    get targetImageUrl() {
+        return this.__targetImageUrl.get();
+    }
+    set targetImageUrl(newValue: string) {
+        this.__targetImageUrl.set(newValue);
+    }
+    private __targetDescription: ObservedPropertySimplePU<string>;
+    get targetDescription() {
+        return this.__targetDescription.get();
+    }
+    set targetDescription(newValue: string) {
+        this.__targetDescription.set(newValue);
+    }
+    private __targetCategory: ObservedPropertySimplePU<string>;
+    get targetCategory() {
+        return this.__targetCategory.get();
+    }
+    set targetCategory(newValue: string) {
+        this.__targetCategory.set(newValue);
+    }
+    private __targetView: ObservedPropertySimplePU<FeedViewType>;
+    get targetView() {
+        return this.__targetView.get();
+    }
+    set targetView(newValue: FeedViewType) {
+        this.__targetView.set(newValue);
+    }
+    private __sourceKind: ObservedPropertySimplePU<string>;
+    get sourceKind() {
+        return this.__sourceKind.get();
+    }
+    set sourceKind(newValue: string) {
+        this.__sourceKind.set(newValue);
     }
     private __theme: ObservedPropertyObjectPU<ThemePalette>;
     get theme() {
@@ -98,278 +171,48 @@ class FeedDetail extends ViewPU {
         this.__theme.set(newValue);
     }
     aboutToAppear(): void {
-        console.info('Livo Harmony FeedDetail aboutToAppear');
-        const params = router.getParams() as Record<string, string>;
-        if (params && params.feedId) {
-            this.feedId = params.feedId;
-            void this.loadData();
+        const params = getStringParams();
+        if (params) {
+            this.feedId = params.feedId ?? '';
+            this.targetUrl = params.targetUrl ?? '';
+            this.targetTitle = params.targetTitle ?? '';
+            this.targetSiteUrl = params.siteUrl ?? '';
+            this.targetImageUrl = params.imageUrl ?? '';
+            this.targetDescription = params.description ?? '';
+            this.targetCategory = params.category ?? '';
+            this.sourceKind = params.sourceKind ?? '';
+            const parsedView = Number(params.view ?? FeedViewType.Articles);
+            this.targetView = parsedView as FeedViewType;
         }
+        void this.loadSettings();
     }
-    private async loadData(): Promise<void> {
+    private async loadSettings(): Promise<void> {
         const settings = await AppRepository.settings();
         this.theme = await ThemeService.resolvePalette(settings);
-        if (this.feedId) {
-            this.feed = await AppRepository.feedById(this.feedId);
-            this.entries = await AppRepository.entriesByFeed(this.feedId);
-        }
     }
-    private async refreshFeed(): Promise<void> {
-        if (!this.feedId)
-            return;
-        this.isRefreshing = true;
-        try {
-            await AppRepository.refreshFeed(this.feedId);
-            this.feed = await AppRepository.feedById(this.feedId);
-            this.entries = await AppRepository.entriesByFeed(this.feedId);
-        }
-        finally {
-            this.isRefreshing = false;
-        }
-    }
-    private openEntry(entryId: string): void {
-        router.pushUrl({
-            url: 'pages/ArticleDetail',
-            params: { entryId },
+    private openEditPage(feed: Feed): void {
+        void openDiscoverSubscribeConfig({
+            targetUrl: feed.url,
+            targetTitle: feed.title,
+            targetView: feed.view as FeedViewType,
+            siteUrl: feed.siteUrl || '',
+            imageUrl: feed.imageUrl || '',
+            description: feed.description || '',
+            sourceKind: '编辑',
+            category: feed.category || '',
         });
     }
-    private EntryCard(entry: EntryCardModel, parent = null) {
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Column.create({ space: 8 });
-            Column.alignItems(HorizontalAlign.Start);
-            Column.padding({ left: 16, right: 16, top: 16, bottom: 16 });
-            Column.borderRadius(16);
-            Column.clickEffect({ level: ClickEffectLevel.LIGHT });
-            Column.onClick(() => this.openEntry(entry.id));
-        }, Column);
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            // Feed 信息行（在单独的源页面里，也可隐藏 sources 名字，但展示时间比较好）
-            Row.create({ space: 6 });
-            // Feed 信息行（在单独的源页面里，也可隐藏 sources 名字，但展示时间比较好）
-            Row.width('100%');
-        }, Row);
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Text.create(entry.publishedLabel);
-            Text.fontSize(12);
-            Text.fontColor(this.theme.textMuted);
-        }, Text);
-        Text.pop();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            If.create();
-            if (entry.readingLabel) {
-                this.ifElseBranchUpdateFunction(0, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Row.create({ space: 4 });
-                    }, Row);
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Text.create('·');
-                        Text.fontSize(12);
-                        Text.fontColor(this.theme.textMuted);
-                    }, Text);
-                    Text.pop();
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Text.create(entry.readingLabel);
-                        Text.fontSize(12);
-                        Text.fontColor(this.theme.textMuted);
-                    }, Text);
-                    Text.pop();
-                    Row.pop();
-                });
-            }
-            else {
-                this.ifElseBranchUpdateFunction(1, () => {
-                });
-            }
-        }, If);
-        If.pop();
-        // Feed 信息行（在单独的源页面里，也可隐藏 sources 名字，但展示时间比较好）
-        Row.pop();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            // 标题
-            Text.create(entry.title);
-            // 标题
-            Text.fontSize(16);
-            // 标题
-            Text.fontWeight(FontWeight.Bold);
-            // 标题
-            Text.fontColor(this.theme.textPrimary);
-            // 标题
-            Text.lineHeight(24);
-            // 标题
-            Text.maxLines(2);
-            // 标题
-            Text.textOverflow({ overflow: TextOverflow.Ellipsis });
-        }, Text);
-        // 标题
-        Text.pop();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            If.create();
-            // 摘要（可选）
-            if (entry.summary && entry.summary.length > 50) {
-                this.ifElseBranchUpdateFunction(0, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Text.create(entry.summary);
-                        Text.fontSize(14);
-                        Text.lineHeight(22);
-                        Text.fontColor(this.theme.textSecondary);
-                        Text.maxLines(2);
-                        Text.textOverflow({ overflow: TextOverflow.Ellipsis });
-                    }, Text);
-                    Text.pop();
-                });
-            }
-            // 标签和作者
-            else {
-                this.ifElseBranchUpdateFunction(1, () => {
-                });
-            }
-        }, If);
-        If.pop();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            // 标签和作者
-            Row.create({ space: 8 });
-        }, Row);
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            If.create();
-            if (entry.tags.length > 0) {
-                this.ifElseBranchUpdateFunction(0, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        ForEach.create();
-                        const forEachItemGenFunction = _item => {
-                            const tag = _item;
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                Text.create(`#${tag}`);
-                                Text.fontSize(12);
-                                Text.fontColor(this.theme.textSecondary);
-                                Text.padding({ left: 8, right: 8, top: 4, bottom: 4 });
-                                Text.backgroundColor(this.theme.elevated);
-                                Text.borderRadius(8);
-                            }, Text);
-                            Text.pop();
-                        };
-                        this.forEachUpdateFunction(elmtId, entry.tags.slice(0, 2), forEachItemGenFunction, (tag: string) => tag, false, false);
-                    }, ForEach);
-                    ForEach.pop();
-                });
-            }
-            else {
-                this.ifElseBranchUpdateFunction(1, () => {
-                });
-            }
-        }, If);
-        If.pop();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            If.create();
-            if (entry.author) {
-                this.ifElseBranchUpdateFunction(0, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Text.create(entry.author);
-                        Text.fontSize(12);
-                        Text.fontColor(this.theme.textSecondary);
-                        Text.margin({ left: 8 });
-                    }, Text);
-                    Text.pop();
-                });
-            }
-            else {
-                this.ifElseBranchUpdateFunction(1, () => {
-                });
-            }
-        }, If);
-        If.pop();
-        // 标签和作者
-        Row.pop();
-        Column.pop();
-    }
-    private EntrySeparator(parent = null) {
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Row.create();
-            Row.width('100%');
-            Row.height(0.5);
-            Row.backgroundColor(this.theme.divider);
-            Row.margin({ left: 16, right: 16 });
-        }, Row);
-        Row.pop();
-    }
-    private PageHeader(parent = null) {
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            Row.create({ space: 16 });
-            Row.width('100%');
-            Row.padding({ left: 12, right: 16, top: 12, bottom: 12 });
-        }, Row);
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            SymbolGlyph.create({ "id": 125832663, "type": 40000, params: [], "bundleName": "com.livo.harmony", "moduleName": "entry" });
-            SymbolGlyph.fontSize(28);
-            SymbolGlyph.fontColor([this.theme.textPrimary]);
-            SymbolGlyph.padding(8);
-            SymbolGlyph.clickEffect({ level: ClickEffectLevel.LIGHT });
-            SymbolGlyph.onClick(() => router.back());
-        }, SymbolGlyph);
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            If.create();
-            if (this.feed) {
-                this.ifElseBranchUpdateFunction(0, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        If.create();
-                        if (this.feed.imageUrl) {
-                            this.ifElseBranchUpdateFunction(0, () => {
-                                this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                    Image.create(this.feed.imageUrl);
-                                    Image.width(36);
-                                    Image.height(36);
-                                    Image.borderRadius(18);
-                                    Image.objectFit(ImageFit.Cover);
-                                }, Image);
-                            });
-                        }
-                        else {
-                            this.ifElseBranchUpdateFunction(1, () => {
-                                this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                    Row.create();
-                                    Row.width(36);
-                                    Row.height(36);
-                                    Row.borderRadius(18);
-                                    Row.backgroundColor(this.theme.accent);
-                                    Row.justifyContent(FlexAlign.Center);
-                                }, Row);
-                                this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                    Text.create(this.feed.title.charAt(0).toUpperCase());
-                                    Text.fontSize(18);
-                                    Text.fontWeight(FontWeight.Bold);
-                                    Text.fontColor('#ffffff');
-                                }, Text);
-                                Text.pop();
-                                Row.pop();
-                            });
-                        }
-                    }, If);
-                    If.pop();
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Text.create(this.feed.title);
-                        Text.fontSize(20);
-                        Text.fontWeight(FontWeight.Bold);
-                        Text.fontColor(this.theme.textPrimary);
-                        Text.maxLines(1);
-                        Text.textOverflow({ overflow: TextOverflow.Ellipsis });
-                        Text.layoutWeight(1);
-                    }, Text);
-                    Text.pop();
-                });
-            }
-            else {
-                this.ifElseBranchUpdateFunction(1, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Text.create('加载中');
-                        Text.fontSize(20);
-                        Text.fontWeight(FontWeight.Bold);
-                        Text.fontColor(this.theme.textPrimary);
-                        Text.layoutWeight(1);
-                    }, Text);
-                    Text.pop();
-                });
-            }
-        }, If);
-        If.pop();
-        Row.pop();
+    private handleSubscribe(payload: FeedRefreshPayload): void {
+        void openDiscoverSubscribeConfig({
+            targetUrl: this.targetUrl,
+            targetTitle: payload.feedTitle || this.targetTitle,
+            targetView: this.targetView,
+            siteUrl: payload.siteUrl || this.targetSiteUrl,
+            imageUrl: payload.imageUrl || this.targetImageUrl,
+            description: payload.description || this.targetDescription,
+            sourceKind: this.sourceKind,
+            category: this.targetCategory,
+        });
     }
     initialRender() {
         this.observeComponentCreation2((elmtId, isInitialRender) => {
@@ -378,175 +221,65 @@ class FeedDetail extends ViewPU {
             Column.height('100%');
             Column.backgroundColor(this.theme.background);
         }, Column);
-        this.PageHeader.bind(this)();
-        this.observeComponentCreation2((elmtId, isInitialRender) => {
-            If.create();
-            if (this.feed) {
-                this.ifElseBranchUpdateFunction(0, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        List.create({ space: 12 });
-                        List.width('100%');
-                        List.layoutWeight(1);
-                        List.scrollBar(BarState.Off);
-                        List.edgeEffect(EdgeEffect.Spring);
-                    }, List);
-                    {
-                        const itemCreation = (elmtId, isInitialRender) => {
-                            ViewStackProcessor.StartGetAccessRecordingFor(elmtId);
-                            ListItem.create(deepRenderFunction, true);
-                            if (!isInitialRender) {
-                                ListItem.pop();
-                            }
-                            ViewStackProcessor.StopGetAccessRecording();
-                        };
-                        const itemCreation2 = (elmtId, isInitialRender) => {
-                            ListItem.create(deepRenderFunction, true);
-                        };
-                        const deepRenderFunction = (elmtId, isInitialRender) => {
-                            itemCreation(elmtId, isInitialRender);
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                Column.create({ space: 10 });
-                                Column.padding({ left: 18, right: 18, bottom: 12 });
-                                Column.alignItems(HorizontalAlign.Start);
-                            }, Column);
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                If.create();
-                                if (this.feed.description) {
-                                    this.ifElseBranchUpdateFunction(0, () => {
-                                        this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                            Text.create(this.feed.description);
-                                            Text.fontSize(14);
-                                            Text.fontColor(this.theme.textSecondary);
-                                        }, Text);
-                                        Text.pop();
-                                    });
-                                }
-                                else {
-                                    this.ifElseBranchUpdateFunction(1, () => {
-                                    });
-                                }
-                            }, If);
-                            If.pop();
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                Row.create();
-                                Row.width('100%');
-                            }, Row);
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                Text.create(`${this.entries.length} 篇文章`);
-                                Text.fontSize(13);
-                                Text.fontColor(this.theme.textMuted);
-                                Text.layoutWeight(1);
-                            }, Text);
-                            Text.pop();
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                Button.createWithLabel(this.isRefreshing ? '刷新中' : '刷新');
-                                Button.type(ButtonType.Capsule);
-                                Button.backgroundColor(this.theme.elevated);
-                                Button.fontColor(this.theme.textPrimary);
-                                Button.enabled(!this.isRefreshing);
-                                Button.clickEffect({ level: ClickEffectLevel.LIGHT });
-                                Button.onClick(() => { void this.refreshFeed(); });
-                            }, Button);
-                            Button.pop();
-                            Row.pop();
-                            Column.pop();
-                            ListItem.pop();
-                        };
-                        this.observeComponentCreation2(itemCreation2, ListItem);
-                        ListItem.pop();
-                    }
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        ForEach.create();
-                        const forEachItemGenFunction = (_item, index: number) => {
-                            const entry = _item;
-                            {
-                                const itemCreation = (elmtId, isInitialRender) => {
-                                    ViewStackProcessor.StartGetAccessRecordingFor(elmtId);
-                                    ListItem.create(deepRenderFunction, true);
-                                    if (!isInitialRender) {
-                                        ListItem.pop();
-                                    }
-                                    ViewStackProcessor.StopGetAccessRecording();
-                                };
-                                const itemCreation2 = (elmtId, isInitialRender) => {
-                                    ListItem.create(deepRenderFunction, true);
-                                };
-                                const deepRenderFunction = (elmtId, isInitialRender) => {
-                                    itemCreation(elmtId, isInitialRender);
-                                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                        Column.create();
-                                    }, Column);
-                                    this.EntryCard.bind(this)(entry);
-                                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                        If.create();
-                                        if (index < this.entries.length - 1) {
-                                            this.ifElseBranchUpdateFunction(0, () => {
-                                                this.EntrySeparator.bind(this)();
-                                            });
-                                        }
-                                        else {
-                                            this.ifElseBranchUpdateFunction(1, () => {
-                                            });
-                                        }
-                                    }, If);
-                                    If.pop();
-                                    Column.pop();
-                                    ListItem.pop();
-                                };
-                                this.observeComponentCreation2(itemCreation2, ListItem);
-                                ListItem.pop();
+        {
+            this.observeComponentCreation2((elmtId, isInitialRender) => {
+                if (isInitialRender) {
+                    let componentCall = new FeedDetailView(this, {
+                        feedId: this.feedId,
+                        targetUrl: this.targetUrl,
+                        initialTargetTitle: this.targetTitle,
+                        initialTargetSiteUrl: this.targetSiteUrl,
+                        initialTargetImageUrl: this.targetImageUrl,
+                        initialTargetDescription: this.targetDescription,
+                        targetCategory: this.targetCategory,
+                        targetView: this.targetView,
+                        theme: this.theme,
+                        onBack: () => { void goBack(); },
+                        onEdit: (feed: Feed) => { this.openEditPage(feed); },
+                        onSubscribe: (payload: FeedRefreshPayload) => { this.handleSubscribe(payload); },
+                        onOpenArticle: (entry: Entry, feed: Feed) => {
+                            const model = toArticleDetailModel(entry, feed);
+                            void openArticleDetail(entry.id || 'preview', JSON.stringify(model));
+                        }
+                    }, undefined, elmtId, () => { }, { page: "entry/src/main/ets/pages/FeedDetail.ets", line: 72, col: 7 });
+                    ViewPU.create(componentCall);
+                    let paramsLambda = () => {
+                        return {
+                            feedId: this.feedId,
+                            targetUrl: this.targetUrl,
+                            initialTargetTitle: this.targetTitle,
+                            initialTargetSiteUrl: this.targetSiteUrl,
+                            initialTargetImageUrl: this.targetImageUrl,
+                            initialTargetDescription: this.targetDescription,
+                            targetCategory: this.targetCategory,
+                            targetView: this.targetView,
+                            theme: this.theme,
+                            onBack: () => { void goBack(); },
+                            onEdit: (feed: Feed) => { this.openEditPage(feed); },
+                            onSubscribe: (payload: FeedRefreshPayload) => { this.handleSubscribe(payload); },
+                            onOpenArticle: (entry: Entry, feed: Feed) => {
+                                const model = toArticleDetailModel(entry, feed);
+                                void openArticleDetail(entry.id || 'preview', JSON.stringify(model));
                             }
                         };
-                        this.forEachUpdateFunction(elmtId, this.entries, forEachItemGenFunction, (entry: EntryCardModel) => entry.id, true, false);
-                    }, ForEach);
-                    ForEach.pop();
-                    {
-                        const itemCreation = (elmtId, isInitialRender) => {
-                            ViewStackProcessor.StartGetAccessRecordingFor(elmtId);
-                            ListItem.create(deepRenderFunction, true);
-                            if (!isInitialRender) {
-                                ListItem.pop();
-                            }
-                            ViewStackProcessor.StopGetAccessRecording();
-                        };
-                        const itemCreation2 = (elmtId, isInitialRender) => {
-                            ListItem.create(deepRenderFunction, true);
-                        };
-                        const deepRenderFunction = (elmtId, isInitialRender) => {
-                            itemCreation(elmtId, isInitialRender);
-                            this.observeComponentCreation2((elmtId, isInitialRender) => {
-                                Row.create();
-                                Row.height(40);
-                                Row.width('100%');
-                            }, Row);
-                            Row.pop();
-                            ListItem.pop();
-                        };
-                        this.observeComponentCreation2(itemCreation2, ListItem);
-                        ListItem.pop();
-                    }
-                    List.pop();
-                });
-            }
-            else {
-                this.ifElseBranchUpdateFunction(1, () => {
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        Column.create();
-                        Column.width('100%');
-                        Column.layoutWeight(1);
-                        Column.justifyContent(FlexAlign.Center);
-                    }, Column);
-                    this.observeComponentCreation2((elmtId, isInitialRender) => {
-                        LoadingProgress.create();
-                        LoadingProgress.width(48);
-                        LoadingProgress.height(48);
-                        LoadingProgress.color(this.theme.accent);
-                    }, LoadingProgress);
-                    Column.pop();
-                });
-            }
-        }, If);
-        If.pop();
+                    };
+                    componentCall.paramsGenerator_ = paramsLambda;
+                }
+                else {
+                    this.updateStateVarsOfChildByElmtId(elmtId, {
+                        feedId: this.feedId,
+                        targetUrl: this.targetUrl,
+                        initialTargetTitle: this.targetTitle,
+                        initialTargetSiteUrl: this.targetSiteUrl,
+                        initialTargetImageUrl: this.targetImageUrl,
+                        initialTargetDescription: this.targetDescription,
+                        targetCategory: this.targetCategory,
+                        targetView: this.targetView,
+                        theme: this.theme
+                    });
+                }
+            }, { name: "FeedDetailView" });
+        }
         Column.pop();
     }
     rerender() {

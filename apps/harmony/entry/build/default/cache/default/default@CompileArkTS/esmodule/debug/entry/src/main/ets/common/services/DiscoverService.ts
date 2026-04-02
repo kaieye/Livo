@@ -7,6 +7,8 @@ export interface RecommendedFeed {
     description: string;
     view: FeedViewType;
     category: string;
+    imageUrl?: string;
+    followers?: string;
 }
 export interface WebUrlParts {
     host: string;
@@ -21,6 +23,7 @@ export interface ResolvedDiscoverCandidate {
     siteUrl: string;
     sourceKind: string;
     imageUrl?: string;
+    followers?: string;
 }
 export const DEFAULT_RSSHUB_INSTANCE = 'https://rsshub.pseudoyu.com';
 const DEFAULT_NITTER_INSTANCE = 'https://nitter.poast.org';
@@ -144,6 +147,163 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
         description: '新闻视频与故事',
         view: FeedViewType.Videos,
         category: '资讯',
+    },
+    {
+        title: 'OpenAI',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UCXZCJLdBC09xxGZ6gcdrc6A`,
+        siteUrl: 'https://www.youtube.com/@OpenAI',
+        description: 'OpenAI 官方频道更新',
+        view: FeedViewType.Videos,
+        category: 'YouTube',
+        imageUrl: 'https://yt3.googleusercontent.com/MopgmVAFV9BqlzOJ-UINtmutvEPcNe5IbKMmP_4vZZo3vnJXcZGtybUBsXaEVxkmxKyGqX9R=s900-c-k-c0x00ffffff-no-rj',
+        followers: '362K 订阅者',
+    },
+    {
+        title: 'Google Developers',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw`,
+        siteUrl: 'https://www.youtube.com/@GoogleDevelopers',
+        description: 'Google Developers 官方视频更新',
+        view: FeedViewType.Videos,
+        category: 'YouTube',
+        imageUrl: 'https://yt3.googleusercontent.com/WZ_63J_-745xyW_DGxGi3VUyTZAe0Jvhw2ZCg7fdz-tv9esTbNPZTFR9X79QzA0ArIrMjYJCDA=s900-c-k-c0x00ffffff-no-rj',
+        followers: '2.61M 订阅者',
+    },
+    {
+        title: 'Fireship',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UC2Xd-TjJByJyK2w1zNwY0zQ`,
+        siteUrl: 'https://www.youtube.com/@Fireship',
+        description: '开发者视频推荐源',
+        view: FeedViewType.Videos,
+        category: 'YouTube',
+        imageUrl: 'https://yt3.googleusercontent.com/3fPNbkf_xPyCleq77ZhcxyeorY97NtMHVNUbaAON_RBDH9ydL4hJkjxC8x_4mpuopkB8oI7Ct6Y=s900-c-k-c0x00ffffff-no-rj',
+        followers: '469K 订阅者',
+    },
+    {
+        title: 'Veritasium',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UCHnyfMqiRRG1u-2MsSQLbXA`,
+        siteUrl: 'https://www.youtube.com/@veritasium',
+        description: '科普视频推荐源',
+        view: FeedViewType.Videos,
+        category: 'YouTube',
+        imageUrl: 'https://yt3.googleusercontent.com/7vCbvtCqtjQ3YLgsJt7Y952MQV1sBvhllSCSxHP8_sVZdcPCBrITfhkN2RdyCuwPnsByq-1GoA=s900-c-k-c0x00ffffff-no-rj',
+        followers: '20.5M 订阅者',
+    },
+    {
+        title: '罗翔说刑法',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/video/517327498`,
+        siteUrl: 'https://space.bilibili.com/517327498',
+        description: 'Bilibili 视频更新示例源',
+        view: FeedViewType.Videos,
+        category: 'Bilibili',
+        imageUrl: 'https://i1.hdslb.com/bfs/face/4e5d0a51273fe3f8fabc700b6a71bb8a38c9e21e.jpg',
+        followers: '3206万粉丝',
+    },
+    {
+        title: '影视飓风',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/video/946974`,
+        siteUrl: 'https://space.bilibili.com/946974',
+        description: '影像与数码创作内容',
+        view: FeedViewType.Videos,
+        category: 'Bilibili',
+        imageUrl: 'https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg',
+        followers: '1568万粉丝',
+    },
+    {
+        title: '老师好我叫何同学',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/video/163637592`,
+        siteUrl: 'https://space.bilibili.com/163637592',
+        description: '数码与创意视频更新',
+        view: FeedViewType.Videos,
+        category: 'Bilibili',
+        imageUrl: 'https://i0.hdslb.com/bfs/face/492d0bb71749332040f9d812954fa0b52e66c490.jpg',
+        followers: '1269万粉丝',
+    },
+    {
+        title: '老番茄',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/dynamic/546195`,
+        siteUrl: 'https://space.bilibili.com/546195',
+        description: 'Bilibili 动态示例源',
+        view: FeedViewType.SocialMedia,
+        category: 'Bilibili',
+        imageUrl: 'https://i0.hdslb.com/bfs/face/bc5ca101313d4db223c395d64779e76eb3482d60.jpg',
+        followers: '2017万粉丝',
+    },
+    {
+        title: 'OpenAI on X',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/openai`,
+        siteUrl: 'https://x.com/OpenAI',
+        description: 'OpenAI 在 X 上的公开动态',
+        view: FeedViewType.SocialMedia,
+        category: 'X',
+        imageUrl: 'https://unavatar.io/x/openai',
+    },
+    {
+        title: 'GitHub on X',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/github`,
+        siteUrl: 'https://x.com/github',
+        description: 'GitHub 官方动态',
+        view: FeedViewType.SocialMedia,
+        category: 'X',
+        imageUrl: 'https://unavatar.io/x/github',
+    },
+    {
+        title: 'verge on X',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/verge`,
+        siteUrl: 'https://x.com/verge',
+        description: 'The Verge 社交动态',
+        view: FeedViewType.SocialMedia,
+        category: 'X',
+        imageUrl: 'https://unavatar.io/x/verge',
+        followers: '3.4M followers',
+    },
+    {
+        title: 'Figma on X',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/figma`,
+        siteUrl: 'https://x.com/figma',
+        description: 'Figma 官方动态',
+        view: FeedViewType.SocialMedia,
+        category: 'X',
+        imageUrl: 'https://unavatar.io/x/figma',
+    },
+    {
+        title: 'NASA',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/nasa`,
+        siteUrl: 'https://www.instagram.com/nasa/',
+        description: 'Instagram 图片流示例源',
+        view: FeedViewType.Pictures,
+        category: 'Instagram',
+        imageUrl: 'https://unavatar.io/instagram/nasa?fallback=false',
+        followers: '100M followers',
+    },
+    {
+        title: 'National Geographic',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/natgeo`,
+        siteUrl: 'https://www.instagram.com/natgeo/',
+        description: '国家地理图片更新',
+        view: FeedViewType.Pictures,
+        category: 'Instagram',
+        imageUrl: 'https://unavatar.io/instagram/natgeo?fallback=false',
+        followers: '275M followers',
+    },
+    {
+        title: 'Figma',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/figma`,
+        siteUrl: 'https://www.instagram.com/figma/',
+        description: 'Figma 官方视觉内容',
+        view: FeedViewType.Pictures,
+        category: 'Instagram',
+        imageUrl: 'https://unavatar.io/instagram/figma?fallback=false',
+        followers: '898K followers',
+    },
+    {
+        title: 'Google',
+        url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/google`,
+        siteUrl: 'https://www.instagram.com/google/',
+        description: 'Google 官方图片内容',
+        view: FeedViewType.Pictures,
+        category: 'Instagram',
+        imageUrl: 'https://unavatar.io/instagram/google?fallback=false',
+        followers: '16M followers',
     },
 ];
 export function discoverViewLabel(view: FeedViewType): string {

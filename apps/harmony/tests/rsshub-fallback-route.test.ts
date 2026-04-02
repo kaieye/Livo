@@ -23,3 +23,17 @@ test('expandRssHubFallbackRoutes adds instagram mirror route fallbacks', () => {
     ],
   )
 })
+
+test('expandRssHubFallbackRoutes adds x to twitter route fallback', () => {
+  assert.deepEqual(expandRssHubFallbackRoutes('/x/user/openai'), [
+    '/x/user/openai',
+    '/twitter/user/openai',
+  ])
+})
+
+test('expandRssHubFallbackRoutes adds twitter to x route fallback', () => {
+  assert.deepEqual(expandRssHubFallbackRoutes('/twitter/user/openai'), [
+    '/twitter/user/openai',
+    '/x/user/openai',
+  ])
+})

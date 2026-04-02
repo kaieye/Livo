@@ -18,8 +18,10 @@ import {
   resolveSocialFeedDisplayImageUrl,
   resolveSocialFeedDisplayTitle,
 } from '../utils/SocialFeedPresentation'
+import { presentTweetEntryFromEntry } from '../utils/TweetEntryPresentation'
 import { PageHeader } from './PageHeader'
 import { PictureEntryCard } from './PictureEntryCard'
+import { TweetEntryCard } from './TweetEntryCard'
 import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
 
 interface VideoPreviewCacheItem {
@@ -718,6 +720,24 @@ export struct FeedDetailView {
     return currentView === FeedViewType.Pictures
   }
 
+  private isXUrl(value: string): boolean {
+    const normalized = (value || '').toLowerCase()
+    return normalized.includes('x.com/') || normalized.includes('twitter.com/')
+      || normalized.includes('/x/user/') || normalized.includes('/twitter/user/')
+  }
+
+  private isXPreview(): boolean {
+    return this.isXUrl(this.existingFeed?.url || '')
+      || this.isXUrl(this.existingFeed?.siteUrl || '')
+      || this.isXUrl(this.targetUrl)
+      || this.isXUrl(this.targetSiteUrl)
+      || this.isXUrl(this.previewPayload?.siteUrl || '')
+  }
+
+  private tweetPresentation(entry: Entry) {
+    return presentTweetEntryFromEntry(entry, this.resolvedAvatarUrl())
+  }
+
   private entryPictureUrl(entry: Entry): string {
     return resolveEntryCardImageUrl({
       title: entry.title,
@@ -1038,6 +1058,14 @@ export struct FeedDetailView {
           ForEach(this.previewEntries(), (entry: Entry, index: number) => {
             if (this.isPicturesPreview()) {
               PictureEntryCard(this.picturePreviewCardProps(entry, index))
+            } else if (this.isXPreview()) {
+              TweetEntryCard({
+                presentation: this.tweetPresentation(entry),
+                theme: this.theme,
+                onOpen: () => {
+                  this.onOpenArticle(entry, this.articleDetailFeed(entry))
+                },
+              })
             } else {
               this.EntryCard(entry, index)
             }

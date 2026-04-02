@@ -1,12 +1,7 @@
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
-
-interface TweetMetricItem {
-  label: string
-  value: string
-}
 
 @Component
 export struct TweetEntryCard {
@@ -15,80 +10,179 @@ export struct TweetEntryCard {
 
   onOpen: () => void = () => {}
 
+  private usernameLabel(): string {
+    return (this.presentation.username || '').trim()
+  }
+
+  private retweetLabel(): string {
+    return (this.presentation.retweetByLabel || '').trim()
+  }
+
   private normalizedMediaUrls(): string[] {
     return (this.presentation.mediaUrls || [])
       .map((url: string) => url.trim())
       .filter((url: string) => !!url)
+      .slice(0, 4)
   }
 
-  private hasMetrics(): boolean {
-    return !!(
-      this.presentation.replyCount ||
-      this.presentation.repostCount ||
-      this.presentation.likeCount ||
-      this.presentation.viewCount
-    )
+  private hasQuotedTweet(): boolean {
+    return this.presentation.kind === 'quote' && !!this.presentation.quotedTweet
   }
 
-  private metricItems(): TweetMetricItem[] {
-    return [
-      { label: '回复', value: this.presentation.replyCount },
-      { label: '转发', value: this.presentation.repostCount },
-      { label: '喜欢', value: this.presentation.likeCount },
-      { label: '浏览', value: this.presentation.viewCount },
-    ].filter((item: TweetMetricItem) => !!item.value)
+  private quotedTweet(): TweetQuotedPresentation {
+    return this.presentation.quotedTweet || {
+      displayName: '',
+      username: '',
+      avatarUrl: '',
+      text: '',
+      mediaUrls: [],
+    }
+  }
+
+  private quotedUsernameLabel(): string {
+    return (this.quotedTweet().username || '').trim()
+  }
+
+  private mediaTileWidth(index: number, count: number): string {
+    if (count <= 1) {
+      return '100%'
+    }
+
+    if (count === 3 && index === 0) {
+      return '100%'
+    }
+
+    return '49.2%'
+  }
+
+  private mediaTileHeight(index: number, count: number): number {
+    if (count <= 1) {
+      return 208
+    }
+
+    if (count === 3 && index === 0) {
+      return 148
+    }
+
+    return 136
   }
 
   @Builder
-  private MetricChip(item: TweetMetricItem) {
-    Row({ space: 6 }) {
-      Text(item.label)
-        .fontSize(11)
-        .fontColor(this.theme.textMuted)
+  private RetweetBanner() {
+    if (this.presentation.kind === 'retweet' && this.retweetLabel()) {
+      Row({ space: 6 }) {
+        Text('转')
+          .fontSize(10)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textMuted)
+          .width(16)
+          .height(16)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(this.theme.elevated)
+          .borderRadius(999)
 
-      Text(item.value)
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
+        Text(`${this.retweetLabel()} 已转帖`)
+          .fontSize(11)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textMuted)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .width('100%')
+      .padding({ left: 48, bottom: 2 })
     }
-    .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-    .borderRadius(999)
-    .backgroundColor(this.theme.elevated)
   }
 
   @Builder
   private MediaGrid() {
-    const mediaUrls = this.normalizedMediaUrls()
-    if (mediaUrls.length > 0) {
+    if (this.normalizedMediaUrls().length > 0) {
       Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-        ForEach(mediaUrls.slice(0, 4), (mediaUrl: string) => {
+        ForEach(this.normalizedMediaUrls(), (mediaUrl: string, index: number) => {
           Image(mediaUrl)
-            .width(mediaUrls.length === 1 ? '100%' : mediaUrls.length === 2 ? '49%' : '48.5%')
-            .height(mediaUrls.length === 1 ? 220 : 160)
-            .borderRadius(16)
+            .width(this.mediaTileWidth(index, this.normalizedMediaUrls().length))
+            .height(this.mediaTileHeight(index, this.normalizedMediaUrls().length))
+            .borderRadius(14)
             .objectFit(ImageFit.Cover)
             .backgroundColor(this.theme.elevated)
-            .margin({ bottom: 8 })
-        }, (mediaUrl: string) => mediaUrl)
+            .margin({ bottom: this.normalizedMediaUrls().length > 1 ? 6 : 0 })
+        }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
       }
       .width('100%')
+      .clip(true)
+    }
+  }
+
+  @Builder
+  private QuoteCard() {
+    if (this.hasQuotedTweet()) {
+      Column({ space: 8 }) {
+        Row({ space: 8 }) {
+          AvatarTile({
+            imageUrl: this.quotedTweet().avatarUrl,
+            fallbackLabel: this.quotedTweet().displayName,
+          accent: this.theme.accent,
+          theme: this.theme,
+          avatarSize: 28,
+          radius: 999,
+          textSize: 11,
+          showFallbackLabel: false,
+        })
+
+          Row({ space: 4 }) {
+            Text(this.quotedTweet().displayName || '未知来源')
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.theme.textPrimary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+            if (this.quotedUsernameLabel()) {
+              Text(this.quotedUsernameLabel())
+                .fontSize(12)
+                .fontColor(this.theme.textMuted)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+          }
+          .layoutWeight(1)
+        }
+        .width('100%')
+
+        if (this.quotedTweet().text) {
+          Text(this.quotedTweet().text)
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(4)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+      .border({ width: 1, color: this.theme.divider })
+      .borderRadius(16)
+      .backgroundColor(this.theme.isDark ? '#171C22' : '#F9FBFC')
     }
   }
 
   build() {
-    Column({ space: 12 }) {
-      Row({ space: 12 }) {
+    Column({ space: 8 }) {
+      this.RetweetBanner()
+
+      Row({ space: 8 }) {
         AvatarTile({
           imageUrl: this.presentation.avatarUrl,
           fallbackLabel: this.presentation.displayName,
           accent: this.theme.accent,
           theme: this.theme,
-          avatarSize: 44,
-          radius: 14,
-          textSize: 16,
+          avatarSize: 17,
+          radius: 999,
+          textSize: 11,
+          showFallbackLabel: false,
         })
 
-        Column({ space: 2 }) {
+        Row({ space: 4 }) {
           Text(this.presentation.displayName || '未知来源')
             .fontSize(16)
             .fontWeight(FontWeight.Bold)
@@ -96,51 +190,46 @@ export struct TweetEntryCard {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          if (this.presentation.username.trim()) {
-            Text(this.presentation.username)
-              .fontSize(12)
+          if (this.usernameLabel()) {
+            Text(this.usernameLabel())
+              .fontSize(14)
               .fontColor(this.theme.textMuted)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
+
+          if (this.presentation.publishedLabel) {
+            Text(`· ${this.presentation.publishedLabel}`)
+              .fontSize(13)
+              .fontColor(this.theme.textMuted)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+          }
         }
         .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        if (this.presentation.publishedLabel) {
-          Text(this.presentation.publishedLabel)
-            .fontSize(11)
-            .fontColor(this.theme.textMuted)
-        }
       }
       .width('100%')
+      .alignItems(VerticalAlign.Top)
 
       if (this.presentation.text) {
         Text(this.presentation.text)
-          .fontSize(15)
-          .lineHeight(22)
+          .fontSize(16)
+          .lineHeight(24)
           .fontColor(this.theme.textPrimary)
-          .maxLines(8)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
       }
 
+      this.QuoteCard()
       this.MediaGrid()
-
-      if (this.hasMetrics()) {
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-          ForEach(this.metricItems(), (item: TweetMetricItem) => {
-            this.MetricChip(item)
-          }, (item: TweetMetricItem) => `${item.label}-${item.value}`)
-        }
-        .width('100%')
-      }
     }
     .width('100%')
-    .padding(16)
+    .padding({ left: 14, right: 14, top: 12, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(24)
+    .borderRadius(18)
+    .border({ width: 0.8, color: this.theme.divider })
     .alignItems(HorizontalAlign.Start)
-    .transition(livoMotion.enterSoft(32))
+    .transition(livoMotion.enterSoft(24))
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
       this.onOpen()

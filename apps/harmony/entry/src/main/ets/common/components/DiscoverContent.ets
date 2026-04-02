@@ -23,6 +23,7 @@ import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedDetailView } from './FeedDetailView'
+import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -87,6 +88,8 @@ function createDiscoverResultFromFeed(feed: RecommendedFeed): ResolvedDiscoverCa
     description: feed.description,
     siteUrl: feed.siteUrl,
     sourceKind: '推荐',
+    imageUrl: feed.imageUrl || '',
+    followers: feed.followers || '',
   }
 }
 
@@ -148,6 +151,8 @@ export struct DiscoverContent {
   private searchInputController: TextInputController = new TextInputController()
 
   aboutToAppear(): void {
+    this.dismissSearchFocus()
+
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
       if (this.hasLoaded || this.isLoadingPage) {
@@ -234,8 +239,13 @@ export struct DiscoverContent {
   }
 
   private handleSearchDismissSignal(): void {
+    this.dismissSearchFocus()
+  }
+
+  private dismissSearchFocus(): void {
     this.searchInputController.stopEditing()
     this.showPlatformChips = false
+    this.keepPlatformChipsOnBlur = false
   }
 
   private settleDiscoverRootVisible(): void {
@@ -278,25 +288,110 @@ export struct DiscoverContent {
       .replace(/\/+$/, '')
   }
 
-  private isSubscribedRecommendedFeed(feed: RecommendedFeed): boolean {
-    const recommendedUrl = this.normalizeFeedIdentity(feed.url)
-    const recommendedSiteUrl = this.normalizeFeedIdentity(feed.siteUrl)
-    const recommendedTitle = feed.title.trim().toLowerCase()
+  private pushIdentityKey(keys: string[], value: string): void {
+    const trimmed = value.trim()
+    if (!trimmed || keys.includes(trimmed)) {
+      return
+    }
+    keys.push(trimmed)
+  }
+
+  private extractBilibiliIdentity(value: string): string {
+    const matched = value.match(/\/(?:bilibili\/user\/(?:video|dynamic|article)|space\.bilibili\.com)\/(\d+)/i)
+    return matched?.[1]?.trim() ? `bilibili:${matched[1].trim()}` : ''
+  }
+
+  private extractYouTubeIdentity(value: string): string {
+    const channelId = value.match(/[?&]channel_id=([^&]+)/i)?.[1]
+      || value.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
+      || value.match(/\/channel\/([^/?#]+)/i)?.[1]
+    if (channelId?.trim()) {
+      return `youtube:channel:${decodeURIComponent(channelId).trim().toLowerCase()}`
+    }
+
+    const handle = value.match(/\/youtube\/user\/(@[^/?#]+)/i)?.[1]
+      || value.match(/\/(@[^/?#]+)/i)?.[1]
+    if (handle?.trim()) {
+      return `youtube:handle:${decodeURIComponent(handle).trim().replace(/^@/, '').toLowerCase()}`
+    }
+
+    const user = value.match(/\/youtube\/user\/([^/?#]+)/i)?.[1]
+      || value.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]
+    if (user?.trim()) {
+      return `youtube:user:${decodeURIComponent(user).trim().toLowerCase()}`
+    }
+
+    return ''
+  }
+
+  private extractCanonicalFeedIdentity(primaryUrl: string, secondaryUrl: string): string {
+    const xUsername = extractXUsername(primaryUrl) || extractXUsername(secondaryUrl)
+    if (xUsername) {
+      return `x:${xUsername}`
+    }
+
+    const instagramUsername = extractInstagramUsername(primaryUrl) || extractInstagramUsername(secondaryUrl)
+    if (instagramUsername) {
+      return `instagram:${instagramUsername}`
+    }
+
+    const bilibiliIdentity = this.extractBilibiliIdentity(primaryUrl) || this.extractBilibiliIdentity(secondaryUrl)
+    if (bilibiliIdentity) {
+      return bilibiliIdentity
+    }
+
+    const youTubeIdentity = this.extractYouTubeIdentity(primaryUrl) || this.extractYouTubeIdentity(secondaryUrl)
+    if (youTubeIdentity) {
+      return youTubeIdentity
+    }
+
+    return ''
+  }
+
+  private collectFeedIdentityKeys(url: string, siteUrl: string, title: string): string[] {
+    const keys: string[] = []
+    const normalizedUrl = this.normalizeFeedIdentity(url)
+    const normalizedSiteUrl = this.normalizeFeedIdentity(siteUrl)
+    const normalizedTitle = title.trim().toLowerCase()
+    const canonicalIdentity = this.extractCanonicalFeedIdentity(url, siteUrl)
+
+    this.pushIdentityKey(keys, normalizedUrl)
+    this.pushIdentityKey(keys, normalizedSiteUrl)
+    this.pushIdentityKey(keys, canonicalIdentity)
+    this.pushIdentityKey(keys, normalizedTitle)
+
+    return keys
+  }
+
+  private identityKeysOverlap(left: string[], right: string[]): boolean {
+    for (const leftKey of left) {
+      if (leftKey && right.includes(leftKey)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private isSubscribedFeedIdentity(url: string, siteUrl: string, title: string): boolean {
+    const candidateKeys = this.collectFeedIdentityKeys(url, siteUrl, title)
 
     for (const subscribedFeed of this.subscribedFeeds) {
+      const subscribedKeys = this.collectFeedIdentityKeys(
+        subscribedFeed.url,
+        subscribedFeed.siteUrl ?? '',
+        subscribedFeed.title,
+      )
+
+      if (this.identityKeysOverlap(candidateKeys, subscribedKeys)) {
+        return true
+      }
+
       const subscribedUrl = this.normalizeFeedIdentity(subscribedFeed.url)
       const subscribedSiteUrl = this.normalizeFeedIdentity(subscribedFeed.siteUrl ?? '')
-      const subscribedTitle = subscribedFeed.title.trim().toLowerCase()
-
-      if (recommendedUrl && subscribedUrl && recommendedUrl === subscribedUrl) {
-        return true
-      }
-
-      if (recommendedSiteUrl && subscribedSiteUrl && recommendedSiteUrl === subscribedSiteUrl) {
-        return true
-      }
-
-      if (recommendedTitle && subscribedTitle && recommendedTitle === subscribedTitle) {
+      if (
+        (candidateKeys.includes(subscribedUrl) && !!subscribedUrl)
+        || (candidateKeys.includes(subscribedSiteUrl) && !!subscribedSiteUrl)
+      ) {
         return true
       }
     }
@@ -304,30 +399,12 @@ export struct DiscoverContent {
     return false
   }
 
+  private isSubscribedRecommendedFeed(feed: RecommendedFeed): boolean {
+    return this.isSubscribedFeedIdentity(feed.url, feed.siteUrl, feed.title)
+  }
+
   private isSubscribedCandidate(candidate: ResolvedDiscoverCandidate): boolean {
-    const candidateUrl = this.normalizeFeedIdentity(candidate.targetUrl)
-    const candidateSiteUrl = this.normalizeFeedIdentity(candidate.siteUrl)
-    const candidateTitle = candidate.targetTitle.trim().toLowerCase()
-
-    for (const subscribedFeed of this.subscribedFeeds) {
-      const subscribedUrl = this.normalizeFeedIdentity(subscribedFeed.url)
-      const subscribedSiteUrl = this.normalizeFeedIdentity(subscribedFeed.siteUrl ?? '')
-      const subscribedTitle = subscribedFeed.title.trim().toLowerCase()
-
-      if (candidateUrl && subscribedUrl && candidateUrl === subscribedUrl) {
-        return true
-      }
-
-      if (candidateSiteUrl && subscribedSiteUrl && candidateSiteUrl === subscribedSiteUrl) {
-        return true
-      }
-
-      if (candidateTitle && subscribedTitle && candidateTitle === subscribedTitle) {
-        return true
-      }
-    }
-
-    return false
+    return this.isSubscribedFeedIdentity(candidate.targetUrl, candidate.siteUrl, candidate.targetTitle)
   }
 
   private candidateActionLabel(candidate: ResolvedDiscoverCandidate): string {
@@ -340,6 +417,10 @@ export struct DiscoverContent {
 
   private candidateActionFontColor(candidate: ResolvedDiscoverCandidate): string {
     return this.isSubscribedCandidate(candidate) ? this.theme.textPrimary : '#FFFFFF'
+  }
+
+  private candidateMetaText(candidate: ResolvedDiscoverCandidate): string {
+    return (candidate.followers || candidate.description).trim()
   }
 
   private hasSearchResults(): boolean {
@@ -781,7 +862,7 @@ export struct DiscoverContent {
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-            Text(candidate.description)
+            Text(this.candidateMetaText(candidate))
               .fontSize(LIST_ROW_META_SIZE)
               .fontColor(this.theme.textSecondary)
               .maxLines(2)
@@ -1069,6 +1150,7 @@ export struct DiscoverContent {
     .height('100%')
     .backgroundColor(this.theme.background)
     .onAppear(() => {
+      this.dismissSearchFocus()
       this.settleDiscoverRootVisible()
     })
   }

@@ -37,43 +37,95 @@
 			"id":	"0x01000008"
 		}, {
 			"type":	"media",
-			"name":	"startIcon",
+			"name":	"account_bilibili",
 			"id":	"0x01000009"
 		}, {
-			"type":	"profile",
-			"name":	"main_pages",
+			"type":	"media",
+			"name":	"account_instagram",
 			"id":	"0x0100000A"
 		}, {
 			"type":	"media",
-			"name":	"sub_articles_active",
+			"name":	"account_x",
 			"id":	"0x0100000B"
 		}, {
 			"type":	"media",
-			"name":	"sub_articles_inactive",
+			"name":	"account_youtube",
 			"id":	"0x0100000C"
 		}, {
 			"type":	"media",
-			"name":	"sub_pictures_active",
+			"name":	"nav_discover_active",
 			"id":	"0x0100000D"
 		}, {
 			"type":	"media",
-			"name":	"sub_pictures_inactive",
+			"name":	"nav_discover_inactive",
 			"id":	"0x0100000E"
 		}, {
 			"type":	"media",
-			"name":	"sub_social_active",
+			"name":	"nav_home_active",
 			"id":	"0x0100000F"
 		}, {
 			"type":	"media",
-			"name":	"sub_social_inactive",
+			"name":	"nav_home_inactive",
 			"id":	"0x01000010"
 		}, {
 			"type":	"media",
-			"name":	"sub_videos_active",
+			"name":	"nav_settings_active",
 			"id":	"0x01000011"
 		}, {
 			"type":	"media",
-			"name":	"sub_videos_inactive",
+			"name":	"nav_settings_inactive",
 			"id":	"0x01000012"
+		}, {
+			"type":	"media",
+			"name":	"nav_subscriptions_active",
+			"id":	"0x01000013"
+		}, {
+			"type":	"media",
+			"name":	"nav_subscriptions_inactive",
+			"id":	"0x01000014"
+		}, {
+			"type":	"media",
+			"name":	"startIcon",
+			"id":	"0x01000015"
+		}, {
+			"type":	"media",
+			"name":	"sub_articles_active",
+			"id":	"0x01000016"
+		}, {
+			"type":	"media",
+			"name":	"sub_articles_inactive",
+			"id":	"0x01000017"
+		}, {
+			"type":	"media",
+			"name":	"sub_pictures_active",
+			"id":	"0x01000018"
+		}, {
+			"type":	"media",
+			"name":	"sub_pictures_inactive",
+			"id":	"0x01000019"
+		}, {
+			"type":	"media",
+			"name":	"sub_social_active",
+			"id":	"0x0100001A"
+		}, {
+			"type":	"media",
+			"name":	"sub_social_inactive",
+			"id":	"0x0100001B"
+		}, {
+			"type":	"media",
+			"name":	"sub_videos_active",
+			"id":	"0x0100001C"
+		}, {
+			"type":	"media",
+			"name":	"sub_videos_inactive",
+			"id":	"0x0100001D"
+		}, {
+			"type":	"profile",
+			"name":	"main_pages",
+			"id":	"0x0100001E"
+		}, {
+			"type":	"media",
+			"name":	"test",
+			"id":	"0x0100001F"
 		}]
 }

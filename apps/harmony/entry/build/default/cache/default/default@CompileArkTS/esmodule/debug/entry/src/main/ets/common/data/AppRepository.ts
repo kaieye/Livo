@@ -1,11 +1,18 @@
 import { toArticleDetailModel, toEntryCardModel, toFeedCardModel, } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
-import type { ArticleDetailModel, DashboardMetric, Entry, EntryCardModel, Feed, FeedCardModel, FeedWithCount, HarmonySettings, RemoteFeedResult } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
+import type { ArticleDetailModel, AccountProvider, AccountStatusResult, BilibiliImportProgress, DashboardMetric, Entry, EntryCardModel, Feed, FeedCardModel, FeedWithCount, PendingBilibiliCreator, FeedViewType, HarmonySettings, RemoteFeedResult } from "@bundle:com.livo.harmony/entry/ets/common/models/LivoModels";
 import { FeedRepository } from "@bundle:com.livo.harmony/entry/ets/common/repositories/FeedRepository";
 import type { FeedDraft } from "@bundle:com.livo.harmony/entry/ets/common/repositories/FeedRepository";
 import { EntryRepository } from "@bundle:com.livo.harmony/entry/ets/common/repositories/EntryRepository";
 import { seedSettings, SEED_ENTRIES, SEED_FEEDS } from "@bundle:com.livo.harmony/entry/ets/common/data/SeedData";
 import { AppPreferenceService } from "@bundle:com.livo.harmony/entry/ets/common/services/AppPreferenceService";
+import { AccountSessionService } from "@bundle:com.livo.harmony/entry/ets/common/services/AccountSessionService";
+import { BilibiliFollowingsService } from "@bundle:com.livo.harmony/entry/ets/common/services/BilibiliFollowingsService";
 import { RssFeedService } from "@bundle:com.livo.harmony/entry/ets/common/services/RssFeedService";
+import type { FeedRefreshPayload } from "@bundle:com.livo.harmony/entry/ets/common/services/RssFeedService";
+import { SocialFeedAvatarService } from "@bundle:com.livo.harmony/entry/ets/common/services/SocialFeedAvatarService";
+import { canonicalInstagramFeedUrl, normalizeSocialFeedDescription } from "@bundle:com.livo.harmony/entry/ets/common/utils/SocialFeedTitles";
+import { resolveSocialFeedDisplayDescription, resolveSocialFeedDisplayImageUrl, resolveSocialFeedDisplayTitle, resolvePreferredStoredFeedImageUrl, resolvePreferredStoredFeedTitle, } from "@bundle:com.livo.harmony/entry/ets/common/utils/SocialFeedPresentation";
+import { rekeyPreviewEntries } from "@bundle:com.livo.harmony/entry/ets/common/utils/PreviewFeedSeed";
 function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardModel[] {
     const result: EntryCardModel[] = [];
     items.forEach((item: EntryCardModel | undefined) => {
@@ -15,15 +22,19 @@ function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardM
     });
     return result;
 }
+const HOME_ENTRY_CANDIDATE_LIMIT: number = 400;
 async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
     const unreadCount = await EntryRepository.countUnreadByFeed(feed.id);
+    const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '');
+    const displayDescription = resolveSocialFeedDisplayDescription(feed.description || '', feed.url, feed.siteUrl || '');
+    const displayImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', displayTitle);
     return {
         id: feed.id,
-        title: feed.title,
+        title: displayTitle,
         url: feed.url,
         siteUrl: feed.siteUrl,
-        imageUrl: feed.imageUrl,
-        description: feed.description,
+        imageUrl: displayImageUrl,
+        description: displayDescription,
         category: feed.category,
         view: feed.view,
         showInAll: feed.showInAll,
@@ -40,7 +51,26 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
     if (!feed) {
         return undefined;
     }
-    return toEntryCardModel(entry, feed);
+    const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '');
+    const displayDescription = resolveSocialFeedDisplayDescription(feed.description || '', feed.url, feed.siteUrl || '');
+    const displayImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', displayTitle);
+    return toEntryCardModel(entry, {
+        id: feed.id,
+        title: displayTitle,
+        url: feed.url,
+        siteUrl: feed.siteUrl,
+        imageUrl: displayImageUrl,
+        description: displayDescription,
+        category: feed.category,
+        view: feed.view,
+        showInAll: feed.showInAll,
+        lastFetched: feed.lastFetched,
+        etag: feed.etag,
+        lastModified: feed.lastModified,
+        errorCount: feed.errorCount,
+        createdAt: feed.createdAt,
+        updatedAt: feed.updatedAt,
+    });
 }
 export class AppRepository {
     private static bootstrapped: boolean = false;
@@ -94,11 +124,23 @@ export class AppRepository {
     }
     static async featuredEntries(): Promise<EntryCardModel[]> {
         await AppRepository.bootstrap();
-        const entries = await EntryRepository.listRecent(20);
+        const entries = await EntryRepository.listRecent(HOME_ENTRY_CANDIDATE_LIMIT);
         const feeds = await FeedRepository.list();
         const feedMap = new Map<string, Feed>();
         feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed));
         return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feedMap.get(entry.feedId))));
+    }
+    static async starredEntries(): Promise<EntryCardModel[]> {
+        await AppRepository.bootstrap();
+        const entries = await EntryRepository.listStarred(100);
+        const feeds = await FeedRepository.list();
+        const feedMap = new Map<string, Feed>();
+        feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed));
+        return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feedMap.get(entry.feedId))));
+    }
+    static async entryEntitiesByFeed(feedId: string): Promise<Entry[]> {
+        await AppRepository.bootstrap();
+        return EntryRepository.listByFeed(feedId);
     }
     static async entriesByFeed(feedId: string): Promise<EntryCardModel[]> {
         await AppRepository.bootstrap();
@@ -124,14 +166,77 @@ export class AppRepository {
         await AppRepository.bootstrap();
         return AppPreferenceService.loadSettings();
     }
+    static async accountStatus(provider: AccountProvider): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.status(provider);
+    }
+    static async linkAccount(provider: AccountProvider): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.link(provider);
+    }
+    static accountLoginUrl(provider: AccountProvider): string {
+        return AccountSessionService.loginUrl(provider);
+    }
+    static async unlinkAccount(provider: AccountProvider): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.unlink(provider);
+    }
+    static async setAccountDisplayName(provider: AccountProvider, displayName: string): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.setDisplayName(provider, displayName);
+    }
+    static async bilibiliSessData(): Promise<string> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.bilibiliSessData();
+    }
+    static async setBilibiliSessData(sessdata: string): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.setBilibiliSessData(sessdata);
+    }
+    static async setBilibiliVerifiedLink(displayName: string, sessdata?: string): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.setBilibiliVerifiedLink(displayName, sessdata);
+    }
+    static async setVerifiedAccountLink(provider: AccountProvider, displayName: string): Promise<AccountStatusResult> {
+        await AppRepository.bootstrap();
+        return AccountSessionService.setVerifiedLink(provider, displayName);
+    }
+    static async previewBilibiliFollowings(): Promise<PendingBilibiliCreator[]> {
+        await AppRepository.bootstrap();
+        return BilibiliFollowingsService.preview();
+    }
+    static async importBilibiliFollowings(creators: PendingBilibiliCreator[], views: FeedViewType[], onProgress: (progress: BilibiliImportProgress) => void): Promise<void> {
+        await AppRepository.bootstrap();
+        await BilibiliFollowingsService.importCreators(creators, views, onProgress);
+    }
     static async persistSettings(next: HarmonySettings): Promise<HarmonySettings> {
         await AppRepository.bootstrap();
         return AppPreferenceService.saveSettings(next);
     }
     static async createFeed(draft: FeedDraft): Promise<FeedCardModel> {
         await AppRepository.bootstrap();
-        const feed = await FeedRepository.create(draft);
-        return toFeedCardModel(await feedWithCount(feed));
+        try {
+            const feed = await FeedRepository.create(draft);
+            return toFeedCardModel(await feedWithCount(feed));
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : 'unknown error';
+            if (message.includes('constraint violation')) {
+                const existing = await FeedRepository.getByUrl(draft.url);
+                if (existing) {
+                    return toFeedCardModel(await feedWithCount(existing));
+                }
+            }
+            throw error instanceof Error ? error : new Error(String(error));
+        }
+    }
+    static async feedEntityByUrl(url: string): Promise<Feed | undefined> {
+        await AppRepository.bootstrap();
+        return FeedRepository.getByUrl(url);
+    }
+    static async feedEntityBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
+        await AppRepository.bootstrap();
+        return FeedRepository.getBySiteUrl(siteUrl);
     }
     static async updateFeed(feedId: string, draft: FeedDraft): Promise<FeedCardModel> {
         await AppRepository.bootstrap();
@@ -158,12 +263,19 @@ export class AppRepository {
         }
         try {
             const payload = await RssFeedService.fetchFeedEntries(feed);
+            const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url;
+            const nextSiteUrl = payload.siteUrl || feed.siteUrl || '';
+            const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl);
+            const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl);
+            const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '');
+            const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl);
             await EntryRepository.upsertMany(payload.entries);
             await FeedRepository.updateFetchState(feedId, {
-                title: payload.feedTitle || feed.title,
-                siteUrl: payload.siteUrl || feed.siteUrl || '',
-                imageUrl: payload.imageUrl || feed.imageUrl || '',
-                description: payload.description || feed.description || '',
+                url: nextUrl,
+                title: nextTitle,
+                siteUrl: nextSiteUrl,
+                imageUrl: nextImageUrl,
+                description: nextDescription,
                 lastFetched: Date.now(),
                 etag: payload.etag,
                 lastModified: payload.lastModified,
@@ -191,6 +303,32 @@ export class AppRepository {
             };
             return result;
         }
+    }
+    static async seedFeedFromPreview(feedId: string, payload: FeedRefreshPayload): Promise<void> {
+        await AppRepository.bootstrap();
+        const feed = await FeedRepository.getById(feedId);
+        if (!feed) {
+            throw new Error('订阅源不存在');
+        }
+        const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url;
+        const nextSiteUrl = payload.siteUrl || feed.siteUrl || '';
+        const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl);
+        const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl);
+        const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '');
+        const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl);
+        await EntryRepository.removeByFeed(feedId);
+        await EntryRepository.upsertMany(rekeyPreviewEntries(feedId, payload.entries));
+        await FeedRepository.updateFetchState(feedId, {
+            url: nextUrl,
+            title: nextTitle,
+            siteUrl: nextSiteUrl,
+            imageUrl: nextImageUrl,
+            description: nextDescription,
+            lastFetched: Date.now(),
+            etag: payload.etag,
+            lastModified: payload.lastModified,
+            errorCount: 0,
+        });
     }
     static async refreshAllFeeds(): Promise<RemoteFeedResult> {
         await AppRepository.bootstrap();

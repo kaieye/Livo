@@ -1,4 +1,15 @@
+import { extractEntryGalleryImageUrls } from './PictureGallery.ts'
+
+export interface TweetQuotedPresentation {
+  displayName: string
+  username: string
+  avatarUrl: string
+  text: string
+  mediaUrls: string[]
+}
+
 export interface TweetEntryPresentation {
+  kind: 'tweet' | 'retweet' | 'quote'
   displayName: string
   username: string
   avatarUrl: string
@@ -10,6 +21,41 @@ export interface TweetEntryPresentation {
   repostCount: string
   likeCount: string
   viewCount: string
+  retweetByLabel: string
+  quotedTweet?: TweetQuotedPresentation
+}
+
+interface TweetPresentationSource {
+  title?: string
+  summary?: string
+  content?: string
+  author?: string
+  articleUrl?: string
+  imageUrl?: string
+  feedImageUrl?: string
+  publishedAt?: number
+  publishedLabel?: string
+  mediaUrls?: string[]
+  avatarUrl?: string
+}
+
+interface TweetMetrics {
+  replyCount: string
+  repostCount: string
+  likeCount: string
+  viewCount: string
+}
+
+interface ParsedRetweet {
+  originalDisplayName: string
+  originalUsername: string
+  originalText: string
+  originalAvatarUrl: string
+}
+
+interface ParsedQuote {
+  mainText: string
+  quotedTweet: TweetQuotedPresentation
 }
 
 function trimValue(value: string | undefined): string {
@@ -37,6 +83,32 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
+function normalizeParagraphWhitespace(value: string): string {
+  return value
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+function normalizedPlainText(value: string): string {
+  return normalizeWhitespace(stripHtml(value))
+}
+
+function isMetricsOnlyParagraph(value: string): boolean {
+  const normalized = normalizeWhitespace(value).toLowerCase()
+  if (!normalized) {
+    return false
+  }
+
+  const stripped = normalized
+    .replace(/\d[\d.,kmbw万]*/gi, '')
+    .replace(/\b(?:repl(?:y|ies)|reposts?|retweets?|likes?|views?)\b/gi, '')
+    .replace(/[·,，.:：/|()\-\s]+/g, '')
+
+  return stripped.length === 0
+}
+
 function formatPublishedLabel(publishedAt: number | undefined): string {
   if (!publishedAt || !Number.isFinite(publishedAt)) {
     return ''
@@ -53,9 +125,9 @@ function formatPublishedLabel(publishedAt: number | undefined): string {
   const sameDate = target.getDate() === now.getDate()
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
   const isYesterday =
-    target.getFullYear() === yesterday.getFullYear() &&
-    target.getMonth() === yesterday.getMonth() &&
-    target.getDate() === yesterday.getDate()
+    target.getFullYear() === yesterday.getFullYear()
+    && target.getMonth() === yesterday.getMonth()
+    && target.getDate() === yesterday.getDate()
   const hours = target.getHours().toString().padStart(2, '0')
   const minutes = target.getMinutes().toString().padStart(2, '0')
 
@@ -70,20 +142,6 @@ function formatPublishedLabel(publishedAt: number | undefined): string {
   return `${sameYear ? '' : `${target.getFullYear()}年`}${target.getMonth() + 1}月${target.getDate()}日 ${hours}:${minutes}`
 }
 
-function extractText(summary: string, content: string): string {
-  const source = trimValue(summary) || trimValue(content)
-  if (!source) {
-    return ''
-  }
-
-  const raw = decodeBasicHtml(source)
-  const paragraphMatch = raw.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i)
-  const text = paragraphMatch?.[1]
-    ? stripHtml(paragraphMatch[1])
-    : stripHtml(raw)
-  return normalizeWhitespace(text.split(/\n{2,}/)[0] ?? '')
-}
-
 function uniqueUrls(urls: string[]): string[] {
   const result: string[] = []
   urls.forEach((url: string) => {
@@ -93,6 +151,33 @@ function uniqueUrls(urls: string[]): string[] {
     }
   })
   return result
+}
+
+function extractText(summary: string, content: string): string {
+  const source = trimValue(summary) || trimValue(content)
+  if (!source) {
+    return ''
+  }
+
+  const raw = decodeBasicHtml(source)
+  const paragraphMatches = Array.from(
+    raw.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi),
+    (item: RegExpMatchArray) => normalizeParagraphWhitespace(stripHtml(item[1] || '')),
+  ).filter((line: string) => !!line && !isMetricsOnlyParagraph(line))
+
+  if (paragraphMatches.length > 0) {
+    return paragraphMatches.join('\n\n')
+  }
+
+  return normalizeParagraphWhitespace(stripHtml(raw))
+}
+
+function xAvatarUrl(username: string): string {
+  const normalized = trimValue(username).replace(/^@+/, '')
+  if (!normalized) {
+    return ''
+  }
+  return `https://unavatar.io/x/${encodeURIComponent(normalized)}?fallback=false`
 }
 
 function extractUrlUsername(value: string): string {
@@ -141,10 +226,16 @@ function extractUrlUsername(value: string): string {
   return ''
 }
 
-function extractDisplayName(source: {
-  author?: string
-  title?: string
-}): string {
+function normalizeUsernameLabel(value: string): string {
+  const trimmed = trimValue(value)
+  if (!trimmed) {
+    return ''
+  }
+
+  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`
+}
+
+function extractDisplayName(source: TweetPresentationSource): string {
   const author = trimValue(source.author)
   if (author) {
     return author
@@ -152,12 +243,7 @@ function extractDisplayName(source: {
   return trimValue(source.title)
 }
 
-function extractUsername(source: {
-  author?: string
-  articleUrl?: string
-  feedImageUrl?: string
-  avatarUrl?: string
-}): string {
+function extractUsername(source: TweetPresentationSource): string {
   const byUrl =
     extractUrlUsername(source.feedImageUrl) ||
     extractUrlUsername(source.avatarUrl) ||
@@ -169,61 +255,181 @@ function extractUsername(source: {
   return ''
 }
 
-function extractMetrics(
-  source: string,
-): Pick<
-  TweetEntryPresentation,
-  'replyCount' | 'repostCount' | 'likeCount' | 'viewCount'
-> {
-  const text = normalizeWhitespace(stripHtml(source).toLowerCase())
-  const replyCount = text.match(/(\d+)\s+replies?\b/)?.[1] ?? ''
-  const repostCount = text.match(/(\d+)\s+(?:reposts?|retweets?)\b/)?.[1] ?? ''
-  const likeCount = text.match(/(\d+)\s+likes?\b/)?.[1] ?? ''
-  const viewCount = text.match(/(\d+)\s+views?\b/)?.[1] ?? ''
+function preferredSourceAvatarUrl(source: TweetPresentationSource): string {
+  const explicitAvatar = trimValue(source.avatarUrl)
+  if (explicitAvatar) {
+    return explicitAvatar
+  }
 
+  const feedAvatar = trimValue(source.feedImageUrl)
+  if (feedAvatar) {
+    return feedAvatar
+  }
+
+  return xAvatarUrl(extractUsername(source))
+}
+
+function extractMetrics(source: string): TweetMetrics {
+  const text = normalizeWhitespace(stripHtml(source).toLowerCase())
   return {
-    replyCount,
-    repostCount,
-    likeCount,
-    viewCount,
+    replyCount: text.match(/(\d+)\s+replies?\b/)?.[1] ?? '',
+    repostCount: text.match(/(\d+)\s+(?:reposts?|retweets?)\b/)?.[1] ?? '',
+    likeCount: text.match(/(\d+)\s+likes?\b/)?.[1] ?? '',
+    viewCount: text.match(/(\d+)\s+views?\b/)?.[1] ?? '',
   }
 }
 
-function presentTweetEntryFromSource(source: {
-  title?: string
-  summary?: string
-  content?: string
-  author?: string
-  articleUrl?: string
-  imageUrl?: string
-  feedImageUrl?: string
-  publishedAt?: number
-  publishedLabel?: string
-  mediaUrls?: string[]
-  avatarUrl?: string
-}): TweetEntryPresentation {
+function basePresentation(source: TweetPresentationSource): TweetEntryPresentation {
   const mediaUrls = uniqueUrls([
     ...(source.mediaUrls ?? []),
     ...(trimValue(source.imageUrl) ? [source.imageUrl ?? ''] : []),
+    ...extractEntryGalleryImageUrls({
+      summary: source.summary || '',
+      content: source.content || '',
+      articleUrl: source.articleUrl || '',
+      siteUrl: source.articleUrl || '',
+      mediaUrls: source.mediaUrls ?? [],
+    }),
   ])
   const textSource = `${source.summary || ''}\n${source.content || ''}`
   const metrics = extractMetrics(textSource)
-
   return {
+    kind: 'tweet',
     displayName: extractDisplayName(source),
     username: extractUsername(source),
-    avatarUrl: trimValue(source.avatarUrl) || trimValue(source.feedImageUrl),
+    avatarUrl: preferredSourceAvatarUrl(source),
     text: extractText(source.summary || '', source.content || ''),
     mediaUrls,
     publishedLabel:
-      trimValue(source.publishedLabel) ||
-      formatPublishedLabel(source.publishedAt),
+      trimValue(source.publishedLabel) || formatPublishedLabel(source.publishedAt),
     articleUrl: trimValue(source.articleUrl),
     replyCount: metrics.replyCount,
     repostCount: metrics.repostCount,
     likeCount: metrics.likeCount,
     viewCount: metrics.viewCount,
+    retweetByLabel: '',
+    quotedTweet: undefined,
   }
+}
+
+function parseRetweet(rawText: string): ParsedRetweet | undefined {
+  const matched = rawText.match(/^RT\s+(@[A-Za-z0-9_]{1,15})\s*:\s*([\s\S]+)$/i)
+  if (!matched?.[1] || !matched?.[2]) {
+    return undefined
+  }
+
+  const username = trimValue(matched[1])
+  const text = trimValue(matched[2])
+  if (!username || !text) {
+    return undefined
+  }
+
+  const displayName = username.replace(/^@/, '')
+  return {
+    originalDisplayName: displayName,
+    originalUsername: username,
+    originalText: normalizeParagraphWhitespace(text),
+    originalAvatarUrl: xAvatarUrl(username),
+  }
+}
+
+function parseQuoteDisplayName(header: string): string {
+  const normalized = trimValue(header)
+  const matched = normalized.match(/^(.+?)\s+@[A-Za-z0-9_]{1,15}$/)
+  return trimValue(matched?.[1] || normalized)
+}
+
+function parseQuoteUsername(header: string): string {
+  const matched = header.match(/(@[A-Za-z0-9_]{1,15})/)
+  return trimValue(matched?.[1] || '')
+}
+
+function parseQuotedTweetFromHtml(rawHtml: string): ParsedQuote | undefined {
+  const matched = rawHtml.match(/([\s\S]*?)<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/i)
+  if (!matched?.[1] || !matched?.[2]) {
+    return undefined
+  }
+
+  const mainText = normalizedPlainText(matched[1])
+  const quoteRaw = matched[2]
+  if (!mainText || !quoteRaw) {
+    return undefined
+  }
+
+  const paragraphMatches = Array.from(
+    quoteRaw.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi),
+    (item: RegExpMatchArray) => normalizeWhitespace(stripHtml(item[1] || '')),
+  ).filter((line: string) => !!line)
+
+  const lines = paragraphMatches.length > 0
+    ? paragraphMatches
+    : stripHtml(quoteRaw)
+        .split(/\n+/)
+        .map((line: string) => normalizeWhitespace(line))
+        .filter((line: string) => !!line)
+
+  if (lines.length < 2) {
+    return undefined
+  }
+
+  const header = lines[0]
+  const body = lines.slice(1).join('\n\n').trim()
+  const username = parseQuoteUsername(header)
+  const displayName = parseQuoteDisplayName(header)
+  if (!body || (!displayName && !username)) {
+    return undefined
+  }
+
+  return {
+    mainText,
+    quotedTweet: {
+      displayName: displayName || username.replace(/^@/, ''),
+      username,
+      avatarUrl: xAvatarUrl(username),
+      text: body,
+      mediaUrls: [],
+    },
+  }
+}
+
+function applyRetweetSemantics(base: TweetEntryPresentation, source: TweetPresentationSource): TweetEntryPresentation | undefined {
+  const rawText = normalizedPlainText(`${source.summary || ''}\n${source.content || ''}`)
+  const parsed = parseRetweet(rawText)
+  if (!parsed) {
+    return undefined
+  }
+
+  return {
+    ...base,
+    kind: 'retweet',
+    retweetByLabel: base.displayName,
+    displayName: parsed.originalDisplayName,
+    username: parsed.originalUsername,
+    avatarUrl: parsed.originalAvatarUrl || base.avatarUrl,
+    text: parsed.originalText,
+  }
+}
+
+function applyQuoteSemantics(base: TweetEntryPresentation, source: TweetPresentationSource): TweetEntryPresentation | undefined {
+  const rawHtml = `${source.summary || ''}\n${source.content || ''}`
+  const parsed = parseQuotedTweetFromHtml(rawHtml)
+  if (!parsed) {
+    return undefined
+  }
+
+  return {
+    ...base,
+    kind: 'quote',
+    text: parsed.mainText,
+    quotedTweet: parsed.quotedTweet,
+  }
+}
+
+function presentTweetEntryFromSource(source: TweetPresentationSource): TweetEntryPresentation {
+  const base = basePresentation(source)
+  return applyRetweetSemantics(base, source)
+    || applyQuoteSemantics(base, source)
+    || base
 }
 
 export function presentTweetEntryFromEntry(
@@ -258,8 +464,16 @@ export function presentTweetEntryFromCard(card: {
   publishedLabel?: string
   mediaUrls?: string[]
 }): TweetEntryPresentation {
-  return presentTweetEntryFromSource({
+  const source = {
     ...card,
     avatarUrl: card.feedImageUrl,
-  })
+  }
+  const presentation = presentTweetEntryFromSource(source)
+  const sourceAvatarUrl = preferredSourceAvatarUrl(source)
+
+  return {
+    ...presentation,
+    username: presentation.username || normalizeUsernameLabel(extractUsername(source)),
+    avatarUrl: sourceAvatarUrl || presentation.avatarUrl,
+  }
 }

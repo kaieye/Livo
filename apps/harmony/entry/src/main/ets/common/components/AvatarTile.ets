@@ -9,6 +9,7 @@ export struct AvatarTile {
   @Prop avatarSize: number = 38
   @Prop radius: number = 10
   @Prop textSize: number = 14
+  @Prop showFallbackLabel: boolean = true
   @State private imageLoadFailed: boolean = false
 
   aboutToAppear(): void {
@@ -40,12 +41,18 @@ export struct AvatarTile {
           .width(this.avatarSize)
           .height(this.avatarSize)
           .borderRadius(this.radius)
-          .backgroundColor(this.accent)
+          .backgroundColor(this.theme.elevated)
+          .border({
+            width: 0.8,
+            color: this.theme.divider,
+          })
 
-        Text(this.initialsLabel())
-          .fontSize(this.textSize)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FFFFFF')
+        if (this.showFallbackLabel) {
+          Text(this.initialsLabel())
+            .fontSize(this.textSize)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF')
+        }
       }
     }
   }

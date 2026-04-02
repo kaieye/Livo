@@ -149,3 +149,197 @@ test('presentTweetEntryFromEntry ignores official x status paths as usernames', 
   assert.equal(presented.username, '')
   assert.equal(presented.articleUrl, 'https://x.com/i/web/status/123')
 })
+
+test('presentTweetEntryFromEntry classifies RT prefix content as retweet', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-5',
+    title: '',
+    summary: 'RT @ArthurMacWaters: Western civilization is awesome, actually',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/1',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 4, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetByLabel, 'Elon Musk')
+  assert.equal(presented.displayName, 'ArthurMacWaters')
+  assert.equal(presented.username, '@ArthurMacWaters')
+  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/ArthurMacWaters?fallback=false')
+  assert.equal(presented.text, 'Western civilization is awesome, actually')
+})
+
+test('presentTweetEntryFromCard classifies RT prefix content as retweet with original avatar', () => {
+  const card: TweetCardLike = {
+    id: 'card-retweet',
+    title: '',
+    summary: 'RT @ArthurMacWaters: Western civilization is awesome, actually',
+    content: '',
+    imageUrl: '',
+    feedImageUrl: 'https://unavatar.io/x/elonmusk',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/1',
+    publishedAt: Date.UTC(2024, 3, 4, 0, 0, 0),
+    mediaUrls: [],
+    feedTitle: 'Elon Musk',
+  }
+
+  const presented = presentTweetEntryFromCard(card)
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetByLabel, 'Elon Musk')
+  assert.equal(presented.displayName, 'ArthurMacWaters')
+  assert.equal(presented.username, '@ArthurMacWaters')
+  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/elonmusk')
+})
+
+test('presentTweetEntryFromCard falls back to source username avatar when feed avatar is missing', () => {
+  const card: TweetCardLike = {
+    id: 'card-source-avatar',
+    title: '',
+    summary: '<p>First line</p><p>Second line</p>',
+    content: '',
+    imageUrl: '',
+    feedImageUrl: '',
+    author: 'OpenAI',
+    articleUrl: 'https://x.com/openai/status/22',
+    publishedAt: Date.UTC(2024, 3, 4, 0, 0, 0),
+    mediaUrls: [],
+    feedTitle: 'OpenAI',
+  }
+
+  const presented = presentTweetEntryFromCard(card)
+
+  assert.equal(presented.username, '@openai')
+  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/openai?fallback=false')
+})
+
+test('presentTweetEntryFromEntry keeps ambiguous RT content as plain tweet', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-6',
+    title: '',
+    summary: 'RT this is still just plain text without a real author split',
+    content: '',
+    author: 'OpenAI',
+    articleUrl: 'https://x.com/openai/status/2',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 5, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/openai')
+
+  assert.equal(presented.kind, 'tweet')
+  assert.equal(presented.retweetByLabel, '')
+  assert.equal(presented.quotedTweet, undefined)
+})
+
+test('presentTweetEntryFromEntry classifies blockquote content as quote tweet', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-7',
+    title: '',
+    summary:
+      '<p>Try out self-driving in a Tesla.</p><blockquote><p>Robert Scoble @Scobleizer</p><p>I was on @wholemars space this afternoon while my Model 3 drove me for a couple of hours</p></blockquote>',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/3',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 6, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'quote')
+  assert.equal(presented.text, 'Try out self-driving in a Tesla.')
+  assert.equal(presented.quotedTweet?.displayName, 'Robert Scoble')
+  assert.equal(presented.quotedTweet?.username, '@Scobleizer')
+  assert.equal(presented.quotedTweet?.avatarUrl, 'https://unavatar.io/x/Scobleizer?fallback=false')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'I was on @wholemars space this afternoon while my Model 3 drove me for a couple of hours',
+  )
+})
+
+test('presentTweetEntryFromCard preserves media order and metrics for timeline actions', () => {
+  const card: TweetCardLike = {
+    id: 'card-2',
+    title: '',
+    summary:
+      '<p>Hello world.</p><p>12 replies 34 reposts 56 likes 78 views</p>',
+    content: '',
+    imageUrl: 'https://pbs.twimg.com/media/four.jpg',
+    feedImageUrl: 'https://unavatar.io/x/openai',
+    author: 'OpenAI',
+    articleUrl: 'https://x.com/openai/status/2',
+    publishedAt: 1711920000000,
+    mediaUrls: [
+      'https://pbs.twimg.com/media/one.jpg',
+      'https://pbs.twimg.com/media/two.jpg',
+      'https://pbs.twimg.com/media/three.jpg',
+    ],
+    feedTitle: 'OpenAI',
+  }
+
+  const presented = presentTweetEntryFromCard(card)
+
+  assert.deepEqual(presented.mediaUrls, [
+    'https://pbs.twimg.com/media/one.jpg',
+    'https://pbs.twimg.com/media/two.jpg',
+    'https://pbs.twimg.com/media/three.jpg',
+    'https://pbs.twimg.com/media/four.jpg',
+  ])
+  assert.equal(presented.replyCount, '12')
+  assert.equal(presented.repostCount, '34')
+  assert.equal(presented.likeCount, '56')
+  assert.equal(presented.viewCount, '78')
+})
+
+test('presentTweetEntryFromEntry preserves paragraph breaks from tweet html content', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-lines',
+    title: '',
+    summary: '<p>First line</p><p>Second line</p><p>Third line</p>',
+    content: '',
+    author: 'OpenAI',
+    articleUrl: 'https://x.com/openai/status/4',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 7, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/openai')
+
+  assert.equal(presented.text, 'First line\n\nSecond line\n\nThird line')
+})
+
+test('presentTweetEntryFromEntry extracts image urls from tweet html when mediaUrls are absent', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-html-image',
+    title: '',
+    summary: '<p>Photo set</p><img src="https://pbs.twimg.com/media/one.jpg" /><img src="https://pbs.twimg.com/media/two.jpg" />',
+    content: '',
+    author: 'OpenAI',
+    articleUrl: 'https://x.com/openai/status/5',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 7, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/openai')
+
+  assert.deepEqual(presented.mediaUrls, [
+    'https://pbs.twimg.com/media/one.jpg',
+    'https://pbs.twimg.com/media/two.jpg',
+  ])
+})

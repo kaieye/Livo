@@ -7,9 +7,11 @@ import { ContentModeRail } from '../common/components/ContentModeRail'
 import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 import { PageHeader } from '../common/components/PageHeader'
 import { PictureEntryCard } from '../common/components/PictureEntryCard'
+import { TweetEntryCard } from '../common/components/TweetEntryCard'
 import { Entry, EntryCardModel, selectPictureMediaUrls } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
+import { presentTweetEntryFromCard } from '../common/utils/TweetEntryPresentation'
 import { livoMotion } from '../common/ui/Motion'
 import {
   CARD_RADIUS_MD,
@@ -25,6 +27,7 @@ import { SettingsContent } from '../common/components/SettingsContent'
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SCENE_DURATION: number = 240
+const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 
 @Entry
 @Component
@@ -285,6 +288,37 @@ struct Index {
       this.previousMode = nextMode
       this.isModeTransitioning = false
     }, MODE_SCENE_DURATION)
+  }
+
+  private adjacentMode(offsetX: number): SubscriptionMode | undefined {
+    const currentIndex = this.modeIndex(this.mode)
+    if (currentIndex < 0) {
+      return undefined
+    }
+
+    const nextIndex = offsetX < 0 ? currentIndex + 1 : currentIndex - 1
+    if (nextIndex < 0 || nextIndex >= SUBSCRIPTION_MODES.length) {
+      return undefined
+    }
+
+    return SUBSCRIPTION_MODES[nextIndex]
+  }
+
+  private handleModeSwipe(event: GestureEvent): void {
+    if (this.isModeTransitioning) {
+      return
+    }
+
+    const offsetX = event.offsetX
+    const offsetY = event.offsetY
+    if (Math.abs(offsetX) < MODE_SWIPE_TRIGGER_OFFSET || Math.abs(offsetX) <= Math.abs(offsetY)) {
+      return
+    }
+
+    const nextMode = this.adjacentMode(offsetX)
+    if (nextMode) {
+      this.requestModeSwitch(nextMode)
+    }
   }
 
   private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
@@ -608,12 +642,37 @@ struct Index {
     .onClick(() => this.openEntry(entry.id))
   }
 
+  private isXSocialEntry(entry: EntryCardModel): boolean {
+    const articleUrl = (entry.articleUrl || '').toLowerCase()
+    const feedTitle = (entry.feedTitle || '').toLowerCase()
+    return articleUrl.includes('x.com/')
+      || articleUrl.includes('twitter.com/')
+      || feedTitle.includes('x / twitter')
+  }
+
+  @Builder
+  private SocialEntryCard(entry: EntryCardModel) {
+    if (this.isXSocialEntry(entry)) {
+      TweetEntryCard({
+        presentation: presentTweetEntryFromCard(entry),
+        theme: this.theme,
+        onOpen: () => this.openEntry(entry.id),
+      })
+    } else {
+      this.EntryCard(entry)
+    }
+  }
+
   @Builder
   private EntryList(mode: SubscriptionMode) {
     List({ space: 10 }) {
       ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel, index: number) => {
         ListItem() {
-          this.EntryCard(entry)
+          if (mode === 'social') {
+            this.SocialEntryCard(entry)
+          } else {
+            this.EntryCard(entry)
+          }
         }
         .width('100%')
         .transition(livoMotion.enterSoft(index * 18 + 40))
@@ -785,6 +844,12 @@ struct Index {
         }
         .width('100%')
         .height('100%')
+        .gesture(
+          PanGesture({ direction: PanDirection.Horizontal })
+            .onActionEnd((event: GestureEvent) => {
+              this.handleModeSwipe(event)
+            })
+        )
       }
       .width('100%')
       .layoutWeight(1)
