@@ -84,19 +84,11 @@ export struct BottomTabs {
   }
 
   private itemBackgroundColor(tabId: RootTabId): string {
-    if (!this.isActive(tabId)) {
-      return 'rgba(0,0,0,0)'
-    }
-
-    return this.theme.isDark ? 'rgba(118,162,255,0.10)' : 'rgba(47,107,255,0.08)'
+    return 'rgba(0,0,0,0)'
   }
 
   private itemBorderColor(tabId: RootTabId): string {
-    if (!this.isActive(tabId)) {
-      return 'rgba(0,0,0,0)'
-    }
-
-    return this.theme.isDark ? 'rgba(118,162,255,0.18)' : 'rgba(47,107,255,0.12)'
+    return 'rgba(0,0,0,0)'
   }
 
   private itemShadowColor(tabId: RootTabId): string {

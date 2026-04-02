@@ -464,6 +464,10 @@ struct Index {
     return suffix
   }
 
+  private searchPanelIcon(): Resource {
+    return this.theme.isDark ? $r('app.media.nav_discover_active') : $r('app.media.nav_discover_inactive')
+  }
+
   @Builder
   private HighlightTitle(title: string, keyword: string) {
     if (!keyword || this.findHighlightIndex(title, keyword) < 0) {
@@ -810,10 +814,9 @@ struct Index {
         PageHeader({
           title: '今日推荐',
           theme: this.theme,
-          trailingSymbol: $r('sys.symbol.magnifyingglass'),
+          trailingImage: $r('app.media.magnifyingglass'),
           trailingButtonCircular: true,
           trailingSymbolSize: 22,
-          trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
           trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
           onTrailingClick: () => {
             if (this.showSearch) {
@@ -905,9 +908,10 @@ struct Index {
         Column() {
           Column({ space: 10 }) {
             Row({ space: 8 }) {
-              SymbolGlyph($r('sys.symbol.magnifyingglass'))
-                .fontSize(20)
-                .fontColor([this.theme.textSecondary])
+              Image(this.searchPanelIcon())
+                .width(20)
+                .height(20)
+                .objectFit(ImageFit.Contain)
               TextInput({ text: this.searchQuery, placeholder: '搜索标题、摘要或来源', controller: this.searchInputController })
                 .backgroundColor('transparent')
                 .fontColor(this.theme.textPrimary)
@@ -1004,9 +1008,10 @@ struct Index {
                   if (this.hasSearchEmptyState()) {
                     ListItem() {
                       Column({ space: 8 }) {
-                        SymbolGlyph($r('sys.symbol.magnifyingglass'))
-                          .fontSize(24)
-                          .fontColor([this.theme.textMuted])
+                        Image(this.searchPanelIcon())
+                          .width(24)
+                          .height(24)
+                          .objectFit(ImageFit.Contain)
 
                         Text('搜索不到内容')
                           .fontSize(15)
