@@ -4,6 +4,8 @@ dist/
 dist-web/
 .claude/
 .agents/
+.superpowers/
+.turbo/
 .vscode/
 __pycache__/
 *.pyc
