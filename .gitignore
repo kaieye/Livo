@@ -13,3 +13,5 @@ __pycache__/
 .env.local
 Folo-dev/
 .worktrees/
+apps/harmony/.hvigor/
+apps/harmony/entry/build/
