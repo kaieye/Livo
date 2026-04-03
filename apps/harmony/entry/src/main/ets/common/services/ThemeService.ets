@@ -2,7 +2,7 @@ import ConfigurationConstant from '@ohos.app.ability.ConfigurationConstant'
 import resourceManager from '@ohos.resourceManager'
 import { HarmonySettings, ThemeAccent } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
-
+ 
 export interface ThemePalette {
   isDark: boolean
   background: string
@@ -100,6 +100,14 @@ export class ThemeService {
   }
 
   static async resolvePalette(settings: HarmonySettings): Promise<ThemePalette> {
+    return ThemeService.resolvePaletteWithMode(settings, true)
+  }
+
+  static async resolvePaletteForSystemChange(settings: HarmonySettings): Promise<ThemePalette> {
+    return ThemeService.resolvePaletteWithMode(settings, false)
+  }
+
+  private static async resolvePaletteWithMode(settings: HarmonySettings, shouldApplyColorMode: boolean): Promise<ThemePalette> {
     let resolved: ThemePalette
     if (settings.themeMode === 'dark') {
       resolved = ThemeService.darkPalette()
@@ -113,7 +121,9 @@ export class ThemeService {
 
     resolved.accent = ThemeService.resolveAccentColor(settings.themeAccent)
     resolved.accentText = '#FFFFFF'
-    ThemeService.applyColorMode(settings)
+    if (shouldApplyColorMode) {
+      ThemeService.applyColorMode(settings)
+    }
 
     ThemeService.cachedPalette = ThemeService.clonePalette(resolved)
     return resolved

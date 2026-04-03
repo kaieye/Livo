@@ -31,6 +31,8 @@ import {
   resolveHdsBottomTabBarBottomMargin,
   resolveHdsBottomTabItems,
 } from '../common/utils/HdsBottomTabConfig'
+import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
+import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
@@ -46,6 +48,7 @@ interface RootTabSymbolPair {
 @Component
 struct Index {
   @StorageProp('topAvoidArea') topAvoidArea: number = 0
+  @StorageProp('systemThemeChangedAt') @Watch('handleSystemThemeChanged') systemThemeChangedAt: number = 0
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @StorageProp('discoverHasForegroundOverlay') discoverHasForegroundOverlay: boolean = false
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
@@ -115,6 +118,20 @@ struct Index {
     void this.applySystemBarStyle(this.theme)
   }
 
+  private handleSystemThemeChanged(): void {
+    void this.refreshThemeFromSystemChange()
+  }
+
+  private async refreshThemeFromSystemChange(): Promise<void> {
+    const settings = await AppRepository.settings()
+    if (!shouldRefreshThemeOnSystemColorModeChange(settings.themeMode)) {
+      return
+    }
+
+    this.theme = await ThemeService.resolvePaletteForSystemChange(settings)
+    void this.applySystemBarStyle(this.theme)
+  }
+
   private async applySystemBarStyle(theme: ThemePalette): Promise<void> {
     const mainWindow = AppStorage.get<window.Window>('WindowClass')
     if (!mainWindow) {
@@ -122,10 +139,12 @@ struct Index {
     }
 
     try {
+      const systemBarStyle = resolveSystemBarStyle(theme)
       await mainWindow.setWindowSystemBarProperties({
-        statusBarColor: '#00000000',
-        navigationBarColor: '#00000000',
-        isStatusBarLightIcon: theme.isDark,
+        statusBarColor: systemBarStyle.statusBarColor,
+        navigationBarColor: systemBarStyle.navigationBarColor,
+        isStatusBarLightIcon: systemBarStyle.isStatusBarLightIcon,
+        statusBarContentColor: systemBarStyle.statusBarContentColor,
       })
     } catch (_) {
     }

@@ -1,18 +1,27 @@
 
 import AbilityConstant from '@ohos.app.ability.AbilityConstant'
+import { Configuration } from '@ohos.app.ability.Configuration'
 import Want from '@ohos.app.ability.Want'
 import UIAbility from '@ohos.app.ability.UIAbility'
 import window from '@ohos.window'
 import { AppRepository } from '../common/data/AppRepository'
 import { AppContextService } from '../common/services/AppContextService'
+import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 
 export default class EntryAbility extends UIAbility {
+  private static readonly SYSTEM_THEME_CHANGED_AT_KEY: string = 'systemThemeChangedAt'
+
   private async applySystemBarStyle(mainWindow: window.Window, isDark: boolean = false): Promise<void> {
     try {
+      const systemBarStyle = resolveSystemBarStyle({
+        isDark,
+        background: isDark ? '#111418' : '#F3F5F8',
+      })
       await mainWindow.setWindowSystemBarProperties({
-        statusBarColor: '#00000000',
-        navigationBarColor: '#00000000',
-        isStatusBarLightIcon: isDark,
+        statusBarColor: systemBarStyle.statusBarColor,
+        navigationBarColor: systemBarStyle.navigationBarColor,
+        isStatusBarLightIcon: systemBarStyle.isStatusBarLightIcon,
+        statusBarContentColor: systemBarStyle.statusBarContentColor,
       })
     } catch (error) {
       throw new Error(`设置系统栏样式失败：${error instanceof Error ? error.message : 'unknown error'}`)
@@ -76,6 +85,14 @@ export default class EntryAbility extends UIAbility {
 
   onWindowStageDestroy(): void {
     console.info('Livo EntryAbility onWindowStageDestroy')
+  }
+
+  onConfigurationUpdate(newConfig: Configuration): void {
+    if (newConfig.colorMode === undefined) {
+      return
+    }
+
+    AppStorage.setOrCreate(EntryAbility.SYSTEM_THEME_CHANGED_AT_KEY, Date.now())
   }
 
   onDestroy(): void {
