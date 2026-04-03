@@ -51,5 +51,5 @@
 - Test: `apps/harmony/tests/video-player-state.test.ts`
 - Test: `apps/harmony/tests/youtube-playback-url.test.ts`
 
-- [ ] Run `node --test apps/harmony/tests/video-player-state.test.ts apps/harmony/tests/youtube-playback-url.test.ts apps/harmony/tests/youtube-playback-display.test.ts apps/harmony/tests/video-resolver-service.test.ts`
+- [ ] Run `node --test apps/harmony/tests/video-player-state.test.ts apps/harmony/tests/youtube-playback-url.test.ts apps/harmony/tests/youtube-playback-display.test.ts apps/harmony/tests/video-playable-selection.test.ts`
 - [ ] Run `pnpm --filter @livo/harmony run build:debug`

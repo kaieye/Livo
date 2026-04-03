@@ -105,6 +105,7 @@ export struct SettingsContent {
   private static readonly SHEET_COMPACT_HEIGHT: number = 440
   private static readonly SHEET_STANDARD_HEIGHT: number = 500
   private static readonly SHEET_TALL_HEIGHT: number = 600
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State saveHint: string = '设置将写入本地 Preferences'
   @State theme: ThemePalette = ThemeService.currentPalette()
@@ -336,7 +337,11 @@ export struct SettingsContent {
             })
           }
           .width('100%')
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
+          .padding({
+            left: PAGE_HORIZONTAL_PADDING,
+            right: PAGE_HORIZONTAL_PADDING,
+            top: this.topAvoidArea + PAGE_TOP_PADDING,
+          })
         }
 
         ListItem() {

@@ -13,9 +13,10 @@
 ### Task 1: 锁定首页视频模式分支与组件接口
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/pages/Index.ets`
 - Create: `apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets`
-- Test: `apps/harmony/tests/home-video-grid-layout.test.ts`
+- Test: `apps/harmony/tests/home-video-grid.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -23,7 +24,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { resolveHomeVideoGridColumns, resolveHomeVideoCardMeta } from '../entry/src/main/ets/common/components/HomeVideoGrid.ets'
+import {
+  resolveHomeVideoGridColumns,
+  resolveHomeVideoCardMeta,
+} from '../entry/src/main/ets/common/components/HomeVideoGrid.ets'
 
 test('resolveHomeVideoGridColumns keeps the home video feed in two columns', () => {
   assert.equal(resolveHomeVideoGridColumns(), 2)
@@ -45,7 +49,7 @@ test('resolveHomeVideoCardMeta prefers author over published label', () => {
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: FAIL with module or export not found for `HomeVideoGrid.ets`.
@@ -99,7 +103,7 @@ import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: PASS with 2 passing tests.
@@ -107,19 +111,20 @@ Expected: PASS with 2 passing tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/tests/home-video-grid-layout.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/tests/home-video-grid.test.ts
 git commit -m "test(harmony): lock home video grid helpers"
 ```
 
 ### Task 2: 实现首页双列视频卡片组件
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets`
-- Test: `apps/harmony/tests/home-video-grid-layout.test.ts`
+- Test: `apps/harmony/tests/home-video-grid.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
-Expand `apps/harmony/tests/home-video-grid-layout.test.ts`:
+Expand `apps/harmony/tests/home-video-grid.test.ts`:
 
 ```ts
 test('resolveHomeVideoCardMeta falls back to published label when author is absent', () => {
@@ -148,7 +153,7 @@ test('resolveHomeVideoCardMeta returns empty string when both author and publish
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: FAIL if the helper or exports are incomplete after wiring real component code.
@@ -259,7 +264,7 @@ export struct HomeVideoGrid {
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: PASS with all helper tests passing.
@@ -267,20 +272,21 @@ Expected: PASS with all helper tests passing.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets apps/harmony/tests/home-video-grid-layout.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets apps/harmony/tests/home-video-grid.test.ts
 git commit -m "feat(harmony): add home video grid component"
 ```
 
 ### Task 3: 将首页 videos 模式切到视频网格
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/pages/Index.ets`
 - Modify: `apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets`
-- Test: `apps/harmony/tests/home-video-grid-layout.test.ts`
+- Test: `apps/harmony/tests/home-video-grid.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
-Extend `apps/harmony/tests/home-video-grid-layout.test.ts`:
+Extend `apps/harmony/tests/home-video-grid.test.ts`:
 
 ```ts
 import { resolveHomeVideoSceneKind } from '../entry/src/main/ets/pages/Index.ets'
@@ -299,7 +305,7 @@ test('resolveHomeVideoSceneKind keeps list scene for articles mode', () => {
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: FAIL because `resolveHomeVideoSceneKind` does not exist yet.
@@ -309,7 +315,9 @@ Expected: FAIL because `resolveHomeVideoSceneKind` does not exist yet.
 In `apps/harmony/entry/src/main/ets/pages/Index.ets`, add a pure helper near the mode definitions:
 
 ```ts
-export function resolveHomeVideoSceneKind(mode: SubscriptionMode): 'list' | 'grid' {
+export function resolveHomeVideoSceneKind(
+  mode: SubscriptionMode,
+): 'list' | 'grid' {
   return mode === 'videos' ? 'grid' : 'list'
 }
 ```
@@ -350,7 +358,7 @@ Keep all non-video modes on the existing `EntryCard` path.
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: PASS with the new scene-kind assertions.
@@ -358,20 +366,21 @@ Expected: PASS with the new scene-kind assertions.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets apps/harmony/tests/home-video-grid-layout.test.ts
+git add apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets apps/harmony/tests/home-video-grid.test.ts
 git commit -m "feat(harmony): switch home videos to grid scene"
 ```
 
 ### Task 4: 验证首页视频网格与现有链路兼容
 
 **Files:**
-- Modify: `apps/harmony/tests/home-video-grid-layout.test.ts`
+
+- Modify: `apps/harmony/tests/home-video-grid.test.ts`
 - Verify: `apps/harmony/entry/src/main/ets/pages/Index.ets`
 - Verify: `apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets`
 
 - [ ] **Step 1: Write the failing test**
 
-Add a final regression assertion to `apps/harmony/tests/home-video-grid-layout.test.ts`:
+Add a final regression assertion to `apps/harmony/tests/home-video-grid.test.ts`:
 
 ```ts
 test('resolveHomeVideoGridColumns remains two columns for stable thumbnail browsing', () => {
@@ -386,7 +395,7 @@ This duplicates the user-facing contract to protect against accidental future re
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 ```
 
 Expected: If an earlier refactor broke the helper export or changed the column count, this test fails before final verification.
@@ -414,7 +423,7 @@ onOpenEntry: (entry: EntryCardModel) => {
 Run:
 
 ```bash
-node --test apps/harmony/tests/home-video-grid-layout.test.ts
+node --test apps/harmony/tests/home-video-grid.test.ts
 pnpm --filter @livo/harmony run build:debug
 ```
 
@@ -426,7 +435,7 @@ Expected:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/tests/home-video-grid-layout.test.ts apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets
+git add apps/harmony/tests/home-video-grid.test.ts apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/HomeVideoGrid.ets
 git commit -m "test(harmony): verify home video grid flow"
 ```
 

@@ -13,17 +13,21 @@
 ### Task 1: Lock Platform Recommendation Coverage with a Failing Test
 
 **Files:**
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
 - Verify: `apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets`
 
 - [ ] **Step 1: Write the failing test**
 
-Add this source-level regression test near the other Discover-related assertions in `apps/harmony/tests/feed-subscribe-flow.test.ts`:
+Add this source-level regression test near the other Discover-related assertions in `apps/harmony/tests/source-regressions.test.ts`:
 
 ```ts
 test('DiscoverService provides built-in recommended feeds for every discover chip platform', async () => {
   const source = await fs.readFile(
-    path.join(repoRoot, 'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets'),
+    path.join(
+      repoRoot,
+      'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets',
+    ),
     'utf8',
   )
 
@@ -42,7 +46,7 @@ test('DiscoverService provides built-in recommended feeds for every discover chi
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL because the current recommendation table does not yet contain built-in examples for every platform chip.
 
@@ -100,48 +104,64 @@ Keep the additions balanced: add at least 4 entries for `youtube`, 4 for `bilibi
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS, including the new coverage assertion.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: add discover recommendations for every chip"
 ```
 
 ### Task 2: Verify Platform Filtering Still Works with the Expanded Dataset
 
 **Files:**
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
 - Verify: `apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets`
 - Verify: `apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets`
 
 - [ ] **Step 1: Write the failing test**
 
-Add a second regression to `apps/harmony/tests/feed-subscribe-flow.test.ts` that checks the actual platform-filter helpers still exist and are wired through Discover content:
+Add a second regression to `apps/harmony/tests/source-regressions.test.ts` that checks the actual platform-filter helpers still exist and are wired through Discover content:
 
 ```ts
 test('DiscoverContent still uses platform-scoped recommended fallback helpers', async () => {
   const discoverContent = await fs.readFile(
-    path.join(repoRoot, 'apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets'),
+    path.join(
+      repoRoot,
+      'apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets',
+    ),
     'utf8',
   )
   const discoverService = await fs.readFile(
-    path.join(repoRoot, 'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets'),
+    path.join(
+      repoRoot,
+      'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets',
+    ),
     'utf8',
   )
 
-  assert.match(discoverContent, /filteredRecommendedFeedsByPlatform\(this\.searchPlatform\)/)
-  assert.match(discoverContent, /searchedRecommendedFeedsByPlatform\(this\.query, this\.searchPlatform\)/)
-  assert.match(discoverService, /export function filteredRecommendedFeedsByPlatform\(platform: DiscoverSearchPlatform\)/)
+  assert.match(
+    discoverContent,
+    /filteredRecommendedFeedsByPlatform\(this\.searchPlatform\)/,
+  )
+  assert.match(
+    discoverContent,
+    /searchedRecommendedFeedsByPlatform\(this\.query, this\.searchPlatform\)/,
+  )
+  assert.match(
+    discoverService,
+    /export function filteredRecommendedFeedsByPlatform\(platform: DiscoverSearchPlatform\)/,
+  )
 })
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS or FAIL depending on the exact source shape. If it already passes, keep the test and move on; this step exists to confirm the assertion is meaningful before broader verification.
 
@@ -173,30 +193,31 @@ Do not add a second recommendation source or special-case platform branch; keep 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "test: lock discover chip recommendation wiring"
 ```
 
 ### Task 3: Run Final Verification for Discover Chip Recommendations
 
 **Files:**
+
 - Verify only: `apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets`
 - Verify only: `apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets`
-- Verify only: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Verify only: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Run focused regression tests**
 
 Run:
 
 ```bash
-node --test apps/harmony/tests/feed-subscribe-flow.test.ts
+node --test apps/harmony/tests/source-regressions.test.ts
 ```
 
 Expected: PASS.
@@ -226,7 +247,7 @@ Verify on device or emulator:
 - [ ] **Step 4: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "chore: verify discover chip recommendations"
 ```
 

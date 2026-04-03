@@ -22,12 +22,13 @@
   - Keep the X preview branch and route preview entries into the same unified renderer.
 - Modify: `apps/harmony/tests/tweet-entry-presentation.test.ts`
   - Add regression cases for retweet, quote, media, and action-bar-facing fields.
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
   - Assert the home and detail entry points still use the shared X renderer.
 
 ### Task 1: Lock the richer X presentation contract with tests
 
 **Files:**
+
 - Modify: `apps/harmony/tests/tweet-entry-presentation.test.ts`
 - Modify: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 
@@ -37,17 +38,20 @@ Add tests that assert the presentation model exposes enough structure for the ne
 
 ```ts
 test('presentTweetEntryFromEntry keeps retweet metadata for timeline header', () => {
-  const presented = presentTweetEntryFromEntry({
-    id: 'entry-retweet',
-    title: '',
-    summary: 'RT @ArthurMacWaters: Western civilization is awesome, actually',
-    content: '',
-    author: 'Elon Musk',
-    articleUrl: 'https://x.com/elonmusk/status/1',
-    imageUrl: '',
-    mediaUrls: [],
-    publishedAt: Date.UTC(2024, 3, 4, 0, 0, 0),
-  } as any, 'https://unavatar.io/x/elonmusk')
+  const presented = presentTweetEntryFromEntry(
+    {
+      id: 'entry-retweet',
+      title: '',
+      summary: 'RT @ArthurMacWaters: Western civilization is awesome, actually',
+      content: '',
+      author: 'Elon Musk',
+      articleUrl: 'https://x.com/elonmusk/status/1',
+      imageUrl: '',
+      mediaUrls: [],
+      publishedAt: Date.UTC(2024, 3, 4, 0, 0, 0),
+    } as any,
+    'https://unavatar.io/x/elonmusk',
+  )
 
   assert.equal(presented.kind, 'retweet')
   assert.equal(presented.retweetByLabel, 'Elon Musk')
@@ -56,23 +60,30 @@ test('presentTweetEntryFromEntry keeps retweet metadata for timeline header', ()
 })
 
 test('presentTweetEntryFromEntry keeps quote metadata for timeline quote card', () => {
-  const presented = presentTweetEntryFromEntry({
-    id: 'entry-quote',
-    title: '',
-    summary: '<p>Try out self-driving in a Tesla.</p><blockquote><p>Robert Scoble @Scobleizer</p><p>I was on @wholemars space this afternoon</p></blockquote>',
-    content: '',
-    author: 'Elon Musk',
-    articleUrl: 'https://x.com/elonmusk/status/3',
-    imageUrl: '',
-    mediaUrls: [],
-    publishedAt: Date.UTC(2024, 3, 6, 0, 0, 0),
-  } as any, 'https://unavatar.io/x/elonmusk')
+  const presented = presentTweetEntryFromEntry(
+    {
+      id: 'entry-quote',
+      title: '',
+      summary:
+        '<p>Try out self-driving in a Tesla.</p><blockquote><p>Robert Scoble @Scobleizer</p><p>I was on @wholemars space this afternoon</p></blockquote>',
+      content: '',
+      author: 'Elon Musk',
+      articleUrl: 'https://x.com/elonmusk/status/3',
+      imageUrl: '',
+      mediaUrls: [],
+      publishedAt: Date.UTC(2024, 3, 6, 0, 0, 0),
+    } as any,
+    'https://unavatar.io/x/elonmusk',
+  )
 
   assert.equal(presented.kind, 'quote')
   assert.equal(presented.text, 'Try out self-driving in a Tesla.')
   assert.equal(presented.quotedTweet?.displayName, 'Robert Scoble')
   assert.equal(presented.quotedTweet?.username, '@Scobleizer')
-  assert.equal(presented.quotedTweet?.text, 'I was on @wholemars space this afternoon')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'I was on @wholemars space this afternoon',
+  )
 })
 ```
 
@@ -131,7 +142,8 @@ git commit -m "test: lock harmony x timeline presentation contract"
 ### Task 2: Add renderer-level regression tests for shared X entry points
 
 **Files:**
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
 - Modify: `apps/harmony/entry/src/main/ets/pages/Index.ets`
 - Modify: `apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets`
 
@@ -141,7 +153,10 @@ Add source-level assertions that both entry points still route X content through
 
 ```ts
 test('Index routes x social entries through TweetEntryCard', () => {
-  const source = fs.readFileSync('apps/harmony/entry/src/main/ets/pages/Index.ets', 'utf8')
+  const source = fs.readFileSync(
+    'apps/harmony/entry/src/main/ets/pages/Index.ets',
+    'utf8',
+  )
 
   assert.match(source, /private isXSocialEntry\(entry: EntryCardModel\)/)
   assert.match(source, /TweetEntryCard\(\{/)
@@ -149,17 +164,23 @@ test('Index routes x social entries through TweetEntryCard', () => {
 })
 
 test('FeedDetailView routes x previews through TweetEntryCard', () => {
-  const source = fs.readFileSync('apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets', 'utf8')
+  const source = fs.readFileSync(
+    'apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets',
+    'utf8',
+  )
 
   assert.match(source, /private isXPreview\(\)/)
   assert.match(source, /TweetEntryCard\(\{/)
-  assert.match(source, /presentTweetEntryFromEntry\(entry, this\.resolvedAvatarUrl\(\)\)/)
+  assert.match(
+    source,
+    /presentTweetEntryFromEntry\(entry, this\.resolvedAvatarUrl\(\)\)/,
+  )
 })
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL if either page no longer uses the shared X renderer or missing helper calls.
 
@@ -191,20 +212,21 @@ if (this.isXPreview()) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS with the new entry-point assertions green.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/tests/feed-subscribe-flow.test.ts apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets
+git add apps/harmony/tests/source-regressions.test.ts apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets
 git commit -m "test: guard shared harmony x renderer entry points"
 ```
 
 ### Task 3: Refactor TweetEntryCard into a timeline renderer
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets`
 
 - [ ] **Step 1: Write the failing test**
@@ -229,7 +251,7 @@ test('TweetEntryCard defines timeline-specific sections', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL because the current card still uses pill-style metric chips and the old card layout.
 
@@ -269,20 +291,21 @@ The final card should:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS for the renderer structure assertions.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: refactor harmony x card into timeline renderer"
 ```
 
 ### Task 4: Keep the richer X model aligned with the new renderer
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 - Modify: `apps/harmony/tests/tweet-entry-presentation.test.ts`
 
@@ -295,7 +318,8 @@ test('presentTweetEntryFromCard keeps stable media order and optional action cou
   const presented = presentTweetEntryFromCard({
     id: 'card-2',
     title: '',
-    summary: '<p>Hello world.</p><p>12 replies 34 reposts 56 likes 78 views</p>',
+    summary:
+      '<p>Hello world.</p><p>12 replies 34 reposts 56 likes 78 views</p>',
     content: '',
     imageUrl: 'https://pbs.twimg.com/media/four.jpg',
     feedImageUrl: 'https://unavatar.io/x/openai',
@@ -339,7 +363,9 @@ const mediaUrls = uniqueUrls([
   ...(trimValue(source.imageUrl) ? [source.imageUrl ?? ''] : []),
 ])
 
-const metrics = extractMetrics(`${source.summary || ''}\n${source.content || ''}`)
+const metrics = extractMetrics(
+  `${source.summary || ''}\n${source.content || ''}`,
+)
 ```
 
 Keep the current parsing order deterministic and let card-based sources expose metrics when available.
@@ -360,12 +386,13 @@ git commit -m "feat: align harmony x presentation data with timeline renderer"
 ### Task 5: Final verification
 
 **Files:**
+
 - Verify only: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 - Verify only: `apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets`
 - Verify only: `apps/harmony/entry/src/main/ets/pages/Index.ets`
 - Verify only: `apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets`
 - Verify only: `apps/harmony/tests/tweet-entry-presentation.test.ts`
-- Verify only: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Verify only: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Run X presentation tests**
 
@@ -375,7 +402,7 @@ Expected: PASS with all X semantic parsing tests green.
 
 - [ ] **Step 2: Run shared entry-point tests**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS with both home/detail X routing assertions green.
 
@@ -394,7 +421,7 @@ Expected: build succeeds without new X renderer errors.
 - [ ] **Step 5: Commit final implementation**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets apps/harmony/tests/tweet-entry-presentation.test.ts apps/harmony/tests/feed-subscribe-flow.test.ts docs/superpowers/specs/2026-04-01-harmony-x-timeline-unification-design.md docs/superpowers/plans/2026-04-01-harmony-x-timeline-unification.md
+git add apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets apps/harmony/tests/tweet-entry-presentation.test.ts apps/harmony/tests/source-regressions.test.ts docs/superpowers/specs/2026-04-01-harmony-x-timeline-unification-design.md docs/superpowers/plans/2026-04-01-harmony-x-timeline-unification.md
 git commit -m "feat: unify harmony x timeline presentation"
 ```
 

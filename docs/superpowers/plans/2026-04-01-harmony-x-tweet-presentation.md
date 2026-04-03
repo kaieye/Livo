@@ -20,7 +20,7 @@
   - Detect X feeds in subscribed feed detail preview and route them to `TweetEntryCard`.
 - Modify: `apps/harmony/entry/src/main/ets/pages/Index.ets`
   - Detect X entries in the home "social" tab and route them to `TweetEntryCard`.
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
   - Assert the two page entry points both branch into the shared tweet card.
 - Create: `apps/harmony/tests/tweet-entry-presentation.test.ts`
   - Cover parsing of username, text, media, and engagement metadata from existing feed data.
@@ -28,6 +28,7 @@
 ### Task 1: Add Tweet Presentation Parsing
 
 **Files:**
+
 - Create: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 - Create: `apps/harmony/tests/tweet-entry-presentation.test.ts`
 
@@ -43,20 +44,24 @@ import {
 } from '../entry/src/main/ets/common/utils/TweetEntryPresentation.ts'
 
 test('presentTweetEntryFromEntry extracts x username, text, media, and metrics', () => {
-  const presented = presentTweetEntryFromEntry({
-    id: 'entry-1',
-    title: 'OpenAI shipped Codex',
-    summary: '<p>Codex is live now.</p><p>12 replies 34 reposts 56 likes 78 views</p>',
-    content: '',
-    author: 'OpenAI',
-    articleUrl: 'https://x.com/OpenAI/status/1234567890',
-    imageUrl: 'https://pbs.twimg.com/media/one.jpg',
-    mediaUrls: [
-      'https://pbs.twimg.com/media/one.jpg',
-      'https://pbs.twimg.com/media/two.jpg',
-    ],
-    publishedAt: 1711920000000,
-  } as any, 'https://unavatar.io/x/OpenAI')
+  const presented = presentTweetEntryFromEntry(
+    {
+      id: 'entry-1',
+      title: 'OpenAI shipped Codex',
+      summary:
+        '<p>Codex is live now.</p><p>12 replies 34 reposts 56 likes 78 views</p>',
+      content: '',
+      author: 'OpenAI',
+      articleUrl: 'https://x.com/OpenAI/status/1234567890',
+      imageUrl: 'https://pbs.twimg.com/media/one.jpg',
+      mediaUrls: [
+        'https://pbs.twimg.com/media/one.jpg',
+        'https://pbs.twimg.com/media/two.jpg',
+      ],
+      publishedAt: 1711920000000,
+    } as any,
+    'https://unavatar.io/x/OpenAI',
+  )
 
   assert.equal(presented.displayName, 'OpenAI')
   assert.equal(presented.username, '@OpenAI')
@@ -89,7 +94,9 @@ test('presentTweetEntryFromCard falls back cleanly when metrics are missing', ()
   assert.equal(presented.displayName, 'The Verge')
   assert.equal(presented.username, '@verge')
   assert.equal(presented.text, 'Plain text summary only')
-  assert.deepEqual(presented.mediaUrls, ['https://pbs.twimg.com/media/card.jpg'])
+  assert.deepEqual(presented.mediaUrls, [
+    'https://pbs.twimg.com/media/card.jpg',
+  ])
   assert.equal(presented.replyCount, '')
   assert.equal(presented.repostCount, '')
   assert.equal(presented.likeCount, '')
@@ -121,31 +128,52 @@ export interface TweetEntryPresentation {
 }
 
 function extractUsername(articleUrl: string, author: string): string {
-  const matched = (articleUrl || '').match(/https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([^/?#]+)/i)
+  const matched = (articleUrl || '').match(
+    /https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([^/?#]+)/i,
+  )
   const raw = matched?.[1] || author || ''
   const normalized = raw.replace(/^@+/, '').trim()
   return normalized ? `@${normalized}` : ''
 }
 
 function extractTweetText(summary: string, title: string): string {
-  const plain = (summary || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const plain = (summary || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (plain) {
-    return plain.replace(/\b\d+\s+(?:replies|reply|reposts|repost|likes|like|views|view)\b/gi, '').replace(/\s+/g, ' ').trim()
+    return plain
+      .replace(
+        /\b\d+\s+(?:replies|reply|reposts|repost|likes|like|views|view)\b/gi,
+        '',
+      )
+      .replace(/\s+/g, ' ')
+      .trim()
   }
   return (title || '').trim()
 }
 
 function extractMetric(summary: string, label: string): string {
-  const matched = (summary || '').match(new RegExp(`(\\d[\\d.,KMB万]*)\\s+${label}`, 'i'))
+  const matched = (summary || '').match(
+    new RegExp(`(\\d[\\d.,KMB万]*)\\s+${label}`, 'i'),
+  )
   return matched?.[1] || ''
 }
 
-function mediaList(mediaUrls: string[] | undefined, imageUrl: string): string[] {
+function mediaList(
+  mediaUrls: string[] | undefined,
+  imageUrl: string,
+): string[] {
   const urls = [...(mediaUrls || []), imageUrl].filter((url: string) => !!url)
-  return urls.filter((url: string, index: number) => urls.indexOf(url) === index)
+  return urls.filter(
+    (url: string, index: number) => urls.indexOf(url) === index,
+  )
 }
 
-export function presentTweetEntryFromEntry(entry: any, avatarUrl: string): TweetEntryPresentation {
+export function presentTweetEntryFromEntry(
+  entry: any,
+  avatarUrl: string,
+): TweetEntryPresentation {
   return {
     displayName: (entry.author || '').trim() || '未知用户',
     username: extractUsername(entry.articleUrl || '', entry.author || ''),
@@ -165,7 +193,7 @@ export function presentTweetEntryFromCard(entry: any): TweetEntryPresentation {
   return {
     displayName: (entry.author || entry.feedTitle || '').trim() || '未知用户',
     username: extractUsername(entry.articleUrl || '', ''),
-    text: ((entry.summary || '').trim() || (entry.title || '').trim()),
+    text: (entry.summary || '').trim() || (entry.title || '').trim(),
     mediaUrls: mediaList(entry.mediaUrls, entry.imageUrl || ''),
     avatarUrl: entry.feedImageUrl || '',
     publishedLabel: entry.publishedLabel || '',
@@ -194,9 +222,10 @@ git commit -m "feat: add x tweet presentation parser"
 ### Task 2: Build Shared Tweet Entry Card
 
 **Files:**
+
 - Create: `apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets`
 - Modify: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
-- Test: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Test: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -217,13 +246,16 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   assert.match(source, /presentation\.username/)
   assert.match(source, /presentation\.text/)
   assert.match(source, /presentation\.mediaUrls/)
-  assert.match(source, /presentation\.replyCount|presentation\.repostCount|presentation\.likeCount|presentation\.viewCount/)
+  assert.match(
+    source,
+    /presentation\.replyCount|presentation\.repostCount|presentation\.likeCount|presentation\.viewCount/,
+  )
 })
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL because `TweetEntryCard.ets` does not exist yet and the source assertion cannot pass.
 
@@ -283,22 +315,23 @@ export struct TweetEntryCard {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS for the new `TweetEntryCard` source-structure assertion and all existing tests still pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: add shared harmony tweet entry card"
 ```
 
 ### Task 3: Route Feed Detail X Entries to Tweet Cards
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets`
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -318,7 +351,7 @@ test('FeedDetailView routes x previews through TweetEntryCard', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL because `FeedDetailView.ets` still routes non-picture entries through the generic `EntryCard()`.
 
@@ -356,30 +389,37 @@ if (this.isPicturesPreview()) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS for the new FeedDetailView assertion and prior feed-detail regression tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: render x previews as tweet cards in feed detail"
 ```
 
 ### Task 4: Route Home Social X Entries to Tweet Cards
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/pages/Index.ets`
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 test('Index routes x social cards through TweetEntryCard', () => {
-  const source = fs.readFileSync('apps/harmony/entry/src/main/ets/pages/Index.ets', 'utf8')
+  const source = fs.readFileSync(
+    'apps/harmony/entry/src/main/ets/pages/Index.ets',
+    'utf8',
+  )
 
-  assert.match(source, /import \{ TweetEntryCard \} from '\.\.\/common\/components\/TweetEntryCard'/)
+  assert.match(
+    source,
+    /import \{ TweetEntryCard \} from '\.\.\/common\/components\/TweetEntryCard'/,
+  )
   assert.match(source, /presentTweetEntryFromCard/)
   assert.match(source, /private isXSocialEntry\(entry: EntryCardModel\)/)
   assert.match(source, /mode === 'social'/)
@@ -389,7 +429,7 @@ test('Index routes x social cards through TweetEntryCard', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL because home social entries still render through the generic `EntryCard`.
 
@@ -428,26 +468,27 @@ if (mode === 'social') {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS for the new Index assertion and prior discover/subscribe regressions.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: render x cards in home social feed"
 ```
 
 ### Task 5: Verify Full Harmony Build
 
 **Files:**
+
 - Verify only: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 - Verify only: `apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets`
 - Verify only: `apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets`
 - Verify only: `apps/harmony/entry/src/main/ets/pages/Index.ets`
 - Verify only: `apps/harmony/tests/tweet-entry-presentation.test.ts`
-- Verify only: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Verify only: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Run focused parsing tests**
 
@@ -457,7 +498,7 @@ Expected: PASS with the tweet parsing assertions all green.
 
 - [ ] **Step 2: Run integration-style source tests**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS with the new X tweet routing assertions plus the existing subscribe/discover regressions.
 
@@ -470,7 +511,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 4: Commit final implementation**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/tests/tweet-entry-presentation.test.ts apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/entry/src/main/ets/common/components/FeedDetailView.ets apps/harmony/entry/src/main/ets/pages/Index.ets apps/harmony/tests/tweet-entry-presentation.test.ts apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: present harmony x feeds as tweet cards"
 ```
 

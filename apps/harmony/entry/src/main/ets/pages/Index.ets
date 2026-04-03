@@ -1,7 +1,7 @@
 import { AppRepository } from '../common/data/AppRepository'
-import { KeyboardAvoidMode } from '@kit.ArkUI'
+import { KeyboardAvoidMode, SymbolGlyphModifier } from '@kit.ArkUI'
+import { HdsNavigation, HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit'
 import window from '@ohos.window'
-import { BottomTabs } from '../common/components/BottomTabs'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
 import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
@@ -14,6 +14,8 @@ import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
 import { presentTweetEntryFromCard } from '../common/utils/TweetEntryPresentation'
 import { livoMotion } from '../common/ui/Motion'
 import {
+  BOTTOM_TAB_BAR_HEIGHT,
+  BOTTOM_TAB_FLOAT_GAP,
   CARD_RADIUS_MD,
   INPUT_RADIUS,
   META_FONT_SIZE,
@@ -23,11 +25,22 @@ import {
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { DiscoverContent } from '../common/components/DiscoverContent'
 import { SettingsContent } from '../common/components/SettingsContent'
+import {
+  HdsBottomTabId,
+  HdsBottomTabItem,
+  resolveHdsBottomTabBarBottomMargin,
+  resolveHdsBottomTabItems,
+} from '../common/utils/HdsBottomTabConfig'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SCENE_DURATION: number = 240
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
+
+interface RootTabSymbolPair {
+  normal: SymbolGlyphModifier
+  selected: SymbolGlyphModifier
+}
 
 @Entry
 @Component
@@ -54,10 +67,8 @@ struct Index {
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
   @State highlightedRootTabId: RootTabId = 'home'
-  @State previousRootTabId: RootTabId = 'home'
-  @State isRootTransitioning: boolean = false
-  private pendingRootTabId: RootTabId = 'home'
-  private rootTransitionVersion: number = 0
+  @State private suppressRootTabChange: boolean = false
+  private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private modeTransitionVersion: number = 0
 
   private animateWithUiContext(options: AnimateParam, event: () => void): void {
@@ -126,130 +137,84 @@ struct Index {
       return
     }
 
-    this.previousRootTabId = requestedTab
-    this.isRootTransitioning = false
     this.activeRootTabId = requestedTab
     this.highlightedRootTabId = requestedTab
-    this.pendingRootTabId = requestedTab
     this.rootTabIndex = rootTabIndexForId(requestedTab)
+    this.syncRootTabsController()
   }
 
-  private requestRootTabSwitch(tabId: RootTabId): void {
-    const nextIndex = rootTabIndexForId(tabId)
-    if (tabId === this.highlightedRootTabId && nextIndex === this.rootTabIndex) {
-      return
+  private syncRootTabsController(): void {
+    try {
+      this.suppressRootTabChange = true
+      this.rootTabsController.changeIndex(this.rootTabIndex)
+    } catch (_) {
+    } finally {
+      this.suppressRootTabChange = false
     }
-
-    this.highlightedRootTabId = tabId
-    this.pendingRootTabId = tabId
-    this.startRootTabTransition(tabId, nextIndex)
-  }
-
-  private startRootTabTransition(tabId: RootTabId, nextIndex: number): void {
-    const currentTabId = this.activeRootTabId
-    const currentIndex = this.rootTabIndex
-    if (currentTabId === tabId && currentIndex === nextIndex) {
-      return
-    }
-
-    this.rootTransitionVersion += 1
-    const version = this.rootTransitionVersion
-    this.previousRootTabId = currentTabId
-    this.isRootTransitioning = true
-    this.activeRootTabId = tabId
-    this.rootTabIndex = nextIndex
-    this.refreshRootTheme()
-
-    setTimeout(() => {
-      if (version !== this.rootTransitionVersion) {
-        return
-      }
-
-      this.previousRootTabId = tabId
-      this.isRootTransitioning = false
-      if (this.highlightedRootTabId !== this.activeRootTabId) {
-        this.highlightedRootTabId = this.activeRootTabId
-      }
-    }, livoMotion.rootSceneDuration())
   }
 
   private openEntry(entryId: string): void {
     void openArticleDetail(entryId)
   }
 
-  private sceneVisible(tabId: RootTabId): Visibility {
-    if (tabId === this.activeRootTabId) {
-      return Visibility.Visible
-    }
-
-    if (this.isRootTransitioning && tabId === this.previousRootTabId) {
-      return Visibility.Visible
-    }
-
-    return Visibility.Hidden
+  private bottomTabSymbol(
+    symbol: Resource,
+    colors: ResourceColor[],
+  ): SymbolGlyphModifier {
+    return new SymbolGlyphModifier(symbol)
+      .renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
+      .fontColor(colors)
   }
 
-  private sceneOffset(tabId: RootTabId): number {
-    return livoMotion.rootSceneOffset(this.rootTabIndex, rootTabIndexForId(tabId))
+  private rootTabSymbolPair(tabId: HdsBottomTabId): RootTabSymbolPair {
+    const normalColors: ResourceColor[] = [
+      $r('sys.color.ohos_id_color_bottom_tab_icon_off'),
+      $r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02'),
+    ]
+    const selectedColors: ResourceColor[] = [
+      $r('sys.color.ohos_id_color_activated'),
+      $r('sys.color.ohos_id_color_primary_contrary'),
+    ]
+
+    switch (tabId) {
+      case 'subscriptions':
+        return {
+          normal: this.bottomTabSymbol($r('sys.symbol.folder_fill'), normalColors),
+          selected: this.bottomTabSymbol($r('sys.symbol.folder_fill'), selectedColors),
+        } as RootTabSymbolPair
+      case 'discover':
+        return {
+          normal: this.bottomTabSymbol($r('sys.symbol.magnifyingglass'), normalColors),
+          selected: this.bottomTabSymbol($r('sys.symbol.magnifyingglass'), selectedColors),
+        } as RootTabSymbolPair
+      case 'settings':
+        return {
+          normal: this.bottomTabSymbol($r('sys.symbol.gearshape'), normalColors),
+          selected: this.bottomTabSymbol($r('sys.symbol.gearshape_fill'), selectedColors),
+        } as RootTabSymbolPair
+      default:
+        return {
+          normal: this.bottomTabSymbol($r('sys.symbol.house'), normalColors),
+          selected: this.bottomTabSymbol($r('sys.symbol.house_fill'), selectedColors),
+        } as RootTabSymbolPair
+    }
   }
 
-  private sceneOpacity(tabId: RootTabId): number {
-    return livoMotion.rootSceneOpacity(tabId === this.activeRootTabId)
-  }
-
-  private sceneScale(tabId: RootTabId): number {
-    return livoMotion.rootSceneScale(tabId === this.activeRootTabId)
-  }
-
-  private sceneZIndex(tabId: RootTabId): number {
-    if (tabId === this.activeRootTabId) {
-      return 2
+  private handleRootTabChange(index: number): void {
+    if (this.suppressRootTabChange) {
+      return
     }
 
-    if (this.isRootTransitioning && tabId === this.previousRootTabId) {
-      return 1
+    const item = resolveHdsBottomTabItems()[index]
+    if (!item) {
+      return
     }
 
-    return 0
-  }
-
-  @Builder
-  private RootScene(tabId: RootTabId) {
-    Stack() {
-      if (tabId === 'home') {
-        this.HomeRootPage()
-      } else if (tabId === 'subscriptions') {
-        SubscriptionsContent({
-          showBottomTabs: false,
-          inheritedTheme: this.theme,
-        })
-      } else if (tabId === 'discover') {
-        DiscoverContent({
-          showBottomTabs: false,
-          reserveBottomTabInset: true,
-          inheritedTheme: this.theme,
-        })
-      } else {
-        SettingsContent({
-          showBottomTabs: false,
-          inheritedTheme: this.theme,
-          onThemeChange: (theme: ThemePalette) => {
-            this.theme = theme
-            void this.applySystemBarStyle(theme)
-          },
-        })
-      }
-    }
-    .width('100%')
-    .height('100%')
-    .visibility(this.sceneVisible(tabId))
-    .opacity(this.sceneOpacity(tabId))
-    .translate({ x: this.sceneOffset(tabId) })
-    .zIndex(this.sceneZIndex(tabId))
-    .animation({
-      duration: livoMotion.rootSceneDuration(),
-      curve: livoMotion.rootSceneCurve(),
-    })
+    const tabId = item.id as RootTabId
+    this.rootTabIndex = index
+    this.activeRootTabId = tabId
+    this.highlightedRootTabId = tabId
+    this.refreshRootTheme()
   }
 
   private modeIndex(mode: SubscriptionMode): number {
@@ -836,7 +801,12 @@ struct Index {
         })
       }
       .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 10 })
+      .padding({
+        left: PAGE_HORIZONTAL_PADDING,
+        right: PAGE_HORIZONTAL_PADDING,
+        top: this.topAvoidArea + PAGE_TOP_PADDING,
+        bottom: 10,
+      })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
         Stack() {
@@ -880,29 +850,66 @@ struct Index {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Stack() {
-        this.RootScene('home')
-        this.RootScene('subscriptions')
-        this.RootScene('discover')
-        this.RootScene('settings')
+    Stack() {
+      HdsNavigation() {
+        HdsTabs({ controller: this.rootTabsController }) {
+          ForEach(resolveHdsBottomTabItems(), (item: HdsBottomTabItem) => {
+            TabContent() {
+              Stack() {
+                if (item.id === 'home') {
+                  this.HomeRootPage()
+                } else if (item.id === 'subscriptions') {
+                  SubscriptionsContent({
+                    showBottomTabs: false,
+                    inheritedTheme: this.theme,
+                  })
+                } else if (item.id === 'discover') {
+                  DiscoverContent({
+                    showBottomTabs: false,
+                    reserveBottomTabInset: true,
+                    inheritedTheme: this.theme,
+                  })
+                } else {
+                  SettingsContent({
+                    showBottomTabs: false,
+                    inheritedTheme: this.theme,
+                    onThemeChange: (theme: ThemePalette) => {
+                      this.theme = theme
+                      void this.applySystemBarStyle(theme)
+                    },
+                  })
+                }
+              }
+              .width('100%')
+              .height('100%')
+            }
+            .tabBar(BottomTabBarStyle.of({
+              normal: this.rootTabSymbolPair(item.id).normal,
+              selected: this.rootTabSymbolPair(item.id).selected,
+            }, item.label))
+          }, (item: HdsBottomTabItem) => item.id)
+        }
+        .vertical(false)
+        .barPosition(BarPosition.End)
+        .barOverlap(true)
+        .barHeight(this.shouldHideBottomTabs() ? 0 : BOTTOM_TAB_BAR_HEIGHT)
+        .barFloatingStyle({
+          barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP),
+          systemMaterialEffect: {
+            materialType: hdsMaterial.MaterialType.ADAPTIVE,
+            materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+          },
+        })
+        .onChange((index: number) => {
+          this.handleRootTabChange(index)
+        })
       }
+      .mode(NavigationMode.Stack)
+      .hideTitleBar(true)
+      .hideBackButton(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')
       .height('100%')
-      .padding({ top: this.topAvoidArea })
-      .backgroundColor(this.theme.background)
-
-      BottomTabs({
-        activeTab: this.highlightedRootTabId,
-        theme: this.theme,
-        useTabsController: true,
-        onTabRequest: (tabId: RootTabId) => {
-          this.requestRootTabSwitch(tabId)
-        },
-      })
-        .visibility(this.shouldHideBottomTabs() ? Visibility.Hidden : Visibility.Visible)
-        .opacity(this.shouldHideBottomTabs() ? 0 : 1)
-        .animation({ duration: 90, curve: Curve.EaseOut })
 
       if (this.showSearch) {
         Column() {

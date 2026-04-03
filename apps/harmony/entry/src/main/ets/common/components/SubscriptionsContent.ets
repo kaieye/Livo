@@ -47,6 +47,7 @@ class SubscriptionFeedConfigParams {
 
 @Component
 export struct SubscriptionsContent {
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State feeds: FeedCardModel[] = []
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
@@ -591,7 +592,12 @@ export struct SubscriptionsContent {
           .transition(livoMotion.enterRise(50))
         }
         .width('100%')
-        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 6 })
+        .padding({
+          left: PAGE_HORIZONTAL_PADDING,
+          right: PAGE_HORIZONTAL_PADDING,
+          top: this.topAvoidArea + PAGE_TOP_PADDING,
+          bottom: 6,
+        })
 
         Stack() {
           this.ModeFeedsScene('articles')

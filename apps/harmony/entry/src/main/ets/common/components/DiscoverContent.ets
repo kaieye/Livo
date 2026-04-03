@@ -125,6 +125,7 @@ function normalizeDiscoverFlowRouteParams(params?: DiscoverFlowRouteParams): Dis
 
 @Component
 export struct DiscoverContent {
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State query: string = ''
   @State searchPlatform: DiscoverSearchPlatform = 'all'
   @State showPlatformChips: boolean = false
@@ -1090,7 +1091,12 @@ export struct DiscoverContent {
           this.SearchPanel()
         }
         .width('100%')
-        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 0 })
+        .padding({
+          left: PAGE_HORIZONTAL_PADDING,
+          right: PAGE_HORIZONTAL_PADDING,
+          top: this.topAvoidArea + PAGE_TOP_PADDING,
+          bottom: 0,
+        })
         .alignItems(HorizontalAlign.Start)
 
         if (this.isSearchModeActive()) {

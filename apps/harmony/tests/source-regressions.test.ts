@@ -89,8 +89,14 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   assert.match(source, /avatarSize:\s*17/)
   assert.match(source, /showFallbackLabel:\s*false/)
   assert.match(source, /Row\(\{ space: 8 \}\) \{\s*AvatarTile\(/s)
-  assert.match(source, /Text\(this\.presentation\.displayName \|\| '未知来源'\)/)
-  assert.match(source, /Column\(\{ space: 8 \}\) \{\s*this\.RetweetBanner\(\)\s*Row\(\{ space: 8 \}\)/s)
+  assert.match(
+    source,
+    /Text\(this\.presentation\.displayName \|\| '未知来源'\)/,
+  )
+  assert.match(
+    source,
+    /Column\(\{ space: 8 \}\) \{\s*this\.RetweetBanner\(\)\s*Row\(\{ space: 8 \}\)/s,
+  )
   assert.match(
     source,
     /\.alignItems\(VerticalAlign\.Top\)\s*if \(this\.presentation\.text\) \{\s*Text\(this\.presentation\.text\)/s,
@@ -135,7 +141,10 @@ test('Index routes x social cards through TweetEntryCard', () => {
     indexSource,
     /import \{ presentTweetEntryFromCard \} from '\.\.\/common\/utils\/TweetEntryPresentation'/,
   )
-  assert.match(indexSource, /private isXSocialEntry\(entry: EntryCardModel\): boolean/)
+  assert.match(
+    indexSource,
+    /private isXSocialEntry\(entry: EntryCardModel\): boolean/,
+  )
   assert.match(indexSource, /private SocialEntryCard\(entry: EntryCardModel\)/)
   assert.match(indexSource, /presentTweetEntryFromCard\(entry\)/)
   assert.match(
@@ -150,24 +159,45 @@ test('Home and subscriptions mode scenes support horizontal swipe switching', ()
     'utf8',
   )
   const subscriptionsContentSource = fs.readFileSync(
-    path.join(process.cwd(), 'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets'),
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets',
+    ),
     'utf8',
   )
 
   assert.match(indexSource, /const MODE_SWIPE_TRIGGER_OFFSET: number = 56/)
-  assert.match(indexSource, /private handleModeSwipe\(event: GestureEvent\): void/)
-  assert.match(indexSource, /PanGesture\(\{ direction: PanDirection\.Horizontal \}\)/)
+  assert.match(
+    indexSource,
+    /private handleModeSwipe\(event: GestureEvent\): void/,
+  )
+  assert.match(
+    indexSource,
+    /PanGesture\(\{ direction: PanDirection\.Horizontal \}\)/,
+  )
   assert.match(indexSource, /this\.handleModeSwipe\(event\)/)
 
-  assert.match(subscriptionsContentSource, /const MODE_SWIPE_TRIGGER_OFFSET: number = 56/)
-  assert.match(subscriptionsContentSource, /private handleModeSwipe\(event: GestureEvent\): void/)
-  assert.match(subscriptionsContentSource, /PanGesture\(\{ direction: PanDirection\.Horizontal \}\)/)
+  assert.match(
+    subscriptionsContentSource,
+    /const MODE_SWIPE_TRIGGER_OFFSET: number = 56/,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /private handleModeSwipe\(event: GestureEvent\): void/,
+  )
+  assert.match(
+    subscriptionsContentSource,
+    /PanGesture\(\{ direction: PanDirection\.Horizontal \}\)/,
+  )
   assert.match(subscriptionsContentSource, /this\.handleModeSwipe\(event\)/)
 })
 
 test('SubscriptionsContent keeps overlay storage in sync across detail and config destinations', () => {
   const subscriptionsContentSource = fs.readFileSync(
-    path.join(process.cwd(), 'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets'),
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets',
+    ),
     'utf8',
   )
 
@@ -579,18 +609,30 @@ test('AppRepository keeps better subscribed feed metadata when refresh payload i
 
 test('SeedData defines the four built-in default subscriptions for the home tabs', () => {
   assert.match(seedDataSource, /title: '阮一峰的网络日志'/)
-  assert.match(seedDataSource, /url: 'https:\/\/www\.ruanyifeng\.com\/blog\/atom\.xml'/)
+  assert.match(
+    seedDataSource,
+    /url: 'https:\/\/www\.ruanyifeng\.com\/blog\/atom\.xml'/,
+  )
   assert.match(seedDataSource, /view: FeedViewType\.Articles/)
 
   assert.match(seedDataSource, /title: 'elonmusk'/)
-  assert.match(seedDataSource, /url: 'https:\/\/rsshub\.pseudoyu\.com\/x\/user\/elonmusk'/)
+  assert.match(
+    seedDataSource,
+    /url: 'https:\/\/rsshub\.pseudoyu\.com\/x\/user\/elonmusk'/,
+  )
   assert.match(seedDataSource, /view: FeedViewType\.SocialMedia/)
 
   assert.match(seedDataSource, /title: 'du_chenduling'/)
-  assert.match(seedDataSource, /url: 'https:\/\/rsshub\.pseudoyu\.com\/instagram\/user\/du_chenduling'/)
+  assert.match(
+    seedDataSource,
+    /url: 'https:\/\/rsshub\.pseudoyu\.com\/instagram\/user\/du_chenduling'/,
+  )
   assert.match(seedDataSource, /view: FeedViewType\.Pictures/)
 
   assert.match(seedDataSource, /title: '影视飓风'/)
-  assert.match(seedDataSource, /url: 'https:\/\/rsshub\.pseudoyu\.com\/bilibili\/user\/video\/946974'/)
+  assert.match(
+    seedDataSource,
+    /url: 'https:\/\/rsshub\.pseudoyu\.com\/bilibili\/user\/video\/946974'/,
+  )
   assert.match(seedDataSource, /view: FeedViewType\.Videos/)
 })

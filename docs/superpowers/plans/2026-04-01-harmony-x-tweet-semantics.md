@@ -18,12 +18,13 @@
   - Render retweet header and quote sub-card using the shared semantic model.
 - Modify: `apps/harmony/tests/tweet-entry-presentation.test.ts`
   - Add parser regression coverage for retweets, quote tweets, and safe fallbacks.
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
   - Add source-level assertions for retweet banner and quoted tweet rendering.
 
 ### Task 1: Extend Tweet Presentation Semantics
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 - Modify: `apps/harmony/tests/tweet-entry-presentation.test.ts`
 
@@ -42,7 +43,10 @@ test('presentTweetEntryFromEntry classifies RT prefix content as retweet', () =>
     publishedAt: 1711920000000,
   }
 
-  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/elonmusk')
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
 
   assert.equal(presented.kind, 'retweet')
   assert.equal(presented.retweetByLabel, 'Elon Musk')
@@ -63,7 +67,10 @@ test('presentTweetEntryFromEntry keeps ambiguous RT content as plain tweet', () 
     publishedAt: 1711920000000,
   }
 
-  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/OpenAI')
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/OpenAI',
+  )
 
   assert.equal(presented.kind, 'tweet')
   assert.equal(presented.retweetByLabel, '')
@@ -73,7 +80,8 @@ test('presentTweetEntryFromEntry keeps ambiguous RT content as plain tweet', () 
 test('presentTweetEntryFromEntry classifies quote tweet content', () => {
   const entry: TweetEntryLike = {
     title: '',
-    summary: 'Try out self-driving in a Tesla. ||QUOTE|| Robert Scoble|@Scobleizer|I was on @wholemars space this afternoon while my Model 3 drove me for a couple of hours',
+    summary:
+      'Try out self-driving in a Tesla. ||QUOTE|| Robert Scoble|@Scobleizer|I was on @wholemars space this afternoon while my Model 3 drove me for a couple of hours',
     content: '',
     author: 'Elon Musk',
     articleUrl: 'https://x.com/elonmusk/status/3',
@@ -82,7 +90,10 @@ test('presentTweetEntryFromEntry classifies quote tweet content', () => {
     publishedAt: 1711920000000,
   }
 
-  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/elonmusk')
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
 
   assert.equal(presented.kind, 'quote')
   assert.equal(presented.text, 'Try out self-driving in a Tesla.')
@@ -119,8 +130,12 @@ export interface TweetEntryPresentation {
   // existing fields stay here
 }
 
-function parseRetweetPresentation(source: PresentTweetSource): TweetEntryPresentation | undefined {
-  const normalized = trimValue(stripHtml(source.summary || source.content || ''))
+function parseRetweetPresentation(
+  source: PresentTweetSource,
+): TweetEntryPresentation | undefined {
+  const normalized = trimValue(
+    stripHtml(source.summary || source.content || ''),
+  )
   const matched = normalized.match(/^RT\s+@?([^:]+):\s+([\s\S]+)$/)
   if (!matched?.[1] || !matched?.[2]) {
     return undefined
@@ -142,8 +157,12 @@ function parseRetweetPresentation(source: PresentTweetSource): TweetEntryPresent
   }
 }
 
-function parseQuotePresentation(source: PresentTweetSource): TweetEntryPresentation | undefined {
-  const normalized = trimValue(stripHtml(source.summary || source.content || ''))
+function parseQuotePresentation(
+  source: PresentTweetSource,
+): TweetEntryPresentation | undefined {
+  const normalized = trimValue(
+    stripHtml(source.summary || source.content || ''),
+  )
   const parts = normalized.split('||QUOTE||')
   if (parts.length !== 2) {
     return undefined
@@ -169,15 +188,18 @@ function parseQuotePresentation(source: PresentTweetSource): TweetEntryPresentat
   }
 }
 
-function presentTweetEntryFromSource(source: PresentTweetSource): TweetEntryPresentation {
-  return parseRetweetPresentation(source)
-    || parseQuotePresentation(source)
-    || {
+function presentTweetEntryFromSource(
+  source: PresentTweetSource,
+): TweetEntryPresentation {
+  return (
+    parseRetweetPresentation(source) ||
+    parseQuotePresentation(source) || {
       ...basePresentation(source),
       kind: 'tweet',
       retweetByLabel: '',
       quotedTweet: undefined,
     }
+  )
 }
 ```
 
@@ -197,8 +219,9 @@ git commit -m "feat: classify harmony x tweet semantics"
 ### Task 2: Render Retweet and Quote Semantics in TweetEntryCard
 
 **Files:**
+
 - Modify: `apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets`
-- Modify: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Modify: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -219,7 +242,7 @@ test('TweetEntryCard renders retweet and quote semantic sections', () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: FAIL because `TweetEntryCard.ets` does not yet render retweet banner or quote sub-card sections.
 
@@ -268,24 +291,25 @@ build() {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS with the new semantic-card assertions and existing X routing assertions green.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: render harmony x retweets and quotes"
 ```
 
 ### Task 3: Full Verification
 
 **Files:**
+
 - Verify only: `apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts`
 - Verify only: `apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets`
 - Verify only: `apps/harmony/tests/tweet-entry-presentation.test.ts`
-- Verify only: `apps/harmony/tests/feed-subscribe-flow.test.ts`
+- Verify only: `apps/harmony/tests/source-regressions.test.ts`
 
 - [ ] **Step 1: Run tweet parser tests**
 
@@ -295,7 +319,7 @@ Expected: PASS with retweet/quote semantic parsing coverage.
 
 - [ ] **Step 2: Run integration-style source tests**
 
-Run: `node --test apps/harmony/tests/feed-subscribe-flow.test.ts`
+Run: `node --test apps/harmony/tests/source-regressions.test.ts`
 
 Expected: PASS with `TweetEntryCard` semantic rendering assertions and existing X routing assertions.
 
@@ -308,7 +332,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 4: Commit final verification state**
 
 ```bash
-git add apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/tests/tweet-entry-presentation.test.ts apps/harmony/tests/feed-subscribe-flow.test.ts
+git add apps/harmony/entry/src/main/ets/common/utils/TweetEntryPresentation.ts apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets apps/harmony/tests/tweet-entry-presentation.test.ts apps/harmony/tests/source-regressions.test.ts
 git commit -m "feat: improve harmony x tweet semantics"
 ```
 
