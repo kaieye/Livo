@@ -1,16 +1,16 @@
 {
-	"CommonInfo":{
-		"project.ide.version":"6.0.2.642",
-		"current.select.product":"default",
-		"current.select.buildMode":"",
-		"crossplatform.projectType":""
-	},
-	"BuildOptions":{
-		"SELECT_BUILD_PRODUCT":"default",
-		"BUNDLE_NAME":"com.livo.harmony",
-		"BUILD_PATH":{
-			"OUTPUT_PATH":"E:\\Livo\\apps\\harmony\\build\\outputs\\default"
-		},
-		"SELECT_BUILD_MODE":""
-	}
+  "CommonInfo": {
+    "project.ide.version": "6.1.0.818",
+    "current.select.product": "default",
+    "current.select.buildMode": "",
+    "crossplatform.projectType": ""
+  },
+  "BuildOptions": {
+    "SELECT_BUILD_PRODUCT": "default",
+    "BUNDLE_NAME": "com.livo.harmony",
+    "BUILD_PATH": {
+      "OUTPUT_PATH": "E:\\Livo\\apps\\harmony\\build\\outputs\\default"
+    },
+    "SELECT_BUILD_MODE": ""
+  }
 }

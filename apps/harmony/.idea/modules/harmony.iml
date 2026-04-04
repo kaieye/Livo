@@ -20,7 +20,7 @@
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module-library" exported="" scope="PROVIDED">
-      <library name="ArkTS-HarmonyOS-6.0.2(openharmony)" type="ArkUI">
+      <library name="ArkTS-HarmonyOS-6.0.33(openharmony)" type="ArkUI">
         <CLASSES />
         <JAVADOC />
         <SOURCES>
@@ -32,7 +32,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library" exported="" scope="PROVIDED">
-      <library name="ArkTS-HarmonyOS-6.0.2(hms)" type="ArkUI">
+      <library name="ArkTS-HarmonyOS-6.0.33(hms)" type="ArkUI">
         <CLASSES />
         <JAVADOC />
         <SOURCES>
