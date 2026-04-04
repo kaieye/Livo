@@ -19,21 +19,34 @@ export struct FloatingRootPageLayout {
   @Prop trailingSymbolSize: number = 22
   @Prop trailingSymbolColor: string = ''
   @Prop trailingButtonBackground: string = ''
+  @Prop showTrailingBuilder: boolean = false
   onTrailingClick: () => void = () => {}
 
+  @Builder
+  private EmptyTrailingBuilder() {
+  }
+
+  @BuilderParam trailingBuilder: () => void = this.EmptyTrailingBuilder
+
   build() {
-    PageHeader({
-      title: this.title,
-      theme: this.theme,
-      trailingImage: this.trailingImage,
-      trailingSymbol: this.trailingSymbol,
-      trailingButtonCircular: this.trailingButtonCircular,
-      trailingSymbolSize: this.trailingSymbolSize,
-      trailingSymbolColor: this.trailingSymbolColor,
-      trailingButtonBackground: this.trailingButtonBackground,
-      onTrailingClick: this.onTrailingClick,
-    })
+    Column() {
+      PageHeader({
+        title: this.title,
+        theme: this.theme,
+        trailingImage: this.trailingImage,
+        trailingSymbol: this.trailingSymbol,
+        trailingButtonCircular: this.trailingButtonCircular,
+        trailingSymbolSize: this.trailingSymbolSize,
+        trailingSymbolColor: this.trailingSymbolColor,
+        trailingButtonBackground: this.trailingButtonBackground,
+        showTrailingBuilder: this.showTrailingBuilder,
+        onTrailingClick: this.onTrailingClick,
+      }) {
+        this.trailingBuilder()
+      }
+    }
       .width('100%')
+      .backgroundColor(this.theme.background)
       .padding({
         left: PAGE_HORIZONTAL_PADDING,
         right: PAGE_HORIZONTAL_PADDING,

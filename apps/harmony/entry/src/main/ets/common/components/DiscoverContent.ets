@@ -3,7 +3,6 @@ import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
-import { FloatingRootPageLayout, FloatingRootPageSpacer } from './FloatingRootPageLayout'
 import { PageHeader } from './PageHeader'
 import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
@@ -1025,9 +1024,9 @@ export struct DiscoverContent {
   @Builder
   private DiscoverScrollContent() {
     Column({ space: 14 }) {
-      FloatingRootPageSpacer({
-        topAvoidArea: this.topAvoidArea,
-      })
+      Row()
+        .width('100%')
+        .height(0)
 
       this.SearchPanel()
 
@@ -1116,14 +1115,6 @@ export struct DiscoverContent {
       })
       .margin({ bottom: this.isSearchModeActive() ? 0 : this.discoverListExternalGap() })
 
-      FloatingRootPageLayout({
-        title: '添加订阅',
-        theme: this.theme,
-        topAvoidArea: this.topAvoidArea,
-        scrollBlurProgress: this.headerBlurProgress,
-      })
-      .align(Alignment.TopStart)
-
       if (this.showBottomTabs && this.discoverOverlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })
           .align(Alignment.Bottom)
@@ -1187,6 +1178,7 @@ export struct DiscoverContent {
       this.DiscoverRoot()
     }
     .hideToolBar(true)
+    .hideTitleBar(true)
     .hideBackButton(true)
     .mode(NavigationMode.Stack)
     .navDestination(this.DiscoverDestinations)

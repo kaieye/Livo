@@ -1,4 +1,5 @@
 import { AppRepository } from '../data/AppRepository'
+import { HdsNavigation } from '@kit.UIDesignKit'
 import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
 import { AccountsSettingsPanel } from './AccountsSettingsPanel'
@@ -9,7 +10,6 @@ import {
   PrivacySettingsPanel,
   FavoritesPanel,
 } from './SettingsSecondaryPanels'
-import { FloatingRootPageLayout, FloatingRootPageSpacer } from './FloatingRootPageLayout'
 import { SettingListRow } from './SettingListRow'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -18,8 +18,7 @@ import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
-const HEADER_BLUR_SCROLL_RANGE: number = 72
-
+const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = 74
 interface SettingItem {
   title: string
   symbol: Resource
@@ -106,10 +105,9 @@ export struct SettingsContent {
   private static readonly SHEET_COMPACT_HEIGHT: number = 440
   private static readonly SHEET_STANDARD_HEIGHT: number = 500
   private static readonly SHEET_TALL_HEIGHT: number = 600
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
+  private static readonly HEADER_OVERLAY_HEIGHT: number = 46
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State saveHint: string = '设置将写入本地 Preferences'
-  @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State hasLoaded: boolean = false
   @State isLoading: boolean = false
@@ -117,21 +115,12 @@ export struct SettingsContent {
   @State showSettingsSheet: boolean = false
   @StorageProp(SETTINGS_ACTIVE_SHEET_KEY) @Watch('handleStoredActiveSheetChange') storedActiveSheet: SettingsSheetKey = ''
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
-  private headerBlurOffset: number = 0
+  private readonly contentScroller: Scroller = new Scroller()
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onReady: () => void = () => {}
-
-  private updateHeaderBlurProgress(offset: number): void {
-    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
-    this.headerBlurOffset = clampedOffset
-    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
-  }
-
-  private handleHeaderBlurScrollDelta(delta: number): void {
-    this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
-  }
 
   aboutToAppear(): void {
     const restoreSheet = this.storedActiveSheet || AppStorage.get<SettingsSheetKey>(SETTINGS_ACTIVE_SHEET_KEY)
@@ -339,56 +328,85 @@ export struct SettingsContent {
     }
   }
 
-  build() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      List({ space: 18 }) {
-        ListItem() {
-          FloatingRootPageSpacer({
-            topAvoidArea: this.topAvoidArea,
-          })
-        }
-        .width('100%')
+  private headerOverlayHeight(): number {
+    return this.topAvoidArea + SettingsContent.HEADER_OVERLAY_HEIGHT
+  }
 
-        ListItem() {
-          Column({ space: 14 }) {
-            this.Group(PRIMARY_GROUP, 30)
-            this.Group(SECOND_GROUP, 50)
-            this.Group(THIRD_GROUP, 70)
-            this.Group(FOURTH_GROUP, 90)
+  private headerOverlayTint(): string {
+    return this.theme.isDark ? 'rgba(12,16,22,0.06)' : 'rgba(255,255,255,0.05)'
+  }
+
+  @Builder
+  private HeaderBlurOverlay() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Row()
+        .width('100%')
+        .height(this.headerOverlayHeight())
+        .backgroundColor(this.headerOverlayTint())
+        .backdropBlur(24)
+
+      Column() {
+        Text('设置')
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textPrimary)
+      }
+      .padding({
+        top: this.topAvoidArea + 8,
+        left: PAGE_HORIZONTAL_PADDING,
+        right: PAGE_HORIZONTAL_PADDING,
+        bottom: 8,
+      })
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .height(this.headerOverlayHeight())
+    .clip(true)
+    .hitTestBehavior(HitTestMode.None)
+    .zIndex(1)
+  }
+
+  build() {
+    HdsNavigation() {
+      Stack({ alignContent: Alignment.TopStart }) {
+        Scroll(this.contentScroller) {
+          Column({ space: 18 }) {
+            Blank()
+              .height(SETTINGS_TITLE_BAR_OVERLAY_SPACER)
+
+            Column({ space: 14 }) {
+              this.Group(PRIMARY_GROUP, 30)
+              this.Group(SECOND_GROUP, 50)
+              this.Group(THIRD_GROUP, 70)
+              this.Group(FOURTH_GROUP, 90)
+            }
+            .width('100%')
+            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 8 })
+
+            Row().height(100).width('100%')
           }
           .width('100%')
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 8 })
+          .alignItems(HorizontalAlign.Start)
         }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .backgroundColor(this.theme.background)
+        .edgeEffect(EdgeEffect.Spring)
 
-        ListItem() {
-          Row().height(100).width('100%')
+        this.HeaderBlurOverlay()
+
+        if (this.showBottomTabs && !this.showSettingsSheet) {
+          BottomTabs({ activeTab: 'settings', theme: this.theme })
+            .align(Alignment.Bottom)
         }
       }
       .width('100%')
       .height('100%')
-      .scrollBar(BarState.Off)
       .backgroundColor(this.theme.background)
-      .edgeEffect(EdgeEffect.Spring)
-      .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-        this.handleHeaderBlurScrollDelta(scrollOffset)
-      })
-
-      FloatingRootPageLayout({
-        title: '设置',
-        theme: this.theme,
-        topAvoidArea: this.topAvoidArea,
-        scrollBlurProgress: this.headerBlurProgress,
-      })
-      .align(Alignment.TopStart)
-
-      if (this.showBottomTabs && !this.showSettingsSheet) {
-        BottomTabs({ activeTab: 'settings', theme: this.theme })
-          .align(Alignment.Bottom)
-      }
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
+    .mode(NavigationMode.Stack)
+    .hideTitleBar(true)
     .bindSheet($$this.showSettingsSheet, this.SettingsSheetOverlay(), {
       detents: [this.initialSheetHeight(), SheetSize.LARGE],
       dragBar: false,
@@ -404,6 +422,9 @@ export struct SettingsContent {
         AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
       },
     })
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
   }
 
   @Builder

@@ -5,12 +5,7 @@ import { openArticleDetail } from '../navigation/AppRouter'
 import { ContentModeRail } from './ContentModeRail'
 import { FeedDetailView } from './FeedDetailView'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
-import {
-  FloatingRootPageLayout,
-  FloatingRootPageSpacer,
-  ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
-  ROOT_MODE_RAIL_TOP_GAP,
-} from './FloatingRootPageLayout'
+import { ROOT_MODE_RAIL_TOP_GAP } from './FloatingRootPageLayout'
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -357,10 +352,9 @@ export struct SubscriptionsContent {
   private FeedSection(mode: SubscriptionMode) {
     Column({ space: 14 }) {
       Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-        FloatingRootPageSpacer({
-          topAvoidArea: this.topAvoidArea,
-          extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
-        })
+        Row()
+          .width('100%')
+          .height(0)
 
         Column() {
           ContentModeRail({
@@ -608,19 +602,6 @@ export struct SubscriptionsContent {
           })
       )
 
-      FloatingRootPageLayout({
-        title: '订阅库',
-        theme: this.theme,
-        topAvoidArea: this.topAvoidArea,
-        scrollBlurProgress: this.headerBlurProgress,
-        trailingSymbol: $r('sys.symbol.magnifyingglass'),
-        trailingButtonCircular: true,
-        trailingSymbolSize: 22,
-        trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
-        trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
-      })
-      .align(Alignment.TopStart)
-
       if (this.showBottomTabs && this.overlayLevel === 0) {
         BottomTabs({ activeTab: 'subscriptions', theme: this.theme })
           .align(Alignment.Bottom)
@@ -639,6 +620,7 @@ export struct SubscriptionsContent {
       this.SubscriptionsRoot()
     }
     .hideToolBar(true)
+    .hideTitleBar(true)
     .hideBackButton(true)
     .mode(NavigationMode.Stack)
     .navDestination(this.Destinations)

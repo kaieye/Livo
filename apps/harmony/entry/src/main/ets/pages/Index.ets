@@ -1,14 +1,20 @@
 import { AppRepository } from '../common/data/AppRepository'
-import { KeyboardAvoidMode, SymbolGlyphModifier } from '@kit.ArkUI'
-import { HdsNavigation, HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit'
+import { KeyboardAvoidMode, LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
+import {
+  HdsNavigation,
+  HdsNavigationMenuContentOptions,
+  HdsNavigationTitleMode,
+  HdsTabs,
+  HdsTabsController,
+  ScrollEffectType,
+  SystemMaterialParams,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
 import window from '@ohos.window'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
 import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 import {
-  FloatingRootPageLayout,
-  FloatingRootPageSpacer,
-  ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
   ROOT_MODE_RAIL_TOP_GAP,
 } from '../common/components/FloatingRootPageLayout'
 import { PictureEntryCard } from '../common/components/PictureEntryCard'
@@ -138,6 +144,92 @@ struct Index {
 
   private handleHeaderBlurScrollDelta(delta: number): void {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+  }
+
+  private toggleHomeSearch(): void {
+    if (this.showSearch) {
+      this.closeSearch()
+      return
+    }
+
+    this.openSearch()
+  }
+
+  private homeNavigationMenu(): HdsNavigationMenuContentOptions {
+    return {
+      maxCount: 1,
+      value: [{
+        content: {
+          label: '搜索',
+          icon: $r('sys.symbol.magnifyingglass'),
+          action: () => {
+            this.toggleHomeSearch()
+          },
+          componentId: 'home_title_search',
+        },
+      }],
+    }
+  }
+
+  private currentRootTitle(): string {
+    switch (this.activeRootTabId) {
+      case 'subscriptions':
+        return '订阅库'
+      case 'discover':
+        return '添加订阅'
+      default:
+        return '今日推荐'
+    }
+  }
+
+  private currentRootMenu(): HdsNavigationMenuContentOptions | undefined {
+    switch (this.activeRootTabId) {
+      case 'home':
+        return this.homeNavigationMenu()
+      default:
+        return undefined
+    }
+  }
+
+  private shouldHideRootTitleBar(): boolean {
+    return this.activeRootTabId === 'settings'
+      || this.showSearch
+      || (this.activeRootTabId === 'discover' && this.discoverHasForegroundOverlay)
+      || (this.activeRootTabId === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
+  }
+
+  private currentRootScrollEffectType(): ScrollEffectType {
+    return ScrollEffectType.GRADIENT_BLUR
+  }
+
+  private currentRootOriginalTitleBarBackgroundColor(): ResourceColor {
+    return $r('sys.color.ohos_id_color_background')
+  }
+
+  private currentRootScrollEffectBackgroundColor(): ResourceColor {
+    return $r('sys.color.ohos_id_color_background_transparent')
+  }
+
+  private currentRootTitleBarBlurRadius(): number {
+    return 36
+  }
+
+  private currentRootTitleBarMaskExtraHeight(): number {
+    return 32
+  }
+
+  private currentRootSystemMaterialEffect(): SystemMaterialParams | undefined {
+    return {
+      materialType: hdsMaterial.MaterialType.ADAPTIVE,
+      materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+    }
+  }
+
+  @Builder
+  private HomeModeRailSpacer() {
+    Row()
+      .width('100%')
+      .height(0)
   }
 
   private handleSystemThemeChanged(): void {
@@ -700,10 +792,7 @@ struct Index {
     List({ space: HOME_MODE_CONTENT_GAP }) {
       ListItem() {
         Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-          FloatingRootPageSpacer({
-            topAvoidArea: this.topAvoidArea,
-            extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
-          })
+          this.HomeModeRailSpacer()
 
           Column() {
             this.HomeModeRail()
@@ -768,10 +857,7 @@ struct Index {
     List({ space: HOME_MODE_CONTENT_GAP }) {
       ListItem() {
         Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-          FloatingRootPageSpacer({
-            topAvoidArea: this.topAvoidArea,
-            extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
-          })
+          this.HomeModeRailSpacer()
 
           Column() {
             this.HomeModeRail()
@@ -845,10 +931,7 @@ struct Index {
         Scroll() {
           Column({ space: HOME_MODE_CONTENT_GAP }) {
             Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-              FloatingRootPageSpacer({
-                topAvoidArea: this.topAvoidArea,
-                extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
-              })
+              this.HomeModeRailSpacer()
 
               Column() {
                 this.HomeModeRail()
@@ -927,24 +1010,6 @@ struct Index {
         }
       })
 
-      FloatingRootPageLayout({
-        title: '今日推荐',
-        theme: this.theme,
-        topAvoidArea: this.topAvoidArea,
-        scrollBlurProgress: this.headerBlurProgress,
-        trailingImage: $r('app.media.magnifyingglass'),
-        trailingButtonCircular: true,
-        trailingSymbolSize: 22,
-        trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
-        onTrailingClick: () => {
-          if (this.showSearch) {
-            this.closeSearch()
-            return
-          }
-          this.openSearch()
-        },
-      })
-      .align(Alignment.TopStart)
     }
     .width('100%')
     .height('100%')
@@ -1020,7 +1085,69 @@ struct Index {
         })
       }
       .mode(NavigationMode.Stack)
-      .hideTitleBar(true)
+      .titleBar({
+        content: {
+          title: {
+            mainTitle: this.currentRootTitle(),
+          },
+          menu: this.currentRootMenu(),
+        },
+        style: {
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: this.currentRootScrollEffectType(),
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(20),
+          },
+          originalStyle: {
+            backgroundStyle: {
+              backgroundColor: this.currentRootOriginalTitleBarBackgroundColor(),
+              maskExtraHeight: this.currentRootTitleBarMaskExtraHeight(),
+              blurRadius: this.currentRootTitleBarBlurRadius(),
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+            },
+          },
+          scrollEffectStyle: {
+            backgroundStyle: {
+              backgroundColor: this.currentRootScrollEffectBackgroundColor(),
+              maskExtraHeight: this.currentRootTitleBarMaskExtraHeight(),
+              blurRadius: this.currentRootTitleBarBlurRadius(),
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+            },
+          },
+          systemMaterialEffect: this.currentRootSystemMaterialEffect(),
+        },
+        avoidLayoutSafeArea: true,
+        enableComponentSafeArea: true,
+      })
+      .titleMode(HdsNavigationTitleMode.MINI)
+      .hideTitleBar(this.shouldHideRootTitleBar())
       .hideBackButton(true)
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')

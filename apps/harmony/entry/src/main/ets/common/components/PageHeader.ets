@@ -33,6 +33,52 @@ export struct PageHeader {
 
   @BuilderParam trailingBuilder: () => void = this.EmptyTrailingBuilder
 
+  private trailingButtonBackgroundColor(): string {
+    if (this.trailingButtonBackground) {
+      return this.trailingButtonBackground
+    }
+
+    if (this.trailingButtonCircular) {
+      return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
+    }
+
+    return this.theme.elevated
+  }
+
+  private trailingButtonBorderColor(): string {
+    if (this.trailingButtonCircular) {
+      return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
+    }
+
+    return this.theme.divider
+  }
+
+  private trailingButtonShadow(): ShadowOptions {
+    if (this.trailingButtonCircular) {
+      return {
+        radius: 10,
+        color: this.theme.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)',
+        offsetX: 0,
+        offsetY: 2,
+      }
+    }
+
+    return {
+      radius: 8,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
+      offsetX: 0,
+      offsetY: 2,
+    }
+  }
+
+  private trailingButtonBackdropBlur(): number {
+    if (this.trailingButtonCircular) {
+      return this.theme.isDark ? 10 : 18
+    }
+
+    return 0
+  }
+
   @Builder
   private BackButton() {
     Text('‹')
@@ -86,12 +132,11 @@ export struct PageHeader {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .margin(this.trailingButtonCircular ? { top: -2, left: -5 } : {})
-      .backgroundColor(this.trailingButtonBackground || this.theme.elevated)
+      .backgroundColor(this.trailingButtonBackgroundColor())
+      .backdropBlur(this.trailingButtonBackdropBlur())
       .borderRadius(this.trailingButtonCircular ? HEADER_BACK_SLOT_SIZE : 15)
-      .border(this.trailingButtonCircular ? { width: 0 } : { width: 0.8, color: this.theme.divider })
-      .shadow(this.trailingButtonCircular
-        ? { radius: 0, color: 'rgba(0,0,0,0)', offsetY: 0 }
-        : { radius: 8, color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)', offsetY: 2 })
+      .border({ width: 0.8, color: this.trailingButtonBorderColor() })
+      .shadow(this.trailingButtonShadow())
       .clickEffect({ level: ClickEffectLevel.MIDDLE })
       .scale({
         x: this.isTrailingPressed ? 0.84 : 1,
@@ -123,12 +168,11 @@ export struct PageHeader {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .margin(this.trailingButtonCircular ? { top: -2, left: -5 } : {})
-      .backgroundColor(this.trailingButtonBackground || this.theme.elevated)
+      .backgroundColor(this.trailingButtonBackgroundColor())
+      .backdropBlur(this.trailingButtonBackdropBlur())
       .borderRadius(this.trailingButtonCircular ? HEADER_BACK_SLOT_SIZE : 15)
-      .border(this.trailingButtonCircular ? { width: 0 } : { width: 0.8, color: this.theme.divider })
-      .shadow(this.trailingButtonCircular
-        ? { radius: 0, color: 'rgba(0,0,0,0)', offsetY: 0 }
-        : { radius: 8, color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)', offsetY: 2 })
+      .border({ width: 0.8, color: this.trailingButtonBorderColor() })
+      .shadow(this.trailingButtonShadow())
       .clickEffect({ level: ClickEffectLevel.MIDDLE })
       .scale({
         x: this.isTrailingPressed ? 0.84 : 1,

@@ -1,11 +1,6 @@
 import { Entry, formatPublishedAt, selectPictureMediaUrls } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { createPictureGalleryTiles, PictureGalleryTile } from '../utils/PictureGallery'
-
-interface PictureEntryGalleryGridProps {
-  galleryTiles: PictureGalleryTile[]
-}
 
 @Component
 export struct PictureEntryCard {
@@ -18,6 +13,7 @@ export struct PictureEntryCard {
   @Prop pictureUrl: string = ''
   @Prop galleryUrls: string[] = []
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @State private activeMediaIndex: number = 0
 
   onOpen: () => void = () => {}
 
@@ -53,42 +49,65 @@ export struct PictureEntryCard {
     return selectPictureMediaUrls(this.galleryUrls)
   }
 
-  private galleryTiles(): PictureGalleryTile[] {
-    return createPictureGalleryTiles(this.normalizedGalleryUrls())
+  private carouselMediaUrls(): string[] {
+    const galleryMediaUrls = this.normalizedGalleryUrls()
+    if (galleryMediaUrls.length > 0) {
+      return galleryMediaUrls
+    }
+
+    const singleMediaUrl = (this.pictureUrl || '').trim()
+    return singleMediaUrl ? [singleMediaUrl] : []
   }
 
   @Builder
-  private GalleryGrid(props: PictureEntryGalleryGridProps) {
-    Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-      ForEach(props.galleryTiles, (tile: PictureGalleryTile) => {
-        Stack({ alignContent: Alignment.Center }) {
-          Image(tile.url)
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Cover)
-            .borderRadius(12)
-            .backgroundColor(this.theme.elevated)
-
-          if (tile.overflowCount > 0) {
-            Row()
-              .width('100%')
-              .height('100%')
-              .borderRadius(12)
-              .backgroundColor('rgba(0,0,0,0.28)')
-
-            Text(`+${tile.overflowCount}`)
-              .fontSize(16)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-          }
-        }
-        .width(tile.width)
-        .aspectRatio(1)
-        .clip(true)
-        .margin({ bottom: 6 })
-      }, (tile: PictureGalleryTile) => `${tile.url}-${tile.overflowCount}`)
+  private CarouselIndicator(total: number) {
+    if (total > 1) {
+      Row({ space: 6 }) {
+        ForEach(this.carouselMediaUrls(), (_url: string, index: number) => {
+          Row()
+            .width(index === this.activeMediaIndex ? 16 : 6)
+            .height(6)
+            .borderRadius(6)
+            .backgroundColor(index === this.activeMediaIndex ? '#FFFFFF' : 'rgba(255,255,255,0.45)')
+            .animation({ duration: 180, curve: Curve.EaseOut })
+        }, (_url: string, index: number) => `dot-${index}`)
+      }
+      .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+      .backgroundColor('rgba(0,0,0,0.28)')
+      .borderRadius(999)
     }
-    .width('100%')
+  }
+
+  @Builder
+  private MediaCarousel() {
+    if (this.carouselMediaUrls().length > 0) {
+      Stack({ alignContent: Alignment.Bottom }) {
+        Swiper() {
+          ForEach(this.carouselMediaUrls(), (mediaUrl: string, index: number) => {
+            Image(mediaUrl)
+              .width('100%')
+              .objectFit(ImageFit.Contain)
+              .borderRadius(18)
+              .backgroundColor(this.theme.elevated)
+          }, (mediaUrl: string, index: number) => `${mediaUrl}-${index}`)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .indicator(false)
+        .loop(this.carouselMediaUrls().length > 1)
+        .duration(260)
+        .onChange((index: number) => {
+          this.activeMediaIndex = index
+        })
+
+        this.CarouselIndicator(this.carouselMediaUrls().length)
+      }
+      .width('100%')
+      .constraintSize({ minHeight: 120, maxHeight: 640 })
+      .clip(true)
+      .borderRadius(18)
+      .backgroundColor(this.theme.elevated)
+    }
   }
 
   build() {
@@ -123,22 +142,14 @@ export struct PictureEntryCard {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
 
-      if (this.normalizedGalleryUrls().length > 0) {
-        this.GalleryGrid({ galleryTiles: this.galleryTiles() })
-      } else if (this.pictureUrl) {
-        Image(this.pictureUrl)
-          .width('100%')
-          .height(220)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(18)
-          .backgroundColor(this.theme.elevated)
+      if (this.carouselMediaUrls().length > 0) {
+        this.MediaCarousel()
       }
     }
     .width('100%')
     .padding({ top: 8, bottom: 10 })
     .alignItems(HorizontalAlign.Start)
     .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
       this.onOpen()
     })

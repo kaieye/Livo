@@ -37,49 +37,89 @@ test('floating root pages share a common floating header shell', () => {
     /top: this\.topAvoidArea \+ PAGE_TOP_PADDING/,
   )
   assert.doesNotMatch(layoutSource, /@BuilderParam content:/)
+  assert.match(layoutSource, /\.backgroundColor\(this\.theme\.background\)/)
   assert.match(
     indexSource,
     /private HomeRootPage\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
   )
-  assert.match(indexSource, /FloatingRootPageLayout\(\{/)
-  assert.match(indexSource, /scrollBlurProgress: this\.headerBlurProgress/)
+  assert.doesNotMatch(indexSource, /FloatingRootPageLayout\(\{/)
+  assert.match(indexSource, /private currentRootTitle\(\): string/)
+  assert.match(indexSource, /private shouldHideRootTitleBar\(\): boolean/)
   assert.match(
     indexSource,
-    /FloatingRootPageLayout\(\{[\s\S]*?\}\)\s*\.align\(Alignment\.TopStart\)/,
+    /\.titleBar\(\{[\s\S]*mainTitle:\s*this\.currentRootTitle\(\)/s,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootScrollEffectType\(\): ScrollEffectType/,
+  )
+  assert.match(indexSource, /ScrollEffectType\.GRADIENT_BLUR/)
+  assert.match(
+    indexSource,
+    /scrollEffectType:\s*this\.currentRootScrollEffectType\(\)/,
+  )
+  assert.match(
+    indexSource,
+    /blurRadius:\s*this\.currentRootTitleBarBlurRadius\(\)/,
+  )
+  assert.match(
+    indexSource,
+    /maskExtraHeight:\s*this\.currentRootTitleBarMaskExtraHeight\(\)/,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootOriginalTitleBarBackgroundColor\(\): ResourceColor/,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootScrollEffectBackgroundColor\(\): ResourceColor/,
+  )
+  assert.match(indexSource, /SystemMaterialParams,/)
+  assert.match(
+    indexSource,
+    /private currentRootSystemMaterialEffect\(\): SystemMaterialParams \| undefined/,
+  )
+  assert.match(
+    indexSource,
+    /\.hideTitleBar\(this\.shouldHideRootTitleBar\(\)\)/,
   )
   assert.match(
     discoverSource,
     /private DiscoverRoot\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
   )
-  assert.match(discoverSource, /FloatingRootPageLayout\(\{/)
-  assert.match(discoverSource, /scrollBlurProgress: this\.headerBlurProgress/)
-  assert.match(
-    discoverSource,
-    /FloatingRootPageLayout\(\{[\s\S]*?\}\)\s*\.align\(Alignment\.TopStart\)/,
-  )
+  assert.doesNotMatch(discoverSource, /FloatingRootPageLayout\(\{/)
   assert.match(
     subscriptionsSource,
     /private SubscriptionsRoot\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
   )
-  assert.match(subscriptionsSource, /FloatingRootPageLayout\(\{/)
+  assert.doesNotMatch(subscriptionsSource, /FloatingRootPageLayout\(\{/)
+  assert.match(settingsSource, /build\(\) \{\s*HdsNavigation\(\)/s)
+  assert.match(settingsSource, /SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = 56/)
+  assert.match(settingsSource, /HEADER_OVERLAY_HEIGHT: number = 56/)
   assert.match(
-    subscriptionsSource,
-    /scrollBlurProgress: this\.headerBlurProgress/,
-  )
-  assert.match(
-    subscriptionsSource,
-    /FloatingRootPageLayout\(\{[\s\S]*?\}\)\s*\.align\(Alignment\.TopStart\)/,
+    settingsSource,
+    /@StorageProp\('topAvoidArea'\) topAvoidArea: number = 0/,
   )
   assert.match(
     settingsSource,
-    /build\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
+    /private readonly contentScroller: Scroller = new Scroller\(\)/,
   )
-  assert.match(settingsSource, /FloatingRootPageLayout\(\{/)
-  assert.match(settingsSource, /scrollBlurProgress: this\.headerBlurProgress/)
+  assert.match(settingsSource, /private headerOverlayHeight\(\): number/)
+  assert.match(settingsSource, /private headerOverlayTint\(\): string/)
+  assert.match(settingsSource, /private HeaderBlurOverlay\(\)/)
+  assert.match(settingsSource, /Scroll\(this\.contentScroller\)/)
   assert.match(
     settingsSource,
-    /FloatingRootPageLayout\(\{[\s\S]*?\}\)\s*\.align\(Alignment\.TopStart\)/,
+    /Blank\(\)\s*\.height\(SETTINGS_TITLE_BAR_OVERLAY_SPACER\)/s,
   )
+  assert.match(settingsSource, /Text\('设置'\)/)
+  assert.match(settingsSource, /\.backdropBlur\(24\)/)
+  assert.match(settingsSource, /\.clip\(true\)/)
+  assert.match(settingsSource, /\.hitTestBehavior\(HitTestMode\.None\)/)
+  assert.match(settingsSource, /\.hideTitleBar\(true\)/)
+  assert.doesNotMatch(settingsSource, /titleBar\(\{/)
+  assert.doesNotMatch(settingsSource, /FloatingRootPageLayout\(\{/)
+  assert.doesNotMatch(settingsSource, /SettingsBlurHeader\(\)/)
 })
 
 test('settings content no longer renders PageHeader directly inside a list item', () => {
