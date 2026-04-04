@@ -3,6 +3,7 @@ import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
+import { FloatingRootPageLayout, FloatingRootPageSpacer } from './FloatingRootPageLayout'
 import { PageHeader } from './PageHeader'
 import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
@@ -49,6 +50,7 @@ import {
 const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
 const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
+const HEADER_BLUR_SCROLL_RANGE: number = 72
 
 interface DirectUrlResult {
   targetUrl: string
@@ -133,6 +135,7 @@ export struct DiscoverContent {
   @State keepPlatformChipsOnBlur: boolean = false
   @State isPlatformSwitchSearching: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @State headerBlurProgress: number = 0
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
   @State hasLoaded: boolean = false
@@ -150,6 +153,17 @@ export struct DiscoverContent {
   private searchSession: number = 0
   private platformSwitchSession: number = 0
   private searchInputController: TextInputController = new TextInputController()
+  private headerBlurOffset: number = 0
+
+  private updateHeaderBlurProgress(offset: number): void {
+    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
+    this.headerBlurOffset = clampedOffset
+    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+  }
+
+  private handleHeaderBlurScrollDelta(delta: number): void {
+    this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+  }
 
   aboutToAppear(): void {
     this.dismissSearchFocus()
@@ -1009,16 +1023,26 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private SearchModeContent() {
+  private DiscoverScrollContent() {
     Column({ space: 14 }) {
-      this.SearchResultSection()
+      FloatingRootPageSpacer({
+        topAvoidArea: this.topAvoidArea,
+      })
 
-      if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote && !this.isPlatformSwitchSearching) {
-        this.NoResultState()
+      this.SearchPanel()
+
+      if (this.isSearchModeActive()) {
+        this.SearchResultSection()
+
+        if (this.query.trim() && !this.hasAnyResult() && !this.isSearchingRemote && !this.isPlatformSwitchSearching) {
+          this.NoResultState()
+        }
+      } else {
+        this.RecommendedFallbackSection()
       }
 
       Row()
-        .height(24)
+        .height(this.isSearchModeActive() ? 24 : this.discoverBottomSpacerHeight())
         .width('100%')
     }
     .width('100%')
@@ -1026,21 +1050,6 @@ export struct DiscoverContent {
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
     .transition(livoMotion.enterSoft(30))
-  }
-
-  @Builder
-  private DiscoverDefaultContent() {
-    Column({ space: 16 }) {
-      this.RecommendedFallbackSection()
-
-      Row()
-        .height(this.discoverBottomSpacerHeight())
-        .width('100%')
-    }
-    .width('100%')
-    .constraintSize({ minHeight: '100%' })
-    .alignItems(HorizontalAlign.Start)
-    .justifyContent(FlexAlign.Start)
   }
 
   private shouldReserveBottomDock(): boolean {
@@ -1081,71 +1090,39 @@ export struct DiscoverContent {
 
   @Builder
   private DiscoverRoot() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-        Column({ space: 10 }) {
-          PageHeader({
-            title: '添加订阅',
-            theme: this.theme,
-          })
-          this.SearchPanel()
-        }
-        .width('100%')
-        .padding({
-          left: PAGE_HORIZONTAL_PADDING,
-          right: PAGE_HORIZONTAL_PADDING,
-          top: this.topAvoidArea + PAGE_TOP_PADDING,
-          bottom: 0,
-        })
-        .alignItems(HorizontalAlign.Start)
-
-        if (this.isSearchModeActive()) {
-          Scroll() {
-            this.SearchModeContent()
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .scrollBar(BarState.Off)
-          .backgroundColor(this.theme.background)
-          .edgeEffect(EdgeEffect.Spring)
-          .nestedScroll({
-            scrollForward: NestedScrollMode.SELF_FIRST,
-            scrollBackward: NestedScrollMode.SELF_FIRST,
-          })
-          .onWillScroll((_scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
-            this.keepPlatformChipsOnBlur = true
-            this.searchInputController.stopEditing()
-          })
-          .padding({
-            left: PAGE_HORIZONTAL_PADDING,
-            right: PAGE_HORIZONTAL_PADDING,
-            top: 6,
-            bottom: 16,
-          })
-        } else {
-          Scroll() {
-            this.DiscoverDefaultContent()
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .scrollBar(BarState.Off)
-          .backgroundColor(this.theme.background)
-          .edgeEffect(EdgeEffect.Spring)
-          .nestedScroll({
-            scrollForward: NestedScrollMode.SELF_FIRST,
-            scrollBackward: NestedScrollMode.SELF_FIRST,
-          })
-          .padding({
-            left: PAGE_HORIZONTAL_PADDING,
-            right: PAGE_HORIZONTAL_PADDING,
-            top: 0,
-            bottom: this.discoverListBottomPadding(),
-          })
-          .margin({ bottom: this.discoverListExternalGap() })
-        }
+    Stack({ alignContent: Alignment.TopStart }) {
+      Scroll() {
+        this.DiscoverScrollContent()
       }
       .width('100%')
       .height('100%')
+      .scrollBar(BarState.Off)
+      .backgroundColor(this.theme.background)
+      .edgeEffect(EdgeEffect.Spring)
+      .nestedScroll({
+        scrollForward: NestedScrollMode.SELF_FIRST,
+        scrollBackward: NestedScrollMode.SELF_FIRST,
+      })
+      .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
+        this.handleHeaderBlurScrollDelta(scrollOffset)
+        this.keepPlatformChipsOnBlur = true
+        this.searchInputController.stopEditing()
+      })
+      .padding({
+        left: PAGE_HORIZONTAL_PADDING,
+        right: PAGE_HORIZONTAL_PADDING,
+        top: 0,
+        bottom: this.isSearchModeActive() ? 16 : this.discoverListBottomPadding(),
+      })
+      .margin({ bottom: this.isSearchModeActive() ? 0 : this.discoverListExternalGap() })
+
+      FloatingRootPageLayout({
+        title: '添加订阅',
+        theme: this.theme,
+        topAvoidArea: this.topAvoidArea,
+        scrollBlurProgress: this.headerBlurProgress,
+      })
+      .align(Alignment.TopStart)
 
       if (this.showBottomTabs && this.discoverOverlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })

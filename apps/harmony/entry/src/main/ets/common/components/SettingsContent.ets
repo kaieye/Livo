@@ -9,15 +9,16 @@ import {
   PrivacySettingsPanel,
   FavoritesPanel,
 } from './SettingsSecondaryPanels'
-import { PageHeader } from './PageHeader'
+import { FloatingRootPageLayout, FloatingRootPageSpacer } from './FloatingRootPageLayout'
 import { SettingListRow } from './SettingListRow'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
+import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
+const HEADER_BLUR_SCROLL_RANGE: number = 72
 
 interface SettingItem {
   title: string
@@ -108,6 +109,7 @@ export struct SettingsContent {
   @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State saveHint: string = '设置将写入本地 Preferences'
+  @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State hasLoaded: boolean = false
   @State isLoading: boolean = false
@@ -117,8 +119,19 @@ export struct SettingsContent {
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  private headerBlurOffset: number = 0
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onReady: () => void = () => {}
+
+  private updateHeaderBlurProgress(offset: number): void {
+    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
+    this.headerBlurOffset = clampedOffset
+    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+  }
+
+  private handleHeaderBlurScrollDelta(delta: number): void {
+    this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+  }
 
   aboutToAppear(): void {
     const restoreSheet = this.storedActiveSheet || AppStorage.get<SettingsSheetKey>(SETTINGS_ACTIVE_SHEET_KEY)
@@ -327,22 +340,14 @@ export struct SettingsContent {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
+    Stack({ alignContent: Alignment.TopStart }) {
       List({ space: 18 }) {
         ListItem() {
-          Column() {
-            PageHeader({
-              title: '设置',
-              theme: this.theme,
-            })
-          }
-          .width('100%')
-          .padding({
-            left: PAGE_HORIZONTAL_PADDING,
-            right: PAGE_HORIZONTAL_PADDING,
-            top: this.topAvoidArea + PAGE_TOP_PADDING,
+          FloatingRootPageSpacer({
+            topAvoidArea: this.topAvoidArea,
           })
         }
+        .width('100%')
 
         ListItem() {
           Column({ space: 14 }) {
@@ -364,6 +369,17 @@ export struct SettingsContent {
       .scrollBar(BarState.Off)
       .backgroundColor(this.theme.background)
       .edgeEffect(EdgeEffect.Spring)
+      .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+        this.handleHeaderBlurScrollDelta(scrollOffset)
+      })
+
+      FloatingRootPageLayout({
+        title: '设置',
+        theme: this.theme,
+        topAvoidArea: this.topAvoidArea,
+        scrollBlurProgress: this.headerBlurProgress,
+      })
+      .align(Alignment.TopStart)
 
       if (this.showBottomTabs && !this.showSettingsSheet) {
         BottomTabs({ activeTab: 'settings', theme: this.theme })

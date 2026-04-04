@@ -5,7 +5,12 @@ import window from '@ohos.window'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
 import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
-import { PageHeader } from '../common/components/PageHeader'
+import {
+  FloatingRootPageLayout,
+  FloatingRootPageSpacer,
+  ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
+  ROOT_MODE_RAIL_TOP_GAP,
+} from '../common/components/FloatingRootPageLayout'
 import { PictureEntryCard } from '../common/components/PictureEntryCard'
 import { TweetEntryCard } from '../common/components/TweetEntryCard'
 import { Entry, EntryCardModel, selectPictureMediaUrls } from '../common/models/LivoModels'
@@ -41,6 +46,8 @@ import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
+const HOME_MODE_CONTENT_GAP: number = 12
+const HEADER_BLUR_SCROLL_RANGE: number = 72
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -71,12 +78,14 @@ struct Index {
   @State visitedModes: SubscriptionMode[] = ['articles']
   @State isModeTransitioning: boolean = false
   @State modeTransitionDirection: number = 1
+  @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
   @State highlightedRootTabId: RootTabId = 'home'
   @State private suppressRootTabChange: boolean = false
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
+  private headerBlurOffset: number = 0
 
   private animateWithUiContext(options: AnimateParam, event: () => void): void {
     this.getUIContext().animateTo(options, event)
@@ -119,6 +128,16 @@ struct Index {
   private refreshRootTheme(): void {
     this.theme = ThemeService.currentPalette()
     void this.applySystemBarStyle(this.theme)
+  }
+
+  private updateHeaderBlurProgress(offset: number): void {
+    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
+    this.headerBlurOffset = clampedOffset
+    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+  }
+
+  private handleHeaderBlurScrollDelta(delta: number): void {
+    this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
   }
 
   private handleSystemThemeChanged(): void {
@@ -678,9 +697,22 @@ struct Index {
 
   @Builder
   private EntryList(mode: SubscriptionMode) {
-    List({ space: 10 }) {
+    List({ space: HOME_MODE_CONTENT_GAP }) {
       ListItem() {
-        this.HomeModeRail()
+        Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+          FloatingRootPageSpacer({
+            topAvoidArea: this.topAvoidArea,
+            extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
+          })
+
+          Column() {
+            this.HomeModeRail()
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
 
@@ -726,13 +758,29 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      this.handleHeaderBlurScrollDelta(scrollOffset)
+    })
   }
 
   @Builder
   private PictureEntryList() {
-    List({ space: 12 }) {
+    List({ space: HOME_MODE_CONTENT_GAP }) {
       ListItem() {
-        this.HomeModeRail()
+        Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+          FloatingRootPageSpacer({
+            topAvoidArea: this.topAvoidArea,
+            extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
+          })
+
+          Column() {
+            this.HomeModeRail()
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
 
@@ -785,6 +833,9 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      this.handleHeaderBlurScrollDelta(scrollOffset)
+    })
   }
 
   @Builder
@@ -792,8 +843,21 @@ struct Index {
     Stack() {
       if (resolveHomeVideoSceneKind(mode) === 'grid') {
         Scroll() {
-          Column({ space: 12 }) {
-            this.HomeModeRail()
+          Column({ space: HOME_MODE_CONTENT_GAP }) {
+            Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+              FloatingRootPageSpacer({
+                topAvoidArea: this.topAvoidArea,
+                extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
+              })
+
+              Column() {
+                this.HomeModeRail()
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start)
 
             HomeVideoGrid({
               entries: this.filteredEntriesFor(mode),
@@ -811,6 +875,9 @@ struct Index {
         .height('100%')
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
+        .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
+          this.handleHeaderBlurScrollDelta(scrollOffset)
+        })
       } else if (mode === 'pictures') {
         this.PictureEntryList()
       } else {
@@ -827,30 +894,7 @@ struct Index {
 
   @Builder
   private HomeRootPage() {
-    Column() {
-      PageHeader({
-        title: '今日推荐',
-        theme: this.theme,
-        trailingImage: $r('app.media.magnifyingglass'),
-        trailingButtonCircular: true,
-        trailingSymbolSize: 22,
-        trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
-        onTrailingClick: () => {
-          if (this.showSearch) {
-            this.closeSearch()
-            return
-          }
-          this.openSearch()
-        },
-      })
-      .width('100%')
-      .padding({
-        left: PAGE_HORIZONTAL_PADDING,
-        right: PAGE_HORIZONTAL_PADDING,
-        top: this.topAvoidArea + PAGE_TOP_PADDING,
-        bottom: 6,
-      })
-
+    Stack({ alignContent: Alignment.TopStart }) {
       Refresh({ refreshing: $$this.isRefreshing }) {
         Stack() {
           if (this.shouldMountModeScene('articles')) {
@@ -876,12 +920,31 @@ struct Index {
         )
       }
       .width('100%')
-      .layoutWeight(1)
+      .height('100%')
       .onRefreshing(() => {
         if (!this.isRefreshing) {
           void this.refreshFeaturedEntries()
         }
       })
+
+      FloatingRootPageLayout({
+        title: '今日推荐',
+        theme: this.theme,
+        topAvoidArea: this.topAvoidArea,
+        scrollBlurProgress: this.headerBlurProgress,
+        trailingImage: $r('app.media.magnifyingglass'),
+        trailingButtonCircular: true,
+        trailingSymbolSize: 22,
+        trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
+        onTrailingClick: () => {
+          if (this.showSearch) {
+            this.closeSearch()
+            return
+          }
+          this.openSearch()
+        },
+      })
+      .align(Alignment.TopStart)
     }
     .width('100%')
     .height('100%')

@@ -5,7 +5,12 @@ import { openArticleDetail } from '../navigation/AppRouter'
 import { ContentModeRail } from './ContentModeRail'
 import { FeedDetailView } from './FeedDetailView'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
-import { PageHeader } from './PageHeader'
+import {
+  FloatingRootPageLayout,
+  FloatingRootPageSpacer,
+  ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
+  ROOT_MODE_RAIL_TOP_GAP,
+} from './FloatingRootPageLayout'
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -21,7 +26,6 @@ import {
   LIST_ROW_TITLE_SIZE,
   LIST_ROW_VERTICAL_PADDING,
   PAGE_HORIZONTAL_PADDING,
-  PAGE_TOP_PADDING,
 } from '../ui/UiTokens'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
@@ -29,6 +33,7 @@ const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures'
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
 const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
+const HEADER_BLUR_SCROLL_RANGE: number = 72
 
 class SubscriptionFeedDetailParams {
   feedId: string = ''
@@ -54,6 +59,7 @@ export struct SubscriptionsContent {
   @State previousMode: SubscriptionMode = 'articles'
   @State isModeTransitioning: boolean = false
   @State modeTransitionDirection: number = 1
+  @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State sourceHint: string = '正在加载订阅内容...'
   @State hasLoaded: boolean = false
@@ -64,6 +70,7 @@ export struct SubscriptionsContent {
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   private subscriptionPathStack: NavPathStack = new NavPathStack()
+  private headerBlurOffset: number = 0
   onReady: () => void = () => {}
   private syncOverlayLevel(level: number): void {
     this.overlayLevel = level
@@ -120,6 +127,16 @@ export struct SubscriptionsContent {
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
     }
+  }
+
+  private updateHeaderBlurProgress(offset: number): void {
+    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
+    this.headerBlurOffset = clampedOffset
+    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+  }
+
+  private handleHeaderBlurScrollDelta(delta: number): void {
+    this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
   }
 
   private handleFeedsChanged(): void {
@@ -246,7 +263,6 @@ export struct SubscriptionsContent {
     return 0
   }
 
-
   private deriveFallbackIcon(siteUrl: string): string {
     const trimmed = siteUrl.trim()
     if (!trimmed) {
@@ -340,15 +356,28 @@ export struct SubscriptionsContent {
   @Builder
   private FeedSection(mode: SubscriptionMode) {
     Column({ space: 14 }) {
-      ContentModeRail({
-        mode: this.mode,
-        theme: this.theme,
-        interactionLocked: this.isModeTransitioning,
-        enableEnterTransition: false,
-        onChange: (mode: SubscriptionMode) => {
-          this.requestModeSwitch(mode)
-        },
-      })
+      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+        FloatingRootPageSpacer({
+          topAvoidArea: this.topAvoidArea,
+          extraHeight: ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT,
+        })
+
+        Column() {
+          ContentModeRail({
+            mode: this.mode,
+            theme: this.theme,
+            interactionLocked: this.isModeTransitioning,
+            enableEnterTransition: false,
+            onChange: (mode: SubscriptionMode) => {
+              this.requestModeSwitch(mode)
+            },
+          })
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
 
       Row() {
         Text(this.sourceHint)
@@ -431,6 +460,9 @@ export struct SubscriptionsContent {
     })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring)
+    .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
+      this.handleHeaderBlurScrollDelta(scrollOffset)
+    })
     .visibility(this.modeSceneVisible(mode))
     .opacity(this.modeSceneOpacity(mode))
     .translate({ x: this.modeSceneOffset(mode) })
@@ -559,44 +591,35 @@ export struct SubscriptionsContent {
 
   @Builder
   private SubscriptionsRoot() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-        PageHeader({
-          title: '订阅库',
-          theme: this.theme,
-          trailingSymbol: $r('sys.symbol.magnifyingglass'),
-          trailingButtonCircular: true,
-          trailingSymbolSize: 22,
-          trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
-          trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
-        })
-        .width('100%')
-        .padding({
-          left: PAGE_HORIZONTAL_PADDING,
-          right: PAGE_HORIZONTAL_PADDING,
-          top: this.topAvoidArea + PAGE_TOP_PADDING,
-          bottom: 6,
-        })
-
-        Stack() {
-          this.ModeFeedsScene('articles')
-          this.ModeFeedsScene('social')
-          this.ModeFeedsScene('pictures')
-          this.ModeFeedsScene('videos')
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor(this.theme.background)
-        .gesture(
-          PanGesture({ direction: PanDirection.Horizontal })
-            .onActionEnd((event: GestureEvent) => {
-              this.handleModeSwipe(event)
-            })
-        )
-
+    Stack({ alignContent: Alignment.TopStart }) {
+      Stack() {
+        this.ModeFeedsScene('articles')
+        this.ModeFeedsScene('social')
+        this.ModeFeedsScene('pictures')
+        this.ModeFeedsScene('videos')
       }
       .width('100%')
       .height('100%')
+      .backgroundColor(this.theme.background)
+      .gesture(
+        PanGesture({ direction: PanDirection.Horizontal })
+          .onActionEnd((event: GestureEvent) => {
+            this.handleModeSwipe(event)
+          })
+      )
+
+      FloatingRootPageLayout({
+        title: '订阅库',
+        theme: this.theme,
+        topAvoidArea: this.topAvoidArea,
+        scrollBlurProgress: this.headerBlurProgress,
+        trailingSymbol: $r('sys.symbol.magnifyingglass'),
+        trailingButtonCircular: true,
+        trailingSymbolSize: 22,
+        trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
+        trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
+      })
+      .align(Alignment.TopStart)
 
       if (this.showBottomTabs && this.overlayLevel === 0) {
         BottomTabs({ activeTab: 'subscriptions', theme: this.theme })
