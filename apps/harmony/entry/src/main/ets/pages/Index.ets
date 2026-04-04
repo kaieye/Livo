@@ -10,9 +10,12 @@ import { PictureEntryCard } from '../common/components/PictureEntryCard'
 import { TweetEntryCard } from '../common/components/TweetEntryCard'
 import { Entry, EntryCardModel, selectPictureMediaUrls } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
+import { rememberVisitedMode } from '../common/utils/HomeModeVisitedCache'
 import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
 import { presentTweetEntryFromCard } from '../common/utils/TweetEntryPresentation'
 import { livoMotion } from '../common/ui/Motion'
+import { resolveModeSceneRenderState } from '../common/utils/ModeSceneTransition'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
   BOTTOM_TAB_FLOAT_GAP,
@@ -33,10 +36,10 @@ import {
 } from '../common/utils/HdsBottomTabConfig'
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
+import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
-const MODE_SCENE_DURATION: number = 240
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 
 interface RootTabSymbolPair {
@@ -55,6 +58,7 @@ struct Index {
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @State featuredEntries: EntryCardModel[] = []
+  @State entryGroups: HomeEntryGroups<EntryCardModel> = createEmptyHomeEntryGroups<EntryCardModel>()
   @State feedSourceLabel: string = '准备加载本地内容'
   @State isRefreshing: boolean = false
   @State searchQuery: string = ''
@@ -64,6 +68,7 @@ struct Index {
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
   @State previousMode: SubscriptionMode = 'articles'
+  @State visitedModes: SubscriptionMode[] = ['articles']
   @State isModeTransitioning: boolean = false
   @State modeTransitionDirection: number = 1
   @State theme: ThemePalette = ThemeService.currentPalette()
@@ -72,7 +77,6 @@ struct Index {
   @State highlightedRootTabId: RootTabId = 'home'
   @State private suppressRootTabChange: boolean = false
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
-  private modeTransitionVersion: number = 0
 
   private animateWithUiContext(options: AnimateParam, event: () => void): void {
     this.getUIContext().animateTo(options, event)
@@ -95,10 +99,8 @@ struct Index {
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
     this.featuredEntries = await AppRepository.featuredEntries()
+    this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
     this.feedSourceLabel = '本地内容已加载'
-    if (settings.autoRefresh) {
-      await this.refreshFeaturedEntries()
-    }
   }
 
   private async refreshFeaturedEntries(): Promise<void> {
@@ -107,6 +109,7 @@ struct Index {
     try {
       const result = await AppRepository.refreshAllFeeds()
       this.featuredEntries = result.entries
+      this.entryGroups = groupHomeEntriesByMode(result.entries)
       this.feedSourceLabel = result.sourceLabel
     } finally {
       this.isRefreshing = false
@@ -241,37 +244,24 @@ struct Index {
   }
 
   private requestModeSwitch(nextMode: SubscriptionMode): void {
-    if (nextMode === this.mode) {
+    if (!shouldAcceptModeSwitch({
+      currentMode: this.mode,
+      nextMode,
+      isTransitioning: this.isModeTransitioning,
+    })) {
       return
     }
 
     this.mode = nextMode
+    this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
     this.startModeTransition(nextMode)
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
-    const currentMode = this.renderedMode
-    if (currentMode === nextMode) {
-      this.previousMode = nextMode
-      this.isModeTransitioning = false
-      return
-    }
-
-    this.modeTransitionVersion += 1
-    const version = this.modeTransitionVersion
-    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(currentMode) ? 1 : -1
-    this.previousMode = currentMode
+    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(this.renderedMode) ? 1 : -1
+    this.previousMode = nextMode
     this.renderedMode = nextMode
-    this.isModeTransitioning = true
-
-    setTimeout(() => {
-      if (version !== this.modeTransitionVersion) {
-        return
-      }
-
-      this.previousMode = nextMode
-      this.isModeTransitioning = false
-    }, MODE_SCENE_DURATION)
+    this.isModeTransitioning = false
   }
 
   private adjacentMode(offsetX: number): SubscriptionMode | undefined {
@@ -306,9 +296,16 @@ struct Index {
   }
 
   private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
-    return this.featuredEntries.filter((entry: EntryCardModel) =>
-      entry.viewLabel === this.getModeTitle(mode)
-    )
+    switch (mode) {
+      case 'social':
+        return this.entryGroups.social
+      case 'pictures':
+        return this.entryGroups.pictures
+      case 'videos':
+        return this.entryGroups.videos
+      default:
+        return this.entryGroups.articles
+    }
   }
 
   private handleFeedsChanged(): void {
@@ -317,6 +314,7 @@ struct Index {
 
   private async reloadFeaturedEntriesFromLocal(): Promise<void> {
     this.featuredEntries = await AppRepository.featuredEntries()
+    this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
     this.feedSourceLabel = '本地内容已同步'
   }
 
@@ -503,43 +501,56 @@ struct Index {
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
-    if (mode === this.renderedMode) {
-      return Visibility.Visible
-    }
-
-    if (this.isModeTransitioning && mode === this.previousMode) {
-      return Visibility.Visible
-    }
-
-    return Visibility.Hidden
+    const state = resolveModeSceneRenderState({
+      mode,
+      renderedMode: this.renderedMode,
+      previousMode: this.previousMode,
+      isTransitioning: this.isModeTransitioning,
+      direction: this.modeTransitionDirection,
+    })
+    return state.visibility === 'visible' ? Visibility.Visible : Visibility.Hidden
   }
 
   private modeSceneOpacity(mode: SubscriptionMode): number {
-    return mode === this.renderedMode ? 1 : 0
+    return resolveModeSceneRenderState({
+      mode,
+      renderedMode: this.renderedMode,
+      previousMode: this.previousMode,
+      isTransitioning: this.isModeTransitioning,
+      direction: this.modeTransitionDirection,
+    }).opacity
   }
 
   private modeSceneOffset(mode: SubscriptionMode): number {
-    if (mode === this.renderedMode) {
-      return 0
-    }
-
-    if (!this.isModeTransitioning || mode !== this.previousMode) {
-      return 0
-    }
-
-    return this.modeTransitionDirection > 0 ? -16 : 16
+    return resolveModeSceneRenderState({
+      mode,
+      renderedMode: this.renderedMode,
+      previousMode: this.previousMode,
+      isTransitioning: this.isModeTransitioning,
+      direction: this.modeTransitionDirection,
+    }).offset
   }
 
   private modeSceneZIndex(mode: SubscriptionMode): number {
-    if (mode === this.renderedMode) {
-      return 2
-    }
+    return resolveModeSceneRenderState({
+      mode,
+      renderedMode: this.renderedMode,
+      previousMode: this.previousMode,
+      isTransitioning: this.isModeTransitioning,
+      direction: this.modeTransitionDirection,
+    }).zIndex
+  }
 
-    if (this.isModeTransitioning && mode === this.previousMode) {
-      return 1
-    }
+  private shouldMountModeScene(mode: SubscriptionMode): boolean {
+    const renderState = resolveModeSceneRenderState({
+      mode,
+      renderedMode: this.renderedMode,
+      previousMode: this.previousMode,
+      isTransitioning: this.isModeTransitioning,
+      direction: this.modeTransitionDirection,
+    })
 
-    return 0
+    return renderState.shouldMount || this.visitedModes.includes(mode)
   }
 
   private getModeTitle(mode: SubscriptionMode): string {
@@ -644,6 +655,7 @@ struct Index {
       TweetEntryCard({
         presentation: presentTweetEntryFromCard(entry),
         theme: this.theme,
+        enableEnterTransition: false,
         onOpen: () => this.openEntry(entry.id),
       })
     } else {
@@ -652,9 +664,27 @@ struct Index {
   }
 
   @Builder
+  private HomeModeRail() {
+    ContentModeRail({
+      mode: this.mode,
+      theme: this.theme,
+      interactionLocked: this.isModeTransitioning,
+      enableEnterTransition: false,
+      onChange: (mode: SubscriptionMode) => {
+        this.requestModeSwitch(mode)
+      },
+    })
+  }
+
+  @Builder
   private EntryList(mode: SubscriptionMode) {
     List({ space: 10 }) {
-      ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel, index: number) => {
+      ListItem() {
+        this.HomeModeRail()
+      }
+      .width('100%')
+
+      ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel) => {
         ListItem() {
           if (mode === 'social') {
             this.SocialEntryCard(entry)
@@ -663,7 +693,6 @@ struct Index {
           }
         }
         .width('100%')
-        .transition(livoMotion.enterSoft(index * 18 + 40))
       }, (entry: EntryCardModel) => entry.id)
 
       if (this.filteredEntriesFor(mode).length === 0) {
@@ -696,12 +725,17 @@ struct Index {
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
-    .edgeEffect(EdgeEffect.Spring)
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
   }
 
   @Builder
   private PictureEntryList() {
     List({ space: 12 }) {
+      ListItem() {
+        this.HomeModeRail()
+      }
+      .width('100%')
+
       ForEach(this.filteredEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
         ListItem() {
           PictureEntryCard({
@@ -713,6 +747,7 @@ struct Index {
             pictureUrl: entry.imageUrl,
             galleryUrls: this.pictureGalleryUrls(entry),
             theme: this.theme,
+            enableEnterTransition: false,
             onOpen: () => this.openEntry(entry.id),
           })
         }
@@ -749,7 +784,7 @@ struct Index {
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
-    .edgeEffect(EdgeEffect.Spring)
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
   }
 
   @Builder
@@ -757,7 +792,9 @@ struct Index {
     Stack() {
       if (resolveHomeVideoSceneKind(mode) === 'grid') {
         Scroll() {
-          Column({ space: 0 }) {
+          Column({ space: 12 }) {
+            this.HomeModeRail()
+
             HomeVideoGrid({
               entries: this.filteredEntriesFor(mode),
               inheritedTheme: this.theme,
@@ -767,7 +804,8 @@ struct Index {
             })
           }
           .width('100%')
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 100 })
+          .alignItems(HorizontalAlign.Start)
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 100 })
         }
         .width('100%')
         .height('100%')
@@ -785,54 +823,48 @@ struct Index {
     .opacity(this.modeSceneOpacity(mode))
     .translate({ x: this.modeSceneOffset(mode) })
     .zIndex(this.modeSceneZIndex(mode))
-    .animation({
-      duration: MODE_SCENE_DURATION,
-      curve: Curve.EaseInOut,
-    })
   }
 
   @Builder
   private HomeRootPage() {
     Column() {
-      Column({ space: 10 }) {
-        PageHeader({
-          title: '今日推荐',
-          theme: this.theme,
-          trailingImage: $r('app.media.magnifyingglass'),
-          trailingButtonCircular: true,
-          trailingSymbolSize: 22,
-          trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
-          onTrailingClick: () => {
-            if (this.showSearch) {
-              this.closeSearch()
-              return
-            }
-            this.openSearch()
-          },
-        })
-
-        ContentModeRail({
-          mode: this.mode,
-          theme: this.theme,
-          onChange: (mode: SubscriptionMode) => {
-            this.requestModeSwitch(mode)
-          },
-        })
-      }
+      PageHeader({
+        title: '今日推荐',
+        theme: this.theme,
+        trailingImage: $r('app.media.magnifyingglass'),
+        trailingButtonCircular: true,
+        trailingSymbolSize: 22,
+        trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
+        onTrailingClick: () => {
+          if (this.showSearch) {
+            this.closeSearch()
+            return
+          }
+          this.openSearch()
+        },
+      })
       .width('100%')
       .padding({
         left: PAGE_HORIZONTAL_PADDING,
         right: PAGE_HORIZONTAL_PADDING,
         top: this.topAvoidArea + PAGE_TOP_PADDING,
-        bottom: 10,
+        bottom: 6,
       })
 
       Refresh({ refreshing: $$this.isRefreshing }) {
         Stack() {
-          this.ModeEntriesScene('articles')
-          this.ModeEntriesScene('social')
-          this.ModeEntriesScene('pictures')
-          this.ModeEntriesScene('videos')
+          if (this.shouldMountModeScene('articles')) {
+            this.ModeEntriesScene('articles')
+          }
+          if (this.shouldMountModeScene('social')) {
+            this.ModeEntriesScene('social')
+          }
+          if (this.shouldMountModeScene('pictures')) {
+            this.ModeEntriesScene('pictures')
+          }
+          if (this.shouldMountModeScene('videos')) {
+            this.ModeEntriesScene('videos')
+          }
         }
         .width('100%')
         .height('100%')
@@ -909,6 +941,7 @@ struct Index {
           }, (item: HdsBottomTabItem) => item.id)
         }
         .vertical(false)
+        .scrollable(false)
         .barPosition(BarPosition.End)
         .barOverlap(true)
         .barHeight(this.shouldHideBottomTabs() ? 0 : BOTTOM_TAB_BAR_HEIGHT)

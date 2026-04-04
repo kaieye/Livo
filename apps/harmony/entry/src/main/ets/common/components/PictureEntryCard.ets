@@ -11,6 +11,7 @@ interface PictureEntryGalleryGridProps {
 export struct PictureEntryCard {
   @Prop entry: Entry = {} as Entry
   @Prop index: number = 0
+  @Prop enableEnterTransition: boolean = true
   @Prop authorLabel: string = ''
   @Prop feedImageUrl: string = ''
   @Prop caption: string = ''
@@ -136,7 +137,7 @@ export struct PictureEntryCard {
     .width('100%')
     .padding({ top: 8, bottom: 10 })
     .alignItems(HorizontalAlign.Start)
-    .transition(livoMotion.enterSoft(this.index * 18 + 40))
+    .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
       this.onOpen()

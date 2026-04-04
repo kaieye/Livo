@@ -7,6 +7,7 @@ import { AvatarTile } from './AvatarTile'
 export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @Prop enableEnterTransition: boolean = true
 
   onOpen: () => void = () => {}
 
@@ -229,7 +230,7 @@ export struct TweetEntryCard {
     .borderRadius(18)
     .border({ width: 0.8, color: this.theme.divider })
     .alignItems(HorizontalAlign.Start)
-    .transition(livoMotion.enterSoft(24))
+    .transition(this.enableEnterTransition ? livoMotion.enterSoft(24) : TransitionEffect.IDENTITY)
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
       this.onOpen()

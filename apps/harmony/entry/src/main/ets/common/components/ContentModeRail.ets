@@ -1,24 +1,17 @@
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_SM, CHIP_RADIUS } from '../ui/UiTokens'
-import { curves } from '@kit.ArkUI'
-
 export type ContentMode = 'articles' | 'social' | 'pictures' | 'videos'
 const CONTENT_MODES: ContentMode[] = ['articles', 'social', 'pictures', 'videos']
-const INDICATOR_MOVE_DURATION: number = 100
-const INDICATOR_BOUNCE_DURATION: number = 56
 
 @Component
 export struct ContentModeRail {
   @Prop mode: ContentMode = 'articles'
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @Prop interactionLocked: boolean = false
+  @Prop enableEnterTransition: boolean = true
   @State pressedMode: ContentMode | '' = ''
-  @State indicatorScaleX: number = 1
-  @State indicatorScaleY: number = 1
-  @State emphasizedMode: ContentMode | '' = ''
   @State railWidth: number = 0
-  private indicatorBounceVersion: number = 0
-  private emphasisVersion: number = 0
   onChange: (mode: ContentMode) => void = () => {}
 
   private modeIndex(mode: ContentMode): number {
@@ -56,6 +49,10 @@ export struct ContentModeRail {
   }
 
   private itemScale(mode: ContentMode): number {
+    if (this.interactionLocked) {
+      return 1
+    }
+
     if (this.mode === mode) {
       return this.isPressed(mode) ? 0.98 : 1
     }
@@ -64,47 +61,15 @@ export struct ContentModeRail {
   }
 
   private itemOpacity(mode: ContentMode): number {
+    if (this.interactionLocked) {
+      return this.mode === mode ? 1 : 0.94
+    }
+
     if (this.mode === mode) {
       return 1
     }
 
     return this.isPressed(mode) ? 0.9 : 0.94
-  }
-
-  private isEmphasized(mode: ContentMode): boolean {
-    return this.emphasizedMode === mode
-  }
-
-  private iconScale(mode: ContentMode): number {
-    if (this.isEmphasized(mode)) {
-      return 1.12
-    }
-
-    if (this.mode === mode) {
-      return 1.04
-    }
-
-    return 1
-  }
-
-  private iconOffset(mode: ContentMode): number {
-    if (this.isEmphasized(mode)) {
-      return -1.5
-    }
-
-    if (this.mode === mode) {
-      return -0.5
-    }
-
-    return 0
-  }
-
-  private labelOffset(mode: ContentMode): number {
-    if (this.isEmphasized(mode)) {
-      return -0.8
-    }
-
-    return this.mode === mode ? -0.2 : 0
   }
 
   private activeTextColor(): string {
@@ -124,45 +89,15 @@ export struct ContentModeRail {
   }
 
   private indicatorShadowRadius(): number {
-    return this.indicatorScaleX > 1 ? 10 : 8
+    return 8
   }
 
-  private triggerIndicatorBounce(nextMode: ContentMode): void {
-    if (nextMode === this.mode) {
+  private commitModeSwitch(mode: ContentMode): void {
+    if (this.interactionLocked || mode === this.mode) {
       return
     }
 
-    this.indicatorBounceVersion += 1
-    const version = this.indicatorBounceVersion
-    this.indicatorScaleX = 1.055
-    this.indicatorScaleY = 0.94
-
-    setTimeout(() => {
-      if (version !== this.indicatorBounceVersion) {
-        return
-      }
-
-      this.indicatorScaleX = 1
-      this.indicatorScaleY = 1
-    }, INDICATOR_BOUNCE_DURATION)
-  }
-
-  private triggerModeEmphasis(nextMode: ContentMode): void {
-    if (nextMode === this.mode) {
-      return
-    }
-
-    this.emphasisVersion += 1
-    const version = this.emphasisVersion
-    this.emphasizedMode = nextMode
-
-    setTimeout(() => {
-      if (version !== this.emphasisVersion) {
-        return
-      }
-
-      this.emphasizedMode = ''
-    }, 140)
+    this.onChange(mode)
   }
 
   private labelFor(mode: ContentMode): string {
@@ -187,33 +122,21 @@ export struct ContentModeRail {
         .width(16)
         .height(16)
         .objectFit(ImageFit.Contain)
-        .scale({ x: this.iconScale(mode), y: this.iconScale(mode) })
-        .translate({ y: this.iconOffset(mode) })
-        .animation({ duration: 200, curve: curves.springMotion() })
     } else if (mode === 'social') {
       Image($r('app.media.sub_social_inactive'))
         .width(16)
         .height(16)
         .objectFit(ImageFit.Contain)
-        .scale({ x: this.iconScale(mode), y: this.iconScale(mode) })
-        .translate({ y: this.iconOffset(mode) })
-        .animation({ duration: 200, curve: curves.springMotion() })
     } else if (mode === 'pictures') {
       Image($r('app.media.sub_pictures_inactive'))
         .width(16)
         .height(16)
         .objectFit(ImageFit.Contain)
-        .scale({ x: this.iconScale(mode), y: this.iconScale(mode) })
-        .translate({ y: this.iconOffset(mode) })
-        .animation({ duration: 200, curve: curves.springMotion() })
     } else {
       Image($r('app.media.sub_videos_inactive'))
         .width(16)
         .height(16)
         .objectFit(ImageFit.Contain)
-        .scale({ x: this.iconScale(mode), y: this.iconScale(mode) })
-        .translate({ y: this.iconOffset(mode) })
-        .animation({ duration: 200, curve: curves.springMotion() })
     }
   }
 
@@ -226,8 +149,6 @@ export struct ContentModeRail {
         .fontSize(14)
         .fontWeight(this.mode === mode ? FontWeight.Medium : FontWeight.Regular)
         .fontColor(this.mode === mode ? this.activeTextColor() : this.theme.textSecondary)
-        .translate({ y: this.labelOffset(mode) })
-        .animation({ duration: 160, curve: Curve.EaseInOut })
     }
     .layoutWeight(1)
     .height(38)
@@ -235,9 +156,13 @@ export struct ContentModeRail {
     .borderRadius(CHIP_RADIUS)
     .scale({ x: this.itemScale(mode), y: this.itemScale(mode) })
     .opacity(this.itemOpacity(mode))
-    .animation({ duration: 160, curve: Curve.EaseInOut })
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onTouch((event: TouchEvent) => {
+      if (this.interactionLocked) {
+        this.pressedMode = ''
+        return
+      }
+
       if (event.type === TouchType.Down) {
         this.pressedMode = mode
         return
@@ -246,13 +171,11 @@ export struct ContentModeRail {
       if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
         if (this.pressedMode === mode) {
           this.pressedMode = ''
+          if (event.type === TouchType.Up) {
+            this.commitModeSwitch(mode)
+          }
         }
       }
-    })
-    .onClick(() => {
-      this.triggerIndicatorBounce(mode)
-      this.triggerModeEmphasis(mode)
-      this.onChange(mode)
     })
   }
 
@@ -262,7 +185,6 @@ export struct ContentModeRail {
         Row()
           .width(this.indicatorSlotWidth())
           .height(38)
-          .scale({ x: this.indicatorScaleX, y: this.indicatorScaleY })
           .translate({ x: this.indicatorOffsetX() })
           .backgroundColor(this.indicatorColor())
           .borderRadius(CHIP_RADIUS)
@@ -273,7 +195,6 @@ export struct ContentModeRail {
             offsetX: 0,
             offsetY: 2,
           })
-          .animation({ duration: INDICATOR_MOVE_DURATION, curve: Curve.EaseOut })
       }
       .width('100%')
       .height('100%')
@@ -296,6 +217,6 @@ export struct ContentModeRail {
     .onSizeChange((_, newValue) => {
       this.updateRailWidth(newValue.width)
     })
-    .transition(livoMotion.enterScale(30))
+    .transition(this.enableEnterTransition ? livoMotion.enterScale(30) : TransitionEffect.IDENTITY)
   }
 }

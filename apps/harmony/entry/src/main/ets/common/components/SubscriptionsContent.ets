@@ -10,6 +10,7 @@ import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { shouldAcceptModeSwitch } from '../utils/ModeSwitchGuard'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -25,7 +26,6 @@ import {
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
-const MODE_SCENE_DURATION: number = 240
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
 const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
@@ -65,8 +65,6 @@ export struct SubscriptionsContent {
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   private subscriptionPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
-  private modeTransitionVersion: number = 0
-
   private syncOverlayLevel(level: number): void {
     this.overlayLevel = level
     AppStorage.setOrCreate('subscriptionsOverlayLevel', level)
@@ -158,7 +156,11 @@ export struct SubscriptionsContent {
   }
 
   private requestModeSwitch(nextMode: SubscriptionMode): void {
-    if (nextMode === this.mode) {
+    if (!shouldAcceptModeSwitch({
+      currentMode: this.mode,
+      nextMode,
+      isTransitioning: this.isModeTransitioning,
+    })) {
       return
     }
 
@@ -167,28 +169,10 @@ export struct SubscriptionsContent {
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
-    const currentMode = this.renderedMode
-    if (currentMode === nextMode) {
-      this.previousMode = nextMode
-      this.isModeTransitioning = false
-      return
-    }
-
-    this.modeTransitionVersion += 1
-    const version = this.modeTransitionVersion
-    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(currentMode) ? 1 : -1
-    this.previousMode = currentMode
+    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(this.renderedMode) ? 1 : -1
+    this.previousMode = nextMode
     this.renderedMode = nextMode
-    this.isModeTransitioning = true
-
-    setTimeout(() => {
-      if (version !== this.modeTransitionVersion) {
-        return
-      }
-
-      this.previousMode = nextMode
-      this.isModeTransitioning = false
-    }, MODE_SCENE_DURATION)
+    this.isModeTransitioning = false
   }
 
   private adjacentMode(offsetX: number): SubscriptionMode | undefined {
@@ -356,6 +340,31 @@ export struct SubscriptionsContent {
   @Builder
   private FeedSection(mode: SubscriptionMode) {
     Column({ space: 14 }) {
+      ContentModeRail({
+        mode: this.mode,
+        theme: this.theme,
+        interactionLocked: this.isModeTransitioning,
+        enableEnterTransition: false,
+        onChange: (mode: SubscriptionMode) => {
+          this.requestModeSwitch(mode)
+        },
+      })
+
+      Row() {
+        Text(this.sourceHint)
+          .fontSize(META_FONT_SIZE)
+          .fontColor(this.theme.textSecondary)
+
+        Blank()
+
+        Text(`${this.filteredFeeds().length} 个订阅源`)
+          .fontSize(META_FONT_SIZE)
+          .fontColor(this.theme.textMuted)
+      }
+      .width('100%')
+      .padding({ left: 4, right: 4 })
+      .transition(livoMotion.enterRise(50))
+
       Text('订阅源')
         .fontSize(15)
         .fontWeight(FontWeight.Medium)
@@ -426,10 +435,6 @@ export struct SubscriptionsContent {
     .opacity(this.modeSceneOpacity(mode))
     .translate({ x: this.modeSceneOffset(mode) })
     .zIndex(this.modeSceneZIndex(mode))
-    .animation({
-      duration: MODE_SCENE_DURATION,
-      curve: Curve.EaseInOut,
-    })
   }
 
   private openFeedDetailPage(feedId: string): void {
@@ -556,41 +561,15 @@ export struct SubscriptionsContent {
   private SubscriptionsRoot() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
-        Column({ space: 10 }) {
-          PageHeader({
-            title: '订阅库',
-            theme: this.theme,
-            trailingSymbol: $r('sys.symbol.magnifyingglass'),
-            trailingButtonCircular: true,
-            trailingSymbolSize: 22,
-            trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
-            trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
-          })
-
-          ContentModeRail({
-            mode: this.mode,
-            theme: this.theme,
-            onChange: (mode: SubscriptionMode) => {
-              this.requestModeSwitch(mode)
-            },
-          })
-
-
-          Row() {
-            Text(this.sourceHint)
-              .fontSize(META_FONT_SIZE)
-              .fontColor(this.theme.textSecondary)
-
-            Blank()
-
-            Text(`${this.filteredFeeds().length} 个订阅源`)
-              .fontSize(META_FONT_SIZE)
-              .fontColor(this.theme.textMuted)
-          }
-          .width('100%')
-          .padding({ left: 4, right: 4 })
-          .transition(livoMotion.enterRise(50))
-        }
+        PageHeader({
+          title: '订阅库',
+          theme: this.theme,
+          trailingSymbol: $r('sys.symbol.magnifyingglass'),
+          trailingButtonCircular: true,
+          trailingSymbolSize: 22,
+          trailingSymbolColor: this.theme.isDark ? '#E6EDF7' : '#1F2937',
+          trailingButtonBackground: this.theme.isDark ? '#242A33' : '#E6E8E9',
+        })
         .width('100%')
         .padding({
           left: PAGE_HORIZONTAL_PADDING,

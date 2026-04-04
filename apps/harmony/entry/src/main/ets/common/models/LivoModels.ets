@@ -145,7 +145,7 @@ export interface RemoteFeedResult {
 }
 
 export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
-  autoRefresh: true,
+  autoRefresh: false,
   aiSummaryEnabled: true,
   imageProxyEnabled: false,
   refreshIntervalMinutes: 30,
