@@ -423,14 +423,7 @@ export struct SubscriptionsContent {
       .width('100%')
       .alignItems(HorizontalAlign.Start)
 
-      Column({ space: 14 }) {
-        Text('订阅源')
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textMuted)
-          .padding({ left: 4 })
-          .width('100%')
-
+      Column({ space: 20 }) {
         if (this.filteredFeedsFor(mode).length === 0) {
           Column({ space: 10 }) {
             Text(`您还没有收藏任何${this.headerTitle(mode)}源`)
@@ -471,6 +464,7 @@ export struct SubscriptionsContent {
         Row().height(88).width('100%')
       }
       .width('100%')
+      .padding({ top: 12 })
 
     }
     .width('100%')

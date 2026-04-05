@@ -896,7 +896,6 @@ struct Index {
       offsetX: 0,
       offsetY: 4,
     })
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => this.openEntry(entry.id))
   }
 

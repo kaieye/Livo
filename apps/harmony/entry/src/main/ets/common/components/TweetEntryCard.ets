@@ -231,7 +231,6 @@ export struct TweetEntryCard {
     .border({ width: 0.8, color: this.theme.divider })
     .alignItems(HorizontalAlign.Start)
     .transition(this.enableEnterTransition ? livoMotion.enterSoft(24) : TransitionEffect.IDENTITY)
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
       this.onOpen()
     })
