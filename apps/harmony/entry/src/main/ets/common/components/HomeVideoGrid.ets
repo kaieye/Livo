@@ -1,5 +1,6 @@
 import { EntryCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import {
   chunkHomeVideoEntries,
   resolveHomeVideoCardSubtitle,
@@ -90,22 +91,41 @@ export struct HomeVideoGrid {
 
   build() {
     Column({ space: 12 }) {
-      ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
-        Row({ space: 12 }) {
-          ForEach(rowEntries, (entry: EntryCardModel) => {
-            Column() {
-              this.VideoCard(entry)
-            }
-            .layoutWeight(1)
-          }, (entry: EntryCardModel) => entry.id)
+      if (this.entries.length === 0) {
+        Column({ space: 8 }) {
+          Text('还没有可展示的条目')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
 
-          if (rowEntries.length < resolveHomeVideoGridColumns()) {
-            Blank()
-              .layoutWeight(1)
-          }
+          Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+            .fontSize(14)
+            .lineHeight(22)
+            .fontColor(this.theme.textSecondary)
         }
         .width('100%')
-      }, (_rowEntries: EntryCardModel[], rowIndex: number) => `video-row-${rowIndex}`)
+        .alignItems(HorizontalAlign.Start)
+        .padding(20)
+        .backgroundColor(this.theme.elevated)
+        .borderRadius(CARD_RADIUS_MD)
+      } else {
+        ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
+          Row({ space: 12 }) {
+            ForEach(rowEntries, (entry: EntryCardModel) => {
+              Column() {
+                this.VideoCard(entry)
+              }
+              .layoutWeight(1)
+            }, (entry: EntryCardModel) => entry.id)
+
+            if (rowEntries.length < resolveHomeVideoGridColumns()) {
+              Blank()
+                .layoutWeight(1)
+            }
+          }
+          .width('100%')
+        }, (_rowEntries: EntryCardModel[], rowIndex: number) => `video-row-${rowIndex}`)
+      }
     }
     .width('100%')
   }

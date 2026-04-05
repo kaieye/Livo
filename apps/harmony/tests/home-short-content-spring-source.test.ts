@@ -23,14 +23,20 @@ test('home article and picture sections keep List virtualization and always-enab
   const entryList = source.slice(entryListStart, pictureListStart)
   const pictureList = source.slice(pictureListStart, modeSceneStart)
 
-  assert.match(entryList, /List\(\{ space: 10 \}\)/)
+  assert.match(
+    entryList,
+    /List\(\{ space: HOME_MODE_CONTENT_GAP, scroller: this\.homeScrollerForMode\(mode\) \}\)/,
+  )
   assert.match(
     entryList,
     /\.edgeEffect\(EdgeEffect\.Spring, \{ alwaysEnabled: true \}\)/,
   )
   assert.doesNotMatch(entryList, /Scroll\(\)/)
 
-  assert.match(pictureList, /List\(\{ space: 12 \}\)/)
+  assert.match(
+    pictureList,
+    /List\(\{ space: HOME_MODE_CONTENT_GAP, scroller: this\.picturesScroller \}\)/,
+  )
   assert.match(
     pictureList,
     /\.edgeEffect\(EdgeEffect\.Spring, \{ alwaysEnabled: true \}\)/,

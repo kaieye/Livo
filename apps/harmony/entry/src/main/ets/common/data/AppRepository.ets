@@ -25,6 +25,7 @@ import { AccountSessionService } from '../services/AccountSessionService'
 import { BilibiliFollowingsService } from '../services/BilibiliFollowingsService'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
+import { ThemeService } from '../services/ThemeService'
 import { canonicalInstagramFeedUrl, normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
 import {
   resolveSocialFeedDisplayDescription,
@@ -103,13 +104,15 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
 
 export class AppRepository {
   private static bootstrapped: boolean = false
+  private static seedFeedHydrationStarted: boolean = false
 
   static async bootstrap(): Promise<void> {
     if (AppRepository.bootstrapped) {
       return
     }
 
-    await AppPreferenceService.loadSettings()
+    const settings = await AppPreferenceService.loadSettings()
+    await ThemeService.resolvePalette(settings)
     const existingFeeds = await FeedRepository.count()
 
     if (existingFeeds === 0) {
@@ -119,9 +122,52 @@ export class AppRepository {
 
       await EntryRepository.upsertMany(SEED_ENTRIES)
       await AppPreferenceService.saveSettings(seedSettings())
+      void AppRepository.hydrateSeedFeedsOnFirstLaunch(SEED_FEEDS)
     }
 
     AppRepository.bootstrapped = true
+  }
+
+  private static async hydrateSeedFeedsOnFirstLaunch(feeds: Feed[]): Promise<void> {
+    if (AppRepository.seedFeedHydrationStarted) {
+      return
+    }
+
+    AppRepository.seedFeedHydrationStarted = true
+
+    for (const feed of feeds) {
+      try {
+        const payload = await RssFeedService.fetchFeedEntries(feed)
+        const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
+        const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
+        const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
+        const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
+        const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+          nextUrl,
+          nextSiteUrl,
+          payload.imageUrl || '',
+          feed.imageUrl || '',
+        )
+        const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
+
+        await EntryRepository.upsertMany(payload.entries)
+        await FeedRepository.updateFetchState(feed.id, {
+          url: nextUrl,
+          title: nextTitle,
+          siteUrl: nextSiteUrl,
+          imageUrl: nextImageUrl,
+          description: nextDescription,
+          lastFetched: Date.now(),
+          etag: payload.etag,
+          lastModified: payload.lastModified,
+          errorCount: 0,
+        })
+        AppStorage.setOrCreate('feedsChangedAt', Date.now())
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'unknown error'
+        console.error(`Failed to hydrate built-in feed ${feed.id}: ${message}`)
+      }
+    }
   }
 
   static async dashboardMetrics(): Promise<DashboardMetric[]> {
@@ -341,7 +387,13 @@ export class AppRepository {
     }
 
     try {
+      const existingEntries = await EntryRepository.listByFeed(feedId)
+      const existingEntryIds = new Set<string>()
+      existingEntries.forEach((entry: Entry) => {
+        existingEntryIds.add(entry.id)
+      })
       const payload = await RssFeedService.fetchFeedEntries(feed)
+      const newEntriesCount = payload.entries.filter((entry: Entry) => !existingEntryIds.has(entry.id)).length
       const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
       const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
       const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
@@ -367,7 +419,8 @@ export class AppRepository {
       })
       const result: RemoteFeedResult = {
         entries: await AppRepository.entriesByFeed(feedId),
-        sourceLabel: `${feed.title} · 已刷新 ${payload.entries.length} 条`,
+        sourceLabel: `${feed.title} · 新增 ${newEntriesCount} 条`,
+        newEntriesCount,
         fallbackUsed: false,
       }
       return result
@@ -382,6 +435,7 @@ export class AppRepository {
       const result: RemoteFeedResult = {
         entries: await AppRepository.entriesByFeed(feedId),
         sourceLabel: `${feed.title} · 刷新失败：${message}`,
+        newEntriesCount: 0,
         fallbackUsed: true,
       }
       return result
@@ -427,19 +481,33 @@ export class AppRepository {
     const feeds = await FeedRepository.list()
     let refreshedCount = 0
     let failedCount = 0
+    let newEntriesCount = 0
+    const refreshTasks = feeds.map((feed: Feed) => AppRepository.refreshFeed(feed.id))
+    const results = await Promise.allSettled(refreshTasks)
 
-    for (const feed of feeds) {
-      const result = await AppRepository.refreshFeed(feed.id)
-      if (result.fallbackUsed) {
-        failedCount += 1
-      } else {
-        refreshedCount += 1
+    results.forEach((result: PromiseSettledResult<RemoteFeedResult>) => {
+      if (result.status === 'fulfilled') {
+        newEntriesCount += result.value.newEntriesCount ?? 0
+        if (result.value.fallbackUsed) {
+          failedCount += 1
+        } else {
+          refreshedCount += 1
+        }
+        return
       }
+
+      failedCount += 1
+      console.error(`Failed to refresh feed in aggregate refresh: ${result.reason}`)
+    })
+
+    if (failedCount > feeds.length) {
+      failedCount = feeds.length
     }
 
     return {
       entries: await AppRepository.featuredEntries(),
-      sourceLabel: `全部订阅：成功 ${refreshedCount}，失败 ${failedCount}`,
+      sourceLabel: `全部订阅：新增 ${newEntriesCount} 条，成功 ${refreshedCount}，失败 ${failedCount}`,
+      newEntriesCount,
       fallbackUsed: failedCount > 0,
     } as RemoteFeedResult
   }

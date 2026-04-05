@@ -1,5 +1,12 @@
 import { AppRepository } from '../data/AppRepository'
-import { HdsNavigation } from '@kit.UIDesignKit'
+import { LengthMetrics } from '@kit.ArkUI'
+import {
+  HdsNavigation,
+  HdsNavigationTitleMode,
+  ScrollEffectType,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
+import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
 import { AccountsSettingsPanel } from './AccountsSettingsPanel'
@@ -18,7 +25,9 @@ import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
-const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = 74
+const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
+const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = SETTINGS_TITLE_BAR_MINI_HEIGHT + SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT
 interface SettingItem {
   title: string
   symbol: Resource
@@ -105,7 +114,6 @@ export struct SettingsContent {
   private static readonly SHEET_COMPACT_HEIGHT: number = 440
   private static readonly SHEET_STANDARD_HEIGHT: number = 500
   private static readonly SHEET_TALL_HEIGHT: number = 600
-  private static readonly HEADER_OVERLAY_HEIGHT: number = 46
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State saveHint: string = '设置将写入本地 Preferences'
   @State theme: ThemePalette = ThemeService.currentPalette()
@@ -115,14 +123,17 @@ export struct SettingsContent {
   @State showSettingsSheet: boolean = false
   @StorageProp(SETTINGS_ACTIVE_SHEET_KEY) @Watch('handleStoredActiveSheetChange') storedActiveSheet: SettingsSheetKey = ''
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  @Prop @Watch('syncInheritedSettings') inheritedSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   private readonly contentScroller: Scroller = new Scroller()
   onThemeChange: (theme: ThemePalette) => void = () => {}
+  onSettingsChange: (settings: HarmonySettings) => void = () => {}
+  onContentScrollerReady: (scroller: Scroller) => void = () => {}
   onReady: () => void = () => {}
 
   aboutToAppear(): void {
+    this.onContentScrollerReady(this.contentScroller)
     const restoreSheet = this.storedActiveSheet || AppStorage.get<SettingsSheetKey>(SETTINGS_ACTIVE_SHEET_KEY)
     if (restoreSheet && !this.showSettingsSheet) {
       this.activeSheet = restoreSheet
@@ -132,10 +143,10 @@ export struct SettingsContent {
 
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
-      if (this.hasLoaded || this.isLoading) {
-        this.onReady()
-        return
-      }
+      this.config = this.inheritedSettings
+      this.hasLoaded = true
+      this.onReady()
+      return
     }
 
     void this.loadSettings()
@@ -182,10 +193,18 @@ export struct SettingsContent {
     }
   }
 
+  private syncInheritedSettings(): void {
+    if (!this.showBottomTabs) {
+      this.config = this.inheritedSettings
+    }
+  }
+
   private syncSettings(next: HarmonySettings): void {
     this.config = next
+    this.onSettingsChange(next)
     void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
       this.config = saved
+      this.onSettingsChange(saved)
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
         this.theme = palette
         this.onThemeChange(palette)
@@ -198,6 +217,7 @@ export struct SettingsContent {
 
   private handleAppearanceSettingsChange(settings: HarmonySettings): void {
     this.config = settings
+    this.onSettingsChange(settings)
   }
 
   private openSheet(sheet: SettingsSheetKey): void {
@@ -257,6 +277,25 @@ export struct SettingsContent {
     }
   }
 
+  private rootEnterTransition(delay: number = 0): TransitionEffect {
+    return this.showBottomTabs ? livoMotion.enterScale(delay) : TransitionEffect.IDENTITY
+  }
+
+  @Builder
+  private SettingsLowerTitleBuilder() {
+    Row() {
+      Text('设置')
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('sys.color.font_primary'))
+        .margin({ top: -20 })
+    }
+    .width('100%')
+    .height(SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+  }
+
   @Builder
   private SettingRow(item: SettingItem, delay: number) {
     SettingListRow({
@@ -266,9 +305,10 @@ export struct SettingsContent {
       subtitle: this.resolveSubtitle(item),
       hint: this.resolveHint(item),
       theme: this.theme,
+      enableEnterTransition: this.showBottomTabs,
       onTap: () => this.handleSettingTap(item),
     })
-      .transition(livoMotion.enterScale(delay))
+      .transition(this.rootEnterTransition(delay))
   }
 
   @Builder
@@ -328,103 +368,149 @@ export struct SettingsContent {
     }
   }
 
-  private headerOverlayHeight(): number {
-    return this.topAvoidArea + SettingsContent.HEADER_OVERLAY_HEIGHT
-  }
-
-  private headerOverlayTint(): string {
-    return this.theme.isDark ? 'rgba(12,16,22,0.06)' : 'rgba(255,255,255,0.05)'
-  }
-
   @Builder
-  private HeaderBlurOverlay() {
+  private SettingsRootContent() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Row()
-        .width('100%')
-        .height(this.headerOverlayHeight())
-        .backgroundColor(this.headerOverlayTint())
-        .backdropBlur(24)
+      Scroll(this.contentScroller) {
+        Column({ space: 18 }) {
+          Blank()
+            .height(SETTINGS_TITLE_BAR_OVERLAY_SPACER)
 
-      Column() {
-        Text('设置')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
+          Column({ space: 14 }) {
+            this.Group(PRIMARY_GROUP, 30)
+            this.Group(SECOND_GROUP, 50)
+            this.Group(THIRD_GROUP, 70)
+            this.Group(FOURTH_GROUP, 90)
+          }
+          .width('100%')
+          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 8 })
+
+          Row().height(100).width('100%')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
       }
-      .padding({
-        top: this.topAvoidArea + 8,
-        left: PAGE_HORIZONTAL_PADDING,
-        right: PAGE_HORIZONTAL_PADDING,
-        bottom: 8,
-      })
-      .alignItems(HorizontalAlign.Start)
+      .width('100%')
+      .height('100%')
+      .scrollBar(BarState.Off)
+      .backgroundColor(this.theme.background)
+      .edgeEffect(EdgeEffect.Spring)
+
+      if (this.showBottomTabs && !this.showSettingsSheet) {
+        BottomTabs({ activeTab: 'settings', theme: this.theme })
+          .align(Alignment.Bottom)
+      }
     }
     .width('100%')
-    .height(this.headerOverlayHeight())
-    .clip(true)
-    .hitTestBehavior(HitTestMode.None)
-    .zIndex(1)
+    .height('100%')
+    .backgroundColor(this.theme.background)
   }
 
   build() {
-    HdsNavigation() {
-      Stack({ alignContent: Alignment.TopStart }) {
-        Scroll(this.contentScroller) {
-          Column({ space: 18 }) {
-            Blank()
-              .height(SETTINGS_TITLE_BAR_OVERLAY_SPACER)
-
-            Column({ space: 14 }) {
-              this.Group(PRIMARY_GROUP, 30)
-              this.Group(SECOND_GROUP, 50)
-              this.Group(THIRD_GROUP, 70)
-              this.Group(FOURTH_GROUP, 90)
-            }
-            .width('100%')
-            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: 8 })
-
-            Row().height(100).width('100%')
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .backgroundColor(this.theme.background)
-        .edgeEffect(EdgeEffect.Spring)
-
-        this.HeaderBlurOverlay()
-
-        if (this.showBottomTabs && !this.showSettingsSheet) {
-          BottomTabs({ activeTab: 'settings', theme: this.theme })
-            .align(Alignment.Bottom)
-        }
+    if (this.showBottomTabs) {
+      HdsNavigation() {
+        this.SettingsRootContent()
       }
+      .mode(NavigationMode.Stack)
+      .hideTitleBar(true)
+      .bindSheet($$this.showSettingsSheet, this.SettingsSheetOverlay(), {
+        detents: [this.initialSheetHeight(), SheetSize.LARGE],
+        dragBar: false,
+        showClose: false,
+        backgroundColor: this.theme.background,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
+        scrollSizeMode: ScrollSizeMode.CONTINUOUS,
+        preferType: SheetType.CENTER,
+        onWillDismiss: () => {
+          this.showSettingsSheet = false
+          this.activeSheet = ''
+          AppStorage.setOrCreate('settingsOverlayLevel', 0)
+          AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
+        },
+      })
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+    } else {
+      HdsNavigation() {
+        this.SettingsRootContent()
+      }
+      .titleBar({
+        padding: {
+          start: LengthMetrics.vp(2),
+          end: LengthMetrics.vp(2),
+        },
+        style: {
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(30),
+          },
+          blurStrategy: BlurStrategy.ENABLE,
+          systemMaterialEffect: {
+            materialType: hdsMaterial.MaterialType.IMMERSIVE,
+            materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+          },
+          originalStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 134,
+              blurRadius: 42,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+            },
+          },
+          scrollEffectStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 138,
+              blurRadius: 42,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+            },
+          },
+        },
+        content: {
+          title: {
+            mainTitle: '',
+          },
+          bottomBuilder: {
+            builder: (): void => this.SettingsLowerTitleBuilder(),
+          },
+        },
+      })
+      .titleMode(HdsNavigationTitleMode.MINI)
+      .hideBackButton(true)
+      .bindToScrollable([this.contentScroller])
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .bindSheet($$this.showSettingsSheet, this.SettingsSheetOverlay(), {
+        detents: [this.initialSheetHeight(), SheetSize.LARGE],
+        dragBar: false,
+        showClose: false,
+        backgroundColor: this.theme.background,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
+        scrollSizeMode: ScrollSizeMode.CONTINUOUS,
+        preferType: SheetType.CENTER,
+        onWillDismiss: () => {
+          this.showSettingsSheet = false
+          this.activeSheet = ''
+          AppStorage.setOrCreate('settingsOverlayLevel', 0)
+          AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
+        },
+      })
       .width('100%')
       .height('100%')
       .backgroundColor(this.theme.background)
     }
-    .mode(NavigationMode.Stack)
-    .hideTitleBar(true)
-    .bindSheet($$this.showSettingsSheet, this.SettingsSheetOverlay(), {
-      detents: [this.initialSheetHeight(), SheetSize.LARGE],
-      dragBar: false,
-      showClose: false,
-      backgroundColor: this.theme.background,
-      keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
-      scrollSizeMode: ScrollSizeMode.CONTINUOUS,
-      preferType: SheetType.CENTER,
-      onWillDismiss: () => {
-        this.showSettingsSheet = false
-        this.activeSheet = ''
-        AppStorage.setOrCreate('settingsOverlayLevel', 0)
-        AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
-      },
-    })
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
   }
 
   @Builder

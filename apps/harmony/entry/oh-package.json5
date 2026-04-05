@@ -1,6 +1,10 @@
 {
   "name": "entry",
   "version": "1.0.0",
-  "description": "Livo HarmonyOS entry module",
+  "description": "Livo HarmonyOS entry module.",
+  "main": "",
+  "author": "",
+  "license": "",
   "dependencies": {}
 }
+

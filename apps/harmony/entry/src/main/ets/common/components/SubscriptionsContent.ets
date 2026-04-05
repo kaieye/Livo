@@ -5,6 +5,14 @@ import { openArticleDetail } from '../navigation/AppRouter'
 import { ContentModeRail } from './ContentModeRail'
 import { FeedDetailView } from './FeedDetailView'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
+import { LengthMetrics } from '@kit.ArkUI'
+import {
+  HdsNavigation,
+  HdsNavigationTitleMode,
+  ScrollEffectType,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
+import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import { ROOT_MODE_RAIL_TOP_GAP } from './FloatingRootPageLayout'
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
 import { FeedRefreshPayload } from '../services/RssFeedService'
@@ -29,6 +37,10 @@ const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
 const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
+const SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT: number = 56
+const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number =
+  SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT + SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT
 
 class SubscriptionFeedDetailParams {
   feedId: string = ''
@@ -47,7 +59,6 @@ class SubscriptionFeedConfigParams {
 
 @Component
 export struct SubscriptionsContent {
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State feeds: FeedCardModel[] = []
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
@@ -65,6 +76,10 @@ export struct SubscriptionsContent {
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   private subscriptionPathStack: NavPathStack = new NavPathStack()
+  private readonly articlesScroller: Scroller = new Scroller()
+  private readonly socialScroller: Scroller = new Scroller()
+  private readonly picturesScroller: Scroller = new Scroller()
+  private readonly videosScroller: Scroller = new Scroller()
   private headerBlurOffset: number = 0
   onReady: () => void = () => {}
   private syncOverlayLevel(level: number): void {
@@ -134,8 +149,40 @@ export struct SubscriptionsContent {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
   }
 
+  private scrollerForMode(mode: SubscriptionMode): Scroller {
+    switch (mode) {
+      case 'social':
+        return this.socialScroller
+      case 'pictures':
+        return this.picturesScroller
+      case 'videos':
+        return this.videosScroller
+      default:
+        return this.articlesScroller
+    }
+  }
+
   private handleFeedsChanged(): void {
     void this.refreshFeeds()
+  }
+
+  private rootEnterTransition(delay: number): TransitionEffect {
+    return this.showBottomTabs ? livoMotion.enterScale(delay) : TransitionEffect.IDENTITY
+  }
+
+  @Builder
+  private SubscriptionsLowerTitleBuilder() {
+    Row() {
+      Text('订阅')
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('sys.color.font_primary'))
+        .margin({ top: -20 })
+    }
+    .width('100%')
+    .height(SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
   }
 
   private headerTitle(mode: SubscriptionMode = this.mode): string {
@@ -345,12 +392,15 @@ export struct SubscriptionsContent {
       }
     }
     .width('100%')
-    .transition(livoMotion.enterScale(index * 18 + 30))
+    .transition(this.rootEnterTransition(index * 18 + 30))
   }
 
   @Builder
   private FeedSection(mode: SubscriptionMode) {
-    Column({ space: 14 }) {
+    Column({ space: 0 }) {
+      Blank()
+        .height(SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER)
+
       Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
         Row()
           .width('100%')
@@ -373,66 +423,55 @@ export struct SubscriptionsContent {
       .width('100%')
       .alignItems(HorizontalAlign.Start)
 
-      Row() {
-        Text(this.sourceHint)
-          .fontSize(META_FONT_SIZE)
-          .fontColor(this.theme.textSecondary)
-
-        Blank()
-
-        Text(`${this.filteredFeeds().length} 个订阅源`)
-          .fontSize(META_FONT_SIZE)
+      Column({ space: 14 }) {
+        Text('订阅源')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textMuted)
+          .padding({ left: 4 })
+          .width('100%')
+
+        if (this.filteredFeedsFor(mode).length === 0) {
+          Column({ space: 10 }) {
+            Text(`您还没有收藏任何${this.headerTitle(mode)}源`)
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.theme.textPrimary)
+
+            Text('先添加对应类型的订阅源，或者刷新现有订阅后再回来看看。')
+              .fontSize(14)
+              .lineHeight(22)
+              .fontColor(this.theme.textSecondary)
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .padding(18)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_MD)
+          .border({ width: 0.8, color: this.theme.divider })
+          .transition(this.rootEnterTransition(70))
+        } else {
+          Column() {
+            ForEach(this.filteredFeedsFor(mode), (feed: FeedCardModel, index: number) => {
+              this.FeedRow(
+                feed,
+                index,
+                index < this.filteredFeedsFor(mode).length - 1,
+              )
+            }, (feed: FeedCardModel) => feed.id)
+          }
+          .width('100%')
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_LG)
+          .border({ width: 0.8, color: this.theme.divider })
+          .clip(true)
+          .transition(this.rootEnterTransition(70))
+        }
+
+        Row().height(88).width('100%')
       }
       .width('100%')
-      .padding({ left: 4, right: 4 })
-      .transition(livoMotion.enterRise(50))
 
-      Text('订阅源')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textMuted)
-        .padding({ left: 4 })
-        .width('100%')
-
-      if (this.filteredFeedsFor(mode).length === 0) {
-        Column({ space: 10 }) {
-          Text(`您还没有收藏任何${this.headerTitle(mode)}源`)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-
-          Text('先添加对应类型的订阅源，或者刷新现有订阅后再回来看看。')
-            .fontSize(14)
-            .lineHeight(22)
-            .fontColor(this.theme.textSecondary)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(18)
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_MD)
-        .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterScale(70))
-      } else {
-        Column() {
-          ForEach(this.filteredFeedsFor(mode), (feed: FeedCardModel, index: number) => {
-            this.FeedRow(
-              feed,
-              index,
-              index < this.filteredFeedsFor(mode).length - 1,
-            )
-          }, (feed: FeedCardModel) => feed.id)
-        }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .border({ width: 0.8, color: this.theme.divider })
-        .clip(true)
-        .transition(livoMotion.enterScale(70))
-      }
-
-      Row().height(88).width('100%')
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -443,7 +482,7 @@ export struct SubscriptionsContent {
 
   @Builder
   private ModeFeedsScene(mode: SubscriptionMode) {
-    Scroll() {
+    Scroll(this.scrollerForMode(mode)) {
       this.FeedSection(mode)
     }
     .width('100%')
@@ -616,16 +655,98 @@ export struct SubscriptionsContent {
   }
 
   build() {
-    Navigation(this.subscriptionPathStack) {
-      this.SubscriptionsRoot()
+    if (this.showBottomTabs) {
+      Navigation(this.subscriptionPathStack) {
+        this.SubscriptionsRoot()
+      }
+      .hideToolBar(true)
+      .hideTitleBar(true)
+      .hideBackButton(true)
+      .mode(NavigationMode.Stack)
+      .navDestination(this.Destinations)
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+    } else {
+      HdsNavigation() {
+        Navigation(this.subscriptionPathStack) {
+          this.SubscriptionsRoot()
+        }
+        .hideToolBar(true)
+        .hideTitleBar(true)
+        .hideBackButton(true)
+        .mode(NavigationMode.Stack)
+        .navDestination(this.Destinations)
+        .width('100%')
+        .height('100%')
+        .backgroundColor(this.theme.background)
+      }
+      .titleBar({
+        padding: {
+          start: LengthMetrics.vp(2),
+          end: LengthMetrics.vp(2),
+        },
+        style: {
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(30),
+          },
+          blurStrategy: BlurStrategy.ENABLE,
+          systemMaterialEffect: {
+            materialType: hdsMaterial.MaterialType.IMMERSIVE,
+            materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+          },
+          originalStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 134,
+              blurRadius: 42,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+            },
+          },
+          scrollEffectStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 138,
+              blurRadius: 42,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+            },
+          },
+        },
+        content: {
+          title: {
+            mainTitle: '',
+          },
+          bottomBuilder: {
+            builder: (): void => this.SubscriptionsLowerTitleBuilder(),
+          },
+        },
+      })
+      .titleMode(HdsNavigationTitleMode.MINI)
+      .hideTitleBar(this.overlayLevel > 0)
+      .hideBackButton(true)
+      .bindToScrollable([
+        this.articlesScroller,
+        this.socialScroller,
+        this.picturesScroller,
+        this.videosScroller,
+      ])
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
     }
-    .hideToolBar(true)
-    .hideTitleBar(true)
-    .hideBackButton(true)
-    .mode(NavigationMode.Stack)
-    .navDestination(this.Destinations)
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
   }
 }

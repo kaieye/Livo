@@ -6,6 +6,7 @@ import UIAbility from '@ohos.app.ability.UIAbility'
 import window from '@ohos.window'
 import { AppRepository } from '../common/data/AppRepository'
 import { AppContextService } from '../common/services/AppContextService'
+import { ThemeService } from '../common/services/ThemeService'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 
 export default class EntryAbility extends UIAbility {
@@ -45,12 +46,6 @@ export default class EntryAbility extends UIAbility {
     )
 
     AppContextService.setContext(this.context)
-
-    void AppRepository.bootstrap().then(() => {
-      console.info('Livo Harmony repositories initialized')
-    }).catch((error: Error) => {
-      console.error(`Failed to initialize Harmony repositories: ${error.message}`)
-    })
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -59,27 +54,30 @@ export default class EntryAbility extends UIAbility {
     void windowStage.getMainWindow().then(async (mainWindow: window.Window) => {
       try {
         await mainWindow.setWindowLayoutFullScreen(true)
-        await this.applySystemBarStyle(mainWindow)
+        AppStorage.setOrCreate('WindowClass', mainWindow)
+        this.syncAvoidArea(mainWindow)
+        mainWindow.on('avoidAreaChange', () => {
+          this.syncAvoidArea(mainWindow)
+        })
+
+        await AppRepository.bootstrap()
+        console.info('Livo Harmony repositories initialized')
+        const theme = ThemeService.currentPalette()
+        await this.applySystemBarStyle(mainWindow, theme.isDark)
+
+        windowStage.loadContent('pages/Index', (err) => {
+          if (err.code) {
+            console.error(`Failed to load content. Code: ${err.code}, message: ${err.message}`)
+            return
+          }
+          console.info('Livo Harmony home page loaded')
+        })
       } catch (error) {
         const message = error instanceof Error ? error.message : `${error}`
-        console.error(`Failed to configure immersive window: ${message}`)
+        console.error(`Failed to initialize immersive window: ${message}`)
       }
-
-      AppStorage.setOrCreate('WindowClass', mainWindow)
-      this.syncAvoidArea(mainWindow)
-      mainWindow.on('avoidAreaChange', () => {
-        this.syncAvoidArea(mainWindow)
-      })
     }).catch((error: Error) => {
       console.error(`Failed to get main window: ${error.message}`)
-    })
-
-    windowStage.loadContent('pages/Index', (err) => {
-      if (err.code) {
-        console.error(`Failed to load content. Code: ${err.code}, message: ${err.message}`)
-        return
-      }
-      console.info('Livo Harmony home page loaded')
     })
   }
 

@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   chunkHomeVideoEntries,
@@ -95,4 +96,21 @@ test('resolveHomeVideoCardTokens keeps strong contrast in dark mode', () => {
     titleColor: '#FFFFFF',
     metaColor: '#D3D8E1',
   })
+})
+
+test('home video grid renders an empty-state prompt when there are no video entries', () => {
+  const source = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/components/HomeVideoGrid.ets',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+
+  assert.match(source, /if \(this\.entries\.length === 0\)/)
+  assert.match(source, /Text\('还没有可展示的条目'\)/)
+  assert.match(
+    source,
+    /Text\('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。'\)/,
+  )
 })

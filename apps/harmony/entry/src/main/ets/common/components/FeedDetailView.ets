@@ -49,6 +49,7 @@ interface DisplayFeedState {
 
 @Component
 export struct FeedDetailView {
+  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @Prop feedId: string = ''
   @Prop targetUrl: string = ''
   @Prop initialTargetTitle: string = ''
@@ -860,7 +861,7 @@ export struct FeedDetailView {
       showBackButton: true,
       trailingText: !this.isLoading && this.existingFeed ? '编辑' : '',
       titleSize: 20,
-      topPadding: 0,
+      topPadding: 24,
       bottomPadding: 0,
       onBack: () => { this.onBack() },
       onTrailingClick: () => {
@@ -1177,6 +1178,7 @@ export struct FeedDetailView {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.topAvoidArea })
     .backgroundColor(this.theme.background)
   }
 }

@@ -4,6 +4,14 @@ import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
 import { PageHeader } from './PageHeader'
+import { LengthMetrics } from '@kit.ArkUI'
+import {
+  HdsNavigation,
+  HdsNavigationTitleMode,
+  ScrollEffectType,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
+import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import {
@@ -50,6 +58,10 @@ const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
 const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
+const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
+const DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const DISCOVER_TITLE_BAR_OVERLAY_SPACER: number =
+  DISCOVER_TITLE_BAR_MINI_HEIGHT + DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT
 
 interface DirectUrlResult {
   targetUrl: string
@@ -152,6 +164,7 @@ export struct DiscoverContent {
   private searchSession: number = 0
   private platformSwitchSession: number = 0
   private searchInputController: TextInputController = new TextInputController()
+  private readonly contentScroller: Scroller = new Scroller()
   private headerBlurOffset: number = 0
 
   private updateHeaderBlurProgress(offset: number): void {
@@ -162,6 +175,25 @@ export struct DiscoverContent {
 
   private handleHeaderBlurScrollDelta(delta: number): void {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+  }
+
+  private rootEnterTransition(delay: number): TransitionEffect {
+    return this.showBottomTabs ? livoMotion.enterSoft(delay) : TransitionEffect.IDENTITY
+  }
+
+  @Builder
+  private DiscoverLowerTitleBuilder() {
+    Row() {
+      Text('发现')
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('sys.color.font_primary'))
+        .margin({ top: -20 })
+    }
+    .width('100%')
+    .height(DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
   }
 
   aboutToAppear(): void {
@@ -771,7 +803,7 @@ export struct DiscoverContent {
     }
     .width('100%')
     .margin({ bottom: 6 })
-    .transition(livoMotion.enterSoft(40))
+    .transition(this.rootEnterTransition(40))
   }
 
   @Builder
@@ -783,7 +815,7 @@ export struct DiscoverContent {
         .fontColor(this.theme.textPrimary)
     }
     .width('100%')
-    .transition(livoMotion.enterFromRight(20))
+    .transition(this.showBottomTabs ? livoMotion.enterFromRight(20) : TransitionEffect.IDENTITY)
   }
 
   @Builder
@@ -1024,9 +1056,8 @@ export struct DiscoverContent {
   @Builder
   private DiscoverScrollContent() {
     Column({ space: 14 }) {
-      Row()
-        .width('100%')
-        .height(0)
+      Blank()
+        .height(DISCOVER_TITLE_BAR_OVERLAY_SPACER)
 
       this.SearchPanel()
 
@@ -1048,7 +1079,7 @@ export struct DiscoverContent {
     .constraintSize({ minHeight: '100%' })
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
-    .transition(livoMotion.enterSoft(30))
+    .transition(this.rootEnterTransition(30))
   }
 
   private shouldReserveBottomDock(): boolean {
@@ -1090,7 +1121,7 @@ export struct DiscoverContent {
   @Builder
   private DiscoverRoot() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Scroll() {
+      Scroll(this.contentScroller) {
         this.DiscoverScrollContent()
       }
       .width('100%')
@@ -1174,17 +1205,93 @@ export struct DiscoverContent {
   }
 
   build() {
-    Navigation(this.discoverPathStack) {
-      this.DiscoverRoot()
+    if (this.showBottomTabs) {
+      Navigation(this.discoverPathStack) {
+        this.DiscoverRoot()
+      }
+      .hideToolBar(true)
+      .hideTitleBar(true)
+      .hideBackButton(true)
+      .mode(NavigationMode.Stack)
+      .navDestination(this.DiscoverDestinations)
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+    } else {
+      HdsNavigation() {
+        Navigation(this.discoverPathStack) {
+          this.DiscoverRoot()
+        }
+        .hideToolBar(true)
+        .hideTitleBar(true)
+        .hideBackButton(true)
+        .mode(NavigationMode.Stack)
+        .navDestination(this.DiscoverDestinations)
+        .width('100%')
+        .height('100%')
+        .backgroundColor(this.theme.background)
+      }
+      .titleBar({
+        padding: {
+          start: LengthMetrics.vp(2),
+          end: LengthMetrics.vp(2),
+        },
+        style: {
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(30),
+          },
+          blurStrategy: BlurStrategy.ENABLE,
+          systemMaterialEffect: {
+            materialType: hdsMaterial.MaterialType.IMMERSIVE,
+            materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+          },
+          originalStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 134,
+              blurRadius: 42,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+            },
+          },
+          scrollEffectStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 138,
+              blurRadius: 42,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+            },
+          },
+        },
+        content: {
+          title: {
+            mainTitle: '',
+          },
+          bottomBuilder: {
+            builder: (): void => this.DiscoverLowerTitleBuilder(),
+          },
+        },
+      })
+      .titleMode(HdsNavigationTitleMode.MINI)
+      .hideBackButton(true)
+      .bindToScrollable([this.contentScroller])
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
     }
-    .hideToolBar(true)
-    .hideTitleBar(true)
-    .hideBackButton(true)
-    .mode(NavigationMode.Stack)
-    .navDestination(this.DiscoverDestinations)
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
   }
 }
 

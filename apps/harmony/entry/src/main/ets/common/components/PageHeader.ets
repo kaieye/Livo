@@ -81,13 +81,15 @@ export struct PageHeader {
 
   @Builder
   private BackButton() {
-    Text('‹')
-      .fontSize(28)
-      .fontWeight(FontWeight.Medium)
-      .fontColor(this.theme.textPrimary)
+    Row() {
+      SymbolGlyph($r('sys.symbol.chevron_backward'))
+        .fontSize(20)
+        .fontColor([this.theme.textPrimary])
+    }
       .width(HEADER_BACK_SLOT_SIZE)
       .height(HEADER_BACK_SLOT_SIZE)
-      .textAlign(TextAlign.Center)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
       .clickEffect({ level: ClickEffectLevel.MIDDLE })
       .scale({
         x: this.isBackPressed ? 0.92 : 1,

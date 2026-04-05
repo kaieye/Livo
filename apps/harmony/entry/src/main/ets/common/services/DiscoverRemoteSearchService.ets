@@ -1,7 +1,7 @@
 import http from '@ohos.net.http'
 import { FeedViewType } from '../models/LivoModels'
 import { DEFAULT_RSSHUB_INSTANCE, DiscoverSearchPlatform, ResolvedDiscoverCandidate } from './DiscoverService'
-import { FeedRefreshPayload, RssFeedService } from './RssFeedService'
+import { FeedRefreshPayload } from './RssFeedService'
 import {
   buildInstagramCandidateFromProfile,
   buildInstagramProfileSeedFromProfile,
@@ -67,6 +67,7 @@ const SOCIAL_VIEW_MAPPING: DiscoverRemoteViewMapping = {
   instagram: FeedViewType.Pictures,
 }
 const RSSHUB_BASE_URL = DEFAULT_RSSHUB_INSTANCE.replace(/\/+$/, '')
+const INSTAGRAM_SEARCH_TIMEOUT_MS = 3500
 
 function decodeNumericEntities(value: string): string {
   return value
@@ -256,22 +257,6 @@ function createResolvedCandidate(
     sourceKind,
     imageUrl,
   }
-}
-
-function createInstagramProbeCandidate(
-  username: string,
-  payload: FeedRefreshPayload,
-  imageUrl: string,
-): ResolvedDiscoverCandidate {
-  return withConfiguredRssHubCandidate(createResolvedCandidate(
-    withRssHubBase(`instagram/user/${encodeURIComponent(username)}`),
-    formatInstagramFeedTitle(payload.feedTitle || username, username),
-    FeedViewType.Pictures,
-    payload.description?.trim() || `@${username}`,
-    payload.siteUrl?.trim() || `https://www.instagram.com/${encodeURIComponent(username)}/`,
-    'Instagram',
-    imageUrl.trim(),
-  ))
 }
 
 function normalizeFollowerLabel(value: number | string | undefined): string {
@@ -532,36 +517,20 @@ export class DiscoverRemoteSearchService {
   }
 
   private static async searchInstagramUsers(query: string): Promise<ResolvedDiscoverCandidate[]> {
-    const results: ResolvedDiscoverCandidate[] = []
-    for (const username of buildQueryVariants(query, 30)) {
-      const candidate = await DiscoverRemoteSearchService.probeInstagramUser(username)
-      if (candidate) {
-        results.push(candidate)
+    const variants = buildQueryVariants(query, 30)
+    const seedResults = await Promise.allSettled(
+      variants.map((username: string) => DiscoverRemoteSearchService.fetchInstagramProfileSeed(username)),
+    )
+    const seeds: DiscoverRemoteProfileSeed[] = []
+    seedResults.forEach((result: PromiseSettledResult<DiscoverRemoteProfileSeed | undefined>) => {
+      if (result.status === 'fulfilled' && result.value) {
+        seeds.push(result.value)
       }
-    }
+    })
 
-    return dedupeCandidates(results)
-  }
-
-  private static async probeInstagramUser(username: string): Promise<ResolvedDiscoverCandidate | undefined> {
-    const routeUrl = withRssHubBase(`instagram/user/${encodeURIComponent(username)}`)
-    try {
-      const payload = await RssFeedService.previewFeedUrl(routeUrl)
-      DiscoverRemoteSearchService.rememberPreviewPayload(routeUrl, payload)
-      return createInstagramProbeCandidate(
-        username,
-        payload,
-        payload.imageUrl || '',
-      )
-    } catch (_) {
-      const seed = await DiscoverRemoteSearchService.fetchInstagramProfileSeed(username)
-      if (!seed) {
-        return undefined
-      }
-      return withConfiguredRssHubCandidate(
-        buildInstagramCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
-      )
-    }
+    return dedupeCandidates(seeds.map((seed: DiscoverRemoteProfileSeed) => withConfiguredRssHubCandidate(
+      buildInstagramCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
+    )))
   }
 
   private static async fetchInstagramProfileSeed(username: string): Promise<DiscoverRemoteProfileSeed | undefined> {
@@ -571,8 +540,8 @@ export class DiscoverRemoteSearchService {
         `https://www.instagram.com/${encodeURIComponent(username)}/`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
+          readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           header: {
             'User-Agent': 'Mozilla/5.0',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -623,8 +592,8 @@ export class DiscoverRemoteSearchService {
         `https://dumpor.io/v/${encodeURIComponent(username)}/`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
+          readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           header: {
             'User-Agent': 'Mozilla/5.0',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',

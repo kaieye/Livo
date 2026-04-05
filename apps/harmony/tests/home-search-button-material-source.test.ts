@@ -82,77 +82,172 @@ test('home page uses HDS title bar system material for the search button', () =>
     'utf8',
   )
 
-  assert.match(
-    source,
-    /private homeNavigationMenu\(\): HdsNavigationMenuContentOptions/,
-  )
   assert.match(source, /private currentRootTitle\(\): string/)
-  assert.match(
-    source,
-    /private currentRootMenu\(\): HdsNavigationMenuContentOptions \| undefined/,
-  )
   assert.match(source, /private shouldHideRootTitleBar\(\): boolean/)
   assert.match(
     source,
     /private currentRootScrollEffectType\(\): ScrollEffectType/,
   )
-  assert.match(source, /private currentRootTitleBarBlurRadius\(\): number/)
-  assert.match(source, /private currentRootTitleBarMaskExtraHeight\(\): number/)
+  assert.match(source, /private isSettingsRootTab\(\): boolean/)
+  assert.match(source, /private isHomeRootTab\(\): boolean/)
+  assert.match(source, /private HomeRootLowerTitleBuilder\(\)/)
+  assert.match(source, /private HomeTitleSearchButton\(\)/)
+  assert.match(
+    source,
+    /private homeTitleSearchButtonBackgroundColor\(\): string/,
+  )
+  assert.match(source, /private homeTitleSearchButtonBorderColor\(\): string/)
+  assert.match(source, /private homeTitleSearchButtonShadow\(\): ShadowOptions/)
+  assert.match(source, /private homeTitleSearchButtonBackdropBlur\(\): number/)
+  assert.match(source, /private SettingsRootLowerTitleBuilder\(\)/)
+  assert.match(
+    source,
+    /private currentRootBlurEffectiveEndOffset\(\): LengthMetrics/,
+  )
+  assert.match(
+    source,
+    /private currentRootOriginalTitleBarBlurRadius\(\): number/,
+  )
+  assert.match(
+    source,
+    /private currentRootScrollEffectTitleBarBlurRadius\(\): number/,
+  )
+  assert.match(
+    source,
+    /private currentRootOriginalTitleBarMaskExtraHeight\(\): number/,
+  )
+  assert.match(
+    source,
+    /private currentRootScrollEffectTitleBarMaskExtraHeight\(\): number/,
+  )
+  assert.match(
+    source,
+    /private currentRootBlurStrategy\(\): BlurStrategy \| undefined/,
+  )
   assert.match(source, /SystemMaterialParams,/)
   assert.match(
     source,
     /private currentRootSystemMaterialEffect\(\): SystemMaterialParams \| undefined/,
   )
-  assert.match(source, /private HomeModeRailSpacer\(\)/)
+  assert.match(source, /private currentRootBindScrollers\(\): Scroller\[\]/)
+  assert.match(
+    source,
+    /private handleSettingsContentScrollerReady\(scroller: Scroller\): void/,
+  )
+  assert.match(source, /private HomeModeHeaderSection\(\)/)
   assert.match(source, /\.height\(0\)/)
-  assert.match(source, /label:\s*'搜索'/)
-  assert.match(source, /icon:\s*\$r\('sys\.symbol\.magnifyingglass'\)/)
+  assert.match(source, /SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)/)
+  assert.match(source, /\.fontSize\(20\)/)
+  assert.match(source, /\.width\(34\)/)
+  assert.match(source, /\.height\(34\)/)
+  assert.match(source, /\.borderRadius\(17\)/)
   assert.match(
     source,
-    /action:\s*\(\)\s*=>\s*\{\s*this\.toggleHomeSearch\(\)\s*\}/s,
+    /private currentRootTitle\(\): string \{[\s\S]*case 'subscriptions':\s*return '订阅库'[\s\S]*case 'settings':\s*return '设置'[\s\S]*case 'discover':\s*return '添加订阅'[\s\S]*default:\s*return '今日推荐'/s,
   )
   assert.match(
     source,
-    /private currentRootTitle\(\): string \{[\s\S]*case 'subscriptions':\s*return '订阅库'[\s\S]*case 'discover':\s*return '添加订阅'[\s\S]*default:\s*return '今日推荐'/s,
+    /private homeTitleSearchButtonBackgroundColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(20,22,28,0\.72\)' : 'rgba\(255,255,255,0\.72\)'\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootMenu\(\): HdsNavigationMenuContentOptions \| undefined \{[\s\S]*case 'home':\s*return this\.homeNavigationMenu\(\)[\s\S]*default:\s*return undefined/s,
+    /private homeTitleSearchButtonBorderColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(255,255,255,0\.12\)' : 'rgba\(255,255,255,0\.88\)'\s*\}/s,
   )
   assert.match(
     source,
-    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.activeRootTabId === 'settings'[\s\S]*this\.activeRootTabId === 'discover' && this\.discoverHasForegroundOverlay[\s\S]*this\.activeRootTabId === 'subscriptions' && this\.subscriptionsOverlayLevel > 0/s,
+    /private homeTitleSearchButtonShadow\(\): ShadowOptions \{\s*return \{\s*radius: 10,\s*color: this\.theme\.isDark \? 'rgba\(255,255,255,0\.10\)' : 'rgba\(15,23,42,0\.12\)',\s*offsetX: 0,\s*offsetY: 2,\s*\}\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootScrollEffectType\(\): ScrollEffectType \{\s*return ScrollEffectType\.GRADIENT_BLUR\s*\}/s,
+    /private homeTitleSearchButtonBackdropBlur\(\): number \{\s*return this\.theme\.isDark \? 10 : 18\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootTitleBarBlurRadius\(\): number \{\s*return 36\s*\}/s,
+    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.showSearch[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
   )
   assert.match(
     source,
-    /private currentRootTitleBarMaskExtraHeight\(\): number \{\s*return 32\s*\}/s,
+    /private currentRootScrollEffectType\(\): ScrollEffectType \{\s*return ScrollEffectType\.IMMERSIVE_GRADIENT_BLUR\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootSystemMaterialEffect\(\): SystemMaterialParams \| undefined \{\s*return \{[\s\S]*materialType:\s*hdsMaterial\.MaterialType\.ADAPTIVE[\s\S]*materialLevel:\s*hdsMaterial\.MaterialLevel\.ADAPTIVE/s,
+    /private currentRootBlurEffectiveEndOffset\(\): LengthMetrics \{\s*return LengthMetrics\.vp\(30\)\s*\}/s,
   )
   assert.match(
     source,
-    /\.titleBar\(\{[\s\S]*mainTitle:\s*this\.currentRootTitle\(\),[\s\S]*menu:\s*this\.currentRootMenu\(\),[\s\S]*systemMaterialEffect:\s*this\.currentRootSystemMaterialEffect\(\),/s,
+    /private currentRootOriginalTitleBarBlurRadius\(\): number \{\s*return 42\s*\}/s,
   )
+  assert.match(
+    source,
+    /private currentRootScrollEffectTitleBarBlurRadius\(\): number \{\s*return 42\s*\}/s,
+  )
+  assert.match(
+    source,
+    /private currentRootOriginalTitleBarMaskExtraHeight\(\): number \{\s*return 134\s*\}/s,
+  )
+  assert.match(
+    source,
+    /private currentRootScrollEffectTitleBarMaskExtraHeight\(\): number \{\s*return 138\s*\}/s,
+  )
+  assert.match(
+    source,
+    /private currentRootBlurStrategy\(\): BlurStrategy \| undefined \{\s*return BlurStrategy\.ENABLE\s*\}/s,
+  )
+  assert.match(
+    source,
+    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*layoutWeight\(1\)[\s\S]*margin\(\{ top: -20 \}\)[\s\S]*this\.HomeTitleSearchButton\(\)[\s\S]*justifyContent\(FlexAlign\.SpaceBetween\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeTitleSearchButton\(\) \{[\s\S]*\.backgroundColor\(this\.homeTitleSearchButtonBackgroundColor\(\)\)[\s\S]*\.backdropBlur\(this\.homeTitleSearchButtonBackdropBlur\(\)\)[\s\S]*\.border\(\{ width: 0\.8, color: this\.homeTitleSearchButtonBorderColor\(\) \}\)[\s\S]*\.shadow\(this\.homeTitleSearchButtonShadow\(\)\)[\s\S]*\.margin\(\{ top: -20 \}\)[\s\S]*\.onClick\(\(\) => \{\s*this\.toggleHomeSearch\(\)\s*\}\)/s,
+  )
+  assert.match(
+    source,
+    /private currentRootSystemMaterialEffect\(\): SystemMaterialParams \| undefined \{\s*return \{[\s\S]*materialType:\s*hdsMaterial\.MaterialType\.IMMERSIVE[\s\S]*materialLevel:\s*hdsMaterial\.MaterialLevel\.EXQUISITE/s,
+  )
+  assert.match(
+    source,
+    /private readonly articlesScroller: Scroller = new Scroller\(\)/,
+  )
+  assert.match(
+    source,
+    /private readonly socialScroller: Scroller = new Scroller\(\)/,
+  )
+  assert.match(
+    source,
+    /private readonly picturesScroller: Scroller = new Scroller\(\)/,
+  )
+  assert.match(
+    source,
+    /private readonly videosScroller: Scroller = new Scroller\(\)/,
+  )
+  assert.match(
+    source,
+    /private currentRootBindScrollers\(\): Scroller\[\] \{[\s\S]*if \(this\.activeRootTabId === 'home'\) \{[\s\S]*return \[\s*this\.articlesScroller,\s*this\.socialScroller,\s*this\.picturesScroller,\s*this\.videosScroller,\s*\][\s\S]*if \(this\.isSettingsRootTab\(\) && this\.settingsRootScroller\) \{\s*return \[this\.settingsRootScroller\]/s,
+  )
+  assert.match(
+    source,
+    /private handleSettingsContentScrollerReady\(scroller: Scroller\): void \{[\s\S]*this\.settingsRootScroller = scroller[\s\S]*this\.settingsScrollerBindingVersion \+= 1/s,
+  )
+  assert.match(
+    source,
+    /\.titleBar\(\{[\s\S]*mainTitle:\s*this\.isHomeRootTab\(\) \|\| this\.isSettingsRootTab\(\) \? '' : this\.currentRootTitle\(\),[\s\S]*bottomBuilder:\s*this\.isHomeRootTab\(\)\s*\?[\s\S]*this\.HomeRootLowerTitleBuilder\(\)[\s\S]*this\.isSettingsRootTab\(\)\s*\?[\s\S]*this\.SettingsRootLowerTitleBuilder\(\)[\s\S]*systemMaterialEffect:\s*this\.currentRootSystemMaterialEffect\(\),/s,
+  )
+  assert.doesNotMatch(source, /menu:\s*this\.currentRootMenu\(\)/)
   assert.match(source, /enableScrollEffect:\s*true/)
   assert.match(
     source,
     /scrollEffectType:\s*this\.currentRootScrollEffectType\(\)/,
   )
   assert.match(source, /blurEffectiveStartOffset:\s*LengthMetrics\.vp\(0\)/)
-  assert.match(source, /blurEffectiveEndOffset:\s*LengthMetrics\.vp\(20\)/)
   assert.match(
     source,
-    /originalStyle:\s*\{[\s\S]*backgroundStyle:\s*\{[\s\S]*backgroundColor:\s*this\.currentRootOriginalTitleBarBackgroundColor\(\),[\s\S]*maskExtraHeight:\s*this\.currentRootTitleBarMaskExtraHeight\(\),[\s\S]*blurRadius:\s*this\.currentRootTitleBarBlurRadius\(\),/s,
+    /blurEffectiveEndOffset:\s*this\.currentRootBlurEffectiveEndOffset\(\)/,
+  )
+  assert.match(source, /blurStrategy:\s*this\.currentRootBlurStrategy\(\)/)
+  assert.match(
+    source,
+    /originalStyle:\s*\{[\s\S]*backgroundStyle:\s*\{[\s\S]*backgroundColor:\s*this\.currentRootOriginalTitleBarBackgroundColor\(\),[\s\S]*maskExtraHeight:\s*this\.currentRootOriginalTitleBarMaskExtraHeight\(\),[\s\S]*blurRadius:\s*this\.currentRootOriginalTitleBarBlurRadius\(\),/s,
   )
   assert.match(
     source,
@@ -160,16 +255,20 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /scrollEffectStyle:\s*\{[\s\S]*backgroundStyle:\s*\{[\s\S]*backgroundColor:\s*this\.currentRootScrollEffectBackgroundColor\(\),[\s\S]*maskExtraHeight:\s*this\.currentRootTitleBarMaskExtraHeight\(\),[\s\S]*blurRadius:\s*this\.currentRootTitleBarBlurRadius\(\),/s,
+    /scrollEffectStyle:\s*\{[\s\S]*backgroundStyle:\s*\{[\s\S]*backgroundColor:\s*this\.currentRootScrollEffectBackgroundColor\(\),[\s\S]*maskExtraHeight:\s*this\.currentRootScrollEffectTitleBarMaskExtraHeight\(\),[\s\S]*blurRadius:\s*this\.currentRootScrollEffectTitleBarBlurRadius\(\),/s,
   )
   assert.match(
     source,
     /scrollEffectStyle:\s*\{[\s\S]*contentStyle:\s*\{[\s\S]*menuStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\),[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\),/s,
   )
-  assert.match(source, /avoidLayoutSafeArea:\s*true/)
-  assert.match(source, /enableComponentSafeArea:\s*true/)
+  assert.doesNotMatch(source, /avoidLayoutSafeArea:\s*true/)
+  assert.doesNotMatch(source, /enableComponentSafeArea:\s*true/)
   assert.match(source, /\.titleMode\(HdsNavigationTitleMode\.MINI\)/)
   assert.match(source, /\.hideTitleBar\(this\.shouldHideRootTitleBar\(\)\)/)
+  assert.match(
+    source,
+    /\.bindToScrollable\(this\.currentRootBindScrollers\(\)\)/,
+  )
   assert.doesNotMatch(source, /private HomeSearchTrailingAction\(\)/)
   assert.doesNotMatch(source, /\.backgroundBlurStyle\(BlurStyle\.Regular\)/)
 })

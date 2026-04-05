@@ -670,7 +670,7 @@ struct ArticleDetail {
           showBackButton: true,
           showTrailingBuilder: true,
           titleSize: 20,
-          topPadding: 0,
+          topPadding: 24,
           bottomPadding: 0,
           onBack: () => { void goBack() },
         }) {

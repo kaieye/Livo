@@ -10,4 +10,5 @@ test('root HdsTabs disables swipe navigation between bottom tabs', () => {
 
   assert.match(source, /HdsTabs\(\{ controller: this\.rootTabsController \}\)/)
   assert.match(source, /\.scrollable\(false\)/)
+  assert.match(source, /\.animationDuration\(0\)/)
 })

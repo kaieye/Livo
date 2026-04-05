@@ -9,6 +9,7 @@ export struct SettingListRow {
   @Prop subtitle: string = ''
   @Prop hint: string = ''
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @Prop enableEnterTransition: boolean = true
   onTap: () => void = () => {}
 
   build() {
@@ -54,7 +55,7 @@ export struct SettingListRow {
     .borderRadius(20)
     .backgroundColor(this.theme.elevated)
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .transition(livoMotion.enterScale())
+    .transition(this.enableEnterTransition ? livoMotion.enterScale() : TransitionEffect.IDENTITY)
     .alignItems(VerticalAlign.Center)
     .onClick(() => this.onTap())
   }

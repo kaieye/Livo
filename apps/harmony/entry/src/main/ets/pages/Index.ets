@@ -2,7 +2,6 @@ import { AppRepository } from '../common/data/AppRepository'
 import { KeyboardAvoidMode, LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
   HdsNavigation,
-  HdsNavigationMenuContentOptions,
   HdsNavigationTitleMode,
   HdsTabs,
   HdsTabsController,
@@ -10,6 +9,7 @@ import {
   SystemMaterialParams,
   hdsMaterial,
 } from '@kit.UIDesignKit'
+import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import window from '@ohos.window'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
@@ -19,7 +19,13 @@ import {
 } from '../common/components/FloatingRootPageLayout'
 import { PictureEntryCard } from '../common/components/PictureEntryCard'
 import { TweetEntryCard } from '../common/components/TweetEntryCard'
-import { Entry, EntryCardModel, selectPictureMediaUrls } from '../common/models/LivoModels'
+import {
+  DEFAULT_HARMONY_SETTINGS,
+  Entry,
+  EntryCardModel,
+  HarmonySettings,
+  selectPictureMediaUrls,
+} from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
 import { rememberVisitedMode } from '../common/utils/HomeModeVisitedCache'
@@ -52,8 +58,14 @@ import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
-const HOME_MODE_CONTENT_GAP: number = 12
+const HOME_MODE_CONTENT_GAP: number = 14
 const HEADER_BLUR_SCROLL_RANGE: number = 72
+const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56
+const ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const HOME_TITLE_BAR_OVERLAY_SPACER: number =
+  ROOT_TITLE_BAR_MINI_HEIGHT + ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT
+const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER
+const ROOT_BOTTOM_TITLE_HEIGHT: number = 36
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -86,11 +98,18 @@ struct Index {
   @State modeTransitionDirection: number = 1
   @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @State rootSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
   @State highlightedRootTabId: RootTabId = 'home'
   @State private suppressRootTabChange: boolean = false
+  @State settingsScrollerBindingVersion: number = 0
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
+  private readonly articlesScroller: Scroller = new Scroller()
+  private readonly socialScroller: Scroller = new Scroller()
+  private readonly picturesScroller: Scroller = new Scroller()
+  private readonly videosScroller: Scroller = new Scroller()
+  private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
 
   private animateWithUiContext(options: AnimateParam, event: () => void): void {
@@ -111,6 +130,7 @@ struct Index {
     this.theme = ThemeService.currentPalette()
     void this.applySystemBarStyle(this.theme)
     const settings = await AppRepository.settings()
+    this.rootSettings = settings
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
     this.featuredEntries = await AppRepository.featuredEntries()
@@ -155,26 +175,12 @@ struct Index {
     this.openSearch()
   }
 
-  private homeNavigationMenu(): HdsNavigationMenuContentOptions {
-    return {
-      maxCount: 1,
-      value: [{
-        content: {
-          label: '搜索',
-          icon: $r('sys.symbol.magnifyingglass'),
-          action: () => {
-            this.toggleHomeSearch()
-          },
-          componentId: 'home_title_search',
-        },
-      }],
-    }
-  }
-
   private currentRootTitle(): string {
     switch (this.activeRootTabId) {
       case 'subscriptions':
         return '订阅库'
+      case 'settings':
+        return '设置'
       case 'discover':
         return '添加订阅'
       default:
@@ -182,54 +188,196 @@ struct Index {
     }
   }
 
-  private currentRootMenu(): HdsNavigationMenuContentOptions | undefined {
-    switch (this.activeRootTabId) {
-      case 'home':
-        return this.homeNavigationMenu()
-      default:
-        return undefined
+  private homeTitleSearchButtonBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
+  }
+
+  private homeTitleSearchButtonBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
+  }
+
+  private homeTitleSearchButtonShadow(): ShadowOptions {
+    return {
+      radius: 10,
+      color: this.theme.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)',
+      offsetX: 0,
+      offsetY: 2,
     }
   }
 
+  private homeTitleSearchButtonBackdropBlur(): number {
+    return this.theme.isDark ? 10 : 18
+  }
+
+  @Builder
+  private HomeTitleSearchButton() {
+    Row() {
+      SymbolGlyph($r('sys.symbol.magnifyingglass'))
+        .fontSize(20)
+        .fontColor([$r('sys.color.icon_primary')])
+    }
+    .width(34)
+    .height(34)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(this.homeTitleSearchButtonBackgroundColor())
+    .backdropBlur(this.homeTitleSearchButtonBackdropBlur())
+    .borderRadius(17)
+    .border({ width: 0.8, color: this.homeTitleSearchButtonBorderColor() })
+    .shadow(this.homeTitleSearchButtonShadow())
+    .margin({ top: -20 })
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => {
+      this.toggleHomeSearch()
+    })
+  }
+
+  @Builder
+  private SettingsRootLowerTitleBuilder() {
+    Row() {
+      Text(this.currentRootTitle())
+        .fontSize(24)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('sys.color.font_primary'))
+    }
+    .width('100%')
+    .height(ROOT_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+  }
+
+  @Builder
+  private HomeRootLowerTitleBuilder() {
+    Row({ space: 12 }) {
+      Text('今日推荐')
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('sys.color.font_primary'))
+        .layoutWeight(1)
+        .margin({ top: -20 })
+
+      this.HomeTitleSearchButton()
+    }
+    .width('100%')
+    .height(ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Center)
+    .justifyContent(FlexAlign.SpaceBetween)
+    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+  }
+
+  private isHomeRootTab(): boolean {
+    return this.activeRootTabId === 'home'
+  }
+
   private shouldHideRootTitleBar(): boolean {
-    return this.activeRootTabId === 'settings'
-      || this.showSearch
-      || (this.activeRootTabId === 'discover' && this.discoverHasForegroundOverlay)
-      || (this.activeRootTabId === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
+    return this.showSearch
+      || this.activeRootTabId === 'subscriptions'
+      || this.activeRootTabId === 'discover'
+      || this.activeRootTabId === 'settings'
   }
 
   private currentRootScrollEffectType(): ScrollEffectType {
-    return ScrollEffectType.GRADIENT_BLUR
+    return ScrollEffectType.IMMERSIVE_GRADIENT_BLUR
+  }
+
+  private isSettingsRootTab(): boolean {
+    return this.activeRootTabId === 'settings'
+  }
+
+  private currentRootBlurEffectiveEndOffset(): LengthMetrics {
+    return LengthMetrics.vp(30)
   }
 
   private currentRootOriginalTitleBarBackgroundColor(): ResourceColor {
-    return $r('sys.color.ohos_id_color_background')
+    return '#00000000'
   }
 
   private currentRootScrollEffectBackgroundColor(): ResourceColor {
-    return $r('sys.color.ohos_id_color_background_transparent')
+    return '#00000000'
   }
 
-  private currentRootTitleBarBlurRadius(): number {
-    return 36
+  private currentRootOriginalTitleBarBlurRadius(): number {
+    return 42
   }
 
-  private currentRootTitleBarMaskExtraHeight(): number {
-    return 32
+  private currentRootScrollEffectTitleBarBlurRadius(): number {
+    return 42
+  }
+
+  private currentRootOriginalTitleBarMaskExtraHeight(): number {
+    return 134
+  }
+
+  private currentRootScrollEffectTitleBarMaskExtraHeight(): number {
+    return 138
+  }
+
+  private currentRootBlurStrategy(): BlurStrategy | undefined {
+    return BlurStrategy.ENABLE
   }
 
   private currentRootSystemMaterialEffect(): SystemMaterialParams | undefined {
     return {
-      materialType: hdsMaterial.MaterialType.ADAPTIVE,
-      materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+      materialType: hdsMaterial.MaterialType.IMMERSIVE,
+      materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
     }
   }
 
+  private currentRootBindScrollers(): Scroller[] {
+    if (this.activeRootTabId === 'home') {
+      return [
+        this.articlesScroller,
+        this.socialScroller,
+        this.picturesScroller,
+        this.videosScroller,
+      ]
+    }
+    if (this.isSettingsRootTab() && this.settingsRootScroller) {
+      return [this.settingsRootScroller]
+    }
+    return []
+  }
+
+  private homeScrollerForMode(mode: SubscriptionMode): Scroller {
+    switch (mode) {
+      case 'social':
+        return this.socialScroller
+      case 'pictures':
+        return this.picturesScroller
+      case 'videos':
+        return this.videosScroller
+      default:
+        return this.articlesScroller
+    }
+  }
+
+  private handleSettingsContentScrollerReady(scroller: Scroller): void {
+    if (this.settingsRootScroller === scroller) {
+      return
+    }
+
+    this.settingsRootScroller = scroller
+    this.settingsScrollerBindingVersion += 1
+  }
+
   @Builder
-  private HomeModeRailSpacer() {
-    Row()
+  private HomeModeHeaderSection() {
+    Column({ space: 0 }) {
+      Blank()
+        .height(HOME_MODE_CONTENT_TOP_SPACER_HEIGHT)
+
+      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+        Row()
+          .width('100%')
+          .height(0)
+
+        this.HomeModeRail()
+      }
       .width('100%')
-      .height(0)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
   }
 
   private handleSystemThemeChanged(): void {
@@ -789,19 +937,9 @@ struct Index {
 
   @Builder
   private EntryList(mode: SubscriptionMode) {
-    List({ space: HOME_MODE_CONTENT_GAP }) {
+    List({ space: HOME_MODE_CONTENT_GAP, scroller: this.homeScrollerForMode(mode) }) {
       ListItem() {
-        Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-          this.HomeModeRailSpacer()
-
-          Column() {
-            this.HomeModeRail()
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        this.HomeModeHeaderSection()
       }
       .width('100%')
 
@@ -854,19 +992,9 @@ struct Index {
 
   @Builder
   private PictureEntryList() {
-    List({ space: HOME_MODE_CONTENT_GAP }) {
+    List({ space: HOME_MODE_CONTENT_GAP, scroller: this.picturesScroller }) {
       ListItem() {
-        Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-          this.HomeModeRailSpacer()
-
-          Column() {
-            this.HomeModeRail()
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        this.HomeModeHeaderSection()
       }
       .width('100%')
 
@@ -928,19 +1056,9 @@ struct Index {
   private ModeEntriesScene(mode: SubscriptionMode) {
     Stack() {
       if (resolveHomeVideoSceneKind(mode) === 'grid') {
-        Scroll() {
+        Scroll(this.homeScrollerForMode(mode)) {
           Column({ space: HOME_MODE_CONTENT_GAP }) {
-            Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-              this.HomeModeRailSpacer()
-
-              Column() {
-                this.HomeModeRail()
-              }
-              .width('100%')
-              .alignItems(HorizontalAlign.Start)
-            }
-            .width('100%')
-            .alignItems(HorizontalAlign.Start)
+            this.HomeModeHeaderSection()
 
             HomeVideoGrid({
               entries: this.filteredEntriesFor(mode),
@@ -978,38 +1096,28 @@ struct Index {
   @Builder
   private HomeRootPage() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Refresh({ refreshing: $$this.isRefreshing }) {
-        Stack() {
-          if (this.shouldMountModeScene('articles')) {
-            this.ModeEntriesScene('articles')
-          }
-          if (this.shouldMountModeScene('social')) {
-            this.ModeEntriesScene('social')
-          }
-          if (this.shouldMountModeScene('pictures')) {
-            this.ModeEntriesScene('pictures')
-          }
-          if (this.shouldMountModeScene('videos')) {
-            this.ModeEntriesScene('videos')
-          }
+      Stack() {
+        if (this.shouldMountModeScene('articles')) {
+          this.ModeEntriesScene('articles')
         }
-        .width('100%')
-        .height('100%')
-        .gesture(
-          PanGesture({ direction: PanDirection.Horizontal })
-            .onActionEnd((event: GestureEvent) => {
-              this.handleModeSwipe(event)
-            })
-        )
+        if (this.shouldMountModeScene('social')) {
+          this.ModeEntriesScene('social')
+        }
+        if (this.shouldMountModeScene('pictures')) {
+          this.ModeEntriesScene('pictures')
+        }
+        if (this.shouldMountModeScene('videos')) {
+          this.ModeEntriesScene('videos')
+        }
       }
       .width('100%')
       .height('100%')
-      .onRefreshing(() => {
-        if (!this.isRefreshing) {
-          void this.refreshFeaturedEntries()
-        }
-      })
-
+      .gesture(
+        PanGesture({ direction: PanDirection.Horizontal })
+          .onActionEnd((event: GestureEvent) => {
+            this.handleModeSwipe(event)
+          })
+      )
     }
     .width('100%')
     .height('100%')
@@ -1052,6 +1160,13 @@ struct Index {
                   SettingsContent({
                     showBottomTabs: false,
                     inheritedTheme: this.theme,
+                    inheritedSettings: this.rootSettings,
+                    onContentScrollerReady: (scroller: Scroller) => {
+                      this.handleSettingsContentScrollerReady(scroller)
+                    },
+                    onSettingsChange: (settings: HarmonySettings) => {
+                      this.rootSettings = settings
+                    },
                     onThemeChange: (theme: ThemePalette) => {
                       this.theme = theme
                       void this.applySystemBarStyle(theme)
@@ -1070,6 +1185,7 @@ struct Index {
         }
         .vertical(false)
         .scrollable(false)
+        .animationDuration(0)
         .barPosition(BarPosition.End)
         .barOverlap(true)
         .barHeight(this.shouldHideBottomTabs() ? 0 : BOTTOM_TAB_BAR_HEIGHT)
@@ -1088,22 +1204,31 @@ struct Index {
       .titleBar({
         content: {
           title: {
-            mainTitle: this.currentRootTitle(),
+            mainTitle: this.isHomeRootTab() || this.isSettingsRootTab() ? '' : this.currentRootTitle(),
           },
-          menu: this.currentRootMenu(),
+          bottomBuilder: this.isHomeRootTab()
+            ? {
+                builder: (): void => this.HomeRootLowerTitleBuilder(),
+              }
+            : this.isSettingsRootTab()
+            ? {
+                builder: (): void => this.SettingsRootLowerTitleBuilder(),
+              }
+            : undefined,
         },
         style: {
           scrollEffectOpts: {
             enableScrollEffect: true,
             scrollEffectType: this.currentRootScrollEffectType(),
             blurEffectiveStartOffset: LengthMetrics.vp(0),
-            blurEffectiveEndOffset: LengthMetrics.vp(20),
+            blurEffectiveEndOffset: this.currentRootBlurEffectiveEndOffset(),
           },
+          blurStrategy: this.currentRootBlurStrategy(),
           originalStyle: {
             backgroundStyle: {
               backgroundColor: this.currentRootOriginalTitleBarBackgroundColor(),
-              maskExtraHeight: this.currentRootTitleBarMaskExtraHeight(),
-              blurRadius: this.currentRootTitleBarBlurRadius(),
+              maskExtraHeight: this.currentRootOriginalTitleBarMaskExtraHeight(),
+              blurRadius: this.currentRootOriginalTitleBarBlurRadius(),
             },
             contentStyle: {
               titleStyle: {
@@ -1123,8 +1248,8 @@ struct Index {
           scrollEffectStyle: {
             backgroundStyle: {
               backgroundColor: this.currentRootScrollEffectBackgroundColor(),
-              maskExtraHeight: this.currentRootTitleBarMaskExtraHeight(),
-              blurRadius: this.currentRootTitleBarBlurRadius(),
+              maskExtraHeight: this.currentRootScrollEffectTitleBarMaskExtraHeight(),
+              blurRadius: this.currentRootScrollEffectTitleBarBlurRadius(),
             },
             contentStyle: {
               titleStyle: {
@@ -1143,12 +1268,11 @@ struct Index {
           },
           systemMaterialEffect: this.currentRootSystemMaterialEffect(),
         },
-        avoidLayoutSafeArea: true,
-        enableComponentSafeArea: true,
       })
       .titleMode(HdsNavigationTitleMode.MINI)
       .hideTitleBar(this.shouldHideRootTitleBar())
       .hideBackButton(true)
+      .bindToScrollable(this.currentRootBindScrollers())
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')
       .height('100%')

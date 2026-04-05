@@ -141,6 +141,7 @@ export interface HarmonySettings {
 export interface RemoteFeedResult {
   entries: EntryCardModel[]
   sourceLabel: string
+  newEntriesCount?: number
   fallbackUsed: boolean
 }
 
