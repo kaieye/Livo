@@ -13,7 +13,13 @@ import {
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
-import { ROOT_MODE_RAIL_TOP_GAP } from './FloatingRootPageLayout'
+import {
+  ROOT_MODE_RAIL_TOP_GAP,
+  ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
+  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+  ROOT_PAGE_MODE_TOP_OFFSET,
+  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
+} from './FloatingRootPageLayout'
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -38,9 +44,9 @@ const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
 const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT: number = 56
-const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number =
-  SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT + SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT
+  SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT + SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 
 class SubscriptionFeedDetailParams {
   feedId: string = ''
@@ -177,12 +183,16 @@ export struct SubscriptionsContent {
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
-        .margin({ top: -20 })
+        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
     }
     .width('100%')
     .height(SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .alignItems(VerticalAlign.Bottom)
+    .padding({
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+    })
   }
 
   private headerTitle(mode: SubscriptionMode = this.mode): string {
@@ -695,8 +705,8 @@ export struct SubscriptionsContent {
           originalStyle: {
             backgroundStyle: {
               backgroundColor: '#00000000',
-              maskExtraHeight: 134,
-              blurRadius: 42,
+              maskExtraHeight: 0,
+              blurRadius: 28,
             },
             contentStyle: {
               titleStyle: {
@@ -708,8 +718,8 @@ export struct SubscriptionsContent {
           scrollEffectStyle: {
             backgroundStyle: {
               backgroundColor: '#00000000',
-              maskExtraHeight: 138,
-              blurRadius: 42,
+              maskExtraHeight: 0,
+              blurRadius: 48,
             },
             contentStyle: {
               titleStyle: {

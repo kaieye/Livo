@@ -14,12 +14,15 @@ test('subscriptions content leaves the root title bar responsible for the page t
   assert.match(source, /const SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT: number = 56/)
   assert.match(
     source,
-    /const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36/,
+    /ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT[\s\S]*const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/,
   )
   assert.match(
     source,
-    /const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number =[\s\S]*SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT \+ SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT/,
+    /const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number =[\s\S]*SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT \+ SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT \+ ROOT_PAGE_MODE_TOP_OFFSET/,
   )
+  assert.match(source, /ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/)
+  assert.match(source, /ROOT_PAGE_MODE_TOP_OFFSET/)
+  assert.match(source, /ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET/)
   assert.doesNotMatch(
     source,
     /const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number = PAGE_TOP_PADDING/,

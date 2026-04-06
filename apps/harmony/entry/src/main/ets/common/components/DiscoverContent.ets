@@ -12,6 +12,11 @@ import {
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
+import {
+  ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
+  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
+} from './FloatingRootPageLayout'
 import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import {
@@ -59,7 +64,7 @@ const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
 const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
-const DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const DISCOVER_TITLE_BAR_OVERLAY_SPACER: number =
   DISCOVER_TITLE_BAR_MINI_HEIGHT + DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT
 
@@ -188,12 +193,16 @@ export struct DiscoverContent {
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
-        .margin({ top: -20 })
+        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
     }
     .width('100%')
     .height(DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .alignItems(VerticalAlign.Bottom)
+    .padding({
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+    })
   }
 
   aboutToAppear(): void {
@@ -1251,8 +1260,8 @@ export struct DiscoverContent {
           originalStyle: {
             backgroundStyle: {
               backgroundColor: '#00000000',
-              maskExtraHeight: 134,
-              blurRadius: 42,
+              maskExtraHeight: 0,
+              blurRadius: 28,
             },
             contentStyle: {
               titleStyle: {
@@ -1264,8 +1273,8 @@ export struct DiscoverContent {
           scrollEffectStyle: {
             backgroundStyle: {
               backgroundColor: '#00000000',
-              maskExtraHeight: 138,
-              blurRadius: 42,
+              maskExtraHeight: 0,
+              blurRadius: 48,
             },
             contentStyle: {
               titleStyle: {

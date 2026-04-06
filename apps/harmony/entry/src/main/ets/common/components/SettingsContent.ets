@@ -7,6 +7,11 @@ import {
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
+import {
+  ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
+  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
+} from './FloatingRootPageLayout'
 import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
 import { AccountsSettingsPanel } from './AccountsSettingsPanel'
@@ -26,7 +31,7 @@ import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
-const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = SETTINGS_TITLE_BAR_MINI_HEIGHT + SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT
 interface SettingItem {
   title: string
@@ -288,12 +293,16 @@ export struct SettingsContent {
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
-        .margin({ top: -20 })
+        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
     }
     .width('100%')
     .height(SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .alignItems(VerticalAlign.Bottom)
+    .padding({
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+    })
   }
 
   @Builder
@@ -455,21 +464,8 @@ export struct SettingsContent {
           originalStyle: {
             backgroundStyle: {
               backgroundColor: '#00000000',
-              maskExtraHeight: 134,
-              blurRadius: 42,
-            },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-            },
-          },
-          scrollEffectStyle: {
-            backgroundStyle: {
-              backgroundColor: '#00000000',
-              maskExtraHeight: 138,
-              blurRadius: 42,
+              maskExtraHeight: 0,
+              blurRadius: 28,
             },
             contentStyle: {
               titleStyle: {

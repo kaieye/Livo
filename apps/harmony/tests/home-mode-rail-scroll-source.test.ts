@@ -83,10 +83,13 @@ test('home header section now includes the immersive title bar overlay before co
   )
 
   assert.match(source, /const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56/)
-  assert.match(source, /const ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36/)
   assert.match(
     source,
-    /const HOME_TITLE_BAR_OVERLAY_SPACER: number =[\s\S]*ROOT_TITLE_BAR_MINI_HEIGHT \+ ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT/,
+    /const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/,
+  )
+  assert.match(
+    source,
+    /const HOME_TITLE_BAR_OVERLAY_SPACER: number =[\s\S]*ROOT_TITLE_BAR_MINI_HEIGHT \+ HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT \+ ROOT_PAGE_MODE_TOP_OFFSET/,
   )
   assert.match(
     source,

@@ -106,8 +106,9 @@ export struct HomeVideoGrid {
         .width('100%')
         .alignItems(HorizontalAlign.Start)
         .padding(20)
-        .backgroundColor(this.theme.elevated)
+        .backgroundColor(this.theme.surface)
         .borderRadius(CARD_RADIUS_MD)
+        .border({ width: 0.8, color: this.theme.divider })
       } else {
         ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
           Row({ space: 12 }) {

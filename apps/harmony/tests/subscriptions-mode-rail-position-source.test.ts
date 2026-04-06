@@ -16,6 +16,7 @@ test('subscriptions rail aligns with the home title spacing while keeping the lo
     source,
     /Column\(\{ space: 0 \}\)\s*\{\s*Blank\(\)\s*\.height\(SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER\)/s,
   )
+  assert.match(source, /ROOT_PAGE_MODE_TOP_OFFSET/)
   assert.match(source, /Column\(\{ space: ROOT_MODE_RAIL_TOP_GAP \}\)/)
   assert.match(source, /Column\(\{ space: 20 \}\)/)
   assert.match(source, /\.padding\(\{ top: 12 \}\)/)

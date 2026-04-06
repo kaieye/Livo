@@ -113,4 +113,26 @@ test('home video grid renders an empty-state prompt when there are no video entr
     source,
     /Text\('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。'\)/,
   )
+  assert.match(source, /\.backgroundColor\(this\.theme\.surface\)/)
+  assert.match(
+    source,
+    /\.border\(\{ width: 0\.8, color: this\.theme\.divider \}\)/,
+  )
+  assert.doesNotMatch(source, /\.backgroundColor\(this\.theme\.elevated\)/)
+})
+
+test('home video scene keeps the empty grid branch pinned to the top of the viewport', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /Scroll\(this\.homeScrollerForMode\(mode\)\)\s*\{\s*Column\(\{ space: HOME_MODE_CONTENT_GAP \}\)\s*\{[\s\S]*?\.constraintSize\(\{ minHeight: '100%' \}\)/,
+  )
+  assert.match(
+    source,
+    /Scroll\(this\.homeScrollerForMode\(mode\)\)\s*\{\s*Column\(\{ space: HOME_MODE_CONTENT_GAP \}\)\s*\{[\s\S]*?\.justifyContent\(FlexAlign\.Start\)/,
+  )
 })

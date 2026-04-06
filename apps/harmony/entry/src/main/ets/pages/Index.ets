@@ -16,6 +16,10 @@ import { ContentModeRail } from '../common/components/ContentModeRail'
 import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 import {
   ROOT_MODE_RAIL_TOP_GAP,
+  ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
+  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+  ROOT_PAGE_MODE_TOP_OFFSET,
+  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from '../common/components/FloatingRootPageLayout'
 import { PictureEntryCard } from '../common/components/PictureEntryCard'
 import { TweetEntryCard } from '../common/components/TweetEntryCard'
@@ -61,11 +65,11 @@ const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const HOME_MODE_CONTENT_GAP: number = 14
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56
-const ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36
+const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const HOME_TITLE_BAR_OVERLAY_SPACER: number =
-  ROOT_TITLE_BAR_MINI_HEIGHT + ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT
+  ROOT_TITLE_BAR_MINI_HEIGHT + HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER
-const ROOT_BOTTOM_TITLE_HEIGHT: number = 36
+const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -213,19 +217,18 @@ struct Index {
   private HomeTitleSearchButton() {
     Row() {
       SymbolGlyph($r('sys.symbol.magnifyingglass'))
-        .fontSize(20)
+        .fontSize(22)
         .fontColor([$r('sys.color.icon_primary')])
     }
-    .width(34)
-    .height(34)
+    .width(40)
+    .height(40)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     .backgroundColor(this.homeTitleSearchButtonBackgroundColor())
     .backdropBlur(this.homeTitleSearchButtonBackdropBlur())
-    .borderRadius(17)
+    .borderRadius(20)
     .border({ width: 0.8, color: this.homeTitleSearchButtonBorderColor() })
     .shadow(this.homeTitleSearchButtonShadow())
-    .margin({ top: -20 })
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onClick(() => {
       this.toggleHomeSearch()
@@ -239,11 +242,16 @@ struct Index {
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
+        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
     }
     .width('100%')
     .height(ROOT_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .alignItems(VerticalAlign.Bottom)
+    .padding({
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+    })
   }
 
   @Builder
@@ -254,15 +262,19 @@ struct Index {
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .layoutWeight(1)
-        .margin({ top: -20 })
+        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
 
       this.HomeTitleSearchButton()
     }
     .width('100%')
-    .height(ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Center)
+    .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Bottom)
     .justifyContent(FlexAlign.SpaceBetween)
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
+    .padding({
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+    })
   }
 
   private isHomeRootTab(): boolean {
@@ -270,8 +282,7 @@ struct Index {
   }
 
   private shouldHideRootTitleBar(): boolean {
-    return this.showSearch
-      || this.activeRootTabId === 'subscriptions'
+    return this.activeRootTabId === 'subscriptions'
       || this.activeRootTabId === 'discover'
       || this.activeRootTabId === 'settings'
   }
@@ -297,19 +308,19 @@ struct Index {
   }
 
   private currentRootOriginalTitleBarBlurRadius(): number {
-    return 42
+    return 28
   }
 
   private currentRootScrollEffectTitleBarBlurRadius(): number {
-    return 42
+    return 48
   }
 
   private currentRootOriginalTitleBarMaskExtraHeight(): number {
-    return 134
+    return 0
   }
 
   private currentRootScrollEffectTitleBarMaskExtraHeight(): number {
-    return 138
+    return 0
   }
 
   private currentRootBlurStrategy(): BlurStrategy | undefined {
@@ -1068,7 +1079,9 @@ struct Index {
             })
           }
           .width('100%')
+          .constraintSize({ minHeight: '100%' })
           .alignItems(HorizontalAlign.Start)
+          .justifyContent(FlexAlign.Start)
           .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 100 })
         }
         .width('100%')
@@ -1117,6 +1130,7 @@ struct Index {
             this.handleModeSwipe(event)
           })
       )
+
     }
     .width('100%')
     .height('100%')

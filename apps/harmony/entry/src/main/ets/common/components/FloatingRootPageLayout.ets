@@ -6,6 +6,10 @@ const FLOATING_ROOT_HEADER_BOTTOM_GAP: number = 6
 const FLOATING_ROOT_SPACER_EXTRA_HEIGHT: number = 8
 export const ROOT_MODE_RAIL_SPACER_EXTRA_HEIGHT: number = -8
 export const ROOT_MODE_RAIL_TOP_GAP: number = 8
+export const ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT: number = 68
+export const ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING: number = 24
+export const ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET: number = 4
+export const ROOT_PAGE_MODE_TOP_OFFSET: number = -26
 
 @Component
 export struct FloatingRootPageLayout {

@@ -22,6 +22,22 @@ test('floating root pages share a common floating header shell', () => {
   )
 
   assert.match(layoutSource, /export struct FloatingRootPageLayout/)
+  assert.match(
+    layoutSource,
+    /export const ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT: number = 68/,
+  )
+  assert.match(
+    layoutSource,
+    /export const ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING: number = 24/,
+  )
+  assert.match(
+    layoutSource,
+    /export const ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET: number = 4/,
+  )
+  assert.match(
+    layoutSource,
+    /export const ROOT_PAGE_MODE_TOP_OFFSET: number = -12/,
+  )
   assert.match(layoutSource, /PageHeader\(\{/)
   assert.match(layoutSource, /@Prop scrollBlurProgress: number = 0/)
   assert.doesNotMatch(layoutSource, /\.backdropBlur\(/)
@@ -48,7 +64,11 @@ test('floating root pages share a common floating header shell', () => {
   assert.match(indexSource, /private shouldHideRootTitleBar\(\): boolean/)
   assert.match(
     indexSource,
-    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.showSearch[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
+    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
+  )
+  assert.doesNotMatch(
+    indexSource,
+    /private shouldHideRootTitleBar\(\): boolean \{\s*return this\.showSearch/s,
   )
   assert.match(
     indexSource,
@@ -60,6 +80,8 @@ test('floating root pages share a common floating header shell', () => {
   )
   assert.match(indexSource, /private HomeRootLowerTitleBuilder\(\)/)
   assert.match(indexSource, /private SettingsRootLowerTitleBuilder\(\)/)
+  assert.match(indexSource, /ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/)
+  assert.match(indexSource, /ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET/)
   assert.match(
     indexSource,
     /private currentRootScrollEffectType\(\): ScrollEffectType/,
@@ -69,6 +91,22 @@ test('floating root pages share a common floating header shell', () => {
   assert.match(
     indexSource,
     /private currentRootBlurEffectiveEndOffset\(\): LengthMetrics/,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootOriginalTitleBarBlurRadius\(\): number \{\s*return 28\s*\}/s,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootScrollEffectTitleBarBlurRadius\(\): number \{\s*return 48\s*\}/s,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootOriginalTitleBarMaskExtraHeight\(\): number \{\s*return 0\s*\}/s,
+  )
+  assert.match(
+    indexSource,
+    /private currentRootScrollEffectTitleBarMaskExtraHeight\(\): number \{\s*return 0\s*\}/s,
   )
   assert.match(
     indexSource,
@@ -140,6 +178,9 @@ test('floating root pages share a common floating header shell', () => {
     discoverSource,
     /scrollEffectType:\s*ScrollEffectType\.IMMERSIVE_GRADIENT_BLUR/,
   )
+  assert.match(discoverSource, /maskExtraHeight:\s*0/)
+  assert.match(discoverSource, /blurRadius:\s*28/)
+  assert.match(discoverSource, /blurRadius:\s*48/)
   assert.match(discoverSource, /blurStrategy:\s*BlurStrategy\.ENABLE/)
   assert.match(
     discoverSource,
@@ -160,6 +201,9 @@ test('floating root pages share a common floating header shell', () => {
     subscriptionsSource,
     /scrollEffectType:\s*ScrollEffectType\.IMMERSIVE_GRADIENT_BLUR/,
   )
+  assert.match(subscriptionsSource, /maskExtraHeight:\s*0/)
+  assert.match(subscriptionsSource, /blurRadius:\s*28/)
+  assert.match(subscriptionsSource, /blurRadius:\s*48/)
   assert.match(subscriptionsSource, /blurStrategy:\s*BlurStrategy\.ENABLE/)
   assert.match(
     subscriptionsSource,
@@ -171,7 +215,7 @@ test('floating root pages share a common floating header shell', () => {
   assert.match(settingsSource, /SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56/)
   assert.match(
     settingsSource,
-    /SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = 36/,
+    /SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/,
   )
   assert.match(
     settingsSource,
@@ -222,7 +266,12 @@ test('floating root pages share a common floating header shell', () => {
   assert.match(settingsSource, /private SettingsLowerTitleBuilder\(\)/)
   assert.match(settingsSource, /Text\('设置'\)/)
   assert.match(settingsSource, /\.fontSize\(28\)/)
-  assert.match(settingsSource, /\.margin\(\{ top: -20 \}\)/)
+  assert.match(settingsSource, /\.alignItems\(VerticalAlign\.Bottom\)/)
+  assert.match(settingsSource, /bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/)
+  assert.match(
+    settingsSource,
+    /\.margin\(\{ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET \}\)/,
+  )
   assert.doesNotMatch(
     settingsSource,
     /SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)/,
@@ -245,6 +294,8 @@ test('floating root pages share a common floating header shell', () => {
     /if \(this\.showBottomTabs && !this\.showSettingsSheet\) \{/,
   )
   assert.match(settingsSource, /\.titleBar\(\{/)
+  assert.match(settingsSource, /maskExtraHeight:\s*0/)
+  assert.match(settingsSource, /blurRadius:\s*28/)
   assert.doesNotMatch(
     settingsSource,
     /menu:\s*this\.settingsNavigationMenu\(\)/,

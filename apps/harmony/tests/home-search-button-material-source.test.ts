@@ -92,6 +92,14 @@ test('home page uses HDS title bar system material for the search button', () =>
   assert.match(source, /private isHomeRootTab\(\): boolean/)
   assert.match(source, /private HomeRootLowerTitleBuilder\(\)/)
   assert.match(source, /private HomeTitleSearchButton\(\)/)
+  assert.match(source, /ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/)
+  assert.match(source, /ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/)
+  assert.match(source, /ROOT_PAGE_MODE_TOP_OFFSET/)
+  assert.match(source, /ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET/)
+  assert.match(
+    source,
+    /const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/,
+  )
   assert.match(
     source,
     /private homeTitleSearchButtonBackgroundColor\(\): string/,
@@ -137,10 +145,10 @@ test('home page uses HDS title bar system material for the search button', () =>
   assert.match(source, /private HomeModeHeaderSection\(\)/)
   assert.match(source, /\.height\(0\)/)
   assert.match(source, /SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)/)
-  assert.match(source, /\.fontSize\(20\)/)
-  assert.match(source, /\.width\(34\)/)
-  assert.match(source, /\.height\(34\)/)
-  assert.match(source, /\.borderRadius\(17\)/)
+  assert.match(source, /\.fontSize\(22\)/)
+  assert.match(source, /\.width\(40\)/)
+  assert.match(source, /\.height\(40\)/)
+  assert.match(source, /\.borderRadius\(20\)/)
   assert.match(
     source,
     /private currentRootTitle\(\): string \{[\s\S]*case 'subscriptions':\s*return '订阅库'[\s\S]*case 'settings':\s*return '设置'[\s\S]*case 'discover':\s*return '添加订阅'[\s\S]*default:\s*return '今日推荐'/s,
@@ -163,7 +171,11 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.showSearch[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
+    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
+  )
+  assert.doesNotMatch(
+    source,
+    /private shouldHideRootTitleBar\(\): boolean \{\s*return this\.showSearch/s,
   )
   assert.match(
     source,
@@ -175,19 +187,19 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /private currentRootOriginalTitleBarBlurRadius\(\): number \{\s*return 42\s*\}/s,
+    /private currentRootOriginalTitleBarBlurRadius\(\): number \{\s*return 28\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootScrollEffectTitleBarBlurRadius\(\): number \{\s*return 42\s*\}/s,
+    /private currentRootScrollEffectTitleBarBlurRadius\(\): number \{\s*return 48\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootOriginalTitleBarMaskExtraHeight\(\): number \{\s*return 134\s*\}/s,
+    /private currentRootOriginalTitleBarMaskExtraHeight\(\): number \{\s*return 0\s*\}/s,
   )
   assert.match(
     source,
-    /private currentRootScrollEffectTitleBarMaskExtraHeight\(\): number \{\s*return 138\s*\}/s,
+    /private currentRootScrollEffectTitleBarMaskExtraHeight\(\): number \{\s*return 0\s*\}/s,
   )
   assert.match(
     source,
@@ -195,11 +207,11 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*layoutWeight\(1\)[\s\S]*margin\(\{ top: -20 \}\)[\s\S]*this\.HomeTitleSearchButton\(\)[\s\S]*justifyContent\(FlexAlign\.SpaceBetween\)/s,
+    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*layoutWeight\(1\)[\s\S]*\.margin\(\{ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET \}\)[\s\S]*this\.HomeTitleSearchButton\(\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*justifyContent\(FlexAlign\.SpaceBetween\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
   )
   assert.match(
     source,
-    /private HomeTitleSearchButton\(\) \{[\s\S]*\.backgroundColor\(this\.homeTitleSearchButtonBackgroundColor\(\)\)[\s\S]*\.backdropBlur\(this\.homeTitleSearchButtonBackdropBlur\(\)\)[\s\S]*\.border\(\{ width: 0\.8, color: this\.homeTitleSearchButtonBorderColor\(\) \}\)[\s\S]*\.shadow\(this\.homeTitleSearchButtonShadow\(\)\)[\s\S]*\.margin\(\{ top: -20 \}\)[\s\S]*\.onClick\(\(\) => \{\s*this\.toggleHomeSearch\(\)\s*\}\)/s,
+    /private HomeTitleSearchButton\(\) \{[\s\S]*\.backgroundColor\(this\.homeTitleSearchButtonBackgroundColor\(\)\)[\s\S]*\.backdropBlur\(this\.homeTitleSearchButtonBackdropBlur\(\)\)[\s\S]*\.border\(\{ width: 0\.8, color: this\.homeTitleSearchButtonBorderColor\(\) \}\)[\s\S]*\.shadow\(this\.homeTitleSearchButtonShadow\(\)\)[\s\S]*\.onClick\(\(\) => \{\s*this\.toggleHomeSearch\(\)\s*\}\)/s,
   )
   assert.match(
     source,
