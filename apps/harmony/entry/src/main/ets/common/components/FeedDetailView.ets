@@ -80,6 +80,10 @@ export struct FeedDetailView {
   @State private heroAvatarCandidates: string[] = []
   @State private heroAvatarIndex: number = 0
 
+  private detailHeaderTopPadding(): number {
+    return this.feedId ? 42 : 24
+  }
+
   aboutToAppear(): void {
     this.targetTitle = this.initialTargetTitle
     this.targetSiteUrl = this.initialTargetSiteUrl
@@ -861,7 +865,7 @@ export struct FeedDetailView {
       showBackButton: true,
       trailingText: !this.isLoading && this.existingFeed ? '编辑' : '',
       titleSize: 20,
-      topPadding: 24,
+      topPadding: this.detailHeaderTopPadding(),
       bottomPadding: 0,
       onBack: () => { this.onBack() },
       onTrailingClick: () => {
