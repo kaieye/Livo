@@ -36,7 +36,7 @@ test('floating root pages share a common floating header shell', () => {
   )
   assert.match(
     layoutSource,
-    /export const ROOT_PAGE_MODE_TOP_OFFSET: number = -12/,
+    /export const ROOT_PAGE_MODE_TOP_OFFSET: number = -26/,
   )
   assert.match(layoutSource, /PageHeader\(\{/)
   assert.match(layoutSource, /@Prop scrollBlurProgress: number = 0/)
@@ -167,6 +167,11 @@ test('floating root pages share a common floating header shell', () => {
     /\.hideTitleBar\(this\.shouldHideRootTitleBar\(\)\)/,
   )
 
+  assert.match(discoverSource, /ROOT_PAGE_MODE_TOP_OFFSET/)
+  assert.match(
+    discoverSource,
+    /DISCOVER_TITLE_BAR_OVERLAY_SPACER: number =\s*DISCOVER_TITLE_BAR_MINI_HEIGHT \+ DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT \+ ROOT_PAGE_MODE_TOP_OFFSET/,
+  )
   assert.match(
     discoverSource,
     /private DiscoverRoot\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
@@ -182,6 +187,14 @@ test('floating root pages share a common floating header shell', () => {
   assert.match(discoverSource, /blurRadius:\s*28/)
   assert.match(discoverSource, /blurRadius:\s*48/)
   assert.match(discoverSource, /blurStrategy:\s*BlurStrategy\.ENABLE/)
+  assert.match(
+    discoverSource,
+    /menuStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\)[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\)/,
+  )
+  assert.match(
+    discoverSource,
+    /backIconStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\)[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\)/,
+  )
   assert.match(
     discoverSource,
     /\.bindToScrollable\(\[this\.contentScroller\]\)/,
@@ -207,19 +220,28 @@ test('floating root pages share a common floating header shell', () => {
   assert.match(subscriptionsSource, /blurStrategy:\s*BlurStrategy\.ENABLE/)
   assert.match(
     subscriptionsSource,
+    /menuStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\)[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\)/,
+  )
+  assert.match(
+    subscriptionsSource,
+    /backIconStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\)[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\)/,
+  )
+  assert.match(
+    subscriptionsSource,
     /\.bindToScrollable\(\[\s*this\.articlesScroller,\s*this\.socialScroller,\s*this\.picturesScroller,\s*this\.videosScroller,\s*\]\)/,
   )
   assert.match(subscriptionsSource, /Navigation\(this\.subscriptionPathStack\)/)
 
   assert.match(settingsSource, /private SettingsRootContent\(\)/)
   assert.match(settingsSource, /SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56/)
+  assert.match(settingsSource, /ROOT_PAGE_MODE_TOP_OFFSET/)
   assert.match(
     settingsSource,
     /SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/,
   )
   assert.match(
     settingsSource,
-    /SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = SETTINGS_TITLE_BAR_MINI_HEIGHT \+ SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT/,
+    /SETTINGS_TITLE_BAR_OVERLAY_SPACER: number =\s*SETTINGS_TITLE_BAR_MINI_HEIGHT \+ SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT \+ ROOT_PAGE_MODE_TOP_OFFSET/,
   )
   assert.match(
     settingsSource,
@@ -256,6 +278,25 @@ test('floating root pages share a common floating header shell', () => {
     /Blank\(\)\s*\.height\(SETTINGS_TITLE_BAR_OVERLAY_SPACER\)/s,
   )
   assert.doesNotMatch(settingsSource, /HEADER_OVERLAY_HEIGHT: number = 46/)
+  assert.match(
+    settingsSource,
+    /scrollEffectType:\s*ScrollEffectType\.IMMERSIVE_GRADIENT_BLUR/,
+  )
+  assert.match(settingsSource, /maskExtraHeight:\s*0/)
+  assert.match(settingsSource, /blurRadius:\s*28/)
+  assert.match(
+    settingsSource,
+    /scrollEffectStyle:\s*\{[\s\S]*blurRadius:\s*48/s,
+  )
+  assert.match(settingsSource, /blurStrategy:\s*BlurStrategy\.ENABLE/)
+  assert.match(
+    settingsSource,
+    /menuStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\)[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\)/,
+  )
+  assert.match(
+    settingsSource,
+    /backIconStyle:\s*\{[\s\S]*backgroundColor:\s*\$r\('sys\.color\.comp_background_tertiary'\)[\s\S]*iconColor:\s*\$r\('sys\.color\.icon_primary'\)/,
+  )
   assert.doesNotMatch(
     settingsSource,
     /@StorageProp\('topAvoidArea'\) topAvoidArea: number = 0/,

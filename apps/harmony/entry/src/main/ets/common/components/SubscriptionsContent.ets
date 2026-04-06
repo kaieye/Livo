@@ -713,6 +713,14 @@ export struct SubscriptionsContent {
                 mainTitleColor: $r('sys.color.font_primary'),
                 subTitleColor: $r('sys.color.font_secondary'),
               },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
             },
           },
           scrollEffectStyle: {
@@ -725,6 +733,14 @@ export struct SubscriptionsContent {
               titleStyle: {
                 mainTitleColor: $r('sys.color.font_primary'),
                 subTitleColor: $r('sys.color.font_secondary'),
+              },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
               },
             },
           },

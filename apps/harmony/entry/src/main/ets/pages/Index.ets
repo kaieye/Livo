@@ -193,24 +193,24 @@ struct Index {
   }
 
   private homeTitleSearchButtonBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
+    return this.theme.isDark ? 'rgba(28,32,40,0.82)' : 'rgba(255,255,255,0.84)'
   }
 
   private homeTitleSearchButtonBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
+    return this.theme.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.96)'
   }
 
   private homeTitleSearchButtonShadow(): ShadowOptions {
     return {
-      radius: 10,
-      color: this.theme.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)',
+      radius: 18,
+      color: this.theme.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.72)',
       offsetX: 0,
-      offsetY: 2,
+      offsetY: 4,
     }
   }
 
   private homeTitleSearchButtonBackdropBlur(): number {
-    return this.theme.isDark ? 10 : 18
+    return this.theme.isDark ? 16 : 24
   }
 
   @Builder
@@ -229,6 +229,7 @@ struct Index {
     .borderRadius(20)
     .border({ width: 0.8, color: this.homeTitleSearchButtonBorderColor() })
     .shadow(this.homeTitleSearchButtonShadow())
+    .translate({ y: 1 })
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onClick(() => {
       this.toggleHomeSearch()

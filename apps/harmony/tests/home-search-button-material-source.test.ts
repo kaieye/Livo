@@ -155,19 +155,19 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /private homeTitleSearchButtonBackgroundColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(20,22,28,0\.72\)' : 'rgba\(255,255,255,0\.72\)'\s*\}/s,
+    /private homeTitleSearchButtonBackgroundColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(28,32,40,0\.82\)' : 'rgba\(255,255,255,0\.84\)'\s*\}/s,
   )
   assert.match(
     source,
-    /private homeTitleSearchButtonBorderColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(255,255,255,0\.12\)' : 'rgba\(255,255,255,0\.88\)'\s*\}/s,
+    /private homeTitleSearchButtonBorderColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(255,255,255,0\.18\)' : 'rgba\(255,255,255,0\.96\)'\s*\}/s,
   )
   assert.match(
     source,
-    /private homeTitleSearchButtonShadow\(\): ShadowOptions \{\s*return \{\s*radius: 10,\s*color: this\.theme\.isDark \? 'rgba\(255,255,255,0\.10\)' : 'rgba\(15,23,42,0\.12\)',\s*offsetX: 0,\s*offsetY: 2,\s*\}\s*\}/s,
+    /private homeTitleSearchButtonShadow\(\): ShadowOptions \{\s*return \{\s*radius: 18,\s*color: this\.theme\.isDark \? 'rgba\(255,255,255,0\.16\)' : 'rgba\(255,255,255,0\.72\)',\s*offsetX: 0,\s*offsetY: 4,\s*\}\s*\}/s,
   )
   assert.match(
     source,
-    /private homeTitleSearchButtonBackdropBlur\(\): number \{\s*return this\.theme\.isDark \? 10 : 18\s*\}/s,
+    /private homeTitleSearchButtonBackdropBlur\(\): number \{\s*return this\.theme\.isDark \? 16 : 24\s*\}/s,
   )
   assert.match(
     source,
@@ -211,7 +211,7 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /private HomeTitleSearchButton\(\) \{[\s\S]*\.backgroundColor\(this\.homeTitleSearchButtonBackgroundColor\(\)\)[\s\S]*\.backdropBlur\(this\.homeTitleSearchButtonBackdropBlur\(\)\)[\s\S]*\.border\(\{ width: 0\.8, color: this\.homeTitleSearchButtonBorderColor\(\) \}\)[\s\S]*\.shadow\(this\.homeTitleSearchButtonShadow\(\)\)[\s\S]*\.onClick\(\(\) => \{\s*this\.toggleHomeSearch\(\)\s*\}\)/s,
+    /private HomeTitleSearchButton\(\) \{[\s\S]*\.backgroundColor\(this\.homeTitleSearchButtonBackgroundColor\(\)\)[\s\S]*\.backdropBlur\(this\.homeTitleSearchButtonBackdropBlur\(\)\)[\s\S]*\.border\(\{ width: 0\.8, color: this\.homeTitleSearchButtonBorderColor\(\) \}\)[\s\S]*\.shadow\(this\.homeTitleSearchButtonShadow\(\)\)[\s\S]*\.translate\(\{ y: 4 \}\)[\s\S]*\.onClick\(\(\) => \{\s*this\.toggleHomeSearch\(\)\s*\}\)/s,
   )
   assert.match(
     source,

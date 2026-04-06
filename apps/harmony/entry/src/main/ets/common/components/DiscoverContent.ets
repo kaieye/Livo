@@ -15,6 +15,7 @@ import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import {
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+  ROOT_PAGE_MODE_TOP_OFFSET,
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from './FloatingRootPageLayout'
 import { Entry, Feed, FeedViewType, formatPublishedAt, toArticleDetailModel } from '../models/LivoModels'
@@ -66,7 +67,7 @@ const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
 const DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const DISCOVER_TITLE_BAR_OVERLAY_SPACER: number =
-  DISCOVER_TITLE_BAR_MINI_HEIGHT + DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT
+  DISCOVER_TITLE_BAR_MINI_HEIGHT + DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 
 interface DirectUrlResult {
   targetUrl: string
@@ -784,7 +785,7 @@ export struct DiscoverContent {
         }
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
       .backgroundColor(this.theme.elevated)
       .borderRadius(INPUT_RADIUS)
       .border({ width: 0.8, color: this.theme.divider })
@@ -811,7 +812,7 @@ export struct DiscoverContent {
       .animation({ duration: 260, curve: Curve.FastOutSlowIn })
     }
     .width('100%')
-    .margin({ bottom: 6 })
+    .margin({ bottom: 4 })
     .transition(this.rootEnterTransition(40))
   }
 
@@ -1018,7 +1019,7 @@ export struct DiscoverContent {
   @Builder
   private RecommendedFallbackSection() {
     if (!this.query.trim() && this.recommendedFallback().length > 0) {
-      Column({ space: 8 }) {
+      Column({ space: 6 }) {
         this.SectionHeader(
           this.searchPlatform === 'all' ? '推荐订阅' : `${discoverPlatformLabel(this.searchPlatform)} 推荐订阅`,
         )
@@ -1064,7 +1065,7 @@ export struct DiscoverContent {
 
   @Builder
   private DiscoverScrollContent() {
-    Column({ space: 14 }) {
+    Column({ space: 8 }) {
       Blank()
         .height(DISCOVER_TITLE_BAR_OVERLAY_SPACER)
 
@@ -1268,6 +1269,14 @@ export struct DiscoverContent {
                 mainTitleColor: $r('sys.color.font_primary'),
                 subTitleColor: $r('sys.color.font_secondary'),
               },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
             },
           },
           scrollEffectStyle: {
@@ -1280,6 +1289,14 @@ export struct DiscoverContent {
               titleStyle: {
                 mainTitleColor: $r('sys.color.font_primary'),
                 subTitleColor: $r('sys.color.font_secondary'),
+              },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
               },
             },
           },

@@ -503,6 +503,25 @@ test('DiscoverContent dismisses search focus when the page reappears', () => {
   )
 })
 
+test('DiscoverContent uses a tighter search panel vertical spacing', () => {
+  assert.match(
+    discoverContentSource,
+    /\.padding\(\{ left: 16, right: 16, top: 12, bottom: 12 \}\)/,
+  )
+  assert.match(discoverContentSource, /\.margin\(\{ bottom: 4 \}\)/)
+})
+
+test('DiscoverContent lifts recommended content closer to the search panel', () => {
+  assert.match(
+    discoverContentSource,
+    /private RecommendedFallbackSection\(\) \{[\s\S]*Column\(\{ space: 6 \}\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private DiscoverScrollContent\(\) \{[\s\S]*Column\(\{ space: 8 \}\)/,
+  )
+})
+
 test('DiscoverService provides built-in recommended feeds for every discover chip platform', () => {
   const discoverServiceSource = fs.readFileSync(
     path.join(

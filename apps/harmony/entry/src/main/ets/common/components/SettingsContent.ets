@@ -10,6 +10,7 @@ import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import {
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+  ROOT_PAGE_MODE_TOP_OFFSET,
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from './FloatingRootPageLayout'
 import { BottomTabs } from './BottomTabs'
@@ -32,7 +33,8 @@ type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privac
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
-const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number = SETTINGS_TITLE_BAR_MINI_HEIGHT + SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT
+const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number =
+  SETTINGS_TITLE_BAR_MINI_HEIGHT + SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 interface SettingItem {
   title: string
   symbol: Resource
@@ -471,6 +473,35 @@ export struct SettingsContent {
               titleStyle: {
                 mainTitleColor: $r('sys.color.font_primary'),
                 subTitleColor: $r('sys.color.font_secondary'),
+              },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+            },
+          },
+          scrollEffectStyle: {
+            backgroundStyle: {
+              backgroundColor: '#00000000',
+              maskExtraHeight: 0,
+              blurRadius: 48,
+            },
+            contentStyle: {
+              titleStyle: {
+                mainTitleColor: $r('sys.color.font_primary'),
+                subTitleColor: $r('sys.color.font_secondary'),
+              },
+              menuStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
+              },
+              backIconStyle: {
+                backgroundColor: $r('sys.color.comp_background_tertiary'),
+                iconColor: $r('sys.color.icon_primary'),
               },
             },
           },
