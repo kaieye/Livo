@@ -180,7 +180,7 @@ test('buildXCandidateFromProfile adapts an X profile seed into Harmony discover 
   )
 
   assert.deepEqual(xCandidate, {
-    targetUrl: 'https://rsshub.pseudoyu.com/x/user/openai',
+    targetUrl: 'https://rsshub.pseudoyu.com/twitter/user/openai',
     targetTitle: 'OpenAI',
     targetView: 1,
     description: '1.8M followers',

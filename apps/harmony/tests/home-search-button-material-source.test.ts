@@ -91,7 +91,9 @@ test('home page uses HDS title bar system material for the search button', () =>
   assert.match(source, /private isSettingsRootTab\(\): boolean/)
   assert.match(source, /private isHomeRootTab\(\): boolean/)
   assert.match(source, /private HomeRootLowerTitleBuilder\(\)/)
-  assert.match(source, /private HomeTitleSearchButton\(\)/)
+  assert.match(source, /private HomeFloatingSearchButton\(\)/)
+  assert.doesNotMatch(source, /HdsNavigationMenuContentOptions/)
+  assert.doesNotMatch(source, /import \{ HdsMiniBarButton \} from 'hds_button'/)
   assert.match(source, /ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/)
   assert.match(source, /ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/)
   assert.match(source, /ROOT_PAGE_MODE_TOP_OFFSET/)
@@ -100,13 +102,6 @@ test('home page uses HDS title bar system material for the search button', () =>
     source,
     /const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT/,
   )
-  assert.match(
-    source,
-    /private homeTitleSearchButtonBackgroundColor\(\): string/,
-  )
-  assert.match(source, /private homeTitleSearchButtonBorderColor\(\): string/)
-  assert.match(source, /private homeTitleSearchButtonShadow\(\): ShadowOptions/)
-  assert.match(source, /private homeTitleSearchButtonBackdropBlur\(\): number/)
   assert.match(source, /private SettingsRootLowerTitleBuilder\(\)/)
   assert.match(
     source,
@@ -144,30 +139,9 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(source, /private HomeModeHeaderSection\(\)/)
   assert.match(source, /\.height\(0\)/)
-  assert.match(source, /SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)/)
-  assert.match(source, /\.fontSize\(22\)/)
-  assert.match(source, /\.width\(40\)/)
-  assert.match(source, /\.height\(40\)/)
-  assert.match(source, /\.borderRadius\(20\)/)
   assert.match(
     source,
     /private currentRootTitle\(\): string \{[\s\S]*case 'subscriptions':\s*return '订阅库'[\s\S]*case 'settings':\s*return '设置'[\s\S]*case 'discover':\s*return '添加订阅'[\s\S]*default:\s*return '今日推荐'/s,
-  )
-  assert.match(
-    source,
-    /private homeTitleSearchButtonBackgroundColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(28,32,40,0\.82\)' : 'rgba\(255,255,255,0\.84\)'\s*\}/s,
-  )
-  assert.match(
-    source,
-    /private homeTitleSearchButtonBorderColor\(\): string \{\s*return this\.theme\.isDark \? 'rgba\(255,255,255,0\.18\)' : 'rgba\(255,255,255,0\.96\)'\s*\}/s,
-  )
-  assert.match(
-    source,
-    /private homeTitleSearchButtonShadow\(\): ShadowOptions \{\s*return \{\s*radius: 18,\s*color: this\.theme\.isDark \? 'rgba\(255,255,255,0\.16\)' : 'rgba\(255,255,255,0\.72\)',\s*offsetX: 0,\s*offsetY: 4,\s*\}\s*\}/s,
-  )
-  assert.match(
-    source,
-    /private homeTitleSearchButtonBackdropBlur\(\): number \{\s*return this\.theme\.isDark \? 16 : 24\s*\}/s,
   )
   assert.match(
     source,
@@ -207,11 +181,44 @@ test('home page uses HDS title bar system material for the search button', () =>
   )
   assert.match(
     source,
-    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*layoutWeight\(1\)[\s\S]*\.margin\(\{ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET \}\)[\s\S]*this\.HomeTitleSearchButton\(\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*justifyContent\(FlexAlign\.SpaceBetween\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
+    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*layoutWeight\(1\)[\s\S]*\.margin\(\{ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET \}\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
   )
   assert.match(
     source,
-    /private HomeTitleSearchButton\(\) \{[\s\S]*\.backgroundColor\(this\.homeTitleSearchButtonBackgroundColor\(\)\)[\s\S]*\.backdropBlur\(this\.homeTitleSearchButtonBackdropBlur\(\)\)[\s\S]*\.border\(\{ width: 0\.8, color: this\.homeTitleSearchButtonBorderColor\(\) \}\)[\s\S]*\.shadow\(this\.homeTitleSearchButtonShadow\(\)\)[\s\S]*\.translate\(\{ y: 4 \}\)[\s\S]*\.onClick\(\(\) => \{\s*this\.toggleHomeSearch\(\)\s*\}\)/s,
+    /private homeFloatingSearchButtonBackgroundColor\(\): string/,
+  )
+  assert.match(
+    source,
+    /private homeFloatingSearchButtonBorderColor\(\): string/,
+  )
+  assert.match(
+    source,
+    /private homeFloatingSearchButtonShadow\(\): ShadowOptions/,
+  )
+  assert.match(
+    source,
+    /private homeFloatingSearchButtonBackdropBlur\(\): number/,
+  )
+  assert.doesNotMatch(source, /@State searchQuery: string = ''/)
+  assert.doesNotMatch(source, /@State showSearch: boolean = false/)
+  assert.doesNotMatch(source, /@State searchExpanded: boolean = false/)
+  assert.doesNotMatch(
+    source,
+    /private searchInputController: TextInputController = new TextInputController\(\)/,
+  )
+  assert.doesNotMatch(source, /private toggleHomeSearch\(\): void/)
+  assert.doesNotMatch(source, /private openSearch\(\): void/)
+  assert.doesNotMatch(source, /private closeSearch\(\): void/)
+  assert.doesNotMatch(source, /private handleSearchSheetDismiss\(\): void/)
+  assert.doesNotMatch(source, /private HomeSearchSheetOverlay\(\)/)
+  assert.doesNotMatch(
+    source,
+    /private searchAllEntries\(\): EntryCardModel\[\]/,
+  )
+  assert.doesNotMatch(source, /\.bindSheet\(/)
+  assert.match(
+    source,
+    /private HomeFloatingSearchButton\(\) \{[\s\S]*Row\(\) \{[\s\S]*SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)[\s\S]*\.fontSize\(22\)[\s\S]*\.fontColor\(\[\$r\('sys\.color\.icon_primary'\)\]\)[\s\S]*\}\s*\.width\(HOME_FLOATING_SEARCH_BUTTON_SIZE\)\s*\.height\(HOME_FLOATING_SEARCH_BUTTON_SIZE\)\s*\.justifyContent\(FlexAlign\.Center\)\s*\.alignItems\(VerticalAlign\.Center\)\s*\.backgroundColor\(this\.homeFloatingSearchButtonBackgroundColor\(\)\)\s*\.backdropBlur\(this\.homeFloatingSearchButtonBackdropBlur\(\)\)\s*\.borderRadius\(40\)\s*\.border\(\{ width: 0\.8, color: this\.homeFloatingSearchButtonBorderColor\(\) \}\)\s*\.shadow\(this\.homeFloatingSearchButtonShadow\(\)\)\s*\.clickEffect\(\{ level: ClickEffectLevel\.MIDDLE \}\)/s,
   )
   assert.match(
     source,
@@ -244,6 +251,18 @@ test('home page uses HDS title bar system material for the search button', () =>
   assert.match(
     source,
     /\.titleBar\(\{[\s\S]*mainTitle:\s*this\.isHomeRootTab\(\) \|\| this\.isSettingsRootTab\(\) \? '' : this\.currentRootTitle\(\),[\s\S]*bottomBuilder:\s*this\.isHomeRootTab\(\)\s*\?[\s\S]*this\.HomeRootLowerTitleBuilder\(\)[\s\S]*this\.isSettingsRootTab\(\)\s*\?[\s\S]*this\.SettingsRootLowerTitleBuilder\(\)[\s\S]*systemMaterialEffect:\s*this\.currentRootSystemMaterialEffect\(\),/s,
+  )
+  assert.match(
+    source,
+    /private HomeFloatingSearchButtonLayer\(\) \{[\s\S]*?Column\(\) \{[\s\S]*?this\.HomeFloatingSearchButton\(\)[\s\S]*?\.width\('100%'\)[\s\S]*?\.alignItems\(HorizontalAlign\.End\)[\s\S]*?\.padding\(\{[\s\S]*?top: this\.homeSearchOverlayTopPadding\(\),[\s\S]*?left: PAGE_HORIZONTAL_PADDING,[\s\S]*?right: PAGE_HORIZONTAL_PADDING,[\s\S]*?\}\)[\s\S]*?\.zIndex\(110\)/s,
+  )
+  assert.doesNotMatch(
+    source,
+    /private HomeFloatingSearchButtonLayer\(\) \{[\s\S]*?\.height\('100%'\)[\s\S]*?onPageShow\(\): void/s,
+  )
+  assert.match(
+    source,
+    /build\(\) \{[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeFloatingSearchButtonLayer\(\)[\s\S]*\}/s,
   )
   assert.doesNotMatch(source, /menu:\s*this\.currentRootMenu\(\)/)
   assert.match(source, /enableScrollEffect:\s*true/)
@@ -281,6 +300,9 @@ test('home page uses HDS title bar system material for the search button', () =>
     source,
     /\.bindToScrollable\(this\.currentRootBindScrollers\(\)\)/,
   )
+  assert.doesNotMatch(source, /private currentRootMenu\(/)
+  assert.doesNotMatch(source, /private HomeTitleSearchButton\(\)/)
+  assert.doesNotMatch(source, /HdsMiniBarButton\(/)
   assert.doesNotMatch(source, /private HomeSearchTrailingAction\(\)/)
   assert.doesNotMatch(source, /\.backgroundBlurStyle\(BlurStyle\.Regular\)/)
 })

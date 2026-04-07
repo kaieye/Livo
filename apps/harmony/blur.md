@@ -1,81 +1,156 @@
-从6.0.0(20) Beta1版本开始，新增支持过渡模糊与渐变模糊样式。
+# hds_button
 
-当应用开发者需要使用标题栏样式随内容区滚动而动态改变样式的导航组件时，可以通过设置titleBar属性中的style配置，自定义滚动前后的标题栏样式。
+`hds_button` 是一个基于 HarmonyOS `HdsTabs` 的浮动迷你栏按钮组件。
+组件通过 `barFloatingStyle` 提供沉浸光感材质效果，并支持参数化和内容槽位自定义。
 
-通用模糊样式
-对组件背景进行均匀的模糊处理，模糊强度一致，边界清晰，用于强调控件与内容的层级分隔。滑动内容进入/离开标题栏区域过程中，模糊背板和分割线透明渐变出现/消失。此方式适用于非沉浸式场景。
+## 功能特性
 
-过渡模糊样式
-对组件背景进行均匀的模糊处理，模糊强度一致，边界清晰，用于强调控件与内容的层级分隔。滑动前后标题栏内容发生颜色/状态变化，滑动过程中，线性跟手变化。此方式仅适用于沉浸式到非沉浸式相互切换的场景。
+- 基于 `HdsTabs` + `barFloatingStyle` 实现浮动按钮
+- 支持沉浸材质：`materialType` / `materialLevel`
+- 支持 15 项参数配置（尺寸、图标、布局、事件、样式）
+- 支持 `@BuilderParam` 尾随闭包自定义按钮内容
+- 同时导出兼容别名 `hdsButton`（deprecated）
 
-渐变模糊样式
-模糊效果在空间维度上呈现渐强/渐弱的变化，模糊边界柔和，用于增强页面沉浸感。
+## 安装
 
-开发步骤
-导入相关模块。
+面向已发布包使用：
 
-// 从6.0.2(22)版本开始，无需手动导入HdsNavigationAttribute。具体请参考HdsNavigation的导入模块说明。
-import { HdsNavigation, ScrollEffectType, HdsNavigationAttribute } from '@kit.UIDesignKit';
-import { LengthMetrics } from '@kit.ArkUI';
-创建一级导航组件，通过配置titleBar中的scrollEffectType属性，可实现通用模糊、过渡模糊、渐变模糊样式。
+```cmake
+ohpm install hds_button
+```
 
-@Entry
-@Component
-struct Index {
-build() {
-HdsNavigation() { // 创建HdsNavigation组件
-// HdsNavigation组件内容区
-}.titleBar({
-style: { // 设置导航组件标题栏样式
-// 标题栏动态模糊样式，包括是否使能滚动动态模糊，动态模糊类型，动态模糊生效的滚动距离等
-scrollEffectOpts: {
-enableScrollEffect: true,
-scrollEffectType: ScrollEffectType.COMMON_BLUR,
-blurEffectiveStartOffset: LengthMetrics.vp(0),
-blurEffectiveEndOffset: LengthMetrics.vp(20)
-},
-originalStyle: { // 内容区滚动前初始样式设置
-backgroundStyle: { // 标题栏背板样式设置
-backgroundColor: $r('sys.color.ohos_id_color_background'),
-},
-contentStyle: { // 标题栏内容区样式设置，包括标题区域，菜单区域，返回按钮区域
-titleStyle: {
-mainTitleColor: $r('sys.color.font_primary'),
-subTitleColor: $r('sys.color.font_secondary')
-},
-menuStyle: {
-backgroundColor: $r('sys.color.comp_background_tertiary'),
-iconColor: $r('sys.color.icon_primary')
-},
-backIconStyle: {
-backgroundColor: $r('sys.color.comp_background_tertiary'),
-iconColor: $r('sys.color.icon_primary')
-}
-}
-},
-scrollEffectStyle: { // 内容区滚动超过blurEffectiveEndOffset后样式设置
-backgroundStyle: {
-backgroundColor: $r('sys.color.ohos_id_color_background_transparent'),
-},
-contentStyle: {
-titleStyle: {
-mainTitleColor: $r('sys.color.font_primary'),
-subTitleColor: $r('sys.color.font_secondary')
-},
-menuStyle: {
-backgroundColor: $r('sys.color.comp_background_tertiary'),
-iconColor: $r('sys.color.icon_primary')
-},
-backIconStyle: {
-backgroundColor: $r('sys.color.comp_background_tertiary'),
-iconColor: $r('sys.color.icon_primary')
-}
-}
-}
-},
-content: { // 标题栏内容设置
-title: { mainTitle: 'Main', subTitle: 'Sub' },
-}
+## 导入
+
+```clean
+import { HdsMiniBarButton } from 'hds_button'
+```
+
+## 快速开始（代码 + 演示）
+
+### 1) 基础用法
+
+默认样式，适合先验证组件是否正常接入。
+
+```arcade
+HdsMiniBarButton({
+  onButtonClick: () => {
+    console.info('按钮被点击')
+  }
 })
+```
+
+**演示效果**
+
+![加载失败](https://chos1nz.oss-cn-hangzhou.aliyuncs.com/20260406191019728.gif)
+
+### 2) 自定义图标（图片）
+
+替换默认图标资源，快速定制按钮语义。
+
+```arcade
+HdsMiniBarButton({
+  iconResource: $r('sys.symbol.play_fill'),
+  iconColor: [Color.White],
+  onButtonClick: () => {
+    console.info('点击了播放按钮')
+  }
+})
+```
+
+**演示效果**
+
+![加载失败](https://chos1nz.oss-cn-hangzhou.aliyuncs.com/20260406191019787.gif)
+
+### 3) 自定义尺寸
+
+调整按钮宽高和内容留白，适配不同视觉密度。
+
+```dts
+HdsMiniBarButton({
+  barWidth: 60,
+  barHeight: 60,
+  contentPadding: 10, // containerSize 未设置时自动计算
+})
+```
+
+**演示效果**
+
+![加载失败](https://chos1nz.oss-cn-hangzhou.aliyuncs.com/20260406191020097.gif)
+
+### 4) 自定义内容（@BuilderParam）
+
+使用尾随闭包替换默认图标，可展示文本或任意自定义内容。
+
+```roboconf
+HdsMiniBarButton({
+  onButtonClick: () => {}
+}) {
+  Text('GO')
+    .fontSize(18)
+    .fontColor(Color.White)
+    .fontWeight(FontWeight.Bold)
 }
-}
+```
+
+**演示效果**
+
+![加载失败](https://chos1nz.oss-cn-hangzhou.aliyuncs.com/20260406191019692.gif)
+
+### 5) 自定义材质
+
+用于精细调节浮动栏的材质观感和底部间距。
+
+```php
+import { hdsMaterial } from '@kit.UIDesignKit'
+
+HdsMiniBarButton({
+  materialType: hdsMaterial.MaterialType.TRANSLUCENT,
+  materialLevel: hdsMaterial.MaterialLevel.LIGHT,
+  maskColor: '#20FFFFFF',
+  barBottomMargin: 12
+})
+```
+
+> 说明：当前未单独录制“自定义材质”动图，可在示例工程中直接运行查看效果。
+
+## API
+
+### 组件参数
+
+| 参数              | 类型                        | 默认值                  | 说明                         |
+| ----------------- | --------------------------- | ----------------------- | ---------------------------- | -------------------------- |
+| `barWidth`        | `number`                    | `50`                    | 按钮栏宽度                   |
+| `barHeight`       | `number`                    | `50`                    | 按钮栏高度                   |
+| `contentPadding`  | `number`                    | `8`                     | 容器内边距（防止光效被裁切） |
+| `containerSize`   | `SizeOptions                | undefined`              | `undefined`                  | 容器尺寸，未设置时自动计算 |
+| `iconResource`    | `Resource`                  | `$r('sys.symbol.plus')` | 图标资源                     |
+| `iconSize`        | `number`                    | `27`                    | 图标尺寸                     |
+| `iconColor`       | `ResourceColor[]`           | `[Color.Gray]`          | 图标颜色数组                 |
+| `maskColor`       | `ResourceColor`             | `Color.Transparent`     | 渐变遮罩颜色                 |
+| `barBottomMargin` | `number`                    | `8`                     | 按钮栏底部边距               |
+| `materialType`    | `hdsMaterial.MaterialType`  | `IMMERSIVE`             | 材质类型                     |
+| `materialLevel`   | `hdsMaterial.MaterialLevel` | `ADAPTIVE`              | 材质等级                     |
+| `barPosition`     | `BarPosition`               | `BarPosition.End`       | 栏位置                       |
+| `barOverlap`      | `boolean`                   | `true`                  | 是否与内容重叠               |
+| `onButtonClick`   | `(() => void)               | undefined`              | `undefined`                  | 按钮点击回调               |
+| `buttonContent`   | `@BuilderParam`             | 默认图标构建            | 自定义按钮内容               |
+
+### 导出说明
+
+- `HdsMiniBarButton`：推荐使用的主组件
+- `hdsButton`：兼容历史版本的别名组件（deprecated）
+
+## 示例项目
+
+可参考示例页面：
+
+- `entry/src/main/ets/pages/Index.ets`
+
+## 系统要求
+
+- HarmonyOS SDK：`6.1.0(23)` 及以上
+- DevEco Studio：`5.0` 及以上
+
+## 许可证
+
+Apache-2.0

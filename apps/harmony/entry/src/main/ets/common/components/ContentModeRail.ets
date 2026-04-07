@@ -10,8 +10,11 @@ export struct ContentModeRail {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop interactionLocked: boolean = false
   @Prop enableEnterTransition: boolean = true
+  @Prop collapsed: boolean = false
+  @Prop collapseProgress: number = 0
   @State pressedMode: ContentMode | '' = ''
   @State railWidth: number = 0
+  onExpandRequest: () => void = () => {}
   onChange: (mode: ContentMode) => void = () => {}
 
   private modeIndex(mode: ContentMode): number {
@@ -32,6 +35,10 @@ export struct ContentModeRail {
 
   private indicatorOffsetX(): number {
     return this.indicatorSlotWidth() * this.modeIndex(this.mode)
+  }
+
+  private clampedCollapseProgress(): number {
+    return Math.max(0, Math.min(this.collapseProgress, 1))
   }
 
   private updateRailWidth(width: Length | undefined): void {
@@ -72,8 +79,29 @@ export struct ContentModeRail {
     return this.isPressed(mode) ? 0.9 : 0.94
   }
 
+  private transitionalItemOpacity(mode: ContentMode): number {
+    if (this.mode === mode) {
+      return 1
+    }
+
+    const restOpacity = this.itemOpacity(mode)
+    return restOpacity * (1 - this.clampedCollapseProgress())
+  }
+
   private activeTextColor(): string {
     return this.theme.isDark ? '#F5F8FF' : '#14213D'
+  }
+
+  private railBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
+  }
+
+  private railBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
+  }
+
+  private railBackdropBlur(): number {
+    return this.theme.isDark ? 10 : 18
   }
 
   private indicatorColor(): string {
@@ -92,7 +120,64 @@ export struct ContentModeRail {
     return 8
   }
 
+  private railShellWidth(): Length {
+    if (this.collapsed) {
+      return this.collapsedCircleSize()
+    }
+
+    return '100%'
+  }
+
+  private collapsedCircleSize(): number {
+    return 40
+  }
+
+  private modeIconSize(collapsed: boolean = false): number {
+    return collapsed ? 24 : 16
+  }
+
+  private expandedRailScale(): number {
+    return 1 - this.clampedCollapseProgress() * 0.14
+  }
+
+  private railShellPadding(): Padding {
+    if (this.collapsed) {
+      return { left: 0, right: 0, top: 0, bottom: 0 }
+    }
+
+    return { left: 4, right: 4, top: 4, bottom: 4 }
+  }
+
+  private railShellBackgroundColor(): string {
+    return this.collapsed ? '#00000000' : this.railBackgroundColor()
+  }
+
+  private railShellBorderWidth(): number {
+    return this.collapsed ? 0 : 0.8
+  }
+
+  private railShellBackdropBlur(): number {
+    return this.collapsed ? 0 : this.railBackdropBlur()
+  }
+
+  private railShellBorderRadius(): number {
+    return this.collapsed ? CHIP_RADIUS : CARD_RADIUS_SM
+  }
+
+  private handleCollapsedTap(): void {
+    if (this.interactionLocked) {
+      return
+    }
+
+    this.onExpandRequest()
+  }
+
   private commitModeSwitch(mode: ContentMode): void {
+    if (this.collapsed) {
+      this.onExpandRequest()
+      return
+    }
+
     if (this.interactionLocked || mode === this.mode) {
       return
     }
@@ -116,26 +201,51 @@ export struct ContentModeRail {
   }
 
   @Builder
-  private ModeIcon(mode: ContentMode) {
+  private collapsedIcon(mode: ContentMode) {
     if (mode === 'articles') {
       Image($r('app.media.sub_articles_inactive'))
-        .width(16)
-        .height(16)
+        .width(this.modeIconSize(true))
+        .height(this.modeIconSize(true))
         .objectFit(ImageFit.Contain)
     } else if (mode === 'social') {
       Image($r('app.media.sub_social_inactive'))
-        .width(16)
-        .height(16)
+        .width(this.modeIconSize(true))
+        .height(this.modeIconSize(true))
         .objectFit(ImageFit.Contain)
     } else if (mode === 'pictures') {
       Image($r('app.media.sub_pictures_inactive'))
-        .width(16)
-        .height(16)
+        .width(this.modeIconSize(true))
+        .height(this.modeIconSize(true))
         .objectFit(ImageFit.Contain)
     } else {
       Image($r('app.media.sub_videos_inactive'))
-        .width(16)
-        .height(16)
+        .width(this.modeIconSize(true))
+        .height(this.modeIconSize(true))
+        .objectFit(ImageFit.Contain)
+    }
+  }
+
+  @Builder
+  private ModeIcon(mode: ContentMode) {
+    if (mode === 'articles') {
+      Image($r('app.media.sub_articles_inactive'))
+        .width(this.modeIconSize())
+        .height(this.modeIconSize())
+        .objectFit(ImageFit.Contain)
+    } else if (mode === 'social') {
+      Image($r('app.media.sub_social_inactive'))
+        .width(this.modeIconSize())
+        .height(this.modeIconSize())
+        .objectFit(ImageFit.Contain)
+    } else if (mode === 'pictures') {
+      Image($r('app.media.sub_pictures_inactive'))
+        .width(this.modeIconSize())
+        .height(this.modeIconSize())
+        .objectFit(ImageFit.Contain)
+    } else {
+      Image($r('app.media.sub_videos_inactive'))
+        .width(this.modeIconSize())
+        .height(this.modeIconSize())
         .objectFit(ImageFit.Contain)
     }
   }
@@ -155,7 +265,7 @@ export struct ContentModeRail {
     .justifyContent(FlexAlign.Center)
     .borderRadius(CHIP_RADIUS)
     .scale({ x: this.itemScale(mode), y: this.itemScale(mode) })
-    .opacity(this.itemOpacity(mode))
+    .opacity(this.transitionalItemOpacity(mode))
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onTouch((event: TouchEvent) => {
       if (this.interactionLocked) {
@@ -179,7 +289,45 @@ export struct ContentModeRail {
     })
   }
 
-  build() {
+  @Builder
+  private CollapsedRail() {
+    Row() {
+      this.collapsedIcon(this.mode)
+    }
+    .width(this.collapsedCircleSize())
+    .height(this.collapsedCircleSize())
+    .justifyContent(FlexAlign.Center)
+    .borderRadius(this.collapsedCircleSize())
+    .backgroundColor(this.indicatorColor())
+    .border({ width: 0.6, color: this.indicatorBorderColor() })
+    .shadow({
+      radius: this.indicatorShadowRadius(),
+      color: this.indicatorShadowColor(),
+      offsetX: 0,
+      offsetY: 2,
+    })
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => {
+      this.handleCollapsedTap()
+    })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.pressedMode = this.mode
+        return
+      }
+
+      if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        const wasPressed = this.pressedMode === this.mode
+        this.pressedMode = ''
+        if (event.type === TouchType.Up && wasPressed) {
+          this.handleCollapsedTap()
+        }
+      }
+    })
+  }
+
+  @Builder
+  private ExpandedRail() {
     Stack({ alignContent: Alignment.Center }) {
       Row() {
         Row()
@@ -208,12 +356,27 @@ export struct ContentModeRail {
       .width('100%')
       .height('100%')
     }
-    .width('100%')
-    .height(46)
-    .padding(4)
-    .backgroundColor(this.theme.elevated)
-    .borderRadius(CARD_RADIUS_SM)
-    .border({ width: 0.8, color: this.theme.divider })
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.collapsed) {
+        this.CollapsedRail()
+      } else {
+        this.ExpandedRail()
+      }
+    }
+    .width(this.railShellWidth())
+    .height(this.collapsed ? this.collapsedCircleSize() : 46)
+    .padding(this.railShellPadding())
+    .backgroundColor(this.railShellBackgroundColor())
+    .backdropBlur(this.railShellBackdropBlur())
+    .borderRadius(this.railShellBorderRadius())
+    .border({ width: this.railShellBorderWidth(), color: this.railBorderColor() })
+    .scale({
+      x: this.collapsed ? 1 : this.expandedRailScale(),
+      y: this.collapsed ? 1 : this.expandedRailScale(),
+    })
     .onSizeChange((_, newValue) => {
       this.updateRailWidth(newValue.width)
     })

@@ -59,6 +59,14 @@ const seedDataSource = fs.readFileSync(
   'utf8',
 )
 
+const discoverServiceSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/services/DiscoverService.ets',
+  ),
+  'utf8',
+)
+
 test('TweetEntryCard renders tweet-specific sections', () => {
   const source = fs.readFileSync(
     'apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets',
@@ -566,6 +574,21 @@ test('DiscoverContent still uses platform-scoped recommended fallback helpers', 
   assert.match(
     discoverServiceSource,
     /export function filteredRecommendedFeedsByPlatform\(platform: DiscoverSearchPlatform\)/,
+  )
+})
+
+test('DiscoverService prefers twitter RSSHub routes for X subscriptions', () => {
+  assert.match(
+    discoverServiceSource,
+    /\/twitter\/user\/\$\{encodeURIComponent\(clean\.toLowerCase\(\)\)\}/,
+  )
+  assert.match(
+    discoverServiceSource,
+    /\/twitter\/user\/\$\{encodeURIComponent\(username\.toLowerCase\(\)\)\}/,
+  )
+  assert.doesNotMatch(
+    discoverServiceSource,
+    /\/x\/user\/\$\{encodeURIComponent\(clean\.toLowerCase\(\)\)\}/,
   )
 })
 

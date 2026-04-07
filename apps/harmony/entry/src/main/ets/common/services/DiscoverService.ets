@@ -236,7 +236,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
   },
   {
     title: 'OpenAI on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/openai`,
+    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/openai`,
     siteUrl: 'https://x.com/OpenAI',
     description: 'OpenAI 在 X 上的公开动态',
     view: FeedViewType.SocialMedia,
@@ -245,7 +245,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
   },
   {
     title: 'GitHub on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/github`,
+    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/github`,
     siteUrl: 'https://x.com/github',
     description: 'GitHub 官方动态',
     view: FeedViewType.SocialMedia,
@@ -254,7 +254,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
   },
   {
     title: 'verge on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/verge`,
+    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/verge`,
     siteUrl: 'https://x.com/verge',
     description: 'The Verge 社交动态',
     view: FeedViewType.SocialMedia,
@@ -264,7 +264,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
   },
   {
     title: 'Figma on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/x/user/figma`,
+    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/figma`,
     siteUrl: 'https://x.com/figma',
     description: 'Figma 官方动态',
     view: FeedViewType.SocialMedia,
@@ -469,7 +469,7 @@ export function resolveProfileCandidates(value: string): ResolvedDiscoverCandida
     const username = (parts.pathSegments[0] ?? '').replace(/^@/, '')
     if (username) {
       pushCandidate({
-        targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/x/user/${encodeURIComponent(username.toLowerCase())}`,
+        targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/${encodeURIComponent(username.toLowerCase())}`,
         targetTitle: `@${username}`,
         targetView: FeedViewType.SocialMedia,
         description: '已从 X/Twitter 主页解析为 RSSHub 用户订阅地址。',
@@ -639,7 +639,7 @@ export function resolveKeywordCandidates(query: string, preferredView: FeedViewT
 
   if (preferredView === FeedViewType.SocialMedia) {
     pushCandidate({
-      targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/x/user/${encodeURIComponent(clean.toLowerCase())}`,
+      targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/${encodeURIComponent(clean.toLowerCase())}`,
       targetTitle: `@${clean}`,
       targetView: FeedViewType.SocialMedia,
       description: '根据关键词生成 X/Twitter 用户订阅地址。',
@@ -730,7 +730,7 @@ export function resolveKeywordCandidatesByPlatform(
 
   if (enableX) {
     pushCandidate({
-      targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/x/user/${encodeURIComponent(clean.toLowerCase())}`,
+      targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/${encodeURIComponent(clean.toLowerCase())}`,
       targetTitle: `@${clean}`,
       targetView: FeedViewType.SocialMedia,
       description: '根据关键词生成 X/Twitter 用户订阅地址。',

@@ -2,19 +2,28 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-test('home mode rail is rendered inside each scroll scene instead of a fixed root overlay', () => {
+test('home mode rail is rendered in a fixed root overlay instead of inside each scroll scene', () => {
   const source = readFileSync(
     new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
     'utf8',
   )
 
   const homeRootPageStart = source.indexOf('private HomeRootPage() {')
+  const searchLayerStart = source.indexOf(
+    'private HomeFloatingSearchButtonLayer() {',
+  )
   const buildStart = source.indexOf('build() {')
-  const homeRootPage = source.slice(homeRootPageStart, buildStart)
+  const homeRootPage = source.slice(homeRootPageStart, searchLayerStart)
+  const buildBlock = source.slice(buildStart)
 
   assert.notEqual(homeRootPageStart, -1)
+  assert.notEqual(searchLayerStart, -1)
   assert.notEqual(buildStart, -1)
-  assert.doesNotMatch(homeRootPage, /this\.HomeFixedModeRail\(\)/)
+  assert.doesNotMatch(homeRootPage, /this\.HomeCollapsingModeRailLayer\(\)/)
+  assert.match(
+    buildBlock,
+    /if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsingModeRailLayer\(\)/s,
+  )
   assert.doesNotMatch(homeRootPage, /Refresh\(/)
 
   const entryListStart = source.indexOf(
@@ -33,9 +42,12 @@ test('home mode rail is rendered inside each scroll scene instead of a fixed roo
   assert.match(entryList, /this\.HomeModeHeaderSection\(\)/)
   assert.match(pictureList, /this\.HomeModeHeaderSection\(\)/)
   assert.match(modeScene, /this\.HomeModeHeaderSection\(\)/)
+  assert.doesNotMatch(entryList, /this\.HomeModeRail\(\)/)
+  assert.doesNotMatch(pictureList, /this\.HomeModeRail\(\)/)
+  assert.doesNotMatch(modeScene, /this\.HomeModeRail\(\)/)
 })
 
-test('home no longer keeps a dedicated fixed rail wrapper once the rail moves into content scenes', () => {
+test('home keeps a dedicated fixed rail wrapper once the rail moves out of content scenes', () => {
   const source = readFileSync(
     new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
     'utf8',
@@ -47,7 +59,27 @@ test('home no longer keeps a dedicated fixed rail wrapper once the rail moves in
   )
   assert.doesNotMatch(source, /RootModeRailSection\(\{/)
   assert.match(source, /private HomeModeHeaderSection\(\)/)
-  assert.doesNotMatch(source, /private HomeFixedModeRail\(\)/)
+  assert.match(source, /private HomeCollapsingModeRailLayer\(\)/)
+})
+
+test('home no longer ships debug boundary lines for the rail top and first card top', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /private homeFirstCardTopBoundary\(\): number \{/)
+  assert.match(
+    source,
+    /return Math\.max\(0, HOME_MODE_HEADER_SPACER_HEIGHT - this\.currentHomeModeScrollOffset\)/,
+  )
+  assert.doesNotMatch(source, /private HomeModeRailDebugBoundaryLayer\(\)/)
+  assert.doesNotMatch(source, /backgroundColor\('#FF4D4F'\)/)
+  assert.doesNotMatch(source, /backgroundColor\('#3B82F6'\)/)
+  assert.doesNotMatch(
+    source,
+    /if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeModeRailDebugBoundaryLayer\(\)/s,
+  )
 })
 
 test('home uses one shared vertical gap value around the content area across list and grid scenes', () => {
@@ -95,12 +127,17 @@ test('home header section now includes the immersive title bar overlay before co
     source,
     /const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER/,
   )
+  assert.match(source, /const HOME_MODE_RAIL_HEIGHT: number = 46/)
   assert.match(
     source,
-    /Blank\(\)\s*\.height\(HOME_MODE_CONTENT_TOP_SPACER_HEIGHT\)/s,
+    /const HOME_MODE_HEADER_SPACER_HEIGHT: number =[\s\S]*HOME_MODE_CONTENT_TOP_SPACER_HEIGHT \+ ROOT_MODE_RAIL_TOP_GAP \+ HOME_MODE_RAIL_HEIGHT/,
+  )
+  assert.match(
+    source,
+    /Blank\(\)\s*\.height\(HOME_MODE_HEADER_SPACER_HEIGHT\)/s,
   )
   assert.match(source, /private HomeModeHeaderSection\(\)/)
-  assert.doesNotMatch(source, /private HomeFixedModeRail\(\)/)
+  assert.match(source, /private HomeCollapsingModeRailLayer\(\)/)
 })
 
 test('home and subscriptions share the same rail top gap constant so the rail position stays aligned', () => {
@@ -132,9 +169,10 @@ test('home and subscriptions share the same rail top gap constant so the rail po
     subscriptionsSource,
     /import \{[\s\S]*ROOT_MODE_RAIL_TOP_GAP[\s\S]*\} from '\.\/FloatingRootPageLayout'/,
   )
-  assert.match(homeSource, /this\.HomeModeRail\(\)/)
+  assert.match(homeSource, /this\.HomeModeRail\(\{/)
   assert.match(
     subscriptionsSource,
     /Column\(\{ space: ROOT_MODE_RAIL_TOP_GAP \}\)/,
   )
+  assert.match(homeSource, /private HomeCollapsingModeRailLayer\(\)/)
 })

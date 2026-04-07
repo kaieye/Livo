@@ -1,6 +1,7 @@
 import http from '@ohos.net.http'
 import { Entry, Feed, FeedViewType } from '../models/LivoModels'
 import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../utils/FeedMediaUrl'
+import { parseBilibiliDynamicEntries } from '../utils/BilibiliDynamicFeed'
 import { expandRssHubFallbackRoutes } from '../utils/RssHubFallbackRoute'
 
 interface ParsedItem {
@@ -297,6 +298,11 @@ function parseFeedImageUrl(xml: string, baseUrl: string): string {
   return ''
 }
 
+function extractBilibiliDynamicUid(url: string): string {
+  const matched = (url || '').match(/\/bilibili\/user\/dynamic\/(\d+)/i)
+  return matched?.[1] ?? ''
+}
+
 function parseRssItems(feedId: string, xml: string, baseUrl: string): ParsedItem[] {
   const itemMatches = xml.match(/<item[\s\S]*?<\/item>/gi) ?? []
 
@@ -375,7 +381,62 @@ interface RssHubInstanceResult {
   finalUrl: string
 }
 
+interface BilibiliDynamicApiPayload {
+  data?: object
+}
+
 export class RssFeedService {
+  private static async fetchBilibiliDynamicFeed(
+    feed: Feed,
+    uid: string,
+  ): Promise<FeedRefreshPayload> {
+    const request = http.createHttp()
+
+    try {
+      const response = await request.request(
+        `https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space?host_mid=${encodeURIComponent(uid)}`,
+        {
+          method: http.RequestMethod.GET,
+          connectTimeout: 10000,
+          readTimeout: 10000,
+          header: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': `https://space.bilibili.com/${encodeURIComponent(uid)}`,
+            'Origin': 'https://www.bilibili.com',
+          },
+        },
+      )
+
+      if (response.responseCode !== 200) {
+        throw new Error(`Bilibili dynamic request failed with status ${response.responseCode}`)
+      }
+
+      const payload = JSON.parse(String(response.result)) as BilibiliDynamicApiPayload
+      const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+        ? payload.data
+        : undefined
+      const entries = data ? parseBilibiliDynamicEntries(feed.id, data) : []
+
+      if (entries.length === 0) {
+        throw new Error('Bilibili dynamic feed returned no entries')
+      }
+
+      return {
+        etag: '',
+        lastModified: '',
+        feedTitle: feed.title,
+        siteUrl: feed.siteUrl || `https://space.bilibili.com/${uid}`,
+        imageUrl: feed.imageUrl || '',
+        description: feed.description || '',
+        resolvedFeedUrl: feed.url,
+        entries,
+      }
+    } finally {
+      request.destroy()
+    }
+  }
+
   static async previewFeedUrl(url: string): Promise<FeedRefreshPayload> {
     const dummyFeed: Feed = {
       id: `preview-${Date.now()}`,
@@ -563,6 +624,15 @@ export class RssFeedService {
     let activeRequest = mainRequest
     
     try {
+      const bilibiliDynamicUid = extractBilibiliDynamicUid(feed.url)
+      if (bilibiliDynamicUid) {
+        try {
+          return await RssFeedService.fetchBilibiliDynamicFeed(feed, bilibiliDynamicUid)
+        } catch (error) {
+          console.warn(`[RssFeedService] Bilibili dynamic fallback failed: ${error instanceof Error ? error.message : error}`)
+        }
+      }
+
       // 尝试将 YouTube 官方 RSS 转换为 RSSHub 代理
       let actualUrl = feed.url
       const rsshubUrl = RssFeedService.convertYouTubeToRssHub(feed.url)

@@ -1,5 +1,5 @@
 import { AppRepository } from '../common/data/AppRepository'
-import { KeyboardAvoidMode, LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
+import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
   HdsNavigation,
   HdsNavigationTitleMode,
@@ -41,9 +41,7 @@ import {
   BOTTOM_TAB_BAR_HEIGHT,
   BOTTOM_TAB_FLOAT_GAP,
   CARD_RADIUS_MD,
-  INPUT_RADIUS,
   META_FONT_SIZE,
-  PAGE_TOP_PADDING,
   PAGE_HORIZONTAL_PADDING,
 } from '../common/ui/UiTokens'
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
@@ -69,11 +67,31 @@ const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTT
 const HOME_TITLE_BAR_OVERLAY_SPACER: number =
   ROOT_TITLE_BAR_MINI_HEIGHT + HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER
+const HOME_MODE_RAIL_HEIGHT: number = 46
+const HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
+const HOME_MODE_HEADER_SPACER_HEIGHT: number =
+  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
 const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
+const HOME_FLOATING_SEARCH_BUTTON_SIZE: number = 40
+const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 8
+const HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING: number =
+  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_FLOATING_SEARCH_BUTTON_SIZE - ROOT_MODE_RAIL_TOP_GAP
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
   selected: SymbolGlyphModifier
+}
+
+interface HomeModeRailOptions {
+  collapsed?: boolean
+  collapseProgress?: number
+}
+
+interface HomeModeScrollOffsetMap {
+  articles: number
+  social: number
+  pictures: number
+  videos: number
 }
 
 @Entry
@@ -90,10 +108,6 @@ struct Index {
   @State entryGroups: HomeEntryGroups<EntryCardModel> = createEmptyHomeEntryGroups<EntryCardModel>()
   @State feedSourceLabel: string = '准备加载本地内容'
   @State isRefreshing: boolean = false
-  @State searchQuery: string = ''
-  @State showSearch: boolean = false
-  @State searchExpanded: boolean = false
-  private searchInputController: TextInputController = new TextInputController()
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
   @State previousMode: SubscriptionMode = 'articles'
@@ -101,6 +115,10 @@ struct Index {
   @State isModeTransitioning: boolean = false
   @State modeTransitionDirection: number = 1
   @State headerBlurProgress: number = 0
+  @State currentHomeModeScrollOffset: number = 0
+  @State homeModeRailExpandedOverride: boolean = false
+  @State homeModeRailExpandedLockOffset: number = -1
+  @State homeCollapsedModeRailPressed: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State rootSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State rootTabIndex: number = 0
@@ -113,21 +131,22 @@ struct Index {
   private readonly socialScroller: Scroller = new Scroller()
   private readonly picturesScroller: Scroller = new Scroller()
   private readonly videosScroller: Scroller = new Scroller()
+  private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
   private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
 
-  private animateWithUiContext(options: AnimateParam, event: () => void): void {
-    this.getUIContext().animateTo(options, event)
-  }
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
     this.syncRequestedRootTab()
-    this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
     void this.loadInitialData()
   }
 
   aboutToDisappear(): void {
-    this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
   }
 
   private async loadInitialData(): Promise<void> {
@@ -166,17 +185,62 @@ struct Index {
     this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
   }
 
-  private handleHeaderBlurScrollDelta(delta: number): void {
-    this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+  private homeModeScrollOffsetFor(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeModeScrollOffsets.social
+      case 'pictures':
+        return this.homeModeScrollOffsets.pictures
+      case 'videos':
+        return this.homeModeScrollOffsets.videos
+      default:
+        return this.homeModeScrollOffsets.articles
+    }
   }
 
-  private toggleHomeSearch(): void {
-    if (this.showSearch) {
-      this.closeSearch()
+  private updateHomeModeScrollOffset(mode: SubscriptionMode, offset: number): void {
+    switch (mode) {
+      case 'social':
+        this.homeModeScrollOffsets.social = offset
+        break
+      case 'pictures':
+        this.homeModeScrollOffsets.pictures = offset
+        break
+      case 'videos':
+        this.homeModeScrollOffsets.videos = offset
+        break
+      default:
+        this.homeModeScrollOffsets.articles = offset
+        break
+    }
+  }
+
+  private readHomeModeScrollOffset(mode: SubscriptionMode): number {
+    try {
+      return Math.max(0, this.homeScrollerForMode(mode).currentOffset().yOffset)
+    } catch (_) {
+      return this.homeModeScrollOffsetFor(mode)
+    }
+  }
+
+  private syncHomeModeRailState(mode: SubscriptionMode = this.mode): void {
+    const nextOffset = this.readHomeModeScrollOffset(mode)
+    this.updateHomeModeScrollOffset(mode, nextOffset)
+    if (mode !== this.mode) {
       return
     }
 
-    this.openSearch()
+    if (this.homeModeRailExpandedOverride) {
+      if (Math.abs(nextOffset - this.homeModeRailExpandedLockOffset) < 0.5) {
+        return
+      }
+
+      this.homeModeRailExpandedOverride = false
+      this.homeModeRailExpandedLockOffset = -1
+    }
+
+    this.currentHomeModeScrollOffset = nextOffset
+    this.updateHeaderBlurProgress(nextOffset)
   }
 
   private currentRootTitle(): string {
@@ -192,47 +256,123 @@ struct Index {
     }
   }
 
-  private homeTitleSearchButtonBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(28,32,40,0.82)' : 'rgba(255,255,255,0.84)'
+  private homeFloatingSearchButtonBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
   }
 
-  private homeTitleSearchButtonBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.96)'
+  private homeFloatingSearchButtonBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
   }
 
-  private homeTitleSearchButtonShadow(): ShadowOptions {
+  private homeFloatingSearchButtonShadow(): ShadowOptions {
     return {
-      radius: 18,
-      color: this.theme.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.72)',
+      radius: 10,
+      color: this.theme.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)',
       offsetX: 0,
-      offsetY: 4,
+      offsetY: 2,
     }
   }
 
-  private homeTitleSearchButtonBackdropBlur(): number {
-    return this.theme.isDark ? 16 : 24
+  private homeFloatingSearchButtonBackdropBlur(): number {
+    return this.theme.isDark ? 10 : 18
+  }
+
+  private homeCollapsedModeRailBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.82)' : 'rgba(255,255,255,0.9)'
+  }
+
+  private homeCollapsedModeRailBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.08)'
+  }
+
+  private homeCollapsedModeRailShadow(): ShadowOptions {
+    return {
+      radius: 10,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(15,23,42,0.12)',
+      offsetX: 0,
+      offsetY: 2,
+    }
+  }
+
+  private homeSearchOverlayTopPadding(): number {
+    return this.topAvoidArea + HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING
   }
 
   @Builder
-  private HomeTitleSearchButton() {
+  private HomeFloatingSearchButton() {
     Row() {
       SymbolGlyph($r('sys.symbol.magnifyingglass'))
         .fontSize(22)
         .fontColor([$r('sys.color.icon_primary')])
     }
-    .width(40)
-    .height(40)
+    .width(HOME_FLOATING_SEARCH_BUTTON_SIZE)
+    .height(HOME_FLOATING_SEARCH_BUTTON_SIZE)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.homeTitleSearchButtonBackgroundColor())
-    .backdropBlur(this.homeTitleSearchButtonBackdropBlur())
-    .borderRadius(20)
-    .border({ width: 0.8, color: this.homeTitleSearchButtonBorderColor() })
-    .shadow(this.homeTitleSearchButtonShadow())
-    .translate({ y: 1 })
+    .backgroundColor(this.homeFloatingSearchButtonBackgroundColor())
+    .backdropBlur(this.homeFloatingSearchButtonBackdropBlur())
+    .borderRadius(40)
+    .border({ width: 0.8, color: this.homeFloatingSearchButtonBorderColor() })
+    .shadow(this.homeFloatingSearchButtonShadow())
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
+  }
+
+  @Builder
+  private HomeCollapsedModeRailIcon() {
+    if (this.mode === 'articles') {
+      Image($r('app.media.sub_articles_inactive'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    } else if (this.mode === 'social') {
+      Image($r('app.media.sub_social_inactive'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    } else if (this.mode === 'pictures') {
+      Image($r('app.media.sub_pictures_inactive'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    } else {
+      Image($r('app.media.sub_videos_inactive'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    }
+  }
+
+  @Builder
+  private HomeCollapsedModeRailButton() {
+    Row() {
+      this.HomeCollapsedModeRailIcon()
+    }
+    .width(this.homeCollapsedModeRailWidth())
+    .height(this.homeCollapsedModeRailWidth())
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
+    .backdropBlur(this.homeFloatingSearchButtonBackdropBlur())
+    .borderRadius(this.homeCollapsedModeRailWidth())
+    .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
+    .shadow(this.homeCollapsedModeRailShadow())
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .scale({
+      x: this.homeCollapsedModeRailPressed ? 0.92 : 1,
+      y: this.homeCollapsedModeRailPressed ? 0.92 : 1,
+    })
+    .opacity(this.homeCollapsedModeRailPressed ? 0.82 : 1)
+    .animation({ duration: 140, curve: Curve.EaseOut })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.homeCollapsedModeRailPressed = true
+        return
+      }
+
+      this.homeCollapsedModeRailPressed = false
+    })
     .onClick(() => {
-      this.toggleHomeSearch()
+      this.requestExpandedModeRail()
     })
   }
 
@@ -257,20 +397,17 @@ struct Index {
 
   @Builder
   private HomeRootLowerTitleBuilder() {
-    Row({ space: 12 }) {
+    Row() {
       Text('今日推荐')
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .layoutWeight(1)
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-
-      this.HomeTitleSearchButton()
     }
     .width('100%')
     .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
     .alignItems(VerticalAlign.Bottom)
-    .justifyContent(FlexAlign.SpaceBetween)
     .padding({
       left: PAGE_HORIZONTAL_PADDING,
       right: PAGE_HORIZONTAL_PADDING,
@@ -374,19 +511,9 @@ struct Index {
 
   @Builder
   private HomeModeHeaderSection() {
-    Column({ space: 0 }) {
+    Column() {
       Blank()
-        .height(HOME_MODE_CONTENT_TOP_SPACER_HEIGHT)
-
-      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-        Row()
-          .width('100%')
-          .height(0)
-
-        this.HomeModeRail()
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
+        .height(HOME_MODE_HEADER_SPACER_HEIGHT)
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -525,6 +652,10 @@ struct Index {
 
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
+    this.homeModeRailExpandedOverride = false
+    this.homeModeRailExpandedLockOffset = -1
+    this.currentHomeModeScrollOffset = this.homeModeScrollOffsetFor(nextMode)
+    this.updateHeaderBlurProgress(this.homeModeScrollOffsetFor(nextMode))
     this.startModeTransition(nextMode)
   }
 
@@ -625,152 +756,6 @@ struct Index {
     }
   }
 
-  private searchAllEntries(): EntryCardModel[] {
-    const keyword = this.searchQuery.trim().toLowerCase()
-    if (!keyword) {
-      return []
-    }
-
-    return this.featuredEntries.filter((entry: EntryCardModel) =>
-      entry.title.toLowerCase().includes(keyword)
-      || entry.summary.toLowerCase().includes(keyword)
-      || entry.feedTitle.toLowerCase().includes(keyword)
-    )
-  }
-
-  private hasSearchEmptyState(): boolean {
-    return !!this.searchQuery.trim() && this.searchAllEntries().length === 0
-  }
-
-  private searchPanelHeight(): number {
-    const resultCount = this.searchAllEntries().length
-    if (resultCount === 0) {
-      return 132
-    }
-
-    const visibleCount = this.searchExpanded ? Math.min(resultCount, 6) : Math.min(resultCount, 3)
-    return visibleCount * 90 + (visibleCount - 1) * 8 + 16
-  }
-
-  private getMatchedContent(text: string, keyword: string, maxLength: number = 60): string {
-    if (!keyword || !text) {
-      return ''
-    }
-    const lowerText = text.toLowerCase()
-    const lowerKeyword = keyword.toLowerCase()
-    const index = lowerText.indexOf(lowerKeyword)
-    if (index === -1) {
-      return ''
-    }
-    const start = Math.max(0, index - 20)
-    const end = Math.min(text.length, index + keyword.length + 30)
-    let result = text.slice(start, end)
-    if (start > 0) {
-      result = '...' + result
-    }
-    if (end < text.length) {
-      result = result + '...'
-    }
-    return result
-  }
-
-  private findHighlightIndex(text: string, keyword: string): number {
-    if (!keyword || !text) {
-      return -1
-    }
-    return text.toLowerCase().indexOf(keyword.toLowerCase())
-  }
-
-  private getMatchedContentPrefix(text: string, keyword: string): string {
-    if (!keyword || !text) {
-      return ''
-    }
-    const lowerText = text.toLowerCase()
-    const lowerKeyword = keyword.toLowerCase()
-    const index = lowerText.indexOf(lowerKeyword)
-    if (index === -1) {
-      return ''
-    }
-    const start = Math.max(0, index - 20)
-    let prefix = text.slice(start, index)
-    if (start > 0) {
-      prefix = '...' + prefix
-    }
-    return prefix
-  }
-
-  private getMatchedContentSuffix(text: string, keyword: string): string {
-    if (!keyword || !text) {
-      return ''
-    }
-    const lowerText = text.toLowerCase()
-    const lowerKeyword = keyword.toLowerCase()
-    const index = lowerText.indexOf(lowerKeyword)
-    if (index === -1) {
-      return ''
-    }
-    const end = Math.min(text.length, index + keyword.length + 30)
-    let suffix = text.slice(index + keyword.length, end)
-    if (end < text.length) {
-      suffix = suffix + '...'
-    }
-    return suffix
-  }
-
-  private searchPanelIcon(): Resource {
-    return this.theme.isDark ? $r('app.media.nav_discover_active') : $r('app.media.nav_discover_inactive')
-  }
-
-  @Builder
-  private HighlightTitle(title: string, keyword: string) {
-    if (!keyword || this.findHighlightIndex(title, keyword) < 0) {
-      Text(title)
-        .fontSize(14)
-        .fontColor(this.theme.textPrimary)
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .layoutWeight(1)
-    } else {
-      Text() {
-        Span(title.slice(0, this.findHighlightIndex(title, keyword)))
-          .fontSize(14)
-          .fontColor(this.theme.textPrimary)
-        Span(title.slice(
-          this.findHighlightIndex(title, keyword),
-          this.findHighlightIndex(title, keyword) + keyword.length
-        ))
-          .fontSize(14)
-          .fontColor(this.theme.accent)
-          .fontWeight(FontWeight.Medium)
-        Span(title.slice(this.findHighlightIndex(title, keyword) + keyword.length))
-          .fontSize(14)
-          .fontColor(this.theme.textPrimary)
-      }
-      .maxLines(2)
-      .textOverflow({ overflow: TextOverflow.Ellipsis })
-      .layoutWeight(1)
-    }
-  }
-
-  @Builder
-  private HighlightSummary(summary: string, keyword: string) {
-    Text() {
-      Span(this.getMatchedContentPrefix(summary, keyword))
-        .fontSize(12)
-        .fontColor(this.theme.textSecondary)
-      Span(keyword)
-        .fontSize(12)
-        .fontColor(this.theme.accent)
-        .fontWeight(FontWeight.Medium)
-      Span(this.getMatchedContentSuffix(summary, keyword))
-        .fontSize(12)
-        .fontColor(this.theme.textSecondary)
-    }
-    .maxLines(2)
-    .textOverflow({ overflow: TextOverflow.Ellipsis })
-    .width('100%')
-  }
-
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
     const state = resolveModeSceneRenderState({
       mode,
@@ -832,40 +817,6 @@ struct Index {
       case 'videos': return '视频'
       default: return ''
     }
-  }
-
-  private updateKeyboardAvoidMode(mode: KeyboardAvoidMode): void {
-    try {
-      this.getUIContext().setKeyboardAvoidMode(mode)
-    } catch (_) {
-    }
-  }
-
-  private openSearch(): void {
-    if (this.showSearch) {
-      return
-    }
-
-    this.updateKeyboardAvoidMode(KeyboardAvoidMode.NONE)
-    this.showSearch = true
-
-    setTimeout(() => {
-      const focusController = this.getUIContext().getFocusController()
-      focusController.requestFocus('home_search_input')
-    }, 140)
-  }
-
-  private closeSearch(): void {
-    if (!this.showSearch) {
-      return
-    }
-
-    this.updateKeyboardAvoidMode(KeyboardAvoidMode.OFFSET)
-    this.animateWithUiContext({ duration: 260, curve: Curve.EaseIn }, () => {
-      this.showSearch = false
-      this.searchQuery = ''
-      this.searchExpanded = false
-    })
   }
 
   @Builder
@@ -934,16 +885,190 @@ struct Index {
   }
 
   @Builder
-  private HomeModeRail() {
-    ContentModeRail({
-      mode: this.mode,
-      theme: this.theme,
-      interactionLocked: this.isModeTransitioning,
-      enableEnterTransition: false,
-      onChange: (mode: SubscriptionMode) => {
-        this.requestModeSwitch(mode)
-      },
-    })
+  private HomeModeRail(options: HomeModeRailOptions = {}) {
+    if (options.collapsed ?? false) {
+      if (this.mode === 'articles') {
+        ContentModeRail({
+          mode: 'articles',
+          theme: this.theme,
+          interactionLocked: this.isModeTransitioning,
+          enableEnterTransition: false,
+          collapsed: true,
+          collapseProgress: options.collapseProgress ?? 0,
+          onExpandRequest: () => {
+            this.requestExpandedModeRail()
+          },
+          onChange: (mode: SubscriptionMode) => {
+            this.requestModeSwitch(mode)
+          },
+        })
+      } else if (this.mode === 'social') {
+        ContentModeRail({
+          mode: 'social',
+          theme: this.theme,
+          interactionLocked: this.isModeTransitioning,
+          enableEnterTransition: false,
+          collapsed: true,
+          collapseProgress: options.collapseProgress ?? 0,
+          onExpandRequest: () => {
+            this.requestExpandedModeRail()
+          },
+          onChange: (mode: SubscriptionMode) => {
+            this.requestModeSwitch(mode)
+          },
+        })
+      } else if (this.mode === 'pictures') {
+        ContentModeRail({
+          mode: 'pictures',
+          theme: this.theme,
+          interactionLocked: this.isModeTransitioning,
+          enableEnterTransition: false,
+          collapsed: true,
+          collapseProgress: options.collapseProgress ?? 0,
+          onExpandRequest: () => {
+            this.requestExpandedModeRail()
+          },
+          onChange: (mode: SubscriptionMode) => {
+            this.requestModeSwitch(mode)
+          },
+        })
+      } else {
+        ContentModeRail({
+          mode: 'videos',
+          theme: this.theme,
+          interactionLocked: this.isModeTransitioning,
+          enableEnterTransition: false,
+          collapsed: true,
+          collapseProgress: options.collapseProgress ?? 0,
+          onExpandRequest: () => {
+            this.requestExpandedModeRail()
+          },
+          onChange: (mode: SubscriptionMode) => {
+            this.requestModeSwitch(mode)
+          },
+        })
+      }
+    } else {
+      ContentModeRail({
+        mode: this.mode,
+        theme: this.theme,
+        interactionLocked: this.isModeTransitioning,
+        enableEnterTransition: false,
+        collapsed: false,
+        collapseProgress: options.collapseProgress ?? 0,
+        onExpandRequest: () => {
+          this.requestExpandedModeRail()
+        },
+        onChange: (mode: SubscriptionMode) => {
+          this.requestModeSwitch(mode)
+        },
+      })
+    }
+  }
+
+  private currentHomeModeScroller(): Scroller {
+    return this.homeScrollerForMode(this.mode)
+  }
+
+  private requestExpandedModeRail(): void {
+    this.homeModeRailExpandedLockOffset = this.readHomeModeScrollOffset(this.mode)
+    this.homeModeRailExpandedOverride = true
+    this.currentHomeModeScrollOffset = 0
+    this.updateHeaderBlurProgress(0)
+  }
+
+  private homeModeRailCollapseProgress(): number {
+    if (this.homeModeRailExpandedOverride) {
+      return 0
+    }
+
+    return this.homeFirstCardTopBoundary() <= HOME_MODE_CONTENT_TOP_SPACER_HEIGHT ? 1 : 0
+  }
+
+  private isHomeModeRailCollapsed(): boolean {
+    return this.homeModeRailCollapseProgress() >= 1
+  }
+
+  private homeCollapsedModeRailTopPadding(): number {
+    return this.topAvoidArea
+      + HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING
+      - ROOT_MODE_RAIL_TOP_GAP
+      + HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET
+  }
+
+  private homeCollapsedModeRailWidth(): number {
+    return HOME_FLOATING_SEARCH_BUTTON_SIZE
+  }
+
+  private homeModeRailRightInset(): number {
+    if (this.homeModeRailCollapseProgress() >= 1) {
+      return PAGE_HORIZONTAL_PADDING + HOME_FLOATING_SEARCH_BUTTON_SIZE + ROOT_MODE_RAIL_TOP_GAP
+    }
+
+    return PAGE_HORIZONTAL_PADDING
+  }
+
+  private homeModeRailLeftPadding(): number {
+    return PAGE_HORIZONTAL_PADDING
+  }
+
+  private homeModeRailTopPadding(): number {
+    const progress = this.homeModeRailCollapseProgress()
+    return HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
+      + (this.homeCollapsedModeRailTopPadding() - HOME_MODE_CONTENT_TOP_SPACER_HEIGHT) * progress
+  }
+
+  private homeFirstCardTopBoundary(): number {
+    return Math.max(0, HOME_MODE_HEADER_SPACER_HEIGHT - this.currentHomeModeScrollOffset)
+  }
+
+  @Builder
+  private HomeCollapsingModeRailLayer() {
+    if (!this.isHomeModeRailCollapsed()) {
+      Stack({ alignContent: Alignment.Top }) {
+        Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+          Row()
+            .width('100%')
+            .height(0)
+
+          Row() {
+            this.HomeModeRail({
+              collapsed: false,
+              collapseProgress: this.homeModeRailCollapseProgress(),
+            })
+          }
+            .width('100%')
+            .justifyContent(FlexAlign.Start)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .align(Alignment.Top)
+      }
+      .width('100%')
+      .padding({
+        top: this.homeModeRailTopPadding(),
+        left: this.homeModeRailLeftPadding(),
+        right: this.homeModeRailRightInset(),
+      })
+      .zIndex(100)
+    }
+  }
+
+  @Builder
+  private HomeCollapsedModeRailLayer() {
+    if (this.isHomeModeRailCollapsed()) {
+      Column() {
+        this.HomeCollapsedModeRailButton()
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.End)
+      .padding({
+        top: this.homeCollapsedModeRailTopPadding(),
+        left: PAGE_HORIZONTAL_PADDING,
+        right: this.homeModeRailRightInset(),
+      })
+      .zIndex(120)
+    }
   }
 
   @Builder
@@ -996,8 +1121,8 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-      this.handleHeaderBlurScrollDelta(scrollOffset)
+    .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
+      this.syncHomeModeRailState(mode)
     })
   }
 
@@ -1058,8 +1183,8 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-      this.handleHeaderBlurScrollDelta(scrollOffset)
+    .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
+      this.syncHomeModeRailState('pictures')
     })
   }
 
@@ -1089,8 +1214,8 @@ struct Index {
         .height('100%')
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
-        .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
-          this.handleHeaderBlurScrollDelta(scrollOffset)
+        .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
+          this.syncHomeModeRailState(mode)
         })
       } else if (mode === 'pictures') {
         this.PictureEntryList()
@@ -1108,34 +1233,44 @@ struct Index {
 
   @Builder
   private HomeRootPage() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Stack() {
-        if (this.shouldMountModeScene('articles')) {
-          this.ModeEntriesScene('articles')
-        }
-        if (this.shouldMountModeScene('social')) {
-          this.ModeEntriesScene('social')
-        }
-        if (this.shouldMountModeScene('pictures')) {
-          this.ModeEntriesScene('pictures')
-        }
-        if (this.shouldMountModeScene('videos')) {
-          this.ModeEntriesScene('videos')
-        }
+    Stack() {
+      if (this.shouldMountModeScene('articles')) {
+        this.ModeEntriesScene('articles')
       }
-      .width('100%')
-      .height('100%')
-      .gesture(
-        PanGesture({ direction: PanDirection.Horizontal })
-          .onActionEnd((event: GestureEvent) => {
-            this.handleModeSwipe(event)
-          })
-      )
-
+      if (this.shouldMountModeScene('social')) {
+        this.ModeEntriesScene('social')
+      }
+      if (this.shouldMountModeScene('pictures')) {
+        this.ModeEntriesScene('pictures')
+      }
+      if (this.shouldMountModeScene('videos')) {
+        this.ModeEntriesScene('videos')
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionEnd((event: GestureEvent) => {
+          this.handleModeSwipe(event)
+        })
+    )
+  }
+
+  @Builder
+  private HomeFloatingSearchButtonLayer() {
+    Column() {
+      this.HomeFloatingSearchButton()
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.End)
+    .padding({
+      top: this.homeSearchOverlayTopPadding(),
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+    })
+    .zIndex(110)
   }
 
   onPageShow(): void {
@@ -1151,7 +1286,7 @@ struct Index {
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       HdsNavigation() {
         HdsTabs({ controller: this.rootTabsController }) {
           ForEach(resolveHdsBottomTabItems(), (item: HdsBottomTabItem) => {
@@ -1291,185 +1426,16 @@ struct Index {
       .width('100%')
       .height('100%')
 
-      if (this.showSearch) {
-        Column() {
-          Column({ space: 10 }) {
-            Row({ space: 8 }) {
-              Image(this.searchPanelIcon())
-                .width(20)
-                .height(20)
-                .objectFit(ImageFit.Contain)
-              TextInput({ text: this.searchQuery, placeholder: '搜索标题、摘要或来源', controller: this.searchInputController })
-                .backgroundColor('transparent')
-                .fontColor(this.theme.textPrimary)
-                .padding(0)
-                .layoutWeight(1)
-                .defaultFocus(true)
-                .id('home_search_input')
-                .textAlign(TextAlign.Center)
-                .onChange((value: string) => {
-                  this.searchQuery = value
-                })
-                .onClick(() => {
-                  if (this.searchExpanded) {
-                    this.animateWithUiContext({ duration: 300, curve: Curve.EaseOut }, () => {
-                      this.searchExpanded = false
-                    })
-                  }
-                })
-                .onBlur(() => {
-                  if (!this.searchExpanded && this.searchQuery.trim()) {
-                    this.animateWithUiContext({ duration: 300, curve: Curve.EaseOut }, () => {
-                      this.searchExpanded = true
-                    })
-                  }
-                })
-            }
-            .width('100%')
-            .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .backgroundColor(this.theme.elevated)
-            .borderRadius(INPUT_RADIUS)
-            .border({ width: 0.8, color: this.theme.divider })
-            .shadow({
-              radius: 10,
-              color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
-              offsetY: 2,
-            })
-            .gesture(
-              PanGesture({ direction: PanDirection.Down })
-                .onActionEnd((event: GestureEvent) => {
-                  if (event.offsetY > 30) {
-                    this.closeSearch()
-                  }
-                })
-            )
+      if (this.isHomeRootTab()) {
+        this.HomeCollapsingModeRailLayer()
+      }
 
-            if (this.searchQuery.trim()) {
-              Stack({ alignContent: Alignment.Bottom }) {
-                List({ space: 8 }) {
-                  ForEach(this.searchAllEntries(), (entry: EntryCardModel, index: number) => {
-                    ListItem() {
-                      Column({ space: 6 }) {
-                        Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
-                          this.HighlightTitle(entry.title, this.searchQuery.trim())
+      if (this.isHomeRootTab()) {
+        this.HomeCollapsedModeRailLayer()
+      }
 
-                          Text(entry.feedTitle)
-                            .fontSize(11)
-                            .fontColor(this.theme.textMuted)
-                            .maxLines(1)
-                            .textOverflow({ overflow: TextOverflow.Ellipsis })
-                            .flexShrink(0)
-                            .margin({ left: 8, top: 2 })
-                        }
-                        .width('100%')
-
-                        if (entry.summary && entry.summary.trim()) {
-                          if (this.getMatchedContent(entry.summary, this.searchQuery.trim())) {
-                            this.HighlightSummary(entry.summary, this.searchQuery.trim())
-                          } else {
-                            Text(entry.summary)
-                              .fontSize(12)
-                              .fontColor(this.theme.textSecondary)
-                              .maxLines(2)
-                              .textOverflow({ overflow: TextOverflow.Ellipsis })
-                              .width('100%')
-                          }
-                        }
-                      }
-                      .width('100%')
-                      .alignItems(HorizontalAlign.Start)
-                      .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-                      .backgroundColor(this.theme.surface)
-                      .borderRadius(12)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT })
-                      .onClick(() => {
-                        this.closeSearch()
-                        this.openEntry(entry.id)
-                      })
-                    }
-                    .transition(
-                      TransitionEffect.OPACITY.animation({ duration: 200, curve: Curve.EaseOut, delay: index * 30 })
-                    )
-                  }, (entry: EntryCardModel) => `${entry.id}_${this.searchQuery}`)
-
-                  if (this.hasSearchEmptyState()) {
-                    ListItem() {
-                      Column({ space: 8 }) {
-                        Image(this.searchPanelIcon())
-                          .width(24)
-                          .height(24)
-                          .objectFit(ImageFit.Contain)
-
-                        Text('搜索不到内容')
-                          .fontSize(15)
-                          .fontWeight(FontWeight.Medium)
-                          .fontColor(this.theme.textPrimary)
-
-                        Text('换个关键词试试，或者搜索标题、摘要和来源')
-                          .fontSize(12)
-                          .fontColor(this.theme.textSecondary)
-                          .textAlign(TextAlign.Center)
-                          .maxLines(2)
-                      }
-                      .width('100%')
-                      .padding({ left: 20, right: 20, top: 24, bottom: 24 })
-                      .justifyContent(FlexAlign.Center)
-                      .alignItems(HorizontalAlign.Center)
-                      .backgroundColor(this.theme.surface)
-                      .borderRadius(12)
-                    }
-                  }
-                }
-                .width('100%')
-                .height(this.searchPanelHeight())
-                .backgroundColor(this.theme.surface)
-                .borderRadius(this.searchExpanded ? 16 : INPUT_RADIUS)
-                .border({ width: 0.8, color: this.theme.divider })
-                .shadow({
-                  radius: 10,
-                  color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
-                  offsetY: 2,
-                })
-                .padding({ left: 8, right: 8, top: 8, bottom: 8 })
-                .scrollBar(BarState.Off)
-                .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-                .alignListItem(ListItemAlign.Start)
-                .onWillScroll((_scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-                  if (!this.searchExpanded) {
-                    this.searchInputController.stopEditing()
-                    this.animateWithUiContext({ duration: 400, curve: Curve.FastOutSlowIn }, () => {
-                      this.searchExpanded = true
-                    })
-                  }
-                })
-              }
-              .clip(true)
-              .animation({ duration: 400, curve: Curve.FastOutSlowIn })
-            }
-          }
-          .width('100%')
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING })
-          .transition(
-            TransitionEffect.asymmetric(
-              TransitionEffect.translate({ y: -20 })
-                .combine(TransitionEffect.opacity(0))
-                .animation({ duration: 260, curve: Curve.EaseOut }),
-              TransitionEffect.translate({ y: -20 })
-                .combine(TransitionEffect.opacity(0))
-                .animation({ duration: 260, curve: Curve.EaseIn })
-            )
-          )
-        }
-        .width('100%')
-        .height('100%')
-        .padding({ top: this.topAvoidArea })
-        .justifyContent(FlexAlign.Start)
-        .alignItems(HorizontalAlign.Center)
-        .backgroundColor('rgba(0,0,0,0.15)')
-        .onClick(() => {
-          this.closeSearch()
-        })
-        .zIndex(10)
+      if (this.isHomeRootTab()) {
+        this.HomeFloatingSearchButtonLayer()
       }
     }
     .width('100%')

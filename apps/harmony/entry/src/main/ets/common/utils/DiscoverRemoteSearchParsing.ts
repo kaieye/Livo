@@ -435,7 +435,7 @@ export function toDiscoverCandidateFromProfileSeed(
 
   if (seed.platform === 'x') {
     return {
-      targetUrl: `https://rsshub.pseudoyu.com/x/user/${encodeURIComponent(seed.username)}`,
+      targetUrl: `https://rsshub.pseudoyu.com/twitter/user/${encodeURIComponent(seed.username)}`,
       targetTitle: formatXFeedTitle(displayTitle, seed.username),
       targetView: viewMapping.x,
       description: normalizeSocialFeedDescription(
