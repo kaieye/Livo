@@ -1,12 +1,14 @@
 import { common } from '@kit.AbilityKit'
-import Want from '@ohos.app.ability.Want'
+import { MovingPhotoView, MovingPhotoViewController, photoAccessHelper } from '@kit.MediaLibraryKit'
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack, openImageViewer, openVideoPlayer } from '../common/navigation/AppRouter'
 import { ArticleAssistService } from '../common/services/ArticleAssistService'
-import { AppContextService } from '../common/services/AppContextService'
+import { ExternalUrlService } from '../common/services/ExternalUrlService'
+import { MovingPhotoService } from '../common/services/MovingPhotoService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
 import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
+import { PictureCarouselMediaItem } from '../common/utils/PictureGallery'
 import { resolveArticleSourceUrl } from '../common/utils/ArticleSourceUrl'
 import { resolveYouTubePlaybackDisplay } from '../common/utils/YouTubePlaybackDisplay'
 import { resolveVideoPlaybackTarget } from '../common/utils/VideoPlaybackTarget'
@@ -41,14 +43,64 @@ struct ArticleDetail {
   @State isResolvingActiveVideo: boolean = false
   @State inlineVideoPreparingBlockId: string = ''
   @State mediaAspectRatios: number[] = []
+  @State activeMovingPhoto: photoAccessHelper.MovingPhoto | undefined = undefined
+  @State private activePictureMediaIndex: number = 0
+  @State private playingDetailLivePhotoIndex: number = -1
+  @State private pausedDetailLivePhotoIndex: number = -1
+  @State private preparedDetailLivePhotoIndices: number[] = []
+  @State private detailLivePhotoInstanceSeeds: number[] = []
+  @State private detailLivePhotoAspectRatios: number[] = []
+  @State private isPictureMediaFullyVisible: boolean = false
+  @State private isPictureMediaNearlyVisible: boolean = false
+  @State private detailLivePhotoVisibilityRatios: number[] = []
+  @State private detailLivePhotoMuted: boolean = true
   private upgradedEntryIds: Set<string> = new Set<string>()
   private videoWebController: webview.WebviewController = new webview.WebviewController()
   private nativeVideoController: VideoController = new VideoController()
+  private readonly movingPhotoController: MovingPhotoViewController = new MovingPhotoViewController()
+  private readonly detailLivePhotoControllers: VideoController[] = []
   private readonly webVideoUserAgent: string =
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
 
   private animateWithUiContext(options: AnimateParam, event: () => void): void {
     this.getUIContext().animateTo(options, event)
+  }
+
+  private copyEntryWithStarState(entry: ArticleDetailModel, isStarred: boolean): ArticleDetailModel {
+    return {
+      id: entry.id,
+      feedId: entry.feedId,
+      title: entry.title,
+      summary: entry.summary,
+      imageUrl: entry.imageUrl,
+      feedImageUrl: entry.feedImageUrl,
+      author: entry.author,
+      articleUrl: entry.articleUrl,
+      publishedAt: entry.publishedAt,
+      publishedLabel: entry.publishedLabel,
+      readingLabel: entry.readingLabel,
+      tags: entry.tags,
+      mediaUrls: entry.mediaUrls,
+      rawMediaUrls: entry.rawMediaUrls,
+      feedTitle: entry.feedTitle,
+      feedCategory: entry.feedCategory,
+      viewLabel: entry.viewLabel,
+      viewBadgeColor: entry.viewBadgeColor,
+      hasVideoMedia: entry.hasVideoMedia,
+      isRead: entry.isRead,
+      isStarred,
+      contentParagraphs: entry.contentParagraphs,
+      contentBlocks: entry.contentBlocks,
+      siteUrl: entry.siteUrl,
+    }
+  }
+
+  private showToast(message: string, duration: number = 1800): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (error) {
+      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   aboutToAppear(): void {
@@ -107,19 +159,34 @@ struct ArticleDetail {
       return
     }
 
-    this.animateWithUiContext({ duration: 150, curve: Curve.EaseOut }, () => {
-      this.starScale = 1.4
+    const previousStarred = this.entry?.isStarred ?? false
+    if (this.entry) {
+      this.entry = this.copyEntryWithStarState(this.entry, !previousStarred)
+    }
+
+    this.animateWithUiContext({ duration: 140, curve: Curve.EaseOut }, () => {
+      this.starScale = 1.28
     })
 
-    await AppRepository.toggleStar(entryId)
-    await this.loadEntry(false)
-    this.actionHint = this.entry?.isStarred ? '已收藏' : '已取消收藏'
-
     setTimeout(() => {
-      this.animateWithUiContext({ duration: 300, curve: Curve.FastOutSlowIn }, () => {
+      this.animateWithUiContext({ duration: 240, curve: Curve.FastOutSlowIn }, () => {
         this.starScale = 1.0
       })
-    }, 150)
+    }, 100)
+
+    try {
+      await AppRepository.toggleStar(entryId)
+      await this.loadEntry(false)
+      const message = this.entry?.isStarred ? '已收藏' : '已取消收藏'
+      this.actionHint = message
+      this.showToast(message)
+    } catch (error) {
+      if (this.entry) {
+        this.entry = this.copyEntryWithStarState(this.entry, previousStarred)
+      }
+      this.showToast('收藏操作失败，请稍后重试')
+      console.error(`toggleStar failed: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   private async upgradeLegacyEntryIfNeeded(): Promise<boolean> {
@@ -158,23 +225,7 @@ struct ArticleDetail {
   }
 
   private async openExternalUrl(url: string): Promise<void> {
-    const trimmed = (url || '').trim()
-    if (!trimmed) {
-      return
-    }
-
-    try {
-      const want: Want = {
-        action: 'action.view',
-        entities: ['entity.default'],
-        uri: trimmed,
-      }
-      await AppContextService.getContext().startAbility(want)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : `${error}`
-      console.error(`Failed to open external url: ${message}`)
-      this.actionHint = '打开视频失败'
-    }
+    await ExternalUrlService.open(url)
   }
 
   private extractYouTubeVideoId(value: string): string {
@@ -253,6 +304,383 @@ struct ArticleDetail {
   private sourceLabel(): string {
     const hasVideoBlock = !!this.entry?.contentBlocks.find((block: ArticleContentBlock) => block.type === 'video')
     return hasVideoBlock ? '视频来源' : '原始来源'
+  }
+
+  private browserOpenUrl(): string {
+    const articleUrl = (this.entry?.articleUrl || '').trim()
+    if (articleUrl) {
+      return articleUrl
+    }
+
+    return this.sourceUrl()
+  }
+
+  private async openEntryInBrowser(): Promise<void> {
+    const url = this.browserOpenUrl()
+    if (!url) {
+      this.actionHint = '暂无可打开链接'
+      return
+    }
+
+    try {
+      await ExternalUrlService.open(url)
+      this.actionHint = '已在浏览器打开'
+    } catch (error) {
+      console.error(`Failed to open entry in browser: ${error instanceof Error ? error.message : `${error}`}`)
+      this.actionHint = '浏览器打开失败'
+    }
+  }
+
+  private pictureDetailMediaItems(): PictureCarouselMediaItem[] {
+    if (!this.isPictureDetail()) {
+      return []
+    }
+
+    return (this.entry?.contentBlocks ?? []).reduce((result: PictureCarouselMediaItem[], block: ArticleContentBlock) => {
+      if (block.type === 'video' && block.videoUrl) {
+        result.push({
+          kind: 'livePhoto',
+          imageUrl: block.imageUrl || '',
+          videoUrl: block.videoUrl,
+        })
+        return result
+      }
+
+      if (block.type === 'image' && block.imageUrl) {
+        result.push({
+          kind: 'image',
+          imageUrl: block.imageUrl,
+          videoUrl: '',
+        })
+      }
+      return result
+    }, [])
+  }
+
+  private pictureDetailTextBlocks(): ArticleContentBlock[] {
+    if (!this.isPictureDetail()) {
+      return this.entry?.contentBlocks ?? []
+    }
+
+    return (this.entry?.contentBlocks ?? []).filter((block: ArticleContentBlock) => block.type === 'paragraph' && !!block.text)
+  }
+
+  private detailLivePhotoControllerFor(index: number): VideoController {
+    if (!this.detailLivePhotoControllers[index]) {
+      this.detailLivePhotoControllers[index] = new VideoController()
+    }
+    return this.detailLivePhotoControllers[index]
+  }
+
+  private currentDetailLivePhotoItem(index: number): PictureCarouselMediaItem | undefined {
+    const item = this.pictureDetailMediaItems()[index]
+    return item?.kind === 'livePhoto' && item.videoUrl ? item : undefined
+  }
+
+  private firstDetailLivePhotoIndex(): number {
+    const items = this.pictureDetailMediaItems()
+    for (let index = 0; index < items.length; index += 1) {
+      if (items[index]?.kind === 'livePhoto' && items[index].videoUrl) {
+        return index
+      }
+    }
+
+    return -1
+  }
+
+  private preloadDetailLivePhotoIndices(): number[] {
+    // 在垂直列表布局中，所有live图片都会被挂载和显示
+    // 这个方法保留以保持向后兼容，但现在返回空数组
+    return []
+  }
+
+  private mountedDetailLivePhotoIndices(): number[] {
+    // 在垂直列表布局中，所有live图片都被挂载和显示
+    const items = this.pictureDetailMediaItems()
+    const mounted = new Set<number>()
+
+    items.forEach((item: PictureCarouselMediaItem, index: number) => {
+      if (item.kind === 'livePhoto' && item.videoUrl) {
+        mounted.add(index)
+      }
+    })
+
+    return Array.from(mounted.values())
+  }
+
+  private warmMountedDetailLivePhotos(targetIndex: number): void {
+    this.mountedDetailLivePhotoIndices().forEach((index: number) => {
+      if (index !== targetIndex) {
+        return
+      }
+      try {
+        this.detailLivePhotoControllerFor(index).start()
+      } catch (_) {
+      }
+    })
+  }
+
+  private isDetailLivePhotoPrepared(index: number): boolean {
+    return this.preparedDetailLivePhotoIndices.includes(index)
+  }
+
+  private clearPreparedDetailLivePhoto(index: number): void {
+    if (!this.preparedDetailLivePhotoIndices.includes(index)) {
+      return
+    }
+
+    this.preparedDetailLivePhotoIndices = this.preparedDetailLivePhotoIndices.filter((value: number) => value !== index)
+  }
+
+  private markPreparedDetailLivePhoto(index: number): void {
+    if (this.preparedDetailLivePhotoIndices.includes(index)) {
+      return
+    }
+
+    this.preparedDetailLivePhotoIndices = [...this.preparedDetailLivePhotoIndices, index]
+  }
+
+  private detailLivePhotoInstanceSeed(index: number): number {
+    return this.detailLivePhotoInstanceSeeds[index] ?? 0
+  }
+
+  private refreshDetailLivePhotoInstance(index: number): void {
+    this.clearPreparedDetailLivePhoto(index)
+    const nextSeeds = [...this.detailLivePhotoInstanceSeeds]
+    nextSeeds[index] = (nextSeeds[index] ?? 0) + 1
+    this.detailLivePhotoInstanceSeeds = nextSeeds
+  }
+
+  private stopAllDetailLivePhotoPlayback(exceptIndex: number = -1): void {
+    this.detailLivePhotoControllers.forEach((controller: VideoController, index: number) => {
+      if (index === exceptIndex || !controller) {
+        return
+      }
+      try {
+        controller.pause()
+      } catch (_) {
+      }
+    })
+  }
+
+  private stopDetailLivePhotoPlayback(): void {
+    this.playingDetailLivePhotoIndex = -1
+    this.pausedDetailLivePhotoIndex = -1
+    this.preparedDetailLivePhotoIndices = []
+    this.stopAllDetailLivePhotoPlayback()
+  }
+
+  private pauseDetailLivePhotoPlayback(index: number): void {
+    const item = this.currentDetailLivePhotoItem(index)
+    if (!item) {
+      this.pausedDetailLivePhotoIndex = -1
+      this.playingDetailLivePhotoIndex = -1
+      return
+    }
+
+    this.stopAllDetailLivePhotoPlayback(index)
+    try {
+      this.detailLivePhotoControllerFor(index).pause()
+      this.pausedDetailLivePhotoIndex = index
+    } catch (_) {
+      this.pausedDetailLivePhotoIndex = -1
+    }
+    this.playingDetailLivePhotoIndex = -1
+  }
+
+  private syncPictureDetailLivePhotoPlayback(index: number): void {
+    const item = this.currentDetailLivePhotoItem(index)
+    if (!item) {
+      this.playingDetailLivePhotoIndex = -1
+      this.pausedDetailLivePhotoIndex = -1
+      return
+    }
+
+    if (this.detailLivePhotoVisibilityRatio(index) < 0.35) {
+      this.pauseDetailLivePhotoPlayback(index)
+      return
+    }
+
+    this.warmMountedDetailLivePhotos(index)
+
+    if (this.isDetailLivePhotoPrepared(index)) {
+      this.pausedDetailLivePhotoIndex = -1
+      this.playingDetailLivePhotoIndex = index
+      try {
+        this.detailLivePhotoControllerFor(index).start()
+      } catch (_) {
+      }
+      return
+    }
+
+    this.pausedDetailLivePhotoIndex = -1
+    this.playingDetailLivePhotoIndex = -1
+  }
+
+  private detailLivePhotoVisibilityRatio(index: number): number {
+    return this.detailLivePhotoVisibilityRatios[index] ?? 0
+  }
+
+  private resolveCenteredDetailLivePhotoIndex(ratios: number[]): number {
+    const items = this.pictureDetailMediaItems()
+    let bestIndex = -1
+    let bestScore = 0
+
+    items.forEach((item: PictureCarouselMediaItem, index: number) => {
+      if (item.kind !== 'livePhoto' || !item.videoUrl) {
+        return
+      }
+      const score = ratios[index] ?? 0
+      if (score > bestScore) {
+        bestScore = score
+        bestIndex = index
+      }
+    })
+
+    return bestScore >= 0.35 ? bestIndex : -1
+  }
+
+  private updateDetailLivePhotoVisibility(index: number, isVisible: boolean, currentRatio: number): void {
+    if (this.currentDetailLivePhotoItem(index) === undefined) {
+      return
+    }
+
+    const nextRatios = [...this.detailLivePhotoVisibilityRatios]
+    nextRatios[index] = currentRatio
+    this.detailLivePhotoVisibilityRatios = nextRatios
+
+    const centeredIndex = this.resolveCenteredDetailLivePhotoIndex(nextRatios)
+    if (centeredIndex < 0) {
+      this.isPictureMediaNearlyVisible = false
+      this.isPictureMediaFullyVisible = false
+      this.stopDetailLivePhotoPlayback()
+      return
+    }
+
+    this.isPictureMediaNearlyVisible = true
+    this.isPictureMediaFullyVisible = true
+    if (this.activePictureMediaIndex !== centeredIndex) {
+      this.activePictureMediaIndex = centeredIndex
+    }
+    this.syncPictureDetailLivePhotoPlayback(centeredIndex)
+  }
+
+  private toggleDetailLivePhotoMuted(): void {
+    this.detailLivePhotoMuted = !this.detailLivePhotoMuted
+    this.showToast(this.detailLivePhotoMuted ? '已静音' : '已开启声音')
+  }
+
+  private toggleDetailLivePhotoPlayback(index: number): void {
+    const item = this.currentDetailLivePhotoItem(index)
+    if (!item) {
+      return
+    }
+
+    if (this.playingDetailLivePhotoIndex === index) {
+      this.pauseDetailLivePhotoPlayback(index)
+      return
+    }
+
+    if (this.detailLivePhotoVisibilityRatio(index) < 0.35) {
+      return
+    }
+
+    this.syncPictureDetailLivePhotoPlayback(index)
+  }
+
+  private shouldShowPlayingDetailLivePhoto(index: number): boolean {
+    return this.activePictureMediaIndex === index
+      && this.isDetailLivePhotoPrepared(index)
+  }
+
+  private shouldShowPausedDetailLivePhoto(index: number): boolean {
+    return this.pausedDetailLivePhotoIndex === index && this.isDetailLivePhotoPrepared(index)
+  }
+
+  private shouldWarmDetailLivePhoto(index: number): boolean {
+    return this.activePictureMediaIndex === index
+      && this.detailLivePhotoVisibilityRatio(index) >= 0.35
+      && this.mountedDetailLivePhotoIndices().includes(index)
+  }
+
+  private shouldShowDetailLivePhotoLoading(index: number): boolean {
+    // 仅为屏幕中间候选live图显示加载指示器
+    return this.currentDetailLivePhotoItem(index) !== undefined
+      && this.activePictureMediaIndex === index
+      && this.detailLivePhotoVisibilityRatio(index) >= 0.35
+      && !this.isDetailLivePhotoPrepared(index)
+  }
+
+  private handleDetailLivePhotoPrepared(index: number): void {
+    this.markPreparedDetailLivePhoto(index)
+    if (this.activePictureMediaIndex === index && this.detailLivePhotoVisibilityRatio(index) >= 0.35) {
+      this.pausedDetailLivePhotoIndex = -1
+      this.playingDetailLivePhotoIndex = index
+      try {
+        this.detailLivePhotoControllerFor(index).start()
+      } catch (_) {
+      }
+    }
+  }
+
+  private handleDetailLivePhotoStart(index: number): void {
+    this.markPreparedDetailLivePhoto(index)
+    if (this.pausedDetailLivePhotoIndex === index) {
+      this.pausedDetailLivePhotoIndex = -1
+    }
+    if (this.activePictureMediaIndex === index && this.detailLivePhotoVisibilityRatio(index) >= 0.35) {
+      this.playingDetailLivePhotoIndex = index
+    }
+  }
+
+  private handleDetailLivePhotoPause(index: number): void {
+    if (this.isDetailLivePhotoPrepared(index)) {
+      this.pausedDetailLivePhotoIndex = index
+    }
+    if (this.playingDetailLivePhotoIndex === index) {
+      this.playingDetailLivePhotoIndex = -1
+    }
+  }
+
+  private handleDetailLivePhotoStop(index: number): void {
+    if (this.playingDetailLivePhotoIndex === index) {
+      this.playingDetailLivePhotoIndex = -1
+    }
+    if (this.pausedDetailLivePhotoIndex === index) {
+      this.pausedDetailLivePhotoIndex = -1
+    }
+  }
+
+  private handleDetailLivePhotoError(index: number): void {
+    this.clearPreparedDetailLivePhoto(index)
+    if (this.playingDetailLivePhotoIndex === index) {
+      this.playingDetailLivePhotoIndex = -1
+    }
+    if (this.pausedDetailLivePhotoIndex === index) {
+      this.pausedDetailLivePhotoIndex = -1
+    }
+    this.refreshDetailLivePhotoInstance(index)
+  }
+
+  private detailLivePhotoAspectRatio(index: number): number {
+    const ratio = this.detailLivePhotoAspectRatios[index]
+    return ratio && ratio > 0 ? ratio : 4 / 5
+  }
+
+  private rememberDetailLivePhotoAspectRatio(index: number, width: number, height: number): void {
+    if (width <= 0 || height <= 0) {
+      return
+    }
+
+    const nextRatio = width / height
+    const currentRatio = this.detailLivePhotoAspectRatios[index]
+    if (currentRatio && Math.abs(currentRatio - nextRatio) < 0.001) {
+      return
+    }
+
+    const nextAspectRatios = [...this.detailLivePhotoAspectRatios]
+    nextAspectRatios[index] = nextRatio
+    this.detailLivePhotoAspectRatios = nextAspectRatios
   }
 
   private shouldRenderSummary(): boolean {
@@ -352,8 +780,42 @@ struct ArticleDetail {
     return this.isPictureDetail() && this.isDirectVideoFile(block.videoUrl)
   }
 
+  private shouldUseNativeMovingPhoto(block: ArticleContentBlock): boolean {
+    return this.shouldInlineVideoPlayback(block) && !!block.imageUrl
+  }
+
   private isInlineVideoPreparing(block: ArticleContentBlock): boolean {
     return this.inlineVideoPreparingBlockId === block.id
+  }
+
+  private loadMovingPhotoForBlock(block: ArticleContentBlock): void {
+    if (!this.shouldUseNativeMovingPhoto(block)) {
+      this.activeMovingPhoto = undefined
+      return
+    }
+
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+    const expectedBlockId = block.id
+    this.activeMovingPhoto = undefined
+    void MovingPhotoService.loadRemoteMovingPhoto(
+      context,
+      block.imageUrl,
+      block.videoUrl,
+    )
+      .then((movingPhoto: photoAccessHelper.MovingPhoto) => {
+        if (this.activeVideoBlockId !== expectedBlockId) {
+          return
+        }
+        this.activeMovingPhoto = movingPhoto
+      })
+      .catch((error: Error) => {
+        if (this.activeVideoBlockId !== expectedBlockId) {
+          return
+        }
+        this.activeMovingPhoto = undefined
+        this.inlineVideoPreparingBlockId = ''
+        this.actionHint = error instanceof Error ? error.message : '动态照片加载失败'
+      })
   }
 
   private openVideoFullscreen(block: ArticleContentBlock): void {
@@ -383,9 +845,11 @@ struct ArticleDetail {
     this.activeVideoPlayableUrl = ''
     this.activeVideoFallbackUrl = ''
     this.isResolvingActiveVideo = false
+    this.activeMovingPhoto = undefined
     this.inlineVideoPreparingBlockId = this.shouldInlineVideoPlayback(block) ? block.id : ''
     this.actionHint = ''
     if (this.isDirectVideoFile(block.videoUrl)) {
+      this.loadMovingPhotoForBlock(block)
       this.activeVideoPlayableUrl = block.videoUrl
       return
     }
@@ -402,8 +866,12 @@ struct ArticleDetail {
     this.activeVideoFallbackUrl = ''
     this.isResolvingActiveVideo = false
     this.inlineVideoPreparingBlockId = ''
+    this.activeMovingPhoto = undefined
     try {
       this.nativeVideoController.stop()
+    } catch (_) {}
+    try {
+      this.movingPhotoController.stopPlayback()
     } catch (_) {}
   }
 
@@ -457,6 +925,7 @@ struct ArticleDetail {
     onTap?: () => void,
     symbolColors?: ResourceColor[],
     backgroundColor?: string,
+    buttonScale: number = 1,
   ) {
     Row() {
       SymbolGlyph(symbol)
@@ -473,6 +942,8 @@ struct ArticleDetail {
       .backgroundColor(backgroundColor ?? Color.Transparent)
       .borderRadius(HEADER_BACK_SLOT_SIZE)
       .clickEffect({ level: ClickEffectLevel.LIGHT })
+      .scale({ x: buttonScale, y: buttonScale })
+      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
       .onClick(() => {
         if (onTap) {
           onTap()
@@ -491,17 +962,18 @@ struct ArticleDetail {
       )
 
       this.HeaderIconAction(
-        $r('sys.symbol.share'),
+        $r('sys.symbol.link'),
         22,
-        () => { this.actionHint = '分享功能开发中...' },
+        () => { void this.openEntryInBrowser() },
       )
 
       this.HeaderIconAction(
         $r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'),
         22,
         () => { void this.toggleStar() },
-        [this.entry?.isStarred ? this.theme.accent : this.theme.textSecondary],
+        [this.entry?.isStarred ? '#F6C343' : this.theme.textSecondary],
         undefined,
+        this.starScale,
       )
     }
     .height(HEADER_BACK_SLOT_SIZE)
@@ -520,6 +992,188 @@ struct ArticleDetail {
     .alignItems(VerticalAlign.Center)
     .backgroundColor('rgba(17,24,39,0.42)')
     .borderRadius(999)
+  }
+
+  @Builder
+  private LiveBadge() {
+    Row({ space: 4 }) {
+      SymbolGlyph($r('sys.symbol.play_fill'))
+        .fontSize(11)
+        .fontColor(['rgba(255,255,255,0.92)'])
+
+      Text('LIVE')
+        .fontSize(10)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('rgba(255,255,255,0.92)')
+    }
+    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+    .margin({ top: 10, right: 10 })
+    .backgroundColor('rgba(0,0,0,0.22)')
+    .borderRadius(999)
+  }
+
+  @Builder
+  private LiveSoundToggle() {
+    Row({ space: 4 }) {
+      SymbolGlyph($r(this.detailLivePhotoMuted ? 'sys.symbol.speaker_slash_fill' : 'sys.symbol.speaker_wave_2_fill'))
+        .fontSize(11)
+        .fontColor(['rgba(255,255,255,0.92)'])
+
+      Text(this.detailLivePhotoMuted ? '静音' : '有声')
+        .fontSize(10)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('rgba(255,255,255,0.92)')
+    }
+    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+    .margin({ right: 10, bottom: 10 })
+    .backgroundColor('rgba(0,0,0,0.28)')
+    .borderRadius(999)
+    .clickEffect({ level: ClickEffectLevel.LIGHT })
+    .onClick(() => {
+      this.toggleDetailLivePhotoMuted()
+    })
+  }
+
+  @Builder
+  private DetailLivePhotoSlide(item: PictureCarouselMediaItem, index: number) {
+    Stack({ alignContent: Alignment.Center }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image(item.imageUrl)
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Contain)
+          .borderRadius(18)
+          .backgroundColor(this.theme.elevated)
+          .onComplete((event) => {
+            if (event) {
+              this.rememberDetailLivePhotoAspectRatio(index, event.width, event.height)
+            }
+          })
+          .visibility((this.shouldShowPlayingDetailLivePhoto(index) || this.shouldShowPausedDetailLivePhoto(index))
+            ? Visibility.Hidden
+            : Visibility.Visible)
+
+        if (item.kind === 'livePhoto' && item.videoUrl && this.mountedDetailLivePhotoIndices().includes(index)) {
+          Video({
+            src: item.videoUrl,
+            controller: this.detailLivePhotoControllerFor(index),
+            previewUri: item.imageUrl,
+          })
+            .width('100%')
+            .height('100%')
+            .borderRadius(18)
+            .controls(false)
+            .autoPlay(this.shouldWarmDetailLivePhoto(index))
+            .loop(true)
+            .muted(this.detailLivePhotoMuted || !this.shouldShowPlayingDetailLivePhoto(index))
+            .objectFit(ImageFit.Cover)
+            .opacity((this.shouldShowPlayingDetailLivePhoto(index) || this.shouldShowPausedDetailLivePhoto(index)) ? 1 : 0)
+            .onPrepared(() => {
+              this.handleDetailLivePhotoPrepared(index)
+            })
+            .onStart(() => {
+              this.handleDetailLivePhotoStart(index)
+            })
+            .onPause(() => {
+              this.handleDetailLivePhotoPause(index)
+            })
+            .onStop(() => {
+              this.handleDetailLivePhotoStop(index)
+            })
+            .onError(() => {
+              this.handleDetailLivePhotoError(index)
+            })
+        }
+      }
+      .width('100%')
+      .height('100%')
+      .clickEffect({ level: ClickEffectLevel.LIGHT })
+      .onClick(() => {
+        this.toggleDetailLivePhotoPlayback(index)
+      })
+
+      if (this.shouldShowDetailLivePhotoLoading(index)) {
+        Stack() {
+          LoadingProgress()
+            .width(28)
+            .height(28)
+            .color(this.theme.accent)
+        }
+        .width('100%')
+        .height('100%')
+        .align(Alignment.Center)
+      }
+
+      Stack() {
+        this.LiveBadge()
+      }
+      .width('100%')
+      .height('100%')
+      .align(Alignment.TopEnd)
+
+      Stack() {
+        this.LiveSoundToggle()
+      }
+      .width('100%')
+      .height('100%')
+      .align(Alignment.BottomEnd)
+    }
+    .width('100%')
+    .aspectRatio(this.detailLivePhotoAspectRatio(index))
+    .onVisibleAreaChange([0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0], (isVisible: boolean, currentRatio: number) => {
+      this.updateDetailLivePhotoVisibility(index, isVisible, currentRatio)
+    })
+  }
+
+  @Builder
+  private PictureDetailMediaCarousel() {
+    if (this.pictureDetailMediaItems().length > 0) {
+      Column({ space: 20 }) {
+        ForEach(this.pictureDetailMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+          Column() {
+            if (item.kind === 'livePhoto') {
+              this.DetailLivePhotoSlide(item, index)
+            } else {
+              Stack({ alignContent: Alignment.Center }) {
+                Image(item.imageUrl)
+                  .width('100%')
+                  .height('100%')
+                  .objectFit(ImageFit.Contain)
+                  .borderRadius(18)
+                  .backgroundColor(this.theme.elevated)
+                  .onComplete((event) => {
+                    if (event) {
+                      this.rememberDetailLivePhotoAspectRatio(index, event.width, event.height)
+                    }
+                  })
+              }
+              .width('100%')
+              .aspectRatio(this.detailLivePhotoAspectRatio(index))
+              .clip(true)
+              .borderRadius(18)
+              .backgroundColor(this.theme.elevated)
+              .onClick(() => {
+                void openImageViewer(item.imageUrl, this.entry?.title || '图片预览')
+              })
+            }
+          }
+          .width('100%')
+        }, (item: PictureCarouselMediaItem, index: number) =>
+          `${item.kind}-${item.imageUrl}-${item.videoUrl}-${index}-${this.detailLivePhotoInstanceSeed(index)}`)
+      }
+      .width('100%')
+      .onVisibleAreaChange([0], (isVisible: boolean) => {
+        if (!isVisible) {
+          this.isPictureMediaNearlyVisible = false
+          this.isPictureMediaFullyVisible = false
+          this.detailLivePhotoVisibilityRatios = []
+          this.stopDetailLivePhotoPlayback()
+        }
+      })
+      .onDisAppear(() => {
+        this.stopDetailLivePhotoPlayback()
+      })
+    }
   }
 
   @Builder
@@ -569,31 +1223,60 @@ struct ArticleDetail {
                     })
                 }
 
-                Video({
-                  src: this.activeVideoPlayableUrl || block.videoUrl,
-                  controller: this.nativeVideoController,
-                  previewUri: block.imageUrl || '',
-                })
-                  .width('100%')
-                  .height('100%')
-                  .borderRadius(18)
-                  .controls(true)
-                  .autoPlay(true)
-                  .objectFit(ImageFit.Contain)
-                  .onPrepared(() => {
-                    if (this.inlineVideoPreparingBlockId === block.id) {
+                if (this.shouldUseNativeMovingPhoto(block) && this.activeMovingPhoto) {
+                  MovingPhotoView({
+                    movingPhoto: this.activeMovingPhoto,
+                    controller: this.movingPhotoController,
+                  })
+                    .width('100%')
+                    .height('100%')
+                    .muted(true)
+                    .objectFit(ImageFit.Contain)
+                    .autoPlay(true)
+                    .repeatPlay(false)
+                    .autoPlayPeriod(0, 1500)
+                    .onPrepared(() => {
+                      if (this.inlineVideoPreparingBlockId === block.id) {
+                        this.inlineVideoPreparingBlockId = ''
+                      }
+                    })
+                    .onStart(() => {
+                      if (this.inlineVideoPreparingBlockId === block.id) {
+                        this.inlineVideoPreparingBlockId = ''
+                      }
+                    })
+                    .onError(() => {
+                      this.activeMovingPhoto = undefined
                       this.inlineVideoPreparingBlockId = ''
-                    }
+                      this.actionHint = '动态照片播放失败，请稍后重试'
+                    })
+                } else {
+                  Video({
+                    src: this.activeVideoPlayableUrl || block.videoUrl,
+                    controller: this.nativeVideoController,
+                    previewUri: block.imageUrl || '',
                   })
-                  .onStart(() => {
-                    if (this.inlineVideoPreparingBlockId === block.id) {
+                    .width('100%')
+                    .height('100%')
+                    .borderRadius(18)
+                    .controls(true)
+                    .autoPlay(true)
+                    .objectFit(ImageFit.Contain)
+                    .onPrepared(() => {
+                      if (this.inlineVideoPreparingBlockId === block.id) {
+                        this.inlineVideoPreparingBlockId = ''
+                      }
+                    })
+                    .onStart(() => {
+                      if (this.inlineVideoPreparingBlockId === block.id) {
+                        this.inlineVideoPreparingBlockId = ''
+                      }
+                    })
+                    .onError(() => {
                       this.inlineVideoPreparingBlockId = ''
-                    }
-                  })
-                  .onError(() => {
-                    this.inlineVideoPreparingBlockId = ''
-                    this.actionHint = '应用内播放失败，请稍后重试'
-                  })
+                      this.actionHint = '应用内播放失败，请稍后重试'
+                    })
+                }
 
                 if (this.isInlineVideoPreparing(block)) {
                   LoadingProgress()
@@ -792,7 +1475,7 @@ struct ArticleDetail {
           showBackButton: true,
           showTrailingBuilder: true,
           titleSize: 20,
-          topPadding: 24,
+          topPadding: 40,
           bottomPadding: 0,
           onBack: () => { void goBack() },
         }) {
@@ -839,6 +1522,10 @@ struct ArticleDetail {
             }
 
             Column({ space: 20 }) {
+              if (this.isPictureDetail()) {
+                this.PictureDetailMediaCarousel()
+              }
+
               if (this.shouldRenderSummary()) {
                 Text(this.entry!.summary)
                   .fontSize(16)
@@ -849,7 +1536,7 @@ struct ArticleDetail {
               }
 
               if (this.entry!.contentBlocks.length > 0) {
-                ForEach(this.entry!.contentBlocks, (block: ArticleContentBlock, index: number) => {
+                ForEach(this.pictureDetailTextBlocks(), (block: ArticleContentBlock, index: number) => {
                   if (this.shouldRenderParagraphBlock(block, index)) {
                     this.ContentBlockItem(block, index)
                   }
@@ -865,11 +1552,13 @@ struct ArticleDetail {
                 }, (paragraph: string, index: number) => `${index}-${paragraph}`)
               }
 
-              if (this.sourceUrl()) {
-                Text(`${this.sourceLabel()}：${this.sourceUrl()}`)
-                  .fontSize(13)
-                  .fontColor(this.theme.textMuted)
-                  .width('100%')
+              if (!this.isPictureDetail()) {
+                if (this.sourceUrl()) {
+                  Text(`${this.sourceLabel()}：${this.sourceUrl()}`)
+                    .fontSize(13)
+                    .fontColor(this.theme.textMuted)
+                    .width('100%')
+                }
               }
             }
             .width('100%')

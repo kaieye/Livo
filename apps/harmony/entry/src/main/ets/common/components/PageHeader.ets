@@ -90,13 +90,21 @@ export struct PageHeader {
       .height(HEADER_BACK_SLOT_SIZE)
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
+      .backgroundColor(this.isBackPressed ? this.theme.elevated : 'transparent')
+      .borderRadius(12)
+      .clickEffect({ level: ClickEffectLevel.LIGHT })
       .scale({
-        x: this.isBackPressed ? 0.92 : 1,
-        y: this.isBackPressed ? 0.92 : 1,
+        x: this.isBackPressed ? 0.88 : 1,
+        y: this.isBackPressed ? 0.88 : 1,
       })
-      .opacity(this.isBackPressed ? 0.72 : 1)
-      .animation({ duration: 120, curve: Curve.EaseOut })
+      .opacity(this.isBackPressed ? 0.6 : 1)
+      .shadow(this.isBackPressed ? {
+        radius: 6,
+        color: this.theme.isDark ? 'rgba(0,0,0,0.3)' : 'rgba(15,23,42,0.12)',
+        offsetX: 0,
+        offsetY: 2,
+      } : undefined)
+      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           this.isBackPressed = true

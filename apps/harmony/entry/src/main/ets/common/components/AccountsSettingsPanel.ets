@@ -55,22 +55,22 @@ const ACCOUNT_PROVIDER_CARDS: AccountProviderCardDefinition[] = [
   {
     provider: 'youtube',
     title: 'YouTube',
-    description: '读取 YouTube 账号状态并同步关联信息',
+    description: '',
   },
   {
     provider: 'x',
     title: 'X / Twitter',
-    description: '读取 X 账号状态并同步关联信息',
+    description: '',
   },
   {
     provider: 'instagram',
     title: 'Instagram',
-    description: '读取 Instagram 账号状态并同步关联信息',
+    description: '',
   },
   {
     provider: 'bilibili',
     title: 'Bilibili',
-    description: '读取 Bilibili 账号状态并同步关联信息',
+    description: '',
   },
 ]
 
@@ -658,7 +658,7 @@ export struct AccountsSettingsPanel {
     if (card.status.error.trim()) {
       return card.status.error.trim()
     }
-    return card.description
+    return ''
   }
 
   private selfCheckSummaryColor(): string {

@@ -107,6 +107,14 @@ const mediaSaveServiceSource = fs.readFileSync(
   'utf8',
 )
 
+const movingPhotoServiceSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/services/MovingPhotoService.ets',
+  ),
+  'utf8',
+)
+
 test('TweetEntryCard renders tweet-specific sections', () => {
   const source = fs.readFileSync(
     'apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets',
@@ -309,6 +317,84 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   )
 })
 
+test('ArticleDetail uses browser action, favorite action, and picture carousel live playback', () => {
+  const source = fs.readFileSync(
+    'apps/harmony/entry/src/main/ets/pages/ArticleDetail.ets',
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /import \{ ExternalUrlService \} from '\.\.\/common\/services\/ExternalUrlService'/,
+  )
+  assert.match(
+    source,
+    /private pictureDetailMediaItems\(\): PictureCarouselMediaItem\[]/,
+  )
+  assert.match(
+    source,
+    /private pictureDetailTextBlocks\(\): ArticleContentBlock\[]/,
+  )
+  assert.match(
+    source,
+    /private readonly detailLivePhotoControllers: VideoController\[] = \[]/,
+  )
+  assert.match(source, /@State private activePictureMediaIndex: number = 0/)
+  assert.match(
+    source,
+    /@State private playingDetailLivePhotoIndex: number = -1/,
+  )
+  assert.match(source, /@State private pausedDetailLivePhotoIndex: number = -1/)
+  assert.match(
+    source,
+    /@State private preparedDetailLivePhotoIndices: number\[] = \[]/,
+  )
+  assert.match(
+    source,
+    /@State private detailLivePhotoInstanceSeeds: number\[] = \[]/,
+  )
+  assert.match(
+    source,
+    /@State private detailLivePhotoAspectRatios: number\[] = \[]/,
+  )
+  assert.match(
+    source,
+    /@State private isPictureMediaFullyVisible: boolean = false/,
+  )
+  assert.match(
+    source,
+    /@State private isPictureMediaNearlyVisible: boolean = false/,
+  )
+  assert.match(source, /private async openEntryInBrowser\(\): Promise<void>/)
+  assert.match(source, /await ExternalUrlService\.open\(url\)/)
+  assert.match(source, /this\.actionHint = '已在浏览器打开'/)
+  assert.match(source, /\$r\('sys\.symbol\.link'\)/)
+  assert.match(source, /\(\) => \{ void this\.openEntryInBrowser\(\) \}/)
+  assert.match(source, /\(\) => \{ void this\.toggleStar\(\) \}/)
+  assert.match(
+    source,
+    /if \(!this\.isPictureDetail\(\)\) \{[\s\S]*Text\(`\$\{this\.sourceLabel\(\)\}：\$\{this\.sourceUrl\(\)\}`\)/s,
+  )
+  assert.match(source, /private PictureDetailMediaCarousel\(\)/)
+  assert.match(
+    source,
+    /private DetailLivePhotoSlide\(item: PictureCarouselMediaItem, index: number\)/,
+  )
+  assert.match(source, /Swiper\(\)/)
+  assert.match(source, /\.autoPlay\(this\.shouldWarmDetailLivePhoto\(index\)\)/)
+  assert.match(
+    source,
+    /\.muted\(!this\.shouldShowPlayingDetailLivePhoto\(index\)\)/,
+  )
+  assert.match(source, /\.objectFit\(ImageFit\.Cover\)/)
+  assert.match(source, /this\.PictureDetailMediaCarousel\(\)/)
+  assert.match(source, /this\.pictureDetailTextBlocks\(\)/)
+  assert.match(
+    source,
+    /\.onVisibleAreaChange\(\[1\], \(isVisible: boolean, currentRatio: number\) => \{/,
+  )
+})
+
 test('FeedDetailView routes x previews through TweetEntryCard', () => {
   assert.match(
     feedDetailViewSource,
@@ -374,9 +460,33 @@ test('VideoPlayer keeps fullscreen playback centered and aspect-ratio constraine
 test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', () => {
   assert.match(
     articleDetailSource,
+    /import \{ MovingPhotoView, MovingPhotoViewController, photoAccessHelper \} from '@kit\.MediaLibraryKit'/,
+  )
+  assert.match(
+    articleDetailSource,
+    /import \{ MovingPhotoService \} from '\.\.\/common\/services\/MovingPhotoService'/,
+  )
+  assert.match(
+    articleDetailSource,
     /import \{ getStringParams, goBack, openImageViewer, openVideoPlayer \} from '\.\.\/common\/navigation\/AppRouter'/,
   )
   assert.match(articleDetailSource, /private isPictureDetail\(\): boolean/)
+  assert.match(
+    articleDetailSource,
+    /private shouldUseNativeMovingPhoto\(block: ArticleContentBlock\): boolean/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private loadMovingPhotoForBlock\(block: ArticleContentBlock\): void/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private readonly movingPhotoController: MovingPhotoViewController = new MovingPhotoViewController\(\)/,
+  )
+  assert.match(
+    articleDetailSource,
+    /@State activeMovingPhoto: photoAccessHelper\.MovingPhoto \| undefined = undefined/,
+  )
   assert.match(
     articleDetailSource,
     /private shouldInlineVideoPlayback\(block: ArticleContentBlock\): boolean/,
@@ -393,6 +503,7 @@ test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', 
     articleDetailSource,
     /@State inlineVideoPreparingBlockId: string = ''/,
   )
+  assert.match(articleDetailSource, /this\.loadMovingPhotoForBlock\(block\)/)
   assert.match(
     articleDetailSource,
     /private isInlineVideoPreparing\(block: ArticleContentBlock\): boolean/,
@@ -447,6 +558,14 @@ test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', 
     articleDetailSource,
     /Video\(\{[\s\S]*src: this\.activeVideoPlayableUrl \|\| block\.videoUrl[\s\S]*\.controls\(true\)/s,
   )
+  assert.match(articleDetailSource, /MovingPhotoView\(\{/)
+  assert.match(
+    articleDetailSource,
+    /MovingPhotoView\(\{[\s\S]*movingPhoto: this\.activeMovingPhoto[\s\S]*controller: this\.movingPhotoController/s,
+  )
+  assert.match(articleDetailSource, /\.autoPlay\(true\)/)
+  assert.match(articleDetailSource, /\.repeatPlay\(false\)/)
+  assert.match(articleDetailSource, /\.autoPlayPeriod\(0, 1500\)/)
   assert.match(articleDetailSource, /\.onPrepared\(\(\) => \{/)
   assert.match(
     articleDetailSource,
@@ -499,6 +618,25 @@ test('MediaSaveService saves remote images and videos through the system creatio
   assert.match(mediaSaveServiceSource, /fileUri\.getUriFromPath/)
   assert.match(mediaSaveServiceSource, /fileIo\.copyFile\(/)
   assert.match(mediaSaveServiceSource, /http\.createHttp\(\)/)
+})
+
+test('MovingPhotoService downloads remote image-video pairs and loads native moving photos', () => {
+  assert.match(
+    movingPhotoServiceSource,
+    /import \{ common \} from '@kit\.AbilityKit'/,
+  )
+  assert.match(
+    movingPhotoServiceSource,
+    /import \{ photoAccessHelper \} from '@kit\.MediaLibraryKit'/,
+  )
+  assert.match(movingPhotoServiceSource, /export class MovingPhotoService/)
+  assert.match(movingPhotoServiceSource, /static async loadRemoteMovingPhoto\(/)
+  assert.match(
+    movingPhotoServiceSource,
+    /photoAccessHelper\.MediaAssetManager\.loadMovingPhoto\(/,
+  )
+  assert.match(movingPhotoServiceSource, /http\.createHttp\(\)/)
+  assert.match(movingPhotoServiceSource, /fileUri\.getUriFromPath/)
 })
 
 test('Index routes x social cards through TweetEntryCard', () => {

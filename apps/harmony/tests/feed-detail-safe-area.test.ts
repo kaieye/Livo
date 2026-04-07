@@ -19,7 +19,7 @@ test('FeedDetailView offsets its custom header below the top avoid area', () => 
   assert.match(source, /top: PAGE_TOP_PADDING/)
   assert.match(
     source,
-    /private detailHeaderTopPadding\(\): number \{\s*return this\.feedId \? 30 : 24\s*\}/s,
+    /private detailHeaderTopPadding\(\): number \{\s*return this\.feedId \? 42 : 24\s*\}/s,
   )
   assert.match(source, /topPadding: this\.detailHeaderTopPadding\(\)/)
 })

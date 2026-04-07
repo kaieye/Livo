@@ -1,4 +1,5 @@
 import { openArticleDetail } from '../navigation/AppRouter'
+import { SymbolGlyphModifier } from '@kit.ArkUI'
 import { AppRepository } from '../data/AppRepository'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -18,6 +19,17 @@ const PANEL_GROUP_SPACING: number = 14
 const PANEL_SECTION_SPACING: number = 2
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 6
+const REFRESH_INTERVAL_OPTIONS: string[] = ['15', '30', '60', '120']
+
+interface SelectOption {
+  label: string
+  value: string
+}
+
+const LANGUAGE_OPTIONS: SelectOption[] = [
+  { label: '简体中文', value: 'zh-CN' },
+  { label: 'English', value: 'en' },
+]
 
 @Builder
 function SettingsPanelHeader(title: string, theme: ThemePalette) {
@@ -45,6 +57,57 @@ export struct GeneralSettingsPanel {
     this.config = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(this.config)
     this.saveHint = '已加载通用配置'
+  }
+
+  private syncSettings(next: HarmonySettings): void {
+    this.config = next
+    this.onSettingsChange(next)
+    void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
+      this.config = saved
+      this.onSettingsChange(saved)
+      void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
+        this.theme = palette
+      })
+      this.saveHint = '已保存通用配置'
+    }).catch((error: Error) => {
+      this.saveHint = `保存失败：${error.message}`
+    })
+  }
+
+  private getRefreshIntervalOptions(): SelectOption[] {
+    return REFRESH_INTERVAL_OPTIONS.map((minutes: string): SelectOption => ({
+      label: `${minutes} 分钟`,
+      value: minutes,
+    }))
+  }
+
+  private applyRefreshInterval(value: string): void {
+    const minutes = Number(value)
+    const nextSettings: HarmonySettings = {
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      refreshIntervalMinutes: Number.isFinite(minutes) ? minutes : this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    }
+    this.syncSettings(nextSettings)
+  }
+
+  private applyLanguage(value: string): void {
+    const nextSettings: HarmonySettings = {
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: value,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    }
+    this.syncSettings(nextSettings)
   }
 
   @Builder
@@ -115,6 +178,92 @@ export struct GeneralSettingsPanel {
       .backgroundColor(this.theme.divider)
   }
 
+  @Builder
+  private OptionMenu(
+    options: SelectOption[],
+    selectedValue: string,
+    onSelect: (value: string) => void,
+  ) {
+    Menu() {
+      ForEach(options, (option: SelectOption) => {
+        MenuItem({
+          content: option.label,
+          symbolEndIcon: selectedValue === option.value ? new SymbolGlyphModifier($r('sys.symbol.checkmark')) : undefined,
+        })
+          .selected(selectedValue === option.value)
+          .onChange((selected: boolean) => {
+            if (selected) {
+              onSelect(option.value)
+            }
+          })
+      }, (option: SelectOption) => option.value)
+    }
+  }
+
+  @Builder
+  private ActionLabel(label: string, options: SelectOption[], selectedValue: string,
+    onSelect: (value: string) => void) {
+    Row({ space: 6 }) {
+      Text(label)
+        .fontSize(PANEL_HINT_SIZE)
+        .fontColor(this.theme.textSecondary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+        .fontSize(11)
+        .fontColor([this.theme.textMuted])
+    }
+      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+      .bindMenu(this.OptionMenu(options, selectedValue, onSelect))
+  }
+
+  @Builder
+  private SettingActionRow(
+    symbol: Resource,
+    title: string,
+    subtitle: string,
+    actionLabel: string,
+    options: SelectOption[],
+    selectedValue: string,
+    onSelect: (value: string) => void,
+    iconDelay: number = 0,
+  ) {
+    Row({ space: 12 }) {
+      SymbolGlyph(symbol)
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text(title)
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text(subtitle)
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      this.ActionLabel(actionLabel, options, selectedValue, onSelect)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
   build() {
     Scroll() {
       Column({ space: PANEL_SECTION_SPACING }) {
@@ -122,11 +271,27 @@ export struct GeneralSettingsPanel {
         this.PanelHeader()
 
         Column() {
-          this.InfoRow($r('sys.symbol.translate_c2e'), '应用语言', '当前界面语言', this.config.language, 0)
+          this.SettingActionRow(
+            $r('sys.symbol.translate'),
+            '界面语言',
+            '切换应用显示语言',
+            this.config.language === 'en' ? 'English' : '简体中文',
+            LANGUAGE_OPTIONS,
+            this.config.language,
+            (value: string) => this.applyLanguage(value),
+            0,
+          )
           this.DividerLine()
-          this.InfoRow($r('sys.symbol.arrow_clockwise'), '刷新间隔', '后台自动刷新频率', `${this.config.refreshIntervalMinutes} 分钟`, 1)
-          this.DividerLine()
-          this.InfoRow($r('sys.symbol.link'), '默认订阅源', '远程订阅源地址', this.config.remoteFeedUrl ? '已配置' : '未配置', 2)
+          this.SettingActionRow(
+            $r('sys.symbol.arrow_clockwise'),
+            '刷新间隔',
+            '控制后台自动刷新频率',
+            `${this.config.refreshIntervalMinutes} 分钟`,
+            this.getRefreshIntervalOptions(),
+            `${this.config.refreshIntervalMinutes}`,
+            (value: string) => this.applyRefreshInterval(value),
+            1,
+          )
         }
         .width('100%')
         .backgroundColor(this.theme.surface)
@@ -175,6 +340,35 @@ export struct FavoritesPanel {
   private async toggleStar(entryId: string): Promise<void> {
     await AppRepository.toggleStar(entryId)
     this.starredEntries = this.starredEntries.filter((entry: EntryCardModel) => entry.id !== entryId)
+  }
+
+  private favoritePreviewImages(entry: EntryCardModel): string[] {
+    if (entry.viewLabel !== '图片') {
+      return []
+    }
+
+    const candidates = (entry.mediaUrls && entry.mediaUrls.length > 0)
+      ? entry.mediaUrls
+      : (entry.imageUrl ? [entry.imageUrl] : [])
+    return candidates.slice(0, 5)
+  }
+
+  @Builder
+  private PictureThumbStrip(entry: EntryCardModel) {
+    if (this.favoritePreviewImages(entry).length > 0) {
+      Row({ space: 8 }) {
+        ForEach(this.favoritePreviewImages(entry), (url: string, index: number) => {
+          Image(url)
+            .width(58)
+            .height(58)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(10)
+            .backgroundColor(this.theme.elevated)
+            .border({ width: index === 0 ? 1 : 0.6, color: this.theme.divider })
+        }, (url: string, index: number) => `${url}-${index}`)
+      }
+      .width('100%')
+    }
   }
 
   @Builder
@@ -278,6 +472,8 @@ export struct FavoritesPanel {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
       }
+
+      this.PictureThumbStrip(entry)
     }
     .width('100%')
     .padding(16)

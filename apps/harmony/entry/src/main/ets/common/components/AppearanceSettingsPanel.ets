@@ -33,11 +33,6 @@ const REFRESH_INTERVAL_OPTIONS: AppearanceOption[] = [
   { label: '120 分钟', value: '120' },
 ]
 
-const LANGUAGE_OPTIONS: AppearanceOption[] = [
-  { label: '简体中文', value: 'zh-CN' },
-  { label: 'English', value: 'en' },
-]
-
 const ROW_MIN_HEIGHT: number = 56
 const ROW_ICON_SIZE: number = 22
 const ROW_TITLE_SIZE: number = 15
@@ -55,7 +50,6 @@ export struct AppearanceSettingsPanel {
   @State themeModeText: string = '跟随系统'
   @State themeAccentText: string = '流光橙'
   @State refreshIntervalText: string = '30 分钟'
-  @State languageText: string = '简体中文'
   @Prop showBackButton: boolean = true
   @Prop initialSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
@@ -80,7 +74,6 @@ export struct AppearanceSettingsPanel {
     this.themeModeText = this.resolveThemeLabel(settings.themeMode)
     this.themeAccentText = this.resolveAccentLabel(settings.themeAccent)
     this.refreshIntervalText = `${settings.refreshIntervalMinutes} 分钟`
-    this.languageText = settings.language === 'en' ? 'English' : '简体中文'
     this.onSettingsChange(settings)
     this.onThemeChange(palette)
   }
@@ -186,19 +179,6 @@ export struct AppearanceSettingsPanel {
       themeMode: this.config.themeMode,
       themeAccent: this.config.themeAccent,
       language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    })
-  }
-
-  private applyLanguage(value: string): void {
-    this.syncSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: value,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
   }
@@ -375,43 +355,6 @@ export struct AppearanceSettingsPanel {
   }
 
   @Builder
-  private LanguageRow() {
-    Row({ space: 12 }) {
-      SymbolGlyph($r('sys.symbol.translate'))
-        .fontSize(ROW_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(2))
-
-      Column({ space: ROW_TEXT_SPACING }) {
-        Text('界面语言')
-          .fontSize(ROW_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        Text('切换应用显示语言')
-          .fontSize(ROW_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-
-      this.MenuAction(
-        this.languageText,
-        LANGUAGE_OPTIONS,
-        this.config.language,
-        (value: string) => this.applyLanguage(value)
-      )
-    }
-    .width('100%')
-    .constraintSize({ minHeight: ROW_MIN_HEIGHT })
-    .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  @Builder
   private ToggleRow(icon: Resource, title: string, subtitle: string, checked: boolean, onToggle: () => void) {
     Row({ space: 12 }) {
       SymbolGlyph(icon)
@@ -521,10 +464,6 @@ export struct AppearanceSettingsPanel {
         this.ThemeModeRow()
         this.DividerLine()
         this.ThemeAccentRow()
-        this.DividerLine()
-        this.RefreshIntervalRow()
-        this.DividerLine()
-        this.LanguageRow()
       }
       .width('100%')
       .backgroundColor(this.theme.surface)
