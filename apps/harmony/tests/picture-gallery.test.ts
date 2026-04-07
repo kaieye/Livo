@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import {
   createPictureGalleryTiles,
   extractEntryGalleryImageUrls,
+  extractPictureCarouselMediaUrls,
+  resolvePictureCarouselMediaItems,
   resolvePictureGalleryColumns,
   shouldUseCachedPicturePreview,
 } from '../entry/src/main/ets/common/utils/PictureGallery.ts'
@@ -56,6 +58,63 @@ test('extractEntryGalleryImageUrls keeps special image hosts from html and media
   })
 
   assert.deepEqual(urls, ['https://i.ytimg.com/vi/demo/hqdefault.jpg'])
+})
+
+test('resolvePictureCarouselMediaItems groups adjacent image and direct video as a live photo slide', () => {
+  const items = resolvePictureCarouselMediaItems([
+    'https://cdn.example.com/live-cover.jpg',
+    'https://cdn.example.com/live-motion.mp4',
+    'https://cdn.example.com/follow-up.jpg',
+  ])
+
+  assert.deepEqual(items, [
+    {
+      kind: 'livePhoto',
+      imageUrl: 'https://cdn.example.com/live-cover.jpg',
+      videoUrl: 'https://cdn.example.com/live-motion.mp4',
+    },
+    {
+      kind: 'image',
+      imageUrl: 'https://cdn.example.com/follow-up.jpg',
+      videoUrl: '',
+    },
+  ])
+})
+
+test('resolvePictureCarouselMediaItems falls back to the card image when direct video has no adjacent cover', () => {
+  const items = resolvePictureCarouselMediaItems(
+    ['https://cdn.example.com/live-only.mov'],
+    'https://cdn.example.com/card-cover.jpg',
+  )
+
+  assert.deepEqual(items, [
+    {
+      kind: 'livePhoto',
+      imageUrl: 'https://cdn.example.com/card-cover.jpg',
+      videoUrl: 'https://cdn.example.com/live-only.mov',
+    },
+  ])
+})
+
+test('extractPictureCarouselMediaUrls preserves mixed image and live-video order from html content', () => {
+  const urls = extractPictureCarouselMediaUrls({
+    summary: '',
+    content: `
+      <p>caption</p>
+      <img src="https://cdn.example.com/cover-1.jpg" />
+      <video src="https://cdn.example.com/live-1.mp4"></video>
+      <img src="https://cdn.example.com/cover-2.jpg" />
+    `,
+    articleUrl: 'https://www.instagram.com/p/demo/',
+    siteUrl: 'https://www.instagram.com/demo/',
+    mediaUrls: [],
+  })
+
+  assert.deepEqual(urls, [
+    'https://cdn.example.com/cover-1.jpg',
+    'https://cdn.example.com/live-1.mp4',
+    'https://cdn.example.com/cover-2.jpg',
+  ])
 })
 
 test('resolvePictureGalleryColumns matches desktop-like density', () => {

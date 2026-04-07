@@ -19,6 +19,7 @@ struct VideoPlayer {
   @State mode: VideoPlayerLaunchMode = 'error'
   @State actionHint: string = ''
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @State videoAspectRatio: number = 16 / 9
 
   private previousOrientation?: window.Orientation = undefined
   private nativeVideoController: VideoController = new VideoController()
@@ -91,22 +92,60 @@ struct VideoPlayer {
     }
   }
 
+  private rememberVideoAspectRatio(width: number, height: number): void {
+    if (width <= 0 || height <= 0) {
+      return
+    }
+
+    const nextRatio = width / height
+    if (Math.abs(this.videoAspectRatio - nextRatio) < 0.001) {
+      return
+    }
+
+    this.videoAspectRatio = nextRatio
+  }
+
   @Builder
   private PlayerBody() {
     if (this.mode === 'direct' && this.playableUrl) {
-      Video({
-        src: this.playableUrl,
-        controller: this.nativeVideoController,
-        previewUri: this.previewUrl,
-      })
+      Column() {
+        Stack({ alignContent: Alignment.Center }) {
+          if (this.previewUrl) {
+            Image(this.previewUrl)
+              .width('100%')
+              .height('100%')
+              .objectFit(ImageFit.Contain)
+              .opacity(0)
+              .onComplete((event) => {
+                if (event) {
+                  this.rememberVideoAspectRatio(event.width, event.height)
+                }
+              })
+          }
+
+          Video({
+            src: this.playableUrl,
+            controller: this.nativeVideoController,
+            previewUri: this.previewUrl,
+          })
+            .width('100%')
+            .height('100%')
+            .controls(true)
+            .autoPlay(true)
+            .objectFit(ImageFit.Contain)
+            .onError(() => {
+              this.actionHint = '应用内播放失败，请稍后重试'
+            })
+        }
         .width('100%')
-        .height('100%')
-        .controls(true)
-        .autoPlay(true)
-        .objectFit(ImageFit.Contain)
-        .onError(() => {
-          this.actionHint = '应用内播放失败，请稍后重试'
-        })
+        .aspectRatio(this.videoAspectRatio)
+        .constraintSize({ maxHeight: '88%' })
+      }
+      .width('100%')
+      .height('100%')
+      .padding({ left: 16, right: 16 })
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
     } else if (this.mode === 'web' && this.fallbackUrl) {
       Web({
         src: this.fallbackUrl,

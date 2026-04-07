@@ -95,6 +95,7 @@ test('selectArticleVideoUrls prefers article watch url over feed embed-like yout
 
 test('EntryCardModel keeps picture card source fields for the home pictures stream', () => {
   assert.match(livoModelsSource, /mediaUrls\?: string\[]/)
+  assert.match(livoModelsSource, /rawMediaUrls\?: string\[]/)
   assert.match(livoModelsSource, /articleUrl: string/)
   assert.match(livoModelsSource, /publishedAt: number/)
 })
@@ -120,6 +121,10 @@ test('toEntryCardModel maps raw picture card fields from entry data', () => {
   assert.match(
     returnedObjectSource,
     /mediaUrls:\s*selectPictureMediaUrls\(pictureMediaUrls\)/,
+  )
+  assert.match(
+    returnedObjectSource,
+    /rawMediaUrls:\s*extractPictureCarouselMediaUrls\(\{/,
   )
 })
 
@@ -168,5 +173,32 @@ test('toEntryCardModel derives picture gallery urls from html when mediaUrls are
   assert.match(
     livoModelsSource,
     /const pictureMediaUrls = extractEntryGalleryImageUrls\(\{[\s\S]*summary: entry\.summary,[\s\S]*content: entry\.content,[\s\S]*articleUrl: entry\.url,[\s\S]*siteUrl: feed\.siteUrl \?\? feed\.url,[\s\S]*mediaUrls: entry\.mediaUrls \?\? \[\],[\s\S]*\}\)/,
+  )
+})
+
+test('toArticleDetailModel uses picture-specific media parsing for picture feeds', () => {
+  assert.match(
+    livoModelsSource,
+    /const blocks = feed\.view === FeedViewType\.Pictures\s*\? buildPictureDetailContentBlocks\(entry, feed, card\.imageUrl\)\s*:\s*buildArticleContentBlocks\(entry\.content, entry\.url \|\| feed\.siteUrl \|\| feed\.url, entry\.url, entry\.mediaUrls \?\? \[\]\)/s,
+  )
+  assert.match(
+    livoModelsSource,
+    /function buildPictureDetailContentBlocks\(entry: Entry, feed: Feed, fallbackImageUrl: string\): ArticleContentBlock\[]/,
+  )
+  assert.match(
+    livoModelsSource,
+    /const orderedMediaUrls = extractPictureCarouselMediaUrls\(\{/,
+  )
+  assert.match(
+    livoModelsSource,
+    /const mediaItems = resolvePictureCarouselMediaItems\(orderedMediaUrls, fallbackImageUrl\)/,
+  )
+  assert.match(
+    livoModelsSource,
+    /type: 'video',\s*text: '',\s*imageUrl: item\.imageUrl \|\| fallbackImageUrl,\s*videoUrl: item\.videoUrl/s,
+  )
+  assert.match(
+    livoModelsSource,
+    /type: 'image',\s*text: '',\s*imageUrl: item\.imageUrl,\s*videoUrl: ''/s,
   )
 })

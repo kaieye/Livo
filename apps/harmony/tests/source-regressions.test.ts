@@ -67,6 +67,38 @@ const discoverServiceSource = fs.readFileSync(
   'utf8',
 )
 
+const videoPlayerSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/pages/VideoPlayer.ets',
+  ),
+  'utf8',
+)
+
+const appRouterSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/navigation/AppRouter.ets',
+  ),
+  'utf8',
+)
+
+const articleDetailSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/pages/ArticleDetail.ets',
+  ),
+  'utf8',
+)
+
+const imageViewerSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/pages/ImageViewer.ets',
+  ),
+  'utf8',
+)
+
 test('TweetEntryCard renders tweet-specific sections', () => {
   const source = fs.readFileSync(
     'apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets',
@@ -115,6 +147,160 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   )
 })
 
+test('PictureEntryCard renders mixed swiper slides and in-card live photo playback', () => {
+  const source = fs.readFileSync(
+    'apps/harmony/entry/src/main/ets/common/components/PictureEntryCard.ets',
+    'utf8',
+  )
+
+  assert.match(source, /resolvePictureCarouselMediaItems/)
+  assert.match(
+    source,
+    /private readonly livePhotoControllers: VideoController\[] = \[]/,
+  )
+  assert.match(source, /@State private playingLivePhotoIndex: number = -1/)
+  assert.match(source, /@State private pausedLivePhotoIndex: number = -1/)
+  assert.match(
+    source,
+    /@State private preparedLivePhotoIndices: number\[] = \[]/,
+  )
+  assert.match(source, /@State private livePhotoInstanceSeeds: number\[] = \[]/)
+  assert.match(source, /@State private livePhotoAspectRatios: number\[] = \[]/)
+  assert.match(source, /@State private isFullyVisible: boolean = false/)
+  assert.match(source, /@State private isNearlyVisible: boolean = false/)
+  assert.match(
+    source,
+    /private controllerFor\(index: number\): VideoController/,
+  )
+  assert.match(
+    source,
+    /private currentLivePhotoItem\(index: number\): PictureCarouselMediaItem \| undefined/,
+  )
+  assert.match(source, /private firstLivePhotoIndex\(\): number/)
+  assert.match(source, /private preloadLivePhotoIndices\(\): number\[]/)
+  assert.match(
+    source,
+    /const previousIndex = \(this\.activeMediaIndex - 1 \+ items\.length\) % items\.length/,
+  )
+  assert.match(source, /private mountedLivePhotoIndices\(\): number\[]/)
+  assert.match(source, /private warmMountedLivePhotos\(\): void/)
+  assert.match(
+    source,
+    /private syncVisibleLivePhotoPlayback\(index: number\): void/,
+  )
+  assert.match(source, /private pauseLivePhotoPlayback\(index: number\): void/)
+  assert.match(
+    source,
+    /private stopAllLivePhotoPlayback\(exceptIndex: number = -1\): void/,
+  )
+  assert.match(source, /private clearPreparedLivePhoto\(index: number\): void/)
+  assert.match(source, /private markPreparedLivePhoto\(index: number\): void/)
+  assert.match(source, /private livePhotoInstanceSeed\(index: number\): number/)
+  assert.match(
+    source,
+    /private refreshLivePhotoInstance\(index: number\): void/,
+  )
+  assert.match(source, /private stopLivePhotoPlayback\(\): void/)
+  assert.match(source, /private isLivePhotoPrepared\(index: number\): boolean/)
+  assert.match(
+    source,
+    /private shouldShowPlayingLivePhoto\(index: number\): boolean/,
+  )
+  assert.match(
+    source,
+    /private shouldShowPausedLivePhoto\(index: number\): boolean/,
+  )
+  assert.match(source, /private shouldWarmLivePhoto\(index: number\): boolean/)
+  assert.match(
+    source,
+    /private shouldShowLivePhotoLoading\(index: number\): boolean/,
+  )
+  assert.match(source, /private handleLivePhotoPrepared\(index: number\): void/)
+  assert.match(source, /private handleLivePhotoStart\(index: number\): void/)
+  assert.match(source, /private handleLivePhotoStop\(index: number\): void/)
+  assert.match(source, /private handleLivePhotoError\(index: number\): void/)
+  assert.match(source, /private livePhotoAspectRatio\(index: number\): number/)
+  assert.match(
+    source,
+    /private rememberLivePhotoAspectRatio\(index: number, width: number, height: number\): void/,
+  )
+  assert.match(source, /private LiveBadge\(\)/)
+  assert.match(
+    source,
+    /private LivePhotoSlide\(item: PictureCarouselMediaItem, index: number\)/,
+  )
+  assert.match(source, /Swiper\(\)/)
+  assert.match(source, /Video\(\{/)
+  assert.match(
+    source,
+    /Video\(\{[\s\S]*?controller: this\.controllerFor\(index\)[\s\S]*?\.objectFit\(ImageFit\.Cover\)/s,
+  )
+  assert.match(source, /\.controls\(false\)/)
+  assert.match(source, /\.loop\(true\)/)
+  assert.match(source, /\.autoPlay\(this\.shouldWarmLivePhoto\(index\)\)/)
+  assert.match(source, /\.muted\(!this\.shouldShowPlayingLivePhoto\(index\)\)/)
+  assert.match(source, /\.onComplete\(\(event\) => \{/)
+  assert.match(
+    source,
+    /this\.rememberLivePhotoAspectRatio\(index, event\.width, event\.height\)/,
+  )
+  assert.match(source, /\.aspectRatio\(this\.livePhotoAspectRatio\(index\)\)/)
+  assert.match(source, /Text\('LIVE'\)/)
+  assert.match(source, /SymbolGlyph\(\$r\('sys\.symbol\.play_fill'\)\)/)
+  assert.match(source, /this\.mountedLivePhotoIndices\(\)\.includes\(index\)/)
+  assert.match(source, /this\.markPreparedLivePhoto\(index\)/)
+  assert.match(source, /const firstLiveIndex = this\.firstLivePhotoIndex\(\)/)
+  assert.match(source, /this\.warmMountedLivePhotos\(\)/)
+  assert.match(
+    source,
+    /private handleLivePhotoError\(index: number\): void \{[\s\S]*this\.refreshLivePhotoInstance\(index\)/s,
+  )
+  assert.match(
+    source,
+    /\.opacity\(\(this\.shouldShowPlayingLivePhoto\(index\) \|\| this\.shouldShowPausedLivePhoto\(index\)\) \? 1 : 0\)/,
+  )
+  assert.match(
+    source,
+    /\.onPrepared\(\(\) => \{\s*this\.handleLivePhotoPrepared\(index\)\s*\}\)/s,
+  )
+  assert.match(
+    source,
+    /\.onStart\(\(\) => \{\s*this\.handleLivePhotoStart\(index\)\s*\}\)/s,
+  )
+  assert.match(
+    source,
+    /\.onPause\(\(\) => \{\s*this\.handleLivePhotoPause\(index\)\s*\}\)/s,
+  )
+  assert.match(
+    source,
+    /\.onStop\(\(\) => \{\s*this\.handleLivePhotoStop\(index\)\s*\}\)/s,
+  )
+  assert.match(
+    source,
+    /\.onError\(\(\) => \{\s*this\.handleLivePhotoError\(index\)\s*\}\)/s,
+  )
+  assert.match(source, /private handleLivePhotoPause\(index: number\): void/)
+  assert.match(source, /this\.controllerFor\(index\)\.pause\(\)/)
+  assert.match(
+    source,
+    /\.onVisibleAreaChange\(\[1\], \(isVisible: boolean, currentRatio: number\) => \{/,
+  )
+  assert.match(
+    source,
+    /this\.isNearlyVisible = isVisible && currentRatio >= 0\.6/,
+  )
+  assert.match(source, /\.vertical\(false\)/)
+  assert.match(source, /\.displayArrow\(false\)/)
+  assert.match(source, /\.effectMode\(EdgeEffect\.None\)/)
+  assert.match(source, /\.cachedCount\(4\)/)
+  assert.match(source, /\.indicator\(new DotIndicator\(\)/)
+  assert.match(source, /\.selectedColor\(this\.theme\.accent\)/)
+  assert.match(
+    source,
+    /\.onChange\(\(index: number\) => \{\s*this\.activeMediaIndex = index\s*this\.syncVisibleLivePhotoPlayback\(index\)\s*\}\)/s,
+  )
+})
+
 test('FeedDetailView routes x previews through TweetEntryCard', () => {
   assert.match(
     feedDetailViewSource,
@@ -133,6 +319,70 @@ test('FeedDetailView routes x previews through TweetEntryCard', () => {
     feedDetailViewSource,
     /else if \(this\.isXPreview\(\)\) \{\s*TweetEntryCard\(\{/s,
   )
+})
+
+test('VideoPlayer keeps fullscreen playback centered and aspect-ratio constrained', () => {
+  assert.match(videoPlayerSource, /@State videoAspectRatio: number = 16 \/ 9/)
+  assert.match(
+    videoPlayerSource,
+    /private rememberVideoAspectRatio\(width: number, height: number\): void/,
+  )
+  assert.match(videoPlayerSource, /Image\(this\.previewUrl\)/)
+  assert.match(videoPlayerSource, /\.onComplete\(\(event\) => \{/)
+  assert.match(
+    videoPlayerSource,
+    /this\.rememberVideoAspectRatio\(event\.width, event\.height\)/,
+  )
+  assert.match(videoPlayerSource, /\.aspectRatio\(this\.videoAspectRatio\)/)
+  assert.match(videoPlayerSource, /\.constraintSize\(\{ maxHeight: '88%' \}\)/)
+  assert.match(videoPlayerSource, /\.objectFit\(ImageFit\.Contain\)/)
+})
+
+test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', () => {
+  assert.match(
+    articleDetailSource,
+    /import \{ getStringParams, goBack, openImageViewer, openVideoPlayer \} from '\.\.\/common\/navigation\/AppRouter'/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private openImageBlock\(block: ArticleContentBlock\): void/,
+  )
+  assert.match(
+    articleDetailSource,
+    /void openImageViewer\(block\.imageUrl, this\.entry\?\.title \|\| '图片预览'\)/,
+  )
+  assert.match(
+    articleDetailSource,
+    /if \(block\.type === 'image' && block\.imageUrl\) \{/,
+  )
+  assert.match(
+    articleDetailSource,
+    /\.onClick\(\(\) => \{\s*this\.openImageBlock\(block\)\s*\}\)/s,
+  )
+})
+
+test('AppRouter and ImageViewer provide a fullscreen image preview route', () => {
+  assert.match(appRouterSource, /imageViewer: string/)
+  assert.match(appRouterSource, /imageViewer: 'pages\/ImageViewer'/)
+  assert.match(appRouterSource, /class ImageViewerParams \{/)
+  assert.match(appRouterSource, /imageUrl: string = ''/)
+  assert.match(appRouterSource, /title: string = ''/)
+  assert.match(
+    appRouterSource,
+    /export async function openImageViewer\(imageUrl: string, title: string = '图片预览'\): Promise<void>/,
+  )
+  assert.match(
+    appRouterSource,
+    /await getAppRouter\(\)\.pushUrl\(createRouterOptions\(ROUTES\.imageViewer, params\)\)/,
+  )
+
+  assert.match(imageViewerSource, /@Entry/)
+  assert.match(imageViewerSource, /struct ImageViewer/)
+  assert.match(imageViewerSource, /@State title: string = '图片预览'/)
+  assert.match(imageViewerSource, /Image\(this\.imageUrl\)/)
+  assert.match(imageViewerSource, /\.objectFit\(ImageFit\.Contain\)/)
+  assert.match(imageViewerSource, /\.backgroundColor\('#000000'\)/)
+  assert.match(imageViewerSource, /void goBack\(\)/)
 })
 
 test('Index routes x social cards through TweetEntryCard', () => {

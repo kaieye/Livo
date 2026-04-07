@@ -9,6 +9,7 @@ export interface RouteDefinition {
   discoverPreview: string
   articleDetail: string
   videoPlayer: string
+  imageViewer: string
   accountLogin: string
   settings: string
   generalSettings: string
@@ -27,6 +28,7 @@ export const ROUTES: RouteDefinition = {
   discoverPreview: 'pages/DiscoverPreview',
   articleDetail: 'pages/ArticleDetail',
   videoPlayer: 'pages/VideoPlayer',
+  imageViewer: 'pages/ImageViewer',
   accountLogin: 'pages/AccountLogin',
   settings: 'pages/Settings',
   generalSettings: 'pages/GeneralSettings',
@@ -208,6 +210,11 @@ class VideoPlayerParams {
   previewUrl: string = ''
 }
 
+class ImageViewerParams {
+  title: string = ''
+  imageUrl: string = ''
+}
+
 function getAppRouter() {
   const mainWindow = AppStorage.get<window.Window>('WindowClass')
   if (!mainWindow) {
@@ -294,6 +301,17 @@ export async function openVideoPlayer(title: string, videoUrl: string, previewUr
     await getAppRouter().pushUrl(createRouterOptions(ROUTES.videoPlayer, params))
   } catch (error) {
     throw new Error(`打开视频播放页失败：${error instanceof Error ? error.message : 'unknown error'}`)
+  }
+}
+
+export async function openImageViewer(imageUrl: string, title: string = '图片预览'): Promise<void> {
+  const params = new ImageViewerParams()
+  params.title = title
+  params.imageUrl = imageUrl
+  try {
+    await getAppRouter().pushUrl(createRouterOptions(ROUTES.imageViewer, params))
+  } catch (error) {
+    throw new Error(`打开图片预览页失败：${error instanceof Error ? error.message : 'unknown error'}`)
   }
 }
 

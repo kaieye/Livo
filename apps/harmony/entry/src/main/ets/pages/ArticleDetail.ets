@@ -1,7 +1,7 @@
 import Want from '@ohos.app.ability.Want'
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
-import { getStringParams, goBack, openVideoPlayer } from '../common/navigation/AppRouter'
+import { getStringParams, goBack, openImageViewer, openVideoPlayer } from '../common/navigation/AppRouter'
 import { ArticleAssistService } from '../common/services/ArticleAssistService'
 import { AppContextService } from '../common/services/AppContextService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
@@ -311,6 +311,14 @@ struct ArticleDetail {
     return this.activeVideoBlockId === block.id
   }
 
+  private openImageBlock(block: ArticleContentBlock): void {
+    if (!block.imageUrl) {
+      return
+    }
+
+    void openImageViewer(block.imageUrl, this.entry?.title || '图片预览')
+  }
+
   private playVideo(block: ArticleContentBlock): void {
     const playbackTarget = resolveVideoPlaybackTarget(
       this.isYouTubeVideo(block.videoUrl),
@@ -459,6 +467,9 @@ struct ArticleDetail {
       }
       .width('100%')
       .clip(true)
+      .onClick(() => {
+        this.openImageBlock(block)
+      })
     } else if (block.type === 'video' && block.videoUrl) {
       Column({ space: 12 }) {
         if (this.isVideoPlaying(block)) {

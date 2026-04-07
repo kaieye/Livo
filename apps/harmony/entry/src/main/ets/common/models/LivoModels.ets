@@ -1,7 +1,11 @@
 import { selectArticleVideoUrls } from '../utils/ArticleVideoSource'
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
-import { extractEntryGalleryImageUrls } from '../utils/PictureGallery'
+import {
+  extractEntryGalleryImageUrls,
+  extractPictureCarouselMediaUrls,
+  resolvePictureCarouselMediaItems,
+} from '../utils/PictureGallery'
 
 export enum FeedViewType {
   Articles = 0,
@@ -91,6 +95,7 @@ export interface EntryCardModel {
   readingLabel: string
   tags: string[]
   mediaUrls?: string[]
+  rawMediaUrls?: string[]
   feedTitle: string
   feedCategory: string
   viewLabel: string
@@ -274,6 +279,31 @@ export function selectPictureMediaUrls(mediaUrls: string[]): string[] {
   return result
 }
 
+export function selectPictureCarouselMediaUrls(
+  mediaUrls: string[],
+  fallbackImageUrls: string[] = [],
+): string[] {
+  const result: string[] = []
+
+  ;[...mediaUrls, ...fallbackImageUrls].forEach((url: string) => {
+    const trimmed = (url || '').trim()
+    if (!trimmed || result.includes(trimmed)) {
+      return
+    }
+
+    if (isDirectVideoUrl(trimmed)) {
+      result.push(trimmed)
+      return
+    }
+
+    if (selectPictureMediaUrls([trimmed]).length > 0) {
+      result.push(trimmed)
+    }
+  })
+
+  return result
+}
+
 export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
   const definition = viewDefinitionOf(feed.view)
 
@@ -328,6 +358,13 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     readingLabel: `${entry.readingTimeMinutes} 分钟`,
     tags: entry.tags,
     mediaUrls: selectPictureMediaUrls(pictureMediaUrls),
+    rawMediaUrls: extractPictureCarouselMediaUrls({
+      summary: entry.summary,
+      content: entry.content,
+      articleUrl: entry.url,
+      siteUrl: feed.siteUrl ?? feed.url,
+      mediaUrls: selectPictureCarouselMediaUrls(entry.mediaUrls ?? [], pictureMediaUrls),
+    }),
     feedTitle: feed.title,
     feedCategory: feed.category ?? '未分类',
     viewLabel: definition.label,
@@ -340,7 +377,9 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
 
 export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailModel {
   const card = toEntryCardModel(entry, feed)
-  const blocks = buildArticleContentBlocks(entry.content, entry.url || feed.siteUrl || feed.url, entry.url, entry.mediaUrls ?? [])
+  const blocks = feed.view === FeedViewType.Pictures
+    ? buildPictureDetailContentBlocks(entry, feed, card.imageUrl)
+    : buildArticleContentBlocks(entry.content, entry.url || feed.siteUrl || feed.url, entry.url, entry.mediaUrls ?? [])
   const paragraphs = blocks
     .filter((block: ArticleContentBlock) => block.type === 'paragraph')
     .map((block: ArticleContentBlock) => block.text)
@@ -669,5 +708,62 @@ function buildArticleContentBlocks(content: string, baseUrl: string, articleUrl:
     blockIndex = pushParagraphBlocks(part, blocks, blockIndex)
   })
 
+  return blocks
+}
+
+function buildPictureDetailContentBlocks(entry: Entry, feed: Feed, fallbackImageUrl: string): ArticleContentBlock[] {
+  const baseUrl = entry.url || feed.siteUrl || feed.url
+  const galleryImageUrls = extractEntryGalleryImageUrls({
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feed.siteUrl ?? feed.url,
+    mediaUrls: entry.mediaUrls ?? [],
+  })
+  const orderedMediaUrls = extractPictureCarouselMediaUrls({
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feed.siteUrl ?? feed.url,
+    mediaUrls: selectPictureCarouselMediaUrls(entry.mediaUrls ?? [], galleryImageUrls),
+  })
+  const mediaItems = resolvePictureCarouselMediaItems(orderedMediaUrls, fallbackImageUrl)
+  const blocks: ArticleContentBlock[] = []
+  let blockIndex = 0
+
+  mediaItems.forEach((item) => {
+    if (item.kind === 'livePhoto' && item.videoUrl) {
+      blocks.push({
+        id: `video-${blockIndex}`,
+        type: 'video',
+        text: '',
+        imageUrl: item.imageUrl || fallbackImageUrl,
+        videoUrl: item.videoUrl,
+      })
+      blockIndex += 1
+      return
+    }
+
+    if (item.imageUrl) {
+      blocks.push({
+        id: `image-${blockIndex}`,
+        type: 'image',
+        text: '',
+        imageUrl: item.imageUrl,
+        videoUrl: '',
+      })
+      blockIndex += 1
+    }
+  })
+
+  const mediaStrippedContent = decodeBasicHtml(entry.content || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<(?:img|video|source)\b[^>]*>/gi, '\n\n')
+  const pictureTextSource = [entry.summary, mediaStrippedContent]
+    .filter((value: string) => !!(value || '').trim())
+    .join('\n\n')
+
+  blockIndex = pushParagraphBlocks(pictureTextSource, blocks, blockIndex)
   return blocks
 }

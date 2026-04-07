@@ -4,6 +4,7 @@
     "pages/Subscriptions",
     "pages/Discover",
     "pages/ArticleDetail",
+    "pages/ImageViewer",
     "pages/Settings"
   ]
 }

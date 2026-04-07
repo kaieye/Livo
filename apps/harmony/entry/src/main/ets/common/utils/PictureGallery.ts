@@ -1,9 +1,17 @@
+import { isDirectVideoUrl } from './FeedMediaUrl.ts'
+
 export interface PictureGalleryTarget {
   summary: string
   content: string
   articleUrl: string
   siteUrl: string
   mediaUrls: string[]
+}
+
+export interface PictureCarouselMediaItem {
+  kind: 'image' | 'livePhoto'
+  imageUrl: string
+  videoUrl: string
 }
 
 export interface CachedPicturePreviewLike {
@@ -96,6 +104,10 @@ function uniqueUrls(urls: string[]): string[] {
   return result
 }
 
+function isPlayablePictureVideoUrl(value: string): boolean {
+  return isDirectVideoUrl(value)
+}
+
 function isStringField(value: unknown): boolean {
   return typeof value === 'string'
 }
@@ -143,6 +155,37 @@ function extractImageUrlsFromHtml(content: string, baseUrl: string): string[] {
   return results
 }
 
+function extractPictureMediaUrlsFromHtml(
+  content: string,
+  baseUrl: string,
+): string[] {
+  const raw = decodeBasicHtml(content || '')
+  const results: string[] = []
+  const pushMedia = (candidate: string): void => {
+    const resolved = resolveAbsoluteUrl(baseUrl, decodeBasicHtml(candidate))
+    if (!resolved || results.includes(resolved)) {
+      return
+    }
+    if (!isImageUrl(resolved) && !isPlayablePictureVideoUrl(resolved)) {
+      return
+    }
+    results.push(resolved)
+  }
+
+  const mediaTagMatches = raw.matchAll(/<(?:img|video|source)\b[^>]*>/gi)
+  for (const matched of mediaTagMatches) {
+    const tag = matched[0] || ''
+    const attrMatch = tag.match(
+      /\b(?:poster|data-src|data-original|src)=["']([^"']+)["']/i,
+    )
+    if (attrMatch?.[1]) {
+      pushMedia(attrMatch[1])
+    }
+  }
+
+  return results
+}
+
 export function extractEntryGalleryImageUrls(
   target: PictureGalleryTarget,
 ): string[] {
@@ -156,6 +199,81 @@ export function extractEntryGalleryImageUrls(
 
   return uniqueUrls(
     extractImageUrlsFromHtml(`${target.summary}\n${target.content}`, baseUrl),
+  )
+}
+
+export function extractPictureCarouselMediaUrls(
+  target: PictureGalleryTarget,
+): string[] {
+  const baseUrl = target.articleUrl || target.siteUrl
+  const mediaUrls = uniqueUrls(
+    (target.mediaUrls ?? []).filter(
+      (url: string) => isImageUrl(url) || isPlayablePictureVideoUrl(url),
+    ),
+  )
+  const htmlUrls = extractPictureMediaUrlsFromHtml(
+    `${target.summary}\n${target.content}`,
+    baseUrl,
+  )
+
+  if (htmlUrls.length > 0) {
+    return uniqueUrls([...htmlUrls, ...mediaUrls])
+  }
+
+  return mediaUrls
+}
+
+export function resolvePictureCarouselMediaItems(
+  mediaUrls: string[],
+  fallbackImageUrl: string = '',
+): PictureCarouselMediaItem[] {
+  const orderedUrls = uniqueUrls(mediaUrls)
+  const result: PictureCarouselMediaItem[] = []
+
+  for (let index = 0; index < orderedUrls.length; index += 1) {
+    const currentUrl = orderedUrls[index]
+    const nextUrl = orderedUrls[index + 1] ?? ''
+
+    if (isImageUrl(currentUrl) && isPlayablePictureVideoUrl(nextUrl)) {
+      result.push({
+        kind: 'livePhoto',
+        imageUrl: currentUrl,
+        videoUrl: nextUrl,
+      })
+      index += 1
+      continue
+    }
+
+    if (isPlayablePictureVideoUrl(currentUrl) && isImageUrl(nextUrl)) {
+      result.push({
+        kind: 'livePhoto',
+        imageUrl: nextUrl,
+        videoUrl: currentUrl,
+      })
+      index += 1
+      continue
+    }
+
+    if (isImageUrl(currentUrl)) {
+      result.push({
+        kind: 'image',
+        imageUrl: currentUrl,
+        videoUrl: '',
+      })
+      continue
+    }
+
+    if (isPlayablePictureVideoUrl(currentUrl)) {
+      result.push({
+        kind: 'livePhoto',
+        imageUrl: fallbackImageUrl.trim(),
+        videoUrl: currentUrl,
+      })
+    }
+  }
+
+  return result.filter(
+    (item: PictureCarouselMediaItem) => !!(item.imageUrl || item.videoUrl),
   )
 }
 

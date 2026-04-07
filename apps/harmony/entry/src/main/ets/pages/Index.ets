@@ -28,6 +28,7 @@ import {
   Entry,
   EntryCardModel,
   HarmonySettings,
+  selectPictureCarouselMediaUrls,
   selectPictureMediaUrls,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
@@ -748,7 +749,7 @@ struct Index {
       publishedAt: entry.publishedAt,
       readingTimeMinutes: 0,
       tags: entry.tags,
-      mediaUrls: entry.mediaUrls ?? [],
+      mediaUrls: entry.rawMediaUrls ?? selectPictureCarouselMediaUrls(entry.mediaUrls ?? []),
       isRead: entry.isRead,
       isStarred: entry.isStarred,
       createdAt: entry.publishedAt,
