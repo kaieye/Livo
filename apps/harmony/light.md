@@ -1,297 +1,146 @@
 场景介绍
-从6.1.0(23) 版本开始，新增支持HDS组件的沉浸光感材质能力。
+从6.0.0(20) Beta1版本开始，新增支持点光源效果。
 
-HDS导航：通过设置TitleBarStyleOptions的systemMaterialEffect参数，可为标题栏按钮设置沉浸光感视效。
-HDS底部页签：通过设置HdsTabsFloatingStyle的systemMaterialEffect参数，可为底部页签设置沉浸光感视效。
-使用系统自适应的沉浸光感
-推荐使用系统自适应的沉浸光感效果，系统会根据当前设备的算力动态调整组件的材质效果，实现性能与显示效果的最佳平衡体验。
+通过点光源接口可以设置组件的发光效果以及被照亮的受光效果，使得组件交互体验更显沉浸。
+
+约束与限制
+单个组件最多同时受12个光源照亮。
 
 开发步骤
-导入相关模块。
+导入模块。
 
-import { HdsNavigation, HdsNavigationTitleMode, HdsTabs, HdsTabsController, HdsNavigationMenuContentOptions, ScrollEffectType, hdsMaterial, } from '@kit.UIDesignKit';
-import { SymbolGlyphModifier } from "@kit.ArkUI";
-创建HDS导航和底部页签组件。导航标题栏包含1个返回按钮和3个功能按钮，底部页签包含3个子项。
+import { hdsEffect } from '@kit.UIDesignKit';
+创建点光源发光效果。如果需要发光，配置sourceType属性；如果需要被照亮，配置illuminatedType属性。
 
-以下示例代码为底部页签和标题栏的4个按钮设置了沉浸光感效果，该效果将根据系统能力自适应调整。
+以下代码表示：当中间的Button点击时，产生点光源效果，重复点击触发不同点光源效果。
 
 @Entry
 @Component
-export struct Index {
-private scrollerForScroll: Scroller = new Scroller();
-private controller: HdsTabsController = new HdsTabsController();
-
-private menus: HdsNavigationMenuContentOptions = {
-value: [{
-content: {
-label: 'menu1',
-icon: $r('sys.symbol.square_and_pencil'),
-}
-}, {
-content: {
-label: 'menu2',
-icon: $r('sys.symbol.star')
-},
-},{
-content: {
-label: 'menu3',
-icon: $r('sys.symbol.more')
-},
-}
-],
-};
+struct Index {
+@State bloomValue: number = 0;
+@State index: number = 0;
+@State illuminatedType: hdsEffect.PointLightIlluminatedType = hdsEffect.PointLightIlluminatedType.NONE;
+@State button_gradient_state: hdsEffect.PressShadowType = hdsEffect.PressShadowType.NONE;
+@State lightIntensity: number = 10;
+@State types: hdsEffect.PointLightIlluminatedType[] =
+[hdsEffect.PointLightIlluminatedType.NONE, hdsEffect.PointLightIlluminatedType.BORDER,
+hdsEffect.PointLightIlluminatedType.CONTENT, hdsEffect.PointLightIlluminatedType.BORDER_CONTENT,
+hdsEffect.PointLightIlluminatedType.DEFAULT_FEATHERING_BORDER];
 
 build() {
-HdsNavigation() {
-HdsTabs({ controller: this.controller }) {
-ForEach(MENU_CONFIG, (item: MenuItem) => {
-TabContent() {
-Stack() {
-Scroll(this.scrollerForScroll) {
-Column() {
-Image($r("app.media.scenery01")).width('100%') // scenery为自定义资源，开发者需替换本地资源
-}
-}
-.clipContent(ContentClipMode.SAFE_AREA)
-.height('100%')
-}
-}
-.tabBar(new BottomTabBarStyle({
-normal: item.symbolGlyph, selected: item.symbolGlyph1
-}, item.label))
+Flex({
+direction: FlexDirection.Column,
+justifyContent: FlexAlign.Center,
+alignItems: ItemAlign.Center,
+}) {
+// 纵向循环
+ForEach(Array<number>(4).fill(0), (row: number) => {
+Flex({
+direction: FlexDirection.Row,
+justifyContent: FlexAlign.Center,
+alignItems: ItemAlign.Center,
+}) {
+// 横向循环
+ForEach(Array<number>(4).fill(0), (col: number) => {
+Flex()
+.visualEffect(new hdsEffect.HdsEffectBuilder().pointLight({
+illuminatedType: this.illuminatedType,
+}).buildEffect())
+.backgroundColor(0x808080)
+.size({ width: 60, height: 60 })
+.borderRadius(50)
+.margin({ top: 20, right: 10, left: 10 }) // 添加间距
 })
 }
-.barOverlap(true)
-.vertical(false)
-.barPosition(BarPosition.End)
-.barFloatingStyle({
-barBottomMargin: 28,
-systemMaterialEffect: {
-materialType: hdsMaterial.MaterialType.ADAPTIVE,
-materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE // 底部悬浮页签沉浸光感效果跟随系统策略自适应
-}
+.width('100%') // 设置 Row 组件的宽度为 100%
 })
-}
-.mode(NavigationMode.Stack)
-.titleBar({
-content: {
-title: {
-mainTitle: 'MainTitle',
-},
-menu: this.menus,
-},
-style: {
-scrollEffectOpts: {
-enableScrollEffect: false,
-scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
-},
-systemMaterialEffect: {
-materialType: hdsMaterial.MaterialType.ADAPTIVE,
-materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE // 标题栏按钮沉浸光感效果跟随系统策略自适应
-},
-},
-avoidLayoutSafeArea: false,
-enableComponentSafeArea: false
-})
-.bindToScrollable([this.scrollerForScroll])
-.hideBackButton(false)
-.titleMode(HdsNavigationTitleMode.MINI)
-.ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-}
-}
 
-interface MenuItem {
-symbolGlyph: SymbolGlyphModifier,
-symbolGlyph1: SymbolGlyphModifier,
-label: string,
-defaultBgColor: ResourceColor,
-hoverBgColor: ResourceColor,
-pressBgColor: ResourceColor,
-};
+      Flex({
+        direction: FlexDirection.Row,
+        justifyContent: FlexAlign.Center, // 使用 SpaceBetween 来均匀分布间距
+        alignItems: ItemAlign.Center,
+      }) {
+        Flex()
+          .visualEffect(new hdsEffect.HdsEffectBuilder().pointLight({
+            illuminatedType: this.illuminatedType,
+          }).buildEffect())
+          .backgroundColor(0x808080)
+          .size({ width: 60, height: 60 })
+          .borderRadius(50)
+          .margin({ top: 20, right: 10, left: 10 })
 
-const MENU_CONFIG: MenuItem[] = [
-{
-symbolGlyph: new SymbolGlyphModifier($r('sys.symbol.alarm_fill_1')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-       .fontColor([$r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-$r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02')]),
-     symbolGlyph1: new SymbolGlyphModifier($r('sys.symbol.alarm_fill_1')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-.fontColor([$r('sys.color.ohos_id_color_activated'), $r('sys.color.ohos_id_color_primary_contrary')]),
-label: '闹钟',
-defaultBgColor: Color.Transparent,
-hoverBgColor: $r('sys.color.ohos_id_color_hover'),
-     pressBgColor: $r('sys.color.ohos_id_color_click_effect')
-   },
-   {
-     symbolGlyph: new SymbolGlyphModifier($r('sys.symbol.worldclock_fill_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-.fontColor([$r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-$r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02')]),
-symbolGlyph1: new SymbolGlyphModifier($r('sys.symbol.worldclock_fill_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-       .fontColor([$r('sys.color.ohos_id_color_activated'), $r('sys.color.ohos_id_color_primary_contrary')]),
-     label: '时钟',
-     defaultBgColor: Color.Transparent,
-     hoverBgColor: $r('sys.color.ohos_id_color_hover'),
-     pressBgColor: $r('sys.color.ohos_id_color_click_effect')
-   },
-   {
-     symbolGlyph: new SymbolGlyphModifier($r('sys.symbol.stopwatch_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-.fontColor([$r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-$r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02')]),
-symbolGlyph1: new SymbolGlyphModifier($r('sys.symbol.stopwatch_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-       .fontColor([$r('sys.color.ohos_id_color_activated'), $r('sys.color.ohos_id_color_primary_contrary')]),
-label: '秒表',
-defaultBgColor: Color.Transparent,
-hoverBgColor: $r('sys.color.ohos_id_color_hover'),
-pressBgColor: $r('sys.color.ohos_id_color_click_effect')
-}
-];
-使用自定义沉浸光感效果
-如果使用自定义沉浸光感的视觉效果，请先调用getSystemMaterialTypes()接口查询当前设备所支持的材质能力，再根据查询结果选用相应的材质效果枚举：
+        Button('点击发光')
+          .size({ width: 140, height: 60 })
+          .backgroundColor(0x808080)
+          .fontColor(0xADD8E6)
+          .visualEffect(new hdsEffect.HdsEffectBuilder()
+            .pressShadow(this.button_gradient_state)
+            .pointLight({
+              options: {
+                color: Color.White,
+                intensity: this.lightIntensity,
+                height: 150
+              }
+            })
+            .pressShadow(this.button_gradient_state)
+            .buildEffect())
+          .onClick(() => {
+            if (this.index <= 3) {
+              this.index++;
+              this.illuminatedType = this.types[this.index];
+              this.button_gradient_state = hdsEffect.PressShadowType.BLEND_GRADIENT;
+            }
+            let message = 'NONE';
+            if (this.illuminatedType == 1) {
+              message = 'BORDER';
+            } else if (this.illuminatedType == 2) {
+              message = 'CONTENT';
+            } else if (this.illuminatedType == 3) {
+              message = 'BORDER_CONTENT';
+            } else {
+              message = 'DEFAULT_FEATHERING_BORDER';
+            }
+            this.getUIContext().getPromptAction().showToast({
+              message: message,
+              duration: 2000,
+              bottom: '80%'
+            });
+          })
+          .margin({ top: 20, right: 10, left: 10 })
 
-如果查询结果显示当前设备支持IMMERSIVE材质类型，可选用EXQUISITE或GENTLE效果。
-如果查询结果显示当前设备不支持IMMERSIVE材质类型，则建议使用SMOOTH效果，以降低卡顿和发热风险，保障用户体验。
-开发步骤
-导入相关模块。
+        Flex()
+          .visualEffect(new hdsEffect.HdsEffectBuilder().pointLight({
+            illuminatedType: this.illuminatedType,
+          }).buildEffect())
+          .backgroundColor(0x808080)
+          .size({ width: 60, height: 60 })
+          .borderRadius(50)
+          .margin({ top: 20, right: 10, left: 10 })
+      }
+      .width('100%') // 设置 Row 组件的宽度为 100%
 
-import { HdsNavigation, HdsNavigationTitleMode, HdsTabs, HdsTabsController, HdsNavigationMenuContentOptions, ScrollEffectType, hdsMaterial, } from '@kit.UIDesignKit';
-import { SymbolGlyphModifier } from "@kit.ArkUI";
-创建HDS导航和底部页签组件。导航标题栏包含1个返回按钮和3个功能按钮，底部页签包含3个子项。
+      ForEach(Array<number>(4).fill(0), (row: number) => {
+        Flex({
+          direction: FlexDirection.Row,
+          justifyContent: FlexAlign.Center,
+          alignItems: ItemAlign.Center,
+        }) {
+          // 横向循环
+          ForEach(Array<number>(4).fill(0), (col: number) => {
+            Flex()
+              .visualEffect(new hdsEffect.HdsEffectBuilder().pointLight({
+                illuminatedType: this.illuminatedType,
+              }).buildEffect())
+              .backgroundColor(0x808080)
+              .size({ width: 60, height: 60 })
+              .borderRadius(50)
+              .margin({ top: 20, right: 10, left: 10 })
+          })
+        }
+        .width('100%') // 设置 Row 组件的宽度为 100%
+      })
+    }
+    .backgroundColor(Color.Black)
 
-以下示例代码为底部页签和标题栏的4个按钮设置了沉浸光感效果，根据设备所能支持的材质能力自定义动态切换显示效果。
-
-@Entry
-@Component
-export struct Index {
-private scrollerForScroll: Scroller = new Scroller();
-private controller: HdsTabsController = new HdsTabsController();
-@State customMaterialLevel: hdsMaterial.MaterialLevel = hdsMaterial.MaterialLevel.EXQUISITE;
-
-private menus: HdsNavigationMenuContentOptions = {
-value: [{
-content: {
-label: 'menu1',
-icon: $r('sys.symbol.square_and_pencil'),
-}
-}, {
-content: {
-label: 'menu2',
-icon: $r('sys.symbol.star')
-},
-},{
-content: {
-label: 'menu3',
-icon: $r('sys.symbol.more')
-},
-}
-],
-};
-
-aboutToAppear(): void {
-let materialTypes: Array<hdsMaterial.MaterialType> = hdsMaterial.getSystemMaterialTypes();
-if (materialTypes.indexOf(hdsMaterial.MaterialType.IMMERSIVE) < 0) {
-this.customMaterialLevel = hdsMaterial.MaterialLevel.SMOOTH; // 当前设备不支持IMMERSIVE材质类型，则使用SMOOTH效果
 }
 }
-
-build() {
-HdsNavigation() {
-HdsTabs({ controller: this.controller }) {
-ForEach(MENU_CONFIG, (item: MenuItem) => {
-TabContent() {
-Stack() {
-Scroll(this.scrollerForScroll) {
-Column() {
-Image($r("app.media.scenery01")).width('100%') // scenery为自定义资源，开发者需替换本地资源
-}
-}
-.clipContent(ContentClipMode.SAFE_AREA)
-.height('100%')
-}
-}
-.tabBar(new BottomTabBarStyle({
-normal: item.symbolGlyph, selected: item.symbolGlyph1
-}, item.label))
-})
-}
-.barOverlap(true)
-.vertical(false)
-.barPosition(BarPosition.End)
-.barFloatingStyle({
-barBottomMargin: 28,
-systemMaterialEffect: {
-materialType: hdsMaterial.MaterialType.ADAPTIVE,
-materialLevel: this.customMaterialLevel // 底部悬浮页签自定义沉浸光感材质效果
-}
-})
-}
-.mode(NavigationMode.Stack)
-.titleBar({
-content: {
-title: {
-mainTitle: 'MainTitle',
-},
-menu: this.menus,
-},
-style: {
-scrollEffectOpts: {
-enableScrollEffect: false,
-scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
-},
-systemMaterialEffect: {
-materialType: hdsMaterial.MaterialType.ADAPTIVE,
-materialLevel: this.customMaterialLevel // 标题栏按钮自定义沉浸光感材质效果
-},
-},
-avoidLayoutSafeArea: false,
-enableComponentSafeArea: false
-})
-.bindToScrollable([this.scrollerForScroll])
-.hideBackButton(false)
-.titleMode(HdsNavigationTitleMode.MINI)
-.ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-}
-}
-
-interface MenuItem {
-symbolGlyph: SymbolGlyphModifier,
-symbolGlyph1: SymbolGlyphModifier,
-label: string,
-defaultBgColor: ResourceColor,
-hoverBgColor: ResourceColor,
-pressBgColor: ResourceColor,
-};
-
-const MENU_CONFIG: MenuItem[] = [
-{
-symbolGlyph: new SymbolGlyphModifier($r('sys.symbol.alarm_fill_1')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-       .fontColor([$r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-$r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02')]),
-     symbolGlyph1: new SymbolGlyphModifier($r('sys.symbol.alarm_fill_1')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-.fontColor([$r('sys.color.ohos_id_color_activated'), $r('sys.color.ohos_id_color_primary_contrary')]),
-label: '闹钟',
-defaultBgColor: Color.Transparent,
-hoverBgColor: $r('sys.color.ohos_id_color_hover'),
-     pressBgColor: $r('sys.color.ohos_id_color_click_effect')
-   },
-   {
-     symbolGlyph: new SymbolGlyphModifier($r('sys.symbol.worldclock_fill_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-.fontColor([$r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-$r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02')]),
-symbolGlyph1: new SymbolGlyphModifier($r('sys.symbol.worldclock_fill_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-       .fontColor([$r('sys.color.ohos_id_color_activated'), $r('sys.color.ohos_id_color_primary_contrary')]),
-     label: '时钟',
-     defaultBgColor: Color.Transparent,
-     hoverBgColor: $r('sys.color.ohos_id_color_hover'),
-     pressBgColor: $r('sys.color.ohos_id_color_click_effect')
-   },
-   {
-     symbolGlyph: new SymbolGlyphModifier($r('sys.symbol.stopwatch_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-.fontColor([$r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-$r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02')]),
-symbolGlyph1: new SymbolGlyphModifier($r('sys.symbol.stopwatch_2')).renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-       .fontColor([$r('sys.color.ohos_id_color_activated'), $r('sys.color.ohos_id_color_primary_contrary')]),
-label: '秒表',
-defaultBgColor: Color.Transparent,
-hoverBgColor: $r('sys.color.ohos_id_color_hover'),
-pressBgColor: $r('sys.color.ohos_id_color_click_effect')
-}
-];

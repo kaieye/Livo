@@ -1,3 +1,4 @@
+import { common } from '@kit.AbilityKit'
 import Want from '@ohos.app.ability.Want'
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
@@ -38,6 +39,8 @@ struct ArticleDetail {
   @State activeVideoPlayableUrl: string = ''
   @State activeVideoFallbackUrl: string = ''
   @State isResolvingActiveVideo: boolean = false
+  @State inlineVideoPreparingBlockId: string = ''
+  @State mediaAspectRatios: number[] = []
   private upgradedEntryIds: Set<string> = new Set<string>()
   private videoWebController: webview.WebviewController = new webview.WebviewController()
   private nativeVideoController: VideoController = new VideoController()
@@ -230,6 +233,11 @@ struct ArticleDetail {
     return isDirectVideoUrl(videoUrl)
   }
 
+  private isPictureDetail(): boolean {
+    const viewLabel = (this.entry?.viewLabel || '').trim()
+    return viewLabel === '图片'
+  }
+
   private sourceUrl(): string {
     if (!this.entry) {
       return ''
@@ -319,20 +327,63 @@ struct ArticleDetail {
     void openImageViewer(block.imageUrl, this.entry?.title || '图片预览')
   }
 
-  private playVideo(block: ArticleContentBlock): void {
+  private mediaAspectRatio(index: number): number {
+    const ratio = this.mediaAspectRatios[index]
+    return ratio && ratio > 0 ? ratio : 4 / 5
+  }
+
+  private rememberMediaAspectRatio(index: number, width: number, height: number): void {
+    if (width <= 0 || height <= 0) {
+      return
+    }
+
+    const nextRatio = width / height
+    const currentRatio = this.mediaAspectRatios[index]
+    if (currentRatio && Math.abs(currentRatio - nextRatio) < 0.001) {
+      return
+    }
+
+    const nextRatios = [...this.mediaAspectRatios]
+    nextRatios[index] = nextRatio
+    this.mediaAspectRatios = nextRatios
+  }
+
+  private shouldInlineVideoPlayback(block: ArticleContentBlock): boolean {
+    return this.isPictureDetail() && this.isDirectVideoFile(block.videoUrl)
+  }
+
+  private isInlineVideoPreparing(block: ArticleContentBlock): boolean {
+    return this.inlineVideoPreparingBlockId === block.id
+  }
+
+  private openVideoFullscreen(block: ArticleContentBlock): void {
+    void openVideoPlayer(this.entry?.title || '视频播放', block.videoUrl, block.imageUrl || '')
+  }
+
+  private openVideoBlock(block: ArticleContentBlock): void {
+    if (this.shouldInlineVideoPlayback(block)) {
+      this.playVideo(block)
+      return
+    }
+
     const playbackTarget = resolveVideoPlaybackTarget(
       this.isYouTubeVideo(block.videoUrl),
       this.isDirectVideoFile(block.videoUrl),
     )
     if (playbackTarget === 'dedicated') {
-      void openVideoPlayer(this.entry?.title || '视频播放', block.videoUrl, block.imageUrl || '')
+      this.openVideoFullscreen(block)
       return
     }
 
+    this.playVideo(block)
+  }
+
+  private playVideo(block: ArticleContentBlock): void {
     this.activeVideoBlockId = block.id
     this.activeVideoPlayableUrl = ''
     this.activeVideoFallbackUrl = ''
     this.isResolvingActiveVideo = false
+    this.inlineVideoPreparingBlockId = this.shouldInlineVideoPlayback(block) ? block.id : ''
     this.actionHint = ''
     if (this.isDirectVideoFile(block.videoUrl)) {
       this.activeVideoPlayableUrl = block.videoUrl
@@ -350,6 +401,7 @@ struct ArticleDetail {
     this.activeVideoPlayableUrl = ''
     this.activeVideoFallbackUrl = ''
     this.isResolvingActiveVideo = false
+    this.inlineVideoPreparingBlockId = ''
     try {
       this.nativeVideoController.stop()
     } catch (_) {}
@@ -456,55 +508,143 @@ struct ArticleDetail {
   }
 
   @Builder
-  private ContentBlockItem(block: ArticleContentBlock) {
+  private PlayOverlayButton() {
+    Row() {
+      SymbolGlyph($r('sys.symbol.play_fill'))
+        .fontSize(26)
+        .fontColor(['#FFFFFF'])
+    }
+    .width(62)
+    .height(62)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor('rgba(17,24,39,0.42)')
+    .borderRadius(999)
+  }
+
+  @Builder
+  private ContentBlockItem(block: ArticleContentBlock, index: number) {
     if (block.type === 'image' && block.imageUrl) {
-      Column({ space: 0 }) {
-        Image(block.imageUrl)
-          .width('100%')
-          .constraintSize({ minHeight: 180, maxHeight: 520 })
-          .objectFit(ImageFit.Contain)
-          .borderRadius(16)
+      Column() {
+        Stack({ alignContent: Alignment.Center }) {
+          Image(block.imageUrl)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Contain)
+            .borderRadius(18)
+            .backgroundColor(this.theme.elevated)
+            .onComplete((event) => {
+              if (event) {
+                this.rememberMediaAspectRatio(index, event.width, event.height)
+              }
+            })
+        }
+        .width('100%')
+        .aspectRatio(this.mediaAspectRatio(index))
+        .constraintSize({ maxHeight: 640 })
+        .clip(true)
+        .borderRadius(18)
+        .backgroundColor(this.theme.elevated)
+        .onClick(() => {
+          this.openImageBlock(block)
+        })
       }
       .width('100%')
-      .clip(true)
-      .onClick(() => {
-        this.openImageBlock(block)
-      })
     } else if (block.type === 'video' && block.videoUrl) {
-      Column({ space: 12 }) {
+      Column() {
         if (this.isVideoPlaying(block)) {
-          Column({ space: 10 }) {
+          Column() {
             if (this.isDirectVideoFile(block.videoUrl)) {
-              Video({
-                src: this.activeVideoPlayableUrl || block.videoUrl,
-                controller: this.nativeVideoController,
-                previewUri: block.imageUrl || '',
-              })
-                .width('100%')
-                .height(232)
-                .borderRadius(18)
-                .controls(true)
-                .autoPlay(true)
-                .objectFit(ImageFit.Contain)
-                .onError(() => {
-                  this.actionHint = '应用内播放失败，请稍后重试'
-                })
-            } else if (this.isYouTubeVideo(block.videoUrl)) {
-              if (this.activeVideoPlayableUrl) {
+              Stack({ alignContent: Alignment.Center }) {
+                if (block.imageUrl) {
+                  Image(block.imageUrl)
+                    .width('100%')
+                    .height('100%')
+                    .objectFit(ImageFit.Contain)
+                    .opacity(0)
+                    .onComplete((event) => {
+                      if (event) {
+                        this.rememberMediaAspectRatio(index, event.width, event.height)
+                      }
+                    })
+                }
+
                 Video({
-                  src: this.activeVideoPlayableUrl,
+                  src: this.activeVideoPlayableUrl || block.videoUrl,
                   controller: this.nativeVideoController,
                   previewUri: block.imageUrl || '',
                 })
                   .width('100%')
-                  .height(232)
+                  .height('100%')
                   .borderRadius(18)
                   .controls(true)
                   .autoPlay(true)
                   .objectFit(ImageFit.Contain)
+                  .onPrepared(() => {
+                    if (this.inlineVideoPreparingBlockId === block.id) {
+                      this.inlineVideoPreparingBlockId = ''
+                    }
+                  })
+                  .onStart(() => {
+                    if (this.inlineVideoPreparingBlockId === block.id) {
+                      this.inlineVideoPreparingBlockId = ''
+                    }
+                  })
                   .onError(() => {
+                    this.inlineVideoPreparingBlockId = ''
                     this.actionHint = '应用内播放失败，请稍后重试'
                   })
+
+                if (this.isInlineVideoPreparing(block)) {
+                  LoadingProgress()
+                    .width(28)
+                    .height(28)
+                    .color(this.theme.accent)
+                }
+              }
+                .width('100%')
+                .aspectRatio(this.mediaAspectRatio(index))
+                .constraintSize({ maxHeight: 640 })
+                .clip(true)
+                .borderRadius(18)
+                .backgroundColor(this.theme.elevated)
+            } else if (this.isYouTubeVideo(block.videoUrl)) {
+              if (this.activeVideoPlayableUrl) {
+                Stack({ alignContent: Alignment.Center }) {
+                  if (block.imageUrl) {
+                    Image(block.imageUrl)
+                      .width('100%')
+                      .height('100%')
+                      .objectFit(ImageFit.Contain)
+                      .opacity(0)
+                      .onComplete((event) => {
+                        if (event) {
+                          this.rememberMediaAspectRatio(index, event.width, event.height)
+                        }
+                      })
+                  }
+
+                  Video({
+                    src: this.activeVideoPlayableUrl,
+                    controller: this.nativeVideoController,
+                    previewUri: block.imageUrl || '',
+                  })
+                    .width('100%')
+                    .height('100%')
+                    .borderRadius(18)
+                    .controls(false)
+                    .autoPlay(true)
+                    .objectFit(ImageFit.Contain)
+                    .onError(() => {
+                      this.actionHint = '应用内播放失败，请稍后重试'
+                    })
+                }
+                .width('100%')
+                .aspectRatio(this.mediaAspectRatio(index))
+                .constraintSize({ maxHeight: 640 })
+                .clip(true)
+                .borderRadius(18)
+                .backgroundColor(this.theme.elevated)
               } else if (this.isResolvingActiveVideo) {
                 Column({ space: 10 }) {
                   LoadingProgress()
@@ -517,7 +657,8 @@ struct ArticleDetail {
                     .fontColor(this.theme.textSecondary)
                 }
                 .width('100%')
-                .height(232)
+                .aspectRatio(this.mediaAspectRatio(index))
+                .constraintSize({ maxHeight: 640 })
                 .justifyContent(FlexAlign.Center)
                 .alignItems(HorizontalAlign.Center)
                 .backgroundColor(this.theme.elevated)
@@ -528,7 +669,8 @@ struct ArticleDetail {
                   controller: this.videoWebController,
                 })
                   .width('100%')
-                  .height(232)
+                  .aspectRatio(this.mediaAspectRatio(index))
+                  .constraintSize({ maxHeight: 640 })
                   .borderRadius(18)
                   .javaScriptAccess(true)
                   .domStorageAccess(true)
@@ -564,7 +706,8 @@ struct ArticleDetail {
                     .fontColor(this.theme.textSecondary)
                 }
                 .width('100%')
-                .height(232)
+                .aspectRatio(this.mediaAspectRatio(index))
+                .constraintSize({ maxHeight: 640 })
                 .justifyContent(FlexAlign.Center)
                 .alignItems(HorizontalAlign.Center)
                 .backgroundColor(this.theme.elevated)
@@ -576,7 +719,8 @@ struct ArticleDetail {
                 controller: this.videoWebController,
               })
                 .width('100%')
-                .height(232)
+                .aspectRatio(this.mediaAspectRatio(index))
+                .constraintSize({ maxHeight: 640 })
                 .borderRadius(18)
                 .javaScriptAccess(true)
                 .domStorageAccess(true)
@@ -587,35 +731,8 @@ struct ArticleDetail {
                   if (event.request?.isMainFrame()) {
                     this.actionHint = '应用内播放失败，可尝试外部打开'
                   }
-                })
+              })
             }
-
-            Row({ space: 10 }) {
-              Text('收起')
-                .fontSize(13)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.theme.textSecondary)
-                .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-                .backgroundColor(this.theme.elevated)
-                .borderRadius(999)
-                .onClick(() => {
-                  this.stopVideo()
-                })
-
-              if (!this.isYouTubeVideo(block.videoUrl)) {
-                Text('外部打开')
-                  .fontSize(13)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor('#FFFFFF')
-                  .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-                  .backgroundColor(this.theme.accent)
-                  .borderRadius(999)
-                  .onClick(() => {
-                    void this.openExternalUrl(block.videoUrl)
-                  })
-              }
-            }
-            .padding({ top: 2, bottom: 2 })
           }
           .width('100%')
         } else {
@@ -623,41 +740,35 @@ struct ArticleDetail {
             if (block.imageUrl) {
               Image(block.imageUrl)
                 .width('100%')
-                .constraintSize({ minHeight: 180, maxHeight: 260 })
-                .objectFit(ImageFit.Cover)
+                .height('100%')
+                .objectFit(ImageFit.Contain)
                 .borderRadius(18)
+                .backgroundColor(this.theme.elevated)
+                .onComplete((event) => {
+                  if (event) {
+                    this.rememberMediaAspectRatio(index, event.width, event.height)
+                  }
+                })
             } else {
               Row()
                 .width('100%')
-                .height(180)
+                .height('100%')
                 .backgroundColor(this.theme.elevated)
                 .borderRadius(18)
             }
 
-            Row({ space: 8 }) {
-              Text('播放视频')
-                .fontSize(15)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#FFFFFF')
-            }
-            .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-            .backgroundColor('rgba(17,24,39,0.72)')
-            .borderRadius(999)
+            this.PlayOverlayButton()
           }
           .width('100%')
+          .aspectRatio(this.mediaAspectRatio(index))
+          .constraintSize({ maxHeight: 640 })
           .clip(true)
           .onClick(() => {
-            this.playVideo(block)
+            this.openVideoBlock(block)
           })
         }
       }
       .width('100%')
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
-      .onClick(() => {
-        if (!this.isVideoPlaying(block)) {
-          this.playVideo(block)
-        }
-      })
     } else if (block.text) {
       Column({ space: 0 }) {
         Text(block.text)
@@ -740,7 +851,7 @@ struct ArticleDetail {
               if (this.entry!.contentBlocks.length > 0) {
                 ForEach(this.entry!.contentBlocks, (block: ArticleContentBlock, index: number) => {
                   if (this.shouldRenderParagraphBlock(block, index)) {
-                    this.ContentBlockItem(block)
+                    this.ContentBlockItem(block, index)
                   }
                 }, (block: ArticleContentBlock) => block.id)
               } else {

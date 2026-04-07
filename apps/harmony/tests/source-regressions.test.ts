@@ -99,6 +99,14 @@ const imageViewerSource = fs.readFileSync(
   'utf8',
 )
 
+const mediaSaveServiceSource = fs.readFileSync(
+  path.join(
+    process.cwd(),
+    'apps/harmony/entry/src/main/ets/common/services/MediaSaveService.ets',
+  ),
+  'utf8',
+)
+
 test('TweetEntryCard renders tweet-specific sections', () => {
   const source = fs.readFileSync(
     'apps/harmony/entry/src/main/ets/common/components/TweetEntryCard.ets',
@@ -323,9 +331,19 @@ test('FeedDetailView routes x previews through TweetEntryCard', () => {
 
 test('VideoPlayer keeps fullscreen playback centered and aspect-ratio constrained', () => {
   assert.match(videoPlayerSource, /@State videoAspectRatio: number = 16 \/ 9/)
+  assert.match(videoPlayerSource, /import \{ common \} from '@kit\.AbilityKit'/)
+  assert.match(
+    videoPlayerSource,
+    /import \{ MediaSaveService \} from '\.\.\/common\/services\/MediaSaveService'/,
+  )
   assert.match(
     videoPlayerSource,
     /private rememberVideoAspectRatio\(width: number, height: number\): void/,
+  )
+  assert.match(videoPlayerSource, /private saveVideoToPhotos\(\): void/)
+  assert.match(
+    videoPlayerSource,
+    /MediaSaveService\.saveRemoteMedia\(context, this\.playableUrl \|\| this\.videoUrl, 'video'\)/,
   )
   assert.match(videoPlayerSource, /Image\(this\.previewUrl\)/)
   assert.match(videoPlayerSource, /\.onComplete\(\(event\) => \{/)
@@ -333,9 +351,24 @@ test('VideoPlayer keeps fullscreen playback centered and aspect-ratio constraine
     videoPlayerSource,
     /this\.rememberVideoAspectRatio\(event\.width, event\.height\)/,
   )
+  assert.match(videoPlayerSource, /\.bindMenu\(this\.SaveVideoMenu\(\)\)/)
+  assert.match(videoPlayerSource, /MenuItem\(\{\s*content: '保存到本地'/s)
   assert.match(videoPlayerSource, /\.aspectRatio\(this\.videoAspectRatio\)/)
   assert.match(videoPlayerSource, /\.constraintSize\(\{ maxHeight: '88%' \}\)/)
   assert.match(videoPlayerSource, /\.objectFit\(ImageFit\.Contain\)/)
+  assert.match(
+    videoPlayerSource,
+    /SymbolGlyph\(\$r\('sys\.symbol\.chevron_backward'\)\)/,
+  )
+  assert.match(videoPlayerSource, /Column\(\) \{\s*Row\(\) \{/s)
+  assert.match(
+    videoPlayerSource,
+    /\.padding\(\{ left: 16, right: 16, top: 8, bottom: 8 \}\)/,
+  )
+  assert.match(videoPlayerSource, /\.justifyContent\(FlexAlign\.Start\)/)
+  assert.match(videoPlayerSource, /Stack\(\) \{\s*this\.PlayerBody\(\)/s)
+  assert.match(videoPlayerSource, /\.layoutWeight\(1\)/)
+  assert.match(videoPlayerSource, /\.backgroundColor\('rgba\(0,0,0,0\.48\)'\)/)
 })
 
 test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', () => {
@@ -343,9 +376,43 @@ test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', 
     articleDetailSource,
     /import \{ getStringParams, goBack, openImageViewer, openVideoPlayer \} from '\.\.\/common\/navigation\/AppRouter'/,
   )
+  assert.match(articleDetailSource, /private isPictureDetail\(\): boolean/)
+  assert.match(
+    articleDetailSource,
+    /private shouldInlineVideoPlayback\(block: ArticleContentBlock\): boolean/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private openVideoFullscreen\(block: ArticleContentBlock\): void/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private openVideoBlock\(block: ArticleContentBlock\): void \{[\s\S]*if \(this\.shouldInlineVideoPlayback\(block\)\) \{\s*this\.playVideo\(block\)\s*return\s*\}/s,
+  )
+  assert.match(
+    articleDetailSource,
+    /@State inlineVideoPreparingBlockId: string = ''/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private isInlineVideoPreparing\(block: ArticleContentBlock\): boolean/,
+  )
+  assert.match(articleDetailSource, /@State mediaAspectRatios: number\[] = \[]/)
+  assert.match(
+    articleDetailSource,
+    /private mediaAspectRatio\(index: number\): number/,
+  )
+  assert.match(
+    articleDetailSource,
+    /private rememberMediaAspectRatio\(index: number, width: number, height: number\): void/,
+  )
   assert.match(
     articleDetailSource,
     /private openImageBlock\(block: ArticleContentBlock\): void/,
+  )
+  assert.match(
+    articleDetailSource,
+    /void openVideoPlayer\(this\.entry\?\.title \|\| '视频播放', block\.videoUrl, block\.imageUrl \|\| ''\)/,
   )
   assert.match(
     articleDetailSource,
@@ -357,7 +424,43 @@ test('ArticleDetail opens image blocks in a dedicated fullscreen image viewer', 
   )
   assert.match(
     articleDetailSource,
+    /\.aspectRatio\(this\.mediaAspectRatio\(index\)\)/,
+  )
+  assert.match(
+    articleDetailSource,
+    /this\.rememberMediaAspectRatio\(index, event\.width, event\.height\)/,
+  )
+  assert.match(
+    articleDetailSource,
+    /SymbolGlyph\(\$r\('sys\.symbol\.play_fill'\)\)/,
+  )
+  assert.doesNotMatch(articleDetailSource, /Text\('播放视频'\)/)
+  assert.match(
+    articleDetailSource,
     /\.onClick\(\(\) => \{\s*this\.openImageBlock\(block\)\s*\}\)/s,
+  )
+  assert.match(
+    articleDetailSource,
+    /\.onClick\(\(\) => \{\s*this\.openVideoBlock\(block\)\s*\}\)/s,
+  )
+  assert.match(
+    articleDetailSource,
+    /Video\(\{[\s\S]*src: this\.activeVideoPlayableUrl \|\| block\.videoUrl[\s\S]*\.controls\(true\)/s,
+  )
+  assert.match(articleDetailSource, /\.onPrepared\(\(\) => \{/)
+  assert.match(
+    articleDetailSource,
+    /if \(this\.isInlineVideoPreparing\(block\)\) \{\s*LoadingProgress\(\)/s,
+  )
+  assert.doesNotMatch(articleDetailSource, /Text\('查看大图'\)/)
+  assert.doesNotMatch(articleDetailSource, /Text\('保存图片'\)/)
+  assert.doesNotMatch(articleDetailSource, /Text\('保存视频'\)/)
+  assert.doesNotMatch(articleDetailSource, /Text\('收起'\)/)
+  assert.doesNotMatch(articleDetailSource, /Text\('外部打开'\)/)
+  assert.doesNotMatch(articleDetailSource, /articleUrl\.includes\('x\.com\/'\)/)
+  assert.doesNotMatch(
+    articleDetailSource,
+    /articleUrl\.includes\('twitter\.com\/'\)/,
   )
 })
 
@@ -383,6 +486,19 @@ test('AppRouter and ImageViewer provide a fullscreen image preview route', () =>
   assert.match(imageViewerSource, /\.objectFit\(ImageFit\.Contain\)/)
   assert.match(imageViewerSource, /\.backgroundColor\('#000000'\)/)
   assert.match(imageViewerSource, /void goBack\(\)/)
+})
+
+test('MediaSaveService saves remote images and videos through the system creation dialog', () => {
+  assert.match(
+    mediaSaveServiceSource,
+    /export type MediaSaveKind = 'image' \| 'video'/,
+  )
+  assert.match(mediaSaveServiceSource, /showAssetsCreationDialog/)
+  assert.match(mediaSaveServiceSource, /photoAccessHelper\.PhotoType\.IMAGE/)
+  assert.match(mediaSaveServiceSource, /photoAccessHelper\.PhotoType\.VIDEO/)
+  assert.match(mediaSaveServiceSource, /fileUri\.getUriFromPath/)
+  assert.match(mediaSaveServiceSource, /fileIo\.copyFile\(/)
+  assert.match(mediaSaveServiceSource, /http\.createHttp\(\)/)
 })
 
 test('Index routes x social cards through TweetEntryCard', () => {

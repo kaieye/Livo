@@ -1,7 +1,9 @@
+import { common } from '@kit.AbilityKit'
 import window from '@ohos.window'
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
+import { MediaSaveService } from '../common/services/MediaSaveService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { resolveVideoPlayerLaunchState, VideoPlayerLaunchMode } from '../common/utils/VideoPlayerLaunchState'
@@ -105,6 +107,40 @@ struct VideoPlayer {
     this.videoAspectRatio = nextRatio
   }
 
+  private saveVideoToPhotos(): void {
+    const mediaUrl = (this.playableUrl || this.videoUrl).trim()
+    if (!mediaUrl) {
+      this.actionHint = '未找到可保存的视频地址'
+      return
+    }
+
+    this.actionHint = '正在保存视频...'
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+    void MediaSaveService.saveRemoteMedia(context, this.playableUrl || this.videoUrl, 'video')
+      .then(() => {
+        this.actionHint = '视频已保存到相册'
+      })
+      .catch((error: Error) => {
+        if ((error?.message || '').includes('用户取消保存')) {
+          this.actionHint = ''
+          return
+        }
+        this.actionHint = error instanceof Error ? error.message : '保存失败，请稍后重试'
+      })
+  }
+
+  @Builder
+  private SaveVideoMenu() {
+    Menu() {
+      MenuItem({ content: '保存到本地' })
+        .onChange((selected: boolean) => {
+          if (selected) {
+            this.saveVideoToPhotos()
+          }
+        })
+    }
+  }
+
   @Builder
   private PlayerBody() {
     if (this.mode === 'direct' && this.playableUrl) {
@@ -146,6 +182,7 @@ struct VideoPlayer {
       .padding({ left: 16, right: 16 })
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
+      .bindMenu(this.SaveVideoMenu())
     } else if (this.mode === 'web' && this.fallbackUrl) {
       Web({
         src: this.fallbackUrl,
@@ -197,40 +234,49 @@ struct VideoPlayer {
   }
 
   build() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      this.PlayerBody()
-
-      if (this.actionHint) {
-        Column() {
-          Text(this.actionHint)
-            .fontSize(12)
-            .fontColor('#FFFFFF')
-            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .backgroundColor('rgba(0,0,0,0.56)')
-            .borderRadius(999)
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, bottom: Math.max(24, this.bottomAvoidArea + 8) })
-        .alignItems(HorizontalAlign.Center)
-        .justifyContent(FlexAlign.End)
-        .align(Alignment.Bottom)
-      }
-
+    Column() {
       Row() {
-        SymbolGlyph($r('sys.symbol.chevron_backward'))
-          .fontSize(20)
-          .fontColor(['#FFFFFF'])
+        Row() {
+          SymbolGlyph($r('sys.symbol.chevron_backward'))
+            .fontSize(20)
+            .fontColor(['#FFFFFF'])
+        }
+        .width(42)
+        .height(42)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor('rgba(0,0,0,0.48)')
+        .borderRadius(999)
+        .onClick(() => {
+          void goBack()
+        })
       }
-      .width(42)
-      .height(42)
-      .justifyContent(FlexAlign.Center)
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+      .justifyContent(FlexAlign.Start)
       .alignItems(VerticalAlign.Center)
-      .backgroundColor('rgba(0,0,0,0.48)')
-      .borderRadius(999)
-      .margin({ left: 16, top: 16 })
-      .onClick(() => {
-        void goBack()
-      })
+
+      Stack() {
+        this.PlayerBody()
+
+        if (this.actionHint) {
+          Column() {
+            Text(this.actionHint)
+              .fontSize(12)
+              .fontColor('#FFFFFF')
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .backgroundColor('rgba(0,0,0,0.56)')
+              .borderRadius(999)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: Math.max(24, this.bottomAvoidArea + 8) })
+          .alignItems(HorizontalAlign.Center)
+          .justifyContent(FlexAlign.End)
+          .align(Alignment.Bottom)
+        }
+      }
+      .layoutWeight(1)
+      .width('100%')
     }
     .width('100%')
     .height('100%')
