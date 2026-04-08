@@ -32,8 +32,10 @@ import {
   selectPictureCarouselMediaUrls,
   selectPictureMediaUrls,
 } from '../common/models/LivoModels'
+import { HighlightedInlineText } from '../common/components/HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
+import { buildInlineHighlightSegments, normalizeInlineSearchQuery } from '../common/utils/HomeInlineSearch'
 import { rememberVisitedMode } from '../common/utils/HomeModeVisitedCache'
 import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
 import { presentTweetEntryFromCard } from '../common/utils/TweetEntryPresentation'
@@ -80,6 +82,8 @@ const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA: number = 14
 const HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT: number = -6
 const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_COLLAPSED_MODE_RAIL_SIZE - ROOT_MODE_RAIL_TOP_GAP
+const HOME_INLINE_SEARCH_INPUT_HEIGHT: number = 40
+const HOME_INLINE_SEARCH_WIDTH: number = 196
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -123,6 +127,8 @@ struct Index {
   @State homeModeRailExpandedOverride: boolean = false
   @State homeModeRailExpandedLockOffset: number = -1
   @State homeCollapsedModeRailPressed: boolean = false
+  @State searchQuery: string = ''
+  @State showSearch: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State rootSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State rootTabIndex: number = 0
@@ -135,6 +141,7 @@ struct Index {
   private readonly socialScroller: Scroller = new Scroller()
   private readonly picturesScroller: Scroller = new Scroller()
   private readonly videosScroller: Scroller = new Scroller()
+  private searchInputController: TextInputController = new TextInputController()
   private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = {
     articles: 0,
     social: 0,
@@ -260,6 +267,57 @@ struct Index {
     }
   }
 
+  private normalizedSearchQuery(): string {
+    return normalizeInlineSearchQuery(this.searchQuery)
+  }
+
+  private currentSearchEntries(): EntryCardModel[] {
+    return this.filteredEntriesFor(this.mode)
+  }
+
+  private entrySearchTexts(entry: EntryCardModel): string[] {
+    return [
+      entry.feedTitle || '',
+      entry.title || '',
+      entry.summary || '',
+      entry.author || '',
+    ]
+  }
+
+  private hasSearchMatches(): boolean {
+    const query = this.normalizedSearchQuery()
+    if (!query) {
+      return false
+    }
+
+    return this.currentSearchEntries().some((entry: EntryCardModel) => {
+      return this.entrySearchTexts(entry).some((text: string) => {
+        return buildInlineHighlightSegments(text, query).some((segment) => segment.matched)
+      })
+    })
+  }
+
+  private openHomeInlineSearch(): void {
+    if (!this.showSearch) {
+      this.showSearch = true
+    }
+    this.focusHomeInlineSearch()
+  }
+
+  private focusHomeInlineSearch(): void {
+    setTimeout(() => {
+      this.searchInputController.caretPosition(this.searchQuery.length)
+    }, 80)
+  }
+
+  private closeHomeInlineSearch(clearQuery: boolean = true): void {
+    this.showSearch = false
+    this.searchInputController.stopEditing()
+    if (clearQuery) {
+      this.searchQuery = ''
+    }
+  }
+
   private homeCollapsedModeRailBackdropBlur(): number {
     return this.theme.isDark ? 10 : 18
   }
@@ -361,13 +419,15 @@ struct Index {
 
   @Builder
   private HomeRootLowerTitleBuilder() {
-    Row() {
+    Row({ space: 12 }) {
       Text('今日推荐')
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .layoutWeight(1)
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
+
+      this.HomeInlineSearchActionRow()
     }
     .width('100%')
     .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
@@ -377,6 +437,80 @@ struct Index {
       right: PAGE_HORIZONTAL_PADDING,
       bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
     })
+  }
+
+  @Builder
+  private HomeInlineSearchField() {
+    Row({ space: 8 }) {
+      SymbolGlyph($r('sys.symbol.magnifyingglass'))
+        .fontSize(16)
+        .fontColor([this.theme.textSecondary])
+
+      TextInput({ text: this.searchQuery, placeholder: '搜索当前分段', controller: this.searchInputController })
+        .layoutWeight(1)
+        .backgroundColor('transparent')
+        .fontColor(this.theme.textPrimary)
+        .placeholderColor(this.theme.textMuted)
+        .caretColor(this.theme.accent)
+        .padding(0)
+        .defaultFocus(this.showSearch)
+        .onAppear(() => {
+          this.focusHomeInlineSearch()
+        })
+        .onChange((value: string) => {
+          this.searchQuery = value
+        })
+
+      Text('×')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textMuted)
+        .width(24)
+        .height(24)
+        .textAlign(TextAlign.Center)
+        .borderRadius(999)
+        .onClick(() => {
+          this.closeHomeInlineSearch(true)
+        })
+    }
+    .width(this.showSearch ? HOME_INLINE_SEARCH_WIDTH : 0)
+    .height(HOME_INLINE_SEARCH_INPUT_HEIGHT)
+    .padding({ left: this.showSearch ? 12 : 0, right: this.showSearch ? 8 : 0 })
+    .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
+    .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
+    .borderRadius(HOME_INLINE_SEARCH_INPUT_HEIGHT)
+    .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
+    .shadow(this.homeCollapsedModeRailShadow())
+    .opacity(this.showSearch ? 1 : 0)
+    .translate({ x: this.showSearch ? 0 : 18 })
+    .clip(true)
+    .animation({ duration: 220, curve: Curve.FastOutSlowIn })
+  }
+
+  @Builder
+  private HomeInlineSearchActionRow() {
+    Row({ space: 8 }) {
+      this.HomeInlineSearchField()
+
+      Row() {
+        SymbolGlyph($r('sys.symbol.magnifyingglass'))
+          .fontSize(18)
+          .fontColor([this.theme.textPrimary])
+      }
+      .width(40)
+      .height(40)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
+      .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
+      .borderRadius(20)
+      .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
+      .shadow(this.homeCollapsedModeRailShadow())
+      .onClick(() => {
+        this.openHomeInlineSearch()
+      })
+    }
+    .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
   }
 
   private isHomeRootTab(): boolean {
@@ -603,6 +737,9 @@ struct Index {
     this.rootTabIndex = index
     this.activeRootTabId = tabId
     this.highlightedRootTabId = tabId
+    if (tabId !== 'home') {
+      this.closeHomeInlineSearch(true)
+    }
     this.refreshRootTheme()
   }
 
@@ -792,12 +929,16 @@ struct Index {
   private EntryCard(entry: EntryCardModel) {
     Column({ space: 8 }) {
       Row({ space: 6 }) {
-        Text(entry.feedTitle)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.accent)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        HighlightedInlineText({
+          text: entry.feedTitle,
+          query: this.searchQuery,
+          theme: this.theme,
+          fontSize: 12,
+          lineHeight: 16,
+          fontWeight: FontWeight.Medium,
+          defaultColor: this.theme.accent,
+          maxLines: 1,
+        })
 
         Text('·')
           .fontSize(12)
@@ -809,13 +950,16 @@ struct Index {
       }
       .width('100%')
 
-      Text(entry.title)
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-        .lineHeight(22)
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      HighlightedInlineText({
+        text: entry.title,
+        query: this.searchQuery,
+        theme: this.theme,
+        fontSize: 15,
+        lineHeight: 22,
+        fontWeight: FontWeight.Bold,
+        defaultColor: this.theme.textPrimary,
+        maxLines: 2,
+      })
     }
     .alignItems(HorizontalAlign.Start)
     .padding({ left: 14, right: 14, top: 14, bottom: 14 })
@@ -845,6 +989,7 @@ struct Index {
       TweetEntryCard({
         presentation: presentTweetEntryFromCard(entry),
         theme: this.theme,
+        highlightQuery: this.searchQuery,
         enableEnterTransition: false,
         onOpen: () => this.openEntry(entry),
       })
@@ -1125,6 +1270,7 @@ struct Index {
             pictureUrl: entry.imageUrl,
             galleryUrls: this.pictureGalleryUrls(entry),
             theme: this.theme,
+            highlightQuery: this.searchQuery,
             enableEnterTransition: false,
             onOpen: () => this.openEntry(entry),
           })
@@ -1178,6 +1324,7 @@ struct Index {
 
             HomeVideoGrid({
               entries: this.filteredEntriesFor(mode),
+              highlightQuery: this.searchQuery,
               inheritedTheme: this.theme,
               onOpenEntry: (entry: EntryCardModel) => {
                 this.openEntry(entry)

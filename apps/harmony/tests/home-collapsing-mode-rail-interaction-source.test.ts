@@ -61,7 +61,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
   assert.match(
     indexSource,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*const collapseProgress = this\.homeModeRailCollapseProgress\(\)[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(collapseProgress\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
   )
   assert.match(
     indexSource,

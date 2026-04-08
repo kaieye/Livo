@@ -16,11 +16,13 @@ export struct HighlightedInlineText {
     return this.theme.isDark ? `${this.theme.accent}33` : `${this.theme.accent}22`
   }
 
-  build() {
-    const segments: InlineHighlightSegment[] = buildInlineHighlightSegments(this.text, this.query)
+  private segments(): InlineHighlightSegment[] {
+    return buildInlineHighlightSegments(this.text, this.query)
+  }
 
+  build() {
     Text() {
-      ForEach(segments, (segment: InlineHighlightSegment, index: number) => {
+      ForEach(this.segments(), (segment: InlineHighlightSegment, index: number) => {
         Span(segment.text)
           .fontColor(segment.matched ? this.theme.accent : (this.defaultColor || this.theme.textPrimary))
           .backgroundColor(segment.matched ? this.highlightBackgroundColor() : '#00000000')

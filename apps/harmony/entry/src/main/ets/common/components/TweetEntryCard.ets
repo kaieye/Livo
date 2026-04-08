@@ -1,3 +1,4 @@
+import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
@@ -8,6 +9,7 @@ export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop enableEnterTransition: boolean = true
+  @Prop highlightQuery: string = ''
 
   onOpen: () => void = () => {}
 
@@ -184,19 +186,27 @@ export struct TweetEntryCard {
         })
 
         Row({ space: 4 }) {
-          Text(this.presentation.displayName || '未知来源')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          HighlightedInlineText({
+            text: this.presentation.displayName || '未知来源',
+            query: this.highlightQuery,
+            theme: this.theme,
+            fontSize: 16,
+            lineHeight: 20,
+            fontWeight: FontWeight.Bold,
+            defaultColor: this.theme.textPrimary,
+            maxLines: 1,
+          })
 
           if (this.usernameLabel()) {
-            Text(this.usernameLabel())
-              .fontSize(14)
-              .fontColor(this.theme.textMuted)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            HighlightedInlineText({
+              text: this.usernameLabel(),
+              query: this.highlightQuery,
+              theme: this.theme,
+              fontSize: 14,
+              lineHeight: 18,
+              defaultColor: this.theme.textMuted,
+              maxLines: 1,
+            })
           }
 
           if (this.presentation.publishedLabel) {
@@ -214,10 +224,15 @@ export struct TweetEntryCard {
       .alignItems(VerticalAlign.Top)
 
       if (this.presentation.text) {
-        Text(this.presentation.text)
-          .fontSize(16)
-          .lineHeight(24)
-          .fontColor(this.theme.textPrimary)
+        HighlightedInlineText({
+          text: this.presentation.text,
+          query: this.highlightQuery,
+          theme: this.theme,
+          fontSize: 16,
+          lineHeight: 24,
+          defaultColor: this.theme.textPrimary,
+          maxLines: 99,
+        })
           .width('100%')
       }
 

@@ -206,7 +206,7 @@ test('home page keeps HDS title bar system material while rendering inline searc
     /private searchInputController: TextInputController = new TextInputController\(\)/,
   )
   assert.match(source, /private openHomeInlineSearch\(\): void/)
-  assert.match(source, /private closeHomeInlineSearch\(\): void/)
+  assert.match(source, /private closeHomeInlineSearch\([^)]*\): void/)
   assert.match(source, /private HomeInlineSearchActionRow\(\)/)
   assert.match(source, /private HomeInlineSearchField\(\)/)
   assert.doesNotMatch(source, /\.bindSheet\(/)

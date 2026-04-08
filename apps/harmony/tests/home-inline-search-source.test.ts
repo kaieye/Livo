@@ -15,7 +15,7 @@ test('home page defines inline search state and keyboard controller', () => {
     /private searchInputController: TextInputController = new TextInputController\(\)/,
   )
   assert.match(source, /private openHomeInlineSearch\(\): void/)
-  assert.match(source, /private closeHomeInlineSearch\(\): void/)
+  assert.match(source, /private closeHomeInlineSearch\([^)]*\): void/)
   assert.match(source, /private focusHomeInlineSearch\(\): void/)
 })
 
@@ -46,7 +46,7 @@ test('home inline search utility exposes normalized matching helpers', () => {
   )
   assert.match(
     source,
-    /export function buildInlineHighlightSegments\(text: string, query: string\): InlineHighlightSegment\[\]/,
+    /export function buildInlineHighlightSegments\([\s\S]*text: string,[\s\S]*query: string,[\s\S]*\): InlineHighlightSegment\[\]/,
   )
   assert.match(source, /toLocaleLowerCase\(\)/)
 })
@@ -64,5 +64,43 @@ test('highlighted inline text component renders matched segments with theme acce
   assert.match(source, /@Prop query: string = ''/)
   assert.match(source, /buildInlineHighlightSegments/)
   assert.match(source, /this\.theme\.accent/)
-  assert.match(source, /ForEach\(segments/)
+  assert.match(source, /ForEach\(this\.segments\(\)/)
+})
+
+test('tweet picture and video home content accept inline highlight query plumbing', () => {
+  const tweetSource = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/components/TweetEntryCard.ets',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  assert.match(tweetSource, /@Prop highlightQuery: string = ''/)
+  assert.match(tweetSource, /HighlightedInlineText/)
+
+  const pictureSource = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/components/PictureEntryCard.ets',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  assert.match(pictureSource, /@Prop highlightQuery: string = ''/)
+  assert.match(pictureSource, /HighlightedInlineText/)
+
+  const videoSource = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/components/HomeVideoGrid.ets',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  assert.match(videoSource, /@Prop highlightQuery: string = ''/)
+  assert.match(videoSource, /HighlightedInlineText/)
+
+  const indexSource = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+  assert.match(indexSource, /highlightQuery: this\.searchQuery/)
 })

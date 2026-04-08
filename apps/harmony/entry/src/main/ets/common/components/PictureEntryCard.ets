@@ -2,6 +2,7 @@ import { Entry, formatPublishedAt, selectPictureMediaUrls } from '../models/Livo
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
+import { HighlightedInlineText } from './HighlightedInlineText'
 
 @Component
 export struct PictureEntryCard {
@@ -14,6 +15,7 @@ export struct PictureEntryCard {
   @Prop pictureUrl: string = ''
   @Prop galleryUrls: string[] = []
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @Prop highlightQuery: string = ''
   @State private activeMediaIndex: number = 0
   @State private playingLivePhotoIndex: number = -1
   @State private pausedLivePhotoIndex: number = -1
@@ -529,12 +531,16 @@ export struct PictureEntryCard {
       Row({ space: 8 }) {
         this.FeedAvatar()
 
-        Text(this.displayAuthor())
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        HighlightedInlineText({
+          text: this.displayAuthor(),
+          query: this.highlightQuery,
+          theme: this.theme,
+          fontSize: 15,
+          lineHeight: 20,
+          fontWeight: FontWeight.Medium,
+          defaultColor: this.theme.textPrimary,
+          maxLines: 1,
+        })
 
         Text('·')
           .fontSize(12)
@@ -547,12 +553,15 @@ export struct PictureEntryCard {
       .width('100%')
 
       if (this.caption) {
-        Text(this.caption)
-          .fontSize(13)
-          .lineHeight(20)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        HighlightedInlineText({
+          text: this.caption,
+          query: this.highlightQuery,
+          theme: this.theme,
+          fontSize: 13,
+          lineHeight: 20,
+          defaultColor: this.theme.textSecondary,
+          maxLines: 2,
+        })
       }
 
       if (this.carouselMediaItems().length > 0) {

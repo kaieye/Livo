@@ -1,4 +1,5 @@
 import { EntryCardModel } from '../models/LivoModels'
+import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import {
@@ -11,6 +12,7 @@ import {
 @Component
 export struct HomeVideoGrid {
   @Prop entries: EntryCardModel[] = []
+  @Prop highlightQuery: string = ''
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
@@ -62,13 +64,17 @@ export struct HomeVideoGrid {
       }
 
       Column({ space: 4 }) {
-        Text(entry.title)
+        HighlightedInlineText({
+          text: entry.title,
+          query: this.highlightQuery,
+          theme: this.theme,
+          fontSize: 14,
+          lineHeight: 18,
+          fontWeight: FontWeight.Medium,
+          defaultColor: this.cardTokens().titleColor,
+          maxLines: 2,
+        })
           .width('100%')
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.cardTokens().titleColor)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
         if (this.cardMeta(entry)) {
           Text(this.cardMeta(entry))

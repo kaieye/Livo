@@ -106,7 +106,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*const collapseProgress = this\.homeModeRailCollapseProgress\(\)[\s\S]*if \(collapseProgress > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(collapseProgress\)[\s\S]*\.translate\(\{ y: \(1 - collapseProgress\) \* -6 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.translate\(\{ y: \(1 - this\.homeModeRailCollapseProgress\(\)\) \* -6 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
   )
   assert.match(
     source,
