@@ -11,6 +11,10 @@ test('DiscoverRemoteSearchService searches instagram profiles with lightweight p
     '../entry/src/main/ets/common/services/DiscoverRemoteSearchService.ets',
   )
 
+  assert.match(
+    source,
+    /const searchSeeds = await DiscoverRemoteSearchService\.searchInstagramUsersByTopsearch\(clean\)/,
+  )
   assert.match(source, /const variants = buildQueryVariants\(query, 30\)/)
   assert.match(source, /const INSTAGRAM_SEARCH_TIMEOUT_MS = 3500/)
   assert.match(
@@ -20,11 +24,19 @@ test('DiscoverRemoteSearchService searches instagram profiles with lightweight p
   assert.match(source, /const seeds: DiscoverRemoteProfileSeed\[\] = \[\]/)
   assert.match(
     source,
+    /const fallbackSeeds: DiscoverRemoteProfileSeed\[\] = \[\]/,
+  )
+  assert.match(
+    source,
     /seedResults\.forEach\(\(result: PromiseSettledResult<DiscoverRemoteProfileSeed \| undefined>\) => \{/,
   )
   assert.match(
     source,
-    /return dedupeCandidates\(seeds\.map\(\(seed: DiscoverRemoteProfileSeed\) => withConfiguredRssHubCandidate\(\s*buildInstagramCandidateFromProfile\(seed, SOCIAL_VIEW_MAPPING\) as ResolvedDiscoverCandidate,\s*\)\)\)/s,
+    /const dedupedSeeds = dedupeAndLimitDiscoverCandidates\(\s*\[\.\.\.searchSeeds, \.\.\.fallbackSeeds\],\s*12,\s*\)/,
+  )
+  assert.match(
+    source,
+    /return dedupeCandidates\(dedupedSeeds\.map\(\(seed: DiscoverRemoteProfileSeed\) => withConfiguredRssHubCandidate\(\s*buildInstagramCandidateFromProfile\(seed, SOCIAL_VIEW_MAPPING\) as ResolvedDiscoverCandidate,\s*\)\)\)/s,
   )
   assert.doesNotMatch(
     source,
@@ -32,4 +44,8 @@ test('DiscoverRemoteSearchService searches instagram profiles with lightweight p
   )
   assert.match(source, /connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS/)
   assert.match(source, /readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS/)
+  assert.match(
+    source,
+    /https:\/\/www\.instagram\.com\/web\/search\/topsearch\/\?query=\$\{encodeURIComponent\(query\)\}&context=user/,
+  )
 })

@@ -20,6 +20,7 @@ export struct PictureEntryCard {
   @State private preparedLivePhotoIndices: number[] = []
   @State private livePhotoInstanceSeeds: number[] = []
   @State private livePhotoAspectRatios: number[] = []
+  @State private livePhotoMuted: boolean = true
   @State private isFullyVisible: boolean = false
   @State private isNearlyVisible: boolean = false
   private readonly livePhotoControllers: VideoController[] = []
@@ -368,6 +369,10 @@ export struct PictureEntryCard {
     this.livePhotoAspectRatios = nextAspectRatios
   }
 
+  private toggleLivePhotoMuted(): void {
+    this.livePhotoMuted = !this.livePhotoMuted
+  }
+
   @Builder
   private LoadingIndicator() {
     Stack({ alignContent: Alignment.Center }) {
@@ -401,60 +406,98 @@ export struct PictureEntryCard {
   }
 
   @Builder
-  private LivePhotoSlide(item: PictureCarouselMediaItem, index: number) {
-    Stack({ alignContent: Alignment.TopEnd }) {
-      Image(item.imageUrl || this.pictureUrl)
-        .width('100%')
-        .height('100%')
-        .objectFit(ImageFit.Contain)
-        .borderRadius(18)
-        .backgroundColor(this.theme.elevated)
-        .onComplete((event) => {
-          if (event) {
-            this.rememberLivePhotoAspectRatio(index, event.width, event.height)
-          }
-        })
-        .visibility((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index))
-          ? Visibility.Hidden
-          : Visibility.Visible)
+  private LiveSoundToggle() {
+    Row({ space: 4 }) {
+      SymbolGlyph($r(this.livePhotoMuted ? 'sys.symbol.speaker_slash_fill' : 'sys.symbol.speaker_wave_2_fill'))
+        .fontSize(11)
+        .fontColor(['rgba(255,255,255,0.92)'])
 
-      if (item.kind === 'livePhoto' && item.videoUrl && this.mountedLivePhotoIndices().includes(index)) {
-        Video({
-          src: item.videoUrl,
-          controller: this.controllerFor(index),
-          previewUri: item.imageUrl || this.pictureUrl,
-        })
+      Text(this.livePhotoMuted ? '静音' : '有声')
+        .fontSize(10)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('rgba(255,255,255,0.92)')
+    }
+    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+    .margin({ right: 10, bottom: 10 })
+    .backgroundColor('rgba(0,0,0,0.28)')
+    .borderRadius(999)
+    .clickEffect({ level: ClickEffectLevel.LIGHT })
+    .onClick(() => {
+      this.toggleLivePhotoMuted()
+    })
+  }
+
+  @Builder
+  private LivePhotoSlide(item: PictureCarouselMediaItem, index: number) {
+    Stack({ alignContent: Alignment.Center }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image(item.imageUrl || this.pictureUrl)
           .width('100%')
           .height('100%')
+          .objectFit(ImageFit.Contain)
           .borderRadius(18)
-          .controls(false)
-          .autoPlay(this.shouldWarmLivePhoto(index))
-          .loop(true)
-          .muted(!this.shouldShowPlayingLivePhoto(index))
-          .objectFit(ImageFit.Cover)
-          .opacity((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index)) ? 1 : 0)
-          .onPrepared(() => {
-            this.handleLivePhotoPrepared(index)
+          .backgroundColor(this.theme.elevated)
+          .onComplete((event) => {
+            if (event) {
+              this.rememberLivePhotoAspectRatio(index, event.width, event.height)
+            }
           })
-          .onStart(() => {
-            this.handleLivePhotoStart(index)
+          .visibility((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index))
+            ? Visibility.Hidden
+            : Visibility.Visible)
+
+        if (item.kind === 'livePhoto' && item.videoUrl && this.mountedLivePhotoIndices().includes(index)) {
+          Video({
+            src: item.videoUrl,
+            controller: this.controllerFor(index),
+            previewUri: item.imageUrl || this.pictureUrl,
           })
-          .onPause(() => {
-            this.handleLivePhotoPause(index)
-          })
-          .onStop(() => {
-            this.handleLivePhotoStop(index)
-          })
-          .onError(() => {
-            this.handleLivePhotoError(index)
-          })
+            .width('100%')
+            .height('100%')
+            .borderRadius(18)
+            .controls(false)
+            .autoPlay(this.shouldWarmLivePhoto(index))
+            .loop(true)
+            .muted(this.livePhotoMuted || !this.shouldShowPlayingLivePhoto(index))
+            .objectFit(ImageFit.Cover)
+            .opacity((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index)) ? 1 : 0)
+            .onPrepared(() => {
+              this.handleLivePhotoPrepared(index)
+            })
+            .onStart(() => {
+              this.handleLivePhotoStart(index)
+            })
+            .onPause(() => {
+              this.handleLivePhotoPause(index)
+            })
+            .onStop(() => {
+              this.handleLivePhotoStop(index)
+            })
+            .onError(() => {
+              this.handleLivePhotoError(index)
+            })
+        }
       }
+      .width('100%')
+      .height('100%')
 
       if (this.shouldShowLivePhotoLoading(index)) {
         this.LoadingIndicator()
       }
 
-      this.LiveBadge()
+      Stack() {
+        this.LiveBadge()
+      }
+      .width('100%')
+      .height('100%')
+      .align(Alignment.TopEnd)
+
+      Stack() {
+        this.LiveSoundToggle()
+      }
+      .width('100%')
+      .height('100%')
+      .align(Alignment.BottomEnd)
     }
     .width('100%')
     .aspectRatio(this.livePhotoAspectRatio(index))

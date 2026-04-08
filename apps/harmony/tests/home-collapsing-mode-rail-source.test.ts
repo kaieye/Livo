@@ -72,11 +72,11 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private homeCollapsedModeRailTopPadding\(\): number \{[\s\S]*this\.topAvoidArea[\s\S]*HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING[\s\S]*ROOT_MODE_RAIL_TOP_GAP/s,
+    /private homeCollapsedModeRailTopPadding\(\): number \{[\s\S]*this\.topAvoidArea[\s\S]*HOME_COLLAPSED_MODE_RAIL_TOP_PADDING[\s\S]*ROOT_MODE_RAIL_TOP_GAP/s,
   )
   assert.match(
     source,
-    /private homeCollapsedModeRailWidth\(\): number \{\s*return HOME_FLOATING_SEARCH_BUTTON_SIZE\s*\}/s,
+    /private homeCollapsedModeRailWidth\(\): number \{\s*return HOME_COLLAPSED_MODE_RAIL_SIZE\s*\}/s,
   )
   assert.match(source, /private homeModeRailLeftPadding\(\): number/)
   assert.match(source, /private homeModeRailRightInset\(\): number/)
@@ -86,7 +86,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private homeModeRailRightInset\(\): number \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) >= 1\) \{[\s\S]*PAGE_HORIZONTAL_PADDING \+ HOME_FLOATING_SEARCH_BUTTON_SIZE \+ ROOT_MODE_RAIL_TOP_GAP[\s\S]*\}[\s\S]*return PAGE_HORIZONTAL_PADDING\s*\}/s,
+    /private homeModeRailRightInset\(\): number \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) >= 1\) \{[\s\S]*PAGE_HORIZONTAL_PADDING \+ HOME_COLLAPSED_MODE_RAIL_SIZE \+ ROOT_MODE_RAIL_TOP_GAP[\s\S]*\}[\s\S]*return PAGE_HORIZONTAL_PADDING\s*\}/s,
   )
   assert.match(
     source,
@@ -102,6 +102,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /build\(\) \{[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsingModeRailLayer\(\)[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsedModeRailLayer\(\)[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeFloatingSearchButtonLayer\(\)/s,
+    /build\(\) \{[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsingModeRailLayer\(\)[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsedModeRailLayer\(\)/s,
   )
+  assert.doesNotMatch(source, /HomeFloatingSearchButtonLayer\(\)/)
 })

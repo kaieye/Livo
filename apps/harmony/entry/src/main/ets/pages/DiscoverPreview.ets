@@ -6,6 +6,7 @@ import { FeedDraft } from '../common/repositories/FeedRepository'
 import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { PageHeader } from '../common/components/PageHeader'
+import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 
 @Entry
@@ -105,16 +106,18 @@ struct DiscoverPreview {
 
   @Builder
   private HeaderSection() {
-    PageHeader({
-      title: this.previewPayload?.feedTitle || this.targetTitle || '订阅预览',
-      theme: this.theme,
-      showBackButton: true,
-      titleSize: 20,
-      topPadding: 0,
-      bottomPadding: 0,
-      onBack: () => { void goBack() },
-    })
-      .width('100%')
+    SecondaryPageHeaderShell() {
+      PageHeader({
+        title: this.previewPayload?.feedTitle || this.targetTitle || '订阅预览',
+        theme: this.theme,
+        showBackButton: true,
+        titleSize: 20,
+        topPadding: 0,
+        bottomPadding: 0,
+        onBack: () => { void goBack() },
+      })
+        .width('100%')
+    }
   }
 
   @Builder
@@ -320,11 +323,7 @@ struct DiscoverPreview {
 
   build() {
     Column({ space: 0 }) {
-      Column() {
-        this.HeaderSection()
-      }
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 20, bottom: 12 })
+      this.HeaderSection()
 
       if (this.isLoading) {
         Column({ space: 12 }) {

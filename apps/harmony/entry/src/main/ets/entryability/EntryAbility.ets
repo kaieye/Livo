@@ -33,8 +33,10 @@ export default class EntryAbility extends UIAbility {
     try {
       const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
       const uiContext = mainWindow.getUIContext()
-      AppStorage.setOrCreate('topAvoidArea', uiContext.px2vp(avoidArea.topRect.height))
-      AppStorage.setOrCreate('bottomAvoidArea', uiContext.px2vp(avoidArea.bottomRect.height))
+      const nextTopAvoidArea = uiContext.px2vp(avoidArea.topRect.height)
+      const nextBottomAvoidArea = uiContext.px2vp(avoidArea.bottomRect.height)
+      AppStorage.setOrCreate('topAvoidArea', nextTopAvoidArea)
+      AppStorage.setOrCreate('bottomAvoidArea', nextBottomAvoidArea)
     } catch (error) {
       console.error(`Failed to sync avoid area: ${error instanceof Error ? error.message : error}`)
     }

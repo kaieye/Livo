@@ -16,7 +16,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
 
   assert.match(indexSource, /private homeModeRailRightInset\(\): number/)
-  assert.match(indexSource, /HOME_FLOATING_SEARCH_BUTTON_SIZE/)
+  assert.match(indexSource, /HOME_COLLAPSED_MODE_RAIL_SIZE/)
   assert.match(indexSource, /ROOT_MODE_RAIL_TOP_GAP/)
   assert.match(
     indexSource,

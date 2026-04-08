@@ -4,6 +4,7 @@ import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { FeedSubscribeConfigView } from './FeedSubscribeConfigView'
 import { PageHeader } from './PageHeader'
+import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { LengthMetrics } from '@kit.ArkUI'
 import {
   HdsNavigation,
@@ -38,6 +39,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedDetailView } from './FeedDetailView'
 import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -144,7 +146,6 @@ function normalizeDiscoverFlowRouteParams(params?: DiscoverFlowRouteParams): Dis
 
 @Component
 export struct DiscoverContent {
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State query: string = ''
   @State searchPlatform: DiscoverSearchPlatform = 'all'
   @State showPlatformChips: boolean = false
@@ -152,7 +153,6 @@ export struct DiscoverContent {
   @State keepPlatformChipsOnBlur: boolean = false
   @State isPlatformSwitchSearching: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
-  @State headerBlurProgress: number = 0
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
   @State hasLoaded: boolean = false
@@ -176,7 +176,6 @@ export struct DiscoverContent {
   private updateHeaderBlurProgress(offset: number): void {
     const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
     this.headerBlurOffset = clampedOffset
-    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
   }
 
   private handleHeaderBlurScrollDelta(delta: number): void {
@@ -304,7 +303,21 @@ export struct DiscoverContent {
     this.keepPlatformChipsOnBlur = false
   }
 
+  private scheduleOverlayNavigation(action: () => void): void {
+    this.dismissSearchFocus()
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+    AppStorage.setOrCreate('discoverOverlayLevel', 1)
+    setTimeout(() => {
+      action()
+    }, 90)
+  }
+
   private settleDiscoverRootVisible(): void {
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    if (currentLevel > 0) {
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+      return
+    }
     AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
     AppStorage.setOrCreate('discoverOverlayLevel', 0)
   }
@@ -564,39 +577,41 @@ export struct DiscoverContent {
     sourceKind: string,
     category: string,
   ): void {
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-    AppStorage.setOrCreate('discoverOverlayLevel', 1)
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_PREVIEW,
-      createDiscoverFlowRouteParams(
-        targetUrl,
-        targetTitle,
-        targetView,
-        siteUrl,
-        imageUrl,
-        description,
-        sourceKind,
-        category,
-      ),
-      true,
-    )
+    this.scheduleOverlayNavigation(() => {
+      this.discoverPathStack.pushPathByName(
+        DISCOVER_ROUTE_PREVIEW,
+        createDiscoverFlowRouteParams(
+          targetUrl,
+          targetTitle,
+          targetView,
+          siteUrl,
+          imageUrl,
+          description,
+          sourceKind,
+          category,
+        ),
+        true,
+      )
+    })
   }
 
   private openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate): void {
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
-      createDiscoverFlowRouteParams(
-        candidate.targetUrl,
-        candidate.targetTitle,
-        candidate.targetView,
-        candidate.siteUrl,
-        candidate.imageUrl ?? '',
-        candidate.description,
-        candidate.sourceKind,
-        this.resolvedPlatformLabel(candidate),
-      ),
-      true,
-    )
+    this.scheduleOverlayNavigation(() => {
+      this.discoverPathStack.pushPathByName(
+        DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
+        createDiscoverFlowRouteParams(
+          candidate.targetUrl,
+          candidate.targetTitle,
+          candidate.targetView,
+          candidate.siteUrl,
+          this.resolvedCandidateAvatarUrl(candidate),
+          candidate.description,
+          candidate.sourceKind,
+          this.resolvedPlatformLabel(candidate),
+        ),
+        true,
+      )
+    })
   }
 
   private openDirectUrlResult(result: DirectUrlResult): void {
@@ -618,7 +633,7 @@ export struct DiscoverContent {
       candidate.targetTitle,
       candidate.targetView,
       candidate.siteUrl,
-      candidate.imageUrl ?? '',
+      this.resolvedCandidateAvatarUrl(candidate),
       candidate.description,
       candidate.sourceKind,
       this.resolvedPlatformLabel(candidate),
@@ -688,25 +703,19 @@ export struct DiscoverContent {
   }
 
   private resolvedCandidateAvatarUrl(candidate: ResolvedDiscoverCandidate): string {
-    if (candidate.imageUrl) {
-      return candidate.imageUrl
+    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
+      candidate.imageUrl ?? '',
+      candidate.targetUrl,
+      candidate.siteUrl,
+      candidate.targetTitle,
+    )
+    if (resolvedImageUrl) {
+      return resolvedImageUrl
     }
 
     const platform = this.resolvedPlatformLabel(candidate)
     if (platform === 'GitHub') {
       return 'https://github.githubassets.com/favicons/favicon.svg'
-    }
-    if (platform === 'YouTube') {
-      return 'https://www.youtube.com/s/desktop/fe0e7cf8/img/favicon_144x144.png'
-    }
-    if (platform === 'Instagram') {
-      return 'https://static.cdninstagram.com/rsrc.php/v4/yI/r/VsNE-OHk_8a.png'
-    }
-    if (platform === 'Bilibili') {
-      return 'https://www.bilibili.com/favicon.ico'
-    }
-    if (platform === 'X') {
-      return 'https://abs.twimg.com/favicons/twitter.3.ico'
     }
     return this.faviconUrl(candidate.siteUrl)
   }
@@ -1120,14 +1129,6 @@ export struct DiscoverContent {
     return 24
   }
 
-  private discoverListExternalGap(): number {
-    return 0
-  }
-
-  private discoverViewportBottomInset(): number {
-    return 0
-  }
-
   @Builder
   private DiscoverRoot() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -1154,12 +1155,12 @@ export struct DiscoverContent {
         top: 0,
         bottom: this.isSearchModeActive() ? 16 : this.discoverListBottomPadding(),
       })
-      .margin({ bottom: this.isSearchModeActive() ? 0 : this.discoverListExternalGap() })
 
       if (this.showBottomTabs && this.discoverOverlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })
           .align(Alignment.Bottom)
       }
+
     }
     .width('100%')
     .height('100%')
@@ -1186,6 +1187,7 @@ export struct DiscoverContent {
         })
       }
       .hideTitleBar(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     } else if (name === DISCOVER_ROUTE_SUBSCRIBE_CONFIG) {
       NavDestination() {
         DiscoverSubscribeConfigDestination({
@@ -1201,6 +1203,7 @@ export struct DiscoverContent {
         })
       }
       .hideTitleBar(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     } else if (name === DISCOVER_ROUTE_ENTRY_DETAIL) {
       NavDestination() {
         DiscoverEntryDetailDestination({
@@ -1211,11 +1214,12 @@ export struct DiscoverContent {
         })
       }
       .hideTitleBar(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     }
   }
 
   build() {
-    if (this.showBottomTabs) {
+    if (this.showBottomTabs || this.discoverOverlayLevel > 0) {
       Navigation(this.discoverPathStack) {
         this.DiscoverRoot()
       }
@@ -1312,7 +1316,7 @@ export struct DiscoverContent {
       })
       .titleMode(HdsNavigationTitleMode.MINI)
       .hideBackButton(true)
-      .hideTitleBar(this.discoverOverlayLevel > 0)
+      .hideTitleBar(false)
       .bindToScrollable([this.contentScroller])
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')
@@ -1341,6 +1345,16 @@ struct DiscoverSubscribeConfigDestination {
     AppStorage.setOrCreate('discoverOverlayLevel', 0)
   }
 
+  private restoreRootOverlayAfterConfigClose(): void {
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    if (currentLevel > 1) {
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+      AppStorage.setOrCreate('discoverOverlayLevel', 1)
+    } else {
+      this.settleRootOverlayClosed()
+    }
+  }
+
   build() {
     FeedSubscribeConfigView({
       targetUrl: this.targetUrl,
@@ -1353,8 +1367,7 @@ struct DiscoverSubscribeConfigDestination {
       initialSelectedView: this.initialSelectedView,
       theme: this.theme,
       onBack: () => {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-        AppStorage.setOrCreate('discoverOverlayLevel', 1)
+        this.restoreRootOverlayAfterConfigClose()
         this.discoverPathStack.pop(true)
       },
       onSubscribed: () => {
@@ -1365,7 +1378,7 @@ struct DiscoverSubscribeConfigDestination {
       },
       onSaved: () => {
         AppStorage.setOrCreate('feedsChangedAt', Date.now())
-        AppStorage.setOrCreate('discoverOverlayLevel', 1)
+        this.restoreRootOverlayAfterConfigClose()
         this.discoverPathStack.pop(true)
       },
       onUnsubscribed: () => {
@@ -1379,9 +1392,7 @@ struct DiscoverSubscribeConfigDestination {
     })
     .onDisAppear(() => {
       const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-      if (currentLevel <= 1) {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-      }
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', currentLevel > 0)
     })
   }
 }
@@ -1503,19 +1514,20 @@ struct DiscoverEntryDetailDestination {
 
   @Builder
   private HeaderSection() {
-    PageHeader({
-      title: this.feedTitle || '文章详情',
-      theme: this.theme,
-      showBackButton: true,
-      titleSize: 20,
-      topPadding: 0,
-      bottomPadding: 0,
-      onBack: () => {
-        this.discoverPathStack.pop(true)
-      },
-    })
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12, bottom: 10 })
+    SecondaryPageHeaderShell() {
+      PageHeader({
+        title: this.feedTitle || '文章详情',
+        theme: this.theme,
+        showBackButton: true,
+        titleSize: 20,
+        topPadding: 0,
+        bottomPadding: 0,
+        onBack: () => {
+          this.discoverPathStack.pop(true)
+        },
+      })
+        .width('100%')
+    }
   }
 
   @Builder

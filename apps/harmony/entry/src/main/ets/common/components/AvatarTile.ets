@@ -2,7 +2,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 
 @Component
 export struct AvatarTile {
-  @Prop imageUrl: string = ''
+  @Prop @Watch('handleImageUrlChange') imageUrl: string = ''
   @Prop fallbackLabel: string = ''
   @Prop accent: string = '#FF6A00'
   @Prop theme: ThemePalette = ThemeService.darkPalette()
@@ -13,6 +13,10 @@ export struct AvatarTile {
   @State private imageLoadFailed: boolean = false
 
   aboutToAppear(): void {
+    this.imageLoadFailed = false
+  }
+
+  private handleImageUrlChange(): void {
     this.imageLoadFailed = false
   }
 

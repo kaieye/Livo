@@ -37,6 +37,22 @@ export interface DiscoverRemoteCandidateCompatible {
   imageUrl?: string
 }
 
+interface InstagramTopsearchUser {
+  username?: string
+  full_name?: string
+  profile_pic_url?: string
+  profile_pic_url_hd?: string
+  follower_count?: number | string
+}
+
+interface InstagramTopsearchItem {
+  user?: InstagramTopsearchUser
+}
+
+interface InstagramTopsearchPayload {
+  users?: InstagramTopsearchItem[]
+}
+
 interface ResolvedProfileUrl {
   href: string
   host: string
@@ -349,6 +365,55 @@ export function parseInstagramProfilesFromSearchHtml(
     ['instagram.com'],
     '@',
   )
+}
+
+export function parseInstagramProfilesFromTopsearchPayload(
+  payload: unknown,
+  query: string,
+): SocialRemoteProfile[] {
+  const users = (payload as InstagramTopsearchPayload | undefined)?.users
+  if (!Array.isArray(users)) {
+    return []
+  }
+
+  const profiles: SocialRemoteProfile[] = []
+  const seen = new Set<string>()
+
+  users.forEach((item: InstagramTopsearchItem) => {
+    const user = item?.user
+    const username = stripTags(user?.username || '')
+      .replace(/^@/, '')
+      .trim()
+      .toLowerCase()
+    if (!username || seen.has(username)) {
+      return
+    }
+
+    const title = stripTags(user?.full_name || '').trim() || username
+    const imageUrl = normalizeImageUrl(
+      user?.profile_pic_url_hd || user?.profile_pic_url || '',
+      `https://www.instagram.com/${encodeURIComponent(username)}/`,
+    )
+    const followersRaw = user?.follower_count
+    const followers =
+      followersRaw === undefined || followersRaw === null
+        ? ''
+        : `${String(followersRaw).trim()} followers`
+
+    if (!shouldKeepProfile(query, username, title, `${username} ${title}`)) {
+      return
+    }
+
+    seen.add(username)
+    profiles.push({
+      username,
+      title,
+      imageUrl,
+      followers,
+    })
+  })
+
+  return profiles
 }
 
 function normalizeProfileTitle(profile: SocialRemoteProfile): string {

@@ -618,11 +618,13 @@ export struct SubscriptionsContent {
         this.FeedDetailDestination(params as SubscriptionFeedDetailParams)
       }
       .hideTitleBar(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     } else if (name === SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG) {
       NavDestination() {
         this.FeedSubscribeConfigDestination(params as SubscriptionFeedConfigParams)
       }
       .hideTitleBar(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     }
   }
 

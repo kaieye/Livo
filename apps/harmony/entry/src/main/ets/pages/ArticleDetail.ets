@@ -17,18 +17,18 @@ import {
   shouldUseYouTubeWebFallback,
 } from '../common/utils/YouTubePlaybackMode'
 import { PageHeader } from '../common/components/PageHeader'
+import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
   isLegacyPlainArticleContent,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
-import { HEADER_BACK_SLOT_SIZE, PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../common/ui/UiTokens'
+import { HEADER_BACK_SLOT_SIZE, PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 
 @Entry
 @Component
 struct ArticleDetail {
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @State entry?: ArticleDetailModel = undefined
   @State actionHint: string = ''
@@ -1497,22 +1497,23 @@ struct ArticleDetail {
 
   build() {
     Column() {
-      Column({ space: 8 }) {
-        PageHeader({
-          title: '文章详情',
-          theme: this.theme,
-          showBackButton: true,
-          showTrailingBuilder: true,
-          titleSize: 20,
-          topPadding: 40,
-          bottomPadding: 0,
-          onBack: () => { void goBack() },
-        }) {
-          this.HeaderActions()
+      SecondaryPageHeaderShell() {
+        Column({ space: 8 }) {
+          PageHeader({
+            title: '文章详情',
+            theme: this.theme,
+            showBackButton: true,
+            showTrailingBuilder: true,
+            titleSize: 20,
+            topPadding: 0,
+            bottomPadding: 0,
+            onBack: () => { void goBack() },
+          }) {
+            this.HeaderActions()
+          }
         }
+        .width('100%')
       }
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 8 })
 
       if (this.entry) {
         Scroll() {
@@ -1621,7 +1622,6 @@ struct ArticleDetail {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.topAvoidArea })
     .backgroundColor(this.theme.background)
   }
 }

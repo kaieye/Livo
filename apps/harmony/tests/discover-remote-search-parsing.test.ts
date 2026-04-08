@@ -8,6 +8,7 @@ import {
   buildXProfileSeedFromProfile,
   dedupeAndLimitDiscoverCandidates,
   extractXFollowersFromText,
+  parseInstagramProfilesFromTopsearchPayload,
   parseInstagramProfilesFromSearchHtml,
   parseXProfilesFromSearchHtml,
 } from '../entry/src/main/ets/common/utils/DiscoverRemoteSearchParsing.ts'
@@ -133,6 +134,38 @@ test('parseInstagramProfilesFromSearchHtml keeps zh-CN follower text from profil
 
   assert.equal(profiles.length, 1)
   assert.equal(profiles[0]?.followers, '4M followers')
+})
+
+test('parseInstagramProfilesFromTopsearchPayload extracts matching users from official search payload', () => {
+  const profiles = parseInstagramProfilesFromTopsearchPayload(
+    {
+      users: [
+        {
+          user: {
+            username: 'openai',
+            full_name: 'OpenAI',
+            profile_pic_url: 'https://cdninstagram.com/openai.jpg',
+            follower_count: 4200000,
+          },
+        },
+        {
+          user: {
+            username: 'not-related',
+            full_name: 'Someone Else',
+            profile_pic_url: 'https://cdninstagram.com/other.jpg',
+            follower_count: 20,
+          },
+        },
+      ],
+    },
+    'open ai',
+  )
+
+  assert.equal(profiles.length, 1)
+  assert.equal(profiles[0]?.username, 'openai')
+  assert.equal(profiles[0]?.title, 'OpenAI')
+  assert.equal(profiles[0]?.imageUrl, 'https://cdninstagram.com/openai.jpg')
+  assert.equal(profiles[0]?.followers, '4200000 followers')
 })
 
 test('buildXCandidateFromProfile emits an X profile seed with follower-first description', () => {

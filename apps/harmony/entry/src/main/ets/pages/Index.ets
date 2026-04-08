@@ -74,10 +74,10 @@ const HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP + HOME_MOD
 const HOME_MODE_HEADER_SPACER_HEIGHT: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
 const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
-const HOME_FLOATING_SEARCH_BUTTON_SIZE: number = 40
 const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 8
-const HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING: number =
-  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_FLOATING_SEARCH_BUTTON_SIZE - ROOT_MODE_RAIL_TOP_GAP
+const HOME_COLLAPSED_MODE_RAIL_SIZE: number = 40
+const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING: number =
+  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_COLLAPSED_MODE_RAIL_SIZE - ROOT_MODE_RAIL_TOP_GAP
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -258,24 +258,7 @@ struct Index {
     }
   }
 
-  private homeFloatingSearchButtonBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
-  }
-
-  private homeFloatingSearchButtonBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
-  }
-
-  private homeFloatingSearchButtonShadow(): ShadowOptions {
-    return {
-      radius: 10,
-      color: this.theme.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)',
-      offsetX: 0,
-      offsetY: 2,
-    }
-  }
-
-  private homeFloatingSearchButtonBackdropBlur(): number {
+  private homeCollapsedModeRailBackdropBlur(): number {
     return this.theme.isDark ? 10 : 18
   }
 
@@ -294,29 +277,6 @@ struct Index {
       offsetX: 0,
       offsetY: 2,
     }
-  }
-
-  private homeSearchOverlayTopPadding(): number {
-    return this.topAvoidArea + HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING
-  }
-
-  @Builder
-  private HomeFloatingSearchButton() {
-    Row() {
-      SymbolGlyph($r('sys.symbol.magnifyingglass'))
-        .fontSize(22)
-        .fontColor([$r('sys.color.icon_primary')])
-    }
-    .width(HOME_FLOATING_SEARCH_BUTTON_SIZE)
-    .height(HOME_FLOATING_SEARCH_BUTTON_SIZE)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.homeFloatingSearchButtonBackgroundColor())
-    .backdropBlur(this.homeFloatingSearchButtonBackdropBlur())
-    .borderRadius(40)
-    .border({ width: 0.8, color: this.homeFloatingSearchButtonBorderColor() })
-    .shadow(this.homeFloatingSearchButtonShadow())
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
   }
 
   @Builder
@@ -354,7 +314,7 @@ struct Index {
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
-    .backdropBlur(this.homeFloatingSearchButtonBackdropBlur())
+    .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
     .borderRadius(this.homeCollapsedModeRailWidth())
     .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
     .shadow(this.homeCollapsedModeRailShadow())
@@ -998,18 +958,18 @@ struct Index {
 
   private homeCollapsedModeRailTopPadding(): number {
     return this.topAvoidArea
-      + HOME_FLOATING_SEARCH_BUTTON_TOP_PADDING
+      + HOME_COLLAPSED_MODE_RAIL_TOP_PADDING
       - ROOT_MODE_RAIL_TOP_GAP
       + HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET
   }
 
   private homeCollapsedModeRailWidth(): number {
-    return HOME_FLOATING_SEARCH_BUTTON_SIZE
+    return HOME_COLLAPSED_MODE_RAIL_SIZE
   }
 
   private homeModeRailRightInset(): number {
     if (this.homeModeRailCollapseProgress() >= 1) {
-      return PAGE_HORIZONTAL_PADDING + HOME_FLOATING_SEARCH_BUTTON_SIZE + ROOT_MODE_RAIL_TOP_GAP
+      return PAGE_HORIZONTAL_PADDING + HOME_COLLAPSED_MODE_RAIL_SIZE + ROOT_MODE_RAIL_TOP_GAP
     }
 
     return PAGE_HORIZONTAL_PADDING
@@ -1265,21 +1225,6 @@ struct Index {
     )
   }
 
-  @Builder
-  private HomeFloatingSearchButtonLayer() {
-    Column() {
-      this.HomeFloatingSearchButton()
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.End)
-    .padding({
-      top: this.homeSearchOverlayTopPadding(),
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-    })
-    .zIndex(110)
-  }
-
   onPageShow(): void {
     this.syncRequestedRootTab()
     this.restoreSettingsSheetIfNeeded()
@@ -1452,9 +1397,6 @@ struct Index {
         this.HomeCollapsedModeRailLayer()
       }
 
-      if (this.isHomeRootTab()) {
-        this.HomeFloatingSearchButtonLayer()
-      }
     }
     .width('100%')
     .height('100%')

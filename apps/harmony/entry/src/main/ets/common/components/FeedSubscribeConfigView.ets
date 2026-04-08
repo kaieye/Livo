@@ -4,11 +4,12 @@ import { FeedDraft } from '../repositories/FeedRepository'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { canonicalInstagramFeedUrl } from '../utils/SocialFeedTitles'
+import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import { PageHeader } from './PageHeader'
+import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import {
   CARD_RADIUS_SM,
   CHIP_RADIUS,
-  PAGE_HORIZONTAL_PADDING,
 } from '../ui/UiTokens'
 
 interface ConfigOption {
@@ -183,11 +184,29 @@ export struct FeedSubscribeConfigView {
   }
 
   private faviconUrl(): string {
-    if (this.targetImageUrl.trim()) {
-      return this.targetImageUrl.trim()
-    }
     const host = this.hostOf(this.targetSiteUrl || this.targetUrl)
     return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128` : ''
+  }
+
+  private cachedPreviewPayload() {
+    return DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
+      ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
+      ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.targetSiteUrl)
+  }
+
+  private resolvedFeedImageUrl(): string {
+    const cachedPreview = this.cachedPreviewPayload()
+    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
+      cachedPreview?.imageUrl || this.targetImageUrl || this.existingFeed?.imageUrl || '',
+      cachedPreview?.resolvedFeedUrl || this.mappedTargetUrl(),
+      cachedPreview?.siteUrl || this.targetSiteUrl,
+      this.customTitle || cachedPreview?.feedTitle || this.targetTitle,
+    )
+    if (resolvedImageUrl) {
+      return resolvedImageUrl
+    }
+
+    return this.faviconUrl()
   }
 
   private async runCompletion(action: () => void | Promise<void>, label: string): Promise<void> {
@@ -224,7 +243,7 @@ export struct FeedSubscribeConfigView {
         url: this.mappedTargetUrl(),
         title: this.customTitle || this.targetTitle,
         siteUrl: this.targetSiteUrl,
-        imageUrl: this.targetImageUrl || this.existingFeed?.imageUrl || '',
+        imageUrl: this.resolvedFeedImageUrl() || this.existingFeed?.imageUrl || '',
         description: this.targetDescription,
         category: this.customCategory,
         view: this.selectedView,
@@ -232,7 +251,7 @@ export struct FeedSubscribeConfigView {
       }
 
       const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
-      const cachedPreview = DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
+      const cachedPreview = this.cachedPreviewPayload()
       if (cachedPreview) {
         await AppRepository.seedFeedFromPreview(updatedFeed.id, cachedPreview)
       }
@@ -253,9 +272,7 @@ export struct FeedSubscribeConfigView {
 
     this.isSubmitting = true
     try {
-      const cachedPreview = DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
-        ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
-        ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.targetSiteUrl)
+      const cachedPreview = this.cachedPreviewPayload()
       const effectiveTargetUrl = this.effectiveSubscribedUrl(
         cachedPreview?.resolvedFeedUrl?.trim() || this.mappedTargetUrl(),
         cachedPreview?.siteUrl?.trim() || this.targetSiteUrl.trim(),
@@ -269,46 +286,55 @@ export struct FeedSubscribeConfigView {
         url: effectiveTargetUrl,
         title: this.customTitle || cachedPreview?.feedTitle || this.targetTitle,
         siteUrl: effectiveSiteUrl,
-        imageUrl: cachedPreview?.imageUrl || this.targetImageUrl || latestExistingFeed?.imageUrl || '',
+        imageUrl: this.resolvedFeedImageUrl() || latestExistingFeed?.imageUrl || '',
         description: cachedPreview?.description || this.targetDescription,
         category: this.customCategory,
         view: this.selectedView,
         showInAll: !this.hideInTimeline,
       }
       const hasSeededPreview = !!cachedPreview && (cachedPreview.entries?.length ?? 0) > 0
+      let subscribedFeedId: string = ''
+      let successMessage: string = ''
 
       if (latestExistingFeed) {
         const updatedFeed = await AppRepository.updateFeed(latestExistingFeed.id, draft)
+        subscribedFeedId = updatedFeed.id
+        successMessage = '订阅已更新'
         if (cachedPreview) {
           await AppRepository.seedFeedFromPreview(updatedFeed.id, cachedPreview)
         }
-        if (!hasSeededPreview) {
-          const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
-          this.showToast(refreshResult.fallbackUsed ? '订阅已更新，内容将在稍后刷新' : '订阅已更新', 2000)
-        } else {
-          this.showToast('订阅已更新', 2000)
-        }
       } else {
         const createdFeed = await AppRepository.createFeed(draft)
+        subscribedFeedId = createdFeed.id
+        successMessage = '订阅成功'
         if (cachedPreview) {
           await AppRepository.seedFeedFromPreview(createdFeed.id, cachedPreview)
         }
-        if (!hasSeededPreview) {
-          const refreshResult = await AppRepository.refreshFeed(createdFeed.id)
-          this.showToast(refreshResult.fallbackUsed ? '订阅成功，内容将在稍后刷新' : '订阅成功', 2000)
-        } else {
-          this.showToast('订阅成功', 2000)
-        }
       }
+
+      this.showToast(successMessage, 2000)
+      this.isSubmitting = false
+      await this.runCompletion(this.onSubscribed, 'subscribe')
+      if (!hasSeededPreview && subscribedFeedId) {
+        void this.refreshFeedAfterSubscribe(subscribedFeedId, successMessage)
+      }
+      return
     } catch (e) {
       this.showToast(`订阅失败: ${e}`, 3000)
       this.isSubmitting = false
       return
     }
+  }
 
-    this.isSubmitting = false
-
-    await this.runCompletion(this.onSubscribed, 'subscribe')
+  private async refreshFeedAfterSubscribe(feedId: string, successMessage: string): Promise<void> {
+    try {
+      const refreshResult = await AppRepository.refreshFeed(feedId)
+      if (refreshResult.fallbackUsed) {
+        this.showToast(`${successMessage}，内容将在稍后刷新`, 2000)
+      }
+    } catch (error) {
+      console.error(`subscribe refresh failed: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   private showToast(message: string, duration: number = 2000): void {
@@ -357,30 +383,26 @@ export struct FeedSubscribeConfigView {
 
   @Builder
   private TopBar() {
-    PageHeader({
-      title: `订阅 - ${this.targetTitle}`,
-      theme: this.theme,
-      showBackButton: true,
-      trailingText: this.isEditMode ? '保存' : '订阅',
-      titleSize: 18,
-      topPadding: 0,
-      bottomPadding: 0,
-      onBack: () => {
-        this.onBack()
-      },
-      onTrailingClick: () => {
-        if (this.isSubmitting) {
-          return
-        }
-        if (this.isEditMode) {
-          void this.handleSave()
-          return
-        }
-        void this.handleSubscribe()
-      },
-    })
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 12, bottom: 8 })
+    SecondaryPageHeaderShell() {
+      PageHeader({
+        title: `订阅 - ${this.targetTitle}`,
+        theme: this.theme,
+        showBackButton: true,
+        trailingText: this.isEditMode ? '保存' : '',
+        titleSize: 18,
+        topPadding: 0,
+        bottomPadding: 0,
+        onBack: () => {
+          this.onBack()
+        },
+        onTrailingClick: () => {
+          if (this.isEditMode) {
+            void this.handleSave()
+          }
+        },
+      })
+        .width('100%')
+    }
   }
 
   @Builder
@@ -388,8 +410,8 @@ export struct FeedSubscribeConfigView {
     Column({ space: 12 }) {
       Row({ space: 12 }) {
         Stack({ alignContent: Alignment.Center }) {
-          if (this.faviconUrl()) {
-            Image(this.faviconUrl())
+          if (this.resolvedFeedImageUrl()) {
+            Image(this.resolvedFeedImageUrl())
               .width(56)
               .height(56)
               .borderRadius(14)
@@ -528,51 +550,64 @@ export struct FeedSubscribeConfigView {
 
   @Builder
   private BottomActions() {
-    if (this.isEditMode) {
-      if (this.hasChanges) {
-        Row({ space: 12 }) {
-          Button('取消订阅')
-            .type(ButtonType.Capsule)
-            .layoutWeight(1)
-            .height(50)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .backgroundColor(this.theme.elevated)
-            .fontColor('#EF4444')
-            .onClick(() => {
-              this.showUnsubscribeConfirm()
-            })
-
-          Button('保存')
-            .type(ButtonType.Capsule)
-            .layoutWeight(1)
-            .height(50)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .backgroundColor(this.theme.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
-              void this.handleSave()
-            })
-        }
-        .width('90%')
+    if (!this.isEditMode) {
+      Button(this.isSubmitting ? '订阅中...' : '订阅')
+        .type(ButtonType.Capsule)
+        .width('80%')
+        .height(50)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .backgroundColor(this.theme.accent)
+        .fontColor('#FFFFFF')
         .margin({ bottom: 24 })
         .opacity(0.92)
-      } else {
+        .enabled(!this.isSubmitting)
+        .onClick(() => {
+          void this.handleSubscribe()
+        })
+    } else if (this.isEditMode && this.hasChanges) {
+      Row({ space: 12 }) {
         Button('取消订阅')
           .type(ButtonType.Capsule)
-          .width('80%')
+          .layoutWeight(1)
           .height(50)
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .backgroundColor(this.theme.elevated)
           .fontColor('#EF4444')
-          .margin({ bottom: 24 })
-          .opacity(0.92)
           .onClick(() => {
             this.showUnsubscribeConfirm()
           })
+
+        Button('保存')
+          .type(ButtonType.Capsule)
+          .layoutWeight(1)
+          .height(50)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .backgroundColor(this.theme.accent)
+          .fontColor('#FFFFFF')
+          .onClick(() => {
+            void this.handleSave()
+          })
       }
+      .width('90%')
+      .margin({ bottom: 24 })
+      .opacity(0.92)
+    } else if (this.isEditMode) {
+      Button('取消订阅')
+        .type(ButtonType.Capsule)
+        .width('80%')
+        .height(50)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .backgroundColor(this.theme.elevated)
+        .fontColor('#EF4444')
+        .margin({ bottom: 24 })
+        .opacity(0.92)
+        .onClick(() => {
+          this.showUnsubscribeConfirm()
+        })
     }
   }
 

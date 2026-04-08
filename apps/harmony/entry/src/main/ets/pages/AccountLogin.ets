@@ -1,10 +1,10 @@
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
 import { PageHeader } from '../common/components/PageHeader'
+import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { AccountProvider } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
-import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../common/ui/UiTokens'
 import {
   buildAccountLoginRenderExitMessage,
   resolveAccountLoginWebPolicy,
@@ -44,7 +44,6 @@ interface YouTubePageState {
 @Entry
 @Component
 struct AccountLogin {
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State pageTitle: string = '账号关联'
   @State loginUrl: string = ''
@@ -570,7 +569,7 @@ struct AccountLogin {
 
   build() {
     Column({ space: 0 }) {
-      Column() {
+      SecondaryPageHeaderShell() {
         PageHeader({
           title: this.pageTitle,
           theme: this.theme,
@@ -582,8 +581,6 @@ struct AccountLogin {
         })
           .width('100%')
       }
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 10 })
 
       if (this.loginUrl) {
         Stack({ alignContent: Alignment.Center }) {
@@ -687,7 +684,6 @@ struct AccountLogin {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.topAvoidArea })
     .backgroundColor(this.theme.background)
   }
 }

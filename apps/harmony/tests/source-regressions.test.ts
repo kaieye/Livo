@@ -163,6 +163,60 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   )
 })
 
+test('discover and subscriptions destinations ignore top safe-area so secondary headers stay stable', () => {
+  assert.match(
+    discoverContentSource,
+    /\.hideTitleBar\(true\)\s*\.ignoreLayoutSafeArea\(\[LayoutSafeAreaType\.SYSTEM\], \[LayoutSafeAreaEdge\.TOP, LayoutSafeAreaEdge\.BOTTOM\]\)/,
+  )
+
+  const subscriptionsContentSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/common/components/SubscriptionsContent.ets',
+    ),
+    'utf8',
+  )
+
+  assert.match(
+    subscriptionsContentSource,
+    /\.hideTitleBar\(true\)\s*\.ignoreLayoutSafeArea\(\[LayoutSafeAreaType\.SYSTEM\], \[LayoutSafeAreaEdge\.TOP, LayoutSafeAreaEdge\.BOTTOM\]\)/,
+  )
+})
+
+test('discover root drops HdsNavigation title-bar wrapper while overlay pages are active', () => {
+  assert.match(
+    discoverContentSource,
+    /if \(this\.showBottomTabs \|\| this\.discoverOverlayLevel > 0\) \{\s*Navigation\(this\.discoverPathStack\) \{\s*this\.DiscoverRoot\(\)\s*\}\s*\.hideToolBar\(true\)\s*\.hideTitleBar\(true\)\s*\.hideBackButton\(true\)\s*\.mode\(NavigationMode\.Stack\)/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /\.titleMode\(HdsNavigationTitleMode\.MINI\)\s*\.hideBackButton\(true\)\s*\.hideTitleBar\(false\)/s,
+  )
+  assert.doesNotMatch(
+    discoverContentSource,
+    /} else if \(this\.discoverOverlayLevel > 0\) \{/,
+  )
+})
+
+test('DiscoverContent trims dead safe-area and blur state patches after header stabilization', () => {
+  assert.doesNotMatch(
+    discoverContentSource,
+    /@StorageProp\('topAvoidArea'\) topAvoidArea: number = 0/,
+  )
+  assert.doesNotMatch(
+    discoverContentSource,
+    /@State headerBlurProgress: number = 0/,
+  )
+  assert.doesNotMatch(
+    discoverContentSource,
+    /private discoverListExternalGap\(\): number/,
+  )
+  assert.doesNotMatch(
+    discoverContentSource,
+    /private discoverViewportBottomInset\(\): number/,
+  )
+})
+
 test('PictureEntryCard renders mixed swiper slides and in-card live photo playback', () => {
   const source = fs.readFileSync(
     'apps/harmony/entry/src/main/ets/common/components/PictureEntryCard.ets',
@@ -182,6 +236,7 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   )
   assert.match(source, /@State private livePhotoInstanceSeeds: number\[] = \[]/)
   assert.match(source, /@State private livePhotoAspectRatios: number\[] = \[]/)
+  assert.match(source, /@State private livePhotoMuted: boolean = true/)
   assert.match(source, /@State private isFullyVisible: boolean = false/)
   assert.match(source, /@State private isNearlyVisible: boolean = false/)
   assert.match(
@@ -240,7 +295,9 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
     source,
     /private rememberLivePhotoAspectRatio\(index: number, width: number, height: number\): void/,
   )
+  assert.match(source, /private toggleLivePhotoMuted\(\): void/)
   assert.match(source, /private LiveBadge\(\)/)
+  assert.match(source, /private LiveSoundToggle\(\)/)
   assert.match(
     source,
     /private LivePhotoSlide\(item: PictureCarouselMediaItem, index: number\)/,
@@ -254,7 +311,10 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   assert.match(source, /\.controls\(false\)/)
   assert.match(source, /\.loop\(true\)/)
   assert.match(source, /\.autoPlay\(this\.shouldWarmLivePhoto\(index\)\)/)
-  assert.match(source, /\.muted\(!this\.shouldShowPlayingLivePhoto\(index\)\)/)
+  assert.match(
+    source,
+    /\.muted\(this\.livePhotoMuted \|\| !this\.shouldShowPlayingLivePhoto\(index\)\)/,
+  )
   assert.match(source, /\.onComplete\(\(event\) => \{/)
   assert.match(
     source,
@@ -263,6 +323,11 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   assert.match(source, /\.aspectRatio\(this\.livePhotoAspectRatio\(index\)\)/)
   assert.match(source, /Text\('LIVE'\)/)
   assert.match(source, /SymbolGlyph\(\$r\('sys\.symbol\.play_fill'\)\)/)
+  assert.match(
+    source,
+    /SymbolGlyph\(\$r\(this\.livePhotoMuted \? 'sys\.symbol\.speaker_slash_fill' : 'sys\.symbol\.speaker_wave_2_fill'\)\)/,
+  )
+  assert.match(source, /Text\(this\.livePhotoMuted \? '静音' : '有声'\)/)
   assert.match(source, /this\.mountedLivePhotoIndices\(\)\.includes\(index\)/)
   assert.match(source, /this\.markPreparedLivePhoto\(index\)/)
   assert.match(source, /const firstLiveIndex = this\.firstLivePhotoIndex\(\)/)
@@ -315,6 +380,7 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
     source,
     /\.onChange\(\(index: number\) => \{\s*this\.activeMediaIndex = index\s*this\.syncVisibleLivePhotoPlayback\(index\)\s*\}\)/s,
   )
+  assert.match(source, /this\.LiveSoundToggle\(\)/)
 })
 
 test('ArticleDetail uses browser action, favorite action, and picture carousel live playback', () => {
@@ -766,7 +832,7 @@ test('FeedSubscribeConfigView guards duplicate subscribe submissions and recheck
   )
   assert.match(
     feedSubscribeViewSource,
-    /const cachedPreview = DiscoverRemoteSearchService\.cachedPreviewPayload\(this\.targetUrl\)/,
+    /private cachedPreviewPayload\(\) \{\s*return DiscoverRemoteSearchService\.cachedPreviewPayload\(this\.targetUrl\)/s,
   )
   assert.match(
     feedSubscribeViewSource,
@@ -786,7 +852,111 @@ test('FeedSubscribeConfigView guards duplicate subscribe submissions and recheck
   )
   assert.match(
     feedSubscribeViewSource,
-    /imageUrl: cachedPreview\?\.imageUrl \|\| this\.targetImageUrl \|\| latestExistingFeed\?\.imageUrl \|\| ''/,
+    /imageUrl: this\.resolvedFeedImageUrl\(\) \|\| latestExistingFeed\?\.imageUrl \|\| ''/,
+  )
+})
+
+test('FeedSubscribeConfigView resolves social avatars consistently with discover results', () => {
+  assert.match(
+    feedSubscribeViewSource,
+    /import \{ resolveSocialFeedDisplayImageUrl \} from '\.\.\/utils\/SocialFeedPresentation'/,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /private resolvedFeedImageUrl\(\): string/,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /private cachedPreviewPayload\(\) \{\s*return DiscoverRemoteSearchService\.cachedPreviewPayload\(this\.targetUrl\)\s*\?\?[\s\S]*DiscoverRemoteSearchService\.cachedPreviewPayload\(this\.targetSiteUrl\)\s*\}/s,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /const resolvedImageUrl = resolveSocialFeedDisplayImageUrl\(/,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /Image\(this\.resolvedFeedImageUrl\(\)\)/,
+  )
+})
+
+test('FeedSubscribeConfigView moves subscribe action to the bottom and completes before background refresh', () => {
+  assert.match(
+    feedSubscribeViewSource,
+    /trailingText: this\.isEditMode \? '保存' : ''/,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /private BottomActions\(\) \{[\s\S]*if \(!this\.isEditMode\) \{[\s\S]*Button\(this\.isSubmitting \? '订阅中\.\.\.' : '订阅'\)/s,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /await this\.runCompletion\(this\.onSubscribed, 'subscribe'\)\s*if \(!hasSeededPreview && subscribedFeedId\) \{\s*void this\.refreshFeedAfterSubscribe\(/s,
+  )
+  assert.match(
+    feedSubscribeViewSource,
+    /private async refreshFeedAfterSubscribe\(feedId: string, successMessage: string\): Promise<void>/,
+  )
+})
+
+test('DiscoverContent direct subscribe action enters the same overlay flow as preview-to-subscribe', () => {
+  assert.match(
+    discoverContentSource,
+    /private scheduleOverlayNavigation\(action: \(\) => void\): void \{[\s\S]*?this\.dismissSearchFocus\(\)[\s\S]*?AppStorage\.setOrCreate\('discoverHasForegroundOverlay', true\)[\s\S]*?AppStorage\.setOrCreate\('discoverOverlayLevel', 1\)[\s\S]*?setTimeout\(\(\) => \{[\s\S]*?action\(\)[\s\S]*?\}, 90\)[\s\S]*?\}/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /private openSubscribeConfigPage\(candidate: ResolvedDiscoverCandidate\): void \{\s*this\.scheduleOverlayNavigation\(\(\) => \{\s*this\.discoverPathStack\.pushPathByName\(/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /private openSubscribeConfigPage\(candidate: ResolvedDiscoverCandidate\): void \{[\s\S]*this\.resolvedCandidateAvatarUrl\(candidate\)/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /private openPreviewPage\([\s\S]*this\.scheduleOverlayNavigation\(\(\) => \{\s*this\.discoverPathStack\.pushPathByName\(/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /private openCandidate\(candidate: ResolvedDiscoverCandidate\): void \{[\s\S]*this\.resolvedCandidateAvatarUrl\(candidate\)/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /private settleDiscoverRootVisible\(\): void \{[\s\S]*?const currentLevel = AppStorage\.get<number>\('discoverOverlayLevel'\) \?\? 0[\s\S]*?if \(currentLevel > 0\) \{[\s\S]*?AppStorage\.setOrCreate\('discoverHasForegroundOverlay', true\)[\s\S]*?return[\s\S]*?\}[\s\S]*?AppStorage\.setOrCreate\('discoverHasForegroundOverlay', false\)[\s\S]*?AppStorage\.setOrCreate\('discoverOverlayLevel', 0\)[\s\S]*?\}/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /private restoreRootOverlayAfterConfigClose\(\): void \{\s*const currentLevel = AppStorage\.get<number>\('discoverOverlayLevel'\) \?\? 0\s*if \(currentLevel > 1\) \{\s*AppStorage\.setOrCreate\('discoverHasForegroundOverlay', true\)\s*AppStorage\.setOrCreate\('discoverOverlayLevel', 1\)\s*\} else \{\s*this\.settleRootOverlayClosed\(\)\s*\}\s*\}/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /onBack: \(\) => \{\s*this\.restoreRootOverlayAfterConfigClose\(\)\s*this\.discoverPathStack\.pop\(true\)\s*\}/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /onSaved: \(\) => \{\s*AppStorage\.setOrCreate\('feedsChangedAt', Date\.now\(\)\)\s*this\.restoreRootOverlayAfterConfigClose\(\)\s*this\.discoverPathStack\.pop\(true\)\s*\}/s,
+  )
+  assert.match(
+    discoverContentSource,
+    /\.onDisAppear\(\(\) => \{\s*const currentLevel = AppStorage\.get<number>\('discoverOverlayLevel'\) \?\? 0\s*AppStorage\.setOrCreate\('discoverHasForegroundOverlay', currentLevel > 0\)\s*\}\)/s,
+  )
+})
+
+test('FeedDetailView canonicalizes instagram preview requests before loading picture feeds', () => {
+  assert.match(
+    feedDetailViewSource,
+    /import \{ canonicalInstagramFeedUrl, extractInstagramUsername \} from '\.\.\/utils\/SocialFeedTitles'/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /private resolvedPreviewTargetUrl\(\): string/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /return canonicalInstagramFeedUrl\(this\.targetUrl, this\.targetSiteUrl\) \|\| this\.targetUrl/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /const previewTargetUrl = this\.resolvedPreviewTargetUrl\(\)[\s\S]*await RssFeedService\.previewFeedUrl\(previewTargetUrl\)/s,
   )
 })
 
@@ -797,7 +967,7 @@ test('FeedSubscribeConfigView skips immediate refresh when cached preview alread
   )
   assert.match(
     feedSubscribeViewSource,
-    /if \(!hasSeededPreview\) \{\s*const refreshResult = await AppRepository\.refreshFeed\(/,
+    /if \(!hasSeededPreview && subscribedFeedId\) \{\s*void this\.refreshFeedAfterSubscribe\(/,
   )
 })
 
@@ -937,6 +1107,52 @@ test('FeedDetailView dedupes picture preview entries before rendering', () => {
   assert.match(
     feedDetailViewSource,
     /private dedupePicturePreviewEntries\(entries: Entry\[\]\): Entry\[\]/,
+  )
+})
+
+test('FeedDetailView normalizes picture card media the same way as the home picture feed', () => {
+  assert.match(
+    feedDetailViewSource,
+    /import \{[\s\S]*extractPictureCarouselMediaUrls,\s*extractEntryGalleryImageUrls,[\s\S]*\} from '\.\.\/utils\/PictureGallery'/s,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /private pictureCardEntry\(entry: Entry\): Entry/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /mediaUrls: extractPictureCarouselMediaUrls\(\{[\s\S]*summary: entry\.summary,[\s\S]*content: entry\.content,[\s\S]*articleUrl: entry\.url,[\s\S]*siteUrl: this\.previewPayload\?\.siteUrl \|\| this\.targetSiteUrl \|\| this\.targetUrl,[\s\S]*mediaUrls: entry\.mediaUrls \?\? \[\],[\s\S]*\}\)/s,
+  )
+  assert.match(feedDetailViewSource, /entry: this\.pictureCardEntry\(entry\),/)
+})
+
+test('FeedDetailView prefers richer multi-image cached picture previews over flatter refreshed entries', () => {
+  assert.match(
+    feedDetailViewSource,
+    /private previewRichness\(entries: Entry\[\]\): number/,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /score \+= Math\.min\(6, this\.entryGalleryUrls\(entry\)\.length\)/,
+  )
+  assert.doesNotMatch(
+    feedDetailViewSource,
+    /if \(\(entry\.mediaUrls\?\.length \?\? 0\) > 0\) \{\s*score \+= 2\s*\}/,
+  )
+})
+
+test('FeedDetailView seeds a soft preview placeholder before remote picture preview resolves', () => {
+  assert.match(
+    feedDetailViewSource,
+    /const fallbackPayload = this\.buildFallbackPreviewPayload\(\)\s*if \(this\.shouldUseSoftPreviewFallback\(\) && fallbackPayload\) \{\s*this\.previewPayload = fallbackPayload\s*this\.previewNotice = '正在拉取实时预览，已先展示订阅源信息。'\s*this\.resetHeroAvatarCandidates\(\)\s*\}/s,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /if \(this\.previewPayload\) \{\s*Stack\(\{ alignContent: Alignment\.Bottom \}\)/s,
+  )
+  assert.match(
+    feedDetailViewSource,
+    /else if \(this\.previewPayload\) \{[\s\S]*\} else if \(this\.isLoading\) \{\s*Column\(\{ space: 12 \}\) \{/s,
   )
 })
 

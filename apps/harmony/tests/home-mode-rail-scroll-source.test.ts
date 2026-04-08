@@ -9,15 +9,11 @@ test('home mode rail is rendered in a fixed root overlay instead of inside each 
   )
 
   const homeRootPageStart = source.indexOf('private HomeRootPage() {')
-  const searchLayerStart = source.indexOf(
-    'private HomeFloatingSearchButtonLayer() {',
-  )
   const buildStart = source.indexOf('build() {')
-  const homeRootPage = source.slice(homeRootPageStart, searchLayerStart)
+  const homeRootPage = source.slice(homeRootPageStart, buildStart)
   const buildBlock = source.slice(buildStart)
 
   assert.notEqual(homeRootPageStart, -1)
-  assert.notEqual(searchLayerStart, -1)
   assert.notEqual(buildStart, -1)
   assert.doesNotMatch(homeRootPage, /this\.HomeCollapsingModeRailLayer\(\)/)
   assert.match(

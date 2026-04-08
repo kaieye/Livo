@@ -9,10 +9,11 @@ import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import {
+  extractPictureCarouselMediaUrls,
   extractEntryGalleryImageUrls,
   shouldUseCachedPicturePreview,
 } from '../utils/PictureGallery'
-import { extractInstagramUsername } from '../utils/SocialFeedTitles'
+import { canonicalInstagramFeedUrl, extractInstagramUsername } from '../utils/SocialFeedTitles'
 import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
@@ -21,8 +22,9 @@ import {
 import { presentTweetEntryFromEntry } from '../utils/TweetEntryPresentation'
 import { PageHeader } from './PageHeader'
 import { PictureEntryCard } from './PictureEntryCard'
+import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { TweetEntryCard } from './TweetEntryCard'
-import { PAGE_HORIZONTAL_PADDING, PAGE_TOP_PADDING } from '../ui/UiTokens'
+import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
 interface VideoPreviewCacheItem {
   videoUrl: string
@@ -49,7 +51,6 @@ interface DisplayFeedState {
 
 @Component
 export struct FeedDetailView {
-  @StorageProp('topAvoidArea') topAvoidArea: number = 0
   @Prop feedId: string = ''
   @Prop targetUrl: string = ''
   @Prop initialTargetTitle: string = ''
@@ -79,10 +80,6 @@ export struct FeedDetailView {
   @State private videoPreviewCache: VideoPreviewCacheItem[] = []
   @State private heroAvatarCandidates: string[] = []
   @State private heroAvatarIndex: number = 0
-
-  private detailHeaderTopPadding(): number {
-    return this.feedId ? 42 : 24
-  }
 
   aboutToAppear(): void {
     this.targetTitle = this.initialTargetTitle
@@ -137,10 +134,11 @@ export struct FeedDetailView {
         }
       } else if (this.targetUrl) {
         // Mode: Discover Preview
-        this.existingFeed = await this.findExistingFeed(this.targetUrl, this.targetSiteUrl)
+        const previewTargetUrl = this.resolvedPreviewTargetUrl()
+        this.existingFeed = await this.findExistingFeed(previewTargetUrl, this.targetSiteUrl)
         const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
         if (shouldUseCachedPicturePreview(this.isPicturesPreview(), cachedPayload)) {
-          const resolvedCachedPayload = this.normalizedPreviewPayload(cachedPayload as FeedRefreshPayload, this.targetUrl)
+          const resolvedCachedPayload = this.normalizedPreviewPayload(cachedPayload as FeedRefreshPayload, previewTargetUrl)
           DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, resolvedCachedPayload)
           this.previewPayload = resolvedCachedPayload
           this.targetTitle = resolvedCachedPayload.feedTitle || this.targetTitle
@@ -151,14 +149,21 @@ export struct FeedDetailView {
           void this.hydrateVideoPreviews(resolvedCachedPayload.entries)
 
           if (!this.existingFeed && resolvedCachedPayload.siteUrl) {
-            this.existingFeed = await this.findExistingFeed(this.targetUrl, resolvedCachedPayload.siteUrl)
+            this.existingFeed = await this.findExistingFeed(previewTargetUrl, resolvedCachedPayload.siteUrl)
           }
           return
         }
+        const fallbackPayload = this.buildFallbackPreviewPayload()
+        if (this.shouldUseSoftPreviewFallback() && fallbackPayload) {
+          this.previewPayload = fallbackPayload
+          this.previewNotice = '正在拉取实时预览，已先展示订阅源信息。'
+          this.resetHeroAvatarCandidates()
+        }
         try {
-          const payload = this.normalizedPreviewPayload(await RssFeedService.previewFeedUrl(this.targetUrl), this.targetUrl)
+          const payload = this.normalizedPreviewPayload(await RssFeedService.previewFeedUrl(previewTargetUrl), previewTargetUrl)
           DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
           this.previewPayload = payload
+          this.previewNotice = ''
           this.targetTitle = payload.feedTitle || this.targetTitle
           this.targetSiteUrl = payload.siteUrl || this.targetSiteUrl
           this.targetImageUrl = payload.imageUrl || this.targetImageUrl
@@ -168,7 +173,7 @@ export struct FeedDetailView {
 
           // If it matches an existing entry, update it
           if (!this.existingFeed && payload.siteUrl) {
-             this.existingFeed = await this.findExistingFeed(this.targetUrl, payload.siteUrl)
+             this.existingFeed = await this.findExistingFeed(previewTargetUrl, payload.siteUrl)
           }
         } catch (e) {
           const fallbackPayload = this.buildFallbackPreviewPayload()
@@ -229,7 +234,8 @@ export struct FeedDetailView {
         void this.hydrateVideoPreviews(entries)
       } else if (this.targetUrl) {
         try {
-          const payload = this.normalizedPreviewPayload(await RssFeedService.previewFeedUrl(this.targetUrl), this.targetUrl)
+          const previewTargetUrl = this.resolvedPreviewTargetUrl()
+          const payload = this.normalizedPreviewPayload(await RssFeedService.previewFeedUrl(previewTargetUrl), previewTargetUrl)
           DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
           this.previewPayload = payload
           this.previewNotice = ''
@@ -367,9 +373,7 @@ export struct FeedDetailView {
     let score = 0
     entries.forEach((entry: Entry) => {
       score += 1
-      if ((entry.mediaUrls?.length ?? 0) > 0) {
-        score += 2
-      }
+      score += Math.min(6, this.entryGalleryUrls(entry).length)
       if ((entry.summary || '').trim()) {
         score += 1
       }
@@ -420,6 +424,10 @@ export struct FeedDetailView {
 
   private normalizeUrl(value: string): string {
     return value.trim().replace(/\/+$/, '').toLowerCase()
+  }
+
+  private resolvedPreviewTargetUrl(): string {
+    return canonicalInstagramFeedUrl(this.targetUrl, this.targetSiteUrl) || this.targetUrl
   }
 
   private feedMatchesTarget(feed: Feed, targetUrl: string, siteUrl: string): boolean {
@@ -781,7 +789,7 @@ export struct FeedDetailView {
     const pictureUrl = this.entryPictureUrl(entry)
 
     return {
-      entry,
+      entry: this.pictureCardEntry(entry),
       index,
       authorLabel: entry.author || this.heroTitle() || '未知来源',
       feedImageUrl: this.resolvedAvatarUrl(),
@@ -792,6 +800,32 @@ export struct FeedDetailView {
       onOpen: () => {
         this.onOpenArticle(entry, this.articleDetailFeed(entry))
       },
+    }
+  }
+
+  private pictureCardEntry(entry: Entry): Entry {
+    return {
+      id: entry.id,
+      feedId: entry.feedId,
+      title: entry.title,
+      url: entry.url,
+      summary: entry.summary,
+      content: entry.content,
+      author: entry.author,
+      publishedAt: entry.publishedAt,
+      readingTimeMinutes: entry.readingTimeMinutes,
+      tags: entry.tags,
+      mediaUrls: extractPictureCarouselMediaUrls({
+        summary: entry.summary,
+        content: entry.content,
+        articleUrl: entry.url,
+        siteUrl: this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl,
+        mediaUrls: entry.mediaUrls ?? [],
+      }),
+      isRead: entry.isRead,
+      isStarred: entry.isStarred,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
     }
   }
 
@@ -859,23 +893,24 @@ export struct FeedDetailView {
 
   @Builder
   private HeaderSection() {
-    PageHeader({
-      title: this.previewPayload?.feedTitle || this.targetTitle || '订阅详情',
-      theme: this.theme,
-      showBackButton: true,
-      trailingText: !this.isLoading && this.existingFeed ? '编辑' : '',
-      titleSize: 20,
-      topPadding: this.detailHeaderTopPadding(),
-      bottomPadding: 0,
-      onBack: () => { this.onBack() },
-      onTrailingClick: () => {
-        if (this.existingFeed) {
-          this.onEdit(this.existingFeed)
-        }
-      },
-    })
-      .width('100%')
-      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: PAGE_TOP_PADDING, bottom: 4 })
+    SecondaryPageHeaderShell() {
+      PageHeader({
+        title: this.previewPayload?.feedTitle || this.targetTitle || '订阅详情',
+        theme: this.theme,
+        showBackButton: true,
+        trailingText: !this.isLoading && this.existingFeed ? '编辑' : '',
+        titleSize: 20,
+        topPadding: 0,
+        bottomPadding: 0,
+        onBack: () => { this.onBack() },
+        onTrailingClick: () => {
+          if (this.existingFeed) {
+            this.onEdit(this.existingFeed)
+          }
+        },
+      })
+        .width('100%')
+    }
   }
 
   @Builder
@@ -1103,17 +1138,7 @@ export struct FeedDetailView {
     Column({ space: 0 }) {
       this.HeaderSection()
 
-      if (this.isLoading) {
-        Column({ space: 12 }) {
-          LoadingProgress().width(42).height(42).color(this.theme.accent)
-          Text('正在加载预览...')
-            .fontSize(14)
-            .fontColor(this.theme.textSecondary)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-      } else if (this.previewError) {
+      if (this.previewError) {
         Column({ space: 16 }) {
           Text('预览失败')
             .fontSize(20)
@@ -1134,7 +1159,7 @@ export struct FeedDetailView {
         .width('100%')
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
-      } else {
+      } else if (this.previewPayload) {
         Stack({ alignContent: Alignment.Bottom }) {
           Refresh({ refreshing: $$this.isRefreshing }) {
             Scroll() {
@@ -1178,11 +1203,30 @@ export struct FeedDetailView {
         }
         .width('100%')
         .layoutWeight(1)
+      } else if (this.isLoading) {
+        Column({ space: 12 }) {
+          LoadingProgress().width(42).height(42).color(this.theme.accent)
+          Text('正在加载预览...')
+            .fontSize(14)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+      } else {
+        Column({ space: 12 }) {
+          LoadingProgress().width(42).height(42).color(this.theme.accent)
+          Text('正在初始化预览...')
+            .fontSize(14)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
       }
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.topAvoidArea })
     .backgroundColor(this.theme.background)
   }
 }

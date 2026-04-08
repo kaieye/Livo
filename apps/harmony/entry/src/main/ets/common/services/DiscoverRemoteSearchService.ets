@@ -7,10 +7,12 @@ import {
   buildInstagramProfileSeedFromProfile,
   buildXCandidateFromProfile,
   buildXProfileSeedFromProfile,
+  dedupeAndLimitDiscoverCandidates,
   DiscoverRemoteProfileSeed,
   DiscoverRemoteViewMapping,
   extractXFollowersFromText,
   parseInstagramProfilesFromSearchHtml,
+  parseInstagramProfilesFromTopsearchPayload,
   parseXProfilesFromSearchHtml,
 } from '../utils/DiscoverRemoteSearchParsing'
 import { formatInstagramFeedTitle } from '../utils/SocialFeedTitles'
@@ -67,6 +69,12 @@ const SOCIAL_VIEW_MAPPING: DiscoverRemoteViewMapping = {
   instagram: FeedViewType.Pictures,
 }
 const RSSHUB_BASE_URL = DEFAULT_RSSHUB_INSTANCE.replace(/\/+$/, '')
+const FALLBACK_NITTER_INSTANCES = [
+  'https://nitter.net',
+  'https://nitter.poast.org',
+  'https://nitter.privacydev.net',
+  'https://nitter.d420.de',
+]
 const INSTAGRAM_SEARCH_TIMEOUT_MS = 3500
 
 function decodeNumericEntities(value: string): string {
@@ -458,17 +466,72 @@ export class DiscoverRemoteSearchService {
   }
 
   private static async searchXUsers(query: string): Promise<ResolvedDiscoverCandidate[]> {
-    const seeds: DiscoverRemoteProfileSeed[] = []
+    const clean = query.trim().replace(/^@+/, '')
+    const searchSeeds = await DiscoverRemoteSearchService.searchXUsersByNitter(clean)
+    const fallbackSeeds: DiscoverRemoteProfileSeed[] = []
     for (const username of buildQueryVariants(query, 15)) {
       const seed = await DiscoverRemoteSearchService.fetchXProfileSeed(username)
       if (seed) {
-        seeds.push(seed)
+        fallbackSeeds.push(seed)
       }
     }
 
-    return seeds.map((seed) => withConfiguredRssHubCandidate(
+    const dedupedSeeds = dedupeAndLimitDiscoverCandidates(
+      [...searchSeeds, ...fallbackSeeds],
+      12,
+    )
+
+    return dedupedSeeds.map((seed) => withConfiguredRssHubCandidate(
       buildXCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
     ))
+  }
+
+  private static async searchXUsersByNitter(query: string): Promise<DiscoverRemoteProfileSeed[]> {
+    const clean = query.trim().replace(/^@+/, '')
+    if (!clean) {
+      return []
+    }
+
+    const seeds: DiscoverRemoteProfileSeed[] = []
+
+    for (const nitterInstance of FALLBACK_NITTER_INSTANCES) {
+      const request = http.createHttp()
+      try {
+        const response = await request.request(
+          `${nitterInstance}/search?f=users&q=${encodeURIComponent(clean)}`,
+          {
+            method: http.RequestMethod.GET,
+            connectTimeout: 5000,
+            readTimeout: 5000,
+            header: {
+              'User-Agent': 'Mozilla/5.0',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            },
+          },
+        )
+
+        if (response.responseCode !== 200) {
+          continue
+        }
+
+        const html = String(response.result)
+        const profiles = parseXProfilesFromSearchHtml(html, clean)
+        profiles.forEach((profile) => {
+          seeds.push(buildXProfileSeedFromProfile(profile))
+        })
+
+        if (seeds.length > 0) {
+          break
+        }
+      } catch (_) {
+        // Try the next Nitter instance.
+      } finally {
+        request.destroy()
+      }
+    }
+
+    return dedupeAndLimitDiscoverCandidates(seeds, 12)
   }
 
   private static async fetchXProfileSeed(username: string): Promise<DiscoverRemoteProfileSeed | undefined> {
@@ -517,20 +580,66 @@ export class DiscoverRemoteSearchService {
   }
 
   private static async searchInstagramUsers(query: string): Promise<ResolvedDiscoverCandidate[]> {
+    const clean = query.trim().replace(/^@+/, '')
+    const searchSeeds = await DiscoverRemoteSearchService.searchInstagramUsersByTopsearch(clean)
     const variants = buildQueryVariants(query, 30)
     const seedResults = await Promise.allSettled(
       variants.map((username: string) => DiscoverRemoteSearchService.fetchInstagramProfileSeed(username)),
     )
-    const seeds: DiscoverRemoteProfileSeed[] = []
+    const fallbackSeeds: DiscoverRemoteProfileSeed[] = []
     seedResults.forEach((result: PromiseSettledResult<DiscoverRemoteProfileSeed | undefined>) => {
       if (result.status === 'fulfilled' && result.value) {
-        seeds.push(result.value)
+        fallbackSeeds.push(result.value)
       }
     })
 
-    return dedupeCandidates(seeds.map((seed: DiscoverRemoteProfileSeed) => withConfiguredRssHubCandidate(
+    const dedupedSeeds = dedupeAndLimitDiscoverCandidates(
+      [...searchSeeds, ...fallbackSeeds],
+      12,
+    )
+
+    return dedupeCandidates(dedupedSeeds.map((seed: DiscoverRemoteProfileSeed) => withConfiguredRssHubCandidate(
       buildInstagramCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
     )))
+  }
+
+  private static async searchInstagramUsersByTopsearch(query: string): Promise<DiscoverRemoteProfileSeed[]> {
+    if (!query) {
+      return []
+    }
+
+    const request = http.createHttp()
+    try {
+      const response = await request.request(
+        `https://www.instagram.com/web/search/topsearch/?query=${encodeURIComponent(query)}&context=user`,
+        {
+          method: http.RequestMethod.GET,
+          connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
+          readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
+          header: {
+            'User-Agent': 'Mozilla/5.0',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Referer': 'https://www.instagram.com/',
+            'X-IG-App-ID': '936619743392459',
+          },
+        },
+      )
+
+      if (response.responseCode !== 200) {
+        return []
+      }
+
+      const profiles = parseInstagramProfilesFromTopsearchPayload(JSON.parse(String(response.result)), query)
+      return dedupeAndLimitDiscoverCandidates(
+        profiles.map((profile) => buildInstagramProfileSeedFromProfile(profile)),
+        12,
+      )
+    } catch (_) {
+      return []
+    } finally {
+      request.destroy()
+    }
   }
 
   private static async fetchInstagramProfileSeed(username: string): Promise<DiscoverRemoteProfileSeed | undefined> {
