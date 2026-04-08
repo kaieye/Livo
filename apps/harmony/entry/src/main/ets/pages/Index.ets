@@ -547,7 +547,7 @@ struct Index {
         .fontSize(16)
         .fontColor([this.theme.textSecondary])
 
-      TextInput({ text: this.searchQuery, placeholder: '搜索当前分段', controller: this.searchInputController })
+      TextInput({ text: this.searchQuery, placeholder: this.rootSettings.searchAllHomeCategories ? '搜索全部内容' : `搜索「${this.getModeTitle(this.mode)}」`, controller: this.searchInputController })
         .layoutWeight(1)
         .backgroundColor('transparent')
         .fontColor(this.theme.textPrimary)
@@ -562,6 +562,11 @@ struct Index {
         })
         .onChange((value: string) => {
           this.searchQuery = value
+        })
+        .onEditChange((isEditing: boolean) => {
+          if (!isEditing && this.searchOverlayVisible) {
+            this.closeHomeInlineSearch(false)
+          }
         })
 
       Text('×')
@@ -1463,7 +1468,8 @@ struct Index {
     Column()
       .width('100%')
       .height('100%')
-      .backgroundColor('rgba(0,0,0,0.001)')
+      .backgroundColor(this.showSearch ? 'rgba(0,0,0,0.32)' : 'rgba(0,0,0,0.001)')
+      .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
       .onClick(() => {
         this.closeHomeInlineSearch(true)
       })
@@ -1847,5 +1853,13 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+  }
+
+  onBackPress(): boolean {
+    if (this.isHomeRootTab() && this.searchOverlayVisible) {
+      this.closeHomeInlineSearch(true)
+      return true
+    }
+    return false
   }
 }

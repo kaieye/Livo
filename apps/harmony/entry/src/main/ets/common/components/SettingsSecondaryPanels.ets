@@ -365,14 +365,46 @@ export struct GeneralSettingsPanel {
             1,
           )
           this.DividerLine()
-          this.ToggleRow(
-            $r('sys.symbol.magnifyingglass_circle'),
-            '跨栏目搜索',
-            '开启后，搜索范围包含所有栏目',
-            this.config.searchAllHomeCategories,
-            (enabled: boolean) => this.applySearchAllHomeCategories(enabled),
-            2,
-          )
+          Row({ space: 12 }) {
+            SymbolGlyph($r('sys.symbol.magnifyingglass_circle'))
+              .fontSize(PANEL_ICON_SIZE)
+              .fontColor([this.theme.accent])
+              .transition(livoMotion.enterIconSpin(2))
+
+            Column({ space: PANEL_ROW_TEXT_SPACING }) {
+              Text('跨栏目搜索')
+                .fontSize(PANEL_TITLE_SIZE)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.theme.textPrimary)
+
+              Text('开启后，搜索范围包含所有栏目')
+                .fontSize(PANEL_SUBTITLE_SIZE)
+                .fontColor(this.theme.textSecondary)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Toggle({ type: ToggleType.Switch, isOn: this.config.searchAllHomeCategories })
+              .selectedColor(this.theme.accent)
+              .switchPointColor('#FFFFFF')
+              .onChange((isOn: boolean) => {
+                this.applySearchAllHomeCategories(isOn)
+              })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+          .padding({
+            left: PANEL_ROW_PADDING_HORIZONTAL,
+            right: PANEL_ROW_PADDING_HORIZONTAL,
+            top: PANEL_ROW_PADDING_VERTICAL,
+            bottom: PANEL_ROW_PADDING_VERTICAL,
+          })
+          .backgroundColor(this.theme.surface)
+          .borderRadius(20)
+          .clickEffect({ level: ClickEffectLevel.MIDDLE })
+          .onClick(() => this.toggleSearchAllHomeCategories())
         }
         .width('100%')
         .backgroundColor(this.theme.surface)

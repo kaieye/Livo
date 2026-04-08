@@ -573,6 +573,7 @@ export struct SettingsContent {
         GeneralSettingsPanel({
           onSettingsChange: (settings: HarmonySettings) => {
             this.config = settings
+            this.onSettingsChange(settings)
           },
         })
       } else if (this.activeSheet === 'data-control') {

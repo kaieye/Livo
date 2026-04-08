@@ -67,11 +67,11 @@ test('home inline search uses overlay dismissal and center-expand motion', () =>
   )
   assert.match(
     source,
-    /TextInput\(\{ text: this\.searchQuery, placeholder: '搜索当前分段', controller: this\.searchInputController \}\)[\s\S]*\.defaultFocus\(this\.searchOverlayVisible\)/s,
+    /TextInput\(\{ text: this\.searchQuery, placeholder: this\.rootSettings\.searchAllHomeCategories \? '搜索全部内容' : `搜索「\$\{this\.getModeTitle\(this\.mode\)\}」`, controller: this\.searchInputController \}\)[\s\S]*\.defaultFocus\(this\.searchOverlayVisible\)/s,
   )
   assert.match(
     source,
-    /TextInput\(\{ text: this\.searchQuery, placeholder: '搜索当前分段', controller: this\.searchInputController \}\)[\s\S]*\.id\(HOME_INLINE_SEARCH_INPUT_ID\)[\s\S]*\.focusable\(true\)/s,
+    /TextInput\(\{ text: this\.searchQuery, placeholder: this\.rootSettings\.searchAllHomeCategories \? '搜索全部内容' : `搜索「\$\{this\.getModeTitle\(this\.mode\)\}」`, controller: this\.searchInputController \}\)[\s\S]*\.id\(HOME_INLINE_SEARCH_INPUT_ID\)[\s\S]*\.focusable\(true\)/s,
   )
   assert.match(
     source,
