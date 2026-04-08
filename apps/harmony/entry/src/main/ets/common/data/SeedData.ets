@@ -84,6 +84,7 @@ export function seedSettings(): HarmonySettings {
     autoRefresh: DEFAULT_HARMONY_SETTINGS.autoRefresh,
     aiSummaryEnabled: DEFAULT_HARMONY_SETTINGS.aiSummaryEnabled,
     imageProxyEnabled: DEFAULT_HARMONY_SETTINGS.imageProxyEnabled,
+    searchAllHomeCategories: DEFAULT_HARMONY_SETTINGS.searchAllHomeCategories,
     refreshIntervalMinutes: DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes,
     themeMode: DEFAULT_HARMONY_SETTINGS.themeMode,
     themeAccent: DEFAULT_HARMONY_SETTINGS.themeAccent,

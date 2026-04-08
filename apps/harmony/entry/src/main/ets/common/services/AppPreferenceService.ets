@@ -23,6 +23,7 @@ export class AppPreferenceService {
       const autoRefresh = await pref.get('autoRefresh', DEFAULT_HARMONY_SETTINGS.autoRefresh)
       const aiSummaryEnabled = await pref.get('aiSummaryEnabled', DEFAULT_HARMONY_SETTINGS.aiSummaryEnabled)
       const imageProxyEnabled = await pref.get('imageProxyEnabled', DEFAULT_HARMONY_SETTINGS.imageProxyEnabled)
+      const searchAllHomeCategories = await pref.get('searchAllHomeCategories', DEFAULT_HARMONY_SETTINGS.searchAllHomeCategories)
       const refreshIntervalMinutes = await pref.get('refreshIntervalMinutes', DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes)
       const themeMode = await pref.get('themeMode', DEFAULT_HARMONY_SETTINGS.themeMode)
       const themeAccent = await pref.get('themeAccent', DEFAULT_HARMONY_SETTINGS.themeAccent)
@@ -32,6 +33,7 @@ export class AppPreferenceService {
         autoRefresh: autoRefresh as boolean,
         aiSummaryEnabled: aiSummaryEnabled as boolean,
         imageProxyEnabled: imageProxyEnabled as boolean,
+        searchAllHomeCategories: searchAllHomeCategories as boolean,
         refreshIntervalMinutes: refreshIntervalMinutes as number,
         themeMode: themeMode as 'light' | 'dark' | 'system',
         themeAccent: themeAccent as 'orange' | 'blue' | 'red' | 'pink' | 'green',
@@ -49,6 +51,7 @@ export class AppPreferenceService {
       await pref.put('autoRefresh', next.autoRefresh)
       await pref.put('aiSummaryEnabled', next.aiSummaryEnabled)
       await pref.put('imageProxyEnabled', next.imageProxyEnabled)
+      await pref.put('searchAllHomeCategories', next.searchAllHomeCategories)
       await pref.put('refreshIntervalMinutes', next.refreshIntervalMinutes)
       await pref.put('themeMode', next.themeMode)
       await pref.put('themeAccent', next.themeAccent)

@@ -86,6 +86,8 @@ const HOME_INLINE_SEARCH_ACTION_SIZE: number = 40
 const HOME_INLINE_SEARCH_ACTION_GAP: number = 8
 const HOME_INLINE_SEARCH_INPUT_HEIGHT: number = 40
 const HOME_INLINE_SEARCH_MAX_WIDTH: number = 360
+const HOME_INLINE_SEARCH_RESULT_MAX_WIDTH: number = 360
+const HOME_INLINE_SEARCH_RESULT_LIMIT: number = 6
 const HOME_INLINE_SEARCH_MOTION_DURATION: number = 240
 const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
 const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
@@ -278,6 +280,10 @@ struct Index {
   }
 
   private currentSearchEntries(): EntryCardModel[] {
+    if (this.rootSettings.searchAllHomeCategories) {
+      return this.featuredEntries
+    }
+
     return this.filteredEntriesFor(this.mode)
   }
 
@@ -301,6 +307,67 @@ struct Index {
         return buildInlineHighlightSegments(text, query).some((segment) => segment.matched)
       })
     })
+  }
+
+  private searchResultEntries(): EntryCardModel[] {
+    const query = this.normalizedSearchQuery()
+    if (!query) {
+      return []
+    }
+
+    return this.currentSearchEntries()
+      .filter((entry: EntryCardModel) => {
+        return this.entrySearchTexts(entry).some((text: string) => {
+          return buildInlineHighlightSegments(text, query).some((segment) => segment.matched)
+        })
+      })
+      .slice(0, HOME_INLINE_SEARCH_RESULT_LIMIT)
+  }
+
+  private hasSearchResultEmptyState(): boolean {
+    return !!this.normalizedSearchQuery() && this.searchResultEntries().length === 0
+  }
+
+  private searchResultSummaryText(entry: EntryCardModel): string {
+    const candidates: string[] = [
+      entry.summary || '',
+      entry.author || '',
+      entry.feedTitle || '',
+      entry.title || '',
+    ]
+
+    for (const text of candidates) {
+      const snippet = this.searchResultSnippet(text)
+      if (snippet) {
+        return snippet
+      }
+    }
+
+    return ''
+  }
+
+  private searchResultSnippet(text: string): string {
+    const query = this.normalizedSearchQuery()
+    if (!query || !text) {
+      return ''
+    }
+
+    const lowerText = text.toLocaleLowerCase()
+    const index = lowerText.indexOf(query)
+    if (index < 0) {
+      return ''
+    }
+
+    const start = Math.max(0, index - 20)
+    const end = Math.min(text.length, index + query.length + 30)
+    let snippet = text.slice(start, end).trim()
+    if (start > 0) {
+      snippet = `...${snippet}`
+    }
+    if (end < text.length) {
+      snippet = `${snippet}...`
+    }
+    return snippet
   }
 
   private openHomeInlineSearch(): void {
@@ -1263,21 +1330,132 @@ struct Index {
 
   @Builder
   private HomeSearchFieldLayer() {
-    Row() {
+    Column({ space: 10 }) {
       if (this.searchOverlayVisible) {
         this.HomeInlineSearchField()
+
+        if (this.normalizedSearchQuery()) {
+          this.HomeInlineSearchResults()
+        }
       }
     }
     .width('100%')
     .align(Alignment.Top)
     .justifyContent(FlexAlign.Center)
-    .alignItems(VerticalAlign.Top)
+    .alignItems(HorizontalAlign.Center)
     .padding({
       top: this.homeCollapsedModeRailTopPadding(),
       left: PAGE_HORIZONTAL_PADDING,
       right: PAGE_HORIZONTAL_PADDING,
     })
     .zIndex(131)
+  }
+
+  @Builder
+  private HomeInlineSearchResults() {
+    List({ space: 0 }) {
+      if (this.searchResultEntries().length > 0) {
+        ForEach(this.searchResultEntries(), (entry: EntryCardModel, index: number) => {
+          ListItem() {
+            Column({ space: 0 }) {
+              Column({ space: 6 }) {
+                Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
+                  HighlightedInlineText({
+                    text: entry.title,
+                    query: this.searchQuery,
+                    theme: this.theme,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    fontWeight: FontWeight.Bold,
+                    defaultColor: this.theme.textPrimary,
+                    maxLines: 2,
+                  })
+
+                  Text(entry.feedTitle || entry.author || '')
+                    .fontSize(11)
+                    .fontColor(this.theme.textMuted)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .flexShrink(0)
+                    .margin({ left: 8, top: 2 })
+                }
+                .width('100%')
+
+                if (this.searchResultSummaryText(entry)) {
+                  HighlightedInlineText({
+                    text: this.searchResultSummaryText(entry),
+                    query: this.searchQuery,
+                    theme: this.theme,
+                    fontSize: 12,
+                    lineHeight: 18,
+                    fontWeight: FontWeight.Regular,
+                    defaultColor: this.theme.textSecondary,
+                    maxLines: 2,
+                  })
+                }
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
+              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+              .backgroundColor(this.theme.surface)
+              .borderRadius(12)
+              .clickEffect({ level: ClickEffectLevel.LIGHT })
+              .onClick(() => {
+                this.openEntry(entry)
+                this.closeHomeInlineSearch(true)
+              })
+
+              if (index < this.searchResultEntries().length - 1) {
+                Row()
+                  .width('100%')
+                  .height(0.5)
+                  .margin({ left: 16, right: 16 })
+                  .backgroundColor(this.theme.divider)
+                  .opacity(this.theme.isDark ? 0.36 : 0.6)
+              }
+            }
+            .width('100%')
+          }
+        }, (entry: EntryCardModel) => `${entry.id}_${this.searchQuery}`)
+      } else if (this.hasSearchResultEmptyState()) {
+        ListItem() {
+          Column({ space: 8 }) {
+            Text('当前分段没有匹配内容')
+              .fontSize(15)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textPrimary)
+
+            Text('试试标题、摘要、来源或作者相关关键词')
+              .fontSize(12)
+              .lineHeight(18)
+              .fontColor(this.theme.textSecondary)
+              .textAlign(TextAlign.Center)
+              .maxLines(2)
+          }
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 24, bottom: 24 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(12)
+        }
+      }
+    }
+    .width('100%')
+    .constraintSize({ maxWidth: HOME_INLINE_SEARCH_RESULT_MAX_WIDTH })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+    .border({ width: 0.8, color: this.theme.divider })
+    .shadow({
+      radius: this.theme.isDark ? 10 : 14,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.2)' : 'rgba(15,23,42,0.08)',
+      offsetY: 2,
+    })
+    .padding({ left: 8, right: 8, top: 8, bottom: 8 })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .alignListItem(ListItemAlign.Start)
+    .clip(true)
   }
 
   @Builder

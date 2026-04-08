@@ -34,6 +34,14 @@ test('home inline search highlight uses theme accent and current mode entries', 
   assert.match(source, /theme\.accent/)
   assert.match(source, /private currentSearchEntries\(\): EntryCardModel\[\]/)
   assert.match(source, /private hasSearchMatches\(\): boolean/)
+  assert.match(source, /private searchResultEntries\(\): EntryCardModel\[\]/)
+  assert.match(source, /private hasSearchResultEmptyState\(\): boolean/)
+  assert.match(
+    source,
+    /private searchResultSummaryText\(entry: EntryCardModel\): string/,
+  )
+  assert.match(source, /private searchResultSnippet\(text: string\): string/)
+  assert.match(source, /this\.rootSettings\.searchAllHomeCategories/)
 })
 
 test('home inline search uses overlay dismissal and center-expand motion', () => {
@@ -80,6 +88,47 @@ test('home inline search uses overlay dismissal and center-expand motion', () =>
   assert.match(
     source,
     /private HomeSearchFieldLayer\(\) \{[\s\S]*\.align\(Alignment\.Top\)[\s\S]*\.justifyContent\(FlexAlign\.Center\)/s,
+  )
+})
+
+test('home inline search renders a dedicated result panel with summary snippets and empty state', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /private HomeInlineSearchResults\(\)/)
+  assert.match(
+    source,
+    /private HomeSearchFieldLayer\(\) \{[\s\S]*this\.HomeInlineSearchField\(\)[\s\S]*if \(this\.normalizedSearchQuery\(\)\) \{[\s\S]*this\.HomeInlineSearchResults\(\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*ForEach\(this\.searchResultEntries\(\), \(entry: EntryCardModel, index: number\) => \{/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*List\(\{ space: 0 \}\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*HighlightedInlineText\(\{[\s\S]*text: this\.searchResultSummaryText\(entry\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*\.padding\(\{ left: 8, right: 8, top: 8, bottom: 8 \}\)[\s\S]*\.scrollBar\(BarState\.Off\)[\s\S]*\.clip\(true\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*if \(index < this\.searchResultEntries\(\)\.length - 1\) \{[\s\S]*\.height\(0\.5\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*Text\('当前分段没有匹配内容'\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchResults\(\) \{[\s\S]*\.onClick\(\(\) => \{[\s\S]*this\.openEntry\(entry\)[\s\S]*this\.closeHomeInlineSearch\(true\)/s,
   )
 })
 

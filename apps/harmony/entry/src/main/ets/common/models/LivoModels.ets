@@ -136,6 +136,7 @@ export interface HarmonySettings {
   autoRefresh: boolean
   aiSummaryEnabled: boolean
   imageProxyEnabled: boolean
+  searchAllHomeCategories: boolean
   refreshIntervalMinutes: number
   themeMode: ThemeMode
   themeAccent: ThemeAccent
@@ -154,6 +155,7 @@ export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
   autoRefresh: false,
   aiSummaryEnabled: true,
   imageProxyEnabled: false,
+  searchAllHomeCategories: true,
   refreshIntervalMinutes: 30,
   themeMode: 'system',
   themeAccent: 'orange',
