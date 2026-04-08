@@ -29,3 +29,40 @@ test('home inline search highlight uses theme accent and current mode entries', 
   assert.match(source, /private currentSearchEntries\(\): EntryCardModel\[\]/)
   assert.match(source, /private hasSearchMatches\(\): boolean/)
 })
+
+test('home inline search utility exposes normalized matching helpers', () => {
+  const source = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/utils/HomeInlineSearch.ts',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+
+  assert.match(source, /export interface InlineHighlightSegment/)
+  assert.match(
+    source,
+    /export function normalizeInlineSearchQuery\(query: string\): string/,
+  )
+  assert.match(
+    source,
+    /export function buildInlineHighlightSegments\(text: string, query: string\): InlineHighlightSegment\[\]/,
+  )
+  assert.match(source, /toLocaleLowerCase\(\)/)
+})
+
+test('highlighted inline text component renders matched segments with theme accent styling', () => {
+  const source = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/components/HighlightedInlineText.ets',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+
+  assert.match(source, /@Component\s+export struct HighlightedInlineText/)
+  assert.match(source, /@Prop query: string = ''/)
+  assert.match(source, /buildInlineHighlightSegments/)
+  assert.match(source, /this\.theme\.accent/)
+  assert.match(source, /ForEach\(segments/)
+})
