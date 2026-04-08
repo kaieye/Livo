@@ -24,6 +24,7 @@ import { resolveFeedAvatar } from './feed-avatar'
 import { formatFeedTitle } from './feed-title'
 import { buildEntriesFromParsedItems } from './entry-builder'
 import { logWarnQuiet } from './logger'
+import { reconcileFeedView } from './feed-view'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshAllInFlight: Promise<void> | null = null
@@ -350,13 +351,8 @@ export async function refreshSingleFeed(
         errorCount: 0,
         etag: result.etag,
         lastModified: result.lastModified,
-        // Auto-upgrade Instagram feeds that were incorrectly assigned Articles view
-        ...(feed.view === FeedViewType.Articles && isInstagramFeedUrl(feed.url)
-          ? { view: FeedViewType.SocialMedia }
-          : {}),
-        ...(getRouteAlignedView(feed.url) !== null &&
-        feed.view !== getRouteAlignedView(feed.url)
-          ? { view: getRouteAlignedView(feed.url)! }
+        ...(reconcileFeedView(feed.url, feed.view) !== feed.view
+          ? { view: reconcileFeedView(feed.url, feed.view) }
           : {}),
       })
 

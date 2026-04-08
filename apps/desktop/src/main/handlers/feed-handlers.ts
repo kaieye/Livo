@@ -28,6 +28,7 @@ import {
 import { resolveFeedAvatar } from '../services/feed-avatar'
 import { formatFeedTitle } from '../services/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry-builder'
+import { detectRouteViewFromUrl } from '../services/feed-view'
 import {
   getAllFeeds,
   getFeedById,
@@ -884,26 +885,4 @@ function detectViewTypeFromUrlOrContent(
   const routeView = detectRouteViewFromUrl(url)
   if (routeView !== null) return routeView
   return parsed ? detectViewType(parsed) : FeedViewType.Articles
-}
-
-function detectRouteViewFromUrl(url: string): FeedViewType | null {
-  try {
-    const u = new URL(url)
-    const path = u.pathname.toLowerCase()
-    if (/\/bilibili\/user\/video\//.test(path)) return FeedViewType.Videos
-    if (/\/bilibili\/user\/dynamic\//.test(path))
-      return FeedViewType.SocialMedia
-    if (/\/bilibili\/user\/article\//.test(path)) return FeedViewType.Articles
-    if (/\/youtube\//.test(path)) return FeedViewType.Videos
-    if (/\/instagram\//.test(path)) return FeedViewType.SocialMedia
-  } catch {
-    // Ignore malformed URL.
-  }
-  // rsshub:// protocol URLs
-  try {
-    if (/^rsshub:\/\/instagram\//i.test(url)) return FeedViewType.SocialMedia
-  } catch {
-    // Ignore
-  }
-  return null
 }

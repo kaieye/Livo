@@ -28,6 +28,7 @@ import {
   Entry,
   EntryCardModel,
   HarmonySettings,
+  articleDetailModelFromCard,
   selectPictureCarouselMediaUrls,
   selectPictureMediaUrls,
 } from '../common/models/LivoModels'
@@ -574,8 +575,13 @@ struct Index {
     }
   }
 
-  private openEntry(entryId: string): void {
-    void openArticleDetail(entryId)
+  private openEntry(entry: EntryCardModel): void {
+    if (entry.viewLabel === '图片' && (entry.rawMediaUrls ?? []).length > 0) {
+      const model = articleDetailModelFromCard(entry)
+      void openArticleDetail(entry.id, JSON.stringify(model))
+      return
+    }
+    void openArticleDetail(entry.id)
   }
 
   private bottomTabSymbol(
@@ -860,7 +866,7 @@ struct Index {
       offsetX: 0,
       offsetY: 4,
     })
-    .onClick(() => this.openEntry(entry.id))
+    .onClick(() => this.openEntry(entry))
   }
 
   private isXSocialEntry(entry: EntryCardModel): boolean {
@@ -878,7 +884,7 @@ struct Index {
         presentation: presentTweetEntryFromCard(entry),
         theme: this.theme,
         enableEnterTransition: false,
-        onOpen: () => this.openEntry(entry.id),
+        onOpen: () => this.openEntry(entry),
       })
     } else {
       this.EntryCard(entry)
@@ -1147,7 +1153,7 @@ struct Index {
             galleryUrls: this.pictureGalleryUrls(entry),
             theme: this.theme,
             enableEnterTransition: false,
-            onOpen: () => this.openEntry(entry.id),
+            onOpen: () => this.openEntry(entry),
           })
         }
         .width('100%')
@@ -1201,7 +1207,7 @@ struct Index {
               entries: this.filteredEntriesFor(mode),
               inheritedTheme: this.theme,
               onOpenEntry: (entry: EntryCardModel) => {
-                this.openEntry(entry.id)
+                this.openEntry(entry)
               },
             })
           }
@@ -1276,6 +1282,17 @@ struct Index {
 
   onPageShow(): void {
     this.syncRequestedRootTab()
+    this.restoreSettingsSheetIfNeeded()
+  }
+
+  private restoreSettingsSheetIfNeeded(): void {
+    const storedSheet = AppStorage.get<string>('settingsActiveSheetKey')
+    if (!storedSheet) {
+      return
+    }
+    // 通过短暂清空再恢复来触发 @Watch，让 SettingsContent 重新打开 sheet
+    AppStorage.setOrCreate('settingsActiveSheetKey', '')
+    AppStorage.setOrCreate('settingsActiveSheetKey', storedSheet)
   }
 
   private shouldHideBottomTabs(): boolean {

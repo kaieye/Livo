@@ -375,6 +375,56 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   }
 }
 
+export function articleDetailModelFromCard(card: EntryCardModel): ArticleDetailModel {
+  const rawUrls = card.rawMediaUrls ?? []
+  const mediaItems = resolvePictureCarouselMediaItems(rawUrls, card.imageUrl)
+  const blocks: ArticleContentBlock[] = mediaItems.map((item, index): ArticleContentBlock => {
+    if (item.kind === 'livePhoto' && item.videoUrl) {
+      return {
+        id: `video-${index}`,
+        type: 'video',
+        text: '',
+        imageUrl: item.imageUrl || card.imageUrl,
+        videoUrl: item.videoUrl,
+      }
+    }
+    return {
+      id: `image-${index}`,
+      type: 'image',
+      text: '',
+      imageUrl: item.imageUrl,
+      videoUrl: '',
+    }
+  })
+
+  return {
+    id: card.id,
+    feedId: card.feedId,
+    title: card.title,
+    summary: card.summary,
+    imageUrl: card.imageUrl,
+    feedImageUrl: card.feedImageUrl,
+    author: card.author,
+    articleUrl: card.articleUrl,
+    publishedAt: card.publishedAt,
+    publishedLabel: card.publishedLabel,
+    readingLabel: card.readingLabel,
+    tags: card.tags,
+    mediaUrls: card.mediaUrls,
+    rawMediaUrls: card.rawMediaUrls,
+    feedTitle: card.feedTitle,
+    feedCategory: card.feedCategory,
+    viewLabel: card.viewLabel,
+    viewBadgeColor: card.viewBadgeColor,
+    hasVideoMedia: card.hasVideoMedia,
+    isRead: card.isRead,
+    isStarred: card.isStarred,
+    contentParagraphs: [],
+    contentBlocks: blocks,
+    siteUrl: card.articleUrl,
+  }
+}
+
 export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailModel {
   const card = toEntryCardModel(entry, feed)
   const blocks = feed.view === FeedViewType.Pictures
@@ -670,7 +720,11 @@ function buildArticleContentBlocks(content: string, baseUrl: string, articleUrl:
       }
       const imageIndex = imageUrls.length
       imageUrls.push(imageUrl)
-      return `\n\n[[IMG_${imageIndex}]]\n\n`
+      return `
+
+[[IMG_${imageIndex}]]
+
+`
     })
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<(?:\/p|\/div|\/section|\/article|\/blockquote|\/h[1-6]|\/ul|\/ol|\/li|\/pre|\/tr)>/gi, '\n\n')

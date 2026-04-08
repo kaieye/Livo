@@ -380,18 +380,21 @@ test('ArticleDetail uses browser action, favorite action, and picture carousel l
     source,
     /private DetailLivePhotoSlide\(item: PictureCarouselMediaItem, index: number\)/,
   )
-  assert.match(source, /Swiper\(\)/)
+  assert.match(
+    source,
+    /Column\(\{ space: 20 \}\) \{\s*ForEach\(this\.pictureDetailMediaItems\(\)/s,
+  )
   assert.match(source, /\.autoPlay\(this\.shouldWarmDetailLivePhoto\(index\)\)/)
   assert.match(
     source,
-    /\.muted\(!this\.shouldShowPlayingDetailLivePhoto\(index\)\)/,
+    /\.muted\(this\.detailLivePhotoMuted \|\| !this\.shouldShowPlayingDetailLivePhoto\(index\)\)/,
   )
   assert.match(source, /\.objectFit\(ImageFit\.Cover\)/)
   assert.match(source, /this\.PictureDetailMediaCarousel\(\)/)
   assert.match(source, /this\.pictureDetailTextBlocks\(\)/)
   assert.match(
     source,
-    /\.onVisibleAreaChange\(\[1\], \(isVisible: boolean, currentRatio: number\) => \{/,
+    /\.onVisibleAreaChange\(\[0, 0\.2, 0\.35, 0\.5, 0\.65, 0\.8, 1\.0\], \(isVisible: boolean, currentRatio: number\) => \{/,
   )
 })
 

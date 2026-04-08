@@ -55,10 +55,7 @@ test('floating root pages share a common floating header shell', () => {
   assert.doesNotMatch(layoutSource, /@BuilderParam content:/)
   assert.match(layoutSource, /\.backgroundColor\(this\.theme\.background\)/)
 
-  assert.match(
-    indexSource,
-    /private HomeRootPage\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
-  )
+  assert.match(indexSource, /private HomeRootPage\(\) \{\s*Stack\(\)/s)
   assert.doesNotMatch(indexSource, /FloatingRootPageLayout\(\{/)
   assert.match(indexSource, /private currentRootTitle\(\): string/)
   assert.match(indexSource, /private shouldHideRootTitleBar\(\): boolean/)

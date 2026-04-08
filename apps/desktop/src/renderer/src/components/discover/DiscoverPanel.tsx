@@ -2,7 +2,14 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useDiscoverSearchQuery } from '../../hooks/useDiscoverSearchQuery'
-import type { DiscoverSearchPlatform } from '../../lib/discover-search'
+import {
+  type DiscoverSearchResult,
+  type DiscoverSearchPlatform,
+  getDiscoverSearchDebounceMs,
+  shouldPreserveExplicitDiscoverView,
+  shouldImmediatelySubmitDiscoverSearch,
+} from '../../lib/discover-search'
+import { buildDiscoverInstagramPlaceholderAvatar } from '../../lib/discover-avatar'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
@@ -281,7 +288,13 @@ export function DiscoverPanel() {
     setSubscribing: state.setSubscribing,
   }))
 
-  const { addFeed, feeds: userFeeds, removeFeed, refreshFeed } = useFeedStore()
+  const {
+    addFeed,
+    feeds: userFeeds,
+    removeFeed,
+    refreshFeed,
+    updateFeed,
+  } = useFeedStore()
   const { t } = useTranslation()
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const [subscribeHint, setSubscribeHint] = useState<string>('')
@@ -294,15 +307,19 @@ export function DiscoverPanel() {
     useState<FeedViewType | null>(null)
   const [searchPage, setSearchPage] = useState(1)
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
+  const previousPlatformRef = useRef<DiscoverSearchPlatform>(searchPlatform)
   const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   )
-  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 3000)
+  const debouncedSearchQuery = useDebouncedValue(
+    searchQuery.trim(),
+    getDiscoverSearchDebounceMs(searchPlatform),
+  )
   const searchQueryResult = useDiscoverSearchQuery(
     submittedSearchQuery,
     searchPlatform,
   )
-  const searchResults = useMemo(
+  const searchResults = useMemo<DiscoverSearchResult[]>(
     () => (searchQuery.trim() ? (searchQueryResult.data ?? []) : []),
     [searchQuery, searchQueryResult.data],
   )
@@ -346,9 +363,19 @@ export function DiscoverPanel() {
   }, [searchQuery])
 
   useEffect(() => {
-    if (!searchQuery.trim()) return
+    if (
+      !shouldImmediatelySubmitDiscoverSearch({
+        previousPlatform: previousPlatformRef.current,
+        nextPlatform: searchPlatform,
+        query: searchQuery,
+      })
+    ) {
+      previousPlatformRef.current = searchPlatform
+      return
+    }
     submitSearch(searchQuery)
     setSearchPage(1)
+    previousPlatformRef.current = searchPlatform
   }, [searchPlatform, searchQuery, submitSearch])
 
   useEffect(() => {
@@ -437,6 +464,19 @@ export function DiscoverPanel() {
     try {
       const result = await addFeed(nextUrl, undefined, nextView, title)
       if (result.success) {
+        if (
+          result.feed?.id &&
+          shouldPreserveExplicitDiscoverView({
+            requestedView: nextView,
+            persistedView:
+              typeof result.feed.view === 'number'
+                ? (result.feed.view as number)
+                : undefined,
+          })
+        ) {
+          await updateFeed(result.feed.id, { view: nextView })
+          result.feed = { ...result.feed, view: nextView }
+        }
         setSubscribedUrls((prev) => {
           const next = new Set(prev)
           next.add(nextUrl)
@@ -841,8 +881,19 @@ function FeedCard({
     () => buildDiscoverAvatarFallbacks(imageUrl, url),
     [imageUrl, url],
   )
-  const [avatarSrc, setAvatarSrc] = useState<string>(avatarCandidates[0] || '')
   const isInstagram = useMemo(() => isInstagramDiscoverResult(url), [url])
+  const placeholderAvatarLabel = useMemo(() => {
+    const usernameFromUrl = extractInstagramUsernameFromFeedUrl(url)
+    if (usernameFromUrl) return usernameFromUrl
+    return title || url
+  }, [title, url])
+  const instagramPlaceholderAvatar = useMemo(() => {
+    if (!isInstagram) return ''
+    return buildDiscoverInstagramPlaceholderAvatar(placeholderAvatarLabel)
+  }, [isInstagram, placeholderAvatarLabel])
+  const [avatarSrc, setAvatarSrc] = useState<string>(
+    isInstagram ? instagramPlaceholderAvatar : avatarCandidates[0] || '',
+  )
   const normalizedInstagram = useMemo(
     () =>
       isInstagram
@@ -855,8 +906,41 @@ function FeedCard({
   const displayFollowers = normalizedInstagram?.followers || followers
 
   useEffect(() => {
-    setAvatarSrc(avatarCandidates[0] || '')
-  }, [avatarCandidates])
+    if (!isInstagram) {
+      setAvatarSrc(avatarCandidates[0] || '')
+      return
+    }
+
+    let cancelled = false
+    let activeLoader: HTMLImageElement | null = null
+    setAvatarSrc(instagramPlaceholderAvatar)
+
+    const tryLoad = (index: number) => {
+      const candidate = avatarCandidates[index]
+      if (!candidate) return
+      const loader = new window.Image()
+      activeLoader = loader
+      loader.onload = () => {
+        if (cancelled) return
+        setAvatarSrc(candidate)
+      }
+      loader.onerror = () => {
+        if (cancelled) return
+        tryLoad(index + 1)
+      }
+      loader.src = candidate
+    }
+
+    tryLoad(0)
+
+    return () => {
+      cancelled = true
+      if (activeLoader) {
+        activeLoader.onload = null
+        activeLoader.onerror = null
+      }
+    }
+  }, [avatarCandidates, instagramPlaceholderAvatar, isInstagram])
 
   return (
     <div
@@ -872,6 +956,10 @@ function FeedCard({
           className={`flex-shrink-0 rounded-lg object-cover ${compact ? 'h-8 w-8' : 'h-10 w-10'}`}
           loading="lazy"
           onError={(e) => {
+            if (isInstagram) {
+              setAvatarSrc(instagramPlaceholderAvatar)
+              return
+            }
             const current = e.currentTarget.currentSrc || e.currentTarget.src
             const idx = avatarCandidates.findIndex(
               (candidate) => candidate === current,

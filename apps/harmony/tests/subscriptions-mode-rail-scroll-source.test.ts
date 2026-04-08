@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-test('subscriptions mode rail and source summary are rendered inside the feed section scroll content', () => {
+test('subscriptions feed section keeps the mode rail in scroll content without the legacy source summary', () => {
   const source = readFileSync(
     new URL(
       '../entry/src/main/ets/common/components/SubscriptionsContent.ets',
@@ -22,9 +22,7 @@ test('subscriptions mode rail and source summary are rendered inside the feed se
 
   const feedSection = source.slice(feedSectionStart, feedSectionEnd)
   assert.match(feedSection, /ContentModeRail\(\{/)
-  assert.match(feedSection, /Text\(this\.sourceHint\)/)
-  assert.match(
-    feedSection,
-    /Text\(`\$\{this\.filteredFeeds\(\)\.length\} 个订阅源`\)/,
-  )
+  assert.doesNotMatch(feedSection, /Text\(this\.sourceHint\)/)
+  assert.doesNotMatch(feedSection, /个订阅源/)
+  assert.match(feedSection, /Column\(\{ space: 20 \}\)/)
 })

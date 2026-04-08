@@ -1,8 +1,8 @@
 import { queryOptions } from '@tanstack/react-query'
 import type { AccountProvider } from '../../../shared/types'
 import {
-  enrichDiscoverSearchResults,
-  hasDiscoverSearchQuery,
+  hasDiscoverSearchQueryForPlatform,
+  shouldEnrichDiscoverResultsInForeground,
   type DiscoverSearchPlatform,
 } from './discover-search'
 import { fetchAccountStatus } from './account-status'
@@ -24,13 +24,16 @@ export function discoverSearchQueryOptions(
 
   return queryOptions({
     queryKey: queryKeys.discover.search(normalizedQuery, platform),
-    enabled: hasDiscoverSearchQuery(normalizedQuery),
+    enabled: hasDiscoverSearchQueryForPlatform(normalizedQuery, platform),
     queryFn: async () => {
       const results = await window.api.discover.search(
         normalizedQuery,
         platform,
       )
-      return enrichDiscoverSearchResults(results, platform)
+      if (!shouldEnrichDiscoverResultsInForeground(platform)) {
+        return results
+      }
+      return results
     },
     meta: {
       persist: true,

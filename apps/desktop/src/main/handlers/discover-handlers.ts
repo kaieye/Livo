@@ -1,46 +1,60 @@
-import { ipcMain, session } from "electron"
+import { ipcMain, session } from 'electron'
 import {
   CURATED_FEEDS,
   DISCOVER_CATEGORIES,
   RSSHUB_ROUTES,
   DEFAULT_RSSHUB_INSTANCE,
   searchCuratedFeeds,
-} from "../../shared/discover-data"
-import { IPC } from "../../shared/types"
-import type { ResolvedProfileFeedCandidate } from "../../shared/types"
-import { resolveProfileUrlToCandidates } from "../../shared/profile-resolver"
-import { fetchAndParseFeed } from "../services/rss-parser"
-import { formatFeedTitle } from "../services/feed-title"
-import { deriveImageUrl } from "../services/feed-utils"
-import { getSettings } from "./settings-handlers"
-import { getYouTubeAccountState } from "../services/account-session"
-import { resolveYouTubeProfileToOfficialFeed } from "../services/youtube-profile-resolver"
-import { normalizeRsshubProtocolUrl, toRsshubProtocolUrl } from "../services/rsshub-url"
-import { resolveFeedAvatar } from "../services/feed-avatar"
-import RssParser from "rss-parser"
-import * as https from "node:https"
+} from '../../shared/discover-data'
+import { IPC } from '../../shared/types'
+import type { ResolvedProfileFeedCandidate } from '../../shared/types'
+import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
+import {
+  createInstagramDiscoverCandidate,
+  INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS,
+} from '../services/discover-instagram-search'
+import {
+  computeMatchTier,
+  dedupeAndSortDiscoverResults,
+  type DiscoverSearchResult,
+} from '../services/discover-dedupe'
+import { fetchAndParseFeed } from '../services/rss-parser'
+import { formatFeedTitle } from '../services/feed-title'
+import { deriveImageUrl } from '../services/feed-utils'
+import { getSettings } from './settings-handlers'
+import { getYouTubeAccountState } from '../services/account-session'
+import { resolveYouTubeProfileToOfficialFeed } from '../services/youtube-profile-resolver'
+import {
+  normalizeRsshubProtocolUrl,
+  toRsshubProtocolUrl,
+} from '../services/rsshub-url'
+import { resolveFeedAvatar } from '../services/feed-avatar'
+import RssParser from 'rss-parser'
+import * as https from 'node:https'
 
 /** A lightweight RSS parser with a short timeout - used for quick probes. */
 const fastParser = new RssParser({
   timeout: 15000,
   headers: {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/rss+xml, application/xml, application/atom+xml, text/xml, */*",
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept:
+      'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
   },
 })
 
 /** Fallback RSSHub instances for Twitter probes */
 const FALLBACK_RSSHUB_INSTANCES = [
-  "https://rsshub.pseudoyu.com",
-  "https://rsshub.app",
-  "https://rsshub.rssforever.com",
-  "https://rsshub-instance.zeabur.app",
+  'https://rsshub.pseudoyu.com',
+  'https://rsshub.app',
+  'https://rsshub.rssforever.com',
+  'https://rsshub-instance.zeabur.app',
 ]
 const FALLBACK_NITTER_INSTANCES = [
-  "https://nitter.net",
-  "https://nitter.poast.org",
-  "https://nitter.privacydev.net",
-  "https://nitter.d420.de",
+  'https://nitter.net',
+  'https://nitter.poast.org',
+  'https://nitter.privacydev.net',
+  'https://nitter.d420.de',
 ]
 
 const X_AVATAR_CACHE_TTL = 10 * 60 * 1000
@@ -49,28 +63,28 @@ const YOUTUBE_SUBSCRIBER_CACHE_TTL = 10 * 60 * 1000
 const YOUTUBE_SUBSCRIBER_MISS_CACHE_TTL = 30 * 1000
 const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
 const xAvatarCache = new Map<string, { expiresAt: number; image: string }>()
-const xFollowerCache = new Map<string, { expiresAt: number; followers?: string }>()
-const youtubeSubscriberCache = new Map<string, { expiresAt: number; followers?: string }>()
-type DiscoverSearchResult = {
-  title: string
-  url: string
-  siteUrl: string
-  description: string
-  source: "curated" | "url" | "rsshub"
-  image?: string
-  followers?: string
-}
+const xFollowerCache = new Map<
+  string,
+  { expiresAt: number; followers?: string }
+>()
+const youtubeSubscriberCache = new Map<
+  string,
+  { expiresAt: number; followers?: string }
+>()
 
-const discoverSearchCache = new Map<string, {
-  expiresAt: number
-  results: DiscoverSearchResult[]
-}>()
+const discoverSearchCache = new Map<
+  string,
+  {
+    expiresAt: number
+    results: DiscoverSearchResult[]
+  }
+>()
 
 /** Return the configured RSSHub instance URL (no trailing slash) */
 function getRSSHubInstance(): string {
   const settings = getSettings()
   const custom = settings.general.rsshubInstance?.trim()
-  return (custom || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, "")
+  return (custom || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, '')
 }
 
 function appendSameRouteOnFallbackInstances(
@@ -83,7 +97,7 @@ function appendSameRouteOnFallbackInstances(
       const u = new URL(candidate.feedUrl)
       const pathAndQuery = `${u.pathname}${u.search}`
       for (const inst of instances) {
-        const feedUrl = `${inst.replace(/\/+$/, "")}${pathAndQuery}`
+        const feedUrl = `${inst.replace(/\/+$/, '')}${pathAndQuery}`
         if (!nextCandidates.some((x) => x.feedUrl === feedUrl)) {
           nextCandidates.push({
             ...candidate,
@@ -98,13 +112,16 @@ function appendSameRouteOnFallbackInstances(
   candidates.splice(0, candidates.length, ...nextCandidates)
 }
 
-function normalizeDiscoverQueryToFeedUrl(query: string, rsshubInstance: string): string {
+function normalizeDiscoverQueryToFeedUrl(
+  query: string,
+  rsshubInstance: string,
+): string {
   const trimmed = query.trim()
   if (!trimmed) return trimmed
   const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
   if (rsshubMatch?.[1]) {
-    const route = rsshubMatch[1].replace(/^\/+/, "")
-    const base = rsshubInstance.replace(/\/+$/, "")
+    const route = rsshubMatch[1].replace(/^\/+/, '')
+    const base = rsshubInstance.replace(/\/+$/, '')
     return `${base}/${route}`
   }
   if (/^https?:\/\//i.test(trimmed)) return trimmed
@@ -112,7 +129,7 @@ function normalizeDiscoverQueryToFeedUrl(query: string, rsshubInstance: string):
 }
 
 function extractLikelyXHandle(query: string): string | null {
-  const clean = query.trim().replace(/^@+/, "")
+  const clean = query.trim().replace(/^@+/, '')
   if (!clean) return null
   // X/Twitter username constraint: up to 15 chars, letters/digits/underscore.
   if (!/^[a-zA-Z0-9_]{1,15}$/.test(clean)) return null
@@ -122,8 +139,8 @@ function extractLikelyXHandle(query: string): string | null {
 function extractLikelyXHandleFromKeywords(query: string): string | null {
   const compact = query
     .trim()
-    .replace(/^@+/, "")
-    .replace(/[\s.-]+/g, "")
+    .replace(/^@+/, '')
+    .replace(/[\s.-]+/g, '')
   if (!compact) return null
   if (!/^[a-zA-Z0-9_]{1,15}$/.test(compact)) return null
   return compact
@@ -131,7 +148,7 @@ function extractLikelyXHandleFromKeywords(query: string): string | null {
 
 async function fetchXAvatarByUsername(username: string): Promise<string> {
   const clean = extractLikelyXHandle(username)
-  if (!clean) return ""
+  if (!clean) return ''
   const now = Date.now()
   const cached = xAvatarCache.get(clean.toLowerCase())
   if (cached && cached.expiresAt > now) return cached.image
@@ -140,33 +157,46 @@ async function fetchXAvatarByUsername(username: string): Promise<string> {
     // Use session fetch to respect proxy settings
     const res = await session.defaultSession.fetch(profileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
       },
     })
-    if (!res.ok) return ""
+    if (!res.ok) return ''
     const html = await res.text()
     const raw =
-      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
-      || html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i)?.[1]
-      || ""
+      html.match(
+        /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] ||
+      html.match(
+        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+      )?.[1] ||
+      html.match(
+        /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] ||
+      html.match(
+        /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
+      )?.[1] ||
+      ''
     const decoded = decodeBasicHtmlEntities(raw)
-    if (!/^https?:\/\//i.test(decoded)) return ""
-    const image = decoded.replace(/_normal(\.[a-z0-9]+)(\?.*)?$/i, "$1")
+    if (!/^https?:\/\//i.test(decoded)) return ''
+    const image = decoded.replace(/_normal(\.[a-z0-9]+)(\?.*)?$/i, '$1')
     xAvatarCache.set(clean.toLowerCase(), {
       expiresAt: now + X_AVATAR_CACHE_TTL,
       image,
     })
     return image
   } catch {
-    return ""
+    return ''
   }
 }
 
-async function inferDiscoverResultImage(feedUrl: string, siteUrl?: string): Promise<string | undefined> {
+async function inferDiscoverResultImage(
+  feedUrl: string,
+  siteUrl?: string,
+): Promise<string | undefined> {
   const twitterUsername = extractTwitterUsernameFromUrl(feedUrl)
   if (twitterUsername) {
     const clean = extractLikelyXHandle(twitterUsername)
@@ -178,10 +208,10 @@ async function inferDiscoverResultImage(feedUrl: string, siteUrl?: string): Prom
     }
   }
 
-  const fromSite = (siteUrl || "").trim()
+  const fromSite = (siteUrl || '').trim()
   if (fromSite) {
     try {
-      const siteHost = new URL(fromSite).hostname.replace(/^www\./i, "")
+      const siteHost = new URL(fromSite).hostname.replace(/^www\./i, '')
       if (siteHost) return `https://unavatar.io/${siteHost}`
     } catch {
       // Ignore invalid site URL.
@@ -205,87 +235,107 @@ function extractTwitterUsernameFromUrl(value: string): string {
   try {
     const u = new URL(value)
     const rsshubMatch = u.pathname.match(/\/twitter\/user\/([^/?#]+)/i)
-    if (rsshubMatch?.[1]) return decodeURIComponent(rsshubMatch[1]).replace(/^@/, "")
-    if (u.hostname.toLowerCase().includes("nitter")) {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts.length >= 2 && parts[1].toLowerCase() === "rss") {
-        return decodeURIComponent(parts[0]).replace(/^@/, "")
+    if (rsshubMatch?.[1])
+      return decodeURIComponent(rsshubMatch[1]).replace(/^@/, '')
+    if (u.hostname.toLowerCase().includes('nitter')) {
+      const parts = u.pathname.split('/').filter(Boolean)
+      if (parts.length >= 2 && parts[1].toLowerCase() === 'rss') {
+        return decodeURIComponent(parts[0]).replace(/^@/, '')
       }
     }
     if (/^(www\.)?(x\.com|twitter\.com)$/i.test(u.hostname)) {
-      return (u.pathname.split("/").filter(Boolean)[0] || "").replace(/^@/, "")
+      return (u.pathname.split('/').filter(Boolean)[0] || '').replace(/^@/, '')
     }
   } catch {
     // Ignore malformed URL.
   }
-  return ""
+  return ''
 }
 
 function decodeBasicHtmlEntities(input: string): string {
   return input
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
 }
 
-function extractTwitterDisplayNameFromText(text: string, username: string): string {
-  const raw = (text || "").trim()
-  if (!raw) return ""
-  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const withHandle = new RegExp(`^(.+?)\\s*\\(\\s*@?${escapedUser}\\s*\\)\\s*(?:\\/|[-\\u2013\\u2014]|on)\\s*(?:x|twitter)\\s*$`, "i")
+function extractTwitterDisplayNameFromText(
+  text: string,
+  username: string,
+): string {
+  const raw = (text || '').trim()
+  if (!raw) return ''
+  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const withHandle = new RegExp(
+    `^(.+?)\\s*\\(\\s*@?${escapedUser}\\s*\\)\\s*(?:\\/|[-\\u2013\\u2014]|on)\\s*(?:x|twitter)\\s*$`,
+    'i',
+  )
   const m1 = raw.match(withHandle)
   if (m1?.[1]) return m1[1].trim()
-  const withoutHandle = raw.match(/^(.+?)\s*(?:\/|[-\u2013\u2014]|on)\s*(?:x|twitter)\s*$/i)
+  const withoutHandle = raw.match(
+    /^(.+?)\s*(?:\/|[-\u2013\u2014]|on)\s*(?:x|twitter)\s*$/i,
+  )
   if (withoutHandle?.[1]) {
-    const name = withoutHandle[1].trim().replace(/^@/, "")
+    const name = withoutHandle[1].trim().replace(/^@/, '')
     if (name && name.toLowerCase() !== username.toLowerCase()) return name
   }
-  return ""
+  return ''
 }
 
 function isGenericTwitterTitle(title: string, username: string): boolean {
-  const cleaned = (title || "").trim().toLowerCase()
-  const user = username.trim().replace(/^@/, "").toLowerCase()
+  const cleaned = (title || '').trim().toLowerCase()
+  const user = username.trim().replace(/^@/, '').toLowerCase()
   if (!cleaned || !user) return true
-  return cleaned === user || cleaned === `@${user}` || cleaned === `${user} - x` || cleaned === `@${user} - x`
+  return (
+    cleaned === user ||
+    cleaned === `@${user}` ||
+    cleaned === `${user} - x` ||
+    cleaned === `@${user} - x`
+  )
 }
 
 async function fetchXDisplayNameByUsername(username: string): Promise<string> {
-  const clean = username.trim().replace(/^@/, "")
-  if (!clean) return ""
+  const clean = username.trim().replace(/^@/, '')
+  if (!clean) return ''
   try {
     const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
     const res = await fetch(profileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        'User-Agent': 'Mozilla/5.0',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       signal: AbortSignal.timeout(5000),
     })
-    if (!res.ok) return ""
+    if (!res.ok) return ''
     const html = await res.text()
     const ogTitle =
-      html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1]
-      || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]
-      || ""
+      html.match(
+        /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
+      )?.[1] ||
+      html.match(
+        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
+      )?.[1] ||
+      html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ||
+      ''
     const decoded = decodeBasicHtmlEntities(ogTitle)
     return extractTwitterDisplayNameFromText(decoded, clean)
   } catch {
-    return ""
+    return ''
   }
 }
 
 function getFeedImageUrl(parsed: any): string | undefined {
   if (!parsed) return undefined
   const imageUrl =
-    (parsed["image"] as { url?: string } | undefined)?.url ||
-    (parsed["itunes"] as { image?: string } | undefined)?.image
+    (parsed['image'] as { url?: string } | undefined)?.url ||
+    (parsed['itunes'] as { image?: string } | undefined)?.image
   if (imageUrl) return imageUrl
 
-  const items = (parsed["items"] as Array<Record<string, unknown>> | undefined) || []
+  const items =
+    (parsed['items'] as Array<Record<string, unknown>> | undefined) || []
   for (const item of items.slice(0, 3)) {
     const image = deriveImageUrl(item)
     if (image) return image
@@ -304,20 +354,20 @@ async function fetchBilibiliNameByUid(uid: string): Promise<string | null> {
     try {
       const res = await fetch(endpoint, {
         headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "application/json, text/plain, */*",
-          "Referer": referer,
-          "Origin": "https://www.bilibili.com",
+          'User-Agent': 'Mozilla/5.0',
+          Accept: 'application/json, text/plain, */*',
+          Referer: referer,
+          Origin: 'https://www.bilibili.com',
         },
         signal: AbortSignal.timeout(2500),
       })
       if (!res.ok) continue
-      const json = await res.json() as {
+      const json = (await res.json()) as {
         code?: number
         data?: { card?: { name?: string }; name?: string }
       }
       if (json.code !== 0) continue
-      const name = (json.data?.card?.name || json.data?.name || "").trim()
+      const name = (json.data?.card?.name || json.data?.name || '').trim()
       if (name) return name
     } catch {
       // Ignore single endpoint failure.
@@ -337,20 +387,20 @@ async function fetchBilibiliAvatarByUid(uid: string): Promise<string | null> {
     try {
       const res = await fetch(endpoint, {
         headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "application/json, text/plain, */*",
-          "Referer": referer,
-          "Origin": "https://www.bilibili.com",
+          'User-Agent': 'Mozilla/5.0',
+          Accept: 'application/json, text/plain, */*',
+          Referer: referer,
+          Origin: 'https://www.bilibili.com',
         },
         signal: AbortSignal.timeout(2500),
       })
       if (!res.ok) continue
-      const json = await res.json() as {
+      const json = (await res.json()) as {
         code?: number
         data?: { card?: { face?: string }; face?: string }
       }
       if (json.code !== 0) continue
-      const face = (json.data?.card?.face || json.data?.face || "").trim()
+      const face = (json.data?.card?.face || json.data?.face || '').trim()
       if (face) return face
     } catch {
       // Ignore single endpoint failure.
@@ -359,13 +409,27 @@ async function fetchBilibiliAvatarByUid(uid: string): Promise<string | null> {
   return null
 }
 
-async function inferDiscoverResultTitle(feedUrl: string, parsedTitle?: string): Promise<string> {
+async function inferDiscoverResultTitle(
+  feedUrl: string,
+  parsedTitle?: string,
+): Promise<string> {
   const twitterUsername = extractTwitterUsernameFromUrl(feedUrl)
   if (twitterUsername) {
-    const normalizedByFeed = formatFeedTitle(feedUrl, parsedTitle, `${twitterUsername} - X`)
-    const parsedName = extractTwitterDisplayNameFromText(normalizedByFeed, twitterUsername)
+    const normalizedByFeed = formatFeedTitle(
+      feedUrl,
+      parsedTitle,
+      `${twitterUsername} - X`,
+    )
+    const parsedName = extractTwitterDisplayNameFromText(
+      normalizedByFeed,
+      twitterUsername,
+    )
     if (parsedName) return `${parsedName} - X`
-    if (normalizedByFeed && !isGenericTwitterTitle(normalizedByFeed, twitterUsername)) return normalizedByFeed
+    if (
+      normalizedByFeed &&
+      !isGenericTwitterTitle(normalizedByFeed, twitterUsername)
+    )
+      return normalizedByFeed
     const fetchedName = await fetchXDisplayNameByUsername(twitterUsername)
     if (fetchedName) return `${fetchedName} - X`
     return `${twitterUsername} - X`
@@ -382,7 +446,7 @@ async function inferDiscoverResultTitle(feedUrl: string, parsedTitle?: string): 
 
   try {
     const u = new URL(feedUrl)
-    const host = u.hostname.replace(/^www\./i, "")
+    const host = u.hostname.replace(/^www\./i, '')
     return `${host} - RSS`
   } catch {
     return feedUrl
@@ -390,7 +454,7 @@ async function inferDiscoverResultTitle(feedUrl: string, parsedTitle?: string): 
 }
 
 type VideoProbeCandidate = {
-  platform: "youtube" | "bilibili"
+  platform: 'youtube' | 'bilibili'
   title: string
   description: string
   image: string
@@ -418,130 +482,9 @@ type XUserProbeCandidate = {
 function normalizeNameForMatch(input: string): string {
   return input
     .toLowerCase()
-    .replace(/<[^>]+>/g, "")
-    .replace(/[@\s_.-]+/g, "")
+    .replace(/<[^>]+>/g, '')
+    .replace(/[@\s_.-]+/g, '')
     .trim()
-}
-
-function stripPlatformSuffix(input: string): string {
-  return input
-    .replace(/\s*-\s*(youtube|bilibili|x|twitter|instagram|rss)\s*$/i, "")
-    .trim()
-}
-
-function normalizeDiscoverMatchValue(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/<[^>]+>/g, "")
-    .replace(/[\s_.\-\/|]+/g, "")
-    .trim()
-}
-
-function computeMatchTier(query: string, candidate: string): number {
-  const q = normalizeDiscoverMatchValue(query)
-  const c = normalizeDiscoverMatchValue(candidate)
-  if (!q || !c) return 0
-  if (c === q) return 3
-  if (c.startsWith(q)) return 2
-  if (c.includes(q)) return 1
-  return 0
-}
-
-function detectResultPlatform(url: string): "youtube" | "bilibili" | "twitter" | "instagram" | "other" {
-  try {
-    const u = new URL(url)
-    const p = u.pathname.toLowerCase()
-    if (p.includes("/youtube/")) return "youtube"
-    if (p.includes("/bilibili/")) return "bilibili"
-    if (p.includes("/twitter/") || /(x\.com|twitter\.com|nitter)/i.test(u.hostname)) return "twitter"
-    if (p.includes("/instagram/") || p.includes("/picnob") || p.includes("/pixnoy") || p.includes("/piokok")) return "instagram"
-  } catch {
-    // Ignore malformed URL and fallback to "other".
-  }
-  return "other"
-}
-
-function computeDiscoverResultScore(query: string, result: DiscoverSearchResult): number {
-  const title = (result.title || "").trim()
-  const titleBase = stripPlatformSuffix(title)
-  const description = (result.description || "").trim()
-  const sourceBoost = result.source === "curated" ? 30 : result.source === "rsshub" ? 20 : 10
-  const exactTitleBoost = computeMatchTier(query, titleBase)
-  const fullTitleBoost = computeMatchTier(query, title)
-  const descriptionBoost = computeMatchTier(query, description)
-  const urlBoost = computeMatchTier(query, result.url)
-  const siteBoost = computeMatchTier(query, result.siteUrl)
-  return exactTitleBoost * 1000 + fullTitleBoost * 400 + descriptionBoost * 180 + urlBoost * 140 + siteBoost * 100 + sourceBoost
-}
-
-function computeDiscoverPrimaryTier(query: string, result: DiscoverSearchResult): number {
-  const title = (result.title || "").trim()
-  const titleBase = stripPlatformSuffix(title)
-  return Math.max(
-    computeMatchTier(query, titleBase),
-    computeMatchTier(query, title),
-    computeMatchTier(query, result.description),
-    computeMatchTier(query, result.url),
-    computeMatchTier(query, result.siteUrl),
-  )
-}
-
-function buildAliasDedupKey(result: DiscoverSearchResult): string | null {
-  const platform = detectResultPlatform(result.url)
-  if (platform === "other") return null
-  const normalizedTitle = normalizeDiscoverMatchValue(stripPlatformSuffix(result.title || ""))
-  if (!normalizedTitle) return null
-  return `${platform}:${normalizedTitle}`
-}
-
-function dedupeAndSortDiscoverResults(query: string, results: DiscoverSearchResult[]): DiscoverSearchResult[] {
-  const ranked = results
-    .map((result) => ({
-      result,
-      primaryTier: computeDiscoverPrimaryTier(query, result),
-      score: computeDiscoverResultScore(query, result),
-      aliasTier: computeMatchTier(query, stripPlatformSuffix(result.title || "")),
-    }))
-    .sort((a, b) => {
-      // Explicit priority: exact > prefix > contains.
-      if (b.primaryTier !== a.primaryTier) return b.primaryTier - a.primaryTier
-      if (b.score !== a.score) return b.score - a.score
-      return a.result.title.length - b.result.title.length
-    })
-
-  const seenUrl = new Set<string>()
-  const dedupedByUrlIndex = new Map<string, number>()
-  const seenAlias = new Set<string>()
-  const deduped: DiscoverSearchResult[] = []
-  for (const item of ranked) {
-    const urlKey = item.result.url.trim().toLowerCase()
-    if (seenUrl.has(urlKey)) {
-      const existingIndex = dedupedByUrlIndex.get(urlKey)
-      if (existingIndex !== undefined) {
-        const existing = deduped[existingIndex]
-        const incoming = item.result
-        if (incoming.followers && !existing.followers) existing.followers = incoming.followers
-        if ((!existing.image || !existing.image.trim()) && incoming.image) existing.image = incoming.image
-        if (
-          (!existing.description || /rsshub x\/twitter user route/i.test(existing.description)) &&
-          incoming.description
-        ) {
-          existing.description = incoming.description
-        }
-      }
-      continue
-    }
-
-    const aliasKey = buildAliasDedupKey(item.result)
-    // Alias dedupe only applies for exact-match aliases to keep candidate list rich.
-    if (aliasKey && item.aliasTier >= 3 && seenAlias.has(aliasKey)) continue
-
-    seenUrl.add(urlKey)
-    dedupedByUrlIndex.set(urlKey, deduped.length)
-    if (aliasKey && item.aliasTier >= 3) seenAlias.add(aliasKey)
-    deduped.push(item.result)
-  }
-  return deduped.slice(0, 500)
 }
 
 function isUsernameMatch(query: string, candidateName: string): boolean {
@@ -552,15 +495,19 @@ function isUsernameMatch(query: string, candidateName: string): boolean {
 }
 
 function flattenTextRuns(node: any): string {
-  if (!node) return ""
-  if (typeof node.simpleText === "string") return node.simpleText
-  if (Array.isArray(node.runs)) return node.runs.map((r: any) => r?.text || "").join("").trim()
-  return ""
+  if (!node) return ''
+  if (typeof node.simpleText === 'string') return node.simpleText
+  if (Array.isArray(node.runs))
+    return node.runs
+      .map((r: any) => r?.text || '')
+      .join('')
+      .trim()
+  return ''
 }
 
 function parseYouTubeSubscriberLabel(raw: string): string | undefined {
-  const text = raw.replace(/\s+/g, " ").trim()
-  if (!text || text.startsWith("@")) return undefined
+  const text = raw.replace(/\s+/g, ' ').trim()
+  if (!text || text.startsWith('@')) return undefined
 
   // Keep full matched phrase so we preserve locale style (e.g. "1.2M subscribers", "3.4万位订阅者", "3.4萬位訂閱者").
   const patterns = [
@@ -585,16 +532,19 @@ function parseYouTubeSubscriberLabel(raw: string): string | undefined {
 function extractYouTubeSubscriberText(renderer: any): string {
   const candidates = [
     flattenTextRuns(renderer?.subscriberCountText),
-    String(renderer?.subscriberCountText?.accessibility?.accessibilityData?.label || ""),
+    String(
+      renderer?.subscriberCountText?.accessibility?.accessibilityData?.label ||
+        '',
+    ),
     flattenTextRuns(renderer?.longBylineText),
   ]
 
   for (const candidate of candidates) {
-    const parsed = parseYouTubeSubscriberLabel(candidate || "")
+    const parsed = parseYouTubeSubscriberLabel(candidate || '')
     if (parsed) return parsed
   }
 
-  return ""
+  return ''
 }
 
 function collectChannelRenderers(node: any, out: any[]): void {
@@ -603,7 +553,7 @@ function collectChannelRenderers(node: any, out: any[]): void {
     for (const n of node) collectChannelRenderers(n, out)
     return
   }
-  if (typeof node !== "object") return
+  if (typeof node !== 'object') return
   if (node.channelRenderer) out.push(node.channelRenderer)
   for (const key of Object.keys(node)) {
     collectChannelRenderers(node[key], out)
@@ -612,32 +562,38 @@ function collectChannelRenderers(node: any, out: any[]): void {
 
 function extractYouTubeHandleFromChannelRenderer(renderer: any): string {
   const canonical =
-    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl
-    || renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
-    || ""
+    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+    renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
+    ''
   const matched = String(canonical).match(/\/@([^/?#]+)/)
-  return matched?.[1] ? decodeURIComponent(matched[1]).trim() : ""
+  return matched?.[1] ? decodeURIComponent(matched[1]).trim() : ''
 }
 
-function extractYouTubeUserRouteFromChannelRenderer(renderer: any): string | null {
+function extractYouTubeUserRouteFromChannelRenderer(
+  renderer: any,
+): string | null {
   const canonical =
-    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl
-    || renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
-    || ""
+    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+    renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
+    ''
   const path = String(canonical).trim()
-  if (!path.startsWith("/")) return null
+  if (!path.startsWith('/')) return null
   const atMatch = path.match(/^\/@([^/?#]+)/)
-  if (atMatch?.[1]) return `/youtube/user/@${encodeURIComponent(decodeURIComponent(atMatch[1]).trim())}`
+  if (atMatch?.[1])
+    return `/youtube/user/@${encodeURIComponent(decodeURIComponent(atMatch[1]).trim())}`
   const userMatch = path.match(/^\/(?:user|c)\/([^/?#]+)/i)
-  if (userMatch?.[1]) return `/youtube/user/${encodeURIComponent(decodeURIComponent(userMatch[1]).trim())}`
+  if (userMatch?.[1])
+    return `/youtube/user/${encodeURIComponent(decodeURIComponent(userMatch[1]).trim())}`
   return null
 }
 
-function extractYouTubeChannelPathFromChannelRenderer(renderer: any): string | null {
+function extractYouTubeChannelPathFromChannelRenderer(
+  renderer: any,
+): string | null {
   const canonical =
-    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl
-    || renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
-    || ""
+    renderer?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+    renderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
+    ''
   let path = String(canonical).trim()
   if (!path) return null
   if (/^https?:\/\//i.test(path)) {
@@ -647,7 +603,7 @@ function extractYouTubeChannelPathFromChannelRenderer(renderer: any): string | n
       return null
     }
   }
-  if (!path.startsWith("/")) return null
+  if (!path.startsWith('/')) return null
   const atMatch = path.match(/^\/@[^/?#]+/i)
   if (atMatch?.[0]) return atMatch[0]
   const channelMatch = path.match(/^\/channel\/[^/?#]+/i)
@@ -659,31 +615,45 @@ function extractYouTubeChannelPathFromChannelRenderer(renderer: any): string | n
 
 function decodeEscapedUnicode(input: string): string {
   return input
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_m, code) => String.fromCharCode(Number.parseInt(code, 16)))
-    .replace(/\\x([0-9a-fA-F]{2})/g, (_m, code) => String.fromCharCode(Number.parseInt(code, 16)))
-    .replace(/\\\//g, "/")
-    .replace(/\\"/g, "\"")
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_m, code) =>
+      String.fromCharCode(Number.parseInt(code, 16)),
+    )
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_m, code) =>
+      String.fromCharCode(Number.parseInt(code, 16)),
+    )
+    .replace(/\\\//g, '/')
+    .replace(/\\"/g, '"')
 }
 
-async function fetchYouTubeFollowersByChannelPath(path: string): Promise<string | undefined> {
+async function fetchYouTubeFollowersByChannelPath(
+  path: string,
+): Promise<string | undefined> {
   const normalizedPath = path.trim()
-  if (!normalizedPath.startsWith("/")) return undefined
+  if (!normalizedPath.startsWith('/')) return undefined
   const key = normalizedPath.toLowerCase()
   const now = Date.now()
   const cached = youtubeSubscriberCache.get(key)
   if (cached && cached.expiresAt > now) return cached.followers
 
   try {
-    const pathsToTry = [normalizedPath, `${normalizedPath.replace(/\/+$/, "")}/about`]
+    const pathsToTry = [
+      normalizedPath,
+      `${normalizedPath.replace(/\/+$/, '')}/about`,
+    ]
     for (const pagePath of pathsToTry) {
-      const res = await session.defaultSession.fetch(`https://www.youtube.com${pagePath}`, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-          "Cookie": "CONSENT=YES+",
+      const res = await session.defaultSession.fetch(
+        `https://www.youtube.com${pagePath}`,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Accept:
+              'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            Cookie: 'CONSENT=YES+',
+          },
         },
-      })
+      )
       if (!res.ok) continue
       const html = await res.text()
       const rawCandidates: string[] = []
@@ -716,7 +686,10 @@ async function fetchYouTubeFollowersByChannelPath(path: string): Promise<string 
       for (const raw of rawCandidates) {
         const parsed = parseYouTubeSubscriberLabel(decodeEscapedUnicode(raw))
         if (parsed) {
-          youtubeSubscriberCache.set(key, { expiresAt: now + YOUTUBE_SUBSCRIBER_CACHE_TTL, followers: parsed })
+          youtubeSubscriberCache.set(key, {
+            expiresAt: now + YOUTUBE_SUBSCRIBER_CACHE_TTL,
+            followers: parsed,
+          })
           return parsed
         }
       }
@@ -725,7 +698,9 @@ async function fetchYouTubeFollowersByChannelPath(path: string): Promise<string 
     // Ignore network failures; fall back to description text.
   }
 
-  youtubeSubscriberCache.set(key, { expiresAt: now + YOUTUBE_SUBSCRIBER_MISS_CACHE_TTL })
+  youtubeSubscriberCache.set(key, {
+    expiresAt: now + YOUTUBE_SUBSCRIBER_MISS_CACHE_TTL,
+  })
   return undefined
 }
 
@@ -733,16 +708,20 @@ function looksLikeYouTubeChannelId(input: string): boolean {
   return /^UC[a-zA-Z0-9_-]{20,}$/.test(input.trim())
 }
 
-async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbeCandidate[]> {
+async function searchYouTubeChannelsByKeyword(
+  query: string,
+): Promise<VideoProbeCandidate[]> {
   if (looksLikeYouTubeChannelId(query)) return []
   const endpoint = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`
   try {
     // Use Electron session fetch to respect system proxy settings
     const res = await session.defaultSession.fetch(endpoint, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
       },
     })
     if (!res.ok) return []
@@ -758,9 +737,12 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
 
     const seen = new Set<string>()
     const out: VideoProbeCandidate[] = []
-    const pendingFollowerFetches: Array<{ index: number; channelPath: string }> = []
+    const pendingFollowerFetches: Array<{
+      index: number
+      channelPath: string
+    }> = []
     for (const r of renderers) {
-      const channelId = (r.channelId || "").trim()
+      const channelId = (r.channelId || '').trim()
       if (!channelId || seen.has(channelId)) continue
       seen.add(channelId)
       const name = flattenTextRuns(r.title) || channelId
@@ -770,15 +752,22 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
       if (!route) continue
       // Username-only search: channel ID is not used as a search key.
       // Keep the filter soft to avoid dropping relevant candidates for CJK names.
-      const searchable = [name, handle, flattenTextRuns(r.descriptionSnippet)].filter(Boolean).join(" ")
+      const searchable = [name, handle, flattenTextRuns(r.descriptionSnippet)]
+        .filter(Boolean)
+        .join(' ')
       if (!isUsernameMatch(query, searchable) && out.length >= 30) continue
-      const description = flattenTextRuns(r.descriptionSnippet) || "YouTube channel"
+      const description =
+        flattenTextRuns(r.descriptionSnippet) || 'YouTube channel'
       const subscriberText = extractYouTubeSubscriberText(r)
       const followers = subscriberText || undefined
-      const thumbs = r.thumbnail?.thumbnails as Array<{ url?: string }> | undefined
-      const image = (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : "") || ""
+      const thumbs = r.thumbnail?.thumbnails as
+        | Array<{ url?: string }>
+        | undefined
+      const image =
+        (thumbs && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : '') ||
+        ''
       out.push({
-        platform: "youtube",
+        platform: 'youtube',
         title: `${name} - YouTube`,
         description: handle ? `${description} (@${handle})` : description,
         image,
@@ -794,9 +783,10 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
     if (pendingFollowerFetches.length > 0) {
       await Promise.all(
         pendingFollowerFetches.map(async ({ index, channelPath }) => {
-          const followers = await fetchYouTubeFollowersByChannelPath(channelPath)
+          const followers =
+            await fetchYouTubeFollowersByChannelPath(channelPath)
           if (followers && out[index]) out[index].followers = followers
-        })
+        }),
       )
     }
     return out
@@ -805,37 +795,47 @@ async function searchYouTubeChannelsByKeyword(query: string): Promise<VideoProbe
   }
 }
 
-async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string, platform: "all" | "youtube" | "bilibili" | "x" = "all"): Promise<Array<{
-  platform: "youtube" | "bilibili"
-  title: string
-  description: string
-  image: string
-  feedUrl: string
-  followers?: string
-}>> {
+async function probeVideoSourcesByKeyword(
+  query: string,
+  rsshubInstance: string,
+  platform: 'all' | 'youtube' | 'bilibili' | 'x' = 'all',
+): Promise<
+  Array<{
+    platform: 'youtube' | 'bilibili'
+    title: string
+    description: string
+    image: string
+    feedUrl: string
+    followers?: string
+  }>
+> {
   const results: VideoProbeCandidate[] = []
-  const clean = query.trim().replace(/^@/, "")
+  const clean = query.trim().replace(/^@/, '')
   if (!clean) return results
   if (looksLikeYouTubeChannelId(clean)) return results
 
   // Run searches in parallel based on selected platform
   const searchPromises: Promise<VideoProbeCandidate[]>[] = []
 
-  if (platform === "all" || platform === "youtube") {
+  if (platform === 'all' || platform === 'youtube') {
     searchPromises.push(searchYouTubeChannelsByKeyword(clean))
   } else {
     searchPromises.push(Promise.resolve([]))
   }
 
-  if (platform === "all" || platform === "bilibili") {
-    searchPromises.push(probeBilibiliUsersByKeyword(clean, rsshubInstance).then(users => users.map(user => ({
-      platform: "bilibili" as const,
-      title: user.title,
-      description: user.description,
-      image: user.image,
-      feedUrl: user.feedUrl,
-      followers: user.followers,
-    }))))
+  if (platform === 'all' || platform === 'bilibili') {
+    searchPromises.push(
+      probeBilibiliUsersByKeyword(clean, rsshubInstance).then((users) =>
+        users.map((user) => ({
+          platform: 'bilibili' as const,
+          title: user.title,
+          description: user.description,
+          image: user.image,
+          feedUrl: user.feedUrl,
+          followers: user.followers,
+        })),
+      ),
+    )
   } else {
     searchPromises.push(Promise.resolve([]))
   }
@@ -847,14 +847,18 @@ async function probeVideoSourcesByKeyword(query: string, rsshubInstance: string,
   }
 
   for (const candidate of biliCandidates) {
-    if (!results.some((x) => x.feedUrl === candidate.feedUrl)) results.push(candidate)
+    if (!results.some((x) => x.feedUrl === candidate.feedUrl))
+      results.push(candidate)
   }
 
   return results
 }
 
-async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string): Promise<BilibiliUserProbeCandidate[]> {
-  const clean = query.trim().replace(/^@+/, "")
+async function probeBilibiliUsersByKeyword(
+  query: string,
+  rsshubInstance: string,
+): Promise<BilibiliUserProbeCandidate[]> {
+  const clean = query.trim().replace(/^@+/, '')
   if (!clean) return []
   const candidates: Array<BilibiliUserProbeCandidate & { score: number }> = []
   const seen = new Set<string>()
@@ -863,42 +867,56 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
     // Use Electron session fetch for consistent network behavior
     const res = await session.defaultSession.fetch(endpoint, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "zh-CN,zh;q=0.9",
-        "Referer": "https://www.bilibili.com/",
-        "Origin": "https://www.bilibili.com",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        Referer: 'https://www.bilibili.com/',
+        Origin: 'https://www.bilibili.com',
       },
     })
     if (res.ok) {
-      const json = await res.json() as {
+      const json = (await res.json()) as {
         code?: number
         data?: {
-          result?: Array<{ mid?: number; uname?: string; usign?: string; upic?: string; fans?: number | string }>
+          result?: Array<{
+            mid?: number
+            uname?: string
+            usign?: string
+            upic?: string
+            fans?: number | string
+          }>
         }
       }
       if (json.code === 0) {
         for (const user of (json.data?.result || []).slice(0, 80)) {
-          const mid = user.mid ? String(user.mid) : ""
+          const mid = user.mid ? String(user.mid) : ''
           if (!mid || seen.has(mid)) continue
           seen.add(mid)
-          const uname = (user.uname || `UID ${mid}`).replace(/<[^>]+>/g, "").trim()
-          const usign = (user.usign || "Bilibili user").replace(/<[^>]+>/g, "").trim()
+          const uname = (user.uname || `UID ${mid}`)
+            .replace(/<[^>]+>/g, '')
+            .trim()
+          const usign = (user.usign || 'Bilibili user')
+            .replace(/<[^>]+>/g, '')
+            .trim()
           const nameTier = computeMatchTier(clean, uname)
           const signTier = computeMatchTier(clean, usign)
           const midTier = computeMatchTier(clean, mid)
           const score = nameTier * 1000 + signTier * 200 + midTier * 120
           if (score <= 0) continue
-          const rawFans = typeof user.fans === "string" ? Number(user.fans) : user.fans
+          const rawFans =
+            typeof user.fans === 'string' ? Number(user.fans) : user.fans
           const followers =
-            typeof rawFans === "number" && Number.isFinite(rawFans) && rawFans >= 0
+            typeof rawFans === 'number' &&
+            Number.isFinite(rawFans) &&
+            rawFans >= 0
               ? `${formatFollowerCount(rawFans)} 粉丝`
               : undefined
           candidates.push({
             uid: mid,
             title: `${uname} - Bilibili`,
             description: usign,
-            image: user.upic || "",
+            image: user.upic || '',
             // Social tab should use dynamic route.
             feedUrl: `${rsshubInstance}/bilibili/user/dynamic/${mid}`,
             followers,
@@ -916,8 +934,11 @@ async function probeBilibiliUsersByKeyword(query: string, rsshubInstance: string
     .map(({ score: _score, ...candidate }) => candidate)
 }
 
-async function probeXUsersByKeyword(query: string, rsshubInstance: string): Promise<XUserProbeCandidate[]> {
-  const clean = query.trim().replace(/^@+/, "")
+async function probeXUsersByKeyword(
+  query: string,
+  rsshubInstance: string,
+): Promise<XUserProbeCandidate[]> {
+  const clean = query.trim().replace(/^@+/, '')
   if (!clean) return []
   console.log(`[X Search] Starting search for "${clean}"`)
 
@@ -925,28 +946,38 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   const candidateIndexByKey = new Map<string, number>()
   const pushCandidate = (
     usernameRaw: string,
-    displayName = "",
-    description = "X user",
+    displayName = '',
+    description = 'X user',
     sourceScore = 1,
     followers?: string,
   ) => {
-    const username = usernameRaw.trim().replace(/^@+/, "")
+    const username = usernameRaw.trim().replace(/^@+/, '')
     if (!username) return 0
     const key = username.toLowerCase()
     const existingIndex = candidateIndexByKey.get(key)
     if (existingIndex !== undefined) {
-      const existing = out[existingIndex] as (XUserProbeCandidate & { sourceScore?: number }) | undefined
+      const existing = out[existingIndex] as
+        | (XUserProbeCandidate & { sourceScore?: number })
+        | undefined
       if (!existing) return 0
       const existingScore = existing.sourceScore || 1
-      const nextTitle = displayName ? `${displayName} (@${username}) - X` : `${username} - X`
+      const nextTitle = displayName
+        ? `${displayName} (@${username}) - X`
+        : `${username} - X`
       if (followers && !existing.followers) existing.followers = followers
-      if (description && (existing.description === "X user" || !existing.description)) existing.description = description
+      if (
+        description &&
+        (existing.description === 'X user' || !existing.description)
+      )
+        existing.description = description
       if (displayName && !/\(@/.test(existing.title)) existing.title = nextTitle
       if (sourceScore > existingScore) existing.sourceScore = sourceScore
       return 0
     }
     const image = `https://unavatar.io/x/${encodeURIComponent(username)}`
-    const title = displayName ? `${displayName} (@${username}) - X` : `${username} - X`
+    const title = displayName
+      ? `${displayName} (@${username}) - X`
+      : `${username} - X`
     out.push({
       username,
       title,
@@ -964,13 +995,15 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
   const directHandle = extractLikelyXHandle(clean)
   if (directHandle) {
     console.log(`[X Search] Input looks like a handle: @${directHandle}`)
-    pushCandidate(directHandle, "", "X user", 3)
+    pushCandidate(directHandle, '', 'X user', 3)
   } else {
     // Also support keyword input like "elon musk" -> "elonmusk".
     const compactHandle = extractLikelyXHandleFromKeywords(clean)
     if (compactHandle) {
-      console.log(`[X Search] Input compacted to handle candidate: @${compactHandle}`)
-      pushCandidate(compactHandle, "", "X user", 2)
+      console.log(
+        `[X Search] Input compacted to handle candidate: @${compactHandle}`,
+      )
+      pushCandidate(compactHandle, '', 'X user', 2)
     }
   }
 
@@ -981,8 +1014,10 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       console.log(`[X Search] Trying Nitter: ${searchUrl}`)
       const res = await session.defaultSession.fetch(searchUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       })
       console.log(`[X Search] Nitter status: ${res.status}`)
@@ -992,7 +1027,8 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
 
         // Nitter search results contain user profiles in specific patterns
         // Look for profile links: <a class="profile-link" href="/username">
-        const profileLinkRegex = /<a[^>]*class="[^"]*profile-card[^"]*"[^>]*href="\/([a-zA-Z0-9_]{1,15})"/gi
+        const profileLinkRegex =
+          /<a[^>]*class="[^"]*profile-card[^"]*"[^>]*href="\/([a-zA-Z0-9_]{1,15})"/gi
         let match
         while ((match = profileLinkRegex.exec(html)) !== null) {
           const username = match[1]
@@ -1000,29 +1036,50 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
             // Try to extract display name from the card
             const cardStart = html.lastIndexOf('<', match.index)
             const cardEnd = html.indexOf('</a>', match.index)
-            const cardHtml = html.slice(Math.max(0, cardStart), cardEnd > 0 ? cardEnd + 4 : html.length)
-            const nameMatch = cardHtml.match(/<div[^>]*class="[^"]*fullname[^"]*"[^>]*>([^<]+)</i)
-            const displayName = nameMatch ? nameMatch[1].trim() : ""
-            const followersMatch = cardHtml.match(/([\d][\d.,]*\s*[KMB]?)\s*followers?/i)
-            const followers = followersMatch ? normalizeXFollowersLabel(followersMatch[0]) : undefined
-            console.log(`[X Search] Found via Nitter: @${username} (${displayName})`)
-            pushCandidate(username, displayName, "", 2, followers)
+            const cardHtml = html.slice(
+              Math.max(0, cardStart),
+              cardEnd > 0 ? cardEnd + 4 : html.length,
+            )
+            const nameMatch = cardHtml.match(
+              /<div[^>]*class="[^"]*fullname[^"]*"[^>]*>([^<]+)</i,
+            )
+            const displayName = nameMatch ? nameMatch[1].trim() : ''
+            const followersMatch = cardHtml.match(
+              /([\d][\d.,]*\s*[KMB]?)\s*followers?/i,
+            )
+            const followers = followersMatch
+              ? normalizeXFollowersLabel(followersMatch[0])
+              : undefined
+            console.log(
+              `[X Search] Found via Nitter: @${username} (${displayName})`,
+            )
+            pushCandidate(username, displayName, '', 2, followers)
             if (out.length >= 10) break
           }
         }
 
         // Alternative pattern: generic user links
         if (out.length === 0) {
-          const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home)[^"]*")/gi
-          const excludePaths = ["search", "home", "explore", "i", "settings", "about", "privacy", "terms"]
+          const userLinkRegex =
+            /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home)[^"]*")/gi
+          const excludePaths = [
+            'search',
+            'home',
+            'explore',
+            'i',
+            'settings',
+            'about',
+            'privacy',
+            'terms',
+          ]
           while ((match = userLinkRegex.exec(html)) !== null) {
-          const username = match[1]
-          if (excludePaths.includes(username.toLowerCase())) continue
-          if (username) {
-            console.log(`[X Search] Found via Nitter (alt): @${username}`)
-            pushCandidate(username, "", "", 1)
-            if (out.length >= 10) break
-          }
+            const username = match[1]
+            if (excludePaths.includes(username.toLowerCase())) continue
+            if (username) {
+              console.log(`[X Search] Found via Nitter (alt): @${username}`)
+              pushCandidate(username, '', '', 1)
+              if (out.length >= 10) break
+            }
           }
         }
 
@@ -1039,9 +1096,11 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
     console.log(`[X Search] Trying X.com: ${searchUrl}`)
     const res = await session.defaultSession.fetch(searchUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
       },
     })
     console.log(`[X Search] X.com status: ${res.status}`)
@@ -1050,17 +1109,21 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       console.log(`[X Search] X.com HTML length: ${html.length}`)
 
       // Try to extract user data from __INITIAL_STATE__
-      const stateMatch = html.match(/<script[^>]*>window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/i)
+      const stateMatch = html.match(
+        /<script[^>]*>window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/i,
+      )
       if (stateMatch?.[1]) {
         try {
           const data = JSON.parse(stateMatch[1])
           const users = data?.entities?.users?.users || {}
-          console.log(`[X Search] Found ${Object.keys(users).length} users in __INITIAL_STATE__`)
+          console.log(
+            `[X Search] Found ${Object.keys(users).length} users in __INITIAL_STATE__`,
+          )
           for (const [, user] of Object.entries(users) as [string, any][]) {
             const screenName = user?.screen_name
             if (!screenName) continue
-            const name = user?.name || ""
-            const desc = user?.description || ""
+            const name = user?.name || ''
+            const desc = user?.description || ''
             const followersCount = Number(user?.followers_count)
             const followers =
               Number.isFinite(followersCount) && followersCount > 0
@@ -1077,15 +1140,31 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       // Fallback: extract from HTML meta tags and links
       if (out.length === 0) {
         // Look for user profile links in the HTML
-        const userLinkRegex = /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home|status|hashtag)[^"]*")/gi
+        const userLinkRegex =
+          /href="\/([a-zA-Z0-9_]{1,15})"(?![^<]*class="[^"]*(?:search|explore|home|status|hashtag)[^"]*")/gi
         let match
-        const excludePaths = ["search", "home", "explore", "i", "status", "hashtag", "settings", "notifications", "messages", "bookmarks", "lists", "compose", "intent", "share"]
+        const excludePaths = [
+          'search',
+          'home',
+          'explore',
+          'i',
+          'status',
+          'hashtag',
+          'settings',
+          'notifications',
+          'messages',
+          'bookmarks',
+          'lists',
+          'compose',
+          'intent',
+          'share',
+        ]
         while ((match = userLinkRegex.exec(html)) !== null) {
           const username = match[1]
           if (excludePaths.includes(username.toLowerCase())) continue
           if (username) {
             console.log(`[X Search] Found via HTML: @${username}`)
-            pushCandidate(username, "", "", 1)
+            pushCandidate(username, '', '', 1)
             if (out.length >= 10) break
           }
         }
@@ -1109,20 +1188,6 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
       return rest as XUserProbeCandidate
     })
 
-  const missingFollowers = scored
-    .map((candidate, index) => ({ candidate, index }))
-    .filter(({ candidate }) => !candidate.followers)
-    .slice(0, 8)
-
-  if (missingFollowers.length > 0) {
-    await Promise.all(
-      missingFollowers.map(async ({ candidate, index }) => {
-        const followers = await withSoftTimeout(fetchXFollowersByUsername(candidate.username), 16000)
-        if (followers && scored[index]) scored[index].followers = followers
-      })
-    )
-  }
-
   console.log(`[X Search] Final results: ${scored.length}`)
   return scored
 }
@@ -1130,44 +1195,52 @@ async function probeXUsersByKeyword(query: string, rsshubInstance: string): Prom
 /** Format follower count number to human-readable string like "1.2M" */
 function formatFollowerCount(count: number): string {
   if (count >= 1_000_000_000) {
-    return (count / 1_000_000_000).toFixed(1).replace(/\.0$/, "") + "B"
+    return (count / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B'
   }
   if (count >= 1_000_000) {
-    return (count / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M"
+    return (count / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
   }
   if (count >= 1_000) {
-    return (count / 1_000).toFixed(1).replace(/\.0$/, "") + "K"
+    return (count / 1_000).toFixed(1).replace(/\.0$/, '') + 'K'
   }
   return count.toString()
 }
 
 function normalizeXFollowersLabel(raw: string): string | undefined {
-  const text = raw.replace(/\s+/g, " ").trim()
+  const text = raw.replace(/\s+/g, ' ').trim()
   if (!text) return undefined
   const numberFirst = text.match(/([\d][\d.,]*\s*[KMB]?)\s*followers?/i)
   if (numberFirst?.[1]) {
-    const value = Number(numberFirst[1].replace(/[, ]/g, "").replace(/[KMB]$/i, ""))
+    const value = Number(
+      numberFirst[1].replace(/[, ]/g, '').replace(/[KMB]$/i, ''),
+    )
     if (Number.isFinite(value) && value <= 0) return undefined
     return `${numberFirst[1].trim()} followers`
   }
   const wordFirst = text.match(/followers?\s*[:：]?\s*([\d][\d.,]*\s*[KMB]?)/i)
   if (wordFirst?.[1]) {
-    const value = Number(wordFirst[1].replace(/[, ]/g, "").replace(/[KMB]$/i, ""))
+    const value = Number(
+      wordFirst[1].replace(/[, ]/g, '').replace(/[KMB]$/i, ''),
+    )
     if (Number.isFinite(value) && value <= 0) return undefined
     return `${wordFirst[1].trim()} followers`
   }
   return undefined
 }
 
-async function fetchTextViaNodeHttps(url: string, timeoutMs = 8000): Promise<string | undefined> {
+async function fetchTextViaNodeHttps(
+  url: string,
+  timeoutMs = 8000,
+): Promise<string | undefined> {
   return new Promise((resolve) => {
     const req = https.get(
       url,
       {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/plain,text/html;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/plain,text/html;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
         },
       },
       (res) => {
@@ -1176,24 +1249,26 @@ async function fetchTextViaNodeHttps(url: string, timeoutMs = 8000): Promise<str
           res.resume()
           return
         }
-        let data = ""
-        res.setEncoding("utf8")
-        res.on("data", (chunk) => {
+        let data = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => {
           data += chunk
         })
-        res.on("end", () => resolve(data))
-      }
+        res.on('end', () => resolve(data))
+      },
     )
     req.setTimeout(timeoutMs, () => {
       req.destroy()
       resolve(undefined)
     })
-    req.on("error", () => resolve(undefined))
+    req.on('error', () => resolve(undefined))
   })
 }
 
-async function fetchXFollowersViaJinaNode(usernameRaw: string): Promise<string | undefined> {
-  const username = usernameRaw.trim().replace(/^@+/, "")
+async function fetchXFollowersViaJinaNode(
+  usernameRaw: string,
+): Promise<string | undefined> {
+  const username = usernameRaw.trim().replace(/^@+/, '')
   if (!username) return undefined
   for (const mirrorUrl of [
     `https://r.jina.ai/http://x.com/${encodeURIComponent(username)}`,
@@ -1208,7 +1283,7 @@ async function fetchXFollowersViaJinaNode(usernameRaw: string): Promise<string |
     ]
     for (const pattern of patterns) {
       const m = decodedText.match(pattern)
-      const raw = m?.[0] || m?.[1] || ""
+      const raw = m?.[0] || m?.[1] || ''
       const followers = normalizeXFollowersLabel(raw)
       if (followers) return followers
     }
@@ -1216,8 +1291,10 @@ async function fetchXFollowersViaJinaNode(usernameRaw: string): Promise<string |
   return undefined
 }
 
-async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | undefined> {
-  const username = usernameRaw.trim().replace(/^@+/, "")
+async function fetchXFollowersByUsername(
+  usernameRaw: string,
+): Promise<string | undefined> {
+  const username = usernameRaw.trim().replace(/^@+/, '')
   if (!username) return undefined
   const cacheKey = username.toLowerCase()
   const now = Date.now()
@@ -1232,9 +1309,11 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
     try {
       const res = await session.defaultSession.fetch(profileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
         },
         signal: AbortSignal.timeout(2500),
       })
@@ -1253,10 +1332,13 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
 
       for (const pattern of patterns) {
         const m = decoded.match(pattern)
-        const raw = m?.[0] || m?.[1] || ""
+        const raw = m?.[0] || m?.[1] || ''
         const followers = normalizeXFollowersLabel(raw)
         if (followers) {
-          xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+          xFollowerCache.set(cacheKey, {
+            expiresAt: now + X_FOLLOWER_CACHE_TTL,
+            followers,
+          })
           return followers
         }
       }
@@ -1270,9 +1352,10 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
     const endpoint = `https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names=${encodeURIComponent(username)}`
     const res = await session.defaultSession.fetch(endpoint, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://x.com/",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
+        Referer: 'https://x.com/',
       },
       signal: AbortSignal.timeout(2500),
     })
@@ -1281,7 +1364,10 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
       const followersCount = Number(data?.[0]?.followers_count)
       if (Number.isFinite(followersCount) && followersCount > 0) {
         const followers = `${formatFollowerCount(followersCount)} followers`
-        xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+        xFollowerCache.set(cacheKey, {
+          expiresAt: now + X_FOLLOWER_CACHE_TTL,
+          followers,
+        })
         return followers
       }
     }
@@ -1294,9 +1380,11 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
     const profileUrl = `https://x.com/${encodeURIComponent(username)}`
     const res = await session.defaultSession.fetch(profileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
       },
       signal: AbortSignal.timeout(2500),
     })
@@ -1306,9 +1394,13 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
 
       // 1) og:description often includes follower count text.
       const ogDescMatch =
-        decoded.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
-        decoded.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)
-      const ogDesc = (ogDescMatch?.[1] || "").trim()
+        decoded.match(
+          /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
+        ) ||
+        decoded.match(
+          /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i,
+        )
+      const ogDesc = (ogDescMatch?.[1] || '').trim()
       const ogFollowers =
         normalizeXFollowersLabel(ogDesc) ||
         (() => {
@@ -1316,7 +1408,10 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
           return m?.[0]?.trim()
         })()
       if (ogFollowers) {
-        xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers: ogFollowers })
+        xFollowerCache.set(cacheKey, {
+          expiresAt: now + X_FOLLOWER_CACHE_TTL,
+          followers: ogFollowers,
+        })
         return ogFollowers
       }
 
@@ -1330,7 +1425,10 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
         const count = Number(m?.[1])
         if (Number.isFinite(count) && count > 0) {
           const followers = `${formatFollowerCount(count)} followers`
-          xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+          xFollowerCache.set(cacheKey, {
+            expiresAt: now + X_FOLLOWER_CACHE_TTL,
+            followers,
+          })
           return followers
         }
       }
@@ -1348,9 +1446,10 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
     try {
       const res = await session.defaultSession.fetch(mirrorUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/plain,text/html;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/plain,text/html;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
         },
         signal: AbortSignal.timeout(3500),
       })
@@ -1362,10 +1461,13 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
       ]
       for (const pattern of patterns) {
         const m = text.match(pattern)
-        const raw = m?.[0] || m?.[1] || ""
+        const raw = m?.[0] || m?.[1] || ''
         const followers = normalizeXFollowersLabel(raw)
         if (followers) {
-          xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+          xFollowerCache.set(cacheKey, {
+            expiresAt: now + X_FOLLOWER_CACHE_TTL,
+            followers,
+          })
           return followers
         }
       }
@@ -1377,7 +1479,10 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
   // Final fallback: use Node https client for environments where Electron fetch path differs from browser/proxy behavior.
   const jinaFollowers = await fetchXFollowersViaJinaNode(username)
   if (jinaFollowers) {
-    xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers: jinaFollowers })
+    xFollowerCache.set(cacheKey, {
+      expiresAt: now + X_FOLLOWER_CACHE_TTL,
+      followers: jinaFollowers,
+    })
     return jinaFollowers
   }
 
@@ -1386,9 +1491,11 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
       const profileUrl = `${nitterInstance}/${encodeURIComponent(username)}`
       const res = await session.defaultSession.fetch(profileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
         },
         signal: AbortSignal.timeout(6000),
       })
@@ -1403,12 +1510,15 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
       let followers: string | undefined
       for (const pattern of patterns) {
         const m = decoded.match(pattern)
-        const raw = m?.[0] || m?.[1] || ""
+        const raw = m?.[0] || m?.[1] || ''
         followers = normalizeXFollowersLabel(raw)
         if (followers) break
       }
       if (followers) {
-        xFollowerCache.set(cacheKey, { expiresAt: now + X_FOLLOWER_CACHE_TTL, followers })
+        xFollowerCache.set(cacheKey, {
+          expiresAt: now + X_FOLLOWER_CACHE_TTL,
+          followers,
+        })
         return followers
       }
     } catch {
@@ -1421,13 +1531,13 @@ async function fetchXFollowersByUsername(usernameRaw: string): Promise<string | 
 }
 
 function decodeHtmlEntities(input: string): string {
-  if (!input) return ""
+  if (!input) return ''
   return input
-    .replace(/&quot;/gi, "\"")
+    .replace(/&quot;/gi, '"')
     .replace(/&apos;/gi, "'")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
     .replace(/&#(\d+);/g, (_m, dec) => {
       const code = Number(dec)
       return Number.isFinite(code) ? String.fromCodePoint(code) : _m
@@ -1438,29 +1548,37 @@ function decodeHtmlEntities(input: string): string {
     })
 }
 
-function cleanInstagramDisplayName(rawTitle: string | undefined, username: string): string {
-  const decoded = decodeHtmlEntities((rawTitle || "").trim())
-  if (!decoded) return ""
-  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+function cleanInstagramDisplayName(
+  rawTitle: string | undefined,
+  username: string,
+): string {
+  const decoded = decodeHtmlEntities((rawTitle || '').trim())
+  if (!decoded) return ''
+  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return decoded
-    .replace(new RegExp(`\\s*\\(@?${escapedUser}\\)\\s*`, "i"), " ")
-    .replace(/\s*[•·]\s*Instagram photos and videos\s*$/i, "")
-    .replace(/\s*-\s*Instagram\s*$/i, "")
-    .replace(/\s+/g, " ")
+    .replace(new RegExp(`\\s*\\(@?${escapedUser}\\)\\s*`, 'i'), ' ')
+    .replace(/\s*[•·]\s*Instagram photos and videos\s*$/i, '')
+    .replace(/\s*-\s*Instagram\s*$/i, '')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
 function normalizeImageUrl(input: string): string {
-  return decodeHtmlEntities((input || "").trim()).replace(/\\\//g, "/")
+  return decodeHtmlEntities((input || '').trim()).replace(/\\\//g, '/')
 }
 
 function isInstagramLetterFallbackAvatar(url?: string): boolean {
-  const raw = (url || "").trim().toLowerCase()
-  if (!raw.startsWith("data:image/svg+xml")) return false
-  return raw.includes("833ab4") || raw.includes("e1306c") || raw.includes("f77737")
+  const raw = (url || '').trim().toLowerCase()
+  if (!raw.startsWith('data:image/svg+xml')) return false
+  return (
+    raw.includes('833ab4') || raw.includes('e1306c') || raw.includes('f77737')
+  )
 }
 
-async function withSoftTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
+async function withSoftTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | undefined> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(undefined), timeoutMs)
     promise
@@ -1475,46 +1593,51 @@ async function withSoftTimeout<T>(promise: Promise<T>, timeoutMs: number): Promi
   })
 }
 
-async function tryConvertImageUrlToDataUri(imageUrl: string): Promise<string | undefined> {
+async function tryConvertImageUrlToDataUri(
+  imageUrl: string,
+): Promise<string | undefined> {
   const normalizedUrl = normalizeImageUrl(imageUrl)
   if (!/^https?:\/\//i.test(normalizedUrl)) return undefined
   try {
     const res = await session.defaultSession.fetch(normalizedUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-        "Referer": "https://www.instagram.com/",
-        "Origin": "https://www.instagram.com",
-        "x-ig-app-id": "936619743392459",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+        Referer: 'https://www.instagram.com/',
+        Origin: 'https://www.instagram.com',
+        'x-ig-app-id': '936619743392459',
       },
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return undefined
-    const contentType = (res.headers.get("content-type") || "").toLowerCase()
-    if (contentType && !contentType.startsWith("image/")) return undefined
+    const contentType = (res.headers.get('content-type') || '').toLowerCase()
+    if (contentType && !contentType.startsWith('image/')) return undefined
     const arrayBuffer = await res.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     if (buffer.length < 64) return undefined
-    const ext = normalizedUrl.split(".").pop()?.split("?")[0]?.toLowerCase()
-    const mime = contentType.startsWith("image/")
-      ? contentType.split(";")[0]
-      : ext === "jpg" || ext === "jpeg"
-      ? "image/jpeg"
-      : ext === "png"
-      ? "image/png"
-      : ext === "webp"
-      ? "image/webp"
-      : ext === "gif"
-      ? "image/gif"
-      : "image/jpeg"
-    return `data:${mime};base64,${buffer.toString("base64")}`
+    const ext = normalizedUrl.split('.').pop()?.split('?')[0]?.toLowerCase()
+    const mime = contentType.startsWith('image/')
+      ? contentType.split(';')[0]
+      : ext === 'jpg' || ext === 'jpeg'
+        ? 'image/jpeg'
+        : ext === 'png'
+          ? 'image/png'
+          : ext === 'webp'
+            ? 'image/webp'
+            : ext === 'gif'
+              ? 'image/gif'
+              : 'image/jpeg'
+    return `data:${mime};base64,${buffer.toString('base64')}`
   } catch {
     return undefined
   }
 }
 
-async function fetchInstagramAvatarByUsername(username: string): Promise<string | undefined> {
-  const clean = username.trim().replace(/^@/, "")
+async function fetchInstagramAvatarByUsername(
+  username: string,
+): Promise<string | undefined> {
+  const clean = username.trim().replace(/^@/, '')
   if (!clean) return undefined
 
   // Method 1: Use Instagram's public JSON endpoint (no auth required)
@@ -1522,30 +1645,36 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
     const jsonUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/?__a=1&__d=dis`
     const jsonRes = await session.defaultSession.fetch(jsonUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.5",
-        "X-IG-App-ID": "936619743392459",
-        "X-Requested-With": "XMLHttpRequest",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'X-IG-App-ID': '936619743392459',
+        'X-Requested-With': 'XMLHttpRequest',
       },
     })
     if (jsonRes.ok) {
       const text = await jsonRes.text()
       let jsonText = text
       // Handle JSONP wrapper: for (;;);{...}
-      if (jsonText.startsWith("for (;;);")) {
-        jsonText = jsonText.substring("for (;;);".length)
+      if (jsonText.startsWith('for (;;);')) {
+        jsonText = jsonText.substring('for (;;);'.length)
       }
       try {
         const json = JSON.parse(jsonText) as {
-          graphql?: { user?: { profile_pic_url?: string; profile_pic_url_hd?: string } }
+          graphql?: {
+            user?: { profile_pic_url?: string; profile_pic_url_hd?: string }
+          }
           logging_page_id?: string
         }
-        const avatarUrl = json?.graphql?.user?.profile_pic_url_hd
-          || json?.graphql?.user?.profile_pic_url
+        const avatarUrl =
+          json?.graphql?.user?.profile_pic_url_hd ||
+          json?.graphql?.user?.profile_pic_url
         if (avatarUrl && /^https?:\/\//i.test(avatarUrl)) {
           const normalizedAvatarUrl = normalizeImageUrl(avatarUrl)
-          console.log(`[Instagram Avatar] Found via __a=1 for ${clean}: ${normalizedAvatarUrl.substring(0, 80)}...`)
+          console.log(
+            `[Instagram Avatar] Found via __a=1 for ${clean}: ${normalizedAvatarUrl.substring(0, 80)}...`,
+          )
           const inlined = await tryConvertImageUrlToDataUri(normalizedAvatarUrl)
           if (inlined) return inlined
           return normalizedAvatarUrl
@@ -1563,9 +1692,11 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
   try {
     const res = await session.defaultSession.fetch(profileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
       },
     })
     if (!res.ok) return undefined
@@ -1589,12 +1720,16 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
 
     // Try JSON-LD structured data
     if (!avatarUrl) {
-      const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
+      const jsonLdMatch = html.match(
+        /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i,
+      )
       if (jsonLdMatch?.[1]) {
         try {
           const jsonLd = JSON.parse(jsonLdMatch[1])
-          const imageUrl = jsonLd?.image?.url || jsonLd?.image?.[0]?.url || jsonLd?.image?.[0]
-          if (typeof imageUrl === "string" && /^https?:\/\//i.test(imageUrl)) avatarUrl = normalizeImageUrl(imageUrl)
+          const imageUrl =
+            jsonLd?.image?.url || jsonLd?.image?.[0]?.url || jsonLd?.image?.[0]
+          if (typeof imageUrl === 'string' && /^https?:\/\//i.test(imageUrl))
+            avatarUrl = normalizeImageUrl(imageUrl)
         } catch {
           // JSON parse failed, continue
         }
@@ -1611,45 +1746,60 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
     }
 
     if (avatarUrl) {
-      console.log(`[Instagram Avatar] Found via HTML parse for ${clean}: ${avatarUrl.substring(0, 80)}...`)
+      console.log(
+        `[Instagram Avatar] Found via HTML parse for ${clean}: ${avatarUrl.substring(0, 80)}...`,
+      )
       // Try to fetch avatar image and convert to base64 data URI
       // Instagram CDN requires specific headers to avoid 403
       try {
         const avatarRes = await session.defaultSession.fetch(avatarUrl, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-            "Referer": "https://www.instagram.com/",
-            "Origin": "https://www.instagram.com",
-            "x-ig-app-id": "936619743392459",
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+            Referer: 'https://www.instagram.com/',
+            Origin: 'https://www.instagram.com',
+            'x-ig-app-id': '936619743392459',
           },
         })
         if (avatarRes.ok) {
-          const contentType = (avatarRes.headers.get("content-type") || "").toLowerCase()
-          if (contentType && !contentType.startsWith("image/")) {
-            console.log(`[Instagram Avatar] Avatar response is not image for ${clean}: ${contentType}`)
+          const contentType = (
+            avatarRes.headers.get('content-type') || ''
+          ).toLowerCase()
+          if (contentType && !contentType.startsWith('image/')) {
+            console.log(
+              `[Instagram Avatar] Avatar response is not image for ${clean}: ${contentType}`,
+            )
             return undefined
           }
           const arrayBuffer = await avatarRes.arrayBuffer()
           const buffer = Buffer.from(arrayBuffer)
           if (buffer.length < 64) return undefined
-          const extension = avatarUrl.split(".").pop()?.split("?")[0]?.toLowerCase()
-          const mimeType = contentType.startsWith("image/")
-            ? contentType.split(";")[0]
-            : extension === "jpg" || extension === "jpeg"
-            ? "image/jpeg"
-            : extension === "png"
-            ? "image/png"
-            : extension === "webp"
-            ? "image/webp"
-            : extension === "gif"
-            ? "image/gif"
-            : "image/jpeg"
-          const base64 = buffer.toString("base64")
-          console.log(`[Instagram Avatar] Converted to base64 for ${clean} (${buffer.length} bytes)`)
+          const extension = avatarUrl
+            .split('.')
+            .pop()
+            ?.split('?')[0]
+            ?.toLowerCase()
+          const mimeType = contentType.startsWith('image/')
+            ? contentType.split(';')[0]
+            : extension === 'jpg' || extension === 'jpeg'
+              ? 'image/jpeg'
+              : extension === 'png'
+                ? 'image/png'
+                : extension === 'webp'
+                  ? 'image/webp'
+                  : extension === 'gif'
+                    ? 'image/gif'
+                    : 'image/jpeg'
+          const base64 = buffer.toString('base64')
+          console.log(
+            `[Instagram Avatar] Converted to base64 for ${clean} (${buffer.length} bytes)`,
+          )
           return `data:${mimeType};base64,${base64}`
         } else {
-          console.log(`[Instagram Avatar] Avatar fetch failed for ${clean}: ${avatarRes.status}`)
+          console.log(
+            `[Instagram Avatar] Avatar fetch failed for ${clean}: ${avatarRes.status}`,
+          )
         }
       } catch (e) {
         console.log(`[Instagram Avatar] Avatar fetch error for ${clean}:`, e)
@@ -1662,34 +1812,61 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
       const picukiUrl = `https://www.picuki.com/profile/${encodeURIComponent(clean)}`
       const picukiRes = await session.defaultSession.fetch(picukiUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
         },
       })
       if (picukiRes.ok) {
         const picukiHtml = await picukiRes.text()
         // Try to extract profile image from picuki
-        const picukiAvatarMatch = picukiHtml.match(/<img[^>]+class="[^"]*profile[^"]*"[^>]+src=["']([^"']+)["']/i)
-          || picukiHtml.match(/<img[^>]+src=["']([^"']*picuki[^"']*profile[^"']*)["'][^>]*class=["'][^"']*profile[^"']*["']/i)
-          || picukiHtml.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-        if (picukiAvatarMatch?.[1] && /^https?:\/\//i.test(picukiAvatarMatch[1])) {
+        const picukiAvatarMatch =
+          picukiHtml.match(
+            /<img[^>]+class="[^"]*profile[^"]*"[^>]+src=["']([^"']+)["']/i,
+          ) ||
+          picukiHtml.match(
+            /<img[^>]+src=["']([^"']*picuki[^"']*profile[^"']*)["'][^>]*class=["'][^"']*profile[^"']*["']/i,
+          ) ||
+          picukiHtml.match(
+            /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+          )
+        if (
+          picukiAvatarMatch?.[1] &&
+          /^https?:\/\//i.test(picukiAvatarMatch[1])
+        ) {
           const avatarFromPicuki = picukiAvatarMatch[1]
-          console.log(`[Instagram Avatar] Found via picuki for ${clean}: ${avatarFromPicuki.substring(0, 80)}...`)
+          console.log(
+            `[Instagram Avatar] Found via picuki for ${clean}: ${avatarFromPicuki.substring(0, 80)}...`,
+          )
           // Try to fetch as base64
           try {
             const res = await session.defaultSession.fetch(avatarFromPicuki, {
               headers: {
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                'User-Agent': 'Mozilla/5.0',
+                Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
               },
             })
             if (res.ok) {
               const arrayBuffer = await res.arrayBuffer()
               const buffer = Buffer.from(arrayBuffer)
-              const ext = avatarFromPicuki.split(".").pop()?.split("?")[0]?.toLowerCase()
-              const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg"
-              return `data:${mime};base64,${buffer.toString("base64")}`
+              const ext = avatarFromPicuki
+                .split('.')
+                .pop()
+                ?.split('?')[0]
+                ?.toLowerCase()
+              const mime =
+                ext === 'jpg' || ext === 'jpeg'
+                  ? 'image/jpeg'
+                  : ext === 'png'
+                    ? 'image/png'
+                    : ext === 'webp'
+                      ? 'image/webp'
+                      : ext === 'gif'
+                        ? 'image/gif'
+                        : 'image/jpeg'
+              return `data:${mime};base64,${buffer.toString('base64')}`
             }
           } catch {
             // Ignore and continue to fallback avatar
@@ -1711,7 +1888,7 @@ async function fetchInstagramAvatarByUsername(username: string): Promise<string 
 
 // Extract likely Instagram username from query
 function extractLikelyInstagramHandle(query: string): string | null {
-  const clean = query.trim().replace(/^@+/, "")
+  const clean = query.trim().replace(/^@+/, '')
   if (!clean) return null
   // Instagram username: 1-30 chars, letters/digits/underscores/periods
   if (!/^[a-zA-Z0-9_.]{1,30}$/.test(clean)) return null
@@ -1727,97 +1904,34 @@ type InstagramUserProbeCandidate = {
   followers?: string
 }
 
-async function probeInstagramUsersByKeyword(query: string, rsshubInstance: string): Promise<InstagramUserProbeCandidate[]> {
-  const clean = query.trim().replace(/^@+/, "")
+async function probeInstagramUsersByKeyword(
+  query: string,
+  rsshubInstance: string,
+): Promise<InstagramUserProbeCandidate[]> {
+  const clean = query.trim().replace(/^@+/, '')
   if (!clean) return []
   console.log(`[Instagram Search] Starting search for "${clean}"`)
 
   const out: InstagramUserProbeCandidate[] = []
   const seen = new Set<string>()
-
-  const fetchFeedAvatarFromFeed = async (username: string): Promise<string | undefined> => {
-    const route = `/instagram/user/${encodeURIComponent(username)}`
-    const instances = [rsshubInstance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== rsshubInstance)]
-    const attempts = instances.map(async (inst) => {
-      const feedUrl = `${inst}${route}`
-      const fetched = await fetchAndParseFeed(feedUrl)
-      const data = fetched.data
-      if (!data) return undefined
-      const imageUrl = getFeedImageUrl(data)
-      if (imageUrl) {
-        const normalizedFeedImage = normalizeImageUrl(imageUrl)
-        if (/^https?:\/\//i.test(normalizedFeedImage)) return normalizedFeedImage
-      }
-      const resolved = await resolveFeedAvatar(feedUrl, imageUrl)
-      if (!resolved || isInstagramLetterFallbackAvatar(resolved)) return undefined
-      const normalizedResolved = normalizeImageUrl(resolved)
-      return normalizedResolved
-    })
-    try {
-      const result = await withSoftTimeout(Promise.any(attempts), 3000)
-      return result || undefined
-    } catch {
-      return undefined
-    }
-  }
-
-  // Fetch avatar for a username by probing the RSSHub feed (same source as when subscribing)
-  const fetchAvatar = async (username: string): Promise<string> => {
-    try {
-      const feedAvatar = await withSoftTimeout(fetchFeedAvatarFromFeed(username), 3000)
-      if (feedAvatar) return feedAvatar
-    } catch (e) {
-      console.log(`[Instagram Avatar] RSSHub parser fetch failed for ${username}:`, e)
-    }
-
-    // Fallback: try Instagram HTML avatar (may fail due to CDN restrictions)
-    try {
-      const avatar = await withSoftTimeout(fetchInstagramAvatarByUsername(username), 2500)
-      if (avatar) return avatar
-    } catch {
-      // Ignore
-    }
-
-    // Fallback: unavatar usually works for public Instagram profile pictures.
-    try {
-      const unavatarUrl = `https://unavatar.io/instagram/${encodeURIComponent(username)}?fallback=false`
-      const inlined = await tryConvertImageUrlToDataUri(unavatarUrl)
-      if (inlined) return inlined
-    } catch {
-      // Ignore
-    }
-
-    // Last fallback: styled SVG avatar (no external network request needed)
-    // Instagram gradient: #833AB4 → #E1306C → #F77737
-    const initial = username.charAt(0).toUpperCase()
-    const svgAvatar = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-      <defs>
-        <linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#833AB4"/>
-          <stop offset="50%" stop-color="#E1306C"/>
-          <stop offset="100%" stop-color="#F77737"/>
-        </linearGradient>
-      </defs>
-      <rect width="128" height="128" rx="32" fill="url(#ig)"/>
-      <text x="64" y="82" text-anchor="middle" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="56" font-weight="700">${initial}</text>
-    </svg>`)}`
-    return svgAvatar
-  }
-
-  const pushCandidate = async (usernameRaw: string, displayName = "", description = "Instagram user", _sourceScore = 1) => {
-    const username = usernameRaw.trim().replace(/^@+/, "")
+  const pushCandidate = (
+    usernameRaw: string,
+    displayName = '',
+    description = 'Instagram user',
+    _sourceScore = 1,
+  ) => {
+    const username = usernameRaw.trim().replace(/^@+/, '')
     if (!username) return 0
     const key = username.toLowerCase()
     if (seen.has(key)) return 0
     seen.add(key)
-    const image = await fetchAvatar(username)
-    const title = displayName ? `${displayName} (@${username}) - Instagram` : `${username} - Instagram`
     out.push({
-      username,
-      title,
-      description,
-      image,
-      feedUrl: `${rsshubInstance}/instagram/user/${encodeURIComponent(username)}`,
+      ...createInstagramDiscoverCandidate({
+        username,
+        rsshubInstance,
+        displayName,
+        description,
+      }),
     } as InstagramUserProbeCandidate & { sourceScore?: number })
     return 1
   }
@@ -1825,8 +1939,10 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
   // If input already looks like a username, always keep it as a high-priority candidate
   const directHandle = extractLikelyInstagramHandle(clean)
   if (directHandle) {
-    console.log(`[Instagram Search] Input looks like a handle: @${directHandle}`)
-    await pushCandidate(directHandle, "", "", 3)
+    console.log(
+      `[Instagram Search] Input looks like a handle: @${directHandle}`,
+    )
+    pushCandidate(directHandle, '', '', 3)
   }
 
   // Try to fetch profile info if it looks like a valid username
@@ -1836,35 +1952,56 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
       console.log(`[Instagram Search] Trying to fetch profile: ${profileUrl}`)
       const res = await session.defaultSession.fetch(profileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
         },
-        signal: AbortSignal.timeout(2800),
+        signal: AbortSignal.timeout(INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS),
       })
       if (res.ok) {
         const html = await res.text()
         // Try to extract display name from meta tags
-        const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-          || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1]
-        const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
-          || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1]
+        const ogTitle =
+          html.match(
+            /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
+          )?.[1] ||
+          html.match(
+            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
+          )?.[1]
+        const ogDesc =
+          html.match(
+            /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
+          )?.[1] ||
+          html.match(
+            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i,
+          )?.[1]
 
         // Try to extract followers from JSON-LD structured data
         let followersFromJsonLd: string | undefined
-        const jsonLdScripts = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+        const jsonLdScripts = html.match(
+          /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi,
+        )
         if (jsonLdScripts) {
           for (const script of jsonLdScripts) {
-            const jsonMatch = script.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
+            const jsonMatch = script.match(
+              /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i,
+            )
             if (jsonMatch?.[1]) {
               try {
                 const jsonLd = JSON.parse(jsonMatch[1])
                 // Instagram uses @type: "Profile" with followedBy count
-                const followedBy = jsonLd?.aggregateRating?.ratingCount
-                  || jsonLd?.interactionStatistic?.find((s: { interactionType: string; userInteractionCount: number }) =>
-                    s?.interactionType?.includes("Follow"))?.userInteractionCount
-                  || jsonLd?.aggregateRating?.reviewCount
-                if (followedBy && typeof followedBy === "number") {
+                const followedBy =
+                  jsonLd?.aggregateRating?.ratingCount ||
+                  jsonLd?.interactionStatistic?.find(
+                    (s: {
+                      interactionType: string
+                      userInteractionCount: number
+                    }) => s?.interactionType?.includes('Follow'),
+                  )?.userInteractionCount ||
+                  jsonLd?.aggregateRating?.reviewCount
+                if (followedBy && typeof followedBy === 'number') {
                   followersFromJsonLd = formatFollowerCount(followedBy)
                   break
                 }
@@ -1877,13 +2014,17 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
 
         // Also try to extract from window._sharedData if available
         if (!followersFromJsonLd) {
-          const sharedDataMatch = html.match(/window\._sharedData\s*=\s*({.+?});\s*<\/script>/i)
+          const sharedDataMatch = html.match(
+            /window\._sharedData\s*=\s*({.+?});\s*<\/script>/i,
+          )
           if (sharedDataMatch?.[1]) {
             try {
               const sharedData = JSON.parse(sharedDataMatch[1])
-              const entryData = sharedData?.entry_data?.ProfilePage?.[0]?.graphql?.user
+              const entryData =
+                sharedData?.entry_data?.ProfilePage?.[0]?.graphql?.user
               if (entryData) {
-                const count = entryData.edge_followed_by?.count || entryData.follower_count
+                const count =
+                  entryData.edge_followed_by?.count || entryData.follower_count
                 if (count) {
                   followersFromJsonLd = formatFollowerCount(count)
                 }
@@ -1900,19 +2041,24 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
           if (ogDesc) {
             const followersMatch = ogDesc.match(/([\d.]+[KMB]?)\s*followers?/i)
             if (followersMatch) {
-              followers = followersMatch[1] + " followers"
+              followers = followersMatch[1] + ' followers'
             }
           }
           // Use JSON-LD followers if og:description didn't have it
           followers = followers || followersFromJsonLd
           const displayName = cleanInstagramDisplayName(ogTitle, directHandle)
-          if (displayName && displayName.toLowerCase() !== directHandle.toLowerCase()) {
+          if (
+            displayName &&
+            displayName.toLowerCase() !== directHandle.toLowerCase()
+          ) {
             console.log(`[Instagram Search] Found display name: ${displayName}`)
             // Update the first candidate with better info
             const first = out[0]
             if (first) {
               first.title = `${displayName} (@${directHandle}) - Instagram`
-              first.description = followers ? `${followers}` : (ogDesc || "Instagram user")
+              first.description = followers
+                ? `${followers}`
+                : ogDesc || 'Instagram user'
               first.followers = followers
             }
           } else if (followers) {
@@ -1936,263 +2082,265 @@ async function probeInstagramUsersByKeyword(query: string, rsshubInstance: strin
 
 export function registerDiscoverHandlers(): void {
   // Get categories
-  ipcMain.handle("discover:categories", () => {
+  ipcMain.handle('discover:categories', () => {
     return DISCOVER_CATEGORIES
   })
 
   // Get curated feeds, optionally filtered by category
-  ipcMain.handle("discover:popular", (_event, category?: string) => {
+  ipcMain.handle('discover:popular', (_event, category?: string) => {
     if (category) {
       return CURATED_FEEDS.filter((f) => f.category === category)
     }
     return CURATED_FEEDS
   })
 
-  type DiscoverSearchPlatform = "all" | "youtube" | "bilibili" | "x" | "instagram"
+  type DiscoverSearchPlatform =
+    | 'all'
+    | 'youtube'
+    | 'bilibili'
+    | 'x'
+    | 'instagram'
 
   // Search feeds by query (check curated feeds + try as URL)
-  ipcMain.handle("discover:search", async (_event, query: string, platform: DiscoverSearchPlatform = "all") => {
-    const cacheKey = `${query.trim().toLowerCase()}:${platform}`
-    const shouldUseCache = platform !== "instagram"
-    const cached = discoverSearchCache.get(cacheKey)
-    if (shouldUseCache && cacheKey && cached && cached.expiresAt > Date.now()) {
-      return cached.results
-    }
-
-    console.log(`[Discover Search] ========== START SEARCH ==========`)
-    console.log(`[Discover Search] Query: "${query}", Platform: "${platform}"`)
-    const startTime = Date.now()
-    const results: DiscoverSearchResult[] = []
-
-    // Search curated feeds (fast, local) - only for "all" or matching platform
-    if (platform === "all") {
-      const curated = searchCuratedFeeds(query)
-      console.log(`[Discover Search] Curated feeds: ${curated.length}`)
-      for (const feed of curated) {
-        results.push({
-          title: feed.title,
-          url: feed.url,
-          siteUrl: feed.siteUrl,
-          description: feed.description,
-          source: "curated",
-          image: feed.imageUrl || "",
-        })
+  ipcMain.handle(
+    'discover:search',
+    async (_event, query: string, platform: DiscoverSearchPlatform = 'all') => {
+      const cacheKey = `${query.trim().toLowerCase()}:${platform}`
+      const shouldUseCache = platform !== 'instagram'
+      const cached = discoverSearchCache.get(cacheKey)
+      if (
+        shouldUseCache &&
+        cacheKey &&
+        cached &&
+        cached.expiresAt > Date.now()
+      ) {
+        return cached.results
       }
 
-      // Search RSSHub routes (fast, local)
-      const q = query.toLowerCase()
-      const matchingRoutes = RSSHUB_ROUTES.filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q)
+      console.log(`[Discover Search] ========== START SEARCH ==========`)
+      console.log(
+        `[Discover Search] Query: "${query}", Platform: "${platform}"`,
       )
-      console.log(`[Discover Search] RSSHub routes: ${matchingRoutes.length}`)
+      const startTime = Date.now()
+      const results: DiscoverSearchResult[] = []
+
+      // Search curated feeds (fast, local) - only for "all" or matching platform
+      if (platform === 'all') {
+        const curated = searchCuratedFeeds(query)
+        console.log(`[Discover Search] Curated feeds: ${curated.length}`)
+        for (const feed of curated) {
+          results.push({
+            title: feed.title,
+            url: feed.url,
+            siteUrl: feed.siteUrl,
+            description: feed.description,
+            source: 'curated',
+            image: feed.imageUrl || '',
+          })
+        }
+
+        // Search RSSHub routes (fast, local)
+        const q = query.toLowerCase()
+        const matchingRoutes = RSSHUB_ROUTES.filter(
+          (r) =>
+            r.name.toLowerCase().includes(q) ||
+            r.description.toLowerCase().includes(q),
+        )
+        console.log(`[Discover Search] RSSHub routes: ${matchingRoutes.length}`)
+        const instance = getRSSHubInstance()
+        for (const route of matchingRoutes.slice(0, 20)) {
+          results.push({
+            title: route.name,
+            url: `${instance}${route.url}`,
+            siteUrl: `${instance}${route.url}`,
+            description: `${route.description} (RSSHub)`,
+            source: 'rsshub',
+            image: '',
+          })
+        }
+      }
+
       const instance = getRSSHubInstance()
-      for (const route of matchingRoutes.slice(0, 20)) {
-        results.push({
-          title: route.name,
-          url: `${instance}${route.url}`,
-          siteUrl: `${instance}${route.url}`,
-          description: `${route.description} (RSSHub)`,
-          source: "rsshub",
-          image: "",
-        })
-      }
-    }
 
-    const instance = getRSSHubInstance()
+      // Run platform-specific searches based on selected platform
+      const searchPromises: Promise<void>[] = []
 
-    // Run platform-specific searches based on selected platform
-    const searchPromises: Promise<void>[] = []
-
-    if (platform === "all" || platform === "youtube" || platform === "bilibili") {
-      searchPromises.push(
-        probeVideoSourcesByKeyword(query, instance, platform).then((videoCandidates) => {
-          console.log(`[Discover Search] Video candidates: ${videoCandidates.length}`)
-          for (const candidate of videoCandidates) {
-            if (results.some((r) => r.url === candidate.feedUrl)) continue
-            results.push({
-              title: candidate.title,
-              url: candidate.feedUrl,
-              siteUrl: candidate.feedUrl,
-              description: candidate.description || (candidate.platform === "youtube" ? "YouTube channel" : "Bilibili user"),
-              source: "rsshub",
-              image: candidate.image || "",
-              followers: candidate.followers,
-            })
-          }
-        })
-      )
-    }
-
-    if (platform === "all" || platform === "x") {
-      searchPromises.push(
-        probeXUsersByKeyword(query, instance).then((xCandidates) => {
-          console.log(`[Discover Search] X candidates: ${xCandidates.length}`)
-          const enhance = async () => {
-            for (const candidate of xCandidates) {
-              let followers = candidate.followers
-              if (!followers) {
-                followers = await withSoftTimeout(fetchXFollowersViaJinaNode(candidate.username), 12000)
+      if (
+        platform === 'all' ||
+        platform === 'youtube' ||
+        platform === 'bilibili'
+      ) {
+        searchPromises.push(
+          probeVideoSourcesByKeyword(query, instance, platform).then(
+            (videoCandidates) => {
+              console.log(
+                `[Discover Search] Video candidates: ${videoCandidates.length}`,
+              )
+              for (const candidate of videoCandidates) {
+                if (results.some((r) => r.url === candidate.feedUrl)) continue
+                results.push({
+                  title: candidate.title,
+                  url: candidate.feedUrl,
+                  siteUrl: candidate.feedUrl,
+                  description:
+                    candidate.description ||
+                    (candidate.platform === 'youtube'
+                      ? 'YouTube channel'
+                      : 'Bilibili user'),
+                  source: 'rsshub',
+                  image: candidate.image || '',
+                  followers: candidate.followers,
+                })
               }
+            },
+          ),
+        )
+      }
+
+      if (platform === 'all' || platform === 'x') {
+        searchPromises.push(
+          probeXUsersByKeyword(query, instance).then((xCandidates) => {
+            console.log(`[Discover Search] X candidates: ${xCandidates.length}`)
+            for (const candidate of xCandidates) {
               if (results.some((r) => r.url === candidate.feedUrl)) continue
               results.push({
                 title: candidate.title,
                 url: candidate.feedUrl,
                 siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
-                description: followers || candidate.description,
-                source: "rsshub",
+                description: candidate.followers || candidate.description,
+                source: 'rsshub',
                 image: candidate.image,
-                followers,
+                followers: candidate.followers,
               })
             }
-          }
-          return enhance()
-        })
-      )
-    }
+          }),
+        )
+      }
 
-    if (platform === "all" || platform === "instagram") {
-      searchPromises.push(
-        probeInstagramUsersByKeyword(query, instance).then((igCandidates) => {
-          console.log(`[Discover Search] Instagram candidates: ${igCandidates.length}`)
-          for (const candidate of igCandidates) {
+      if (platform === 'all' || platform === 'instagram') {
+        searchPromises.push(
+          probeInstagramUsersByKeyword(query, instance).then((igCandidates) => {
+            console.log(
+              `[Discover Search] Instagram candidates: ${igCandidates.length}`,
+            )
+            for (const candidate of igCandidates) {
+              if (results.some((r) => r.url === candidate.feedUrl)) continue
+              results.push({
+                title: candidate.title,
+                url: candidate.feedUrl,
+                siteUrl: `https://www.instagram.com/${encodeURIComponent(candidate.username)}/`,
+                description: candidate.description,
+                source: 'rsshub',
+                image: candidate.image,
+                followers: candidate.followers,
+              })
+            }
+          }),
+        )
+      }
+
+      await Promise.all(searchPromises)
+
+      const trimmedQuery = query.trim()
+
+      // Resolve profile-like inputs. For X search, keyword mode already generates
+      // candidates, so only keep explicit URL resolution to avoid noisy fallback routes.
+      if (platform !== 'instagram') {
+        const profileInputs = new Set<string>()
+        if (trimmedQuery) {
+          const isExplicitUrl = /^https?:\/\//i.test(trimmedQuery)
+          if (platform === 'x') {
+            if (isExplicitUrl) profileInputs.add(trimmedQuery)
+          } else {
+            profileInputs.add(trimmedQuery)
+            const xHandle = extractLikelyXHandle(trimmedQuery)
+            if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
+            const compactXHandle =
+              extractLikelyXHandleFromKeywords(trimmedQuery)
+            if (compactXHandle)
+              profileInputs.add(`https://x.com/${compactXHandle}`)
+          }
+        }
+        for (const profileInput of profileInputs) {
+          const resolved = resolveProfileUrlToCandidates(profileInput, instance)
+          for (const candidate of resolved.candidates) {
             if (results.some((r) => r.url === candidate.feedUrl)) continue
             results.push({
               title: candidate.title,
               url: candidate.feedUrl,
-              siteUrl: `https://www.instagram.com/${encodeURIComponent(candidate.username)}/`,
-              description: candidate.description,
-              source: "rsshub",
-              image: candidate.image,
-              followers: candidate.followers,
+              siteUrl: candidate.siteUrl || profileInput,
+              description: candidate.description || 'Profile feed',
+              source: candidate.source === 'rss' ? 'url' : 'rsshub',
+              image: '', // Skip image fetch for speed
             })
           }
+        }
+      }
+
+      // If query looks like a URL, try to fetch it as RSS
+      const looksLikeUrl =
+        /^rsshub:\/\//i.test(trimmedQuery) ||
+        /^https?:\/\//i.test(trimmedQuery) ||
+        (platform !== 'instagram' &&
+          trimmedQuery.includes('.') &&
+          !trimmedQuery.includes(' '))
+      if (looksLikeUrl) {
+        const feedUrl = normalizeDiscoverQueryToFeedUrl(trimmedQuery, instance)
+        try {
+          const parsed = await fetchAndParseFeed(feedUrl)
+          const data = parsed.data
+          // Only add if not already in results
+          if (data && !results.some((r) => r.url === feedUrl)) {
+            const displayTitle = await inferDiscoverResultTitle(
+              feedUrl,
+              data.title || undefined,
+            )
+            results.push({
+              title: displayTitle,
+              url: feedUrl,
+              siteUrl: data.link || feedUrl,
+              description: data.description || '鐩存帴 URL 璁㈤槄',
+              source: 'url',
+              image:
+                getFeedImageUrl(data) ||
+                (await inferDiscoverResultImage(feedUrl, data.link || feedUrl)),
+            })
+          }
+        } catch {
+          // Keep a direct subscribable option even when probe fails.
+          if (!results.some((r) => r.url === feedUrl)) {
+            const displayTitle = await inferDiscoverResultTitle(feedUrl)
+            results.push({
+              title: displayTitle,
+              url: feedUrl,
+              siteUrl: feedUrl,
+              description: 'Direct URL subscription',
+              source: 'url',
+              image: await inferDiscoverResultImage(feedUrl, feedUrl),
+            })
+          }
+        }
+      }
+
+      const finalResults = dedupeAndSortDiscoverResults(query, results)
+
+      console.log(`[Discover Search] Final results: ${finalResults.length}`)
+      console.log(`[Discover Search] Elapsed: ${Date.now() - startTime}ms`)
+      console.log(`[Discover Search] ========== END SEARCH ==========`)
+
+      if (shouldUseCache && cacheKey) {
+        discoverSearchCache.set(cacheKey, {
+          expiresAt: Date.now() + DISCOVER_SEARCH_CACHE_TTL,
+          results: finalResults,
         })
-      )
-    }
-
-    await Promise.all(searchPromises)
-
-    const trimmedQuery = query.trim()
-
-    // Resolve profile-like inputs (fast)
-    if (platform !== "instagram") {
-      const profileInputs = new Set<string>()
-      if (trimmedQuery) {
-        profileInputs.add(trimmedQuery)
-        const xHandle = extractLikelyXHandle(trimmedQuery)
-        if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
-        const compactXHandle = extractLikelyXHandleFromKeywords(trimmedQuery)
-        if (compactXHandle) profileInputs.add(`https://x.com/${compactXHandle}`)
       }
-      for (const profileInput of profileInputs) {
-        const resolved = resolveProfileUrlToCandidates(profileInput, instance)
-        for (const candidate of resolved.candidates) {
-          if (results.some((r) => r.url === candidate.feedUrl)) continue
-          let followers: string | undefined
-          if (resolved.platform === "x") {
-            const usernameFromFeed = candidate.feedUrl.match(/\/(?:x|twitter)\/user\/([^/?#]+)/i)?.[1]
-            const username =
-              usernameFromFeed
-                ? decodeURIComponent(usernameFromFeed).replace(/^@+/, "").trim()
-                : ""
-            if (username) {
-              followers = await withSoftTimeout(fetchXFollowersByUsername(username), 16000)
-            }
-          }
-          results.push({
-            title: candidate.title,
-            url: candidate.feedUrl,
-            siteUrl: candidate.siteUrl || profileInput,
-            description: followers || candidate.description || "Profile feed",
-            source: candidate.source === "rss" ? "url" : "rsshub",
-            image: "", // Skip image fetch for speed
-            followers,
-          })
-        }
-      }
-    }
 
-    // If query looks like a URL, try to fetch it as RSS
-    const looksLikeUrl =
-      /^rsshub:\/\//i.test(trimmedQuery) ||
-      /^https?:\/\//i.test(trimmedQuery) ||
-      ((platform !== "instagram") && trimmedQuery.includes(".") && !trimmedQuery.includes(" "))
-    if (looksLikeUrl) {
-      const feedUrl = normalizeDiscoverQueryToFeedUrl(trimmedQuery, instance)
-      try {
-        const parsed = await fetchAndParseFeed(feedUrl)
-        const data = parsed.data
-        // Only add if not already in results
-        if (data && !results.some((r) => r.url === feedUrl)) {
-          const displayTitle = await inferDiscoverResultTitle(feedUrl, data.title || undefined)
-          results.push({
-            title: displayTitle,
-            url: feedUrl,
-            siteUrl: data.link || feedUrl,
-            description: data.description || "鐩存帴 URL 璁㈤槄",
-            source: "url",
-            image: getFeedImageUrl(data) || await inferDiscoverResultImage(feedUrl, data.link || feedUrl),
-          })
-        }
-      } catch {
-        // Keep a direct subscribable option even when probe fails.
-        if (!results.some((r) => r.url === feedUrl)) {
-          const displayTitle = await inferDiscoverResultTitle(feedUrl)
-          results.push({
-            title: displayTitle,
-            url: feedUrl,
-            siteUrl: feedUrl,
-            description: "Direct URL subscription",
-            source: "url",
-            image: await inferDiscoverResultImage(feedUrl, feedUrl),
-          })
-        }
-      }
-    }
+      return finalResults
+    },
+  )
 
-    // Final safety net for X: resolve query -> handle and force-fill followers on matching x/user result.
-    if (platform === "x") {
-      const handle =
-        extractLikelyXHandle(trimmedQuery) ||
-        extractLikelyXHandleFromKeywords(trimmedQuery)
-      if (handle) {
-        const forcedFollowers = await withSoftTimeout(fetchXFollowersViaJinaNode(handle), 12000)
-        if (forcedFollowers) {
-          const encodedHandle = encodeURIComponent(handle.toLowerCase())
-          for (const result of results) {
-            const m = result.url.match(/\/(?:x|twitter)\/user\/([^/?#]+)/i)
-            const resultUser = m?.[1] ? decodeURIComponent(m[1]).replace(/^@+/, "").toLowerCase() : ""
-            if (resultUser === handle.toLowerCase() || result.url.toLowerCase().includes(`/x/user/${encodedHandle}`) || result.url.toLowerCase().includes(`/twitter/user/${encodedHandle}`)) {
-              result.followers = forcedFollowers
-              if (!result.description || /x user|rsshub x\/twitter user route/i.test(result.description)) {
-                result.description = forcedFollowers
-              }
-            }
-          }
-        }
-      }
-    }
-
-    const finalResults = dedupeAndSortDiscoverResults(query, results)
-
-    console.log(`[Discover Search] Final results: ${finalResults.length}`)
-    console.log(`[Discover Search] Elapsed: ${Date.now() - startTime}ms`)
-    console.log(`[Discover Search] ========== END SEARCH ==========`)
-
-    if (shouldUseCache && cacheKey) {
-      discoverSearchCache.set(cacheKey, {
-        expiresAt: Date.now() + DISCOVER_SEARCH_CACHE_TTL,
-        results: finalResults,
-      })
-    }
-
-    return finalResults
-  })
-
-// Get RSSHub routes - prepend instance URL to make them subscribable
-  ipcMain.handle("discover:rsshub-routes", (_event, category?: string) => {
+  // Get RSSHub routes - prepend instance URL to make them subscribable
+  ipcMain.handle('discover:rsshub-routes', (_event, category?: string) => {
     const routes = category
       ? RSSHUB_ROUTES.filter((r) => r.category === category)
       : RSSHUB_ROUTES
@@ -2204,27 +2352,27 @@ export function registerDiscoverHandlers(): void {
   })
 
   // Get RSSHub instance config
-  ipcMain.handle("discover:rsshub-instance", () => {
+  ipcMain.handle('discover:rsshub-instance', () => {
     return getRSSHubInstance()
   })
 
   // Validate a feed URL (try to fetch and parse)
-  ipcMain.handle("discover:validate-feed", async (_event, url: string) => {
+  ipcMain.handle('discover:validate-feed', async (_event, url: string) => {
     try {
       const fetchableUrl = normalizeRsshubProtocolUrl(url, getRSSHubInstance())
       const parsed = await fetchAndParseFeed(fetchableUrl)
       const data = parsed.data
-      let image = getFeedImageUrl(data) || ""
+      let image = getFeedImageUrl(data) || ''
       if (!image) {
         const bilibiliUid = extractBilibiliUid(fetchableUrl)
         if (bilibiliUid) {
-          image = (await fetchBilibiliAvatarByUid(bilibiliUid)) || ""
+          image = (await fetchBilibiliAvatarByUid(bilibiliUid)) || ''
         }
       }
       return {
         valid: !!data,
         title: data?.title || url,
-        description: data?.description || "",
+        description: data?.description || '',
         image,
         itemCount: data?.items?.length || 0,
       }
@@ -2236,27 +2384,44 @@ export function registerDiscoverHandlers(): void {
     }
   })
 
-// Quick probe for a Twitter user via RSSHub - returns name + avatar fast
+  // Quick probe for a Twitter user via RSSHub - returns name + avatar fast
   // Tries the configured instance first, then fallback instances
-  ipcMain.handle("twitter:probe-user", async (_event, username: string) => {
-    const clean = username.trim().replace(/^@/, "")
+  ipcMain.handle('twitter:probe-user', async (_event, username: string) => {
+    const clean = username.trim().replace(/^@/, '')
     const instance = getRSSHubInstance()
-    const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
+    const allInstances = [
+      instance,
+      ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
+    ]
     const allCandidates = [
-      ...allInstances.map((inst) => `${inst}/twitter/user/${encodeURIComponent(clean)}`),
-      ...FALLBACK_NITTER_INSTANCES.map((inst) => `${inst.replace(/\/+$/, "")}/${encodeURIComponent(clean)}/rss`),
+      ...allInstances.map(
+        (inst) => `${inst}/twitter/user/${encodeURIComponent(clean)}`,
+      ),
+      ...FALLBACK_NITTER_INSTANCES.map(
+        (inst) =>
+          `${inst.replace(/\/+$/, '')}/${encodeURIComponent(clean)}/rss`,
+      ),
     ]
 
     for (const feedUrl of allCandidates) {
       try {
         const parsed = await fastParser.parseURL(feedUrl)
-        const parsedName = extractTwitterDisplayNameFromText(parsed.title || "", clean)
-        const fetchedName = parsedName ? "" : await fetchXDisplayNameByUsername(clean)
+        const parsedName = extractTwitterDisplayNameFromText(
+          parsed.title || '',
+          clean,
+        )
+        const fetchedName = parsedName
+          ? ''
+          : await fetchXDisplayNameByUsername(clean)
         return {
           valid: true,
           username: clean,
-          title: parsedName ? `${parsedName} - X` : (fetchedName ? `${fetchedName} - X` : formatFeedTitle(feedUrl, parsed.title || "", `${clean} - X`)),
-          description: parsed.description || "",
+          title: parsedName
+            ? `${parsedName} - X`
+            : fetchedName
+              ? `${fetchedName} - X`
+              : formatFeedTitle(feedUrl, parsed.title || '', `${clean} - X`),
+          description: parsed.description || '',
           // Use unavatar.io for always-fresh Twitter profile pictures
           image: `https://unavatar.io/x/${encodeURIComponent(clean)}`,
           feedUrl,
@@ -2269,12 +2434,15 @@ export function registerDiscoverHandlers(): void {
     return { valid: false, username: clean }
   })
 
-// Quick probe for a YouTube channel via RSSHub - returns channel name + avatar
+  // Quick probe for a YouTube channel via RSSHub - returns channel name + avatar
   // Supports: @handle or plain username (channel ID intentionally disabled)
-  ipcMain.handle("youtube:probe-channel", async (_event, query: string) => {
+  ipcMain.handle('youtube:probe-channel', async (_event, query: string) => {
     const instance = getRSSHubInstance()
-    const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
-    const clean = query.trim().replace(/^@/, "")
+    const allInstances = [
+      instance,
+      ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
+    ]
+    const clean = query.trim().replace(/^@/, '')
     if (!clean) return { valid: false, query }
 
     if (looksLikeYouTubeChannelId(clean)) {
@@ -2283,8 +2451,8 @@ export function registerDiscoverHandlers(): void {
 
     // Try multiple RSSHub route patterns
     const routes = [
-      `/youtube/user/@${clean}`,    // @handle format
-      `/youtube/user/${clean}`,     // plain username
+      `/youtube/user/@${clean}`, // @handle format
+      `/youtube/user/${clean}`, // plain username
     ]
 
     // Try all instance+route combinations in parallel for faster results
@@ -2293,12 +2461,13 @@ export function registerDiscoverHandlers(): void {
       routes.map(async (route) => {
         const feedUrl = `${inst}${route}`
         const parsed = await fastParser.parseURL(feedUrl)
-        const image = (parsed as any).image?.url || (parsed as any).itunes?.image || ""
+        const image =
+          (parsed as any).image?.url || (parsed as any).itunes?.image || ''
         return {
           valid: true as const,
           query: clean,
           title: parsed.title || clean,
-          description: parsed.description || "",
+          description: parsed.description || '',
           image,
           feedUrl,
           feedRoute: route,
@@ -2315,137 +2484,171 @@ export function registerDiscoverHandlers(): void {
   })
 
   // Probe multi-platform video sources by keyword (for candidate list)
-  ipcMain.handle("discover:probe-video-sources", async (_event, query: string) => {
-    const instance = getRSSHubInstance()
-    const candidates = await probeVideoSourcesByKeyword(query, instance)
-    return { valid: candidates.length > 0, query: query.trim(), candidates }
-  })
+  ipcMain.handle(
+    'discover:probe-video-sources',
+    async (_event, query: string) => {
+      const instance = getRSSHubInstance()
+      const candidates = await probeVideoSourcesByKeyword(query, instance)
+      return { valid: candidates.length > 0, query: query.trim(), candidates }
+    },
+  )
 
   // Fast probe for Bilibili UID (name + avatar + canonical video feed URL)
-  ipcMain.handle("discover:probe-bilibili-uid", async (_event, uidRaw: string) => {
-    const uid = (uidRaw || "").trim().match(/^(\d{3,})$/)?.[1]
-    if (!uid) return { valid: false, uid: uidRaw }
-    const instance = getRSSHubInstance()
-    const name = await fetchBilibiliNameByUid(uid)
-    const image = (await fetchBilibiliAvatarByUid(uid)) || ""
-    return {
-      valid: true,
-      uid,
-      title: `${name || `UID ${uid}`} - Bilibili`,
-      description: `UID ${uid}`,
-      image,
-      feedUrl: `${instance}/bilibili/user/video/${uid}`,
-    }
-  })
+  ipcMain.handle(
+    'discover:probe-bilibili-uid',
+    async (_event, uidRaw: string) => {
+      const uid = (uidRaw || '').trim().match(/^(\d{3,})$/)?.[1]
+      if (!uid) return { valid: false, uid: uidRaw }
+      const instance = getRSSHubInstance()
+      const name = await fetchBilibiliNameByUid(uid)
+      const image = (await fetchBilibiliAvatarByUid(uid)) || ''
+      return {
+        valid: true,
+        uid,
+        title: `${name || `UID ${uid}`} - Bilibili`,
+        description: `UID ${uid}`,
+        image,
+        feedUrl: `${instance}/bilibili/user/video/${uid}`,
+      }
+    },
+  )
 
   // Probe Bilibili users by keyword (for Social tab candidate list)
-  ipcMain.handle("discover:probe-bilibili-users", async (_event, query: string) => {
-    const instance = getRSSHubInstance()
-    const candidates = await probeBilibiliUsersByKeyword(query, instance)
-    return { valid: candidates.length > 0, query: query.trim(), candidates }
-  })
+  ipcMain.handle(
+    'discover:probe-bilibili-users',
+    async (_event, query: string) => {
+      const instance = getRSSHubInstance()
+      const candidates = await probeBilibiliUsersByKeyword(query, instance)
+      return { valid: candidates.length > 0, query: query.trim(), candidates }
+    },
+  )
 
   // Resolve a creator/profile homepage URL into one or more subscribable feed URLs.
-  ipcMain.handle(IPC.DISCOVER_RESOLVE_PROFILE_URL, async (_event, inputUrl: string) => {
-    const currentInstance = getRSSHubInstance()
-    const result = resolveProfileUrlToCandidates(inputUrl, currentInstance)
+  ipcMain.handle(
+    IPC.DISCOVER_RESOLVE_PROFILE_URL,
+    async (_event, inputUrl: string) => {
+      const currentInstance = getRSSHubInstance()
+      const result = resolveProfileUrlToCandidates(inputUrl, currentInstance)
 
-    // For YouTube, always try to resolve official channel RSS from homepage first.
-    if (result.platform === "youtube" && result.normalizedUrl) {
-      const official = await resolveYouTubeProfileToOfficialFeed(result.normalizedUrl)
-      if (official) {
-        result.candidates = [official, ...result.candidates.filter((x) => x.feedUrl !== official.feedUrl)]
-        result.matched = true
-        result.reason = null
-      }
-    }
-
-    // For Bilibili/X, append fallback RSSHub-instance candidates for the same route path.
-    if ((result.platform === "bilibili" || result.platform === "x") && result.candidates.length > 0) {
-      const instances = [currentInstance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== currentInstance)]
-      appendSameRouteOnFallbackInstances(result.candidates, instances)
-      if (result.candidates.length > 0) {
-        result.matched = true
-        result.reason = null
-      }
-    }
-
-    // For X, also add Nitter RSS candidates to avoid stale/blocked RSSHub routes.
-    if (result.platform === "x" && result.candidates.length > 0) {
-      const usernameSet = new Set<string>()
-      for (const candidate of result.candidates) {
-        const m = candidate.feedUrl.match(/\/twitter\/user\/([^/?#]+)/i)
-        if (m?.[1]) usernameSet.add(decodeURIComponent(m[1]))
-      }
-      if (usernameSet.size === 0 && result.normalizedUrl) {
-        try {
-          const url = new URL(result.normalizedUrl)
-          const maybeUser = url.pathname.split("/").filter(Boolean)[0]?.replace(/^@/, "")
-          if (maybeUser) usernameSet.add(maybeUser)
-        } catch {
-          // Ignore malformed URL.
+      // For YouTube, always try to resolve official channel RSS from homepage first.
+      if (result.platform === 'youtube' && result.normalizedUrl) {
+        const official = await resolveYouTubeProfileToOfficialFeed(
+          result.normalizedUrl,
+        )
+        if (official) {
+          result.candidates = [
+            official,
+            ...result.candidates.filter((x) => x.feedUrl !== official.feedUrl),
+          ]
+          result.matched = true
+          result.reason = null
         }
       }
 
-      const existing = new Set(result.candidates.map((x) => x.feedUrl))
-      const nitterInstances = [...FALLBACK_NITTER_INSTANCES]
-      for (const username of usernameSet) {
-        for (const base of nitterInstances) {
-          const feedUrl = `${base.replace(/\/+$/, "")}/${encodeURIComponent(username)}/rss`
-          if (existing.has(feedUrl)) continue
-          result.candidates.push({
-            feedUrl,
-            title: `@${username}`,
-            source: "derived",
-            siteUrl: `https://x.com/${username}`,
-            description: "Nitter RSS fallback for X/Twitter user",
-            view: result.candidates[0]?.view,
-          })
-          existing.add(feedUrl)
+      // For Bilibili/X, append fallback RSSHub-instance candidates for the same route path.
+      if (
+        (result.platform === 'bilibili' || result.platform === 'x') &&
+        result.candidates.length > 0
+      ) {
+        const instances = [
+          currentInstance,
+          ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== currentInstance),
+        ]
+        appendSameRouteOnFallbackInstances(result.candidates, instances)
+        if (result.candidates.length > 0) {
+          result.matched = true
+          result.reason = null
         }
       }
-      if (result.candidates.length > 0) {
-        result.matched = true
-        result.reason = null
-      }
-    }
 
-    if (!result.matched) {
+      // For X, also add Nitter RSS candidates to avoid stale/blocked RSSHub routes.
+      if (result.platform === 'x' && result.candidates.length > 0) {
+        const usernameSet = new Set<string>()
+        for (const candidate of result.candidates) {
+          const m = candidate.feedUrl.match(/\/twitter\/user\/([^/?#]+)/i)
+          if (m?.[1]) usernameSet.add(decodeURIComponent(m[1]))
+        }
+        if (usernameSet.size === 0 && result.normalizedUrl) {
+          try {
+            const url = new URL(result.normalizedUrl)
+            const maybeUser = url.pathname
+              .split('/')
+              .filter(Boolean)[0]
+              ?.replace(/^@/, '')
+            if (maybeUser) usernameSet.add(maybeUser)
+          } catch {
+            // Ignore malformed URL.
+          }
+        }
+
+        const existing = new Set(result.candidates.map((x) => x.feedUrl))
+        const nitterInstances = [...FALLBACK_NITTER_INSTANCES]
+        for (const username of usernameSet) {
+          for (const base of nitterInstances) {
+            const feedUrl = `${base.replace(/\/+$/, '')}/${encodeURIComponent(username)}/rss`
+            if (existing.has(feedUrl)) continue
+            result.candidates.push({
+              feedUrl,
+              title: `@${username}`,
+              source: 'derived',
+              siteUrl: `https://x.com/${username}`,
+              description: 'Nitter RSS fallback for X/Twitter user',
+              view: result.candidates[0]?.view,
+            })
+            existing.add(feedUrl)
+          }
+        }
+        if (result.candidates.length > 0) {
+          result.matched = true
+          result.reason = null
+        }
+      }
+
+      if (!result.matched) {
+        return result
+      }
+
+      const needsYoutube = result.candidates.some((x) =>
+        x.requiresAccount?.includes('youtube'),
+      )
+      if (needsYoutube) {
+        result.accountStates = [await getYouTubeAccountState()]
+      } else {
+        result.accountStates = []
+      }
       return result
-    }
-
-    const needsYoutube = result.candidates.some((x) => x.requiresAccount?.includes("youtube"))
-    if (needsYoutube) {
-      result.accountStates = [await getYouTubeAccountState()]
-    } else {
-      result.accountStates = []
-    }
-    return result
-  })
+    },
+  )
 
   // Quick probe for an Instagram user via RSSHub official route.
-  ipcMain.handle("instagram:probe-user", async (_event, username: string) => {
+  ipcMain.handle('instagram:probe-user', async (_event, username: string) => {
     const instance = getRSSHubInstance()
-    const allInstances = [instance, ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance)]
-    const clean = username.trim().replace(/^@/, "")
+    const allInstances = [
+      instance,
+      ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
+    ]
+    const clean = username.trim().replace(/^@/, '')
     if (!clean) return { valid: false, username: clean }
 
     const routes = [`/instagram/user/${encodeURIComponent(clean)}`]
-    const profileAvatarPromise = fetchInstagramAvatarByUsername(clean).catch(() => undefined)
+    const profileAvatarPromise = fetchInstagramAvatarByUsername(clean).catch(
+      () => undefined,
+    )
     const attempts = allInstances.flatMap((inst) =>
       routes.map(async (route) => {
         const feedUrl = `${inst}${route}`
         const fetched = await fetchAndParseFeed(feedUrl)
         const data = fetched.data
-        if (!data) throw new Error("Empty feed data")
-        const image = await resolveFeedAvatar(feedUrl, getFeedImageUrl(data))
-          || await profileAvatarPromise
-          || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${clean.charAt(0).toUpperCase()}</text></svg>`)}`
+        if (!data) throw new Error('Empty feed data')
+        const image =
+          (await resolveFeedAvatar(feedUrl, getFeedImageUrl(data))) ||
+          (await profileAvatarPromise) ||
+          `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${clean.charAt(0).toUpperCase()}</text></svg>`)}`
         return {
           valid: true as const,
           username: clean,
           title: data.title || `@${clean}`,
-          description: data.description || "",
+          description: data.description || '',
           image,
           feedUrl: toRsshubProtocolUrl(feedUrl),
         }

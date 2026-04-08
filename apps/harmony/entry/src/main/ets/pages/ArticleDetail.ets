@@ -598,22 +598,41 @@ struct ArticleDetail {
   }
 
   private shouldWarmDetailLivePhoto(index: number): boolean {
-    return this.activePictureMediaIndex === index
-      && this.detailLivePhotoVisibilityRatio(index) >= 0.35
+    // 如果可见比例已知且达到阈值，正常预热
+    if (this.detailLivePhotoVisibilityRatio(index) >= 0.35) {
+      return this.activePictureMediaIndex === index
+        && this.mountedDetailLivePhotoIndices().includes(index)
+    }
+    // 可见比例尚未初始化时（页面刚进入），对第一个 live 图片立即预热
+    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
+    return allRatiosZero
+      && index === this.firstDetailLivePhotoIndex()
       && this.mountedDetailLivePhotoIndices().includes(index)
   }
 
   private shouldShowDetailLivePhotoLoading(index: number): boolean {
-    // 仅为屏幕中间候选live图显示加载指示器
-    return this.currentDetailLivePhotoItem(index) !== undefined
-      && this.activePictureMediaIndex === index
-      && this.detailLivePhotoVisibilityRatio(index) >= 0.35
-      && !this.isDetailLivePhotoPrepared(index)
+    if (this.currentDetailLivePhotoItem(index) === undefined) {
+      return false
+    }
+    if (this.isDetailLivePhotoPrepared(index)) {
+      return false
+    }
+    // 可见比例已知时，只对当前激活且可见的图片显示加载
+    const ratio = this.detailLivePhotoVisibilityRatio(index)
+    if (ratio > 0) {
+      return this.activePictureMediaIndex === index && ratio >= 0.35
+    }
+    // 可见比例尚未初始化时，对第一个 live 图片显示加载
+    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
+    return allRatiosZero && index === this.firstDetailLivePhotoIndex()
   }
 
   private handleDetailLivePhotoPrepared(index: number): void {
     this.markPreparedDetailLivePhoto(index)
-    if (this.activePictureMediaIndex === index && this.detailLivePhotoVisibilityRatio(index) >= 0.35) {
+    const ratio = this.detailLivePhotoVisibilityRatio(index)
+    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
+    const isInitialFirstPhoto = allRatiosZero && index === this.firstDetailLivePhotoIndex()
+    if ((this.activePictureMediaIndex === index && ratio >= 0.35) || isInitialFirstPhoto) {
       this.pausedDetailLivePhotoIndex = -1
       this.playingDetailLivePhotoIndex = index
       try {
@@ -628,7 +647,10 @@ struct ArticleDetail {
     if (this.pausedDetailLivePhotoIndex === index) {
       this.pausedDetailLivePhotoIndex = -1
     }
-    if (this.activePictureMediaIndex === index && this.detailLivePhotoVisibilityRatio(index) >= 0.35) {
+    const ratio = this.detailLivePhotoVisibilityRatio(index)
+    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
+    const isInitialFirstPhoto = allRatiosZero && index === this.firstDetailLivePhotoIndex()
+    if ((this.activePictureMediaIndex === index && ratio >= 0.35) || isInitialFirstPhoto) {
       this.playingDetailLivePhotoIndex = index
     }
   }
@@ -967,14 +989,21 @@ struct ArticleDetail {
         () => { void this.openEntryInBrowser() },
       )
 
-      this.HeaderIconAction(
-        $r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'),
-        22,
-        () => { void this.toggleStar() },
-        [this.entry?.isStarred ? '#F6C343' : this.theme.textSecondary],
-        undefined,
-        this.starScale,
-      )
+      Row() {
+        SymbolGlyph($r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'))
+          .fontSize(22)
+          .fontColor([this.entry?.isStarred ? '#F6C343' : this.theme.textSecondary])
+          .renderingStrategy(SymbolRenderingStrategy.SINGLE)
+      }
+      .width(HEADER_BACK_SLOT_SIZE)
+      .height(HEADER_BACK_SLOT_SIZE)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .borderRadius(HEADER_BACK_SLOT_SIZE)
+      .clickEffect({ level: ClickEffectLevel.LIGHT })
+      .scale({ x: this.starScale, y: this.starScale })
+      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
+      .onClick(() => { void this.toggleStar() })
     }
     .height(HEADER_BACK_SLOT_SIZE)
   }

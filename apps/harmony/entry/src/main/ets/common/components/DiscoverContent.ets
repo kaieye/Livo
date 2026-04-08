@@ -1312,6 +1312,7 @@ export struct DiscoverContent {
       })
       .titleMode(HdsNavigationTitleMode.MINI)
       .hideBackButton(true)
+      .hideTitleBar(this.discoverOverlayLevel > 0)
       .bindToScrollable([this.contentScroller])
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')
