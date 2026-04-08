@@ -10,6 +10,7 @@ test('home page defines inline search state and keyboard controller', () => {
 
   assert.match(source, /@State searchQuery: string = ''/)
   assert.match(source, /@State showSearch: boolean = false/)
+  assert.match(source, /@State searchOverlayVisible: boolean = false/)
   assert.match(
     source,
     /private searchInputController: TextInputController = new TextInputController\(\)/,
@@ -17,6 +18,11 @@ test('home page defines inline search state and keyboard controller', () => {
   assert.match(source, /private openHomeInlineSearch\(\): void/)
   assert.match(source, /private closeHomeInlineSearch\([^)]*\): void/)
   assert.match(source, /private focusHomeInlineSearch\(\): void/)
+  assert.match(source, /private finalizeHomeInlineSearchClose\(\): void/)
+  assert.match(
+    source,
+    /const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'/,
+  )
 })
 
 test('home inline search highlight uses theme accent and current mode entries', () => {
@@ -28,6 +34,53 @@ test('home inline search highlight uses theme accent and current mode entries', 
   assert.match(source, /theme\.accent/)
   assert.match(source, /private currentSearchEntries\(\): EntryCardModel\[\]/)
   assert.match(source, /private hasSearchMatches\(\): boolean/)
+})
+
+test('home inline search uses overlay dismissal and center-expand motion', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /private HomeSearchDismissLayer\(\)/)
+  assert.match(source, /private HomeSearchFieldLayer\(\)/)
+  assert.match(
+    source,
+    /private HomeSearchDismissLayer\(\) \{[\s\S]*\.onClick\(\(\) => \{\s*this\.closeHomeInlineSearch\(true\)\s*\}\)/s,
+  )
+  assert.match(source, /private homeInlineSearchVerticalOffset\(\): number/)
+  assert.match(
+    source,
+    /private HomeInlineSearchField\(\) \{[\s\S]*\.scale\(\{[\s\S]*x: this\.showSearch \? 1 :/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchField\(\) \{[\s\S]*\.translate\(\{[\s\S]*x: 0,[\s\S]*y: this\.homeInlineSearchVerticalOffset\(\)/s,
+  )
+  assert.match(
+    source,
+    /TextInput\(\{ text: this\.searchQuery, placeholder: '搜索当前分段', controller: this\.searchInputController \}\)[\s\S]*\.defaultFocus\(this\.searchOverlayVisible\)/s,
+  )
+  assert.match(
+    source,
+    /TextInput\(\{ text: this\.searchQuery, placeholder: '搜索当前分段', controller: this\.searchInputController \}\)[\s\S]*\.id\(HOME_INLINE_SEARCH_INPUT_ID\)[\s\S]*\.focusable\(true\)/s,
+  )
+  assert.match(
+    source,
+    /private focusHomeInlineSearch\(\): void \{[\s\S]*focusControl\.requestFocus\(HOME_INLINE_SEARCH_INPUT_ID\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchField\(\) \{[\s\S]*\.width\('100%'\)[\s\S]*\.constraintSize\(\{ maxWidth: HOME_INLINE_SEARCH_MAX_WIDTH \}\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeInlineSearchActionRow\(\) \{[\s\S]*\.opacity\(this\.showSearch \? 0 : 1\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeSearchFieldLayer\(\) \{[\s\S]*\.align\(Alignment\.Top\)[\s\S]*\.justifyContent\(FlexAlign\.Center\)/s,
+  )
 })
 
 test('home inline search utility exposes normalized matching helpers', () => {

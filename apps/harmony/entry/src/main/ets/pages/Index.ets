@@ -85,7 +85,10 @@ const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING: number =
 const HOME_INLINE_SEARCH_ACTION_SIZE: number = 40
 const HOME_INLINE_SEARCH_ACTION_GAP: number = 8
 const HOME_INLINE_SEARCH_INPUT_HEIGHT: number = 40
-const HOME_INLINE_SEARCH_WIDTH: number = 196
+const HOME_INLINE_SEARCH_MAX_WIDTH: number = 360
+const HOME_INLINE_SEARCH_MOTION_DURATION: number = 240
+const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
+const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -131,6 +134,7 @@ struct Index {
   @State homeCollapsedModeRailPressed: boolean = false
   @State searchQuery: string = ''
   @State showSearch: boolean = false
+  @State searchOverlayVisible: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State rootSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State rootTabIndex: number = 0
@@ -300,16 +304,36 @@ struct Index {
   }
 
   private openHomeInlineSearch(): void {
-    if (!this.showSearch) {
-      this.showSearch = true
+    if (!this.searchOverlayVisible) {
+      this.searchOverlayVisible = true
+      setTimeout(() => {
+        this.showSearch = true
+        this.focusHomeInlineSearch()
+      }, 16)
+      return
     }
+
+    this.showSearch = true
     this.focusHomeInlineSearch()
   }
 
   private focusHomeInlineSearch(): void {
     setTimeout(() => {
+      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
+      this.searchInputController.caretPosition(this.searchQuery.length)
+    }, 24)
+    setTimeout(() => {
+      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
       this.searchInputController.caretPosition(this.searchQuery.length)
     }, 80)
+    setTimeout(() => {
+      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
+      this.searchInputController.caretPosition(this.searchQuery.length)
+    }, 180)
+    setTimeout(() => {
+      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
+      this.searchInputController.caretPosition(this.searchQuery.length)
+    }, 320)
   }
 
   private closeHomeInlineSearch(clearQuery: boolean = true): void {
@@ -318,6 +342,17 @@ struct Index {
     if (clearQuery) {
       this.searchQuery = ''
     }
+    setTimeout(() => {
+      this.finalizeHomeInlineSearchClose()
+    }, HOME_INLINE_SEARCH_MOTION_DURATION)
+  }
+
+  private finalizeHomeInlineSearchClose(): void {
+    if (this.showSearch) {
+      return
+    }
+
+    this.searchOverlayVisible = false
   }
 
   private homeCollapsedModeRailBackdropBlur(): number {
@@ -452,7 +487,9 @@ struct Index {
         .placeholderColor(this.theme.textMuted)
         .caretColor(this.theme.accent)
         .padding(0)
-        .defaultFocus(this.showSearch)
+        .id(HOME_INLINE_SEARCH_INPUT_ID)
+        .focusable(true)
+        .defaultFocus(this.searchOverlayVisible)
         .onAppear(() => {
           this.focusHomeInlineSearch()
         })
@@ -472,8 +509,9 @@ struct Index {
           this.closeHomeInlineSearch(true)
         })
     }
-    .width(HOME_INLINE_SEARCH_WIDTH)
+    .width('100%')
     .height(HOME_INLINE_SEARCH_INPUT_HEIGHT)
+    .constraintSize({ maxWidth: HOME_INLINE_SEARCH_MAX_WIDTH })
     .padding({ left: 12, right: 8 })
     .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
     .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
@@ -481,16 +519,21 @@ struct Index {
     .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
     .shadow(this.homeCollapsedModeRailShadow())
     .clip(true)
-    .transition(livoMotion.enterFromRight(0))
+    .opacity(this.showSearch ? 1 : 0)
+    .scale({
+      x: this.showSearch ? 1 : 0.12,
+      y: this.showSearch ? 1 : 0.88,
+    })
+    .translate({
+      x: 0,
+      y: this.homeInlineSearchVerticalOffset(),
+    })
+    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
   }
 
   @Builder
   private HomeInlineSearchActionRow() {
-    Row({ space: 8 }) {
-      if (this.showSearch) {
-        this.HomeInlineSearchField()
-      }
-
+    Row() {
       Row() {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontSize(18)
@@ -505,10 +548,18 @@ struct Index {
       .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
       .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
       .shadow(this.homeCollapsedModeRailShadow())
+      .opacity(this.showSearch ? 0 : 1)
+      .translate({ x: this.showSearch ? 10 : 0 })
+      .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
+      .enabled(!this.showSearch)
       .onClick(() => {
         this.openHomeInlineSearch()
       })
     }
+  }
+
+  private homeInlineSearchVerticalOffset(): number {
+    return this.showSearch ? 0 : -1 * HOME_INLINE_SEARCH_VERTICAL_TRAVEL
   }
 
   private isHomeRootTab(): boolean {
@@ -1211,6 +1262,37 @@ struct Index {
   }
 
   @Builder
+  private HomeSearchFieldLayer() {
+    Row() {
+      if (this.searchOverlayVisible) {
+        this.HomeInlineSearchField()
+      }
+    }
+    .width('100%')
+    .align(Alignment.Top)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Top)
+    .padding({
+      top: this.homeCollapsedModeRailTopPadding(),
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+    })
+    .zIndex(131)
+  }
+
+  @Builder
+  private HomeSearchDismissLayer() {
+    Column()
+      .width('100%')
+      .height('100%')
+      .backgroundColor('rgba(0,0,0,0.001)')
+      .onClick(() => {
+        this.closeHomeInlineSearch(true)
+      })
+      .zIndex(125)
+  }
+
+  @Builder
   private EntryList(mode: SubscriptionMode) {
     List({ space: HOME_MODE_CONTENT_GAP, scroller: this.homeScrollerForMode(mode) }) {
       ListItem() {
@@ -1569,6 +1651,14 @@ struct Index {
 
       if (this.isHomeRootTab()) {
         this.HomeCollapsedModeRailLayer()
+      }
+
+      if (this.isHomeRootTab() && this.searchOverlayVisible) {
+        this.HomeSearchDismissLayer()
+      }
+
+      if (this.isHomeRootTab()) {
+        this.HomeSearchFieldLayer()
       }
 
       if (this.isHomeRootTab()) {
