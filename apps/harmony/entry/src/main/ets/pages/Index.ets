@@ -82,6 +82,8 @@ const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA: number = 14
 const HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT: number = -6
 const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_COLLAPSED_MODE_RAIL_SIZE - ROOT_MODE_RAIL_TOP_GAP
+const HOME_INLINE_SEARCH_ACTION_SIZE: number = 40
+const HOME_INLINE_SEARCH_ACTION_GAP: number = 8
 const HOME_INLINE_SEARCH_INPUT_HEIGHT: number = 40
 const HOME_INLINE_SEARCH_WIDTH: number = 196
 
@@ -419,15 +421,12 @@ struct Index {
 
   @Builder
   private HomeRootLowerTitleBuilder() {
-    Row({ space: 12 }) {
+    Row() {
       Text('今日推荐')
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
-        .layoutWeight(1)
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-
-      this.HomeInlineSearchActionRow()
     }
     .width('100%')
     .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
@@ -473,44 +472,43 @@ struct Index {
           this.closeHomeInlineSearch(true)
         })
     }
-    .width(this.showSearch ? HOME_INLINE_SEARCH_WIDTH : 0)
+    .width(HOME_INLINE_SEARCH_WIDTH)
     .height(HOME_INLINE_SEARCH_INPUT_HEIGHT)
-    .padding({ left: this.showSearch ? 12 : 0, right: this.showSearch ? 8 : 0 })
+    .padding({ left: 12, right: 8 })
     .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
     .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
     .borderRadius(HOME_INLINE_SEARCH_INPUT_HEIGHT)
     .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
     .shadow(this.homeCollapsedModeRailShadow())
-    .opacity(this.showSearch ? 1 : 0)
-    .translate({ x: this.showSearch ? 0 : 18 })
     .clip(true)
-    .animation({ duration: 220, curve: Curve.FastOutSlowIn })
+    .transition(livoMotion.enterFromRight(0))
   }
 
   @Builder
   private HomeInlineSearchActionRow() {
     Row({ space: 8 }) {
-      this.HomeInlineSearchField()
+      if (this.showSearch) {
+        this.HomeInlineSearchField()
+      }
 
       Row() {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontSize(18)
           .fontColor([this.theme.textPrimary])
       }
-      .width(40)
-      .height(40)
+      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
       .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
-      .borderRadius(20)
+      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
       .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
       .shadow(this.homeCollapsedModeRailShadow())
       .onClick(() => {
         this.openHomeInlineSearch()
       })
     }
-    .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
   }
 
   private isHomeRootTab(): boolean {
@@ -1085,6 +1083,7 @@ struct Index {
   }
 
   private requestExpandedModeRail(): void {
+    this.closeHomeInlineSearch()
     this.homeModeRailExpandedLockOffset = this.readHomeModeScrollOffset(this.mode)
     this.homeModeRailExpandedOverride = true
     this.currentHomeModeScrollOffset = 0
@@ -1122,11 +1121,9 @@ struct Index {
   }
 
   private homeModeRailRightInset(): number {
-    if (this.homeModeRailCollapseProgress() >= 1) {
-      return PAGE_HORIZONTAL_PADDING + HOME_COLLAPSED_MODE_RAIL_SIZE + ROOT_MODE_RAIL_TOP_GAP
-    }
-
     return PAGE_HORIZONTAL_PADDING
+      + HOME_INLINE_SEARCH_ACTION_SIZE
+      + HOME_INLINE_SEARCH_ACTION_GAP
   }
 
   private homeModeRailLeftPadding(): number {
@@ -1169,7 +1166,7 @@ struct Index {
       .padding({
         top: this.homeModeRailTopPadding(),
         left: this.homeModeRailLeftPadding(),
-        right: this.homeModeRailRightInset(),
+        right: PAGE_HORIZONTAL_PADDING,
       })
       .zIndex(100)
     }
@@ -1178,11 +1175,12 @@ struct Index {
   @Builder
   private HomeCollapsedModeRailLayer() {
     if (this.homeModeRailCollapseProgress() > 0) {
-      Column() {
+      Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
         this.HomeCollapsedModeRailButton()
       }
       .width('100%')
-      .alignItems(HorizontalAlign.End)
+      .justifyContent(FlexAlign.End)
+      .alignItems(VerticalAlign.Top)
       .padding({
         top: this.homeCollapsedModeRailTopPadding(),
         left: PAGE_HORIZONTAL_PADDING,
@@ -1194,6 +1192,22 @@ struct Index {
       .enabled(this.isHomeModeRailCollapsed())
       .zIndex(120)
     }
+  }
+
+  @Builder
+  private HomeSearchActionLayer() {
+    Row() {
+      this.HomeInlineSearchActionRow()
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.End)
+    .alignItems(VerticalAlign.Top)
+    .padding({
+      top: this.homeCollapsedModeRailTopPadding(),
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+    })
+    .zIndex(130)
   }
 
   @Builder
@@ -1555,6 +1569,10 @@ struct Index {
 
       if (this.isHomeRootTab()) {
         this.HomeCollapsedModeRailLayer()
+      }
+
+      if (this.isHomeRootTab()) {
+        this.HomeSearchActionLayer()
       }
 
     }

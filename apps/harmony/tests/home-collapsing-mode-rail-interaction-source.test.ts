@@ -47,6 +47,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
     /private isHomeModeRailCollapsed\(\): boolean \{\s*return this\.homeModeRailCollapseProgress\(\) >= 1\s*\}/s,
   )
   assert.match(indexSource, /private HomeCollapsedModeRailButton\(\)/)
+  assert.match(indexSource, /private HomeSearchActionLayer\(\)/)
   assert.match(
     indexSource,
     /private HomeCollapsedModeRailButton\(\) \{[\s\S]*this\.HomeCollapsedModeRailIcon\(\)[\s\S]*\.onClick\(\(\) => \{[\s\S]*this\.requestExpandedModeRail\(\)[\s\S]*\}\)/s,
@@ -61,7 +62,15 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
   assert.match(
     indexSource,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*\.padding\(\{[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\),[\s\S]*left: PAGE_HORIZONTAL_PADDING,[\s\S]*right: this\.homeModeRailRightInset\(\),[\s\S]*\}\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+  )
+  assert.match(
+    indexSource,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*Row\(\{ space: HOME_INLINE_SEARCH_ACTION_GAP \}\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)/s,
+  )
+  assert.match(
+    indexSource,
+    /private HomeSearchActionLayer\(\) \{[\s\S]*this\.HomeInlineSearchActionRow\(\)[\s\S]*right: PAGE_HORIZONTAL_PADDING[\s\S]*\.zIndex\(130\)/s,
   )
   assert.match(
     indexSource,

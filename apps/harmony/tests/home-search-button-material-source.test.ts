@@ -76,11 +76,15 @@ test('FloatingRootPageLayout forwards custom trailing builders to PageHeader', (
   )
 })
 
-test('home page keeps HDS title bar system material while rendering inline search in the home lower title area', () => {
+test('home page keeps HDS title bar system material while rendering inline search in a persistent home overlay layer', () => {
   const source = readFileSync(
     new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
     'utf8',
   )
+  const homeRootLowerTitleBuilder =
+    source.match(
+      /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*?\n {2}}\n\n {2}@Builder\n {2}private HomeInlineSearchField/,
+    )?.[0] ?? ''
 
   assert.match(source, /private currentRootTitle\(\): string/)
   assert.match(source, /private shouldHideRootTitleBar\(\): boolean/)
@@ -180,7 +184,11 @@ test('home page keeps HDS title bar system material while rendering inline searc
   )
   assert.match(
     source,
-    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*layoutWeight\(1\)[\s\S]*\.margin\(\{ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET \}\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
+    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*fontWeight\(FontWeight\.Bold\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
+  )
+  assert.equal(
+    homeRootLowerTitleBuilder.includes('this.HomeInlineSearchActionRow()'),
+    false,
   )
   assert.doesNotMatch(
     source,
@@ -209,6 +217,11 @@ test('home page keeps HDS title bar system material while rendering inline searc
   assert.match(source, /private closeHomeInlineSearch\([^)]*\): void/)
   assert.match(source, /private HomeInlineSearchActionRow\(\)/)
   assert.match(source, /private HomeInlineSearchField\(\)/)
+  assert.match(source, /private HomeSearchActionLayer\(\)/)
+  assert.match(
+    source,
+    /private HomeSearchActionLayer\(\) \{[\s\S]*this\.HomeInlineSearchActionRow\(\)/s,
+  )
   assert.doesNotMatch(source, /\.bindSheet\(/)
   assert.match(
     source,

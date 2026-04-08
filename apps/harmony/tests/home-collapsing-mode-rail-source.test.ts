@@ -58,6 +58,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(source, /private HomeCollapsingModeRailLayer\(\)/)
   assert.match(source, /private HomeCollapsedModeRailLayer\(\)/)
+  assert.match(source, /private HomeSearchActionLayer\(\)/)
   assert.match(
     source,
     /const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA: number = 14/,
@@ -98,15 +99,19 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private homeModeRailRightInset\(\): number \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) >= 1\) \{[\s\S]*PAGE_HORIZONTAL_PADDING \+ HOME_COLLAPSED_MODE_RAIL_SIZE \+ ROOT_MODE_RAIL_TOP_GAP[\s\S]*\}[\s\S]*return PAGE_HORIZONTAL_PADDING\s*\}/s,
+    /private homeModeRailRightInset\(\): number \{[\s\S]*PAGE_HORIZONTAL_PADDING[\s\S]*HOME_INLINE_SEARCH_ACTION_SIZE[\s\S]*HOME_INLINE_SEARCH_ACTION_GAP[\s\S]*\}/s,
   )
   assert.match(
     source,
-    /private HomeCollapsingModeRailLayer\(\) \{[\s\S]*collapsed: false[\s\S]*\.width\('100%'\)[\s\S]*justifyContent\(FlexAlign\.Start\)[\s\S]*alignItems\(HorizontalAlign\.Start\)[\s\S]*left: this\.homeModeRailLeftPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)/s,
+    /private HomeCollapsingModeRailLayer\(\) \{[\s\S]*?right: PAGE_HORIZONTAL_PADDING,[\s\S]*?\.zIndex\(100\)/s,
   )
   assert.match(
     source,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.translate\(\{ y: \(1 - this\.homeModeRailCollapseProgress\(\)\) \* -6 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*\.padding\(\{[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\),[\s\S]*left: PAGE_HORIZONTAL_PADDING,[\s\S]*right: this\.homeModeRailRightInset\(\),[\s\S]*\}\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.translate\(\{ y: \(1 - this\.homeModeRailCollapseProgress\(\)\) \* -6 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeSearchActionLayer\(\) \{[\s\S]*this\.HomeInlineSearchActionRow\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: PAGE_HORIZONTAL_PADDING[\s\S]*\.zIndex\(130\)/s,
   )
   assert.match(
     source,
@@ -114,7 +119,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /build\(\) \{[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsingModeRailLayer\(\)[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsedModeRailLayer\(\)/s,
+    /build\(\) \{[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsingModeRailLayer\(\)[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsedModeRailLayer\(\)[\s\S]*if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeSearchActionLayer\(\)/s,
   )
   assert.doesNotMatch(source, /HomeFloatingSearchButtonLayer\(\)/)
 })
