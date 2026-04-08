@@ -26,7 +26,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   assert.match(source, /@State homeModeRailExpandedLockOffset: number = -1/)
   assert.match(
     source,
-    /private homeModeRailCollapseProgress\(\): number \{[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{\s*return 0\s*\}[\s\S]*return this\.homeFirstCardTopBoundary\(\) <= HOME_MODE_CONTENT_TOP_SPACER_HEIGHT \? 1 : 0\s*\}/s,
+    /private homeModeRailCollapseProgress\(\): number \{[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{\s*return 0\s*\}[\s\S]*const collapseStartBoundary = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT \+ HOME_MODE_RAIL_COLLAPSE_OFFSET[\s\S]*const traveledDistance = collapseStartBoundary - this\.homeFirstCardTopBoundary\(\)[\s\S]*return Math\.max\(0, Math\.min\(traveledDistance \/ HOME_MODE_RAIL_COLLAPSE_OFFSET, 1\)\)\s*\}/s,
   )
   assert.match(
     source,
@@ -60,6 +60,14 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   assert.match(source, /private HomeCollapsedModeRailLayer\(\)/)
   assert.match(
     source,
+    /const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA: number = 14/,
+  )
+  assert.match(
+    source,
+    /const HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT: number = -6/,
+  )
+  assert.match(
+    source,
     /private isHomeModeRailCollapsed\(\): boolean \{\s*return this\.homeModeRailCollapseProgress\(\) >= 1\s*\}/s,
   )
   assert.match(
@@ -72,7 +80,11 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private homeCollapsedModeRailTopPadding\(\): number \{[\s\S]*this\.topAvoidArea[\s\S]*HOME_COLLAPSED_MODE_RAIL_TOP_PADDING[\s\S]*ROOT_MODE_RAIL_TOP_GAP/s,
+    /private resolvedHomeCollapsedModeRailTopAvoidArea\(\): number \{\s*return HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA\s*\}/s,
+  )
+  assert.match(
+    source,
+    /private homeCollapsedModeRailTopPadding\(\): number \{[\s\S]*this\.resolvedHomeCollapsedModeRailTopAvoidArea\(\)[\s\S]*HOME_COLLAPSED_MODE_RAIL_TOP_PADDING[\s\S]*HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT[\s\S]*ROOT_MODE_RAIL_TOP_GAP/s,
   )
   assert.match(
     source,
@@ -94,7 +106,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.isHomeModeRailCollapsed\(\)\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*const collapseProgress = this\.homeModeRailCollapseProgress\(\)[\s\S]*if \(collapseProgress > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(collapseProgress\)[\s\S]*\.translate\(\{ y: \(1 - collapseProgress\) \* -6 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
   )
   assert.match(
     source,

@@ -1,6 +1,6 @@
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
-export const SECONDARY_PAGE_HEADER_TOP_GAP: number = 20
+export const SECONDARY_PAGE_HEADER_TOP_GAP: number = 34
 export const SECONDARY_PAGE_HEADER_BOTTOM_GAP: number = 8
 export const SECONDARY_PAGE_HEADER_FALLBACK_TOP_AVOID_AREA: number = 14
 

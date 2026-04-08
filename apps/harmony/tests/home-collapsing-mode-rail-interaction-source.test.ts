@@ -24,7 +24,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
   assert.match(
     indexSource,
-    /private homeModeRailCollapseProgress\(\): number \{[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{\s*return 0\s*\}[\s\S]*return this\.homeFirstCardTopBoundary\(\) <= HOME_MODE_CONTENT_TOP_SPACER_HEIGHT \? 1 : 0\s*\}/s,
+    /private homeModeRailCollapseProgress\(\): number \{[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{\s*return 0\s*\}[\s\S]*const collapseStartBoundary = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT \+ HOME_MODE_RAIL_COLLAPSE_OFFSET[\s\S]*const traveledDistance = collapseStartBoundary - this\.homeFirstCardTopBoundary\(\)[\s\S]*return Math\.max\(0, Math\.min\(traveledDistance \/ HOME_MODE_RAIL_COLLAPSE_OFFSET, 1\)\)\s*\}/s,
   )
   assert.match(
     indexSource,
@@ -61,7 +61,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
   assert.match(
     indexSource,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*const collapseProgress = this\.homeModeRailCollapseProgress\(\)[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\)[\s\S]*right: this\.homeModeRailRightInset\(\)[\s\S]*\.opacity\(collapseProgress\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
   )
   assert.match(
     indexSource,

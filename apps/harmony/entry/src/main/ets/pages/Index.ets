@@ -74,8 +74,10 @@ const HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP + HOME_MOD
 const HOME_MODE_HEADER_SPACER_HEIGHT: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
 const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
-const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 8
+const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 0
 const HOME_COLLAPSED_MODE_RAIL_SIZE: number = 40
+const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA: number = 14
+const HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT: number = -6
 const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_COLLAPSED_MODE_RAIL_SIZE - ROOT_MODE_RAIL_TOP_GAP
 
@@ -263,7 +265,7 @@ struct Index {
   }
 
   private homeCollapsedModeRailBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.82)' : 'rgba(255,255,255,0.9)'
+    return this.theme.isDark ? 'rgba(20,22,28,0.74)' : 'rgba(255,255,255,0.84)'
   }
 
   private homeCollapsedModeRailBorderColor(): string {
@@ -949,16 +951,23 @@ struct Index {
       return 0
     }
 
-    return this.homeFirstCardTopBoundary() <= HOME_MODE_CONTENT_TOP_SPACER_HEIGHT ? 1 : 0
+    const collapseStartBoundary = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_RAIL_COLLAPSE_OFFSET
+    const traveledDistance = collapseStartBoundary - this.homeFirstCardTopBoundary()
+    return Math.max(0, Math.min(traveledDistance / HOME_MODE_RAIL_COLLAPSE_OFFSET, 1))
   }
 
   private isHomeModeRailCollapsed(): boolean {
     return this.homeModeRailCollapseProgress() >= 1
   }
 
+  private resolvedHomeCollapsedModeRailTopAvoidArea(): number {
+    return HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA
+  }
+
   private homeCollapsedModeRailTopPadding(): number {
-    return this.topAvoidArea
+    return this.resolvedHomeCollapsedModeRailTopAvoidArea()
       + HOME_COLLAPSED_MODE_RAIL_TOP_PADDING
+      + HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT
       - ROOT_MODE_RAIL_TOP_GAP
       + HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET
   }
@@ -1023,7 +1032,7 @@ struct Index {
 
   @Builder
   private HomeCollapsedModeRailLayer() {
-    if (this.isHomeModeRailCollapsed()) {
+    if (this.homeModeRailCollapseProgress() > 0) {
       Column() {
         this.HomeCollapsedModeRailButton()
       }
@@ -1034,6 +1043,10 @@ struct Index {
         left: PAGE_HORIZONTAL_PADDING,
         right: this.homeModeRailRightInset(),
       })
+      .opacity(this.homeModeRailCollapseProgress())
+      .translate({ y: (1 - this.homeModeRailCollapseProgress()) * -6 })
+      .animation({ duration: 180, curve: Curve.EaseOut })
+      .enabled(this.isHomeModeRailCollapsed())
       .zIndex(120)
     }
   }

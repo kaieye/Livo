@@ -13,7 +13,7 @@ test('secondary page header shell centralizes the safe-area baseline for detail 
 
   assert.match(
     shellSource,
-    /export const SECONDARY_PAGE_HEADER_TOP_GAP: number = 20/,
+    /export const SECONDARY_PAGE_HEADER_TOP_GAP: number = 24/,
   )
   assert.match(
     shellSource,

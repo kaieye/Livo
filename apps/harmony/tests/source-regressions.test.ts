@@ -247,14 +247,14 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
     source,
     /private currentLivePhotoItem\(index: number\): PictureCarouselMediaItem \| undefined/,
   )
-  assert.match(source, /private firstLivePhotoIndex\(\): number/)
-  assert.match(source, /private preloadLivePhotoIndices\(\): number\[]/)
-  assert.match(
+  assert.doesNotMatch(source, /private firstLivePhotoIndex\(\): number/)
+  assert.match(source, /private mountedLivePhotoIndices\(\): number\[]/)
+  assert.doesNotMatch(source, /private preloadLivePhotoIndices\(\): number\[]/)
+  assert.doesNotMatch(
     source,
     /const previousIndex = \(this\.activeMediaIndex - 1 \+ items\.length\) % items\.length/,
   )
-  assert.match(source, /private mountedLivePhotoIndices\(\): number\[]/)
-  assert.match(source, /private warmMountedLivePhotos\(\): void/)
+  assert.doesNotMatch(source, /private warmMountedLivePhotos\(\): void/)
   assert.match(
     source,
     /private syncVisibleLivePhotoPlayback\(index: number\): void/,
@@ -285,6 +285,14 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   assert.match(
     source,
     /private shouldShowLivePhotoLoading\(index: number\): boolean/,
+  )
+  assert.match(
+    source,
+    /private shouldWarmLivePhoto\(index: number\): boolean \{[\s\S]*this\.isNearlyVisible[\s\S]*this\.activeMediaIndex === index[\s\S]*this\.mountedLivePhotoIndices\(\)\.includes\(index\)[\s\S]*\}/s,
+  )
+  assert.match(
+    source,
+    /private shouldShowLivePhotoLoading\(index: number\): boolean \{[\s\S]*this\.isNearlyVisible[\s\S]*!this\.isLivePhotoPrepared\(index\)\s*\}/s,
   )
   assert.match(source, /private handleLivePhotoPrepared\(index: number\): void/)
   assert.match(source, /private handleLivePhotoStart\(index: number\): void/)
@@ -330,8 +338,11 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   assert.match(source, /Text\(this\.livePhotoMuted \? '静音' : '有声'\)/)
   assert.match(source, /this\.mountedLivePhotoIndices\(\)\.includes\(index\)/)
   assert.match(source, /this\.markPreparedLivePhoto\(index\)/)
-  assert.match(source, /const firstLiveIndex = this\.firstLivePhotoIndex\(\)/)
-  assert.match(source, /this\.warmMountedLivePhotos\(\)/)
+  assert.doesNotMatch(
+    source,
+    /const firstLiveIndex = this\.firstLivePhotoIndex\(\)/,
+  )
+  assert.doesNotMatch(source, /this\.warmMountedLivePhotos\(\)/)
   assert.match(
     source,
     /private handleLivePhotoError\(index: number\): void \{[\s\S]*this\.refreshLivePhotoInstance\(index\)/s,
@@ -364,11 +375,15 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   assert.match(source, /this\.controllerFor\(index\)\.pause\(\)/)
   assert.match(
     source,
-    /\.onVisibleAreaChange\(\[1\], \(isVisible: boolean, currentRatio: number\) => \{/,
+    /\.onVisibleAreaChange\(\[0, 0\.35, 0\.6, 1\.0\], \(isVisible: boolean, currentRatio: number\) => \{/,
   )
   assert.match(
     source,
-    /this\.isNearlyVisible = isVisible && currentRatio >= 0\.6/,
+    /this\.isNearlyVisible = isVisible && currentRatio >= 0\.35/,
+  )
+  assert.match(
+    source,
+    /this\.isFullyVisible = isVisible && currentRatio >= 0\.6/,
   )
   assert.match(source, /\.vertical\(false\)/)
   assert.match(source, /\.displayArrow\(false\)/)
@@ -378,7 +393,7 @@ test('PictureEntryCard renders mixed swiper slides and in-card live photo playba
   assert.match(source, /\.selectedColor\(this\.theme\.accent\)/)
   assert.match(
     source,
-    /\.onChange\(\(index: number\) => \{\s*this\.activeMediaIndex = index\s*this\.syncVisibleLivePhotoPlayback\(index\)\s*\}\)/s,
+    /\.onChange\(\(index: number\) => \{[\s\S]*this\.activeMediaIndex = index[\s\S]*this\.logLivePhotoState\('swiper-change', index\)[\s\S]*this\.syncVisibleLivePhotoPlayback\(index\)\s*\}\)/s,
   )
   assert.match(source, /this\.LiveSoundToggle\(\)/)
 })

@@ -97,44 +97,27 @@ export struct PictureEntryCard {
     return item?.kind === 'livePhoto' && item.videoUrl ? item : undefined
   }
 
-  private firstLivePhotoIndex(): number {
-    const items = this.carouselMediaItems()
-    for (let index = 0; index < items.length; index += 1) {
-      if (items[index]?.kind === 'livePhoto' && items[index].videoUrl) {
-        return index
-      }
+  private logLivePhotoState(event: string, index: number, extra: string = ''): void {
+    const item = this.currentLivePhotoItem(index)
+    const parts: string[] = [
+      `[Picture Live] ${event}`,
+      `index=${index}`,
+      `active=${this.activeMediaIndex}`,
+      `prepared=${this.isLivePhotoPrepared(index)}`,
+      `playing=${this.playingLivePhotoIndex}`,
+      `paused=${this.pausedLivePhotoIndex}`,
+      `nearly=${this.isNearlyVisible}`,
+      `fully=${this.isFullyVisible}`,
+      `mounted=${this.mountedLivePhotoIndices().join(',')}`,
+      `seed=${this.livePhotoInstanceSeed(index)}`,
+      `hasVideo=${!!item?.videoUrl}`,
+    ]
+
+    if (extra) {
+      parts.push(extra)
     }
 
-    return -1
-  }
-
-  private preloadLivePhotoIndices(): number[] {
-    const items = this.carouselMediaItems()
-    const result: number[] = []
-    if (items.length <= 1) {
-      return result
-    }
-
-    const previousIndex = (this.activeMediaIndex - 1 + items.length) % items.length
-    const previousItem = items[previousIndex]
-    if (previousIndex !== this.activeMediaIndex
-      && previousItem?.kind === 'livePhoto'
-      && previousItem.videoUrl
-      && !result.includes(previousIndex)) {
-      result.push(previousIndex)
-    }
-
-    let offset = 1
-    while (offset < items.length && result.length < 4) {
-      const candidateIndex = (this.activeMediaIndex + offset) % items.length
-      const candidateItem = items[candidateIndex]
-      if (candidateItem?.kind === 'livePhoto' && candidateItem.videoUrl && !result.includes(candidateIndex)) {
-        result.push(candidateIndex)
-      }
-      offset += 1
-    }
-
-    return result
+    console.info(parts.join(' | '))
   }
 
   private mountedLivePhotoIndices(): number[] {
@@ -144,18 +127,9 @@ export struct PictureEntryCard {
       mounted.add(this.activeMediaIndex)
     }
 
-    this.preloadLivePhotoIndices().forEach((index: number) => {
-      mounted.add(index)
-    })
-
     this.preparedLivePhotoIndices.forEach((index: number) => {
       mounted.add(index)
     })
-
-    const firstLiveIndex = this.firstLivePhotoIndex()
-    if (firstLiveIndex >= 0 && this.isNearlyVisible) {
-      mounted.add(firstLiveIndex)
-    }
 
     if (this.playingLivePhotoIndex >= 0) {
       mounted.add(this.playingLivePhotoIndex)
@@ -167,15 +141,6 @@ export struct PictureEntryCard {
     return Array.from(mounted.values())
   }
 
-  private warmMountedLivePhotos(): void {
-    this.mountedLivePhotoIndices().forEach((index: number) => {
-      try {
-        this.controllerFor(index).start()
-      } catch (_) {
-      }
-    })
-  }
-
   private syncVisibleLivePhotoPlayback(index: number): void {
     const item = this.currentLivePhotoItem(index)
     if (!item) {
@@ -185,29 +150,26 @@ export struct PictureEntryCard {
     }
 
     if (!this.isNearlyVisible) {
+      this.logLivePhotoState('sync-pause-not-visible', index)
       this.pauseLivePhotoPlayback(index)
       return
     }
-
-    if (!this.isFullyVisible) {
-      this.pauseLivePhotoPlayback(index)
-      return
-    }
-
-    this.warmMountedLivePhotos()
 
     if (this.isLivePhotoPrepared(index)) {
       this.pausedLivePhotoIndex = -1
       this.playingLivePhotoIndex = index
       try {
         this.controllerFor(index).start()
+        this.logLivePhotoState('sync-start-prepared', index)
       } catch (_) {
+        this.logLivePhotoState('sync-start-prepared-failed', index)
       }
       return
     }
 
     this.pausedLivePhotoIndex = -1
     this.playingLivePhotoIndex = -1
+    this.logLivePhotoState('sync-wait-prepared', index)
   }
 
   private pauseLivePhotoPlayback(index: number): void {
@@ -222,8 +184,10 @@ export struct PictureEntryCard {
     try {
       this.controllerFor(index).pause()
       this.pausedLivePhotoIndex = index
+      this.logLivePhotoState('pause', index)
     } catch (_) {
       this.pausedLivePhotoIndex = -1
+      this.logLivePhotoState('pause-failed', index)
     }
     this.playingLivePhotoIndex = -1
   }
@@ -265,6 +229,7 @@ export struct PictureEntryCard {
     const nextSeeds = [...this.livePhotoInstanceSeeds]
     nextSeeds[index] = (nextSeeds[index] ?? 0) + 1
     this.livePhotoInstanceSeeds = nextSeeds
+    this.logLivePhotoState('refresh-instance', index)
   }
 
   private stopLivePhotoPlayback(): void {
@@ -287,24 +252,29 @@ export struct PictureEntryCard {
   }
 
   private shouldWarmLivePhoto(index: number): boolean {
-    return this.isNearlyVisible && this.mountedLivePhotoIndices().includes(index)
+    return this.isNearlyVisible
+      && this.activeMediaIndex === index
+      && this.mountedLivePhotoIndices().includes(index)
   }
 
   private shouldShowLivePhotoLoading(index: number): boolean {
     return this.currentLivePhotoItem(index) !== undefined
       && this.activeMediaIndex === index
-      && this.isFullyVisible
+      && this.isNearlyVisible
       && !this.isLivePhotoPrepared(index)
   }
 
   private handleLivePhotoPrepared(index: number): void {
     this.markPreparedLivePhoto(index)
-    if (this.isFullyVisible && this.activeMediaIndex === index) {
+    this.logLivePhotoState('prepared', index)
+    if (this.isNearlyVisible && this.activeMediaIndex === index) {
       this.pausedLivePhotoIndex = -1
       this.playingLivePhotoIndex = index
       try {
         this.controllerFor(index).start()
+        this.logLivePhotoState('prepared-start', index)
       } catch (_) {
+        this.logLivePhotoState('prepared-start-failed', index)
       }
     }
   }
@@ -314,9 +284,10 @@ export struct PictureEntryCard {
     if (this.pausedLivePhotoIndex === index) {
       this.pausedLivePhotoIndex = -1
     }
-    if (this.isFullyVisible && this.activeMediaIndex === index) {
+    if (this.isNearlyVisible && this.activeMediaIndex === index) {
       this.playingLivePhotoIndex = index
     }
+    this.logLivePhotoState('start', index)
   }
 
   private handleLivePhotoPause(index: number): void {
@@ -326,6 +297,7 @@ export struct PictureEntryCard {
     if (this.playingLivePhotoIndex === index) {
       this.playingLivePhotoIndex = -1
     }
+    this.logLivePhotoState('on-pause', index)
   }
 
   private handleLivePhotoStop(index: number): void {
@@ -335,6 +307,7 @@ export struct PictureEntryCard {
     if (this.pausedLivePhotoIndex === index) {
       this.pausedLivePhotoIndex = -1
     }
+    this.logLivePhotoState('on-stop', index)
   }
 
   private handleLivePhotoError(index: number): void {
@@ -345,6 +318,7 @@ export struct PictureEntryCard {
     if (this.pausedLivePhotoIndex === index) {
       this.pausedLivePhotoIndex = -1
     }
+    this.logLivePhotoState('error', index)
     this.refreshLivePhotoInstance(index)
   }
 
@@ -537,6 +511,7 @@ export struct PictureEntryCard {
         .duration(260)
         .onChange((index: number) => {
           this.activeMediaIndex = index
+          this.logLivePhotoState('swiper-change', index)
           this.syncVisibleLivePhotoPlayback(index)
         })
       }
@@ -588,9 +563,14 @@ export struct PictureEntryCard {
     .padding({ top: 8, bottom: 10 })
     .alignItems(HorizontalAlign.Start)
     .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
-    .onVisibleAreaChange([1], (isVisible: boolean, currentRatio: number) => {
-      this.isNearlyVisible = isVisible && currentRatio >= 0.6
-      this.isFullyVisible = isVisible && currentRatio >= 0.99
+    .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
+      this.isNearlyVisible = isVisible && currentRatio >= 0.35
+      this.isFullyVisible = isVisible && currentRatio >= 0.6
+      this.logLivePhotoState(
+        'visible-area-change',
+        this.activeMediaIndex,
+        `isVisible=${isVisible} ratio=${currentRatio.toFixed(2)}`,
+      )
       this.syncVisibleLivePhotoPlayback(this.activeMediaIndex)
     })
     .onDisAppear(() => {
