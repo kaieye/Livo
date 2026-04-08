@@ -76,7 +76,7 @@ test('FloatingRootPageLayout forwards custom trailing builders to PageHeader', (
   )
 })
 
-test('home page keeps HDS title bar system material without rendering a floating search button', () => {
+test('home page keeps HDS title bar system material while rendering inline search in the home lower title area', () => {
   const source = readFileSync(
     new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
     'utf8',
@@ -199,22 +199,16 @@ test('home page keeps HDS title bar system material without rendering a floating
     /private homeFloatingSearchButtonBackdropBlur\(\): number/,
   )
   assert.doesNotMatch(source, /private homeSearchOverlayTopPadding\(\): number/)
-  assert.doesNotMatch(source, /@State searchQuery: string = ''/)
-  assert.doesNotMatch(source, /@State showSearch: boolean = false/)
-  assert.doesNotMatch(source, /@State searchExpanded: boolean = false/)
-  assert.doesNotMatch(
+  assert.match(source, /@State searchQuery: string = ''/)
+  assert.match(source, /@State showSearch: boolean = false/)
+  assert.match(
     source,
     /private searchInputController: TextInputController = new TextInputController\(\)/,
   )
-  assert.doesNotMatch(source, /private toggleHomeSearch\(\): void/)
-  assert.doesNotMatch(source, /private openSearch\(\): void/)
-  assert.doesNotMatch(source, /private closeSearch\(\): void/)
-  assert.doesNotMatch(source, /private handleSearchSheetDismiss\(\): void/)
-  assert.doesNotMatch(source, /private HomeSearchSheetOverlay\(\)/)
-  assert.doesNotMatch(
-    source,
-    /private searchAllEntries\(\): EntryCardModel\[\]/,
-  )
+  assert.match(source, /private openHomeInlineSearch\(\): void/)
+  assert.match(source, /private closeHomeInlineSearch\(\): void/)
+  assert.match(source, /private HomeInlineSearchActionRow\(\)/)
+  assert.match(source, /private HomeInlineSearchField\(\)/)
   assert.doesNotMatch(source, /\.bindSheet\(/)
   assert.match(
     source,
@@ -251,9 +245,9 @@ test('home page keeps HDS title bar system material without rendering a floating
   assert.doesNotMatch(source, /private HomeFloatingSearchButton\(\)/)
   assert.doesNotMatch(source, /private HomeFloatingSearchButtonLayer\(\)/)
   assert.doesNotMatch(source, /HOME_FLOATING_SEARCH_BUTTON/)
-  assert.doesNotMatch(
+  assert.match(
     source,
-    /SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)/,
+    /private HomeInlineSearchActionRow\(\) \{[\s\S]*SymbolGlyph\(\$r\('sys\.symbol\.magnifyingglass'\)\)/s,
   )
   assert.doesNotMatch(source, /menu:\s*this\.currentRootMenu\(\)/)
   assert.match(source, /enableScrollEffect:\s*true/)
