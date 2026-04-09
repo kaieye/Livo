@@ -72,7 +72,7 @@ const HOME_TITLE_BAR_OVERLAY_SPACER: number =
   ROOT_TITLE_BAR_MINI_HEIGHT + HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER
 const HOME_MODE_RAIL_HEIGHT: number = 46
-const HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
+const HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL: number = 32
 const HOME_MODE_HEADER_SPACER_HEIGHT: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
 const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -131,6 +131,7 @@ struct Index {
   @State modeTransitionDirection: number = 1
   @State headerBlurProgress: number = 0
   @State currentHomeModeScrollOffset: number = 0
+  @State homeModeRailDismissedByScroll: boolean = false
   @State homeModeRailExpandedOverride: boolean = false
   @State homeModeRailExpandedLockOffset: number = -1
   @State homeCollapsedModeRailPressed: boolean = false
@@ -243,6 +244,7 @@ struct Index {
   }
 
   private syncHomeModeRailState(mode: SubscriptionMode = this.mode): void {
+    const previousOffset = this.currentHomeModeScrollOffset
     const nextOffset = this.readHomeModeScrollOffset(mode)
     this.updateHomeModeScrollOffset(mode, nextOffset)
     if (mode !== this.mode) {
@@ -250,12 +252,22 @@ struct Index {
     }
 
     if (this.homeModeRailExpandedOverride) {
-      if (Math.abs(nextOffset - this.homeModeRailExpandedLockOffset) < 0.5) {
+      if (Math.abs(nextOffset - this.homeModeRailExpandedLockOffset) < 2) {
         return
       }
 
       this.homeModeRailExpandedOverride = false
       this.homeModeRailExpandedLockOffset = -1
+    }
+
+    if (!this.homeModeRailExpandedOverride) {
+      if (nextOffset > previousOffset + 0.5) {
+        this.homeModeRailDismissedByScroll = true
+      } else if (nextOffset < previousOffset - 0.5) {
+        this.homeModeRailDismissedByScroll = false
+      } else if (nextOffset <= 0.5) {
+        this.homeModeRailDismissedByScroll = false
+      }
     }
 
     this.currentHomeModeScrollOffset = nextOffset
@@ -881,8 +893,10 @@ struct Index {
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
     this.homeModeRailExpandedOverride = false
     this.homeModeRailExpandedLockOffset = -1
-    this.currentHomeModeScrollOffset = this.homeModeScrollOffsetFor(nextMode)
-    this.updateHeaderBlurProgress(this.homeModeScrollOffsetFor(nextMode))
+    const nextModeOffset = this.homeModeScrollOffsetFor(nextMode)
+    this.currentHomeModeScrollOffset = nextModeOffset
+    this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
+    this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
   }
 
@@ -1209,8 +1223,9 @@ struct Index {
     this.closeHomeInlineSearch()
     this.homeModeRailExpandedLockOffset = this.readHomeModeScrollOffset(this.mode)
     this.homeModeRailExpandedOverride = true
-    this.currentHomeModeScrollOffset = 0
-    this.updateHeaderBlurProgress(0)
+    this.homeModeRailDismissedByScroll = false
+    this.currentHomeModeScrollOffset = this.homeModeRailExpandedLockOffset
+    this.updateHeaderBlurProgress(this.homeModeRailExpandedLockOffset)
   }
 
   private homeModeRailCollapseProgress(): number {
@@ -1218,9 +1233,7 @@ struct Index {
       return 0
     }
 
-    const collapseStartBoundary = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_RAIL_COLLAPSE_OFFSET
-    const traveledDistance = collapseStartBoundary - this.homeFirstCardTopBoundary()
-    return Math.max(0, Math.min(traveledDistance / HOME_MODE_RAIL_COLLAPSE_OFFSET, 1))
+    return this.homeModeRailDismissedByScroll ? 1 : 0
   }
 
   private isHomeModeRailCollapsed(): boolean {
@@ -1255,66 +1268,73 @@ struct Index {
 
   private homeModeRailTopPadding(): number {
     const progress = this.homeModeRailCollapseProgress()
-    return HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
+    const interpolatedTopPadding = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
       + (this.homeCollapsedModeRailTopPadding() - HOME_MODE_CONTENT_TOP_SPACER_HEIGHT) * progress
+    // Keep the collapsing rail below the "今日推荐" title area to avoid visual overlap while scrolling.
+    return Math.max(HOME_MODE_CONTENT_TOP_SPACER_HEIGHT, interpolatedTopPadding)
   }
 
-  private homeFirstCardTopBoundary(): number {
-    return Math.max(0, HOME_MODE_HEADER_SPACER_HEIGHT - this.currentHomeModeScrollOffset)
+  private homeModeRailDismissTranslateY(): number {
+    return -1 * HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL * this.homeModeRailCollapseProgress()
+  }
+
+  private homeModeRailDismissOpacity(): number {
+    const progress = this.homeModeRailCollapseProgress()
+    return Math.max(0, 1 - progress)
   }
 
   @Builder
   private HomeCollapsingModeRailLayer() {
-    if (!this.isHomeModeRailCollapsed()) {
-      Stack({ alignContent: Alignment.Top }) {
-        Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-          Row()
-            .width('100%')
-            .height(0)
+    Stack({ alignContent: Alignment.Top }) {
+      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
+        Row()
+          .width('100%')
+          .height(0)
 
-          Row() {
-            this.HomeModeRail({
-              collapsed: false,
-              collapseProgress: this.homeModeRailCollapseProgress(),
-            })
-          }
-            .width('100%')
-            .justifyContent(FlexAlign.Start)
+        Row() {
+          this.HomeModeRail({
+            collapsed: false,
+            collapseProgress: this.homeModeRailCollapseProgress(),
+          })
         }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .align(Alignment.Top)
+          .width('100%')
+          .justifyContent(FlexAlign.Start)
       }
       .width('100%')
-      .padding({
-        top: this.homeModeRailTopPadding(),
-        left: this.homeModeRailLeftPadding(),
-        right: PAGE_HORIZONTAL_PADDING,
-      })
-      .zIndex(100)
+      .alignItems(HorizontalAlign.Start)
+      .align(Alignment.Top)
     }
+    .width('100%')
+    .padding({
+      top: this.homeModeRailTopPadding(),
+      left: this.homeModeRailLeftPadding(),
+      right: PAGE_HORIZONTAL_PADDING,
+    })
+    .translate({ y: this.homeModeRailDismissTranslateY() })
+    .opacity(this.homeModeRailDismissOpacity())
+    .animation({ duration: 180, curve: Curve.EaseOut })
+    .enabled(!this.isHomeModeRailCollapsed())
+    .zIndex(100)
   }
 
   @Builder
   private HomeCollapsedModeRailLayer() {
-    if (this.homeModeRailCollapseProgress() > 0) {
-      Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
-        this.HomeCollapsedModeRailButton()
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.End)
-      .alignItems(VerticalAlign.Top)
-      .padding({
-        top: this.homeCollapsedModeRailTopPadding(),
-        left: PAGE_HORIZONTAL_PADDING,
-        right: this.homeModeRailRightInset(),
-      })
-      .opacity(this.homeModeRailCollapseProgress())
-      .translate({ y: (1 - this.homeModeRailCollapseProgress()) * -6 })
-      .animation({ duration: 180, curve: Curve.EaseOut })
-      .enabled(this.isHomeModeRailCollapsed())
-      .zIndex(120)
+    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
+      this.HomeCollapsedModeRailButton()
     }
+    .width('100%')
+    .justifyContent(FlexAlign.End)
+    .alignItems(VerticalAlign.Top)
+    .padding({
+      top: this.homeCollapsedModeRailTopPadding(),
+      left: PAGE_HORIZONTAL_PADDING,
+      right: this.homeModeRailRightInset(),
+    })
+    .opacity(this.homeModeRailCollapseProgress())
+    .translate({ y: (1 - this.homeModeRailCollapseProgress()) * 14 })
+    .animation({ duration: 180, curve: Curve.EaseOut })
+    .enabled(this.isHomeModeRailCollapsed())
+    .zIndex(132)
   }
 
   @Builder
