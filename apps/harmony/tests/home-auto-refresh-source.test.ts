@@ -41,3 +41,15 @@ test('home loadInitialData does not auto refresh feeds on page entry', () => {
   assert.doesNotMatch(loadInitialData, /settings\.autoRefresh/)
   assert.doesNotMatch(loadInitialData, /await this\.refreshFeaturedEntries\(\)/)
 })
+
+test('home refreshFeaturedEntries prevents reentrant refresh calls', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /private async refreshFeaturedEntries\(\): Promise<void> \{\s*if \(this\.isRefreshing\) \{\s*return\s*\}\s*this\.isRefreshing = true/s,
+  )
+})

@@ -65,6 +65,15 @@ type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const HOME_MODE_CONTENT_GAP: number = 14
+const HOME_REFRESH_PULL_DISTANCE: number = 60
+const HOME_REFRESH_MAX_PULL_DISTANCE: number = 120
+const HOME_REFRESH_FOLLOW_RATIO: number = 0.72
+const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 36
+const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32
+const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 28
+const HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y: number = 12
+const HOME_REFRESH_RESET_DURATION: number = 220
+const HOME_REFRESH_DISMISS_SCROLL_OFFSET: number = 18
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56
 const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -72,9 +81,9 @@ const HOME_TITLE_BAR_OVERLAY_SPACER: number =
   ROOT_TITLE_BAR_MINI_HEIGHT + HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
 const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER
 const HOME_MODE_RAIL_HEIGHT: number = 46
-const HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL: number = 32
-const HOME_MODE_HEADER_SPACER_HEIGHT: number =
+const HOME_MODE_SCENE_TOP_INSET: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
+const HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL: number = 32
 const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 0
 const HOME_COLLAPSED_MODE_RAIL_SIZE: number = 40
@@ -121,8 +130,13 @@ struct Index {
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @State featuredEntries: EntryCardModel[] = []
   @State entryGroups: HomeEntryGroups<EntryCardModel> = createEmptyHomeEntryGroups<EntryCardModel>()
-  @State feedSourceLabel: string = '准备加载本地内容'
+  @State feedSourceLabel: string = '本地内容已加载'
   @State isRefreshing: boolean = false
+  @State homeRefreshPullDistance: number = 0
+  @State homeRefreshIndicatorOffset: number = 0
+  @State homeRefreshContentHoldOffset: number = 0
+  @State homeRefreshIndicatorDismissed: boolean = false
+  @State homeRefreshStatus: RefreshStatus = RefreshStatus.Inactive
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
   @State previousMode: SubscriptionMode = 'articles'
@@ -182,6 +196,10 @@ struct Index {
   }
 
   private async refreshFeaturedEntries(): Promise<void> {
+    if (this.isRefreshing) {
+      return
+    }
+
     this.isRefreshing = true
 
     try {
@@ -191,6 +209,238 @@ struct Index {
       this.feedSourceLabel = result.sourceLabel
     } finally {
       this.isRefreshing = false
+      this.animateHomePullRefreshReset()
+    }
+  }
+
+  private updateHomePullRefreshState(offset: number): void {
+    const nextOffset = Math.max(0, Math.min(offset, HOME_REFRESH_MAX_PULL_DISTANCE))
+    this.homeRefreshPullDistance = nextOffset
+    this.homeRefreshIndicatorOffset = nextOffset
+    if (this.isRefreshing) {
+      this.homeRefreshStatus = RefreshStatus.Refresh
+      return
+    }
+
+    if (nextOffset <= 0.5) {
+      this.homeRefreshStatus = RefreshStatus.Inactive
+    } else if (nextOffset >= HOME_REFRESH_PULL_DISTANCE) {
+      this.homeRefreshStatus = RefreshStatus.OverDrag
+    } else {
+      this.homeRefreshStatus = RefreshStatus.Drag
+    }
+  }
+
+  private resetHomePullRefreshState(): void {
+    this.homeRefreshPullDistance = 0
+    this.homeRefreshIndicatorOffset = 0
+    this.homeRefreshContentHoldOffset = 0
+    this.homeRefreshIndicatorDismissed = false
+    this.homeRefreshStatus = RefreshStatus.Inactive
+  }
+
+  private dismissHomeRefreshIndicatorDuringRefresh(): void {
+    if (!this.isRefreshing || this.homeRefreshIndicatorDismissed) {
+      return
+    }
+
+    this.homeRefreshIndicatorDismissed = true
+    this.homeRefreshPullDistance = 0
+    this.homeRefreshIndicatorOffset = 0
+    this.homeRefreshContentHoldOffset = 0
+    this.homeRefreshStatus = RefreshStatus.Drag
+    setTimeout(() => {
+      if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
+        return
+      }
+
+      if (this.homeRefreshIndicatorOffset > 0.5 || this.homeRefreshContentHoldOffset > 0.5) {
+        return
+      }
+
+      this.homeRefreshStatus = RefreshStatus.Inactive
+    }, HOME_REFRESH_RESET_DURATION)
+  }
+
+  private reopenHomeRefreshGapDuringRefresh(): void {
+    if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
+      return
+    }
+
+    this.homeRefreshIndicatorDismissed = false
+    this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
+    this.homeRefreshStatus = RefreshStatus.Refresh
+  }
+
+  private animateHomePullRefreshReset(): void {
+    this.homeRefreshPullDistance = 0
+    this.homeRefreshIndicatorOffset = 0
+    this.homeRefreshContentHoldOffset = 0
+
+    if (this.isRefreshing) {
+      this.homeRefreshStatus = RefreshStatus.Refresh
+      return
+    }
+
+    this.homeRefreshStatus = RefreshStatus.Drag
+    setTimeout(() => {
+      if (this.isRefreshing) {
+        return
+      }
+
+      if (this.homeRefreshIndicatorOffset > 0.5 || this.homeRefreshContentHoldOffset > 0.5) {
+        return
+      }
+
+      this.homeRefreshStatus = RefreshStatus.Inactive
+    }, HOME_REFRESH_RESET_DURATION)
+  }
+
+  private shouldConsumeHomePullScroll(mode: SubscriptionMode): boolean {
+    return this.activeRootTabId === 'home'
+      && mode === this.mode
+      && !this.searchOverlayVisible
+  }
+
+  private consumeHomePullScroll(mode: SubscriptionMode, scrollOffset: number) {
+    if (!this.shouldConsumeHomePullScroll(mode)) {
+      return undefined
+    }
+
+    if (this.isRefreshing) {
+      if (scrollOffset < 0 && this.homeModeScrollOffsetFor(mode) <= 0.5) {
+        this.homeRefreshIndicatorOffset = Math.max(
+          0,
+          Math.min(
+            this.homeRefreshIndicatorOffset + (-1 * scrollOffset * HOME_REFRESH_FOLLOW_RATIO),
+            HOME_REFRESH_MAX_PULL_DISTANCE,
+          ),
+        )
+        if (this.homeRefreshIndicatorOffset >= HOME_REFRESH_GAP_OPEN_PULL_DISTANCE) {
+          this.reopenHomeRefreshGapDuringRefresh()
+        }
+      }
+      return undefined
+    }
+
+    const isAtTop = this.homeModeScrollOffsetFor(mode) <= 0.5
+    const hasPullDistance = this.homeRefreshPullDistance > 0.5
+    if (scrollOffset < 0 && (isAtTop || hasPullDistance)) {
+      if (this.homeRefreshIndicatorDismissed) {
+        this.homeRefreshIndicatorDismissed = false
+      }
+      this.updateHomePullRefreshState(
+        this.homeRefreshPullDistance + (-1 * scrollOffset * HOME_REFRESH_FOLLOW_RATIO),
+      )
+      return undefined
+    }
+
+    if (scrollOffset > 0 && hasPullDistance) {
+      this.updateHomePullRefreshState(this.homeRefreshPullDistance - scrollOffset)
+      return undefined
+    }
+
+    return undefined
+  }
+
+  private consumeHomePullScrollOffset(mode: SubscriptionMode, yOffset: number) {
+    this.consumeHomePullScroll(mode, yOffset)
+    return undefined
+  }
+
+  private finalizeHomePullRefresh(): void {
+    if (!this.shouldConsumeHomePullScroll(this.mode)) {
+      return
+    }
+
+    if (this.isRefreshing) {
+      if (this.homeRefreshIndicatorDismissed) {
+        this.homeRefreshIndicatorOffset = 0
+      }
+      return
+    }
+
+    if (this.homeRefreshPullDistance >= HOME_REFRESH_PULL_DISTANCE) {
+      this.homeRefreshPullDistance = HOME_REFRESH_PULL_DISTANCE
+      this.homeRefreshIndicatorOffset = HOME_REFRESH_PULL_DISTANCE
+      this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
+      this.homeRefreshIndicatorDismissed = false
+      this.homeRefreshStatus = RefreshStatus.Refresh
+      void this.refreshFeaturedEntries()
+      return
+    }
+
+    this.animateHomePullRefreshReset()
+  }
+
+  private homeRefreshIndicatorProgress(): number {
+    return Math.max(0, Math.min(this.homeRefreshIndicatorOffset / HOME_REFRESH_PULL_DISTANCE, 1))
+  }
+
+  private shouldShowHomeRefreshGap(mode: SubscriptionMode): boolean {
+    if (!this.isHomeRootTab() || mode !== this.mode || this.homeRefreshIndicatorDismissed) {
+      return false
+    }
+
+    return this.homeRefreshIndicatorOffset >= HOME_REFRESH_GAP_OPEN_PULL_DISTANCE
+      || this.homeRefreshContentHoldOffset > 0.5
+      || this.isRefreshing
+  }
+
+  private shouldShowHomeRefreshIndicator(mode: SubscriptionMode): boolean {
+    if (!this.isHomeRootTab() || mode !== this.mode) {
+      return false
+    }
+
+    return this.isRefreshing
+      || this.homeRefreshStatus !== RefreshStatus.Inactive
+      || this.homeRefreshIndicatorOffset > 0.5
+  }
+
+  private homeRefreshGapHeight(mode: SubscriptionMode): number {
+    if (!this.shouldShowHomeRefreshGap(mode)) {
+      return 0
+    }
+
+    const indicatorHeight = 18 + 10 * 2
+    const expandedGapHeight = indicatorHeight + HOME_REFRESH_INDICATOR_VISUAL_OFFSET
+    const dragGapHeight = Math.max(0, this.homeRefreshIndicatorOffset - HOME_REFRESH_GAP_OPEN_PULL_DISTANCE) * HOME_REFRESH_FOLLOW_RATIO
+    return Math.max(0, Math.min(Math.max(dragGapHeight, this.homeRefreshContentHoldOffset), expandedGapHeight))
+  }
+
+  private homeRefreshIndicatorOpacity(): number {
+    if (this.isRefreshing || this.homeRefreshStatus === RefreshStatus.Refresh) {
+      return 1
+    }
+    return this.homeRefreshIndicatorProgress()
+  }
+
+  private homeRefreshIndicatorScale(): number {
+    const progress = this.homeRefreshIndicatorProgress()
+    return 0.84 + progress * 0.16
+  }
+
+  private homeRefreshIndicatorTranslateY(): number {
+    if (this.isRefreshing || this.homeRefreshStatus === RefreshStatus.Refresh) {
+      return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y
+    }
+    return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y + (1 - this.homeRefreshIndicatorProgress()) * 12
+  }
+
+  private homeRefreshIndicatorBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(24,28,36,0.92)' : 'rgba(255,255,255,0.94)'
+  }
+
+  private homeRefreshIndicatorBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)'
+  }
+
+  private homeRefreshIndicatorShadow(): ShadowOptions {
+    return {
+      radius: this.theme.isDark ? 10 : 14,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.22)' : 'rgba(15,23,42,0.08)',
+      offsetX: 0,
+      offsetY: 2,
     }
   }
 
@@ -249,6 +499,10 @@ struct Index {
     this.updateHomeModeScrollOffset(mode, nextOffset)
     if (mode !== this.mode) {
       return
+    }
+
+    if (this.isRefreshing && nextOffset > HOME_REFRESH_DISMISS_SCROLL_OFFSET) {
+      this.dismissHomeRefreshIndicatorDuringRefresh()
     }
 
     if (this.homeModeRailExpandedOverride) {
@@ -740,16 +994,6 @@ struct Index {
     this.settingsScrollerBindingVersion += 1
   }
 
-  @Builder
-  private HomeModeHeaderSection() {
-    Column() {
-      Blank()
-        .height(HOME_MODE_HEADER_SPACER_HEIGHT)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
   private handleSystemThemeChanged(): void {
     void this.refreshThemeFromSystemChange()
   }
@@ -871,6 +1115,7 @@ struct Index {
     this.activeRootTabId = tabId
     this.highlightedRootTabId = tabId
     if (tabId !== 'home') {
+      this.resetHomePullRefreshState()
       this.closeHomeInlineSearch(true)
     }
     this.refreshRootTheme()
@@ -891,6 +1136,7 @@ struct Index {
 
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
+    this.resetHomePullRefreshState()
     this.homeModeRailExpandedOverride = false
     this.homeModeRailExpandedLockOffset = -1
     const nextModeOffset = this.homeModeScrollOffsetFor(nextMode)
@@ -1497,10 +1743,47 @@ struct Index {
   }
 
   @Builder
+  private HomeRefreshGapSlot(mode: SubscriptionMode) {
+    Column() {
+      if (this.shouldShowHomeRefreshIndicator(mode)) {
+        Column() {
+          LoadingProgress()
+            .width(18)
+            .height(18)
+            .color(this.theme.accent)
+        }
+        .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+        .backgroundColor(this.homeRefreshIndicatorBackgroundColor())
+        .borderRadius(999)
+        .border({ width: 0.8, color: this.homeRefreshIndicatorBorderColor() })
+        .shadow(this.homeRefreshIndicatorShadow())
+        .opacity(this.homeRefreshIndicatorOpacity())
+        .scale({
+          x: this.homeRefreshIndicatorScale(),
+          y: this.homeRefreshIndicatorScale(),
+        })
+        .translate({ y: this.homeRefreshIndicatorTranslateY() })
+        .animation({ duration: 160, curve: Curve.EaseOut })
+      }
+    }
+    .width('100%')
+    .height(this.homeRefreshGapHeight(mode))
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .animation({ duration: 180, curve: Curve.EaseOut })
+  }
+
+  @Builder
   private EntryList(mode: SubscriptionMode) {
     List({ space: HOME_MODE_CONTENT_GAP, scroller: this.homeScrollerForMode(mode) }) {
       ListItem() {
-        this.HomeModeHeaderSection()
+        Column() {
+          Blank()
+            .height(HOME_MODE_SCENE_TOP_INSET)
+
+          this.HomeRefreshGapSlot(mode)
+        }
+        .width('100%')
       }
       .width('100%')
 
@@ -1546,8 +1829,14 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      return this.consumeHomePullScroll(mode, scrollOffset)
+    })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
+    })
+    .onDidStopDragging((_willFling: boolean) => {
+      this.finalizeHomePullRefresh()
     })
   }
 
@@ -1555,7 +1844,13 @@ struct Index {
   private PictureEntryList() {
     List({ space: HOME_MODE_CONTENT_GAP, scroller: this.picturesScroller }) {
       ListItem() {
-        this.HomeModeHeaderSection()
+        Column() {
+          Blank()
+            .height(HOME_MODE_SCENE_TOP_INSET)
+
+          this.HomeRefreshGapSlot('pictures')
+        }
+        .width('100%')
       }
       .width('100%')
 
@@ -1609,46 +1904,68 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      return this.consumeHomePullScroll('pictures', scrollOffset)
+    })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
+    })
+    .onDidStopDragging((_willFling: boolean) => {
+      this.finalizeHomePullRefresh()
     })
   }
 
   @Builder
   private ModeEntriesScene(mode: SubscriptionMode) {
-    Stack() {
-      if (resolveHomeVideoSceneKind(mode) === 'grid') {
-        Scroll(this.homeScrollerForMode(mode)) {
-          Column({ space: HOME_MODE_CONTENT_GAP }) {
-            this.HomeModeHeaderSection()
+    Stack({ alignContent: Alignment.TopStart }) {
+      Stack({ alignContent: Alignment.TopStart }) {
+        if (resolveHomeVideoSceneKind(mode) === 'grid') {
+          Scroll(this.homeScrollerForMode(mode)) {
+            Column({ space: HOME_MODE_CONTENT_GAP }) {
+              Column() {
+                Blank()
+                  .height(HOME_MODE_SCENE_TOP_INSET)
 
-            HomeVideoGrid({
-              entries: this.filteredEntriesFor(mode),
-              highlightQuery: this.searchQuery,
-              inheritedTheme: this.theme,
-              onOpenEntry: (entry: EntryCardModel) => {
-                this.openEntry(entry)
-              },
-            })
+                this.HomeRefreshGapSlot(mode)
+              }
+              .width('100%')
+
+              HomeVideoGrid({
+                entries: this.filteredEntriesFor(mode),
+                highlightQuery: this.searchQuery,
+                inheritedTheme: this.theme,
+                onOpenEntry: (entry: EntryCardModel) => {
+                  this.openEntry(entry)
+                },
+              })
+            }
+            .width('100%')
+            .constraintSize({ minHeight: '100%' })
+            .alignItems(HorizontalAlign.Start)
+            .justifyContent(FlexAlign.Start)
+            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 100 })
           }
           .width('100%')
-          .constraintSize({ minHeight: '100%' })
-          .alignItems(HorizontalAlign.Start)
-          .justifyContent(FlexAlign.Start)
-          .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 100 })
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.Spring)
+          .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+            return this.consumeHomePullScrollOffset(mode, yOffset)
+          })
+          .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
+            this.syncHomeModeRailState(mode)
+          })
+          .onDidStopDragging((_willFling: boolean) => {
+            this.finalizeHomePullRefresh()
+          })
+        } else if (mode === 'pictures') {
+          this.PictureEntryList()
+        } else {
+          this.EntryList(mode)
         }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
-        .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
-          this.syncHomeModeRailState(mode)
-        })
-      } else if (mode === 'pictures') {
-        this.PictureEntryList()
-      } else {
-        this.EntryList(mode)
       }
+      .width('100%')
+      .height('100%')
     }
     .width('100%')
     .height('100%')
