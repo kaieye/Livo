@@ -21,6 +21,10 @@ test('home mode rail is rendered in a fixed root overlay instead of inside each 
     /if \(this\.isHomeRootTab\(\)\) \{[\s\S]*this\.HomeCollapsingModeRailLayer\(\)/s,
   )
   assert.doesNotMatch(homeRootPage, /Refresh\(/)
+  assert(
+    homeRootPage.indexOf('this.HomeRefreshIndicatorLayer()') <
+      homeRootPage.indexOf("this.ModeEntriesScene('articles')"),
+  )
 
   const entryListStart = source.indexOf(
     'private EntryList(mode: SubscriptionMode) {',
@@ -73,10 +77,12 @@ test('home no longer ships debug boundary lines for the rail top and first card 
     'utf8',
   )
 
-  assert.doesNotMatch(source, /private homeFirstCardTopBoundary\(\): number \{/)
-  assert.doesNotMatch(
+  assert.match(source, /private homeFirstCardTopBoundary\(\): number \{/)
+  assert.match(source, /private homeModeRailTopBoundary\(\): number \{/)
+  assert.match(source, /private homeModeRailCollapseReady\(\): boolean \{/)
+  assert.match(
     source,
-    /return Math\.max\(0, HOME_MODE_HEADER_SPACER_HEIGHT - this\.currentHomeModeScrollOffset\)/,
+    /HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP \+ HOME_MODE_RAIL_HEIGHT/,
   )
   assert.doesNotMatch(source, /private HomeModeRailDebugBoundaryLayer\(\)/)
   assert.doesNotMatch(source, /const HOME_MODE_HEADER_SPACER_HEIGHT: number =/)
@@ -189,14 +195,14 @@ test('home refresh indicator is visually anchored below the spacer while keeping
     source,
     /\.translate\(\{ y: HOME_REFRESH_CONTENT_COMPENSATION_OFFSET \}\)/,
   )
-  assert.match(source, /const HOME_REFRESH_PULL_DISTANCE: number = 60/)
+  assert.match(source, /const HOME_REFRESH_PULL_DISTANCE: number = 24/)
   assert.match(source, /const HOME_REFRESH_FOLLOW_RATIO: number = 0\.72/)
   assert.match(source, /const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 36/)
   assert.match(
     source,
     /const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32/,
   )
-  assert.match(source, /const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 28/)
+  assert.match(source, /const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 12/)
   assert.match(
     source,
     /const HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y: number = 12/,
@@ -319,7 +325,7 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   )
   assert.match(source, /\.padding\(\{ top: HOME_MODE_SCENE_TOP_INSET \}\)/)
   assert.match(source, /\.align\(Alignment\.Top\)/)
-  assert.match(source, /\.zIndex\(90\)/)
+  assert.match(source, /\.zIndex\(-1\)/)
   assert.match(
     source,
     /\.onWillScroll\(\(scrollOffset: number,[\s\S]*?this\.consumeHomePullScroll\(mode, scrollOffset\)/s,
@@ -360,7 +366,10 @@ test('home refresh indicator is visually anchored below the spacer while keeping
     source,
     /Column\(\{ space: HOME_MODE_CONTENT_GAP \}\) \{[\s\S]*?Column\(\) \{[\s\S]*?Blank\(\)[\s\S]*?this\.HomeRefreshGapSlot\(mode\)[\s\S]*?\}\s*\.width\('100%'\)[\s\S]*?HomeVideoGrid\(/s,
   )
-  assert.match(source, /if \(this\.shouldShowHomeRefreshGap\(this\.mode\)\) \{/)
+  assert.match(
+    source,
+    /if \(this\.shouldShowHomeRefreshIndicator\(this\.mode\)\) \{/,
+  )
   assert.match(source, /\.translate\(\{ x: this\.modeSceneOffset\(mode\) \}\)/)
   assert.doesNotMatch(
     source,

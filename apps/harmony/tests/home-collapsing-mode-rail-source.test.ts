@@ -26,7 +26,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   assert.match(source, /@State homeModeRailExpandedLockOffset: number = -1/)
   assert.match(
     source,
-    /private homeModeRailCollapseProgress\(\): number \{[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{\s*return 0\s*\}[\s\S]*const collapseStartBoundary = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT \+ HOME_MODE_RAIL_COLLAPSE_OFFSET[\s\S]*const traveledDistance = collapseStartBoundary - this\.homeFirstCardTopBoundary\(\)[\s\S]*return Math\.max\(0, Math\.min\(traveledDistance \/ HOME_MODE_RAIL_COLLAPSE_OFFSET, 1\)\)\s*\}/s,
+    /private homeModeRailCollapseProgress\(\): number \{[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{\s*return 0\s*\}[\s\S]*if \(!this\.homeModeRailCollapseReady\(\)\) \{\s*return 0\s*\}[\s\S]*return this\.homeModeRailDismissedByScroll \? 1 : 0\s*\}/s,
   )
   assert.match(
     source,
@@ -46,7 +46,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private syncHomeModeRailState\(mode: SubscriptionMode = this\.mode\): void \{[\s\S]*const nextOffset = this\.readHomeModeScrollOffset\(mode\)[\s\S]*this\.updateHomeModeScrollOffset\(mode, nextOffset\)[\s\S]*if \(mode !== this\.mode\) \{\s*return\s*\}[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{[\s\S]*Math\.abs\(nextOffset - this\.homeModeRailExpandedLockOffset\) < 0\.5[\s\S]*return[\s\S]*this\.homeModeRailExpandedOverride = false[\s\S]*this\.homeModeRailExpandedLockOffset = -1[\s\S]*\}[\s\S]*this\.currentHomeModeScrollOffset = nextOffset[\s\S]*this\.updateHeaderBlurProgress\(nextOffset\)\s*\}/s,
+    /private syncHomeModeRailState\(mode: SubscriptionMode = this\.mode\): void \{[\s\S]*const previousOffset = this\.currentHomeModeScrollOffset[\s\S]*const nextOffset = this\.readHomeModeScrollOffset\(mode\)[\s\S]*this\.updateHomeModeScrollOffset\(mode, nextOffset\)[\s\S]*if \(mode !== this\.mode\) \{\s*return\s*\}[\s\S]*if \(this\.isRefreshing && nextOffset > HOME_REFRESH_DISMISS_SCROLL_OFFSET\) \{\s*this\.dismissHomeRefreshIndicatorDuringRefresh\(\)[\s\S]*if \(this\.homeModeRailExpandedOverride\) \{[\s\S]*Math\.abs\(nextOffset - this\.homeModeRailExpandedLockOffset\) < 2[\s\S]*return[\s\S]*this\.homeModeRailExpandedOverride = false[\s\S]*this\.homeModeRailExpandedLockOffset = -1[\s\S]*\}[\s\S]*if \(nextOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET\) \{[\s\S]*this\.homeModeRailDismissedByScroll = false[\s\S]*\} else if \(!this\.homeModeRailExpandedOverride\) \{[\s\S]*if \(nextOffset > previousOffset \+ 0\.5\) \{[\s\S]*this\.homeModeRailDismissedByScroll = true[\s\S]*\} else if \(nextOffset < previousOffset - 0\.5\) \{[\s\S]*this\.homeModeRailDismissedByScroll = false[\s\S]*\} else if \(nextOffset <= 0\.5\) \{[\s\S]*this\.homeModeRailDismissedByScroll = false[\s\S]*\}[\s\S]*this\.currentHomeModeScrollOffset = nextOffset[\s\S]*this\.updateHeaderBlurProgress\(nextOffset\)\s*\}/s,
   )
   assert.match(
     source,
@@ -73,7 +73,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private HomeCollapsingModeRailLayer\(\) \{[\s\S]*if \(!this\.isHomeModeRailCollapsed\(\)\) \{[\s\S]*this\.HomeModeRail\(\{[\s\S]*collapsed: false[\s\S]*collapseProgress: this\.homeModeRailCollapseProgress\(\)/s,
+    /private HomeCollapsingModeRailLayer\(\) \{[\s\S]*Stack\(\{ alignContent: Alignment\.Top \}\)[\s\S]*Column\(\{ space: ROOT_MODE_RAIL_TOP_GAP \}\)[\s\S]*this\.HomeModeRail\(\{[\s\S]*collapsed: false[\s\S]*collapseProgress: this\.homeModeRailCollapseProgress\(\)[\s\S]*\.enabled\(!this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(100\)/s,
   )
   assert.match(
     source,
@@ -103,11 +103,11 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private HomeCollapsingModeRailLayer\(\) \{[\s\S]*?right: PAGE_HORIZONTAL_PADDING,[\s\S]*?\.zIndex\(100\)/s,
+    /private HomeCollapsingModeRailLayer\(\) \{[\s\S]*Stack\(\{ alignContent: Alignment\.Top \}\)[\s\S]*Column\(\{ space: ROOT_MODE_RAIL_TOP_GAP \}\)[\s\S]*this\.HomeModeRail\(\{[\s\S]*collapsed: false[\s\S]*collapseProgress: this\.homeModeRailCollapseProgress\(\)[\s\S]*\.enabled\(!this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(100\)/s,
   )
   assert.match(
     source,
-    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*if \(this\.homeModeRailCollapseProgress\(\) > 0\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*\.padding\(\{[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\),[\s\S]*left: PAGE_HORIZONTAL_PADDING,[\s\S]*right: this\.homeModeRailRightInset\(\),[\s\S]*\}\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.translate\(\{ y: \(1 - this\.homeModeRailCollapseProgress\(\)\) \* -6 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(120\)/s,
+    /private HomeCollapsedModeRailLayer\(\) \{[\s\S]*Row\(\{ space: HOME_INLINE_SEARCH_ACTION_GAP \}\) \{[\s\S]*this\.HomeCollapsedModeRailButton\(\)[\s\S]*\.padding\(\{[\s\S]*top: this\.homeCollapsedModeRailTopPadding\(\),[\s\S]*left: PAGE_HORIZONTAL_PADDING,[\s\S]*right: this\.homeModeRailRightInset\(\),[\s\S]*\}\)[\s\S]*\.opacity\(this\.homeModeRailCollapseProgress\(\)\)[\s\S]*\.translate\(\{ y: \(1 - this\.homeModeRailCollapseProgress\(\)\) \* 14 \}\)[\s\S]*\.animation\(\{ duration: 180, curve: Curve\.EaseOut \}\)[\s\S]*\.enabled\(this\.isHomeModeRailCollapsed\(\)\)[\s\S]*\.zIndex\(132\)/s,
   )
   assert.match(
     source,
@@ -115,7 +115,7 @@ test('home page derives a collapsing mode rail progress and moves the collapsed 
   )
   assert.match(
     source,
-    /private homeFirstCardTopBoundary\(\): number \{\s*return Math\.max\(0, HOME_MODE_HEADER_SPACER_HEIGHT - this\.currentHomeModeScrollOffset\)\s*\}/s,
+    /private homeFirstCardTopBoundary\(\): number \{\s*return HOME_MODE_SCENE_TOP_INSET - this\.currentHomeModeScrollOffset\s*\}/s,
   )
   assert.match(
     source,

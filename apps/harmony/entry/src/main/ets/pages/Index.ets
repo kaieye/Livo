@@ -64,14 +64,17 @@ import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
-const HOME_MODE_CONTENT_GAP: number = 14
-const HOME_REFRESH_PULL_DISTANCE: number = 60
+const HOME_MODE_CONTENT_GAP: number = 6
+const HOME_REFRESH_PULL_DISTANCE: number = 24
 const HOME_REFRESH_MAX_PULL_DISTANCE: number = 120
 const HOME_REFRESH_FOLLOW_RATIO: number = 0.72
 const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 36
+const HOME_REFRESH_AUTO_DISMISS_HOLD_DISTANCE: number = 18
 const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32
-const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 28
+const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 12
 const HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y: number = 12
+const HOME_REFRESH_INDICATOR_SIZE: number = 40
+const HOME_REFRESH_INDICATOR_BOTTOM_MARGIN: number = 15
 const HOME_REFRESH_RESET_DURATION: number = 220
 const HOME_REFRESH_DISMISS_SCROLL_OFFSET: number = 18
 const HEADER_BLUR_SCROLL_RANGE: number = 72
@@ -248,7 +251,8 @@ struct Index {
     this.homeRefreshIndicatorDismissed = true
     this.homeRefreshPullDistance = 0
     this.homeRefreshIndicatorOffset = 0
-    this.homeRefreshContentHoldOffset = 0
+    // Use a fixed hold distance so the auto-dismiss settle position is stable every time.
+    this.homeRefreshContentHoldOffset = HOME_REFRESH_AUTO_DISMISS_HOLD_DISTANCE
     this.homeRefreshStatus = RefreshStatus.Drag
     setTimeout(() => {
       if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
@@ -379,8 +383,12 @@ struct Index {
   }
 
   private shouldShowHomeRefreshGap(mode: SubscriptionMode): boolean {
-    if (!this.isHomeRootTab() || mode !== this.mode || this.homeRefreshIndicatorDismissed) {
+    if (!this.isHomeRootTab() || mode !== this.mode) {
       return false
+    }
+
+    if (this.homeRefreshIndicatorDismissed) {
+      return this.homeRefreshContentHoldOffset > 0.5
     }
 
     return this.homeRefreshIndicatorOffset >= HOME_REFRESH_GAP_OPEN_PULL_DISTANCE
@@ -390,6 +398,14 @@ struct Index {
 
   private shouldShowHomeRefreshIndicator(mode: SubscriptionMode): boolean {
     if (!this.isHomeRootTab() || mode !== this.mode) {
+      return false
+    }
+
+    if (this.homeRefreshIndicatorDismissed) {
+      return false
+    }
+
+    if (this.homeRefreshGapHeight(mode) <= 0.5) {
       return false
     }
 
@@ -874,7 +890,36 @@ struct Index {
 
   @Builder
   private HomeInlineSearchActionRow() {
-    Row() {
+    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
+      Row() {
+        if (this.isRefreshing) {
+          LoadingProgress()
+            .width(18)
+            .height(18)
+            .color(this.theme.textPrimary)
+        } else {
+          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+            .fontSize(18)
+            .fontColor([this.theme.textPrimary])
+        }
+      }
+      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
+      .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
+      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
+      .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
+      .shadow(this.homeCollapsedModeRailShadow())
+      .opacity(this.showSearch ? 0 : 1)
+      .translate({ x: this.showSearch ? 10 : 0 })
+      .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
+      .enabled(!this.showSearch)
+      .onClick(() => {
+        void this.refreshFeaturedEntries()
+      })
+
       Row() {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontSize(18)
@@ -1523,8 +1568,8 @@ struct Index {
 
   private homeModeRailRightInset(): number {
     return PAGE_HORIZONTAL_PADDING
-      + HOME_INLINE_SEARCH_ACTION_SIZE
-      + HOME_INLINE_SEARCH_ACTION_GAP
+      + HOME_INLINE_SEARCH_ACTION_SIZE * 2
+      + HOME_INLINE_SEARCH_ACTION_GAP * 2
   }
 
   private homeModeRailLeftPadding(): number {
@@ -1771,11 +1816,12 @@ struct Index {
 
   @Builder
   private HomeRefreshIndicatorLayer() {
-    if (this.shouldShowHomeRefreshGap(this.mode)) {
+    if (this.shouldShowHomeRefreshIndicator(this.mode)) {
       Column() {
         LoadingProgress()
-          .width(18)
-          .height(18)
+          .width(HOME_REFRESH_INDICATOR_SIZE)
+          .height(HOME_REFRESH_INDICATOR_SIZE)
+          .margin({ bottom: HOME_REFRESH_INDICATOR_BOTTOM_MARGIN })
           .color(this.theme.accent)
       }
       .opacity(this.homeRefreshIndicatorOpacity())
@@ -1789,7 +1835,7 @@ struct Index {
       .alignItems(HorizontalAlign.Center)
       .padding({ top: HOME_MODE_SCENE_TOP_INSET })
       .align(Alignment.Top)
-      .zIndex(90)
+      .zIndex(-1)
     }
   }
 
@@ -1998,6 +2044,8 @@ struct Index {
   @Builder
   private HomeRootPage() {
     Stack({ alignContent: Alignment.TopStart }) {
+      this.HomeRefreshIndicatorLayer()
+
       if (this.shouldMountModeScene('articles')) {
         this.ModeEntriesScene('articles')
       }
@@ -2010,8 +2058,6 @@ struct Index {
       if (this.shouldMountModeScene('videos')) {
         this.ModeEntriesScene('videos')
       }
-
-      this.HomeRefreshIndicatorLayer()
     }
     .width('100%')
     .height('100%')
