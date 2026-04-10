@@ -114,10 +114,7 @@ test('home page keeps HDS title bar system material while rendering inline searc
     source,
     /private currentRootOriginalTitleBarBlurRadius\(\): number/,
   )
-  assert.match(
-    source,
-    /private currentRootScrollEffectTitleBarBlurRadius\(\): number/,
-  )
+  assert.doesNotMatch(source, /private HomeModeHeaderSection\(\)/)
   assert.match(
     source,
     /private currentRootOriginalTitleBarMaskExtraHeight\(\): number/,
@@ -140,7 +137,7 @@ test('home page keeps HDS title bar system material while rendering inline searc
     source,
     /private handleSettingsContentScrollerReady\(scroller: Scroller\): void/,
   )
-  assert.match(source, /private HomeModeHeaderSection\(\)/)
+  assert.doesNotMatch(source, /private HomeModeHeaderSection\(\)/)
   assert.match(source, /\.height\(0\)/)
   assert.match(
     source,
