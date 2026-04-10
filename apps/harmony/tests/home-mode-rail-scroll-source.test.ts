@@ -39,8 +39,7 @@ test('home mode rail is rendered in a fixed root overlay instead of inside each 
   assert.doesNotMatch(pictureList, /this\.HomeModeHeaderSection\(\)/)
   assert.doesNotMatch(modeScene, /this\.HomeModeHeaderSection\(\)/)
   assert.match(source, /private HomeRefreshGapSlot\(mode: SubscriptionMode\)/)
-  assert.doesNotMatch(source, /private HomeRefreshIndicatorLayer\(\)/)
-  assert.doesNotMatch(source, /builder: this\.HomeRefreshIndicatorLayer\(\)/)
+  assert.match(source, /private HomeRefreshIndicatorLayer\(\)/)
   assert.match(source, /LoadingProgress\(\)/)
   assert.doesNotMatch(
     modeScene,
@@ -167,10 +166,6 @@ test('home header section now includes the immersive title bar overlay before co
     source,
     /\.translate\(\{ y: this\.homeModeSceneSpacerTranslateY\(mode\) \}\)/,
   )
-  assert.doesNotMatch(
-    source,
-    /\.padding\(\{ top: HOME_MODE_SCENE_TOP_INSET \}\)/,
-  )
   assert.doesNotMatch(source, /\.backgroundColor\('\#00000000'\)/)
   assert.match(source, /private HomeCollapsingModeRailLayer\(\)/)
 })
@@ -290,7 +285,7 @@ test('home refresh indicator is visually anchored below the spacer while keeping
     /private homeRefreshGapHeight\(mode: SubscriptionMode\): number \{/,
   )
   assert.match(source, /private HomeRefreshGapSlot\(mode: SubscriptionMode\)/)
-  assert.doesNotMatch(source, /private HomeRefreshIndicatorLayer\(\)/)
+  assert.match(source, /private HomeRefreshIndicatorLayer\(\)/)
   assert.doesNotMatch(
     source,
     /private homeRefreshContentTranslateY\(mode: SubscriptionMode\): number \{/,
@@ -300,9 +295,19 @@ test('home refresh indicator is visually anchored below the spacer while keeping
     /private homeRefreshIndicatorTopMargin\(\): number \{/,
   )
   assert.match(source, /\.width\('100%'\)/)
-  assert.match(source, /\.justifyContent\(FlexAlign\.Center\)/)
-  assert.match(source, /\.alignItems\(HorizontalAlign\.Center\)/)
   assert.match(source, /\.height\(this\.homeRefreshGapHeight\(mode\)\)/)
+  assert.doesNotMatch(
+    source,
+    /\.backgroundColor\(this\.homeRefreshIndicatorBackgroundColor\(\)\)/,
+  )
+  assert.doesNotMatch(
+    source,
+    /\.border\(\{ width: 0\.8, color: this\.homeRefreshIndicatorBorderColor\(\) \}\)/,
+  )
+  assert.doesNotMatch(
+    source,
+    /\.shadow\(this\.homeRefreshIndicatorShadow\(\)\)/,
+  )
   assert.match(
     source,
     /const dragGapHeight = Math\.max\(0, this\.homeRefreshIndicatorOffset - HOME_REFRESH_GAP_OPEN_PULL_DISTANCE\) \* HOME_REFRESH_FOLLOW_RATIO/,
@@ -312,6 +317,9 @@ test('home refresh indicator is visually anchored below the spacer while keeping
     source,
     /return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y \+ \(1 - this\.homeRefreshIndicatorProgress\(\)\) \* 12/,
   )
+  assert.match(source, /\.padding\(\{ top: HOME_MODE_SCENE_TOP_INSET \}\)/)
+  assert.match(source, /\.align\(Alignment\.Top\)/)
+  assert.match(source, /\.zIndex\(90\)/)
   assert.match(
     source,
     /\.onWillScroll\(\(scrollOffset: number,[\s\S]*?this\.consumeHomePullScroll\(mode, scrollOffset\)/s,
@@ -323,6 +331,14 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   assert.doesNotMatch(
     source,
     /if \(this\.isHomeRootTab\(\) && this\.shouldShowHomeRefreshIndicator\(\)\) \{[\s\S]*this\.HomeRefreshIndicatorLayer\(\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeRootPage\(\) \{[\s\S]*this\.HomeRefreshIndicatorLayer\(\)/s,
+  )
+  assert.match(
+    source,
+    /private HomeRootPage\(\) \{\s*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
   )
   assert.doesNotMatch(
     source,
@@ -344,7 +360,7 @@ test('home refresh indicator is visually anchored below the spacer while keeping
     source,
     /Column\(\{ space: HOME_MODE_CONTENT_GAP \}\) \{[\s\S]*?Column\(\) \{[\s\S]*?Blank\(\)[\s\S]*?this\.HomeRefreshGapSlot\(mode\)[\s\S]*?\}\s*\.width\('100%'\)[\s\S]*?HomeVideoGrid\(/s,
   )
-  assert.match(source, /if \(this\.shouldShowHomeRefreshIndicator\(mode\)\) \{/)
+  assert.match(source, /if \(this\.shouldShowHomeRefreshGap\(this\.mode\)\) \{/)
   assert.match(source, /\.translate\(\{ x: this\.modeSceneOffset\(mode\) \}\)/)
   assert.doesNotMatch(
     source,

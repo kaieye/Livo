@@ -1744,33 +1744,34 @@ struct Index {
 
   @Builder
   private HomeRefreshGapSlot(mode: SubscriptionMode) {
-    Column() {
-      if (this.shouldShowHomeRefreshIndicator(mode)) {
-        Column() {
-          LoadingProgress()
-            .width(18)
-            .height(18)
-            .color(this.theme.accent)
-        }
-        .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-        .backgroundColor(this.homeRefreshIndicatorBackgroundColor())
-        .borderRadius(999)
-        .border({ width: 0.8, color: this.homeRefreshIndicatorBorderColor() })
-        .shadow(this.homeRefreshIndicatorShadow())
-        .opacity(this.homeRefreshIndicatorOpacity())
-        .scale({
-          x: this.homeRefreshIndicatorScale(),
-          y: this.homeRefreshIndicatorScale(),
-        })
-        .translate({ y: this.homeRefreshIndicatorTranslateY() })
-        .animation({ duration: 160, curve: Curve.EaseOut })
-      }
-    }
+    Column()
     .width('100%')
     .height(this.homeRefreshGapHeight(mode))
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
     .animation({ duration: 180, curve: Curve.EaseOut })
+  }
+
+  @Builder
+  private HomeRefreshIndicatorLayer() {
+    if (this.shouldShowHomeRefreshGap(this.mode)) {
+      Column() {
+        LoadingProgress()
+          .width(18)
+          .height(18)
+          .color(this.theme.accent)
+      }
+      .opacity(this.homeRefreshIndicatorOpacity())
+      .scale({
+        x: this.homeRefreshIndicatorScale(),
+        y: this.homeRefreshIndicatorScale(),
+      })
+      .translate({ y: this.homeRefreshIndicatorTranslateY() })
+      .animation({ duration: 160, curve: Curve.EaseOut })
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
+      .padding({ top: HOME_MODE_SCENE_TOP_INSET })
+      .align(Alignment.Top)
+      .zIndex(90)
+    }
   }
 
   @Builder
@@ -1977,7 +1978,7 @@ struct Index {
 
   @Builder
   private HomeRootPage() {
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       if (this.shouldMountModeScene('articles')) {
         this.ModeEntriesScene('articles')
       }
@@ -1990,6 +1991,8 @@ struct Index {
       if (this.shouldMountModeScene('videos')) {
         this.ModeEntriesScene('videos')
       }
+
+      this.HomeRefreshIndicatorLayer()
     }
     .width('100%')
     .height('100%')
