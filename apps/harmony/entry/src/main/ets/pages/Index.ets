@@ -83,6 +83,7 @@ const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACE
 const HOME_MODE_RAIL_HEIGHT: number = 46
 const HOME_MODE_SCENE_TOP_INSET: number =
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
+const HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
 const HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL: number = 32
 const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 0
@@ -514,7 +515,9 @@ struct Index {
       this.homeModeRailExpandedLockOffset = -1
     }
 
-    if (!this.homeModeRailExpandedOverride) {
+    if (nextOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET) {
+      this.homeModeRailDismissedByScroll = false
+    } else if (!this.homeModeRailExpandedOverride) {
       if (nextOffset > previousOffset + 0.5) {
         this.homeModeRailDismissedByScroll = true
       } else if (nextOffset < previousOffset - 0.5) {
@@ -1474,8 +1477,24 @@ struct Index {
     this.updateHeaderBlurProgress(this.homeModeRailExpandedLockOffset)
   }
 
+  private homeFirstCardTopBoundary(): number {
+    return HOME_MODE_SCENE_TOP_INSET - this.currentHomeModeScrollOffset
+  }
+
+  private homeModeRailTopBoundary(): number {
+    return HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
+  }
+
+  private homeModeRailCollapseReady(): boolean {
+    return this.homeFirstCardTopBoundary() <= this.homeModeRailTopBoundary()
+  }
+
   private homeModeRailCollapseProgress(): number {
     if (this.homeModeRailExpandedOverride) {
+      return 0
+    }
+
+    if (!this.homeModeRailCollapseReady()) {
       return 0
     }
 
