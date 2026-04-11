@@ -255,11 +255,19 @@ export struct FeedSubscribeConfigView {
       const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
       const cachedPreview = this.cachedPreviewPayload()
       if (cachedPreview) {
-        void this.seedPreviewAfterSave(updatedFeed.id, {
-          ...cachedPreview,
+        const saveSeedPayload: FeedRefreshPayload = {
+          etag: cachedPreview.etag,
+          lastModified: cachedPreview.lastModified,
           feedTitle: draft.title || cachedPreview.feedTitle,
-        })
+          siteUrl: cachedPreview.siteUrl,
+          imageUrl: cachedPreview.imageUrl,
+          description: cachedPreview.description,
+          resolvedFeedUrl: cachedPreview.resolvedFeedUrl,
+          entries: cachedPreview.entries,
+        }
+        void this.seedPreviewAfterSave(updatedFeed.id, saveSeedPayload)
       }
+      AppStorage.setOrCreate('feedsChangedAt', Date.now())
       this.showToast('保存成功', 2000)
       await this.runCompletion(this.onSaved, 'save')
     } catch (e) {

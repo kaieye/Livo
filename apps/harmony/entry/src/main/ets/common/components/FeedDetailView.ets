@@ -80,6 +80,7 @@ export struct FeedDetailView {
   @State private videoPreviewCache: VideoPreviewCacheItem[] = []
   @State private heroAvatarCandidates: string[] = []
   @State private heroAvatarIndex: number = 0
+  @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
 
   aboutToAppear(): void {
     this.targetTitle = this.initialTargetTitle
@@ -88,6 +89,52 @@ export struct FeedDetailView {
     this.targetDescription = this.initialTargetDescription
     this.resetHeroAvatarCandidates()
     void this.loadData()
+  }
+
+  private handleFeedsChanged(): void {
+    if (!this.feedId || this.isLoading || this.isRefreshing) {
+      return
+    }
+    void this.reloadSubscribedFeedSnapshot()
+  }
+
+  private async reloadSubscribedFeedSnapshot(): Promise<void> {
+    if (!this.feedId) {
+      return
+    }
+
+    try {
+      const feed = await AppRepository.feedEntityById(this.feedId)
+      if (!feed) {
+        return
+      }
+
+      this.existingFeed = feed
+      const displayFeed = this.displayFeedState(feed.title, feed.imageUrl || '', feed.description || '', feed.url, feed.siteUrl || '')
+      this.targetTitle = displayFeed.title
+      this.targetSiteUrl = feed.siteUrl || ''
+      this.targetImageUrl = displayFeed.imageUrl
+      this.targetDescription = displayFeed.description
+
+      const entries = await AppRepository.entryEntitiesByFeed(this.feedId)
+      const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(feed.url)
+      const previewEntries = this.preferredPreviewEntries(entries, cachedPayload?.entries ?? [])
+      const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
+      this.targetImageUrl = payloadImageUrl
+      this.previewPayload = {
+        etag: feed.etag || '',
+        lastModified: feed.lastModified || '',
+        feedTitle: displayFeed.title || cachedPayload?.feedTitle || '',
+        siteUrl: feed.siteUrl || cachedPayload?.siteUrl || '',
+        imageUrl: payloadImageUrl,
+        description: displayFeed.description || cachedPayload?.description || '',
+        entries: previewEntries,
+      }
+      this.resetHeroAvatarCandidates()
+      void this.hydrateVideoPreviews(previewEntries)
+    } catch (error) {
+      console.error(`reload subscribed feed snapshot failed: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   private async loadData(): Promise<void> {
