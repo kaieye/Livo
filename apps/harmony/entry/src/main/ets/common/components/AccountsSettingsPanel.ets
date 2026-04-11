@@ -9,7 +9,6 @@ import {
 } from '../models/LivoModels'
 import { PageHeader } from './PageHeader'
 import { AccountSelfCheckService } from '../services/AccountSelfCheckService'
-import { ExternalUrlService } from '../services/ExternalUrlService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { openAccountLogin } from '../navigation/AppRouter'
 import { accountCardHeadlineStatus } from '../utils/AccountCardHeadline'
@@ -22,7 +21,6 @@ import {
   CARD_RADIUS_MD,
   CHIP_RADIUS,
   PAGE_HORIZONTAL_PADDING,
-  SECTION_GAP_MD,
 } from '../ui/UiTokens'
 
 const PANEL_HANDLE_TOP_PADDING: number = 10
@@ -32,6 +30,7 @@ const ACTION_BUTTON_HEIGHT: number = 32
 const INPUT_HEIGHT: number = 42
 const PROVIDER_BADGE_SIZE: number = 48
 const CARD_INNER_PADDING: number = 12
+const PROVIDER_CARD_GAP: number = 10
 
 interface AccountProviderCard {
   provider: AccountProvider
@@ -263,13 +262,6 @@ export struct AccountsSettingsPanel {
     return resolveAccountLoginWebPolicy(provider).usesExternalBrowser
   }
 
-  private externalLoginHint(provider: AccountProvider): string {
-    if (provider === 'youtube') {
-      return '已在浏览器打开登录页，完成登录后返回此处检查，或手动保存账号名完成关联'
-    }
-    return '已打开外部登录页'
-  }
-
   private async loadProviderStatuses(): Promise<void> {
     const nextCards: AccountProviderCard[] = []
 
@@ -341,21 +333,7 @@ export struct AccountsSettingsPanel {
 
       this.activeProvider = provider
       try {
-        if (this.usesExternalBrowser(provider)) {
-          await ExternalUrlService.open(loginUrl)
-          this.updateProviderMessage(provider, this.externalLoginHint(provider))
-          this.replaceCard(provider, (current: AccountProviderCard) => {
-            const status: AccountStatusResult = {
-              provider,
-              linked: current.status.linked,
-              displayName: current.status.displayName,
-              error: '',
-            }
-            return createCardDefinitionStatus(current.provider, current.title, current.description, status)
-          })
-        } else {
-          await openAccountLogin(provider, card?.title || '账号关联', loginUrl)
-        }
+        await openAccountLogin(provider, card?.title || '账号关联', loginUrl)
       } catch (error) {
         const failedStatus = buildLinkNavigationFailureStatus(
           provider,
@@ -744,7 +722,7 @@ export struct AccountsSettingsPanel {
 
   @Builder
   private ProviderCard(card: AccountProviderCard) {
-    Column({ space: 10 }) {
+    Column({ space: 8 }) {
       Row({ space: 12 }) {
         Row({ space: 10 }) {
           Image(providerBadgeResource(card.provider))
@@ -755,62 +733,65 @@ export struct AccountsSettingsPanel {
             .backgroundColor(this.providerBadgeBackground(card.provider))
             .borderRadius(17)
 
-          Column({ space: 4 }) {
-            Row() {
-              Text(card.title)
-                .fontSize(15)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.theme.textPrimary)
+          Row() {
+            Text(card.title)
+              .fontSize(15)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textPrimary)
 
-              Text(` - ${this.titleStatusText(card.status)}`)
-                .fontSize(14)
-                .fontColor(card.status.error ? '#DC2626' : this.theme.textSecondary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            .alignItems(VerticalAlign.Center)
-
-            Text(this.providerDetailText(card))
-              .fontSize(12)
-              .lineHeight(18)
+            Text(` - ${this.titleStatusText(card.status)}`)
+              .fontSize(14)
               .fontColor(card.status.error ? '#DC2626' : this.theme.textSecondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .layoutWeight(1)
-          .alignItems(HorizontalAlign.Start)
+          .alignItems(VerticalAlign.Center)
         }
         .layoutWeight(1)
-        .alignItems(VerticalAlign.Top)
+        .alignItems(VerticalAlign.Center)
 
-        Column({ space: 8 }) {
-          Button(this.isProviderLoading(card.provider) ? '处理中...' : this.actionLabel(card.status))
+        Button(this.isProviderLoading(card.provider) ? '处理中...' : this.actionLabel(card.status))
+          .enabled(!this.isProviderLoading(card.provider))
+          .height(ACTION_BUTTON_HEIGHT)
+          .backgroundColor(card.status.linked ? this.theme.elevated : this.theme.accent)
+          .fontColor(card.status.linked ? this.theme.textPrimary : this.theme.accentText)
+          .fontSize(13)
+          .borderRadius(CHIP_RADIUS)
+          .padding({ left: 14, right: 14 })
+          .onClick(() => {
+            void this.updateProviderStatus(card.provider, card.status.linked ? 'unlink' : 'link')
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      if (this.providerDetailText(card)) {
+        Text(this.providerDetailText(card))
+          .fontSize(12)
+          .lineHeight(18)
+          .fontColor(card.status.error ? '#DC2626' : this.theme.textSecondary)
+      }
+
+      if (this.shouldShowSecondaryAction(card.provider)) {
+        Row() {
+          Blank()
+            .layoutWeight(1)
+
+          Button(this.secondaryActionLabel(card.provider))
             .enabled(!this.isProviderLoading(card.provider))
             .height(ACTION_BUTTON_HEIGHT)
-            .backgroundColor(card.status.linked ? this.theme.elevated : this.theme.accent)
-            .fontColor(card.status.linked ? this.theme.textPrimary : this.theme.accentText)
+            .backgroundColor(this.theme.elevated)
+            .fontColor(this.theme.textPrimary)
             .fontSize(13)
             .borderRadius(CHIP_RADIUS)
             .padding({ left: 14, right: 14 })
             .onClick(() => {
-              void this.updateProviderStatus(card.provider, card.status.linked ? 'unlink' : 'link')
+              void this.updateProviderStatus(card.provider, 'refresh')
             })
-
-          if (this.shouldShowSecondaryAction(card.provider)) {
-            Button(this.secondaryActionLabel(card.provider))
-              .enabled(!this.isProviderLoading(card.provider))
-              .height(ACTION_BUTTON_HEIGHT)
-              .backgroundColor(this.theme.elevated)
-              .fontColor(this.theme.textPrimary)
-              .fontSize(13)
-              .borderRadius(CHIP_RADIUS)
-              .padding({ left: 14, right: 14 })
-              .onClick(() => {
-                void this.updateProviderStatus(card.provider, 'refresh')
-              })
-          }
         }
-        .alignItems(HorizontalAlign.End)
+        .width('100%')
       }
-      .width('100%')
 
       if (this.shouldShowManualSave(card.provider, card.status)) {
         Row({ space: 8 }) {
@@ -842,11 +823,12 @@ export struct AccountsSettingsPanel {
       }
     }
     .width('100%')
-    .padding(CARD_INNER_PADDING)
+    .padding({ left: CARD_INNER_PADDING, right: CARD_INNER_PADDING, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
     .borderRadius(CARD_RADIUS_MD)
     .border({ width: 0.8, color: this.theme.divider })
-    .constraintSize({ minHeight: 76 })
+    .justifyContent(FlexAlign.Center)
+    .constraintSize({ minHeight: 64 })
   }
 
   @Builder
@@ -876,7 +858,7 @@ export struct AccountsSettingsPanel {
         this.SheetHandle()
         this.PanelHeader()
 
-        Column({ space: SECTION_GAP_MD }) {
+        Column({ space: PROVIDER_CARD_GAP }) {
           ForEach(this.providerCards, (card: AccountProviderCard) => {
             this.ProviderCard(card)
           }, (card: AccountProviderCard) => accountCardRenderKey(

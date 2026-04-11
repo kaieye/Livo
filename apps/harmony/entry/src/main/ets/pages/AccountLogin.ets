@@ -495,9 +495,17 @@ struct AccountLogin {
     }
 
     try {
+      const controllerUrl = (this.webController.getUrl() || '').trim()
+      if (this.isYouTubeAuthFlowUrl(controllerUrl)) {
+        return
+      }
+
       await webview.WebCookieManager.saveCookieAsync()
       const pageState = await this.currentYouTubePageState()
       const currentUrl = (pageState?.currentUrl || this.webController.getUrl() || '').trim()
+      if (this.isYouTubeAuthFlowUrl(currentUrl)) {
+        return
+      }
       const documentCookies = (pageState?.cookies || '').trim() || await this.currentDocumentCookies()
       const detection = detectYouTubeLoginState({
         currentUrl,
@@ -550,6 +558,14 @@ struct AccountLogin {
         this.startYouTubeCookiePolling()
       }
     }
+  }
+
+  private isYouTubeAuthFlowUrl(value: string): boolean {
+    const normalized = (value || '').trim().toLowerCase()
+    if (!normalized) {
+      return false
+    }
+    return normalized.includes('accounts.google.com') || normalized.includes('accounts.youtube.com')
   }
 
   private async tryHandleYouTubeLogin(): Promise<void> {

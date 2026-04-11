@@ -6,7 +6,7 @@ import {
   resolveAccountLoginWebPolicy,
 } from '../entry/src/main/ets/common/utils/AccountLoginWebPolicy.ts'
 
-test('resolveAccountLoginWebPolicy enables window.open support for youtube login', () => {
+test('resolveAccountLoginWebPolicy keeps youtube login in app and enables popup handling', () => {
   const youtubePolicy = resolveAccountLoginWebPolicy('youtube')
   const bilibiliPolicy = resolveAccountLoginWebPolicy('bilibili')
 
