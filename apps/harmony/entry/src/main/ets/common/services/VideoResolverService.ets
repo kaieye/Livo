@@ -20,6 +20,9 @@ const INVIDIOUS_INSTANCES: string[] = [
   'https://invidious.nerdvpn.de',
   'https://iv.nbooo.com',
   'https://invidious.protokolla.fi',
+  'https://yewtu.be',
+  'https://inv.nadeko.net',
+  'https://invidious.fdn.fr',
 ]
 
 const PIPED_INSTANCES: string[] = [
@@ -121,7 +124,7 @@ export class VideoResolverService {
       return async (): Promise<string> => {
         try {
           const raw = await VideoResolverService.fetchJson(
-            `${instance}/api/v1/videos/${videoId}?fields=formatStreams,title`,
+            `${instance}/api/v1/videos/${videoId}`,
             instance,
           )
           if (!raw) {
@@ -130,11 +133,10 @@ export class VideoResolverService {
 
           const payload = JSON.parse(raw) as Record<string, Object>
           const formatStreams = payload['formatStreams'] as InvidiousFormatStream[] | undefined
-          if (!formatStreams || formatStreams.length === 0) {
-            return ''
-          }
+          const adaptiveFormats = payload['adaptiveFormats'] as InvidiousFormatStream[] | undefined
+          const hlsUrl = typeof payload['hlsUrl'] === 'string' ? payload['hlsUrl'] : ''
 
-          return selectInvidiousPlayableUrl(formatStreams)
+          return selectInvidiousPlayableUrl(formatStreams ?? [], adaptiveFormats ?? [], hlsUrl)
         } catch (_) {
           return ''
         }

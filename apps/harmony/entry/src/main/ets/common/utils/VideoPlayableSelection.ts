@@ -4,6 +4,8 @@ export interface InvidiousFormatStream {
   quality?: string
   container?: string
   resolution?: string
+  audioQuality?: string
+  bitrate?: string
 }
 
 export interface PipedStream {
@@ -20,12 +22,14 @@ function qualityValue(label: string): number {
 
 export function selectInvidiousPlayableUrl(
   formatStreams: InvidiousFormatStream[],
+  adaptiveFormats: InvidiousFormatStream[] = [],
+  hlsUrl: string = '',
 ): string {
-  if (!formatStreams || formatStreams.length === 0) {
-    return ''
+  if ((hlsUrl || '').trim()) {
+    return hlsUrl.trim()
   }
 
-  const mp4Streams = formatStreams
+  const rankedFormatStreams = (formatStreams || [])
     .filter(
       (item: InvidiousFormatStream) =>
         item.container === 'mp4' || `${item.type ?? ''}`.includes('video/mp4'),
@@ -36,7 +40,25 @@ export function selectInvidiousPlayableUrl(
         qualityValue(left.quality ?? left.resolution ?? ''),
     )
 
-  const best = mp4Streams[0] ?? formatStreams[0]
+  if (rankedFormatStreams.length > 0) {
+    return rankedFormatStreams[0]?.url || ''
+  }
+
+  const rankedAdaptiveStreams = (adaptiveFormats || [])
+    .filter(
+      (item: InvidiousFormatStream) =>
+        `${item.type ?? ''}`.includes('video/mp4') && !!item.audioQuality,
+    )
+    .sort(
+      (left: InvidiousFormatStream, right: InvidiousFormatStream) =>
+        qualityValue(right.quality ?? right.resolution ?? right.bitrate ?? '') -
+        qualityValue(left.quality ?? left.resolution ?? left.bitrate ?? ''),
+    )
+  if (rankedAdaptiveStreams.length > 0) {
+    return rankedAdaptiveStreams[0]?.url || ''
+  }
+
+  const best = (formatStreams || [])[0] ?? (adaptiveFormats || [])[0]
   return best?.url || ''
 }
 

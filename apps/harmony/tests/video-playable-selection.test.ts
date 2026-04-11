@@ -81,3 +81,34 @@ test('selectPipedPlayableUrl returns empty string when no playable stream exists
 
   assert.equal(result, '')
 })
+
+test('selectInvidiousPlayableUrl prefers hls url when available', () => {
+  const result = selectInvidiousPlayableUrl(
+    [],
+    [],
+    'https://manifest.example.com/invidious-master.m3u8',
+  )
+
+  assert.equal(result, 'https://manifest.example.com/invidious-master.m3u8')
+})
+
+test('selectInvidiousPlayableUrl falls back to adaptive mp4 streams with audio', () => {
+  const result = selectInvidiousPlayableUrl(
+    [],
+    [
+      {
+        url: 'https://cdn.example.com/video-only.mp4',
+        type: 'video/mp4; codecs="avc1"',
+        quality: '1080p',
+      },
+      {
+        url: 'https://cdn.example.com/combined-720.mp4',
+        type: 'video/mp4; codecs="avc1,mp4a"',
+        quality: '720p',
+        audioQuality: 'AUDIO_QUALITY_MEDIUM',
+      },
+    ],
+  )
+
+  assert.equal(result, 'https://cdn.example.com/combined-720.mp4')
+})

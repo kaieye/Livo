@@ -1,12 +1,10 @@
 export type VideoPlaybackTarget = 'inline' | 'dedicated'
 
 export function resolveVideoPlaybackTarget(
-  isYouTubeVideo: boolean,
-  isDirectVideoFile: boolean,
+  _isYouTubeVideo: boolean,
+  _isDirectVideoFile: boolean,
 ): VideoPlaybackTarget {
-  if (isYouTubeVideo && !isDirectVideoFile) {
-    return 'dedicated'
-  }
-
+  // Keep YouTube playback inline in article detail to avoid context switches.
+  // The resolver still handles direct stream/fallback URL selection.
   return 'inline'
 }
