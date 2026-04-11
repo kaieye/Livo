@@ -148,6 +148,9 @@ export interface RemoteFeedResult {
   entries: EntryCardModel[]
   sourceLabel: string
   newEntriesCount?: number
+  failedFeedCount?: number
+  failedFeedLabels?: string[]
+  failedFeedDetails?: string[]
   fallbackUsed: boolean
 }
 

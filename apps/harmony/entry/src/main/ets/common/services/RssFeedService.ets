@@ -3,6 +3,7 @@ import { Entry, Feed, FeedViewType } from '../models/LivoModels'
 import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../utils/FeedMediaUrl'
 import { parseBilibiliDynamicEntries } from '../utils/BilibiliDynamicFeed'
 import { expandRssHubFallbackRoutes } from '../utils/RssHubFallbackRoute'
+import { canonicalFeedUrl } from '../utils/SocialFeedTitles'
 
 interface ParsedItem {
   id: string
@@ -374,6 +375,39 @@ const RSSHUB_INSTANCES = [
   'https://rsshub.feeded.xyz',
 ]
 
+function preferredRssHubInstances(route: string): string[] {
+  if (route.toLowerCase().includes('/x/') || route.toLowerCase().includes('/twitter/')) {
+    return [
+      'https://rsshub.pseudoyu.com',
+      ...RSSHUB_INSTANCES.filter((instance: string) => instance !== 'https://rsshub.pseudoyu.com'),
+    ]
+  }
+
+  if (route.toLowerCase().includes('/bilibili/')) {
+    return [
+      'https://rsshub.liumingye.cn',
+      ...RSSHUB_INSTANCES.filter((instance: string) => instance !== 'https://rsshub.liumingye.cn'),
+    ]
+  }
+
+  if (route.toLowerCase().includes('/picnob/') || route.toLowerCase().includes('/instagram/')) {
+    return [
+      'https://rsshub.liumingye.cn',
+      ...RSSHUB_INSTANCES.filter((instance: string) => instance !== 'https://rsshub.liumingye.cn'),
+    ]
+  }
+
+  return RSSHUB_INSTANCES
+}
+
+function rssHubRequestTimeoutMs(route: string): number {
+  if (route.toLowerCase().includes('/picnob/') || route.toLowerCase().includes('/instagram/')) {
+    return 8000
+  }
+
+  return 4000
+}
+
 // RSSHub 实例尝试结果
 interface RssHubInstanceResult {
   response: http.HttpResponse
@@ -487,6 +521,7 @@ export class RssFeedService {
     }
     // 检查是否包含常见的 RSSHub 路由
     return lowerUrl.includes('/bilibili/') || 
+           lowerUrl.includes('/x/') || 
            lowerUrl.includes('/twitter/') || 
            lowerUrl.includes('/youtube/') ||
            lowerUrl.includes('/instagram/')
@@ -532,8 +567,10 @@ export class RssFeedService {
     let bestResult: RssHubInstanceResult | null = null
     let bestStatusCode = 0
     const routes = expandRssHubFallbackRoutes(route)
+    const instances = preferredRssHubInstances(route)
+    const timeoutMs = rssHubRequestTimeoutMs(route)
 
-    for (const instance of RSSHUB_INSTANCES) {
+    for (const instance of instances) {
       for (const candidateRoute of routes) {
         const url = `${instance}${candidateRoute}`
         console.info(`[RssFeedService] Trying RSSHub instance: ${url}`)
@@ -554,8 +591,8 @@ export class RssFeedService {
 
           const response = await request.request(url, {
             method: http.RequestMethod.GET,
-            connectTimeout: 8000,
-            readTimeout: 8000,
+            connectTimeout: timeoutMs,
+            readTimeout: timeoutMs,
             header: instanceHeaders,
           })
 
@@ -634,7 +671,7 @@ export class RssFeedService {
       }
 
       // 尝试将 YouTube 官方 RSS 转换为 RSSHub 代理
-      let actualUrl = feed.url
+      let actualUrl = canonicalFeedUrl(feed.url, feed.siteUrl || '') || feed.url
       const rsshubUrl = RssFeedService.convertYouTubeToRssHub(feed.url)
       if (rsshubUrl) {
         console.info(`[RssFeedService] Converting YouTube RSS to RSSHub: ${rsshubUrl}`)

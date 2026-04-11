@@ -206,6 +206,9 @@ test('home page keeps HDS title bar system material while rendering inline searc
   assert.doesNotMatch(source, /private homeSearchOverlayTopPadding\(\): number/)
   assert.match(source, /@State searchQuery: string = ''/)
   assert.match(source, /@State showSearch: boolean = false/)
+  assert.match(source, /@State refreshCompletedCount: number = 0/)
+  assert.match(source, /@State refreshTotalCount: number = 0/)
+  assert.match(source, /@State displayRefreshPercent: number = 0/)
   assert.match(
     source,
     /private searchInputController: TextInputController = new TextInputController\(\)/,
@@ -218,6 +221,36 @@ test('home page keeps HDS title bar system material while rendering inline searc
   assert.match(
     source,
     /private HomeSearchActionLayer\(\) \{[\s\S]*this\.HomeInlineSearchActionRow\(\)/s,
+  )
+  assert.match(
+    source,
+    /if \(this\.isRefreshing && this\.refreshTotalCount > 0\) \{\s*Text\(`\$\{this\.displayRefreshPercent\}%`\)/s,
+  )
+  assert.doesNotMatch(
+    source,
+    /if \(this\.isRefreshing && this\.refreshTotalCount > 0\) \{[\s\S]*?\}\s*else if \(this\.isRefreshing\) \{/s,
+  )
+  assert.match(
+    source,
+    /private resolveRefreshPercent\(completedCount: number, totalCount: number\): number/,
+  )
+  assert.match(source, /private clearRefreshPercentAnimation\(\): void/)
+  assert.match(
+    source,
+    /private animateRefreshPercentTo\(targetPercent: number\): void/,
+  )
+  assert.match(
+    source,
+    /this\.refreshPercentAnimationTimer = setInterval\(\(\) => \{/,
+  )
+  assert.doesNotMatch(
+    source,
+    /const HOME_INLINE_REFRESH_ACTION_WIDTH: number = 78/,
+  )
+  assert.match(source, /\.width\(HOME_INLINE_SEARCH_ACTION_SIZE\)/)
+  assert.match(
+    source,
+    /\.backdropBlur\(this\.isRefreshing \? this\.homeCollapsedModeRailBackdropBlur\(\) \+ 2 : this\.homeCollapsedModeRailBackdropBlur\(\)\)/,
   )
   assert.doesNotMatch(source, /\.bindSheet\(/)
   assert.match(

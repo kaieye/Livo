@@ -27,7 +27,7 @@ export const SEED_FEEDS: Feed[] = [
   {
     id: 'feed-elonmusk-x',
     title: 'elonmusk',
-    url: 'https://rsshub.pseudoyu.com/x/user/elonmusk',
+    url: 'https://rsshub.pseudoyu.com/twitter/user/elonmusk',
     siteUrl: 'https://x.com/elonmusk',
     imageUrl: 'https://unavatar.io/x/elonmusk?fallback=false',
     description: 'Elon Musk 在 X 上的公开动态。',
@@ -44,7 +44,7 @@ export const SEED_FEEDS: Feed[] = [
   {
     id: 'feed-du-chenduling-instagram',
     title: 'du_chenduling',
-    url: 'https://rsshub.pseudoyu.com/instagram/user/du_chenduling',
+    url: 'https://rsshub.liumingye.cn/picnob/user/du_chenduling',
     siteUrl: 'https://www.instagram.com/du_chenduling/',
     imageUrl: 'https://unavatar.io/instagram/du_chenduling?fallback=false',
     description: 'du_chenduling 的 Instagram 图片流。',
