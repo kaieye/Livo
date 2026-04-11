@@ -26,7 +26,7 @@ import { BilibiliFollowingsService } from '../services/BilibiliFollowingsService
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { ThemeService } from '../services/ThemeService'
-import { canonicalInstagramFeedUrl, normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
+import { canonicalFeedUrl, normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
 import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
@@ -138,7 +138,7 @@ export class AppRepository {
     for (const feed of feeds) {
       try {
         const payload = await RssFeedService.fetchFeedEntries(feed)
-        const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
+        const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
         const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
         const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
         const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
@@ -394,7 +394,7 @@ export class AppRepository {
       })
       const payload = await RssFeedService.fetchFeedEntries(feed)
       const newEntriesCount = payload.entries.filter((entry: Entry) => !existingEntryIds.has(entry.id)).length
-      const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
+      const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
       const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
       const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
       const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
@@ -421,6 +421,9 @@ export class AppRepository {
         entries: await AppRepository.entriesByFeed(feedId),
         sourceLabel: `${feed.title} · 新增 ${newEntriesCount} 条`,
         newEntriesCount,
+        failedFeedCount: 0,
+        failedFeedLabels: [],
+        failedFeedDetails: [],
         fallbackUsed: false,
       }
       return result
@@ -436,6 +439,9 @@ export class AppRepository {
         entries: await AppRepository.entriesByFeed(feedId),
         sourceLabel: `${feed.title} · 刷新失败：${message}`,
         newEntriesCount: 0,
+        failedFeedCount: 1,
+        failedFeedLabels: [feed.title],
+        failedFeedDetails: [`${feed.title}：${message}`],
         fallbackUsed: true,
       }
       return result
@@ -450,7 +456,7 @@ export class AppRepository {
       throw new Error('订阅源不存在')
     }
 
-    const nextUrl = canonicalInstagramFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
+    const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
     const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
     const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
     const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
@@ -476,20 +482,41 @@ export class AppRepository {
     })
   }
 
-  static async refreshAllFeeds(): Promise<RemoteFeedResult> {
+  static async refreshAllFeeds(
+    onProgress?: (completedCount: number, totalCount: number) => void,
+  ): Promise<RemoteFeedResult> {
     await AppRepository.bootstrap()
     const feeds = await FeedRepository.list()
     let refreshedCount = 0
     let failedCount = 0
     let newEntriesCount = 0
+    let completedCount = 0
+    const failedFeedLabels: string[] = []
+    const failedFeedDetails: string[] = []
+    onProgress?.(0, feeds.length)
     const refreshTasks = feeds.map((feed: Feed) => AppRepository.refreshFeed(feed.id))
-    const results = await Promise.allSettled(refreshTasks)
+    const results = await Promise.allSettled(
+      refreshTasks.map((task: Promise<RemoteFeedResult>) => task.finally(() => {
+        completedCount += 1
+        onProgress?.(completedCount, feeds.length)
+      })),
+    )
 
-    results.forEach((result: PromiseSettledResult<RemoteFeedResult>) => {
+    results.forEach((result: PromiseSettledResult<RemoteFeedResult>, index: number) => {
       if (result.status === 'fulfilled') {
         newEntriesCount += result.value.newEntriesCount ?? 0
         if (result.value.fallbackUsed) {
           failedCount += 1
+          ;(result.value.failedFeedLabels ?? []).forEach((label: string) => {
+            if (label && !failedFeedLabels.includes(label)) {
+              failedFeedLabels.push(label)
+            }
+          })
+          ;(result.value.failedFeedDetails ?? []).forEach((detail: string) => {
+            if (detail) {
+              failedFeedDetails.push(detail)
+            }
+          })
         } else {
           refreshedCount += 1
         }
@@ -497,6 +524,11 @@ export class AppRepository {
       }
 
       failedCount += 1
+      const failedFeed = feeds[index]
+      if (failedFeed && !failedFeedLabels.includes(failedFeed.title)) {
+        failedFeedLabels.push(failedFeed.title)
+      }
+      failedFeedDetails.push(`${failedFeed?.title || '未知订阅源'}：${result.reason}`)
       console.error(`Failed to refresh feed in aggregate refresh: ${result.reason}`)
     })
 
@@ -504,10 +536,22 @@ export class AppRepository {
       failedCount = feeds.length
     }
 
+    if (failedFeedDetails.length > 0) {
+      console.error(`[AppRepository] Aggregate refresh failed feeds: ${failedFeedDetails.join(' | ')}`)
+    }
+
+    const failedFeedSummary = failedFeedLabels.slice(0, 3).join('、')
+    const failedFeedSuffix = failedFeedSummary
+      ? `：${failedFeedSummary}${failedFeedLabels.length > 3 ? ' 等' : ''}`
+      : ''
+
     return {
       entries: await AppRepository.featuredEntries(),
-      sourceLabel: `全部订阅：新增 ${newEntriesCount} 条，成功 ${refreshedCount}，失败 ${failedCount}`,
+      sourceLabel: `新增 ${newEntriesCount} 条，${failedCount} 个订阅源刷新失败${failedFeedSuffix}`,
       newEntriesCount,
+      failedFeedCount: failedCount,
+      failedFeedLabels,
+      failedFeedDetails,
       fallbackUsed: failedCount > 0,
     } as RemoteFeedResult
   }

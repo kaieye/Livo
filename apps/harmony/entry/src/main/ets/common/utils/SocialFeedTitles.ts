@@ -44,7 +44,48 @@ function getPathLike(raw: string): string {
   return trimmed
 }
 
+function getHostLike(raw: string): string {
+  const trimmed = (raw || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  const matched = trimmed.match(/^https?:\/\/([^/?#]+)/i)
+  return (matched?.[1] || '').trim().toLowerCase()
+}
+
+function isKnownXHost(host: string): boolean {
+  return (
+    host === 'x.com' ||
+    host === 'www.x.com' ||
+    host === 'twitter.com' ||
+    host === 'www.twitter.com' ||
+    host === 'mobile.twitter.com' ||
+    host === 'nitter.net' ||
+    host.endsWith('.nitter.net')
+  )
+}
+
+function isKnownInstagramHost(host: string): boolean {
+  return (
+    host === 'instagram.com' ||
+    host === 'www.instagram.com' ||
+    host === 'm.instagram.com' ||
+    host === 'dumpor.com' ||
+    host === 'www.dumpor.com' ||
+    host === 'picnob.com' ||
+    host === 'www.picnob.com' ||
+    host === 'picnob.info' ||
+    host === 'www.picnob.info' ||
+    host === 'pixnoy.com' ||
+    host === 'www.pixnoy.com' ||
+    host === 'piokok.com' ||
+    host === 'www.piokok.com'
+  )
+}
+
 export function extractInstagramUsername(value: string): string {
+  const trimmed = (value || '').trim()
   const pathLike = getPathLike(value)
   const rsshub = pathLike.match(/\/instagram\/user\/([^/?#]+)/i)
   if (rsshub?.[1]) {
@@ -71,6 +112,10 @@ export function extractInstagramUsername(value: string): string {
     return decodeURIComponent(dumpor[1]).replace(/^@/, '').trim().toLowerCase()
   }
 
+  if (looksLikeUrl(trimmed) && !isKnownInstagramHost(getHostLike(trimmed))) {
+    return ''
+  }
+
   const direct = pathLike.match(/^\/?([^/?#]+)\/?$/)
   if (direct?.[1] && !/^https?:/i.test(direct[1])) {
     return decodeURIComponent(direct[1]).replace(/^@/, '').trim().toLowerCase()
@@ -80,10 +125,15 @@ export function extractInstagramUsername(value: string): string {
 }
 
 export function extractXUsername(value: string): string {
+  const trimmed = (value || '').trim()
   const pathLike = getPathLike(value)
   const rsshub = pathLike.match(/\/(?:x|twitter)\/user\/([^/?#]+)/i)
   if (rsshub?.[1]) {
     return decodeURIComponent(rsshub[1]).replace(/^@/, '').trim().toLowerCase()
+  }
+
+  if (looksLikeUrl(trimmed) && !isKnownXHost(getHostLike(trimmed))) {
+    return ''
   }
 
   const direct = pathLike.match(/^\/?([^/?#]+)\/?$/)
@@ -112,6 +162,42 @@ export function canonicalInstagramFeedUrl(
   }
 
   return `${instance.replace(/\/+$/, '')}/picnob/user/${encodeURIComponent(username)}`
+}
+
+export function canonicalXFeedUrl(
+  rawUrl: string,
+  siteUrl: string = '',
+): string {
+  const trimmed = (rawUrl || '').trim()
+  const username = extractXUsername(trimmed) || extractXUsername(siteUrl)
+  if (!username) {
+    return trimmed
+  }
+
+  const instanceMatch = trimmed.match(/^(https?:\/\/[^/]+)/i)
+  const instance = instanceMatch?.[1]?.trim()
+  if (!instance) {
+    return trimmed
+  }
+
+  return `${instance.replace(/\/+$/, '')}/twitter/user/${encodeURIComponent(username)}`
+}
+
+export function canonicalFeedUrl(rawUrl: string, siteUrl: string = ''): string {
+  const trimmed = (rawUrl || '').trim()
+  const instagramUsername =
+    extractInstagramUsername(trimmed) || extractInstagramUsername(siteUrl)
+  const xUsername = extractXUsername(trimmed) || extractXUsername(siteUrl)
+
+  if (xUsername && !instagramUsername) {
+    return canonicalXFeedUrl(rawUrl, siteUrl)
+  }
+
+  if (instagramUsername) {
+    return canonicalInstagramFeedUrl(rawUrl, siteUrl)
+  }
+
+  return trimmed
 }
 
 function isGenericInstagramTitle(value: string): boolean {

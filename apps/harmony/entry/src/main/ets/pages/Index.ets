@@ -68,8 +68,7 @@ const HOME_MODE_CONTENT_GAP: number = 6
 const HOME_REFRESH_PULL_DISTANCE: number = 24
 const HOME_REFRESH_MAX_PULL_DISTANCE: number = 120
 const HOME_REFRESH_FOLLOW_RATIO: number = 0.72
-const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 36
-const HOME_REFRESH_AUTO_DISMISS_HOLD_DISTANCE: number = 18
+const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 44
 const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32
 const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 12
 const HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y: number = 12
@@ -136,6 +135,9 @@ struct Index {
   @State entryGroups: HomeEntryGroups<EntryCardModel> = createEmptyHomeEntryGroups<EntryCardModel>()
   @State feedSourceLabel: string = '本地内容已加载'
   @State isRefreshing: boolean = false
+  @State refreshCompletedCount: number = 0
+  @State refreshTotalCount: number = 0
+  @State displayRefreshPercent: number = 0
   @State homeRefreshPullDistance: number = 0
   @State homeRefreshIndicatorOffset: number = 0
   @State homeRefreshContentHoldOffset: number = 0
@@ -177,6 +179,7 @@ struct Index {
   }
   private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
+  private refreshPercentAnimationTimer: number = -1
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -185,6 +188,7 @@ struct Index {
   }
 
   aboutToDisappear(): void {
+    this.clearRefreshPercentAnimation()
   }
 
   private async loadInitialData(): Promise<void> {
@@ -205,15 +209,78 @@ struct Index {
     }
 
     this.isRefreshing = true
+    this.refreshCompletedCount = 0
+    this.refreshTotalCount = 0
+    this.clearRefreshPercentAnimation()
+    this.displayRefreshPercent = 0
 
     try {
-      const result = await AppRepository.refreshAllFeeds()
+      const result = await AppRepository.refreshAllFeeds((completedCount: number, totalCount: number) => {
+        this.refreshCompletedCount = completedCount
+        this.refreshTotalCount = totalCount
+        this.animateRefreshPercentTo(this.resolveRefreshPercent(completedCount, totalCount))
+      })
       this.featuredEntries = result.entries
       this.entryGroups = groupHomeEntriesByMode(result.entries)
       this.feedSourceLabel = result.sourceLabel
+      this.showToast(result.sourceLabel)
     } finally {
       this.isRefreshing = false
+      this.refreshCompletedCount = 0
+      this.refreshTotalCount = 0
+      this.clearRefreshPercentAnimation()
+      this.displayRefreshPercent = 0
       this.animateHomePullRefreshReset()
+    }
+  }
+
+  private resolveRefreshPercent(completedCount: number, totalCount: number): number {
+    if (totalCount <= 0) {
+      return 0
+    }
+
+    return Math.min(100, Math.max(0, Math.round((completedCount / totalCount) * 100)))
+  }
+
+  private clearRefreshPercentAnimation(): void {
+    if (this.refreshPercentAnimationTimer < 0) {
+      return
+    }
+
+    clearInterval(this.refreshPercentAnimationTimer)
+    this.refreshPercentAnimationTimer = -1
+  }
+
+  private animateRefreshPercentTo(targetPercent: number): void {
+    const nextTarget = Math.min(100, Math.max(0, targetPercent))
+    this.clearRefreshPercentAnimation()
+
+    if (nextTarget === this.displayRefreshPercent) {
+      return
+    }
+
+    const startPercent = this.displayRefreshPercent
+    const delta = nextTarget - startPercent
+    const steps = Math.max(4, Math.min(10, Math.abs(delta)))
+    let currentStep = 0
+
+    this.refreshPercentAnimationTimer = setInterval(() => {
+      currentStep += 1
+      const progress = currentStep / steps
+      this.displayRefreshPercent = Math.round(startPercent + delta * progress)
+
+      if (currentStep >= steps) {
+        this.displayRefreshPercent = nextTarget
+        this.clearRefreshPercentAnimation()
+      }
+    }, 32)
+  }
+
+  private showToast(message: string, duration: number = 2000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (error) {
+      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
     }
   }
 
@@ -251,8 +318,8 @@ struct Index {
     this.homeRefreshIndicatorDismissed = true
     this.homeRefreshPullDistance = 0
     this.homeRefreshIndicatorOffset = 0
-    // Use a fixed hold distance so the auto-dismiss settle position is stable every time.
-    this.homeRefreshContentHoldOffset = HOME_REFRESH_AUTO_DISMISS_HOLD_DISTANCE
+    // Keep the same hold distance during dismiss so the rebound position stays fixed.
+    this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
     this.homeRefreshStatus = RefreshStatus.Drag
     setTimeout(() => {
       if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
@@ -273,6 +340,7 @@ struct Index {
     }
 
     this.homeRefreshIndicatorDismissed = false
+    this.homeRefreshIndicatorOffset = HOME_REFRESH_PULL_DISTANCE
     this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
     this.homeRefreshStatus = RefreshStatus.Refresh
   }
@@ -313,17 +381,8 @@ struct Index {
     }
 
     if (this.isRefreshing) {
-      if (scrollOffset < 0 && this.homeModeScrollOffsetFor(mode) <= 0.5) {
-        this.homeRefreshIndicatorOffset = Math.max(
-          0,
-          Math.min(
-            this.homeRefreshIndicatorOffset + (-1 * scrollOffset * HOME_REFRESH_FOLLOW_RATIO),
-            HOME_REFRESH_MAX_PULL_DISTANCE,
-          ),
-        )
-        if (this.homeRefreshIndicatorOffset >= HOME_REFRESH_GAP_OPEN_PULL_DISTANCE) {
-          this.reopenHomeRefreshGapDuringRefresh()
-        }
+      if (scrollOffset < 0 && this.homeModeScrollOffsetFor(mode) <= 0.5 && this.homeRefreshIndicatorDismissed) {
+        this.reopenHomeRefreshGapDuringRefresh()
       }
       return undefined
     }
@@ -438,10 +497,7 @@ struct Index {
   }
 
   private homeRefreshIndicatorTranslateY(): number {
-    if (this.isRefreshing || this.homeRefreshStatus === RefreshStatus.Refresh) {
-      return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y
-    }
-    return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y + (1 - this.homeRefreshIndicatorProgress()) * 12
+    return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y
   }
 
   private homeRefreshIndicatorBackgroundColor(): string {
@@ -892,11 +948,11 @@ struct Index {
   private HomeInlineSearchActionRow() {
     Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
       Row() {
-        if (this.isRefreshing) {
-          LoadingProgress()
-            .width(18)
-            .height(18)
-            .color(this.theme.textPrimary)
+        if (this.isRefreshing && this.refreshTotalCount > 0) {
+          Text(`${this.displayRefreshPercent}%`)
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
         } else {
           SymbolGlyph($r('sys.symbol.arrow_clockwise'))
             .fontSize(18)
@@ -908,7 +964,7 @@ struct Index {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
-      .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
+      .backdropBlur(this.isRefreshing ? this.homeCollapsedModeRailBackdropBlur() + 2 : this.homeCollapsedModeRailBackdropBlur())
       .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
       .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
       .shadow(this.homeCollapsedModeRailShadow())

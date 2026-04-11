@@ -197,7 +197,11 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   )
   assert.match(source, /const HOME_REFRESH_PULL_DISTANCE: number = 24/)
   assert.match(source, /const HOME_REFRESH_FOLLOW_RATIO: number = 0\.72/)
-  assert.match(source, /const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 36/)
+  assert.match(source, /const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 44/)
+  assert.doesNotMatch(
+    source,
+    /const HOME_REFRESH_AUTO_DISMISS_HOLD_DISTANCE: number =/,
+  )
   assert.match(
     source,
     /const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32/,
@@ -239,6 +243,10 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   )
   assert.match(
     source,
+    /if \(this\.isRefreshing\) \{\s*if \(scrollOffset < 0 && this\.homeModeScrollOffsetFor\(mode\) <= 0\.5 && this\.homeRefreshIndicatorDismissed\) \{\s*this\.reopenHomeRefreshGapDuringRefresh\(\)\s*\}\s*return undefined\s*\}/s,
+  )
+  assert.match(
+    source,
     /const isAtTop = this\.homeModeScrollOffsetFor\(mode\) <= 0\.5/,
   )
   assert.doesNotMatch(
@@ -274,6 +282,14 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   assert.match(
     source,
     /this\.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE/,
+  )
+  assert.match(
+    source,
+    /this\.homeRefreshIndicatorOffset = HOME_REFRESH_PULL_DISTANCE/,
+  )
+  assert.doesNotMatch(
+    source,
+    /this\.homeRefreshContentHoldOffset = HOME_REFRESH_AUTO_DISMISS_HOLD_DISTANCE/,
   )
   assert.match(source, /this\.homeRefreshContentHoldOffset = 0/)
   assert.match(source, /this\.homeRefreshIndicatorDismissed = true/)
@@ -321,7 +337,7 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   assert.match(source, /return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y/)
   assert.match(
     source,
-    /return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y \+ \(1 - this\.homeRefreshIndicatorProgress\(\)\) \* 12/,
+    /private homeRefreshIndicatorTranslateY\(\): number \{\s*return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y\s*\}/s,
   )
   assert.match(source, /\.padding\(\{ top: HOME_MODE_SCENE_TOP_INSET \}\)/)
   assert.match(source, /\.align\(Alignment\.Top\)/)
@@ -382,10 +398,6 @@ test('home refresh indicator is visually anchored below the spacer while keeping
   assert.doesNotMatch(
     source,
     /else if \(this\.isRefreshing && nextOffset <= 0\.5\) \{\s*this\.reopenHomeRefreshGapDuringRefresh\(\)\s*\}/s,
-  )
-  assert.match(
-    source,
-    /if \(scrollOffset < 0 && this\.homeModeScrollOffsetFor\(mode\) <= 0\.5\) \{[\s\S]*?this\.homeRefreshIndicatorOffset = Math\.max\([\s\S]*?HOME_REFRESH_MAX_PULL_DISTANCE[\s\S]*?\)[\s\S]*?if \(this\.homeRefreshIndicatorOffset >= HOME_REFRESH_GAP_OPEN_PULL_DISTANCE\) \{\s*this\.reopenHomeRefreshGapDuringRefresh\(\)\s*\}/s,
   )
   assert.match(source, /this\.resetHomePullRefreshState\(\)/)
 })

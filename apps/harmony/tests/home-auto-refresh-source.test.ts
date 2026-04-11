@@ -53,3 +53,38 @@ test('home refreshFeaturedEntries prevents reentrant refresh calls', () => {
     /private async refreshFeaturedEntries\(\): Promise<void> \{\s*if \(this\.isRefreshing\) \{\s*return\s*\}\s*this\.isRefreshing = true/s,
   )
 })
+
+test('home refreshFeaturedEntries shows the aggregate refresh toast message after updating entries', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /private showToast\(message: string, duration: number = 2000\): void/,
+  )
+  assert.match(
+    source,
+    /const result = await AppRepository\.refreshAllFeeds\([\s\S]*this\.featuredEntries = result\.entries[\s\S]*this\.entryGroups = groupHomeEntriesByMode\(result\.entries\)[\s\S]*this\.feedSourceLabel = result\.sourceLabel[\s\S]*this\.showToast\(result\.sourceLabel\)/s,
+  )
+})
+
+test('home refreshFeaturedEntries updates refresh button progress while feeds are still refreshing', () => {
+  const source = readFileSync(
+    new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /@State refreshCompletedCount: number = 0/)
+  assert.match(source, /@State refreshTotalCount: number = 0/)
+  assert.match(source, /@State displayRefreshPercent: number = 0/)
+  assert.match(
+    source,
+    /const result = await AppRepository\.refreshAllFeeds\(\(completedCount: number, totalCount: number\) => \{\s*this\.refreshCompletedCount = completedCount\s*this\.refreshTotalCount = totalCount\s*this\.animateRefreshPercentTo\(this\.resolveRefreshPercent\(completedCount, totalCount\)\)\s*\}\)/s,
+  )
+  assert.match(
+    source,
+    /this\.refreshCompletedCount = 0[\s\S]*this\.refreshTotalCount = 0[\s\S]*this\.clearRefreshPercentAnimation\(\)[\s\S]*this\.displayRefreshPercent = 0/s,
+  )
+})
