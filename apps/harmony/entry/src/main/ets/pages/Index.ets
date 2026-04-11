@@ -2198,6 +2198,7 @@ struct Index {
         }
         .vertical(false)
         .scrollable(false)
+        .cachedMaxCount(2, TabsCacheMode.CACHE_BOTH_SIDE)
         .animationDuration(0)
         .barPosition(BarPosition.End)
         .barOverlap(true)
