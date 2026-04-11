@@ -3,6 +3,7 @@ import { Feed, FeedViewType } from '../models/LivoModels'
 import { FeedDraft } from '../repositories/FeedRepository'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
+import { FeedRefreshPayload } from '../services/RssFeedService'
 import { canonicalInstagramFeedUrl } from '../utils/SocialFeedTitles'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import { PageHeader } from './PageHeader'
@@ -234,10 +235,11 @@ export struct FeedSubscribeConfigView {
   }
 
   private async handleSave(): Promise<void> {
-    if (!this.existingFeed) {
+    if (!this.existingFeed || this.isSubmitting) {
       return
     }
 
+    this.isSubmitting = true
     try {
       const draft: FeedDraft = {
         url: this.mappedTargetUrl(),
@@ -253,16 +255,26 @@ export struct FeedSubscribeConfigView {
       const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
       const cachedPreview = this.cachedPreviewPayload()
       if (cachedPreview) {
-        await AppRepository.seedFeedFromPreview(updatedFeed.id, cachedPreview)
+        void this.seedPreviewAfterSave(updatedFeed.id, {
+          ...cachedPreview,
+          feedTitle: draft.title || cachedPreview.feedTitle,
+        })
       }
-      const refreshResult = await AppRepository.refreshFeed(updatedFeed.id)
-      this.showToast(refreshResult.fallbackUsed ? '保存成功，内容将在稍后刷新' : '保存成功', 2000)
+      this.showToast('保存成功', 2000)
+      await this.runCompletion(this.onSaved, 'save')
     } catch (e) {
       this.showToast(`保存失败: ${e}`, 3000)
-      return
+    } finally {
+      this.isSubmitting = false
     }
+  }
 
-    await this.runCompletion(this.onSaved, 'save')
+  private async seedPreviewAfterSave(feedId: string, payload: FeedRefreshPayload): Promise<void> {
+    try {
+      await AppRepository.seedFeedFromPreview(feedId, payload)
+    } catch (error) {
+      console.error(`seed preview after save failed: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   private async handleSubscribe(): Promise<void> {
@@ -471,10 +483,12 @@ export struct FeedSubscribeConfigView {
         .fontWeight(FontWeight.Bold)
         .fontColor(this.theme.textPrimary)
 
-      Text(description)
-        .fontSize(13)
-        .lineHeight(18)
-        .fontColor(this.theme.textSecondary)
+      if (description.trim()) {
+        Text(description)
+          .fontSize(13)
+          .lineHeight(18)
+          .fontColor(this.theme.textSecondary)
+      }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -579,7 +593,7 @@ export struct FeedSubscribeConfigView {
             this.showUnsubscribeConfirm()
           })
 
-        Button('保存')
+        Button(this.isSubmitting ? '保存中...' : '保存')
           .type(ButtonType.Capsule)
           .layoutWeight(1)
           .height(50)
@@ -587,6 +601,7 @@ export struct FeedSubscribeConfigView {
           .fontWeight(FontWeight.Bold)
           .backgroundColor(this.theme.accent)
           .fontColor('#FFFFFF')
+          .enabled(!this.isSubmitting)
           .onClick(() => {
             void this.handleSave()
           })
@@ -639,7 +654,7 @@ export struct FeedSubscribeConfigView {
             this.FeedInfoCard()
 
             Column({ space: 12 }) {
-              this.ConfigSection('标题', '此订阅源的自定义标题，留空则使用默认标题。')
+              this.ConfigSection('名称', '')
               this.TextInputField('', this.customTitle, (value: string) => {
                 this.customTitle = value
               })
