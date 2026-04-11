@@ -81,6 +81,38 @@ export struct HomeVideoGrid {
     return Math.max(0, hours * 3600 + minutes * 60 + seconds)
   }
 
+  private parseChineseDurationToSeconds(value: string): number {
+    const normalized = (value || '').replace(/\s+/g, '')
+    if (!normalized) {
+      return 0
+    }
+
+    const fullMatch = normalized.match(/(?:(\d+)小时)?(?:(\d+)分(?:钟)?)?(?:(\d+)秒)?/)
+    if (fullMatch) {
+      const hours = Number(fullMatch[1] || '0')
+      const minutes = Number(fullMatch[2] || '0')
+      const seconds = Number(fullMatch[3] || '0')
+      const total = hours * 3600 + minutes * 60 + seconds
+      if (total > 0) {
+        return total
+      }
+    }
+
+    return 0
+  }
+
+  private parseNumericDurationToSeconds(value: string): number {
+    const normalized = value || ''
+
+    // duration=123 / duration:123 / 时长 123秒
+    const explicitSeconds = normalized.match(/(?:duration|length|时长)[\s:=："]*(\d{1,6})(?:\s*(?:s|秒))?/i)
+    if (explicitSeconds?.[1]) {
+      return Math.max(0, Number(explicitSeconds[1]))
+    }
+
+    return 0
+  }
+
   private parseClockDurationToSeconds(value: string): number {
     const matched = value.match(/(?:^|[^\d])((?:\d{1,2}:)?\d{1,2}:\d{2})(?:[^\d]|$)/)
     if (!matched?.[1]) {
@@ -121,9 +153,20 @@ export struct HomeVideoGrid {
       return this.formatDuration(isoSeconds)
     }
 
+    const chineseExplicit = (source.match(/(?:时长|duration|length)[^，。；;|]*?(?:(?:\d+小时)?(?:\d+分(?:钟)?)?(?:\d+秒)?)/i)?.[0]) || ''
+    const chineseSeconds = this.parseChineseDurationToSeconds(chineseExplicit || source)
+    if (chineseSeconds > 0) {
+      return this.formatDuration(chineseSeconds)
+    }
+
     const clockSeconds = this.parseClockDurationToSeconds(source)
     if (clockSeconds > 0) {
       return this.formatDuration(clockSeconds)
+    }
+
+    const numericSeconds = this.parseNumericDurationToSeconds(source)
+    if (numericSeconds > 0) {
+      return this.formatDuration(numericSeconds)
     }
 
     return ''
