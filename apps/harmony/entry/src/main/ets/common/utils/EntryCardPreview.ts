@@ -127,13 +127,18 @@ function isImageUrl(value: string): boolean {
     return false
   }
 
+  const hasImageFormatQuery =
+    /[?&]format=(jpg|jpeg|png|webp|gif|bmp|avif)(?:[&#]|$)/i.test(normalized)
   return (
     /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized) ||
+    hasImageFormatQuery ||
     normalized.includes('ytimg.com/') ||
     normalized.includes('googleusercontent.com/') ||
     normalized.includes('cdninstagram') ||
     normalized.includes('scontent.') ||
-    normalized.includes('fbcdn.net')
+    normalized.includes('fbcdn.net') ||
+    normalized.includes('pbs.twimg.com/media/') ||
+    normalized.includes('twimg.com/media/')
   )
 }
 

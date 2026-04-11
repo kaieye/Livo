@@ -4,7 +4,6 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import {
   chunkHomeVideoEntries,
-  resolveHomeVideoCardSubtitle,
   resolveHomeVideoCardTokens,
   resolveHomeVideoGridColumns,
 } from '../utils/HomeVideoGrid'
@@ -26,11 +25,108 @@ export struct HomeVideoGrid {
   }
 
   private cardMeta(entry: EntryCardModel): string {
-    return resolveHomeVideoCardSubtitle({
-      feedTitle: entry.feedTitle,
-      author: entry.author,
-      publishedLabel: entry.publishedLabel,
-    })
+    const feedTitle = (entry.feedTitle || '').trim()
+    if (feedTitle) {
+      return feedTitle
+    }
+    return (entry.author || '').trim()
+  }
+
+  private relativePublishedMeta(entry: EntryCardModel): string {
+    if (!entry.publishedAt || entry.publishedAt <= 0) {
+      return ''
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - entry.publishedAt)
+    const minuteMs = 60 * 1000
+    const hourMs = 60 * minuteMs
+    const dayMs = 24 * hourMs
+
+    if (elapsedMs < minuteMs) {
+      return '刚刚'
+    }
+    if (elapsedMs < hourMs) {
+      return `${Math.floor(elapsedMs / minuteMs)}分钟前`
+    }
+    if (elapsedMs < dayMs) {
+      return `${Math.floor(elapsedMs / hourMs)}小时前`
+    }
+    if (elapsedMs < 30 * dayMs) {
+      return `${Math.floor(elapsedMs / dayMs)}天前`
+    }
+    if (elapsedMs < 365 * dayMs) {
+      return `${Math.floor(elapsedMs / (30 * dayMs))}个月前`
+    }
+    return `${Math.floor(elapsedMs / (365 * dayMs))}年前`
+  }
+
+  private cardMetaLine(entry: EntryCardModel): string {
+    const source = this.cardMeta(entry)
+    const relative = this.relativePublishedMeta(entry)
+    if (source && relative) {
+      return `${source} · ${relative}`
+    }
+    return source || relative
+  }
+
+  private parseIsoDurationToSeconds(value: string): number {
+    const matched = value.match(/\bPT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?\b/i)
+    if (!matched) {
+      return 0
+    }
+
+    const hours = Number(matched[1] || '0')
+    const minutes = Number(matched[2] || '0')
+    const seconds = Number(matched[3] || '0')
+    return Math.max(0, hours * 3600 + minutes * 60 + seconds)
+  }
+
+  private parseClockDurationToSeconds(value: string): number {
+    const matched = value.match(/(?:^|[^\d])((?:\d{1,2}:)?\d{1,2}:\d{2})(?:[^\d]|$)/)
+    if (!matched?.[1]) {
+      return 0
+    }
+
+    const parts = matched[1].split(':').map((part: string) => Number(part))
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1]
+    }
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    }
+    return 0
+  }
+
+  private formatDuration(seconds: number): string {
+    const safe = Math.max(0, Math.floor(seconds))
+    const hours = Math.floor(safe / 3600)
+    const minutes = Math.floor((safe % 3600) / 60)
+    const remainSeconds = safe % 60
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainSeconds).padStart(2, '0')}`
+    }
+    return `${String(minutes).padStart(2, '0')}:${String(remainSeconds).padStart(2, '0')}`
+  }
+
+  private videoDurationLabel(entry: EntryCardModel): string {
+    const source = [
+      entry.title || '',
+      entry.summary || '',
+      ...(entry.mediaUrls ?? []),
+      entry.articleUrl || '',
+    ].join(' ')
+
+    const isoSeconds = this.parseIsoDurationToSeconds(source)
+    if (isoSeconds > 0) {
+      return this.formatDuration(isoSeconds)
+    }
+
+    const clockSeconds = this.parseClockDurationToSeconds(source)
+    if (clockSeconds > 0) {
+      return this.formatDuration(clockSeconds)
+    }
+
+    return ''
   }
 
   private rows(): EntryCardModel[][] {
@@ -49,18 +145,31 @@ export struct HomeVideoGrid {
   @Builder
   private VideoCard(entry: EntryCardModel) {
     Column({ space: 8 }) {
-      if (entry.imageUrl) {
-        Image(entry.imageUrl)
-          .width('100%')
-          .aspectRatio(16 / 9)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(18)
-      } else {
-        Column()
-          .width('100%')
-          .aspectRatio(16 / 9)
-          .backgroundColor(this.cardTokens().placeholderBackground)
-          .borderRadius(18)
+      Stack({ alignContent: Alignment.BottomEnd }) {
+        if (entry.imageUrl) {
+          Image(entry.imageUrl)
+            .width('100%')
+            .aspectRatio(16 / 9)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(14)
+        } else {
+          Column()
+            .width('100%')
+            .aspectRatio(16 / 9)
+            .backgroundColor(this.cardTokens().placeholderBackground)
+            .borderRadius(14)
+        }
+
+        if (this.videoDurationLabel(entry)) {
+          Text(this.videoDurationLabel(entry))
+            .fontSize(10)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#FFFFFF')
+            .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+            .backgroundColor('rgba(0,0,0,0.62)')
+            .borderRadius(8)
+            .margin({ right: 8, bottom: 8 })
+        }
       }
 
       Column({ space: 4 }) {
@@ -76,8 +185,8 @@ export struct HomeVideoGrid {
         })
           .width('100%')
 
-        if (this.cardMeta(entry)) {
-          Text(this.cardMeta(entry))
+        if (this.cardMetaLine(entry)) {
+          Text(this.cardMetaLine(entry))
             .width('100%')
             .fontSize(11)
             .fontColor(this.cardTokens().metaColor)

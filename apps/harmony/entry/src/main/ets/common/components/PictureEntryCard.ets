@@ -4,6 +4,11 @@ import { livoMotion } from '../ui/Motion'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import { HighlightedInlineText } from './HighlightedInlineText'
 
+interface MediaNaturalSize {
+  width: number
+  height: number
+}
+
 @Component
 export struct PictureEntryCard {
   @Prop entry: Entry = {} as Entry
@@ -22,6 +27,7 @@ export struct PictureEntryCard {
   @State private preparedLivePhotoIndices: number[] = []
   @State private livePhotoInstanceSeeds: number[] = []
   @State private livePhotoAspectRatios: number[] = []
+  @State private mediaNaturalSizes: MediaNaturalSize[] = []
   @State private livePhotoMuted: boolean = true
   @State private isFullyVisible: boolean = false
   @State private isNearlyVisible: boolean = false
@@ -334,6 +340,7 @@ export struct PictureEntryCard {
       return
     }
 
+    this.rememberMediaNaturalSize(index, width, height)
     const nextRatio = width / height
     const currentRatio = this.livePhotoAspectRatios[index]
     if (currentRatio && Math.abs(currentRatio - nextRatio) < 0.001) {
@@ -343,6 +350,92 @@ export struct PictureEntryCard {
     const nextAspectRatios = [...this.livePhotoAspectRatios]
     nextAspectRatios[index] = nextRatio
     this.livePhotoAspectRatios = nextAspectRatios
+  }
+
+  private rememberMediaNaturalSize(index: number, width: number, height: number): void {
+    if (width <= 0 || height <= 0) {
+      return
+    }
+
+    const nextSizes = [...this.mediaNaturalSizes]
+    nextSizes[index] = { width, height }
+    this.mediaNaturalSizes = nextSizes
+  }
+
+  private resolvedMediaFrameAspectRatio(): number {
+    const fallbackRatio = 4 / 5
+    const items = this.carouselMediaItems()
+    if (items.length === 0) {
+      return fallbackRatio
+    }
+
+    let maxArea: number = -1
+    let maxAreaIndex: number = 0
+    for (let index = 0; index < items.length; index++) {
+      const size = this.mediaNaturalSizes[index]
+      const area = size ? size.width * size.height : -1
+      if (area > maxArea) {
+        maxArea = area
+        maxAreaIndex = index
+      }
+    }
+
+    if (items[maxAreaIndex]?.kind === 'livePhoto') {
+      return this.livePhotoAspectRatio(maxAreaIndex)
+    }
+
+    const defaultItem = items[maxAreaIndex] || items[0]
+    if (!defaultItem) {
+      return fallbackRatio
+    }
+
+    if (defaultItem.kind === 'livePhoto') {
+      return this.livePhotoAspectRatio(maxAreaIndex)
+    }
+
+    const measuredSize = this.mediaNaturalSizes[maxAreaIndex]
+    if (!measuredSize || measuredSize.width <= 0 || measuredSize.height <= 0) {
+      return fallbackRatio
+    }
+
+    return measuredSize.width / measuredSize.height
+  }
+
+  private frameShadowColor(): string {
+    return this.theme.isDark ? 'rgba(0,0,0,0.34)' : 'rgba(15,23,42,0.16)'
+  }
+
+  @Builder
+  private FramedImageSlide(item: PictureCarouselMediaItem, index: number) {
+    Stack({ alignContent: Alignment.Center }) {
+      Image(item.imageUrl || this.pictureUrl)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Cover)
+        .opacity(0.26)
+        .blur(14)
+        .borderRadius(14)
+
+      Image(item.imageUrl || this.pictureUrl)
+        .width('100%')
+        .height('100%')
+        .objectFit(ImageFit.Contain)
+        .borderRadius(14)
+        .backgroundColor(this.theme.elevated)
+        .shadow({
+          radius: this.theme.isDark ? 14 : 16,
+          color: this.frameShadowColor(),
+          offsetX: 0,
+          offsetY: 3,
+        })
+        .onComplete((event) => {
+          if (event) {
+            this.rememberMediaNaturalSize(index, event.width, event.height)
+          }
+        })
+    }
+    .width('100%')
+    .aspectRatio(this.resolvedMediaFrameAspectRatio())
   }
 
   private toggleLivePhotoMuted(): void {
@@ -411,7 +504,7 @@ export struct PictureEntryCard {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Contain)
-          .borderRadius(18)
+          .borderRadius(14)
           .backgroundColor(this.theme.elevated)
           .onComplete((event) => {
             if (event) {
@@ -430,7 +523,7 @@ export struct PictureEntryCard {
           })
             .width('100%')
             .height('100%')
-            .borderRadius(18)
+            .borderRadius(14)
             .controls(false)
             .autoPlay(this.shouldWarmLivePhoto(index))
             .loop(true)
@@ -476,7 +569,7 @@ export struct PictureEntryCard {
       .align(Alignment.BottomEnd)
     }
     .width('100%')
-    .aspectRatio(this.livePhotoAspectRatio(index))
+    .aspectRatio(this.resolvedMediaFrameAspectRatio())
   }
 
   @Builder
@@ -488,11 +581,7 @@ export struct PictureEntryCard {
             if (item.kind === 'livePhoto') {
               this.LivePhotoSlide(item, index)
             } else {
-              Image(item.imageUrl || this.pictureUrl)
-                .width('100%')
-                .objectFit(ImageFit.Contain)
-                .borderRadius(18)
-                .backgroundColor(this.theme.elevated)
+              this.FramedImageSlide(item, index)
             }
           }, (item: PictureCarouselMediaItem, index: number) => `${item.kind}-${item.imageUrl}-${item.videoUrl}-${index}-${this.livePhotoInstanceSeed(index)}`)
         }
@@ -520,7 +609,7 @@ export struct PictureEntryCard {
       .width('100%')
       .constraintSize({ maxHeight: 640 })
       .clip(true)
-      .borderRadius(18)
+      .borderRadius(14)
       .backgroundColor(this.theme.elevated)
     }
   }

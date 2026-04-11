@@ -267,12 +267,16 @@ export function selectPictureMediaUrls(mediaUrls: string[]): string[] {
     }
 
     const normalized = trimmed.toLowerCase()
+    const hasImageFormatQuery = /[?&]format=(jpg|jpeg|png|webp|gif|bmp|avif)(?:[&#]|$)/i.test(normalized)
     const isImageUrl = /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)
+      || hasImageFormatQuery
       || normalized.includes('cdninstagram')
       || normalized.includes('scontent.')
       || normalized.includes('fbcdn.net')
       || normalized.includes('googleusercontent.com/')
       || normalized.includes('ytimg.com/')
+      || normalized.includes('pbs.twimg.com/media/')
+      || normalized.includes('twimg.com/media/')
 
     if (!isImageUrl || result.includes(trimmed)) {
       return

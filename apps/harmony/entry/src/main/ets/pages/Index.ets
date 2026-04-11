@@ -1412,44 +1412,58 @@ struct Index {
 
   @Builder
   private EntryCard(entry: EntryCardModel) {
-    Column({ space: 8 }) {
-      Row({ space: 6 }) {
+    Row({ space: this.articleTweetPreviewImage(entry) ? 10 : 0 }) {
+      Column({ space: 6 }) {
+        Row({ space: 6 }) {
+          HighlightedInlineText({
+            text: entry.feedTitle,
+            query: this.searchQuery,
+            theme: this.theme,
+            fontSize: 12,
+            lineHeight: 16,
+            fontWeight: FontWeight.Medium,
+            defaultColor: this.theme.accent,
+            maxLines: 1,
+          })
+
+          Text('·')
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
+
+          Text(entry.publishedLabel)
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
+        }
+        .width('100%')
+
         HighlightedInlineText({
-          text: entry.feedTitle,
+          text: entry.title,
           query: this.searchQuery,
           theme: this.theme,
-          fontSize: 12,
-          lineHeight: 16,
-          fontWeight: FontWeight.Medium,
-          defaultColor: this.theme.accent,
-          maxLines: 1,
+          fontSize: 15,
+          lineHeight: 22,
+          fontWeight: FontWeight.Bold,
+          defaultColor: this.theme.textPrimary,
+          maxLines: 2,
         })
-
-        Text('·')
-          .fontSize(12)
-          .fontColor(this.theme.textMuted)
-
-        Text(entry.publishedLabel)
-          .fontSize(12)
-          .fontColor(this.theme.textMuted)
       }
-      .width('100%')
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
 
-      HighlightedInlineText({
-        text: entry.title,
-        query: this.searchQuery,
-        theme: this.theme,
-        fontSize: 15,
-        lineHeight: 22,
-        fontWeight: FontWeight.Bold,
-        defaultColor: this.theme.textPrimary,
-        maxLines: 2,
-      })
+      if (this.articleTweetPreviewImage(entry)) {
+        Image(this.articleTweetPreviewImage(entry))
+          .width(72)
+          .height(72)
+          .borderRadius(8)
+          .objectFit(ImageFit.Cover)
+          .backgroundColor(this.theme.elevated)
+      }
     }
-    .alignItems(HorizontalAlign.Start)
-    .padding({ left: 14, right: 14, top: 14, bottom: 14 })
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(20)
+    .borderRadius(14)
     .border({ width: 0.8, color: this.theme.divider })
     .shadow({
       radius: this.theme.isDark ? 10 : 14,
@@ -1460,12 +1474,75 @@ struct Index {
     .onClick(() => this.openEntry(entry))
   }
 
+  private articleTweetPreviewImage(entry: EntryCardModel): string {
+    const candidateUrls = [
+      ...(entry.mediaUrls ?? []),
+      entry.imageUrl || '',
+      entry.feedImageUrl || '',
+      this.extractFirstImageUrlFromText(entry.summary || ''),
+      this.extractFirstImageUrlFromText(entry.title || ''),
+    ].filter((url: string) => !!url.trim())
+
+    const pictureMediaCandidates = selectPictureMediaUrls(candidateUrls)
+    if (pictureMediaCandidates.length > 0) {
+      return pictureMediaCandidates[0]
+    }
+
+    const firstLikelyImage = candidateUrls.find((url: string) => this.isLikelyImageUrl(url))
+    return firstLikelyImage || ''
+  }
+
   private isXSocialEntry(entry: EntryCardModel): boolean {
     const articleUrl = (entry.articleUrl || '').toLowerCase()
     const feedTitle = (entry.feedTitle || '').toLowerCase()
     return articleUrl.includes('x.com/')
       || articleUrl.includes('twitter.com/')
       || feedTitle.includes('x / twitter')
+  }
+
+  private isTweetLikeEntry(entry: EntryCardModel): boolean {
+    if (this.isXSocialEntry(entry)) {
+      return true
+    }
+
+    const articleUrl = (entry.articleUrl || '').toLowerCase()
+    const feedTitle = (entry.feedTitle || '').toLowerCase()
+    const author = (entry.author || '').toLowerCase()
+    return articleUrl.includes('/status/')
+      || feedTitle.includes('twitter')
+      || feedTitle.includes(' on x')
+      || author.startsWith('@')
+  }
+
+  private extractFirstImageUrlFromText(text: string): string {
+    const raw = (text || '').trim()
+    if (!raw) {
+      return ''
+    }
+
+    const htmlMatch = raw.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i)
+    if (htmlMatch?.[1]) {
+      return htmlMatch[1].trim()
+    }
+
+    const twimgMatch = raw.match(/https?:\/\/pbs\.twimg\.com\/[^\s"'<>]+/i)
+    if (twimgMatch?.[0]) {
+      return twimgMatch[0].trim()
+    }
+
+    const imageMatch = raw.match(/https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif|bmp|avif)(?:\?[^\s"'<>]*)?/i)
+    return imageMatch?.[0]?.trim() || ''
+  }
+
+  private isLikelyImageUrl(url: string): boolean {
+    const normalized = (url || '').trim().toLowerCase()
+    if (!normalized) {
+      return false
+    }
+    return /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)
+      || normalized.includes('pbs.twimg.com/media/')
+      || normalized.includes('twimg.com/media/')
+      || normalized.includes('scontent.')
   }
 
   @Builder
@@ -1475,6 +1552,7 @@ struct Index {
         presentation: presentTweetEntryFromCard(entry),
         theme: this.theme,
         highlightQuery: this.searchQuery,
+        collapsedTextLines: 7,
         enableEnterTransition: false,
         onOpen: () => this.openEntry(entry),
       })

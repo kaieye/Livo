@@ -10,6 +10,8 @@ export struct TweetEntryCard {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop enableEnterTransition: boolean = true
   @Prop highlightQuery: string = ''
+  @Prop collapsedTextLines: number = 0
+  @State private isTextExpanded: boolean = false
 
   onOpen: () => void = () => {}
 
@@ -30,6 +32,26 @@ export struct TweetEntryCard {
 
   private hasQuotedTweet(): boolean {
     return this.presentation.kind === 'quote' && !!this.presentation.quotedTweet
+  }
+
+  private resolvedTweetTextMaxLines(): number {
+    if (this.isTextExpanded || this.collapsedTextLines <= 0) {
+      return 99
+    }
+    return this.collapsedTextLines
+  }
+
+  private shouldShowExpandAction(): boolean {
+    if (this.isTextExpanded || this.collapsedTextLines <= 0) {
+      return false
+    }
+    const text = (this.presentation.text || '').trim()
+    if (!text) {
+      return false
+    }
+    // 使用内容长度做轻量判断，避免引入额外测量节点带来抖动。
+    const threshold = this.collapsedTextLines * 22
+    return text.length > threshold || text.includes('\n')
   }
 
   private quotedTweet(): TweetQuotedPresentation {
@@ -104,7 +126,7 @@ export struct TweetEntryCard {
           Image(mediaUrl)
             .width(this.mediaTileWidth(index, this.normalizedMediaUrls().length))
             .height(this.mediaTileHeight(index, this.normalizedMediaUrls().length))
-            .borderRadius(14)
+            .borderRadius(10)
             .objectFit(ImageFit.Cover)
             .backgroundColor(this.theme.elevated)
             .margin({ bottom: this.normalizedMediaUrls().length > 1 ? 6 : 0 })
@@ -164,7 +186,7 @@ export struct TweetEntryCard {
       .alignItems(HorizontalAlign.Start)
       .padding({ left: 12, right: 12, top: 10, bottom: 10 })
       .border({ width: 1, color: this.theme.divider })
-      .borderRadius(16)
+      .borderRadius(12)
       .backgroundColor(this.theme.isDark ? '#171C22' : '#F9FBFC')
     }
   }
@@ -231,9 +253,20 @@ export struct TweetEntryCard {
           fontSize: 16,
           lineHeight: 24,
           defaultColor: this.theme.textPrimary,
-          maxLines: 99,
+          maxLines: this.resolvedTweetTextMaxLines(),
         })
           .width('100%')
+
+        if (this.shouldShowExpandAction()) {
+          Text('显示更多')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#1677FF')
+            .margin({ top: -2 })
+            .onClick(() => {
+              this.isTextExpanded = true
+            })
+        }
       }
 
       this.QuoteCard()
@@ -242,7 +275,7 @@ export struct TweetEntryCard {
     .width('100%')
     .padding({ left: 14, right: 14, top: 12, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(18)
+    .borderRadius(14)
     .border({ width: 0.8, color: this.theme.divider })
     .alignItems(HorizontalAlign.Start)
     .transition(this.enableEnterTransition ? livoMotion.enterSoft(24) : TransitionEffect.IDENTITY)
