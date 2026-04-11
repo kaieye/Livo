@@ -173,12 +173,15 @@ export struct AppearanceSettingsPanel {
 
   private applyRefreshInterval(value: string): void {
     const minutes = Number(value)
+    const normalizedMinutes = Number.isFinite(minutes) && minutes > 0
+      ? Math.floor(minutes)
+      : this.config.refreshIntervalMinutes
     this.syncSettings({
       autoRefresh: this.config.autoRefresh,
       aiSummaryEnabled: this.config.aiSummaryEnabled,
       imageProxyEnabled: this.config.imageProxyEnabled,
       searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: Number.isFinite(minutes) ? minutes : this.config.refreshIntervalMinutes,
+      refreshIntervalMinutes: normalizedMinutes,
       themeMode: this.config.themeMode,
       themeAccent: this.config.themeAccent,
       language: this.config.language,

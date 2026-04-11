@@ -47,6 +47,7 @@ export struct GeneralSettingsPanel {
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State saveHint: string = '通用设置将保存到本地'
+  @State refreshIntervalSelection: string = `${DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes}`
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
 
   aboutToAppear(): void {
@@ -55,22 +56,27 @@ export struct GeneralSettingsPanel {
 
   private async loadSettings(): Promise<void> {
     this.config = await AppRepository.settings()
+    this.refreshIntervalSelection = `${this.config.refreshIntervalMinutes}`
     this.theme = await ThemeService.resolvePalette(this.config)
     this.saveHint = '已加载通用配置'
   }
 
   private syncSettings(next: HarmonySettings): void {
     this.config = next
-    this.onSettingsChange(next)
+    this.refreshIntervalSelection = `${next.refreshIntervalMinutes}`
+    console.info(`[GeneralSettings] syncSettings -> refreshIntervalMinutes=${next.refreshIntervalMinutes}`)
     void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
       this.config = saved
+      this.refreshIntervalSelection = `${saved.refreshIntervalMinutes}`
       this.onSettingsChange(saved)
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
         this.theme = palette
       })
       this.saveHint = '已保存通用配置'
+      console.info(`[GeneralSettings] persistSettings saved -> refreshIntervalMinutes=${saved.refreshIntervalMinutes}`)
     }).catch((error: Error) => {
       this.saveHint = `保存失败：${error.message}`
+      console.error(`[GeneralSettings] persistSettings failed: ${error.message}`)
     })
   }
 
@@ -83,12 +89,28 @@ export struct GeneralSettingsPanel {
 
   private applyRefreshInterval(value: string): void {
     const minutes = Number(value)
+    const normalizedMinutes = Number.isFinite(minutes) && minutes > 0
+      ? Math.floor(minutes)
+      : this.config.refreshIntervalMinutes
+    console.info(`[GeneralSettings] applyRefreshInterval input=${value}, normalized=${normalizedMinutes}`)
+    this.refreshIntervalSelection = `${normalizedMinutes}`
+    this.config = {
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: normalizedMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    }
     const nextSettings: HarmonySettings = {
       autoRefresh: this.config.autoRefresh,
       aiSummaryEnabled: this.config.aiSummaryEnabled,
       imageProxyEnabled: this.config.imageProxyEnabled,
       searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: Number.isFinite(minutes) ? minutes : this.config.refreshIntervalMinutes,
+      refreshIntervalMinutes: normalizedMinutes,
       themeMode: this.config.themeMode,
       themeAccent: this.config.themeAccent,
       language: this.config.language,
@@ -286,6 +308,61 @@ export struct GeneralSettingsPanel {
   }
 
   @Builder
+  private RefreshIntervalMenuRow(iconDelay: number = 0) {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text('刷新间隔')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text('控制后台自动刷新频率')
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Row({ space: 6 }) {
+        Text(`${this.refreshIntervalSelection} 分钟`)
+          .fontSize(PANEL_HINT_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+          .fontSize(11)
+          .fontColor([this.theme.textMuted])
+      }
+      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+      .bindMenu(this.OptionMenu(
+        this.getRefreshIntervalOptions(),
+        this.refreshIntervalSelection,
+        (value: string) => {
+          this.applyRefreshInterval(value)
+        },
+      ))
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
+  @Builder
   private ToggleRow(
     symbol: Resource,
     title: string,
@@ -354,16 +431,7 @@ export struct GeneralSettingsPanel {
             0,
           )
           this.DividerLine()
-          this.SettingActionRow(
-            $r('sys.symbol.arrow_clockwise'),
-            '刷新间隔',
-            '控制后台自动刷新频率',
-            `${this.config.refreshIntervalMinutes} 分钟`,
-            this.getRefreshIntervalOptions(),
-            `${this.config.refreshIntervalMinutes}`,
-            (value: string) => this.applyRefreshInterval(value),
-            1,
-          )
+          this.RefreshIntervalMenuRow(1)
           this.DividerLine()
           Row({ space: 12 }) {
             SymbolGlyph($r('sys.symbol.magnifyingglass_circle'))
@@ -411,6 +479,14 @@ export struct GeneralSettingsPanel {
         .borderRadius(CARD_RADIUS_LG)
         .border({ width: 0.8, color: this.theme.divider })
         .transition(livoMotion.enterSoft(40))
+
+        Text(this.saveHint)
+          .fontSize(12)
+          .fontColor(this.theme.textMuted)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .padding({ left: 6, right: 6, top: 6, bottom: 2 })
 
         Row()
           .height(28)

@@ -103,6 +103,7 @@ const HOME_INLINE_SEARCH_RESULT_LIMIT: number = 6
 const HOME_INLINE_SEARCH_MOTION_DURATION: number = 240
 const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
 const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
+const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -180,6 +181,7 @@ struct Index {
   private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
   private refreshPercentAnimationTimer: number = -1
+  private autoRefreshTimer: number = -1
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -189,6 +191,7 @@ struct Index {
 
   aboutToDisappear(): void {
     this.clearRefreshPercentAnimation()
+    this.clearAutoRefreshTimer()
   }
 
   private async loadInitialData(): Promise<void> {
@@ -201,9 +204,10 @@ struct Index {
     this.featuredEntries = await AppRepository.featuredEntries()
     this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
     this.feedSourceLabel = '本地内容已加载'
+    this.configureAutoRefreshTimer()
   }
 
-  private async refreshFeaturedEntries(): Promise<void> {
+  private async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
     if (this.isRefreshing) {
       return
     }
@@ -223,7 +227,9 @@ struct Index {
       this.featuredEntries = result.entries
       this.entryGroups = groupHomeEntriesByMode(result.entries)
       this.feedSourceLabel = result.sourceLabel
-      this.showToast(result.sourceLabel)
+      if (showResultToast) {
+        this.showToast(result.sourceLabel)
+      }
     } finally {
       this.isRefreshing = false
       this.refreshCompletedCount = 0
@@ -1474,6 +1480,34 @@ struct Index {
     .onClick(() => this.openEntry(entry))
   }
 
+  private clearAutoRefreshTimer(): void {
+    if (this.autoRefreshTimer < 0) {
+      return
+    }
+    clearInterval(this.autoRefreshTimer)
+    this.autoRefreshTimer = -1
+  }
+
+  private autoRefreshIntervalMs(): number {
+    const configuredMinutes = Number(this.rootSettings.refreshIntervalMinutes)
+    const normalizedMinutes = Number.isFinite(configuredMinutes) && configuredMinutes > 0
+      ? configuredMinutes
+      : DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes
+    const safeMinutes = Math.max(AUTO_REFRESH_MIN_INTERVAL_MINUTES, Math.floor(normalizedMinutes))
+    return safeMinutes * 60 * 1000
+  }
+
+  private configureAutoRefreshTimer(): void {
+    this.clearAutoRefreshTimer()
+    if (!this.rootSettings.autoRefresh) {
+      return
+    }
+    const intervalMs = this.autoRefreshIntervalMs()
+    this.autoRefreshTimer = setInterval(() => {
+      void this.refreshFeaturedEntries(false)
+    }, intervalMs)
+  }
+
   private articleTweetPreviewImage(entry: EntryCardModel): string {
     const candidateUrls = [
       ...(entry.mediaUrls ?? []),
@@ -2256,7 +2290,16 @@ struct Index {
                       this.handleSettingsContentScrollerReady(scroller)
                     },
                     onSettingsChange: (settings: HarmonySettings) => {
+                      const previousSettings = this.rootSettings
                       this.rootSettings = settings
+                      this.configureAutoRefreshTimer()
+                      if (
+                        settings.autoRefresh
+                        && (!previousSettings.autoRefresh
+                          || previousSettings.refreshIntervalMinutes !== settings.refreshIntervalMinutes)
+                      ) {
+                        void this.refreshFeaturedEntries(false)
+                      }
                     },
                     onThemeChange: (theme: ThemePalette) => {
                       this.theme = theme
