@@ -64,7 +64,7 @@ const PRIMARY_GROUP: SettingItem[] = [
   },
   {
     title: '账户',
-    symbol: $r('sys.symbol.square_and_pencil'),
+    symbol: $r('sys.symbol.person'),
     symbolColor: '#FF8C42',
     subtitle: '账户连接与个人资料'
   },

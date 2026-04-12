@@ -48,7 +48,7 @@ export struct AppearanceSettingsPanel {
   @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State themeModeText: string = '跟随系统'
-  @State themeAccentText: string = '流光橙'
+  @State themeAccentText: string = '莓果粉'
   @State refreshIntervalText: string = '30 分钟'
   @State themeModeSelection: string = DEFAULT_HARMONY_SETTINGS.themeMode
   @State themeAccentSelection: string = DEFAULT_HARMONY_SETTINGS.themeAccent

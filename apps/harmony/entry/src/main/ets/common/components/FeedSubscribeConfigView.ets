@@ -122,23 +122,23 @@ export struct FeedSubscribeConfigView {
     }
   }
 
-  private getViewIcon(view: FeedViewType): Resource {
+  private getViewSymbol(view: FeedViewType): Resource {
     switch (view) {
       case FeedViewType.Articles:
-        return $r('app.media.sub_articles_inactive')
+        return $r('sys.symbol.doc_text')
       case FeedViewType.SocialMedia:
-        return $r('app.media.sub_social_inactive')
+        return $r('sys.symbol.ellipsis_bubble')
       case FeedViewType.Pictures:
-        return $r('app.media.sub_pictures_inactive')
+        return $r('sys.symbol.picture_2')
       case FeedViewType.Videos:
-        return $r('app.media.sub_videos_inactive')
+        return $r('sys.symbol.media_center')
       default:
-        return $r('app.media.sub_articles_inactive')
+        return $r('sys.symbol.doc_text')
     }
   }
 
   private activeTextColor(): string {
-    return this.theme.isDark ? '#F5F8FF' : '#14213D'
+    return this.theme.accent
   }
 
   private isBilibiliSource(): boolean {
@@ -548,15 +548,14 @@ export struct FeedSubscribeConfigView {
   @Builder
   private ViewTypeButton(option: ConfigOption) {
     Row({ space: 6 }) {
-      Image(this.getViewIcon(option.view))
-        .width(16)
-        .height(16)
-        .objectFit(ImageFit.Contain)
+      SymbolGlyph(this.getViewSymbol(option.view))
+        .fontSize(16)
+        .fontColor([this.selectedView === option.view ? this.activeTextColor() : this.theme.textSecondary])
 
       Text(this.getViewLabel(option.view))
         .fontSize(14)
-        .fontWeight(this.selectedView === option.view ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.selectedView === option.view ? this.activeTextColor() : this.theme.textSecondary)
+        .fontWeight(FontWeight.Regular)
+        .fontColor(this.theme.textSecondary)
     }
     .layoutWeight(1)
     .height(38)

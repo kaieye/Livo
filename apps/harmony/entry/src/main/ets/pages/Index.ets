@@ -155,7 +155,6 @@ struct Index {
   @State homeModeRailDismissedByScroll: boolean = false
   @State homeModeRailExpandedOverride: boolean = false
   @State homeModeRailExpandedLockOffset: number = -1
-  @State homeCollapsedModeRailPressed: boolean = false
   @State searchQuery: string = ''
   @State showSearch: boolean = false
   @State searchOverlayVisible: boolean = false
@@ -790,29 +789,25 @@ struct Index {
     }
   }
 
+  private homeCollapsedModeSymbol(): Resource {
+    switch (this.mode) {
+      case 'articles':
+        return $r('sys.symbol.doc_text')
+      case 'social':
+        return $r('sys.symbol.ellipsis_bubble')
+      case 'pictures':
+        return $r('sys.symbol.picture_2')
+      case 'videos':
+      default:
+        return $r('sys.symbol.media_center')
+    }
+  }
+
   @Builder
   private HomeCollapsedModeRailIcon() {
-    if (this.mode === 'articles') {
-      Image($r('app.media.sub_articles_inactive'))
-        .width(24)
-        .height(24)
-        .objectFit(ImageFit.Contain)
-    } else if (this.mode === 'social') {
-      Image($r('app.media.sub_social_inactive'))
-        .width(24)
-        .height(24)
-        .objectFit(ImageFit.Contain)
-    } else if (this.mode === 'pictures') {
-      Image($r('app.media.sub_pictures_inactive'))
-        .width(24)
-        .height(24)
-        .objectFit(ImageFit.Contain)
-    } else {
-      Image($r('app.media.sub_videos_inactive'))
-        .width(24)
-        .height(24)
-        .objectFit(ImageFit.Contain)
-    }
+    SymbolGlyph(this.homeCollapsedModeSymbol())
+      .fontSize(18)
+      .fontColor([this.theme.textPrimary])
   }
 
   @Builder
@@ -820,30 +815,15 @@ struct Index {
     Row() {
       this.HomeCollapsedModeRailIcon()
     }
-    .width(this.homeCollapsedModeRailWidth())
-    .height(this.homeCollapsedModeRailWidth())
+    .width(HOME_INLINE_SEARCH_ACTION_SIZE)
+    .height(HOME_INLINE_SEARCH_ACTION_SIZE)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     .backgroundColor(this.homeCollapsedModeRailBackgroundColor())
     .backdropBlur(this.homeCollapsedModeRailBackdropBlur())
-    .borderRadius(this.homeCollapsedModeRailWidth())
+    .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
     .border({ width: 0.8, color: this.homeCollapsedModeRailBorderColor() })
     .shadow(this.homeCollapsedModeRailShadow())
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .scale({
-      x: this.homeCollapsedModeRailPressed ? 0.92 : 1,
-      y: this.homeCollapsedModeRailPressed ? 0.92 : 1,
-    })
-    .opacity(this.homeCollapsedModeRailPressed ? 0.82 : 1)
-    .animation({ duration: 140, curve: Curve.EaseOut })
-    .onTouch((event: TouchEvent) => {
-      if (event.type === TouchType.Down) {
-        this.homeCollapsedModeRailPressed = true
-        return
-      }
-
-      this.homeCollapsedModeRailPressed = false
-    })
     .onClick(() => {
       this.requestExpandedModeRail()
     })

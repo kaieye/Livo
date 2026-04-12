@@ -161,7 +161,7 @@ export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
   searchAllHomeCategories: true,
   refreshIntervalMinutes: 30,
   themeMode: 'system',
-  themeAccent: 'orange',
+  themeAccent: 'pink',
   language: 'zh-CN',
   remoteFeedUrl: 'https://sspai.com/feed',
 }

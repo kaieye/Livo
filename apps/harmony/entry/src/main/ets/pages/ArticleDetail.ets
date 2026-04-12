@@ -765,6 +765,36 @@ struct ArticleDetail {
     return true
   }
 
+  private imageBlockServesAsVideoCover(index: number): boolean {
+    const blocks = this.entry?.contentBlocks ?? []
+    const current = blocks[index]
+    if (!current || current.type !== 'image' || !current.imageUrl) {
+      return false
+    }
+
+    const previous = index > 0 ? blocks[index - 1] : undefined
+    if (!previous || previous.type !== 'video') {
+      return false
+    }
+
+    return !(previous.imageUrl || '').trim()
+  }
+
+  private resolveVideoPreviewImage(block: ArticleContentBlock, index: number): string {
+    const ownPreview = (block.imageUrl || '').trim()
+    if (ownPreview) {
+      return ownPreview
+    }
+
+    const blocks = this.entry?.contentBlocks ?? []
+    const next = index + 1 < blocks.length ? blocks[index + 1] : undefined
+    if (next && next.type === 'image' && next.imageUrl) {
+      return next.imageUrl
+    }
+
+    return ''
+  }
+
   private isVideoPlaying(block: ArticleContentBlock): boolean {
     return this.activeVideoBlockId === block.id
   }
@@ -1207,7 +1237,7 @@ struct ArticleDetail {
 
   @Builder
   private ContentBlockItem(block: ArticleContentBlock, index: number) {
-    if (block.type === 'image' && block.imageUrl) {
+    if (block.type === 'image' && block.imageUrl && !this.imageBlockServesAsVideoCover(index)) {
       Column() {
         Stack({ alignContent: Alignment.Center }) {
           Image(block.imageUrl)
@@ -1239,8 +1269,8 @@ struct ArticleDetail {
           Column() {
             if (this.isDirectVideoFile(block.videoUrl)) {
               Stack({ alignContent: Alignment.Center }) {
-                if (block.imageUrl) {
-                  Image(block.imageUrl)
+                if (this.resolveVideoPreviewImage(block, index)) {
+                  Image(this.resolveVideoPreviewImage(block, index))
                     .width('100%')
                     .height('100%')
                     .objectFit(ImageFit.Contain)
@@ -1283,7 +1313,7 @@ struct ArticleDetail {
                   Video({
                     src: this.activeVideoPlayableUrl || block.videoUrl,
                     controller: this.nativeVideoController,
-                    previewUri: block.imageUrl || '',
+                    previewUri: this.resolveVideoPreviewImage(block, index),
                   })
                     .width('100%')
                     .height('100%')
@@ -1323,8 +1353,8 @@ struct ArticleDetail {
             } else if (this.isYouTubeVideo(block.videoUrl)) {
               if (this.activeVideoPlayableUrl) {
                 Stack({ alignContent: Alignment.Center }) {
-                  if (block.imageUrl) {
-                    Image(block.imageUrl)
+                  if (this.resolveVideoPreviewImage(block, index)) {
+                    Image(this.resolveVideoPreviewImage(block, index))
                       .width('100%')
                       .height('100%')
                       .objectFit(ImageFit.Contain)
@@ -1339,7 +1369,7 @@ struct ArticleDetail {
                   Video({
                     src: this.activeVideoPlayableUrl,
                     controller: this.nativeVideoController,
-                    previewUri: block.imageUrl || '',
+                    previewUri: this.resolveVideoPreviewImage(block, index),
                   })
                     .width('100%')
                     .height('100%')
@@ -1449,8 +1479,8 @@ struct ArticleDetail {
           .width('100%')
         } else {
           Stack({ alignContent: Alignment.Center }) {
-            if (block.imageUrl) {
-              Image(block.imageUrl)
+            if (this.resolveVideoPreviewImage(block, index)) {
+              Image(this.resolveVideoPreviewImage(block, index))
                 .width('100%')
                 .height('100%')
                 .objectFit(ImageFit.Contain)

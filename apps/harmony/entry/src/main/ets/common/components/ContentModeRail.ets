@@ -89,7 +89,7 @@ export struct ContentModeRail {
   }
 
   private activeTextColor(): string {
-    return this.theme.isDark ? '#F5F8FF' : '#14213D'
+    return this.theme.accent
   }
 
   private railBackgroundColor(): string {
@@ -200,54 +200,32 @@ export struct ContentModeRail {
     }
   }
 
-  @Builder
-  private collapsedIcon(mode: ContentMode) {
-    if (mode === 'articles') {
-      Image($r('app.media.sub_articles_inactive'))
-        .width(this.modeIconSize(true))
-        .height(this.modeIconSize(true))
-        .objectFit(ImageFit.Contain)
-    } else if (mode === 'social') {
-      Image($r('app.media.sub_social_inactive'))
-        .width(this.modeIconSize(true))
-        .height(this.modeIconSize(true))
-        .objectFit(ImageFit.Contain)
-    } else if (mode === 'pictures') {
-      Image($r('app.media.sub_pictures_inactive'))
-        .width(this.modeIconSize(true))
-        .height(this.modeIconSize(true))
-        .objectFit(ImageFit.Contain)
-    } else {
-      Image($r('app.media.sub_videos_inactive'))
-        .width(this.modeIconSize(true))
-        .height(this.modeIconSize(true))
-        .objectFit(ImageFit.Contain)
+  private modeSymbol(mode: ContentMode): Resource {
+    switch (mode) {
+      case 'articles':
+        return $r('sys.symbol.doc_text')
+      case 'social':
+        return $r('sys.symbol.ellipsis_bubble')
+      case 'pictures':
+        return $r('sys.symbol.picture_2')
+      case 'videos':
+      default:
+        return $r('sys.symbol.media_center')
     }
   }
 
   @Builder
+  private collapsedIcon(mode: ContentMode) {
+    SymbolGlyph(this.modeSymbol(mode))
+      .fontSize(this.modeIconSize(true))
+      .fontColor([this.activeTextColor()])
+  }
+
+  @Builder
   private ModeIcon(mode: ContentMode) {
-    if (mode === 'articles') {
-      Image($r('app.media.sub_articles_inactive'))
-        .width(this.modeIconSize())
-        .height(this.modeIconSize())
-        .objectFit(ImageFit.Contain)
-    } else if (mode === 'social') {
-      Image($r('app.media.sub_social_inactive'))
-        .width(this.modeIconSize())
-        .height(this.modeIconSize())
-        .objectFit(ImageFit.Contain)
-    } else if (mode === 'pictures') {
-      Image($r('app.media.sub_pictures_inactive'))
-        .width(this.modeIconSize())
-        .height(this.modeIconSize())
-        .objectFit(ImageFit.Contain)
-    } else {
-      Image($r('app.media.sub_videos_inactive'))
-        .width(this.modeIconSize())
-        .height(this.modeIconSize())
-        .objectFit(ImageFit.Contain)
-    }
+    SymbolGlyph(this.modeSymbol(mode))
+      .fontSize(this.modeIconSize())
+      .fontColor([this.mode === mode ? this.activeTextColor() : this.theme.textSecondary])
   }
 
   @Builder
@@ -257,8 +235,8 @@ export struct ContentModeRail {
 
       Text(this.labelFor(mode))
         .fontSize(14)
-        .fontWeight(this.mode === mode ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.mode === mode ? this.activeTextColor() : this.theme.textSecondary)
+        .fontWeight(FontWeight.Regular)
+        .fontColor(this.theme.textSecondary)
     }
     .layoutWeight(1)
     .height(38)
