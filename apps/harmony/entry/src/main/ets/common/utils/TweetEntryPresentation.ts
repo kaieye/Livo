@@ -125,9 +125,9 @@ function formatPublishedLabel(publishedAt: number | undefined): string {
   const sameDate = target.getDate() === now.getDate()
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
   const isYesterday =
-    target.getFullYear() === yesterday.getFullYear()
-    && target.getMonth() === yesterday.getMonth()
-    && target.getDate() === yesterday.getDate()
+    target.getFullYear() === yesterday.getFullYear() &&
+    target.getMonth() === yesterday.getMonth() &&
+    target.getDate() === yesterday.getDate()
   const hours = target.getHours().toString().padStart(2, '0')
   const minutes = target.getMinutes().toString().padStart(2, '0')
 
@@ -162,7 +162,8 @@ function extractText(summary: string, content: string): string {
   const raw = decodeBasicHtml(source)
   const paragraphMatches = Array.from(
     raw.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi),
-    (item: RegExpMatchArray) => normalizeParagraphWhitespace(stripHtml(item[1] || '')),
+    (item: RegExpMatchArray) =>
+      normalizeParagraphWhitespace(stripHtml(item[1] || '')),
   ).filter((line: string) => !!line && !isMetricsOnlyParagraph(line))
 
   if (paragraphMatches.length > 0) {
@@ -279,7 +280,9 @@ function extractMetrics(source: string): TweetMetrics {
   }
 }
 
-function basePresentation(source: TweetPresentationSource): TweetEntryPresentation {
+function basePresentation(
+  source: TweetPresentationSource,
+): TweetEntryPresentation {
   const mediaUrls = uniqueUrls([
     ...(source.mediaUrls ?? []),
     ...(trimValue(source.imageUrl) ? [source.imageUrl ?? ''] : []),
@@ -301,7 +304,8 @@ function basePresentation(source: TweetPresentationSource): TweetEntryPresentati
     text: extractText(source.summary || '', source.content || ''),
     mediaUrls,
     publishedLabel:
-      trimValue(source.publishedLabel) || formatPublishedLabel(source.publishedAt),
+      trimValue(source.publishedLabel) ||
+      formatPublishedLabel(source.publishedAt),
     articleUrl: trimValue(source.articleUrl),
     replyCount: metrics.replyCount,
     repostCount: metrics.repostCount,
@@ -334,9 +338,32 @@ function parseRetweet(rawText: string): ParsedRetweet | undefined {
 }
 
 function parseQuoteDisplayName(header: string): string {
-  const normalized = trimValue(header)
+  const normalized = trimValue(header).replace(/[：:]+\s*$/, '')
   const matched = normalized.match(/^(.+?)\s+@[A-Za-z0-9_]{1,15}$/)
   return trimValue(matched?.[1] || normalized)
+}
+
+function splitQuoteHeader(header: string): {
+  displayName: string
+  leadingText: string
+} {
+  const normalized = trimValue(header)
+  if (!normalized) {
+    return { displayName: '', leadingText: '' }
+  }
+
+  const colonMatch = normalized.match(/^(.+?)[：:](\s*.*)$/)
+  if (colonMatch?.[1]) {
+    return {
+      displayName: trimValue(colonMatch[1]),
+      leadingText: trimValue(colonMatch[2] || ''),
+    }
+  }
+
+  return {
+    displayName: parseQuoteDisplayName(normalized),
+    leadingText: '',
+  }
 }
 
 function parseQuoteUsername(header: string): string {
@@ -344,39 +371,71 @@ function parseQuoteUsername(header: string): string {
   return trimValue(matched?.[1] || '')
 }
 
+function extractMediaUrlsFromHtml(rawHtml: string): string[] {
+  const urls: string[] = []
+  const imgMatches = Array.from(
+    rawHtml.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi),
+    (item: RegExpMatchArray) => trimValue(decodeBasicHtml(item[1] || '')),
+  )
+  const videoMatches = Array.from(
+    rawHtml.matchAll(/<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi),
+    (item: RegExpMatchArray) => trimValue(decodeBasicHtml(item[1] || '')),
+  )
+
+  imgMatches.concat(videoMatches).forEach((url: string) => {
+    if (url && !urls.includes(url)) {
+      urls.push(url)
+    }
+  })
+
+  return urls
+}
+
 function parseQuotedTweetFromHtml(rawHtml: string): ParsedQuote | undefined {
-  const matched = rawHtml.match(/([\s\S]*?)<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/i)
+  const matched = rawHtml.match(
+    /([\s\S]*?)(?:<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>|<div\b[^>]*class=["'][^"']*rsshub-quote[^"']*["'][^>]*>([\s\S]*?)<\/div>)/i,
+  )
   if (!matched?.[1] || !matched?.[2]) {
-    return undefined
+    if (!matched?.[1] || !matched?.[3]) {
+      return undefined
+    }
   }
 
   const mainText = normalizedPlainText(matched[1])
-  const quoteRaw = matched[2]
+  const quoteRaw = matched[2] || matched[3]
   if (!mainText || !quoteRaw) {
     return undefined
   }
+
+  const quoteMediaUrls = extractMediaUrlsFromHtml(quoteRaw)
 
   const paragraphMatches = Array.from(
     quoteRaw.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi),
     (item: RegExpMatchArray) => normalizeWhitespace(stripHtml(item[1] || '')),
   ).filter((line: string) => !!line)
 
-  const lines = paragraphMatches.length > 0
-    ? paragraphMatches
-    : stripHtml(quoteRaw)
-        .split(/\n+/)
-        .map((line: string) => normalizeWhitespace(line))
-        .filter((line: string) => !!line)
+  const lines =
+    paragraphMatches.length > 0
+      ? paragraphMatches
+      : stripHtml(quoteRaw)
+          .split(/\n+/)
+          .map((line: string) => normalizeWhitespace(line))
+          .filter((line: string) => !!line)
 
-  if (lines.length < 2) {
+  if (lines.length < 1) {
     return undefined
   }
 
   const header = lines[0]
-  const body = lines.slice(1).join('\n\n').trim()
+  const headerParts = splitQuoteHeader(header)
+  const body = [headerParts.leadingText, ...lines.slice(1)]
+    .map((line: string) => trimValue(line))
+    .filter((line: string) => !!line)
+    .join('\n\n')
+    .trim()
   const username = parseQuoteUsername(header)
-  const displayName = parseQuoteDisplayName(header)
-  if (!body || (!displayName && !username)) {
+  const displayName = headerParts.displayName || parseQuoteDisplayName(header)
+  if ((!body && quoteMediaUrls.length === 0) || (!displayName && !username)) {
     return undefined
   }
 
@@ -387,13 +446,18 @@ function parseQuotedTweetFromHtml(rawHtml: string): ParsedQuote | undefined {
       username,
       avatarUrl: xAvatarUrl(username),
       text: body,
-      mediaUrls: [],
+      mediaUrls: quoteMediaUrls,
     },
   }
 }
 
-function applyRetweetSemantics(base: TweetEntryPresentation, source: TweetPresentationSource): TweetEntryPresentation | undefined {
-  const rawText = normalizedPlainText(`${source.summary || ''}\n${source.content || ''}`)
+function applyRetweetSemantics(
+  base: TweetEntryPresentation,
+  source: TweetPresentationSource,
+): TweetEntryPresentation | undefined {
+  const rawText = normalizedPlainText(
+    `${source.summary || ''}\n${source.content || ''}`,
+  )
   const parsed = parseRetweet(rawText)
   if (!parsed) {
     return undefined
@@ -410,9 +474,24 @@ function applyRetweetSemantics(base: TweetEntryPresentation, source: TweetPresen
   }
 }
 
-function applyQuoteSemantics(base: TweetEntryPresentation, source: TweetPresentationSource): TweetEntryPresentation | undefined {
-  const rawHtml = `${source.summary || ''}\n${source.content || ''}`
-  const parsed = parseQuotedTweetFromHtml(rawHtml)
+function applyQuoteSemantics(
+  base: TweetEntryPresentation,
+  source: TweetPresentationSource,
+): TweetEntryPresentation | undefined {
+  const candidateSources = [
+    `${source.content || ''}`,
+    `${source.summary || ''}`,
+    `${source.summary || ''}\n${source.content || ''}`,
+  ]
+
+  let parsed: ParsedQuote | undefined
+  for (const candidate of candidateSources) {
+    parsed = parseQuotedTweetFromHtml(candidate)
+    if (parsed) {
+      break
+    }
+  }
+
   if (!parsed) {
     return undefined
   }
@@ -425,11 +504,15 @@ function applyQuoteSemantics(base: TweetEntryPresentation, source: TweetPresenta
   }
 }
 
-function presentTweetEntryFromSource(source: TweetPresentationSource): TweetEntryPresentation {
+function presentTweetEntryFromSource(
+  source: TweetPresentationSource,
+): TweetEntryPresentation {
   const base = basePresentation(source)
-  return applyRetweetSemantics(base, source)
-    || applyQuoteSemantics(base, source)
-    || base
+  return (
+    applyRetweetSemantics(base, source) ||
+    applyQuoteSemantics(base, source) ||
+    base
+  )
 }
 
 export function presentTweetEntryFromEntry(
@@ -473,7 +556,8 @@ export function presentTweetEntryFromCard(card: {
 
   return {
     ...presentation,
-    username: presentation.username || normalizeUsernameLabel(extractUsername(source)),
+    username:
+      presentation.username || normalizeUsernameLabel(extractUsername(source)),
     avatarUrl: sourceAvatarUrl || presentation.avatarUrl,
   }
 }

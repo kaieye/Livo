@@ -172,7 +172,10 @@ test('presentTweetEntryFromEntry classifies RT prefix content as retweet', () =>
   assert.equal(presented.retweetByLabel, 'Elon Musk')
   assert.equal(presented.displayName, 'ArthurMacWaters')
   assert.equal(presented.username, '@ArthurMacWaters')
-  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/ArthurMacWaters?fallback=false')
+  assert.equal(
+    presented.avatarUrl,
+    'https://unavatar.io/x/ArthurMacWaters?fallback=false',
+  )
   assert.equal(presented.text, 'Western civilization is awesome, actually')
 })
 
@@ -218,7 +221,10 @@ test('presentTweetEntryFromCard falls back to source username avatar when feed a
   const presented = presentTweetEntryFromCard(card)
 
   assert.equal(presented.username, '@openai')
-  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/openai?fallback=false')
+  assert.equal(
+    presented.avatarUrl,
+    'https://unavatar.io/x/openai?fallback=false',
+  )
 })
 
 test('presentTweetEntryFromEntry keeps ambiguous RT content as plain tweet', () => {
@@ -234,7 +240,10 @@ test('presentTweetEntryFromEntry keeps ambiguous RT content as plain tweet', () 
     publishedAt: Date.UTC(2024, 3, 5, 0, 0, 0),
   }
 
-  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/openai')
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/openai',
+  )
 
   assert.equal(presented.kind, 'tweet')
   assert.equal(presented.retweetByLabel, '')
@@ -264,11 +273,68 @@ test('presentTweetEntryFromEntry classifies blockquote content as quote tweet', 
   assert.equal(presented.text, 'Try out self-driving in a Tesla.')
   assert.equal(presented.quotedTweet?.displayName, 'Robert Scoble')
   assert.equal(presented.quotedTweet?.username, '@Scobleizer')
-  assert.equal(presented.quotedTweet?.avatarUrl, 'https://unavatar.io/x/Scobleizer?fallback=false')
+  assert.equal(
+    presented.quotedTweet?.avatarUrl,
+    'https://unavatar.io/x/Scobleizer?fallback=false',
+  )
   assert.equal(
     presented.quotedTweet?.text,
     'I was on @wholemars space this afternoon while my Model 3 drove me for a couple of hours',
   )
+})
+
+test('presentTweetEntryFromEntry classifies rsshub quote div content as quote tweet', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-rsshub-quote',
+    title: '',
+    summary:
+      'Grok groks<div class="rsshub-quote"><br><br>X Freeze: Elon Musk speaks hard truths on what Nelson Mandela actually stood for<br><br>They are literally shaping humanity\'s future.<br><br><img src="https://pbs.twimg.com/media/HFs6HTKWMAEsorg?format=jpg&amp;name=orig"></div>',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/2043293725804421596',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 6, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'quote')
+  assert.equal(presented.text, 'Grok groks')
+  assert.equal(presented.quotedTweet?.displayName, 'X Freeze')
+  assert.equal(
+    presented.quotedTweet?.text,
+    "Elon Musk speaks hard truths on what Nelson Mandela actually stood for\n\nThey are literally shaping humanity's future.",
+  )
+  assert.deepEqual(presented.quotedTweet?.mediaUrls, [
+    'https://pbs.twimg.com/media/HFs6HTKWMAEsorg?format=jpg&name=orig',
+  ])
+})
+
+test('presentTweetEntryFromCard prefers rich content over flattened summary for quote main text', () => {
+  const card: TweetCardLike = {
+    id: 'card-rsshub-summary-content-split',
+    title: 'Grok groks',
+    summary: 'Grok groksAlice Smith:',
+    content:
+      'Grok groks<div class="rsshub-quote"><br><br>Alice Smith:<br><br><img src="https://pbs.twimg.com/media/HFs6HTKWMAEsorg?format=jpg&amp;name=orig"></div>',
+    imageUrl: '',
+    feedImageUrl: 'https://unavatar.io/x/elonmusk',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/2043293725804421596',
+    publishedAt: Date.UTC(2024, 3, 6, 0, 0, 0),
+    mediaUrls: [],
+    feedTitle: 'Elon Musk',
+  }
+
+  const presented = presentTweetEntryFromCard(card)
+
+  assert.equal(presented.kind, 'quote')
+  assert.equal(presented.text, 'Grok groks')
+  assert.equal(presented.quotedTweet?.displayName, 'Alice Smith')
 })
 
 test('presentTweetEntryFromCard preserves media order and metrics for timeline actions', () => {
@@ -318,7 +384,10 @@ test('presentTweetEntryFromEntry preserves paragraph breaks from tweet html cont
     publishedAt: Date.UTC(2024, 3, 7, 0, 0, 0),
   }
 
-  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/openai')
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/openai',
+  )
 
   assert.equal(presented.text, 'First line\n\nSecond line\n\nThird line')
 })
@@ -327,7 +396,8 @@ test('presentTweetEntryFromEntry extracts image urls from tweet html when mediaU
   const entry: TweetEntryLike = {
     id: 'entry-html-image',
     title: '',
-    summary: '<p>Photo set</p><img src="https://pbs.twimg.com/media/one.jpg" /><img src="https://pbs.twimg.com/media/two.jpg" />',
+    summary:
+      '<p>Photo set</p><img src="https://pbs.twimg.com/media/one.jpg" /><img src="https://pbs.twimg.com/media/two.jpg" />',
     content: '',
     author: 'OpenAI',
     articleUrl: 'https://x.com/openai/status/5',
@@ -336,7 +406,10 @@ test('presentTweetEntryFromEntry extracts image urls from tweet html when mediaU
     publishedAt: Date.UTC(2024, 3, 7, 0, 0, 0),
   }
 
-  const presented = presentTweetEntryFromEntry(entry, 'https://unavatar.io/x/openai')
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/openai',
+  )
 
   assert.deepEqual(presented.mediaUrls, [
     'https://pbs.twimg.com/media/one.jpg',

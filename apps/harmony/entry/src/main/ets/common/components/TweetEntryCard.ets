@@ -68,6 +68,19 @@ export struct TweetEntryCard {
     return (this.quotedTweet().username || '').trim()
   }
 
+  private quotedAuthorLabel(): string {
+    return (this.quotedTweet().displayName || '').trim()
+      || this.quotedUsernameLabel()
+      || '未知来源'
+  }
+
+  private quotedMediaUrls(): string[] {
+    return (this.quotedTweet().mediaUrls || [])
+      .map((url: string) => url.trim())
+      .filter((url: string) => !!url)
+      .slice(0, 4)
+  }
+
   private mediaTileWidth(index: number, count: number): string {
     if (count <= 1) {
       return '100%'
@@ -140,38 +153,14 @@ export struct TweetEntryCard {
   @Builder
   private QuoteCard() {
     if (this.hasQuotedTweet()) {
-      Column({ space: 8 }) {
-        Row({ space: 8 }) {
-          AvatarTile({
-            imageUrl: this.quotedTweet().avatarUrl,
-            fallbackLabel: this.quotedTweet().displayName,
-          accent: this.theme.accent,
-          theme: this.theme,
-          avatarSize: 28,
-          radius: 999,
-          textSize: 11,
-          showFallbackLabel: false,
-        })
-
-          Row({ space: 4 }) {
-            Text(this.quotedTweet().displayName || '未知来源')
-              .fontSize(13)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.theme.textPrimary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            if (this.quotedUsernameLabel()) {
-              Text(this.quotedUsernameLabel())
-                .fontSize(12)
-                .fontColor(this.theme.textMuted)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-          }
-          .layoutWeight(1)
-        }
-        .width('100%')
+      Column({ space: 10 }) {
+        Text(this.quotedAuthorLabel())
+          .fontSize(13)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textPrimary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
 
         if (this.quotedTweet().text) {
           Text(this.quotedTweet().text)
@@ -181,13 +170,29 @@ export struct TweetEntryCard {
             .maxLines(4)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
+
+        if (this.quotedMediaUrls().length > 0) {
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+            ForEach(this.quotedMediaUrls(), (mediaUrl: string, index: number) => {
+              Image(mediaUrl)
+                .width(this.mediaTileWidth(index, this.quotedMediaUrls().length))
+                .height(this.mediaTileHeight(index, this.quotedMediaUrls().length))
+                .borderRadius(8)
+                .objectFit(ImageFit.Cover)
+                .backgroundColor(this.theme.elevated)
+                .margin({ bottom: this.quotedMediaUrls().length > 1 ? 6 : 0 })
+            }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+          }
+          .width('100%')
+          .clip(true)
+        }
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+      .padding({ left: 12, right: 12, top: 12, bottom: 12 })
       .border({ width: 1, color: this.theme.divider })
       .borderRadius(12)
-      .backgroundColor(this.theme.isDark ? '#171C22' : '#F9FBFC')
+      .backgroundColor(this.theme.isDark ? '#151A20' : '#F4F8FB')
     }
   }
 

@@ -75,6 +75,7 @@ struct ArticleDetail {
       feedId: entry.feedId,
       title: entry.title,
       summary: entry.summary,
+      content: entry.content,
       imageUrl: entry.imageUrl,
       feedImageUrl: entry.feedImageUrl,
       author: entry.author,
@@ -299,6 +300,19 @@ struct ArticleDetail {
 
   private tweetPresentation(): TweetEntryPresentation {
     return presentTweetEntryFromCard(this.entry ?? {})
+  }
+
+  private tweetContextLabel(): string {
+    const presentation = this.tweetPresentation()
+    if (presentation.kind === 'retweet' && presentation.retweetByLabel.trim()) {
+      return `转发自 ${presentation.retweetByLabel.trim()}`
+    }
+
+    if (presentation.kind === 'quote' && presentation.quotedTweet?.displayName?.trim()) {
+      return `引用自 ${presentation.quotedTweet.displayName.trim()}`
+    }
+
+    return ''
   }
 
   private sourceUrl(): string {
@@ -1630,6 +1644,19 @@ struct ArticleDetail {
               if (this.isSocialDetail()) {
                 // 推文详情：复用卡片的 presentation 数据，去掉外层卡片样式直接渲染内容
                 Column({ space: 10 }) {
+                  if (this.tweetContextLabel()) {
+                    Row({ space: 6 }) {
+                      Text(this.tweetContextLabel())
+                        .fontSize(12)
+                        .fontWeight(FontWeight.Medium)
+                        .fontColor(this.theme.textMuted)
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    }
+                    .width('100%')
+                    .padding({ left: 2, right: 2, bottom: 2 })
+                  }
+
                   // 头像 + 用户名行
                   Row({ space: 8 }) {
                     AvatarTile({
@@ -1678,28 +1705,16 @@ struct ArticleDetail {
 
                   // 引用推文
                   if (this.tweetPresentation().kind === 'quote' && this.tweetPresentation().quotedTweet) {
-                    Column({ space: 8 }) {
-                      Row({ space: 8 }) {
-                        AvatarTile({
-                          imageUrl: (this.tweetPresentation().quotedTweet as TweetQuotedPresentation).avatarUrl,
-                          fallbackLabel: (this.tweetPresentation().quotedTweet as TweetQuotedPresentation).displayName,
-                          accent: this.theme.accent,
-                          theme: this.theme,
-                          avatarSize: 20,
-                          radius: 999,
-                          textSize: 10,
-                          showFallbackLabel: false,
-                        })
-
-                        Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).displayName || '未知来源')
-                          .fontSize(13)
-                          .fontWeight(FontWeight.Bold)
-                          .fontColor(this.theme.textPrimary)
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          .layoutWeight(1)
-                      }
-                      .width('100%')
+                    Column({ space: 10 }) {
+                      Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).displayName
+                        || (this.tweetPresentation().quotedTweet as TweetQuotedPresentation).username
+                        || '未知来源')
+                        .fontSize(13)
+                        .fontWeight(FontWeight.Bold)
+                        .fontColor(this.theme.textPrimary)
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .width('100%')
 
                       if ((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).text) {
                         Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).text)
@@ -1708,13 +1723,26 @@ struct ArticleDetail {
                           .fontColor(this.theme.textPrimary)
                           .width('100%')
                       }
+
+                      if (((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).mediaUrls || []).length > 0) {
+                        Column({ space: 8 }) {
+                          ForEach((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).mediaUrls, (url: string, index: number) => {
+                            Image(url)
+                              .width('100%')
+                              .borderRadius(10)
+                              .objectFit(ImageFit.Cover)
+                              .backgroundColor(this.theme.elevated)
+                          }, (url: string, index: number) => `${url}_${index}`)
+                        }
+                        .width('100%')
+                      }
                     }
                     .width('100%')
                     .alignItems(HorizontalAlign.Start)
-                    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+                    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
                     .border({ width: 1, color: this.theme.divider })
                     .borderRadius(12)
-                    .backgroundColor(this.theme.isDark ? '#171C22' : '#F9FBFC')
+                    .backgroundColor(this.theme.isDark ? '#151A20' : '#F4F8FB')
                   }
 
                   // 媒体图片

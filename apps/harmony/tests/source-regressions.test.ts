@@ -140,6 +140,8 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   assert.match(source, /private QuoteCard\(\)/)
   assert.match(source, /presentation\.kind === 'quote'/)
   assert.match(source, /presentation\.quotedTweet/)
+  assert.doesNotMatch(source, /private QuoteBanner\(\)/)
+  assert.doesNotMatch(source, /引用帖/)
   assert.doesNotMatch(source, /private ActionRow\(\)/)
   assert.doesNotMatch(source, /private ActionItem\(/)
   assert.match(source, /avatarSize:\s*17/)
@@ -497,6 +499,28 @@ test('FeedDetailView routes x previews through TweetEntryCard', () => {
     feedDetailViewSource,
     /else if \(this\.isXPreview\(\)\) \{\s*TweetEntryCard\(\{/s,
   )
+})
+
+test('ArticleDetail social view shows X tweet context banner for quote and repost posts', () => {
+  const source = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'apps/harmony/entry/src/main/ets/pages/ArticleDetail.ets',
+    ),
+    'utf8',
+  )
+
+  assert.match(source, /private tweetContextLabel\(\): string/)
+  assert.match(
+    source,
+    /return `转发自 \$\{presentation\.retweetByLabel\.trim\(\)\}`/,
+  )
+  assert.match(
+    source,
+    /return `引用自 \$\{presentation\.quotedTweet\.displayName.trim\(\)\}`/,
+  )
+  assert.match(source, /if \(this\.tweetContextLabel\(\)\) \{/)
+  assert.match(source, /Text\(this\.tweetContextLabel\(\)\)/)
 })
 
 test('VideoPlayer keeps fullscreen playback centered and aspect-ratio constrained', () => {

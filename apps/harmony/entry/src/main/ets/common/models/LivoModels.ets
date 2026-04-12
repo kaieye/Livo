@@ -86,6 +86,7 @@ export interface EntryCardModel {
   feedId: string
   title: string
   summary: string
+  content: string
   imageUrl: string
   feedImageUrl: string
   author: string
@@ -434,6 +435,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     feedId: entry.feedId,
     title: entry.title,
     summary: entry.summary,
+    content: entry.content,
     imageUrl: resolveEntryCardImageUrl({
       title: entry.title,
       summary: entry.summary,
@@ -494,6 +496,7 @@ export function articleDetailModelFromCard(card: EntryCardModel): ArticleDetailM
     feedId: card.feedId,
     title: card.title,
     summary: card.summary,
+    content: card.content,
     imageUrl: card.imageUrl,
     feedImageUrl: card.feedImageUrl,
     author: card.author,
@@ -531,6 +534,7 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     feedId: card.feedId,
     title: card.title,
     summary: card.summary,
+    content: card.content,
     imageUrl: card.imageUrl,
     feedImageUrl: card.feedImageUrl,
     author: card.author,

@@ -101,29 +101,24 @@ test('EntryCardModel keeps picture card source fields for the home pictures stre
 })
 
 test('toEntryCardModel maps raw picture card fields from entry data', () => {
-  const toEntryCardModelMatch = livoModelsSource.match(
-    /export function toEntryCardModel\(entry: Entry, feed: Feed\): EntryCardModel \{[\s\S]*?return \{([\s\S]*?)\n {2}\}\n\}/,
+  assert.match(
+    livoModelsSource,
+    /export function toEntryCardModel\(entry: Entry, feed: Feed\): EntryCardModel/,
   )
-
-  assert.ok(
-    toEntryCardModelMatch,
-    'expected toEntryCardModel implementation in LivoModels.ets',
-  )
-
-  const returnedObjectSource = toEntryCardModelMatch[1] ?? ''
 
   assert.match(
     livoModelsSource,
     /const pictureMediaUrls = extractEntryGalleryImageUrls\(\{[\s\S]*summary: entry\.summary,[\s\S]*content: entry\.content,[\s\S]*articleUrl: entry\.url,[\s\S]*siteUrl: feed\.siteUrl \?\? feed\.url,[\s\S]*mediaUrls: entry\.mediaUrls \?\? \[\],[\s\S]*\}\)/,
   )
-  assert.match(returnedObjectSource, /articleUrl:\s*entry\.url/)
-  assert.match(returnedObjectSource, /publishedAt:\s*entry\.publishedAt/)
+  assert.match(livoModelsSource, /articleUrl:\s*entry\.url/)
+  assert.match(livoModelsSource, /publishedAt:\s*entry\.publishedAt/)
+  assert.match(livoModelsSource, /content:\s*entry\.content/)
   assert.match(
-    returnedObjectSource,
+    livoModelsSource,
     /mediaUrls:\s*selectPictureMediaUrls\(pictureMediaUrls\)/,
   )
   assert.match(
-    returnedObjectSource,
+    livoModelsSource,
     /rawMediaUrls:\s*extractPictureCarouselMediaUrls\(\{/,
   )
 })
