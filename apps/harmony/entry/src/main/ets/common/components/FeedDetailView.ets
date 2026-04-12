@@ -1264,7 +1264,8 @@ export struct FeedDetailView {
             .width('100%')
             .justifyContent(FlexAlign.Center)
             .padding({ bottom: 24 })
-            .align(Alignment.Bottom)
+            .position({ x: 0, y: '100%' })
+            .markAnchor({ x: 0, y: '100%' })
             .transition(TransitionEffect.move(TransitionEdge.BOTTOM).combine(TransitionEffect.OPACITY))
           }
         }

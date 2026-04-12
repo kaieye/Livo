@@ -25,6 +25,9 @@ import {
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { HEADER_BACK_SLOT_SIZE, PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
+import { presentTweetEntryFromCard, TweetEntryPresentation, TweetQuotedPresentation } from '../common/utils/TweetEntryPresentation'
+import { AvatarTile } from '../common/components/AvatarTile'
+import { HighlightedInlineText } from '../common/components/HighlightedInlineText'
 
 @Entry
 @Component
@@ -287,6 +290,15 @@ struct ArticleDetail {
   private isPictureDetail(): boolean {
     const viewLabel = (this.entry?.viewLabel || '').trim()
     return viewLabel === '图片'
+  }
+
+  private isSocialDetail(): boolean {
+    const viewLabel = (this.entry?.viewLabel || '').trim()
+    return viewLabel === '社交'
+  }
+
+  private tweetPresentation(): TweetEntryPresentation {
+    return presentTweetEntryFromCard(this.entry ?? {})
   }
 
   private sourceUrl(): string {
@@ -1578,7 +1590,7 @@ struct ArticleDetail {
         Scroll() {
           Column({ space: 18 }) {
             Column({ space: 12 }) {
-              if (!this.isPictureDetail()) {
+              if (!this.isPictureDetail() && !this.isSocialDetail()) {
                 Text(this.entry!.title)
                   .fontSize(28)
                   .lineHeight(38)
@@ -1587,11 +1599,13 @@ struct ArticleDetail {
                   .width('100%')
               }
 
-              Text(`${this.entry!.author} · ${this.entry!.publishedLabel}`)
-                .fontSize(13)
-                .lineHeight(20)
-                .fontColor(this.theme.textSecondary)
-                .width('100%')
+              if (!this.isSocialDetail()) {
+                Text(`${this.entry!.author} · ${this.entry!.publishedLabel}`)
+                  .fontSize(13)
+                  .lineHeight(20)
+                  .fontColor(this.theme.textSecondary)
+                  .width('100%')
+              }
             }
             .width('100%')
             .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 6, bottom: 2 })
@@ -1613,51 +1627,155 @@ struct ArticleDetail {
             }
 
             Column({ space: 20 }) {
-              if (this.isPictureDetail() && (this.entry!.title || '').trim()) {
-                Text(this.entry!.title)
-                  .fontSize(16)
-                  .lineHeight(29)
-                  .fontColor(this.theme.textPrimary)
-                  .width('100%')
-                  .textAlign(TextAlign.Start)
-              }
+              if (this.isSocialDetail()) {
+                // 推文详情：复用卡片的 presentation 数据，去掉外层卡片样式直接渲染内容
+                Column({ space: 10 }) {
+                  // 头像 + 用户名行
+                  Row({ space: 8 }) {
+                    AvatarTile({
+                      imageUrl: this.tweetPresentation().avatarUrl,
+                      fallbackLabel: this.tweetPresentation().displayName,
+                      accent: this.theme.accent,
+                      theme: this.theme,
+                      avatarSize: 40,
+                      radius: 999,
+                      textSize: 14,
+                      showFallbackLabel: false,
+                    })
 
-              if (this.isPictureDetail()) {
-                this.PictureDetailMediaCarousel()
-              }
+                    Column({ space: 2 }) {
+                      Text(this.tweetPresentation().displayName || '未知来源')
+                        .fontSize(16)
+                        .fontWeight(FontWeight.Bold)
+                        .fontColor(this.theme.textPrimary)
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .width('100%')
 
-              if (this.shouldRenderSummary()) {
-                Text(this.entry!.summary)
-                  .fontSize(16)
-                  .lineHeight(27)
-                  .fontColor(this.theme.textSecondary)
-                  .fontWeight(FontWeight.Medium)
-                  .width('100%')
-              }
-
-              if (this.entry!.contentBlocks.length > 0) {
-                ForEach(this.pictureDetailTextBlocks(), (block: ArticleContentBlock, index: number) => {
-                  if (this.shouldRenderParagraphBlock(block, index)) {
-                    this.ContentBlockItem(block, index)
+                      if (this.tweetPresentation().username) {
+                        Text(this.tweetPresentation().username)
+                          .fontSize(13)
+                          .fontColor(this.theme.textMuted)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .width('100%')
+                      }
+                    }
+                    .layoutWeight(1)
+                    .alignItems(HorizontalAlign.Start)
                   }
-                }, (block: ArticleContentBlock) => block.id)
+                  .width('100%')
+                  .alignItems(VerticalAlign.Center)
+
+                  // 推文正文
+                  if (this.tweetPresentation().text) {
+                    Text(this.tweetPresentation().text)
+                      .fontSize(17)
+                      .lineHeight(26)
+                      .fontColor(this.theme.textPrimary)
+                      .width('100%')
+                  }
+
+                  // 引用推文
+                  if (this.tweetPresentation().kind === 'quote' && this.tweetPresentation().quotedTweet) {
+                    Column({ space: 8 }) {
+                      Row({ space: 8 }) {
+                        AvatarTile({
+                          imageUrl: (this.tweetPresentation().quotedTweet as TweetQuotedPresentation).avatarUrl,
+                          fallbackLabel: (this.tweetPresentation().quotedTweet as TweetQuotedPresentation).displayName,
+                          accent: this.theme.accent,
+                          theme: this.theme,
+                          avatarSize: 20,
+                          radius: 999,
+                          textSize: 10,
+                          showFallbackLabel: false,
+                        })
+
+                        Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).displayName || '未知来源')
+                          .fontSize(13)
+                          .fontWeight(FontWeight.Bold)
+                          .fontColor(this.theme.textPrimary)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .layoutWeight(1)
+                      }
+                      .width('100%')
+
+                      if ((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).text) {
+                        Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).text)
+                          .fontSize(14)
+                          .lineHeight(21)
+                          .fontColor(this.theme.textPrimary)
+                          .width('100%')
+                      }
+                    }
+                    .width('100%')
+                    .alignItems(HorizontalAlign.Start)
+                    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+                    .border({ width: 1, color: this.theme.divider })
+                    .borderRadius(12)
+                    .backgroundColor(this.theme.isDark ? '#171C22' : '#F9FBFC')
+                  }
+
+                  // 媒体图片
+                  if (this.tweetPresentation().mediaUrls.length > 0) {
+                    Column({ space: 8 }) {
+                      ForEach(this.tweetPresentation().mediaUrls, (url: string, index: number) => {
+                        Image(url)
+                          .width('100%')
+                          .borderRadius(12)
+                          .objectFit(ImageFit.Cover)
+                          .backgroundColor(this.theme.elevated)
+                      }, (url: string, index: number) => `${url}_${index}`)
+                    }
+                    .width('100%')
+                  }
+
+                  // 来源链接已移除
+                }
+                .width('100%')
+                .alignItems(HorizontalAlign.Start)
               } else {
-                ForEach(this.entry!.contentParagraphs, (paragraph: string) => {
-                  Text(paragraph)
+                if (this.isPictureDetail() && (this.entry!.title || '').trim()) {
+                  Text(this.entry!.title)
                     .fontSize(16)
                     .lineHeight(29)
                     .fontColor(this.theme.textPrimary)
                     .width('100%')
                     .textAlign(TextAlign.Start)
-                }, (paragraph: string, index: number) => `${index}-${paragraph}`)
-              }
+                }
 
-              if (!this.isPictureDetail()) {
-                if (this.sourceUrl()) {
-                  Text(`${this.sourceLabel()}：${this.sourceUrl()}`)
-                    .fontSize(13)
-                    .fontColor(this.theme.textMuted)
+                if (this.isPictureDetail()) {
+                  this.PictureDetailMediaCarousel()
+                }
+
+                if (this.shouldRenderSummary()) {
+                  Text(this.entry!.summary)
+                    .fontSize(16)
+                    .lineHeight(27)
+                    .fontColor(this.theme.textSecondary)
+                    .fontWeight(FontWeight.Medium)
                     .width('100%')
+                }
+
+                if (this.entry!.contentBlocks.length > 0) {
+                  ForEach(this.pictureDetailTextBlocks(), (block: ArticleContentBlock, index: number) => {
+                    if (this.shouldRenderParagraphBlock(block, index)) {
+                      this.ContentBlockItem(block, index)
+                    }
+                  }, (block: ArticleContentBlock) => block.id)
+                } else {
+                  ForEach(this.entry!.contentParagraphs, (paragraph: string) => {
+                    Text(paragraph)
+                      .fontSize(16)
+                      .lineHeight(29)
+                      .fontColor(this.theme.textPrimary)
+                      .width('100%')
+                      .textAlign(TextAlign.Start)
+                  }, (paragraph: string, index: number) => `${index}-${paragraph}`)
+                }
+
+                if (!this.isPictureDetail()) {
                 }
               }
             }
@@ -1669,6 +1787,8 @@ struct ArticleDetail {
           .width('100%')
           .padding({ bottom: this.bottomAvoidArea + 28 })
           .alignItems(HorizontalAlign.Start)
+          .justifyContent(FlexAlign.Start)
+          .constraintSize({ minHeight: '100%' })
         }
         .width('100%')
         .layoutWeight(1)

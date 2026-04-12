@@ -6,6 +6,7 @@ import {
   AI_PROVIDER_OPTIONS,
   AIProviderDefinition,
   AIProvider,
+  AITargetLanguage,
   DEFAULT_AI_ASSISTANT_SETTINGS,
   DEFAULT_HARMONY_SETTINGS,
   HarmonySettings,
@@ -120,7 +121,7 @@ export struct AIAssistantSettingsPanel {
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
         this.theme = palette
       })
-      this.saveHint = '已保存 AI 摘要开关'
+      this.saveHint = '已保存 AI 功能设置'
     }).catch((error: Error) => {
       this.saveHint = `保存失败：${error.message}`
     })
@@ -231,6 +232,10 @@ export struct AIAssistantSettingsPanel {
     this.syncGeneralSettings({
       autoRefresh: this.config.autoRefresh,
       aiSummaryEnabled: enabled,
+      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
+      aiTranslationEnabled: this.config.aiTranslationEnabled,
+      aiTranslationLanguage: this.config.aiTranslationLanguage,
+      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
       imageProxyEnabled: this.config.imageProxyEnabled,
       searchAllHomeCategories: this.config.searchAllHomeCategories,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
@@ -239,6 +244,95 @@ export struct AIAssistantSettingsPanel {
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
+  }
+
+  private patchTranslationEnabled(value: boolean): void {
+    this.syncGeneralSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
+      aiTranslationEnabled: value,
+      aiTranslationLanguage: this.config.aiTranslationLanguage,
+      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    })
+  }
+
+  private patchTranslationLanguage(value: AITargetLanguage): void {
+    this.syncGeneralSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
+      aiTranslationEnabled: this.config.aiTranslationEnabled,
+      aiTranslationLanguage: value,
+      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    })
+  }
+
+  private patchTranslationAutoTrigger(value: boolean): void {
+    this.syncGeneralSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
+      aiTranslationEnabled: this.config.aiTranslationEnabled,
+      aiTranslationLanguage: this.config.aiTranslationLanguage,
+      aiTranslationAutoTrigger: value,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    })
+  }
+
+  private patchSummaryAutoTrigger(value: boolean): void {
+    this.syncGeneralSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      aiSummaryAutoTrigger: value,
+      aiTranslationEnabled: this.config.aiTranslationEnabled,
+      aiTranslationLanguage: this.config.aiTranslationLanguage,
+      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    })
+  }
+
+  private readonly translationLanguageOptions: SelectOption[] = [
+    { label: '简体中文', value: 'zh-CN' },
+    { label: '繁體中文', value: 'zh-TW' },
+    { label: 'English', value: 'en' },
+    { label: '日本語', value: 'ja' },
+    { label: '한국어', value: 'ko' },
+    { label: 'Français', value: 'fr' },
+    { label: 'Deutsch', value: 'de' },
+    { label: 'Español', value: 'es' },
+    { label: 'Русский', value: 'ru' },
+    { label: 'العربية', value: 'ar' },
+  ]
+
+  private translationLanguageLabel(value: AITargetLanguage): string {
+    return this.translationLanguageOptions.find((o: SelectOption) => o.value === value)?.label ?? value
   }
 
   private persistCurrentDraft(): void {
@@ -444,6 +538,287 @@ export struct AIAssistantSettingsPanel {
     .borderRadius(20)
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onClick(() => onTap())
+  }
+
+  @Builder
+  private TranslationLanguageMenu() {
+    Menu() {
+      ForEach(this.translationLanguageOptions, (option: SelectOption) => {
+        MenuItem({
+          content: option.label,
+          symbolEndIcon: this.config.aiTranslationLanguage === option.value
+            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
+            : undefined,
+        })
+          .selected(this.config.aiTranslationLanguage === option.value)
+          .onChange((selected: boolean) => {
+            if (selected && option.value !== this.config.aiTranslationLanguage) {
+              this.patchTranslationLanguage(option.value as AITargetLanguage)
+            }
+          })
+      }, (option: SelectOption) => option.value)
+    }
+  }
+
+  @Builder
+  private SummaryLanguageMenu() {
+    Menu() {
+      ForEach(this.translationLanguageOptions, (option: SelectOption) => {
+        MenuItem({
+          content: option.label,
+          symbolEndIcon: this.config.aiTranslationLanguage === option.value
+            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
+            : undefined,
+        })
+          .selected(this.config.aiTranslationLanguage === option.value)
+          .onChange((selected: boolean) => {
+            if (selected && option.value !== this.config.aiTranslationLanguage) {
+              this.patchTranslationLanguage(option.value as AITargetLanguage)
+            }
+          })
+      }, (option: SelectOption) => option.value)
+    }
+  }
+
+  @Builder
+  private TranslationFeatureCard(iconDelay: number) {
+    Column() {
+      // 语言选择行（带菜单）
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.translate'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay))
+
+        Text('目标语言')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .layoutWeight(1)
+
+        Row({ space: 4 }) {
+          Text(this.translationLanguageLabel(this.config.aiTranslationLanguage))
+            .fontSize(PANEL_HINT_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(1)
+
+          SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+            .fontSize(11)
+            .fontColor([this.theme.textMuted])
+        }
+        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+        .bindMenu(this.TranslationLanguageMenu())
+      }
+      .width('100%')
+      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+      .padding({
+        left: PANEL_ROW_PADDING_HORIZONTAL,
+        right: PANEL_ROW_PADDING_HORIZONTAL,
+        top: PANEL_ROW_PADDING_VERTICAL,
+        bottom: PANEL_ROW_PADDING_VERTICAL,
+      })
+
+      this.DividerLine()
+
+      // 自动触发行
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.bolt_fill'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay + 1))
+
+        Column({ space: PANEL_ROW_TEXT_SPACING }) {
+          Text('打开文章自动执行')
+            .fontSize(PANEL_TITLE_SIZE)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+
+          Text('进入文章页时自动触发，无需手动点击')
+            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.config.aiTranslationAutoTrigger })
+          .selectedColor(this.theme.accent)
+          .switchPointColor('#FFFFFF')
+          .onChange((isOn: boolean) => this.patchTranslationAutoTrigger(isOn))
+      }
+      .width('100%')
+      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+      .padding({
+        left: PANEL_ROW_PADDING_HORIZONTAL,
+        right: PANEL_ROW_PADDING_HORIZONTAL,
+        top: PANEL_ROW_PADDING_VERTICAL,
+        bottom: PANEL_ROW_PADDING_VERTICAL,
+      })
+      .clickEffect({ level: ClickEffectLevel.MIDDLE })
+      .onClick(() => this.patchTranslationAutoTrigger(!this.config.aiTranslationAutoTrigger))
+
+      this.DividerLine()
+
+      // 功能开关行
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.doc_text_fill'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay + 2))
+
+        Text('开启 AI 翻译')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .layoutWeight(1)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.config.aiTranslationEnabled })
+          .selectedColor(this.theme.accent)
+          .switchPointColor('#FFFFFF')
+          .onChange((isOn: boolean) => this.patchTranslationEnabled(isOn))
+      }
+      .width('100%')
+      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+      .padding({
+        left: PANEL_ROW_PADDING_HORIZONTAL,
+        right: PANEL_ROW_PADDING_HORIZONTAL,
+        top: PANEL_ROW_PADDING_VERTICAL,
+        bottom: PANEL_ROW_PADDING_VERTICAL,
+      })
+      .clickEffect({ level: ClickEffectLevel.MIDDLE })
+      .onClick(() => this.patchTranslationEnabled(!this.config.aiTranslationEnabled))
+    }
+    .width('100%')
+    .backgroundColor(this.theme.surface)
+    .borderRadius(CARD_RADIUS_LG)
+    .border({ width: 0.8, color: this.theme.divider })
+  }
+
+  @Builder
+  private SummaryFeatureCard(iconDelay: number) {
+    Column() {
+      // 语言选择行（摘要输出语言，复用翻译语言设置）
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.translate'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay))
+
+        Text('输出语言')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .layoutWeight(1)
+
+        Row({ space: 4 }) {
+          Text(this.translationLanguageLabel(this.config.aiTranslationLanguage))
+            .fontSize(PANEL_HINT_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(1)
+
+          SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+            .fontSize(11)
+            .fontColor([this.theme.textMuted])
+        }
+        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+        .bindMenu(this.SummaryLanguageMenu())
+      }
+      .width('100%')
+      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+      .padding({
+        left: PANEL_ROW_PADDING_HORIZONTAL,
+        right: PANEL_ROW_PADDING_HORIZONTAL,
+        top: PANEL_ROW_PADDING_VERTICAL,
+        bottom: PANEL_ROW_PADDING_VERTICAL,
+      })
+
+      this.DividerLine()
+
+      // 自动触发行
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.bolt_fill'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay + 1))
+
+        Column({ space: PANEL_ROW_TEXT_SPACING }) {
+          Text('打开文章自动执行')
+            .fontSize(PANEL_TITLE_SIZE)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+
+          Text('进入文章页时自动触发，无需手动点击')
+            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.config.aiSummaryAutoTrigger })
+          .selectedColor(this.theme.accent)
+          .switchPointColor('#FFFFFF')
+          .onChange((isOn: boolean) => this.patchSummaryAutoTrigger(isOn))
+      }
+      .width('100%')
+      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+      .padding({
+        left: PANEL_ROW_PADDING_HORIZONTAL,
+        right: PANEL_ROW_PADDING_HORIZONTAL,
+        top: PANEL_ROW_PADDING_VERTICAL,
+        bottom: PANEL_ROW_PADDING_VERTICAL,
+      })
+      .clickEffect({ level: ClickEffectLevel.MIDDLE })
+      .onClick(() => this.patchSummaryAutoTrigger(!this.config.aiSummaryAutoTrigger))
+
+      this.DividerLine()
+
+      // 功能开关行
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.ellipsis_message_fill'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay + 2))
+
+        Text('开启 AI 摘要')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .layoutWeight(1)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.config.aiSummaryEnabled })
+          .selectedColor(this.theme.accent)
+          .switchPointColor('#FFFFFF')
+          .onChange((isOn: boolean) => this.applyAISummarySwitch(isOn))
+      }
+      .width('100%')
+      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+      .padding({
+        left: PANEL_ROW_PADDING_HORIZONTAL,
+        right: PANEL_ROW_PADDING_HORIZONTAL,
+        top: PANEL_ROW_PADDING_VERTICAL,
+        bottom: PANEL_ROW_PADDING_VERTICAL,
+      })
+      .clickEffect({ level: ClickEffectLevel.MIDDLE })
+      .onClick(() => this.applyAISummarySwitch(!this.config.aiSummaryEnabled))
+    }
+    .width('100%')
+    .backgroundColor(this.theme.surface)
+    .borderRadius(CARD_RADIUS_LG)
+    .border({ width: 0.8, color: this.theme.divider })
+  }
+
+  @Builder
+  private FeatureSectionLabel(label: string, iconDelay: number) {
+    Text(label)
+      .fontSize(13)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(this.theme.textSecondary)
+      .width('100%')
+      .padding({ left: 4, bottom: 2 })
+      .transition(livoMotion.enterSoft(iconDelay))
   }
 
   @Builder
@@ -956,31 +1331,31 @@ export struct AIAssistantSettingsPanel {
         this.SheetHandle()
         this.PanelHeader()
 
+        // AI 翻译卡片
+        this.FeatureSectionLabel('AI 翻译', 20)
+        this.TranslationFeatureCard(20)
+
+        // AI 摘要卡片
+        this.FeatureSectionLabel('AI 摘要', 35)
+        this.SummaryFeatureCard(35)
+
+        // 模型配置卡片
         Column() {
-          this.ToggleRow(
-            $r('sys.symbol.ellipsis_message_fill'),
-            'AI 摘要',
-            '',
-            this.config.aiSummaryEnabled,
-            (enabled: boolean) => this.applyAISummarySwitch(enabled),
-            0,
-          )
+          this.ProviderActionRow(50)
           this.DividerLine()
-          this.ProviderActionRow(1)
+          this.ModelActionRow(51)
           this.DividerLine()
-          this.ModelActionRow(2)
+          this.BaseUrlRow(52)
           this.DividerLine()
-          this.BaseUrlRow(3)
-          this.DividerLine()
-          this.ApiKeyRow(4)
+          this.ApiKeyRow(53)
         }
         .width('100%')
         .backgroundColor(this.theme.surface)
         .borderRadius(CARD_RADIUS_LG)
         .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(40))
+        .transition(livoMotion.enterSoft(55))
 
-        this.ConnectionTestRow(5)
+        this.ConnectionTestRow(60)
 
         Column() {
           this.ToggleRow(
@@ -999,7 +1374,7 @@ export struct AIAssistantSettingsPanel {
                 chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
               }
             },
-            6,
+            65,
           )
           this.DividerLine()
           this.InputRow(
@@ -1019,7 +1394,7 @@ export struct AIAssistantSettingsPanel {
                 chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
               }
             },
-            7,
+            66,
           )
           this.DividerLine()
           this.InputRow(
@@ -1039,14 +1414,14 @@ export struct AIAssistantSettingsPanel {
                 chatPersonaPrompt: nextValue,
               }
             },
-            8,
+            67,
           )
         }
         .width('100%')
         .backgroundColor(this.theme.surface)
         .borderRadius(CARD_RADIUS_LG)
         .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(60))
+        .transition(livoMotion.enterSoft(70))
 
         Row({ space: 10 }) {
           Button('保存 AI 配置')

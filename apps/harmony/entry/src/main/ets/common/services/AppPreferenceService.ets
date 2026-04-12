@@ -2,6 +2,7 @@ import preferences from '@ohos.data.preferences'
 import {
   AIProvider,
   AIAssistantSettings,
+  AITargetLanguage,
   DEFAULT_AI_ASSISTANT_SETTINGS,
   DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
   DEFAULT_HARMONY_SETTINGS,
@@ -36,6 +37,10 @@ export class AppPreferenceService {
 
       const autoRefresh = await pref.get('autoRefresh', DEFAULT_HARMONY_SETTINGS.autoRefresh)
       const aiSummaryEnabled = await pref.get('aiSummaryEnabled', DEFAULT_HARMONY_SETTINGS.aiSummaryEnabled)
+      const aiSummaryAutoTrigger = await pref.get('aiSummaryAutoTrigger', DEFAULT_HARMONY_SETTINGS.aiSummaryAutoTrigger)
+      const aiTranslationEnabled = await pref.get('aiTranslationEnabled', DEFAULT_HARMONY_SETTINGS.aiTranslationEnabled)
+      const aiTranslationLanguage = await pref.get('aiTranslationLanguage', DEFAULT_HARMONY_SETTINGS.aiTranslationLanguage)
+      const aiTranslationAutoTrigger = await pref.get('aiTranslationAutoTrigger', DEFAULT_HARMONY_SETTINGS.aiTranslationAutoTrigger)
       const imageProxyEnabled = await pref.get('imageProxyEnabled', DEFAULT_HARMONY_SETTINGS.imageProxyEnabled)
       const searchAllHomeCategories = await pref.get('searchAllHomeCategories', DEFAULT_HARMONY_SETTINGS.searchAllHomeCategories)
       const refreshIntervalMinutes = await pref.get('refreshIntervalMinutes', DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes)
@@ -46,6 +51,10 @@ export class AppPreferenceService {
       return {
         autoRefresh: autoRefresh as boolean,
         aiSummaryEnabled: aiSummaryEnabled as boolean,
+        aiSummaryAutoTrigger: aiSummaryAutoTrigger as boolean,
+        aiTranslationEnabled: aiTranslationEnabled as boolean,
+        aiTranslationLanguage: aiTranslationLanguage as AITargetLanguage,
+        aiTranslationAutoTrigger: aiTranslationAutoTrigger as boolean,
         imageProxyEnabled: imageProxyEnabled as boolean,
         searchAllHomeCategories: searchAllHomeCategories as boolean,
         refreshIntervalMinutes: refreshIntervalMinutes as number,
@@ -64,6 +73,10 @@ export class AppPreferenceService {
 
       await pref.put('autoRefresh', next.autoRefresh)
       await pref.put('aiSummaryEnabled', next.aiSummaryEnabled)
+      await pref.put('aiSummaryAutoTrigger', next.aiSummaryAutoTrigger)
+      await pref.put('aiTranslationEnabled', next.aiTranslationEnabled)
+      await pref.put('aiTranslationLanguage', next.aiTranslationLanguage)
+      await pref.put('aiTranslationAutoTrigger', next.aiTranslationAutoTrigger)
       await pref.put('imageProxyEnabled', next.imageProxyEnabled)
       await pref.put('searchAllHomeCategories', next.searchAllHomeCategories)
       await pref.put('refreshIntervalMinutes', next.refreshIntervalMinutes)

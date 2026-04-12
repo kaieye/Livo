@@ -91,7 +91,7 @@ export struct PageHeader {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .backgroundColor(this.isBackPressed ? this.theme.elevated : 'transparent')
-      .borderRadius(12)
+      .borderRadius(999)
       .clickEffect({ level: ClickEffectLevel.LIGHT })
       .scale({
         x: this.isBackPressed ? 0.88 : 1,

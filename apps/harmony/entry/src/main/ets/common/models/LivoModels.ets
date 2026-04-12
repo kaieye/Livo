@@ -132,9 +132,15 @@ export function isLegacyPlainArticleContent(content: string): boolean {
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ThemeAccent = 'orange' | 'blue' | 'red' | 'pink' | 'green'
 
+export type AITargetLanguage = 'zh-CN' | 'zh-TW' | 'en' | 'ja' | 'ko' | 'fr' | 'de' | 'es' | 'ru' | 'ar'
+
 export interface HarmonySettings {
   autoRefresh: boolean
   aiSummaryEnabled: boolean
+  aiSummaryAutoTrigger: boolean
+  aiTranslationEnabled: boolean
+  aiTranslationLanguage: AITargetLanguage
+  aiTranslationAutoTrigger: boolean
   imageProxyEnabled: boolean
   searchAllHomeCategories: boolean
   refreshIntervalMinutes: number
@@ -230,6 +236,10 @@ export interface RemoteFeedResult {
 export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
   autoRefresh: false,
   aiSummaryEnabled: true,
+  aiSummaryAutoTrigger: false,
+  aiTranslationEnabled: false,
+  aiTranslationLanguage: 'zh-CN',
+  aiTranslationAutoTrigger: false,
   imageProxyEnabled: false,
   searchAllHomeCategories: true,
   refreshIntervalMinutes: 30,

@@ -83,6 +83,10 @@ export function seedSettings(): HarmonySettings {
   return {
     autoRefresh: DEFAULT_HARMONY_SETTINGS.autoRefresh,
     aiSummaryEnabled: DEFAULT_HARMONY_SETTINGS.aiSummaryEnabled,
+    aiSummaryAutoTrigger: DEFAULT_HARMONY_SETTINGS.aiSummaryAutoTrigger,
+    aiTranslationEnabled: DEFAULT_HARMONY_SETTINGS.aiTranslationEnabled,
+    aiTranslationLanguage: DEFAULT_HARMONY_SETTINGS.aiTranslationLanguage,
+    aiTranslationAutoTrigger: DEFAULT_HARMONY_SETTINGS.aiTranslationAutoTrigger,
     imageProxyEnabled: DEFAULT_HARMONY_SETTINGS.imageProxyEnabled,
     searchAllHomeCategories: DEFAULT_HARMONY_SETTINGS.searchAllHomeCategories,
     refreshIntervalMinutes: DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes,
