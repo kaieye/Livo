@@ -5,6 +5,7 @@ import { livoMotion } from '../ui/Motion'
 export struct SettingListRow {
   @Prop title: string = ''
   @Prop symbol: Resource = $r('sys.symbol.gearshape')
+  @Prop symbolIsImage: boolean = false
   @Prop symbolColor: string = '#4B5563'
   @Prop subtitle: string = ''
   @Prop hint: string = ''
@@ -14,10 +15,19 @@ export struct SettingListRow {
 
   build() {
     Row() {
-      SymbolGlyph(this.symbol)
-        .fontSize(24)
-        .margin({ left: 12, right: 10 })
-        .fontColor([this.symbolColor])
+      if (this.symbolIsImage) {
+        Image(this.symbol)
+          .width(24)
+          .height(24)
+          .objectFit(ImageFit.Contain)
+          .fillColor(this.symbolColor)
+          .margin({ left: 12, right: 10 })
+      } else {
+        SymbolGlyph(this.symbol)
+          .fontSize(24)
+          .margin({ left: 12, right: 10 })
+          .fontColor([this.symbolColor])
+      }
 
       Column({ space: this.subtitle ? 2 : 0 }) {
         Text(this.title)

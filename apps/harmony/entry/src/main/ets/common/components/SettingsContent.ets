@@ -38,6 +38,7 @@ const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number =
 interface SettingItem {
   title: string
   symbol: Resource
+  symbolIsImage?: boolean
   symbolColor: string
   subtitle: string
   hint?: string
@@ -78,10 +79,11 @@ const SECOND_GROUP: SettingItem[] = [
     subtitle: '查看并管理已收藏的推文与内容'
   },
   {
-    title: '自动化',
-    symbol: $r('sys.symbol.bolt_filled_on_circle'),
+    title: 'AI助手',
+    symbol: $r('app.media.ri_ai'),
+    symbolIsImage: true,
     symbolColor: '#7A5AF8',
-    subtitle: '自动刷新与智能摘要'
+    subtitle: '智能摘要与助手能力'
   },
   {
     title: '列表',
@@ -312,6 +314,7 @@ export struct SettingsContent {
     SettingListRow({
       title: item.title,
       symbol: item.symbol,
+      symbolIsImage: item.symbolIsImage ?? false,
       symbolColor: item.symbolColor,
       subtitle: this.resolveSubtitle(item),
       hint: this.resolveHint(item),
@@ -333,8 +336,8 @@ export struct SettingsContent {
   }
 
   private resolveSubtitle(item: SettingItem): string {
-    if (item.title === '自动化') {
-      return `${item.subtitle} · ${this.config.autoRefresh ? '已开启' : '已关闭'}`
+    if (item.title === 'AI助手') {
+      return `${item.subtitle} · ${this.config.aiSummaryEnabled ? '已开启' : '已关闭'}`
     }
     return item.subtitle
   }

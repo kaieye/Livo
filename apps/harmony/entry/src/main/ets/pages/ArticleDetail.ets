@@ -1004,17 +1004,46 @@ struct ArticleDetail {
   }
 
   @Builder
+  private HeaderImageAction(
+    image: Resource,
+    size: number,
+    onTap?: () => void,
+    backgroundColor?: string,
+    buttonScale: number = 1,
+  ) {
+    Row() {
+      Image(image)
+        .width(size)
+        .height(size)
+        .objectFit(ImageFit.Contain)
+    }
+      .width(HEADER_BACK_SLOT_SIZE)
+      .height(HEADER_BACK_SLOT_SIZE)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(backgroundColor ?? Color.Transparent)
+      .borderRadius(HEADER_BACK_SLOT_SIZE)
+      .clickEffect({ level: ClickEffectLevel.LIGHT })
+      .scale({ x: buttonScale, y: buttonScale })
+      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
+      .onClick(() => {
+        if (onTap) {
+          onTap()
+        }
+      })
+  }
+
+  @Builder
   private HeaderActions() {
     Row({ space: 4 }) {
-      this.HeaderIconAction(
-        $r('sys.symbol.lightbulb'),
-        24,
+      this.HeaderImageAction(
+        $r('app.media.ri_ai'),
+        22,
         () => { this.actionHint = 'AI 助手功能开发中...' },
-        [this.theme.accent, this.theme.textSecondary],
       )
 
       this.HeaderIconAction(
-        $r('sys.symbol.link'),
+        $r('sys.symbol.arrow_right_up_and_square'),
         22,
         () => { void this.openEntryInBrowser() },
       )
