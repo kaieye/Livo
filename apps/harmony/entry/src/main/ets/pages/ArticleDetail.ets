@@ -105,7 +105,7 @@ struct ArticleDetail {
 
   aboutToAppear(): void {
     this.theme = ThemeService.currentPalette()
-    void this.loadEntry(true)
+    void this.loadEntry(true, true)
   }
 
   private entryId(): string {
@@ -113,7 +113,7 @@ struct ArticleDetail {
     return params?.entryId ?? ''
   }
 
-  private async loadEntry(markRead: boolean): Promise<void> {
+  private async loadEntry(markRead: boolean, allowRouteSnapshot: boolean = false): Promise<void> {
     const entryId = this.entryId()
     if (!entryId) {
       this.entry = undefined
@@ -127,7 +127,7 @@ struct ArticleDetail {
     const params = getStringParams()
     const entryJson = params?.entryJson as string
 
-    if (entryJson) {
+    if (allowRouteSnapshot && entryJson) {
       try {
         const parsed = JSON.parse(entryJson) as ArticleDetailModel
         if (parsed) {
@@ -176,7 +176,7 @@ struct ArticleDetail {
 
     try {
       await AppRepository.toggleStar(entryId)
-      await this.loadEntry(false)
+      await this.loadEntry(false, false)
       const message = this.entry?.isStarred ? '已收藏' : '已取消收藏'
       this.actionHint = message
       this.showToast(message)

@@ -688,32 +688,23 @@ export struct FavoritesPanel {
         this.SheetHandle()
         this.PanelHeader()
 
-        Column() {
-          this.StatusCard(
-            $r('sys.symbol.star_fill'),
-            '收藏概览',
-            this.isLoading
-              ? '正在整理你已收藏的文章'
-              : this.starredEntries.length > 0
-                ? `当前共收藏 ${this.starredEntries.length} 条内容`
-                : '还没有收藏任何内容'
-          )
-        }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(20))
-
         if (this.isLoading) {
-          Column() {
-            this.StatusCard($r('sys.symbol.arrow_clockwise'), '正在加载收藏', '请稍等，Livo 正在同步你的收藏列表')
+          Column({ space: 10 }) {
+            LoadingProgress()
+              .width(28)
+              .height(28)
+              .color(this.theme.accent)
+
+            Text('正在加载收藏')
+              .fontSize(13)
+              .fontColor(this.theme.textSecondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .width('100%')
-          .backgroundColor(this.theme.surface)
-          .borderRadius(CARD_RADIUS_LG)
-          .border({ width: 0.8, color: this.theme.divider })
-          .transition(livoMotion.enterSoft(40))
+          .padding({ top: 24, bottom: 12 })
+          .alignItems(HorizontalAlign.Center)
+          .transition(livoMotion.enterSoft(20))
         } else if (this.starredEntries.length === 0) {
           Column() {
             this.StatusCard($r('sys.symbol.star'), '暂无收藏内容', '在文章详情里点亮星标后，会出现在这里')

@@ -333,12 +333,6 @@ export struct SettingsContent {
   }
 
   private resolveSubtitle(item: SettingItem): string {
-    if (item.title === '外观') {
-      return `${item.subtitle} · 当前${this.themeLabel()}`
-    }
-    if (item.title === '通用') {
-      return `${item.subtitle} · ${this.config.language}`
-    }
     if (item.title === '自动化') {
       return `${item.subtitle} · ${this.config.autoRefresh ? '已开启' : '已关闭'}`
     }
