@@ -50,12 +50,15 @@ export struct AppearanceSettingsPanel {
   @State themeModeText: string = '跟随系统'
   @State themeAccentText: string = '流光橙'
   @State refreshIntervalText: string = '30 分钟'
+  @State themeModeSelection: string = DEFAULT_HARMONY_SETTINGS.themeMode
+  @State themeAccentSelection: string = DEFAULT_HARMONY_SETTINGS.themeAccent
   @Prop showBackButton: boolean = true
   @Prop initialSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
   onClose: () => void = () => {}
+  private settingsMutationVersion: number = 0
 
   aboutToAppear(): void {
     this.applyResolvedState(this.initialSettings, this.inheritedTheme)
@@ -63,14 +66,20 @@ export struct AppearanceSettingsPanel {
   }
 
   private async loadSettings(): Promise<void> {
+    const loadVersion = this.settingsMutationVersion
     const saved = await AppRepository.settings()
     const palette = await ThemeService.resolvePalette(saved)
+    if (loadVersion !== this.settingsMutationVersion) {
+      return
+    }
     this.applyResolvedState(saved, palette)
   }
 
   private applyResolvedState(settings: HarmonySettings, palette: ThemePalette): void {
     this.config = settings
     this.theme = palette
+    this.themeModeSelection = settings.themeMode
+    this.themeAccentSelection = settings.themeAccent
     this.themeModeText = this.resolveThemeLabel(settings.themeMode)
     this.themeAccentText = this.resolveAccentLabel(settings.themeAccent)
     this.refreshIntervalText = `${settings.refreshIntervalMinutes} 分钟`
@@ -79,24 +88,21 @@ export struct AppearanceSettingsPanel {
   }
 
   private syncSettings(next: HarmonySettings): void {
-    const optimisticTheme: ThemePalette = {
-      isDark: this.theme.isDark,
-      background: this.theme.background,
-      surface: this.theme.surface,
-      elevated: this.theme.elevated,
-      textPrimary: this.theme.textPrimary,
-      textSecondary: this.theme.textSecondary,
-      textMuted: this.theme.textMuted,
-      divider: this.theme.divider,
-      accent: this.resolveAccentColor(next.themeAccent),
-      accentText: '#FFFFFF',
-      tabBarBackground: this.theme.tabBarBackground,
-      tabBarInactive: this.theme.tabBarInactive,
-      dragHandle: this.theme.dragHandle,
-    }
+    const mutationVersion = this.settingsMutationVersion + 1
+    this.settingsMutationVersion = mutationVersion
+    const optimisticTheme = this.resolveOptimisticTheme(next)
     this.applyResolvedState(next, optimisticTheme)
+    void ThemeService.resolvePalette(next).then((resolved: ThemePalette) => {
+      if (mutationVersion !== this.settingsMutationVersion) {
+        return
+      }
+      this.applyResolvedState(next, resolved)
+    })
     void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
+        if (mutationVersion !== this.settingsMutationVersion) {
+          return
+        }
         this.applyResolvedState(saved, palette)
       })
     }).catch((_error: Error) => {})
@@ -144,6 +150,8 @@ export struct AppearanceSettingsPanel {
   }
 
   private applyThemeMode(value: string): void {
+    this.themeModeSelection = value
+    this.themeModeText = this.resolveThemeLabel(value as ThemeMode)
     this.syncSettings({
       autoRefresh: this.config.autoRefresh,
       aiSummaryEnabled: this.config.aiSummaryEnabled,
@@ -158,6 +166,9 @@ export struct AppearanceSettingsPanel {
   }
 
   private applyThemeAccent(value: string): void {
+    const nextAccent = value as ThemeAccent
+    this.themeAccentSelection = value
+    this.themeAccentText = this.resolveAccentLabel(nextAccent)
     this.syncSettings({
       autoRefresh: this.config.autoRefresh,
       aiSummaryEnabled: this.config.aiSummaryEnabled,
@@ -165,10 +176,38 @@ export struct AppearanceSettingsPanel {
       searchAllHomeCategories: this.config.searchAllHomeCategories,
       refreshIntervalMinutes: this.config.refreshIntervalMinutes,
       themeMode: this.config.themeMode,
-      themeAccent: value as ThemeAccent,
+      themeAccent: nextAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
     })
+  }
+
+  private getThemeModeOptions(): AppearanceOption[] {
+    return THEME_MODE_OPTIONS.map((option: AppearanceOption): AppearanceOption => ({
+      label: option.label,
+      value: option.value,
+      color: option.color,
+    }))
+  }
+
+  private getThemeAccentOptions(): AppearanceOption[] {
+    return THEME_ACCENT_OPTIONS.map((option: AppearanceOption): AppearanceOption => ({
+      label: option.label,
+      value: option.value,
+      color: option.color,
+    }))
+  }
+
+  private resolveOptimisticTheme(next: HarmonySettings): ThemePalette {
+    const basePalette: ThemePalette = next.themeMode === 'dark'
+      ? ThemeService.darkPalette()
+      : next.themeMode === 'light'
+        ? ThemeService.lightPalette()
+        : (this.theme.isDark ? ThemeService.darkPalette() : ThemeService.lightPalette())
+
+    basePalette.accent = this.resolveAccentColor(next.themeAccent)
+    basePalette.accentText = '#FFFFFF'
+    return basePalette
   }
 
   private applyRefreshInterval(value: string): void {
@@ -253,7 +292,7 @@ export struct AppearanceSettingsPanel {
         })
           .selected(selectedValue === option.value)
           .onChange((selected: boolean) => {
-            if (selected) {
+            if (selected && option.value !== selectedValue) {
               onSelect(option.value)
             }
           })
@@ -303,7 +342,7 @@ export struct AppearanceSettingsPanel {
       .alignItems(HorizontalAlign.Start)
 
       Row() {
-        Text(this.resolveThemeLabel(this.config.themeMode))
+        Text(this.themeModeText)
           .fontSize(ROW_TIPS_SIZE)
           .fontColor(this.theme.textSecondary)
           .maxLines(1)
@@ -315,7 +354,7 @@ export struct AppearanceSettingsPanel {
           .margin({ left: 7, right: 2, top: 1 })
       }
       .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-      .bindMenu(this.OptionMenu(THEME_MODE_OPTIONS, this.config.themeMode, (value: string) => {
+      .bindMenu(this.OptionMenu(this.getThemeModeOptions(), this.themeModeSelection, (value: string) => {
         this.applyThemeMode(value)
       }))
     }
@@ -439,12 +478,24 @@ export struct AppearanceSettingsPanel {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      this.MenuAction(
-        this.themeAccentText,
-        THEME_ACCENT_OPTIONS,
-        this.config.themeAccent,
-        (value: string) => this.applyThemeAccent(value)
-      )
+      Row() {
+        Text(this.themeAccentText)
+          .fontSize(ROW_TIPS_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+          .fontSize(12)
+          .fontColor([this.theme.textMuted])
+          .margin({ left: 7, right: 2, top: 1 })
+      }
+      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+      .bindMenu(this.OptionMenu(
+        this.getThemeAccentOptions(),
+        this.themeAccentSelection,
+        (value: string) => this.applyThemeAccent(value),
+      ))
     }
     .width('100%')
     .constraintSize({ minHeight: ROW_MIN_HEIGHT })

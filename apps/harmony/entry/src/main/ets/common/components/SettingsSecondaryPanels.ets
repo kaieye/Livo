@@ -235,7 +235,7 @@ export struct GeneralSettingsPanel {
         })
           .selected(selectedValue === option.value)
           .onChange((selected: boolean) => {
-            if (selected) {
+            if (selected && option.value !== selectedValue) {
               onSelect(option.value)
             }
           })
