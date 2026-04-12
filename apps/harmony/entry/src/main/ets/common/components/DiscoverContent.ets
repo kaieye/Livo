@@ -114,6 +114,21 @@ function createDiscoverResultFromFeed(feed: RecommendedFeed): ResolvedDiscoverCa
   }
 }
 
+function isBilibiliDiscoverTarget(targetUrl: string, siteUrl: string): boolean {
+  const normalizedTargetUrl = targetUrl.toLowerCase()
+  const normalizedSiteUrl = siteUrl.toLowerCase()
+  return normalizedTargetUrl.includes('/bilibili/')
+    || normalizedSiteUrl.includes('space.bilibili.com')
+    || normalizedSiteUrl.includes('bilibili.com')
+}
+
+function resolveDiscoverDefaultTargetView(targetUrl: string, siteUrl: string, targetView: FeedViewType): FeedViewType {
+  if (isBilibiliDiscoverTarget(targetUrl, siteUrl)) {
+    return FeedViewType.Videos
+  }
+  return targetView
+}
+
 function createDiscoverFlowRouteParams(
   targetUrl: string,
   targetTitle: string,
@@ -127,7 +142,7 @@ function createDiscoverFlowRouteParams(
   const params = new DiscoverFlowRouteParams()
   params.targetUrl = targetUrl
   params.targetTitle = targetTitle
-  params.targetView = targetView
+  params.targetView = resolveDiscoverDefaultTargetView(targetUrl, siteUrl, targetView)
   params.siteUrl = siteUrl
   params.imageUrl = imageUrl
   params.description = description

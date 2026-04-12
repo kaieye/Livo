@@ -54,6 +54,13 @@ function getHostLike(raw: string): string {
   return (matched?.[1] || '').trim().toLowerCase()
 }
 
+function extractBilibiliUid(value: string): string {
+  const matched = getPathLike(value).match(
+    /\/(?:bilibili\/user\/(?:video|dynamic|article)|space\.bilibili\.com)\/(\d+)/i,
+  )
+  return matched?.[1]?.trim() || ''
+}
+
 function isKnownXHost(host: string): boolean {
   return (
     host === 'x.com' ||
@@ -302,6 +309,30 @@ export function formatXFeedTitle(
   return cleaned
 }
 
+export function formatBilibiliFeedTitle(
+  candidateTitle: string | undefined,
+  fallbackUidOrUrl: string,
+): string {
+  const fallbackUid =
+    extractBilibiliUid(fallbackUidOrUrl) || trimTitle(fallbackUidOrUrl)
+  const cleanedCandidate = trimTitle(candidateTitle || '')
+  if (!cleanedCandidate || looksLikeUrl(cleanedCandidate)) {
+    return fallbackUid ? `Bilibili ${fallbackUid}` : cleanedCandidate
+  }
+
+  const normalizedBase = cleanedCandidate
+    .replace(/\s*的\s*bilibili\s*空间\s*$/i, '')
+    .replace(/\s*的\s*bilibili\s*(?:动态|视频|专栏)\s*$/i, '')
+    .replace(/\s*-\s*bilibili\s*$/i, '')
+    .trim()
+
+  if (!normalizedBase) {
+    return fallbackUid ? `Bilibili ${fallbackUid}` : cleanedCandidate
+  }
+
+  return `${normalizedBase} - Bilibili`
+}
+
 export function normalizeSocialFeedTitle(
   candidateTitle: string | undefined,
   feedUrl: string,
@@ -318,6 +349,11 @@ export function normalizeSocialFeedTitle(
     return formatXFeedTitle(candidateTitle, xUsername)
   }
 
+  const bilibiliUid = extractBilibiliUid(feedUrl) || extractBilibiliUid(siteUrl)
+  if (bilibiliUid) {
+    return formatBilibiliFeedTitle(candidateTitle, bilibiliUid)
+  }
+
   return trimTitle(candidateTitle || '')
 }
 
@@ -327,6 +363,8 @@ export function normalizeSocialFeedDescription(
   siteUrl: string = '',
 ): string {
   const normalized = trimTitle(description || '')
+    .replace(/\s*[|·•\-–—]?\s*powered\s+by\s+rsshub\.?\s*$/i, '')
+    .trim()
   if (normalized && !/^(instagram|x)\s+用户$/i.test(normalized)) {
     return normalized
   }

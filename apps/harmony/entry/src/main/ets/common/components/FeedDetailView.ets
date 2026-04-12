@@ -76,6 +76,7 @@ export struct FeedDetailView {
   @State private previewNotice: string = ''
   @State private isLoading: boolean = true
   @State private isRefreshing: boolean = false
+  @State private isRefreshBusy: boolean = false
   @State private existingFeed: Feed | undefined = undefined
   @State private videoPreviewCache: VideoPreviewCacheItem[] = []
   @State private heroAvatarCandidates: string[] = []
@@ -241,10 +242,14 @@ export struct FeedDetailView {
   }
 
   private async refreshData(): Promise<void> {
-    if (this.isRefreshing) return
+    if (this.isRefreshBusy) return
+    this.isRefreshBusy = true
     this.isRefreshing = true
     try {
       if (this.existingFeed) {
+        const previousEntries = this.previewPayload?.entries ?? []
+        const previousCount = previousEntries.length
+        const previousLatestPublishedAt = this.latestPublishedAt(previousEntries)
         await AppRepository.refreshFeed(this.existingFeed.id)
         const refreshedFeed = await AppRepository.feedEntityById(this.existingFeed.id)
         const entries = await AppRepository.entryEntitiesByFeed(this.existingFeed.id)
@@ -261,7 +266,8 @@ export struct FeedDetailView {
           this.targetSiteUrl = refreshedFeed.siteUrl || ''
           this.targetDescription = displayFeed.description
           const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(refreshedFeed.url)
-          const previewEntries = this.preferredPreviewEntries(entries, cachedPayload?.entries ?? [])
+          // 在订阅详情页刷新时优先展示本地最新拉取结果，仅在本地为空时回退缓存预览。
+          const previewEntries = entries.length > 0 ? entries : (cachedPayload?.entries ?? [])
           const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
           this.targetImageUrl = payloadImageUrl
           this.previewPayload = {
@@ -276,6 +282,14 @@ export struct FeedDetailView {
           this.resetHeroAvatarCandidates()
           await this.hydrateSubscribedAvatar(refreshedFeed, payloadImageUrl)
           void this.hydrateVideoPreviews(previewEntries)
+          const latestPublishedAt = this.latestPublishedAt(previewEntries)
+          const hasNewerEntries = latestPublishedAt > previousLatestPublishedAt
+          const countDelta = previewEntries.length - previousCount
+          if (hasNewerEntries || countDelta > 0) {
+            this.showToast(`刷新完成，新增 ${Math.max(countDelta, 1)} 条内容`)
+          } else {
+            this.showToast('已刷新到最新')
+          }
           return
         }
         void this.hydrateVideoPreviews(entries)
@@ -292,20 +306,31 @@ export struct FeedDetailView {
           this.targetDescription = payload.description || this.targetDescription
           this.resetHeroAvatarCandidates()
           void this.hydrateVideoPreviews(payload.entries)
+          this.showToast('预览已刷新')
         } catch (e) {
           const fallbackPayload = this.buildFallbackPreviewPayload()
           if (this.shouldUseSoftPreviewFallback() && fallbackPayload) {
             this.previewPayload = fallbackPayload
             this.previewNotice = '暂时无法刷新实时预览，已保留订阅源信息。'
             this.resetHeroAvatarCandidates()
+            this.showToast('刷新失败，已保留当前内容')
           } else {
             throw new Error(e instanceof Error ? e.message : '预览刷新失败')
           }
         }
       }
+    } catch (error) {
+      this.showToast(`刷新失败: ${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
       this.isRefreshing = false
+      this.isRefreshBusy = false
     }
+  }
+
+  private showToast(message: string, duration: number = 1800): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (_error) {}
   }
 
   private shouldUseSoftPreviewFallback(): boolean {
@@ -973,15 +998,6 @@ export struct FeedDetailView {
           .maxLines(2)
           .textAlign(TextAlign.Center)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        if (this.heroHostLabel()) {
-          Text(this.heroHostLabel())
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .textAlign(TextAlign.Center)
-        }
       }
       .width('100%')
       .alignItems(HorizontalAlign.Center)
@@ -1207,7 +1223,7 @@ export struct FeedDetailView {
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
       } else if (this.previewPayload) {
-        Stack({ alignContent: Alignment.Bottom }) {
+        Stack({ alignContent: Alignment.TopStart }) {
           Refresh({ refreshing: $$this.isRefreshing }) {
             Scroll() {
               Column({ space: 14 }) {
@@ -1218,6 +1234,9 @@ export struct FeedDetailView {
                 Row().height(100).width('100%')
               }
               .width('100%')
+              .constraintSize({ minHeight: '100%' })
+              .justifyContent(FlexAlign.Start)
+              .alignItems(HorizontalAlign.Start)
               .padding({ left: 18, right: 18, top: 0, bottom: 24 })
             }
             .width('100%')
@@ -1245,6 +1264,7 @@ export struct FeedDetailView {
             .width('100%')
             .justifyContent(FlexAlign.Center)
             .padding({ bottom: 24 })
+            .align(Alignment.Bottom)
             .transition(TransitionEffect.move(TransitionEdge.BOTTOM).combine(TransitionEffect.OPACITY))
           }
         }

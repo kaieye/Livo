@@ -7,7 +7,7 @@
   },
   "BuildOptions": {
     "SELECT_BUILD_PRODUCT": "default",
-    "BUNDLE_NAME": "com.livo.harmony",
+    "BUNDLE_NAME": "com.chos1nz.livo",
     "BUILD_PATH": {
       "OUTPUT_PATH": "E:\\Livo\\apps\\harmony\\build\\outputs\\default"
     },

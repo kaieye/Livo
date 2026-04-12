@@ -1578,12 +1578,14 @@ struct ArticleDetail {
         Scroll() {
           Column({ space: 18 }) {
             Column({ space: 12 }) {
-              Text(this.entry!.title)
-                .fontSize(28)
-                .lineHeight(38)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.theme.textPrimary)
-                .width('100%')
+              if (!this.isPictureDetail()) {
+                Text(this.entry!.title)
+                  .fontSize(28)
+                  .lineHeight(38)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.theme.textPrimary)
+                  .width('100%')
+              }
 
               Text(`${this.entry!.author} · ${this.entry!.publishedLabel}`)
                 .fontSize(13)
@@ -1611,6 +1613,15 @@ struct ArticleDetail {
             }
 
             Column({ space: 20 }) {
+              if (this.isPictureDetail() && (this.entry!.title || '').trim()) {
+                Text(this.entry!.title)
+                  .fontSize(16)
+                  .lineHeight(29)
+                  .fontColor(this.theme.textPrimary)
+                  .width('100%')
+                  .textAlign(TextAlign.Start)
+              }
+
               if (this.isPictureDetail()) {
                 this.PictureDetailMediaCarousel()
               }
