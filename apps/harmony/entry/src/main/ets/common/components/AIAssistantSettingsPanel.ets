@@ -1,4 +1,5 @@
 import { SymbolGlyphModifier } from '@kit.ArkUI'
+import { http } from '@kit.NetworkKit'
 import { AppRepository } from '../data/AppRepository'
 import {
   AIAssistantSettings,
@@ -53,6 +54,8 @@ export struct AIAssistantSettingsPanel {
   @State modelSelection: string = 'deepseek-chat'
   @State baseUrlPlaceholder: string = 'https://api.deepseek.com/v1'
   @State baseUrlDraft: string = ''
+  @State apiKeyDraft: string = ''
+  @State isTesting: boolean = false
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
   private settingsMutationVersion: number = 0
 
@@ -94,7 +97,7 @@ export struct AIAssistantSettingsPanel {
       : (providerConfig.models.length > 0 ? providerConfig.models[0] : settings.model)
     const normalizedSettings: AIAssistantSettings = {
       provider: normalizedProvider,
-      apiKey: settings.apiKey,
+      apiKeys: settings.apiKeys ?? {},
       baseUrl: settings.baseUrl,
       model: normalizedModel,
       enableSystemPrompt: settings.enableSystemPrompt,
@@ -106,6 +109,7 @@ export struct AIAssistantSettingsPanel {
     this.modelSelection = normalizedModel
     this.baseUrlPlaceholder = providerConfig.defaultBaseUrl
     this.baseUrlDraft = normalizedSettings.baseUrl
+    this.apiKeyDraft = normalizedSettings.apiKeys[normalizedProvider] ?? ''
   }
 
   private syncGeneralSettings(next: HarmonySettings): void {
@@ -196,7 +200,7 @@ export struct AIAssistantSettingsPanel {
     this.modelSelection = value
     this.syncAISettings({
       provider: this.aiConfig.provider,
-      apiKey: this.aiConfig.apiKey,
+      apiKeys: this.aiConfig.apiKeys,
       baseUrl: this.aiConfig.baseUrl,
       model: value,
       enableSystemPrompt: this.aiConfig.enableSystemPrompt,
@@ -213,7 +217,7 @@ export struct AIAssistantSettingsPanel {
     this.modelSelection = nextModel
     const nextSettings: AIAssistantSettings = {
       provider,
-      apiKey: this.aiConfig.apiKey,
+      apiKeys: this.aiConfig.apiKeys,
       baseUrl: '',
       model: nextModel,
       enableSystemPrompt: this.aiConfig.enableSystemPrompt,
@@ -238,12 +242,14 @@ export struct AIAssistantSettingsPanel {
   }
 
   private persistCurrentDraft(): void {
-    const trimmedApiKey = (this.aiConfig.apiKey || '').trim()
+    const trimmedApiKey = this.apiKeyDraft.trim()
     const trimmedBaseUrl = (this.aiConfig.baseUrl || '').trim()
     const trimmedModel = (this.aiConfig.model || '').trim()
+    const nextApiKeys: Record<string, string> = this.copyApiKeys(this.aiConfig.apiKeys)
+    nextApiKeys[this.providerSelection] = trimmedApiKey
     const nextSettings: AIAssistantSettings = {
       provider: this.aiConfig.provider,
-      apiKey: trimmedApiKey,
+      apiKeys: nextApiKeys,
       baseUrl: trimmedBaseUrl,
       model: trimmedModel,
       enableSystemPrompt: this.aiConfig.enableSystemPrompt,
@@ -251,6 +257,95 @@ export struct AIAssistantSettingsPanel {
       chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
     }
     this.syncAISettings(nextSettings)
+  }
+
+  private copyApiKeys(source: Record<string, string>): Record<string, string> {
+    const result: Record<string, string> = {}
+    for (const key of Object.keys(source)) {
+      result[key] = source[key]
+    }
+    return result
+  }
+
+  private showToast(message: string, duration: number = 3000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (error) {
+      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+
+  private async runConnectionTest(): Promise<void> {
+    if (this.isTesting) {
+      return
+    }
+    const apiKey = (this.aiConfig.apiKeys[this.providerSelection] ?? this.apiKeyDraft).trim()
+    const model = (this.aiConfig.model || this.modelSelection || '').trim()
+    const providerConfig = this.providerDefinition(this.providerSelection as AIProvider)
+    const baseUrl = (this.aiConfig.baseUrl || '').trim() || providerConfig.defaultBaseUrl
+    if (!apiKey || !model || !baseUrl) {
+      this.showToast('请先填写 API Key、模型和 Base URL')
+      return
+    }
+    this.isTesting = true
+    const endpoint = baseUrl.replace(/\/+$/, '') + '/chat/completions'
+
+    interface ChatMessage {
+      role: string
+      content: string
+    }
+    interface ChatRequest {
+      model: string
+      messages: ChatMessage[]
+      max_tokens: number
+    }
+    const chatBody: ChatRequest = {
+      model,
+      messages: [{ role: 'user', content: '简短告诉我你是什么公司的什么模型、是什么版本，不超过15个字' }],
+      max_tokens: 80,
+    }
+    const body = JSON.stringify(chatBody)
+    const request = http.createHttp()
+    try {
+      const response = await request.request(endpoint, {
+        method: http.RequestMethod.POST,
+        connectTimeout: 10000,
+        readTimeout: 15000,
+        header: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        extraData: body,
+      })
+      const raw = String(response.result)
+      if (response.responseCode === 200) {
+        const parsed = JSON.parse(raw) as Record<string, object>
+        const choices = parsed['choices'] as Array<Record<string, object>>
+        const message = choices[0]['message'] as Record<string, string>
+        const content = (message['content'] || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+        this.showToast(content || '无响应内容', 4000)
+      } else {
+        this.showToast(`错误 ${response.responseCode}`)
+      }
+    } catch (error) {
+      this.showToast(`连接失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      request.destroy()
+      this.isTesting = false
+    }
+  }
+
+  private shortenUrl(url: string): string {
+    if (!url) {
+      return ''
+    }
+    try {
+      // 去掉 https:// 前缀，保留 host + path 但截短
+      const withoutScheme = url.replace(/^https?:\/\//, '')
+      return withoutScheme.length > 28 ? withoutScheme.slice(0, 28) + '…' : withoutScheme
+    } catch (_) {
+      return url
+    }
   }
 
   private displayBaseUrl(): string {
@@ -399,20 +494,11 @@ export struct AIAssistantSettingsPanel {
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text('模型提供商')
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        Text('选择 AI 模型提供商')
-          .fontSize(PANEL_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      Text('模型提供商')
+        .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
+        .layoutWeight(1)
 
       Row() {
         Text(this.providerDefinition(this.providerSelection as AIProvider).label)
@@ -449,37 +535,28 @@ export struct AIAssistantSettingsPanel {
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text('模型')
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        Text(this.providerSelection === 'custom' ? '输入自定义模型名称' : '选择默认模型')
-          .fontSize(PANEL_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      Text('模型')
+        .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
+        .layoutWeight(1)
 
       if (this.providerSelection === 'custom') {
         TextInput({ text: this.modelSelection, placeholder: '如 gpt-4o' })
           .height(36)
-          .width(160)
+          .layoutWeight(1)
           .backgroundColor(this.theme.elevated)
           .fontColor(this.theme.textPrimary)
           .placeholderColor(this.theme.textMuted)
           .fontSize(PANEL_HINT_SIZE)
           .borderRadius(10)
           .padding({ left: 10, right: 10 })
-          .textAlign(TextAlign.End)
+          .textAlign(TextAlign.Center)
           .onChange((nextValue: string) => {
             this.modelSelection = nextValue
             this.aiConfig = {
               provider: this.aiConfig.provider,
-              apiKey: this.aiConfig.apiKey,
+              apiKeys: this.aiConfig.apiKeys,
               baseUrl: this.aiConfig.baseUrl,
               model: nextValue,
               enableSystemPrompt: this.aiConfig.enableSystemPrompt,
@@ -665,11 +742,13 @@ export struct AIAssistantSettingsPanel {
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textPrimary)
 
-        Text(subtitle)
-          .fontSize(PANEL_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (subtitle) {
+          Text(subtitle)
+            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
@@ -695,44 +774,74 @@ export struct AIAssistantSettingsPanel {
 
   @Builder
   private BaseUrlRow(iconDelay: number = 0) {
-    Column({ space: 6 }) {
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.link'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay))
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.link'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
 
-        Column({ space: PANEL_ROW_TEXT_SPACING }) {
-          Text('Base URL')
-            .fontSize(PANEL_TITLE_SIZE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
+      Text('Base URL')
+        .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
+        .flexShrink(0)
 
-          Text('留空则使用服务商默认地址')
-            .fontSize(PANEL_SUBTITLE_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
+      Text(this.baseUrlPlaceholder)
+        .fontSize(10)
+        .fontColor(this.theme.textSecondary)
         .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
+        .textAlign(TextAlign.End)
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .wordBreak(WordBreak.BREAK_ALL)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
 
-      TextInput({ text: this.baseUrlDraft, placeholder: this.baseUrlPlaceholder })
-        .height(INPUT_HEIGHT)
-        .width('100%')
+  @Builder
+  private ApiKeyRow(iconDelay: number = 0) {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.key_horizontal'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Text('API Key')
+        .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
+        .width(80)
+        .flexShrink(0)
+
+      TextInput({ text: this.apiKeyDraft, placeholder: '请输入 API Key' })
+        .height(36)
+        .layoutWeight(1)
         .backgroundColor(this.theme.elevated)
         .fontColor(this.theme.textPrimary)
         .placeholderColor(this.theme.textMuted)
-        .borderRadius(12)
-        .padding({ left: 14, right: 14 })
+        .fontSize(10)
+        .borderRadius(10)
+        .padding({ left: 10, right: 10 })
+        .textAlign(TextAlign.Start)
+        .type(InputType.Password)
+        .showPasswordIcon(true)
         .onChange((nextValue: string) => {
-          this.baseUrlDraft = nextValue
+          this.apiKeyDraft = nextValue
+          const nextApiKeys: Record<string, string> = this.copyApiKeys(this.aiConfig.apiKeys)
+          nextApiKeys[this.providerSelection] = nextValue
           this.aiConfig = {
             provider: this.aiConfig.provider,
-            apiKey: this.aiConfig.apiKey,
-            baseUrl: nextValue,
+            apiKeys: nextApiKeys,
+            baseUrl: this.aiConfig.baseUrl,
             model: this.aiConfig.model,
             enableSystemPrompt: this.aiConfig.enableSystemPrompt,
             systemPromptTemplate: this.aiConfig.systemPromptTemplate,
@@ -741,11 +850,50 @@ export struct AIAssistantSettingsPanel {
         })
     }
     .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
     .padding({
       left: PANEL_ROW_PADDING_HORIZONTAL,
       right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: 6,
-      bottom: 6,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
+  @Builder
+  private ConnectionTestRow(iconDelay: number = 0) {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.wifi'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Text('在线连接测试')
+        .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
+        .layoutWeight(1)
+
+      Button(this.isTesting ? '测试中' : '测试')
+        .height(32)
+        .padding({ left: 16, right: 16 })
+        .backgroundColor(this.isTesting ? this.theme.elevated : this.theme.accent)
+        .fontColor(this.isTesting ? this.theme.textMuted : this.theme.accentText)
+        .fontSize(13)
+        .borderRadius(10)
+        .enabled(!this.isTesting)
+        .onClick(() => {
+          void this.runConnectionTest()
+        })
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
@@ -812,7 +960,7 @@ export struct AIAssistantSettingsPanel {
           this.ToggleRow(
             $r('sys.symbol.ellipsis_message_fill'),
             'AI 摘要',
-            '控制文章页是否展示 AI 摘要能力',
+            '',
             this.config.aiSummaryEnabled,
             (enabled: boolean) => this.applyAISummarySwitch(enabled),
             0,
@@ -824,26 +972,17 @@ export struct AIAssistantSettingsPanel {
           this.DividerLine()
           this.BaseUrlRow(3)
           this.DividerLine()
-          this.InputRow(
-            $r('sys.symbol.externaldrive_fill'),
-            'API Key',
-            '用于调用在线模型服务',
-            this.aiConfig.apiKey,
-            '请输入 API Key',
-            (nextValue: string) => {
-              this.aiConfig = {
-                provider: this.aiConfig.provider,
-                apiKey: nextValue,
-                baseUrl: this.aiConfig.baseUrl,
-                model: this.aiConfig.model,
-                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-              }
-            },
-            4,
-          )
-          this.DividerLine()
+          this.ApiKeyRow(4)
+        }
+        .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
+        .transition(livoMotion.enterSoft(40))
+
+        this.ConnectionTestRow(5)
+
+        Column() {
           this.ToggleRow(
             $r('sys.symbol.ellipsis_message_fill'),
             '启用系统提示词',
@@ -852,7 +991,7 @@ export struct AIAssistantSettingsPanel {
             (enabled: boolean) => {
               this.aiConfig = {
                 provider: this.aiConfig.provider,
-                apiKey: this.aiConfig.apiKey,
+                apiKeys: this.aiConfig.apiKeys,
                 baseUrl: this.aiConfig.baseUrl,
                 model: this.aiConfig.model,
                 enableSystemPrompt: enabled,
@@ -860,7 +999,7 @@ export struct AIAssistantSettingsPanel {
                 chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
               }
             },
-            5,
+            6,
           )
           this.DividerLine()
           this.InputRow(
@@ -872,7 +1011,7 @@ export struct AIAssistantSettingsPanel {
             (nextValue: string) => {
               this.aiConfig = {
                 provider: this.aiConfig.provider,
-                apiKey: this.aiConfig.apiKey,
+                apiKeys: this.aiConfig.apiKeys,
                 baseUrl: this.aiConfig.baseUrl,
                 model: this.aiConfig.model,
                 enableSystemPrompt: this.aiConfig.enableSystemPrompt,
@@ -880,7 +1019,7 @@ export struct AIAssistantSettingsPanel {
                 chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
               }
             },
-            6,
+            7,
           )
           this.DividerLine()
           this.InputRow(
@@ -892,7 +1031,7 @@ export struct AIAssistantSettingsPanel {
             (nextValue: string) => {
               this.aiConfig = {
                 provider: this.aiConfig.provider,
-                apiKey: this.aiConfig.apiKey,
+                apiKeys: this.aiConfig.apiKeys,
                 baseUrl: this.aiConfig.baseUrl,
                 model: this.aiConfig.model,
                 enableSystemPrompt: this.aiConfig.enableSystemPrompt,
@@ -900,14 +1039,14 @@ export struct AIAssistantSettingsPanel {
                 chatPersonaPrompt: nextValue,
               }
             },
-            7,
+            8,
           )
         }
         .width('100%')
         .backgroundColor(this.theme.surface)
         .borderRadius(CARD_RADIUS_LG)
         .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(40))
+        .transition(livoMotion.enterSoft(60))
 
         Row({ space: 10 }) {
           Button('保存 AI 配置')
@@ -941,13 +1080,6 @@ export struct AIAssistantSettingsPanel {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
           .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-
-        Text('说明：当前 Harmony 端已支持完整配置保存，在线连接测试会在后续版本补齐。')
-          .fontSize(12)
-          .fontColor(this.theme.textSecondary)
-          .lineHeight(18)
-          .width('100%')
-          .padding({ left: 6, right: 6, top: 0, bottom: 2 })
 
         Row()
           .height(24)

@@ -1,5 +1,5 @@
 MiniMax
-baseURL:https://api.minimaxi.com/anthropic
+baseURL:https://api.minimax.chat
 
 - MiniMax-M2.7
 

@@ -11,12 +11,12 @@ import { AppContextService } from './AppContextService'
 
 const SETTINGS_NAME = 'livo_harmony_settings'
 const AI_KEY_PROVIDER: string = 'aiProvider'
-const AI_KEY_API_KEY: string = 'aiApiKey'
 const AI_KEY_BASE_URL: string = 'aiBaseUrl'
 const AI_KEY_MODEL: string = 'aiModel'
 const AI_KEY_ENABLE_SYSTEM_PROMPT: string = 'aiEnableSystemPrompt'
 const AI_KEY_SYSTEM_PROMPT_TEMPLATE: string = 'aiSystemPromptTemplate'
 const AI_KEY_CHAT_PERSONA_PROMPT: string = 'aiChatPersonaPrompt'
+const AI_PROVIDERS: string[] = ['minimax', 'deepseek', 'openai', 'anthropic', 'glm', 'custom']
 export class AppPreferenceService {
   private static pref: preferences.Preferences | null = null
   private static async getPref(): Promise<preferences.Preferences> {
@@ -83,7 +83,6 @@ export class AppPreferenceService {
     try {
       const pref = await AppPreferenceService.getPref()
       const provider = await pref.get(AI_KEY_PROVIDER, await pref.get('ai.provider', DEFAULT_AI_ASSISTANT_SETTINGS.provider))
-      const apiKey = await pref.get(AI_KEY_API_KEY, await pref.get('ai.apiKey', DEFAULT_AI_ASSISTANT_SETTINGS.apiKey))
       const baseUrl = await pref.get(AI_KEY_BASE_URL, await pref.get('ai.baseUrl', DEFAULT_AI_ASSISTANT_SETTINGS.baseUrl))
       const model = await pref.get(AI_KEY_MODEL, await pref.get('ai.model', DEFAULT_AI_ASSISTANT_SETTINGS.model))
       const enableSystemPrompt = await pref.get(
@@ -102,9 +101,22 @@ export class AppPreferenceService {
         await pref.get('ai.chatPersonaPrompt', DEFAULT_AI_ASSISTANT_SETTINGS.chatPersonaPrompt),
       )
 
+      // 迁移旧的单一 apiKey 到 per-provider 存储
+      const legacyApiKey = await pref.get('aiApiKey', await pref.get('ai.apiKey', ''))
+      const apiKeys: Record<string, string> = {}
+      for (const p of AI_PROVIDERS) {
+        const perProviderKey = await pref.get(`aiApiKey_${p}`, '') as string
+        if (perProviderKey) {
+          apiKeys[p] = perProviderKey
+        } else if (legacyApiKey && p === (provider as string)) {
+          // 迁移旧数据：把旧 apiKey 归到当前 provider
+          apiKeys[p] = legacyApiKey as string
+        }
+      }
+
       return {
         provider: provider as AIProvider,
-        apiKey: apiKey as string,
+        apiKeys,
         baseUrl: baseUrl as string,
         model: model as string,
         enableSystemPrompt: enableSystemPrompt as boolean,
@@ -120,12 +132,14 @@ export class AppPreferenceService {
     try {
       const pref = await AppPreferenceService.getPref()
       await pref.put(AI_KEY_PROVIDER, next.provider)
-      await pref.put(AI_KEY_API_KEY, next.apiKey)
       await pref.put(AI_KEY_BASE_URL, next.baseUrl)
       await pref.put(AI_KEY_MODEL, next.model)
       await pref.put(AI_KEY_ENABLE_SYSTEM_PROMPT, next.enableSystemPrompt)
       await pref.put(AI_KEY_SYSTEM_PROMPT_TEMPLATE, next.systemPromptTemplate)
       await pref.put(AI_KEY_CHAT_PERSONA_PROMPT, next.chatPersonaPrompt)
+      for (const p of AI_PROVIDERS) {
+        await pref.put(`aiApiKey_${p}`, next.apiKeys[p] ?? '')
+      }
       await pref.flush()
       return AppPreferenceService.loadAISettings()
     } catch (error) {

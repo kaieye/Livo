@@ -163,7 +163,7 @@ export interface AIProviderOptionMap {
 
 export interface AIAssistantSettings {
   provider: AIProvider
-  apiKey: string
+  apiKeys: Record<string, string>
   baseUrl: string
   model: string
   enableSystemPrompt: boolean
@@ -177,7 +177,7 @@ export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE: string =
 export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
   minimax: {
     label: 'MiniMax',
-    defaultBaseUrl: 'https://api.minimaxi.com/anthropic',
+    defaultBaseUrl: 'https://api.minimax.chat/v1',
     models: ['MiniMax-M2.7'],
   },
   deepseek: {
@@ -209,7 +209,7 @@ export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
 
 export const DEFAULT_AI_ASSISTANT_SETTINGS: AIAssistantSettings = {
   provider: 'deepseek',
-  apiKey: '',
+  apiKeys: {},
   baseUrl: '',
   model: 'deepseek-chat',
   enableSystemPrompt: false,
