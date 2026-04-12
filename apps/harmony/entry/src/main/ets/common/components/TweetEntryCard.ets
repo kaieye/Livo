@@ -68,7 +68,7 @@ export struct TweetEntryCard {
     return (this.quotedTweet().username || '').trim()
   }
 
-  private quotedAuthorLabel(): string {
+  private quotedInlineNameLabel(): string {
     return (this.quotedTweet().displayName || '').trim()
       || this.quotedUsernameLabel()
       || '未知来源'
@@ -151,10 +151,16 @@ export struct TweetEntryCard {
   }
 
   @Builder
-  private QuoteCard() {
+  private RtSection() {
     if (this.hasQuotedTweet()) {
-      Column({ space: 10 }) {
-        Text(this.quotedAuthorLabel())
+      Column({ space: 8 }) {
+        Text('RT')
+          .fontSize(12)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.theme.textMuted)
+          .width('100%')
+
+        Text(this.quotedInlineNameLabel())
           .fontSize(13)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.theme.textPrimary)
@@ -167,8 +173,7 @@ export struct TweetEntryCard {
             .fontSize(13)
             .lineHeight(20)
             .fontColor(this.theme.textPrimary)
-            .maxLines(4)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%')
         }
 
         if (this.quotedMediaUrls().length > 0) {
@@ -189,10 +194,7 @@ export struct TweetEntryCard {
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-      .border({ width: 1, color: this.theme.divider })
-      .borderRadius(12)
-      .backgroundColor(this.theme.isDark ? '#151A20' : '#F4F8FB')
+      .padding({ left: 2, right: 2, top: 2, bottom: 2 })
     }
   }
 
@@ -274,7 +276,7 @@ export struct TweetEntryCard {
         }
       }
 
-      this.QuoteCard()
+      this.RtSection()
       this.MediaGrid()
     }
     .width('100%')

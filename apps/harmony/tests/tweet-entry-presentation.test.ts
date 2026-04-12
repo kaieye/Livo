@@ -305,6 +305,7 @@ test('presentTweetEntryFromEntry classifies rsshub quote div content as quote tw
   assert.equal(presented.kind, 'quote')
   assert.equal(presented.text, 'Grok groks')
   assert.equal(presented.quotedTweet?.displayName, 'X Freeze')
+  assert.deepEqual(presented.mediaUrls, [])
   assert.equal(
     presented.quotedTweet?.text,
     "Elon Musk speaks hard truths on what Nelson Mandela actually stood for\n\nThey are literally shaping humanity's future.",

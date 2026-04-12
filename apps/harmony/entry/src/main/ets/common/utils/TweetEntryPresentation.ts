@@ -496,10 +496,19 @@ function applyQuoteSemantics(
     return undefined
   }
 
+  const quotedMediaUrls = parsed.quotedTweet.mediaUrls || []
+  const mediaUrls =
+    quotedMediaUrls.length > 0
+      ? (base.mediaUrls || []).filter(
+          (url: string) => !quotedMediaUrls.includes(url),
+        )
+      : base.mediaUrls
+
   return {
     ...base,
     kind: 'quote',
     text: parsed.mainText,
+    mediaUrls,
     quotedTweet: parsed.quotedTweet,
   }
 }

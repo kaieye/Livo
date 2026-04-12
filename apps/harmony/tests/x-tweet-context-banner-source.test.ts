@@ -16,12 +16,15 @@ const articleDetailSource = readFileSync(
 )
 
 test('TweetEntryCard keeps quote content separated without top quote banner', () => {
+  assert.match(tweetCardSource, /private RtSection\(\)/)
+  assert.doesNotMatch(tweetCardSource, /private QuoteCard\(\)/)
   assert.doesNotMatch(tweetCardSource, /private QuoteBanner\(\)/)
   assert.doesNotMatch(tweetCardSource, /this\.QuoteBanner\(\)/)
   assert.doesNotMatch(tweetCardSource, /引用帖/)
   assert.doesNotMatch(tweetCardSource, /Text\('原文引用'\)/)
   assert.doesNotMatch(tweetCardSource, /Text\('单独展开显示'\)/)
-  assert.match(tweetCardSource, /private quotedAuthorLabel\(\): string/)
+  assert.match(tweetCardSource, /private quotedInlineNameLabel\(\): string/)
+  assert.match(tweetCardSource, /Text\('RT'\)/)
 })
 
 test('ArticleDetail social view shows tweet context label for reposts and quotes', () => {

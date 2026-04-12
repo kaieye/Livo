@@ -137,11 +137,13 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   )
   assert.match(source, /presentation\.kind === 'retweet'/)
   assert.match(source, /presentation\.retweetByLabel/)
-  assert.match(source, /private QuoteCard\(\)/)
+  assert.match(source, /private RtSection\(\)/)
   assert.match(source, /presentation\.kind === 'quote'/)
   assert.match(source, /presentation\.quotedTweet/)
+  assert.doesNotMatch(source, /private QuoteCard\(\)/)
   assert.doesNotMatch(source, /private QuoteBanner\(\)/)
   assert.doesNotMatch(source, /引用帖/)
+  assert.match(source, /Text\('RT'\)/)
   assert.doesNotMatch(source, /private ActionRow\(\)/)
   assert.doesNotMatch(source, /private ActionItem\(/)
   assert.match(source, /avatarSize:\s*17/)
@@ -154,6 +156,10 @@ test('TweetEntryCard renders tweet-specific sections', () => {
   assert.match(
     source,
     /Column\(\{ space: 8 \}\) \{\s*this\.RetweetBanner\(\)\s*Row\(\{ space: 8 \}\)/s,
+  )
+  assert.match(
+    source,
+    /if \(this\.presentation\.text\) \{[\s\S]*?this\.RtSection\(\)[\s\S]*?this\.MediaGrid\(\)/s,
   )
   assert.match(
     source,
