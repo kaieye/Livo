@@ -144,7 +144,7 @@ export interface HarmonySettings {
   remoteFeedUrl: string
 }
 
-export type AIProvider = 'openai' | 'anthropic' | 'deepseek' | 'glm' | 'ollama' | 'custom'
+export type AIProvider = 'minimax' | 'deepseek' | 'openai' | 'anthropic' | 'glm' | 'custom'
 
 export interface AIProviderDefinition {
   label: string
@@ -153,11 +153,11 @@ export interface AIProviderDefinition {
 }
 
 export interface AIProviderOptionMap {
+  minimax: AIProviderDefinition
+  deepseek: AIProviderDefinition
   openai: AIProviderDefinition
   anthropic: AIProviderDefinition
-  deepseek: AIProviderDefinition
   glm: AIProviderDefinition
-  ollama: AIProviderDefinition
   custom: AIProviderDefinition
 }
 
@@ -175,30 +175,30 @@ export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE: string =
   'You are Livo AI assistant. Answer in concise Chinese. Context: {{context}}. Persona: {{persona}}.'
 
 export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
-  openai: {
-    label: 'OpenAI',
-    defaultBaseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'],
-  },
-  anthropic: {
-    label: 'Anthropic',
-    defaultBaseUrl: 'https://api.anthropic.com/v1',
-    models: ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'],
+  minimax: {
+    label: 'MiniMax',
+    defaultBaseUrl: 'https://api.minimaxi.com/anthropic',
+    models: ['MiniMax-M2.7'],
   },
   deepseek: {
     label: 'DeepSeek',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
     models: ['deepseek-chat', 'deepseek-reasoner'],
   },
+  openai: {
+    label: 'OpenAI',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: ['gpt-5.4', 'gpt-5.4-mini'],
+  },
+  anthropic: {
+    label: 'Anthropic',
+    defaultBaseUrl: 'https://api.anthropic.com/v1/messages',
+    models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  },
   glm: {
     label: 'GLM',
     defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    models: ['glm-4-flash', 'glm-4-plus', 'glm-4v-plus'],
-  },
-  ollama: {
-    label: 'Ollama',
-    defaultBaseUrl: 'http://localhost:11434/v1',
-    models: ['qwen2.5', 'llama3.1', 'mistral'],
+    models: ['GLM-5.1', 'GLM-5'],
   },
   custom: {
     label: '自定义',
@@ -208,10 +208,10 @@ export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
 }
 
 export const DEFAULT_AI_ASSISTANT_SETTINGS: AIAssistantSettings = {
-  provider: 'openai',
+  provider: 'deepseek',
   apiKey: '',
   baseUrl: '',
-  model: 'gpt-4o-mini',
+  model: 'deepseek-chat',
   enableSystemPrompt: false,
   systemPromptTemplate: DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
   chatPersonaPrompt: '',

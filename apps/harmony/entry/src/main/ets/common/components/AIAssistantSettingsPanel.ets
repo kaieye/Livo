@@ -25,7 +25,7 @@ const PANEL_ROW_TEXT_SPACING: number = 2
 const PANEL_SECTION_SPACING: number = 14
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 8
-const INPUT_HEIGHT: number = 44
+const INPUT_HEIGHT: number = 36
 
 interface SelectOption {
   label: string
@@ -51,17 +51,17 @@ export struct AIAssistantSettingsPanel {
   @State saveHint: string = 'AI 助手设置将保存到本地'
   @State providerSelection: string = 'deepseek'
   @State modelSelection: string = 'deepseek-chat'
-  @State providerListExpanded: boolean = false
-  @State modelListExpanded: boolean = false
+  @State baseUrlPlaceholder: string = 'https://api.deepseek.com/v1'
+  @State baseUrlDraft: string = ''
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
   private settingsMutationVersion: number = 0
 
   private readonly providerOrder: AIProvider[] = [
+    'minimax',
+    'deepseek',
     'openai',
     'anthropic',
-    'deepseek',
     'glm',
-    'ollama',
     'custom',
   ]
 
@@ -104,6 +104,8 @@ export struct AIAssistantSettingsPanel {
     this.aiConfig = normalizedSettings
     this.providerSelection = normalizedProvider
     this.modelSelection = normalizedModel
+    this.baseUrlPlaceholder = providerConfig.defaultBaseUrl
+    this.baseUrlDraft = normalizedSettings.baseUrl
   }
 
   private syncGeneralSettings(next: HarmonySettings): void {
@@ -148,20 +150,20 @@ export struct AIAssistantSettingsPanel {
   private providerDefinition(provider: AIProvider): AIProviderDefinition {
     const normalizedProvider = this.normalizeProvider(provider)
     switch (normalizedProvider) {
+      case 'minimax':
+        return AI_PROVIDER_OPTIONS.minimax
+      case 'deepseek':
+        return AI_PROVIDER_OPTIONS.deepseek
       case 'openai':
         return AI_PROVIDER_OPTIONS.openai
       case 'anthropic':
         return AI_PROVIDER_OPTIONS.anthropic
-      case 'deepseek':
-        return AI_PROVIDER_OPTIONS.deepseek
       case 'glm':
         return AI_PROVIDER_OPTIONS.glm
-      case 'ollama':
-        return AI_PROVIDER_OPTIONS.ollama
       case 'custom':
         return AI_PROVIDER_OPTIONS.custom
       default:
-        return AI_PROVIDER_OPTIONS.openai
+        return AI_PROVIDER_OPTIONS.deepseek
     }
   }
 
@@ -212,7 +214,7 @@ export struct AIAssistantSettingsPanel {
     const nextSettings: AIAssistantSettings = {
       provider,
       apiKey: this.aiConfig.apiKey,
-      baseUrl: providerConfig.defaultBaseUrl,
+      baseUrl: '',
       model: nextModel,
       enableSystemPrompt: this.aiConfig.enableSystemPrompt,
       systemPromptTemplate: this.aiConfig.systemPromptTemplate,
@@ -350,6 +352,46 @@ export struct AIAssistantSettingsPanel {
   }
 
   @Builder
+  private ProviderOptionMenu() {
+    Menu() {
+      ForEach(this.providerOptions(), (option: SelectOption) => {
+        MenuItem({
+          content: option.label,
+          symbolEndIcon: this.providerSelection === option.value
+            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
+            : undefined,
+        })
+          .selected(this.providerSelection === option.value)
+          .onChange((selected: boolean) => {
+            if (selected && option.value !== this.providerSelection) {
+              this.applyProvider(option.value)
+            }
+          })
+      }, (option: SelectOption) => option.value)
+    }
+  }
+
+  @Builder
+  private ModelOptionMenu() {
+    Menu() {
+      ForEach(this.modelOptions(), (option: SelectOption) => {
+        MenuItem({
+          content: option.label,
+          symbolEndIcon: this.modelSelection === option.value
+            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
+            : undefined,
+        })
+          .selected(this.modelSelection === option.value)
+          .onChange((selected: boolean) => {
+            if (selected && option.value !== this.modelSelection) {
+              this.applyModel(option.value)
+            }
+          })
+      }, (option: SelectOption) => option.value)
+    }
+  }
+
+  @Builder
   private ProviderActionRow(iconDelay: number = 0) {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.gearshape'))
@@ -358,12 +400,12 @@ export struct AIAssistantSettingsPanel {
         .transition(livoMotion.enterIconSpin(iconDelay))
 
       Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text('服务提供商')
+        Text('模型提供商')
           .fontSize(PANEL_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textPrimary)
 
-        Text('选择 AI 接口服务商')
+        Text('选择 AI 模型提供商')
           .fontSize(PANEL_SUBTITLE_SIZE)
           .fontColor(this.theme.textSecondary)
           .maxLines(2)
@@ -372,7 +414,7 @@ export struct AIAssistantSettingsPanel {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      Row({ space: 6 }) {
+      Row() {
         Text(this.providerDefinition(this.providerSelection as AIProvider).label)
           .fontSize(PANEL_HINT_SIZE)
           .fontColor(this.theme.textSecondary)
@@ -382,8 +424,10 @@ export struct AIAssistantSettingsPanel {
         SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
           .fontSize(11)
           .fontColor([this.theme.textMuted])
+          .margin({ left: 7, right: 2, top: 1 })
       }
-        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+      .bindMenu(this.ProviderOptionMenu())
     }
     .width('100%')
     .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
@@ -395,13 +439,6 @@ export struct AIAssistantSettingsPanel {
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => {
-      this.providerListExpanded = !this.providerListExpanded
-      if (this.providerListExpanded) {
-        this.modelListExpanded = false
-      }
-    })
   }
 
   @Builder
@@ -418,7 +455,7 @@ export struct AIAssistantSettingsPanel {
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textPrimary)
 
-        Text('选择默认模型')
+        Text(this.providerSelection === 'custom' ? '输入自定义模型名称' : '选择默认模型')
           .fontSize(PANEL_SUBTITLE_SIZE)
           .fontColor(this.theme.textSecondary)
           .maxLines(2)
@@ -427,18 +464,45 @@ export struct AIAssistantSettingsPanel {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      Row({ space: 6 }) {
-        Text(this.modelSelection)
+      if (this.providerSelection === 'custom') {
+        TextInput({ text: this.modelSelection, placeholder: '如 gpt-4o' })
+          .height(36)
+          .width(160)
+          .backgroundColor(this.theme.elevated)
+          .fontColor(this.theme.textPrimary)
+          .placeholderColor(this.theme.textMuted)
           .fontSize(PANEL_HINT_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .borderRadius(10)
+          .padding({ left: 10, right: 10 })
+          .textAlign(TextAlign.End)
+          .onChange((nextValue: string) => {
+            this.modelSelection = nextValue
+            this.aiConfig = {
+              provider: this.aiConfig.provider,
+              apiKey: this.aiConfig.apiKey,
+              baseUrl: this.aiConfig.baseUrl,
+              model: nextValue,
+              enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+              systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+              chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+            }
+          })
+      } else {
+        Row() {
+          Text(this.modelSelection)
+            .fontSize(PANEL_HINT_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
-          .fontSize(11)
-          .fontColor([this.theme.textMuted])
-      }
+          SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+            .fontSize(11)
+            .fontColor([this.theme.textMuted])
+            .margin({ left: 7, right: 2, top: 1 })
+        }
         .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+        .bindMenu(this.ModelOptionMenu())
+      }
     }
     .width('100%')
     .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
@@ -450,13 +514,6 @@ export struct AIAssistantSettingsPanel {
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => {
-      this.modelListExpanded = !this.modelListExpanded
-      if (this.modelListExpanded) {
-        this.providerListExpanded = false
-      }
-    })
   }
 
   @Builder
@@ -637,8 +694,66 @@ export struct AIAssistantSettingsPanel {
   }
 
   @Builder
+  private BaseUrlRow(iconDelay: number = 0) {
+    Column({ space: 6 }) {
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.link'))
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay))
+
+        Column({ space: PANEL_ROW_TEXT_SPACING }) {
+          Text('Base URL')
+            .fontSize(PANEL_TITLE_SIZE)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+
+          Text('留空则使用服务商默认地址')
+            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+
+      TextInput({ text: this.baseUrlDraft, placeholder: this.baseUrlPlaceholder })
+        .height(INPUT_HEIGHT)
+        .width('100%')
+        .backgroundColor(this.theme.elevated)
+        .fontColor(this.theme.textPrimary)
+        .placeholderColor(this.theme.textMuted)
+        .borderRadius(12)
+        .padding({ left: 14, right: 14 })
+        .onChange((nextValue: string) => {
+          this.baseUrlDraft = nextValue
+          this.aiConfig = {
+            provider: this.aiConfig.provider,
+            apiKey: this.aiConfig.apiKey,
+            baseUrl: nextValue,
+            model: this.aiConfig.model,
+            enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+            systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+            chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+          }
+        })
+    }
+    .width('100%')
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: 6,
+      bottom: 6,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
+  @Builder
   private InputRow(symbol: Resource, title: string, subtitle: string, value: string, placeholder: string,
-    onChange: (nextValue: string) => void, iconDelay: number = 0) {
+    onChange: (nextValue: string) => void, iconDelay: number = 0, rebuildKey: string = '') {
     Column({ space: 10 }) {
       Row({ space: 12 }) {
         SymbolGlyph(symbol)
@@ -664,6 +779,7 @@ export struct AIAssistantSettingsPanel {
       .width('100%')
 
       TextInput({ text: value, placeholder })
+        .key(rebuildKey)
         .height(INPUT_HEIGHT)
         .width('100%')
         .backgroundColor(this.theme.elevated)
@@ -703,28 +819,10 @@ export struct AIAssistantSettingsPanel {
           )
           this.DividerLine()
           this.ProviderActionRow(1)
-          if (this.providerListExpanded) {
-            this.InlineOptionList(
-              this.providerOptions(),
-              this.providerSelection,
-              (value: string) => {
-                this.applyProvider(value)
-                this.providerListExpanded = false
-              },
-            )
-          }
           this.DividerLine()
           this.ModelActionRow(2)
-          if (this.modelListExpanded) {
-            this.InlineOptionList(
-              this.modelOptions(),
-              this.modelSelection,
-              (value: string) => {
-                this.applyModel(value)
-                this.modelListExpanded = false
-              },
-            )
-          }
+          this.DividerLine()
+          this.BaseUrlRow(3)
           this.DividerLine()
           this.InputRow(
             $r('sys.symbol.externaldrive_fill'),
@@ -737,26 +835,6 @@ export struct AIAssistantSettingsPanel {
                 provider: this.aiConfig.provider,
                 apiKey: nextValue,
                 baseUrl: this.aiConfig.baseUrl,
-                model: this.aiConfig.model,
-                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-              }
-            },
-            3,
-          )
-          this.DividerLine()
-          this.InputRow(
-            $r('sys.symbol.link'),
-            'Base URL',
-            '留空则使用服务商默认地址',
-            this.aiConfig.baseUrl,
-            this.displayBaseUrl(),
-            (nextValue: string) => {
-              this.aiConfig = {
-                provider: this.aiConfig.provider,
-                apiKey: this.aiConfig.apiKey,
-                baseUrl: nextValue,
                 model: this.aiConfig.model,
                 enableSystemPrompt: this.aiConfig.enableSystemPrompt,
                 systemPromptTemplate: this.aiConfig.systemPromptTemplate,
