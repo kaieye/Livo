@@ -16,6 +16,7 @@ import {
 import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
 import { AccountsSettingsPanel } from './AccountsSettingsPanel'
+import { AIAssistantSettingsPanel } from './AIAssistantSettingsPanel'
 import {
   AboutSettingsPanel,
   DataControlSettingsPanel,
@@ -29,7 +30,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
-type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts'
+type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts' | 'ai-assistant'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -264,6 +265,9 @@ export struct SettingsContent {
       case 'accounts':
         preferredHeight = 520
         break
+      case 'ai-assistant':
+        preferredHeight = SettingsContent.SHEET_TALL_HEIGHT
+        break
       case 'appearance':
       case 'favorites':
         preferredHeight = SettingsContent.SHEET_TALL_HEIGHT
@@ -365,6 +369,10 @@ export struct SettingsContent {
     }
     if (item.title === '数据控制') {
       this.openSheet('data-control')
+      return
+    }
+    if (item.title === 'AI助手') {
+      this.openSheet('ai-assistant')
       return
     }
     if (item.title === '隐私') {
@@ -588,6 +596,13 @@ export struct SettingsContent {
       } else if (this.activeSheet === 'accounts') {
         AccountsSettingsPanel({
           inheritedTheme: this.theme,
+        })
+      } else if (this.activeSheet === 'ai-assistant') {
+        AIAssistantSettingsPanel({
+          onSettingsChange: (settings: HarmonySettings) => {
+            this.config = settings
+            this.onSettingsChange(settings)
+          },
         })
       }
     }

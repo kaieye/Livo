@@ -1,4 +1,5 @@
 import {
+  AIAssistantSettings,
   ArticleDetailModel,
   AccountProvider,
   AccountStatusResult,
@@ -267,6 +268,11 @@ export class AppRepository {
     return AppPreferenceService.loadSettings()
   }
 
+  static async aiSettings(): Promise<AIAssistantSettings> {
+    await AppRepository.bootstrap()
+    return AppPreferenceService.loadAISettings()
+  }
+
   static async accountStatus(provider: AccountProvider): Promise<AccountStatusResult> {
     await AppRepository.bootstrap()
     return AccountSessionService.status(provider)
@@ -328,6 +334,11 @@ export class AppRepository {
   static async persistSettings(next: HarmonySettings): Promise<HarmonySettings> {
     await AppRepository.bootstrap()
     return AppPreferenceService.saveSettings(next)
+  }
+
+  static async persistAISettings(next: AIAssistantSettings): Promise<AIAssistantSettings> {
+    await AppRepository.bootstrap()
+    return AppPreferenceService.saveAISettings(next)
   }
 
   static async createFeed(draft: FeedDraft): Promise<FeedCardModel> {

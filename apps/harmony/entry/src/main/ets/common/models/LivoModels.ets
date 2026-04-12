@@ -144,6 +144,79 @@ export interface HarmonySettings {
   remoteFeedUrl: string
 }
 
+export type AIProvider = 'openai' | 'anthropic' | 'deepseek' | 'glm' | 'ollama' | 'custom'
+
+export interface AIProviderDefinition {
+  label: string
+  defaultBaseUrl: string
+  models: string[]
+}
+
+export interface AIProviderOptionMap {
+  openai: AIProviderDefinition
+  anthropic: AIProviderDefinition
+  deepseek: AIProviderDefinition
+  glm: AIProviderDefinition
+  ollama: AIProviderDefinition
+  custom: AIProviderDefinition
+}
+
+export interface AIAssistantSettings {
+  provider: AIProvider
+  apiKey: string
+  baseUrl: string
+  model: string
+  enableSystemPrompt: boolean
+  systemPromptTemplate: string
+  chatPersonaPrompt: string
+}
+
+export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE: string =
+  'You are Livo AI assistant. Answer in concise Chinese. Context: {{context}}. Persona: {{persona}}.'
+
+export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
+  openai: {
+    label: 'OpenAI',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'],
+  },
+  anthropic: {
+    label: 'Anthropic',
+    defaultBaseUrl: 'https://api.anthropic.com/v1',
+    models: ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'],
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    defaultBaseUrl: 'https://api.deepseek.com/v1',
+    models: ['deepseek-chat', 'deepseek-reasoner'],
+  },
+  glm: {
+    label: 'GLM',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    models: ['glm-4-flash', 'glm-4-plus', 'glm-4v-plus'],
+  },
+  ollama: {
+    label: 'Ollama',
+    defaultBaseUrl: 'http://localhost:11434/v1',
+    models: ['qwen2.5', 'llama3.1', 'mistral'],
+  },
+  custom: {
+    label: '自定义',
+    defaultBaseUrl: '',
+    models: [],
+  },
+}
+
+export const DEFAULT_AI_ASSISTANT_SETTINGS: AIAssistantSettings = {
+  provider: 'openai',
+  apiKey: '',
+  baseUrl: '',
+  model: 'gpt-4o-mini',
+  enableSystemPrompt: false,
+  systemPromptTemplate: DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
+  chatPersonaPrompt: '',
+}
+
 export interface RemoteFeedResult {
   entries: EntryCardModel[]
   sourceLabel: string

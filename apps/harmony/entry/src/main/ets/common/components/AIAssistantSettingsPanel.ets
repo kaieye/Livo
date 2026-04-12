@@ -1,0 +1,890 @@
+import { SymbolGlyphModifier } from '@kit.ArkUI'
+import { AppRepository } from '../data/AppRepository'
+import {
+  AIAssistantSettings,
+  AI_PROVIDER_OPTIONS,
+  AIProviderDefinition,
+  AIProvider,
+  DEFAULT_AI_ASSISTANT_SETTINGS,
+  DEFAULT_HARMONY_SETTINGS,
+  HarmonySettings,
+} from '../models/LivoModels'
+import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { livoMotion } from '../ui/Motion'
+import { PageHeader } from './PageHeader'
+import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+
+const PANEL_ROW_MIN_HEIGHT: number = 56
+const PANEL_ICON_SIZE: number = 22
+const PANEL_TITLE_SIZE: number = 15
+const PANEL_SUBTITLE_SIZE: number = 12
+const PANEL_HINT_SIZE: number = 12
+const PANEL_HANDLE_TOP_PADDING: number = 10
+const PANEL_HANDLE_BOTTOM_PADDING: number = 8
+const PANEL_ROW_TEXT_SPACING: number = 2
+const PANEL_SECTION_SPACING: number = 14
+const PANEL_ROW_PADDING_HORIZONTAL: number = 12
+const PANEL_ROW_PADDING_VERTICAL: number = 8
+const INPUT_HEIGHT: number = 44
+
+interface SelectOption {
+  label: string
+  value: string
+}
+
+@Builder
+function AIPanelHeader(title: string, theme: ThemePalette) {
+  PageHeader({
+    title,
+    theme,
+    titleSize: 20,
+    topPadding: 0,
+    bottomPadding: 0,
+  })
+}
+
+@Component
+export struct AIAssistantSettingsPanel {
+  @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
+  @State aiConfig: AIAssistantSettings = DEFAULT_AI_ASSISTANT_SETTINGS
+  @State theme: ThemePalette = ThemeService.currentPalette()
+  @State saveHint: string = 'AI 助手设置将保存到本地'
+  @State providerSelection: string = 'deepseek'
+  @State modelSelection: string = 'deepseek-chat'
+  @State providerListExpanded: boolean = false
+  @State modelListExpanded: boolean = false
+  onSettingsChange: (settings: HarmonySettings) => void = () => {}
+  private settingsMutationVersion: number = 0
+
+  private readonly providerOrder: AIProvider[] = [
+    'openai',
+    'anthropic',
+    'deepseek',
+    'glm',
+    'ollama',
+    'custom',
+  ]
+
+  aboutToAppear(): void {
+    void this.loadSettings()
+  }
+
+  private async loadSettings(): Promise<void> {
+    try {
+      const loadVersion = this.settingsMutationVersion
+      const settings = await AppRepository.settings()
+      this.config = settings
+      this.theme = await ThemeService.resolvePalette(settings)
+      const aiSettings = await AppRepository.aiSettings()
+      if (loadVersion !== this.settingsMutationVersion) {
+        return
+      }
+      this.applyResolvedAIState(aiSettings)
+      this.saveHint = '已加载 AI 助手配置'
+    } catch (error) {
+      this.saveHint = `加载失败：${error instanceof Error ? error.message : 'unknown error'}`
+    }
+  }
+
+  private applyResolvedAIState(settings: AIAssistantSettings): void {
+    const normalizedProvider = this.normalizeProvider(settings.provider)
+    const providerConfig = this.providerDefinition(normalizedProvider)
+    const normalizedModel = providerConfig.models.includes(settings.model)
+      ? settings.model
+      : (providerConfig.models.length > 0 ? providerConfig.models[0] : settings.model)
+    const normalizedSettings: AIAssistantSettings = {
+      provider: normalizedProvider,
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl,
+      model: normalizedModel,
+      enableSystemPrompt: settings.enableSystemPrompt,
+      systemPromptTemplate: settings.systemPromptTemplate,
+      chatPersonaPrompt: settings.chatPersonaPrompt,
+    }
+    this.aiConfig = normalizedSettings
+    this.providerSelection = normalizedProvider
+    this.modelSelection = normalizedModel
+  }
+
+  private syncGeneralSettings(next: HarmonySettings): void {
+    this.config = next
+    void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
+      this.config = saved
+      this.onSettingsChange(saved)
+      void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
+        this.theme = palette
+      })
+      this.saveHint = '已保存 AI 摘要开关'
+    }).catch((error: Error) => {
+      this.saveHint = `保存失败：${error.message}`
+    })
+  }
+
+  private syncAISettings(next: AIAssistantSettings): void {
+    const mutationVersion = this.settingsMutationVersion + 1
+    this.settingsMutationVersion = mutationVersion
+    this.applyResolvedAIState(next)
+    void AppRepository.persistAISettings(next).then((_saved: AIAssistantSettings) => {
+      if (mutationVersion !== this.settingsMutationVersion) {
+        return
+      }
+      this.saveHint = '已保存 AI 助手配置'
+    }).catch((error: Error) => {
+      this.saveHint = `保存失败：${error.message}`
+    })
+  }
+
+  private providerOptions(): SelectOption[] {
+    return this.providerOrder.map((provider: AIProvider): SelectOption => ({
+      label: this.providerDefinition(provider).label,
+      value: provider,
+    }))
+  }
+
+  private normalizeProvider(provider: AIProvider): AIProvider {
+    return this.providerOrder.includes(provider) ? provider : DEFAULT_AI_ASSISTANT_SETTINGS.provider
+  }
+
+  private providerDefinition(provider: AIProvider): AIProviderDefinition {
+    const normalizedProvider = this.normalizeProvider(provider)
+    switch (normalizedProvider) {
+      case 'openai':
+        return AI_PROVIDER_OPTIONS.openai
+      case 'anthropic':
+        return AI_PROVIDER_OPTIONS.anthropic
+      case 'deepseek':
+        return AI_PROVIDER_OPTIONS.deepseek
+      case 'glm':
+        return AI_PROVIDER_OPTIONS.glm
+      case 'ollama':
+        return AI_PROVIDER_OPTIONS.ollama
+      case 'custom':
+        return AI_PROVIDER_OPTIONS.custom
+      default:
+        return AI_PROVIDER_OPTIONS.openai
+    }
+  }
+
+  private modelOptions(): SelectOption[] {
+    const provider = this.providerDefinition(this.providerSelection as AIProvider)
+    if (provider.models.length > 0) {
+      return provider.models.map((model: string): SelectOption => ({
+        label: model,
+        value: model,
+      }))
+    }
+
+    const fallbackModel = (this.modelSelection || this.aiConfig.model || 'custom-model').trim() || 'custom-model'
+    return [{
+      label: fallbackModel,
+      value: fallbackModel,
+    }]
+  }
+
+  private resolveNextModel(provider: AIProvider): string {
+    const providerConfig = this.providerDefinition(provider)
+    if (providerConfig.models.length > 0) {
+      return providerConfig.models[0]
+    }
+    const fallbackModel = (this.modelSelection || this.aiConfig.model || 'custom-model').trim()
+    return fallbackModel || 'custom-model'
+  }
+
+  private applyModel(value: string): void {
+    this.modelSelection = value
+    this.syncAISettings({
+      provider: this.aiConfig.provider,
+      apiKey: this.aiConfig.apiKey,
+      baseUrl: this.aiConfig.baseUrl,
+      model: value,
+      enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+      systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+      chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+    })
+  }
+
+  private applyProvider(value: string): void {
+    const provider = value as AIProvider
+    const providerConfig = this.providerDefinition(provider)
+    const nextModel = this.resolveNextModel(provider)
+    this.providerSelection = provider
+    this.modelSelection = nextModel
+    const nextSettings: AIAssistantSettings = {
+      provider,
+      apiKey: this.aiConfig.apiKey,
+      baseUrl: providerConfig.defaultBaseUrl,
+      model: nextModel,
+      enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+      systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+      chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+    }
+    this.syncAISettings(nextSettings)
+  }
+
+  private applyAISummarySwitch(enabled: boolean): void {
+    this.syncGeneralSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: enabled,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+    })
+  }
+
+  private persistCurrentDraft(): void {
+    const trimmedApiKey = (this.aiConfig.apiKey || '').trim()
+    const trimmedBaseUrl = (this.aiConfig.baseUrl || '').trim()
+    const trimmedModel = (this.aiConfig.model || '').trim()
+    const nextSettings: AIAssistantSettings = {
+      provider: this.aiConfig.provider,
+      apiKey: trimmedApiKey,
+      baseUrl: trimmedBaseUrl,
+      model: trimmedModel,
+      enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+      systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+      chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+    }
+    this.syncAISettings(nextSettings)
+  }
+
+  private displayBaseUrl(): string {
+    const provider = this.providerDefinition(this.providerSelection as AIProvider)
+    const current = (this.aiConfig.baseUrl || '').trim()
+    if (current) {
+      return current
+    }
+    return provider.defaultBaseUrl
+  }
+
+  @Builder
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+  }
+
+  @Builder
+  private PanelHeader() {
+    AIPanelHeader('AI助手', this.theme)
+  }
+
+  @Builder
+  private DividerLine() {
+    Row()
+      .width('92%')
+      .height(0.5)
+      .backgroundColor(this.theme.divider)
+  }
+
+  @Builder
+  private ActionLabel(label: string) {
+    Row({ space: 6 }) {
+      Text(label)
+        .fontSize(PANEL_HINT_SIZE)
+        .fontColor(this.theme.textSecondary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+        .fontSize(11)
+        .fontColor([this.theme.textMuted])
+    }
+      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+  }
+
+  @Builder
+  private SettingActionRow(
+    symbol: Resource,
+    title: string,
+    subtitle: string,
+    actionLabel: string,
+    onTap: () => void,
+    iconDelay: number = 0,
+  ) {
+    Row({ space: 12 }) {
+      SymbolGlyph(symbol)
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text(title)
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text(subtitle)
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      this.ActionLabel(actionLabel)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => onTap())
+  }
+
+  @Builder
+  private ProviderActionRow(iconDelay: number = 0) {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.gearshape'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text('服务提供商')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text('选择 AI 接口服务商')
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Row({ space: 6 }) {
+        Text(this.providerDefinition(this.providerSelection as AIProvider).label)
+          .fontSize(PANEL_HINT_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+          .fontSize(11)
+          .fontColor([this.theme.textMuted])
+      }
+        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => {
+      this.providerListExpanded = !this.providerListExpanded
+      if (this.providerListExpanded) {
+        this.modelListExpanded = false
+      }
+    })
+  }
+
+  @Builder
+  private ModelActionRow(iconDelay: number = 0) {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.doc_text'))
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text('模型')
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text('选择默认模型')
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Row({ space: 6 }) {
+        Text(this.modelSelection)
+          .fontSize(PANEL_HINT_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
+          .fontSize(11)
+          .fontColor([this.theme.textMuted])
+      }
+        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => {
+      this.modelListExpanded = !this.modelListExpanded
+      if (this.modelListExpanded) {
+        this.providerListExpanded = false
+      }
+    })
+  }
+
+  @Builder
+  private InlineOptionList(
+    options: SelectOption[],
+    selectedValue: string,
+    onSelect: (value: string) => void,
+  ) {
+    Column({ space: 0 }) {
+      ForEach(options, (option: SelectOption, index: number) => {
+        Row({ space: 8 }) {
+          Text(option.label)
+            .layoutWeight(1)
+            .fontSize(14)
+            .fontColor(selectedValue === option.value ? this.theme.accent : this.theme.textPrimary)
+            .fontWeight(selectedValue === option.value ? FontWeight.Medium : FontWeight.Regular)
+
+          if (selectedValue === option.value) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize(14)
+              .fontColor([this.theme.accent])
+          }
+        }
+        .width('100%')
+        .height(40)
+        .padding({ left: 14, right: 14 })
+        .clickEffect({ level: ClickEffectLevel.MIDDLE })
+        .onClick(() => onSelect(option.value))
+
+        if (index < options.length - 1) {
+          Row()
+            .width('100%')
+            .height(0.5)
+            .backgroundColor(this.theme.divider)
+        }
+      }, (option: SelectOption) => option.value)
+    }
+    .width('100%')
+    .backgroundColor(this.theme.surface)
+    .borderRadius(12)
+    .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+  }
+
+  @Builder
+  private SelectionListRow(
+    symbol: Resource,
+    kind: 'provider' | 'model',
+    title: string,
+    subtitle: string,
+    options: SelectOption[],
+    onSelect: (value: string) => void,
+    iconDelay: number = 0,
+  ) {
+    Column({ space: 10 }) {
+      Row({ space: 12 }) {
+        SymbolGlyph(symbol)
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay))
+
+        Column({ space: PANEL_ROW_TEXT_SPACING }) {
+          Text(title)
+            .fontSize(PANEL_TITLE_SIZE)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+
+          Text(subtitle)
+            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+
+      Column({ space: 6 }) {
+        ForEach(options, (option: SelectOption, index: number) => {
+          Column({ space: 0 }) {
+            Row({ space: 8 }) {
+              Text(option.label)
+                .layoutWeight(1)
+                .fontSize(15)
+                .fontWeight(this.isOptionSelected(kind, option.value) ? FontWeight.Medium : FontWeight.Regular)
+                .fontColor(this.isOptionSelected(kind, option.value) ? this.theme.accent : this.theme.textPrimary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+              if (this.isOptionSelected(kind, option.value)) {
+                SymbolGlyph($r('sys.symbol.checkmark'))
+                  .fontSize(15)
+                  .fontColor([this.theme.accent])
+              }
+            }
+            .width('100%')
+            .height(44)
+            .padding({ left: 2, right: 2 })
+            .clickEffect({ level: ClickEffectLevel.MIDDLE })
+            .onClick(() => onSelect(option.value))
+
+            if (index < options.length - 1) {
+              Row()
+                .width('100%')
+                .height(0.5)
+                .backgroundColor(this.theme.divider)
+            }
+          }
+          .width('100%')
+        }, (option: SelectOption) => option.value)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
+  private isOptionSelected(kind: 'provider' | 'model', value: string): boolean {
+    return kind === 'provider'
+      ? this.providerSelection === value
+      : this.modelSelection === value
+  }
+
+  @Builder
+  private ToggleRow(
+    symbol: Resource,
+    title: string,
+    subtitle: string,
+    checked: boolean,
+    onToggle: (nextChecked: boolean) => void,
+    iconDelay: number = 0,
+  ) {
+    Row({ space: 12 }) {
+      SymbolGlyph(symbol)
+        .fontSize(PANEL_ICON_SIZE)
+        .fontColor([this.theme.accent])
+        .transition(livoMotion.enterIconSpin(iconDelay))
+
+      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Text(title)
+          .fontSize(PANEL_TITLE_SIZE)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+
+        Text(subtitle)
+          .fontSize(PANEL_SUBTITLE_SIZE)
+          .fontColor(this.theme.textSecondary)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Toggle({ type: ToggleType.Switch, isOn: checked })
+        .selectedColor(this.theme.accent)
+        .switchPointColor('#FFFFFF')
+        .onChange((isOn: boolean) => onToggle(isOn))
+    }
+    .width('100%')
+    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => onToggle(!checked))
+  }
+
+  @Builder
+  private InputRow(symbol: Resource, title: string, subtitle: string, value: string, placeholder: string,
+    onChange: (nextValue: string) => void, iconDelay: number = 0) {
+    Column({ space: 10 }) {
+      Row({ space: 12 }) {
+        SymbolGlyph(symbol)
+          .fontSize(PANEL_ICON_SIZE)
+          .fontColor([this.theme.accent])
+          .transition(livoMotion.enterIconSpin(iconDelay))
+
+        Column({ space: PANEL_ROW_TEXT_SPACING }) {
+          Text(title)
+            .fontSize(PANEL_TITLE_SIZE)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+
+          Text(subtitle)
+            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+
+      TextInput({ text: value, placeholder })
+        .height(INPUT_HEIGHT)
+        .width('100%')
+        .backgroundColor(this.theme.elevated)
+        .fontColor(this.theme.textPrimary)
+        .placeholderColor(this.theme.textMuted)
+        .borderRadius(12)
+        .padding({ left: 14, right: 14 })
+        .onChange((nextValue: string) => {
+          onChange(nextValue)
+        })
+    }
+    .width('100%')
+    .padding({
+      left: PANEL_ROW_PADDING_HORIZONTAL,
+      right: PANEL_ROW_PADDING_HORIZONTAL,
+      top: PANEL_ROW_PADDING_VERTICAL,
+      bottom: PANEL_ROW_PADDING_VERTICAL,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(20)
+  }
+
+  build() {
+    Scroll() {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
+        this.PanelHeader()
+
+        Column() {
+          this.ToggleRow(
+            $r('sys.symbol.ellipsis_message_fill'),
+            'AI 摘要',
+            '控制文章页是否展示 AI 摘要能力',
+            this.config.aiSummaryEnabled,
+            (enabled: boolean) => this.applyAISummarySwitch(enabled),
+            0,
+          )
+          this.DividerLine()
+          this.ProviderActionRow(1)
+          if (this.providerListExpanded) {
+            this.InlineOptionList(
+              this.providerOptions(),
+              this.providerSelection,
+              (value: string) => {
+                this.applyProvider(value)
+                this.providerListExpanded = false
+              },
+            )
+          }
+          this.DividerLine()
+          this.ModelActionRow(2)
+          if (this.modelListExpanded) {
+            this.InlineOptionList(
+              this.modelOptions(),
+              this.modelSelection,
+              (value: string) => {
+                this.applyModel(value)
+                this.modelListExpanded = false
+              },
+            )
+          }
+          this.DividerLine()
+          this.InputRow(
+            $r('sys.symbol.externaldrive_fill'),
+            'API Key',
+            '用于调用在线模型服务',
+            this.aiConfig.apiKey,
+            '请输入 API Key',
+            (nextValue: string) => {
+              this.aiConfig = {
+                provider: this.aiConfig.provider,
+                apiKey: nextValue,
+                baseUrl: this.aiConfig.baseUrl,
+                model: this.aiConfig.model,
+                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+              }
+            },
+            3,
+          )
+          this.DividerLine()
+          this.InputRow(
+            $r('sys.symbol.link'),
+            'Base URL',
+            '留空则使用服务商默认地址',
+            this.aiConfig.baseUrl,
+            this.displayBaseUrl(),
+            (nextValue: string) => {
+              this.aiConfig = {
+                provider: this.aiConfig.provider,
+                apiKey: this.aiConfig.apiKey,
+                baseUrl: nextValue,
+                model: this.aiConfig.model,
+                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+              }
+            },
+            4,
+          )
+          this.DividerLine()
+          this.ToggleRow(
+            $r('sys.symbol.ellipsis_message_fill'),
+            '启用系统提示词',
+            '为 AI 摘要/对话注入系统身份与上下文',
+            this.aiConfig.enableSystemPrompt,
+            (enabled: boolean) => {
+              this.aiConfig = {
+                provider: this.aiConfig.provider,
+                apiKey: this.aiConfig.apiKey,
+                baseUrl: this.aiConfig.baseUrl,
+                model: this.aiConfig.model,
+                enableSystemPrompt: enabled,
+                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+              }
+            },
+            5,
+          )
+          this.DividerLine()
+          this.InputRow(
+            $r('sys.symbol.list_bullet_square_fill'),
+            '系统提示词模板',
+            '支持占位符 {{context}} / {{persona}}',
+            this.aiConfig.systemPromptTemplate,
+            '请输入系统提示词模板',
+            (nextValue: string) => {
+              this.aiConfig = {
+                provider: this.aiConfig.provider,
+                apiKey: this.aiConfig.apiKey,
+                baseUrl: this.aiConfig.baseUrl,
+                model: this.aiConfig.model,
+                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+                systemPromptTemplate: nextValue,
+                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
+              }
+            },
+            6,
+          )
+          this.DividerLine()
+          this.InputRow(
+            $r('sys.symbol.person'),
+            'AI 个性化 Prompt',
+            '作为固定提示词附加到每次请求',
+            this.aiConfig.chatPersonaPrompt,
+            '请输入个性化 Prompt',
+            (nextValue: string) => {
+              this.aiConfig = {
+                provider: this.aiConfig.provider,
+                apiKey: this.aiConfig.apiKey,
+                baseUrl: this.aiConfig.baseUrl,
+                model: this.aiConfig.model,
+                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
+                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
+                chatPersonaPrompt: nextValue,
+              }
+            },
+            7,
+          )
+        }
+        .width('100%')
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
+        .transition(livoMotion.enterSoft(40))
+
+        Row({ space: 10 }) {
+          Button('保存 AI 配置')
+            .height(42)
+            .layoutWeight(1)
+            .backgroundColor(this.theme.accent)
+            .fontColor(this.theme.accentText)
+            .fontSize(14)
+            .borderRadius(12)
+            .onClick(() => {
+              this.persistCurrentDraft()
+            })
+
+          Button('重置默认')
+            .height(42)
+            .layoutWeight(1)
+            .backgroundColor(this.theme.elevated)
+            .fontColor(this.theme.textPrimary)
+            .fontSize(14)
+            .borderRadius(12)
+            .onClick(() => {
+              this.syncAISettings(DEFAULT_AI_ASSISTANT_SETTINGS)
+            })
+        }
+        .width('100%')
+
+        Text(this.saveHint)
+          .fontSize(12)
+          .fontColor(this.theme.textMuted)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+
+        Text('说明：当前 Harmony 端已支持完整配置保存，在线连接测试会在后续版本补齐。')
+          .fontSize(12)
+          .fontColor(this.theme.textSecondary)
+          .lineHeight(18)
+          .width('100%')
+          .padding({ left: 6, right: 6, top: 0, bottom: 2 })
+
+        Row()
+          .height(24)
+          .width('100%')
+      }
+      .width('100%')
+      .constraintSize({ minHeight: '100%' })
+      .justifyContent(FlexAlign.Start)
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 12 })
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
+    .backgroundColor(this.theme.background)
+    .edgeEffect(EdgeEffect.Spring)
+  }
+}
