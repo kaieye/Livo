@@ -69,3 +69,18 @@ test('DiscoverContent resets avatar tiles after overlay or feed refresh changes'
     /refreshToken: this\.feedsChangedAt \+ this\.discoverOverlayLevel,/,
   )
 })
+
+test('DiscoverContent guards against auto keyboard popup on page enter', () => {
+  assert.match(
+    discoverContentSource,
+    /private searchFocusGuardToken: number = 0/,
+  )
+  assert.match(
+    discoverContentSource,
+    /private preventAutoKeyboardPopup\(\): void \{[\s\S]*this\.dismissSearchFocus\(\)[\s\S]*setTimeout\([\s\S]*80\)[\s\S]*setTimeout\([\s\S]*220\)/,
+  )
+  assert.match(
+    discoverContentSource,
+    /aboutToAppear\(\): void \{\s*this\.preventAutoKeyboardPopup\(\)/s,
+  )
+})

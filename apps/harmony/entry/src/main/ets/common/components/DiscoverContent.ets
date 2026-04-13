@@ -184,6 +184,7 @@ export struct DiscoverContent {
   onReady: () => void = () => {}
   private searchSession: number = 0
   private platformSwitchSession: number = 0
+  private searchFocusGuardToken: number = 0
   private searchInputController: TextInputController = new TextInputController()
   private readonly contentScroller: Scroller = new Scroller()
   private headerBlurOffset: number = 0
@@ -221,7 +222,7 @@ export struct DiscoverContent {
   }
 
   aboutToAppear(): void {
-    this.dismissSearchFocus()
+    this.preventAutoKeyboardPopup()
 
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
@@ -309,7 +310,23 @@ export struct DiscoverContent {
   }
 
   private handleSearchDismissSignal(): void {
+    this.preventAutoKeyboardPopup()
+  }
+
+  private preventAutoKeyboardPopup(): void {
+    this.searchFocusGuardToken += 1
+    const guardToken = this.searchFocusGuardToken
     this.dismissSearchFocus()
+    setTimeout(() => {
+      if (this.searchFocusGuardToken === guardToken) {
+        this.dismissSearchFocus()
+      }
+    }, 80)
+    setTimeout(() => {
+      if (this.searchFocusGuardToken === guardToken) {
+        this.dismissSearchFocus()
+      }
+    }, 220)
   }
 
   private dismissSearchFocus(): void {
@@ -1182,7 +1199,7 @@ export struct DiscoverContent {
     .height('100%')
     .backgroundColor(this.theme.background)
     .onAppear(() => {
-      this.dismissSearchFocus()
+      this.preventAutoKeyboardPopup()
       this.settleDiscoverRootVisible()
     })
   }
