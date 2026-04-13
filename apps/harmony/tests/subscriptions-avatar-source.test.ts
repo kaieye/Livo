@@ -18,11 +18,15 @@ test('SubscriptionsContent resolves social avatars before generic favicon fallba
   assert.match(source, /private normalizeSiteUrl\(value: string\): string/)
   assert.match(
     source,
+    /const normalizedFeedUrl = this\.normalizeSiteUrl\(feed\.url\)/,
+  )
+  assert.match(
+    source,
     /const normalizedSiteUrl = this\.normalizeSiteUrl\(feed\.siteUrl\)/,
   )
   assert.match(
     source,
-    /const resolved = resolveSocialFeedDisplayImageUrl\(\s*feed\.imageUrl,\s*normalizedSiteUrl,\s*normalizedSiteUrl,\s*feed\.title,\s*\)/,
+    /const resolved = resolveSocialFeedDisplayImageUrl\(\s*feed\.imageUrl,\s*normalizedFeedUrl,\s*normalizedSiteUrl,\s*feed\.title,\s*\)/,
   )
   assert.match(source, /return this\.deriveFallbackIcon\(normalizedSiteUrl\)/)
 })

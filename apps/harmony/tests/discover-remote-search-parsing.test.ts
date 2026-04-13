@@ -358,6 +358,28 @@ test('resolveSocialFeedDisplayImageUrl falls back to instagram avatar for picnob
   )
 })
 
+test('resolveSocialFeedDisplayImageUrl upgrades generic favicons to social avatars', () => {
+  assert.equal(
+    resolveSocialFeedDisplayImageUrl(
+      'https://www.google.com/s2/favicons?domain=x.com&sz=128',
+      'https://rsshub.pseudoyu.com/twitter/user/openai',
+      'https://x.com/openai',
+      'OpenAI',
+    ),
+    'https://unavatar.io/x/openai',
+  )
+
+  assert.equal(
+    resolveSocialFeedDisplayImageUrl(
+      'https://www.google.com/s2/favicons?domain=instagram.com&sz=128',
+      'https://rsshub.pseudoyu.com/instagram/user/du_chenduling',
+      'https://instagram.com/du_chenduling',
+      '陈都灵',
+    ),
+    'https://unavatar.io/instagram/du_chenduling?fallback=false',
+  )
+})
+
 test('dedupeAndLimitDiscoverCandidates keeps unique candidates and respects the limit', () => {
   const deduped = dedupeAndLimitDiscoverCandidates(
     [

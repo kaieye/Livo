@@ -11,6 +11,7 @@ import {
   FeedCardModel,
   FeedWithCount,
   PendingBilibiliCreator,
+  RefreshLogEntry,
   FeedViewType,
   HarmonySettings,
   RemoteFeedResult,
@@ -342,6 +343,32 @@ export class AppRepository {
     return AppPreferenceService.saveAISettings(next)
   }
 
+  static async refreshLogs(): Promise<RefreshLogEntry[]> {
+    await AppRepository.bootstrap()
+    return AppPreferenceService.loadRefreshLogs()
+  }
+
+  static async clearRefreshLogs(): Promise<void> {
+    await AppRepository.bootstrap()
+    await AppPreferenceService.clearRefreshLogs()
+  }
+
+  private static async recordRefreshLog(
+    successFeedCount: number,
+    failedFeedCount: number,
+    failedFeedTitles: string[],
+  ): Promise<void> {
+    const normalizedFailedFeedTitles = failedFeedTitles.filter((title: string) => !!title)
+    const entry: RefreshLogEntry = {
+      id: `${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+      refreshedAt: Date.now(),
+      successFeedCount: Math.max(0, successFeedCount),
+      failedFeedCount: Math.max(0, failedFeedCount),
+      failedFeedTitles: normalizedFailedFeedTitles,
+    }
+    await AppPreferenceService.appendRefreshLog(entry)
+  }
+
   static async createFeed(draft: FeedDraft): Promise<FeedCardModel> {
     await AppRepository.bootstrap()
     try {
@@ -500,6 +527,7 @@ export class AppRepository {
     await AppRepository.bootstrap()
     const feeds = await FeedRepository.list()
     if (feeds.length === 0) {
+      await AppRepository.recordRefreshLog(0, 0, [])
       return {
         entries: [],
         sourceLabel: '暂无可刷新的订阅源',
@@ -571,6 +599,8 @@ export class AppRepository {
     const failedFeedSuffix = failedFeedSummary
       ? `：${failedFeedSummary}${failedFeedLabels.length > 3 ? ' 等' : ''}`
       : ''
+
+    await AppRepository.recordRefreshLog(refreshedCount, failedCount, failedFeedLabels)
 
     return {
       entries: await AppRepository.featuredEntries(),

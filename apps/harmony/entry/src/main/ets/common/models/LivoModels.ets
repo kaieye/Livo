@@ -72,6 +72,7 @@ export interface FeedCardModel {
   title: string
   description: string
   category: string
+  url: string
   siteUrl: string
   imageUrl: string
   unreadLabel: string
@@ -233,6 +234,14 @@ export interface RemoteFeedResult {
   failedFeedLabels?: string[]
   failedFeedDetails?: string[]
   fallbackUsed: boolean
+}
+
+export interface RefreshLogEntry {
+  id: string
+  refreshedAt: number
+  successFeedCount: number
+  failedFeedCount: number
+  failedFeedTitles: string[]
 }
 
 export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
@@ -407,6 +416,7 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
     title: feed.title,
     description: feed.description ?? '等待补充订阅描述',
     category: feed.category ?? '未分类',
+    url: feed.url,
     siteUrl: feed.siteUrl ?? feed.url,
     imageUrl: feed.imageUrl ?? '',
     unreadLabel: `${feed.unreadCount} 未读`,

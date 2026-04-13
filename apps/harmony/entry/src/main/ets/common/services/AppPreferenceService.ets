@@ -7,6 +7,7 @@ import {
   DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
   DEFAULT_HARMONY_SETTINGS,
   HarmonySettings,
+  RefreshLogEntry,
 } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
 
@@ -17,7 +18,22 @@ const AI_KEY_MODEL: string = 'aiModel'
 const AI_KEY_ENABLE_SYSTEM_PROMPT: string = 'aiEnableSystemPrompt'
 const AI_KEY_SYSTEM_PROMPT_TEMPLATE: string = 'aiSystemPromptTemplate'
 const AI_KEY_CHAT_PERSONA_PROMPT: string = 'aiChatPersonaPrompt'
+const REFRESH_LOGS_KEY: string = 'refreshLogs'
+const MAX_REFRESH_LOGS: number = 60
 const AI_PROVIDERS: string[] = ['minimax', 'deepseek', 'openai', 'anthropic', 'glm', 'custom']
+
+function normalizeRefreshLogEntry(item: RefreshLogEntry): RefreshLogEntry {
+  const normalized: RefreshLogEntry = {
+    id: item.id,
+    refreshedAt: Number(item.refreshedAt) || 0,
+    successFeedCount: Math.max(0, Number(item.successFeedCount) || 0),
+    failedFeedCount: Math.max(0, Number(item.failedFeedCount) || 0),
+    failedFeedTitles: Array.isArray(item.failedFeedTitles)
+      ? item.failedFeedTitles.filter((title: string) => !!title)
+      : [],
+  }
+  return normalized
+}
 export class AppPreferenceService {
   private static pref: preferences.Preferences | null = null
   private static async getPref(): Promise<preferences.Preferences> {
@@ -161,5 +177,44 @@ export class AppPreferenceService {
     } catch (error) {
       throw new Error(`保存 AI 设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
     }
+  }
+
+  static async loadRefreshLogs(): Promise<RefreshLogEntry[]> {
+    try {
+      const pref = await AppPreferenceService.getPref()
+      const raw = await pref.get(REFRESH_LOGS_KEY, '[]')
+      const text = typeof raw === 'string' ? raw : '[]'
+      const parsed = JSON.parse(text) as RefreshLogEntry[]
+      if (!Array.isArray(parsed)) {
+        return []
+      }
+
+      return parsed
+        .filter((item: RefreshLogEntry) => item && typeof item.id === 'string')
+        .map((item: RefreshLogEntry) => normalizeRefreshLogEntry(item))
+    } catch (_error) {
+      return []
+    }
+  }
+
+  static async saveRefreshLogs(entries: RefreshLogEntry[]): Promise<RefreshLogEntry[]> {
+    const normalizedEntries = entries
+      .slice(0, MAX_REFRESH_LOGS)
+      .map((entry: RefreshLogEntry) => normalizeRefreshLogEntry(entry))
+
+    const pref = await AppPreferenceService.getPref()
+    await pref.put(REFRESH_LOGS_KEY, JSON.stringify(normalizedEntries))
+    await pref.flush()
+    return normalizedEntries
+  }
+
+  static async appendRefreshLog(entry: RefreshLogEntry): Promise<RefreshLogEntry[]> {
+    const current = await AppPreferenceService.loadRefreshLogs()
+    const nextEntries = [entry, ...current].slice(0, MAX_REFRESH_LOGS)
+    return AppPreferenceService.saveRefreshLogs(nextEntries)
+  }
+
+  static async clearRefreshLogs(): Promise<void> {
+    await AppPreferenceService.saveRefreshLogs([])
   }
 }

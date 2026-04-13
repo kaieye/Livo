@@ -19,7 +19,7 @@ import { AccountsSettingsPanel } from './AccountsSettingsPanel'
 import { AIAssistantSettingsPanel } from './AIAssistantSettingsPanel'
 import {
   AboutSettingsPanel,
-  DataControlSettingsPanel,
+  RefreshLogSettingsPanel,
   GeneralSettingsPanel,
   PrivacySettingsPanel,
   FavoritesPanel,
@@ -31,7 +31,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
-type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts' | 'ai-assistant' | 'subscriptions'
+type SettingsSheetKey = '' | 'appearance' | 'general' | 'refresh-log' | 'privacy' | 'about' | 'favorites' | 'accounts' | 'ai-assistant' | 'subscriptions'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -58,12 +58,6 @@ const PRIMARY_GROUP: SettingItem[] = [
     symbol: $r('sys.symbol.brush_fill'),
     symbolColor: '#6C63FF',
     subtitle: '主题、字号与阅读观感'
-  },
-  {
-    title: '数据控制',
-    symbol: $r('sys.symbol.externaldrive_fill'),
-    symbolColor: '#3D7BFF',
-    subtitle: '本地数据、缓存与同步控制'
   },
   {
     title: '账户',
@@ -105,6 +99,12 @@ const THIRD_GROUP: SettingItem[] = [
 ]
 
 const FOURTH_GROUP: SettingItem[] = [
+  {
+    title: '刷新日志',
+    symbol: $r('sys.symbol.arrow_clockwise_circle_fill'),
+    symbolColor: '#3D7BFF',
+    subtitle: '查看每次刷新结果与失败订阅源'
+  },
   {
     title: '隐私',
     symbol: $r('sys.symbol.person_shield_fill'),
@@ -251,7 +251,7 @@ export struct SettingsContent {
   private initialSheetHeight(): number {
     let preferredHeight = SettingsContent.SHEET_STANDARD_HEIGHT
     switch (this.activeSheet) {
-      case 'data-control':
+      case 'refresh-log':
         preferredHeight = SettingsContent.SHEET_COMPACT_HEIGHT
         break
       case 'general':
@@ -371,8 +371,8 @@ export struct SettingsContent {
       this.openSheet('general')
       return
     }
-    if (item.title === '数据控制') {
-      this.openSheet('data-control')
+    if (item.title === '刷新日志') {
+      this.openSheet('refresh-log')
       return
     }
     if (item.title === 'AI助手') {
@@ -589,8 +589,8 @@ export struct SettingsContent {
             this.onSettingsChange(settings)
           },
         })
-      } else if (this.activeSheet === 'data-control') {
-        DataControlSettingsPanel({
+      } else if (this.activeSheet === 'refresh-log') {
+        RefreshLogSettingsPanel({
           onSettingsChange: (settings: HarmonySettings) => {
             this.config = settings
           },

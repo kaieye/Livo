@@ -43,7 +43,9 @@ function isGenericXIcon(value: string): boolean {
 }
 
 function extractBilibiliUid(value: string): string {
-  const matched = trimValue(value).match(/\/(?:bilibili\/user\/(?:video|dynamic|article)|space\.bilibili\.com)\/(\d+)/i)
+  const matched = trimValue(value).match(
+    /\/(?:bilibili\/user\/(?:video|dynamic|article)|space\.bilibili\.com)\/(\d+)/i,
+  )
   return matched?.[1]?.trim() || ''
 }
 
@@ -53,13 +55,15 @@ function extractYouTubeIdentity(value: string): string {
     return ''
   }
 
-  return trimmed.match(/[?&]channel_id=([^&]+)/i)?.[1]?.trim()
-    || trimmed.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]?.trim()
-    || trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]?.trim()
-    || trimmed.match(/\/youtube\/user\/(@[^/?#]+)/i)?.[1]?.trim()
-    || trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim()
-    || trimmed.match(/\/(@[^/?#]+)/i)?.[1]?.trim()
-    || ''
+  return (
+    trimmed.match(/[?&]channel_id=([^&]+)/i)?.[1]?.trim() ||
+    trimmed.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]?.trim() ||
+    trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]?.trim() ||
+    trimmed.match(/\/youtube\/user\/(@[^/?#]+)/i)?.[1]?.trim() ||
+    trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim() ||
+    trimmed.match(/\/(@[^/?#]+)/i)?.[1]?.trim() ||
+    ''
+  )
 }
 
 function isGenericFeedIcon(value: string): boolean {
@@ -68,12 +72,14 @@ function isGenericFeedIcon(value: string): boolean {
     return true
   }
 
-  return normalized.includes('google.com/s2/favicons')
-    || normalized.includes('/favicon.ico')
-    || normalized.includes('/favicon.')
-    || normalized.includes('/apple-touch-icon')
-    || isGenericInstagramIcon(normalized)
-    || isGenericXIcon(normalized)
+  return (
+    normalized.includes('google.com/s2/favicons') ||
+    normalized.includes('/favicon.ico') ||
+    normalized.includes('/favicon.') ||
+    normalized.includes('/apple-touch-icon') ||
+    isGenericInstagramIcon(normalized) ||
+    isGenericXIcon(normalized)
+  )
 }
 
 function scoreStoredFeedTitle(
@@ -107,7 +113,9 @@ function scoreStoredFeedTitle(
 
   const bilibiliUid = extractBilibiliUid(feedUrl) || extractBilibiliUid(siteUrl)
   if (bilibiliUid) {
-    return new RegExp(`^bilibili\\s+${bilibiliUid}$`, 'i').test(normalized) ? 1 : 4
+    return new RegExp(`^bilibili\\s+${bilibiliUid}$`, 'i').test(normalized)
+      ? 1
+      : 4
   }
 
   if (extractYouTubeIdentity(feedUrl) || extractYouTubeIdentity(siteUrl)) {
@@ -160,16 +168,27 @@ export function resolveSocialFeedDisplayImageUrl(
   title: string,
 ): string {
   const normalizedImage = trimValue(imageUrl)
+  const instagramUsernameFromUrl =
+    extractInstagramUsername(feedUrl) || extractInstagramUsername(siteUrl)
+  const xUsernameFromUrl =
+    extractXUsername(feedUrl) || extractXUsername(siteUrl)
   const instagramUsername =
-    extractInstagramUsername(feedUrl) ||
-    extractInstagramUsername(siteUrl) ||
-    extractInstagramUsername(title)
-  const xUsername =
-    extractXUsername(feedUrl) ||
-    extractXUsername(siteUrl) ||
-    extractXUsername(title)
+    instagramUsernameFromUrl || extractInstagramUsername(title)
+  const xUsername = xUsernameFromUrl || extractXUsername(title)
 
   if (normalizedImage) {
+    if (xUsernameFromUrl && isGenericFeedIcon(normalizedImage)) {
+      return `https://unavatar.io/x/${encodeURIComponent(xUsernameFromUrl)}`
+    }
+    if (instagramUsernameFromUrl && isGenericFeedIcon(normalizedImage)) {
+      return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsernameFromUrl)}?fallback=false`
+    }
+    if (instagramUsername && isGenericFeedIcon(normalizedImage)) {
+      return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`
+    }
+    if (xUsername && isGenericFeedIcon(normalizedImage)) {
+      return `https://unavatar.io/x/${encodeURIComponent(xUsername)}`
+    }
     if (instagramUsername && isGenericInstagramIcon(normalizedImage)) {
       return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`
     }
@@ -179,12 +198,20 @@ export function resolveSocialFeedDisplayImageUrl(
     return normalizedImage
   }
 
-  if (instagramUsername) {
-    return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`
+  if (xUsernameFromUrl) {
+    return `https://unavatar.io/x/${encodeURIComponent(xUsernameFromUrl)}`
+  }
+
+  if (instagramUsernameFromUrl) {
+    return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsernameFromUrl)}?fallback=false`
   }
 
   if (xUsername) {
     return `https://unavatar.io/x/${encodeURIComponent(xUsername)}`
+  }
+
+  if (instagramUsername) {
+    return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`
   }
 
   const host = hostOf(siteUrl || feedUrl)
@@ -199,28 +226,57 @@ export function resolvePreferredStoredFeedTitle(
   feedUrl: string,
   siteUrl: string,
 ): string {
-  const normalizedExisting = normalizeSocialFeedTitle(existingTitle, feedUrl, siteUrl)
-  const normalizedIncoming = normalizeSocialFeedTitle(incomingTitle, feedUrl, siteUrl)
+  const normalizedExisting = normalizeSocialFeedTitle(
+    existingTitle,
+    feedUrl,
+    siteUrl,
+  )
+  const normalizedIncoming = normalizeSocialFeedTitle(
+    incomingTitle,
+    feedUrl,
+    siteUrl,
+  )
   const instagramUsername =
     extractInstagramUsername(feedUrl) || extractInstagramUsername(siteUrl)
   const xUsername = extractXUsername(feedUrl) || extractXUsername(siteUrl)
   const bilibiliUid = extractBilibiliUid(feedUrl) || extractBilibiliUid(siteUrl)
-  const youTubeIdentity = extractYouTubeIdentity(feedUrl) || extractYouTubeIdentity(siteUrl)
+  const youTubeIdentity =
+    extractYouTubeIdentity(feedUrl) || extractYouTubeIdentity(siteUrl)
 
-  if (normalizedExisting && normalizedIncoming && normalizedExisting !== normalizedIncoming) {
+  if (
+    normalizedExisting &&
+    normalizedIncoming &&
+    normalizedExisting !== normalizedIncoming
+  ) {
     const loweredIncoming = normalizedIncoming.toLowerCase()
     if (
-      (instagramUsername && (loweredIncoming === instagramUsername || loweredIncoming === `@${instagramUsername}`))
-      || (xUsername && (loweredIncoming === xUsername || loweredIncoming === `@${xUsername}`))
-      || (bilibiliUid && new RegExp(`^bilibili\\s+${bilibiliUid}$`, 'i').test(normalizedIncoming))
-      || (youTubeIdentity && /^youtube\s+(?:@|频道|channel|uc[a-z0-9_-]+)/i.test(normalizedIncoming))
+      (instagramUsername &&
+        (loweredIncoming === instagramUsername ||
+          loweredIncoming === `@${instagramUsername}`)) ||
+      (xUsername &&
+        (loweredIncoming === xUsername ||
+          loweredIncoming === `@${xUsername}`)) ||
+      (bilibiliUid &&
+        new RegExp(`^bilibili\\s+${bilibiliUid}$`, 'i').test(
+          normalizedIncoming,
+        )) ||
+      (youTubeIdentity &&
+        /^youtube\s+(?:@|频道|channel|uc[a-z0-9_-]+)/i.test(normalizedIncoming))
     ) {
       return normalizedExisting
     }
   }
 
-  const existingScore = scoreStoredFeedTitle(normalizedExisting, feedUrl, siteUrl)
-  const incomingScore = scoreStoredFeedTitle(normalizedIncoming, feedUrl, siteUrl)
+  const existingScore = scoreStoredFeedTitle(
+    normalizedExisting,
+    feedUrl,
+    siteUrl,
+  )
+  const incomingScore = scoreStoredFeedTitle(
+    normalizedIncoming,
+    feedUrl,
+    siteUrl,
+  )
 
   if (incomingScore >= existingScore && normalizedIncoming) {
     return normalizedIncoming

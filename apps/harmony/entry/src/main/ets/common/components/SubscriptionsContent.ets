@@ -26,6 +26,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { shouldAcceptModeSwitch } from '../utils/ModeSwitchGuard'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
+import { extractXUsername } from '../utils/SocialFeedTitles'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -352,11 +353,12 @@ export struct SubscriptionsContent {
       return ''
     }
 
+    const normalizedFeedUrl = this.normalizeSiteUrl(feed.url)
     const normalizedSiteUrl = this.normalizeSiteUrl(feed.siteUrl)
 
     const resolved = resolveSocialFeedDisplayImageUrl(
       feed.imageUrl,
-      normalizedSiteUrl,
+      normalizedFeedUrl,
       normalizedSiteUrl,
       feed.title,
     )
@@ -380,6 +382,14 @@ export struct SubscriptionsContent {
     })
   }
 
+  private getDisplaySubscriptionTitle(feed: FeedCardModel): string {
+    const xUsername = extractXUsername(feed.url) || extractXUsername(feed.siteUrl)
+    if (xUsername) {
+      return feed.title + ' - X'
+    }
+    return feed.title
+  }
+
   @Builder
   private FeedRow(feed: FeedCardModel, index: number, showDivider: boolean) {
     Column() {
@@ -387,7 +397,7 @@ export struct SubscriptionsContent {
         this.FeedAvatar(feed)
 
         Column() {
-          Text(feed.title)
+          Text(this.getDisplaySubscriptionTitle(feed))
             .fontSize(LIST_ROW_TITLE_SIZE)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.theme.textPrimary)

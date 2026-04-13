@@ -3,7 +3,7 @@ import { SymbolGlyphModifier } from '@kit.ArkUI'
 import { fileIo, picker } from '@kit.CoreFileKit'
 import { AppRepository } from '../data/AppRepository'
 import { AppContextService } from '../services/AppContextService'
-import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, Feed, FeedViewType, HarmonySettings } from '../models/LivoModels'
+import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, Feed, FeedViewType, HarmonySettings, RefreshLogEntry } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { generateOpml, parseOpml } from '../utils/OpmlParser'
 import { extractInstagramUsername } from '../utils/SocialFeedTitles'
@@ -1144,30 +1144,49 @@ export struct SubscriptionsSettingsPanel {
 }
 
 @Component
-export struct DataControlSettingsPanel {
-  @State config: HarmonySettings = DEFAULT_HARMONY_SETTINGS
+export struct RefreshLogSettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @State logs: RefreshLogEntry[] = []
+  @State isLoading: boolean = true
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
 
   aboutToAppear(): void {
-    void this.loadSettings()
+    void this.loadData()
   }
 
-  private async loadSettings(): Promise<void> {
-    this.config = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(this.config)
+  private async loadData(): Promise<void> {
+    this.isLoading = true
+    try {
+      const settings = await AppRepository.settings()
+      this.theme = await ThemeService.resolvePalette(settings)
+      this.logs = await AppRepository.refreshLogs()
+    } finally {
+      this.isLoading = false
+    }
   }
 
-  private syncSettings(next: HarmonySettings): void {
-    this.config = next
-    this.onSettingsChange(next)
-    void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
-      this.config = saved
-      this.onSettingsChange(saved)
-      void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
-        this.theme = palette
-      })
-    })
+  private formatDateTime(timestamp: number): string {
+    if (timestamp <= 0) {
+      return '未知时间'
+    }
+    const date = new Date(timestamp)
+    const month = `${date.getMonth() + 1}`.padStart(2, '0')
+    const day = `${date.getDate()}`.padStart(2, '0')
+    const hour = `${date.getHours()}`.padStart(2, '0')
+    const minute = `${date.getMinutes()}`.padStart(2, '0')
+    return `${month}-${day} ${hour}:${minute}`
+  }
+
+  private failedFeedsLabel(log: RefreshLogEntry): string {
+    if (!log.failedFeedTitles || log.failedFeedTitles.length === 0) {
+      return '无'
+    }
+    return log.failedFeedTitles.join('、')
+  }
+
+  private async clearLogs(): Promise<void> {
+    await AppRepository.clearRefreshLogs()
+    this.logs = []
   }
 
   @Builder
@@ -1186,54 +1205,65 @@ export struct DataControlSettingsPanel {
 
   @Builder
   private PanelHeader() {
-    SettingsPanelHeader('数据控制', this.theme)
+    SettingsPanelHeader('刷新日志', this.theme)
   }
 
   @Builder
-  private ToggleRow(
-    symbol: Resource,
-    title: string,
-    subtitle: string,
-    checked: boolean,
-    onToggle: () => void,
-    iconDelay: number = 0,
-  ) {
-    Row({ space: 12 }) {
-      SymbolGlyph(symbol)
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
+  private EmptyState() {
+    Column({ space: 8 }) {
+      Text('暂无刷新记录')
+        .fontSize(PANEL_TITLE_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.textPrimary)
 
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text(title)
+      Text('在首页执行刷新后，这里会显示刷新时间、成功数、失败数和失败订阅源。')
+        .fontSize(PANEL_SUBTITLE_SIZE)
+        .lineHeight(18)
+        .fontColor(this.theme.textSecondary)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .padding(14)
+    .backgroundColor(this.theme.surface)
+    .borderRadius(CARD_RADIUS_LG)
+    .border({ width: 0.8, color: this.theme.divider })
+  }
+
+  @Builder
+  private LogCard(log: RefreshLogEntry, index: number) {
+    Column({ space: 8 }) {
+      Row() {
+        Text(this.formatDateTime(log.refreshedAt))
           .fontSize(PANEL_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textPrimary)
+          .layoutWeight(1)
 
-        Text(subtitle)
-          .fontSize(PANEL_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
+        Text(`#${this.logs.length - index}`)
+          .fontSize(PANEL_HINT_SIZE)
+          .fontColor(this.theme.textMuted)
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      .width('100%')
 
-      Toggle({ type: ToggleType.Switch, isOn: checked })
-        .selectedColor(this.theme.accent)
-        .switchPointColor('#FFFFFF')
-        .hitTestBehavior(HitTestMode.None)
+      Text(`成功刷新 ${log.successFeedCount} 个订阅源 · 失败 ${log.failedFeedCount} 个`)
+        .fontSize(PANEL_SUBTITLE_SIZE)
+        .fontColor(this.theme.textSecondary)
+        .width('100%')
+
+      Text(`失败订阅源：${this.failedFeedsLabel(log)}`)
+        .fontSize(PANEL_SUBTITLE_SIZE)
+        .lineHeight(18)
+        .fontColor(this.theme.textSecondary)
+        .maxLines(3)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => onToggle())
+    .borderRadius(16)
+    .border({ width: 0.8, color: this.theme.divider })
+    .transition(livoMotion.enterSoft(index * 18 + 20))
   }
 
   build() {
@@ -1242,39 +1272,61 @@ export struct DataControlSettingsPanel {
         this.SheetHandle()
         this.PanelHeader()
 
-        Column() {
-          this.ToggleRow(
-            $r('sys.symbol.externaldrive_fill'),
-            '图片代理',
-            '通过代理加载远程图片资源',
-            this.config.imageProxyEnabled,
-            () => {
-              const nextSettings: HarmonySettings = {
-                autoRefresh: this.config.autoRefresh,
-                aiSummaryEnabled: this.config.aiSummaryEnabled,
-                aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-                aiTranslationEnabled: this.config.aiTranslationEnabled,
-                aiTranslationLanguage: this.config.aiTranslationLanguage,
-                aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-                imageProxyEnabled: !this.config.imageProxyEnabled,
-                searchAllHomeCategories: this.config.searchAllHomeCategories,
-                refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-                themeMode: this.config.themeMode,
-                themeAccent: this.config.themeAccent,
-                language: this.config.language,
-                remoteFeedUrl: this.config.remoteFeedUrl,
-              showUnreadDot: this.config.showUnreadDot,
-              }
-              this.syncSettings(nextSettings)
-            },
-            0,
-          )
+        if (this.isLoading) {
+          Column({ space: 10 }) {
+            LoadingProgress()
+              .width(26)
+              .height(26)
+              .color(this.theme.accent)
+
+            Text('正在加载刷新日志')
+              .fontSize(PANEL_SUBTITLE_SIZE)
+              .fontColor(this.theme.textSecondary)
+          }
+          .width('100%')
+          .padding({ top: 24, bottom: 12 })
+          .alignItems(HorizontalAlign.Center)
+        } else {
+          Row({ space: 10 }) {
+            Button('清空日志')
+              .type(ButtonType.Capsule)
+              .height(36)
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textPrimary)
+              .backgroundColor(this.theme.surface)
+              .border({ width: 0.8, color: this.theme.divider })
+              .onClick(() => {
+                void this.clearLogs()
+              })
+
+            Button('刷新列表')
+              .type(ButtonType.Capsule)
+              .height(36)
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textPrimary)
+              .backgroundColor(this.theme.surface)
+              .border({ width: 0.8, color: this.theme.divider })
+              .onClick(() => {
+                void this.loadData()
+              })
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.End)
+          .padding({ top: 8, bottom: 10 })
+
+          if (this.logs.length === 0) {
+            this.EmptyState()
+          } else {
+            Column({ space: 10 }) {
+              ForEach(this.logs, (log: RefreshLogEntry, index: number) => {
+                this.LogCard(log, index)
+              }, (log: RefreshLogEntry) => log.id)
+            }
+            .width('100%')
+          }
         }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(40))
 
         Row()
           .height(28)
