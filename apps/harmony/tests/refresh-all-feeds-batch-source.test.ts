@@ -6,24 +6,36 @@ function read(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
-test('AppRepository refreshes feeds in bounded batches', () => {
+test('AppRepository refreshes feeds with a bounded rolling pool', () => {
   const source = read('../entry/src/main/ets/common/data/AppRepository.ets')
 
   assert.match(
     source,
-    /private static readonly refreshConcurrencyLimit: number = 4/,
+    /private static readonly refreshConcurrencyMin: number = 4/,
+  )
+  assert.match(
+    source,
+    /private static readonly refreshConcurrencyMax: number = 8/,
+  )
+  assert.match(
+    source,
+    /private static resolveRefreshConcurrency\(totalFeeds: number\): number \{/,
+  )
+  assert.match(
+    source,
+    /private static async refreshFeedsWithPool\(\s*feeds: Feed\[],\s*refreshConcurrency: number,/s,
   )
   assert.match(source, /if \(feeds\.length === 0\) \{/)
   assert.match(
     source,
-    /for \(let index = 0; index < feeds\.length; index \+= AppRepository\.refreshConcurrencyLimit\)/,
+    /const refreshConcurrency = AppRepository\.resolveRefreshConcurrency\(feeds\.length\)/,
   )
   assert.match(
     source,
-    /const batchFeeds = feeds\.slice\(index, index \+ AppRepository\.refreshConcurrencyLimit\)/,
+    /const workerCount = Math\.min\(refreshConcurrency, feeds\.length\)/,
   )
-  assert.match(
-    source,
-    new RegExp('Promise\\.allSettled\\([\\s\\S]*batchFeeds\\.map\\('),
-  )
+  assert.match(source, /workers\.push\(worker\(\)\)/)
+  assert.match(source, /await Promise\.all\(workers\)/)
+  assert.match(source, /const currentIndex = nextIndex/)
+  assert.match(source, /results\[currentIndex\] = fulfilled/)
 })

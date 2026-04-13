@@ -21,15 +21,15 @@ test('AppRepository refreshAllFeeds refreshes feeds in parallel and reports newl
   )
   assert.match(
     source,
-    /const refreshTasks = feeds\.map\(\(feed: Feed\) => AppRepository\.refreshFeed\(feed\.id\)\)/,
+    /const refreshConcurrency = AppRepository\.resolveRefreshConcurrency\(feeds\.length\)/,
   )
   assert.match(
     source,
-    /const results = await Promise\.allSettled\(\s*refreshTasks\.map\(\(task: Promise<RemoteFeedResult>\) => task\.finally\(\(\) => \{/s,
+    /const results = await AppRepository\.refreshFeedsWithPool\(\s*feeds,\s*refreshConcurrency,\s*onProgress,\s*\)/s,
   )
-  assert.match(source, /onProgress\?\.\(0, feeds\.length\)/)
-  assert.match(source, /completedCount \+= 1/)
+  assert.match(source, /let completedCount = 0/)
   assert.match(source, /onProgress\?\.\(completedCount, feeds\.length\)/)
+  assert.match(source, /onProgress\?\.\(0, feeds\.length\)/)
   assert.match(source, /let newEntriesCount = 0/)
   assert.match(
     source,

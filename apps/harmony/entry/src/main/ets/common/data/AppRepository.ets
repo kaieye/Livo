@@ -107,7 +107,79 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
 export class AppRepository {
   private static bootstrapped: boolean = false
   private static seedFeedHydrationStarted: boolean = false
-  private static readonly refreshConcurrencyLimit: number = 4
+  private static readonly refreshConcurrencyMin: number = 4
+  private static readonly refreshConcurrencyMax: number = 8
+
+  private static resolveRefreshConcurrency(totalFeeds: number): number {
+    if (totalFeeds >= 24) {
+      return AppRepository.refreshConcurrencyMax
+    }
+
+    if (totalFeeds >= 12) {
+      return 6
+    }
+
+    return AppRepository.refreshConcurrencyMin
+  }
+
+  private static async refreshFeedsWithPool(
+    feeds: Feed[],
+    refreshConcurrency: number,
+    onProgress?: (completedCount: number, totalCount: number) => void,
+  ): Promise<PromiseSettledResult<RemoteFeedResult>[]> {
+    const results: PromiseSettledResult<RemoteFeedResult>[] = new Array(feeds.length)
+    let nextIndex = 0
+    let completedCount = 0
+
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const currentIndex = nextIndex
+        nextIndex += 1
+
+        if (currentIndex >= feeds.length) {
+          return
+        }
+
+        const feed = feeds[currentIndex]
+        if (!feed) {
+          const rejected: PromiseSettledResult<RemoteFeedResult> = {
+            status: 'rejected',
+            reason: '订阅源不存在',
+          }
+          results[currentIndex] = rejected
+          completedCount += 1
+          onProgress?.(completedCount, feeds.length)
+          continue
+        }
+
+        try {
+          const value = await AppRepository.refreshFeed(feed.id)
+          const fulfilled: PromiseSettledResult<RemoteFeedResult> = {
+            status: 'fulfilled',
+            value,
+          }
+          results[currentIndex] = fulfilled
+        } catch (reason) {
+          const rejected: PromiseSettledResult<RemoteFeedResult> = {
+            status: 'rejected',
+            reason,
+          }
+          results[currentIndex] = rejected
+        }
+
+        completedCount += 1
+        onProgress?.(completedCount, feeds.length)
+      }
+    }
+
+    const workerCount = Math.min(refreshConcurrency, feeds.length)
+    const workers: Promise<void>[] = []
+    for (let index = 0; index < workerCount; index += 1) {
+      workers.push(worker())
+    }
+    await Promise.all(workers)
+    return results
+  }
 
   static async bootstrap(): Promise<void> {
     if (AppRepository.bootstrapped) {
@@ -542,21 +614,15 @@ export class AppRepository {
     let refreshedCount = 0
     let failedCount = 0
     let newEntriesCount = 0
-    let completedCount = 0
     const failedFeedLabels: string[] = []
     const failedFeedDetails: string[] = []
+    const refreshConcurrency = AppRepository.resolveRefreshConcurrency(feeds.length)
     onProgress?.(0, feeds.length)
-    const results: PromiseSettledResult<RemoteFeedResult>[] = []
-    for (let index = 0; index < feeds.length; index += AppRepository.refreshConcurrencyLimit) {
-      const batchFeeds = feeds.slice(index, index + AppRepository.refreshConcurrencyLimit)
-      const batchResults = await Promise.allSettled(
-        batchFeeds.map((feed: Feed) => AppRepository.refreshFeed(feed.id).finally(() => {
-          completedCount += 1
-          onProgress?.(completedCount, feeds.length)
-        })),
-      )
-      results.push(...batchResults)
-    }
+    const results = await AppRepository.refreshFeedsWithPool(
+      feeds,
+      refreshConcurrency,
+      onProgress,
+    )
 
     results.forEach((result: PromiseSettledResult<RemoteFeedResult>, index: number) => {
       if (result.status === 'fulfilled') {
