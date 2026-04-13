@@ -149,6 +149,7 @@ export interface HarmonySettings {
   themeAccent: ThemeAccent
   language: string
   remoteFeedUrl: string
+  showUnreadDot: boolean
 }
 
 export type AIProvider = 'minimax' | 'deepseek' | 'openai' | 'anthropic' | 'glm' | 'custom'
@@ -248,6 +249,7 @@ export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {
   themeAccent: 'pink',
   language: 'zh-CN',
   remoteFeedUrl: 'https://sspai.com/feed',
+  showUnreadDot: true,
 }
 
 export type AccountProvider = 'youtube' | 'x' | 'instagram' | 'bilibili'

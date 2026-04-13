@@ -83,6 +83,7 @@ export struct AppearanceSettingsPanel {
     this.themeModeText = this.resolveThemeLabel(settings.themeMode)
     this.themeAccentText = this.resolveAccentLabel(settings.themeAccent)
     this.refreshIntervalText = `${settings.refreshIntervalMinutes} 分钟`
+    AppStorage.setOrCreate('showUnreadDot', settings.showUnreadDot)
     this.onSettingsChange(settings)
     this.onThemeChange(palette)
   }
@@ -166,6 +167,7 @@ export struct AppearanceSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
     })
   }
 
@@ -187,6 +189,7 @@ export struct AppearanceSettingsPanel {
       themeAccent: nextAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
     })
   }
 
@@ -237,6 +240,7 @@ export struct AppearanceSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
     })
   }
 
@@ -255,6 +259,7 @@ export struct AppearanceSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
     })
   }
 
@@ -273,6 +278,7 @@ export struct AppearanceSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
     })
   }
 
@@ -291,6 +297,28 @@ export struct AppearanceSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
+    })
+  }
+
+  private toggleShowUnreadDot(): void {
+    const next = !this.config.showUnreadDot
+    AppStorage.setOrCreate('showUnreadDot', next)
+    this.syncSettings({
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
+      aiTranslationEnabled: this.config.aiTranslationEnabled,
+      aiTranslationLanguage: this.config.aiTranslationLanguage,
+      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: next,
     })
   }
 
@@ -564,6 +592,49 @@ export struct AppearanceSettingsPanel {
       .borderRadius(CARD_RADIUS_LG)
       .border({ width: 0.8, color: this.theme.divider })
       .transition(livoMotion.enterSoft(40))
+
+      Column() {
+        Row({ space: 12 }) {
+          SymbolGlyph($r('sys.symbol.circle_fill'))
+            .fontSize(ROW_ICON_SIZE)
+            .fontColor([this.theme.accent])
+            .transition(livoMotion.enterIconSpin(2))
+
+          Column({ space: ROW_TEXT_SPACING }) {
+            Text('显示未读圆圈')
+              .fontSize(ROW_TITLE_SIZE)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textPrimary)
+
+            Text('在未读推文右上角显示圆点标记')
+              .fontSize(ROW_SUBTITLE_SIZE)
+              .fontColor(this.theme.textSecondary)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+
+          Toggle({ type: ToggleType.Switch, isOn: this.config.showUnreadDot })
+            .selectedColor(this.theme.accent)
+            .switchPointColor('#FFFFFF')
+            .onChange((isOn: boolean) => {
+              this.toggleShowUnreadDot()
+            })
+        }
+        .width('100%')
+        .constraintSize({ minHeight: ROW_MIN_HEIGHT })
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .clickEffect({ level: ClickEffectLevel.MIDDLE })
+        .onClick(() => this.toggleShowUnreadDot())
+      }
+      .width('100%')
+      .backgroundColor(this.theme.surface)
+      .borderRadius(CARD_RADIUS_LG)
+      .border({ width: 0.8, color: this.theme.divider })
+      .transition(livoMotion.enterSoft(60))
     }
     .width('100%')
   }

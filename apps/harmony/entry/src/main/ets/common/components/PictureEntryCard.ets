@@ -22,6 +22,7 @@ export struct PictureEntryCard {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop highlightQuery: string = ''
   @Prop isUnread: boolean = false
+  @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @State private activeMediaIndex: number = 0
   @State private playingLivePhotoIndex: number = -1
   @State private pausedLivePhotoIndex: number = -1
@@ -42,7 +43,7 @@ export struct PictureEntryCard {
 
   @Builder
   private UnreadDot() {
-    if (this.isUnread) {
+    if (this.isUnread && this.showUnreadDot) {
       Row()
         .width(8)
         .height(8)

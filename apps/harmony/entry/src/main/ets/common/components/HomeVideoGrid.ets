@@ -12,6 +12,7 @@ import {
 export struct HomeVideoGrid {
   @Prop entries: EntryCardModel[] = []
   @Prop highlightQuery: string = ''
+  @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
@@ -216,7 +217,7 @@ export struct HomeVideoGrid {
           }
         }
 
-        if (!entry.isRead) {
+        if (!entry.isRead && this.showUnreadDot) {
           Row()
             .width(8)
             .height(8)

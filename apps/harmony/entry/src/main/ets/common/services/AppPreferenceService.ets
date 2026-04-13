@@ -48,6 +48,7 @@ export class AppPreferenceService {
       const themeAccent = await pref.get('themeAccent', DEFAULT_HARMONY_SETTINGS.themeAccent)
       const language = await pref.get('language', DEFAULT_HARMONY_SETTINGS.language)
       const remoteFeedUrl = await pref.get('remoteFeedUrl', DEFAULT_HARMONY_SETTINGS.remoteFeedUrl)
+      const showUnreadDot = await pref.get('showUnreadDot', DEFAULT_HARMONY_SETTINGS.showUnreadDot)
       return {
         autoRefresh: autoRefresh as boolean,
         aiSummaryEnabled: aiSummaryEnabled as boolean,
@@ -62,6 +63,7 @@ export class AppPreferenceService {
         themeAccent: themeAccent as 'orange' | 'blue' | 'red' | 'pink' | 'green',
         language: language as string,
         remoteFeedUrl: remoteFeedUrl as string,
+        showUnreadDot: showUnreadDot as boolean,
       }
     } catch (error) {
       throw new Error(`加载设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
@@ -84,6 +86,7 @@ export class AppPreferenceService {
       await pref.put('themeAccent', next.themeAccent)
       await pref.put('language', next.language)
       await pref.put('remoteFeedUrl', next.remoteFeedUrl)
+      await pref.put('showUnreadDot', next.showUnreadDot)
       await pref.flush()
 
       return AppPreferenceService.loadSettings()

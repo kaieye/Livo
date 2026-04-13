@@ -111,6 +111,7 @@ export struct GeneralSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+    showUnreadDot: this.config.showUnreadDot,
     }
     const nextSettings: HarmonySettings = {
       autoRefresh: this.config.autoRefresh,
@@ -126,6 +127,7 @@ export struct GeneralSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+    showUnreadDot: this.config.showUnreadDot,
     }
     this.syncSettings(nextSettings)
   }
@@ -145,6 +147,7 @@ export struct GeneralSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: value,
       remoteFeedUrl: this.config.remoteFeedUrl,
+    showUnreadDot: this.config.showUnreadDot,
     }
     this.syncSettings(nextSettings)
   }
@@ -164,6 +167,7 @@ export struct GeneralSettingsPanel {
       themeAccent: this.config.themeAccent,
       language: this.config.language,
       remoteFeedUrl: this.config.remoteFeedUrl,
+    showUnreadDot: this.config.showUnreadDot,
     }
     this.syncSettings(nextSettings)
   }
@@ -1175,6 +1179,7 @@ export struct DataControlSettingsPanel {
                 themeAccent: this.config.themeAccent,
                 language: this.config.language,
                 remoteFeedUrl: this.config.remoteFeedUrl,
+              showUnreadDot: this.config.showUnreadDot,
               }
               this.syncSettings(nextSettings)
             },

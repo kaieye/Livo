@@ -132,6 +132,7 @@ struct Index {
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
   @StorageProp('settingsOverlayLevel') settingsOverlayLevel: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
+  @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @State featuredEntries: EntryCardModel[] = []
   @State entryGroups: HomeEntryGroups<EntryCardModel> = createEmptyHomeEntryGroups<EntryCardModel>()
   @State feedSourceLabel: string = '本地内容已加载'
@@ -198,6 +199,7 @@ struct Index {
     void this.applySystemBarStyle(this.theme)
     const settings = await AppRepository.settings()
     this.rootSettings = settings
+    AppStorage.setOrCreate('showUnreadDot', settings.showUnreadDot)
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
     this.featuredEntries = await AppRepository.featuredEntries()
@@ -1525,7 +1527,7 @@ struct Index {
       .width('100%')
       .alignItems(VerticalAlign.Center)
 
-      if (!entry.isRead) {
+      if (!entry.isRead && this.showUnreadDot) {
         Row()
           .width(8)
           .height(8)

@@ -9,6 +9,7 @@ export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop isUnread: boolean = false
+  @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @Prop enableEnterTransition: boolean = true
   @Prop highlightQuery: string = ''
   @Prop collapsedTextLines: number = 0
@@ -201,7 +202,7 @@ export struct TweetEntryCard {
 
   @Builder
   private UnreadDot() {
-    if (this.isUnread) {
+    if (this.isUnread && this.showUnreadDot) {
       Row()
         .width(8)
         .height(8)

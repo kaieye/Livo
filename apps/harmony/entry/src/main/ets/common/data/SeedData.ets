@@ -94,5 +94,6 @@ export function seedSettings(): HarmonySettings {
     themeAccent: DEFAULT_HARMONY_SETTINGS.themeAccent,
     language: DEFAULT_HARMONY_SETTINGS.language,
     remoteFeedUrl: DEFAULT_HARMONY_SETTINGS.remoteFeedUrl,
+    showUnreadDot: DEFAULT_HARMONY_SETTINGS.showUnreadDot,
   }
 }
