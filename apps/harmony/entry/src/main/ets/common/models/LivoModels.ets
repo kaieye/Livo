@@ -184,7 +184,7 @@ export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE: string =
 export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
   minimax: {
     label: 'MiniMax',
-    defaultBaseUrl: 'https://api.minimax.chat/v1',
+    defaultBaseUrl: 'https://api.minimaxi.com/v1/',
     models: ['MiniMax-M2.7'],
   },
   deepseek: {

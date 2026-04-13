@@ -3,7 +3,7 @@ import { MovingPhotoView, MovingPhotoViewController, photoAccessHelper } from '@
 import webview from '@ohos.web.webview'
 import { AppRepository } from '../common/data/AppRepository'
 import { getStringParams, goBack, openImageViewer, openVideoPlayer } from '../common/navigation/AppRouter'
-import { ArticleAssistService } from '../common/services/ArticleAssistService'
+import { ArticleAssistService, TranslationFormattingHint } from '../common/services/ArticleAssistService'
 import { ExternalUrlService } from '../common/services/ExternalUrlService'
 import { MovingPhotoService } from '../common/services/MovingPhotoService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
@@ -21,6 +21,8 @@ import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHead
 import {
   ArticleContentBlock,
   ArticleDetailModel,
+  AITargetLanguage,
+  HarmonySettings,
   isLegacyPlainArticleContent,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
@@ -36,7 +38,14 @@ struct ArticleDetail {
   @State entry?: ArticleDetailModel = undefined
   @State actionHint: string = ''
   @State aiSummary: string = ''
+  @State aiTranslation: string = ''
+  @State aiSummaryError: string = ''
+  @State aiTranslationError: string = ''
+  @State aiResultEntryId: string = ''
   @State aiEnabled: boolean = false
+  @State aiTranslationEnabled: boolean = false
+  @State aiTargetLanguage: AITargetLanguage = 'zh-CN'
+  @State isAiProcessing: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State isUpgradingLegacyContent: boolean = false
   @State starScale: number = 1
@@ -149,11 +158,214 @@ struct ArticleDetail {
     const settings = await AppRepository.settings()
     this.theme = await ThemeService.resolvePalette(settings)
     this.aiEnabled = settings.aiSummaryEnabled
-    this.aiSummary = this.entry
-      ? ArticleAssistService.summarize(this.entry.title, this.entry.summary, this.entry.contentParagraphs)
-      : ''
+    this.aiTranslationEnabled = settings.aiTranslationEnabled
+    this.aiTargetLanguage = settings.aiTranslationLanguage
+    const currentEntryId = this.entry?.id || ''
+    if (currentEntryId && this.aiResultEntryId !== currentEntryId) {
+      this.aiSummary = ''
+      this.aiTranslation = ''
+      this.aiSummaryError = ''
+      this.aiTranslationError = ''
+      this.aiResultEntryId = currentEntryId
+    }
+    if (this.entry && (
+      (settings.aiSummaryEnabled && settings.aiSummaryAutoTrigger)
+      || (settings.aiTranslationEnabled && settings.aiTranslationAutoTrigger)
+    )) {
+      void this.runArticleAIAssist(settings)
+    }
     if (!upgraded) {
       this.actionHint = markRead ? '已标记为已读' : '内容已刷新'
+    }
+  }
+
+  private aiLanguageLabel(): string {
+    switch (this.aiTargetLanguage) {
+      case 'zh-CN':
+        return '简体中文'
+      case 'zh-TW':
+        return '繁体中文'
+      case 'en':
+        return 'English'
+      case 'ja':
+        return '日本語'
+      case 'ko':
+        return '한국어'
+      case 'fr':
+        return 'Français'
+      case 'de':
+        return 'Deutsch'
+      case 'es':
+        return 'Español'
+      case 'ru':
+        return 'Русский'
+      case 'ar':
+        return 'العربية'
+      default:
+        return this.aiTargetLanguage
+    }
+  }
+
+  private compactErrorMessage(message: string, maxLength: number = 88): string {
+    const normalized = (message || '').replace(/\s+/g, ' ').trim()
+    if (!normalized) {
+      return '未知错误'
+    }
+    return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized
+  }
+
+  private isChineseTargetLanguage(): boolean {
+    return this.aiTargetLanguage === 'zh-CN' || this.aiTargetLanguage === 'zh-TW'
+  }
+
+  private containsCjkText(value: string): boolean {
+    return /[\u3400-\u9FFF]/.test(value || '')
+  }
+
+  private async handleArticleAIAssist(): Promise<void> {
+    try {
+      const settings = await AppRepository.settings()
+      await this.runArticleAIAssist(settings)
+    } catch (error) {
+      const message = `AI 处理失败：${error instanceof Error ? error.message : String(error)}`
+      this.actionHint = message
+      this.showToast(message, 2600)
+    }
+  }
+
+  private async runArticleAIAssist(settings?: HarmonySettings): Promise<void> {
+    if (!this.entry) {
+      this.actionHint = '暂无可处理文章'
+      this.showToast('暂无可处理文章')
+      return
+    }
+    if (this.isAiProcessing) {
+      this.actionHint = 'AI 正在处理中，请稍候...'
+      this.showToast('AI 正在处理中，请稍候...')
+      return
+    }
+
+    const resolvedSettings = settings ?? await AppRepository.settings()
+    this.aiEnabled = resolvedSettings.aiSummaryEnabled
+    this.aiTranslationEnabled = resolvedSettings.aiTranslationEnabled
+    this.aiTargetLanguage = resolvedSettings.aiTranslationLanguage
+
+    if (!this.aiEnabled && !this.aiTranslationEnabled) {
+      this.actionHint = '请先在 设置 > AI助手 中开启摘要或翻译'
+      this.showToast('请先在 设置 > AI助手 中开启摘要或翻译')
+      return
+    }
+
+    this.isAiProcessing = true
+    this.actionHint = 'AI 助手处理中...'
+    this.showToast('AI 助手处理中...', 1200)
+    this.aiSummaryError = ''
+    this.aiTranslationError = ''
+    const errors: string[] = []
+    try {
+      const aiSettings = await AppRepository.aiSettings()
+      const entry = this.entry
+      if (!entry) {
+        return
+      }
+      this.aiResultEntryId = entry.id
+
+      const aiTasks: Promise<void>[] = []
+
+      if (this.aiEnabled) {
+        aiTasks.push((async () => {
+          try {
+            this.aiSummary = await ArticleAssistService.summarizeWithAI(
+              entry.title,
+              entry.summary,
+              entry.contentParagraphs,
+              this.aiTargetLanguage,
+              aiSettings,
+            )
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error)
+            const fallbackSummary = ArticleAssistService.summarizeInLanguage(
+              entry.title,
+              entry.summary,
+              entry.contentParagraphs,
+              this.aiTargetLanguage,
+            )
+            if (this.aiTargetLanguage === 'en') {
+              this.aiSummary = fallbackSummary
+            } else {
+              try {
+                const localized = await ArticleAssistService.localizeTextWithAI(
+                  fallbackSummary,
+                  this.aiTargetLanguage,
+                  aiSettings,
+                )
+                if (this.isChineseTargetLanguage() && !this.containsCjkText(localized)) {
+                  this.aiSummary = ''
+                } else {
+                  this.aiSummary = localized.trim()
+                }
+              } catch (_localizeError) {
+                this.aiSummary = ''
+              }
+            }
+            if (!this.aiSummary.trim()) {
+              this.aiSummaryError = reason
+              errors.push(`摘要失败：${reason}`)
+            }
+          }
+        })())
+      }
+
+      if (this.aiTranslationEnabled) {
+        aiTasks.push((async () => {
+          try {
+            this.aiTranslation = await ArticleAssistService.translateWithAI(
+              entry.title,
+              entry.summary,
+              entry.contentParagraphs,
+              this.aiTargetLanguage,
+              aiSettings,
+              this.translationFormattingHint(),
+            )
+          } catch (error) {
+            this.aiTranslation = ''
+            const reason = error instanceof Error ? error.message : String(error)
+            this.aiTranslationError = reason
+            errors.push(`翻译失败：${reason}`)
+          }
+        })())
+      }
+
+      if (aiTasks.length > 0) {
+        await Promise.all(aiTasks)
+      }
+
+      if (errors.length === 0) {
+        this.actionHint = 'AI 处理完成'
+        this.showToast('AI 处理完成')
+      } else if (errors.length === 1 && (this.aiEnabled || this.aiTranslationEnabled)) {
+        const summaryReady = !!this.aiSummary.trim()
+        const translationReady = !!this.aiTranslation.trim()
+        if (summaryReady && !translationReady) {
+          this.actionHint = `摘要已完成，翻译失败：${errors[0]}`
+          this.showToast(this.compactErrorMessage(`AI 摘要已完成，翻译失败：${errors[0]}`), 3000)
+        } else if (!summaryReady && translationReady) {
+          this.actionHint = `翻译已完成，摘要失败：${errors[0]}`
+          this.showToast(this.compactErrorMessage(`AI 翻译已完成，摘要失败：${errors[0]}`), 3000)
+        } else {
+          this.actionHint = `部分完成：${errors[0]}`
+          this.showToast(this.compactErrorMessage(`AI 部分完成：${errors[0]}`), 3000)
+        }
+      } else {
+        this.actionHint = errors.join('；')
+        this.showToast(this.compactErrorMessage(`AI 处理存在错误：${errors[0]}`), 3000)
+      }
+    } catch (error) {
+      const message = `AI 处理失败：${error instanceof Error ? error.message : String(error)}`
+      this.actionHint = message
+      this.showToast(message, 2600)
+    } finally {
+      this.isAiProcessing = false
     }
   }
 
@@ -302,17 +514,206 @@ struct ArticleDetail {
     return presentTweetEntryFromCard(this.entry ?? {})
   }
 
-  private tweetContextLabel(): string {
+  private tweetUsernameLabel(): string {
+    return (this.tweetPresentation().username || '').trim()
+  }
+
+  private tweetMediaUrls(): string[] {
+    return (this.tweetPresentation().mediaUrls || [])
+      .map((url: string) => url.trim())
+      .filter((url: string) => !!url)
+      .slice(0, 4)
+  }
+
+  private hasQuotedTweet(): boolean {
+    return this.tweetPresentation().kind === 'quote' && !!this.tweetPresentation().quotedTweet
+  }
+
+  private quotedTweetPresentation(): TweetQuotedPresentation {
+    return this.tweetPresentation().quotedTweet || {
+      displayName: '',
+      username: '',
+      avatarUrl: '',
+      text: '',
+      mediaUrls: [],
+    }
+  }
+
+  private quotedTweetMediaUrls(): string[] {
+    return (this.quotedTweetPresentation().mediaUrls || [])
+      .map((url: string) => url.trim())
+      .filter((url: string) => !!url)
+      .slice(0, 4)
+  }
+
+  private translationFormattingHint(): TranslationFormattingHint | undefined {
+    if (!this.isSocialDetail()) {
+      return undefined
+    }
     const presentation = this.tweetPresentation()
-    if (presentation.kind === 'retweet' && presentation.retweetByLabel.trim()) {
-      return `转发自 ${presentation.retweetByLabel.trim()}`
+    if (presentation.kind !== 'retweet') {
+      return undefined
     }
-
-    if (presentation.kind === 'quote' && presentation.quotedTweet?.displayName?.trim()) {
-      return `引用自 ${presentation.quotedTweet.displayName.trim()}`
+    return {
+      tweetKind: 'retweet',
+      sourceUserName: (presentation.displayName || '').trim() || (this.entry?.author || '').trim() || '用户',
+      retweetedUserName: (presentation.retweetByLabel || '').trim() || '转发用户',
     }
+  }
 
-    return ''
+  private tweetMediaTileWidth(index: number, count: number): string {
+    if (count <= 1) {
+      return '100%'
+    }
+    if (count === 3 && index === 0) {
+      return '100%'
+    }
+    return '49.2%'
+  }
+
+  private tweetMediaTileHeight(index: number, count: number): number {
+    if (count <= 1) {
+      return 208
+    }
+    if (count === 3 && index === 0) {
+      return 148
+    }
+    return 136
+  }
+
+  @Builder
+  private SocialTweetDetail() {
+    Column({ space: 8 }) {
+      Row({ space: 8 }) {
+        AvatarTile({
+          imageUrl: this.tweetPresentation().avatarUrl,
+          fallbackLabel: this.tweetPresentation().displayName,
+          accent: this.theme.accent,
+          theme: this.theme,
+          avatarSize: 17,
+          radius: 999,
+          textSize: 11,
+          showFallbackLabel: false,
+        })
+
+        Row({ space: 4 }) {
+          HighlightedInlineText({
+            text: this.tweetPresentation().displayName || '未知来源',
+            query: '',
+            theme: this.theme,
+            fontSize: 16,
+            lineHeight: 20,
+            fontWeight: FontWeight.Bold,
+            defaultColor: this.theme.textPrimary,
+            maxLines: 1,
+          })
+
+          if (this.tweetUsernameLabel()) {
+            HighlightedInlineText({
+              text: this.tweetUsernameLabel(),
+              query: '',
+              theme: this.theme,
+              fontSize: 14,
+              lineHeight: 18,
+              defaultColor: this.theme.textMuted,
+              maxLines: 1,
+            })
+          }
+
+          if (this.tweetPresentation().publishedLabel) {
+            Text(`· ${this.tweetPresentation().publishedLabel}`)
+              .fontSize(13)
+              .fontColor(this.theme.textMuted)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+          }
+        }
+        .layoutWeight(1)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Top)
+
+      if (this.tweetPresentation().text) {
+        HighlightedInlineText({
+          text: this.tweetPresentation().text,
+          query: '',
+          theme: this.theme,
+          fontSize: 16,
+          lineHeight: 24,
+          defaultColor: this.theme.textPrimary,
+          maxLines: 99,
+        })
+          .width('100%')
+      }
+
+      if (this.hasQuotedTweet()) {
+        Column({ space: 8 }) {
+          Text('RT')
+            .fontSize(12)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textMuted)
+            .width('100%')
+
+          Text(
+            (this.quotedTweetPresentation().displayName || '').trim()
+            || (this.quotedTweetPresentation().username || '').trim()
+            || '未知来源'
+          )
+            .fontSize(13)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%')
+
+          if (this.quotedTweetPresentation().text) {
+            Text(this.quotedTweetPresentation().text)
+              .fontSize(13)
+              .lineHeight(20)
+              .fontColor(this.theme.textPrimary)
+              .width('100%')
+          }
+
+          if (this.quotedTweetMediaUrls().length > 0) {
+            Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+              ForEach(this.quotedTweetMediaUrls(), (mediaUrl: string, index: number) => {
+                Image(mediaUrl)
+                  .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaUrls().length))
+                  .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaUrls().length))
+                  .borderRadius(8)
+                  .objectFit(ImageFit.Cover)
+                  .backgroundColor(this.theme.elevated)
+                  .margin({ bottom: this.quotedTweetMediaUrls().length > 1 ? 6 : 0 })
+              }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+            }
+            .width('100%')
+            .clip(true)
+          }
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding({ left: 2, right: 2, top: 2, bottom: 2 })
+      }
+
+      if (this.tweetMediaUrls().length > 0) {
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+          ForEach(this.tweetMediaUrls(), (mediaUrl: string, index: number) => {
+            Image(mediaUrl)
+              .width(this.tweetMediaTileWidth(index, this.tweetMediaUrls().length))
+              .height(this.tweetMediaTileHeight(index, this.tweetMediaUrls().length))
+              .borderRadius(10)
+              .objectFit(ImageFit.Cover)
+              .backgroundColor(this.theme.elevated)
+              .margin({ bottom: this.tweetMediaUrls().length > 1 ? 6 : 0 })
+          }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+        }
+        .width('100%')
+        .clip(true)
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
   }
 
   private sourceUrl(): string {
@@ -1065,7 +1466,7 @@ struct ArticleDetail {
       this.HeaderImageAction(
         $r('app.media.ri_ai'),
         22,
-        () => { this.actionHint = 'AI 助手功能开发中...' },
+        () => { void this.handleArticleAIAssist() },
       )
 
       this.HeaderIconAction(
@@ -1106,6 +1507,87 @@ struct ArticleDetail {
     .alignItems(VerticalAlign.Center)
     .backgroundColor('rgba(17,24,39,0.42)')
     .borderRadius(999)
+  }
+
+  private hasAiAssistResult(): boolean {
+    return !!this.aiSummary.trim() || !!this.aiTranslation.trim()
+  }
+
+  private hasAiAssistStatePanel(): boolean {
+    return this.isAiProcessing
+      || this.hasAiAssistResult()
+      || !!this.aiSummaryError.trim()
+      || !!this.aiTranslationError.trim()
+  }
+
+  @Builder
+  private AIAssistResultCard(title: string, content: string) {
+    Column({ space: 8 }) {
+      Text(title)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.theme.accent)
+        .width('100%')
+
+      Text(content)
+        .fontSize(14)
+        .lineHeight(22)
+        .fontColor(this.theme.textPrimary)
+        .width('100%')
+    }
+    .width('100%')
+    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+    .backgroundColor(this.theme.elevated)
+    .borderRadius(14)
+  }
+
+  @Builder
+  private AIAssistResultSection() {
+    Column({ space: 10 }) {
+      if (this.isAiProcessing) {
+        Row({ space: 8 }) {
+          LoadingProgress()
+            .width(14)
+            .height(14)
+            .color(this.theme.accent)
+
+          Text('正在生成摘要与翻译...')
+            .fontSize(12)
+            .fontColor(this.theme.textSecondary)
+            .width('100%')
+            .layoutWeight(1)
+        }
+        .width('100%')
+      }
+
+      if (this.aiSummary.trim()) {
+        this.AIAssistResultCard('AI 摘要', this.aiSummary)
+      }
+
+      if (this.aiTranslation.trim()) {
+        this.AIAssistResultCard(`AI 翻译（${this.aiLanguageLabel()}）`, this.aiTranslation)
+      }
+
+      if (this.aiSummaryError.trim()) {
+        Text(`摘要失败：${this.compactErrorMessage(this.aiSummaryError, 120)}`)
+          .fontSize(12)
+          .lineHeight(18)
+          .fontColor('#D94848')
+          .width('100%')
+      }
+
+      if (this.aiTranslationError.trim()) {
+        Text(`翻译失败：${this.compactErrorMessage(this.aiTranslationError, 120)}`)
+          .fontSize(12)
+          .lineHeight(18)
+          .fontColor('#D94848')
+          .width('100%')
+      }
+    }
+    .width('100%')
+    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+    .backgroundColor(this.theme.elevated)
+    .borderRadius(14)
   }
 
   @Builder
@@ -1603,27 +2085,27 @@ struct ArticleDetail {
       if (this.entry) {
         Scroll() {
           Column({ space: 18 }) {
-            Column({ space: 12 }) {
-              if (!this.isPictureDetail() && !this.isSocialDetail()) {
-                Text(this.entry!.title)
-                  .fontSize(28)
-                  .lineHeight(38)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(this.theme.textPrimary)
-                  .width('100%')
-              }
+            if (!this.isSocialDetail()) {
+              Column({ space: 12 }) {
+                if (!this.isPictureDetail()) {
+                  Text(this.entry!.title)
+                    .fontSize(28)
+                    .lineHeight(38)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(this.theme.textPrimary)
+                    .width('100%')
+                }
 
-              if (!this.isSocialDetail()) {
                 Text(`${this.entry!.author} · ${this.entry!.publishedLabel}`)
                   .fontSize(13)
                   .lineHeight(20)
                   .fontColor(this.theme.textSecondary)
                   .width('100%')
               }
+              .width('100%')
+              .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 6, bottom: 2 })
+              .alignItems(HorizontalAlign.Start)
             }
-            .width('100%')
-            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 6, bottom: 2 })
-            .alignItems(HorizontalAlign.Start)
 
             if (this.entry!.tags.length > 0) {
               Row({ space: 8 }) {
@@ -1641,128 +2123,12 @@ struct ArticleDetail {
             }
 
             Column({ space: 20 }) {
+              if (this.hasAiAssistStatePanel()) {
+                this.AIAssistResultSection()
+              }
+
               if (this.isSocialDetail()) {
-                // 推文详情：复用卡片的 presentation 数据，去掉外层卡片样式直接渲染内容
-                Column({ space: 10 }) {
-                  if (this.tweetContextLabel()) {
-                    Row({ space: 6 }) {
-                      Text(this.tweetContextLabel())
-                        .fontSize(12)
-                        .fontWeight(FontWeight.Medium)
-                        .fontColor(this.theme.textMuted)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-                    .width('100%')
-                    .padding({ left: 2, right: 2, bottom: 2 })
-                  }
-
-                  // 头像 + 用户名行
-                  Row({ space: 8 }) {
-                    AvatarTile({
-                      imageUrl: this.tweetPresentation().avatarUrl,
-                      fallbackLabel: this.tweetPresentation().displayName,
-                      accent: this.theme.accent,
-                      theme: this.theme,
-                      avatarSize: 40,
-                      radius: 999,
-                      textSize: 14,
-                      showFallbackLabel: false,
-                    })
-
-                    Column({ space: 2 }) {
-                      Text(this.tweetPresentation().displayName || '未知来源')
-                        .fontSize(16)
-                        .fontWeight(FontWeight.Bold)
-                        .fontColor(this.theme.textPrimary)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .width('100%')
-
-                      if (this.tweetPresentation().username) {
-                        Text(this.tweetPresentation().username)
-                          .fontSize(13)
-                          .fontColor(this.theme.textMuted)
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          .width('100%')
-                      }
-                    }
-                    .layoutWeight(1)
-                    .alignItems(HorizontalAlign.Start)
-                  }
-                  .width('100%')
-                  .alignItems(VerticalAlign.Center)
-
-                  // 推文正文
-                  if (this.tweetPresentation().text) {
-                    Text(this.tweetPresentation().text)
-                      .fontSize(17)
-                      .lineHeight(26)
-                      .fontColor(this.theme.textPrimary)
-                      .width('100%')
-                  }
-
-                  // 引用推文
-                  if (this.tweetPresentation().kind === 'quote' && this.tweetPresentation().quotedTweet) {
-                    Column({ space: 10 }) {
-                      Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).displayName
-                        || (this.tweetPresentation().quotedTweet as TweetQuotedPresentation).username
-                        || '未知来源')
-                        .fontSize(13)
-                        .fontWeight(FontWeight.Bold)
-                        .fontColor(this.theme.textPrimary)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .width('100%')
-
-                      if ((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).text) {
-                        Text((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).text)
-                          .fontSize(14)
-                          .lineHeight(21)
-                          .fontColor(this.theme.textPrimary)
-                          .width('100%')
-                      }
-
-                      if (((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).mediaUrls || []).length > 0) {
-                        Column({ space: 8 }) {
-                          ForEach((this.tweetPresentation().quotedTweet as TweetQuotedPresentation).mediaUrls, (url: string, index: number) => {
-                            Image(url)
-                              .width('100%')
-                              .borderRadius(10)
-                              .objectFit(ImageFit.Cover)
-                              .backgroundColor(this.theme.elevated)
-                          }, (url: string, index: number) => `${url}_${index}`)
-                        }
-                        .width('100%')
-                      }
-                    }
-                    .width('100%')
-                    .alignItems(HorizontalAlign.Start)
-                    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-                    .border({ width: 1, color: this.theme.divider })
-                    .borderRadius(12)
-                    .backgroundColor(this.theme.isDark ? '#151A20' : '#F4F8FB')
-                  }
-
-                  // 媒体图片
-                  if (this.tweetPresentation().mediaUrls.length > 0) {
-                    Column({ space: 8 }) {
-                      ForEach(this.tweetPresentation().mediaUrls, (url: string, index: number) => {
-                        Image(url)
-                          .width('100%')
-                          .borderRadius(12)
-                          .objectFit(ImageFit.Cover)
-                          .backgroundColor(this.theme.elevated)
-                      }, (url: string, index: number) => `${url}_${index}`)
-                    }
-                    .width('100%')
-                  }
-
-                  // 来源链接已移除
-                }
-                .width('100%')
-                .alignItems(HorizontalAlign.Start)
+                this.SocialTweetDetail()
               } else {
                 if (this.isPictureDetail() && (this.entry!.title || '').trim()) {
                   Text(this.entry!.title)
