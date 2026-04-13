@@ -594,6 +594,8 @@ export struct SubscriptionsContent {
     .onDisAppear(() => {
       const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
       if (currentLevel <= 1) {
+          // Refresh feeds when returning to subscriptions list to ensure avatars display correctly
+          AppStorage.setOrCreate('feedsChangedAt', Date.now())
         this.syncOverlayLevel(0)
       }
     })
