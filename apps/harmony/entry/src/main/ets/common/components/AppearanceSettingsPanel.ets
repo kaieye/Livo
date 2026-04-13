@@ -595,13 +595,13 @@ export struct AppearanceSettingsPanel {
 
       Column() {
         Row({ space: 12 }) {
-          SymbolGlyph($r('sys.symbol.circle_fill'))
+          SymbolGlyph($r('sys.symbol.sun_max'))
             .fontSize(ROW_ICON_SIZE)
             .fontColor([this.theme.accent])
             .transition(livoMotion.enterIconSpin(2))
 
           Column({ space: ROW_TEXT_SPACING }) {
-            Text('显示未读圆圈')
+            Text('显示未读圆点')
               .fontSize(ROW_TITLE_SIZE)
               .fontWeight(FontWeight.Medium)
               .fontColor(this.theme.textPrimary)

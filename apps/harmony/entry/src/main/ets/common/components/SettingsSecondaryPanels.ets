@@ -6,6 +6,7 @@ import { AppContextService } from '../services/AppContextService'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, Feed, FeedViewType, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { generateOpml, parseOpml } from '../utils/OpmlParser'
+import { extractInstagramUsername } from '../utils/SocialFeedTitles'
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -792,11 +793,13 @@ export struct SubscriptionsSettingsPanel {
 
   private inferFeedViewByUrl(url: string): FeedViewType {
     const normalized = this.normalizeFeedUrl(url)
+    if (!!extractInstagramUsername(normalized)) {
+      return FeedViewType.Pictures
+    }
     if (
       normalized.includes('/twitter/')
       || normalized.includes('/x.com/')
       || normalized.includes('/nitter.')
-      || normalized.includes('/instagram/')
       || normalized.includes('/bilibili/user/dynamic/')
     ) {
       return FeedViewType.SocialMedia
@@ -833,6 +836,64 @@ export struct SubscriptionsSettingsPanel {
       return ''
     }
     return uris[0]
+  }
+
+  private decodeUtf8Bytes(bytes: Uint8Array): string {
+    if (bytes.length === 0) {
+      return ''
+    }
+
+    let encoded = ''
+    bytes.forEach((value: number) => {
+      const hex = value.toString(16).padStart(2, '0')
+      encoded += `%${hex}`
+    })
+
+    try {
+      return decodeURIComponent(encoded)
+    } catch (_error) {
+      let fallback = ''
+      bytes.forEach((value: number) => {
+        fallback += String.fromCharCode(value)
+      })
+      return fallback
+    }
+  }
+
+  private normalizeImportedUrl(raw: string): string {
+    const trimmed = (raw || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(trimmed)) {
+      return `https://${trimmed.replace(/^\/\/+/, '')}`
+    }
+    return trimmed
+  }
+
+  private readTextFromUri(uri: string): string {
+    const file = fileIo.openSync(uri, fileIo.OpenMode.READ_ONLY)
+    try {
+      const bytes: number[] = []
+      const bufferSize = 4096
+      while (true) {
+        const buffer = new ArrayBuffer(bufferSize)
+        const readLength = fileIo.readSync(file.fd, buffer)
+        if (readLength <= 0) {
+          break
+        }
+        const view = new Uint8Array(buffer).subarray(0, readLength)
+        view.forEach((value: number) => {
+          bytes.push(value)
+        })
+      }
+      return this.decodeUtf8Bytes(new Uint8Array(bytes))
+    } finally {
+      fileIo.closeSync(file)
+    }
   }
 
   private async exportOpmlToFile(): Promise<void> {
@@ -877,7 +938,7 @@ export struct SubscriptionsSettingsPanel {
         return
       }
 
-      const xml = await fileIo.readText(targetUri)
+      const xml = this.readTextFromUri(targetUri)
       const opmlFeeds = parseOpml(xml)
       if (opmlFeeds.length === 0) {
         this.showToast('OPML 文件中未发现可导入订阅', 3000)
@@ -886,10 +947,12 @@ export struct SubscriptionsSettingsPanel {
 
       const existingFeeds = await AppRepository.feedEntities()
       const existingUrlSet: Set<string> = new Set<string>()
+      const existingFeedMap: Map<string, Feed> = new Map<string, Feed>()
       existingFeeds.forEach((feed: Feed) => {
         const normalized = this.normalizeFeedUrl(feed.url)
         if (normalized) {
           existingUrlSet.add(normalized)
+          existingFeedMap.set(normalized, feed)
         }
       })
 
@@ -906,11 +969,12 @@ export struct SubscriptionsSettingsPanel {
       let failed = 0
 
       for (const opmlFeed of opmlFeeds) {
-        const url = (opmlFeed.xmlUrl || '').trim()
+        const url = this.normalizeImportedUrl(opmlFeed.xmlUrl || '')
         if (!url) {
           skipped += 1
           continue
         }
+        const importedView = this.inferFeedViewByUrl(url)
         const normalizedUrl = this.normalizeFeedUrl(url)
         if (!normalizedUrl) {
           skipped += 1
@@ -923,6 +987,26 @@ export struct SubscriptionsSettingsPanel {
         seenInOpml.add(normalizedUrl)
 
         if (mode === 'merge' && existingUrlSet.has(normalizedUrl)) {
+          const existingFeed = existingFeedMap.get(normalizedUrl)
+          if (existingFeed && existingFeed.view !== importedView && importedView === FeedViewType.SocialMedia) {
+            try {
+              await AppRepository.updateFeed(existingFeed.id, {
+                title: (opmlFeed.title || url).trim(),
+                url,
+                siteUrl: this.normalizeImportedUrl(opmlFeed.htmlUrl || ''),
+                imageUrl: '',
+                description: '',
+                category: (opmlFeed.category || '').trim(),
+                view: importedView,
+                showInAll: true,
+              })
+              imported += 1
+              continue
+            } catch (_error) {
+              failed += 1
+              continue
+            }
+          }
           skipped += 1
           continue
         }
@@ -931,11 +1015,11 @@ export struct SubscriptionsSettingsPanel {
           await AppRepository.createFeed({
             title: (opmlFeed.title || url).trim(),
             url,
-            siteUrl: (opmlFeed.htmlUrl || '').trim(),
+            siteUrl: this.normalizeImportedUrl(opmlFeed.htmlUrl || ''),
             imageUrl: '',
             description: '',
             category: (opmlFeed.category || '').trim(),
-            view: this.inferFeedViewByUrl(url),
+            view: importedView,
             showInAll: true,
           })
           existingUrlSet.add(normalizedUrl)

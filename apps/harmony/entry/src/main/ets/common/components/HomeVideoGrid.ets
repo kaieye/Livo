@@ -12,6 +12,7 @@ import {
 export struct HomeVideoGrid {
   @Prop entries: EntryCardModel[] = []
   @Prop highlightQuery: string = ''
+  @Prop isLoading: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
@@ -263,12 +264,14 @@ export struct HomeVideoGrid {
     Column({ space: 12 }) {
       if (this.entries.length === 0) {
         Column({ space: 8 }) {
-          Text('还没有可展示的条目')
+          Text(this.isLoading ? '正在加载订阅内容' : '还没有可展示的条目')
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.theme.textPrimary)
 
-          Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+          Text(this.isLoading
+            ? '正在后台刷新订阅源，请稍候。'
+            : '请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
             .fontSize(14)
             .lineHeight(22)
             .fontColor(this.theme.textSecondary)

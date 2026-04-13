@@ -166,6 +166,7 @@ struct Index {
   @State highlightedRootTabId: RootTabId = 'home'
   @State private suppressRootTabChange: boolean = false
   @State settingsScrollerBindingVersion: number = 0
+  @State isHomeStartupRefreshing: boolean = false
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
@@ -205,7 +206,19 @@ struct Index {
     this.featuredEntries = await AppRepository.featuredEntries()
     this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
     this.feedSourceLabel = '本地内容已加载'
+    this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
+  }
+
+  private startStartupRefreshIfNeeded(): void {
+    if (this.isHomeStartupRefreshing) {
+      return
+    }
+
+    this.isHomeStartupRefreshing = true
+    void this.refreshFeaturedEntries(false).finally(() => {
+      this.isHomeStartupRefreshing = false
+    })
   }
 
   private async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
@@ -289,6 +302,20 @@ struct Index {
     } catch (error) {
       console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
     }
+  }
+
+  private isHomeContentLoading(): boolean {
+    return this.isRefreshing || this.isHomeStartupRefreshing
+  }
+
+  private homeEmptyStateTitle(): string {
+    return this.isHomeContentLoading() ? '正在加载订阅内容' : '还没有可展示的条目'
+  }
+
+  private homeEmptyStateSubtitle(): string {
+    return this.isHomeContentLoading()
+      ? '正在后台刷新订阅源，请稍候。'
+      : '请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。'
   }
 
   private updateHomePullRefreshState(offset: number): void {
@@ -2119,12 +2146,12 @@ struct Index {
       if (this.filteredEntriesFor(mode).length === 0) {
         ListItem() {
           Column({ space: 8 }) {
-            Text('还没有可展示的条目')
+            Text(this.homeEmptyStateTitle())
               .fontSize(18)
               .fontWeight(FontWeight.Bold)
               .fontColor(this.theme.textPrimary)
 
-            Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+            Text(this.homeEmptyStateSubtitle())
               .fontSize(14)
               .lineHeight(22)
               .fontColor(this.theme.textSecondary)
@@ -2195,12 +2222,12 @@ struct Index {
       if (this.filteredEntriesFor('pictures').length === 0) {
         ListItem() {
           Column({ space: 8 }) {
-            Text('还没有可展示的条目')
+            Text(this.homeEmptyStateTitle())
               .fontSize(18)
               .fontWeight(FontWeight.Bold)
               .fontColor(this.theme.textPrimary)
 
-            Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+            Text(this.homeEmptyStateSubtitle())
               .fontSize(14)
               .lineHeight(22)
               .fontColor(this.theme.textSecondary)
@@ -2252,6 +2279,7 @@ struct Index {
               HomeVideoGrid({
                 entries: this.filteredEntriesFor(mode),
                 highlightQuery: this.searchQuery,
+                isLoading: this.isHomeContentLoading(),
                 inheritedTheme: this.theme,
                 onOpenEntry: (entry: EntryCardModel) => {
                   this.openEntry(entry)

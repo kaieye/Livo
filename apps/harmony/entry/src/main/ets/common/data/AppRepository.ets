@@ -106,6 +106,7 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
 export class AppRepository {
   private static bootstrapped: boolean = false
   private static seedFeedHydrationStarted: boolean = false
+  private static readonly refreshConcurrencyLimit: number = 4
 
   static async bootstrap(): Promise<void> {
     if (AppRepository.bootstrapped) {
@@ -498,6 +499,17 @@ export class AppRepository {
   ): Promise<RemoteFeedResult> {
     await AppRepository.bootstrap()
     const feeds = await FeedRepository.list()
+    if (feeds.length === 0) {
+      return {
+        entries: [],
+        sourceLabel: '暂无可刷新的订阅源',
+        newEntriesCount: 0,
+        failedFeedCount: 0,
+        failedFeedLabels: [],
+        failedFeedDetails: [],
+        fallbackUsed: false,
+      }
+    }
     let refreshedCount = 0
     let failedCount = 0
     let newEntriesCount = 0
@@ -505,13 +517,17 @@ export class AppRepository {
     const failedFeedLabels: string[] = []
     const failedFeedDetails: string[] = []
     onProgress?.(0, feeds.length)
-    const refreshTasks = feeds.map((feed: Feed) => AppRepository.refreshFeed(feed.id))
-    const results = await Promise.allSettled(
-      refreshTasks.map((task: Promise<RemoteFeedResult>) => task.finally(() => {
-        completedCount += 1
-        onProgress?.(completedCount, feeds.length)
-      })),
-    )
+    const results: PromiseSettledResult<RemoteFeedResult>[] = []
+    for (let index = 0; index < feeds.length; index += AppRepository.refreshConcurrencyLimit) {
+      const batchFeeds = feeds.slice(index, index + AppRepository.refreshConcurrencyLimit)
+      const batchResults = await Promise.allSettled(
+        batchFeeds.map((feed: Feed) => AppRepository.refreshFeed(feed.id).finally(() => {
+          completedCount += 1
+          onProgress?.(completedCount, feeds.length)
+        })),
+      )
+      results.push(...batchResults)
+    }
 
     results.forEach((result: PromiseSettledResult<RemoteFeedResult>, index: number) => {
       if (result.status === 'fulfilled') {

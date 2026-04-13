@@ -25,6 +25,7 @@ import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { shouldAcceptModeSwitch } from '../utils/ModeSwitchGuard'
+import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -332,16 +333,38 @@ export struct SubscriptionsContent {
     }
   }
 
+  private normalizeSiteUrl(value: string): string {
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(trimmed)) {
+      return `https://${trimmed.replace(/^\/\/+/, '')}`
+    }
+    return trimmed
+  }
+
   private iconSource(feed: FeedCardModel | undefined): string {
     if (!feed) {
       return ''
     }
 
-    if (feed.imageUrl.trim().length > 0) {
-      return feed.imageUrl.trim()
+    const normalizedSiteUrl = this.normalizeSiteUrl(feed.siteUrl)
+
+    const resolved = resolveSocialFeedDisplayImageUrl(
+      feed.imageUrl,
+      normalizedSiteUrl,
+      normalizedSiteUrl,
+      feed.title,
+    )
+    if (resolved.trim().length > 0) {
+      return resolved.trim()
     }
 
-    return this.deriveFallbackIcon(feed.siteUrl)
+    return this.deriveFallbackIcon(normalizedSiteUrl)
   }
 
   @Builder
@@ -363,17 +386,11 @@ export struct SubscriptionsContent {
       Row({ space: 12 }) {
         this.FeedAvatar(feed)
 
-        Column({ space: 4 }) {
+        Column() {
           Text(feed.title)
             .fontSize(LIST_ROW_TITLE_SIZE)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          Text(feed.siteUrl.replace(/^https?:\/\//, ''))
-            .fontSize(META_FONT_SIZE)
-            .fontColor(this.theme.textSecondary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
@@ -387,7 +404,7 @@ export struct SubscriptionsContent {
           .backgroundColor(this.theme.textMuted)
       }
       .width('100%')
-      .height(62)
+      .height(52)
       .padding({ left: LIST_ROW_HORIZONTAL_PADDING, right: LIST_ROW_HORIZONTAL_PADDING, top: LIST_ROW_VERTICAL_PADDING, bottom: LIST_ROW_VERTICAL_PADDING })
       .clickEffect({ level: ClickEffectLevel.MIDDLE })
       .onClick(() => {

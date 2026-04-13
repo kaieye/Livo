@@ -473,34 +473,23 @@ export struct PictureEntryCard {
   @Builder
   private LiveBadge() {
     Row({ space: 4 }) {
-      SymbolGlyph($r('sys.symbol.play_fill'))
-        .fontSize(11)
-        .fontColor(['rgba(255,255,255,0.92)'])
-
-      Text('LIVE')
-        .fontSize(10)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('rgba(255,255,255,0.92)')
+      Image($r('app.media.ic_gallery_frame_overlay_camera_livephoto'))
+        .width(16)
+        .height(16)
+        .fillColor('#FFFFFF')
     }
-    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+    .padding({ left: 2, right: 2, top: 2, bottom: 2 })
     .margin({ top: 10, right: 10 })
-    .backgroundColor('rgba(0,0,0,0.22)')
-    .borderRadius(999)
   }
 
   @Builder
   private LiveSoundToggle() {
-    Row({ space: 4 }) {
+    Row() {
       SymbolGlyph($r(this.livePhotoMuted ? 'sys.symbol.speaker_slash_fill' : 'sys.symbol.speaker_wave_2_fill'))
-        .fontSize(11)
+        .fontSize(13)
         .fontColor(['rgba(255,255,255,0.92)'])
-
-      Text(this.livePhotoMuted ? '静音' : '有声')
-        .fontSize(10)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('rgba(255,255,255,0.92)')
     }
-    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+    .padding({ left: 7, right: 7, top: 6, bottom: 6 })
     .margin({ right: 10, bottom: 10 })
     .backgroundColor('rgba(0,0,0,0.28)')
     .borderRadius(999)
