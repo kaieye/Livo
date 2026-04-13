@@ -84,6 +84,15 @@ export struct FeedDetailView {
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
 
   aboutToAppear(): void {
+    // Clear transient detail state before loading to avoid showing stale content from previous destination.
+    this.previewPayload = undefined
+    this.previewError = ''
+    this.previewNotice = ''
+    this.existingFeed = undefined
+    this.videoPreviewCache = []
+    this.heroAvatarCandidates = []
+    this.heroAvatarIndex = 0
+
     this.targetTitle = this.initialTargetTitle
     this.targetSiteUrl = this.initialTargetSiteUrl
     this.targetImageUrl = this.initialTargetImageUrl
