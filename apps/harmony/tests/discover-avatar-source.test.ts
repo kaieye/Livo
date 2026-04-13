@@ -62,3 +62,10 @@ test('DiscoverContent falls back to site favicon ico for generic avatars', () =>
     /private faviconUrl\(siteUrl: string\): string \{\s*const host = this\.hostOf\(siteUrl\)\s*return host \? `https:\/\/\$\{host\}\/favicon\.ico` : ''\s*\}/s,
   )
 })
+
+test('DiscoverContent resets avatar tiles after overlay or feed refresh changes', () => {
+  assert.match(
+    discoverContentSource,
+    /refreshToken: this\.feedsChangedAt \+ this\.discoverOverlayLevel,/,
+  )
+})

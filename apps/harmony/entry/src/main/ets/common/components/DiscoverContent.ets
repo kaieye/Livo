@@ -856,6 +856,7 @@ export struct DiscoverContent {
   private AvatarBox(imageUrl: string, fallbackLabel: string, accent: string) {
     AvatarTile({
       imageUrl,
+      refreshToken: this.feedsChangedAt + this.discoverOverlayLevel,
       fallbackLabel,
       accent,
       theme: this.theme,

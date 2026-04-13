@@ -558,7 +558,7 @@ export struct FeedDetailView {
 
     const host = this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
     if (host) {
-      pushCandidate(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`)
+      pushCandidate(`https://${host}/favicon.ico`)
     }
 
     return this.dedupeUrls(candidates)
