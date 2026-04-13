@@ -373,6 +373,7 @@ export struct SubscriptionsContent {
   private FeedAvatar(feed: FeedCardModel | undefined) {
     AvatarTile({
       imageUrl: this.iconSource(feed),
+      refreshToken: this.feedsChangedAt,
       fallbackLabel: feed ? feed.title : 'Livo',
       accent: this.theme.elevated,
       theme: this.theme,
@@ -594,8 +595,8 @@ export struct SubscriptionsContent {
     .onDisAppear(() => {
       const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
       if (currentLevel <= 1) {
-          // Refresh feeds when returning to subscriptions list to ensure avatars display correctly
-          AppStorage.setOrCreate('feedsChangedAt', Date.now())
+        // Refresh feeds when returning to subscriptions list to ensure avatars display correctly
+        AppStorage.setOrCreate('feedsChangedAt', Date.now())
         this.syncOverlayLevel(0)
       }
     })

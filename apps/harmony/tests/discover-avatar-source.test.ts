@@ -6,7 +6,7 @@ import path from 'node:path'
 const avatarTileSource = fs.readFileSync(
   path.join(
     process.cwd(),
-    'apps/harmony/entry/src/main/ets/common/components/AvatarTile.ets',
+    'entry/src/main/ets/common/components/AvatarTile.ets',
   ),
   'utf8',
 )
@@ -14,7 +14,7 @@ const avatarTileSource = fs.readFileSync(
 const discoverContentSource = fs.readFileSync(
   path.join(
     process.cwd(),
-    'apps/harmony/entry/src/main/ets/common/components/DiscoverContent.ets',
+    'entry/src/main/ets/common/components/DiscoverContent.ets',
   ),
   'utf8',
 )
@@ -30,6 +30,17 @@ test('AvatarTile resets load failure when the image url changes', () => {
   )
 })
 
+test('AvatarTile resets load failure when the refresh token changes', () => {
+  assert.match(
+    avatarTileSource,
+    /@Prop\s+@Watch\('handleRefreshTokenChange'\)\s+refreshToken:\s+number\s*=\s*0/,
+  )
+  assert.match(
+    avatarTileSource,
+    /private handleRefreshTokenChange\(\): void \{\s*this\.imageLoadFailed = false\s*\}/s,
+  )
+})
+
 test('DiscoverContent resolves search result avatars through social display image helper', () => {
   assert.match(
     discoverContentSource,
@@ -42,5 +53,12 @@ test('DiscoverContent resolves search result avatars through social display imag
   assert.match(
     discoverContentSource,
     /if \(resolvedImageUrl\) \{\s*return resolvedImageUrl\s*\}/s,
+  )
+})
+
+test('DiscoverContent falls back to site favicon ico for generic avatars', () => {
+  assert.match(
+    discoverContentSource,
+    /private faviconUrl\(siteUrl: string\): string \{\s*const host = this\.hostOf\(siteUrl\)\s*return host \? `https:\/\/\$\{host\}\/favicon\.ico` : ''\s*\}/s,
   )
 })

@@ -28,5 +28,6 @@ test('SubscriptionsContent resolves social avatars before generic favicon fallba
     source,
     /const resolved = resolveSocialFeedDisplayImageUrl\(\s*feed\.imageUrl,\s*normalizedFeedUrl,\s*normalizedSiteUrl,\s*feed\.title,\s*\)/,
   )
+  assert.match(source, /refreshToken: this\.feedsChangedAt,/)
   assert.match(source, /return this\.deriveFallbackIcon\(normalizedSiteUrl\)/)
 })

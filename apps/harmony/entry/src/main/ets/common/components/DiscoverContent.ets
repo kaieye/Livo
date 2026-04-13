@@ -695,7 +695,7 @@ export struct DiscoverContent {
 
   private faviconUrl(siteUrl: string): string {
     const host = this.hostOf(siteUrl)
-    return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64` : ''
+    return host ? `https://${host}/favicon.ico` : ''
   }
 
   private resolvedPlatformLabel(candidate: ResolvedDiscoverCandidate): string {

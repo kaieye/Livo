@@ -361,7 +361,7 @@ test('resolveSocialFeedDisplayImageUrl falls back to instagram avatar for picnob
 test('resolveSocialFeedDisplayImageUrl upgrades generic favicons to social avatars', () => {
   assert.equal(
     resolveSocialFeedDisplayImageUrl(
-      'https://www.google.com/s2/favicons?domain=x.com&sz=128',
+      'https://x.com/favicon.ico',
       'https://rsshub.pseudoyu.com/twitter/user/openai',
       'https://x.com/openai',
       'OpenAI',
@@ -371,7 +371,7 @@ test('resolveSocialFeedDisplayImageUrl upgrades generic favicons to social avata
 
   assert.equal(
     resolveSocialFeedDisplayImageUrl(
-      'https://www.google.com/s2/favicons?domain=instagram.com&sz=128',
+      'https://www.instagram.com/favicon.ico',
       'https://rsshub.pseudoyu.com/instagram/user/du_chenduling',
       'https://instagram.com/du_chenduling',
       '陈都灵',

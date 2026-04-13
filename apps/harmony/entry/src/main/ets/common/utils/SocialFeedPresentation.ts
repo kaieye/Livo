@@ -82,6 +82,11 @@ function isGenericFeedIcon(value: string): boolean {
   )
 }
 
+function faviconUrlForHost(host: string): string {
+  const trimmed = host.trim()
+  return trimmed ? `https://${trimmed}/favicon.ico` : ''
+}
+
 function scoreStoredFeedTitle(
   value: string,
   feedUrl: string,
@@ -215,9 +220,7 @@ export function resolveSocialFeedDisplayImageUrl(
   }
 
   const host = hostOf(siteUrl || feedUrl)
-  return host
-    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`
-    : ''
+  return faviconUrlForHost(host)
 }
 
 export function resolvePreferredStoredFeedTitle(
