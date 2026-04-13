@@ -61,6 +61,14 @@ test('AppRepository refreshFeed reports how many entries were newly added locall
   assert.match(modelsSource, /newEntriesCount\?: number/)
   assert.match(
     source,
+    /static async refreshFeed\(\s*feedId: string,\s*preferFastImageResolve: boolean = false,\s*\): Promise<RemoteFeedResult>/s,
+  )
+  assert.match(
+    source,
+    /const nextResolvedImageUrl = preferFastImageResolve\s*\? \(payload\.imageUrl \|\| feed\.imageUrl \|\| ''\)\s*:\s*await SocialFeedAvatarService\.resolveFeedAvatar\(/s,
+  )
+  assert.match(
+    source,
     /const existingEntries = await EntryRepository\.listByFeed\(feedId\)/,
   )
   assert.match(source, /const existingEntryIds = new Set<string>\(\)/)

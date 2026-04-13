@@ -153,7 +153,7 @@ export class AppRepository {
         }
 
         try {
-          const value = await AppRepository.refreshFeed(feed.id)
+          const value = await AppRepository.refreshFeed(feed.id, true)
           const fulfilled: PromiseSettledResult<RemoteFeedResult> = {
             status: 'fulfilled',
             value,
@@ -489,7 +489,10 @@ export class AppRepository {
     await EntryRepository.toggleStar(entryId)
   }
 
-  static async refreshFeed(feedId: string): Promise<RemoteFeedResult> {
+  static async refreshFeed(
+    feedId: string,
+    preferFastImageResolve: boolean = false,
+  ): Promise<RemoteFeedResult> {
     await AppRepository.bootstrap()
     const feed = await FeedRepository.getById(feedId)
 
@@ -509,12 +512,14 @@ export class AppRepository {
       const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
       const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
       const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
-      const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
-        nextUrl,
-        nextSiteUrl,
-        payload.imageUrl || '',
-        feed.imageUrl || '',
-      )
+      const nextResolvedImageUrl = preferFastImageResolve
+        ? (payload.imageUrl || feed.imageUrl || '')
+        : await SocialFeedAvatarService.resolveFeedAvatar(
+          nextUrl,
+          nextSiteUrl,
+          payload.imageUrl || '',
+          feed.imageUrl || '',
+        )
       const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
       await EntryRepository.upsertMany(payload.entries)
       await FeedRepository.updateFetchState(feedId, {
