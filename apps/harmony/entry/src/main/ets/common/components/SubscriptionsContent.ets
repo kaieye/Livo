@@ -26,7 +26,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { shouldAcceptModeSwitch } from '../utils/ModeSwitchGuard'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
-import { extractXUsername } from '../utils/SocialFeedTitles'
+import { extractXUsername, extractInstagramUsername } from '../utils/SocialFeedTitles'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -387,6 +387,12 @@ export struct SubscriptionsContent {
     if (xUsername) {
       return feed.title + ' - X'
     }
+
+    const instagramUsername = extractInstagramUsername(feed.url) || extractInstagramUsername(feed.siteUrl)
+    if (instagramUsername) {
+      return feed.title + ' - Ins'
+    }
+
     return feed.title
   }
 
