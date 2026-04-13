@@ -473,6 +473,7 @@ export class AppRepository {
         etag: feed.etag ?? '',
         lastModified: feed.lastModified ?? '',
         errorCount: (feed.errorCount ?? 0) + 1,
+        imageUrl: feed.imageUrl ?? '',
       })
       const result: RemoteFeedResult = {
         entries: await AppRepository.entriesByFeed(feedId),

@@ -289,7 +289,7 @@ export class FeedRepository {
         url: normalizedUrl,
         title: normalizeSocialFeedTitle(next.title ?? '', normalizedUrl, normalizedSiteUrl),
         site_url: normalizedSiteUrl,
-        image_url: next.imageUrl ?? '',
+        image_url: next.imageUrl !== undefined ? next.imageUrl : current.imageUrl ?? '',
         description: normalizeSocialFeedDescription(next.description ?? '', normalizedUrl, normalizedSiteUrl),
         last_fetched: next.lastFetched ?? 0,
         etag: next.etag ?? '',
