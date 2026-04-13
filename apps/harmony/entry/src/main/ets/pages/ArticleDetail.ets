@@ -135,6 +135,7 @@ struct ArticleDetail {
 
     if (markRead) {
       await AppRepository.markRead(entryId, true)
+      console.info(`已标记条目为已读: ${entryId}`)
     }
 
     const params = getStringParams()

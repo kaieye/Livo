@@ -1,8 +1,11 @@
 import { openArticleDetail } from '../navigation/AppRouter'
 import { SymbolGlyphModifier } from '@kit.ArkUI'
+import { fileIo, picker } from '@kit.CoreFileKit'
 import { AppRepository } from '../data/AppRepository'
-import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../models/LivoModels'
+import { AppContextService } from '../services/AppContextService'
+import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, Feed, FeedViewType, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { generateOpml, parseOpml } from '../utils/OpmlParser'
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -739,6 +742,300 @@ export struct FavoritesPanel {
           .width('100%')
           .padding({ top: 8 })
         }
+
+        Row()
+          .height(28)
+          .width('100%')
+      }
+      .width('100%')
+      .constraintSize({ minHeight: '100%' })
+      .justifyContent(FlexAlign.Start)
+      .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 12 })
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
+    .backgroundColor(this.theme.background)
+    .edgeEffect(EdgeEffect.Spring)
+  }
+}
+
+@Component
+export struct SubscriptionsSettingsPanel {
+  @State theme: ThemePalette = ThemeService.currentPalette()
+  @State isOpmlProcessing: boolean = false
+
+  aboutToAppear(): void {
+    void this.loadTheme()
+  }
+
+  private async loadTheme(): Promise<void> {
+    const settings = await AppRepository.settings()
+    this.theme = await ThemeService.resolvePalette(settings)
+  }
+
+  private showToast(message: string, duration: number = 2200): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (_error) {
+    }
+  }
+
+  private normalizeFeedUrl(url: string): string {
+    return (url || '').trim().toLowerCase().replace(/\/+$/g, '')
+  }
+
+  private inferFeedViewByUrl(url: string): FeedViewType {
+    const normalized = this.normalizeFeedUrl(url)
+    if (
+      normalized.includes('/twitter/')
+      || normalized.includes('/x.com/')
+      || normalized.includes('/nitter.')
+      || normalized.includes('/instagram/')
+      || normalized.includes('/bilibili/user/dynamic/')
+    ) {
+      return FeedViewType.SocialMedia
+    }
+    if (
+      normalized.includes('/youtube/')
+      || normalized.includes('/bilibili/user/video/')
+      || normalized.includes('tedtalks')
+    ) {
+      return FeedViewType.Videos
+    }
+    return FeedViewType.Articles
+  }
+
+  private async pickImportOpmlUri(): Promise<string> {
+    const documentPicker = new picker.DocumentViewPicker(AppContextService.getContext())
+    const options = new picker.DocumentSelectOptions()
+    options.maxSelectNumber = 1
+    options.fileSuffixFilters = ['OPML|.opml,.xml']
+    const uris = await documentPicker.select(options)
+    if (!uris || uris.length === 0) {
+      return ''
+    }
+    return uris[0]
+  }
+
+  private async pickExportOpmlUri(): Promise<string> {
+    const documentPicker = new picker.DocumentViewPicker(AppContextService.getContext())
+    const options = new picker.DocumentSaveOptions()
+    options.newFileNames = ['livo-subscriptions.opml']
+    options.fileSuffixChoices = ['OPML|.opml']
+    const uris = await documentPicker.save(options)
+    if (!uris || uris.length === 0) {
+      return ''
+    }
+    return uris[0]
+  }
+
+  private async exportOpmlToFile(): Promise<void> {
+    if (this.isOpmlProcessing) {
+      return
+    }
+    this.isOpmlProcessing = true
+    try {
+      const targetUri = await this.pickExportOpmlUri()
+      if (!targetUri) {
+        this.showToast('已取消导出')
+        return
+      }
+      const feeds = await AppRepository.feedEntities()
+      const opml = generateOpml(feeds)
+      const file = fileIo.openSync(
+        targetUri,
+        fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC,
+      )
+      try {
+        fileIo.writeSync(file.fd, opml)
+      } finally {
+        fileIo.closeSync(file)
+      }
+      this.showToast(`导出完成，共 ${feeds.length} 条`)
+    } catch (error) {
+      this.showToast(`导出失败：${error instanceof Error ? error.message : String(error)}`, 3000)
+    } finally {
+      this.isOpmlProcessing = false
+    }
+  }
+
+  private async importOpmlFromFile(mode: 'merge' | 'overwrite'): Promise<void> {
+    if (this.isOpmlProcessing) {
+      return
+    }
+    this.isOpmlProcessing = true
+    try {
+      const targetUri = await this.pickImportOpmlUri()
+      if (!targetUri) {
+        this.showToast('已取消导入')
+        return
+      }
+
+      const xml = await fileIo.readText(targetUri)
+      const opmlFeeds = parseOpml(xml)
+      if (opmlFeeds.length === 0) {
+        this.showToast('OPML 文件中未发现可导入订阅', 3000)
+        return
+      }
+
+      const existingFeeds = await AppRepository.feedEntities()
+      const existingUrlSet: Set<string> = new Set<string>()
+      existingFeeds.forEach((feed: Feed) => {
+        const normalized = this.normalizeFeedUrl(feed.url)
+        if (normalized) {
+          existingUrlSet.add(normalized)
+        }
+      })
+
+      if (mode === 'overwrite') {
+        for (const feed of existingFeeds) {
+          await AppRepository.removeFeed(feed.id)
+        }
+        existingUrlSet.clear()
+      }
+
+      const seenInOpml: Set<string> = new Set<string>()
+      let imported = 0
+      let skipped = 0
+      let failed = 0
+
+      for (const opmlFeed of opmlFeeds) {
+        const url = (opmlFeed.xmlUrl || '').trim()
+        if (!url) {
+          skipped += 1
+          continue
+        }
+        const normalizedUrl = this.normalizeFeedUrl(url)
+        if (!normalizedUrl) {
+          skipped += 1
+          continue
+        }
+        if (seenInOpml.has(normalizedUrl)) {
+          skipped += 1
+          continue
+        }
+        seenInOpml.add(normalizedUrl)
+
+        if (mode === 'merge' && existingUrlSet.has(normalizedUrl)) {
+          skipped += 1
+          continue
+        }
+
+        try {
+          await AppRepository.createFeed({
+            title: (opmlFeed.title || url).trim(),
+            url,
+            siteUrl: (opmlFeed.htmlUrl || '').trim(),
+            imageUrl: '',
+            description: '',
+            category: (opmlFeed.category || '').trim(),
+            view: this.inferFeedViewByUrl(url),
+            showInAll: true,
+          })
+          existingUrlSet.add(normalizedUrl)
+          imported += 1
+        } catch (_error) {
+          failed += 1
+        }
+      }
+
+      AppStorage.setOrCreate('feedsChangedAt', Date.now())
+      this.showToast(`导入完成：新增 ${imported}，跳过 ${skipped}，失败 ${failed}`, 3200)
+    } catch (error) {
+      this.showToast(`导入失败：${error instanceof Error ? error.message : String(error)}`, 3200)
+    } finally {
+      this.isOpmlProcessing = false
+    }
+  }
+
+  private openOpmlImportChoiceDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: '导入 OPML',
+      message: '请选择导入方式',
+      primaryButton: {
+        value: '合并导入',
+        action: () => {
+          void this.importOpmlFromFile('merge')
+        },
+      },
+      secondaryButton: {
+        value: '覆盖导入',
+        fontColor: '#D94848',
+        action: () => {
+          void this.importOpmlFromFile('overwrite')
+        },
+      },
+    })
+  }
+
+  @Builder
+  private SheetHandle() {
+    Column() {
+      Row()
+        .width(40)
+        .height(5)
+        .borderRadius(999)
+        .backgroundColor(this.theme.dragHandle)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+  }
+
+  @Builder
+  private PanelHeader() {
+    SettingsPanelHeader('订阅', this.theme)
+  }
+
+  build() {
+    Scroll() {
+      Column({ space: PANEL_SECTION_SPACING }) {
+        this.SheetHandle()
+        this.PanelHeader()
+
+        Column({ space: 12 }) {
+          Button(this.isOpmlProcessing ? '处理中...' : '导入 OPML')
+            .width('100%')
+            .height(44)
+            .type(ButtonType.Capsule)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .enabled(!this.isOpmlProcessing)
+            .backgroundColor(this.theme.surface)
+            .fontColor(this.theme.textPrimary)
+            .border({ width: 0.8, color: this.theme.divider })
+            .onClick(() => {
+              this.openOpmlImportChoiceDialog()
+            })
+
+          Button(this.isOpmlProcessing ? '处理中...' : '导出 OPML')
+            .width('100%')
+            .height(44)
+            .type(ButtonType.Capsule)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .enabled(!this.isOpmlProcessing)
+            .backgroundColor(this.theme.surface)
+            .fontColor(this.theme.textPrimary)
+            .border({ width: 0.8, color: this.theme.divider })
+            .onClick(() => {
+              void this.exportOpmlToFile()
+            })
+
+          Text('导入支持“合并导入 / 覆盖导入”，导出会生成标准 OPML 文件。')
+            .fontSize(12)
+            .lineHeight(18)
+            .fontColor(this.theme.textSecondary)
+            .width('100%')
+        }
+        .width('100%')
+        .padding(16)
+        .backgroundColor(this.theme.surface)
+        .borderRadius(CARD_RADIUS_LG)
+        .border({ width: 0.8, color: this.theme.divider })
+        .transition(livoMotion.enterSoft(30))
 
         Row()
           .height(28)

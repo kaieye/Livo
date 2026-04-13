@@ -1165,6 +1165,7 @@ export struct FeedDetailView {
               TweetEntryCard({
                 presentation: this.tweetPresentation(entry),
                 theme: this.theme,
+                isUnread: !entry.isRead,
                 onOpen: () => {
                   this.onOpenArticle(entry, this.articleDetailFeed(entry))
                 },

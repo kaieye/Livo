@@ -21,6 +21,7 @@ export struct PictureEntryCard {
   @Prop galleryUrls: string[] = []
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop highlightQuery: string = ''
+  @Prop isUnread: boolean = false
   @State private activeMediaIndex: number = 0
   @State private playingLivePhotoIndex: number = -1
   @State private pausedLivePhotoIndex: number = -1
@@ -37,6 +38,18 @@ export struct PictureEntryCard {
 
   private displayAuthor(): string {
     return (this.authorLabel || this.entry.author || '').trim() || '未知来源'
+  }
+
+  @Builder
+  private UnreadDot() {
+    if (this.isUnread) {
+      Row()
+        .width(8)
+        .height(8)
+        .borderRadius(999)
+        .backgroundColor(this.theme.accent)
+        .margin({ right: 8, top: 8 })
+    }
   }
 
   @Builder
@@ -615,67 +628,71 @@ export struct PictureEntryCard {
   }
 
   build() {
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column({ space: 10 }) {
+        Row({ space: 8 }) {
+          this.FeedAvatar()
 
-    Column({ space: 10 }) {
-      Row({ space: 8 }) {
-        this.FeedAvatar()
+          HighlightedInlineText({
+            text: this.displayAuthor(),
+            query: this.highlightQuery,
+            theme: this.theme,
+            fontSize: 15,
+            lineHeight: 20,
+            fontWeight: FontWeight.Medium,
+            defaultColor: this.theme.textPrimary,
+            maxLines: 1,
+          })
 
-        HighlightedInlineText({
-          text: this.displayAuthor(),
-          query: this.highlightQuery,
-          theme: this.theme,
-          fontSize: 15,
-          lineHeight: 20,
-          fontWeight: FontWeight.Medium,
-          defaultColor: this.theme.textPrimary,
-          maxLines: 1,
-        })
+          Text('·')
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
 
-        Text('·')
-          .fontSize(12)
-          .fontColor(this.theme.textMuted)
+          Text(formatPublishedAt(this.entry.publishedAt))
+            .fontSize(12)
+            .fontColor(this.theme.textMuted)
+        }
+        .width('100%')
 
-        Text(formatPublishedAt(this.entry.publishedAt))
-          .fontSize(12)
-          .fontColor(this.theme.textMuted)
+        if (this.caption) {
+          HighlightedInlineText({
+            text: this.caption,
+            query: this.highlightQuery,
+            theme: this.theme,
+            fontSize: 13,
+            lineHeight: 20,
+            defaultColor: this.theme.textSecondary,
+            maxLines: 2,
+          })
+        }
+
+        if (this.carouselMediaItems().length > 0) {
+          this.MediaCarousel()
+        }
       }
       .width('100%')
+      .padding({ top: 8, bottom: 10 })
+      .alignItems(HorizontalAlign.Start)
+      .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
+      .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
+        this.isNearlyVisible = isVisible && currentRatio >= 0.35
+        this.isFullyVisible = isVisible && currentRatio >= 0.6
+        this.logLivePhotoState(
+          'visible-area-change',
+          this.activeMediaIndex,
+          `isVisible=${isVisible} ratio=${currentRatio.toFixed(2)}`,
+        )
+        this.syncVisibleLivePhotoPlayback(this.activeMediaIndex)
+      })
+      .onDisAppear(() => {
+        this.stopLivePhotoPlayback()
+      })
+      .onClick(() => {
+        this.onOpen()
+      })
 
-      if (this.caption) {
-        HighlightedInlineText({
-          text: this.caption,
-          query: this.highlightQuery,
-          theme: this.theme,
-          fontSize: 13,
-          lineHeight: 20,
-          defaultColor: this.theme.textSecondary,
-          maxLines: 2,
-        })
-      }
-
-      if (this.carouselMediaItems().length > 0) {
-        this.MediaCarousel()
-      }
+      this.UnreadDot()
     }
     .width('100%')
-    .padding({ top: 8, bottom: 10 })
-    .alignItems(HorizontalAlign.Start)
-    .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
-    .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
-      this.isNearlyVisible = isVisible && currentRatio >= 0.35
-      this.isFullyVisible = isVisible && currentRatio >= 0.6
-      this.logLivePhotoState(
-        'visible-area-change',
-        this.activeMediaIndex,
-        `isVisible=${isVisible} ratio=${currentRatio.toFixed(2)}`,
-      )
-      this.syncVisibleLivePhotoPlayback(this.activeMediaIndex)
-    })
-    .onDisAppear(() => {
-      this.stopLivePhotoPlayback()
-    })
-    .onClick(() => {
-      this.onOpen()
-    })
   }
 }

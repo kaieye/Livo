@@ -1139,12 +1139,88 @@ struct Index {
   }
 
   private openEntry(entry: EntryCardModel): void {
+    setTimeout(() => {
+      this.markEntryReadLocally(entry)
+    }, 120)
+
     if (entry.viewLabel === '图片' && (entry.rawMediaUrls ?? []).length > 0) {
       const model = articleDetailModelFromCard(entry)
       void openArticleDetail(entry.id, JSON.stringify(model))
       return
     }
     void openArticleDetail(entry.id)
+  }
+
+  private markEntryReadLocally(target: EntryCardModel): void {
+    const targetId = (target.id || '').trim()
+    const targetArticleUrl = (target.articleUrl || '').trim()
+    const targetFeedId = (target.feedId || '').trim()
+    const targetPublishedAt = target.publishedAt
+    const targetTitle = (target.title || '').trim()
+
+    let updated = false
+    const updatedEntries = this.featuredEntries.map((item: EntryCardModel) => {
+      if (item.isRead) {
+        return item
+      }
+
+      const itemId = (item.id || '').trim()
+      const itemArticleUrl = (item.articleUrl || '').trim()
+      const itemFeedId = (item.feedId || '').trim()
+      const itemTitle = (item.title || '').trim()
+
+      const matchById = !!targetId && itemId === targetId
+      const matchByUrl = !targetId && !!targetArticleUrl && itemArticleUrl === targetArticleUrl
+      const matchBySnapshot = !targetId
+        && !targetArticleUrl
+        && !!targetFeedId
+        && itemFeedId === targetFeedId
+        && item.publishedAt === targetPublishedAt
+        && itemTitle === targetTitle
+
+      if (!matchById && !matchByUrl && !matchBySnapshot) {
+        return item
+      }
+
+      updated = true
+      return {
+        id: item.id,
+        feedId: item.feedId,
+        title: item.title,
+        summary: item.summary,
+        content: item.content,
+        imageUrl: item.imageUrl,
+        feedImageUrl: item.feedImageUrl,
+        author: item.author,
+        articleUrl: item.articleUrl,
+        publishedAt: item.publishedAt,
+        publishedLabel: item.publishedLabel,
+        readingLabel: item.readingLabel,
+        tags: item.tags,
+        mediaUrls: item.mediaUrls,
+        rawMediaUrls: item.rawMediaUrls,
+        feedTitle: item.feedTitle,
+        feedCategory: item.feedCategory,
+        viewLabel: item.viewLabel,
+        viewBadgeColor: item.viewBadgeColor,
+        hasVideoMedia: item.hasVideoMedia,
+        isRead: true,
+        isStarred: item.isStarred,
+      }
+    })
+
+    if (!updated) {
+      return
+    }
+
+    this.featuredEntries = updatedEntries
+    const regrouped = groupHomeEntriesByMode(this.featuredEntries)
+    this.entryGroups = {
+      articles: [...regrouped.articles],
+      social: [...regrouped.social],
+      pictures: [...regrouped.pictures],
+      videos: [...regrouped.videos],
+    }
   }
 
   private bottomTabSymbol(
@@ -1398,55 +1474,67 @@ struct Index {
 
   @Builder
   private EntryCard(entry: EntryCardModel) {
-    Row({ space: this.articleTweetPreviewImage(entry) ? 10 : 0 }) {
-      Column({ space: 6 }) {
-        Row({ space: 6 }) {
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Row({ space: this.articleTweetPreviewImage(entry) ? 10 : 0 }) {
+        Column({ space: 6 }) {
+          Row({ space: 6 }) {
+            HighlightedInlineText({
+              text: entry.feedTitle,
+              query: this.searchQuery,
+              theme: this.theme,
+              fontSize: 12,
+              lineHeight: 16,
+              fontWeight: FontWeight.Medium,
+              defaultColor: this.theme.accent,
+              maxLines: 1,
+            })
+
+            Text('·')
+              .fontSize(12)
+              .fontColor(this.theme.textMuted)
+
+            Text(entry.publishedLabel)
+              .fontSize(12)
+              .fontColor(this.theme.textMuted)
+          }
+          .width('100%')
+
           HighlightedInlineText({
-            text: entry.feedTitle,
+            text: entry.title,
             query: this.searchQuery,
             theme: this.theme,
-            fontSize: 12,
-            lineHeight: 16,
-            fontWeight: FontWeight.Medium,
-            defaultColor: this.theme.accent,
-            maxLines: 1,
+            fontSize: 15,
+            lineHeight: 22,
+            fontWeight: FontWeight.Bold,
+            defaultColor: this.theme.textPrimary,
+            maxLines: 2,
           })
-
-          Text('·')
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-
-          Text(entry.publishedLabel)
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
         }
-        .width('100%')
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
 
-        HighlightedInlineText({
-          text: entry.title,
-          query: this.searchQuery,
-          theme: this.theme,
-          fontSize: 15,
-          lineHeight: 22,
-          fontWeight: FontWeight.Bold,
-          defaultColor: this.theme.textPrimary,
-          maxLines: 2,
-        })
+        if (this.articleTweetPreviewImage(entry)) {
+          Image(this.articleTweetPreviewImage(entry))
+            .width(72)
+            .height(72)
+            .borderRadius(8)
+            .objectFit(ImageFit.Cover)
+            .backgroundColor(this.theme.elevated)
+        }
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
 
-      if (this.articleTweetPreviewImage(entry)) {
-        Image(this.articleTweetPreviewImage(entry))
-          .width(72)
-          .height(72)
-          .borderRadius(8)
-          .objectFit(ImageFit.Cover)
-          .backgroundColor(this.theme.elevated)
+      if (!entry.isRead) {
+        Row()
+          .width(8)
+          .height(8)
+          .borderRadius(999)
+          .backgroundColor(this.theme.accent)
+          .margin({ right: 8, top: 8 })
       }
     }
     .width('100%')
-    .alignItems(VerticalAlign.Center)
     .padding({ left: 14, right: 14, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
     .borderRadius(14)
@@ -1522,10 +1610,23 @@ struct Index {
     const articleUrl = (entry.articleUrl || '').toLowerCase()
     const feedTitle = (entry.feedTitle || '').toLowerCase()
     const author = (entry.author || '').toLowerCase()
+    const title = (entry.title || '').toLowerCase()
+    const summary = (entry.summary || '').toLowerCase()
+    const content = (entry.content || '').toLowerCase()
+    const combinedText = `${title}\n${summary}\n${content}`
     return articleUrl.includes('/status/')
+      || articleUrl.includes('x.com/')
+      || articleUrl.includes('twitter.com/')
+      || articleUrl.includes('nitter.')
+      || articleUrl.includes('/x/user/')
       || feedTitle.includes('twitter')
+      || feedTitle.includes('x.com')
+      || feedTitle.includes('nitter')
       || feedTitle.includes(' on x')
       || author.startsWith('@')
+      || /(^|\s)rt\s+@[a-z0-9_]{1,15}\s*:/i.test(combinedText)
+      || combinedText.includes('/twitter/user/')
+      || combinedText.includes('/x/user/')
   }
 
   private extractFirstImageUrlFromText(text: string): string {
@@ -1565,6 +1666,7 @@ struct Index {
       TweetEntryCard({
         presentation: presentTweetEntryFromCard(entry),
         theme: this.theme,
+        isUnread: !entry.isRead,
         highlightQuery: this.searchQuery,
         collapsedTextLines: 7,
         enableEnterTransition: false,
@@ -2010,7 +2112,7 @@ struct Index {
           }
         }
         .width('100%')
-      }, (entry: EntryCardModel) => entry.id)
+      }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
 
       if (this.filteredEntriesFor(mode).length === 0) {
         ListItem() {
@@ -2080,12 +2182,13 @@ struct Index {
             galleryUrls: this.pictureGalleryUrls(entry),
             theme: this.theme,
             highlightQuery: this.searchQuery,
+            isUnread: !entry.isRead,
             enableEnterTransition: false,
             onOpen: () => this.openEntry(entry),
           })
         }
         .width('100%')
-      }, (entry: EntryCardModel) => entry.id)
+      }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
 
       if (this.filteredEntriesFor('pictures').length === 0) {
         ListItem() {
@@ -2180,6 +2283,9 @@ struct Index {
       }
       .width('100%')
       .height('100%')
+      .onAppear(() => {
+        console.info(`频道 ${mode} 场景显示`)
+      })
     }
     .width('100%')
     .height('100%')
@@ -2210,6 +2316,9 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .onAppear(() => {
+      console.info('首页显示')
+    })
     .gesture(
       PanGesture({ direction: PanDirection.Horizontal })
         .onActionEnd((event: GestureEvent) => {
@@ -2219,6 +2328,7 @@ struct Index {
   }
 
   onPageShow(): void {
+    console.info('Livo Harmony Index onPageShow')
     this.syncRequestedRootTab()
     this.restoreSettingsSheetIfNeeded()
   }

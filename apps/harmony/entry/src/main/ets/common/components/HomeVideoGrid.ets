@@ -188,30 +188,41 @@ export struct HomeVideoGrid {
   @Builder
   private VideoCard(entry: EntryCardModel) {
     Column({ space: 8 }) {
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        if (entry.imageUrl) {
-          Image(entry.imageUrl)
-            .width('100%')
-            .aspectRatio(16 / 9)
-            .objectFit(ImageFit.Cover)
-            .borderRadius(14)
-        } else {
-          Column()
-            .width('100%')
-            .aspectRatio(16 / 9)
-            .backgroundColor(this.cardTokens().placeholderBackground)
-            .borderRadius(14)
+      Stack({ alignContent: Alignment.TopEnd }) {
+        Stack({ alignContent: Alignment.BottomEnd }) {
+          if (entry.imageUrl) {
+            Image(entry.imageUrl)
+              .width('100%')
+              .aspectRatio(16 / 9)
+              .objectFit(ImageFit.Cover)
+              .borderRadius(14)
+          } else {
+            Column()
+              .width('100%')
+              .aspectRatio(16 / 9)
+              .backgroundColor(this.cardTokens().placeholderBackground)
+              .borderRadius(14)
+          }
+
+          if (this.videoDurationLabel(entry)) {
+            Text(this.videoDurationLabel(entry))
+              .fontSize(10)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#FFFFFF')
+              .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+              .backgroundColor('rgba(0,0,0,0.62)')
+              .borderRadius(8)
+              .margin({ right: 8, bottom: 8 })
+          }
         }
 
-        if (this.videoDurationLabel(entry)) {
-          Text(this.videoDurationLabel(entry))
-            .fontSize(10)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#FFFFFF')
-            .padding({ left: 6, right: 6, top: 3, bottom: 3 })
-            .backgroundColor('rgba(0,0,0,0.62)')
-            .borderRadius(8)
-            .margin({ right: 8, bottom: 8 })
+        if (!entry.isRead) {
+          Row()
+            .width(8)
+            .height(8)
+            .borderRadius(999)
+            .backgroundColor(this.theme.accent)
+            .margin({ right: 8, top: 8 })
         }
       }
 
@@ -275,7 +286,7 @@ export struct HomeVideoGrid {
                 this.VideoCard(entry)
               }
               .layoutWeight(1)
-            }, (entry: EntryCardModel) => entry.id)
+            }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
 
             if (rowEntries.length < resolveHomeVideoGridColumns()) {
               Blank()
@@ -283,7 +294,12 @@ export struct HomeVideoGrid {
             }
           }
           .width('100%')
-        }, (_rowEntries: EntryCardModel[], rowIndex: number) => `video-row-${rowIndex}`)
+        }, (rowEntries: EntryCardModel[], rowIndex: number) => {
+          const rowSignature = rowEntries
+            .map((entry: EntryCardModel) => `${entry.id}-${entry.isRead ? '1' : '0'}`)
+            .join('|')
+          return `video-row-${rowIndex}-${rowSignature}`
+        })
       }
     }
     .width('100%')

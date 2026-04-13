@@ -294,7 +294,6 @@ export struct AppearanceSettingsPanel {
     })
   }
 
-
   @Builder
   private DividerLine() {
     Row()
@@ -427,7 +426,7 @@ export struct AppearanceSettingsPanel {
   }
 
   @Builder
-  private ToggleRow(icon: Resource, title: string, subtitle: string, checked: boolean, onToggle: () => void) {
+  private ToggleRow(icon: Resource, title: string, subtitle: string, checked: boolean, onToggle: (enabled: boolean) => void) {
     Row({ space: 12 }) {
       SymbolGlyph(icon)
         .fontSize(ROW_ICON_SIZE)
@@ -449,18 +448,29 @@ export struct AppearanceSettingsPanel {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      Toggle({ type: ToggleType.Switch, isOn: checked })
-        .selectedColor(this.theme.accent)
-        .switchPointColor('#FFFFFF')
-        .hitTestBehavior(HitTestMode.None)
+      Row({ space: 6 }) {
+        Row()
+          .width(8)
+          .height(8)
+          .borderRadius(999)
+          .backgroundColor(checked ? '#FFFFFF' : this.theme.textMuted)
+
+        Text(checked ? '已开启' : '已关闭')
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(checked ? this.theme.accentText : this.theme.textSecondary)
+      }
+      .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+      .backgroundColor(checked ? this.theme.accent : this.theme.surface)
+      .border({ width: 0.8, color: checked ? this.theme.accent : this.theme.divider })
+      .borderRadius(999)
+      .onClick(() => onToggle(!checked))
     }
     .width('100%')
     .constraintSize({ minHeight: ROW_MIN_HEIGHT })
     .padding({ left: 12, right: 12, top: 6, bottom: 6 })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => onToggle())
   }
 
   @Builder
@@ -554,37 +564,6 @@ export struct AppearanceSettingsPanel {
       .borderRadius(CARD_RADIUS_LG)
       .border({ width: 0.8, color: this.theme.divider })
       .transition(livoMotion.enterSoft(40))
-
-      Column() {
-        this.ToggleRow(
-          $r('sys.symbol.arrow_clockwise'),
-          '自动刷新',
-          '进入应用后保持订阅内容及时更新',
-          this.config.autoRefresh,
-          () => this.toggleAutoRefresh()
-        )
-        this.DividerLine()
-        this.ToggleRow(
-          $r('sys.symbol.ellipsis_message_fill'),
-          'AI 摘要',
-          '在文章详情中启用智能摘要能力',
-          this.config.aiSummaryEnabled,
-          () => this.toggleAiSummary()
-        )
-        this.DividerLine()
-        this.ToggleRow(
-          $r('sys.symbol.externaldrive_fill'),
-          '图片代理',
-          '使用代理加载远程图片内容',
-          this.config.imageProxyEnabled,
-          () => this.toggleImageProxy()
-        )
-      }
-      .width('100%')
-      .backgroundColor(this.theme.surface)
-      .borderRadius(CARD_RADIUS_LG)
-      .border({ width: 0.8, color: this.theme.divider })
-      .transition(livoMotion.enterSoft(70))
     }
     .width('100%')
   }

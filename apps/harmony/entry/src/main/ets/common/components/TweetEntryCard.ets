@@ -8,6 +8,7 @@ import { AvatarTile } from './AvatarTile'
 export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @Prop isUnread: boolean = false
   @Prop enableEnterTransition: boolean = true
   @Prop highlightQuery: string = ''
   @Prop collapsedTextLines: number = 0
@@ -198,93 +199,109 @@ export struct TweetEntryCard {
     }
   }
 
+  @Builder
+  private UnreadDot() {
+    if (this.isUnread) {
+      Row()
+        .width(8)
+        .height(8)
+        .borderRadius(999)
+        .backgroundColor(this.theme.accent)
+        .margin({ right: 8, top: 8 })
+    }
+  }
+
   build() {
-    Column({ space: 8 }) {
-      this.RetweetBanner()
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column({ space: 8 }) {
+        this.RetweetBanner()
 
-      Row({ space: 8 }) {
-        AvatarTile({
-          imageUrl: this.presentation.avatarUrl,
-          fallbackLabel: this.presentation.displayName,
-          accent: this.theme.accent,
-          theme: this.theme,
-          avatarSize: 17,
-          radius: 999,
-          textSize: 11,
-          showFallbackLabel: false,
-        })
+        Row({ space: 8 }) {
+          AvatarTile({
+            imageUrl: this.presentation.avatarUrl,
+            fallbackLabel: this.presentation.displayName,
+            accent: this.theme.accent,
+            theme: this.theme,
+            avatarSize: 17,
+            radius: 999,
+            textSize: 11,
+            showFallbackLabel: false,
+          })
 
-        Row({ space: 4 }) {
+          Row({ space: 4 }) {
+            HighlightedInlineText({
+              text: this.presentation.displayName || '未知来源',
+              query: this.highlightQuery,
+              theme: this.theme,
+              fontSize: 16,
+              lineHeight: 20,
+              fontWeight: FontWeight.Bold,
+              defaultColor: this.theme.textPrimary,
+              maxLines: 1,
+            })
+
+            if (this.usernameLabel()) {
+              HighlightedInlineText({
+                text: this.usernameLabel(),
+                query: this.highlightQuery,
+                theme: this.theme,
+                fontSize: 14,
+                lineHeight: 18,
+                defaultColor: this.theme.textMuted,
+                maxLines: 1,
+              })
+            }
+
+            if (this.presentation.publishedLabel) {
+              Text(`· ${this.presentation.publishedLabel}`)
+                .fontSize(13)
+                .fontColor(this.theme.textMuted)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .layoutWeight(1)
+            }
+          }
+          .layoutWeight(1)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Top)
+
+        if (this.presentation.text) {
           HighlightedInlineText({
-            text: this.presentation.displayName || '未知来源',
+            text: this.presentation.text,
             query: this.highlightQuery,
             theme: this.theme,
             fontSize: 16,
-            lineHeight: 20,
-            fontWeight: FontWeight.Bold,
+            lineHeight: 24,
             defaultColor: this.theme.textPrimary,
-            maxLines: 1,
+            maxLines: this.resolvedTweetTextMaxLines(),
           })
+            .width('100%')
 
-          if (this.usernameLabel()) {
-            HighlightedInlineText({
-              text: this.usernameLabel(),
-              query: this.highlightQuery,
-              theme: this.theme,
-              fontSize: 14,
-              lineHeight: 18,
-              defaultColor: this.theme.textMuted,
-              maxLines: 1,
-            })
-          }
-
-          if (this.presentation.publishedLabel) {
-            Text(`· ${this.presentation.publishedLabel}`)
-              .fontSize(13)
-              .fontColor(this.theme.textMuted)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1)
+          if (this.shouldShowExpandAction()) {
+            Text('显示更多')
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#1677FF')
+              .margin({ top: -2 })
+              .onClick(() => {
+                this.isTextExpanded = true
+              })
           }
         }
-        .layoutWeight(1)
+
+        this.RtSection()
+        this.MediaGrid()
       }
       .width('100%')
-      .alignItems(VerticalAlign.Top)
 
-      if (this.presentation.text) {
-        HighlightedInlineText({
-          text: this.presentation.text,
-          query: this.highlightQuery,
-          theme: this.theme,
-          fontSize: 16,
-          lineHeight: 24,
-          defaultColor: this.theme.textPrimary,
-          maxLines: this.resolvedTweetTextMaxLines(),
-        })
-          .width('100%')
-
-        if (this.shouldShowExpandAction()) {
-          Text('显示更多')
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1677FF')
-            .margin({ top: -2 })
-            .onClick(() => {
-              this.isTextExpanded = true
-            })
-        }
-      }
-
-      this.RtSection()
-      this.MediaGrid()
+      this.UnreadDot()
     }
     .width('100%')
     .padding({ left: 14, right: 14, top: 12, bottom: 10 })
     .backgroundColor(this.theme.surface)
     .borderRadius(14)
     .border({ width: 0.8, color: this.theme.divider })
-    .alignItems(HorizontalAlign.Start)
     .transition(this.enableEnterTransition ? livoMotion.enterSoft(24) : TransitionEffect.IDENTITY)
     .onClick(() => {
       this.onOpen()

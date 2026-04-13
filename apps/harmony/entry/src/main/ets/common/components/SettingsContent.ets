@@ -23,6 +23,7 @@ import {
   GeneralSettingsPanel,
   PrivacySettingsPanel,
   FavoritesPanel,
+  SubscriptionsSettingsPanel,
 } from './SettingsSecondaryPanels'
 import { SettingListRow } from './SettingListRow'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../models/LivoModels'
@@ -30,7 +31,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 
-type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts' | 'ai-assistant'
+type SettingsSheetKey = '' | 'appearance' | 'general' | 'data-control' | 'privacy' | 'about' | 'favorites' | 'accounts' | 'ai-assistant' | 'subscriptions'
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -265,6 +266,9 @@ export struct SettingsContent {
       case 'accounts':
         preferredHeight = 520
         break
+      case 'subscriptions':
+        preferredHeight = 520
+        break
       case 'ai-assistant':
         preferredHeight = SettingsContent.SHEET_TALL_HEIGHT
         break
@@ -373,6 +377,10 @@ export struct SettingsContent {
     }
     if (item.title === 'AI助手') {
       this.openSheet('ai-assistant')
+      return
+    }
+    if (item.title === '订阅') {
+      this.openSheet('subscriptions')
       return
     }
     if (item.title === '隐私') {
@@ -604,6 +612,8 @@ export struct SettingsContent {
             this.onSettingsChange(settings)
           },
         })
+      } else if (this.activeSheet === 'subscriptions') {
+        SubscriptionsSettingsPanel()
       }
     }
     .width('100%')
