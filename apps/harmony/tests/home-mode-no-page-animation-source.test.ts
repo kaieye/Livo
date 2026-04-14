@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-test('home mode switching updates scenes immediately without page transition timer', () => {
+test('home mode switching keeps previous mode semantics without introducing timer delay', () => {
   const source = readFileSync(
     new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
     'utf8',
@@ -23,7 +23,7 @@ test('home mode switching updates scenes immediately without page transition tim
     adjacentModeStart,
   )
 
-  assert.match(startModeTransition, /this\.previousMode = nextMode/)
+  assert.match(startModeTransition, /this\.previousMode = this\.renderedMode/)
   assert.match(startModeTransition, /this\.renderedMode = nextMode/)
   assert.match(startModeTransition, /this\.isModeTransitioning = false/)
   assert.doesNotMatch(startModeTransition, /setTimeout\(/)

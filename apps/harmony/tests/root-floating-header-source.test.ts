@@ -55,13 +55,16 @@ test('floating root pages share a common floating header shell', () => {
   assert.doesNotMatch(layoutSource, /@BuilderParam content:/)
   assert.match(layoutSource, /\.backgroundColor\(this\.theme\.background\)/)
 
-  assert.match(indexSource, /private HomeRootPage\(\) \{\s*Stack\(\)/s)
+  assert.match(
+    indexSource,
+    /private HomeRootPage\(\) \{[\s\S]*Stack\(\{ alignContent: Alignment\.TopStart \}\)/s,
+  )
   assert.doesNotMatch(indexSource, /FloatingRootPageLayout\(\{/)
   assert.match(indexSource, /private currentRootTitle\(\): string/)
   assert.match(indexSource, /private shouldHideRootTitleBar\(\): boolean/)
   assert.match(
     indexSource,
-    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
+    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.currentRootTabId\(\) === 'subscriptions'[\s\S]*this\.currentRootTabId\(\) === 'discover'[\s\S]*this\.currentRootTabId\(\) === 'settings'/s,
   )
   assert.doesNotMatch(
     indexSource,
@@ -69,7 +72,7 @@ test('floating root pages share a common floating header shell', () => {
   )
   assert.match(
     indexSource,
-    /private shouldHideBottomTabs\(\): boolean \{[\s\S]*this\.activeRootTabId === 'discover' && this\.discoverHasForegroundOverlay[\s\S]*this\.activeRootTabId === 'subscriptions' && this\.subscriptionsOverlayLevel > 0[\s\S]*this\.activeRootTabId === 'settings' && this\.settingsOverlayLevel > 0/s,
+    /private shouldHideBottomTabs\(\): boolean \{[\s\S]*this\.currentRootTabId\(\) === 'discover' && this\.discoverHasForegroundOverlay[\s\S]*this\.currentRootTabId\(\) === 'settings' && this\.settingsOverlayLevel > 0/s,
   )
   assert.match(
     indexSource,
@@ -152,7 +155,7 @@ test('floating root pages share a common floating header shell', () => {
   )
   assert.match(
     indexSource,
-    /SettingsContent\(\{[\s\S]*inheritedSettings: this\.rootSettings[\s\S]*onSettingsChange: \(settings: HarmonySettings\) => \{\s*this\.rootSettings = settings/s,
+    /SettingsContent\(\{[\s\S]*inheritedSettings: this\.rootSettings[\s\S]*onSettingsChange: \(settings: HarmonySettings\) => \{[\s\S]*this\.rootSettings = settings/s,
   )
   assert.match(indexSource, /blurStrategy:\s*this\.currentRootBlurStrategy\(\)/)
   assert.match(
@@ -345,6 +348,11 @@ test('floating root pages share a common floating header shell', () => {
   )
   assert.doesNotMatch(settingsSource, /FloatingRootPageLayout\(\{/)
   assert.doesNotMatch(settingsSource, /SettingsBlurHeader\(\)/)
+  assert.match(settingsSource, /\.hideTitleBar\(true\)/)
+  assert.match(
+    indexSource,
+    /private requestModeSwitch\(nextMode: SubscriptionMode\): void \{[\s\S]*this\.requestExpandedModeRail\(\)/s,
+  )
 })
 
 test('settings content no longer renders PageHeader directly inside a list item', () => {

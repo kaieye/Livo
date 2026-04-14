@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-test('subscriptions mode switching updates scenes immediately without page transition timer', () => {
+test('subscriptions mode switching keeps previous mode semantics without timer delay', () => {
   const source = readFileSync(
     new URL(
       '../entry/src/main/ets/common/components/SubscriptionsContent.ets',
@@ -26,7 +26,7 @@ test('subscriptions mode switching updates scenes immediately without page trans
     adjacentModeStart,
   )
 
-  assert.match(startModeTransition, /this\.previousMode = nextMode/)
+  assert.match(startModeTransition, /this\.previousMode = this\.renderedMode/)
   assert.match(startModeTransition, /this\.renderedMode = nextMode/)
   assert.match(startModeTransition, /this\.isModeTransitioning = false/)
   assert.doesNotMatch(startModeTransition, /setTimeout\(/)

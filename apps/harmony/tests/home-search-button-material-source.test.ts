@@ -145,7 +145,7 @@ test('home page keeps HDS title bar system material while rendering inline searc
   )
   assert.match(
     source,
-    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.activeRootTabId === 'subscriptions'[\s\S]*this\.activeRootTabId === 'discover'[\s\S]*this\.activeRootTabId === 'settings'/s,
+    /private shouldHideRootTitleBar\(\): boolean \{[\s\S]*this\.currentRootTabId\(\) === 'subscriptions'[\s\S]*this\.currentRootTabId\(\) === 'discover'[\s\S]*this\.currentRootTabId\(\) === 'settings'/s,
   )
   assert.doesNotMatch(
     source,
@@ -181,7 +181,7 @@ test('home page keeps HDS title bar system material while rendering inline searc
   )
   assert.match(
     source,
-    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('今日推荐'\)[\s\S]*fontSize\(28\)[\s\S]*fontWeight\(FontWeight\.Bold\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
+    /private HomeRootLowerTitleBuilder\(\) \{[\s\S]*Text\('首页'\)[\s\S]*fontSize\(28\)[\s\S]*fontWeight\(FontWeight\.Bold\)[\s\S]*height\(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT\)[\s\S]*alignItems\(VerticalAlign\.Bottom\)[\s\S]*bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING/s,
   )
   assert.equal(
     homeRootLowerTitleBuilder.includes('this.HomeInlineSearchActionRow()'),
@@ -275,7 +275,7 @@ test('home page keeps HDS title bar system material while rendering inline searc
   )
   assert.match(
     source,
-    /private currentRootBindScrollers\(\): Scroller\[\] \{[\s\S]*if \(this\.activeRootTabId === 'home'\) \{[\s\S]*return \[\s*this\.articlesScroller,\s*this\.socialScroller,\s*this\.picturesScroller,\s*this\.videosScroller,\s*\][\s\S]*if \(this\.isSettingsRootTab\(\) && this\.settingsRootScroller\) \{\s*return \[this\.settingsRootScroller\]/s,
+    /private currentRootBindScrollers\(\): Scroller\[\] \{[\s\S]*if \(this\.activeRootTabId === 'home'\) \{[\s\S]*return \[\s*this\.articlesScroller,\s*this\.socialScroller,\s*this\.picturesScroller,\s*this\.videosScroller,\s*\][\s\S]*if \(this\.activeRootTabId === 'settings' && this\.settingsRootScroller\) \{\s*return \[this\.settingsRootScroller\]/s,
   )
   assert.match(
     source,

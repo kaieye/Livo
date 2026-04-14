@@ -1,4 +1,5 @@
 import { EntryCardModel } from '../models/LivoModels'
+import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
@@ -10,13 +11,14 @@ import {
 
 @Component
 export struct HomeVideoGrid {
-  @Prop entries: EntryCardModel[] = []
+  @Prop @Watch('syncEntriesChanged') entries: EntryCardModel[] = []
   @Prop highlightQuery: string = ''
   @Prop isLoading: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  private readonly rowDataSource: ArrayLazyDataSource<EntryCardModel[]> = new ArrayLazyDataSource<EntryCardModel[]>(() => this.rowItems())
 
   aboutToAppear(): void {
     this.theme = this.inheritedTheme
@@ -24,6 +26,14 @@ export struct HomeVideoGrid {
 
   private syncInheritedTheme(): void {
     this.theme = this.inheritedTheme
+  }
+
+  private syncEntriesChanged(): void {
+    this.rowDataSource.notifyDataReloaded()
+  }
+
+  private rowItems(): EntryCardModel[][] {
+    return this.rows()
   }
 
   private cardMeta(entry: EntryCardModel): string {
@@ -283,7 +293,7 @@ export struct HomeVideoGrid {
         .borderRadius(CARD_RADIUS_MD)
         .border({ width: 0.8, color: this.theme.divider })
       } else {
-        ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
+        LazyForEach(this.rowDataSource, (rowEntries: EntryCardModel[], rowIndex: number) => {
           Row({ space: 12 }) {
             ForEach(rowEntries, (entry: EntryCardModel) => {
               Column() {

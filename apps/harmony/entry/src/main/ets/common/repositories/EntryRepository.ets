@@ -228,44 +228,43 @@ export class EntryRepository {
 
     try {
       for (const entry of entries) {
-        const existing = await EntryRepository.getById(entry.id)
-        if (existing) {
-          const predicates = new relationalStore.RdbPredicates('entries')
-          predicates.equalTo('id', entry.id)
-          await store.update({
-            feed_id: entry.feedId,
-            title: entry.title,
-            url: entry.url,
-            summary: entry.summary,
-            content: entry.content,
-            author: entry.author,
-            published_at: entry.publishedAt,
-            reading_time_minutes: entry.readingTimeMinutes,
-            tags_json: JSON.stringify(entry.tags),
-            media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
-            is_read: boolToNumber(existing.isRead),
-            is_starred: boolToNumber(existing.isStarred),
-            updated_at: Date.now(),
-          }, predicates)
-        } else {
-          await store.insert('entries', {
-            id: entry.id,
-            feed_id: entry.feedId,
-            title: entry.title,
-            url: entry.url,
-            summary: entry.summary,
-            content: entry.content,
-            author: entry.author,
-            published_at: entry.publishedAt,
-            is_read: boolToNumber(entry.isRead),
-            is_starred: boolToNumber(entry.isStarred),
-            reading_time_minutes: entry.readingTimeMinutes,
-            tags_json: JSON.stringify(entry.tags),
-            media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
-            created_at: entry.createdAt,
-            updated_at: entry.updatedAt,
-          })
+        const predicates = new relationalStore.RdbPredicates('entries')
+        predicates.equalTo('id', entry.id)
+        const updatedRows = await store.update({
+          feed_id: entry.feedId,
+          title: entry.title,
+          url: entry.url,
+          summary: entry.summary,
+          content: entry.content,
+          author: entry.author,
+          published_at: entry.publishedAt,
+          reading_time_minutes: entry.readingTimeMinutes,
+          tags_json: JSON.stringify(entry.tags),
+          media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
+          updated_at: Date.now(),
+        }, predicates)
+
+        if ((updatedRows as number) > 0) {
+          continue
         }
+
+        await store.insert('entries', {
+          id: entry.id,
+          feed_id: entry.feedId,
+          title: entry.title,
+          url: entry.url,
+          summary: entry.summary,
+          content: entry.content,
+          author: entry.author,
+          published_at: entry.publishedAt,
+          is_read: boolToNumber(entry.isRead),
+          is_starred: boolToNumber(entry.isStarred),
+          reading_time_minutes: entry.readingTimeMinutes,
+          tags_json: JSON.stringify(entry.tags),
+          media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
+          created_at: entry.createdAt,
+          updated_at: entry.updatedAt,
+        })
       }
     } catch (error) {
       throw new Error(`批量插入条目失败：${error instanceof Error ? error.message : 'unknown error'}`)

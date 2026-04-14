@@ -1,4 +1,5 @@
 import { AppRepository } from '../common/data/AppRepository'
+import { ArrayLazyDataSource } from '../common/data/ArrayLazyDataSource'
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
   HdsNavigation,
@@ -103,6 +104,11 @@ const HOME_INLINE_SEARCH_RESULT_LIMIT: number = 6
 const HOME_INLINE_SEARCH_MOTION_DURATION: number = 240
 const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
 const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
+const HOME_REFRESH_RESULT_RELOAD_DELAY_MS: number = 180
+const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 32
+const HOME_INITIAL_CANDIDATE_LIMIT: number = 24
+const HOME_LAZY_LOAD_PAGE_SIZE: number = 24
+const HOME_MAX_CANDIDATE_LIMIT: number = 240
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 
 interface RootTabSymbolPair {
@@ -120,6 +126,13 @@ interface HomeModeScrollOffsetMap {
   social: number
   pictures: number
   videos: number
+}
+
+interface HomeEntryDataSourceMap {
+  articles: ArrayLazyDataSource<EntryCardModel>
+  social: ArrayLazyDataSource<EntryCardModel>
+  pictures: ArrayLazyDataSource<EntryCardModel>
+  videos: ArrayLazyDataSource<EntryCardModel>
 }
 
 @Entry
@@ -167,6 +180,7 @@ struct Index {
   @State private suppressRootTabChange: boolean = false
   @State settingsScrollerBindingVersion: number = 0
   @State isHomeStartupRefreshing: boolean = false
+  @State isHomeLazyLoading: boolean = false
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
@@ -179,10 +193,19 @@ struct Index {
     pictures: 0,
     videos: 0,
   }
+  private readonly homeEntryDataSources: HomeEntryDataSourceMap = {
+    articles: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.articles),
+    social: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.social),
+    pictures: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.pictures),
+    videos: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.videos),
+  }
   private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
   private refreshPercentAnimationTimer: number = -1
   private autoRefreshTimer: number = -1
+  private homeEntryGroupVersion: number = 0
+  private homeLoadedCandidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT
+  private homeHasMoreEntries: boolean = true
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -203,8 +226,7 @@ struct Index {
     AppStorage.setOrCreate('showUnreadDot', settings.showUnreadDot)
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
-    this.featuredEntries = await AppRepository.featuredEntries()
-    this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
+    await this.reloadFeaturedEntriesFromLocal(HOME_INITIAL_CANDIDATE_LIMIT)
     this.feedSourceLabel = '本地内容已加载'
     this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
@@ -238,9 +260,10 @@ struct Index {
         this.refreshTotalCount = totalCount
         this.animateRefreshPercentTo(this.resolveRefreshPercent(completedCount, totalCount))
       })
-      this.featuredEntries = result.entries
-      this.entryGroups = groupHomeEntriesByMode(result.entries)
       this.feedSourceLabel = result.sourceLabel
+      setTimeout(() => {
+        void this.reloadFeaturedEntriesFromLocal(HOME_INITIAL_CANDIDATE_LIMIT)
+      }, HOME_REFRESH_RESULT_RELOAD_DELAY_MS)
       if (showResultToast) {
         this.showToast(result.sourceLabel)
       }
@@ -404,7 +427,7 @@ struct Index {
   }
 
   private shouldConsumeHomePullScroll(mode: SubscriptionMode): boolean {
-    return this.activeRootTabId === 'home'
+    return this.currentRootTabId() === 'home'
       && mode === this.mode
       && !this.searchOverlayVisible
   }
@@ -621,16 +644,8 @@ struct Index {
       this.homeModeRailExpandedLockOffset = -1
     }
 
-    if (nextOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET) {
-      this.homeModeRailDismissedByScroll = false
-    } else if (!this.homeModeRailExpandedOverride) {
-      if (nextOffset > previousOffset + 0.5) {
-        this.homeModeRailDismissedByScroll = true
-      } else if (nextOffset < previousOffset - 0.5) {
-        this.homeModeRailDismissedByScroll = false
-      } else if (nextOffset <= 0.5) {
-        this.homeModeRailDismissedByScroll = false
-      }
+    if (!this.homeModeRailExpandedOverride) {
+      this.homeModeRailDismissedByScroll = nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET
     }
 
     this.currentHomeModeScrollOffset = nextOffset
@@ -638,7 +653,7 @@ struct Index {
   }
 
   private currentRootTitle(): string {
-    switch (this.activeRootTabId) {
+    switch (this.currentRootTabId()) {
       case 'subscriptions':
         return '订阅库'
       case 'settings':
@@ -880,7 +895,7 @@ struct Index {
   @Builder
   private HomeRootLowerTitleBuilder() {
     Row() {
-      Text('今日推荐')
+      Text('首页')
         .fontSize(28)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
@@ -894,6 +909,28 @@ struct Index {
       right: PAGE_HORIZONTAL_PADDING,
       bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
     })
+  }
+
+  @Builder
+  private HomeRootTitleOverlayLayer() {
+    Row() {
+      Text('首页')
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('sys.color.font_primary'))
+        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
+    }
+    .width('100%')
+    .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
+    .alignItems(VerticalAlign.Bottom)
+    .padding({
+      top: ROOT_TITLE_BAR_MINI_HEIGHT,
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
+    })
+    .opacity(Math.max(0, 1 - this.homeModeRailCollapseProgress()))
+    .zIndex(121)
   }
 
   @Builder
@@ -1020,13 +1057,13 @@ struct Index {
   }
 
   private isHomeRootTab(): boolean {
-    return this.activeRootTabId === 'home'
+    return this.currentRootTabId() === 'home'
   }
 
   private shouldHideRootTitleBar(): boolean {
-    return this.activeRootTabId === 'subscriptions'
-      || this.activeRootTabId === 'discover'
-      || this.activeRootTabId === 'settings'
+    return this.currentRootTabId() === 'subscriptions'
+      || this.currentRootTabId() === 'discover'
+      || this.currentRootTabId() === 'settings'
   }
 
   private currentRootScrollEffectType(): ScrollEffectType {
@@ -1034,7 +1071,7 @@ struct Index {
   }
 
   private isSettingsRootTab(): boolean {
-    return this.activeRootTabId === 'settings'
+    return this.currentRootTabId() === 'settings'
   }
 
   private currentRootBlurEffectiveEndOffset(): LengthMetrics {
@@ -1085,7 +1122,7 @@ struct Index {
         this.videosScroller,
       ]
     }
-    if (this.isSettingsRootTab() && this.settingsRootScroller) {
+    if (this.activeRootTabId === 'settings' && this.settingsRootScroller) {
       return [this.settingsRootScroller]
     }
     return []
@@ -1151,8 +1188,8 @@ struct Index {
       return
     }
 
-    this.activeRootTabId = requestedTab
     this.highlightedRootTabId = requestedTab
+    this.activeRootTabId = requestedTab
     this.rootTabIndex = rootTabIndexForId(requestedTab)
     this.syncRootTabsController()
   }
@@ -1307,13 +1344,26 @@ struct Index {
 
     const tabId = item.id as RootTabId
     this.rootTabIndex = index
-    this.activeRootTabId = tabId
     this.highlightedRootTabId = tabId
     if (tabId !== 'home') {
       this.resetHomePullRefreshState()
       this.closeHomeInlineSearch(true)
     }
-    this.refreshRootTheme()
+  }
+
+  private confirmRootTabSelection(tabId: RootTabId): void {
+    if (this.activeRootTabId === tabId) {
+      return
+    }
+
+    this.activeRootTabId = tabId
+    if (tabId === 'home') {
+      this.syncHomeModeRailState(this.mode)
+    }
+  }
+
+  private currentRootTabId(): RootTabId {
+    return this.highlightedRootTabId
   }
 
   private modeIndex(mode: SubscriptionMode): number {
@@ -1339,11 +1389,12 @@ struct Index {
     this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
+    this.requestExpandedModeRail()
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
     this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(this.renderedMode) ? 1 : -1
-    this.previousMode = nextMode
+    this.previousMode = this.renderedMode
     this.renderedMode = nextMode
     this.isModeTransitioning = false
   }
@@ -1393,13 +1444,80 @@ struct Index {
   }
 
   private handleFeedsChanged(): void {
-    void this.reloadFeaturedEntriesFromLocal()
+    void this.reloadFeaturedEntriesFromLocal(this.homeLoadedCandidateLimit)
   }
 
-  private async reloadFeaturedEntriesFromLocal(): Promise<void> {
-    this.featuredEntries = await AppRepository.featuredEntries()
-    this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
-    this.feedSourceLabel = '本地内容已同步'
+  private async reloadFeaturedEntriesFromLocal(candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT): Promise<void> {
+    const nextEntries = await AppRepository.featuredEntries(candidateLimit)
+    this.featuredEntries = nextEntries
+    this.homeLoadedCandidateLimit = candidateLimit
+    this.homeHasMoreEntries = nextEntries.length >= candidateLimit
+    const currentGroupVersion = this.homeEntryGroupVersion + 1
+    this.homeEntryGroupVersion = currentGroupVersion
+    setTimeout(() => {
+      if (this.homeEntryGroupVersion !== currentGroupVersion) {
+        return
+      }
+      this.entryGroups = groupHomeEntriesByMode(nextEntries)
+      this.notifyHomeEntryDataReloaded()
+    }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
+  }
+
+  private notifyHomeEntryDataReloaded(): void {
+    this.homeEntryDataSources.articles.notifyDataReloaded()
+    this.homeEntryDataSources.social.notifyDataReloaded()
+    this.homeEntryDataSources.pictures.notifyDataReloaded()
+    this.homeEntryDataSources.videos.notifyDataReloaded()
+  }
+
+  private homeEntryDataSourceFor(mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> {
+    switch (mode) {
+      case 'social':
+        return this.homeEntryDataSources.social
+      case 'pictures':
+        return this.homeEntryDataSources.pictures
+      case 'videos':
+        return this.homeEntryDataSources.videos
+      default:
+        return this.homeEntryDataSources.articles
+    }
+  }
+
+  private homeEntryCountFor(mode: SubscriptionMode): number {
+    return this.homeEntryDataSourceFor(mode).totalCount()
+  }
+
+  private tryLoadMoreHomeEntries(mode: SubscriptionMode): void {
+    if (mode !== this.mode) {
+      return
+    }
+
+    if (this.isHomeLazyLoading || this.isRefreshing || !this.homeHasMoreEntries) {
+      return
+    }
+
+    if (this.homeLoadedCandidateLimit >= HOME_MAX_CANDIDATE_LIMIT) {
+      this.homeHasMoreEntries = false
+      return
+    }
+
+    this.isHomeLazyLoading = true
+    const nextCandidateLimit = Math.min(HOME_MAX_CANDIDATE_LIMIT, this.homeLoadedCandidateLimit + HOME_LAZY_LOAD_PAGE_SIZE)
+    void this.reloadFeaturedEntriesFromLocal(nextCandidateLimit)
+      .finally(() => {
+        this.isHomeLazyLoading = false
+      })
+  }
+
+  @Builder
+  private HomeLoadMoreSentinel(mode: SubscriptionMode) {
+    Column()
+      .width('100%')
+      .height(1)
+      .opacity(0.001)
+      .onAppear(() => {
+        this.tryLoadMoreHomeEntries(mode)
+      })
   }
 
   private filteredEntries(): EntryCardModel[] {
@@ -1488,7 +1606,7 @@ struct Index {
       direction: this.modeTransitionDirection,
     })
 
-    return renderState.shouldMount || this.visitedModes.includes(mode)
+    return renderState.shouldMount
   }
 
   private getModeTitle(mode: SubscriptionMode): string {
@@ -1901,7 +2019,6 @@ struct Index {
     })
     .translate({ y: this.homeModeRailDismissTranslateY() })
     .opacity(this.homeModeRailDismissOpacity())
-    .animation({ duration: 180, curve: Curve.EaseOut })
     .enabled(!this.isHomeModeRailCollapsed())
     .zIndex(100)
   }
@@ -1921,7 +2038,6 @@ struct Index {
     })
     .opacity(this.homeModeRailCollapseProgress())
     .translate({ y: (1 - this.homeModeRailCollapseProgress()) * 14 })
-    .animation({ duration: 180, curve: Curve.EaseOut })
     .enabled(this.isHomeModeRailCollapsed())
     .zIndex(132)
   }
@@ -2132,7 +2248,7 @@ struct Index {
       }
       .width('100%')
 
-      ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel) => {
+      LazyForEach(this.homeEntryDataSourceFor(mode), (entry: EntryCardModel) => {
         ListItem() {
           if (mode === 'social') {
             this.SocialEntryCard(entry)
@@ -2143,7 +2259,7 @@ struct Index {
         .width('100%')
       }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
 
-      if (this.filteredEntriesFor(mode).length === 0) {
+      if (this.homeEntryCountFor(mode) === 0) {
         ListItem() {
           Column({ space: 8 }) {
             Text(this.homeEmptyStateTitle())
@@ -2167,6 +2283,13 @@ struct Index {
 
       ListItem() {
         Row().height(100).width('100%')
+      }
+
+      if (this.homeHasMoreEntries && this.filteredEntriesFor(mode).length > 0) {
+        ListItem() {
+          this.HomeLoadMoreSentinel(mode)
+        }
+        .width('100%')
       }
     }
     .width('100%')
@@ -2199,7 +2322,7 @@ struct Index {
       }
       .width('100%')
 
-      ForEach(this.filteredEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
+      LazyForEach(this.homeEntryDataSourceFor('pictures'), (entry: EntryCardModel, index: number) => {
         ListItem() {
           PictureEntryCard({
             entry: this.pictureCardEntry(entry),
@@ -2219,7 +2342,7 @@ struct Index {
         .width('100%')
       }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
 
-      if (this.filteredEntriesFor('pictures').length === 0) {
+      if (this.homeEntryCountFor('pictures') === 0) {
         ListItem() {
           Column({ space: 8 }) {
             Text(this.homeEmptyStateTitle())
@@ -2243,6 +2366,13 @@ struct Index {
 
       ListItem() {
         Row().height(100).width('100%')
+      }
+
+      if (this.homeHasMoreEntries && this.filteredEntriesFor('pictures').length > 0) {
+        ListItem() {
+          this.HomeLoadMoreSentinel('pictures')
+        }
+        .width('100%')
       }
     }
     .width('100%')
@@ -2285,6 +2415,10 @@ struct Index {
                   this.openEntry(entry)
                 },
               })
+
+              if (this.homeHasMoreEntries && this.filteredEntriesFor(mode).length > 0) {
+                this.HomeLoadMoreSentinel(mode)
+              }
             }
             .width('100%')
             .constraintSize({ minHeight: '100%' })
@@ -2299,7 +2433,7 @@ struct Index {
           .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
             return this.consumeHomePullScrollOffset(mode, yOffset)
           })
-          .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
+            .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
@@ -2375,9 +2509,8 @@ struct Index {
 
   private shouldHideBottomTabs(): boolean {
     return (
-      (this.activeRootTabId === 'discover' && this.discoverHasForegroundOverlay)
-      || (this.activeRootTabId === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
-      || (this.activeRootTabId === 'settings' && this.settingsOverlayLevel > 0)
+      (this.currentRootTabId() === 'discover' && this.discoverHasForegroundOverlay)
+      || (this.currentRootTabId() === 'settings' && this.settingsOverlayLevel > 0)
     )
   }
 
@@ -2430,6 +2563,9 @@ struct Index {
               }
               .width('100%')
               .height('100%')
+              .onAppear(() => {
+                this.confirmRootTabSelection(item.id as RootTabId)
+              })
             }
             .tabBar(BottomTabBarStyle.of({
               normal: this.rootTabSymbolPair(item.id).normal,

@@ -39,7 +39,7 @@ test('AppRepository refreshes feeds with a bounded rolling pool', () => {
   assert.match(source, /const currentIndex = nextIndex/)
   assert.match(
     source,
-    /const value = await AppRepository\.refreshFeed\(feed\.id, true\)/,
+    /const value = await AppRepository\.refreshFeed\(feed\.id, true, false, false\)/,
   )
   assert.match(source, /results\[currentIndex\] = fulfilled/)
 })

@@ -61,7 +61,8 @@ test('subscriptions content leaves the root title bar responsible for the page t
   assert.match(source, /\.titleBar\(\{/)
   assert.match(source, /ScrollEffectType\.IMMERSIVE_GRADIENT_BLUR/)
   assert.match(source, /blurStrategy:\s*BlurStrategy\.ENABLE/)
-  assert.match(source, /\.hideTitleBar\(this\.overlayLevel > 0\)/)
+  assert.match(source, /\.hideTitleBar\(false\)/)
+  assert.match(source, /this\.subscriptionPathStack\.pop\(false\)/)
   assert.match(
     source,
     /\.bindToScrollable\(\[\s*this\.articlesScroller,\s*this\.socialScroller,\s*this\.picturesScroller,\s*this\.videosScroller,\s*\]\)/,

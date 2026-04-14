@@ -61,7 +61,11 @@ test('AppRepository refreshFeed reports how many entries were newly added locall
   assert.match(modelsSource, /newEntriesCount\?: number/)
   assert.match(
     source,
-    /static async refreshFeed\(\s*feedId: string,\s*preferFastImageResolve: boolean = false,\s*\): Promise<RemoteFeedResult>/s,
+    /static async refreshFeed\(\s*feedId: string,\s*preferFastImageResolve: boolean = false,\s*includeEntries: boolean = true,\s*includeNewEntryCount: boolean = true,\s*\): Promise<RemoteFeedResult>/s,
+  )
+  assert.match(
+    source,
+    /entries: includeEntries \? await AppRepository\.entriesByFeed\(feedId\) : \[\]/,
   )
   assert.match(
     source,
@@ -74,7 +78,11 @@ test('AppRepository refreshFeed reports how many entries were newly added locall
   assert.match(source, /const existingEntryIds = new Set<string>\(\)/)
   assert.match(
     source,
-    /const newEntriesCount = payload\.entries\.filter\(\(entry: Entry\) => !existingEntryIds\.has\(entry\.id\)\)\.length/,
+    /if \(includeNewEntryCount\) \{[\s\S]*const existingEntries = await EntryRepository\.listByFeed\(feedId\)[\s\S]*\}/s,
+  )
+  assert.match(
+    source,
+    /newEntriesCount = payload\.entries\.filter\(\(entry: Entry\) => !existingEntryIds\.has\(entry\.id\)\)\.length/,
   )
   assert.match(
     source,

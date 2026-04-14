@@ -241,7 +241,7 @@ export struct SubscriptionsContent {
 
   private startModeTransition(nextMode: SubscriptionMode): void {
     this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(this.renderedMode) ? 1 : -1
-    this.previousMode = nextMode
+    this.previousMode = this.renderedMode
     this.renderedMode = nextMode
     this.isModeTransitioning = false
   }
@@ -549,7 +549,7 @@ export struct SubscriptionsContent {
 
   private closeFeedDetailPage(): void {
     this.syncOverlayLevel(0)
-    this.subscriptionPathStack.pop(true)
+    this.subscriptionPathStack.pop(false)
   }
 
   private createFeedConfigParams(feed: Feed): SubscriptionFeedConfigParams {
@@ -793,7 +793,7 @@ export struct SubscriptionsContent {
         },
       })
       .titleMode(HdsNavigationTitleMode.MINI)
-      .hideTitleBar(this.overlayLevel > 0)
+      .hideTitleBar(false)
       .hideBackButton(true)
       .bindToScrollable([
         this.articlesScroller,

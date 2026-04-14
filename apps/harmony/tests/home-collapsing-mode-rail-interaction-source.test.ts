@@ -32,7 +32,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
   assert.match(
     indexSource,
-    /if \(nextOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET\) \{\s*this\.homeModeRailDismissedByScroll = false\s*\} else if \(!this\.homeModeRailExpandedOverride\) \{/s,
+    /if \(!this\.homeModeRailExpandedOverride\) \{\s*this\.homeModeRailDismissedByScroll = nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET\s*\}/s,
   )
   assert.match(
     indexSource,
@@ -44,7 +44,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   )
   assert.match(
     indexSource,
-    /private requestModeSwitch\(nextMode: SubscriptionMode\): void \{[\s\S]*this\.mode = nextMode[\s\S]*this\.visitedModes = rememberVisitedMode\(this\.visitedModes, nextMode\)[\s\S]*this\.homeModeRailExpandedOverride = false[\s\S]*this\.homeModeRailExpandedLockOffset = -1[\s\S]*const nextModeOffset = this\.homeModeScrollOffsetFor\(nextMode\)[\s\S]*this\.currentHomeModeScrollOffset = nextModeOffset[\s\S]*this\.homeModeRailDismissedByScroll = nextModeOffset > 0\.5[\s\S]*this\.updateHeaderBlurProgress\(nextModeOffset\)[\s\S]*this\.startModeTransition\(nextMode\)/s,
+    /private requestModeSwitch\(nextMode: SubscriptionMode\): void \{[\s\S]*this\.mode = nextMode[\s\S]*this\.visitedModes = rememberVisitedMode\(this\.visitedModes, nextMode\)[\s\S]*this\.homeModeRailExpandedOverride = false[\s\S]*this\.homeModeRailExpandedLockOffset = -1[\s\S]*const nextModeOffset = this\.homeModeScrollOffsetFor\(nextMode\)[\s\S]*this\.currentHomeModeScrollOffset = nextModeOffset[\s\S]*this\.homeModeRailDismissedByScroll = nextModeOffset > 0\.5[\s\S]*this\.updateHeaderBlurProgress\(nextModeOffset\)[\s\S]*this\.startModeTransition\(nextMode\)[\s\S]*this\.requestExpandedModeRail\(\)/s,
   )
   assert.match(
     indexSource,
@@ -58,11 +58,7 @@ test('collapsed home rail keeps the search button clear and expands before switc
   assert.match(indexSource, /private HomeSearchActionLayer\(\)/)
   assert.match(
     indexSource,
-    /private HomeCollapsedModeRailButton\(\) \{[\s\S]*this\.HomeCollapsedModeRailIcon\(\)[\s\S]*\.onClick\(\(\) => \{[\s\S]*this\.requestExpandedModeRail\(\)[\s\S]*\}\)/s,
-  )
-  assert.match(
-    indexSource,
-    /private HomeCollapsedModeRailButton\(\) \{[\s\S]*homeCollapsedModeRailPressed[\s\S]*\.animation\(\{ duration: 140, curve: Curve\.EaseOut \}\)/s,
+    /private HomeCollapsedModeRailButton\(\) \{[\s\S]*this\.requestExpandedModeRail\(\)[\s\S]*\}/s,
   )
   assert.match(
     indexSource,

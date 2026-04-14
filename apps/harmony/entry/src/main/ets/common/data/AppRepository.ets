@@ -50,7 +50,39 @@ function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardM
   return result
 }
 
-const HOME_ENTRY_CANDIDATE_LIMIT: number = 400
+const HOME_ENTRY_CANDIDATE_LIMIT: number = 320
+const ENTRY_CARD_YIELD_BATCH_SIZE: number = 24
+
+function yieldToUiLoop(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), 0)
+  })
+}
+
+async function buildEntryCardsChunked(
+  entries: Entry[],
+  resolveFeed: (entry: Entry) => Feed | undefined,
+): Promise<EntryCardModel[]> {
+  const cards: EntryCardModel[] = []
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]
+    if (!entry) {
+      continue
+    }
+
+    const card = entryCardFromEntry(entry, resolveFeed(entry))
+    if (card) {
+      cards.push(card)
+    }
+
+    if ((index + 1) % ENTRY_CARD_YIELD_BATCH_SIZE === 0) {
+      await yieldToUiLoop()
+    }
+  }
+
+  return cards
+}
 
 async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
   const unreadCount = await EntryRepository.countUnreadByFeed(feed.id)
@@ -107,8 +139,18 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
 export class AppRepository {
   private static bootstrapped: boolean = false
   private static seedFeedHydrationStarted: boolean = false
+  private static readonly successfulRefreshCooldownMs: number = 3 * 60 * 1000
   private static readonly refreshConcurrencyMin: number = 4
   private static readonly refreshConcurrencyMax: number = 8
+
+  private static isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
+    const lastFetched = feed.lastFetched ?? 0
+    if (lastFetched <= 0) {
+      return false
+    }
+
+    return now - lastFetched < AppRepository.successfulRefreshCooldownMs
+  }
 
   private static resolveRefreshConcurrency(totalFeeds: number): number {
     if (totalFeeds >= 24) {
@@ -153,7 +195,7 @@ export class AppRepository {
         }
 
         try {
-          const value = await AppRepository.refreshFeed(feed.id, true)
+          const value = await AppRepository.refreshFeed(feed.id, true, false, false)
           const fulfilled: PromiseSettledResult<RemoteFeedResult> = {
             status: 'fulfilled',
             value,
@@ -286,14 +328,15 @@ export class AppRepository {
     return FeedRepository.getById(feedId)
   }
 
-  static async featuredEntries(): Promise<EntryCardModel[]> {
+  static async featuredEntries(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
     await AppRepository.bootstrap()
-    const entries = await EntryRepository.listRecent(HOME_ENTRY_CANDIDATE_LIMIT)
+    const safeCandidateLimit = Math.max(1, candidateLimit)
+    const entries = await EntryRepository.listRecent(safeCandidateLimit)
     const feeds = await FeedRepository.list()
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
-    return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feedMap.get(entry.feedId))))
+    return buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
   }
 
   static async starredEntries(): Promise<EntryCardModel[]> {
@@ -303,7 +346,7 @@ export class AppRepository {
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
-    return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feedMap.get(entry.feedId))))
+    return buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
   }
 
   static async entryEntitiesByFeed(feedId: string): Promise<Entry[]> {
@@ -318,7 +361,7 @@ export class AppRepository {
     const entries = await entriesPromise
     const feed = await feedPromise
 
-    return compactEntryCards(entries.map((entry: Entry) => entryCardFromEntry(entry, feed)))
+    return buildEntryCardsChunked(entries, (_entry: Entry) => feed)
   }
 
   static async entryById(entryId: string): Promise<ArticleDetailModel | undefined> {
@@ -492,6 +535,8 @@ export class AppRepository {
   static async refreshFeed(
     feedId: string,
     preferFastImageResolve: boolean = false,
+    includeEntries: boolean = true,
+    includeNewEntryCount: boolean = true,
   ): Promise<RemoteFeedResult> {
     await AppRepository.bootstrap()
     const feed = await FeedRepository.getById(feedId)
@@ -500,14 +545,29 @@ export class AppRepository {
       throw new Error('订阅源不存在')
     }
 
+    if (AppRepository.isFeedRefreshInCooldown(feed)) {
+      return {
+        entries: includeEntries ? await AppRepository.entriesByFeed(feedId) : [],
+        sourceLabel: `${feed.title} · 3 分钟内已刷新，跳过`,
+        newEntriesCount: 0,
+        failedFeedCount: 0,
+        failedFeedLabels: [],
+        failedFeedDetails: [],
+        fallbackUsed: false,
+      }
+    }
+
     try {
-      const existingEntries = await EntryRepository.listByFeed(feedId)
-      const existingEntryIds = new Set<string>()
-      existingEntries.forEach((entry: Entry) => {
-        existingEntryIds.add(entry.id)
-      })
       const payload = await RssFeedService.fetchFeedEntries(feed)
-      const newEntriesCount = payload.entries.filter((entry: Entry) => !existingEntryIds.has(entry.id)).length
+      let newEntriesCount = 0
+      if (includeNewEntryCount) {
+        const existingEntries = await EntryRepository.listByFeed(feedId)
+        const existingEntryIds = new Set<string>()
+        existingEntries.forEach((entry: Entry) => {
+          existingEntryIds.add(entry.id)
+        })
+        newEntriesCount = payload.entries.filter((entry: Entry) => !existingEntryIds.has(entry.id)).length
+      }
       const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
       const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
       const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
@@ -534,8 +594,10 @@ export class AppRepository {
         errorCount: 0,
       })
       const result: RemoteFeedResult = {
-        entries: await AppRepository.entriesByFeed(feedId),
-        sourceLabel: `${feed.title} · 新增 ${newEntriesCount} 条`,
+        entries: includeEntries ? await AppRepository.entriesByFeed(feedId) : [],
+        sourceLabel: includeNewEntryCount
+          ? `${feed.title} · 新增 ${newEntriesCount} 条`
+          : `${feed.title} · 已刷新`,
         newEntriesCount,
         failedFeedCount: 0,
         failedFeedLabels: [],
@@ -553,7 +615,7 @@ export class AppRepository {
         imageUrl: feed.imageUrl ?? '',
       })
       const result: RemoteFeedResult = {
-        entries: await AppRepository.entriesByFeed(feedId),
+        entries: includeEntries ? await AppRepository.entriesByFeed(feedId) : [],
         sourceLabel: `${feed.title} · 刷新失败：${message}`,
         newEntriesCount: 0,
         failedFeedCount: 1,
@@ -675,7 +737,7 @@ export class AppRepository {
     await AppRepository.recordRefreshLog(refreshedCount, failedCount, failedFeedLabels)
 
     return {
-      entries: await AppRepository.featuredEntries(),
+      entries: [],
       sourceLabel: `新增 ${newEntriesCount} 条，${failedCount} 个订阅源刷新失败${failedFeedSuffix}`,
       newEntriesCount,
       failedFeedCount: failedCount,
