@@ -1,4 +1,4 @@
-import { extractEntryGalleryImageUrls } from './PictureGallery.ts'
+import { extractPictureCarouselMediaUrls } from './PictureGallery.ts'
 
 export interface TweetQuotedPresentation {
   displayName: string
@@ -287,15 +287,14 @@ function basePresentation(
   source: TweetPresentationSource,
 ): TweetEntryPresentation {
   const mediaUrls = uniqueUrls([
-    ...(source.mediaUrls ?? []),
-    ...(trimValue(source.imageUrl) ? [source.imageUrl ?? ''] : []),
-    ...extractEntryGalleryImageUrls({
+    ...extractPictureCarouselMediaUrls({
       summary: source.summary || '',
       content: source.content || '',
       articleUrl: source.articleUrl || '',
       siteUrl: source.articleUrl || '',
       mediaUrls: source.mediaUrls ?? [],
     }),
+    ...(trimValue(source.imageUrl) ? [source.imageUrl ?? ''] : []),
   ])
   const textSource = `${source.summary || ''}\n${source.content || ''}`
   const metrics = extractMetrics(textSource)
@@ -366,6 +365,103 @@ function parseRetweet(rawText: string): ParsedRetweet | undefined {
   return parseRetweetWithLoosePattern(normalized)
 }
 
+function parseRetweetAuthorFromTitle(title: string):
+  | {
+      displayName: string
+      username: string
+    }
+  | undefined {
+  const normalized = normalizedPlainText(title)
+  if (!normalized) {
+    return undefined
+  }
+  const matched = normalized.match(/^RT\s+(.+?)\s*[:：]\s*[\s\S]+$/i)
+  if (!matched?.[1]) {
+    return undefined
+  }
+  const authorRaw = trimValue(matched[1])
+  if (!authorRaw) {
+    return undefined
+  }
+  const username = /^@[A-Za-z0-9_]{1,15}$/.test(authorRaw) ? authorRaw : ''
+  return {
+    displayName: username ? authorRaw.replace(/^@/, '') : authorRaw,
+    username,
+  }
+}
+
+function stripDuplicatedRetweetLeadingBadge(
+  displayName: string,
+  text: string,
+): string {
+  const normalizedDisplayName = trimValue(displayName)
+  const normalizedText = normalizeParagraphWhitespace(text)
+  if (!normalizedDisplayName || !normalizedText) {
+    return normalizedText
+  }
+
+  const isDecorativeToken = (token: string): boolean => {
+    return !!token && !/[A-Za-z0-9_]/.test(token)
+  }
+
+  const nameTokens = normalizedDisplayName
+    .split(/\s+/)
+    .map((item: string) => trimValue(item))
+    .filter((item: string) => !!item)
+  const textTokens = normalizedText
+    .split(/\s+/)
+    .map((item: string) => trimValue(item))
+    .filter((item: string) => !!item)
+
+  if (nameTokens.length === 0 || textTokens.length <= 1) {
+    return normalizedText
+  }
+
+  const decorativeTail: string[] = []
+  for (let index = nameTokens.length - 1; index >= 0; index--) {
+    const token = nameTokens[index]
+    if (!isDecorativeToken(token)) {
+      break
+    }
+    decorativeTail.unshift(token)
+  }
+
+  const decorativeHead: string[] = []
+  for (let index = 0; index < textTokens.length; index++) {
+    const token = textTokens[index]
+    if (!isDecorativeToken(token)) {
+      break
+    }
+    decorativeHead.push(token)
+  }
+
+  if (decorativeTail.length === 0 || decorativeHead.length === 0) {
+    return normalizedText
+  }
+
+  const maxOverlap = Math.min(decorativeTail.length, decorativeHead.length)
+  let overlap = 0
+  for (let size = maxOverlap; size >= 1; size--) {
+    const tailSegment = decorativeTail.slice(decorativeTail.length - size)
+    const headSegment = decorativeHead.slice(0, size)
+    if (tailSegment.join(' ') === headSegment.join(' ')) {
+      overlap = size
+      break
+    }
+  }
+
+  if (overlap <= 0) {
+    return normalizedText
+  }
+
+  const trimmedTokens = textTokens.slice(overlap)
+  if (trimmedTokens.length === 0) {
+    return normalizedText
+  }
+
+  return normalizeParagraphWhitespace(trimmedTokens.join(' '))
+}
+
 function parseLooseRetweetBody(
   rawBody: string,
 ): Omit<ParsedRetweet, 'style' | 'commentText'> | undefined {
@@ -377,12 +473,23 @@ function parseLooseRetweetBody(
   const colonMatch = normalized.match(/^([^:\n：]{1,80})\s*[：:]\s*([\s\S]+)$/)
   if (colonMatch?.[1] && colonMatch?.[2]) {
     const header = trimValue(colonMatch[1])
-    const body = normalizeParagraphWhitespace(colonMatch[2])
+    let body = normalizeParagraphWhitespace(colonMatch[2])
     if (!body) {
       return undefined
     }
     const username = /^@[A-Za-z0-9_]{1,15}$/.test(header) ? header : ''
-    const displayName = username ? username.replace(/^@/, '') : header
+    let displayName = username ? username.replace(/^@/, '') : header
+    if (!username) {
+      const headerTopicMatch = header.match(
+        /^([A-Z][a-zA-Z'’-]*\s+[A-Z][a-zA-Z'’-]*)\s+([A-Z][a-zA-Z'’-]*\s+(?:on|about|regarding)\b[\s\S]*)$/i,
+      )
+      if (headerTopicMatch?.[1] && headerTopicMatch?.[2]) {
+        displayName = trimValue(headerTopicMatch[1])
+        body = normalizeParagraphWhitespace(
+          `${trimValue(headerTopicMatch[2])}: ${body}`,
+        )
+      }
+    }
     return {
       originalDisplayName: displayName,
       originalUsername: username,
@@ -408,6 +515,26 @@ function parseLooseRetweetBody(
       originalUsername: username,
       originalText: body,
       originalAvatarUrl: xAvatarUrl(username),
+    }
+  }
+
+  // 处理单行格式：`Mario Nawfal Elon on ...`
+  // 其中 `Mario Nawfal` 才是转发用户名，后半段是正文。
+  const topicLeadMatch = normalized.match(
+    /^([A-Z][a-zA-Z'’-]*\s+[A-Z][a-zA-Z'’-]*)\s+([A-Z][a-zA-Z'’-]*)\s+(on|about|regarding)\b([\s\S]*)$/i,
+  )
+  if (topicLeadMatch?.[1] && topicLeadMatch?.[2] && topicLeadMatch?.[3]) {
+    const displayName = trimValue(topicLeadMatch[1])
+    const body = normalizeParagraphWhitespace(
+      `${topicLeadMatch[2]} ${topicLeadMatch[3]}${topicLeadMatch[4] || ''}`,
+    )
+    if (displayName && body) {
+      return {
+        originalDisplayName: displayName,
+        originalUsername: '',
+        originalText: body,
+        originalAvatarUrl: '',
+      }
     }
   }
 
@@ -615,19 +742,40 @@ function parseQuoteUsername(header: string): string {
 
 function extractMediaUrlsFromHtml(rawHtml: string): string[] {
   const urls: string[] = []
+  const pushUrl = (value: string): void => {
+    const normalized = trimValue(decodeBasicHtml(value || ''))
+    if (normalized && !urls.includes(normalized)) {
+      urls.push(normalized)
+    }
+  }
+
   const imgMatches = Array.from(
     rawHtml.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi),
-    (item: RegExpMatchArray) => trimValue(decodeBasicHtml(item[1] || '')),
+    (item: RegExpMatchArray) => item[1] || '',
   )
-  const videoMatches = Array.from(
-    rawHtml.matchAll(/<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi),
-    (item: RegExpMatchArray) => trimValue(decodeBasicHtml(item[1] || '')),
-  )
+  imgMatches.forEach((url: string) => {
+    pushUrl(url)
+  })
 
-  imgMatches.concat(videoMatches).forEach((url: string) => {
-    if (url && !urls.includes(url)) {
-      urls.push(url)
+  const videoTagMatches = Array.from(rawHtml.matchAll(/<video\b[^>]*>/gi))
+  videoTagMatches.forEach((matched: RegExpMatchArray) => {
+    const tag = matched[0] || ''
+    const poster = tag.match(/\bposter=["']([^"']+)["']/i)?.[1] || ''
+    const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1] || ''
+    if (poster) {
+      pushUrl(poster)
     }
+    if (src) {
+      pushUrl(src)
+    }
+  })
+
+  const sourceTagMatches = Array.from(
+    rawHtml.matchAll(/<source\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi),
+    (item: RegExpMatchArray) => item[1] || '',
+  )
+  sourceTagMatches.forEach((url: string) => {
+    pushUrl(url)
   })
 
   return urls
@@ -714,12 +862,23 @@ function applyRetweetSemantics(
   )
   const originalAvatarUrl =
     parsed.originalAvatarUrl || xAvatarUrl(parsed.originalUsername)
+  const titleAuthor = parseRetweetAuthorFromTitle(source.title || '')
+  const resolvedOriginalDisplayName =
+    trimValue(titleAuthor?.displayName) || originalAuthorLabel
+  const resolvedOriginalUsername =
+    trimValue(titleAuthor?.username) || trimValue(parsed.originalUsername)
+  const resolvedOriginalAvatarUrl =
+    xAvatarUrl(resolvedOriginalUsername) || originalAvatarUrl
+  const resolvedOriginalText = stripDuplicatedRetweetLeadingBadge(
+    resolvedOriginalDisplayName,
+    normalizedOriginalText,
+  )
   const quotedTweet: TweetQuotedPresentation = {
-    displayName: originalAuthorLabel,
-    username: trimValue(parsed.originalUsername),
-    avatarUrl: originalAvatarUrl,
-    text: normalizedOriginalText,
-    mediaUrls: [],
+    displayName: resolvedOriginalDisplayName,
+    username: resolvedOriginalUsername,
+    avatarUrl: resolvedOriginalAvatarUrl,
+    text: resolvedOriginalText,
+    mediaUrls: [...(base.mediaUrls || [])],
   }
 
   if (parsed.style === 'commented') {
@@ -730,6 +889,7 @@ function applyRetweetSemantics(
       retweetStyle: 'commented',
       retweetByLabel: base.displayName,
       text: commentText,
+      mediaUrls: [],
       quotedTweet,
     }
   }
@@ -740,6 +900,7 @@ function applyRetweetSemantics(
     retweetStyle: 'pure',
     retweetByLabel: base.displayName,
     text: '',
+    mediaUrls: [],
     quotedTweet,
   }
 }

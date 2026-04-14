@@ -1808,12 +1808,14 @@ struct Index {
   }
 
   @Builder
-  private SocialEntryCard(entry: EntryCardModel) {
+  private SocialEntryCard(entry: EntryCardModel, index: number = 0) {
     if (this.isXSocialEntry(entry)) {
       TweetEntryCard({
         presentation: presentTweetEntryFromCard(entry),
         theme: this.theme,
         isUnread: !entry.isRead,
+        flatMode: true,
+        showBottomDivider: index < this.homeEntryCountFor('social') - 1,
         highlightQuery: this.searchQuery,
         collapsedTextLines: 7,
         enableEnterTransition: false,
@@ -2236,7 +2238,7 @@ struct Index {
 
   @Builder
   private EntryList(mode: SubscriptionMode) {
-    List({ space: HOME_MODE_CONTENT_GAP, scroller: this.homeScrollerForMode(mode) }) {
+    List({ space: mode === 'social' ? 0 : HOME_MODE_CONTENT_GAP, scroller: this.homeScrollerForMode(mode) }) {
       ListItem() {
         Column() {
           Blank()
@@ -2248,10 +2250,10 @@ struct Index {
       }
       .width('100%')
 
-      LazyForEach(this.homeEntryDataSourceFor(mode), (entry: EntryCardModel) => {
+      LazyForEach(this.homeEntryDataSourceFor(mode), (entry: EntryCardModel, index: number) => {
         ListItem() {
           if (mode === 'social') {
-            this.SocialEntryCard(entry)
+            this.SocialEntryCard(entry, index)
           } else {
             this.EntryCard(entry)
           }

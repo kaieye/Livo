@@ -3,17 +3,29 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
+import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
+
+interface TweetEntryCardPadding {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
 
 @Component
 export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop isUnread: boolean = false
+  @Prop flatMode: boolean = false
+  @Prop showBottomDivider: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @Prop enableEnterTransition: boolean = true
   @Prop highlightQuery: string = ''
   @Prop collapsedTextLines: number = 0
   @State private isTextExpanded: boolean = false
+  @State private activeInlineVideoKey: string = ''
+  private readonly inlineVideoControllers: Map<string, VideoController> = new Map()
 
   onOpen: () => void = () => {}
 
@@ -21,15 +33,16 @@ export struct TweetEntryCard {
     return (this.presentation.username || '').trim()
   }
 
-  private retweetLabel(): string {
-    return (this.presentation.retweetByLabel || '').trim()
-  }
-
-  private normalizedMediaUrls(): string[] {
-    return (this.presentation.mediaUrls || [])
+  private mediaItemsFromUrls(urls: string[]): PictureCarouselMediaItem[] {
+    const normalizedUrls = (urls || [])
       .map((url: string) => url.trim())
       .filter((url: string) => !!url)
-      .slice(0, 4)
+    const fallbackImageUrl = normalizedUrls.find((url: string) => !this.isVideoLikeUrl(url)) || ''
+    return resolvePictureCarouselMediaItems(normalizedUrls, fallbackImageUrl).slice(0, 4)
+  }
+
+  private normalizedMediaItems(): PictureCarouselMediaItem[] {
+    return this.mediaItemsFromUrls(this.presentation.mediaUrls || [])
   }
 
   private hasQuotedTweet(): boolean {
@@ -80,11 +93,57 @@ export struct TweetEntryCard {
     return name.endsWith(':') ? name : `${name}:`
   }
 
-  private quotedMediaUrls(): string[] {
-    return (this.quotedTweet().mediaUrls || [])
-      .map((url: string) => url.trim())
-      .filter((url: string) => !!url)
-      .slice(0, 4)
+  private quotedMediaItems(): PictureCarouselMediaItem[] {
+    return this.mediaItemsFromUrls(this.quotedTweet().mediaUrls || [])
+  }
+
+  private isVideoLikeUrl(url: string): boolean {
+    const normalized = (url || '').trim().toLowerCase()
+    if (!normalized) {
+      return false
+    }
+
+    if (/\.(mp4|m4v|mov|webm|m3u8|mpd|avi|mkv)(\?|#|$)/i.test(normalized)) {
+      return true
+    }
+
+    if (
+      normalized.includes('youtube.com/watch') ||
+      normalized.includes('youtu.be/') ||
+      normalized.includes('bilibili.com/video/') ||
+      normalized.includes('x.com/i/status/') ||
+      normalized.includes('twitter.com/i/status/')
+    ) {
+      return true
+    }
+
+    return false
+  }
+
+  private mediaRenderKey(section: string, item: PictureCarouselMediaItem, index: number): string {
+    return `${section}_${index}_${item.imageUrl}_${item.videoUrl}`
+  }
+
+  private isInlineVideoActive(section: string, item: PictureCarouselMediaItem, index: number): boolean {
+    return this.activeInlineVideoKey === this.mediaRenderKey(section, item, index)
+  }
+
+  private inlineVideoControllerFor(section: string, item: PictureCarouselMediaItem, index: number): VideoController {
+    const key = this.mediaRenderKey(section, item, index)
+    const existing = this.inlineVideoControllers.get(key)
+    if (existing) {
+      return existing
+    }
+    const controller = new VideoController()
+    this.inlineVideoControllers.set(key, controller)
+    return controller
+  }
+
+  private playInlineVideo(section: string, item: PictureCarouselMediaItem, index: number): void {
+    if (!(item.videoUrl || '').trim()) {
+      return
+    }
+    this.activeInlineVideoKey = this.mediaRenderKey(section, item, index)
   }
 
   private mediaTileWidth(index: number, count: number): string {
@@ -111,23 +170,83 @@ export struct TweetEntryCard {
     return 136
   }
 
+  private cardPadding(): TweetEntryCardPadding {
+    if (this.flatMode) {
+      return { left: 0, right: 0, top: 12, bottom: 12 }
+    }
+    return { left: 14, right: 14, top: 12, bottom: 10 }
+  }
+
+  private cardBackgroundColor(): string {
+    return this.flatMode ? '#00000000' : this.theme.surface
+  }
+
+  private cardBorderWidth(): number {
+    return this.flatMode ? 0 : 0.8
+  }
+
+  private cardBorderRadius(): number {
+    return this.flatMode ? 0 : 14
+  }
+
   @Builder
   private RetweetBanner() {
   }
 
   @Builder
   private MediaGrid() {
-    if (this.normalizedMediaUrls().length > 0) {
+    if (this.normalizedMediaItems().length > 0) {
       Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-        ForEach(this.normalizedMediaUrls(), (mediaUrl: string, index: number) => {
-          Image(mediaUrl)
-            .width(this.mediaTileWidth(index, this.normalizedMediaUrls().length))
-            .height(this.mediaTileHeight(index, this.normalizedMediaUrls().length))
-            .borderRadius(10)
-            .objectFit(ImageFit.Cover)
-            .backgroundColor(this.theme.elevated)
-            .margin({ bottom: this.normalizedMediaUrls().length > 1 ? 6 : 0 })
-        }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+        ForEach(this.normalizedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+          Stack({ alignContent: Alignment.Center }) {
+            if ((item.videoUrl || '').trim() && this.isInlineVideoActive('main', item, index)) {
+              Video({
+                src: item.videoUrl,
+                controller: this.inlineVideoControllerFor('main', item, index),
+                previewUri: item.imageUrl,
+              })
+                .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
+                .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                .borderRadius(10)
+                .controls(true)
+                .autoPlay(true)
+                .muted(false)
+            } else {
+              if ((item.imageUrl || '').trim()) {
+                Image(item.imageUrl)
+                  .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
+                  .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                  .borderRadius(10)
+                  .objectFit(ImageFit.Cover)
+                  .backgroundColor(this.theme.elevated)
+              } else {
+                Column()
+                  .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
+                  .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                  .borderRadius(10)
+                  .backgroundColor(this.theme.elevated)
+              }
+
+              if ((item.videoUrl || '').trim()) {
+                Row() {
+                  SymbolGlyph($r('sys.symbol.play_fill'))
+                    .fontSize(28)
+                    .fontColor(['#F5F5F5'])
+                }
+                .width(56)
+                .height(56)
+                .justifyContent(FlexAlign.Center)
+                .alignItems(VerticalAlign.Center)
+                .borderRadius(999)
+                .backgroundColor('rgba(168,168,168,0.58)')
+              }
+            }
+          }
+            .margin({ bottom: this.normalizedMediaItems().length > 1 ? 6 : 0 })
+            .onClick(() => {
+              this.playInlineVideo('main', item, index)
+            })
+        }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
       }
       .width('100%')
       .clip(true)
@@ -158,17 +277,58 @@ export struct TweetEntryCard {
           .fontColor(this.theme.textPrimary)
           .width('100%')
 
-        if (this.quotedMediaUrls().length > 0) {
+        if (this.quotedMediaItems().length > 0) {
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-            ForEach(this.quotedMediaUrls(), (mediaUrl: string, index: number) => {
-              Image(mediaUrl)
-                .width(this.mediaTileWidth(index, this.quotedMediaUrls().length))
-                .height(this.mediaTileHeight(index, this.quotedMediaUrls().length))
-                .borderRadius(8)
-                .objectFit(ImageFit.Cover)
-                .backgroundColor(this.theme.elevated)
-                .margin({ bottom: this.quotedMediaUrls().length > 1 ? 6 : 0 })
-            }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+            ForEach(this.quotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+              Stack({ alignContent: Alignment.Center }) {
+                if ((item.videoUrl || '').trim() && this.isInlineVideoActive('quoted', item, index)) {
+                  Video({
+                    src: item.videoUrl,
+                    controller: this.inlineVideoControllerFor('quoted', item, index),
+                    previewUri: item.imageUrl,
+                  })
+                    .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                    .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                    .borderRadius(8)
+                    .controls(true)
+                    .autoPlay(true)
+                    .muted(false)
+                } else {
+                  if ((item.imageUrl || '').trim()) {
+                    Image(item.imageUrl)
+                      .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                      .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                      .borderRadius(8)
+                      .objectFit(ImageFit.Cover)
+                      .backgroundColor(this.theme.elevated)
+                  } else {
+                    Column()
+                      .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                      .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                      .borderRadius(8)
+                      .backgroundColor(this.theme.elevated)
+                  }
+
+                  if ((item.videoUrl || '').trim()) {
+                    Row() {
+                      SymbolGlyph($r('sys.symbol.play_fill'))
+                        .fontSize(28)
+                        .fontColor(['#F5F5F5'])
+                    }
+                    .width(56)
+                    .height(56)
+                    .justifyContent(FlexAlign.Center)
+                    .alignItems(VerticalAlign.Center)
+                    .borderRadius(999)
+                    .backgroundColor('rgba(168,168,168,0.58)')
+                  }
+                }
+              }
+                .margin({ bottom: this.quotedMediaItems().length > 1 ? 6 : 0 })
+                .onClick(() => {
+                  this.playInlineVideo('quoted', item, index)
+                })
+            }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
           }
           .width('100%')
           .clip(true)
@@ -176,7 +336,10 @@ export struct TweetEntryCard {
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ left: 2, right: 2, top: 2, bottom: 2 })
+      .padding({ left: 12, right: 12, top: 12, bottom: 12 })
+      .backgroundColor(this.flatMode ? this.theme.surface : '#00000000')
+      .borderRadius(12)
+      .border({ width: this.flatMode ? 0.8 : 0, color: this.theme.divider })
     }
   }
 
@@ -273,16 +436,24 @@ export struct TweetEntryCard {
 
         this.RtSection()
         this.MediaGrid()
+
+        if (this.flatMode && this.showBottomDivider) {
+          Row()
+            .width('100%')
+            .height(0.8)
+            .backgroundColor(this.theme.divider)
+            .margin({ top: 10 })
+        }
       }
       .width('100%')
 
       this.UnreadDot()
     }
     .width('100%')
-    .padding({ left: 14, right: 14, top: 12, bottom: 10 })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(14)
-    .border({ width: 0.8, color: this.theme.divider })
+    .padding(this.cardPadding())
+    .backgroundColor(this.cardBackgroundColor())
+    .borderRadius(this.cardBorderRadius())
+    .border({ width: this.cardBorderWidth(), color: this.theme.divider })
     .transition(this.enableEnterTransition ? livoMotion.enterSoft(24) : TransitionEffect.IDENTITY)
     .onClick(() => {
       this.onOpen()

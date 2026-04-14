@@ -8,7 +8,7 @@ import { ExternalUrlService } from '../common/services/ExternalUrlService'
 import { MovingPhotoService } from '../common/services/MovingPhotoService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
 import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
-import { PictureCarouselMediaItem } from '../common/utils/PictureGallery'
+import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../common/utils/PictureGallery'
 import { resolveArticleSourceUrl } from '../common/utils/ArticleSourceUrl'
 import { resolveYouTubePlaybackDisplay } from '../common/utils/YouTubePlaybackDisplay'
 import { resolveVideoPlaybackTarget } from '../common/utils/VideoPlaybackTarget'
@@ -66,11 +66,13 @@ struct ArticleDetail {
   @State private isPictureMediaNearlyVisible: boolean = false
   @State private detailLivePhotoVisibilityRatios: number[] = []
   @State private detailLivePhotoMuted: boolean = true
+  @State private activeSocialInlineVideoKey: string = ''
   private upgradedEntryIds: Set<string> = new Set<string>()
   private videoWebController: webview.WebviewController = new webview.WebviewController()
   private nativeVideoController: VideoController = new VideoController()
   private readonly movingPhotoController: MovingPhotoViewController = new MovingPhotoViewController()
   private readonly detailLivePhotoControllers: VideoController[] = []
+  private readonly socialInlineVideoControllers: Map<string, VideoController> = new Map()
   private readonly webVideoUserAgent: string =
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
 
@@ -519,11 +521,12 @@ struct ArticleDetail {
     return (this.tweetPresentation().username || '').trim()
   }
 
-  private tweetMediaUrls(): string[] {
-    return (this.tweetPresentation().mediaUrls || [])
+  private tweetMediaItems(): PictureCarouselMediaItem[] {
+    const urls = (this.tweetPresentation().mediaUrls || [])
       .map((url: string) => url.trim())
       .filter((url: string) => !!url)
-      .slice(0, 4)
+    const fallbackImage = urls.find((url: string) => !isDirectVideoUrl(url)) || ''
+    return resolvePictureCarouselMediaItems(urls, fallbackImage).slice(0, 4)
   }
 
   private hasQuotedTweet(): boolean {
@@ -543,11 +546,12 @@ struct ArticleDetail {
     }
   }
 
-  private quotedTweetMediaUrls(): string[] {
-    return (this.quotedTweetPresentation().mediaUrls || [])
+  private quotedTweetMediaItems(): PictureCarouselMediaItem[] {
+    const urls = (this.quotedTweetPresentation().mediaUrls || [])
       .map((url: string) => url.trim())
       .filter((url: string) => !!url)
-      .slice(0, 4)
+    const fallbackImage = urls.find((url: string) => !isDirectVideoUrl(url)) || ''
+    return resolvePictureCarouselMediaItems(urls, fallbackImage).slice(0, 4)
   }
 
   private quotedTweetHeaderLabel(): string {
@@ -555,6 +559,42 @@ struct ArticleDetail {
       || (this.quotedTweetPresentation().username || '').trim()
       || '未知来源'
     return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
+  }
+
+  private isTweetMediaVideo(item: PictureCarouselMediaItem): boolean {
+    return !!(item.videoUrl || '').trim()
+  }
+
+  private socialMediaRenderKey(section: string, item: PictureCarouselMediaItem, index: number): string {
+    return `${section}_${index}_${item.imageUrl}_${item.videoUrl}`
+  }
+
+  private isSocialInlineVideoActive(section: string, item: PictureCarouselMediaItem, index: number): boolean {
+    return this.activeSocialInlineVideoKey === this.socialMediaRenderKey(section, item, index)
+  }
+
+  private socialInlineVideoControllerFor(section: string, item: PictureCarouselMediaItem, index: number): VideoController {
+    const key = this.socialMediaRenderKey(section, item, index)
+    const existing = this.socialInlineVideoControllers.get(key)
+    if (existing) {
+      return existing
+    }
+    const controller = new VideoController()
+    this.socialInlineVideoControllers.set(key, controller)
+    return controller
+  }
+
+  private playSocialInlineVideo(section: string, item: PictureCarouselMediaItem, index: number): void {
+    if (!this.isTweetMediaVideo(item)) {
+      return
+    }
+    this.activeSocialInlineVideoKey = this.socialMediaRenderKey(section, item, index)
+  }
+
+  private openSocialImage(item: PictureCarouselMediaItem): void {
+    if ((item.imageUrl || '').trim()) {
+      void openImageViewer(item.imageUrl, this.entry?.title || '图片预览')
+    }
   }
 
   private translationFormattingHint(): TranslationFormattingHint | undefined {
@@ -680,17 +720,62 @@ struct ArticleDetail {
             .fontColor(this.theme.textPrimary)
             .width('100%')
 
-          if (this.quotedTweetMediaUrls().length > 0) {
+          if (this.quotedTweetMediaItems().length > 0) {
             Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-              ForEach(this.quotedTweetMediaUrls(), (mediaUrl: string, index: number) => {
-                Image(mediaUrl)
-                  .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaUrls().length))
-                  .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaUrls().length))
-                  .borderRadius(8)
-                  .objectFit(ImageFit.Cover)
-                  .backgroundColor(this.theme.elevated)
-                  .margin({ bottom: this.quotedTweetMediaUrls().length > 1 ? 6 : 0 })
-              }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+              ForEach(this.quotedTweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+                Stack({ alignContent: Alignment.Center }) {
+                  if (this.isTweetMediaVideo(item) && this.isSocialInlineVideoActive('quoted', item, index)) {
+                    Video({
+                      src: item.videoUrl,
+                      controller: this.socialInlineVideoControllerFor('quoted', item, index),
+                      previewUri: item.imageUrl,
+                    })
+                      .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaItems().length))
+                      .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaItems().length))
+                      .borderRadius(8)
+                      .controls(true)
+                      .autoPlay(true)
+                      .muted(false)
+                  } else {
+                    if ((item.imageUrl || '').trim()) {
+                      Image(item.imageUrl)
+                        .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaItems().length))
+                        .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaItems().length))
+                        .borderRadius(8)
+                        .objectFit(ImageFit.Cover)
+                        .backgroundColor(this.theme.elevated)
+                    } else {
+                      Column()
+                        .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaItems().length))
+                        .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaItems().length))
+                        .borderRadius(8)
+                        .backgroundColor(this.theme.elevated)
+                    }
+
+                    if (this.isTweetMediaVideo(item)) {
+                      Row() {
+                        SymbolGlyph($r('sys.symbol.play_fill'))
+                          .fontSize(28)
+                          .fontColor(['#F5F5F5'])
+                      }
+                      .width(56)
+                      .height(56)
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(999)
+                      .backgroundColor('rgba(168,168,168,0.58)')
+                    }
+                  }
+                }
+                  .margin({ bottom: this.quotedTweetMediaItems().length > 1 ? 6 : 0 })
+                  .onClick(() => {
+                    if (this.isTweetMediaVideo(item)) {
+                      this.playSocialInlineVideo('quoted', item, index)
+                    } else {
+                      this.openSocialImage(item)
+                    }
+                  })
+              }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
             }
             .width('100%')
             .clip(true)
@@ -701,17 +786,62 @@ struct ArticleDetail {
         .padding({ left: 2, right: 2, top: 2, bottom: 2 })
       }
 
-      if (this.tweetMediaUrls().length > 0) {
+      if (this.tweetMediaItems().length > 0) {
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.tweetMediaUrls(), (mediaUrl: string, index: number) => {
-            Image(mediaUrl)
-              .width(this.tweetMediaTileWidth(index, this.tweetMediaUrls().length))
-              .height(this.tweetMediaTileHeight(index, this.tweetMediaUrls().length))
-              .borderRadius(10)
-              .objectFit(ImageFit.Cover)
-              .backgroundColor(this.theme.elevated)
-              .margin({ bottom: this.tweetMediaUrls().length > 1 ? 6 : 0 })
-          }, (mediaUrl: string, index: number) => `${mediaUrl}_${index}`)
+          ForEach(this.tweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+            Stack({ alignContent: Alignment.Center }) {
+              if (this.isTweetMediaVideo(item) && this.isSocialInlineVideoActive('main', item, index)) {
+                Video({
+                  src: item.videoUrl,
+                  controller: this.socialInlineVideoControllerFor('main', item, index),
+                  previewUri: item.imageUrl,
+                })
+                  .width(this.tweetMediaTileWidth(index, this.tweetMediaItems().length))
+                  .height(this.tweetMediaTileHeight(index, this.tweetMediaItems().length))
+                  .borderRadius(10)
+                  .controls(true)
+                  .autoPlay(true)
+                  .muted(false)
+              } else {
+                if ((item.imageUrl || '').trim()) {
+                  Image(item.imageUrl)
+                    .width(this.tweetMediaTileWidth(index, this.tweetMediaItems().length))
+                    .height(this.tweetMediaTileHeight(index, this.tweetMediaItems().length))
+                    .borderRadius(10)
+                    .objectFit(ImageFit.Cover)
+                    .backgroundColor(this.theme.elevated)
+                } else {
+                  Column()
+                    .width(this.tweetMediaTileWidth(index, this.tweetMediaItems().length))
+                    .height(this.tweetMediaTileHeight(index, this.tweetMediaItems().length))
+                    .borderRadius(10)
+                    .backgroundColor(this.theme.elevated)
+                }
+
+                if (this.isTweetMediaVideo(item)) {
+                  Row() {
+                    SymbolGlyph($r('sys.symbol.play_fill'))
+                      .fontSize(28)
+                      .fontColor(['#F5F5F5'])
+                  }
+                  .width(56)
+                  .height(56)
+                  .justifyContent(FlexAlign.Center)
+                  .alignItems(VerticalAlign.Center)
+                  .borderRadius(999)
+                  .backgroundColor('rgba(168,168,168,0.58)')
+                }
+              }
+            }
+              .margin({ bottom: this.tweetMediaItems().length > 1 ? 6 : 0 })
+              .onClick(() => {
+                if (this.isTweetMediaVideo(item)) {
+                  this.playSocialInlineVideo('main', item, index)
+                } else {
+                  this.openSocialImage(item)
+                }
+              })
+          }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
         }
         .width('100%')
         .clip(true)

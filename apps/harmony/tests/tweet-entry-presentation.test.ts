@@ -278,6 +278,145 @@ test('presentTweetEntryFromEntry classifies loose RT format without @ and keeps 
   )
 })
 
+test('presentTweetEntryFromEntry keeps retweet media inside quoted card for pure RT', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-retweet-media',
+    title: '',
+    summary:
+      'RT Chief Nerd\n🔥 BRAD GERSTNER says X is better today than it has ever been',
+    content:
+      '<video src="https://video.twimg.com/demo.mp4" poster="https://pbs.twimg.com/demo.jpg"></video>',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/13',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 13, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.deepEqual(presented.mediaUrls, [])
+  assert.deepEqual(presented.quotedTweet?.mediaUrls, [
+    'https://video.twimg.com/demo.mp4',
+  ])
+})
+
+test('presentTweetEntryFromEntry parses single-line RT name boundary before topic phrase', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-retweet-name-boundary',
+    title: '',
+    summary:
+      'RT Mario Nawfal Elon on the origin of consciousness: Somewhere along that very long journey',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/14',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 14, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.quotedTweet?.displayName, 'Mario Nawfal')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'Elon on the origin of consciousness: Somewhere along that very long journey',
+  )
+})
+
+test('presentTweetEntryFromEntry prefers RT author from title when description has no colon', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-retweet-title-author',
+    title:
+      'RT Mario Nawfal: Elon on the origin of consciousness: Somewhere along that very long journey',
+    summary:
+      'RT Mario Nawfal\nElon on the origin of consciousness: Somewhere along that very long journey',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/15',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 15, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.quotedTweet?.displayName, 'Mario Nawfal')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'Elon on the origin of consciousness: Somewhere along that very long journey',
+  )
+})
+
+test('presentTweetEntryFromEntry deduplicates leading emoji repeated after retweet colon', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-retweet-emoji-dup',
+    title: 'RT Viv 🌐: 🌐 FSD learned which spot is my assigned parking spot',
+    summary: 'RT Viv 🌐: 🌐 FSD learned which spot is my assigned parking spot',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/16',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 16, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.quotedTweet?.displayName, 'Viv 🌐')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'FSD learned which spot is my assigned parking spot',
+  )
+})
+
+test('presentTweetEntryFromEntry deduplicates repeated leading emoji sequence after retweet colon', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-retweet-emoji-sequence-dup',
+    title:
+      "RT Adam Lowisz X Meetup 🇺🇸 🇬🇧 🇺🇦: 🇺🇸 🇬🇧 🇺🇦 It's time for us to dismantle racism once and for all",
+    summary:
+      "RT Adam Lowisz X Meetup 🇺🇸 🇬🇧 🇺🇦: 🇺🇸 🇬🇧 🇺🇦 It's time for us to dismantle racism once and for all",
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/17',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 17, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(
+    presented.quotedTweet?.displayName,
+    'Adam Lowisz X Meetup 🇺🇸 🇬🇧 🇺🇦',
+  )
+  assert.equal(
+    presented.quotedTweet?.text,
+    "It's time for us to dismantle racism once and for all",
+  )
+})
+
 test('presentTweetEntryFromEntry classifies loose comment + RT format without @', () => {
   const entry: TweetEntryLike = {
     id: 'entry-loose-commented-retweet',
