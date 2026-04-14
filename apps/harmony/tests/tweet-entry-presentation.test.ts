@@ -169,14 +169,18 @@ test('presentTweetEntryFromEntry classifies RT prefix content as retweet', () =>
   )
 
   assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'pure')
   assert.equal(presented.retweetByLabel, 'Elon Musk')
-  assert.equal(presented.displayName, 'ArthurMacWaters')
-  assert.equal(presented.username, '@ArthurMacWaters')
+  assert.equal(presented.displayName, 'Elon Musk')
+  assert.equal(presented.username, '@elonmusk')
+  assert.equal(presented.avatarUrl, 'https://unavatar.io/x/elonmusk')
+  assert.equal(presented.text, '')
+  assert.equal(presented.quotedTweet?.displayName, 'ArthurMacWaters')
+  assert.equal(presented.quotedTweet?.username, '@ArthurMacWaters')
   assert.equal(
-    presented.avatarUrl,
-    'https://unavatar.io/x/ArthurMacWaters?fallback=false',
+    presented.quotedTweet?.text,
+    'Western civilization is awesome, actually',
   )
-  assert.equal(presented.text, 'Western civilization is awesome, actually')
 })
 
 test('presentTweetEntryFromCard classifies RT prefix content as retweet with original avatar', () => {
@@ -197,10 +201,166 @@ test('presentTweetEntryFromCard classifies RT prefix content as retweet with ori
   const presented = presentTweetEntryFromCard(card)
 
   assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'pure')
   assert.equal(presented.retweetByLabel, 'Elon Musk')
-  assert.equal(presented.displayName, 'ArthurMacWaters')
-  assert.equal(presented.username, '@ArthurMacWaters')
+  assert.equal(presented.displayName, 'Elon Musk')
+  assert.equal(presented.username, '@elonmusk')
   assert.equal(presented.avatarUrl, 'https://unavatar.io/x/elonmusk')
+  assert.equal(presented.text, '')
+  assert.equal(presented.quotedTweet?.displayName, 'ArthurMacWaters')
+  assert.equal(presented.quotedTweet?.username, '@ArthurMacWaters')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'Western civilization is awesome, actually',
+  )
+})
+
+test('presentTweetEntryFromEntry classifies comment + RT content and preserves original as quoted context', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-commented-retweet',
+    title: '',
+    summary:
+      'This is my take RT @ArthurMacWaters: Western civilization is awesome, actually',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/8',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 8, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'commented')
+  assert.equal(presented.retweetByLabel, 'Elon Musk')
+  assert.equal(presented.displayName, 'Elon Musk')
+  assert.equal(presented.username, '@elonmusk')
+  assert.equal(presented.text, 'This is my take')
+  assert.equal(presented.quotedTweet?.displayName, 'ArthurMacWaters')
+  assert.equal(presented.quotedTweet?.username, '@ArthurMacWaters')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'Western civilization is awesome, actually',
+  )
+})
+
+test('presentTweetEntryFromEntry classifies loose RT format without @ and keeps retweet text', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-loose-retweet',
+    title: '',
+    summary: 'RT Viv FSD learned which spot is assigned parking spot',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/9',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 9, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'pure')
+  assert.equal(presented.retweetByLabel, 'Elon Musk')
+  assert.equal(presented.displayName, 'Elon Musk')
+  assert.equal(presented.text, '')
+  assert.equal(presented.quotedTweet?.displayName, 'Viv FSD')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'learned which spot is assigned parking spot',
+  )
+})
+
+test('presentTweetEntryFromEntry classifies loose comment + RT format without @', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-loose-commented-retweet',
+    title: '',
+    summary: 'Grok RT X Freeze Grok-4.20 just took the #1 spot',
+    content: '',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/10',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 10, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'commented')
+  assert.equal(presented.text, 'Grok')
+  assert.equal(presented.quotedTweet?.displayName, 'X Freeze')
+  assert.equal(presented.quotedTweet?.text, 'Grok-4.20 just took the #1 spot')
+})
+
+test('presentTweetEntryFromEntry avoids duplicate commented-retweet classification when summary and content repeat same RT text', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-duplicate-summary-content',
+    title: '',
+    summary:
+      'RT Viv FSD learned which spot at my apartment complex is my assigned parking spot',
+    content:
+      'RT Viv FSD learned which spot at my apartment complex is my assigned parking spot',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/11',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 11, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'pure')
+  assert.equal(presented.text, '')
+  assert.equal(presented.quotedTweet?.displayName, 'Viv FSD')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'learned which spot at my apartment complex is my assigned parking spot',
+  )
+})
+
+test('presentTweetEntryFromEntry avoids duplicate commented-retweet classification when repeated text only differs by spacing', () => {
+  const entry: TweetEntryLike = {
+    id: 'entry-duplicate-spacing-diff',
+    title: '',
+    summary:
+      'RT Viv FSD learned which spot at my apartment complex is my assigned parking spot and confidently pulls in nowSo cool',
+    content:
+      'RT Viv FSD learned which spot at my apartment complex is my assigned parking spot and confidently pulls in now So cool',
+    author: 'Elon Musk',
+    articleUrl: 'https://x.com/elonmusk/status/12',
+    imageUrl: '',
+    mediaUrls: [],
+    publishedAt: Date.UTC(2024, 3, 12, 0, 0, 0),
+  }
+
+  const presented = presentTweetEntryFromEntry(
+    entry,
+    'https://unavatar.io/x/elonmusk',
+  )
+
+  assert.equal(presented.kind, 'retweet')
+  assert.equal(presented.retweetStyle, 'pure')
+  assert.equal(presented.text, '')
+  assert.equal(presented.quotedTweet?.displayName, 'Viv FSD')
+  assert.equal(
+    presented.quotedTweet?.text,
+    'learned which spot at my apartment complex is my assigned parking spot and confidently pulls in now So cool',
+  )
 })
 
 test('presentTweetEntryFromCard falls back to source username avatar when feed avatar is missing', () => {

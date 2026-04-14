@@ -527,7 +527,10 @@ struct ArticleDetail {
   }
 
   private hasQuotedTweet(): boolean {
-    return this.tweetPresentation().kind === 'quote' && !!this.tweetPresentation().quotedTweet
+    return (
+      (this.tweetPresentation().kind === 'quote' || this.tweetPresentation().kind === 'retweet')
+      && !!this.tweetPresentation().quotedTweet
+    )
   }
 
   private quotedTweetPresentation(): TweetQuotedPresentation {
@@ -545,6 +548,13 @@ struct ArticleDetail {
       .map((url: string) => url.trim())
       .filter((url: string) => !!url)
       .slice(0, 4)
+  }
+
+  private quotedTweetHeaderLabel(): string {
+    const baseLabel = (this.quotedTweetPresentation().displayName || '').trim()
+      || (this.quotedTweetPresentation().username || '').trim()
+      || '未知来源'
+    return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
   }
 
   private translationFormattingHint(): TranslationFormattingHint | undefined {
@@ -656,25 +666,19 @@ struct ArticleDetail {
             .fontColor(this.theme.textMuted)
             .width('100%')
 
-          Text(
-            (this.quotedTweetPresentation().displayName || '').trim()
-            || (this.quotedTweetPresentation().username || '').trim()
-            || '未知来源'
-          )
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%')
+          Text() {
+            Span(this.quotedTweetHeaderLabel())
+              .fontWeight(FontWeight.Bold)
 
-          if (this.quotedTweetPresentation().text) {
-            Text(this.quotedTweetPresentation().text)
-              .fontSize(13)
-              .lineHeight(20)
-              .fontColor(this.theme.textPrimary)
-              .width('100%')
+            if ((this.quotedTweetPresentation().text || '').trim()) {
+              Span(` ${(this.quotedTweetPresentation().text || '').trim()}`)
+                .fontWeight(FontWeight.Regular)
+            }
           }
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor(this.theme.textPrimary)
+            .width('100%')
 
           if (this.quotedTweetMediaUrls().length > 0) {
             Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {

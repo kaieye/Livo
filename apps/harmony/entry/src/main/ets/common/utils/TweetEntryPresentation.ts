@@ -10,6 +10,7 @@ export interface TweetQuotedPresentation {
 
 export interface TweetEntryPresentation {
   kind: 'tweet' | 'retweet' | 'quote'
+  retweetStyle: 'pure' | 'commented' | ''
   displayName: string
   username: string
   avatarUrl: string
@@ -47,6 +48,8 @@ interface TweetMetrics {
 }
 
 interface ParsedRetweet {
+  style: 'pure' | 'commented'
+  commentText: string
   originalDisplayName: string
   originalUsername: string
   originalText: string
@@ -298,6 +301,7 @@ function basePresentation(
   const metrics = extractMetrics(textSource)
   return {
     kind: 'tweet',
+    retweetStyle: '',
     displayName: extractDisplayName(source),
     username: extractUsername(source),
     avatarUrl: preferredSourceAvatarUrl(source),
@@ -317,23 +321,261 @@ function basePresentation(
 }
 
 function parseRetweet(rawText: string): ParsedRetweet | undefined {
-  const matched = rawText.match(/^RT\s+(@[A-Za-z0-9_]{1,15})\s*:\s*([\s\S]+)$/i)
-  if (!matched?.[1] || !matched?.[2]) {
+  const normalized = trimValue(rawText)
+  if (!normalized) {
     return undefined
   }
 
-  const username = trimValue(matched[1])
-  const text = trimValue(matched[2])
-  if (!username || !text) {
+  const pureMatch = normalized.match(
+    /^RT\s+(@[A-Za-z0-9_]{1,15})\s*:\s*([\s\S]+)$/i,
+  )
+  if (pureMatch?.[1] && pureMatch?.[2]) {
+    const username = trimValue(pureMatch[1])
+    const text = trimValue(pureMatch[2])
+    if (username && text) {
+      return {
+        style: 'pure',
+        commentText: '',
+        originalDisplayName: username.replace(/^@/, ''),
+        originalUsername: username,
+        originalText: normalizeParagraphWhitespace(text),
+        originalAvatarUrl: xAvatarUrl(username),
+      }
+    }
+  }
+
+  const commentedMatch = normalized.match(
+    /^([\s\S]+?)\s+RT\s+(@[A-Za-z0-9_]{1,15})\s*:\s*([\s\S]+)$/i,
+  )
+  if (commentedMatch?.[1] && commentedMatch?.[2] && commentedMatch?.[3]) {
+    const commentText = normalizeParagraphWhitespace(commentedMatch[1])
+    const username = trimValue(commentedMatch[2])
+    const text = trimValue(commentedMatch[3])
+    if (commentText && username && text) {
+      return {
+        style: 'commented',
+        commentText,
+        originalDisplayName: username.replace(/^@/, ''),
+        originalUsername: username,
+        originalText: normalizeParagraphWhitespace(text),
+        originalAvatarUrl: xAvatarUrl(username),
+      }
+    }
+  }
+
+  return parseRetweetWithLoosePattern(normalized)
+}
+
+function parseLooseRetweetBody(
+  rawBody: string,
+): Omit<ParsedRetweet, 'style' | 'commentText'> | undefined {
+  const normalized = normalizeParagraphWhitespace(rawBody)
+  if (!normalized) {
     return undefined
   }
 
-  const displayName = username.replace(/^@/, '')
+  const colonMatch = normalized.match(/^([^:\n：]{1,80})\s*[：:]\s*([\s\S]+)$/)
+  if (colonMatch?.[1] && colonMatch?.[2]) {
+    const header = trimValue(colonMatch[1])
+    const body = normalizeParagraphWhitespace(colonMatch[2])
+    if (!body) {
+      return undefined
+    }
+    const username = /^@[A-Za-z0-9_]{1,15}$/.test(header) ? header : ''
+    const displayName = username ? username.replace(/^@/, '') : header
+    return {
+      originalDisplayName: displayName,
+      originalUsername: username,
+      originalText: body,
+      originalAvatarUrl: xAvatarUrl(username),
+    }
+  }
+
+  const lines = normalized
+    .split(/\n+/)
+    .map((line: string) => trimValue(line))
+    .filter((line: string) => !!line)
+  if (lines.length >= 2) {
+    const header = lines[0]
+    const body = normalizeParagraphWhitespace(lines.slice(1).join('\n\n'))
+    if (!body) {
+      return undefined
+    }
+    const username = /^@[A-Za-z0-9_]{1,15}$/.test(header) ? header : ''
+    const displayName = username ? username.replace(/^@/, '') : header
+    return {
+      originalDisplayName: displayName,
+      originalUsername: username,
+      originalText: body,
+      originalAvatarUrl: xAvatarUrl(username),
+    }
+  }
+
+  const tokens = normalized.split(/\s+/).filter((item: string) => !!item)
+  const displayNameTokens: string[] = []
+  for (const token of tokens) {
+    if (displayNameTokens.length >= 4) {
+      break
+    }
+    if (!/^(?:[A-Z][a-zA-Z'’-]*|[A-Z]{2,})$/.test(token)) {
+      break
+    }
+    displayNameTokens.push(token)
+  }
+  if (
+    displayNameTokens.length >= 2 &&
+    displayNameTokens.length < tokens.length
+  ) {
+    const displayName = displayNameTokens.join(' ')
+    const body = normalizeParagraphWhitespace(
+      tokens.slice(displayNameTokens.length).join(' '),
+    )
+    if (body) {
+      return {
+        originalDisplayName: displayName,
+        originalUsername: '',
+        originalText: body,
+        originalAvatarUrl: '',
+      }
+    }
+  }
+
+  if (tokens.length >= 2 && /^[A-Z][a-zA-Z'’-]*$/.test(tokens[0])) {
+    const displayName = tokens[0]
+    const body = normalizeParagraphWhitespace(tokens.slice(1).join(' '))
+    if (body) {
+      return {
+        originalDisplayName: displayName,
+        originalUsername: '',
+        originalText: body,
+        originalAvatarUrl: '',
+      }
+    }
+  }
+
   return {
-    originalDisplayName: displayName,
-    originalUsername: username,
-    originalText: normalizeParagraphWhitespace(text),
-    originalAvatarUrl: xAvatarUrl(username),
+    originalDisplayName: '',
+    originalUsername: '',
+    originalText: normalized,
+    originalAvatarUrl: '',
+  }
+}
+
+function looksLikeLooseRetweetBody(rawBody: string): boolean {
+  const normalized = normalizeWhitespace(rawBody)
+  if (!normalized) {
+    return false
+  }
+  const firstToken = (normalized.match(/^([^\s]+)/)?.[1] || '').toLowerCase()
+  const plainSentenceStarters = new Set([
+    'this',
+    'that',
+    'the',
+    'a',
+    'an',
+    'to',
+    'is',
+    'it',
+    'i',
+    'we',
+    'you',
+    'he',
+    'she',
+    'they',
+  ])
+  return !plainSentenceStarters.has(firstToken)
+}
+
+function comparableRetweetText(value: string): string {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '')
+}
+
+function isComparableDuplicateRetweetText(a: string, b: string): boolean {
+  if (!a || !b) {
+    return false
+  }
+  if (a === b) {
+    return true
+  }
+  const minLength = Math.min(a.length, b.length)
+  const maxLength = Math.max(a.length, b.length)
+  if (minLength < 20) {
+    return false
+  }
+  if (minLength / maxLength < 0.82) {
+    return false
+  }
+  return a.includes(b) || b.includes(a)
+}
+
+function parseRetweetWithLoosePattern(
+  rawText: string,
+): ParsedRetweet | undefined {
+  const normalized = trimValue(rawText)
+  if (!normalized) {
+    return undefined
+  }
+
+  const looseCommentedMatch = normalized.match(/^([\s\S]+?)\s+RT\s+([\s\S]+)$/i)
+  if (looseCommentedMatch?.[1] && looseCommentedMatch?.[2]) {
+    const commentText = normalizeParagraphWhitespace(looseCommentedMatch[1])
+    const retweetBodyRaw = normalizeParagraphWhitespace(looseCommentedMatch[2])
+    const normalizedComment = normalizeWhitespace(commentText)
+    const normalizedCommentWithoutRt = normalizeWhitespace(
+      commentText.replace(/^RT\s+/i, ''),
+    )
+    const normalizedBody = normalizeWhitespace(retweetBodyRaw)
+    const comparableCommentWithoutRt = comparableRetweetText(
+      commentText.replace(/^RT\s+/i, ''),
+    )
+    const comparableBody = comparableRetweetText(retweetBodyRaw)
+    if (
+      normalizedComment === normalizedBody ||
+      normalizedCommentWithoutRt === normalizedBody ||
+      (!!comparableCommentWithoutRt &&
+        !!comparableBody &&
+        isComparableDuplicateRetweetText(
+          comparableCommentWithoutRt,
+          comparableBody,
+        ))
+    ) {
+      const duplicatedPure = parseLooseRetweetBody(retweetBodyRaw)
+      if (duplicatedPure?.originalText) {
+        return {
+          style: 'pure',
+          commentText: '',
+          ...duplicatedPure,
+        }
+      }
+    }
+    const retweetBody = parseLooseRetweetBody(retweetBodyRaw)
+    if (commentText && retweetBody?.originalText) {
+      return {
+        style: 'commented',
+        commentText,
+        ...retweetBody,
+      }
+    }
+  }
+
+  if (!/^RT\s+/i.test(normalized)) {
+    return undefined
+  }
+
+  const body = normalized.replace(/^RT\s+/i, '')
+  if (!looksLikeLooseRetweetBody(body)) {
+    return undefined
+  }
+  const retweetBody = parseLooseRetweetBody(body)
+  if (!retweetBody?.originalText) {
+    return undefined
+  }
+  return {
+    style: 'pure',
+    commentText: '',
+    ...retweetBody,
   }
 }
 
@@ -463,14 +705,42 @@ function applyRetweetSemantics(
     return undefined
   }
 
+  const originalAuthorLabel =
+    trimValue(parsed.originalDisplayName) ||
+    trimValue(parsed.originalUsername).replace(/^@/, '') ||
+    ''
+  const normalizedOriginalText = normalizeParagraphWhitespace(
+    parsed.originalText,
+  )
+  const originalAvatarUrl =
+    parsed.originalAvatarUrl || xAvatarUrl(parsed.originalUsername)
+  const quotedTweet: TweetQuotedPresentation = {
+    displayName: originalAuthorLabel,
+    username: trimValue(parsed.originalUsername),
+    avatarUrl: originalAvatarUrl,
+    text: normalizedOriginalText,
+    mediaUrls: [],
+  }
+
+  if (parsed.style === 'commented') {
+    const commentText = normalizeParagraphWhitespace(parsed.commentText)
+    return {
+      ...base,
+      kind: 'retweet',
+      retweetStyle: 'commented',
+      retweetByLabel: base.displayName,
+      text: commentText,
+      quotedTweet,
+    }
+  }
+
   return {
     ...base,
     kind: 'retweet',
+    retweetStyle: 'pure',
     retweetByLabel: base.displayName,
-    displayName: parsed.originalDisplayName,
-    username: parsed.originalUsername,
-    avatarUrl: parsed.originalAvatarUrl || base.avatarUrl,
-    text: parsed.originalText,
+    text: '',
+    quotedTweet,
   }
 }
 

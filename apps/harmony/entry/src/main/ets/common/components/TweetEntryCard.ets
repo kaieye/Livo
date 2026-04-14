@@ -33,7 +33,10 @@ export struct TweetEntryCard {
   }
 
   private hasQuotedTweet(): boolean {
-    return this.presentation.kind === 'quote' && !!this.presentation.quotedTweet
+    return (
+      (this.presentation.kind === 'quote' || this.presentation.kind === 'retweet')
+      && !!this.presentation.quotedTweet
+    )
   }
 
   private resolvedTweetTextMaxLines(): number {
@@ -71,9 +74,10 @@ export struct TweetEntryCard {
   }
 
   private quotedInlineNameLabel(): string {
-    return (this.quotedTweet().displayName || '').trim()
+    const name = (this.quotedTweet().displayName || '').trim()
       || this.quotedUsernameLabel()
       || '未知来源'
+    return name.endsWith(':') ? name : `${name}:`
   }
 
   private quotedMediaUrls(): string[] {
@@ -109,28 +113,6 @@ export struct TweetEntryCard {
 
   @Builder
   private RetweetBanner() {
-    if (this.presentation.kind === 'retweet' && this.retweetLabel()) {
-      Row({ space: 6 }) {
-        Text('转')
-          .fontSize(10)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textMuted)
-          .width(16)
-          .height(16)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(this.theme.elevated)
-          .borderRadius(999)
-
-        Text(`${this.retweetLabel()} 已转帖`)
-          .fontSize(11)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textMuted)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .width('100%')
-      .padding({ left: 48, bottom: 2 })
-    }
   }
 
   @Builder
@@ -162,21 +144,19 @@ export struct TweetEntryCard {
           .fontColor(this.theme.textMuted)
           .width('100%')
 
-        Text(this.quotedInlineNameLabel())
-          .fontSize(13)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%')
+        Text() {
+          Span(this.quotedInlineNameLabel())
+            .fontWeight(FontWeight.Bold)
 
-        if (this.quotedTweet().text) {
-          Text(this.quotedTweet().text)
-            .fontSize(13)
-            .lineHeight(20)
-            .fontColor(this.theme.textPrimary)
-            .width('100%')
+          if ((this.quotedTweet().text || '').trim()) {
+            Span(` ${(this.quotedTweet().text || '').trim()}`)
+              .fontWeight(FontWeight.Regular)
+          }
         }
+          .fontSize(13)
+          .lineHeight(20)
+          .fontColor(this.theme.textPrimary)
+          .width('100%')
 
         if (this.quotedMediaUrls().length > 0) {
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
