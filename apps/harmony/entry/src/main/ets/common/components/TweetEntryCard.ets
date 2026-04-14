@@ -24,6 +24,7 @@ export struct TweetEntryCard {
   @Prop highlightQuery: string = ''
   @Prop collapsedTextLines: number = 0
   @State private isTextExpanded: boolean = false
+  @State private isQuotedTextExpanded: boolean = false
   @State private activeInlineVideoKey: string = ''
   private readonly inlineVideoControllers: Map<string, VideoController> = new Map()
 
@@ -93,8 +94,44 @@ export struct TweetEntryCard {
     return name.endsWith(':') ? name : `${name}:`
   }
 
+  private resolvedQuotedTextMaxLines(): number {
+    if (this.isQuotedTextExpanded) {
+      return 99
+    }
+    return this.shouldShowQuotedExpandAction() ? 8 : 99
+  }
+
+  private shouldShowQuotedExpandAction(): boolean {
+    if (this.isQuotedTextExpanded) {
+      return false
+    }
+    const text = (this.quotedTweet().text || '').trim()
+    if (!text) {
+      return false
+    }
+    const lineBreakCount = (text.match(/\n/g) || []).length + 1
+    if (lineBreakCount > 10) {
+      return true
+    }
+    const threshold = 10 * 24
+    return text.length > threshold
+  }
+
   private quotedMediaItems(): PictureCarouselMediaItem[] {
     return this.mediaItemsFromUrls(this.quotedTweet().mediaUrls || [])
+  }
+
+  private hasSingleQuotedVideoMedia(): boolean {
+    const items = this.quotedMediaItems()
+    return items.length === 1 && !!(items[0].videoUrl || '').trim()
+  }
+
+  private quotedPrimaryMediaItem(): PictureCarouselMediaItem {
+    const items = this.quotedMediaItems()
+    if (items.length > 0) {
+      return items[0]
+    }
+    return { kind: 'image', imageUrl: '', videoUrl: '' }
   }
 
   private isVideoLikeUrl(url: string): boolean {
@@ -256,90 +293,159 @@ export struct TweetEntryCard {
   @Builder
   private RtSection() {
     if (this.hasQuotedTweet()) {
-      Column({ space: 8 }) {
-        Text('RT')
-          .fontSize(12)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textMuted)
-          .width('100%')
-
-        Text() {
-          Span(this.quotedInlineNameLabel())
+      Column({ space: 0 }) {
+        Column({ space: 8 }) {
+          Text('RT')
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textMuted)
+            .width('100%')
 
-          if ((this.quotedTweet().text || '').trim()) {
-            Span(` ${(this.quotedTweet().text || '').trim()}`)
-              .fontWeight(FontWeight.Regular)
+          Text() {
+            Span(this.quotedInlineNameLabel())
+              .fontWeight(FontWeight.Bold)
+
+            if ((this.quotedTweet().text || '').trim()) {
+              Span(` ${(this.quotedTweet().text || '').trim()}`)
+                .fontWeight(FontWeight.Regular)
+            }
           }
-        }
-          .fontSize(13)
-          .lineHeight(20)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
+            .fontSize(16)
+            .lineHeight(24)
+            .fontColor(this.theme.textPrimary)
+            .width('100%')
+            .maxLines(this.resolvedQuotedTextMaxLines())
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        if (this.quotedMediaItems().length > 0) {
-          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-            ForEach(this.quotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-              Stack({ alignContent: Alignment.Center }) {
-                if ((item.videoUrl || '').trim() && this.isInlineVideoActive('quoted', item, index)) {
-                  Video({
-                    src: item.videoUrl,
-                    controller: this.inlineVideoControllerFor('quoted', item, index),
-                    previewUri: item.imageUrl,
-                  })
-                    .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                    .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                    .borderRadius(8)
-                    .controls(true)
-                    .autoPlay(true)
-                    .muted(false)
-                } else {
-                  if ((item.imageUrl || '').trim()) {
-                    Image(item.imageUrl)
+          if (this.shouldShowQuotedExpandAction()) {
+            Text('显示更多')
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#1677FF')
+              .margin({ top: -2 })
+              .onClick(() => {
+                this.isQuotedTextExpanded = true
+              })
+          }
+
+          if (!this.hasSingleQuotedVideoMedia() && this.quotedMediaItems().length > 0) {
+            Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+              ForEach(this.quotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+                Stack({ alignContent: Alignment.Center }) {
+                  if ((item.videoUrl || '').trim() && this.isInlineVideoActive('quoted', item, index)) {
+                    Video({
+                      src: item.videoUrl,
+                      controller: this.inlineVideoControllerFor('quoted', item, index),
+                      previewUri: item.imageUrl,
+                    })
                       .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
                       .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
                       .borderRadius(8)
-                      .objectFit(ImageFit.Cover)
-                      .backgroundColor(this.theme.elevated)
+                      .controls(true)
+                      .autoPlay(true)
+                      .muted(false)
                   } else {
-                    Column()
-                      .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                      .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                      .borderRadius(8)
-                      .backgroundColor(this.theme.elevated)
-                  }
-
-                  if ((item.videoUrl || '').trim()) {
-                    Row() {
-                      SymbolGlyph($r('sys.symbol.play_fill'))
-                        .fontSize(28)
-                        .fontColor(['#F5F5F5'])
+                    if ((item.imageUrl || '').trim()) {
+                      Image(item.imageUrl)
+                        .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                        .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                        .borderRadius(8)
+                        .objectFit(ImageFit.Cover)
+                        .backgroundColor(this.theme.elevated)
+                    } else {
+                      Column()
+                        .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                        .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                        .borderRadius(8)
+                        .backgroundColor(this.theme.elevated)
                     }
-                    .width(56)
-                    .height(56)
-                    .justifyContent(FlexAlign.Center)
-                    .alignItems(VerticalAlign.Center)
-                    .borderRadius(999)
-                    .backgroundColor('rgba(168,168,168,0.58)')
+
+                    if ((item.videoUrl || '').trim()) {
+                      Row() {
+                        SymbolGlyph($r('sys.symbol.play_fill'))
+                          .fontSize(28)
+                          .fontColor(['#F5F5F5'])
+                      }
+                      .width(56)
+                      .height(56)
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(999)
+                      .backgroundColor('rgba(168,168,168,0.58)')
+                    }
                   }
                 }
+                  .margin({ bottom: this.quotedMediaItems().length > 1 ? 6 : 0 })
+                  .onClick(() => {
+                    this.playInlineVideo('quoted', item, index)
+                  })
+              }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
+            }
+            .width('100%')
+            .clip(true)
+          }
+        }
+        .width('100%')
+        .padding({
+          left: 12,
+          right: 12,
+          top: 12,
+          bottom: this.hasSingleQuotedVideoMedia() ? 10 : 12,
+        })
+
+        if (this.hasSingleQuotedVideoMedia()) {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.isInlineVideoActive('quoted', this.quotedPrimaryMediaItem(), 0)) {
+              Video({
+                src: this.quotedPrimaryMediaItem().videoUrl,
+                controller: this.inlineVideoControllerFor('quoted', this.quotedPrimaryMediaItem(), 0),
+                previewUri: this.quotedPrimaryMediaItem().imageUrl,
+              })
+                .width('100%')
+                .height(208)
+                .controls(true)
+                .autoPlay(true)
+                .muted(false)
+            } else {
+              if ((this.quotedPrimaryMediaItem().imageUrl || '').trim()) {
+                Image(this.quotedPrimaryMediaItem().imageUrl)
+                  .width('100%')
+                  .height(208)
+                  .objectFit(ImageFit.Cover)
+                  .backgroundColor(this.theme.elevated)
+              } else {
+                Column()
+                  .width('100%')
+                  .height(208)
+                  .backgroundColor(this.theme.elevated)
               }
-                .margin({ bottom: this.quotedMediaItems().length > 1 ? 6 : 0 })
-                .onClick(() => {
-                  this.playInlineVideo('quoted', item, index)
-                })
-            }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
+
+              Row() {
+                SymbolGlyph($r('sys.symbol.play_fill'))
+                  .fontSize(28)
+                  .fontColor(['#F5F5F5'])
+              }
+              .width(56)
+              .height(56)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Center)
+              .borderRadius(999)
+              .backgroundColor('rgba(168,168,168,0.58)')
+            }
           }
           .width('100%')
           .clip(true)
+          .onClick(() => {
+            this.playInlineVideo('quoted', this.quotedPrimaryMediaItem(), 0)
+          })
         }
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 12, top: 12, bottom: 12 })
       .backgroundColor(this.flatMode ? this.theme.surface : '#00000000')
       .borderRadius(12)
       .border({ width: this.flatMode ? 0.8 : 0, color: this.theme.divider })
+      .clip(true)
     }
   }
 
