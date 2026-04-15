@@ -1,5 +1,6 @@
 import { EntryCardModel } from '../models/LivoModels'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
+import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
@@ -79,6 +80,14 @@ export struct HomeVideoGrid {
       return `${source} · ${relative}`
     }
     return source || relative
+  }
+
+  private cardSourceName(entry: EntryCardModel): string {
+    return this.cardMeta(entry)
+  }
+
+  private cardPublishedLabel(entry: EntryCardModel): string {
+    return this.relativePublishedMeta(entry)
   }
 
   private parseIsoDurationToSeconds(value: string): number {
@@ -252,12 +261,41 @@ export struct HomeVideoGrid {
           .width('100%')
 
         if (this.cardMetaLine(entry)) {
-          Text(this.cardMetaLine(entry))
-            .width('100%')
-            .fontSize(11)
-            .fontColor(this.cardTokens().metaColor)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row({ space: 6 }) {
+            AvatarTile({
+              imageUrl: entry.feedImageUrl,
+              fallbackLabel: entry.feedTitle || entry.author,
+              theme: this.theme,
+              avatarSize: 16,
+              radius: 8,
+              textSize: 9,
+            })
+              .width(16)
+              .height(16)
+
+            HighlightedInlineText({
+              text: this.cardSourceName(entry),
+              query: this.highlightQuery,
+              theme: this.theme,
+              fontSize: 11,
+              lineHeight: 16,
+              fontWeight: FontWeight.Medium,
+              defaultColor: this.cardTokens().metaColor,
+              maxLines: 1,
+            })
+              .layoutWeight(1)
+
+            if (this.cardPublishedLabel(entry)) {
+              Text(this.cardPublishedLabel(entry))
+                .fontSize(11)
+                .fontColor(this.cardTokens().metaColor)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .flexShrink(0)
+            }
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
         }
       }
       .width('100%')

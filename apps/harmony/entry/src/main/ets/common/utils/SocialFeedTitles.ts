@@ -91,6 +91,36 @@ function isKnownInstagramHost(host: string): boolean {
   )
 }
 
+function isLikelyInstagramHandle(value: string): boolean {
+  const normalized = (value || '').trim().replace(/^@/, '')
+  if (!normalized) {
+    return false
+  }
+
+  if (!/^[a-zA-Z0-9._]{1,30}$/.test(normalized)) {
+    return false
+  }
+
+  if (
+    normalized.startsWith('.') ||
+    normalized.endsWith('.') ||
+    normalized.includes('..')
+  ) {
+    return false
+  }
+
+  return true
+}
+
+function isLikelyXHandle(value: string): boolean {
+  const normalized = (value || '').trim().replace(/^@/, '')
+  if (!normalized) {
+    return false
+  }
+
+  return /^[a-zA-Z0-9_]{1,15}$/.test(normalized)
+}
+
 export function extractInstagramUsername(value: string): string {
   const trimmed = (value || '').trim()
   const pathLike = getPathLike(value)
@@ -125,7 +155,11 @@ export function extractInstagramUsername(value: string): string {
 
   const direct = pathLike.match(/^\/?([^/?#]+)\/?$/)
   if (direct?.[1] && !/^https?:/i.test(direct[1])) {
-    return decodeURIComponent(direct[1]).replace(/^@/, '').trim().toLowerCase()
+    const candidate = decodeURIComponent(direct[1])
+      .replace(/^@/, '')
+      .trim()
+      .toLowerCase()
+    return isLikelyInstagramHandle(candidate) ? candidate : ''
   }
 
   return ''
@@ -145,7 +179,11 @@ export function extractXUsername(value: string): string {
 
   const direct = pathLike.match(/^\/?([^/?#]+)\/?$/)
   if (direct?.[1] && !/^https?:/i.test(direct[1])) {
-    return decodeURIComponent(direct[1]).replace(/^@/, '').trim().toLowerCase()
+    const candidate = decodeURIComponent(direct[1])
+      .replace(/^@/, '')
+      .trim()
+      .toLowerCase()
+    return isLikelyXHandle(candidate) ? candidate : ''
   }
 
   return ''

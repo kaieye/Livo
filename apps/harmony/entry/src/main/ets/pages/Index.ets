@@ -52,6 +52,7 @@ import {
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { DiscoverContent } from '../common/components/DiscoverContent'
 import { SettingsContent } from '../common/components/SettingsContent'
+import { AvatarTile } from '../common/components/AvatarTile'
 import {
   HdsBottomTabId,
   HdsBottomTabItem,
@@ -204,6 +205,7 @@ struct Index {
   @State private suppressRootTabChange: boolean = false
   @State settingsScrollerBindingVersion: number = 0
   @State isHomeStartupRefreshing: boolean = false
+  @State homeInitialLoadPending: boolean = true
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
@@ -232,6 +234,7 @@ struct Index {
   private suppressFeedsChangedUntilMs: number = 0
   private homeListSwapToken: number = 0
   private isComponentActive: boolean = false
+  private initialFeedCount: number = 0
   private managedTimeoutIds: number[] = []
 
   aboutToAppear(): void {
@@ -275,14 +278,26 @@ struct Index {
   }
 
   private async loadInitialData(): Promise<void> {
+    this.homeInitialLoadPending = true
     this.theme = ThemeService.currentPalette()
     void this.applySystemBarStyle(this.theme)
-    const settings = await AppRepository.settings()
+    const settingsPromise = AppRepository.settings()
+    const feedsPromise = AppRepository.feedEntities()
+    const initialEntriesPromise = AppRepository.featuredEntries(HOME_INITIAL_CANDIDATE_LIMIT)
+
+    const initialEntries = await initialEntriesPromise
+    this.applyHomeEntries(initialEntries, false)
+    this.settleInitialHomeLoadState()
+
+    const settings = await settingsPromise
+    const feeds = await feedsPromise
+    this.initialFeedCount = feeds.length
     this.rootSettings = settings
     AppStorage.setOrCreate('showUnreadDot', settings.showUnreadDot)
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
-    await this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+
+    void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
     this.feedSourceLabel = '本地内容已加载'
     this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
@@ -296,6 +311,10 @@ struct Index {
     this.isHomeStartupRefreshing = true
     void this.refreshFeaturedEntries(false).finally(() => {
       this.isHomeStartupRefreshing = false
+      this.settleInitialHomeLoadState()
+      this.runManagedTimeout(() => {
+        this.settleInitialHomeLoadState(true)
+      }, 1200)
     })
   }
 
@@ -398,7 +417,30 @@ struct Index {
   }
 
   private isHomeContentLoading(): boolean {
-    return this.isRefreshing || this.isHomeStartupRefreshing
+    if (this.featuredEntries.length > 0) {
+      return false
+    }
+    return this.homeInitialLoadPending || this.isRefreshing || this.isHomeStartupRefreshing
+  }
+
+  private settleInitialHomeLoadState(force: boolean = false): void {
+    if (!this.homeInitialLoadPending) {
+      return
+    }
+
+    if (this.featuredEntries.length > 0) {
+      this.homeInitialLoadPending = false
+      return
+    }
+
+    if (this.initialFeedCount === 0 && !this.isRefreshing && !this.isHomeStartupRefreshing) {
+      this.homeInitialLoadPending = false
+      return
+    }
+
+    if (force && !this.isRefreshing && !this.isHomeStartupRefreshing) {
+      this.homeInitialLoadPending = false
+    }
   }
 
   private homeEmptyStateTitle(): string {
@@ -1599,6 +1641,7 @@ struct Index {
 
   private applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
     this.featuredEntries = nextEntries
+    this.settleInitialHomeLoadState()
 
     if (!deferredGrouping) {
       this.entryGroups = groupHomeEntriesByMode(nextEntries)
@@ -1887,26 +1930,41 @@ struct Index {
       Row({ space: this.articleTweetPreviewImage(entry) ? 10 : 0 }) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {
-            HighlightedInlineText({
-              text: entry.feedTitle,
-              query: this.searchQuery,
+            AvatarTile({
+              imageUrl: entry.feedImageUrl,
+              fallbackLabel: entry.feedTitle || entry.author,
               theme: this.theme,
-              fontSize: 12,
-              lineHeight: 16,
-              fontWeight: FontWeight.Medium,
-              defaultColor: this.theme.accent,
-              maxLines: 1,
+              avatarSize: 16,
+              radius: 8,
+              textSize: 9,
             })
+              .width(16)
+              .height(16)
 
-            Text('·')
-              .fontSize(12)
-              .fontColor(this.theme.textMuted)
+            Row({ space: 6 }) {
+              HighlightedInlineText({
+                text: entry.feedTitle,
+                query: this.searchQuery,
+                theme: this.theme,
+                fontSize: 12,
+                lineHeight: 16,
+                fontWeight: FontWeight.Medium,
+                defaultColor: this.theme.accent,
+                maxLines: 1,
+              })
 
-            Text(entry.publishedLabel)
-              .fontSize(12)
-              .fontColor(this.theme.textMuted)
+              Text('·')
+                .fontSize(12)
+                .fontColor(this.theme.textMuted)
+
+              Text(entry.publishedLabel)
+                .fontSize(12)
+                .fontColor(this.theme.textMuted)
+            }
+            .layoutWeight(1)
           }
           .width('100%')
+          .alignItems(VerticalAlign.Center)
 
           HighlightedInlineText({
             text: entry.title,

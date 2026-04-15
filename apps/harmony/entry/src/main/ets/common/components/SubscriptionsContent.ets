@@ -89,6 +89,8 @@ export struct SubscriptionsContent {
   private readonly picturesScroller: Scroller = new Scroller()
   private readonly videosScroller: Scroller = new Scroller()
   private headerBlurOffset: number = 0
+  private avatarHydrationToken: number = 0
+  private avatarHydrationRunning: boolean = false
   onReady: () => void = () => {}
   private syncOverlayLevel(level: number): void {
     this.overlayLevel = level
@@ -130,6 +132,7 @@ export struct SubscriptionsContent {
       this.sourceHint = '已加载本地订阅内容'
       this.hasLoaded = true
       this.onReady()
+      void this.hydrateFeedAvatarsInBackground()
     } finally {
       this.isLoading = false
     }
@@ -139,6 +142,7 @@ export struct SubscriptionsContent {
     this.feeds = await AppRepository.feeds()
     this.sourceHint = '已加载本地订阅内容'
     this.hasLoaded = true
+    void this.hydrateFeedAvatarsInBackground()
   }
 
   private syncInheritedTheme(): void {
@@ -324,11 +328,9 @@ export struct SubscriptionsContent {
     }
 
     try {
-      const protocolMatch = trimmed.match(/^(https?:)/)
-      const protocol = protocolMatch ? protocolMatch[1] : 'https:'
       const withoutProtocol = trimmed.replace(/^https?:\/\//, '')
       const host = withoutProtocol.split('/')[0]
-      return `${protocol}//${host}/favicon.ico`
+      return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`
     } catch (_) {
       return ''
     }
@@ -346,6 +348,71 @@ export struct SubscriptionsContent {
       return `https://${trimmed.replace(/^\/\/+/, '')}`
     }
     return trimmed
+  }
+
+  private shouldHydrateAvatar(feed: FeedCardModel): boolean {
+    const imageUrl = (feed.imageUrl || '').trim().toLowerCase()
+    const primaryUrl = this.normalizeSiteUrl(feed.url)
+    const secondaryUrl = this.normalizeSiteUrl(feed.siteUrl)
+    const hasPlatformIdentity =
+      !!(extractXUsername(primaryUrl) || extractXUsername(secondaryUrl))
+      || !!(extractInstagramUsername(primaryUrl) || extractInstagramUsername(secondaryUrl))
+      || !!(this.extractYouTubeIdentity(primaryUrl) || this.extractYouTubeIdentity(secondaryUrl))
+      || !!(this.extractBilibiliUid(primaryUrl) || this.extractBilibiliUid(secondaryUrl))
+
+    if (!hasPlatformIdentity) {
+      return false
+    }
+
+    if (!imageUrl) {
+      return true
+    }
+
+    return imageUrl.includes('favicon')
+      || imageUrl.includes('apple-touch-icon')
+      || imageUrl.includes('/logo')
+      || imageUrl.includes('unavatar.io/youtube/')
+      || imageUrl.includes('unavatar.io/bilibili/')
+      || imageUrl.includes('unavatar.io/instagram/')
+  }
+
+  private async hydrateFeedAvatarsInBackground(): Promise<void> {
+    if (this.avatarHydrationRunning || this.feeds.length === 0) {
+      return
+    }
+
+    const candidates = this.feeds.filter((feed: FeedCardModel) => this.shouldHydrateAvatar(feed))
+    if (candidates.length === 0) {
+      return
+    }
+
+    const currentToken = this.avatarHydrationToken + 1
+    this.avatarHydrationToken = currentToken
+    this.avatarHydrationRunning = true
+
+    let changedCount = 0
+    try {
+      for (const feed of candidates) {
+        if (this.avatarHydrationToken !== currentToken) {
+          break
+        }
+
+        try {
+          const changed = await AppRepository.resolveFeedAvatarOnly(feed.id)
+          if (changed) {
+            changedCount += 1
+          }
+        } catch (_) {
+          continue
+        }
+      }
+    } finally {
+      this.avatarHydrationRunning = false
+    }
+
+    if (changedCount > 0 && this.avatarHydrationToken === currentToken) {
+      AppStorage.setOrCreate('feedsChangedAt', Date.now())
+    }
   }
 
   private iconSource(feed: FeedCardModel | undefined): string {
@@ -369,10 +436,102 @@ export struct SubscriptionsContent {
     return this.deriveFallbackIcon(normalizedSiteUrl)
   }
 
+  private iconCandidates(feed: FeedCardModel | undefined): string[] {
+    if (!feed) {
+      return []
+    }
+
+    const candidates: string[] = []
+    const pushCandidate = (value: string): void => {
+      const trimmed = (value || '').trim()
+      if (!trimmed || candidates.includes(trimmed)) {
+        return
+      }
+      candidates.push(trimmed)
+    }
+
+    const normalizedSiteUrl = this.normalizeSiteUrl(feed.siteUrl)
+    const normalizedFeedUrl = this.normalizeSiteUrl(feed.url)
+    const resolvedPrimary = this.iconSource(feed)
+    pushCandidate(resolvedPrimary)
+    this.platformAvatarCandidates(normalizedFeedUrl, normalizedSiteUrl).forEach((url: string) => pushCandidate(url))
+
+    const hostSource = (normalizedSiteUrl || normalizedFeedUrl || '').trim()
+    const host = hostSource
+      ? hostSource.replace(/^https?:\/\//i, '').split('/')[0].replace(/^www\./i, '')
+      : ''
+
+    if (host) {
+      pushCandidate(`https://icons.duckduckgo.com/ip3/${host}.ico`)
+      pushCandidate(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`)
+      pushCandidate(`https://${host}/favicon.ico`)
+      pushCandidate(`https://www.${host}/favicon.ico`)
+    }
+
+    return candidates
+  }
+
+  private extractBilibiliUid(value: string): string {
+    const matched = (value || '').trim().match(
+      /\/(?:bilibili\/user\/(?:video|dynamic|article)|space\.bilibili\.com)\/(\d+)/i,
+    )
+    return matched?.[1]?.trim() || ''
+  }
+
+  private extractYouTubeIdentity(value: string): string {
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+
+    const identity = trimmed.match(/[?&]channel_id=([^&]+)/i)?.[1]
+      || trimmed.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
+      || trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]
+      || trimmed.match(/\/youtube\/user\/(@?[^/?#]+)/i)?.[1]
+      || trimmed.match(/\/@([^/?#]+)/i)?.[1]
+      || trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]
+
+    return identity ? decodeURIComponent(identity).trim().replace(/^@+/, '').toLowerCase() : ''
+  }
+
+  private platformAvatarCandidates(feedUrl: string, siteUrl: string): string[] {
+    const result: string[] = []
+    const push = (value: string): void => {
+      const trimmed = (value || '').trim()
+      if (!trimmed || result.includes(trimmed)) {
+        return
+      }
+      result.push(trimmed)
+    }
+
+    const xUsername = extractXUsername(feedUrl) || extractXUsername(siteUrl)
+    if (xUsername) {
+      push(`https://unavatar.io/x/${encodeURIComponent(xUsername)}`)
+    }
+
+    const instagramUsername = extractInstagramUsername(feedUrl) || extractInstagramUsername(siteUrl)
+    if (instagramUsername) {
+      push(`https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`)
+    }
+
+    const youTubeIdentity = this.extractYouTubeIdentity(feedUrl) || this.extractYouTubeIdentity(siteUrl)
+    if (youTubeIdentity) {
+      push(`https://unavatar.io/youtube/${encodeURIComponent(youTubeIdentity)}?fallback=false`)
+    }
+
+    const bilibiliUid = this.extractBilibiliUid(feedUrl) || this.extractBilibiliUid(siteUrl)
+    if (bilibiliUid) {
+      push(`https://unavatar.io/bilibili/${encodeURIComponent(bilibiliUid)}?fallback=false`)
+    }
+
+    return result
+  }
+
   @Builder
   private FeedAvatar(feed: FeedCardModel | undefined) {
     AvatarTile({
       imageUrl: this.iconSource(feed),
+      fallbackImageUrls: this.iconCandidates(feed),
       refreshToken: this.feedsChangedAt,
       fallbackLabel: feed ? feed.title : 'Livo',
       accent: this.theme.elevated,

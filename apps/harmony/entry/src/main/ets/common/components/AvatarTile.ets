@@ -3,6 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 @Component
 export struct AvatarTile {
   @Prop @Watch('handleImageUrlChange') imageUrl: string = ''
+  @Prop @Watch('handleImageSourcesChange') fallbackImageUrls: string[] = []
   @Prop @Watch('handleRefreshTokenChange') refreshToken: number = 0
   @Prop fallbackLabel: string = ''
   @Prop accent: string = '#FF6A00'
@@ -11,18 +12,51 @@ export struct AvatarTile {
   @Prop radius: number = 10
   @Prop textSize: number = 14
   @Prop showFallbackLabel: boolean = true
-  @State private imageLoadFailed: boolean = false
+  @State private currentImageIndex: number = 0
 
   aboutToAppear(): void {
-    this.imageLoadFailed = false
+    this.currentImageIndex = 0
   }
 
   private handleImageUrlChange(): void {
-    this.imageLoadFailed = false
+    this.currentImageIndex = 0
+  }
+
+  private handleImageSourcesChange(): void {
+    this.currentImageIndex = 0
   }
 
   private handleRefreshTokenChange(): void {
-    this.imageLoadFailed = false
+    this.currentImageIndex = 0
+  }
+
+  private candidateImageUrls(): string[] {
+    const result: string[] = []
+    const pushCandidate = (value: string): void => {
+      const trimmed = (value || '').trim()
+      if (!trimmed || result.includes(trimmed)) {
+        return
+      }
+      result.push(trimmed)
+    }
+
+    pushCandidate(this.imageUrl)
+    ;(this.fallbackImageUrls || []).forEach((value: string) => pushCandidate(value))
+    return result
+  }
+
+  private currentCandidateImageUrl(): string {
+    return this.candidateImageUrls()[this.currentImageIndex] ?? ''
+  }
+
+  private advanceImageCandidate(): void {
+    const candidates = this.candidateImageUrls()
+    if (this.currentImageIndex + 1 < candidates.length) {
+      this.currentImageIndex += 1
+      return
+    }
+
+    this.currentImageIndex = candidates.length
   }
 
   private initialsLabel(): string {
@@ -35,15 +69,15 @@ export struct AvatarTile {
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
-      if (this.imageUrl && !this.imageLoadFailed) {
-        Image(this.imageUrl)
+      if (this.currentCandidateImageUrl() && this.currentImageIndex < this.candidateImageUrls().length) {
+        Image(this.currentCandidateImageUrl())
           .width(this.avatarSize)
           .height(this.avatarSize)
           .borderRadius(this.radius)
           .backgroundColor(this.theme.elevated)
           .objectFit(ImageFit.Cover)
           .onError(() => {
-            this.imageLoadFailed = true
+            this.advanceImageCandidate()
           })
       } else {
         Row()

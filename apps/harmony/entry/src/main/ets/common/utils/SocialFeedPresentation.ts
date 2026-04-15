@@ -14,6 +14,26 @@ function hostOf(value: string): string {
   return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
 }
 
+function hasSocialFeedHint(value: string): boolean {
+  const normalized = trimValue(value).toLowerCase()
+  if (!normalized) {
+    return false
+  }
+
+  return (
+    normalized.includes('/instagram/') ||
+    normalized.includes('/picnob/') ||
+    normalized.includes('/pixnoy/') ||
+    normalized.includes('/piokok/') ||
+    normalized.includes('instagram.com/') ||
+    normalized.includes('/x/') ||
+    normalized.includes('/twitter/') ||
+    normalized.includes('x.com/') ||
+    normalized.includes('twitter.com/') ||
+    normalized.includes('nitter.')
+  )
+}
+
 function isGenericInstagramIcon(value: string): boolean {
   const normalized = trimValue(value).toLowerCase()
   if (!normalized) {
@@ -60,10 +80,29 @@ function extractYouTubeIdentity(value: string): string {
     trimmed.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/youtube\/user\/(@[^/?#]+)/i)?.[1]?.trim() ||
+    trimmed.match(/\/@([^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim() ||
-    trimmed.match(/\/(@[^/?#]+)/i)?.[1]?.trim() ||
     ''
   )
+}
+
+function normalizeYouTubeIdentity(value: string): string {
+  const raw = trimValue(value).replace(/^@+/, '')
+  return raw ? decodeURIComponent(raw).trim().toLowerCase() : ''
+}
+
+function youTubeAvatarUrl(identity: string): string {
+  const normalized = normalizeYouTubeIdentity(identity)
+  return normalized
+    ? `https://unavatar.io/youtube/${encodeURIComponent(normalized)}?fallback=false`
+    : ''
+}
+
+function bilibiliAvatarUrl(uid: string): string {
+  const normalized = trimValue(uid)
+  return normalized
+    ? `https://unavatar.io/bilibili/${encodeURIComponent(normalized)}?fallback=false`
+    : ''
 }
 
 function isGenericFeedIcon(value: string): boolean {
@@ -84,7 +123,9 @@ function isGenericFeedIcon(value: string): boolean {
 
 function faviconUrlForHost(host: string): string {
   const trimmed = host.trim()
-  return trimmed ? `https://${trimmed}/favicon.ico` : ''
+  return trimmed
+    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(trimmed)}&sz=128`
+    : ''
 }
 
 function scoreStoredFeedTitle(
@@ -177,9 +218,23 @@ export function resolveSocialFeedDisplayImageUrl(
     extractInstagramUsername(feedUrl) || extractInstagramUsername(siteUrl)
   const xUsernameFromUrl =
     extractXUsername(feedUrl) || extractXUsername(siteUrl)
+  const bilibiliUidFromUrl =
+    extractBilibiliUid(feedUrl) || extractBilibiliUid(siteUrl)
+  const youTubeIdentityFromUrl =
+    extractYouTubeIdentity(feedUrl) || extractYouTubeIdentity(siteUrl)
+  const canInferUsernameFromTitle =
+    !!instagramUsernameFromUrl ||
+    !!xUsernameFromUrl ||
+    hasSocialFeedHint(feedUrl) ||
+    hasSocialFeedHint(siteUrl)
   const instagramUsername =
-    instagramUsernameFromUrl || extractInstagramUsername(title)
-  const xUsername = xUsernameFromUrl || extractXUsername(title)
+    instagramUsernameFromUrl ||
+    (canInferUsernameFromTitle ? extractInstagramUsername(title) : '')
+  const xUsername =
+    xUsernameFromUrl ||
+    (canInferUsernameFromTitle ? extractXUsername(title) : '')
+  const bilibiliUid = bilibiliUidFromUrl
+  const youTubeIdentity = youTubeIdentityFromUrl
 
   if (normalizedImage) {
     if (xUsernameFromUrl && isGenericFeedIcon(normalizedImage)) {
@@ -194,11 +249,21 @@ export function resolveSocialFeedDisplayImageUrl(
     if (xUsername && isGenericFeedIcon(normalizedImage)) {
       return `https://unavatar.io/x/${encodeURIComponent(xUsername)}`
     }
+    if (youTubeIdentity && isGenericFeedIcon(normalizedImage)) {
+      return youTubeAvatarUrl(youTubeIdentity)
+    }
+    if (bilibiliUid && isGenericFeedIcon(normalizedImage)) {
+      return bilibiliAvatarUrl(bilibiliUid)
+    }
     if (instagramUsername && isGenericInstagramIcon(normalizedImage)) {
       return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`
     }
     if (xUsername && isGenericXIcon(normalizedImage)) {
       return `https://unavatar.io/x/${encodeURIComponent(xUsername)}`
+    }
+    if (isGenericFeedIcon(normalizedImage)) {
+      const host = hostOf(siteUrl || feedUrl)
+      return faviconUrlForHost(host)
     }
     return normalizedImage
   }
@@ -209,6 +274,14 @@ export function resolveSocialFeedDisplayImageUrl(
 
   if (instagramUsernameFromUrl) {
     return `https://unavatar.io/instagram/${encodeURIComponent(instagramUsernameFromUrl)}?fallback=false`
+  }
+
+  if (youTubeIdentityFromUrl) {
+    return youTubeAvatarUrl(youTubeIdentityFromUrl)
+  }
+
+  if (bilibiliUidFromUrl) {
+    return bilibiliAvatarUrl(bilibiliUidFromUrl)
   }
 
   if (xUsername) {

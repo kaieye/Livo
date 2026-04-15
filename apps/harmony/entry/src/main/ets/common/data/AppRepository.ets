@@ -328,6 +328,37 @@ export class AppRepository {
     return FeedRepository.getById(feedId)
   }
 
+  static async resolveFeedAvatarOnly(feedId: string): Promise<boolean> {
+    await AppRepository.bootstrap()
+    const feed = await FeedRepository.getById(feedId)
+    if (!feed) {
+      return false
+    }
+
+    const resolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+      feed.url,
+      feed.siteUrl || '',
+      feed.imageUrl || '',
+      feed.imageUrl || '',
+    )
+    const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', resolvedImageUrl)
+    if (!nextImageUrl || nextImageUrl === (feed.imageUrl || '')) {
+      return false
+    }
+
+    await FeedRepository.update(feedId, {
+      title: feed.title,
+      url: feed.url,
+      siteUrl: feed.siteUrl || '',
+      imageUrl: nextImageUrl,
+      description: feed.description || '',
+      category: feed.category || '',
+      view: feed.view,
+      showInAll: feed.showInAll,
+    })
+    return true
+  }
+
   static async featuredEntries(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
     await AppRepository.bootstrap()
     const safeCandidateLimit = Math.max(1, candidateLimit)
