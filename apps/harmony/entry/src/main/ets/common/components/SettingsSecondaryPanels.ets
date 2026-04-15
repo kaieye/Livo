@@ -6,7 +6,7 @@ import { AppContextService } from '../services/AppContextService'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, Feed, FeedViewType, HarmonySettings, RefreshLogEntry } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { generateOpml, parseOpml } from '../utils/OpmlParser'
-import { extractInstagramUsername } from '../utils/SocialFeedTitles'
+import { canonicalFeedUrl, extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -876,6 +876,82 @@ export struct SubscriptionsSettingsPanel {
     return trimmed
   }
 
+  private normalizeComparableUrl(raw: string): string {
+    const normalized = (raw || '').trim().toLowerCase()
+    if (!normalized) {
+      return ''
+    }
+
+    return normalized
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./, '')
+      .replace(/[?#].*$/g, '')
+      .replace(/\/+$/g, '')
+  }
+
+  private extractBilibiliUid(raw: string): string {
+    const normalized = this.normalizeComparableUrl(raw)
+    if (!normalized) {
+      return ''
+    }
+
+    const matched = normalized.match(/(?:space\.bilibili\.com\/|\/bilibili\/user\/(?:video|dynamic|article)\/)(\d+)/i)
+    return matched?.[1]?.trim() || ''
+  }
+
+  private feedIdentityKeys(rawUrl: string, rawSiteUrl: string = ''): string[] {
+    const normalizedUrl = this.normalizeImportedUrl(rawUrl)
+    const normalizedSiteUrl = this.normalizeImportedUrl(rawSiteUrl)
+    const canonicalUrl = canonicalFeedUrl(normalizedUrl, normalizedSiteUrl)
+    const keys: string[] = []
+
+    const urlKey = this.normalizeComparableUrl(normalizedUrl)
+    if (urlKey) {
+      keys.push(`url:${urlKey}`)
+    }
+
+    const canonicalKey = this.normalizeComparableUrl(canonicalUrl)
+    if (canonicalKey) {
+      keys.push(`canonical:${canonicalKey}`)
+    }
+
+    const siteKey = this.normalizeComparableUrl(normalizedSiteUrl)
+    if (siteKey) {
+      keys.push(`site:${siteKey}`)
+    }
+
+    const instagramUsername = extractInstagramUsername(canonicalUrl || normalizedUrl)
+      || extractInstagramUsername(normalizedSiteUrl)
+    if (instagramUsername) {
+      keys.push(`instagram:${instagramUsername}`)
+    }
+
+    const xUsername = extractXUsername(canonicalUrl || normalizedUrl)
+      || extractXUsername(normalizedSiteUrl)
+    if (xUsername) {
+      keys.push(`x:${xUsername}`)
+    }
+
+    const bilibiliUid = this.extractBilibiliUid(canonicalUrl || normalizedUrl)
+      || this.extractBilibiliUid(normalizedSiteUrl)
+    if (bilibiliUid) {
+      keys.push(`bilibili:${bilibiliUid}`)
+    }
+
+    const dedupedKeys: string[] = []
+    const seenKeySet: Set<string> = new Set<string>()
+    keys.forEach((key: string) => {
+      const normalizedKey = (key || '').trim()
+      if (!normalizedKey || seenKeySet.has(normalizedKey)) {
+        return
+      }
+
+      seenKeySet.add(normalizedKey)
+      dedupedKeys.push(normalizedKey)
+    })
+    return dedupedKeys
+  }
+
   private readTextFromUri(uri: string): string {
     const file = fileIo.openSync(uri, fileIo.OpenMode.READ_ONLY)
     try {
@@ -1011,21 +1087,24 @@ export struct SubscriptionsSettingsPanel {
       }
 
       const existingFeeds = await AppRepository.feedEntities()
-      const existingUrlSet: Set<string> = new Set<string>()
-      const existingFeedMap: Map<string, Feed> = new Map<string, Feed>()
+      const existingIdentityKeySet: Set<string> = new Set<string>()
+      const existingFeedByIdentityKey: Map<string, Feed> = new Map<string, Feed>()
       existingFeeds.forEach((feed: Feed) => {
-        const normalized = this.normalizeFeedUrl(feed.url)
-        if (normalized) {
-          existingUrlSet.add(normalized)
-          existingFeedMap.set(normalized, feed)
-        }
+        const identityKeys = this.feedIdentityKeys(feed.url, feed.siteUrl || '')
+        identityKeys.forEach((identityKey: string) => {
+          existingIdentityKeySet.add(identityKey)
+          if (!existingFeedByIdentityKey.has(identityKey)) {
+            existingFeedByIdentityKey.set(identityKey, feed)
+          }
+        })
       })
 
       if (mode === 'overwrite') {
         for (const feed of existingFeeds) {
           await AppRepository.removeFeed(feed.id)
         }
-        existingUrlSet.clear()
+        existingIdentityKeySet.clear()
+        existingFeedByIdentityKey.clear()
       }
 
       const seenInOpml: Set<string> = new Set<string>()
@@ -1036,35 +1115,63 @@ export struct SubscriptionsSettingsPanel {
 
       for (const opmlFeed of opmlFeeds) {
         const url = this.normalizeImportedUrl(opmlFeed.xmlUrl || '')
+        const siteUrl = this.normalizeImportedUrl(opmlFeed.htmlUrl || '')
         if (!url) {
           skipped += 1
           continue
         }
         const importedView = this.inferFeedViewByUrl(url)
-        const normalizedUrl = this.normalizeFeedUrl(url)
-        if (!normalizedUrl) {
+        const identityKeys = this.feedIdentityKeys(url, siteUrl)
+        if (identityKeys.length === 0) {
           skipped += 1
           continue
         }
-        if (seenInOpml.has(normalizedUrl)) {
-          skipped += 1
-          continue
-        }
-        seenInOpml.add(normalizedUrl)
 
-        if (mode === 'merge' && existingUrlSet.has(normalizedUrl)) {
-          const existingFeed = existingFeedMap.get(normalizedUrl)
+        let duplicatedInOpml = false
+        for (const identityKey of identityKeys) {
+          if (seenInOpml.has(identityKey)) {
+            duplicatedInOpml = true
+            break
+          }
+        }
+        if (duplicatedInOpml) {
+          skipped += 1
+          continue
+        }
+        identityKeys.forEach((identityKey: string) => {
+          seenInOpml.add(identityKey)
+        })
+
+        let matchedExistingFeed: Feed | undefined = undefined
+        if (mode === 'merge') {
+          for (const identityKey of identityKeys) {
+            const matchedFeed = existingFeedByIdentityKey.get(identityKey)
+            if (matchedFeed) {
+              matchedExistingFeed = matchedFeed
+              break
+            }
+          }
+        }
+
+        if (mode === 'merge' && matchedExistingFeed) {
+          const existingFeed = matchedExistingFeed
           if (existingFeed && existingFeed.view !== importedView && importedView === FeedViewType.SocialMedia) {
             try {
               await AppRepository.updateFeed(existingFeed.id, {
                 title: (opmlFeed.title || url).trim(),
                 url,
-                siteUrl: this.normalizeImportedUrl(opmlFeed.htmlUrl || ''),
+                siteUrl,
                 imageUrl: '',
                 description: '',
                 category: (opmlFeed.category || '').trim(),
                 view: importedView,
                 showInAll: true,
+              })
+              identityKeys.forEach((identityKey: string) => {
+                existingIdentityKeySet.add(identityKey)
+                if (!existingFeedByIdentityKey.has(identityKey)) {
+                  existingFeedByIdentityKey.set(identityKey, existingFeed)
+                }
               })
               importedFeedIds.push(existingFeed.id)
               imported += 1
@@ -1074,6 +1181,13 @@ export struct SubscriptionsSettingsPanel {
               continue
             }
           }
+
+          identityKeys.forEach((identityKey: string) => {
+            existingIdentityKeySet.add(identityKey)
+            if (!existingFeedByIdentityKey.has(identityKey) && existingFeed) {
+              existingFeedByIdentityKey.set(identityKey, existingFeed)
+            }
+          })
           skipped += 1
           continue
         }
@@ -1082,7 +1196,7 @@ export struct SubscriptionsSettingsPanel {
           const createdFeed = await AppRepository.createFeed({
             title: (opmlFeed.title || url).trim(),
             url,
-            siteUrl: this.normalizeImportedUrl(opmlFeed.htmlUrl || ''),
+            siteUrl,
             imageUrl: '',
             description: '',
             category: (opmlFeed.category || '').trim(),
@@ -1090,7 +1204,10 @@ export struct SubscriptionsSettingsPanel {
             showInAll: true,
           })
           importedFeedIds.push(createdFeed.id)
-          existingUrlSet.add(normalizedUrl)
+          const createdIdentityKeys = this.feedIdentityKeys(createdFeed.url, createdFeed.siteUrl || '')
+          createdIdentityKeys.forEach((identityKey: string) => {
+            existingIdentityKeySet.add(identityKey)
+          })
           imported += 1
         } catch (_error) {
           failed += 1
