@@ -61,6 +61,7 @@ import {
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
+import { RefreshStateManager } from '../common/utils/RefreshStateManager'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
@@ -77,6 +78,15 @@ const HOME_REFRESH_INDICATOR_SIZE: number = 40
 const HOME_REFRESH_INDICATOR_BOTTOM_MARGIN: number = 15
 const HOME_REFRESH_RESET_DURATION: number = 220
 const HOME_REFRESH_DISMISS_SCROLL_OFFSET: number = 18
+const HOME_LIST_SWAP_EXIT_DURATION: number = 120
+const HOME_LIST_SWAP_ENTER_DURATION: number = 150
+const HOME_LIST_SWAP_OFFSET_Y: number = 0
+const HOME_LIST_SWAP_ENTRY_OFFSET_Y: number = 0
+const HOME_LIST_SWAP_EXIT_SCALE: number = 1
+const HOME_LIST_SWAP_ENTRY_SCALE: number = 1
+const HOME_LIST_SWAP_EXIT_MIN_OPACITY: number = 0.56
+const HOME_LIST_SWAP_ENTRY_MIN_OPACITY: number = 0.9
+const HOME_LIST_SWAP_ANIMATION_ENABLED: boolean = true
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56
 const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -104,8 +114,17 @@ const HOME_INLINE_SEARCH_RESULT_LIMIT: number = 6
 const HOME_INLINE_SEARCH_MOTION_DURATION: number = 240
 const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
 const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
-const HOME_REFRESH_RESULT_RELOAD_DELAY_MS: number = 180
-const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 32
+const HOME_REFRESH_FIRST_SWAP_DELAY_MS: number = 72
+const HOME_REFRESH_MEDIUM_RELOAD_DELAY_MS: number = 220
+const HOME_REFRESH_FINAL_RELOAD_DELAY_MS: number = 460
+const HOME_FINAL_RELOAD_IDLE_RETRY_MS: number = 120
+const HOME_FINAL_RELOAD_IDLE_MAX_RETRIES: number = 10
+const HOME_REFRESH_RESET_DEFER_MS: number = 32
+const HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS: number = 260
+const HOME_FEEDS_CHANGED_RELOAD_DELAY_MS: number = 280
+const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 96
+const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
+const HOME_SWAP_CANDIDATE_LIMIT: number = 120
 const HOME_MAX_CANDIDATE_LIMIT: number = 240
 const HOME_INITIAL_CANDIDATE_LIMIT: number = 24
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
@@ -168,6 +187,12 @@ struct Index {
   @State homeModeRailDismissedByScroll: boolean = false
   @State homeModeRailExpandedOverride: boolean = false
   @State homeModeRailExpandedLockOffset: number = -1
+  @State isHomeScrollInteracting: boolean = false
+  @State homeListSwapOpacity: number = 1
+  @State homeListSwapTranslateY: number = 0
+  @State homeListSwapScale: number = 1
+  @State homeListSwapMode: SubscriptionMode = 'articles'
+  @State homeListSwapAnimating: boolean = false
   @State searchQuery: string = ''
   @State showSearch: boolean = false
   @State searchOverlayVisible: boolean = false
@@ -202,16 +227,51 @@ struct Index {
   private refreshPercentAnimationTimer: number = -1
   private autoRefreshTimer: number = -1
   private homeEntryGroupVersion: number = 0
+  private postRefreshReloadVersion: number = 0
+  private feedsChangedReloadVersion: number = 0
+  private suppressFeedsChangedUntilMs: number = 0
+  private homeListSwapToken: number = 0
+  private isComponentActive: boolean = false
+  private managedTimeoutIds: number[] = []
 
   aboutToAppear(): void {
+    this.isComponentActive = true
     console.info('Livo Harmony Index aboutToAppear')
     this.syncRequestedRootTab()
     void this.loadInitialData()
   }
 
   aboutToDisappear(): void {
+    this.isComponentActive = false
     this.clearRefreshPercentAnimation()
     this.clearAutoRefreshTimer()
+    this.clearManagedTimeouts()
+    this.homeListSwapToken += 1
+    this.homeListSwapAnimating = false
+    this.homeListSwapOpacity = 1
+    this.homeListSwapTranslateY = 0
+    this.homeListSwapScale = 1
+  }
+
+  private runManagedTimeout(callback: () => void, delayMs: number): void {
+    const timeoutId = setTimeout(() => {
+      const pendingIndex = this.managedTimeoutIds.indexOf(timeoutId)
+      if (pendingIndex >= 0) {
+        this.managedTimeoutIds.splice(pendingIndex, 1)
+      }
+      if (!this.isComponentActive) {
+        return
+      }
+      callback()
+    }, delayMs)
+    this.managedTimeoutIds.push(timeoutId)
+  }
+
+  private clearManagedTimeouts(): void {
+    this.managedTimeoutIds.forEach((timeoutId: number) => {
+      clearTimeout(timeoutId)
+    })
+    this.managedTimeoutIds = []
   }
 
   private async loadInitialData(): Promise<void> {
@@ -240,7 +300,7 @@ struct Index {
   }
 
   private async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
-    if (this.isRefreshing) {
+    if (this.isRefreshing || !this.isComponentActive) {
       return
     }
 
@@ -252,14 +312,18 @@ struct Index {
 
     try {
       const result = await AppRepository.refreshAllFeeds((completedCount: number, totalCount: number) => {
+        if (!this.isComponentActive) {
+          return
+        }
         this.refreshCompletedCount = completedCount
         this.refreshTotalCount = totalCount
         this.animateRefreshPercentTo(this.resolveRefreshPercent(completedCount, totalCount))
       })
+      if (!this.isComponentActive) {
+        return
+      }
       this.feedSourceLabel = result.sourceLabel
-      setTimeout(() => {
-        void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
-      }, HOME_REFRESH_RESULT_RELOAD_DELAY_MS)
+      await this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
       if (showResultToast) {
         this.showToast(result.sourceLabel)
       }
@@ -269,16 +333,14 @@ struct Index {
       this.refreshTotalCount = 0
       this.clearRefreshPercentAnimation()
       this.displayRefreshPercent = 0
-      this.animateHomePullRefreshReset()
+      this.runManagedTimeout(() => {
+        this.animateHomePullRefreshReset()
+      }, HOME_REFRESH_RESET_DEFER_MS)
     }
   }
 
   private resolveRefreshPercent(completedCount: number, totalCount: number): number {
-    if (totalCount <= 0) {
-      return 0
-    }
-
-    return Math.min(100, Math.max(0, Math.round((completedCount / totalCount) * 100)))
+    return RefreshStateManager.resolveRefreshPercent(completedCount, totalCount)
   }
 
   private clearRefreshPercentAnimation(): void {
@@ -291,16 +353,17 @@ struct Index {
   }
 
   private animateRefreshPercentTo(targetPercent: number): void {
-    const nextTarget = Math.min(100, Math.max(0, targetPercent))
+    const animationPlan = RefreshStateManager.createPercentAnimationPlan(this.displayRefreshPercent, targetPercent)
+    const nextTarget = animationPlan.targetPercent
     this.clearRefreshPercentAnimation()
 
     if (nextTarget === this.displayRefreshPercent) {
       return
     }
 
-    const startPercent = this.displayRefreshPercent
+    const startPercent = animationPlan.startPercent
     const delta = nextTarget - startPercent
-    const steps = Math.max(4, Math.min(10, Math.abs(delta)))
+    const steps = animationPlan.steps
     let currentStep = 0
 
     this.refreshPercentAnimationTimer = setInterval(() => {
@@ -316,11 +379,22 @@ struct Index {
   }
 
   private showToast(message: string, duration: number = 2000): void {
+    if (!this.isComponentActive) {
+      return
+    }
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration })
     } catch (error) {
       console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
     }
+  }
+
+  private animateWithUiContext(options: AnimateParam, event: () => void): void {
+    if (!this.isComponentActive) {
+      event()
+      return
+    }
+    this.getUIContext().animateTo(options, event)
   }
 
   private isHomeContentLoading(): boolean {
@@ -338,7 +412,7 @@ struct Index {
   }
 
   private updateHomePullRefreshState(offset: number): void {
-    const nextOffset = Math.max(0, Math.min(offset, HOME_REFRESH_MAX_PULL_DISTANCE))
+    const nextOffset = RefreshStateManager.resolvePullDistance(offset, HOME_REFRESH_MAX_PULL_DISTANCE)
     this.homeRefreshPullDistance = nextOffset
     this.homeRefreshIndicatorOffset = nextOffset
     if (this.isRefreshing) {
@@ -374,7 +448,7 @@ struct Index {
     // Keep the same hold distance during dismiss so the rebound position stays fixed.
     this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
     this.homeRefreshStatus = RefreshStatus.Drag
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
         return
       }
@@ -409,7 +483,7 @@ struct Index {
     }
 
     this.homeRefreshStatus = RefreshStatus.Drag
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       if (this.isRefreshing) {
         return
       }
@@ -491,7 +565,7 @@ struct Index {
   }
 
   private homeRefreshIndicatorProgress(): number {
-    return Math.max(0, Math.min(this.homeRefreshIndicatorOffset / HOME_REFRESH_PULL_DISTANCE, 1))
+    return RefreshStateManager.resolveIndicatorProgress(this.homeRefreshIndicatorOffset, HOME_REFRESH_PULL_DISTANCE)
   }
 
   private shouldShowHomeRefreshGap(mode: SubscriptionMode): boolean {
@@ -527,26 +601,26 @@ struct Index {
   }
 
   private homeRefreshGapHeight(mode: SubscriptionMode): number {
-    if (!this.shouldShowHomeRefreshGap(mode)) {
-      return 0
-    }
-
-    const indicatorHeight = 18 + 10 * 2
-    const expandedGapHeight = indicatorHeight + HOME_REFRESH_INDICATOR_VISUAL_OFFSET
-    const dragGapHeight = Math.max(0, this.homeRefreshIndicatorOffset - HOME_REFRESH_GAP_OPEN_PULL_DISTANCE) * HOME_REFRESH_FOLLOW_RATIO
-    return Math.max(0, Math.min(Math.max(dragGapHeight, this.homeRefreshContentHoldOffset), expandedGapHeight))
+    return RefreshStateManager.resolveGapHeight({
+      shouldShowGap: this.shouldShowHomeRefreshGap(mode),
+      indicatorOffset: this.homeRefreshIndicatorOffset,
+      contentHoldOffset: this.homeRefreshContentHoldOffset,
+      gapOpenPullDistance: HOME_REFRESH_GAP_OPEN_PULL_DISTANCE,
+      followRatio: HOME_REFRESH_FOLLOW_RATIO,
+      visualOffset: HOME_REFRESH_INDICATOR_VISUAL_OFFSET,
+    })
   }
 
   private homeRefreshIndicatorOpacity(): number {
-    if (this.isRefreshing || this.homeRefreshStatus === RefreshStatus.Refresh) {
-      return 1
-    }
-    return this.homeRefreshIndicatorProgress()
+    return RefreshStateManager.resolveIndicatorOpacity(
+      this.isRefreshing,
+      this.homeRefreshStatus === RefreshStatus.Refresh,
+      this.homeRefreshIndicatorProgress(),
+    )
   }
 
   private homeRefreshIndicatorScale(): number {
-    const progress = this.homeRefreshIndicatorProgress()
-    return 0.84 + progress * 0.16
+    return RefreshStateManager.resolveIndicatorScale(this.homeRefreshIndicatorProgress())
   }
 
   private homeRefreshIndicatorTranslateY(): number {
@@ -646,6 +720,10 @@ struct Index {
 
     this.currentHomeModeScrollOffset = nextOffset
     this.updateHeaderBlurProgress(nextOffset)
+  }
+
+  private setHomeScrollInteracting(interacting: boolean): void {
+    this.isHomeScrollInteracting = interacting
   }
 
   private currentRootTitle(): string {
@@ -759,7 +837,7 @@ struct Index {
   private openHomeInlineSearch(): void {
     if (!this.searchOverlayVisible) {
       this.searchOverlayVisible = true
-      setTimeout(() => {
+      this.runManagedTimeout(() => {
         this.showSearch = true
         this.focusHomeInlineSearch()
       }, 16)
@@ -771,19 +849,19 @@ struct Index {
   }
 
   private focusHomeInlineSearch(): void {
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
       this.searchInputController.caretPosition(this.searchQuery.length)
     }, 24)
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
       this.searchInputController.caretPosition(this.searchQuery.length)
     }, 80)
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
       this.searchInputController.caretPosition(this.searchQuery.length)
     }, 180)
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
       this.searchInputController.caretPosition(this.searchQuery.length)
     }, 320)
@@ -795,7 +873,7 @@ struct Index {
     if (clearQuery) {
       this.searchQuery = ''
     }
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       this.finalizeHomeInlineSearchClose()
     }, HOME_INLINE_SEARCH_MOTION_DURATION)
   }
@@ -1201,7 +1279,7 @@ struct Index {
   }
 
   private openEntry(entry: EntryCardModel): void {
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       this.markEntryReadLocally(entry)
     }, 120)
 
@@ -1440,15 +1518,97 @@ struct Index {
   }
 
   private handleFeedsChanged(): void {
-    void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+    if (!this.isComponentActive || this.isRefreshing || this.isHomeStartupRefreshing) {
+      return
+    }
+
+    const now = Date.now()
+    if (now < this.suppressFeedsChangedUntilMs) {
+      return
+    }
+
+    const currentVersion = this.feedsChangedReloadVersion + 1
+    this.feedsChangedReloadVersion = currentVersion
+    void this.reloadFeaturedEntriesFromLocal(HOME_SWAP_PRIME_CANDIDATE_LIMIT)
+
+    this.runManagedTimeout(() => {
+      if (this.feedsChangedReloadVersion !== currentVersion) {
+        return
+      }
+      void this.reloadFeaturedEntriesFromLocal(HOME_SWAP_CANDIDATE_LIMIT)
+    }, HOME_FEEDS_CHANGED_RELOAD_DELAY_MS)
   }
 
-  private async reloadFeaturedEntriesFromLocal(candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT): Promise<void> {
+  private shouldRunFinalHomeReloadNow(): boolean {
+    return this.isComponentActive
+      && this.isHomeRootTab()
+      && !this.isRefreshing
+      && !this.isHomeStartupRefreshing
+      && !this.isModeTransitioning
+      && !this.homeListSwapAnimating
+      && !this.searchOverlayVisible
+      && !this.isHomeScrollInteracting
+  }
+
+  private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void {
+    this.runManagedTimeout(() => {
+      if (this.postRefreshReloadVersion !== currentVersion) {
+        return
+      }
+
+      if (!this.shouldRunFinalHomeReloadNow()) {
+        if (attempt >= HOME_FINAL_RELOAD_IDLE_MAX_RETRIES) {
+          void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+          return
+        }
+        this.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt + 1)
+        return
+      }
+
+      void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+    }, attempt === 0 ? HOME_REFRESH_FINAL_RELOAD_DELAY_MS : HOME_FINAL_RELOAD_IDLE_RETRY_MS)
+  }
+
+  private scheduleHomeReloadAfterRefresh(): void {
+    const currentVersion = this.postRefreshReloadVersion + 1
+    this.postRefreshReloadVersion = currentVersion
+    this.suppressFeedsChangedUntilMs = Date.now()
+      + HOME_REFRESH_FINAL_RELOAD_DELAY_MS
+      + HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS
+
+    this.runManagedTimeout(() => {
+      if (this.postRefreshReloadVersion !== currentVersion) {
+        return
+      }
+      void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true)
+    }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
+  }
+
+  private async reloadFeaturedEntriesFromLocal(
+    candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT,
+    animated: boolean = false,
+  ): Promise<void> {
     const nextEntries = await AppRepository.featuredEntries(candidateLimit)
+    if (animated) {
+      this.playHomeListSwapTransition(nextEntries, this.mode)
+      return
+    }
+
+    this.applyHomeEntries(nextEntries)
+  }
+
+  private applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
     this.featuredEntries = nextEntries
+
+    if (!deferredGrouping) {
+      this.entryGroups = groupHomeEntriesByMode(nextEntries)
+      this.notifyHomeEntryDataReloaded()
+      return
+    }
+
     const currentGroupVersion = this.homeEntryGroupVersion + 1
     this.homeEntryGroupVersion = currentGroupVersion
-    setTimeout(() => {
+    this.runManagedTimeout(() => {
       if (this.homeEntryGroupVersion !== currentGroupVersion) {
         return
       }
@@ -1457,11 +1617,152 @@ struct Index {
     }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
   }
 
+  private applyHomeEntriesForAnimatedMode(
+    nextEntries: EntryCardModel[],
+    mode: SubscriptionMode,
+    token: number,
+  ): void {
+    this.featuredEntries = nextEntries
+    const currentModeEntries = nextEntries.filter((entry: EntryCardModel) => this.resolveEntryMode(entry) === mode)
+    this.entryGroups = {
+      articles: mode === 'articles' ? currentModeEntries : this.entryGroups.articles,
+      social: mode === 'social' ? currentModeEntries : this.entryGroups.social,
+      pictures: mode === 'pictures' ? currentModeEntries : this.entryGroups.pictures,
+      videos: mode === 'videos' ? currentModeEntries : this.entryGroups.videos,
+    }
+    this.notifyHomeEntryDataReloadedForMode(mode)
+
+    const currentGroupVersion = this.homeEntryGroupVersion + 1
+    this.homeEntryGroupVersion = currentGroupVersion
+    this.runManagedTimeout(() => {
+      if (this.homeEntryGroupVersion !== currentGroupVersion || this.homeListSwapToken !== token) {
+        return
+      }
+
+      const regrouped = groupHomeEntriesByMode(nextEntries)
+
+      this.entryGroups = {
+        articles: [...regrouped.articles],
+        social: [...regrouped.social],
+        pictures: [...regrouped.pictures],
+        videos: [...regrouped.videos],
+      }
+      this.notifyHomeEntryDataReloadedExcept(mode)
+    }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
+  }
+
+  private playHomeListSwapTransition(nextEntries: EntryCardModel[], mode: SubscriptionMode): void {
+    if (!this.isComponentActive) {
+      this.applyHomeEntries(nextEntries)
+      return
+    }
+
+    if (this.homeListSwapAnimating || this.featuredEntries.length === 0) {
+      this.applyHomeEntries(nextEntries)
+      this.homeListSwapOpacity = 1
+      this.homeListSwapTranslateY = 0
+      this.homeListSwapScale = 1
+      return
+    }
+
+    this.homeListSwapAnimating = true
+    this.homeListSwapMode = mode
+    const currentToken = this.homeListSwapToken + 1
+    this.homeListSwapToken = currentToken
+
+    // Apply refreshed data once, then play a fade-only update with no translate or scale changes.
+    this.applyHomeEntries(nextEntries, false)
+
+    if (!HOME_LIST_SWAP_ANIMATION_ENABLED) {
+      this.homeListSwapOpacity = 1
+      this.homeListSwapTranslateY = 0
+      this.homeListSwapScale = 1
+      this.homeListSwapAnimating = false
+      return
+    }
+
+    // Refresh animation only fades content; no vertical movement or scaling.
+    this.homeListSwapOpacity = HOME_LIST_SWAP_ENTRY_MIN_OPACITY
+    this.homeListSwapTranslateY = 0
+    this.homeListSwapScale = 1
+
+    this.animateWithUiContext({
+      duration: HOME_LIST_SWAP_ENTER_DURATION,
+      curve: Curve.EaseOut,
+      onFinish: () => {
+        if (this.homeListSwapToken !== currentToken) {
+          return
+        }
+        this.homeListSwapOpacity = 1
+        this.homeListSwapTranslateY = 0
+        this.homeListSwapScale = 1
+        this.homeListSwapAnimating = false
+      },
+    }, () => {
+      this.homeListSwapOpacity = 1
+      this.homeListSwapTranslateY = 0
+      this.homeListSwapScale = 1
+    })
+  }
+
+  private modeListSwapOpacity(mode: SubscriptionMode): number {
+    if (this.homeListSwapAnimating && mode === this.homeListSwapMode) {
+      return this.homeListSwapOpacity
+    }
+    return 1
+  }
+
+  private modeListSwapTranslateY(mode: SubscriptionMode): number {
+    if (this.homeListSwapAnimating && mode === this.homeListSwapMode) {
+      return this.homeListSwapTranslateY
+    }
+    return 0
+  }
+
+  private modeListSwapScale(mode: SubscriptionMode): number {
+    if (this.homeListSwapAnimating && mode === this.homeListSwapMode) {
+      return this.homeListSwapScale
+    }
+    return 1
+  }
+
+  private resolveEntryMode(entry: EntryCardModel): SubscriptionMode {
+    switch (entry.viewLabel) {
+      case '社交':
+        return 'social'
+      case '图片':
+        return 'pictures'
+      case '视频':
+        return 'videos'
+      default:
+        return 'articles'
+    }
+  }
+
   private notifyHomeEntryDataReloaded(): void {
     this.homeEntryDataSources.articles.notifyDataReloaded()
     this.homeEntryDataSources.social.notifyDataReloaded()
     this.homeEntryDataSources.pictures.notifyDataReloaded()
     this.homeEntryDataSources.videos.notifyDataReloaded()
+  }
+
+  private notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void {
+    this.homeEntryDataSourceFor(mode).notifyDataReloaded()
+  }
+
+  private notifyHomeEntryDataReloadedExcept(mode: SubscriptionMode): void {
+    if (mode !== 'articles') {
+      this.homeEntryDataSources.articles.notifyDataReloaded()
+    }
+    if (mode !== 'social') {
+      this.homeEntryDataSources.social.notifyDataReloaded()
+    }
+    if (mode !== 'pictures') {
+      this.homeEntryDataSources.pictures.notifyDataReloaded()
+    }
+    if (mode !== 'videos') {
+      this.homeEntryDataSources.videos.notifyDataReloaded()
+    }
   }
 
   private homeEntryDataSourceFor(mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> {
@@ -2255,12 +2556,14 @@ struct Index {
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      this.setHomeScrollInteracting(true)
       return this.consumeHomePullScroll(mode, scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
     })
     .onDidStopDragging((_willFling: boolean) => {
+      this.setHomeScrollInteracting(false)
       this.finalizeHomePullRefresh()
     })
   }
@@ -2332,12 +2635,14 @@ struct Index {
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      this.setHomeScrollInteracting(true)
       return this.consumeHomePullScroll('pictures', scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
     })
     .onDidStopDragging((_willFling: boolean) => {
+      this.setHomeScrollInteracting(false)
       this.finalizeHomePullRefresh()
     })
   }
@@ -2379,12 +2684,14 @@ struct Index {
           .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
           .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+            this.setHomeScrollInteracting(true)
             return this.consumeHomePullScrollOffset(mode, yOffset)
           })
             .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
+            this.setHomeScrollInteracting(false)
             this.finalizeHomePullRefresh()
           })
         } else if (mode === 'pictures') {
@@ -2395,6 +2702,9 @@ struct Index {
       }
       .width('100%')
       .height('100%')
+      .opacity(this.modeListSwapOpacity(mode))
+      .translate({ y: this.modeListSwapTranslateY(mode) })
+      .scale({ x: this.modeListSwapScale(mode), y: this.modeListSwapScale(mode) })
       .onAppear(() => {
         console.info(`频道 ${mode} 场景显示`)
       })
@@ -2458,6 +2768,7 @@ struct Index {
   private shouldHideBottomTabs(): boolean {
     return (
       (this.currentRootTabId() === 'discover' && this.discoverHasForegroundOverlay)
+      || (this.currentRootTabId() === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
       || (this.currentRootTabId() === 'settings' && this.settingsOverlayLevel > 0)
     )
   }

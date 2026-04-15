@@ -1,4 +1,8 @@
 import { FeedViewType } from '../models/LivoModels'
+import {
+  DEFAULT_NITTER_INSTANCE,
+  DEFAULT_RSSHUB_INSTANCE as APP_DEFAULT_RSSHUB_INSTANCE,
+} from '../AppConfig'
 
 export type DiscoverSearchPlatform = 'all' | 'youtube' | 'bilibili' | 'x' | 'instagram'
 
@@ -30,8 +34,7 @@ export interface ResolvedDiscoverCandidate {
   followers?: string
 }
 
-export const DEFAULT_RSSHUB_INSTANCE = 'https://rsshub.pseudoyu.com'
-const DEFAULT_NITTER_INSTANCE = 'https://nitter.poast.org'
+export const DEFAULT_RSSHUB_INSTANCE = APP_DEFAULT_RSSHUB_INSTANCE
 
 export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
   {

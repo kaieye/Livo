@@ -4,11 +4,15 @@ import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
 import { resolveBilibiliStoredState } from '../utils/BilibiliAccountStatus'
 import { resolveYouTubeLoginUrl } from '../utils/YouTubeLoginUrl'
+import {
+  ACCEPT_JSON,
+  BILIBILI_REFERER,
+  MEDIUM_REQUEST_TIMEOUT_MS,
+  MOBILE_BROWSER_USER_AGENT,
+} from '../AppConfig'
 
 const ACCOUNT_PREFERENCES_NAME = 'livo_harmony_accounts'
 const BILIBILI_NAV_URL = 'https://api.bilibili.com/x/web-interface/nav'
-const MOBILE_USER_AGENT =
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
 
 interface BilibiliNavResponse {
   code?: number
@@ -119,12 +123,12 @@ export class AccountSessionService {
     try {
       const response = await request.request(BILIBILI_NAV_URL, {
         method: http.RequestMethod.GET,
-        connectTimeout: 8000,
-        readTimeout: 8000,
+        connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+        readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
         header: {
-          'User-Agent': MOBILE_USER_AGENT,
-          'Accept': 'application/json, text/plain, */*',
-          'Referer': 'https://www.bilibili.com/',
+          'User-Agent': MOBILE_BROWSER_USER_AGENT,
+          'Accept': ACCEPT_JSON,
+          'Referer': BILIBILI_REFERER,
           'Cookie': `SESSDATA=${sessdata}`,
         },
       })

@@ -1,41 +1,15 @@
 import http from '@ohos.net.http'
 import { extractInstagramUsername } from '../utils/SocialFeedTitles'
+import { decodeBasicEntities, extractMetaContent } from '../utils/HtmlParser'
+import {
+  BASIC_BROWSER_USER_AGENT,
+  DEFAULT_ACCEPT_LANGUAGE,
+  ACCEPT_HTML,
+  MEDIUM_REQUEST_TIMEOUT_MS,
+} from '../AppConfig'
 
 function trimValue(value: string | undefined): string {
   return (value || '').trim()
-}
-
-function decodeBasicEntities(value: string): string {
-  return (value || '')
-    .replace(/\\u0026/g, '&')
-    .replace(/\\u003d/g, '=')
-    .replace(/\\u002F/gi, '/')
-    .replace(/\\"/g, '"')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, '\'')
-    .replace(/&amp;/g, '&')
-}
-
-function extractMetaContent(html: string, propertyName: string): string {
-  const pattern = /<meta\b[^>]*>/gi
-  let matched: RegExpExecArray | null = pattern.exec(html)
-
-  while (matched) {
-    const tag = matched[0] ?? ''
-    if (!new RegExp(`\\bproperty=(["'])${propertyName}\\1`, 'i').test(tag)) {
-      matched = pattern.exec(html)
-      continue
-    }
-
-    const content = tag.match(/\bcontent=(["'])([\s\S]*?)\1/i)
-    if (content?.[2]) {
-      return decodeBasicEntities(content[2]).trim()
-    }
-
-    matched = pattern.exec(html)
-  }
-
-  return ''
 }
 
 function isPlaceholderAvatar(url?: string): boolean {
@@ -89,12 +63,12 @@ export class SocialFeedAvatarService {
         `https://www.instagram.com/${encodeURIComponent(clean)}/`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+          readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_HTML,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
           },
         },
       )

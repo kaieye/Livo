@@ -3,6 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
+import { QuotedTweetRenderer } from './QuotedTweetRenderer'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 
 interface TweetEntryCardPadding {
@@ -293,159 +294,24 @@ export struct TweetEntryCard {
   @Builder
   private RtSection() {
     if (this.hasQuotedTweet()) {
-      Column({ space: 0 }) {
-        Column({ space: 8 }) {
-          Text('RT')
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textMuted)
-            .width('100%')
-
-          Text() {
-            Span(this.quotedInlineNameLabel())
-              .fontWeight(FontWeight.Bold)
-
-            if ((this.quotedTweet().text || '').trim()) {
-              Span(` ${(this.quotedTweet().text || '').trim()}`)
-                .fontWeight(FontWeight.Regular)
-            }
-          }
-            .fontSize(16)
-            .lineHeight(24)
-            .fontColor(this.theme.textPrimary)
-            .width('100%')
-            .maxLines(this.resolvedQuotedTextMaxLines())
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          if (this.shouldShowQuotedExpandAction()) {
-            Text('显示更多')
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#1677FF')
-              .margin({ top: -2 })
-              .onClick(() => {
-                this.isQuotedTextExpanded = true
-              })
-          }
-
-          if (!this.hasSingleQuotedVideoMedia() && this.quotedMediaItems().length > 0) {
-            Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-              ForEach(this.quotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-                Stack({ alignContent: Alignment.Center }) {
-                  if ((item.videoUrl || '').trim() && this.isInlineVideoActive('quoted', item, index)) {
-                    Video({
-                      src: item.videoUrl,
-                      controller: this.inlineVideoControllerFor('quoted', item, index),
-                      previewUri: item.imageUrl,
-                    })
-                      .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                      .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                      .borderRadius(8)
-                      .controls(true)
-                      .autoPlay(true)
-                      .muted(false)
-                  } else {
-                    if ((item.imageUrl || '').trim()) {
-                      Image(item.imageUrl)
-                        .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                        .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                        .borderRadius(8)
-                        .objectFit(ImageFit.Cover)
-                        .backgroundColor(this.theme.elevated)
-                    } else {
-                      Column()
-                        .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                        .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                        .borderRadius(8)
-                        .backgroundColor(this.theme.elevated)
-                    }
-
-                    if ((item.videoUrl || '').trim()) {
-                      Row() {
-                        SymbolGlyph($r('sys.symbol.play_fill'))
-                          .fontSize(28)
-                          .fontColor(['#F5F5F5'])
-                      }
-                      .width(56)
-                      .height(56)
-                      .justifyContent(FlexAlign.Center)
-                      .alignItems(VerticalAlign.Center)
-                      .borderRadius(999)
-                      .backgroundColor('rgba(168,168,168,0.58)')
-                    }
-                  }
-                }
-                  .margin({ bottom: this.quotedMediaItems().length > 1 ? 6 : 0 })
-                  .onClick(() => {
-                    this.playInlineVideo('quoted', item, index)
-                  })
-              }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
-            }
-            .width('100%')
-            .clip(true)
-          }
-        }
-        .width('100%')
-        .padding({
-          left: 12,
-          right: 12,
-          top: 12,
-          bottom: this.hasSingleQuotedVideoMedia() ? 10 : 12,
-        })
-
-        if (this.hasSingleQuotedVideoMedia()) {
-          Stack({ alignContent: Alignment.Center }) {
-            if (this.isInlineVideoActive('quoted', this.quotedPrimaryMediaItem(), 0)) {
-              Video({
-                src: this.quotedPrimaryMediaItem().videoUrl,
-                controller: this.inlineVideoControllerFor('quoted', this.quotedPrimaryMediaItem(), 0),
-                previewUri: this.quotedPrimaryMediaItem().imageUrl,
-              })
-                .width('100%')
-                .height(208)
-                .controls(true)
-                .autoPlay(true)
-                .muted(false)
-            } else {
-              if ((this.quotedPrimaryMediaItem().imageUrl || '').trim()) {
-                Image(this.quotedPrimaryMediaItem().imageUrl)
-                  .width('100%')
-                  .height(208)
-                  .objectFit(ImageFit.Cover)
-                  .backgroundColor(this.theme.elevated)
-              } else {
-                Column()
-                  .width('100%')
-                  .height(208)
-                  .backgroundColor(this.theme.elevated)
-              }
-
-              Row() {
-                SymbolGlyph($r('sys.symbol.play_fill'))
-                  .fontSize(28)
-                  .fontColor(['#F5F5F5'])
-              }
-              .width(56)
-              .height(56)
-              .justifyContent(FlexAlign.Center)
-              .alignItems(VerticalAlign.Center)
-              .borderRadius(999)
-              .backgroundColor('rgba(168,168,168,0.58)')
-            }
-          }
-          .width('100%')
-          .clip(true)
-          .onClick(() => {
-            this.playInlineVideo('quoted', this.quotedPrimaryMediaItem(), 0)
-          })
-        }
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.flatMode ? this.theme.surface : '#00000000')
-      .borderRadius(12)
-      .border({ width: this.flatMode ? 0.8 : 0, color: this.theme.divider })
-      .clip(true)
+      QuotedTweetRenderer({
+        quotedTweet: this.quotedTweet(),
+        theme: this.theme,
+        flatMode: this.flatMode,
+        isTextExpanded: this.isQuotedTextExpanded,
+        onExpandText: () => {
+          this.isQuotedTextExpanded = true
+        },
+        isInlineVideoActive: (item: PictureCarouselMediaItem, index: number): boolean => {
+          return this.isInlineVideoActive('quoted', item, index)
+        },
+        inlineVideoControllerFor: (item: PictureCarouselMediaItem, index: number): VideoController => {
+          return this.inlineVideoControllerFor('quoted', item, index)
+        },
+        onPlayInlineVideo: (item: PictureCarouselMediaItem, index: number): void => {
+          this.playInlineVideo('quoted', item, index)
+        },
+      })
     }
   }
 

@@ -16,6 +16,24 @@ import {
   parseXProfilesFromSearchHtml,
 } from '../utils/DiscoverRemoteSearchParsing'
 import { formatInstagramFeedTitle } from '../utils/SocialFeedTitles'
+import { decodeNumericEntities, decodeBasicEntities, stripHtml, extractMetaContent, extractMetaNameContent, escapeHtml } from '../utils/HtmlParser'
+import {
+  FALLBACK_NITTER_INSTANCES,
+  INSTAGRAM_SEARCH_TIMEOUT_MS,
+  DESKTOP_BROWSER_USER_AGENT,
+  BASIC_BROWSER_USER_AGENT,
+  DEFAULT_ACCEPT_LANGUAGE,
+  ACCEPT_HTML,
+  ACCEPT_JSON,
+  ACCEPT_TEXT_OR_HTML,
+  INSTAGRAM_REFERER,
+  INSTAGRAM_APP_ID,
+  BILIBILI_REFERER,
+  BILIBILI_ORIGIN,
+  SHORT_REQUEST_TIMEOUT_MS,
+  MEDIUM_REQUEST_TIMEOUT_MS,
+  bilibiliSpaceReferer,
+} from '../AppConfig'
 
 interface BilibiliSearchResult {
   mid?: number
@@ -69,42 +87,6 @@ const SOCIAL_VIEW_MAPPING: DiscoverRemoteViewMapping = {
   instagram: FeedViewType.Pictures,
 }
 const RSSHUB_BASE_URL = DEFAULT_RSSHUB_INSTANCE.replace(/\/+$/, '')
-const FALLBACK_NITTER_INSTANCES = [
-  'https://nitter.net',
-  'https://nitter.poast.org',
-  'https://nitter.privacydev.net',
-  'https://nitter.d420.de',
-]
-const INSTAGRAM_SEARCH_TIMEOUT_MS = 3500
-
-function decodeNumericEntities(value: string): string {
-  return value
-    .replace(/&#x([0-9a-f]+);/gi, (matched: string, hex: string) => {
-      const code = parseInt(hex, 16)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : matched
-    })
-    .replace(/&#([0-9]+);/g, (matched: string, digits: string) => {
-      const code = parseInt(digits, 10)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : matched
-    })
-}
-
-function decodeBasicEntities(value: string): string {
-  return decodeNumericEntities(value)
-    .replace(/\\u0026/g, '&')
-    .replace(/\\u003d/g, '=')
-    .replace(/\\u002F/g, '/')
-    .replace(/\\u002f/g, '/')
-    .replace(/&#0*64;/gi, '@')
-    .replace(/\\"/g, '"')
-    .replace(/&#39;/g, '\'')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-  }
-
-function stripHtml(value: string): string {
-  return decodeBasicEntities(value).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
-}
 
 function formatFollowers(value: number | string | undefined): string {
   if (value === undefined || value === null) {
@@ -289,14 +271,6 @@ function buildQueryVariants(query: string, maxLength: number): string[] {
   return variants
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
 function buildProfileAnchorSnippet(
   profileUrl: string,
   username: string,
@@ -310,50 +284,6 @@ function buildProfileAnchorSnippet(
   const safeTitle = title ? ` <span>${escapeHtml(title)}</span>` : ''
   const safeFollowers = followers ? ` <span>${escapeHtml(followers)}</span>` : ''
   return `<a href="${safeUrl}">${safeImageUrl}${safeUsername}${safeTitle}${safeFollowers}</a>`
-}
-
-function extractMetaContent(html: string, name: string): string {
-  const pattern = /<meta\b[^>]*>/gi
-  let matched: RegExpExecArray | null = pattern.exec(html)
-
-  while (matched) {
-    const tag = matched[0] ?? ''
-    if (!new RegExp(`\\bproperty=(["'])${name}\\1`, 'i').test(tag)) {
-      matched = pattern.exec(html)
-      continue
-    }
-
-    const content = tag.match(/\bcontent=(["'])([\s\S]*?)\1/i)
-    if (content?.[2]) {
-      return decodeBasicEntities(content[2])
-    }
-
-    matched = pattern.exec(html)
-  }
-
-  return ''
-}
-
-function extractMetaNameContent(html: string, name: string): string {
-  const pattern = /<meta\b[^>]*>/gi
-  let matched: RegExpExecArray | null = pattern.exec(html)
-
-  while (matched) {
-    const tag = matched[0] ?? ''
-    if (!new RegExp(`\\bname=(["'])${name}\\1`, 'i').test(tag)) {
-      matched = pattern.exec(html)
-      continue
-    }
-
-    const content = tag.match(/\bcontent=(["'])([\s\S]*?)\1/i)
-    if (content?.[2]) {
-      return decodeBasicEntities(content[2])
-    }
-
-    matched = pattern.exec(html)
-  }
-
-  return ''
 }
 
 function isGenericInstagramHtml(html: string, ogTitle: string): boolean {
@@ -501,12 +431,12 @@ export class DiscoverRemoteSearchService {
           `${nitterInstance}/search?f=users&q=${encodeURIComponent(clean)}`,
           {
             method: http.RequestMethod.GET,
-            connectTimeout: 5000,
-            readTimeout: 5000,
+            connectTimeout: SHORT_REQUEST_TIMEOUT_MS,
+            readTimeout: SHORT_REQUEST_TIMEOUT_MS,
             header: {
-              'User-Agent': 'Mozilla/5.0',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+              'User-Agent': BASIC_BROWSER_USER_AGENT,
+              'Accept': ACCEPT_HTML,
+              'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
             },
           },
         )
@@ -541,12 +471,12 @@ export class DiscoverRemoteSearchService {
         `https://r.jina.ai/http://x.com/${encodeURIComponent(username)}`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+          readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'text/plain,text/html;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_TEXT_OR_HTML,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
           },
         },
       )
@@ -617,11 +547,11 @@ export class DiscoverRemoteSearchService {
           connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Referer': 'https://www.instagram.com/',
-            'X-IG-App-ID': '936619743392459',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_JSON,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
+            'Referer': INSTAGRAM_REFERER,
+            'X-IG-App-ID': INSTAGRAM_APP_ID,
           },
         },
       )
@@ -652,9 +582,9 @@ export class DiscoverRemoteSearchService {
           connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_HTML,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
           },
         },
       )
@@ -704,9 +634,9 @@ export class DiscoverRemoteSearchService {
           connectTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           readTimeout: INSTAGRAM_SEARCH_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_HTML,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
           },
         },
       )
@@ -775,14 +705,14 @@ export class DiscoverRemoteSearchService {
         `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(query)}`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+          readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Referer': 'https://www.bilibili.com/',
-            'Origin': 'https://www.bilibili.com',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_JSON,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
+            'Referer': BILIBILI_REFERER,
+            'Origin': BILIBILI_ORIGIN,
           },
         },
       )
@@ -845,13 +775,13 @@ export class DiscoverRemoteSearchService {
         `https://search.bilibili.com/upuser?keyword=${encodeURIComponent(query)}`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+          readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Referer': 'https://www.bilibili.com/',
+            'User-Agent': DESKTOP_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_HTML,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
+            'Referer': BILIBILI_REFERER,
           },
         },
       )
@@ -922,13 +852,13 @@ export class DiscoverRemoteSearchService {
         `https://api.bilibili.com/x/web-interface/card?mid=${encodeURIComponent(uid)}`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 5000,
-          readTimeout: 5000,
+          connectTimeout: SHORT_REQUEST_TIMEOUT_MS,
+          readTimeout: SHORT_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Referer': `https://space.bilibili.com/${encodeURIComponent(uid)}`,
-            'Origin': 'https://www.bilibili.com',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_JSON,
+            'Referer': bilibiliSpaceReferer(uid),
+            'Origin': BILIBILI_ORIGIN,
           },
         },
       )
@@ -958,12 +888,12 @@ export class DiscoverRemoteSearchService {
         `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 8000,
-          readTimeout: 8000,
+          connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+          readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': BASIC_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_HTML,
+            'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
           },
         },
       )

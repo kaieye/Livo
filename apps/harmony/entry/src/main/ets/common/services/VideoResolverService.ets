@@ -7,33 +7,21 @@ import {
   selectInvidiousPlayableUrl,
   selectPipedPlayableUrl,
 } from '../utils/VideoPlayableSelection'
+import {
+  INVIDIOUS_INSTANCES,
+  PIPED_INSTANCES,
+  DIRECT_PLAYBACK_TIMEOUT_MS,
+  REQUEST_CONNECT_TIMEOUT_MS,
+  REQUEST_READ_TIMEOUT_MS,
+  BASIC_BROWSER_USER_AGENT,
+  ACCEPT_JSON,
+} from '../AppConfig'
 
 export interface YouTubePlaybackResolution {
   playableUrl: string
   fallbackUrl: string
   sourceLabel: string
 }
-
-const INVIDIOUS_INSTANCES: string[] = [
-  'https://inv.tux.pizza',
-  'https://invidious.privacyredirect.com',
-  'https://invidious.nerdvpn.de',
-  'https://iv.nbooo.com',
-  'https://invidious.protokolla.fi',
-  'https://yewtu.be',
-  'https://inv.nadeko.net',
-  'https://invidious.fdn.fr',
-]
-
-const PIPED_INSTANCES: string[] = [
-  'https://pipedapi.kavin.rocks',
-  'https://piped-api.privacy.com.de',
-  'https://api.piped.projectsegfau.lt',
-]
-
-const DIRECT_PLAYBACK_TIMEOUT_MS: number = 7000
-const REQUEST_CONNECT_TIMEOUT_MS: number = 3500
-const REQUEST_READ_TIMEOUT_MS: number = 4500
 
 export class VideoResolverService {
   static extractYouTubeVideoId(value: string): string {
@@ -97,8 +85,8 @@ export class VideoResolverService {
     const request = http.createHttp()
     try {
       const header: Record<string, string> = {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': BASIC_BROWSER_USER_AGENT,
+        'Accept': ACCEPT_JSON,
       }
       if (referer) {
         header['Referer'] = referer

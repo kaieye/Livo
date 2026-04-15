@@ -6,12 +6,16 @@ import {
 } from '../models/LivoModels'
 import { FeedDraft, FeedRepository } from '../repositories/FeedRepository'
 import { AccountSessionService } from './AccountSessionService'
+import {
+  DESKTOP_BROWSER_USER_AGENT,
+  ACCEPT_JSON,
+  BILIBILI_REFERER,
+  MEDIUM_REQUEST_TIMEOUT_MS,
+} from '../AppConfig'
 import { DEFAULT_RSSHUB_INSTANCE } from './DiscoverService'
 
 const BILIBILI_PAGE_SIZE = 50
 const BILIBILI_MAX_COUNT = 300
-const DESKTOP_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
 interface BilibiliNavResponse {
   code?: number
@@ -186,12 +190,12 @@ export class BilibiliFollowingsService {
     try {
       const response = await request.request(url, {
         method: http.RequestMethod.GET,
-        connectTimeout: 8000,
-        readTimeout: 8000,
+        connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+        readTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
         header: {
-          'User-Agent': DESKTOP_USER_AGENT,
-          'Accept': 'application/json, text/plain, */*',
-          'Referer': 'https://www.bilibili.com/',
+          'User-Agent': DESKTOP_BROWSER_USER_AGENT,
+          'Accept': ACCEPT_JSON,
+          'Referer': BILIBILI_REFERER,
           'Cookie': `SESSDATA=${sessdata}`,
         },
       })

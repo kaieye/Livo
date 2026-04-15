@@ -2,6 +2,12 @@ import { common } from '@kit.AbilityKit'
 import { fileIo, fileUri } from '@kit.CoreFileKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import http from '@ohos.net.http'
+import {
+  BASIC_BROWSER_USER_AGENT,
+  ACCEPT_ANY,
+  MEDIUM_REQUEST_TIMEOUT_MS,
+  RSS_REQUEST_TIMEOUT_MS,
+} from '../AppConfig'
 
 function normalizeRemoteMediaUrl(url: string): string {
   return (url || '').trim()
@@ -107,11 +113,11 @@ export class MovingPhotoService {
     try {
       const response = await request.request(mediaUrl, {
         method: http.RequestMethod.GET,
-        connectTimeout: 8000,
-        readTimeout: 15000,
+        connectTimeout: MEDIUM_REQUEST_TIMEOUT_MS,
+        readTimeout: RSS_REQUEST_TIMEOUT_MS,
         header: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': '*/*',
+          'User-Agent': BASIC_BROWSER_USER_AGENT,
+          'Accept': ACCEPT_ANY,
         },
       })
 

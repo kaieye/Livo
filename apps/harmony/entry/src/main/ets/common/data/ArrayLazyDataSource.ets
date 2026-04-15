@@ -29,7 +29,11 @@ export class ArrayLazyDataSource<T> implements IDataSource {
 
   notifyDataReloaded(): void {
     this.listeners.forEach((listener: DataChangeListener) => {
-      listener.onDataReloaded()
+      try {
+        listener.onDataReloaded()
+      } catch (error) {
+        console.error(`ArrayLazyDataSource notifyDataReloaded failed: ${error instanceof Error ? error.message : error}`)
+      }
     })
   }
 }

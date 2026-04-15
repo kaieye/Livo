@@ -4,6 +4,30 @@ import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../utils/Fee
 import { parseBilibiliDynamicEntries } from '../utils/BilibiliDynamicFeed'
 import { expandRssHubFallbackRoutes } from '../utils/RssHubFallbackRoute'
 import { canonicalFeedUrl } from '../utils/SocialFeedTitles'
+import {
+  RSSHUB_INSTANCES,
+  RSSHUB_REQUEST_TIMEOUT_MS,
+  RSSHUB_INSTAGRAM_REQUEST_TIMEOUT_MS,
+  RSS_REQUEST_TIMEOUT_MS,
+  DESKTOP_BROWSER_USER_AGENT,
+  RSS_ACCEPT_LANGUAGE,
+  ACCEPT_JSON,
+  ACCEPT_RSS_XML,
+  BILIBILI_ORIGIN,
+  LONG_REQUEST_TIMEOUT_MS,
+  bilibiliSpaceReferer,
+} from '../AppConfig'
+import {
+  decodeNumericEntities,
+  decodeHtml,
+  stripHtml,
+  normalizeRichContent,
+  stripCdata,
+  pickTag,
+  pickFirst,
+  pickTagFromContainer,
+  looksLikeHtmlDocument,
+} from '../utils/HtmlParser'
 
 interface ParsedItem {
   id: string
@@ -26,78 +50,6 @@ export interface FeedRefreshPayload {
   description: string
   resolvedFeedUrl?: string
   entries: Entry[]
-}
-
-function decodeNumericEntities(value: string): string {
-  return value
-    .replace(/&#x([0-9a-f]+);/gi, (matched: string, hex: string) => {
-      const code = parseInt(hex, 16)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : matched
-    })
-    .replace(/&#([0-9]+);/g, (matched: string, digits: string) => {
-      const code = parseInt(digits, 10)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : matched
-    })
-}
-
-function decodeHtml(value: string): string {
-  return decodeNumericEntities(value)
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, '\'')
-    .replace(/&nbsp;/g, ' ')
-}
-
-function stripHtml(value: string): string {
-  return decodeHtml(value).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
-}
-
-function normalizeRichContent(value: string, fallback: string): string {
-  const raw = stripCdata(value).trim()
-  if (!raw) {
-    return fallback
-  }
-
-  const decoded = decodeHtml(raw).trim()
-  return decoded || fallback
-}
-
-function stripCdata(value: string): string {
-  return value.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '')
-}
-
-function pickTag(block: string, tagName: string): string {
-  const regex = new RegExp(`<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)</${tagName}>`, 'i')
-  const matched = block.match(regex)
-  return matched && matched[1] ? stripCdata(matched[1]).trim() : ''
-}
-
-function pickFirst(block: string, tagNames: string[]): string {
-  for (const tagName of tagNames) {
-    const value = pickTag(block, tagName)
-    if (value) {
-      return value
-    }
-  }
-
-  return ''
-}
-
-function pickTagFromContainer(xml: string, containerName: string, tagName: string): string {
-  const containerRegex = new RegExp(`<${containerName}(?:\\s[^>]*)?>([\\s\\S]*?)</${containerName}>`, 'i')
-  const container = xml.match(containerRegex)
-  if (!container?.[1]) {
-    return ''
-  }
-
-  return pickTag(container[1], tagName)
-}
-
-function looksLikeHtmlDocument(value: string): boolean {
-  const sample = value.slice(0, 2000)
-  return /<html[\s>]/i.test(sample) || /<head[\s>]/i.test(sample) || /<body[\s>]/i.test(sample)
 }
 
 function extractAttribute(tag: string, name: string): string {
@@ -363,18 +315,6 @@ function parseAtomItems(feedId: string, xml: string, baseUrl: string): ParsedIte
   })
 }
 
-// RSSHub 备选实例列表（按优先级排序）
-const RSSHUB_INSTANCES = [
-  'https://rsshub.pseudoyu.com',
-  'https://rsshub.app',
-  'https://rsshub.rssforever.com',
-  'https://rsshub-instance.zeabur.app',
-  'https://rss.shab.fun',
-  'https://rsshub.ktachibana.party',
-  'https://rsshub.liumingye.cn',
-  'https://rsshub.feeded.xyz',
-]
-
 function preferredRssHubInstances(route: string): string[] {
   if (route.toLowerCase().includes('/x/') || route.toLowerCase().includes('/twitter/')) {
     return [
@@ -402,10 +342,10 @@ function preferredRssHubInstances(route: string): string[] {
 
 function rssHubRequestTimeoutMs(route: string): number {
   if (route.toLowerCase().includes('/picnob/') || route.toLowerCase().includes('/instagram/')) {
-    return 8000
+    return RSSHUB_INSTAGRAM_REQUEST_TIMEOUT_MS
   }
 
-  return 4000
+  return RSSHUB_REQUEST_TIMEOUT_MS
 }
 
 // RSSHub 实例尝试结果
@@ -431,13 +371,13 @@ export class RssFeedService {
         `https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space?host_mid=${encodeURIComponent(uid)}`,
         {
           method: http.RequestMethod.GET,
-          connectTimeout: 10000,
-          readTimeout: 10000,
+          connectTimeout: LONG_REQUEST_TIMEOUT_MS,
+          readTimeout: LONG_REQUEST_TIMEOUT_MS,
           header: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Referer': `https://space.bilibili.com/${encodeURIComponent(uid)}`,
-            'Origin': 'https://www.bilibili.com',
+            'User-Agent': DESKTOP_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_JSON,
+            'Referer': bilibiliSpaceReferer(uid),
+            'Origin': BILIBILI_ORIGIN,
           },
         },
       )
@@ -679,9 +619,9 @@ export class RssFeedService {
       }
 
       const headers: Record<string, string> = {}
-      headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      headers['Accept'] = 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*'
-      headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+      headers['User-Agent'] = DESKTOP_BROWSER_USER_AGENT
+      headers['Accept'] = ACCEPT_RSS_XML
+      headers['Accept-Language'] = RSS_ACCEPT_LANGUAGE
       headers['Connection'] = 'keep-alive'
       headers['Cache-Control'] = 'no-cache'
       headers['Pragma'] = 'no-cache'
@@ -722,8 +662,8 @@ export class RssFeedService {
           try {
             response = await mainRequest.request(actualUrl, {
               method: http.RequestMethod.GET,
-              connectTimeout: 15000,
-              readTimeout: 15000,
+              connectTimeout: RSS_REQUEST_TIMEOUT_MS,
+              readTimeout: RSS_REQUEST_TIMEOUT_MS,
               header: headers,
             })
           } catch (error) {
@@ -735,8 +675,8 @@ export class RssFeedService {
         try {
           response = await mainRequest.request(actualUrl, {
             method: http.RequestMethod.GET,
-            connectTimeout: 15000,
-            readTimeout: 15000,
+            connectTimeout: RSS_REQUEST_TIMEOUT_MS,
+            readTimeout: RSS_REQUEST_TIMEOUT_MS,
             header: headers,
           })
         } catch (error) {
@@ -781,8 +721,8 @@ export class RssFeedService {
           try {
             discoveryResponse = await discoveryRequest.request(discoveredFeedUrl, {
               method: http.RequestMethod.GET,
-              connectTimeout: 15000,
-              readTimeout: 15000,
+              connectTimeout: RSS_REQUEST_TIMEOUT_MS,
+              readTimeout: RSS_REQUEST_TIMEOUT_MS,
               header: headers,
             })
           } catch (error) {

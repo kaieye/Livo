@@ -793,7 +793,7 @@ export struct SubscriptionsContent {
         },
       })
       .titleMode(HdsNavigationTitleMode.MINI)
-      .hideTitleBar(false)
+      .hideTitleBar(this.overlayLevel > 0)
       .hideBackButton(true)
       .bindToScrollable([
         this.articlesScroller,

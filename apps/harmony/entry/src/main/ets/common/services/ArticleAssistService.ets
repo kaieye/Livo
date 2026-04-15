@@ -1,5 +1,6 @@
 import { http } from '@kit.NetworkKit'
 import { AIAssistantSettings, AI_PROVIDER_OPTIONS, AIProvider, AITargetLanguage } from '../models/LivoModels'
+import { AI_REQUEST_CONNECT_TIMEOUT_MS, AI_REQUEST_READ_TIMEOUT_MS } from '../AppConfig'
 
 interface ChatMessage {
   role: string
@@ -692,8 +693,8 @@ export class ArticleAssistService {
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const response = await request.request(endpoint, {
           method: http.RequestMethod.POST,
-          connectTimeout: 10000,
-          readTimeout: 20000,
+          connectTimeout: AI_REQUEST_CONNECT_TIMEOUT_MS,
+          readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
           header: headers,
           extraData: requestBody,
         })
@@ -734,8 +735,8 @@ export class ArticleAssistService {
           } as MiniMaxTextRequest)
           const fallbackResponse = await request.request(fallbackEndpoint, {
             method: http.RequestMethod.POST,
-            connectTimeout: 10000,
-            readTimeout: 20000,
+            connectTimeout: AI_REQUEST_CONNECT_TIMEOUT_MS,
+            readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
             header: headers,
             extraData: fallbackBody,
           })
