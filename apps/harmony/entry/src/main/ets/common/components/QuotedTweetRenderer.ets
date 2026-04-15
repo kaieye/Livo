@@ -2,6 +2,8 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 
+const QUOTED_TWEET_COLLAPSED_LINES: number = 8
+
 @Component
 export struct QuotedTweetRenderer {
   @Prop quotedTweet: TweetQuotedPresentation = {
@@ -19,6 +21,8 @@ export struct QuotedTweetRenderer {
   isInlineVideoActive: (item: PictureCarouselMediaItem, index: number) => boolean = () => false
   inlineVideoControllerFor: (item: PictureCarouselMediaItem, index: number) => VideoController = () => new VideoController()
   onPlayInlineVideo: (item: PictureCarouselMediaItem, index: number) => void = () => {}
+  private quotedMediaItemsCacheKey: string = ''
+  private quotedMediaItemsCache: PictureCarouselMediaItem[] = []
 
   private quotedUsernameLabel(): string {
     return (this.quotedTweet.username || '').trim()
@@ -35,7 +39,7 @@ export struct QuotedTweetRenderer {
     if (this.isTextExpanded) {
       return 99
     }
-    return this.shouldShowQuotedExpandAction() ? 8 : 99
+    return this.shouldShowQuotedExpandAction() ? QUOTED_TWEET_COLLAPSED_LINES : 99
   }
 
   private shouldShowQuotedExpandAction(): boolean {
@@ -49,11 +53,11 @@ export struct QuotedTweetRenderer {
     }
 
     const lineBreakCount = (text.match(/\n/g) || []).length + 1
-    if (lineBreakCount > 10) {
+    if (lineBreakCount > QUOTED_TWEET_COLLAPSED_LINES) {
       return true
     }
 
-    const threshold = 10 * 24
+    const threshold = QUOTED_TWEET_COLLAPSED_LINES * 24
     return text.length > threshold
   }
 
@@ -65,8 +69,21 @@ export struct QuotedTweetRenderer {
     return resolvePictureCarouselMediaItems(normalizedUrls, fallbackImageUrl).slice(0, 4)
   }
 
+  private mediaItemsCacheKey(urls: string[]): string {
+    return (urls || [])
+      .map((url: string) => url.trim())
+      .filter((url: string) => !!url)
+      .join('|')
+  }
+
   private quotedMediaItems(): PictureCarouselMediaItem[] {
-    return this.mediaItemsFromUrls(this.quotedTweet.mediaUrls || [])
+    const mediaUrls = this.quotedTweet.mediaUrls || []
+    const cacheKey = this.mediaItemsCacheKey(mediaUrls)
+    if (cacheKey !== this.quotedMediaItemsCacheKey) {
+      this.quotedMediaItemsCacheKey = cacheKey
+      this.quotedMediaItemsCache = this.mediaItemsFromUrls(mediaUrls)
+    }
+    return this.quotedMediaItemsCache
   }
 
   private hasSingleQuotedVideoMedia(): boolean {

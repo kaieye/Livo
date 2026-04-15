@@ -140,8 +140,8 @@ export class AppRepository {
   private static bootstrapped: boolean = false
   private static seedFeedHydrationStarted: boolean = false
   private static readonly successfulRefreshCooldownMs: number = 3 * 60 * 1000
-  private static readonly refreshConcurrencyMin: number = 4
-  private static readonly refreshConcurrencyMax: number = 8
+  private static readonly refreshConcurrencyMin: number = 2
+  private static readonly refreshConcurrencyMax: number = 4
 
   private static isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
     const lastFetched = feed.lastFetched ?? 0
@@ -499,6 +499,16 @@ export class AppRepository {
     await AppPreferenceService.clearRefreshLogs()
   }
 
+  static async homeEntrySnapshot(): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    return AppPreferenceService.loadHomeEntrySnapshot()
+  }
+
+  static async persistHomeEntrySnapshot(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    return AppPreferenceService.saveHomeEntrySnapshot(entries)
+  }
+
   private static async recordRefreshLog(
     successFeedCount: number,
     failedFeedCount: number,
@@ -581,6 +591,8 @@ export class AppRepository {
         entries: includeEntries ? await AppRepository.entriesByFeed(feedId) : [],
         sourceLabel: `${feed.title} · 3 分钟内已刷新，跳过`,
         newEntriesCount: 0,
+        skippedByCooldown: true,
+        skippedFeedCount: 1,
         failedFeedCount: 0,
         failedFeedLabels: [],
         failedFeedDetails: [],
@@ -630,6 +642,8 @@ export class AppRepository {
           ? `${feed.title} · 新增 ${newEntriesCount} 条`
           : `${feed.title} · 已刷新`,
         newEntriesCount,
+        skippedByCooldown: false,
+        skippedFeedCount: 0,
         failedFeedCount: 0,
         failedFeedLabels: [],
         failedFeedDetails: [],
@@ -649,6 +663,8 @@ export class AppRepository {
         entries: includeEntries ? await AppRepository.entriesByFeed(feedId) : [],
         sourceLabel: `${feed.title} · 刷新失败：${message}`,
         newEntriesCount: 0,
+        skippedByCooldown: false,
+        skippedFeedCount: 0,
         failedFeedCount: 1,
         failedFeedLabels: [feed.title],
         failedFeedDetails: [`${feed.title}：${message}`],
@@ -711,20 +727,60 @@ export class AppRepository {
     }
     let refreshedCount = 0
     let failedCount = 0
+    const refreshStartedAt = Date.now()
+    const pendingFeeds: Feed[] = []
+    feeds.forEach((feed: Feed) => {
+      if (AppRepository.isFeedRefreshInCooldown(feed, refreshStartedAt)) {
+        return
+      }
+      pendingFeeds.push(feed)
+    })
+
+    let skippedByCooldownCount = Math.max(0, feeds.length - pendingFeeds.length)
     let newEntriesCount = 0
     const failedFeedLabels: string[] = []
     const failedFeedDetails: string[] = []
-    const refreshConcurrency = AppRepository.resolveRefreshConcurrency(feeds.length)
+
     onProgress?.(0, feeds.length)
+
+    if (pendingFeeds.length === 0) {
+      await AppRepository.recordRefreshLog(0, 0, [])
+      return {
+        entries: [],
+        sourceLabel: '全部订阅源 3 分钟内已刷新，已跳过重复抓取',
+        newEntriesCount: 0,
+        skippedByCooldown: true,
+        skippedFeedCount: skippedByCooldownCount,
+        allSkippedByCooldown: true,
+        failedFeedCount: 0,
+        failedFeedLabels: [],
+        failedFeedDetails: [],
+        fallbackUsed: false,
+      }
+    }
+
+    const refreshConcurrency = AppRepository.resolveRefreshConcurrency(pendingFeeds.length)
+    if (skippedByCooldownCount > 0) {
+      onProgress?.(skippedByCooldownCount, feeds.length)
+    }
+
     const results = await AppRepository.refreshFeedsWithPool(
-      feeds,
+      pendingFeeds,
       refreshConcurrency,
-      onProgress,
+      (completedCount: number, totalCount: number) => {
+        const normalizedCompleted = skippedByCooldownCount + completedCount
+        onProgress?.(normalizedCompleted, skippedByCooldownCount + totalCount)
+      },
     )
 
     results.forEach((result: PromiseSettledResult<RemoteFeedResult>, index: number) => {
       if (result.status === 'fulfilled') {
         newEntriesCount += result.value.newEntriesCount ?? 0
+        if (result.value.skippedByCooldown) {
+          skippedByCooldownCount += Math.max(1, result.value.skippedFeedCount ?? 1)
+          return
+        }
+
         if (result.value.fallbackUsed) {
           failedCount += 1
           ;(result.value.failedFeedLabels ?? []).forEach((label: string) => {
@@ -744,7 +800,7 @@ export class AppRepository {
       }
 
       failedCount += 1
-      const failedFeed = feeds[index]
+      const failedFeed = pendingFeeds[index]
       if (failedFeed && !failedFeedLabels.includes(failedFeed.title)) {
         failedFeedLabels.push(failedFeed.title)
       }
@@ -752,8 +808,8 @@ export class AppRepository {
       console.error(`Failed to refresh feed in aggregate refresh: ${result.reason}`)
     })
 
-    if (failedCount > feeds.length) {
-      failedCount = feeds.length
+    if (failedCount > pendingFeeds.length) {
+      failedCount = pendingFeeds.length
     }
 
     if (failedFeedDetails.length > 0) {
@@ -764,13 +820,19 @@ export class AppRepository {
     const failedFeedSuffix = failedFeedSummary
       ? `：${failedFeedSummary}${failedFeedLabels.length > 3 ? ' 等' : ''}`
       : ''
+    const allSkippedByCooldown = skippedByCooldownCount === feeds.length && failedCount === 0 && newEntriesCount === 0
 
     await AppRepository.recordRefreshLog(refreshedCount, failedCount, failedFeedLabels)
 
     return {
       entries: [],
-      sourceLabel: `新增 ${newEntriesCount} 条，${failedCount} 个订阅源刷新失败${failedFeedSuffix}`,
+      sourceLabel: allSkippedByCooldown
+        ? '全部订阅源 3 分钟内已刷新，已跳过重复抓取'
+        : `新增 ${newEntriesCount} 条，${failedCount} 个订阅源刷新失败${failedFeedSuffix}`,
       newEntriesCount,
+      skippedByCooldown: allSkippedByCooldown,
+      skippedFeedCount: skippedByCooldownCount,
+      allSkippedByCooldown,
       failedFeedCount: failedCount,
       failedFeedLabels,
       failedFeedDetails,

@@ -344,6 +344,16 @@ export function formatXFeedTitle(
     return trimTitle(fromAt[1])
   }
 
+  const strippedPrefix = cleaned
+    .replace(/^twitter\s*@?/i, '')
+    .replace(/^x\s*@?/i, '')
+    .replace(/^@+/, '')
+    .trim()
+
+  if (strippedPrefix) {
+    return strippedPrefix
+  }
+
   return cleaned
 }
 

@@ -13,6 +13,8 @@ interface TweetEntryCardPadding {
   bottom: number
 }
 
+const QUOTED_TWEET_COLLAPSED_LINES: number = 8
+
 @Component
 export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
@@ -28,6 +30,10 @@ export struct TweetEntryCard {
   @State private isQuotedTextExpanded: boolean = false
   @State private activeInlineVideoKey: string = ''
   private readonly inlineVideoControllers: Map<string, VideoController> = new Map()
+  private mainMediaItemsCacheKey: string = ''
+  private mainMediaItemsCache: PictureCarouselMediaItem[] = []
+  private quotedMediaItemsCacheKey: string = ''
+  private quotedMediaItemsCache: PictureCarouselMediaItem[] = []
 
   onOpen: () => void = () => {}
 
@@ -43,8 +49,21 @@ export struct TweetEntryCard {
     return resolvePictureCarouselMediaItems(normalizedUrls, fallbackImageUrl).slice(0, 4)
   }
 
+  private mediaItemsCacheKey(urls: string[]): string {
+    return (urls || [])
+      .map((url: string) => url.trim())
+      .filter((url: string) => !!url)
+      .join('|')
+  }
+
   private normalizedMediaItems(): PictureCarouselMediaItem[] {
-    return this.mediaItemsFromUrls(this.presentation.mediaUrls || [])
+    const mediaUrls = this.presentation.mediaUrls || []
+    const cacheKey = this.mediaItemsCacheKey(mediaUrls)
+    if (cacheKey !== this.mainMediaItemsCacheKey) {
+      this.mainMediaItemsCacheKey = cacheKey
+      this.mainMediaItemsCache = this.mediaItemsFromUrls(mediaUrls)
+    }
+    return this.mainMediaItemsCache
   }
 
   private hasQuotedTweet(): boolean {
@@ -99,7 +118,7 @@ export struct TweetEntryCard {
     if (this.isQuotedTextExpanded) {
       return 99
     }
-    return this.shouldShowQuotedExpandAction() ? 8 : 99
+    return this.shouldShowQuotedExpandAction() ? QUOTED_TWEET_COLLAPSED_LINES : 99
   }
 
   private shouldShowQuotedExpandAction(): boolean {
@@ -111,15 +130,21 @@ export struct TweetEntryCard {
       return false
     }
     const lineBreakCount = (text.match(/\n/g) || []).length + 1
-    if (lineBreakCount > 10) {
+    if (lineBreakCount > QUOTED_TWEET_COLLAPSED_LINES) {
       return true
     }
-    const threshold = 10 * 24
+    const threshold = QUOTED_TWEET_COLLAPSED_LINES * 24
     return text.length > threshold
   }
 
   private quotedMediaItems(): PictureCarouselMediaItem[] {
-    return this.mediaItemsFromUrls(this.quotedTweet().mediaUrls || [])
+    const mediaUrls = this.quotedTweet().mediaUrls || []
+    const cacheKey = this.mediaItemsCacheKey(mediaUrls)
+    if (cacheKey !== this.quotedMediaItemsCacheKey) {
+      this.quotedMediaItemsCacheKey = cacheKey
+      this.quotedMediaItemsCache = this.mediaItemsFromUrls(mediaUrls)
+    }
+    return this.quotedMediaItemsCache
   }
 
   private hasSingleQuotedVideoMedia(): boolean {

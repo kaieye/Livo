@@ -70,6 +70,7 @@ const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 const HOME_MODE_CONTENT_GAP: number = 6
 const HOME_REFRESH_PULL_DISTANCE: number = 40
 const HOME_REFRESH_MAX_PULL_DISTANCE: number = 120
+const HOME_REFRESH_PULL_DISTANCE_STEP: number = 1
 const HOME_REFRESH_FOLLOW_RATIO: number = 0.72
 const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 44
 const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32
@@ -79,6 +80,9 @@ const HOME_REFRESH_INDICATOR_SIZE: number = 40
 const HOME_REFRESH_INDICATOR_BOTTOM_MARGIN: number = 15
 const HOME_REFRESH_RESET_DURATION: number = 220
 const HOME_REFRESH_DISMISS_SCROLL_OFFSET: number = 18
+const HOME_REFRESH_FINALIZE_DEBOUNCE_MS: number = 48
+const HOME_REFRESH_TRIGGER_DEFER_MS: number = 180
+const HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS: number = 16
 const HOME_LIST_SWAP_EXIT_DURATION: number = 120
 const HOME_LIST_SWAP_ENTER_DURATION: number = 150
 const HOME_LIST_SWAP_OFFSET_Y: number = 0
@@ -118,6 +122,8 @@ const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
 const HOME_REFRESH_FIRST_SWAP_DELAY_MS: number = 72
 const HOME_REFRESH_MEDIUM_RELOAD_DELAY_MS: number = 220
 const HOME_REFRESH_FINAL_RELOAD_DELAY_MS: number = 460
+const HOME_REFRESH_PERCENT_COALESCE_MS: number = 24
+const HOME_REFRESH_PROGRESS_UI_THROTTLE_MS: number = 72
 const HOME_FINAL_RELOAD_IDLE_RETRY_MS: number = 120
 const HOME_FINAL_RELOAD_IDLE_MAX_RETRIES: number = 10
 const HOME_REFRESH_RESET_DEFER_MS: number = 32
@@ -127,8 +133,10 @@ const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 96
 const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
 const HOME_SWAP_CANDIDATE_LIMIT: number = 120
 const HOME_MAX_CANDIDATE_LIMIT: number = 240
-const HOME_INITIAL_CANDIDATE_LIMIT: number = 24
+const HOME_INITIAL_CANDIDATE_LIMIT: number = HOME_MAX_CANDIDATE_LIMIT
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
+const HOME_PULL_DEBUG_LOG_ENABLED: boolean = true
+const HOME_PULL_DEBUG_LOG_PREFIX: string = '[HomePullDebug]'
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -227,16 +235,32 @@ struct Index {
   private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
   private refreshPercentAnimationTimer: number = -1
+  private pendingRefreshPercentTarget: number = 0
   private autoRefreshTimer: number = -1
   private homeEntryGroupVersion: number = 0
   private postRefreshReloadVersion: number = 0
   private feedsChangedReloadVersion: number = 0
   private suppressFeedsChangedUntilMs: number = 0
   private homeListSwapToken: number = 0
+  private lastHomePullFinalizeAt: number = 0
+  private homePullFinalizeQueued: boolean = false
+  private lastRefreshProgressUiUpdateAt: number = 0
+  private homePullDebugSessionId: number = 0
+  private homePullDebugMode: SubscriptionMode = 'articles'
+  private homePullDebugStartedAt: number = 0
+  private homePullDebugReleasedAt: number = 0
+  private homePullDebugWillScrollCount: number = 0
+  private homePullDebugPostReleaseWillScrollCount: number = 0
+  private homePullDebugIgnoredWillScrollCount: number = 0
+  private homePullDebugStateWriteCount: number = 0
+  private homePullDebugFinalizeScheduleCount: number = 0
+  private homePullDebugFinalizeRunCount: number = 0
   private isComponentActive: boolean = false
   private hasLoadedInitialData: boolean = false
   private initialFeedCount: number = 0
+  private homeSnapshotPersistVersion: number = 0
   private managedTimeoutIds: number[] = []
+  private homeInlineSearchFocusRequestToken: number = 0
 
   aboutToAppear(): void {
     this.isComponentActive = true
@@ -254,6 +278,7 @@ struct Index {
 
   aboutToDisappear(): void {
     this.isComponentActive = false
+    this.persistHomeSnapshotNow()
     this.clearRefreshPercentAnimation()
     this.clearAutoRefreshTimer()
     this.clearManagedTimeouts()
@@ -291,10 +316,16 @@ struct Index {
     void this.applySystemBarStyle(this.theme)
     const settingsPromise = AppRepository.settings()
     const feedsPromise = AppRepository.feedEntities()
-    const initialEntriesPromise = AppRepository.featuredEntries(HOME_INITIAL_CANDIDATE_LIMIT)
 
-    const initialEntries = await initialEntriesPromise
-    this.applyHomeEntries(initialEntries, false)
+    const snapshotEntries = await AppRepository.homeEntrySnapshot()
+    if (snapshotEntries.length > 0) {
+      this.applyHomeEntries(snapshotEntries, false)
+      this.feedSourceLabel = '已恢复上次浏览内容'
+    } else {
+      const initialEntries = await AppRepository.featuredEntries(HOME_INITIAL_CANDIDATE_LIMIT)
+      this.applyHomeEntries(initialEntries, false)
+      this.feedSourceLabel = '本地内容已加载'
+    }
     this.settleInitialHomeLoadState()
 
     const settings = await settingsPromise
@@ -305,8 +336,6 @@ struct Index {
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
 
-    void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
-    this.feedSourceLabel = '本地内容已加载'
     this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
     this.hasLoadedInitialData = true
@@ -335,6 +364,7 @@ struct Index {
     this.isRefreshing = true
     this.refreshCompletedCount = 0
     this.refreshTotalCount = 0
+    this.lastRefreshProgressUiUpdateAt = 0
     this.clearRefreshPercentAnimation()
     this.displayRefreshPercent = 0
 
@@ -343,6 +373,16 @@ struct Index {
         if (!this.isComponentActive) {
           return
         }
+
+        const now = Date.now()
+        const shouldFlushNow = completedCount >= totalCount
+          || this.lastRefreshProgressUiUpdateAt === 0
+          || now - this.lastRefreshProgressUiUpdateAt >= HOME_REFRESH_PROGRESS_UI_THROTTLE_MS
+        if (!shouldFlushNow) {
+          return
+        }
+        this.lastRefreshProgressUiUpdateAt = now
+
         this.refreshCompletedCount = completedCount
         this.refreshTotalCount = totalCount
         this.animateRefreshPercentTo(this.resolveRefreshPercent(completedCount, totalCount))
@@ -351,7 +391,9 @@ struct Index {
         return
       }
       this.feedSourceLabel = result.sourceLabel
-      await this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+      if (!result.allSkippedByCooldown) {
+        await this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+      }
       if (showResultToast) {
         this.showToast(result.sourceLabel)
       }
@@ -359,6 +401,7 @@ struct Index {
       this.isRefreshing = false
       this.refreshCompletedCount = 0
       this.refreshTotalCount = 0
+      this.lastRefreshProgressUiUpdateAt = 0
       this.clearRefreshPercentAnimation()
       this.displayRefreshPercent = 0
       this.runManagedTimeout(() => {
@@ -376,34 +419,26 @@ struct Index {
       return
     }
 
-    clearInterval(this.refreshPercentAnimationTimer)
+    clearTimeout(this.refreshPercentAnimationTimer)
     this.refreshPercentAnimationTimer = -1
   }
 
   private animateRefreshPercentTo(targetPercent: number): void {
     const animationPlan = RefreshStateManager.createPercentAnimationPlan(this.displayRefreshPercent, targetPercent)
     const nextTarget = animationPlan.targetPercent
-    this.clearRefreshPercentAnimation()
-
-    if (nextTarget === this.displayRefreshPercent) {
+    if (nextTarget === this.displayRefreshPercent && this.refreshPercentAnimationTimer < 0) {
       return
     }
 
-    const startPercent = animationPlan.startPercent
-    const delta = nextTarget - startPercent
-    const steps = animationPlan.steps
-    let currentStep = 0
+    this.pendingRefreshPercentTarget = nextTarget
+    if (this.refreshPercentAnimationTimer >= 0) {
+      return
+    }
 
-    this.refreshPercentAnimationTimer = setInterval(() => {
-      currentStep += 1
-      const progress = currentStep / steps
-      this.displayRefreshPercent = Math.round(startPercent + delta * progress)
-
-      if (currentStep >= steps) {
-        this.displayRefreshPercent = nextTarget
-        this.clearRefreshPercentAnimation()
-      }
-    }, 32)
+    this.refreshPercentAnimationTimer = setTimeout(() => {
+      this.refreshPercentAnimationTimer = -1
+      this.displayRefreshPercent = this.pendingRefreshPercentTarget
+    }, HOME_REFRESH_PERCENT_COALESCE_MS)
   }
 
   private showToast(message: string, duration: number = 2000): void {
@@ -463,9 +498,15 @@ struct Index {
   }
 
   private updateHomePullRefreshState(offset: number): void {
-    const nextOffset = RefreshStateManager.resolvePullDistance(offset, HOME_REFRESH_MAX_PULL_DISTANCE)
+    const rawOffset = RefreshStateManager.resolvePullDistance(offset, HOME_REFRESH_MAX_PULL_DISTANCE)
+    const nextOffset = Math.round(rawOffset / HOME_REFRESH_PULL_DISTANCE_STEP) * HOME_REFRESH_PULL_DISTANCE_STEP
+    if (!this.isRefreshing && Math.abs(nextOffset - this.homeRefreshPullDistance) < 0.5) {
+      return
+    }
+
     this.homeRefreshPullDistance = nextOffset
     this.homeRefreshIndicatorOffset = nextOffset
+    this.homePullDebugStateWriteCount += 1
     if (this.isRefreshing) {
       this.homeRefreshStatus = RefreshStatus.Refresh
       return
@@ -558,6 +599,16 @@ struct Index {
       return undefined
     }
 
+    this.homePullDebugWillScrollCount += 1
+    if (this.homePullDebugReleasedAt > 0) {
+      this.homePullDebugPostReleaseWillScrollCount += 1
+    }
+
+    if (!this.isHomeScrollInteracting && !this.isRefreshing) {
+      this.homePullDebugIgnoredWillScrollCount += 1
+      return undefined
+    }
+
     if (this.isRefreshing) {
       if (scrollOffset < 0 && this.homeModeScrollOffsetFor(mode) <= 0.5 && this.homeRefreshIndicatorDismissed) {
         this.reopenHomeRefreshGapDuringRefresh()
@@ -591,7 +642,16 @@ struct Index {
   }
 
   private finalizeHomePullRefresh(): void {
+    this.homePullDebugFinalizeRunCount += 1
+    const now = Date.now()
+    if (now - this.lastHomePullFinalizeAt < HOME_REFRESH_FINALIZE_DEBOUNCE_MS) {
+      this.flushHomePullDebugSummary('debounced')
+      return
+    }
+    this.lastHomePullFinalizeAt = now
+
     if (!this.shouldConsumeHomePullScroll(this.mode)) {
+      this.flushHomePullDebugSummary('skip-not-consume')
       return
     }
 
@@ -599,6 +659,7 @@ struct Index {
       if (this.homeRefreshIndicatorDismissed) {
         this.homeRefreshIndicatorOffset = 0
       }
+      this.flushHomePullDebugSummary('already-refreshing')
       return
     }
 
@@ -608,11 +669,98 @@ struct Index {
       this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
       this.homeRefreshIndicatorDismissed = false
       this.homeRefreshStatus = RefreshStatus.Refresh
-      void this.refreshFeaturedEntries()
+      this.runManagedTimeout(() => {
+        if (this.isRefreshing || this.homeRefreshStatus !== RefreshStatus.Refresh) {
+          return
+        }
+        void this.refreshFeaturedEntries()
+      }, HOME_REFRESH_TRIGGER_DEFER_MS)
+      this.flushHomePullDebugSummary('trigger-refresh')
+      return
+    }
+
+    if (this.homeRefreshPullDistance <= 0.5
+      && this.homeRefreshIndicatorOffset <= 0.5
+      && this.homeRefreshContentHoldOffset <= 0.5) {
+      this.homeRefreshStatus = RefreshStatus.Inactive
+      this.flushHomePullDebugSummary('inactive-no-distance')
       return
     }
 
     this.animateHomePullRefreshReset()
+    this.flushHomePullDebugSummary('animate-reset')
+  }
+
+  private scheduleHomePullRefreshFinalizeForMode(mode: SubscriptionMode): void {
+    if (mode !== this.mode || !this.isHomeRootTab()) {
+      return
+    }
+
+    if (this.homePullFinalizeQueued) {
+      return
+    }
+
+    this.homePullFinalizeQueued = true
+    this.homePullDebugFinalizeScheduleCount += 1
+    this.logHomePullDebug(`session=${this.homePullDebugSessionId} schedule-finalize mode=${mode} delay=${HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS}ms`)
+    this.runManagedTimeout(() => {
+      this.homePullFinalizeQueued = false
+      this.finalizeHomePullRefresh()
+    }, HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS)
+  }
+
+  private logHomePullDebug(message: string): void {
+    if (!HOME_PULL_DEBUG_LOG_ENABLED) {
+      return
+    }
+    console.info(`${HOME_PULL_DEBUG_LOG_PREFIX} ${message}`)
+  }
+
+  private startHomePullDebugSession(mode: SubscriptionMode): void {
+    this.homePullDebugSessionId += 1
+    this.homePullDebugMode = mode
+    this.homePullDebugStartedAt = Date.now()
+    this.homePullDebugReleasedAt = 0
+    this.homePullDebugWillScrollCount = 0
+    this.homePullDebugPostReleaseWillScrollCount = 0
+    this.homePullDebugIgnoredWillScrollCount = 0
+    this.homePullDebugStateWriteCount = 0
+    this.homePullDebugFinalizeScheduleCount = 0
+    this.homePullDebugFinalizeRunCount = 0
+    this.logHomePullDebug(`session=${this.homePullDebugSessionId} start mode=${mode}`)
+  }
+
+  private markHomePullDebugReleased(mode: SubscriptionMode): void {
+    if (this.homePullDebugStartedAt <= 0) {
+      return
+    }
+
+    this.homePullDebugReleasedAt = Date.now()
+    const activeDuration = this.homePullDebugReleasedAt - this.homePullDebugStartedAt
+    this.logHomePullDebug(
+      `session=${this.homePullDebugSessionId} release mode=${mode} activeMs=${activeDuration} `
+      + `willScroll=${this.homePullDebugWillScrollCount} stateWrites=${this.homePullDebugStateWriteCount}`,
+    )
+  }
+
+  private flushHomePullDebugSummary(outcome: string): void {
+    if (this.homePullDebugStartedAt <= 0) {
+      return
+    }
+
+    const now = Date.now()
+    const totalMs = now - this.homePullDebugStartedAt
+    const releaseToFinalizeMs = this.homePullDebugReleasedAt > 0 ? now - this.homePullDebugReleasedAt : -1
+    this.logHomePullDebug(
+      `session=${this.homePullDebugSessionId} summary mode=${this.homePullDebugMode} outcome=${outcome} `
+      + `totalMs=${totalMs} releaseToFinalizeMs=${releaseToFinalizeMs} willScroll=${this.homePullDebugWillScrollCount} `
+      + `postReleaseWillScroll=${this.homePullDebugPostReleaseWillScrollCount} ignoredWillScroll=${this.homePullDebugIgnoredWillScrollCount} `
+      + `stateWrites=${this.homePullDebugStateWriteCount} finalizeScheduled=${this.homePullDebugFinalizeScheduleCount} `
+      + `finalizeRun=${this.homePullDebugFinalizeRunCount}`,
+    )
+
+    this.homePullDebugStartedAt = 0
+    this.homePullDebugReleasedAt = 0
   }
 
   private homeRefreshIndicatorProgress(): number {
@@ -773,7 +921,15 @@ struct Index {
     this.updateHeaderBlurProgress(nextOffset)
   }
 
-  private setHomeScrollInteracting(interacting: boolean): void {
+  private setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
+    if (interacting && !this.isHomeScrollInteracting) {
+      this.startHomePullDebugSession(mode)
+    }
+
+    if (!interacting && this.isHomeScrollInteracting) {
+      this.markHomePullDebugReleased(mode)
+    }
+
     this.isHomeScrollInteracting = interacting
   }
 
@@ -885,11 +1041,20 @@ struct Index {
     return snippet
   }
 
+  private logHomeSearchFocusDebug(event: string, detail: string = ''): void {
+    const suffix = detail ? ` ${detail}` : ''
+    console.info(
+      `[HomeSearchFocusDebug] ${event}${suffix} tab=${this.currentRootTabId()} overlay=${this.searchOverlayVisible} visible=${this.showSearch} token=${this.homeInlineSearchFocusRequestToken}`,
+    )
+  }
+
   private openHomeInlineSearch(): void {
+    this.logHomeSearchFocusDebug('open-search')
     if (!this.searchOverlayVisible) {
       this.searchOverlayVisible = true
       this.runManagedTimeout(() => {
         this.showSearch = true
+        this.logHomeSearchFocusDebug('show-search-overlay')
         this.focusHomeInlineSearch()
       }, 16)
       return
@@ -900,27 +1065,45 @@ struct Index {
   }
 
   private focusHomeInlineSearch(): void {
+    this.homeInlineSearchFocusRequestToken += 1
+    const requestToken = this.homeInlineSearchFocusRequestToken
+    this.logHomeSearchFocusDebug('schedule-focus-batch', `requestToken=${requestToken}`)
+    this.requestHomeInlineSearchFocus(24, requestToken)
+    this.requestHomeInlineSearchFocus(80, requestToken)
+    this.requestHomeInlineSearchFocus(180, requestToken)
+    this.requestHomeInlineSearchFocus(320, requestToken)
+  }
+
+  private requestHomeInlineSearchFocus(delayMs: number, requestToken: number): void {
     this.runManagedTimeout(() => {
+      if (!this.canFocusHomeInlineSearch(requestToken)) {
+        this.logHomeSearchFocusDebug('skip-focus-request', `delayMs=${delayMs} requestToken=${requestToken}`)
+        return
+      }
+
       focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
       this.searchInputController.caretPosition(this.searchQuery.length)
-    }, 24)
-    this.runManagedTimeout(() => {
-      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
-      this.searchInputController.caretPosition(this.searchQuery.length)
-    }, 80)
-    this.runManagedTimeout(() => {
-      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
-      this.searchInputController.caretPosition(this.searchQuery.length)
-    }, 180)
-    this.runManagedTimeout(() => {
-      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
-      this.searchInputController.caretPosition(this.searchQuery.length)
-    }, 320)
+      this.logHomeSearchFocusDebug('apply-focus-request', `delayMs=${delayMs} requestToken=${requestToken}`)
+    }, delayMs)
+  }
+
+  private canFocusHomeInlineSearch(requestToken: number): boolean {
+    return requestToken === this.homeInlineSearchFocusRequestToken
+      && this.currentRootTabId() === 'home'
+      && this.searchOverlayVisible
+      && this.showSearch
+  }
+
+  private cancelHomeInlineSearchFocusRequests(reason: string = 'unknown'): void {
+    this.homeInlineSearchFocusRequestToken += 1
+    this.logHomeSearchFocusDebug('cancel-focus-requests', `reason=${reason}`)
   }
 
   private closeHomeInlineSearch(clearQuery: boolean = true): void {
+    this.cancelHomeInlineSearchFocusRequests('close-search')
     this.showSearch = false
     this.searchInputController.stopEditing()
+    this.logHomeSearchFocusDebug('close-search', `clearQuery=${clearQuery ? 'true' : 'false'}`)
     if (clearQuery) {
       this.searchQuery = ''
     }
@@ -1405,6 +1588,7 @@ struct Index {
     }
 
     this.featuredEntries = updatedEntries
+    this.schedulePersistHomeSnapshot(updatedEntries)
     const regrouped = groupHomeEntriesByMode(this.featuredEntries)
     this.entryGroups = {
       articles: [...regrouped.articles],
@@ -1470,6 +1654,7 @@ struct Index {
     const tabId = item.id as RootTabId
     this.rootTabIndex = index
     this.highlightedRootTabId = tabId
+    this.logHomeSearchFocusDebug('root-tab-change', `nextTab=${tabId}`)
     if (tabId !== 'home') {
       this.resetHomePullRefreshState()
       this.closeHomeInlineSearch(true)
@@ -1648,8 +1833,62 @@ struct Index {
     this.applyHomeEntries(nextEntries)
   }
 
+  private cloneHomeSnapshotEntry(entry: EntryCardModel): EntryCardModel {
+    return {
+      id: entry.id,
+      feedId: entry.feedId,
+      title: entry.title,
+      summary: entry.summary,
+      content: entry.content,
+      imageUrl: entry.imageUrl,
+      feedImageUrl: entry.feedImageUrl,
+      author: entry.author,
+      articleUrl: entry.articleUrl,
+      publishedAt: entry.publishedAt,
+      publishedLabel: entry.publishedLabel,
+      readingLabel: entry.readingLabel,
+      tags: [...entry.tags],
+      mediaUrls: entry.mediaUrls ? [...entry.mediaUrls] : undefined,
+      rawMediaUrls: entry.rawMediaUrls ? [...entry.rawMediaUrls] : undefined,
+      feedTitle: entry.feedTitle,
+      feedCategory: entry.feedCategory,
+      viewLabel: entry.viewLabel,
+      viewBadgeColor: entry.viewBadgeColor,
+      hasVideoMedia: entry.hasVideoMedia,
+      isRead: entry.isRead,
+      isStarred: entry.isStarred,
+    }
+  }
+
+  private schedulePersistHomeSnapshot(entries: EntryCardModel[]): void {
+    if (entries.length === 0) {
+      return
+    }
+
+    const snapshotEntries = entries.map((entry: EntryCardModel) => this.cloneHomeSnapshotEntry(entry))
+    const persistVersion = this.homeSnapshotPersistVersion + 1
+    this.homeSnapshotPersistVersion = persistVersion
+    this.runManagedTimeout(() => {
+      if (this.homeSnapshotPersistVersion !== persistVersion) {
+        return
+      }
+
+      void AppRepository.persistHomeEntrySnapshot(snapshotEntries)
+    }, 180)
+  }
+
+  private persistHomeSnapshotNow(): void {
+    if (this.featuredEntries.length === 0) {
+      return
+    }
+
+    const snapshotEntries = this.featuredEntries.map((entry: EntryCardModel) => this.cloneHomeSnapshotEntry(entry))
+    void AppRepository.persistHomeEntrySnapshot(snapshotEntries)
+  }
+
   private applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
     this.featuredEntries = nextEntries
+    this.schedulePersistHomeSnapshot(nextEntries)
     this.settleInitialHomeLoadState()
 
     if (!deferredGrouping) {
@@ -1675,6 +1914,7 @@ struct Index {
     token: number,
   ): void {
     this.featuredEntries = nextEntries
+    this.schedulePersistHomeSnapshot(nextEntries)
     const currentModeEntries = nextEntries.filter((entry: EntryCardModel) => this.resolveEntryMode(entry) === mode)
     this.entryGroups = {
       articles: mode === 'articles' ? currentModeEntries : this.entryGroups.articles,
@@ -2608,6 +2848,7 @@ struct Index {
           .backgroundColor(this.theme.surface)
           .borderRadius(CARD_RADIUS_MD)
           .border({ width: 0.8, color: this.theme.divider })
+          .margin({ top: mode === 'social' ? HOME_MODE_CONTENT_GAP : 0 })
           .width('100%')
         }
       }
@@ -2623,15 +2864,15 @@ struct Index {
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-      this.setHomeScrollInteracting(true)
+      this.setHomeScrollInteracting(true, mode)
       return this.consumeHomePullScroll(mode, scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
     })
     .onDidStopDragging((_willFling: boolean) => {
-      this.setHomeScrollInteracting(false)
-      this.finalizeHomePullRefresh()
+      this.setHomeScrollInteracting(false, mode)
+      this.scheduleHomePullRefreshFinalizeForMode(mode)
     })
   }
 
@@ -2702,15 +2943,15 @@ struct Index {
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-      this.setHomeScrollInteracting(true)
+      this.setHomeScrollInteracting(true, 'pictures')
       return this.consumeHomePullScroll('pictures', scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
     })
     .onDidStopDragging((_willFling: boolean) => {
-      this.setHomeScrollInteracting(false)
-      this.finalizeHomePullRefresh()
+      this.setHomeScrollInteracting(false, 'pictures')
+      this.scheduleHomePullRefreshFinalizeForMode('pictures')
     })
   }
 
@@ -2751,15 +2992,15 @@ struct Index {
           .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
           .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-            this.setHomeScrollInteracting(true)
+            this.setHomeScrollInteracting(true, mode)
             return this.consumeHomePullScrollOffset(mode, yOffset)
           })
             .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
-            this.setHomeScrollInteracting(false)
-            this.finalizeHomePullRefresh()
+            this.setHomeScrollInteracting(false, mode)
+            this.scheduleHomePullRefreshFinalizeForMode(mode)
           })
         } else if (mode === 'pictures') {
           this.PictureEntryList()

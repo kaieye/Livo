@@ -71,6 +71,7 @@ const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
 const DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const DISCOVER_TITLE_BAR_OVERLAY_SPACER: number =
   DISCOVER_TITLE_BAR_MINI_HEIGHT + DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
+const DISCOVER_SEARCH_INPUT_ID: string = 'discover-search-input'
 
 interface DirectUrlResult {
   targetUrl: string
@@ -187,6 +188,8 @@ export struct DiscoverContent {
   private searchSession: number = 0
   private platformSwitchSession: number = 0
   private searchFocusGuardToken: number = 0
+  @State private searchInputFocusable: boolean = false
+  private searchInputUserFocusArmed: boolean = false
   private searchInputController: TextInputController = new TextInputController()
   private readonly contentScroller: Scroller = new Scroller()
   private headerBlurOffset: number = 0
@@ -226,7 +229,7 @@ export struct DiscoverContent {
   }
 
   aboutToAppear(): void {
-    this.preventAutoKeyboardPopup()
+    this.preventAutoKeyboardPopup('discover-about-to-appear')
 
     if (!this.showBottomTabs) {
       this.theme = this.inheritedTheme
@@ -314,34 +317,87 @@ export struct DiscoverContent {
       .slice(0, 10)
   }
 
-  private handleSearchDismissSignal(): void {
-    this.preventAutoKeyboardPopup()
+  private logDiscoverFocusDebug(event: string, detail: string = ''): void {
+    const suffix = detail ? ` ${detail}` : ''
+    console.info(
+      `[DiscoverFocusDebug] ${event}${suffix} overlay=${this.discoverOverlayLevel} chips=${this.showPlatformChips} queryLength=${this.query.length} token=${this.searchFocusGuardToken}`,
+    )
   }
 
-  private preventAutoKeyboardPopup(): void {
+  private armSearchInputFocus(source: string): void {
+    this.searchInputUserFocusArmed = true
+    this.searchInputFocusable = true
+    this.logDiscoverFocusDebug('arm-search-input-focus', `source=${source}`)
+    this.requestDiscoverSearchInputFocus(`arm-${source}`)
+  }
+
+  private disarmSearchInputFocus(reason: string): void {
+    if (!this.searchInputUserFocusArmed && !this.searchInputFocusable) {
+      return
+    }
+    this.searchInputUserFocusArmed = false
+    this.searchInputFocusable = false
+    this.logDiscoverFocusDebug('disarm-search-input-focus', `reason=${reason}`)
+  }
+
+  private requestDiscoverSearchInputFocus(source: string): void {
+    const guardToken = this.searchFocusGuardToken
+    setTimeout(() => {
+      if (this.searchFocusGuardToken !== guardToken) {
+        this.logDiscoverFocusDebug('skip-search-input-focus-request', `source=${source} reason=guard-changed`)
+        return
+      }
+
+      if (!this.searchInputUserFocusArmed || !this.searchInputFocusable) {
+        this.logDiscoverFocusDebug('skip-search-input-focus-request', `source=${source} reason=not-armed`)
+        return
+      }
+
+      focusControl.requestFocus(DISCOVER_SEARCH_INPUT_ID)
+      this.searchInputController.caretPosition(this.query.length)
+      this.logDiscoverFocusDebug('apply-search-input-focus-request', `source=${source}`)
+    }, 16)
+  }
+
+  private handleSearchDismissSignal(): void {
+    this.preventAutoKeyboardPopup('dismiss-signal')
+  }
+
+  private preventAutoKeyboardPopup(source: string = 'unknown'): void {
     this.searchFocusGuardToken += 1
     const guardToken = this.searchFocusGuardToken
-    this.dismissSearchFocus()
+    this.logDiscoverFocusDebug('prevent-auto-keyboard-popup', `source=${source} guardToken=${guardToken}`)
+    this.dismissSearchFocus('guard-initial')
     setTimeout(() => {
       if (this.searchFocusGuardToken === guardToken) {
-        this.dismissSearchFocus()
+        this.logDiscoverFocusDebug('guard-dismiss', `delayMs=80 guardToken=${guardToken}`)
+        this.dismissSearchFocus('guard-80ms')
       }
     }, 80)
     setTimeout(() => {
       if (this.searchFocusGuardToken === guardToken) {
-        this.dismissSearchFocus()
+        this.logDiscoverFocusDebug('guard-dismiss', `delayMs=220 guardToken=${guardToken}`)
+        this.dismissSearchFocus('guard-220ms')
       }
     }, 220)
+    setTimeout(() => {
+      if (this.searchFocusGuardToken === guardToken) {
+        this.logDiscoverFocusDebug('guard-dismiss', `delayMs=420 guardToken=${guardToken}`)
+        this.dismissSearchFocus('guard-420ms')
+      }
+    }, 420)
   }
 
-  private dismissSearchFocus(): void {
+  private dismissSearchFocus(reason: string = 'unknown'): void {
+    this.logDiscoverFocusDebug('dismiss-search-focus', `reason=${reason}`)
+    this.disarmSearchInputFocus(`dismiss-${reason}`)
     this.searchInputController.stopEditing()
     this.showPlatformChips = false
     this.keepPlatformChipsOnBlur = false
   }
 
   private scheduleOverlayNavigation(action: () => void): void {
-    this.dismissSearchFocus()
+    this.dismissSearchFocus('overlay-navigation')
     AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
     AppStorage.setOrCreate('discoverOverlayLevel', 1)
     setTimeout(() => {
@@ -879,16 +935,35 @@ export struct DiscoverContent {
           .fontColor([this.theme.textSecondary])
 
         TextInput({ text: this.query, placeholder: '搜索订阅源', controller: this.searchInputController })
+          .defaultFocus(false)
+          .id(DISCOVER_SEARCH_INPUT_ID)
+          .focusable(this.searchInputFocusable)
           .backgroundColor('transparent')
           .fontColor(this.theme.textPrimary)
           .placeholderColor(this.theme.textMuted)
           .caretColor(this.theme.textPrimary)
           .padding(0)
           .layoutWeight(1)
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down) {
+              this.armSearchInputFocus('input-touch-down')
+            }
+          })
           .onClick(() => {
+            this.logDiscoverFocusDebug('search-input-click')
+            this.armSearchInputFocus('input-click')
+            this.showPlatformChips = true
+          })
+          .onFocus(() => {
+            this.logDiscoverFocusDebug(
+              'search-input-focus',
+              `armed=${this.searchInputUserFocusArmed ? 'true' : 'false'} focusable=${this.searchInputFocusable ? 'true' : 'false'}`,
+            )
             this.showPlatformChips = true
           })
           .onBlur(() => {
+            this.logDiscoverFocusDebug('search-input-blur', `keepChips=${this.keepPlatformChipsOnBlur ? 'true' : 'false'}`)
+            this.disarmSearchInputFocus('input-blur')
             if (this.keepPlatformChipsOnBlur) {
               this.keepPlatformChipsOnBlur = false
               return
@@ -896,6 +971,7 @@ export struct DiscoverContent {
             setTimeout(() => {
               if (!this.isInteractingWithPlatformChips) {
                 this.showPlatformChips = false
+                this.logDiscoverFocusDebug('hide-platform-chips-on-blur')
               }
             }, 80)
           })
@@ -1277,6 +1353,7 @@ export struct DiscoverContent {
       .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
         this.handleHeaderBlurScrollDelta(scrollOffset)
         this.keepPlatformChipsOnBlur = true
+        this.logDiscoverFocusDebug('discover-scroll-stop-editing')
         this.searchInputController.stopEditing()
       })
       .padding({
@@ -1296,7 +1373,7 @@ export struct DiscoverContent {
     .height('100%')
     .backgroundColor(this.theme.background)
     .onAppear(() => {
-      this.preventAutoKeyboardPopup()
+      this.preventAutoKeyboardPopup('discover-root-appear')
       this.settleDiscoverRootVisible()
     })
   }

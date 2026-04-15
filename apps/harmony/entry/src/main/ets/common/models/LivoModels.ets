@@ -233,6 +233,9 @@ export interface RemoteFeedResult {
   failedFeedCount?: number
   failedFeedLabels?: string[]
   failedFeedDetails?: string[]
+  skippedByCooldown?: boolean
+  skippedFeedCount?: number
+  allSkippedByCooldown?: boolean
   fallbackUsed: boolean
 }
 

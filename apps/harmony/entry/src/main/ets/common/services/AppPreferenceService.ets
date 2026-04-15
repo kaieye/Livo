@@ -6,6 +6,7 @@ import {
   DEFAULT_AI_ASSISTANT_SETTINGS,
   DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
   DEFAULT_HARMONY_SETTINGS,
+  EntryCardModel,
   HarmonySettings,
   RefreshLogEntry,
 } from '../models/LivoModels'
@@ -19,8 +20,69 @@ const AI_KEY_ENABLE_SYSTEM_PROMPT: string = 'aiEnableSystemPrompt'
 const AI_KEY_SYSTEM_PROMPT_TEMPLATE: string = 'aiSystemPromptTemplate'
 const AI_KEY_CHAT_PERSONA_PROMPT: string = 'aiChatPersonaPrompt'
 const REFRESH_LOGS_KEY: string = 'refreshLogs'
+const HOME_ENTRY_SNAPSHOT_KEY: string = 'homeEntrySnapshotV1'
 const MAX_REFRESH_LOGS: number = 60
+const MAX_HOME_ENTRY_SNAPSHOT_ENTRIES: number = 240
 const AI_PROVIDERS: string[] = ['minimax', 'deepseek', 'openai', 'anthropic', 'glm', 'custom']
+
+function cloneHomeEntrySnapshotItem(item: EntryCardModel): EntryCardModel | undefined {
+  const id = (item.id || '').trim()
+  const feedId = (item.feedId || '').trim()
+  if (!id || !feedId) {
+    return undefined
+  }
+
+  const tags = Array.isArray(item.tags)
+    ? item.tags.filter((tag: string) => !!tag)
+    : []
+  const mediaUrls = Array.isArray(item.mediaUrls)
+    ? item.mediaUrls.filter((url: string) => !!url)
+    : []
+  const rawMediaUrls = Array.isArray(item.rawMediaUrls)
+    ? item.rawMediaUrls.filter((url: string) => !!url)
+    : []
+
+  const normalized: EntryCardModel = {
+    id,
+    feedId,
+    title: item.title || '',
+    summary: item.summary || '',
+    content: item.content || '',
+    imageUrl: item.imageUrl || '',
+    feedImageUrl: item.feedImageUrl || '',
+    author: item.author || '',
+    articleUrl: item.articleUrl || '',
+    publishedAt: Number(item.publishedAt) || 0,
+    publishedLabel: item.publishedLabel || '',
+    readingLabel: item.readingLabel || '',
+    tags,
+    mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+    rawMediaUrls: rawMediaUrls.length > 0 ? rawMediaUrls : undefined,
+    feedTitle: item.feedTitle || '',
+    feedCategory: item.feedCategory || '',
+    viewLabel: item.viewLabel || '',
+    viewBadgeColor: item.viewBadgeColor || '',
+    hasVideoMedia: item.hasVideoMedia === true,
+    isRead: item.isRead === true,
+    isStarred: item.isStarred === true,
+  }
+  return normalized
+}
+
+function normalizeHomeEntrySnapshotEntries(entries: EntryCardModel[]): EntryCardModel[] {
+  const normalizedEntries: EntryCardModel[] = []
+  entries.forEach((entry: EntryCardModel) => {
+    if (normalizedEntries.length >= MAX_HOME_ENTRY_SNAPSHOT_ENTRIES) {
+      return
+    }
+
+    const normalizedEntry = cloneHomeEntrySnapshotItem(entry)
+    if (normalizedEntry) {
+      normalizedEntries.push(normalizedEntry)
+    }
+  })
+  return normalizedEntries
+}
 
 function normalizeRefreshLogEntry(item: RefreshLogEntry): RefreshLogEntry {
   const normalized: RefreshLogEntry = {
@@ -216,5 +278,40 @@ export class AppPreferenceService {
 
   static async clearRefreshLogs(): Promise<void> {
     await AppPreferenceService.saveRefreshLogs([])
+  }
+
+  static async loadHomeEntrySnapshot(): Promise<EntryCardModel[]> {
+    try {
+      const pref = await AppPreferenceService.getPref()
+      const raw = await pref.get(HOME_ENTRY_SNAPSHOT_KEY, '[]')
+      const text = typeof raw === 'string' ? raw : '[]'
+      const parsed = JSON.parse(text) as EntryCardModel[]
+      if (!Array.isArray(parsed)) {
+        return []
+      }
+
+      const normalizedEntries: EntryCardModel[] = []
+      parsed.forEach((item: EntryCardModel) => {
+        if (normalizedEntries.length >= MAX_HOME_ENTRY_SNAPSHOT_ENTRIES) {
+          return
+        }
+
+        const normalizedItem = cloneHomeEntrySnapshotItem(item)
+        if (normalizedItem) {
+          normalizedEntries.push(normalizedItem)
+        }
+      })
+      return normalizedEntries
+    } catch (_error) {
+      return []
+    }
+  }
+
+  static async saveHomeEntrySnapshot(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
+    const normalizedEntries = normalizeHomeEntrySnapshotEntries(entries)
+    const pref = await AppPreferenceService.getPref()
+    await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(normalizedEntries))
+    await pref.flush()
+    return normalizedEntries
   }
 }

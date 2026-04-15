@@ -24,6 +24,8 @@ const PANEL_SECTION_SPACING: number = 2
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 6
 const REFRESH_INTERVAL_OPTIONS: string[] = ['15', '30', '60', '120']
+const OPML_IMPORT_REFRESH_CONCURRENCY: number = 4
+const OPML_IMPORT_REFRESH_NOTIFY_BATCH: number = 3
 
 interface SelectOption {
   label: string
@@ -896,6 +898,69 @@ export struct SubscriptionsSettingsPanel {
     }
   }
 
+  private dedupeFeedIds(feedIds: string[]): string[] {
+    const result: string[] = []
+    feedIds.forEach((feedId: string) => {
+      const normalized = (feedId || '').trim()
+      if (normalized && !result.includes(normalized)) {
+        result.push(normalized)
+      }
+    })
+    return result
+  }
+
+  private async refreshImportedFeedsInBackground(feedIds: string[]): Promise<void> {
+    const targetFeedIds = this.dedupeFeedIds(feedIds)
+    if (targetFeedIds.length === 0) {
+      return
+    }
+
+    const total = targetFeedIds.length
+    const workerCount = Math.min(OPML_IMPORT_REFRESH_CONCURRENCY, total)
+    let nextIndex = 0
+    let completed = 0
+    let success = 0
+    let failed = 0
+
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const currentIndex = nextIndex
+        nextIndex += 1
+        if (currentIndex >= total) {
+          return
+        }
+
+        const feedId = targetFeedIds[currentIndex]
+        if (!feedId) {
+          completed += 1
+          continue
+        }
+
+        try {
+          await AppRepository.refreshFeed(feedId, true, false, false)
+          success += 1
+        } catch (_error) {
+          failed += 1
+        }
+
+        completed += 1
+        if (completed === total || completed % OPML_IMPORT_REFRESH_NOTIFY_BATCH === 0) {
+          AppStorage.setOrCreate('feedsChangedAt', Date.now())
+        }
+      }
+    }
+
+    const workers: Promise<void>[] = []
+    for (let index = 0; index < workerCount; index += 1) {
+      workers.push(worker())
+    }
+    await Promise.all(workers)
+
+    AppStorage.setOrCreate('feedsChangedAt', Date.now())
+    const failedSuffix = failed > 0 ? `，失败 ${failed}` : ''
+    this.showToast(`后台同步完成：成功 ${success}/${total}${failedSuffix}`, 3200)
+  }
+
   private async exportOpmlToFile(): Promise<void> {
     if (this.isOpmlProcessing) {
       return
@@ -964,6 +1029,7 @@ export struct SubscriptionsSettingsPanel {
       }
 
       const seenInOpml: Set<string> = new Set<string>()
+      const importedFeedIds: string[] = []
       let imported = 0
       let skipped = 0
       let failed = 0
@@ -1000,6 +1066,7 @@ export struct SubscriptionsSettingsPanel {
                 view: importedView,
                 showInAll: true,
               })
+              importedFeedIds.push(existingFeed.id)
               imported += 1
               continue
             } catch (_error) {
@@ -1012,7 +1079,7 @@ export struct SubscriptionsSettingsPanel {
         }
 
         try {
-          await AppRepository.createFeed({
+          const createdFeed = await AppRepository.createFeed({
             title: (opmlFeed.title || url).trim(),
             url,
             siteUrl: this.normalizeImportedUrl(opmlFeed.htmlUrl || ''),
@@ -1022,6 +1089,7 @@ export struct SubscriptionsSettingsPanel {
             view: importedView,
             showInAll: true,
           })
+          importedFeedIds.push(createdFeed.id)
           existingUrlSet.add(normalizedUrl)
           imported += 1
         } catch (_error) {
@@ -1031,6 +1099,10 @@ export struct SubscriptionsSettingsPanel {
 
       AppStorage.setOrCreate('feedsChangedAt', Date.now())
       this.showToast(`导入完成：新增 ${imported}，跳过 ${skipped}，失败 ${failed}`, 3200)
+      if (importedFeedIds.length > 0) {
+        this.showToast('正在后台同步导入订阅的头像与内容…', 2200)
+        void this.refreshImportedFeedsInBackground(importedFeedIds)
+      }
     } catch (error) {
       this.showToast(`导入失败：${error instanceof Error ? error.message : String(error)}`, 3200)
     } finally {
