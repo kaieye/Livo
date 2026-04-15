@@ -34,6 +34,11 @@ export interface ResolvedDiscoverCandidate {
   followers?: string
 }
 
+function discoverInstagramAvatarUrl(usernameRaw: string): string {
+  const username = (usernameRaw || '').trim().replace(/^@+/, '')
+  return username ? `https://unavatar.io/instagram/${encodeURIComponent(username)}?fallback=false` : ''
+}
+
 export const DEFAULT_RSSHUB_INSTANCE = APP_DEFAULT_RSSHUB_INSTANCE
 
 export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
@@ -281,7 +286,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
     description: 'Instagram 图片流示例源',
     view: FeedViewType.Pictures,
     category: 'Instagram',
-    imageUrl: 'https://unavatar.io/instagram/nasa?fallback=false',
+    imageUrl: discoverInstagramAvatarUrl('nasa'),
     followers: '100M followers',
   },
   {
@@ -291,7 +296,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
     description: '国家地理图片更新',
     view: FeedViewType.Pictures,
     category: 'Instagram',
-    imageUrl: 'https://unavatar.io/instagram/natgeo?fallback=false',
+    imageUrl: discoverInstagramAvatarUrl('natgeo'),
     followers: '275M followers',
   },
   {
@@ -301,7 +306,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
     description: 'Figma 官方视觉内容',
     view: FeedViewType.Pictures,
     category: 'Instagram',
-    imageUrl: 'https://unavatar.io/instagram/figma?fallback=false',
+    imageUrl: discoverInstagramAvatarUrl('figma'),
     followers: '898K followers',
   },
   {
@@ -311,7 +316,7 @@ export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
     description: 'Google 官方图片内容',
     view: FeedViewType.Pictures,
     category: 'Instagram',
-    imageUrl: 'https://unavatar.io/instagram/google?fallback=false',
+    imageUrl: discoverInstagramAvatarUrl('google'),
     followers: '16M followers',
   },
 ]

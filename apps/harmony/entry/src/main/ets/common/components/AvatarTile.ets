@@ -12,6 +12,7 @@ export struct AvatarTile {
   @Prop radius: number = 10
   @Prop textSize: number = 14
   @Prop showFallbackLabel: boolean = true
+  @Prop useAccentFallback: boolean = false
   @State private currentImageIndex: number = 0
 
   aboutToAppear(): void {
@@ -84,10 +85,10 @@ export struct AvatarTile {
           .width(this.avatarSize)
           .height(this.avatarSize)
           .borderRadius(this.radius)
-          .backgroundColor(this.theme.elevated)
+          .backgroundColor(this.useAccentFallback ? this.accent : this.theme.elevated)
           .border({
             width: 0.8,
-            color: this.theme.divider,
+            color: this.useAccentFallback ? 'rgba(255,255,255,0.24)' : this.theme.divider,
           })
 
         if (this.showFallbackLabel) {

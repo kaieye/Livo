@@ -17,6 +17,7 @@ import { canonicalInstagramFeedUrl, extractInstagramUsername } from '../utils/So
 import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
+  resolvePreferredStoredFeedImageUrl,
   resolveSocialFeedDisplayTitle,
 } from '../utils/SocialFeedPresentation'
 import { presentTweetEntryFromEntry } from '../utils/TweetEntryPresentation'
@@ -200,9 +201,10 @@ export struct FeedDetailView {
           this.previewPayload = resolvedCachedPayload
           this.targetTitle = resolvedCachedPayload.feedTitle || this.targetTitle
           this.targetSiteUrl = resolvedCachedPayload.siteUrl || this.targetSiteUrl
-          this.targetImageUrl = resolvedCachedPayload.imageUrl || this.targetImageUrl
+          this.targetImageUrl = this.preferredDisplayImageUrl(resolvedCachedPayload.imageUrl || '', this.targetImageUrl)
           this.targetDescription = resolvedCachedPayload.description || this.targetDescription
           this.resetHeroAvatarCandidates()
+          void this.hydratePreviewAvatar(previewTargetUrl, this.targetSiteUrl, this.targetImageUrl)
           void this.hydrateVideoPreviews(resolvedCachedPayload.entries)
 
           if (!this.existingFeed && resolvedCachedPayload.siteUrl) {
@@ -223,9 +225,10 @@ export struct FeedDetailView {
           this.previewNotice = ''
           this.targetTitle = payload.feedTitle || this.targetTitle
           this.targetSiteUrl = payload.siteUrl || this.targetSiteUrl
-          this.targetImageUrl = payload.imageUrl || this.targetImageUrl
+          this.targetImageUrl = this.preferredDisplayImageUrl(payload.imageUrl || '', this.targetImageUrl)
           this.targetDescription = payload.description || this.targetDescription
           this.resetHeroAvatarCandidates()
+          void this.hydratePreviewAvatar(previewTargetUrl, this.targetSiteUrl, this.targetImageUrl)
           void this.hydrateVideoPreviews(payload.entries)
 
           // If it matches an existing entry, update it
@@ -311,9 +314,10 @@ export struct FeedDetailView {
           this.previewNotice = ''
           this.targetTitle = payload.feedTitle || this.targetTitle
           this.targetSiteUrl = payload.siteUrl || this.targetSiteUrl
-          this.targetImageUrl = payload.imageUrl || this.targetImageUrl
+          this.targetImageUrl = this.preferredDisplayImageUrl(payload.imageUrl || '', this.targetImageUrl)
           this.targetDescription = payload.description || this.targetDescription
           this.resetHeroAvatarCandidates()
+          void this.hydratePreviewAvatar(previewTargetUrl, this.targetSiteUrl, this.targetImageUrl)
           void this.hydrateVideoPreviews(payload.entries)
           this.showToast('预览已刷新')
         } catch (e) {
@@ -407,12 +411,9 @@ export struct FeedDetailView {
   }
 
   private preferredDisplayImageUrl(primaryImageUrl: string, fallbackImageUrl: string): string {
-    const primary = (primaryImageUrl || '').trim()
-    if (primary) {
-      return primary
-    }
-
-    return (fallbackImageUrl || '').trim()
+    const incoming = (primaryImageUrl || '').trim()
+    const existing = (fallbackImageUrl || '').trim()
+    return resolvePreferredStoredFeedImageUrl(existing, incoming)
   }
 
   private async hydrateSubscribedAvatar(feed: Feed, currentImageUrl: string): Promise<void> {
@@ -434,6 +435,38 @@ export struct FeedDetailView {
         feedTitle: this.previewPayload.feedTitle,
         siteUrl: this.previewPayload.siteUrl,
         imageUrl: resolvedAvatar,
+        description: this.previewPayload.description,
+        resolvedFeedUrl: this.previewPayload.resolvedFeedUrl,
+        entries: this.previewPayload.entries,
+      }
+    }
+    this.resetHeroAvatarCandidates()
+  }
+
+  private async hydratePreviewAvatar(feedUrl: string, siteUrl: string, currentImageUrl: string): Promise<void> {
+    const resolvedAvatar = await SocialFeedAvatarService.resolveFeedAvatar(
+      feedUrl,
+      siteUrl,
+      currentImageUrl,
+      this.targetImageUrl,
+    )
+    if (!resolvedAvatar) {
+      return
+    }
+
+    const preferred = this.preferredDisplayImageUrl(resolvedAvatar, this.targetImageUrl)
+    if (!preferred || preferred === this.targetImageUrl) {
+      return
+    }
+
+    this.targetImageUrl = preferred
+    if (this.previewPayload) {
+      this.previewPayload = {
+        etag: this.previewPayload.etag,
+        lastModified: this.previewPayload.lastModified,
+        feedTitle: this.previewPayload.feedTitle,
+        siteUrl: this.previewPayload.siteUrl,
+        imageUrl: preferred,
         description: this.previewPayload.description,
         resolvedFeedUrl: this.previewPayload.resolvedFeedUrl,
         entries: this.previewPayload.entries,

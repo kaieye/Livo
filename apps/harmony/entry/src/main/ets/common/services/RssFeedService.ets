@@ -256,6 +256,37 @@ function extractBilibiliDynamicUid(url: string): string {
   return matched?.[1] ?? ''
 }
 
+function extractBilibiliVideoUid(url: string): string {
+  const matched = (url || '').match(/\/bilibili\/user\/video\/(\d+)/i)
+  return matched?.[1] ?? ''
+}
+
+function appendIfMissing(items: string[], value: string): void {
+  const trimmed = (value || '').trim()
+  if (!trimmed || items.includes(trimmed)) {
+    return
+  }
+  items.push(trimmed)
+}
+
+function previewUrlVariants(url: string): string[] {
+  const variants: string[] = []
+  const trimmed = (url || '').trim()
+  appendIfMissing(variants, trimmed)
+
+  const dynamicUid = extractBilibiliDynamicUid(trimmed)
+  if (dynamicUid) {
+    appendIfMissing(variants, trimmed.replace(/\/bilibili\/user\/dynamic\/\d+/i, `/bilibili/user/video/${dynamicUid}`))
+  }
+
+  const videoUid = extractBilibiliVideoUid(trimmed)
+  if (videoUid) {
+    appendIfMissing(variants, trimmed.replace(/\/bilibili\/user\/video\/\d+/i, `/bilibili/user/dynamic/${videoUid}`))
+  }
+
+  return variants
+}
+
 function parseRssItems(feedId: string, xml: string, baseUrl: string): ParsedItem[] {
   const itemMatches = xml.match(/<item[\s\S]*?<\/item>/gi) ?? []
 
@@ -412,17 +443,29 @@ export class RssFeedService {
   }
 
   static async previewFeedUrl(url: string): Promise<FeedRefreshPayload> {
-    const dummyFeed: Feed = {
-      id: `preview-${Date.now()}`,
-      title: 'Preview',
-      url: url,
-      view: FeedViewType.Articles,
-      showInAll: true,
-      errorCount: 0,
-      createdAt: 0,
-      updatedAt: 0
+    const candidates = previewUrlVariants(url)
+    let lastError: string = 'unknown error'
+
+    for (const candidateUrl of candidates) {
+      const dummyFeed: Feed = {
+        id: `preview-${Date.now()}`,
+        title: 'Preview',
+        url: candidateUrl,
+        view: FeedViewType.Articles,
+        showInAll: true,
+        errorCount: 0,
+        createdAt: 0,
+        updatedAt: 0,
+      }
+
+      try {
+        return await RssFeedService.fetchFeedEntries(dummyFeed)
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error)
+      }
     }
-    return RssFeedService.fetchFeedEntries(dummyFeed)
+
+    throw new Error(lastError)
   }
 
   /**

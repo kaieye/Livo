@@ -5,6 +5,7 @@ import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/L
 import { FeedDraft } from '../common/repositories/FeedRepository'
 import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { resolveSocialFeedDisplayImageUrl } from '../common/utils/SocialFeedPresentation'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
@@ -16,6 +17,7 @@ struct DiscoverPreview {
   @State targetUrl: string = ''
   @State targetTitle: string = ''
   @State targetSiteUrl: string = ''
+  @State targetImageUrl: string = ''
   @State targetDescription: string = ''
   @State targetCategory: string = ''
   @State targetView: FeedViewType = FeedViewType.Articles
@@ -70,9 +72,16 @@ struct DiscoverPreview {
   }
 
   private resolvedAvatarUrl(): string {
-    if (this.previewPayload?.imageUrl) {
-      return this.previewPayload.imageUrl
+    const resolved = resolveSocialFeedDisplayImageUrl(
+      this.previewPayload?.imageUrl || this.targetImageUrl || this.existingFeed?.imageUrl || '',
+      this.previewPayload?.resolvedFeedUrl || this.targetUrl,
+      this.previewPayload?.siteUrl || this.targetSiteUrl,
+      this.previewPayload?.feedTitle || this.targetTitle,
+    )
+    if (resolved) {
+      return resolved
     }
+
     const host = this.hostOf(this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl)
     if (host) {
       return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`
@@ -247,6 +256,7 @@ struct DiscoverPreview {
       this.targetUrl = params.targetUrl ?? ''
       this.targetTitle = params.targetTitle ?? ''
       this.targetSiteUrl = params.siteUrl ?? ''
+      this.targetImageUrl = params.imageUrl ?? ''
       this.targetDescription = params.description ?? ''
       this.targetCategory = params.category ?? ''
       this.sourceKind = params.sourceKind ?? ''

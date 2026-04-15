@@ -234,6 +234,7 @@ struct Index {
   private suppressFeedsChangedUntilMs: number = 0
   private homeListSwapToken: number = 0
   private isComponentActive: boolean = false
+  private hasLoadedInitialData: boolean = false
   private initialFeedCount: number = 0
   private managedTimeoutIds: number[] = []
 
@@ -241,6 +242,13 @@ struct Index {
     this.isComponentActive = true
     console.info('Livo Harmony Index aboutToAppear')
     this.syncRequestedRootTab()
+    if (this.hasLoadedInitialData) {
+      this.configureAutoRefreshTimer()
+      if (this.featuredEntries.length === 0) {
+        void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+      }
+      return
+    }
     void this.loadInitialData()
   }
 
@@ -301,6 +309,7 @@ struct Index {
     this.feedSourceLabel = '本地内容已加载'
     this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
+    this.hasLoadedInitialData = true
   }
 
   private startStartupRefreshIfNeeded(): void {

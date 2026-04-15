@@ -35,6 +35,7 @@ import {
   searchedRecommendedFeedsByPlatform,
 } from '../services/DiscoverService'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedDetailView } from './FeedDetailView'
@@ -170,6 +171,7 @@ export struct DiscoverContent {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
+  @State avatarOverrideVersion: number = 0
   @State hasLoaded: boolean = false
   @State isLoadingPage: boolean = false
   @State subscribedFeeds: Feed[] = []
@@ -188,6 +190,8 @@ export struct DiscoverContent {
   private searchInputController: TextInputController = new TextInputController()
   private readonly contentScroller: Scroller = new Scroller()
   private headerBlurOffset: number = 0
+  private readonly avatarOverrideMap: Map<string, string> = new Map<string, string>()
+  private readonly avatarHydratingKeys: Set<string> = new Set<string>()
 
   private updateHeaderBlurProgress(offset: number): void {
     const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
@@ -252,6 +256,7 @@ export struct DiscoverContent {
 
       this.hasLoaded = true
       this.onReady()
+      void this.hydrateAvatarsForCandidates(this.recommendedFallback().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
     } finally {
       this.isLoadingPage = false
     }
@@ -543,6 +548,7 @@ export struct DiscoverContent {
     if (!trimmed) {
       this.remoteResults = []
       this.isSearchingRemote = false
+      void this.hydrateAvatarsForCandidates(this.recommendedFallback().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
       return
     }
 
@@ -559,6 +565,7 @@ export struct DiscoverContent {
         return
       }
       this.remoteResults = results
+      void this.hydrateAvatarsForCandidates(results)
     } catch (_) {
       if (this.searchSession !== session) {
         return
@@ -580,6 +587,7 @@ export struct DiscoverContent {
     this.remoteResults = []
 
     if (!this.query.trim()) {
+      void this.hydrateAvatarsForCandidates(this.recommendedFallback().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
       return
     }
 
@@ -715,6 +723,21 @@ export struct DiscoverContent {
     return host ? `https://${host}/favicon.ico` : ''
   }
 
+  private isInstagramPlaceholderAvatar(url: string): boolean {
+    const normalized = (url || '').trim().toLowerCase()
+    if (!normalized) {
+      return true
+    }
+
+    return normalized.includes('unavatar.io/instagram/')
+      || normalized.includes('instagram.com/static/images/ico')
+      || normalized.includes('instagram_static/images/ico')
+      || normalized.includes('instagram_logo')
+      || normalized.includes('instagram-logo')
+      || normalized.includes('favicon')
+      || normalized.includes('/logo')
+  }
+
   private resolvedPlatformLabel(candidate: ResolvedDiscoverCandidate): string {
     if (candidate.targetUrl.includes('/youtube/') || candidate.targetUrl.includes('youtube.com/feeds/videos.xml')) {
       return 'YouTube'
@@ -735,6 +758,11 @@ export struct DiscoverContent {
   }
 
   private resolvedCandidateAvatarUrl(candidate: ResolvedDiscoverCandidate): string {
+    const override = this.avatarOverrideMap.get(this.candidateAvatarCacheKey(candidate)) || ''
+    if (override.trim()) {
+      return override.trim()
+    }
+
     const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
       candidate.imageUrl ?? '',
       candidate.targetUrl,
@@ -742,6 +770,9 @@ export struct DiscoverContent {
       candidate.targetTitle,
     )
     if (resolvedImageUrl) {
+      if (this.resolvedPlatformLabel(candidate) === 'Instagram' && this.isInstagramPlaceholderAvatar(resolvedImageUrl)) {
+        return ''
+      }
       return resolvedImageUrl
     }
 
@@ -750,6 +781,71 @@ export struct DiscoverContent {
       return 'https://github.githubassets.com/favicons/favicon.svg'
     }
     return this.faviconUrl(candidate.siteUrl)
+  }
+
+  private candidateAvatarCacheKey(candidate: ResolvedDiscoverCandidate): string {
+    return `${candidate.targetUrl.trim()}|${candidate.siteUrl.trim()}`
+  }
+
+  private shouldHydrateCandidateAvatar(candidate: ResolvedDiscoverCandidate): boolean {
+    const platform = this.resolvedPlatformLabel(candidate)
+    if (platform !== 'Instagram' && platform !== 'YouTube' && platform !== 'Bilibili') {
+      return false
+    }
+
+    const currentUrl = this.resolvedCandidateAvatarUrl(candidate).toLowerCase()
+    if (!currentUrl) {
+      return true
+    }
+
+    return currentUrl.includes('unavatar.io/instagram/')
+      || currentUrl.includes('unavatar.io/youtube/')
+      || currentUrl.includes('unavatar.io/bilibili/')
+      || currentUrl.includes('favicon')
+      || currentUrl.includes('apple-touch-icon')
+      || currentUrl.includes('/logo')
+  }
+
+  private async hydrateAvatarsForCandidates(candidates: ResolvedDiscoverCandidate[]): Promise<void> {
+    for (const candidate of candidates) {
+      const key = this.candidateAvatarCacheKey(candidate)
+      if (this.avatarOverrideMap.has(key) || this.avatarHydratingKeys.has(key)) {
+        continue
+      }
+      if (!this.shouldHydrateCandidateAvatar(candidate)) {
+        continue
+      }
+
+      this.avatarHydratingKeys.add(key)
+      try {
+        const resolved = await SocialFeedAvatarService.resolveFeedAvatar(
+          candidate.targetUrl,
+          candidate.siteUrl,
+          candidate.imageUrl ?? '',
+          '',
+        )
+        const trimmedResolved = (resolved || '').trim()
+        if (!trimmedResolved) {
+          continue
+        }
+
+        const platform = this.resolvedPlatformLabel(candidate)
+        const finalResolved = trimmedResolved
+        if (platform === 'Instagram' && this.isInstagramPlaceholderAvatar(finalResolved)) {
+          continue
+        }
+
+        const current = this.resolvedCandidateAvatarUrl(candidate).trim()
+        if (!current || current !== finalResolved) {
+          this.avatarOverrideMap.set(key, finalResolved)
+          this.avatarOverrideVersion += 1
+        }
+      } catch (_) {
+        // Keep original avatar URL when hydration fails.
+      } finally {
+        this.avatarHydratingKeys.delete(key)
+      }
+    }
   }
 
   @Builder
@@ -880,6 +976,7 @@ export struct DiscoverContent {
       avatarSize: 38,
       radius: 10,
       textSize: 14,
+      useAccentFallback: true,
     })
   }
 
@@ -1444,6 +1541,12 @@ struct DiscoverPreviewDestination {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
   private openEditConfigPage(feed: Feed): void {
+    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
+      feed.imageUrl || this.initialTargetImageUrl,
+      feed.url || this.targetUrl,
+      feed.siteUrl || this.initialTargetSiteUrl,
+      feed.title || this.initialTargetTitle,
+    )
     AppStorage.setOrCreate('discoverOverlayLevel', 2)
     this.discoverPathStack.pushPathByName(
       DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
@@ -1452,7 +1555,7 @@ struct DiscoverPreviewDestination {
         feed.title,
         feed.view,
         feed.siteUrl || this.initialTargetSiteUrl,
-        feed.imageUrl || '',
+        resolvedImageUrl,
         feed.description || this.initialTargetDescription,
         '编辑',
         feed.category || '',
@@ -1463,6 +1566,12 @@ struct DiscoverPreviewDestination {
 
   private openNewSubscribeConfigPage(payload: FeedRefreshPayload): void {
     DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
+    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
+      payload.imageUrl || this.initialTargetImageUrl,
+      payload.resolvedFeedUrl || this.targetUrl,
+      payload.siteUrl || this.initialTargetSiteUrl,
+      payload.feedTitle || this.initialTargetTitle,
+    )
     AppStorage.setOrCreate('discoverOverlayLevel', 2)
     this.discoverPathStack.pushPathByName(
       DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
@@ -1471,7 +1580,7 @@ struct DiscoverPreviewDestination {
         payload.feedTitle || this.initialTargetTitle,
         this.targetView,
         payload.siteUrl || this.initialTargetSiteUrl,
-        payload.imageUrl || '',
+        resolvedImageUrl,
         payload.description || this.initialTargetDescription,
         '',
         this.targetCategory,
