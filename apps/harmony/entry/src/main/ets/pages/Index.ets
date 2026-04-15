@@ -106,9 +106,8 @@ const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
 const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
 const HOME_REFRESH_RESULT_RELOAD_DELAY_MS: number = 180
 const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 32
-const HOME_INITIAL_CANDIDATE_LIMIT: number = 24
-const HOME_LAZY_LOAD_PAGE_SIZE: number = 24
 const HOME_MAX_CANDIDATE_LIMIT: number = 240
+const HOME_INITIAL_CANDIDATE_LIMIT: number = 24
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 
 interface RootTabSymbolPair {
@@ -180,7 +179,6 @@ struct Index {
   @State private suppressRootTabChange: boolean = false
   @State settingsScrollerBindingVersion: number = 0
   @State isHomeStartupRefreshing: boolean = false
-  @State isHomeLazyLoading: boolean = false
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
@@ -204,8 +202,6 @@ struct Index {
   private refreshPercentAnimationTimer: number = -1
   private autoRefreshTimer: number = -1
   private homeEntryGroupVersion: number = 0
-  private homeLoadedCandidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT
-  private homeHasMoreEntries: boolean = true
 
   aboutToAppear(): void {
     console.info('Livo Harmony Index aboutToAppear')
@@ -226,7 +222,7 @@ struct Index {
     AppStorage.setOrCreate('showUnreadDot', settings.showUnreadDot)
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
-    await this.reloadFeaturedEntriesFromLocal(HOME_INITIAL_CANDIDATE_LIMIT)
+    await this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
     this.feedSourceLabel = '本地内容已加载'
     this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
@@ -262,7 +258,7 @@ struct Index {
       })
       this.feedSourceLabel = result.sourceLabel
       setTimeout(() => {
-        void this.reloadFeaturedEntriesFromLocal(HOME_INITIAL_CANDIDATE_LIMIT)
+        void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
       }, HOME_REFRESH_RESULT_RELOAD_DELAY_MS)
       if (showResultToast) {
         this.showToast(result.sourceLabel)
@@ -1444,14 +1440,12 @@ struct Index {
   }
 
   private handleFeedsChanged(): void {
-    void this.reloadFeaturedEntriesFromLocal(this.homeLoadedCandidateLimit)
+    void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
   }
 
   private async reloadFeaturedEntriesFromLocal(candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT): Promise<void> {
     const nextEntries = await AppRepository.featuredEntries(candidateLimit)
     this.featuredEntries = nextEntries
-    this.homeLoadedCandidateLimit = candidateLimit
-    this.homeHasMoreEntries = nextEntries.length >= candidateLimit
     const currentGroupVersion = this.homeEntryGroupVersion + 1
     this.homeEntryGroupVersion = currentGroupVersion
     setTimeout(() => {
@@ -1485,39 +1479,6 @@ struct Index {
 
   private homeEntryCountFor(mode: SubscriptionMode): number {
     return this.homeEntryDataSourceFor(mode).totalCount()
-  }
-
-  private tryLoadMoreHomeEntries(mode: SubscriptionMode): void {
-    if (mode !== this.mode) {
-      return
-    }
-
-    if (this.isHomeLazyLoading || this.isRefreshing || !this.homeHasMoreEntries) {
-      return
-    }
-
-    if (this.homeLoadedCandidateLimit >= HOME_MAX_CANDIDATE_LIMIT) {
-      this.homeHasMoreEntries = false
-      return
-    }
-
-    this.isHomeLazyLoading = true
-    const nextCandidateLimit = Math.min(HOME_MAX_CANDIDATE_LIMIT, this.homeLoadedCandidateLimit + HOME_LAZY_LOAD_PAGE_SIZE)
-    void this.reloadFeaturedEntriesFromLocal(nextCandidateLimit)
-      .finally(() => {
-        this.isHomeLazyLoading = false
-      })
-  }
-
-  @Builder
-  private HomeLoadMoreSentinel(mode: SubscriptionMode) {
-    Column()
-      .width('100%')
-      .height(1)
-      .opacity(0.001)
-      .onAppear(() => {
-        this.tryLoadMoreHomeEntries(mode)
-      })
   }
 
   private filteredEntries(): EntryCardModel[] {
@@ -2287,12 +2248,6 @@ struct Index {
         Row().height(100).width('100%')
       }
 
-      if (this.homeHasMoreEntries && this.filteredEntriesFor(mode).length > 0) {
-        ListItem() {
-          this.HomeLoadMoreSentinel(mode)
-        }
-        .width('100%')
-      }
     }
     .width('100%')
     .height('100%')
@@ -2370,12 +2325,6 @@ struct Index {
         Row().height(100).width('100%')
       }
 
-      if (this.homeHasMoreEntries && this.filteredEntriesFor('pictures').length > 0) {
-        ListItem() {
-          this.HomeLoadMoreSentinel('pictures')
-        }
-        .width('100%')
-      }
     }
     .width('100%')
     .height('100%')
@@ -2418,9 +2367,6 @@ struct Index {
                 },
               })
 
-              if (this.homeHasMoreEntries && this.filteredEntriesFor(mode).length > 0) {
-                this.HomeLoadMoreSentinel(mode)
-              }
             }
             .width('100%')
             .constraintSize({ minHeight: '100%' })

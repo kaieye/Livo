@@ -66,7 +66,7 @@ test('home refreshFeaturedEntries shows the aggregate refresh toast message afte
   )
   assert.match(
     source,
-    /const result = await AppRepository\.refreshAllFeeds\([\s\S]*this\.feedSourceLabel = result\.sourceLabel[\s\S]*setTimeout\(\(\) => \{[\s\S]*this\.reloadFeaturedEntriesFromLocal\(HOME_INITIAL_CANDIDATE_LIMIT\)[\s\S]*\}, HOME_REFRESH_RESULT_RELOAD_DELAY_MS\)[\s\S]*this\.showToast\(result\.sourceLabel\)/s,
+    /const result = await AppRepository\.refreshAllFeeds\([\s\S]*this\.feedSourceLabel = result\.sourceLabel[\s\S]*setTimeout\(\(\) => \{[\s\S]*this\.reloadFeaturedEntriesFromLocal\(HOME_MAX_CANDIDATE_LIMIT\)[\s\S]*\}, HOME_REFRESH_RESULT_RELOAD_DELAY_MS\)[\s\S]*this\.showToast\(result\.sourceLabel\)/s,
   )
 })
 
@@ -79,18 +79,21 @@ test('home reloadFeaturedEntriesFromLocal stages grouping into a deferred frame'
   assert.match(source, /private homeEntryGroupVersion: number = 0/)
   assert.match(source, /const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 32/)
   assert.match(source, /const HOME_INITIAL_CANDIDATE_LIMIT: number = 24/)
-  assert.match(source, /const HOME_LAZY_LOAD_PAGE_SIZE: number = 24/)
   assert.match(source, /const HOME_MAX_CANDIDATE_LIMIT: number = 240/)
   assert.match(
     source,
-    /private async reloadFeaturedEntriesFromLocal\(candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT\): Promise<void> \{[\s\S]*const nextEntries = await AppRepository\.featuredEntries\(candidateLimit\)[\s\S]*this\.featuredEntries = nextEntries[\s\S]*this\.homeLoadedCandidateLimit = candidateLimit[\s\S]*this\.homeHasMoreEntries = nextEntries\.length >= candidateLimit[\s\S]*const currentGroupVersion = this\.homeEntryGroupVersion \+ 1[\s\S]*this\.homeEntryGroupVersion = currentGroupVersion[\s\S]*setTimeout\(\(\) => \{[\s\S]*if \(this\.homeEntryGroupVersion !== currentGroupVersion\) \{[\s\S]*return[\s\S]*\}[\s\S]*this\.entryGroups = groupHomeEntriesByMode\(nextEntries\)[\s\S]*\}, HOME_ENTRY_GROUP_DEFER_DELAY_MS\)/s,
+    /private async reloadFeaturedEntriesFromLocal\(candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT\): Promise<void> \{[\s\S]*const nextEntries = await AppRepository\.featuredEntries\(candidateLimit\)[\s\S]*this\.featuredEntries = nextEntries[\s\S]*const currentGroupVersion = this\.homeEntryGroupVersion \+ 1[\s\S]*this\.homeEntryGroupVersion = currentGroupVersion[\s\S]*setTimeout\(\(\) => \{[\s\S]*if \(this\.homeEntryGroupVersion !== currentGroupVersion\) \{[\s\S]*return[\s\S]*\}[\s\S]*this\.entryGroups = groupHomeEntriesByMode\(nextEntries\)[\s\S]*\}, HOME_ENTRY_GROUP_DEFER_DELAY_MS\)/s,
   )
-  assert.match(
+  assert.doesNotMatch(source, /const HOME_LAZY_LOAD_PAGE_SIZE: number = 24/)
+  assert.doesNotMatch(
     source,
     /private tryLoadMoreHomeEntries\(mode: SubscriptionMode\): void/,
   )
-  assert.match(source, /private HomeLoadMoreSentinel\(mode: SubscriptionMode\)/)
-  assert.match(source, /this\.tryLoadMoreHomeEntries\(mode\)/)
+  assert.doesNotMatch(
+    source,
+    /private HomeLoadMoreSentinel\(mode: SubscriptionMode\)/,
+  )
+  assert.doesNotMatch(source, /this\.tryLoadMoreHomeEntries\(mode\)/)
 })
 
 test('home refreshFeaturedEntries updates refresh button progress while feeds are still refreshing', () => {
