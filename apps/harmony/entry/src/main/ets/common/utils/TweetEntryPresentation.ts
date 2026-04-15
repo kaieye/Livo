@@ -6,6 +6,7 @@ export interface TweetQuotedPresentation {
   avatarUrl: string
   text: string
   mediaUrls: string[]
+  nestedQuotedTweet?: TweetQuotedPresentation
 }
 
 export interface TweetEntryPresentation {
@@ -58,6 +59,11 @@ interface ParsedRetweet {
 
 interface ParsedQuote {
   mainText: string
+  quotedTweet: TweetQuotedPresentation
+}
+
+interface ParsedRetweetWithNestedQuote {
+  retweet: ParsedRetweet
   quotedTweet: TweetQuotedPresentation
 }
 
@@ -841,6 +847,45 @@ function parseQuotedTweetFromHtml(rawHtml: string): ParsedQuote | undefined {
   }
 }
 
+function parseRetweetWithNestedQuote(
+  source: TweetPresentationSource,
+): ParsedRetweetWithNestedQuote | undefined {
+  const candidateSources = [
+    `${source.content || ''}`,
+    `${source.summary || ''}`,
+    `${source.summary || ''}\n${source.content || ''}`,
+  ]
+
+  for (const candidate of candidateSources) {
+    if (!candidate || !candidate.includes('<')) {
+      continue
+    }
+
+    const parsedQuote = parseQuotedTweetFromHtml(candidate)
+    if (!parsedQuote) {
+      continue
+    }
+
+    const parsedRetweet = parseRetweet(parsedQuote.mainText)
+    if (!parsedRetweet) {
+      continue
+    }
+
+    return {
+      retweet: parsedRetweet,
+      quotedTweet: {
+        displayName: trimValue(parsedQuote.quotedTweet.displayName),
+        username: trimValue(parsedQuote.quotedTweet.username),
+        avatarUrl: trimValue(parsedQuote.quotedTweet.avatarUrl),
+        text: normalizeParagraphWhitespace(parsedQuote.quotedTweet.text || ''),
+        mediaUrls: uniqueUrls(parsedQuote.quotedTweet.mediaUrls || []),
+      },
+    }
+  }
+
+  return undefined
+}
+
 function applyRetweetSemantics(
   base: TweetEntryPresentation,
   source: TweetPresentationSource,
@@ -848,10 +893,13 @@ function applyRetweetSemantics(
   const rawText = normalizedPlainText(
     `${source.summary || ''}\n${source.content || ''}`,
   )
-  const parsed = parseRetweet(rawText)
-  if (!parsed) {
+  const parsedRetweet = parseRetweet(rawText)
+  if (!parsedRetweet) {
     return undefined
   }
+
+  const nestedQuoteRetweet = parseRetweetWithNestedQuote(source)
+  const parsed = nestedQuoteRetweet?.retweet || parsedRetweet
 
   const originalAuthorLabel =
     trimValue(parsed.originalDisplayName) ||
@@ -873,6 +921,55 @@ function applyRetweetSemantics(
     resolvedOriginalDisplayName,
     normalizedOriginalText,
   )
+
+  if (nestedQuoteRetweet) {
+    const normalizedCommentText = normalizeParagraphWhitespace(
+      parsed.commentText,
+    )
+    const nestedQuotedMediaUrls = uniqueUrls(
+      nestedQuoteRetweet.quotedTweet.mediaUrls || [],
+    )
+    const outerQuotedMediaUrls = uniqueUrls(
+      (base.mediaUrls || []).filter(
+        (url: string) => !nestedQuotedMediaUrls.includes(url),
+      ),
+    )
+    const outerDisplayName =
+      resolvedOriginalDisplayName ||
+      resolvedOriginalUsername.replace(/^@/, '') ||
+      '转发推文'
+    const outerAvatarUrl =
+      resolvedOriginalAvatarUrl || xAvatarUrl(resolvedOriginalUsername)
+
+    return {
+      ...base,
+      kind: 'retweet',
+      retweetStyle: normalizedCommentText ? 'commented' : 'pure',
+      retweetByLabel: base.displayName,
+      text: normalizedCommentText,
+      mediaUrls: [],
+      quotedTweet: {
+        displayName: outerDisplayName,
+        username: resolvedOriginalUsername,
+        avatarUrl: outerAvatarUrl,
+        text: resolvedOriginalText,
+        mediaUrls: outerQuotedMediaUrls,
+        nestedQuotedTweet: {
+          displayName:
+            nestedQuoteRetweet.quotedTweet.displayName ||
+            nestedQuoteRetweet.quotedTweet.username.replace(/^@/, '') ||
+            '引用推文',
+          username: nestedQuoteRetweet.quotedTweet.username,
+          avatarUrl:
+            nestedQuoteRetweet.quotedTweet.avatarUrl ||
+            xAvatarUrl(nestedQuoteRetweet.quotedTweet.username),
+          text: nestedQuoteRetweet.quotedTweet.text,
+          mediaUrls: nestedQuotedMediaUrls,
+        },
+      },
+    }
+  }
+
   const quotedTweet: TweetQuotedPresentation = {
     displayName: resolvedOriginalDisplayName,
     username: resolvedOriginalUsername,

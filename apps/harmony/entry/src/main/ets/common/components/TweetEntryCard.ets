@@ -218,19 +218,31 @@ export struct TweetEntryCard {
       return '100%'
     }
 
-    return '49.2%'
+    return '49.75%'
   }
 
   private mediaTileHeight(index: number, count: number): number {
     if (count <= 1) {
-      return 208
+      return 232
     }
 
     if (count === 3 && index === 0) {
-      return 148
+      return 156
     }
 
-    return 136
+    return 124
+  }
+
+  private mediaTileBottomMargin(index: number, count: number): number {
+    if (count <= 2) {
+      return 0
+    }
+
+    if (count === 3) {
+      return index === 0 ? 2 : 0
+    }
+
+    return index < 2 ? 2 : 0
   }
 
   private cardPadding(): TweetEntryCardPadding {
@@ -259,59 +271,65 @@ export struct TweetEntryCard {
   @Builder
   private MediaGrid() {
     if (this.normalizedMediaItems().length > 0) {
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-        ForEach(this.normalizedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-          Stack({ alignContent: Alignment.Center }) {
-            if ((item.videoUrl || '').trim() && this.isInlineVideoActive('main', item, index)) {
-              Video({
-                src: item.videoUrl,
-                controller: this.inlineVideoControllerFor('main', item, index),
-                previewUri: item.imageUrl,
-              })
-                .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
-                .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
-                .borderRadius(10)
-                .controls(true)
-                .autoPlay(true)
-                .muted(false)
-            } else {
-              if ((item.imageUrl || '').trim()) {
-                Image(item.imageUrl)
+      Column() {
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+          ForEach(this.normalizedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+            Stack({ alignContent: Alignment.Center }) {
+              if ((item.videoUrl || '').trim() && this.isInlineVideoActive('main', item, index)) {
+                Video({
+                  src: item.videoUrl,
+                  controller: this.inlineVideoControllerFor('main', item, index),
+                  previewUri: item.imageUrl,
+                })
                   .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
                   .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
-                  .borderRadius(10)
-                  .objectFit(ImageFit.Cover)
-                  .backgroundColor(this.theme.elevated)
+                  .borderRadius(0)
+                  .controls(true)
+                  .autoPlay(true)
+                  .muted(false)
               } else {
-                Column()
-                  .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
-                  .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
-                  .borderRadius(10)
-                  .backgroundColor(this.theme.elevated)
-              }
-
-              if ((item.videoUrl || '').trim()) {
-                Row() {
-                  SymbolGlyph($r('sys.symbol.play_fill'))
-                    .fontSize(28)
-                    .fontColor(['#F5F5F5'])
+                if ((item.imageUrl || '').trim()) {
+                  Image(item.imageUrl)
+                    .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
+                    .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                    .borderRadius(0)
+                    .objectFit(ImageFit.Cover)
+                    .backgroundColor(this.theme.elevated)
+                } else {
+                  Column()
+                    .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
+                    .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                    .borderRadius(0)
+                    .backgroundColor(this.theme.elevated)
                 }
-                .width(56)
-                .height(56)
-                .justifyContent(FlexAlign.Center)
-                .alignItems(VerticalAlign.Center)
-                .borderRadius(999)
-                .backgroundColor('rgba(168,168,168,0.58)')
+
+                if ((item.videoUrl || '').trim()) {
+                  Row() {
+                    SymbolGlyph($r('sys.symbol.play_fill'))
+                      .fontSize(28)
+                      .fontColor(['#F5F5F5'])
+                  }
+                  .width(56)
+                  .height(56)
+                  .justifyContent(FlexAlign.Center)
+                  .alignItems(VerticalAlign.Center)
+                  .borderRadius(999)
+                  .backgroundColor('rgba(168,168,168,0.58)')
+                }
               }
             }
-          }
-            .margin({ bottom: this.normalizedMediaItems().length > 1 ? 6 : 0 })
-            .onClick(() => {
-              this.playInlineVideo('main', item, index)
-            })
-        }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
+              .margin({ bottom: this.mediaTileBottomMargin(index, this.normalizedMediaItems().length) })
+              .onClick(() => {
+                this.playInlineVideo('main', item, index)
+              })
+          }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
+        }
+        .width('100%')
       }
       .width('100%')
+      .padding(1)
+      .borderRadius(12)
+      .backgroundColor(this.theme.divider)
       .clip(true)
     }
   }

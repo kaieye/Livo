@@ -99,6 +99,50 @@ export struct QuotedTweetRenderer {
     return { kind: 'image', imageUrl: '', videoUrl: '' }
   }
 
+  private hasNestedQuotedTweet(): boolean {
+    return !!this.quotedTweet.nestedQuotedTweet
+  }
+
+  private nestedQuotedTweet(): TweetQuotedPresentation {
+    return this.quotedTweet.nestedQuotedTweet || {
+      displayName: '',
+      username: '',
+      avatarUrl: '',
+      text: '',
+      mediaUrls: [],
+    }
+  }
+
+  private nestedInlineNameLabel(): string {
+    const nested = this.nestedQuotedTweet()
+    const name = (nested.displayName || '').trim()
+      || (nested.username || '').trim()
+      || '未知来源'
+    return name.endsWith(':') ? name : `${name}:`
+  }
+
+  private nestedQuotedMediaItems(): PictureCarouselMediaItem[] {
+    const nested = this.nestedQuotedTweet()
+    return this.mediaItemsFromUrls(nested.mediaUrls || [])
+  }
+
+  private hasSingleNestedQuotedVideoMedia(): boolean {
+    const items = this.nestedQuotedMediaItems()
+    return items.length === 1 && !!(items[0].videoUrl || '').trim()
+  }
+
+  private nestedQuotedPrimaryMediaItem(): PictureCarouselMediaItem {
+    const items = this.nestedQuotedMediaItems()
+    if (items.length > 0) {
+      return items[0]
+    }
+    return { kind: 'image', imageUrl: '', videoUrl: '' }
+  }
+
+  private nestedMediaIndex(index: number): number {
+    return index + 1000
+  }
+
   private mediaTileWidth(index: number, count: number): string {
     if (count <= 1) {
       return '100%'
@@ -108,7 +152,7 @@ export struct QuotedTweetRenderer {
       return '100%'
     }
 
-    return '49.2%'
+    return '49.75%'
   }
 
   private mediaTileHeight(index: number, count: number): number {
@@ -117,10 +161,22 @@ export struct QuotedTweetRenderer {
     }
 
     if (count === 3 && index === 0) {
-      return 148
+      return 144
     }
 
-    return 136
+    return 112
+  }
+
+  private mediaTileBottomMargin(index: number, count: number): number {
+    if (count <= 2) {
+      return 0
+    }
+
+    if (count === 3) {
+      return index === 0 ? 2 : 0
+    }
+
+    return index < 2 ? 2 : 0
   }
 
   private isVideoLikeUrl(url: string): boolean {
@@ -183,59 +239,65 @@ export struct QuotedTweetRenderer {
         }
 
         if (!this.hasSingleQuotedVideoMedia() && this.quotedMediaItems().length > 0) {
-          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-            ForEach(this.quotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-              Stack({ alignContent: Alignment.Center }) {
-                if ((item.videoUrl || '').trim() && this.isInlineVideoActive(item, index)) {
-                  Video({
-                    src: item.videoUrl,
-                    controller: this.inlineVideoControllerFor(item, index),
-                    previewUri: item.imageUrl,
-                  })
-                    .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                    .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                    .borderRadius(8)
-                    .controls(true)
-                    .autoPlay(true)
-                    .muted(false)
-                } else {
-                  if ((item.imageUrl || '').trim()) {
-                    Image(item.imageUrl)
+          Column() {
+            Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+              ForEach(this.quotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+                Stack({ alignContent: Alignment.Center }) {
+                  if ((item.videoUrl || '').trim() && this.isInlineVideoActive(item, index)) {
+                    Video({
+                      src: item.videoUrl,
+                      controller: this.inlineVideoControllerFor(item, index),
+                      previewUri: item.imageUrl,
+                    })
                       .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
                       .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                      .borderRadius(8)
-                      .objectFit(ImageFit.Cover)
-                      .backgroundColor(this.theme.elevated)
+                      .borderRadius(0)
+                      .controls(true)
+                      .autoPlay(true)
+                      .muted(false)
                   } else {
-                    Column()
-                      .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
-                      .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
-                      .borderRadius(8)
-                      .backgroundColor(this.theme.elevated)
-                  }
-
-                  if ((item.videoUrl || '').trim()) {
-                    Row() {
-                      SymbolGlyph($r('sys.symbol.play_fill'))
-                        .fontSize(28)
-                        .fontColor(['#F5F5F5'])
+                    if ((item.imageUrl || '').trim()) {
+                      Image(item.imageUrl)
+                        .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                        .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                        .borderRadius(0)
+                        .objectFit(ImageFit.Cover)
+                        .backgroundColor(this.theme.elevated)
+                    } else {
+                      Column()
+                        .width(this.mediaTileWidth(index, this.quotedMediaItems().length))
+                        .height(this.mediaTileHeight(index, this.quotedMediaItems().length))
+                        .borderRadius(0)
+                        .backgroundColor(this.theme.elevated)
                     }
-                    .width(56)
-                    .height(56)
-                    .justifyContent(FlexAlign.Center)
-                    .alignItems(VerticalAlign.Center)
-                    .borderRadius(999)
-                    .backgroundColor('rgba(168,168,168,0.58)')
+
+                    if ((item.videoUrl || '').trim()) {
+                      Row() {
+                        SymbolGlyph($r('sys.symbol.play_fill'))
+                          .fontSize(28)
+                          .fontColor(['#F5F5F5'])
+                      }
+                      .width(56)
+                      .height(56)
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(999)
+                      .backgroundColor('rgba(168,168,168,0.58)')
+                    }
                   }
                 }
-              }
-                .margin({ bottom: this.quotedMediaItems().length > 1 ? 6 : 0 })
-                .onClick(() => {
-                  this.onPlayInlineVideo(item, index)
-                })
-            }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
+                  .margin({ bottom: this.mediaTileBottomMargin(index, this.quotedMediaItems().length) })
+                  .onClick(() => {
+                    this.onPlayInlineVideo(item, index)
+                  })
+              }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
+            }
+            .width('100%')
           }
           .width('100%')
+          .padding(1)
+          .borderRadius(10)
+          .backgroundColor(this.theme.divider)
           .clip(true)
         }
       }
@@ -292,6 +354,162 @@ export struct QuotedTweetRenderer {
         .onClick(() => {
           this.onPlayInlineVideo(this.quotedPrimaryMediaItem(), 0)
         })
+      }
+
+      if (this.hasNestedQuotedTweet()) {
+        Column() {
+          Column({ space: 0 }) {
+          Column({ space: 8 }) {
+            Text('RT')
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.theme.textMuted)
+              .width('100%')
+
+            Text() {
+              Span(this.nestedInlineNameLabel())
+                .fontWeight(FontWeight.Bold)
+
+              if ((this.nestedQuotedTweet().text || '').trim()) {
+                Span(` ${(this.nestedQuotedTweet().text || '').trim()}`)
+                  .fontWeight(FontWeight.Regular)
+              }
+            }
+              .fontSize(15)
+              .lineHeight(22)
+              .fontColor(this.theme.textPrimary)
+              .width('100%')
+          }
+          .width('100%')
+          .padding({
+            left: 10,
+            right: 10,
+            top: 10,
+            bottom: this.nestedQuotedMediaItems().length > 0 ? 8 : 10,
+          })
+
+          if (!this.hasSingleNestedQuotedVideoMedia() && this.nestedQuotedMediaItems().length > 0) {
+            Column() {
+              Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+                ForEach(this.nestedQuotedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+                  Stack({ alignContent: Alignment.Center }) {
+                    if ((item.videoUrl || '').trim() && this.isInlineVideoActive(item, this.nestedMediaIndex(index))) {
+                      Video({
+                        src: item.videoUrl,
+                        controller: this.inlineVideoControllerFor(item, this.nestedMediaIndex(index)),
+                        previewUri: item.imageUrl,
+                      })
+                        .width(this.mediaTileWidth(index, this.nestedQuotedMediaItems().length))
+                        .height(this.mediaTileHeight(index, this.nestedQuotedMediaItems().length))
+                        .borderRadius(0)
+                        .controls(true)
+                        .autoPlay(true)
+                        .muted(false)
+                    } else {
+                      if ((item.imageUrl || '').trim()) {
+                        Image(item.imageUrl)
+                          .width(this.mediaTileWidth(index, this.nestedQuotedMediaItems().length))
+                          .height(this.mediaTileHeight(index, this.nestedQuotedMediaItems().length))
+                          .borderRadius(0)
+                          .objectFit(ImageFit.Cover)
+                          .backgroundColor(this.theme.elevated)
+                      } else {
+                        Column()
+                          .width(this.mediaTileWidth(index, this.nestedQuotedMediaItems().length))
+                          .height(this.mediaTileHeight(index, this.nestedQuotedMediaItems().length))
+                          .borderRadius(0)
+                          .backgroundColor(this.theme.elevated)
+                      }
+
+                      if ((item.videoUrl || '').trim()) {
+                        Row() {
+                          SymbolGlyph($r('sys.symbol.play_fill'))
+                            .fontSize(28)
+                            .fontColor(['#F5F5F5'])
+                        }
+                        .width(56)
+                        .height(56)
+                        .justifyContent(FlexAlign.Center)
+                        .alignItems(VerticalAlign.Center)
+                        .borderRadius(999)
+                        .backgroundColor('rgba(168,168,168,0.58)')
+                      }
+                    }
+                  }
+                    .margin({ bottom: this.mediaTileBottomMargin(index, this.nestedQuotedMediaItems().length) })
+                    .onClick(() => {
+                      this.onPlayInlineVideo(item, this.nestedMediaIndex(index))
+                    })
+                }, (item: PictureCarouselMediaItem, index: number) => `nested_${item.imageUrl}_${item.videoUrl}_${index}`)
+              }
+              .width('100%')
+            }
+            .width('100%')
+            .padding(1)
+            .backgroundColor(this.theme.divider)
+            .clip(true)
+          }
+
+          if (this.hasSingleNestedQuotedVideoMedia()) {
+            Stack({ alignContent: Alignment.Center }) {
+              if (this.isInlineVideoActive(this.nestedQuotedPrimaryMediaItem(), this.nestedMediaIndex(0))) {
+                Video({
+                  src: this.nestedQuotedPrimaryMediaItem().videoUrl,
+                  controller: this.inlineVideoControllerFor(this.nestedQuotedPrimaryMediaItem(), this.nestedMediaIndex(0)),
+                  previewUri: this.nestedQuotedPrimaryMediaItem().imageUrl,
+                })
+                  .width('100%')
+                  .height(192)
+                  .borderRadius(0)
+                  .controls(true)
+                  .autoPlay(true)
+                  .muted(false)
+              } else {
+                if ((this.nestedQuotedPrimaryMediaItem().imageUrl || '').trim()) {
+                  Image(this.nestedQuotedPrimaryMediaItem().imageUrl)
+                    .width('100%')
+                    .height(192)
+                    .borderRadius(0)
+                    .objectFit(ImageFit.Cover)
+                    .backgroundColor(this.theme.elevated)
+                } else {
+                  Column()
+                    .width('100%')
+                    .height(192)
+                    .borderRadius(0)
+                    .backgroundColor(this.theme.elevated)
+                }
+
+                Row() {
+                  SymbolGlyph($r('sys.symbol.play_fill'))
+                    .fontSize(28)
+                    .fontColor(['#F5F5F5'])
+                }
+                .width(56)
+                .height(56)
+                .justifyContent(FlexAlign.Center)
+                .alignItems(VerticalAlign.Center)
+                .borderRadius(999)
+                .backgroundColor('rgba(168,168,168,0.58)')
+              }
+            }
+            .width('100%')
+            .padding(1)
+            .backgroundColor(this.theme.divider)
+            .clip(true)
+            .onClick(() => {
+              this.onPlayInlineVideo(this.nestedQuotedPrimaryMediaItem(), this.nestedMediaIndex(0))
+            })
+          }
+          }
+          .width('100%')
+          .borderRadius(10)
+          .border({ width: 0.8, color: this.theme.divider })
+          .backgroundColor(this.theme.surface)
+          .clip(true)
+        }
+        .width('100%')
+        .padding({ left: 12, right: 12, top: 10, bottom: 12 })
       }
     }
     .width('100%')

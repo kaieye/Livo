@@ -561,6 +561,35 @@ struct ArticleDetail {
     return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
   }
 
+  private hasNestedQuotedTweet(): boolean {
+    return this.hasQuotedTweet() && !!this.quotedTweetPresentation().nestedQuotedTweet
+  }
+
+  private nestedQuotedTweetPresentation(): TweetQuotedPresentation {
+    return this.quotedTweetPresentation().nestedQuotedTweet || {
+      displayName: '',
+      username: '',
+      avatarUrl: '',
+      text: '',
+      mediaUrls: [],
+    }
+  }
+
+  private nestedQuotedTweetMediaItems(): PictureCarouselMediaItem[] {
+    const urls = (this.nestedQuotedTweetPresentation().mediaUrls || [])
+      .map((url: string) => url.trim())
+      .filter((url: string) => !!url)
+    const fallbackImage = urls.find((url: string) => !isDirectVideoUrl(url)) || ''
+    return resolvePictureCarouselMediaItems(urls, fallbackImage).slice(0, 4)
+  }
+
+  private nestedQuotedTweetHeaderLabel(): string {
+    const baseLabel = (this.nestedQuotedTweetPresentation().displayName || '').trim()
+      || (this.nestedQuotedTweetPresentation().username || '').trim()
+      || '未知来源'
+    return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
+  }
+
   private isTweetMediaVideo(item: PictureCarouselMediaItem): boolean {
     return !!(item.videoUrl || '').trim()
   }
@@ -778,6 +807,110 @@ struct ArticleDetail {
               }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
             }
             .width('100%')
+            .clip(true)
+          }
+
+          if (this.hasNestedQuotedTweet()) {
+            Column({ space: 0 }) {
+              Column({ space: 8 }) {
+                Text('RT')
+                  .fontSize(12)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.theme.textMuted)
+                  .width('100%')
+
+                Text() {
+                  Span(this.nestedQuotedTweetHeaderLabel())
+                    .fontWeight(FontWeight.Bold)
+
+                  if ((this.nestedQuotedTweetPresentation().text || '').trim()) {
+                    Span(` ${(this.nestedQuotedTweetPresentation().text || '').trim()}`)
+                      .fontWeight(FontWeight.Regular)
+                  }
+                }
+                  .fontSize(13)
+                  .lineHeight(20)
+                  .fontColor(this.theme.textPrimary)
+                  .width('100%')
+              }
+              .width('100%')
+              .padding({
+                left: 10,
+                right: 10,
+                top: 10,
+                bottom: this.nestedQuotedTweetMediaItems().length > 0 ? 8 : 10,
+              })
+
+              if (this.nestedQuotedTweetMediaItems().length > 0) {
+                Column() {
+                  Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+                    ForEach(this.nestedQuotedTweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+                      Stack({ alignContent: Alignment.Center }) {
+                        if (this.isTweetMediaVideo(item) && this.isSocialInlineVideoActive('nested', item, index)) {
+                          Video({
+                            src: item.videoUrl,
+                            controller: this.socialInlineVideoControllerFor('nested', item, index),
+                            previewUri: item.imageUrl,
+                          })
+                            .width(this.tweetMediaTileWidth(index, this.nestedQuotedTweetMediaItems().length))
+                            .height(this.tweetMediaTileHeight(index, this.nestedQuotedTweetMediaItems().length))
+                            .borderRadius(0)
+                            .controls(true)
+                            .autoPlay(true)
+                            .muted(false)
+                        } else {
+                          if ((item.imageUrl || '').trim()) {
+                            Image(item.imageUrl)
+                              .width(this.tweetMediaTileWidth(index, this.nestedQuotedTweetMediaItems().length))
+                              .height(this.tweetMediaTileHeight(index, this.nestedQuotedTweetMediaItems().length))
+                              .borderRadius(0)
+                              .objectFit(ImageFit.Cover)
+                              .backgroundColor(this.theme.elevated)
+                          } else {
+                            Column()
+                              .width(this.tweetMediaTileWidth(index, this.nestedQuotedTweetMediaItems().length))
+                              .height(this.tweetMediaTileHeight(index, this.nestedQuotedTweetMediaItems().length))
+                              .borderRadius(0)
+                              .backgroundColor(this.theme.elevated)
+                          }
+
+                          if (this.isTweetMediaVideo(item)) {
+                            Row() {
+                              SymbolGlyph($r('sys.symbol.play_fill'))
+                                .fontSize(28)
+                                .fontColor(['#F5F5F5'])
+                            }
+                            .width(56)
+                            .height(56)
+                            .justifyContent(FlexAlign.Center)
+                            .alignItems(VerticalAlign.Center)
+                            .borderRadius(999)
+                            .backgroundColor('rgba(168,168,168,0.58)')
+                          }
+                        }
+                      }
+                        .margin({ bottom: this.nestedQuotedTweetMediaItems().length > 1 ? 6 : 0 })
+                        .onClick(() => {
+                          if (this.isTweetMediaVideo(item)) {
+                            this.playSocialInlineVideo('nested', item, index)
+                          } else {
+                            this.openSocialImage(item)
+                          }
+                        })
+                    }, (item: PictureCarouselMediaItem, index: number) => `nested_${item.imageUrl}_${item.videoUrl}_${index}`)
+                  }
+                  .width('100%')
+                }
+                .width('100%')
+                .padding(1)
+                .backgroundColor(this.theme.divider)
+                .clip(true)
+              }
+            }
+            .width('100%')
+            .borderRadius(10)
+            .border({ width: 0.8, color: this.theme.divider })
+            .backgroundColor(this.theme.surface)
             .clip(true)
           }
         }

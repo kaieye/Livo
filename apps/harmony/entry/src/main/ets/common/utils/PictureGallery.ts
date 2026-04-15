@@ -77,14 +77,42 @@ function resolveAbsoluteUrl(baseUrl: string, value: string): string {
   return `${origin}${normalizedBaseDir}${trimmed}`.replace(/([^:]\/)\/+/g, '$1')
 }
 
+function safeDecodeUriComponent(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch (_error) {
+    return value
+  }
+}
+
 function isImageUrl(value: string): boolean {
   const normalized = (value || '').trim().toLowerCase()
   if (!normalized) {
     return false
   }
 
-  return (
+  const decoded = safeDecodeUriComponent(normalized)
+  const hasImageExtension =
     /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized) ||
+    /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(decoded)
+  const hasImageFormatQuery =
+    /(?:[?&]|%3f|%26)format(?:=|%3d)(jpg|jpeg|png|webp|gif|bmp|avif)\b/i.test(
+      normalized,
+    ) || /(?:[?&])format=(jpg|jpeg|png|webp|gif|bmp|avif)\b/i.test(decoded)
+  const isNitterEncodedMedia =
+    normalized.includes('/pic/media%2f') ||
+    normalized.includes('/pic/orig/media%2f') ||
+    decoded.includes('/pic/media/') ||
+    decoded.includes('/pic/orig/media/')
+  const isTwitterMedia =
+    decoded.includes('pbs.twimg.com/media/') ||
+    decoded.includes('twimg.com/media/')
+
+  return (
+    hasImageExtension ||
+    hasImageFormatQuery ||
+    isNitterEncodedMedia ||
+    isTwitterMedia ||
     normalized.includes('cdninstagram') ||
     normalized.includes('scontent.') ||
     normalized.includes('fbcdn.net') ||
