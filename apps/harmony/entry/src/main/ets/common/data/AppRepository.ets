@@ -51,7 +51,30 @@ function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardM
 }
 
 const HOME_ENTRY_CANDIDATE_LIMIT: number = 320
+const HOME_ENTRY_BALANCED_POOL_MULTIPLIER: number = 6
+const HOME_ENTRY_BALANCED_POOL_MAX: number = 6000
+const HOME_ENTRY_BALANCED_MAX_ATTEMPTS: number = 4
 const ENTRY_CARD_YIELD_BATCH_SIZE: number = 24
+const HOME_FEED_DEBUG_ENABLED: boolean = true
+const HOME_FEED_DEBUG_PREFIX: string = '[FeedFetchStateDebug][HomeFeed]'
+
+type HomeEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
+
+interface HomeEntryModeStats {
+  articles: number
+  social: number
+  pictures: number
+  videos: number
+}
+
+interface HomeEntryModeGroups {
+  articles: EntryCardModel[]
+  social: EntryCardModel[]
+  pictures: EntryCardModel[]
+  videos: EntryCardModel[]
+}
+
+const HOME_ENTRY_MODE_ORDER: HomeEntryMode[] = ['articles', 'social', 'pictures', 'videos']
 
 function yieldToUiLoop(): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -136,12 +159,290 @@ function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardMode
   })
 }
 
+function createHomeEntryModeStats(): HomeEntryModeStats {
+  return {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
+}
+
+function homeEntryModeStatsSummary(stats: HomeEntryModeStats): string {
+  return `articles=${stats.articles} social=${stats.social} pictures=${stats.pictures} videos=${stats.videos}`
+}
+
+function logHomeFeedDebug(message: string): void {
+  if (!HOME_FEED_DEBUG_ENABLED) {
+    return
+  }
+
+  console.info(`${HOME_FEED_DEBUG_PREFIX} ${message}`)
+}
+
+function modeOfFeedView(view: FeedViewType): HomeEntryMode {
+  switch (view) {
+    case FeedViewType.SocialMedia:
+      return 'social'
+    case FeedViewType.Pictures:
+      return 'pictures'
+    case FeedViewType.Videos:
+      return 'videos'
+    default:
+      return 'articles'
+  }
+}
+
+function modeOfEntryCard(card: EntryCardModel): HomeEntryMode {
+  switch (card.viewLabel) {
+    case '社交':
+      return 'social'
+    case '图片':
+      return 'pictures'
+    case '视频':
+      return 'videos'
+    default:
+      return 'articles'
+  }
+}
+
+function countHomeEntryModes(entries: EntryCardModel[]): HomeEntryModeStats {
+  let articles = 0
+  let social = 0
+  let pictures = 0
+  let videos = 0
+
+  entries.forEach((entry: EntryCardModel) => {
+    switch (modeOfEntryCard(entry)) {
+      case 'social':
+        social += 1
+        break
+      case 'pictures':
+        pictures += 1
+        break
+      case 'videos':
+        videos += 1
+        break
+      default:
+        articles += 1
+        break
+    }
+  })
+
+  return {
+    articles,
+    social,
+    pictures,
+    videos,
+  }
+}
+
+function resolveFeedModePresence(feeds: Feed[]): HomeEntryModeStats {
+  let articles = 0
+  let social = 0
+  let pictures = 0
+  let videos = 0
+
+  feeds.forEach((feed: Feed) => {
+    switch (modeOfFeedView(feed.view)) {
+      case 'social':
+        social += 1
+        break
+      case 'pictures':
+        pictures += 1
+        break
+      case 'videos':
+        videos += 1
+        break
+      default:
+        articles += 1
+        break
+    }
+  })
+
+  return {
+    articles,
+    social,
+    pictures,
+    videos,
+  }
+}
+
+function modeStatsValue(stats: HomeEntryModeStats, mode: HomeEntryMode): number {
+  switch (mode) {
+    case 'social':
+      return stats.social
+    case 'pictures':
+      return stats.pictures
+    case 'videos':
+      return stats.videos
+    default:
+      return stats.articles
+  }
+}
+
+function modeGroupEntries(groups: HomeEntryModeGroups, mode: HomeEntryMode): EntryCardModel[] {
+  switch (mode) {
+    case 'social':
+      return groups.social
+    case 'pictures':
+      return groups.pictures
+    case 'videos':
+      return groups.videos
+    default:
+      return groups.articles
+  }
+}
+
+function hasModeCoverageGap(
+  entryModeStats: HomeEntryModeStats,
+  feedModePresence: HomeEntryModeStats,
+  perModeTarget: number,
+): boolean {
+  for (const mode of HOME_ENTRY_MODE_ORDER) {
+    if (modeStatsValue(feedModePresence, mode) <= 0) {
+      continue
+    }
+
+    if (modeStatsValue(entryModeStats, mode) < perModeTarget) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function uniqueEntryCardKey(entry: EntryCardModel): string {
+  return `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+}
+
+function selectBalancedHomeEntries(
+  entries: EntryCardModel[],
+  candidateLimit: number,
+): EntryCardModel[] {
+  if (entries.length <= candidateLimit) {
+    return entries
+  }
+
+  const grouped: HomeEntryModeGroups = {
+    articles: [],
+    social: [],
+    pictures: [],
+    videos: [],
+  }
+  entries.forEach((entry: EntryCardModel) => {
+    switch (modeOfEntryCard(entry)) {
+      case 'social':
+        grouped.social.push(entry)
+        break
+      case 'pictures':
+        grouped.pictures.push(entry)
+        break
+      case 'videos':
+        grouped.videos.push(entry)
+        break
+      default:
+        grouped.articles.push(entry)
+        break
+    }
+  })
+
+  const selected: EntryCardModel[] = []
+  const selectedKeys = new Set<string>()
+  const pushSelected = (entry: EntryCardModel): boolean => {
+    const key = uniqueEntryCardKey(entry)
+    if (selectedKeys.has(key)) {
+      return false
+    }
+
+    selectedKeys.add(key)
+    selected.push(entry)
+    return true
+  }
+
+  const perModeTarget = Math.max(1, Math.floor(candidateLimit / HOME_ENTRY_MODE_ORDER.length))
+  HOME_ENTRY_MODE_ORDER.forEach((mode: HomeEntryMode) => {
+    if (selected.length >= candidateLimit) {
+      return
+    }
+
+    let modeAdded = 0
+    modeGroupEntries(grouped, mode).forEach((entry: EntryCardModel) => {
+      if (selected.length >= candidateLimit || modeAdded >= perModeTarget) {
+        return
+      }
+
+      if (pushSelected(entry)) {
+        modeAdded += 1
+      }
+    })
+  })
+
+  if (selected.length < candidateLimit) {
+    entries.forEach((entry: EntryCardModel) => {
+      if (selected.length >= candidateLimit) {
+        return
+      }
+
+      pushSelected(entry)
+    })
+  }
+
+  const sorted = [...selected]
+  sorted.sort((left: EntryCardModel, right: EntryCardModel) => {
+    return (right.publishedAt || 0) - (left.publishedAt || 0)
+  })
+  return sorted
+}
+
 export class AppRepository {
   private static bootstrapped: boolean = false
   private static seedFeedHydrationStarted: boolean = false
+  private static feedMetadataRepairStarted: boolean = false
   private static readonly successfulRefreshCooldownMs: number = 3 * 60 * 1000
   private static readonly refreshConcurrencyMin: number = 2
   private static readonly refreshConcurrencyMax: number = 4
+
+  private static async repairFeedMetadataInBackground(): Promise<void> {
+    if (AppRepository.feedMetadataRepairStarted) {
+      return
+    }
+
+    AppRepository.feedMetadataRepairStarted = true
+
+    try {
+      const feeds = await FeedRepository.list()
+      let repaired = false
+
+      for (const feed of feeds) {
+        const fallbackTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+        const shouldRepairTitle = !(feed.title || '').trim() && !!fallbackTitle
+
+        if (!shouldRepairTitle) {
+          continue
+        }
+
+        await FeedRepository.update(feed.id, {
+          title: shouldRepairTitle ? fallbackTitle : feed.title,
+          url: feed.url,
+          siteUrl: feed.siteUrl || '',
+          imageUrl: feed.imageUrl || '',
+          description: feed.description || '',
+          category: feed.category || '',
+          view: feed.view,
+          showInAll: feed.showInAll,
+        })
+        repaired = true
+      }
+
+      if (repaired) {
+        AppStorage.setOrCreate('feedsChangedAt', Date.now())
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`repair feed metadata failed: ${message}`)
+    }
+  }
 
   private static isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
     const lastFetched = feed.lastFetched ?? 0
@@ -243,6 +544,7 @@ export class AppRepository {
     }
 
     AppRepository.bootstrapped = true
+    void AppRepository.repairFeedMetadataInBackground()
   }
 
   private static async hydrateSeedFeedsOnFirstLaunch(feeds: Feed[]): Promise<void> {
@@ -361,13 +663,59 @@ export class AppRepository {
 
   static async featuredEntries(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
     await AppRepository.bootstrap()
+    const startedAt = Date.now()
     const safeCandidateLimit = Math.max(1, candidateLimit)
-    const entries = await EntryRepository.listRecent(safeCandidateLimit)
     const feeds = await FeedRepository.list()
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
+    const feedModePresence = resolveFeedModePresence(feeds)
+    const perModeTarget = Math.max(1, Math.floor(safeCandidateLimit / HOME_ENTRY_MODE_ORDER.length))
+    logHomeFeedDebug(
+      `featuredEntries start candidateLimit=${safeCandidateLimit} feeds=${feeds.length} `
+      + `feedModes=${homeEntryModeStatsSummary(feedModePresence)} perModeTarget=${perModeTarget}`,
+    )
 
-    return buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    let poolLimit = Math.min(
+      HOME_ENTRY_BALANCED_POOL_MAX,
+      Math.max(safeCandidateLimit, safeCandidateLimit * HOME_ENTRY_BALANCED_POOL_MULTIPLIER),
+    )
+    let selectedEntries: EntryCardModel[] = []
+
+    for (let attempt = 0; attempt < HOME_ENTRY_BALANCED_MAX_ATTEMPTS; attempt += 1) {
+      const entries = await EntryRepository.listRecent(poolLimit)
+      const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
+      selectedEntries = selectBalancedHomeEntries(cards, safeCandidateLimit)
+      const modeStats = countHomeEntryModes(selectedEntries)
+      const reachedOldestEntry = entries.length < poolLimit
+      const hasGap = hasModeCoverageGap(modeStats, feedModePresence, perModeTarget)
+      logHomeFeedDebug(
+        `featuredEntries attempt=${attempt + 1} poolLimit=${poolLimit} recent=${entries.length} cards=${cards.length} `
+        + `selected=${selectedEntries.length} selectedModes=${homeEntryModeStatsSummary(modeStats)} `
+        + `hasGap=${hasGap} reachedOldest=${reachedOldestEntry}`,
+      )
+
+      if (!hasGap || reachedOldestEntry) {
+        logHomeFeedDebug(
+          `featuredEntries return attempt=${attempt + 1} elapsedMs=${Date.now() - startedAt}`,
+        )
+        return selectedEntries
+      }
+
+      if (poolLimit >= HOME_ENTRY_BALANCED_POOL_MAX) {
+        logHomeFeedDebug(
+          `featuredEntries hitPoolMax selected=${selectedEntries.length} elapsedMs=${Date.now() - startedAt}`,
+        )
+        return selectedEntries
+      }
+
+      poolLimit = Math.min(HOME_ENTRY_BALANCED_POOL_MAX, poolLimit * 2)
+    }
+
+    logHomeFeedDebug(
+      `featuredEntries exhaustedAttempts selected=${selectedEntries.length} elapsedMs=${Date.now() - startedAt}`,
+    )
+
+    return selectedEntries
   }
 
   static async starredEntries(): Promise<EntryCardModel[]> {
@@ -693,8 +1041,20 @@ export class AppRepository {
       feed.imageUrl || '',
     )
     const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
-    await EntryRepository.removeByFeed(feedId)
-    await EntryRepository.upsertMany(rekeyPreviewEntries(feedId, payload.entries))
+    const normalizedPreviewEntries = rekeyPreviewEntries(feedId, payload.entries)
+    const existingEntries = await EntryRepository.listByFeed(feedId)
+    const shouldReplaceExistingEntries = existingEntries.length === 0
+      || normalizedPreviewEntries.length >= existingEntries.length
+    logHomeFeedDebug(
+      `seedFeedFromPreview feedId=${feedId} previewEntries=${normalizedPreviewEntries.length} `
+      + `existingEntries=${existingEntries.length} replace=${shouldReplaceExistingEntries} `
+      + `payloadFeedTitleLen=${(payload.feedTitle || '').trim().length}`,
+    )
+
+    if (shouldReplaceExistingEntries) {
+      await EntryRepository.removeByFeed(feedId)
+    }
+    await EntryRepository.upsertMany(normalizedPreviewEntries)
     await FeedRepository.updateFetchState(feedId, {
       url: nextUrl,
       title: nextTitle,
@@ -706,6 +1066,10 @@ export class AppRepository {
       lastModified: payload.lastModified,
       errorCount: 0,
     })
+    logHomeFeedDebug(
+      `seedFeedFromPreview updated feedId=${feedId} nextTitleLen=${nextTitle.trim().length} `
+      + `nextUrl=${nextUrl} nextSiteUrl=${nextSiteUrl}`,
+    )
   }
 
   static async refreshAllFeeds(
@@ -740,6 +1104,17 @@ export class AppRepository {
     let newEntriesCount = 0
     const failedFeedLabels: string[] = []
     const failedFeedDetails: string[] = []
+
+    if (HOME_FEED_DEBUG_ENABLED) {
+      const totalModes = resolveFeedModePresence(feeds)
+      const pendingModes = resolveFeedModePresence(pendingFeeds)
+      logHomeFeedDebug(
+        `refreshAllFeeds start totalFeeds=${feeds.length} pending=${pendingFeeds.length} `
+        + `skippedByCooldown=${skippedByCooldownCount} `
+        + `totalModes=${homeEntryModeStatsSummary(totalModes)} `
+        + `pendingModes=${homeEntryModeStatsSummary(pendingModes)}`,
+      )
+    }
 
     onProgress?.(0, feeds.length)
 
@@ -823,6 +1198,14 @@ export class AppRepository {
     const allSkippedByCooldown = skippedByCooldownCount === feeds.length && failedCount === 0 && newEntriesCount === 0
 
     await AppRepository.recordRefreshLog(refreshedCount, failedCount, failedFeedLabels)
+
+    if (HOME_FEED_DEBUG_ENABLED) {
+      logHomeFeedDebug(
+        `refreshAllFeeds done refreshed=${refreshedCount} failed=${failedCount} `
+        + `skipped=${skippedByCooldownCount} newEntries=${newEntriesCount} `
+        + `allSkipped=${allSkippedByCooldown}`,
+      )
+    }
 
     return {
       entries: [],

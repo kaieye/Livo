@@ -75,6 +75,14 @@ function normalizeImageUrl(value: string): string {
   return /^https?:\/\//i.test(normalized) ? normalized : ''
 }
 
+function normalizeUsableAvatarUrl(value: string): string {
+  const normalized = normalizeImageUrl(value)
+  if (!normalized || isPlaceholderAvatar(normalized)) {
+    return ''
+  }
+  return normalized
+}
+
 interface BilibiliAvatarCard {
   face?: string
 }
@@ -160,14 +168,17 @@ export class SocialFeedAvatarService {
       }
 
       const html = String(response.result)
-      const ogImage = extractMetaContent(html, 'og:image')
-      if (/^https?:\/\//i.test(ogImage)) {
+      const ogImage = normalizeUsableAvatarUrl(extractMetaContent(html, 'og:image'))
+      if (ogImage) {
         return ogImage
       }
 
-      const profilePic = html.match(/"profile_pic_url_hd":"(https?:\\\/\\\/[^"]+)"/i)?.[1] ?? ''
+      const profilePicRaw = html.match(/"profile_pic_url_hd":"(https?:\\\/\\\/[^"]+)"/i)?.[1] ?? ''
+      const profilePic = normalizeUsableAvatarUrl(
+        decodeBasicEntities(profilePicRaw).replace(/\\\//g, '/'),
+      )
       if (profilePic) {
-        return decodeBasicEntities(profilePic).replace(/\\\//g, '/')
+        return profilePic
       }
 
       return ''
@@ -215,13 +226,13 @@ export class SocialFeedAvatarService {
         }
 
         const html = String(response.result)
-        const ogImage = normalizeImageUrl(extractMetaContent(html, 'og:image'))
+        const ogImage = normalizeUsableAvatarUrl(extractMetaContent(html, 'og:image'))
         if (ogImage) {
           return ogImage
         }
 
         const avatarMatch = html.match(/"avatar"\s*:\s*\{[\s\S]*?"url"\s*:\s*"([^"]+)"/i)?.[1] ?? ''
-        const avatarUrl = normalizeImageUrl(avatarMatch)
+        const avatarUrl = normalizeUsableAvatarUrl(avatarMatch)
         if (avatarUrl) {
           return avatarUrl
         }
@@ -265,7 +276,7 @@ export class SocialFeedAvatarService {
 
       const payload = JSON.parse(String(response.result)) as BilibiliAvatarPayload
       const face = typeof payload.data?.card?.face === 'string' ? payload.data.card.face : ''
-      return normalizeImageUrl(face)
+      return normalizeUsableAvatarUrl(face)
     } catch (_) {
       return ''
     } finally {

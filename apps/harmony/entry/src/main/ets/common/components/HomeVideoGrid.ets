@@ -1,5 +1,4 @@
 import { EntryCardModel } from '../models/LivoModels'
-import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -19,7 +18,6 @@ export struct HomeVideoGrid {
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
-  private readonly rowDataSource: ArrayLazyDataSource<EntryCardModel[]> = new ArrayLazyDataSource<EntryCardModel[]>(() => this.rowItems())
 
   aboutToAppear(): void {
     this.theme = this.inheritedTheme
@@ -30,11 +28,7 @@ export struct HomeVideoGrid {
   }
 
   private syncEntriesChanged(): void {
-    this.rowDataSource.notifyDataReloaded()
-  }
-
-  private rowItems(): EntryCardModel[][] {
-    return this.rows()
+    // Direct ForEach rendering updates automatically when @Prop entries changes.
   }
 
   private cardMeta(entry: EntryCardModel): string {
@@ -197,6 +191,20 @@ export struct HomeVideoGrid {
     return chunkHomeVideoEntries(this.entries, resolveHomeVideoGridColumns())
   }
 
+  private entryRenderBaseKey(entry: EntryCardModel): string {
+    const id = (entry.id || '').trim()
+    const feedId = (entry.feedId || '').trim()
+    const articleUrl = (entry.articleUrl || '').trim()
+    const title = (entry.title || '').trim()
+    const publishedAt = entry.publishedAt > 0 ? String(entry.publishedAt) : '0'
+    return `${id}|${feedId}|${articleUrl}|${title}|${publishedAt}`
+  }
+
+  private entryRenderKey(entry: EntryCardModel, rowIndex: number, columnIndex: number): string {
+    const readFlag = entry.isRead ? '1' : '0'
+    return `${this.entryRenderBaseKey(entry)}|${readFlag}|${rowIndex}|${columnIndex}`
+  }
+
   private cardTokens() {
     return resolveHomeVideoCardTokens({
       isDark: this.theme.isDark,
@@ -331,14 +339,14 @@ export struct HomeVideoGrid {
         .borderRadius(CARD_RADIUS_MD)
         .border({ width: 0.8, color: this.theme.divider })
       } else {
-        LazyForEach(this.rowDataSource, (rowEntries: EntryCardModel[], rowIndex: number) => {
+        ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
           Row({ space: 12 }) {
             ForEach(rowEntries, (entry: EntryCardModel) => {
               Column() {
                 this.VideoCard(entry)
               }
               .layoutWeight(1)
-            }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
+            }, (entry: EntryCardModel, columnIndex: number) => this.entryRenderKey(entry, rowIndex, columnIndex))
 
             if (rowEntries.length < resolveHomeVideoGridColumns()) {
               Blank()
@@ -348,7 +356,7 @@ export struct HomeVideoGrid {
           .width('100%')
         }, (rowEntries: EntryCardModel[], rowIndex: number) => {
           const rowSignature = rowEntries
-            .map((entry: EntryCardModel) => `${entry.id}-${entry.isRead ? '1' : '0'}`)
+            .map((entry: EntryCardModel) => `${this.entryRenderBaseKey(entry)}-${entry.isRead ? '1' : '0'}`)
             .join('|')
           return `video-row-${rowIndex}-${rowSignature}`
         })

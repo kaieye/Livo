@@ -3,6 +3,9 @@ import { Feed, FeedViewType } from '../models/LivoModels'
 import { AppDatabaseService } from '../services/AppDatabaseService'
 import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
 
+const FEED_FETCH_STATE_DEBUG_ENABLED: boolean = true
+const FEED_FETCH_STATE_DEBUG_PREFIX: string = '[FeedFetchStateDebug]'
+
 export interface FeedDraft {
   title: string
   url: string
@@ -283,14 +286,40 @@ export class FeedRepository {
       const store = await AppDatabaseService.getStore()
       const predicates = new relationalStore.RdbPredicates('feeds')
       predicates.equalTo('id', feedId)
-      const normalizedUrl = (next.url ?? current.url ?? '').trim()
-      const normalizedSiteUrl = (next.siteUrl ?? current.siteUrl ?? '').trim()
+      const normalizedUrl = (next.url !== undefined ? next.url : current.url).trim()
+      const normalizedSiteUrl = (next.siteUrl !== undefined ? next.siteUrl : (current.siteUrl ?? '')).trim()
+      const normalizedTitle = normalizeSocialFeedTitle(
+        next.title !== undefined ? next.title : current.title,
+        normalizedUrl,
+        normalizedSiteUrl,
+      )
+      const normalizedDescription = normalizeSocialFeedDescription(
+        next.description !== undefined ? next.description : (current.description ?? ''),
+        normalizedUrl,
+        normalizedSiteUrl,
+      )
+      if (FEED_FETCH_STATE_DEBUG_ENABLED) {
+        console.info(
+          `${FEED_FETCH_STATE_DEBUG_PREFIX} feedId=${feedId} `
+          + `incomingTitleDefined=${next.title !== undefined} incomingSiteDefined=${next.siteUrl !== undefined} `
+          + `incomingUrlDefined=${next.url !== undefined} incomingImageDefined=${next.imageUrl !== undefined} `
+          + `nextTitleLen=${normalizedTitle.trim().length} view=${current.view} `
+          + `url=${normalizedUrl} siteUrl=${normalizedSiteUrl}`,
+        )
+      }
+      if (FEED_FETCH_STATE_DEBUG_ENABLED && !normalizedTitle.trim()) {
+        console.warn(
+          `${FEED_FETCH_STATE_DEBUG_PREFIX} empty-normalized-title feedId=${feedId} `
+          + `currentTitle=${current.title} nextTitle=${next.title ?? ''} url=${normalizedUrl}`,
+        )
+      }
       await store.update({
         url: normalizedUrl,
-        title: normalizeSocialFeedTitle(next.title ?? '', normalizedUrl, normalizedSiteUrl),
+        title: normalizedTitle,
         site_url: normalizedSiteUrl,
-        image_url: next.imageUrl !== undefined ? next.imageUrl : current.imageUrl ?? '',
-        description: normalizeSocialFeedDescription(next.description ?? '', normalizedUrl, normalizedSiteUrl),
+        image_url: next.imageUrl !== undefined ? next.imageUrl : (current.imageUrl ?? ''),
+        description: normalizedDescription,
+        view: current.view,
         last_fetched: next.lastFetched ?? 0,
         etag: next.etag ?? '',
         last_modified: next.lastModified ?? '',

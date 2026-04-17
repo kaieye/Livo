@@ -596,19 +596,18 @@ export struct FeedDetailView {
     return latest
   }
 
-  private previewRichness(entries: Entry[]): number {
-    let score = 0
+  private oldestPublishedAt(entries: Entry[]): number {
+    let oldest = 0
     entries.forEach((entry: Entry) => {
-      score += 1
-      score += Math.min(6, this.entryGalleryUrls(entry).length)
-      if ((entry.summary || '').trim()) {
-        score += 1
+      const publishedAt = entry.publishedAt || 0
+      if (publishedAt <= 0) {
+        return
       }
-      if ((entry.content || '').trim()) {
-        score += 1
+      if (oldest <= 0 || publishedAt < oldest) {
+        oldest = publishedAt
       }
     })
-    return score
+    return oldest
   }
 
   private preferredPreviewEntries(localEntries: Entry[], cachedEntries: Entry[]): Entry[] {
@@ -625,14 +624,6 @@ export struct FeedDetailView {
       return cachedEntries
     }
 
-    if (cachedEntries.length > localEntries.length) {
-      return cachedEntries
-    }
-
-    if (this.previewRichness(cachedEntries) > this.previewRichness(localEntries)) {
-      return cachedEntries
-    }
-
     return localEntries
   }
 
@@ -641,7 +632,23 @@ export struct FeedDetailView {
       return false
     }
 
-    return this.preferredPreviewEntries(localEntries, cachedPayload.entries) === cachedPayload.entries
+    const cachedEntries = cachedPayload.entries
+    if (localEntries.length === 0) {
+      return true
+    }
+
+    const localLatest = this.latestPublishedAt(localEntries)
+    const cachedLatest = this.latestPublishedAt(cachedEntries)
+    if (cachedLatest > localLatest) {
+      return true
+    }
+
+    const localOldest = this.oldestPublishedAt(localEntries)
+    const cachedOldest = this.oldestPublishedAt(cachedEntries)
+    const cachedHasEarlierHistory = cachedOldest > 0 && (localOldest <= 0 || cachedOldest < localOldest)
+    const cachedHasMoreEntries = cachedEntries.length > localEntries.length
+    const cachedIsNotStalerThanLocal = cachedLatest >= localLatest
+    return cachedHasEarlierHistory && cachedHasMoreEntries && cachedIsNotStalerThanLocal
   }
 
   private async reseedSubscribedFeedFromCachedPreview(feedId: string, payload: FeedRefreshPayload): Promise<Entry[]> {
@@ -737,7 +744,7 @@ export struct FeedDetailView {
   }
 
   private avatarFallback(): string {
-    const title = (this.previewPayload?.feedTitle || this.targetTitle || '?').trim()
+    const title = this.resolvedFeedDisplayTitle().trim()
     return title ? title.substring(0, 1).toUpperCase() : '?'
   }
 
@@ -1149,7 +1156,7 @@ export struct FeedDetailView {
 
     return {
       id: entry.feedId || this.feedId || 'preview',
-      title: this.previewPayload?.feedTitle || this.targetTitle || '预览内容',
+      title: this.resolvedFeedDisplayTitle(),
       url: this.targetUrl || entry.url,
       siteUrl: this.previewPayload?.siteUrl || this.targetSiteUrl || entry.url,
       imageUrl: this.previewPayload?.imageUrl || '',
@@ -1167,8 +1174,36 @@ export struct FeedDetailView {
     return this.currentHeroAvatarUrl()
   }
 
+  private resolvedFeedDisplayTitle(): string {
+    const previewTitle = (this.previewPayload?.feedTitle || '').trim()
+    if (previewTitle) {
+      return previewTitle
+    }
+
+    const targetTitle = (this.targetTitle || '').trim()
+    if (targetTitle) {
+      return targetTitle
+    }
+
+    const existingTitle = (this.existingFeed?.title || '').trim()
+    if (existingTitle) {
+      return existingTitle
+    }
+
+    const siteOrTarget = (
+      this.previewPayload?.siteUrl
+      || this.targetSiteUrl
+      || this.targetUrl
+      || this.existingFeed?.siteUrl
+      || this.existingFeed?.url
+      || ''
+    ).trim()
+
+    return this.hostOf(siteOrTarget) || siteOrTarget || '订阅详情'
+  }
+
   private heroTitle(): string {
-    return this.previewPayload?.feedTitle || this.targetTitle || '订阅详情'
+    return this.resolvedFeedDisplayTitle()
   }
 
   private heroHostLabel(): string {
@@ -1208,7 +1243,7 @@ export struct FeedDetailView {
   private HeaderSection() {
     SecondaryPageHeaderShell() {
       PageHeader({
-        title: this.previewPayload?.feedTitle || this.targetTitle || '订阅详情',
+        title: this.heroTitle(),
         theme: this.theme,
         showBackButton: true,
         trailingText: !this.isLoading && this.existingFeed ? '编辑' : '',

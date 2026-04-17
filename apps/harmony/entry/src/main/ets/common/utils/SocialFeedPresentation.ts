@@ -196,7 +196,22 @@ export function resolveSocialFeedDisplayTitle(
   feedUrl: string,
   siteUrl: string,
 ): string {
-  return normalizeSocialFeedTitle(title, feedUrl, siteUrl)
+  const normalizedTitle = normalizeSocialFeedTitle(title, feedUrl, siteUrl)
+  if (normalizedTitle) {
+    return normalizedTitle
+  }
+
+  const fallbackHost = hostOf(siteUrl || feedUrl)
+  if (fallbackHost) {
+    return fallbackHost
+  }
+
+  const fallbackSite = trimValue(siteUrl)
+  if (fallbackSite) {
+    return fallbackSite
+  }
+
+  return trimValue(feedUrl)
 }
 
 export function resolveSocialFeedDisplayDescription(

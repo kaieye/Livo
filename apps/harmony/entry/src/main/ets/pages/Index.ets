@@ -129,14 +129,26 @@ const HOME_FINAL_RELOAD_IDLE_MAX_RETRIES: number = 10
 const HOME_REFRESH_RESET_DEFER_MS: number = 32
 const HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS: number = 260
 const HOME_FEEDS_CHANGED_RELOAD_DELAY_MS: number = 280
+const HOME_FEEDS_CHANGED_FULL_RELOAD_DELAY_MS: number = 620
 const HOME_ENTRY_GROUP_DEFER_DELAY_MS: number = 96
 const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
 const HOME_SWAP_CANDIDATE_LIMIT: number = 120
-const HOME_MAX_CANDIDATE_LIMIT: number = 240
+const HOME_MAX_CANDIDATE_LIMIT: number = 480
 const HOME_INITIAL_CANDIDATE_LIMIT: number = HOME_MAX_CANDIDATE_LIMIT
+const HOME_LOAD_MORE_STEP_LIMIT: number = 480
+const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
+const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 80
+const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 60
+const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 160
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 const HOME_PULL_DEBUG_LOG_ENABLED: boolean = true
 const HOME_PULL_DEBUG_LOG_PREFIX: string = '[HomePullDebug]'
+const HOME_GROUP_DEBUG_ENABLED: boolean = true
+const HOME_GROUP_DEBUG_PREFIX: string = '[FeedFetchStateDebug][HomeGroup]'
+const HOME_MODE_DEBUG_ENABLED: boolean = true
+const HOME_MODE_DEBUG_PREFIX: string = '[FeedFetchStateDebug][ModeSwitch]'
+const HOME_LOAD_MORE_DEBUG_ENABLED: boolean = true
+const HOME_LOAD_MORE_DEBUG_PREFIX: string = '[FeedFetchStateDebug][LoadMore]'
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -149,6 +161,13 @@ interface HomeModeRailOptions {
 }
 
 interface HomeModeScrollOffsetMap {
+  articles: number
+  social: number
+  pictures: number
+  videos: number
+}
+
+interface HomeModeVisibleEntryLimitMap {
   articles: number
   social: number
   pictures: number
@@ -214,6 +233,15 @@ struct Index {
   @State settingsScrollerBindingVersion: number = 0
   @State isHomeStartupRefreshing: boolean = false
   @State homeInitialLoadPending: boolean = true
+  @State homeCandidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT
+  @State homeHasMoreEntries: boolean = true
+  @State homeLoadMoreInProgress: boolean = false
+  @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = {
+    articles: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
+    social: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
+    pictures: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
+    videos: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
+  }
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
@@ -261,6 +289,9 @@ struct Index {
   private homeSnapshotPersistVersion: number = 0
   private managedTimeoutIds: number[] = []
   private homeInlineSearchFocusRequestToken: number = 0
+  private homeLoadMoreRequestToken: number = 0
+  private lastHomeLoadMoreRequestedAt: number = 0
+  private homeLoadMoreNoGrowthCount: number = 0
 
   aboutToAppear(): void {
     this.isComponentActive = true
@@ -269,7 +300,7 @@ struct Index {
     if (this.hasLoadedInitialData) {
       this.configureAutoRefreshTimer()
       if (this.featuredEntries.length === 0) {
-        void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+        void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
       }
       return
     }
@@ -319,10 +350,14 @@ struct Index {
 
     const snapshotEntries = await AppRepository.homeEntrySnapshot()
     if (snapshotEntries.length > 0) {
+      this.homeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, snapshotEntries.length)
+      this.homeHasMoreEntries = true
       this.applyHomeEntries(snapshotEntries, false)
       this.feedSourceLabel = '已恢复上次浏览内容'
     } else {
-      const initialEntries = await AppRepository.featuredEntries(HOME_INITIAL_CANDIDATE_LIMIT)
+      const initialLimit = this.resolveHomeCandidateLimit(HOME_INITIAL_CANDIDATE_LIMIT)
+      const initialEntries = await AppRepository.featuredEntries(initialLimit)
+      this.syncHomePaginationFromReloadResult(initialEntries, initialLimit)
       this.applyHomeEntries(initialEntries, false)
       this.feedSourceLabel = '本地内容已加载'
     }
@@ -392,7 +427,7 @@ struct Index {
       }
       this.feedSourceLabel = result.sourceLabel
       if (!result.allSkippedByCooldown) {
-        await this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+        await this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
       }
       if (showResultToast) {
         this.showToast(result.sourceLabel)
@@ -1669,6 +1704,9 @@ struct Index {
     this.activeRootTabId = tabId
     if (tabId === 'home') {
       this.syncHomeModeRailState(this.mode)
+      if (this.hasLoadedInitialData && !this.isRefreshing && !this.isHomeStartupRefreshing) {
+        void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+      }
     }
   }
 
@@ -1689,6 +1727,7 @@ struct Index {
       return
     }
 
+    this.logModeSwitchSnapshot('before-switch', nextMode)
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
     this.resetHomePullRefreshState()
@@ -1700,6 +1739,26 @@ struct Index {
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
     this.requestExpandedModeRail()
+    this.logModeSwitchSnapshot('after-switch', nextMode)
+  }
+
+  private logModeSwitchSnapshot(stage: string, mode: SubscriptionMode): void {
+    if (!HOME_MODE_DEBUG_ENABLED) {
+      return
+    }
+
+    const entries = this.filteredEntriesFor(mode)
+    const firstEntry = entries.length > 0 ? entries[0] : undefined
+    const lastEntry = entries.length > 0 ? entries[entries.length - 1] : undefined
+    const firstId = firstEntry ? firstEntry.id : ''
+    const lastId = lastEntry ? lastEntry.id : ''
+    const currentOffset = this.homeModeScrollOffsetFor(mode)
+
+    console.info(
+      `${HOME_MODE_DEBUG_PREFIX} stage=${stage} target=${mode} count=${entries.length} `
+      + `activeMode=${this.mode} renderedMode=${this.renderedMode} offset=${currentOffset.toFixed(1)} `
+      + `firstId=${firstId} lastId=${lastId}`,
+    )
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
@@ -1758,6 +1817,10 @@ struct Index {
       return
     }
 
+    if (!this.isHomeRootTab()) {
+      return
+    }
+
     const now = Date.now()
     if (now < this.suppressFeedsChangedUntilMs) {
       return
@@ -1765,14 +1828,21 @@ struct Index {
 
     const currentVersion = this.feedsChangedReloadVersion + 1
     this.feedsChangedReloadVersion = currentVersion
-    void this.reloadFeaturedEntriesFromLocal(HOME_SWAP_PRIME_CANDIDATE_LIMIT)
+    void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_SWAP_PRIME_CANDIDATE_LIMIT))
 
     this.runManagedTimeout(() => {
       if (this.feedsChangedReloadVersion !== currentVersion) {
         return
       }
-      void this.reloadFeaturedEntriesFromLocal(HOME_SWAP_CANDIDATE_LIMIT)
+      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_SWAP_CANDIDATE_LIMIT))
     }, HOME_FEEDS_CHANGED_RELOAD_DELAY_MS)
+
+    this.runManagedTimeout(() => {
+      if (this.feedsChangedReloadVersion !== currentVersion) {
+        return
+      }
+      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+    }, HOME_FEEDS_CHANGED_FULL_RELOAD_DELAY_MS)
   }
 
   private shouldRunFinalHomeReloadNow(): boolean {
@@ -1794,14 +1864,14 @@ struct Index {
 
       if (!this.shouldRunFinalHomeReloadNow()) {
         if (attempt >= HOME_FINAL_RELOAD_IDLE_MAX_RETRIES) {
-          void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+          void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
           return
         }
         this.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt + 1)
         return
       }
 
-      void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
     }, attempt === 0 ? HOME_REFRESH_FINAL_RELOAD_DELAY_MS : HOME_FINAL_RELOAD_IDLE_RETRY_MS)
   }
 
@@ -1816,21 +1886,189 @@ struct Index {
       if (this.postRefreshReloadVersion !== currentVersion) {
         return
       }
-      void this.reloadFeaturedEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true)
+      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT), true)
     }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
+  }
+
+  private resolveHomeCandidateLimit(minimumLimit: number): number {
+    return Math.max(minimumLimit, this.homeCandidateLimit)
+  }
+
+  private visibleEntryLimitFor(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeVisibleEntryLimits.social
+      case 'pictures':
+        return this.homeVisibleEntryLimits.pictures
+      case 'videos':
+        return this.homeVisibleEntryLimits.videos
+      default:
+        return this.homeVisibleEntryLimits.articles
+    }
+  }
+
+  private setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
+    const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
+    this.homeVisibleEntryLimits = {
+      articles: mode === 'articles' ? safeLimit : this.homeVisibleEntryLimits.articles,
+      social: mode === 'social' ? safeLimit : this.homeVisibleEntryLimits.social,
+      pictures: mode === 'pictures' ? safeLimit : this.homeVisibleEntryLimits.pictures,
+      videos: mode === 'videos' ? safeLimit : this.homeVisibleEntryLimits.videos,
+    }
+  }
+
+  private totalEntryCountFor(mode: SubscriptionMode): number {
+    return this.filteredEntriesFor(mode).length
+  }
+
+  private visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
+    const entries = this.filteredEntriesFor(mode)
+    const limit = this.visibleEntryLimitFor(mode)
+    const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
+    return entries.slice(0, Math.min(entries.length, safeLimit))
+  }
+
+  private visibleEntryCountFor(mode: SubscriptionMode): number {
+    return this.visibleEntriesFor(mode).length
+  }
+
+  private expandVisibleEntriesForMode(mode: SubscriptionMode): boolean {
+    const total = this.totalEntryCountFor(mode)
+    const currentLimit = this.visibleEntryLimitFor(mode)
+    if (currentLimit >= total) {
+      return false
+    }
+
+    const nextLimit = Math.min(total, currentLimit + HOME_VISIBLE_ENTRY_STEP_LIMIT)
+    this.setVisibleEntryLimitFor(mode, nextLimit)
+    this.logHomeLoadMore(
+      `expand-visible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total}`,
+    )
+    return true
+  }
+
+  private syncHomePaginationFromReloadResult(entries: EntryCardModel[], candidateLimit: number): void {
+    const safeLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
+    this.homeCandidateLimit = Math.max(this.homeCandidateLimit, safeLimit)
+    if (entries.length >= safeLimit) {
+      this.homeHasMoreEntries = true
+      return
+    }
+
+    if (this.homeCandidateLimit >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT) {
+      this.homeHasMoreEntries = false
+    }
+  }
+
+  private canLoadMoreForMode(mode: SubscriptionMode): boolean {
+    const hasBufferedEntries = this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
+    return this.isHomeRootTab()
+      && mode === this.mode
+      && !this.searchOverlayVisible
+      && !this.normalizedSearchQuery()
+      && !this.isRefreshing
+      && !this.isHomeStartupRefreshing
+      && !this.homeInitialLoadPending
+      && !this.homeLoadMoreInProgress
+      && (hasBufferedEntries || this.homeHasMoreEntries)
+  }
+
+  private logHomeLoadMore(message: string): void {
+    if (!HOME_LOAD_MORE_DEBUG_ENABLED) {
+      return
+    }
+    console.info(`${HOME_LOAD_MORE_DEBUG_PREFIX} ${message}`)
+  }
+
+  private requestLoadMoreForMode(mode: SubscriptionMode): void {
+    if (!this.canLoadMoreForMode(mode)) {
+      return
+    }
+
+    const now = Date.now()
+    if (now - this.lastHomeLoadMoreRequestedAt < HOME_LOAD_MORE_MIN_INTERVAL_MS) {
+      return
+    }
+    this.lastHomeLoadMoreRequestedAt = now
+
+    const expandedVisible = this.expandVisibleEntriesForMode(mode)
+    const hasBufferedEntries = this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
+    if (expandedVisible && hasBufferedEntries) {
+      return
+    }
+
+    if (!this.homeHasMoreEntries) {
+      return
+    }
+
+    const previousTotal = this.featuredEntries.length
+    const previousModeTotal = this.totalEntryCountFor(mode)
+    const nextLimit = Math.min(HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT, this.homeCandidateLimit + HOME_LOAD_MORE_STEP_LIMIT)
+    if (nextLimit <= this.homeCandidateLimit) {
+      this.homeHasMoreEntries = false
+      return
+    }
+
+    this.homeLoadMoreInProgress = true
+    const requestToken = this.homeLoadMoreRequestToken + 1
+    this.homeLoadMoreRequestToken = requestToken
+    this.logHomeLoadMore(
+      `request start mode=${mode} prevTotal=${previousTotal} currentLimit=${this.homeCandidateLimit} nextLimit=${nextLimit}`,
+    )
+
+    void this.reloadFeaturedEntriesFromLocal(nextLimit, false, false)
+      .then(() => {
+        if (this.homeLoadMoreRequestToken !== requestToken) {
+          return
+        }
+
+        const currentTotal = this.featuredEntries.length
+        const currentModeTotal = this.totalEntryCountFor(mode)
+        const hasGrowth = currentTotal > previousTotal || currentModeTotal > previousModeTotal
+        if (hasGrowth) {
+          this.homeLoadMoreNoGrowthCount = 0
+          this.homeHasMoreEntries = true
+        } else {
+          this.homeLoadMoreNoGrowthCount += 1
+          if (this.homeCandidateLimit >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT || this.homeLoadMoreNoGrowthCount >= 2) {
+            this.homeHasMoreEntries = false
+          }
+        }
+
+        this.expandVisibleEntriesForMode(mode)
+        this.logHomeLoadMore(
+          `request done mode=${mode} prevTotal=${previousTotal} currentTotal=${currentTotal} `
+          + `prevModeTotal=${previousModeTotal} currentModeTotal=${currentModeTotal} `
+          + `noGrowthCount=${this.homeLoadMoreNoGrowthCount} `
+          + `candidateLimit=${this.homeCandidateLimit} hasMore=${this.homeHasMoreEntries}`,
+        )
+      })
+      .catch(() => {
+        this.logHomeLoadMore(`request failed mode=${mode}`)
+      })
+      .finally(() => {
+        if (this.homeLoadMoreRequestToken !== requestToken) {
+          return
+        }
+        this.homeLoadMoreInProgress = false
+      })
   }
 
   private async reloadFeaturedEntriesFromLocal(
     candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT,
     animated: boolean = false,
+    deferredGrouping: boolean = true,
   ): Promise<void> {
-    const nextEntries = await AppRepository.featuredEntries(candidateLimit)
+    const safeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
+    const nextEntries = await AppRepository.featuredEntries(safeCandidateLimit)
+    this.syncHomePaginationFromReloadResult(nextEntries, safeCandidateLimit)
+    this.logHomeGroupStats(`reloadFeaturedEntriesFromLocal limit=${safeCandidateLimit} animated=${animated}`, nextEntries)
     if (animated) {
       this.playHomeListSwapTransition(nextEntries, this.mode)
       return
     }
 
-    this.applyHomeEntries(nextEntries)
+    this.applyHomeEntries(nextEntries, deferredGrouping)
   }
 
   private cloneHomeSnapshotEntry(entry: EntryCardModel): EntryCardModel {
@@ -1893,6 +2131,7 @@ struct Index {
 
     if (!deferredGrouping) {
       this.entryGroups = groupHomeEntriesByMode(nextEntries)
+      this.logHomeGroupStats('applyHomeEntries immediate-group', nextEntries)
       this.notifyHomeEntryDataReloaded()
       return
     }
@@ -1904,6 +2143,7 @@ struct Index {
         return
       }
       this.entryGroups = groupHomeEntriesByMode(nextEntries)
+      this.logHomeGroupStats('applyHomeEntries deferred-group', nextEntries)
       this.notifyHomeEntryDataReloaded()
     }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
   }
@@ -1923,6 +2163,7 @@ struct Index {
       videos: mode === 'videos' ? currentModeEntries : this.entryGroups.videos,
     }
     this.notifyHomeEntryDataReloadedForMode(mode)
+    this.logHomeGroupStats(`applyHomeEntriesForAnimatedMode mode=${mode} current-slice`, currentModeEntries)
 
     const currentGroupVersion = this.homeEntryGroupVersion + 1
     this.homeEntryGroupVersion = currentGroupVersion
@@ -1939,8 +2180,58 @@ struct Index {
         pictures: [...regrouped.pictures],
         videos: [...regrouped.videos],
       }
+      this.logHomeGroupStats(`applyHomeEntriesForAnimatedMode mode=${mode} regrouped`, nextEntries)
       this.notifyHomeEntryDataReloadedExcept(mode)
     }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
+  }
+
+  private logHomeGroupStats(stage: string, entries: EntryCardModel[]): void {
+    if (!HOME_GROUP_DEBUG_ENABLED) {
+      return
+    }
+
+    const idCounter: Map<string, number> = new Map<string, number>()
+    const renderBaseCounter: Map<string, number> = new Map<string, number>()
+    let articles = 0
+    let social = 0
+    let pictures = 0
+    let videos = 0
+
+    entries.forEach((entry: EntryCardModel) => {
+      const idKey = (entry.id || '').trim()
+      const idCount = idCounter.get(idKey) ?? 0
+      idCounter.set(idKey, idCount + 1)
+
+      const renderBaseKey = this.homeEntryRenderBaseKey(entry)
+      const renderBaseCount = renderBaseCounter.get(renderBaseKey) ?? 0
+      renderBaseCounter.set(renderBaseKey, renderBaseCount + 1)
+
+      switch (entry.viewLabel) {
+        case '社交':
+          social += 1
+          break
+        case '图片':
+          pictures += 1
+          break
+        case '视频':
+          videos += 1
+          break
+        default:
+          articles += 1
+          break
+      }
+    })
+
+    const duplicateIdCount = this.duplicateKeyCount(idCounter)
+    const duplicateRenderBaseCount = this.duplicateKeyCount(renderBaseCounter)
+
+    console.info(
+      `${HOME_GROUP_DEBUG_PREFIX} ${stage} total=${entries.length} `
+      + `articles=${articles} social=${social} pictures=${pictures} videos=${videos} `
+      + `uniqueIds=${idCounter.size} dupIds=${duplicateIdCount} `
+      + `uniqueRender=${renderBaseCounter.size} dupRender=${duplicateRenderBaseCount} `
+      + `activeTab=${this.currentRootTabId()} mode=${this.mode}`,
+    )
   }
 
   private playHomeListSwapTransition(nextEntries: EntryCardModel[], mode: SubscriptionMode): void {
@@ -2031,6 +2322,30 @@ struct Index {
     }
   }
 
+  private homeEntryRenderBaseKey(entry: EntryCardModel): string {
+    const id = (entry.id || '').trim()
+    const feedId = (entry.feedId || '').trim()
+    const articleUrl = (entry.articleUrl || '').trim()
+    const title = (entry.title || '').trim()
+    const publishedAt = entry.publishedAt > 0 ? String(entry.publishedAt) : '0'
+    return `${id}|${feedId}|${articleUrl}|${title}|${publishedAt}`
+  }
+
+  private homeEntryListRenderKey(entry: EntryCardModel, index: number): string {
+    const readFlag = entry.isRead ? '1' : '0'
+    return `${this.homeEntryRenderBaseKey(entry)}|${readFlag}|${index}`
+  }
+
+  private duplicateKeyCount(counter: Map<string, number>): number {
+    let duplicateCount = 0
+    counter.forEach((count: number) => {
+      if (count > 1) {
+        duplicateCount += count - 1
+      }
+    })
+    return duplicateCount
+  }
+
   private notifyHomeEntryDataReloaded(): void {
     this.homeEntryDataSources.articles.notifyDataReloaded()
     this.homeEntryDataSources.social.notifyDataReloaded()
@@ -2071,7 +2386,7 @@ struct Index {
   }
 
   private homeEntryCountFor(mode: SubscriptionMode): number {
-    return this.homeEntryDataSourceFor(mode).totalCount()
+    return this.visibleEntryCountFor(mode)
   }
 
   private filteredEntries(): EntryCardModel[] {
@@ -2108,6 +2423,20 @@ struct Index {
       createdAt: entry.publishedAt,
       updatedAt: entry.publishedAt,
     }
+  }
+
+  @Builder
+  private HomeLoadMoreFooter(mode: SubscriptionMode) {
+    Column()
+    .width('100%')
+    .height(180)
+    .opacity(0.001)
+    .onVisibleAreaChange([0.01], (isVisible: boolean, _currentRatio: number) => {
+      if (!isVisible) {
+        return
+      }
+      this.requestLoadMoreForMode(mode)
+    })
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
@@ -2819,7 +3148,7 @@ struct Index {
       }
       .width('100%')
 
-      LazyForEach(this.homeEntryDataSourceFor(mode), (entry: EntryCardModel, index: number) => {
+      ForEach(this.visibleEntriesFor(mode), (entry: EntryCardModel, index: number) => {
         ListItem() {
           if (mode === 'social') {
             this.SocialEntryCard(entry, index)
@@ -2828,9 +3157,9 @@ struct Index {
           }
         }
         .width('100%')
-      }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
+      }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
 
-      if (this.homeEntryCountFor(mode) === 0) {
+      if (this.totalEntryCountFor(mode) === 0) {
         ListItem() {
           Column({ space: 8 }) {
             Text(this.homeEmptyStateTitle())
@@ -2851,6 +3180,10 @@ struct Index {
           .margin({ top: mode === 'social' ? HOME_MODE_CONTENT_GAP : 0 })
           .width('100%')
         }
+      }
+
+      ListItem() {
+        this.HomeLoadMoreFooter(mode)
       }
 
       ListItem() {
@@ -2890,7 +3223,7 @@ struct Index {
       }
       .width('100%')
 
-      LazyForEach(this.homeEntryDataSourceFor('pictures'), (entry: EntryCardModel, index: number) => {
+      ForEach(this.visibleEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
         ListItem() {
           PictureEntryCard({
             entry: this.pictureCardEntry(entry),
@@ -2908,9 +3241,9 @@ struct Index {
           })
         }
         .width('100%')
-      }, (entry: EntryCardModel) => `${entry.id}-${entry.isRead}`)
+      }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
 
-      if (this.homeEntryCountFor('pictures') === 0) {
+      if (this.totalEntryCountFor('pictures') === 0) {
         ListItem() {
           Column({ space: 8 }) {
             Text(this.homeEmptyStateTitle())
@@ -2930,6 +3263,10 @@ struct Index {
           .border({ width: 0.8, color: this.theme.divider })
           .width('100%')
         }
+      }
+
+      ListItem() {
+        this.HomeLoadMoreFooter('pictures')
       }
 
       ListItem() {
@@ -2971,7 +3308,7 @@ struct Index {
               .width('100%')
 
               HomeVideoGrid({
-                entries: this.filteredEntriesFor(mode),
+                entries: this.visibleEntriesFor(mode),
                 highlightQuery: this.searchQuery,
                 isLoading: this.isHomeContentLoading(),
                 inheritedTheme: this.theme,
@@ -2979,6 +3316,12 @@ struct Index {
                   this.openEntry(entry)
                 },
               })
+
+              this.HomeLoadMoreFooter(mode)
+
+              Row()
+                .width('100%')
+                .height(100)
 
             }
             .width('100%')
@@ -3015,6 +3358,7 @@ struct Index {
       .scale({ x: this.modeListSwapScale(mode), y: this.modeListSwapScale(mode) })
       .onAppear(() => {
         console.info(`频道 ${mode} 场景显示`)
+        this.logModeSwitchSnapshot('scene-appear', mode)
       })
     }
     .width('100%')

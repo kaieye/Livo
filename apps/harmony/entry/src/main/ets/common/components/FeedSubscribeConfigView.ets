@@ -192,7 +192,6 @@ export struct FeedSubscribeConfigView {
   private cachedPreviewPayload() {
     return DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
       ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
-      ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.targetSiteUrl)
   }
 
   private resolvedFeedImageUrl(): string {
