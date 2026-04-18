@@ -16,6 +16,7 @@ export struct HomeVideoGrid {
   @Prop isLoading: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
+  onEntryAppear: (entryIndex: number, totalCount: number) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
@@ -341,11 +342,15 @@ export struct HomeVideoGrid {
       } else {
         ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
           Row({ space: 12 }) {
-            ForEach(rowEntries, (entry: EntryCardModel) => {
+            ForEach(rowEntries, (entry: EntryCardModel, columnIndex: number) => {
               Column() {
                 this.VideoCard(entry)
               }
               .layoutWeight(1)
+              .onAppear(() => {
+                const entryIndex = rowIndex * resolveHomeVideoGridColumns() + columnIndex
+                this.onEntryAppear(entryIndex, this.entries.length)
+              })
             }, (entry: EntryCardModel, columnIndex: number) => this.entryRenderKey(entry, rowIndex, columnIndex))
 
             if (rowEntries.length < resolveHomeVideoGridColumns()) {

@@ -135,20 +135,42 @@ const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
 const HOME_SWAP_CANDIDATE_LIMIT: number = 120
 const HOME_MAX_CANDIDATE_LIMIT: number = 480
 const HOME_INITIAL_CANDIDATE_LIMIT: number = HOME_MAX_CANDIDATE_LIMIT
-const HOME_LOAD_MORE_STEP_LIMIT: number = 480
+const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = 160
+const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 96
+const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 96
+const HOME_MODE_PREWARM_DELAY_MS: number = 120
+const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 90
+const HOME_LOAD_MORE_STEP_LIMIT: number = 24
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
-const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 80
-const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 60
-const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 160
+const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
+const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 18
+const HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT: number = 20
+const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 180
+const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
+const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = true
+const HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED: boolean = true
+const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 64
+const HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS: number = 800
+const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 120
+const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 200
+const HOME_LOAD_MORE_SCROLL_AHEAD_START_PX: number = 760
+const HOME_LOAD_MORE_SCROLL_AHEAD_STEP_PX: number = 560
+const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 5000
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
-const HOME_PULL_DEBUG_LOG_ENABLED: boolean = true
+const HOME_PULL_DEBUG_LOG_ENABLED: boolean = false
 const HOME_PULL_DEBUG_LOG_PREFIX: string = '[HomePullDebug]'
-const HOME_GROUP_DEBUG_ENABLED: boolean = true
+const HOME_GROUP_DEBUG_ENABLED: boolean = false
 const HOME_GROUP_DEBUG_PREFIX: string = '[FeedFetchStateDebug][HomeGroup]'
-const HOME_MODE_DEBUG_ENABLED: boolean = true
+const HOME_MODE_DEBUG_ENABLED: boolean = false
 const HOME_MODE_DEBUG_PREFIX: string = '[FeedFetchStateDebug][ModeSwitch]'
 const HOME_LOAD_MORE_DEBUG_ENABLED: boolean = true
 const HOME_LOAD_MORE_DEBUG_PREFIX: string = '[FeedFetchStateDebug][LoadMore]'
+const HOME_PERF_DIAG_ENABLED: boolean = true
+const HOME_PERF_DIAG_PREFIX: string = '[HomePerfDiag]'
+const HOME_LOAD_STATE_DIAG_ENABLED: boolean = true
+const HOME_LOAD_STATE_DIAG_PREFIX: string = '[HomeLoadStateDiag]'
+const HOME_ASYNC_ERROR_DEBUG_ENABLED: boolean = true
+const HOME_ASYNC_ERROR_PREFIX: string = '[HomeAsyncError]'
 
 interface RootTabSymbolPair {
   normal: SymbolGlyphModifier
@@ -179,6 +201,62 @@ interface HomeEntryDataSourceMap {
   social: ArrayLazyDataSource<EntryCardModel>
   pictures: ArrayLazyDataSource<EntryCardModel>
   videos: ArrayLazyDataSource<EntryCardModel>
+}
+
+interface HomeModePendingLoadMoreMap {
+  articles: boolean
+  social: boolean
+  pictures: boolean
+  videos: boolean
+}
+
+interface HomeModeLoadMoreTimestampMap {
+  articles: number
+  social: number
+  pictures: number
+  videos: number
+}
+
+interface HomeModeFooterStateMap {
+  articles: string
+  social: string
+  pictures: string
+  videos: string
+}
+
+interface HomeModeHasMoreMap {
+  articles: boolean
+  social: boolean
+  pictures: boolean
+  videos: boolean
+}
+
+interface HomeModeNoProgressCountMap {
+  articles: number
+  social: number
+  pictures: number
+  videos: number
+}
+
+interface HomeModeCandidateLimitMap {
+  articles: number
+  social: number
+  pictures: number
+  videos: number
+}
+
+interface HomeModeLoadedMap {
+  articles: boolean
+  social: boolean
+  pictures: boolean
+  videos: boolean
+}
+
+interface HomeModeLoadingMap {
+  articles: boolean
+  social: boolean
+  pictures: boolean
+  videos: boolean
 }
 
 @Entry
@@ -233,8 +311,20 @@ struct Index {
   @State settingsScrollerBindingVersion: number = 0
   @State isHomeStartupRefreshing: boolean = false
   @State homeInitialLoadPending: boolean = true
-  @State homeCandidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT
+  @State homeCandidateLimit: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT
+  @State homeCandidateLimitsByMode: HomeModeCandidateLimitMap = {
+    articles: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
+    social: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
+    pictures: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
+    videos: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
+  }
   @State homeHasMoreEntries: boolean = true
+  @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = {
+    articles: true,
+    social: true,
+    pictures: true,
+    videos: true,
+  }
   @State homeLoadMoreInProgress: boolean = false
   @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = {
     articles: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
@@ -291,11 +381,64 @@ struct Index {
   private homeInlineSearchFocusRequestToken: number = 0
   private homeLoadMoreRequestToken: number = 0
   private lastHomeLoadMoreRequestedAt: number = 0
-  private homeLoadMoreNoGrowthCount: number = 0
+  private homeLoadMorePrefetchToken: number = 0
+  private homeLoadMorePrefetchLimit: number = 0
+  private homeLoadMorePrefetchEntries: EntryCardModel[] = []
+  private homeLoadMorePrefetchInProgress: boolean = false
+  private lastHomeUserScrollAt: number = 0
+  private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = {
+    articles: false,
+    social: false,
+    pictures: false,
+    videos: false,
+  }
+  private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
+  private homeLastScrollAheadTriggerOffsetByMode: HomeModeScrollOffsetMap = {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
+  private homeLastFooterStateByMode: HomeModeFooterStateMap = {
+    articles: '',
+    social: '',
+    pictures: '',
+    videos: '',
+  }
+  private homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
+  private homeModeLoaded: HomeModeLoadedMap = {
+    articles: false,
+    social: false,
+    pictures: false,
+    videos: false,
+  }
+  private homeModeLoading: HomeModeLoadingMap = {
+    articles: false,
+    social: false,
+    pictures: false,
+    videos: false,
+  }
+  private lastHomeLoadMoreCompletedAt: number = 0
+  private lastHomeRefreshFinishedAt: number = 0
+  private homePerfSessionId: number = 0
+  private homePerfSessionStartedAt: number = 0
 
   aboutToAppear(): void {
     this.isComponentActive = true
+    this.homePerfSessionId += 1
+    this.homePerfSessionStartedAt = Date.now()
     console.info('Livo Harmony Index aboutToAppear')
+    this.logHomePerf(`aboutToAppear mode=${this.mode} featured=${this.featuredEntries.length}`)
     this.syncRequestedRootTab()
     if (this.hasLoadedInitialData) {
       this.configureAutoRefreshTimer()
@@ -309,6 +452,7 @@ struct Index {
 
   aboutToDisappear(): void {
     this.isComponentActive = false
+    this.invalidateHomeLoadMorePrefetch()
     this.persistHomeSnapshotNow()
     this.clearRefreshPercentAnimation()
     this.clearAutoRefreshTimer()
@@ -329,7 +473,11 @@ struct Index {
       if (!this.isComponentActive) {
         return
       }
-      callback()
+      try {
+        callback()
+      } catch (error) {
+        this.logHomeAsyncError(`managed-timeout delayMs=${delayMs}`, error)
+      }
     }, delayMs)
     this.managedTimeoutIds.push(timeoutId)
   }
@@ -341,24 +489,72 @@ struct Index {
     this.managedTimeoutIds = []
   }
 
+  private describeError(error: Error | string | Object): string {
+    if (error instanceof Error) {
+      const stack = error.stack ? ` stack=${error.stack}` : ''
+      return `${error.name}: ${error.message}${stack}`
+    }
+    if (typeof error === 'string') {
+      return error
+    }
+    try {
+      return JSON.stringify(error)
+    } catch (_) {
+      return String(error)
+    }
+  }
+
+  private logHomeAsyncError(stage: string, error: Error | string | Object): void {
+    if (!HOME_ASYNC_ERROR_DEBUG_ENABLED) {
+      return
+    }
+    console.error(`${HOME_ASYNC_ERROR_PREFIX} stage=${stage} error=${this.describeError(error)}`)
+  }
+
   private async loadInitialData(): Promise<void> {
+    const startedAt = Date.now()
+    this.logHomePerf('loadInitialData start')
+    this.resetModeLoadMoreStates('load-initial')
     this.homeInitialLoadPending = true
     this.theme = ThemeService.currentPalette()
     void this.applySystemBarStyle(this.theme)
     const settingsPromise = AppRepository.settings()
     const feedsPromise = AppRepository.feedEntities()
 
+    const currentMode = this.mode
     const snapshotEntries = await AppRepository.homeEntrySnapshot()
     if (snapshotEntries.length > 0) {
-      this.homeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, snapshotEntries.length)
-      this.homeHasMoreEntries = true
-      this.applyHomeEntries(snapshotEntries, false)
-      this.feedSourceLabel = '已恢复上次浏览内容'
+      const groupedSnapshot = groupHomeEntriesByMode(snapshotEntries)
+      this.entryGroups = {
+        articles: [...groupedSnapshot.articles],
+        social: [...groupedSnapshot.social],
+        pictures: [...groupedSnapshot.pictures],
+        videos: [...groupedSnapshot.videos],
+      }
+      this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
+
+      this.setCandidateLimitForMode('articles', groupedSnapshot.articles.length)
+      this.setCandidateLimitForMode('social', groupedSnapshot.social.length)
+      this.setCandidateLimitForMode('pictures', groupedSnapshot.pictures.length)
+      this.setCandidateLimitForMode('videos', groupedSnapshot.videos.length)
+
+      this.markModeLoaded('articles', groupedSnapshot.articles.length > 0)
+      this.markModeLoaded('social', groupedSnapshot.social.length > 0)
+      this.markModeLoaded('pictures', groupedSnapshot.pictures.length > 0)
+      this.markModeLoaded('videos', groupedSnapshot.videos.length > 0)
+
+      this.setModeHasMoreEntries('articles', true, 'snapshot-restore')
+      this.setModeHasMoreEntries('social', true, 'snapshot-restore')
+      this.setModeHasMoreEntries('pictures', true, 'snapshot-restore')
+      this.setModeHasMoreEntries('videos', true, 'snapshot-restore')
+      this.notifyHomeEntryDataReloaded()
+      this.schedulePersistHomeSnapshot(this.featuredEntries)
+      this.feedSourceLabel = '已恢复本地内容'
     } else {
-      const initialLimit = this.resolveHomeCandidateLimit(HOME_INITIAL_CANDIDATE_LIMIT)
-      const initialEntries = await AppRepository.featuredEntries(initialLimit)
-      this.syncHomePaginationFromReloadResult(initialEntries, initialLimit)
-      this.applyHomeEntries(initialEntries, false)
+      const initialLimit = this.resolveHomeCandidateLimitForMode(currentMode, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
+      const initialEntries = await AppRepository.featuredEntriesByMode(currentMode, initialLimit)
+      this.syncModePaginationFromReloadResult(currentMode, initialEntries, initialLimit)
+      this.applyEntriesForMode(currentMode, initialEntries, true)
       this.feedSourceLabel = '本地内容已加载'
     }
     this.settleInitialHomeLoadState()
@@ -374,6 +570,32 @@ struct Index {
     this.startStartupRefreshIfNeeded()
     this.configureAutoRefreshTimer()
     this.hasLoadedInitialData = true
+    this.scheduleModePrewarm(currentMode)
+    this.scheduleHomeLoadMorePrefetch(800)
+    this.logHomePerf(`loadInitialData done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
+  }
+
+  private scheduleModePrewarm(currentMode: SubscriptionMode): void {
+    const modes = SUBSCRIPTION_MODES.filter((mode: SubscriptionMode) => mode !== currentMode)
+    modes.forEach((mode: SubscriptionMode, index: number) => {
+      this.runManagedTimeout(() => {
+        if (!this.isComponentActive || this.currentRootTabId() !== 'home') {
+          return
+        }
+        if (this.isModeLoaded(mode) || this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
+          return
+        }
+        this.setModeLoading(mode, true)
+        const prewarmLimit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_PREWARM_CANDIDATE_LIMIT)
+        void this.reloadFeaturedEntriesFromLocal(prewarmLimit, false, true, true, mode)
+          .catch((error: Error | string | Object) => {
+            this.logHomeAsyncError(`mode-prewarm mode=${mode}`, error)
+          })
+          .finally(() => {
+            this.setModeLoading(mode, false)
+          })
+      }, HOME_MODE_PREWARM_DELAY_MS + index * HOME_MODE_PREWARM_STEP_DELAY_MS)
+    })
   }
 
   private startStartupRefreshIfNeeded(): void {
@@ -396,6 +618,10 @@ struct Index {
       return
     }
 
+    const startedAt = Date.now()
+    this.logHomePerf(`refresh start showToast=${showResultToast}`)
+    this.invalidateHomeLoadMorePrefetch()
+    this.resetModeLoadMoreStates('refresh-start')
     this.isRefreshing = true
     this.refreshCompletedCount = 0
     this.refreshTotalCount = 0
@@ -427,21 +653,31 @@ struct Index {
       }
       this.feedSourceLabel = result.sourceLabel
       if (!result.allSkippedByCooldown) {
-        await this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+        this.scheduleHomeReloadAfterRefresh()
       }
       if (showResultToast) {
         this.showToast(result.sourceLabel)
+      }
+    } catch (error) {
+      this.logHomeAsyncError('refresh-featured-entries', error)
+      const errorMessage = this.describeError(error)
+      this.feedSourceLabel = `刷新失败：${errorMessage}`
+      if (showResultToast) {
+        this.showToast('刷新失败，请查看日志')
       }
     } finally {
       this.isRefreshing = false
       this.refreshCompletedCount = 0
       this.refreshTotalCount = 0
       this.lastRefreshProgressUiUpdateAt = 0
+      this.lastHomeRefreshFinishedAt = Date.now()
       this.clearRefreshPercentAnimation()
       this.displayRefreshPercent = 0
       this.runManagedTimeout(() => {
         this.animateHomePullRefreshReset()
       }, HOME_REFRESH_RESET_DEFER_MS)
+      this.scheduleHomeLoadMorePrefetch()
+      this.logHomePerf(`refresh done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
     }
   }
 
@@ -959,6 +1195,10 @@ struct Index {
   private setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
     if (interacting && !this.isHomeScrollInteracting) {
       this.startHomePullDebugSession(mode)
+    }
+
+    if (interacting) {
+      this.lastHomeUserScrollAt = Date.now()
     }
 
     if (!interacting && this.isHomeScrollInteracting) {
@@ -1729,6 +1969,7 @@ struct Index {
 
     this.logModeSwitchSnapshot('before-switch', nextMode)
     this.mode = nextMode
+    this.homeCandidateLimit = this.candidateLimitForMode(nextMode)
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
     this.resetHomePullRefreshState()
     this.homeModeRailExpandedOverride = false
@@ -1738,6 +1979,9 @@ struct Index {
     this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
+    this.runManagedTimeout(() => {
+      this.ensureModeEntriesLoaded(nextMode)
+    }, 16)
     this.requestExpandedModeRail()
     this.logModeSwitchSnapshot('after-switch', nextMode)
   }
@@ -1802,13 +2046,13 @@ struct Index {
   private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     switch (mode) {
       case 'social':
-        return this.entryGroups.social
+        return this.filterEntriesByMode('social', this.entryGroups.social)
       case 'pictures':
-        return this.entryGroups.pictures
+        return this.filterEntriesByMode('pictures', this.entryGroups.pictures)
       case 'videos':
-        return this.entryGroups.videos
+        return this.filterEntriesByMode('videos', this.entryGroups.videos)
       default:
-        return this.entryGroups.articles
+        return this.filterEntriesByMode('articles', this.entryGroups.articles)
     }
   }
 
@@ -1822,12 +2066,19 @@ struct Index {
     }
 
     const now = Date.now()
+    if (now - this.lastHomeRefreshFinishedAt < HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS) {
+      return
+    }
+    if (this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
+      return
+    }
     if (now < this.suppressFeedsChangedUntilMs) {
       return
     }
 
     const currentVersion = this.feedsChangedReloadVersion + 1
     this.feedsChangedReloadVersion = currentVersion
+    this.invalidateHomeLoadMorePrefetch()
     void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_SWAP_PRIME_CANDIDATE_LIMIT))
 
     this.runManagedTimeout(() => {
@@ -1846,6 +2097,7 @@ struct Index {
   }
 
   private shouldRunFinalHomeReloadNow(): boolean {
+    const currentOffset = this.readHomeModeScrollOffset(this.mode)
     return this.isComponentActive
       && this.isHomeRootTab()
       && !this.isRefreshing
@@ -1854,6 +2106,11 @@ struct Index {
       && !this.homeListSwapAnimating
       && !this.searchOverlayVisible
       && !this.isHomeScrollInteracting
+      && !this.homeLoadMoreInProgress
+      && !this.pendingLoadMoreForMode(this.mode)
+      && !this.hasRecentHomeScrollIntent()
+      && currentOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET
+      && this.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT
   }
 
   private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void {
@@ -1882,16 +2139,95 @@ struct Index {
       + HOME_REFRESH_FINAL_RELOAD_DELAY_MS
       + HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS
 
+    const primeLimit = HOME_SWAP_CANDIDATE_LIMIT
+
     this.runManagedTimeout(() => {
       if (this.postRefreshReloadVersion !== currentVersion) {
         return
       }
-      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT), true)
+      if (!this.shouldRunFinalHomeReloadNow()) {
+        return
+      }
+      void this.reloadFeaturedEntriesFromLocal(primeLimit, false, true, true)
     }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
   }
 
   private resolveHomeCandidateLimit(minimumLimit: number): number {
     return Math.max(minimumLimit, this.homeCandidateLimit)
+  }
+
+  private candidateLimitForMode(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeCandidateLimitsByMode.social
+      case 'pictures':
+        return this.homeCandidateLimitsByMode.pictures
+      case 'videos':
+        return this.homeCandidateLimitsByMode.videos
+      default:
+        return this.homeCandidateLimitsByMode.articles
+    }
+  }
+
+  private setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
+    const safeLimit = Math.max(HOME_MODE_INITIAL_CANDIDATE_LIMIT, limit)
+    this.homeCandidateLimitsByMode = {
+      articles: mode === 'articles' ? safeLimit : this.homeCandidateLimitsByMode.articles,
+      social: mode === 'social' ? safeLimit : this.homeCandidateLimitsByMode.social,
+      pictures: mode === 'pictures' ? safeLimit : this.homeCandidateLimitsByMode.pictures,
+      videos: mode === 'videos' ? safeLimit : this.homeCandidateLimitsByMode.videos,
+    }
+    if (mode === this.mode) {
+      this.homeCandidateLimit = safeLimit
+    }
+  }
+
+  private resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number {
+    return Math.max(minimumLimit, this.candidateLimitForMode(mode))
+  }
+
+  private markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
+    this.homeModeLoaded = {
+      articles: mode === 'articles' ? loaded : this.homeModeLoaded.articles,
+      social: mode === 'social' ? loaded : this.homeModeLoaded.social,
+      pictures: mode === 'pictures' ? loaded : this.homeModeLoaded.pictures,
+      videos: mode === 'videos' ? loaded : this.homeModeLoaded.videos,
+    }
+  }
+
+  private isModeLoaded(mode: SubscriptionMode): boolean {
+    switch (mode) {
+      case 'social':
+        return this.homeModeLoaded.social
+      case 'pictures':
+        return this.homeModeLoaded.pictures
+      case 'videos':
+        return this.homeModeLoaded.videos
+      default:
+        return this.homeModeLoaded.articles
+    }
+  }
+
+  private isModeLoading(mode: SubscriptionMode): boolean {
+    switch (mode) {
+      case 'social':
+        return this.homeModeLoading.social
+      case 'pictures':
+        return this.homeModeLoading.pictures
+      case 'videos':
+        return this.homeModeLoading.videos
+      default:
+        return this.homeModeLoading.articles
+    }
+  }
+
+  private setModeLoading(mode: SubscriptionMode, loading: boolean): void {
+    this.homeModeLoading = {
+      articles: mode === 'articles' ? loading : this.homeModeLoading.articles,
+      social: mode === 'social' ? loading : this.homeModeLoading.social,
+      pictures: mode === 'pictures' ? loading : this.homeModeLoading.pictures,
+      videos: mode === 'videos' ? loading : this.homeModeLoading.videos,
+    }
   }
 
   private visibleEntryLimitFor(mode: SubscriptionMode): number {
@@ -1921,6 +2257,10 @@ struct Index {
     return this.filteredEntriesFor(mode).length
   }
 
+  private hasBufferedEntriesForMode(mode: SubscriptionMode): boolean {
+    return this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
+  }
+
   private visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     const entries = this.filteredEntriesFor(mode)
     const limit = this.visibleEntryLimitFor(mode)
@@ -1948,26 +2288,41 @@ struct Index {
   }
 
   private syncHomePaginationFromReloadResult(entries: EntryCardModel[], candidateLimit: number): void {
-    const safeLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
-    this.homeCandidateLimit = Math.max(this.homeCandidateLimit, safeLimit)
+    this.syncModePaginationFromReloadResult(this.mode, entries, candidateLimit)
+  }
+
+  private syncModePaginationFromReloadResult(
+    mode: SubscriptionMode,
+    entries: EntryCardModel[],
+    candidateLimit: number,
+  ): void {
+    const safeLimit = Math.max(HOME_MODE_INITIAL_CANDIDATE_LIMIT, candidateLimit)
+    this.setCandidateLimitForMode(mode, safeLimit)
     if (entries.length >= safeLimit) {
-      this.homeHasMoreEntries = true
+      this.setModeHasMoreEntries(mode, true, `sync-pagination-full entries=${entries.length} limit=${safeLimit}`)
       return
     }
 
-    if (this.homeCandidateLimit >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT) {
-      this.homeHasMoreEntries = false
+    this.setModeHasMoreEntries(mode, false, `sync-pagination-short entries=${entries.length} limit=${safeLimit}`)
+    this.logHomeLoadMore(
+      `stop-hasMore mode=${mode} entries=${entries.length} limit=${safeLimit} candidateLimit=${this.candidateLimitForMode(mode)}`,
+    )
+    if (!this.modeHasMoreEntries('articles')
+      && !this.modeHasMoreEntries('social')
+      && !this.modeHasMoreEntries('pictures')
+      && !this.modeHasMoreEntries('videos')
+    ) {
+      this.setHomeHasMoreEntries(false, `all-modes-exhausted mode=${mode}`)
     }
   }
 
   private canLoadMoreForMode(mode: SubscriptionMode): boolean {
-    const hasBufferedEntries = this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
+    const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
     return this.isHomeRootTab()
       && mode === this.mode
+      && this.modeHasMoreEntries(mode)
       && !this.searchOverlayVisible
       && !this.normalizedSearchQuery()
-      && !this.isRefreshing
-      && !this.isHomeStartupRefreshing
       && !this.homeInitialLoadPending
       && !this.homeLoadMoreInProgress
       && (hasBufferedEntries || this.homeHasMoreEntries)
@@ -1980,43 +2335,353 @@ struct Index {
     console.info(`${HOME_LOAD_MORE_DEBUG_PREFIX} ${message}`)
   }
 
-  private requestLoadMoreForMode(mode: SubscriptionMode): void {
-    if (!this.canLoadMoreForMode(mode)) {
+  private logHomePerf(message: string): void {
+    if (!HOME_PERF_DIAG_ENABLED) {
+      return
+    }
+    const elapsed = this.homePerfSessionStartedAt > 0 ? Date.now() - this.homePerfSessionStartedAt : 0
+    console.info(`${HOME_PERF_DIAG_PREFIX} sid=${this.homePerfSessionId} t=${elapsed}ms ${message}`)
+  }
+
+  private logHomeLoadState(message: string): void {
+    if (!HOME_LOAD_STATE_DIAG_ENABLED) {
+      return
+    }
+    const elapsed = this.homePerfSessionStartedAt > 0 ? Date.now() - this.homePerfSessionStartedAt : 0
+    console.info(`${HOME_LOAD_STATE_DIAG_PREFIX} sid=${this.homePerfSessionId} t=${elapsed}ms ${message}`)
+  }
+
+  private setHomeHasMoreEntries(next: boolean, reason: string): void {
+    if (this.homeHasMoreEntries === next) {
       return
     }
 
-    const now = Date.now()
-    if (now - this.lastHomeLoadMoreRequestedAt < HOME_LOAD_MORE_MIN_INTERVAL_MS) {
+    const mode = this.mode
+    const total = this.totalEntryCountFor(mode)
+    const visible = this.visibleEntryCountFor(mode)
+    this.homeHasMoreEntries = next
+    if (!next) {
+      this.homeHasMoreEntriesByMode = {
+        articles: false,
+        social: false,
+        pictures: false,
+        videos: false,
+      }
+    }
+    this.logHomeLoadState(
+      `hasMore=${next ? 'true' : 'false'} reason=${reason} mode=${mode} `
+      + `candidateLimit=${this.homeCandidateLimit} featured=${this.featuredEntries.length} `
+      + `visible=${visible}/${total} inProgress=${this.homeLoadMoreInProgress}`,
+    )
+  }
+
+  private modeHasMoreEntries(mode: SubscriptionMode): boolean {
+    switch (mode) {
+      case 'social':
+        return this.homeHasMoreEntriesByMode.social
+      case 'pictures':
+        return this.homeHasMoreEntriesByMode.pictures
+      case 'videos':
+        return this.homeHasMoreEntriesByMode.videos
+      default:
+        return this.homeHasMoreEntriesByMode.articles
+    }
+  }
+
+  private setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
+    const previous = this.modeHasMoreEntries(mode)
+    if (previous === next) {
       return
+    }
+    this.homeHasMoreEntriesByMode = {
+      articles: mode === 'articles' ? next : this.homeHasMoreEntriesByMode.articles,
+      social: mode === 'social' ? next : this.homeHasMoreEntriesByMode.social,
+      pictures: mode === 'pictures' ? next : this.homeHasMoreEntriesByMode.pictures,
+      videos: mode === 'videos' ? next : this.homeHasMoreEntriesByMode.videos,
+    }
+    this.logHomeLoadState(
+      `modeHasMore mode=${mode} next=${next ? 'true' : 'false'} reason=${reason} `
+      + `globalHasMore=${this.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
+    )
+    if (next) {
+      this.setHomeHasMoreEntries(true, `mode-has-more mode=${mode}`)
+    }
+  }
+
+  private modeNoProgressCount(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeModeNoProgressLoadMoreCount.social
+      case 'pictures':
+        return this.homeModeNoProgressLoadMoreCount.pictures
+      case 'videos':
+        return this.homeModeNoProgressLoadMoreCount.videos
+      default:
+        return this.homeModeNoProgressLoadMoreCount.articles
+    }
+  }
+
+  private setModeNoProgressCount(mode: SubscriptionMode, count: number): void {
+    const safeCount = Math.max(0, count)
+    this.homeModeNoProgressLoadMoreCount = {
+      articles: mode === 'articles' ? safeCount : this.homeModeNoProgressLoadMoreCount.articles,
+      social: mode === 'social' ? safeCount : this.homeModeNoProgressLoadMoreCount.social,
+      pictures: mode === 'pictures' ? safeCount : this.homeModeNoProgressLoadMoreCount.pictures,
+      videos: mode === 'videos' ? safeCount : this.homeModeNoProgressLoadMoreCount.videos,
+    }
+  }
+
+  private resetModeLoadMoreStates(reason: string): void {
+    this.homeHasMoreEntriesByMode = {
+      articles: true,
+      social: true,
+      pictures: true,
+      videos: true,
+    }
+    this.homeModeNoProgressLoadMoreCount = {
+      articles: 0,
+      social: 0,
+      pictures: 0,
+      videos: 0,
+    }
+    this.logHomeLoadState(`mode loadMore state reset reason=${reason}`)
+  }
+
+  private resolveHomeFooterState(mode: SubscriptionMode): string {
+    if (this.homeLoadMoreInProgress) {
+      return 'loading'
+    }
+    if (!this.hasBufferedEntriesForMode(mode) && (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) {
+      return 'end'
+    }
+    return 'hint'
+  }
+
+  private footerStateForMode(mode: SubscriptionMode): string {
+    switch (mode) {
+      case 'social':
+        return this.homeLastFooterStateByMode.social
+      case 'pictures':
+        return this.homeLastFooterStateByMode.pictures
+      case 'videos':
+        return this.homeLastFooterStateByMode.videos
+      default:
+        return this.homeLastFooterStateByMode.articles
+    }
+  }
+
+  private setFooterStateForMode(mode: SubscriptionMode, state: string): void {
+    this.homeLastFooterStateByMode = {
+      articles: mode === 'articles' ? state : this.homeLastFooterStateByMode.articles,
+      social: mode === 'social' ? state : this.homeLastFooterStateByMode.social,
+      pictures: mode === 'pictures' ? state : this.homeLastFooterStateByMode.pictures,
+      videos: mode === 'videos' ? state : this.homeLastFooterStateByMode.videos,
+    }
+  }
+
+  private traceHomeFooterStateIfChanged(mode: SubscriptionMode): void {
+    const nextState = this.resolveHomeFooterState(mode)
+    const previousState = this.footerStateForMode(mode)
+    if (previousState === nextState) {
+      return
+    }
+
+    this.setFooterStateForMode(mode, nextState)
+    this.logHomeLoadState(
+      `footer state mode=${mode} ${previousState || 'none'}=>${nextState} `
+      + `hasMore=${this.homeHasMoreEntries} modeHasMore=${this.modeHasMoreEntries(mode)} `
+      + `inProgress=${this.homeLoadMoreInProgress} `
+      + `buffered=${this.hasBufferedEntriesForMode(mode)} `
+      + `visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
+    )
+  }
+
+  private loadMoreBlockedReason(mode: SubscriptionMode): string {
+    const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
+    if (!this.isHomeRootTab()) {
+      return 'not-home-tab'
+    }
+    if (mode !== this.mode) {
+      return 'inactive-mode'
+    }
+    if (this.searchOverlayVisible) {
+      return 'search-overlay'
+    }
+    if (!!this.normalizedSearchQuery()) {
+      return 'search-query-active'
+    }
+    if (this.homeInitialLoadPending) {
+      return 'initial-load-pending'
+    }
+    if (this.homeLoadMoreInProgress) {
+      return 'load-more-in-progress'
+    }
+    if (!this.modeHasMoreEntries(mode)) {
+      return 'mode-no-more'
+    }
+    if (!hasBufferedEntries && !this.homeHasMoreEntries) {
+      return 'no-buffer-and-no-more'
+    }
+    if (!this.hasRecentHomeScrollIntent()) {
+      return 'no-recent-scroll-intent'
+    }
+    return ''
+  }
+
+  private hasRecentHomeScrollIntent(): boolean {
+    return Date.now() - this.lastHomeUserScrollAt <= HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS
+  }
+
+  private invalidateHomeLoadMorePrefetch(): void {
+    this.homeLoadMorePrefetchToken += 1
+    this.homeLoadMorePrefetchInProgress = false
+    this.homeLoadMorePrefetchLimit = 0
+    this.homeLoadMorePrefetchEntries = []
+  }
+
+  private canPrefetchHomeLoadMore(): boolean {
+    if (!HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED) {
+      return false
+    }
+    return this.isComponentActive
+      && this.isHomeRootTab()
+      && !this.searchOverlayVisible
+      && !this.normalizedSearchQuery()
+      && !this.isRefreshing
+      && !this.isHomeStartupRefreshing
+      && !this.homeInitialLoadPending
+      && !this.homeLoadMoreInProgress
+      && this.homeHasMoreEntries
+      && this.modeHasMoreEntries(this.mode)
+  }
+
+  private scheduleHomeLoadMorePrefetch(delayMs: number = 220): void {
+    this.runManagedTimeout(() => {
+      void this.prefetchHomeLoadMore()
+    }, delayMs)
+  }
+
+  private async prefetchHomeLoadMore(): Promise<void> {
+    if (!this.canPrefetchHomeLoadMore()) {
+      return
+    }
+
+    const mode = this.mode
+    const currentLimit = this.candidateLimitForMode(mode)
+    const targetLimit = Math.min(HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT, currentLimit + HOME_LOAD_MORE_STEP_LIMIT)
+    if (targetLimit <= currentLimit) {
+      return
+    }
+
+    if (this.homeLoadMorePrefetchLimit >= targetLimit && this.homeLoadMorePrefetchEntries.length > 0) {
+      return
+    }
+
+    if (this.homeLoadMorePrefetchInProgress) {
+      return
+    }
+
+    this.homeLoadMorePrefetchInProgress = true
+    const token = this.homeLoadMorePrefetchToken + 1
+    this.homeLoadMorePrefetchToken = token
+    this.logHomeLoadMore(
+      `prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`,
+    )
+
+    try {
+      const entries = await AppRepository.featuredEntriesByMode(mode, targetLimit)
+      if (!this.isComponentActive || this.homeLoadMorePrefetchToken !== token) {
+        return
+      }
+
+      this.homeLoadMorePrefetchLimit = targetLimit
+      this.homeLoadMorePrefetchEntries = entries
+      this.logHomeLoadMore(
+      `prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`,
+      )
+    } catch (_error) {
+      this.logHomeLoadMore(`prefetch failed targetLimit=${targetLimit}`)
+    } finally {
+      if (this.homeLoadMorePrefetchToken === token) {
+        this.homeLoadMorePrefetchInProgress = false
+      }
+    }
+  }
+
+  private consumePrefetchedHomeEntries(nextLimit: number): EntryCardModel[] | undefined {
+    if (this.homeLoadMorePrefetchLimit < nextLimit || this.homeLoadMorePrefetchEntries.length === 0) {
+      return undefined
+    }
+
+    const entries = this.homeLoadMorePrefetchEntries
+    this.homeLoadMorePrefetchLimit = 0
+    this.homeLoadMorePrefetchEntries = []
+    this.homeLoadMorePrefetchInProgress = false
+    this.logHomeLoadMore(`consume-prefetch nextLimit=${nextLimit} entries=${entries.length}`)
+    return entries
+  }
+
+  private shouldRetryLoadMoreBlockedReason(reason: string): boolean {
+    return reason === 'load-more-in-progress' || reason === 'initial-load-pending'
+  }
+
+  private requestLoadMoreForMode(mode: SubscriptionMode): boolean {
+    const blockedReason = this.loadMoreBlockedReason(mode)
+    if (!!blockedReason || !this.canLoadMoreForMode(mode)) {
+      this.logHomePerf(`loadMore skip mode=${mode} reason=${blockedReason || 'canLoadMore=false'}`)
+      return !!blockedReason ? !this.shouldRetryLoadMoreBlockedReason(blockedReason) : true
+    }
+
+    const now = Date.now()
+    if (this.lastHomeLoadMoreCompletedAt > 0 && now - this.lastHomeLoadMoreCompletedAt < HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS) {
+      this.logHomePerf(`loadMore skip mode=${mode} reason=post-complete-cooldown`)
+      return true
+    }
+    if (now - this.lastHomeLoadMoreRequestedAt < HOME_LOAD_MORE_MIN_INTERVAL_MS) {
+      this.logHomePerf(`loadMore skip mode=${mode} reason=min-interval`)
+      return true
     }
     this.lastHomeLoadMoreRequestedAt = now
 
     const expandedVisible = this.expandVisibleEntriesForMode(mode)
     const hasBufferedEntries = this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
     if (expandedVisible && hasBufferedEntries) {
-      return
+      return true
     }
 
     if (!this.homeHasMoreEntries) {
-      return
+      return true
     }
 
     const previousTotal = this.featuredEntries.length
     const previousModeTotal = this.totalEntryCountFor(mode)
-    const nextLimit = Math.min(HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT, this.homeCandidateLimit + HOME_LOAD_MORE_STEP_LIMIT)
-    if (nextLimit <= this.homeCandidateLimit) {
-      this.homeHasMoreEntries = false
-      return
+    const currentModeLimit = this.candidateLimitForMode(mode)
+    const nextLimit = Math.min(HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT, currentModeLimit + HOME_LOAD_MORE_STEP_LIMIT)
+    if (nextLimit <= currentModeLimit) {
+      this.setModeHasMoreEntries(mode, false, `next-limit-clamped nextLimit=${nextLimit} currentLimit=${currentModeLimit}`)
+      return true
     }
 
     this.homeLoadMoreInProgress = true
     const requestToken = this.homeLoadMoreRequestToken + 1
     this.homeLoadMoreRequestToken = requestToken
+    const prefetchedEntries = this.consumePrefetchedHomeEntries(nextLimit)
+    const requestStartedAt = Date.now()
+    this.logHomePerf(
+      `loadMore start mode=${mode} nextLimit=${nextLimit} hasPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
+    )
     this.logHomeLoadMore(
-      `request start mode=${mode} prevTotal=${previousTotal} currentLimit=${this.homeCandidateLimit} nextLimit=${nextLimit}`,
+      `request start mode=${mode} prevTotal=${previousTotal} currentLimit=${currentModeLimit} nextLimit=${nextLimit}`,
     )
 
-    void this.reloadFeaturedEntriesFromLocal(nextLimit, false, false)
+    const loadPromise = prefetchedEntries
+      ? (async () => {
+          this.syncModePaginationFromReloadResult(mode, prefetchedEntries, nextLimit)
+          this.applyEntriesForMode(mode, prefetchedEntries, true)
+        })()
+      : this.appendFeaturedEntriesFromLocalFast(mode, nextLimit)
+
+    void loadPromise
       .then(() => {
         if (this.homeLoadMoreRequestToken !== requestToken) {
           return
@@ -2024,33 +2689,340 @@ struct Index {
 
         const currentTotal = this.featuredEntries.length
         const currentModeTotal = this.totalEntryCountFor(mode)
-        const hasGrowth = currentTotal > previousTotal || currentModeTotal > previousModeTotal
-        if (hasGrowth) {
-          this.homeLoadMoreNoGrowthCount = 0
-          this.homeHasMoreEntries = true
-        } else {
-          this.homeLoadMoreNoGrowthCount += 1
-          if (this.homeCandidateLimit >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT || this.homeLoadMoreNoGrowthCount >= 2) {
-            this.homeHasMoreEntries = false
+        const modeHasGrowth = currentModeTotal > previousModeTotal
+        if (modeHasGrowth) {
+          this.setModeNoProgressCount(mode, 0)
+        } else if (!this.hasBufferedEntriesForMode(mode)) {
+          const nextNoProgressCount = this.modeNoProgressCount(mode) + 1
+          this.setModeNoProgressCount(mode, nextNoProgressCount)
+          if (nextNoProgressCount >= 2 || !this.homeHasMoreEntries) {
+            this.setModeHasMoreEntries(
+              mode,
+              false,
+              `mode-no-progress count=${nextNoProgressCount} prev=${previousModeTotal} current=${currentModeTotal}`,
+            )
           }
+        }
+        if (this.candidateLimitForMode(mode) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT) {
+          this.setModeHasMoreEntries(mode, false, `candidate-limit-max mode=${mode} limit=${this.candidateLimitForMode(mode)}`)
         }
 
         this.expandVisibleEntriesForMode(mode)
         this.logHomeLoadMore(
           `request done mode=${mode} prevTotal=${previousTotal} currentTotal=${currentTotal} `
           + `prevModeTotal=${previousModeTotal} currentModeTotal=${currentModeTotal} `
-          + `noGrowthCount=${this.homeLoadMoreNoGrowthCount} `
-          + `candidateLimit=${this.homeCandidateLimit} hasMore=${this.homeHasMoreEntries}`,
+          + `candidateLimit=${this.candidateLimitForMode(mode)} hasMore=${this.homeHasMoreEntries} `
+          + `modeHasMore=${this.modeHasMoreEntries(mode)} noProgress=${this.modeNoProgressCount(mode)} `
+          + `usedPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
         )
       })
-      .catch(() => {
-        this.logHomeLoadMore(`request failed mode=${mode}`)
+      .catch((error: Error | string | Object) => {
+        this.logHomeLoadMore(`request failed mode=${mode} error=${this.describeError(error)}`)
+        this.logHomeAsyncError(`load-more-request mode=${mode}`, error)
       })
       .finally(() => {
         if (this.homeLoadMoreRequestToken !== requestToken) {
           return
         }
         this.homeLoadMoreInProgress = false
+        this.lastHomeLoadMoreCompletedAt = Date.now()
+        this.scheduleHomeLoadMorePrefetch()
+        this.logHomePerf(
+          `loadMore done mode=${mode} elapsedMs=${Date.now() - requestStartedAt} total=${this.featuredEntries.length}`,
+        )
+        if (this.pendingLoadMoreForMode(mode)) {
+          this.flushPendingLoadMoreForMode(mode)
+        }
+      })
+    return true
+  }
+
+  private async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
+    const previousEntries = this.filteredEntriesFor(mode)
+    const previousTotal = previousEntries.length
+    const currentLimit = this.candidateLimitForMode(mode)
+    const appendCount = Math.max(1, nextLimit - currentLimit)
+    const nextPage = await AppRepository.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
+
+    if (nextPage.length === 0) {
+      this.setModeHasMoreEntries(mode, false, `append-empty appendCount=${appendCount} nextLimit=${nextLimit}`)
+      this.setCandidateLimitForMode(mode, nextLimit)
+      this.logHomeLoadMore(
+        `append-fast-empty mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextLimit=${nextLimit}`,
+      )
+      return
+    }
+
+    const seen = new Set<string>()
+    const merged: EntryCardModel[] = []
+    previousEntries.forEach((entry: EntryCardModel) => {
+      seen.add(entry.id)
+      merged.push(entry)
+    })
+    nextPage.forEach((entry: EntryCardModel) => {
+      if (seen.has(entry.id)) {
+        return
+      }
+      seen.add(entry.id)
+      merged.push(entry)
+    })
+
+    const appendedUniqueCount = Math.max(0, merged.length - previousTotal)
+    if (appendedUniqueCount === 0) {
+      this.logHomeLoadMore(
+        `append-no-unique prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} nextLimit=${nextLimit}`,
+      )
+
+      const fallbackEntries = await AppRepository.featuredEntriesByMode(mode, nextLimit)
+      this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
+      if (fallbackEntries.length <= previousTotal) {
+        this.setModeHasMoreEntries(
+          mode,
+          false,
+          `append-no-progress prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
+        )
+      }
+      this.applyEntriesForMode(mode, fallbackEntries, true)
+      return
+    }
+
+    this.setCandidateLimitForMode(mode, nextLimit)
+    if (nextPage.length < appendCount) {
+      this.setModeHasMoreEntries(mode, false, `append-short page=${nextPage.length} appendCount=${appendCount} nextLimit=${nextLimit}`)
+    }
+    this.applyEntriesForMode(mode, merged, true)
+  }
+
+  private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
+    this.homePendingLoadMoreModes = {
+      articles: mode === 'articles' ? pending : this.homePendingLoadMoreModes.articles,
+      social: mode === 'social' ? pending : this.homePendingLoadMoreModes.social,
+      pictures: mode === 'pictures' ? pending : this.homePendingLoadMoreModes.pictures,
+      videos: mode === 'videos' ? pending : this.homePendingLoadMoreModes.videos,
+    }
+  }
+
+  private pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
+    switch (mode) {
+      case 'social':
+        return this.homePendingLoadMoreModes.social
+      case 'pictures':
+        return this.homePendingLoadMoreModes.pictures
+      case 'videos':
+        return this.homePendingLoadMoreModes.videos
+      default:
+        return this.homePendingLoadMoreModes.articles
+    }
+  }
+
+  private modeLoadMoreTimestampValue(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeLastItemAppearLoadMoreAt.social
+      case 'pictures':
+        return this.homeLastItemAppearLoadMoreAt.pictures
+      case 'videos':
+        return this.homeLastItemAppearLoadMoreAt.videos
+      default:
+        return this.homeLastItemAppearLoadMoreAt.articles
+    }
+  }
+
+  private setModeLoadMoreTimestamp(mode: SubscriptionMode, value: number): void {
+    this.homeLastItemAppearLoadMoreAt = {
+      articles: mode === 'articles' ? value : this.homeLastItemAppearLoadMoreAt.articles,
+      social: mode === 'social' ? value : this.homeLastItemAppearLoadMoreAt.social,
+      pictures: mode === 'pictures' ? value : this.homeLastItemAppearLoadMoreAt.pictures,
+      videos: mode === 'videos' ? value : this.homeLastItemAppearLoadMoreAt.videos,
+    }
+  }
+
+  private modeScrollAheadTriggerOffsetValue(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeLastScrollAheadTriggerOffsetByMode.social
+      case 'pictures':
+        return this.homeLastScrollAheadTriggerOffsetByMode.pictures
+      case 'videos':
+        return this.homeLastScrollAheadTriggerOffsetByMode.videos
+      default:
+        return this.homeLastScrollAheadTriggerOffsetByMode.articles
+    }
+  }
+
+  private setModeScrollAheadTriggerOffset(mode: SubscriptionMode, value: number): void {
+    this.homeLastScrollAheadTriggerOffsetByMode = {
+      articles: mode === 'articles' ? value : this.homeLastScrollAheadTriggerOffsetByMode.articles,
+      social: mode === 'social' ? value : this.homeLastScrollAheadTriggerOffsetByMode.social,
+      pictures: mode === 'pictures' ? value : this.homeLastScrollAheadTriggerOffsetByMode.pictures,
+      videos: mode === 'videos' ? value : this.homeLastScrollAheadTriggerOffsetByMode.videos,
+    }
+  }
+
+  private maybeTriggerLoadMoreAheadByScroll(mode: SubscriptionMode): void {
+    if (mode !== this.mode || !this.isHomeRootTab() || this.searchOverlayVisible || !!this.normalizedSearchQuery()) {
+      return
+    }
+    if (!this.modeHasMoreEntries(mode) || this.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
+      return
+    }
+    if (!this.hasRecentHomeScrollIntent()) {
+      return
+    }
+
+    const offset = this.readHomeModeScrollOffset(mode)
+    if (offset < HOME_LOAD_MORE_SCROLL_AHEAD_START_PX) {
+      return
+    }
+    const previousTriggerOffset = this.modeScrollAheadTriggerOffsetValue(mode)
+    if (offset < previousTriggerOffset) {
+      this.setModeScrollAheadTriggerOffset(mode, offset)
+      return
+    }
+    if (offset - previousTriggerOffset < HOME_LOAD_MORE_SCROLL_AHEAD_STEP_PX) {
+      return
+    }
+
+    this.setModeScrollAheadTriggerOffset(mode, offset)
+    this.enqueueLoadMoreForMode(mode, 'item-appear')
+  }
+
+  private shouldAcceptItemAppearLoadMore(mode: SubscriptionMode): boolean {
+    const now = Date.now()
+    const previousAt = this.modeLoadMoreTimestampValue(mode)
+    if (now - previousAt < HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS) {
+      return false
+    }
+    this.setModeLoadMoreTimestamp(mode, now)
+    return true
+  }
+
+  private enqueueLoadMoreForMode(mode: SubscriptionMode, source: string): void {
+    if (source === 'item-appear' && !this.shouldAcceptItemAppearLoadMore(mode)) {
+      return
+    }
+
+    if (source === 'item-appear' && this.homeLoadMoreInProgress) {
+      return
+    }
+
+    const alreadyPending = this.pendingLoadMoreForMode(mode)
+    if (!alreadyPending) {
+      this.setPendingLoadMoreForMode(mode, true)
+      this.logHomePerf(`loadMore enqueue mode=${mode} source=${source} interacting=${this.isHomeScrollInteracting}`)
+    }
+
+    if (source === 'item-appear') {
+      if (alreadyPending || this.homeLoadMoreInProgress) {
+        return
+      }
+      this.runManagedTimeout(() => {
+        this.flushPendingLoadMoreForMode(mode)
+      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
+      return
+    }
+    if (!this.isHomeScrollInteracting) {
+      this.flushPendingLoadMoreForMode(mode)
+      return
+    }
+    if (source === 'footer-visible') {
+      return
+    }
+  }
+
+  private flushPendingLoadMoreForMode(mode: SubscriptionMode): void {
+    if (!this.pendingLoadMoreForMode(mode)) {
+      return
+    }
+    this.runManagedTimeout(() => {
+      if (!this.pendingLoadMoreForMode(mode)) {
+        return
+      }
+      const handled = this.requestLoadMoreForMode(mode)
+      if (handled) {
+        this.setPendingLoadMoreForMode(mode, false)
+        return
+      }
+      this.runManagedTimeout(() => {
+        this.flushPendingLoadMoreForMode(mode)
+      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
+    }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
+  }
+
+  private shouldPrefetchLoadMoreAtIndex(mode: SubscriptionMode, index: number): boolean {
+    const totalCount = this.totalEntryCountFor(mode)
+    if (totalCount <= 0) {
+      return false
+    }
+    const visibleCount = this.visibleEntryCountFor(mode)
+    const remainingVisibleCount = Math.max(0, visibleCount - index - 1)
+    const bufferedCount = Math.max(0, totalCount - visibleCount)
+    const remainingCount = remainingVisibleCount + bufferedCount
+    const onePageRemainingThreshold = HOME_VISIBLE_ENTRY_STEP_LIMIT + 6
+    const triggerThreshold = Math.max(HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT, onePageRemainingThreshold)
+    return remainingCount <= triggerThreshold
+  }
+
+  private shouldEnableLoadMorePrefetchForMode(mode: SubscriptionMode): boolean {
+    // Avoid triggering heavy prefetch during initial layout before the user starts scrolling.
+    return this.homeModeScrollOffsetFor(mode) > 2
+  }
+
+  private handleHomeEntryAppear(mode: SubscriptionMode, index: number, _totalCount: number): void {
+    if (!HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED) {
+      return
+    }
+    if (!this.shouldEnableLoadMorePrefetchForMode(mode)) {
+      return
+    }
+    if (!this.shouldPrefetchLoadMoreAtIndex(mode, index)) {
+      return
+    }
+    this.enqueueLoadMoreForMode(mode, 'item-appear')
+  }
+
+  private mergeFeaturedEntriesFromGroups(): EntryCardModel[] {
+    const merged = [
+      ...this.entryGroups.articles,
+      ...this.entryGroups.social,
+      ...this.entryGroups.pictures,
+      ...this.entryGroups.videos,
+    ]
+    merged.sort((left: EntryCardModel, right: EntryCardModel) => (right.publishedAt || 0) - (left.publishedAt || 0))
+    return merged
+  }
+
+  private applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean): void {
+    const scopedEntries = this.filterEntriesByMode(mode, entries)
+    this.entryGroups = {
+      articles: mode === 'articles' ? scopedEntries : this.entryGroups.articles,
+      social: mode === 'social' ? scopedEntries : this.entryGroups.social,
+      pictures: mode === 'pictures' ? scopedEntries : this.entryGroups.pictures,
+      videos: mode === 'videos' ? scopedEntries : this.entryGroups.videos,
+    }
+    this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
+    this.markModeLoaded(mode, true)
+    this.settleInitialHomeLoadState()
+    if (deferredPersist) {
+      this.schedulePersistHomeSnapshot(this.featuredEntries)
+    } else {
+      this.persistHomeSnapshotNow()
+    }
+    this.notifyHomeEntryDataReloadedForMode(mode)
+  }
+
+  private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
+    if (this.isModeLoaded(mode) || this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
+      return
+    }
+    this.setModeLoading(mode, true)
+    const limit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
+    void this.reloadFeaturedEntriesFromLocal(limit, false, true, true, mode)
+      .catch((error: Error | string | Object) => {
+        this.logHomeAsyncError(`ensure-mode-loaded mode=${mode}`, error)
+      })
+      .finally(() => {
+        this.setModeLoading(mode, false)
       })
   }
 
@@ -2058,17 +3030,28 @@ struct Index {
     candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT,
     animated: boolean = false,
     deferredGrouping: boolean = true,
+    preferFastPath: boolean = false,
+    targetMode: SubscriptionMode = this.mode,
   ): Promise<void> {
-    const safeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
-    const nextEntries = await AppRepository.featuredEntries(safeCandidateLimit)
-    this.syncHomePaginationFromReloadResult(nextEntries, safeCandidateLimit)
-    this.logHomeGroupStats(`reloadFeaturedEntriesFromLocal limit=${safeCandidateLimit} animated=${animated}`, nextEntries)
+    const startedAt = Date.now()
+    const safeCandidateLimit = this.resolveHomeCandidateLimitForMode(targetMode, candidateLimit)
+    this.logHomePerf(
+      `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${preferFastPath}`,
+    )
+    const nextEntries = await AppRepository.featuredEntriesByMode(targetMode, safeCandidateLimit)
+    this.syncModePaginationFromReloadResult(targetMode, nextEntries, safeCandidateLimit)
+    this.logHomeGroupStats(
+      `reloadFeaturedEntriesFromLocal mode=${targetMode} limit=${safeCandidateLimit} animated=${animated}`,
+      nextEntries,
+    )
     if (animated) {
       this.playHomeListSwapTransition(nextEntries, this.mode)
       return
     }
-
-    this.applyHomeEntries(nextEntries, deferredGrouping)
+    this.applyEntriesForMode(targetMode, nextEntries, deferredGrouping)
+    this.logHomePerf(
+      `reload done mode=${targetMode} limit=${safeCandidateLimit} elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`,
+    )
   }
 
   private cloneHomeSnapshotEntry(entry: EntryCardModel): EntryCardModel {
@@ -2310,6 +3293,9 @@ struct Index {
   }
 
   private resolveEntryMode(entry: EntryCardModel): SubscriptionMode {
+    if (entry.viewLabel === '图片' && entry.hasVideoMedia && (!entry.mediaUrls || entry.mediaUrls.length === 0)) {
+      return 'videos'
+    }
     switch (entry.viewLabel) {
       case '社交':
         return 'social'
@@ -2320,6 +3306,10 @@ struct Index {
       default:
         return 'articles'
     }
+  }
+
+  private filterEntriesByMode(mode: SubscriptionMode, entries: EntryCardModel[]): EntryCardModel[] {
+    return entries.filter((entry: EntryCardModel) => this.resolveEntryMode(entry) === mode)
   }
 
   private homeEntryRenderBaseKey(entry: EntryCardModel): string {
@@ -2427,16 +3417,53 @@ struct Index {
 
   @Builder
   private HomeLoadMoreFooter(mode: SubscriptionMode) {
-    Column()
+    Column({ space: 8 }) {
+      if (this.homeLoadMoreInProgress) {
+        LoadingProgress()
+          .width(18)
+          .height(18)
+          .color(this.theme.accent)
+
+        Text('正在加载更多...')
+          .fontSize(12)
+          .fontColor(this.theme.textSecondary)
+      } else if (this.shouldShowEndForMode(mode)) {
+        Text('已经到底了')
+          .fontSize(12)
+          .fontColor(this.theme.textMuted)
+      } else {
+        Row()
+          .width(1)
+          .height(1)
+      }
+    }
     .width('100%')
-    .height(180)
-    .opacity(0.001)
+    .height(72)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .opacity(0.92)
+    .onAppear(() => {
+      this.traceHomeFooterStateIfChanged(mode)
+    })
     .onVisibleAreaChange([0.01], (isVisible: boolean, _currentRatio: number) => {
+      this.traceHomeFooterStateIfChanged(mode)
       if (!isVisible) {
         return
       }
-      this.requestLoadMoreForMode(mode)
+      const totalCount = this.totalEntryCountFor(mode)
+      if (totalCount <= 0 || this.homeInitialLoadPending || !this.hasRecentHomeScrollIntent()) {
+        this.logHomePerf(
+          `footer visible ignored mode=${mode} total=${totalCount} initialPending=${this.homeInitialLoadPending} recentIntent=${this.hasRecentHomeScrollIntent()}`,
+        )
+        return
+      }
+      this.logHomePerf(`footer visible mode=${mode} total=${this.totalEntryCountFor(mode)} visible=${this.visibleEntryCountFor(mode)}`)
+      this.enqueueLoadMoreForMode(mode, 'footer-visible')
     })
+  }
+
+  private shouldShowEndForMode(mode: SubscriptionMode): boolean {
+    return !this.hasBufferedEntriesForMode(mode) && (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode))
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
@@ -3082,7 +4109,7 @@ struct Index {
       offsetY: 2,
     })
     .padding({ left: 8, right: 8, top: 8, bottom: 8 })
-    .scrollBar(BarState.Off)
+    .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .alignListItem(ListItemAlign.Start)
     .clip(true)
@@ -3157,6 +4184,9 @@ struct Index {
           }
         }
         .width('100%')
+        .onAppear(() => {
+          this.handleHomeEntryAppear(mode, index, this.visibleEntryCountFor(mode))
+        })
       }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
 
       if (this.totalEntryCountFor(mode) === 0) {
@@ -3194,7 +4224,7 @@ struct Index {
     .width('100%')
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.Off)
+    .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
       this.setHomeScrollInteracting(true, mode)
@@ -3202,10 +4232,16 @@ struct Index {
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
+      this.maybeTriggerLoadMoreAheadByScroll(mode)
     })
     .onDidStopDragging((_willFling: boolean) => {
       this.setHomeScrollInteracting(false, mode)
       this.scheduleHomePullRefreshFinalizeForMode(mode)
+      this.flushPendingLoadMoreForMode(mode)
+      this.logHomePerf(
+        `stop-drag mode=${mode} offset=${this.readHomeModeScrollOffset(mode).toFixed(1)} `
+        + `visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
+      )
     })
   }
 
@@ -3241,6 +4277,9 @@ struct Index {
           })
         }
         .width('100%')
+        .onAppear(() => {
+          this.handleHomeEntryAppear('pictures', index, this.visibleEntryCountFor('pictures'))
+        })
       }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
 
       if (this.totalEntryCountFor('pictures') === 0) {
@@ -3277,7 +4316,7 @@ struct Index {
     .width('100%')
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.Off)
+    .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
       this.setHomeScrollInteracting(true, 'pictures')
@@ -3285,10 +4324,16 @@ struct Index {
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
+      this.maybeTriggerLoadMoreAheadByScroll('pictures')
     })
     .onDidStopDragging((_willFling: boolean) => {
       this.setHomeScrollInteracting(false, 'pictures')
       this.scheduleHomePullRefreshFinalizeForMode('pictures')
+      this.flushPendingLoadMoreForMode('pictures')
+      this.logHomePerf(
+        `stop-drag mode=pictures offset=${this.readHomeModeScrollOffset('pictures').toFixed(1)} `
+        + `visible=${this.visibleEntryCountFor('pictures')}/${this.totalEntryCountFor('pictures')}`,
+      )
     })
   }
 
@@ -3315,6 +4360,9 @@ struct Index {
                 onOpenEntry: (entry: EntryCardModel) => {
                   this.openEntry(entry)
                 },
+                onEntryAppear: (entryIndex: number, totalCount: number) => {
+                  this.handleHomeEntryAppear(mode, entryIndex, totalCount)
+                },
               })
 
               this.HomeLoadMoreFooter(mode)
@@ -3332,7 +4380,7 @@ struct Index {
           }
           .width('100%')
           .height('100%')
-          .scrollBar(BarState.Off)
+          .scrollBar(BarState.On)
           .edgeEffect(EdgeEffect.Spring)
           .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
             this.setHomeScrollInteracting(true, mode)
@@ -3340,10 +4388,16 @@ struct Index {
           })
             .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
+            this.maybeTriggerLoadMoreAheadByScroll(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
             this.setHomeScrollInteracting(false, mode)
             this.scheduleHomePullRefreshFinalizeForMode(mode)
+            this.flushPendingLoadMoreForMode(mode)
+            this.logHomePerf(
+              `stop-drag mode=${mode} offset=${this.readHomeModeScrollOffset(mode).toFixed(1)} `
+              + `visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
+            )
           })
         } else if (mode === 'pictures') {
           this.PictureEntryList()

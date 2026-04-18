@@ -66,6 +66,11 @@ const CREATE_ENTRIES_STAR_INDEX = `
   ON entries (is_starred, published_at DESC)
 `
 
+const CREATE_ENTRIES_PUBLISHED_INDEX = `
+  CREATE INDEX IF NOT EXISTS idx_entries_published
+  ON entries (published_at DESC)
+`
+
 export class AppDatabaseService {
   private static store: relationalStore.RdbStore | null = null
 
@@ -93,6 +98,7 @@ export class AppDatabaseService {
       await store.executeSql(CREATE_ENTRIES_FEED_INDEX)
       await store.executeSql(CREATE_ENTRIES_READ_INDEX)
       await store.executeSql(CREATE_ENTRIES_STAR_INDEX)
+      await store.executeSql(CREATE_ENTRIES_PUBLISHED_INDEX)
     } catch (error) {
       throw new Error(`执行数据库迁移失败：${error instanceof Error ? error.message : 'unknown error'}`)
     }

@@ -88,8 +88,25 @@ export class EntryRepository {
       const store = await AppDatabaseService.getStore()
       const predicates = new relationalStore.RdbPredicates('entries')
       predicates.orderByDesc('published_at')
+      predicates.orderByDesc('id')
       predicates.limitAs(limit)
-      const result = await store.query(predicates)
+      const result = await store.query(predicates, [
+        'id',
+        'feed_id',
+        'title',
+        'url',
+        'summary',
+        'content',
+        'author',
+        'published_at',
+        'is_read',
+        'is_starred',
+        'reading_time_minutes',
+        'tags_json',
+        'media_urls_json',
+        'created_at',
+        'updated_at',
+      ])
       const entries: Entry[] = []
 
       while (result.goToNextRow()) {
@@ -100,6 +117,44 @@ export class EntryRepository {
       return entries
     } catch (error) {
       throw new Error(`读取最近条目失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
+  }
+
+  static async listRecentPage(limit: number = 20, offset: number = 0): Promise<Entry[]> {
+    try {
+      const store = await AppDatabaseService.getStore()
+      const predicates = new relationalStore.RdbPredicates('entries')
+      predicates.orderByDesc('published_at')
+      predicates.orderByDesc('id')
+      predicates.limitAs(Math.max(1, limit))
+      predicates.offsetAs(Math.max(0, offset))
+      const result = await store.query(predicates, [
+        'id',
+        'feed_id',
+        'title',
+        'url',
+        'summary',
+        'content',
+        'author',
+        'published_at',
+        'is_read',
+        'is_starred',
+        'reading_time_minutes',
+        'tags_json',
+        'media_urls_json',
+        'created_at',
+        'updated_at',
+      ])
+      const entries: Entry[] = []
+
+      while (result.goToNextRow()) {
+        entries.push(mapEntry(result))
+      }
+
+      result.close()
+      return entries
+    } catch (error) {
+      throw new Error(`分页读取最近条目失败：${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 

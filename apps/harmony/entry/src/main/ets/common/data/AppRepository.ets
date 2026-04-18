@@ -55,10 +55,10 @@ const HOME_ENTRY_BALANCED_POOL_MULTIPLIER: number = 6
 const HOME_ENTRY_BALANCED_POOL_MAX: number = 6000
 const HOME_ENTRY_BALANCED_MAX_ATTEMPTS: number = 4
 const ENTRY_CARD_YIELD_BATCH_SIZE: number = 24
-const HOME_FEED_DEBUG_ENABLED: boolean = true
+const HOME_FEED_DEBUG_ENABLED: boolean = false
 const HOME_FEED_DEBUG_PREFIX: string = '[FeedFetchStateDebug][HomeFeed]'
 
-type HomeEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
+export type HomeEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 interface HomeEntryModeStats {
   articles: number
@@ -191,6 +191,10 @@ function modeOfFeedView(view: FeedViewType): HomeEntryMode {
     default:
       return 'articles'
   }
+}
+
+function modeMatchesFeedView(mode: HomeEntryMode, view: FeedViewType): boolean {
+  return modeOfFeedView(view) === mode
 }
 
 function modeOfEntryCard(card: EntryCardModel): HomeEntryMode {
@@ -716,6 +720,108 @@ export class AppRepository {
     )
 
     return selectedEntries
+  }
+
+  static async featuredEntriesFast(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    const startedAt = Date.now()
+    const safeCandidateLimit = Math.max(1, candidateLimit)
+    const feeds = await FeedRepository.list()
+    const feedMap = new Map<string, Feed>()
+    feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
+
+    const entries = await EntryRepository.listRecent(safeCandidateLimit)
+    const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    logHomeFeedDebug(
+      `featuredEntriesFast limit=${safeCandidateLimit} recent=${entries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
+    )
+    return cards
+  }
+
+  static async featuredEntriesFastPage(limit: number, offset: number): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    const startedAt = Date.now()
+    const safeLimit = Math.max(1, limit)
+    const safeOffset = Math.max(0, offset)
+    const feeds = await FeedRepository.list()
+    const feedMap = new Map<string, Feed>()
+    feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
+
+    const entries = await EntryRepository.listRecentPage(safeLimit, safeOffset)
+    const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    logHomeFeedDebug(
+      `featuredEntriesFastPage limit=${safeLimit} offset=${safeOffset} recent=${entries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
+    )
+    return cards
+  }
+
+  static async featuredEntriesByMode(
+    mode: HomeEntryMode,
+    candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT,
+  ): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    const startedAt = Date.now()
+    const safeCandidateLimit = Math.max(1, candidateLimit)
+    const feeds = await FeedRepository.list()
+    const feedMap = new Map<string, Feed>()
+    const allowedFeedIds = new Set<string>()
+    feeds.forEach((feed: Feed) => {
+      feedMap.set(feed.id, feed)
+      if (modeMatchesFeedView(mode, feed.view)) {
+        allowedFeedIds.add(feed.id)
+      }
+    })
+
+    if (allowedFeedIds.size === 0) {
+      return []
+    }
+
+    const result: EntryCardModel[] = []
+    const seen = new Set<string>()
+    const pageSize = Math.max(120, Math.min(1200, safeCandidateLimit * 2))
+    let offset = 0
+    while (result.length < safeCandidateLimit) {
+      const page = await EntryRepository.listRecentPage(pageSize, offset)
+      if (page.length === 0) {
+        break
+      }
+
+      const scopedEntries = page.filter((entry: Entry) => allowedFeedIds.has(entry.feedId))
+      const cards = await buildEntryCardsChunked(scopedEntries, (entry: Entry) => feedMap.get(entry.feedId))
+      cards.forEach((card: EntryCardModel) => {
+        if (result.length >= safeCandidateLimit) {
+          return
+        }
+        const key = uniqueEntryCardKey(card)
+        if (seen.has(key)) {
+          return
+        }
+        seen.add(key)
+        result.push(card)
+      })
+
+      if (page.length < pageSize) {
+        break
+      }
+      offset += pageSize
+    }
+
+    logHomeFeedDebug(
+      `featuredEntriesByMode mode=${mode} limit=${safeCandidateLimit} result=${result.length} elapsedMs=${Date.now() - startedAt}`,
+    )
+    return result
+  }
+
+  static async featuredEntriesFastPageByMode(
+    mode: HomeEntryMode,
+    limit: number,
+    offset: number,
+  ): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    const safeLimit = Math.max(1, limit)
+    const safeOffset = Math.max(0, offset)
+    const entries = await AppRepository.featuredEntriesByMode(mode, safeOffset + safeLimit)
+    return entries.slice(safeOffset, safeOffset + safeLimit)
   }
 
   static async starredEntries(): Promise<EntryCardModel[]> {
