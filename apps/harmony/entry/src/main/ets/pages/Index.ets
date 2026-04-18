@@ -135,9 +135,9 @@ const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
 const HOME_SWAP_CANDIDATE_LIMIT: number = 120
 const HOME_MAX_CANDIDATE_LIMIT: number = 480
 const HOME_INITIAL_CANDIDATE_LIMIT: number = HOME_MAX_CANDIDATE_LIMIT
-const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = 160
-const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 96
-const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 96
+const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = 72
+const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 72
+const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 72
 const HOME_MODE_PREWARM_DELAY_MS: number = 120
 const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 90
 const HOME_LOAD_MORE_STEP_LIMIT: number = 24
@@ -153,8 +153,11 @@ const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 64
 const HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS: number = 800
 const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 120
 const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 200
-const HOME_LOAD_MORE_SCROLL_AHEAD_START_PX: number = 760
-const HOME_LOAD_MORE_SCROLL_AHEAD_STEP_PX: number = 560
+const HOME_LOAD_MORE_FETCH_AHEAD_BUFFER_THRESHOLD: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT
+const HOME_LOAD_MORE_SCROLL_PROGRESS_START_PX: number = 720
+const HOME_LOAD_MORE_SCROLL_PROGRESS_STEP_PX: number = 640
+const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
+const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3
 const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 5000
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 const HOME_PULL_DEBUG_LOG_ENABLED: boolean = false
@@ -384,6 +387,7 @@ struct Index {
   private homeLoadMorePrefetchToken: number = 0
   private homeLoadMorePrefetchLimit: number = 0
   private homeLoadMorePrefetchEntries: EntryCardModel[] = []
+  private homeLoadMorePrefetchMode: SubscriptionMode = 'articles'
   private homeLoadMorePrefetchInProgress: boolean = false
   private lastHomeUserScrollAt: number = 0
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = {
@@ -398,7 +402,7 @@ struct Index {
     pictures: 0,
     videos: 0,
   }
-  private homeLastScrollAheadTriggerOffsetByMode: HomeModeScrollOffsetMap = {
+  private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = {
     articles: 0,
     social: 0,
     pictures: 0,
@@ -525,23 +529,27 @@ struct Index {
     const snapshotEntries = await AppRepository.homeEntrySnapshot()
     if (snapshotEntries.length > 0) {
       const groupedSnapshot = groupHomeEntriesByMode(snapshotEntries)
+      const restoredArticles = groupedSnapshot.articles.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
+      const restoredSocial = groupedSnapshot.social.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
+      const restoredPictures = groupedSnapshot.pictures.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
+      const restoredVideos = groupedSnapshot.videos.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
       this.entryGroups = {
-        articles: [...groupedSnapshot.articles],
-        social: [...groupedSnapshot.social],
-        pictures: [...groupedSnapshot.pictures],
-        videos: [...groupedSnapshot.videos],
+        articles: [...restoredArticles],
+        social: [...restoredSocial],
+        pictures: [...restoredPictures],
+        videos: [...restoredVideos],
       }
       this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
 
-      this.setCandidateLimitForMode('articles', groupedSnapshot.articles.length)
-      this.setCandidateLimitForMode('social', groupedSnapshot.social.length)
-      this.setCandidateLimitForMode('pictures', groupedSnapshot.pictures.length)
-      this.setCandidateLimitForMode('videos', groupedSnapshot.videos.length)
+      this.setCandidateLimitForMode('articles', restoredArticles.length)
+      this.setCandidateLimitForMode('social', restoredSocial.length)
+      this.setCandidateLimitForMode('pictures', restoredPictures.length)
+      this.setCandidateLimitForMode('videos', restoredVideos.length)
 
-      this.markModeLoaded('articles', groupedSnapshot.articles.length > 0)
-      this.markModeLoaded('social', groupedSnapshot.social.length > 0)
-      this.markModeLoaded('pictures', groupedSnapshot.pictures.length > 0)
-      this.markModeLoaded('videos', groupedSnapshot.videos.length > 0)
+      this.markModeLoaded('articles', restoredArticles.length > 0)
+      this.markModeLoaded('social', restoredSocial.length > 0)
+      this.markModeLoaded('pictures', restoredPictures.length > 0)
+      this.markModeLoaded('videos', restoredVideos.length > 0)
 
       this.setModeHasMoreEntries('articles', true, 'snapshot-restore')
       this.setModeHasMoreEntries('social', true, 'snapshot-restore')
@@ -1968,6 +1976,7 @@ struct Index {
     }
 
     this.logModeSwitchSnapshot('before-switch', nextMode)
+    this.invalidateHomeLoadMorePrefetch()
     this.mode = nextMode
     this.homeCandidateLimit = this.candidateLimitForMode(nextMode)
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
@@ -2537,6 +2546,7 @@ struct Index {
     this.homeLoadMorePrefetchInProgress = false
     this.homeLoadMorePrefetchLimit = 0
     this.homeLoadMorePrefetchEntries = []
+    this.homeLoadMorePrefetchMode = this.mode
   }
 
   private canPrefetchHomeLoadMore(): boolean {
@@ -2596,6 +2606,7 @@ struct Index {
 
       this.homeLoadMorePrefetchLimit = targetLimit
       this.homeLoadMorePrefetchEntries = entries
+      this.homeLoadMorePrefetchMode = mode
       this.logHomeLoadMore(
       `prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`,
       )
@@ -2608,7 +2619,10 @@ struct Index {
     }
   }
 
-  private consumePrefetchedHomeEntries(nextLimit: number): EntryCardModel[] | undefined {
+  private consumePrefetchedHomeEntries(mode: SubscriptionMode, nextLimit: number): EntryCardModel[] | undefined {
+    if (this.homeLoadMorePrefetchMode !== mode) {
+      return undefined
+    }
     if (this.homeLoadMorePrefetchLimit < nextLimit || this.homeLoadMorePrefetchEntries.length === 0) {
       return undefined
     }
@@ -2635,17 +2649,19 @@ struct Index {
     const now = Date.now()
     if (this.lastHomeLoadMoreCompletedAt > 0 && now - this.lastHomeLoadMoreCompletedAt < HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS) {
       this.logHomePerf(`loadMore skip mode=${mode} reason=post-complete-cooldown`)
-      return true
+      return false
     }
     if (now - this.lastHomeLoadMoreRequestedAt < HOME_LOAD_MORE_MIN_INTERVAL_MS) {
       this.logHomePerf(`loadMore skip mode=${mode} reason=min-interval`)
-      return true
+      return false
     }
     this.lastHomeLoadMoreRequestedAt = now
 
     const expandedVisible = this.expandVisibleEntriesForMode(mode)
-    const hasBufferedEntries = this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
-    if (expandedVisible && hasBufferedEntries) {
+    const totalCount = this.totalEntryCountFor(mode)
+    const visibleLimit = this.visibleEntryLimitFor(mode)
+    const remainingBufferedCount = Math.max(0, totalCount - visibleLimit)
+    if (expandedVisible && remainingBufferedCount > HOME_LOAD_MORE_FETCH_AHEAD_BUFFER_THRESHOLD) {
       return true
     }
 
@@ -2665,7 +2681,7 @@ struct Index {
     this.homeLoadMoreInProgress = true
     const requestToken = this.homeLoadMoreRequestToken + 1
     this.homeLoadMoreRequestToken = requestToken
-    const prefetchedEntries = this.consumePrefetchedHomeEntries(nextLimit)
+    const prefetchedEntries = this.consumePrefetchedHomeEntries(mode, nextLimit)
     const requestStartedAt = Date.now()
     this.logHomePerf(
       `loadMore start mode=${mode} nextLimit=${nextLimit} hasPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
@@ -2837,54 +2853,55 @@ struct Index {
     }
   }
 
-  private modeScrollAheadTriggerOffsetValue(mode: SubscriptionMode): number {
+  private modeScrollProgressLoadMoreValue(mode: SubscriptionMode): number {
     switch (mode) {
       case 'social':
-        return this.homeLastScrollAheadTriggerOffsetByMode.social
+        return this.homeLastScrollProgressLoadMoreAt.social
       case 'pictures':
-        return this.homeLastScrollAheadTriggerOffsetByMode.pictures
+        return this.homeLastScrollProgressLoadMoreAt.pictures
       case 'videos':
-        return this.homeLastScrollAheadTriggerOffsetByMode.videos
+        return this.homeLastScrollProgressLoadMoreAt.videos
       default:
-        return this.homeLastScrollAheadTriggerOffsetByMode.articles
+        return this.homeLastScrollProgressLoadMoreAt.articles
     }
   }
 
-  private setModeScrollAheadTriggerOffset(mode: SubscriptionMode, value: number): void {
-    this.homeLastScrollAheadTriggerOffsetByMode = {
-      articles: mode === 'articles' ? value : this.homeLastScrollAheadTriggerOffsetByMode.articles,
-      social: mode === 'social' ? value : this.homeLastScrollAheadTriggerOffsetByMode.social,
-      pictures: mode === 'pictures' ? value : this.homeLastScrollAheadTriggerOffsetByMode.pictures,
-      videos: mode === 'videos' ? value : this.homeLastScrollAheadTriggerOffsetByMode.videos,
+  private setModeScrollProgressLoadMoreValue(mode: SubscriptionMode, value: number): void {
+    this.homeLastScrollProgressLoadMoreAt = {
+      articles: mode === 'articles' ? value : this.homeLastScrollProgressLoadMoreAt.articles,
+      social: mode === 'social' ? value : this.homeLastScrollProgressLoadMoreAt.social,
+      pictures: mode === 'pictures' ? value : this.homeLastScrollProgressLoadMoreAt.pictures,
+      videos: mode === 'videos' ? value : this.homeLastScrollProgressLoadMoreAt.videos,
     }
   }
 
-  private maybeTriggerLoadMoreAheadByScroll(mode: SubscriptionMode): void {
+  private maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode): void {
     if (mode !== this.mode || !this.isHomeRootTab() || this.searchOverlayVisible || !!this.normalizedSearchQuery()) {
       return
     }
-    if (!this.modeHasMoreEntries(mode) || this.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
+    if (this.homeInitialLoadPending || this.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
       return
     }
-    if (!this.hasRecentHomeScrollIntent()) {
-      return
-    }
-
-    const offset = this.readHomeModeScrollOffset(mode)
-    if (offset < HOME_LOAD_MORE_SCROLL_AHEAD_START_PX) {
-      return
-    }
-    const previousTriggerOffset = this.modeScrollAheadTriggerOffsetValue(mode)
-    if (offset < previousTriggerOffset) {
-      this.setModeScrollAheadTriggerOffset(mode, offset)
-      return
-    }
-    if (offset - previousTriggerOffset < HOME_LOAD_MORE_SCROLL_AHEAD_STEP_PX) {
+    if (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode) || !this.hasRecentHomeScrollIntent()) {
       return
     }
 
-    this.setModeScrollAheadTriggerOffset(mode, offset)
-    this.enqueueLoadMoreForMode(mode, 'item-appear')
+    const currentOffset = this.readHomeModeScrollOffset(mode)
+    if (currentOffset < HOME_LOAD_MORE_SCROLL_PROGRESS_START_PX) {
+      return
+    }
+
+    const previousOffset = this.modeScrollProgressLoadMoreValue(mode)
+    if (currentOffset < previousOffset) {
+      this.setModeScrollProgressLoadMoreValue(mode, currentOffset)
+      return
+    }
+    if (currentOffset - previousOffset < HOME_LOAD_MORE_SCROLL_PROGRESS_STEP_PX) {
+      return
+    }
+
+    this.setModeScrollProgressLoadMoreValue(mode, currentOffset)
+    this.enqueueLoadMoreForMode(mode, 'scroll-progress')
   }
 
   private shouldAcceptItemAppearLoadMore(mode: SubscriptionMode): boolean {
@@ -2913,6 +2930,15 @@ struct Index {
     }
 
     if (source === 'item-appear') {
+      if (alreadyPending || this.homeLoadMoreInProgress) {
+        return
+      }
+      this.runManagedTimeout(() => {
+        this.flushPendingLoadMoreForMode(mode)
+      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
+      return
+    }
+    if (source === 'scroll-progress') {
       if (alreadyPending || this.homeLoadMoreInProgress) {
         return
       }
@@ -2950,22 +2976,21 @@ struct Index {
   }
 
   private shouldPrefetchLoadMoreAtIndex(mode: SubscriptionMode, index: number): boolean {
-    const totalCount = this.totalEntryCountFor(mode)
-    if (totalCount <= 0) {
+    const visibleCount = this.visibleEntryCountFor(mode)
+    if (visibleCount <= 0) {
       return false
     }
-    const visibleCount = this.visibleEntryCountFor(mode)
-    const remainingVisibleCount = Math.max(0, visibleCount - index - 1)
-    const bufferedCount = Math.max(0, totalCount - visibleCount)
-    const remainingCount = remainingVisibleCount + bufferedCount
-    const onePageRemainingThreshold = HOME_VISIBLE_ENTRY_STEP_LIMIT + 6
-    const triggerThreshold = Math.max(HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT, onePageRemainingThreshold)
-    return remainingCount <= triggerThreshold
+    const remainingVisibleCount = visibleCount - index - 1
+    const dynamicThreshold = Math.max(
+      HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
+      Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
+    )
+    return remainingVisibleCount <= dynamicThreshold
   }
 
   private shouldEnableLoadMorePrefetchForMode(mode: SubscriptionMode): boolean {
-    // Avoid triggering heavy prefetch during initial layout before the user starts scrolling.
-    return this.homeModeScrollOffsetFor(mode) > 2
+    // Only arm prefetch after user initiates a real scroll gesture.
+    return this.hasRecentHomeScrollIntent()
   }
 
   private handleHomeEntryAppear(mode: SubscriptionMode, index: number, _totalCount: number): void {
@@ -4232,7 +4257,6 @@ struct Index {
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
-      this.maybeTriggerLoadMoreAheadByScroll(mode)
     })
     .onDidStopDragging((_willFling: boolean) => {
       this.setHomeScrollInteracting(false, mode)
@@ -4324,7 +4348,6 @@ struct Index {
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
-      this.maybeTriggerLoadMoreAheadByScroll('pictures')
     })
     .onDidStopDragging((_willFling: boolean) => {
       this.setHomeScrollInteracting(false, 'pictures')
@@ -4388,7 +4411,6 @@ struct Index {
           })
             .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
-            this.maybeTriggerLoadMoreAheadByScroll(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
             this.setHomeScrollInteracting(false, mode)
