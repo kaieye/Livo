@@ -142,7 +142,7 @@ const HOME_MODE_PREWARM_DELAY_MS: number = 120
 const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 90
 const HOME_LOAD_MORE_STEP_LIMIT: number = 18
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
-const HOME_SOCIAL_FULL_CANDIDATE_LIMIT: number = 2147483647
+const HOME_FULL_MODE_CANDIDATE_LIMIT: number = 2147483647
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
 const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 12
 const HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT: number = 20
@@ -536,10 +536,10 @@ struct Index {
     if (snapshotEntries.length > 0) {
       restoredFromSnapshot = true
       const groupedSnapshot = groupHomeEntriesByMode(snapshotEntries)
-      const restoredArticles = groupedSnapshot.articles.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
-      const restoredSocial = groupedSnapshot.social.slice(0, HOME_SOCIAL_FULL_CANDIDATE_LIMIT)
-      const restoredPictures = groupedSnapshot.pictures.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
-      const restoredVideos = groupedSnapshot.videos.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
+      const restoredArticles = groupedSnapshot.articles.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
+      const restoredSocial = groupedSnapshot.social.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
+      const restoredPictures = groupedSnapshot.pictures.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
+      const restoredVideos = groupedSnapshot.videos.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
       this.entryGroups = {
         articles: [...restoredArticles],
         social: [...restoredSocial],
@@ -2288,8 +2288,8 @@ struct Index {
     return true
   }
 
-  private shouldRenderAllEntriesForMode(mode: SubscriptionMode): boolean {
-    return mode === 'social'
+  private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
+    return true
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
@@ -2320,7 +2320,7 @@ struct Index {
 
   private resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number {
     if (this.shouldRenderAllEntriesForMode(mode)) {
-      return Math.max(HOME_SOCIAL_FULL_CANDIDATE_LIMIT, minimumLimit)
+      return Math.max(HOME_FULL_MODE_CANDIDATE_LIMIT, minimumLimit)
     }
     return Math.max(minimumLimit, this.candidateLimitForMode(mode))
   }
@@ -4486,8 +4486,10 @@ struct Index {
         }
       }
 
-      ListItem() {
-        this.HomeLoadMoreFooter('pictures')
+      if (!this.shouldRenderAllEntriesForMode('pictures')) {
+        ListItem() {
+          this.HomeLoadMoreFooter('pictures')
+        }
       }
 
       ListItem() {
@@ -4543,7 +4545,9 @@ struct Index {
                 },
               })
 
-              this.HomeLoadMoreFooter(mode)
+              if (!this.shouldRenderAllEntriesForMode(mode)) {
+                this.HomeLoadMoreFooter(mode)
+              }
 
               Row()
                 .width('100%')
