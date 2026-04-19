@@ -140,10 +140,10 @@ const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 72
 const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 72
 const HOME_MODE_PREWARM_DELAY_MS: number = 120
 const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 90
-const HOME_LOAD_MORE_STEP_LIMIT: number = 24
+const HOME_LOAD_MORE_STEP_LIMIT: number = 18
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
-const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 18
+const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 12
 const HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT: number = 20
 const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 180
 const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
@@ -1198,6 +1198,7 @@ struct Index {
 
     this.currentHomeModeScrollOffset = nextOffset
     this.updateHeaderBlurProgress(nextOffset)
+    this.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
   }
 
   private setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
@@ -2278,7 +2279,10 @@ struct Index {
   }
 
   private visibleEntryCountFor(mode: SubscriptionMode): number {
-    return this.visibleEntriesFor(mode).length
+    const totalCount = this.totalEntryCountFor(mode)
+    const limit = this.visibleEntryLimitFor(mode)
+    const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
+    return Math.min(totalCount, safeLimit)
   }
 
   private expandVisibleEntriesForMode(mode: SubscriptionMode): boolean {
@@ -2875,7 +2879,7 @@ struct Index {
     }
   }
 
-  private maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode): void {
+  private maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
     if (mode !== this.mode || !this.isHomeRootTab() || this.searchOverlayVisible || !!this.normalizedSearchQuery()) {
       return
     }
@@ -2886,7 +2890,6 @@ struct Index {
       return
     }
 
-    const currentOffset = this.readHomeModeScrollOffset(mode)
     if (currentOffset < HOME_LOAD_MORE_SCROLL_PROGRESS_START_PX) {
       return
     }
@@ -2960,6 +2963,10 @@ struct Index {
     if (!this.pendingLoadMoreForMode(mode)) {
       return
     }
+    // Avoid scheduling list growth while finger is dragging to reduce scroll hitching.
+    if (this.isHomeScrollInteracting) {
+      return
+    }
     this.runManagedTimeout(() => {
       if (!this.pendingLoadMoreForMode(mode)) {
         return
@@ -2975,8 +2982,7 @@ struct Index {
     }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
   }
 
-  private shouldPrefetchLoadMoreAtIndex(mode: SubscriptionMode, index: number): boolean {
-    const visibleCount = this.visibleEntryCountFor(mode)
+  private shouldPrefetchLoadMoreAtIndex(visibleCount: number, index: number): boolean {
     if (visibleCount <= 0) {
       return false
     }
@@ -2993,14 +2999,14 @@ struct Index {
     return this.hasRecentHomeScrollIntent()
   }
 
-  private handleHomeEntryAppear(mode: SubscriptionMode, index: number, _totalCount: number): void {
+  private handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
     if (!HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED) {
       return
     }
     if (!this.shouldEnableLoadMorePrefetchForMode(mode)) {
       return
     }
-    if (!this.shouldPrefetchLoadMoreAtIndex(mode, index)) {
+    if (!this.shouldPrefetchLoadMoreAtIndex(totalCount, index)) {
       return
     }
     this.enqueueLoadMoreForMode(mode, 'item-appear')
@@ -4209,9 +4215,6 @@ struct Index {
           }
         }
         .width('100%')
-        .onAppear(() => {
-          this.handleHomeEntryAppear(mode, index, this.visibleEntryCountFor(mode))
-        })
       }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
 
       if (this.totalEntryCountFor(mode) === 0) {
@@ -4301,9 +4304,6 @@ struct Index {
           })
         }
         .width('100%')
-        .onAppear(() => {
-          this.handleHomeEntryAppear('pictures', index, this.visibleEntryCountFor('pictures'))
-        })
       }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
 
       if (this.totalEntryCountFor('pictures') === 0) {
@@ -4382,9 +4382,6 @@ struct Index {
                 inheritedTheme: this.theme,
                 onOpenEntry: (entry: EntryCardModel) => {
                   this.openEntry(entry)
-                },
-                onEntryAppear: (entryIndex: number, totalCount: number) => {
-                  this.handleHomeEntryAppear(mode, entryIndex, totalCount)
                 },
               })
 
