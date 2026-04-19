@@ -159,6 +159,7 @@ const HOME_LOAD_MORE_SCROLL_PROGRESS_STEP_PX: number = 640
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3
 const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 5000
+const HOME_STARTUP_REFRESH_COOLDOWN_MS: number = 3 * 60 * 1000
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 const HOME_PULL_DEBUG_LOG_ENABLED: boolean = false
 const HOME_PULL_DEBUG_LOG_PREFIX: string = '[HomePullDebug]'
@@ -361,6 +362,8 @@ struct Index {
   private homeEntryGroupVersion: number = 0
   private postRefreshReloadVersion: number = 0
   private feedsChangedReloadVersion: number = 0
+  private hasDeferredFeedsChangedReload: boolean = false
+  private deferredFeedsChangedRetryToken: number = 0
   private suppressFeedsChangedUntilMs: number = 0
   private homeListSwapToken: number = 0
   private lastHomePullFinalizeAt: number = 0
@@ -446,6 +449,7 @@ struct Index {
     this.syncRequestedRootTab()
     if (this.hasLoadedInitialData) {
       this.configureAutoRefreshTimer()
+      this.tryFlushDeferredFeedsChangedReload('about-to-appear')
       if (this.featuredEntries.length === 0) {
         void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
       }
@@ -526,8 +530,10 @@ struct Index {
     const feedsPromise = AppRepository.feedEntities()
 
     const currentMode = this.mode
+    let restoredFromSnapshot: boolean = false
     const snapshotEntries = await AppRepository.homeEntrySnapshot()
     if (snapshotEntries.length > 0) {
+      restoredFromSnapshot = true
       const groupedSnapshot = groupHomeEntriesByMode(snapshotEntries)
       const restoredArticles = groupedSnapshot.articles.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
       const restoredSocial = groupedSnapshot.social.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
@@ -575,7 +581,7 @@ struct Index {
     this.theme = await ThemeService.resolvePalette(settings)
     void this.applySystemBarStyle(this.theme)
 
-    this.startStartupRefreshIfNeeded()
+    void this.startStartupRefreshIfNeeded(restoredFromSnapshot)
     this.configureAutoRefreshTimer()
     this.hasLoadedInitialData = true
     this.scheduleModePrewarm(currentMode)
@@ -606,14 +612,58 @@ struct Index {
     })
   }
 
-  private startStartupRefreshIfNeeded(): void {
+  private async shouldRunStartupRefresh(snapshotRestored: boolean): Promise<boolean> {
+    if (!snapshotRestored) {
+      return true
+    }
+
+    try {
+      const logs = await AppRepository.refreshLogs()
+      if (logs.length <= 0) {
+        return true
+      }
+
+      const latestSuccessfulLog = logs.find((log) => {
+        return Math.max(0, Number(log.successFeedCount) || 0) > 0
+      })
+      if (!latestSuccessfulLog) {
+        return true
+      }
+
+      const latestRefreshAt = Math.max(0, Number(latestSuccessfulLog.refreshedAt) || 0)
+      if (latestRefreshAt <= 0) {
+        return true
+      }
+
+      const elapsedMs = Date.now() - latestRefreshAt
+      if (elapsedMs < HOME_STARTUP_REFRESH_COOLDOWN_MS) {
+        this.logHomePerf(
+          `startup-refresh skip reason=cooldown elapsedMs=${elapsedMs} cooldownMs=${HOME_STARTUP_REFRESH_COOLDOWN_MS}`,
+        )
+        return false
+      }
+    } catch (error) {
+      this.logHomeAsyncError('startup-refresh-check', error)
+      return true
+    }
+
+    return true
+  }
+
+  private async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> {
     if (this.isHomeStartupRefreshing) {
+      return
+    }
+
+    const shouldRun = await this.shouldRunStartupRefresh(snapshotRestored)
+    if (!shouldRun) {
       return
     }
 
     this.isHomeStartupRefreshing = true
     void this.refreshFeaturedEntries(false).finally(() => {
       this.isHomeStartupRefreshing = false
+      this.tryFlushDeferredFeedsChangedReload('startup-refresh-finally')
       this.settleInitialHomeLoadState()
       this.runManagedTimeout(() => {
         this.settleInitialHomeLoadState(true)
@@ -685,6 +735,7 @@ struct Index {
         this.animateHomePullRefreshReset()
       }, HOME_REFRESH_RESET_DEFER_MS)
       this.scheduleHomeLoadMorePrefetch()
+      this.tryFlushDeferredFeedsChangedReload('refresh-finally')
       this.logHomePerf(`refresh done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
     }
   }
@@ -1956,6 +2007,7 @@ struct Index {
       if (this.hasLoadedInitialData && !this.isRefreshing && !this.isHomeStartupRefreshing) {
         void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
       }
+      this.tryFlushDeferredFeedsChangedReload('tab-home')
     }
   }
 
@@ -2066,28 +2118,27 @@ struct Index {
     }
   }
 
-  private handleFeedsChanged(): void {
-    if (!this.isComponentActive || this.isRefreshing || this.isHomeStartupRefreshing) {
-      return
-    }
+  private markDeferredFeedsChangedReload(reason: string): void {
+    this.hasDeferredFeedsChangedReload = true
+    this.logHomePerf(`feedsChanged deferred reason=${reason}`)
+  }
 
-    if (!this.isHomeRootTab()) {
-      return
-    }
+  private scheduleDeferredFeedsChangedRetry(delayMs: number): void {
+    const safeDelayMs = Math.max(16, delayMs)
+    const retryToken = this.deferredFeedsChangedRetryToken + 1
+    this.deferredFeedsChangedRetryToken = retryToken
+    this.runManagedTimeout(() => {
+      if (this.deferredFeedsChangedRetryToken !== retryToken) {
+        return
+      }
+      this.tryFlushDeferredFeedsChangedReload('retry')
+    }, safeDelayMs)
+  }
 
-    const now = Date.now()
-    if (now - this.lastHomeRefreshFinishedAt < HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS) {
-      return
-    }
-    if (this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
-      return
-    }
-    if (now < this.suppressFeedsChangedUntilMs) {
-      return
-    }
-
+  private scheduleFeedsChangedReload(reason: string): void {
     const currentVersion = this.feedsChangedReloadVersion + 1
     this.feedsChangedReloadVersion = currentVersion
+    this.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
     this.invalidateHomeLoadMorePrefetch()
     void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_SWAP_PRIME_CANDIDATE_LIMIT))
 
@@ -2104,6 +2155,71 @@ struct Index {
       }
       void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
     }, HOME_FEEDS_CHANGED_FULL_RELOAD_DELAY_MS)
+
+    // Keep non-active modes in sync so category tabs do not stay empty after startup refresh.
+    const nonActiveModes = SUBSCRIPTION_MODES.filter((mode: SubscriptionMode) => mode !== this.mode)
+    nonActiveModes.forEach((mode: SubscriptionMode, index: number) => {
+      this.runManagedTimeout(() => {
+        if (this.feedsChangedReloadVersion !== currentVersion || !this.isComponentActive || !this.isHomeRootTab()) {
+          return
+        }
+        const modeLimit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
+        void this.reloadFeaturedEntriesFromLocal(modeLimit, false, true, true, mode)
+      }, HOME_FEEDS_CHANGED_RELOAD_DELAY_MS + index * HOME_MODE_PREWARM_STEP_DELAY_MS)
+    })
+  }
+
+  private tryFlushDeferredFeedsChangedReload(source: string): void {
+    if (!this.hasDeferredFeedsChangedReload) {
+      return
+    }
+    if (!this.isComponentActive || !this.isHomeRootTab()) {
+      return
+    }
+
+    const now = Date.now()
+    if (this.isRefreshing || this.isHomeStartupRefreshing || this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
+      return
+    }
+    if (now < this.suppressFeedsChangedUntilMs) {
+      this.scheduleDeferredFeedsChangedRetry(this.suppressFeedsChangedUntilMs - now + 16)
+      return
+    }
+
+    this.hasDeferredFeedsChangedReload = false
+    this.scheduleFeedsChangedReload(`deferred-${source}`)
+  }
+
+  private handleFeedsChanged(): void {
+    if (!this.isComponentActive) {
+      return
+    }
+
+    const now = Date.now()
+    if (!this.isHomeRootTab()) {
+      this.markDeferredFeedsChangedReload('not-home-tab')
+      return
+    }
+
+    if (this.isRefreshing || this.isHomeStartupRefreshing || this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
+      this.markDeferredFeedsChangedReload('busy')
+      return
+    }
+
+    if (now < this.suppressFeedsChangedUntilMs) {
+      this.markDeferredFeedsChangedReload('suppressed-until')
+      this.scheduleDeferredFeedsChangedRetry(this.suppressFeedsChangedUntilMs - now + 16)
+      return
+    }
+
+    if (now - this.lastHomeRefreshFinishedAt < HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS) {
+      this.markDeferredFeedsChangedReload('post-refresh-suppress')
+      const remainingSuppressMs = HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS - (now - this.lastHomeRefreshFinishedAt)
+      this.scheduleDeferredFeedsChangedRetry(remainingSuppressMs + 16)
+      return
+    }
+
+    this.scheduleFeedsChangedReload('watch-event')
   }
 
   private shouldRunFinalHomeReloadNow(): boolean {
@@ -3043,7 +3159,8 @@ struct Index {
   }
 
   private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
-    if (this.isModeLoaded(mode) || this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
+    const hasModeEntries = this.totalEntryCountFor(mode) > 0
+    if ((this.isModeLoaded(mode) && hasModeEntries) || this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
       return
     }
     this.setModeLoading(mode, true)
