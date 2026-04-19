@@ -142,6 +142,7 @@ const HOME_MODE_PREWARM_DELAY_MS: number = 120
 const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 90
 const HOME_LOAD_MORE_STEP_LIMIT: number = 18
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
+const HOME_SOCIAL_FULL_CANDIDATE_LIMIT: number = 2147483647
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
 const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 12
 const HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT: number = 20
@@ -536,7 +537,7 @@ struct Index {
       restoredFromSnapshot = true
       const groupedSnapshot = groupHomeEntriesByMode(snapshotEntries)
       const restoredArticles = groupedSnapshot.articles.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
-      const restoredSocial = groupedSnapshot.social.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
+      const restoredSocial = groupedSnapshot.social.slice(0, HOME_SOCIAL_FULL_CANDIDATE_LIMIT)
       const restoredPictures = groupedSnapshot.pictures.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
       const restoredVideos = groupedSnapshot.videos.slice(0, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
       this.entryGroups = {
@@ -919,7 +920,8 @@ struct Index {
   }
 
   private shouldConsumeHomePullScroll(mode: SubscriptionMode): boolean {
-    return this.currentRootTabId() === 'home'
+    return !this.shouldDisableHomePullRefresh()
+      && this.currentRootTabId() === 'home'
       && mode === this.mode
       && !this.searchOverlayVisible
   }
@@ -1098,7 +1100,7 @@ struct Index {
   }
 
   private shouldShowHomeRefreshGap(mode: SubscriptionMode): boolean {
-    if (!this.isHomeRootTab() || mode !== this.mode) {
+    if (this.shouldDisableHomePullRefresh() || !this.isHomeRootTab() || mode !== this.mode) {
       return false
     }
 
@@ -1112,7 +1114,7 @@ struct Index {
   }
 
   private shouldShowHomeRefreshIndicator(mode: SubscriptionMode): boolean {
-    if (!this.isHomeRootTab() || mode !== this.mode) {
+    if (this.shouldDisableHomePullRefresh() || !this.isHomeRootTab() || mode !== this.mode) {
       return false
     }
 
@@ -2282,6 +2284,14 @@ struct Index {
     return Math.max(minimumLimit, this.homeCandidateLimit)
   }
 
+  private shouldDisableHomePullRefresh(): boolean {
+    return true
+  }
+
+  private shouldRenderAllEntriesForMode(mode: SubscriptionMode): boolean {
+    return mode === 'social'
+  }
+
   private candidateLimitForMode(mode: SubscriptionMode): number {
     switch (mode) {
       case 'social':
@@ -2309,6 +2319,9 @@ struct Index {
   }
 
   private resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number {
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return Math.max(HOME_SOCIAL_FULL_CANDIDATE_LIMIT, minimumLimit)
+    }
     return Math.max(minimumLimit, this.candidateLimitForMode(mode))
   }
 
@@ -2384,11 +2397,17 @@ struct Index {
   }
 
   private hasBufferedEntriesForMode(mode: SubscriptionMode): boolean {
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return false
+    }
     return this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
   }
 
   private visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     const entries = this.filteredEntriesFor(mode)
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return entries
+    }
     const limit = this.visibleEntryLimitFor(mode)
     const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
     return entries.slice(0, Math.min(entries.length, safeLimit))
@@ -2396,12 +2415,18 @@ struct Index {
 
   private visibleEntryCountFor(mode: SubscriptionMode): number {
     const totalCount = this.totalEntryCountFor(mode)
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return totalCount
+    }
     const limit = this.visibleEntryLimitFor(mode)
     const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
     return Math.min(totalCount, safeLimit)
   }
 
   private expandVisibleEntriesForMode(mode: SubscriptionMode): boolean {
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return false
+    }
     const total = this.totalEntryCountFor(mode)
     const currentLimit = this.visibleEntryLimitFor(mode)
     if (currentLimit >= total) {
@@ -2446,6 +2471,9 @@ struct Index {
   }
 
   private canLoadMoreForMode(mode: SubscriptionMode): boolean {
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return false
+    }
     const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
     return this.isHomeRootTab()
       && mode === this.mode
@@ -2675,6 +2703,7 @@ struct Index {
     }
     return this.isComponentActive
       && this.isHomeRootTab()
+      && !this.shouldRenderAllEntriesForMode(this.mode)
       && !this.searchOverlayVisible
       && !this.normalizedSearchQuery()
       && !this.isRefreshing
@@ -2999,6 +3028,9 @@ struct Index {
     if (mode !== this.mode || !this.isHomeRootTab() || this.searchOverlayVisible || !!this.normalizedSearchQuery()) {
       return
     }
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return
+    }
     if (this.homeInitialLoadPending || this.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
       return
     }
@@ -3034,6 +3066,9 @@ struct Index {
   }
 
   private enqueueLoadMoreForMode(mode: SubscriptionMode, source: string): void {
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return
+    }
     if (source === 'item-appear' && !this.shouldAcceptItemAppearLoadMore(mode)) {
       return
     }
@@ -3112,7 +3147,7 @@ struct Index {
 
   private shouldEnableLoadMorePrefetchForMode(mode: SubscriptionMode): boolean {
     // Only arm prefetch after user initiates a real scroll gesture.
-    return this.hasRecentHomeScrollIntent()
+    return !this.shouldRenderAllEntriesForMode(mode) && this.hasRecentHomeScrollIntent()
   }
 
   private handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
@@ -3160,7 +3195,11 @@ struct Index {
 
   private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
     const hasModeEntries = this.totalEntryCountFor(mode) > 0
-    if ((this.isModeLoaded(mode) && hasModeEntries) || this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
+    const requiresFullModeReload = this.shouldRenderAllEntriesForMode(mode)
+      && this.candidateLimitForMode(mode) < this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
+    if ((this.isModeLoaded(mode) && hasModeEntries && !requiresFullModeReload)
+      || this.isModeLoading(mode)
+      || this.homeLoadMoreInProgress) {
       return
     }
     this.setModeLoading(mode, true)
@@ -4357,8 +4396,10 @@ struct Index {
         }
       }
 
-      ListItem() {
-        this.HomeLoadMoreFooter(mode)
+      if (!this.shouldRenderAllEntriesForMode(mode)) {
+        ListItem() {
+          this.HomeLoadMoreFooter(mode)
+        }
       }
 
       ListItem() {
