@@ -3195,11 +3195,10 @@ struct Index {
 
   private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
     const hasModeEntries = this.totalEntryCountFor(mode) > 0
-    const requiresFullModeReload = this.shouldRenderAllEntriesForMode(mode)
-      && this.candidateLimitForMode(mode) < this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
-    if ((this.isModeLoaded(mode) && hasModeEntries && !requiresFullModeReload)
-      || this.isModeLoading(mode)
-      || this.homeLoadMoreInProgress) {
+    if (this.isModeLoaded(mode) && hasModeEntries) {
+      return
+    }
+    if (this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
       return
     }
     this.setModeLoading(mode, true)
