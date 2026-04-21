@@ -208,12 +208,9 @@ export struct DiscoverContent {
   aboutToAppear(): void {
     this.dismissSearchFocus()
 
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-      if (this.hasLoaded || this.isLoadingPage) {
-        this.onReady()
-        return
-      }
+    if (this.hasLoaded || this.isLoadingPage) {
+      this.onReady()
+      return
     }
 
     void this.loadData()

@@ -99,12 +99,9 @@ export struct SubscriptionsContent {
 
   aboutToAppear(): void {
     this.overlayLevel = this.subscriptionsOverlayLevel
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-      if (this.hasLoaded || this.isLoading) {
-        this.onReady()
-        return
-      }
+    if (this.hasLoaded || this.isLoading) {
+      this.onReady()
+      return
     }
 
     void this.loadPageData()
