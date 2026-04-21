@@ -4502,21 +4502,15 @@ struct Index {
 
   @Builder
   private HomeRootPage() {
+    // Always build all mode scenes - visibility is controlled by modeSceneVisible(), not if conditions
+    // This avoids re-building when switching modes, eliminating lag
     Stack({ alignContent: Alignment.TopStart }) {
       this.HomeRefreshIndicatorLayer()
 
-      if (this.shouldMountModeScene('articles')) {
-        this.ModeEntriesScene('articles')
-      }
-      if (this.shouldMountModeScene('social')) {
-        this.ModeEntriesScene('social')
-      }
-      if (this.shouldMountModeScene('pictures')) {
-        this.ModeEntriesScene('pictures')
-      }
-      if (this.shouldMountModeScene('videos')) {
-        this.ModeEntriesScene('videos')
-      }
+      this.ModeEntriesScene('articles')
+      this.ModeEntriesScene('social')
+      this.ModeEntriesScene('pictures')
+      this.ModeEntriesScene('videos')
     }
     .width('100%')
     .height('100%')
