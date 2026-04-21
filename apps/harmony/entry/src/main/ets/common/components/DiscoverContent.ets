@@ -231,12 +231,9 @@ export struct DiscoverContent {
   aboutToAppear(): void {
     this.preventAutoKeyboardPopup('discover-about-to-appear')
 
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-      if (this.hasLoaded || this.isLoadingPage) {
-        this.onReady()
-        return
-      }
+    if (this.hasLoaded || this.isLoadingPage) {
+      this.onReady()
+      return
     }
 
     void this.loadData()
