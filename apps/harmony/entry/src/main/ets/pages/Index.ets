@@ -135,15 +135,16 @@ const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
 const HOME_SWAP_CANDIDATE_LIMIT: number = 120
 const HOME_MAX_CANDIDATE_LIMIT: number = 480
 const HOME_INITIAL_CANDIDATE_LIMIT: number = HOME_MAX_CANDIDATE_LIMIT
-const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = 72
-const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 72
-const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 72
+const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = 120
+const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 120
+const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 300
 const HOME_MODE_PREWARM_DELAY_MS: number = 120
-const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 90
+const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 0
+const HOME_MODE_SWITCH_ENTRY_DEFER_MS: number = 32
 const HOME_LOAD_MORE_STEP_LIMIT: number = 18
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
 const HOME_FULL_MODE_CANDIDATE_LIMIT: number = 2147483647
-const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
+const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 48
 const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 12
 const HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT: number = 20
 const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 180
@@ -566,10 +567,9 @@ struct Index {
       this.schedulePersistHomeSnapshot(this.featuredEntries)
       this.feedSourceLabel = '已恢复本地内容'
     } else {
-      const initialLimit = this.resolveHomeCandidateLimitForMode(currentMode, HOME_MODE_INITIAL_CANDIDATE_LIMIT)
-      const initialEntries = await AppRepository.featuredEntriesByMode(currentMode, initialLimit)
-      this.syncModePaginationFromReloadResult(currentMode, initialEntries, initialLimit)
-      this.applyEntriesForMode(currentMode, initialEntries, true)
+      // Reference project loads all entries at once, not just current mode
+      this.featuredEntries = await AppRepository.featuredEntries()
+      this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
       this.feedSourceLabel = '本地内容已加载'
     }
     this.settleInitialHomeLoadState()
@@ -585,32 +585,12 @@ struct Index {
     void this.startStartupRefreshIfNeeded(restoredFromSnapshot)
     this.configureAutoRefreshTimer()
     this.hasLoadedInitialData = true
-    this.scheduleModePrewarm(currentMode)
+
+    // Preload other modes in background to avoid first-switch lag
+    this.precacheNonActiveModes()
+
     this.scheduleHomeLoadMorePrefetch(800)
     this.logHomePerf(`loadInitialData done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
-  }
-
-  private scheduleModePrewarm(currentMode: SubscriptionMode): void {
-    const modes = SUBSCRIPTION_MODES.filter((mode: SubscriptionMode) => mode !== currentMode)
-    modes.forEach((mode: SubscriptionMode, index: number) => {
-      this.runManagedTimeout(() => {
-        if (!this.isComponentActive || this.currentRootTabId() !== 'home') {
-          return
-        }
-        if (this.isModeLoaded(mode) || this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
-          return
-        }
-        this.setModeLoading(mode, true)
-        const prewarmLimit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_PREWARM_CANDIDATE_LIMIT)
-        void this.reloadFeaturedEntriesFromLocal(prewarmLimit, false, true, true, mode)
-          .catch((error: Error | string | Object) => {
-            this.logHomeAsyncError(`mode-prewarm mode=${mode}`, error)
-          })
-          .finally(() => {
-            this.setModeLoading(mode, false)
-          })
-      }, HOME_MODE_PREWARM_DELAY_MS + index * HOME_MODE_PREWARM_STEP_DELAY_MS)
-    })
   }
 
   private async shouldRunStartupRefresh(snapshotRestored: boolean): Promise<boolean> {
@@ -2022,32 +2002,31 @@ struct Index {
   }
 
   private requestModeSwitch(nextMode: SubscriptionMode): void {
+    console.info(`[MODE_SWITCH] requestModeSwitch START mode=${this.mode} -> ${nextMode}`)
+    const switchStart = Date.now()
     if (!shouldAcceptModeSwitch({
       currentMode: this.mode,
       nextMode,
       isTransitioning: this.isModeTransitioning,
     })) {
+      console.info(`[MODE_SWITCH] requestModeSwitch REJECTED mode=${this.mode} -> ${nextMode}`)
       return
     }
 
-    this.logModeSwitchSnapshot('before-switch', nextMode)
-    this.invalidateHomeLoadMorePrefetch()
+    const nextModeOffset = this.homeModeScrollOffsetFor(nextMode)
+    console.info(`[MODE_SWITCH] setting state mode=${nextMode} offset=${nextModeOffset}`)
+
     this.mode = nextMode
-    this.homeCandidateLimit = this.candidateLimitForMode(nextMode)
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
+    console.info(`[MODE_SWITCH] visitedModes updated=${JSON.stringify(this.visitedModes)}`)
     this.resetHomePullRefreshState()
     this.homeModeRailExpandedOverride = false
     this.homeModeRailExpandedLockOffset = -1
-    const nextModeOffset = this.homeModeScrollOffsetFor(nextMode)
     this.currentHomeModeScrollOffset = nextModeOffset
     this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
-    this.runManagedTimeout(() => {
-      this.ensureModeEntriesLoaded(nextMode)
-    }, 16)
-    this.requestExpandedModeRail()
-    this.logModeSwitchSnapshot('after-switch', nextMode)
+    console.info(`[MODE_SWITCH] requestModeSwitch END elapsed=${Date.now() - switchStart}ms`)
   }
 
   private logModeSwitchSnapshot(stage: string, mode: SubscriptionMode): void {
@@ -2070,10 +2049,13 @@ struct Index {
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
-    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(this.renderedMode) ? 1 : -1
-    this.previousMode = this.renderedMode
+    console.info(`[MODE_SWITCH] startModeTransition START mode=${nextMode} currentRendered=${this.renderedMode}`)
+    const t0 = Date.now()
+    // Reference project uses nextMode for previousMode, not renderedMode
+    this.previousMode = nextMode
     this.renderedMode = nextMode
-    this.isModeTransitioning = false
+    this.modeTransitionDirection = 1
+    console.info(`[MODE_SWITCH] startModeTransition END elapsed=${Date.now() - t0}ms renderedMode=${this.renderedMode}`)
   }
 
   private adjacentMode(offsetX: number): SubscriptionMode | undefined {
@@ -2110,13 +2092,13 @@ struct Index {
   private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     switch (mode) {
       case 'social':
-        return this.filterEntriesByMode('social', this.entryGroups.social)
+        return this.entryGroups.social
       case 'pictures':
-        return this.filterEntriesByMode('pictures', this.entryGroups.pictures)
+        return this.entryGroups.pictures
       case 'videos':
-        return this.filterEntriesByMode('videos', this.entryGroups.videos)
+        return this.entryGroups.videos
       default:
-        return this.filterEntriesByMode('articles', this.entryGroups.articles)
+        return this.entryGroups.articles
     }
   }
 
@@ -3174,7 +3156,7 @@ struct Index {
     return merged
   }
 
-  private applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean): void {
+  private applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void {
     const scopedEntries = this.filterEntriesByMode(mode, entries)
     this.entryGroups = {
       articles: mode === 'articles' ? scopedEntries : this.entryGroups.articles,
@@ -3182,7 +3164,9 @@ struct Index {
       pictures: mode === 'pictures' ? scopedEntries : this.entryGroups.pictures,
       videos: mode === 'videos' ? scopedEntries : this.entryGroups.videos,
     }
-    this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
+    if (!skipMerge) {
+      this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
+    }
     this.markModeLoaded(mode, true)
     this.settleInitialHomeLoadState()
     if (deferredPersist) {
@@ -3190,7 +3174,9 @@ struct Index {
     } else {
       this.persistHomeSnapshotNow()
     }
-    this.notifyHomeEntryDataReloadedForMode(mode)
+    if (!skipNotify) {
+      this.notifyHomeEntryDataReloadedForMode(mode)
+    }
   }
 
   private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
@@ -3210,6 +3196,33 @@ struct Index {
       .finally(() => {
         this.setModeLoading(mode, false)
       })
+  }
+
+  private precacheNonActiveModes(): void {
+    const currentMode = this.mode
+    const modes: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
+    // Use smaller limit for precaching to reduce initial load overhead
+    const precacheLimit = 20
+
+    for (const mode of modes) {
+      if (mode === currentMode) {
+        continue
+      }
+      // Only precache if not already loaded and not currently loading
+      if (!this.isModeLoaded(mode) && !this.isModeLoading(mode)) {
+        this.setModeLoading(mode, true)
+        void AppRepository.featuredEntriesByMode(mode, precacheLimit)
+          .then((entries) => {
+            this.applyEntriesForMode(mode, entries, true, true, true)
+          })
+          .catch((error: Error | string | Object) => {
+            this.logHomeAsyncError(`precache-mode mode=${mode}`, error)
+          })
+          .finally(() => {
+            this.setModeLoading(mode, false)
+          })
+      }
+    }
   }
 
   private async reloadFeaturedEntriesFromLocal(
@@ -3653,56 +3666,30 @@ struct Index {
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
-    const state = resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    })
-    return state.visibility === 'visible' ? Visibility.Visible : Visibility.Hidden
-  }
-
-  private modeSceneOpacity(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    }).opacity
-  }
-
-  private modeSceneOffset(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    }).offset
-  }
-
-  private modeSceneZIndex(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    }).zIndex
+    const result = mode === this.renderedMode ? Visibility.Visible : Visibility.Hidden
+    console.info(`[VISIBILITY] modeSceneVisible mode=${mode} renderedMode=${this.renderedMode} result=${result === Visibility.Visible ? 'Visible' : 'Hidden'}`)
+    return result
   }
 
   private shouldMountModeScene(mode: SubscriptionMode): boolean {
-    const renderState = resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    })
+    const result = mode === this.renderedMode || this.visitedModes.includes(mode)
+    console.info(`[SHOULD_MOUNT] shouldMountModeScene mode=${mode} renderedMode=${this.renderedMode} visited=${JSON.stringify(this.visitedModes)} result=${result}`)
+    return result
+  }
 
-    return renderState.shouldMount
+  private modeSceneOpacity(mode: SubscriptionMode): number {
+    // No fade transition needed
+    return 1
+  }
+
+  private modeSceneOffset(mode: SubscriptionMode): number {
+    // No slide transition needed
+    return 0
+  }
+
+  private modeSceneZIndex(mode: SubscriptionMode): number {
+    // Current mode on top
+    return mode === this.renderedMode ? 2 : 1
   }
 
   private getModeTitle(mode: SubscriptionMode): string {
@@ -4361,7 +4348,7 @@ struct Index {
       }
       .width('100%')
 
-      ForEach(this.visibleEntriesFor(mode), (entry: EntryCardModel, index: number) => {
+      ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel, index: number) => {
         ListItem() {
           if (mode === 'social') {
             this.SocialEntryCard(entry, index)
@@ -4371,35 +4358,6 @@ struct Index {
         }
         .width('100%')
       }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
-
-      if (this.totalEntryCountFor(mode) === 0) {
-        ListItem() {
-          Column({ space: 8 }) {
-            Text(this.homeEmptyStateTitle())
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.theme.textPrimary)
-
-            Text(this.homeEmptyStateSubtitle())
-              .fontSize(14)
-              .lineHeight(22)
-              .fontColor(this.theme.textSecondary)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .padding(20)
-          .backgroundColor(this.theme.surface)
-          .borderRadius(CARD_RADIUS_MD)
-          .border({ width: 0.8, color: this.theme.divider })
-          .margin({ top: mode === 'social' ? HOME_MODE_CONTENT_GAP : 0 })
-          .width('100%')
-        }
-      }
-
-      if (!this.shouldRenderAllEntriesForMode(mode)) {
-        ListItem() {
-          this.HomeLoadMoreFooter(mode)
-        }
-      }
 
       ListItem() {
         Row().height(100).width('100%')
@@ -4412,20 +4370,13 @@ struct Index {
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-      this.setHomeScrollInteracting(true, mode)
       return this.consumeHomePullScroll(mode, scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
     })
     .onDidStopDragging((_willFling: boolean) => {
-      this.setHomeScrollInteracting(false, mode)
-      this.scheduleHomePullRefreshFinalizeForMode(mode)
-      this.flushPendingLoadMoreForMode(mode)
-      this.logHomePerf(
-        `stop-drag mode=${mode} offset=${this.readHomeModeScrollOffset(mode).toFixed(1)} `
-        + `visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
-      )
+      this.finalizeHomePullRefresh()
     })
   }
 
@@ -4443,7 +4394,7 @@ struct Index {
       }
       .width('100%')
 
-      ForEach(this.visibleEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
+      ForEach(this.filteredEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
         ListItem() {
           PictureEntryCard({
             entry: this.pictureCardEntry(entry),
@@ -4455,41 +4406,12 @@ struct Index {
             galleryUrls: this.pictureGalleryUrls(entry),
             theme: this.theme,
             highlightQuery: this.searchQuery,
-            isUnread: !entry.isRead,
             enableEnterTransition: false,
             onOpen: () => this.openEntry(entry),
           })
         }
         .width('100%')
-      }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
-
-      if (this.totalEntryCountFor('pictures') === 0) {
-        ListItem() {
-          Column({ space: 8 }) {
-            Text(this.homeEmptyStateTitle())
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.theme.textPrimary)
-
-            Text(this.homeEmptyStateSubtitle())
-              .fontSize(14)
-              .lineHeight(22)
-              .fontColor(this.theme.textSecondary)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .padding(20)
-          .backgroundColor(this.theme.surface)
-          .borderRadius(CARD_RADIUS_MD)
-          .border({ width: 0.8, color: this.theme.divider })
-          .width('100%')
-        }
-      }
-
-      if (!this.shouldRenderAllEntriesForMode('pictures')) {
-        ListItem() {
-          this.HomeLoadMoreFooter('pictures')
-        }
-      }
+      }, (entry: EntryCardModel) => entry.id)
 
       ListItem() {
         Row().height(100).width('100%')
@@ -4499,23 +4421,16 @@ struct Index {
     .width('100%')
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.On)
-    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring)
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-      this.setHomeScrollInteracting(true, 'pictures')
       return this.consumeHomePullScroll('pictures', scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
     })
     .onDidStopDragging((_willFling: boolean) => {
-      this.setHomeScrollInteracting(false, 'pictures')
-      this.scheduleHomePullRefreshFinalizeForMode('pictures')
-      this.flushPendingLoadMoreForMode('pictures')
-      this.logHomePerf(
-        `stop-drag mode=pictures offset=${this.readHomeModeScrollOffset('pictures').toFixed(1)} `
-        + `visible=${this.visibleEntryCountFor('pictures')}/${this.totalEntryCountFor('pictures')}`,
-      )
+      this.finalizeHomePullRefresh()
     })
   }
 
@@ -4535,18 +4450,14 @@ struct Index {
               .width('100%')
 
               HomeVideoGrid({
-                entries: this.visibleEntriesFor(mode),
+                entries: this.filteredEntriesFor(mode),
                 highlightQuery: this.searchQuery,
-                isLoading: this.isHomeContentLoading(),
                 inheritedTheme: this.theme,
+                isLoading: this.isModeLoading(mode),
                 onOpenEntry: (entry: EntryCardModel) => {
                   this.openEntry(entry)
                 },
               })
-
-              if (!this.shouldRenderAllEntriesForMode(mode)) {
-                this.HomeLoadMoreFooter(mode)
-              }
 
               Row()
                 .width('100%')
@@ -4561,23 +4472,16 @@ struct Index {
           }
           .width('100%')
           .height('100%')
-          .scrollBar(BarState.On)
+          .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
           .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
-            this.setHomeScrollInteracting(true, mode)
             return this.consumeHomePullScrollOffset(mode, yOffset)
           })
             .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
-            this.setHomeScrollInteracting(false, mode)
-            this.scheduleHomePullRefreshFinalizeForMode(mode)
-            this.flushPendingLoadMoreForMode(mode)
-            this.logHomePerf(
-              `stop-drag mode=${mode} offset=${this.readHomeModeScrollOffset(mode).toFixed(1)} `
-              + `visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
-            )
+            this.finalizeHomePullRefresh()
           })
         } else if (mode === 'pictures') {
           this.PictureEntryList()
@@ -4587,13 +4491,6 @@ struct Index {
       }
       .width('100%')
       .height('100%')
-      .opacity(this.modeListSwapOpacity(mode))
-      .translate({ y: this.modeListSwapTranslateY(mode) })
-      .scale({ x: this.modeListSwapScale(mode), y: this.modeListSwapScale(mode) })
-      .onAppear(() => {
-        console.info(`频道 ${mode} 场景显示`)
-        this.logModeSwitchSnapshot('scene-appear', mode)
-      })
     }
     .width('100%')
     .height('100%')

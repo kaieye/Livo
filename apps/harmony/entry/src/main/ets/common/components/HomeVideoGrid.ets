@@ -11,24 +11,16 @@ import {
 
 @Component
 export struct HomeVideoGrid {
-  @Prop @Watch('syncEntriesChanged') entries: EntryCardModel[] = []
+  @Prop entries: EntryCardModel[] = []
   @Prop highlightQuery: string = ''
-  @Prop isLoading: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
+  @Prop isLoading: boolean = false
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
-  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
   aboutToAppear(): void {
     this.theme = this.inheritedTheme
-  }
-
-  private syncInheritedTheme(): void {
-    this.theme = this.inheritedTheme
-  }
-
-  private syncEntriesChanged(): void {
-    // Direct ForEach rendering updates automatically when @Prop entries changes.
   }
 
   private cardMeta(entry: EntryCardModel): string {
@@ -191,20 +183,6 @@ export struct HomeVideoGrid {
     return chunkHomeVideoEntries(this.entries, resolveHomeVideoGridColumns())
   }
 
-  private entryRenderBaseKey(entry: EntryCardModel): string {
-    const id = (entry.id || '').trim()
-    const feedId = (entry.feedId || '').trim()
-    const articleUrl = (entry.articleUrl || '').trim()
-    const title = (entry.title || '').trim()
-    const publishedAt = entry.publishedAt > 0 ? String(entry.publishedAt) : '0'
-    return `${id}|${feedId}|${articleUrl}|${title}|${publishedAt}`
-  }
-
-  private entryRenderKey(entry: EntryCardModel, rowIndex: number, columnIndex: number): string {
-    const readFlag = entry.isRead ? '1' : '0'
-    return `${this.entryRenderBaseKey(entry)}|${readFlag}|${rowIndex}|${columnIndex}`
-  }
-
   private cardTokens() {
     return resolveHomeVideoCardTokens({
       isDark: this.theme.isDark,
@@ -318,16 +296,28 @@ export struct HomeVideoGrid {
 
   build() {
     Column({ space: 12 }) {
-      if (this.entries.length === 0) {
+      if (this.isLoading && this.entries.length === 0) {
+        Column({ space: 16 }) {
+          LoadingProgress()
+            .width(42)
+            .height(42)
+            .color(this.theme.accent)
+
+          Text('正在加载内容...')
+            .fontSize(14)
+            .fontColor(this.theme.textSecondary)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+        .padding({ top: 80, bottom: 80 })
+      } else if (this.entries.length === 0) {
         Column({ space: 8 }) {
-          Text(this.isLoading ? '正在加载订阅内容' : '还没有可展示的条目')
+          Text('还没有可展示的条目')
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.theme.textPrimary)
 
-          Text(this.isLoading
-            ? '正在后台刷新订阅源，请稍候。'
-            : '请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
+          Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
             .fontSize(14)
             .lineHeight(22)
             .fontColor(this.theme.textSecondary)
@@ -339,14 +329,14 @@ export struct HomeVideoGrid {
         .borderRadius(CARD_RADIUS_MD)
         .border({ width: 0.8, color: this.theme.divider })
       } else {
-        ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
+        ForEach(this.rows(), (rowEntries: EntryCardModel[]) => {
           Row({ space: 12 }) {
-            ForEach(rowEntries, (entry: EntryCardModel, columnIndex: number) => {
+            ForEach(rowEntries, (entry: EntryCardModel) => {
               Column() {
                 this.VideoCard(entry)
               }
               .layoutWeight(1)
-            }, (entry: EntryCardModel, columnIndex: number) => this.entryRenderKey(entry, rowIndex, columnIndex))
+            }, (entry: EntryCardModel) => entry.id)
 
             if (rowEntries.length < resolveHomeVideoGridColumns()) {
               Blank()
@@ -354,11 +344,8 @@ export struct HomeVideoGrid {
             }
           }
           .width('100%')
-        }, (rowEntries: EntryCardModel[], rowIndex: number) => {
-          const rowSignature = rowEntries
-            .map((entry: EntryCardModel) => `${this.entryRenderBaseKey(entry)}-${entry.isRead ? '1' : '0'}`)
-            .join('|')
-          return `video-row-${rowIndex}-${rowSignature}`
+        }, (_rowEntries: EntryCardModel[], rowIndex: number) => {
+          return `video-row-${rowIndex}`
         })
       }
     }
