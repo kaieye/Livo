@@ -1,6 +1,7 @@
 import { Entry, formatPublishedAt, selectPictureMediaUrls } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import { HighlightedInlineText } from './HighlightedInlineText'
 
@@ -684,5 +685,15 @@ export struct PictureEntryCard {
       this.UnreadDot()
     }
     .width('100%')
+    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(CARD_RADIUS_MD)
+    .border({ width: 0.8, color: this.theme.divider })
+    .shadow({
+      radius: this.theme.isDark ? 10 : 14,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
+      offsetX: 0,
+      offsetY: 4,
+    })
   }
 }

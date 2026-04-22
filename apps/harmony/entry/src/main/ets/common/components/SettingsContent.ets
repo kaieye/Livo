@@ -584,6 +584,9 @@ export struct SettingsContent {
         })
       } else if (this.activeSheet === 'general') {
         GeneralSettingsPanel({
+          useInheritedState: true,
+          initialSettings: this.config,
+          initialTheme: this.theme,
           onSettingsChange: (settings: HarmonySettings) => {
             this.config = settings
             this.onSettingsChange(settings)
@@ -591,14 +594,22 @@ export struct SettingsContent {
         })
       } else if (this.activeSheet === 'refresh-log') {
         RefreshLogSettingsPanel({
+          useInheritedTheme: true,
+          inheritedTheme: this.theme,
           onSettingsChange: (settings: HarmonySettings) => {
             this.config = settings
           },
         })
       } else if (this.activeSheet === 'privacy') {
-        PrivacySettingsPanel()
+        PrivacySettingsPanel({
+          useInheritedTheme: true,
+          inheritedTheme: this.theme,
+        })
       } else if (this.activeSheet === 'about') {
-        AboutSettingsPanel()
+        AboutSettingsPanel({
+          useInheritedTheme: true,
+          inheritedTheme: this.theme,
+        })
       } else if (this.activeSheet === 'favorites') {
         FavoritesPanel()
       } else if (this.activeSheet === 'accounts') {
@@ -613,7 +624,10 @@ export struct SettingsContent {
           },
         })
       } else if (this.activeSheet === 'subscriptions') {
-        SubscriptionsSettingsPanel()
+        SubscriptionsSettingsPanel({
+          useInheritedTheme: true,
+          inheritedTheme: this.theme,
+        })
       }
     }
     .width('100%')

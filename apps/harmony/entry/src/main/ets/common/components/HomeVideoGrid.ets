@@ -17,9 +17,13 @@ export struct HomeVideoGrid {
   @Prop isLoading: boolean = false
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
-  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
   aboutToAppear(): void {
+    this.theme = this.inheritedTheme
+  }
+
+  private syncInheritedTheme(): void {
     this.theme = this.inheritedTheme
   }
 

@@ -27,6 +27,7 @@ import { livoMotion } from '../ui/Motion'
 import { shouldAcceptModeSwitch } from '../utils/ModeSwitchGuard'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import { extractXUsername, extractInstagramUsername } from '../utils/SocialFeedTitles'
+import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
@@ -49,6 +50,8 @@ const SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number =
   SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT + SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
+const SUBSCRIPTIONS_AVATAR_HYDRATION_LIMIT: number = 6
+const SUBSCRIPTIONS_REFRESH_DIAG_PREFIX: string = '[SubscriptionsDiag]'
 
 class SubscriptionFeedDetailParams {
   feedId: string = ''
@@ -92,8 +95,11 @@ export struct SubscriptionsContent {
   private avatarHydrationToken: number = 0
   private avatarHydrationRunning: boolean = false
   private avatarHydrationPending: boolean = false
-  private avatarHydrationLastNotifyAt: number = 0
   onReady: () => void = () => {}
+
+  private logSubscriptionsDiag(message: string): void {
+    console.info(`${SUBSCRIPTIONS_REFRESH_DIAG_PREFIX} ${message}`)
+  }
   private syncOverlayLevel(level: number): void {
     this.overlayLevel = level
     AppStorage.setOrCreate('subscriptionsOverlayLevel', level)
@@ -123,7 +129,10 @@ export struct SubscriptionsContent {
     }
 
     this.isLoading = true
+    const startedAt = Date.now()
+    this.logSubscriptionsDiag(`load start showBottomTabs=${this.showBottomTabs} mode=${this.mode}`)
     try {
+      this.avatarHydrationToken += 1
       if (this.showBottomTabs) {
         const settings = await AppRepository.settings()
         this.theme = await ThemeService.resolvePalette(settings)
@@ -131,10 +140,11 @@ export struct SubscriptionsContent {
         this.theme = this.inheritedTheme
       }
 
-      this.feeds = await AppRepository.feeds()
+      this.feeds = await AppRepository.feedsFast()
       this.sourceHint = '已加载本地订阅内容'
       this.hasLoaded = true
       this.onReady()
+      this.logSubscriptionsDiag(`load feeds done elapsedMs=${Date.now() - startedAt} count=${this.feeds.length}`)
       void this.hydrateFeedAvatarsInBackground()
     } finally {
       this.isLoading = false
@@ -142,9 +152,12 @@ export struct SubscriptionsContent {
   }
 
   private async refreshFeeds(): Promise<void> {
-    this.feeds = await AppRepository.feeds()
+    const startedAt = Date.now()
+    this.avatarHydrationToken += 1
+    this.feeds = await AppRepository.feedsFast()
     this.sourceHint = '已加载本地订阅内容'
     this.hasLoaded = true
+    this.logSubscriptionsDiag(`refresh done elapsedMs=${Date.now() - startedAt} count=${this.feeds.length}`)
     void this.hydrateFeedAvatarsInBackground()
   }
 
@@ -178,6 +191,7 @@ export struct SubscriptionsContent {
   }
 
   private handleFeedsChanged(): void {
+    this.logSubscriptionsDiag(`feedsChanged received count=${this.feeds.length} loading=${this.isLoading} mode=${this.mode}`)
     void this.refreshFeeds()
   }
 
@@ -384,22 +398,17 @@ export struct SubscriptionsContent {
   private async hydrateFeedAvatarsInBackground(): Promise<void> {
     if (this.avatarHydrationRunning || this.feeds.length === 0) {
       this.avatarHydrationPending = true
+      this.logSubscriptionsDiag(`avatar hydrate pending running=${this.avatarHydrationRunning} count=${this.feeds.length}`)
       return
     }
 
-    const currentModeLabel = this.modeLabel(this.mode)
     const candidates = this.feeds
       .filter((feed: FeedCardModel) => this.shouldHydrateAvatar(feed))
-      .sort((left: FeedCardModel, right: FeedCardModel) => {
-        const leftPriority = left.viewLabel === currentModeLabel ? 0 : 1
-        const rightPriority = right.viewLabel === currentModeLabel ? 0 : 1
-        if (leftPriority !== rightPriority) {
-          return leftPriority - rightPriority
-        }
-        return 0
-      })
+      .filter((feed: FeedCardModel) => feed.viewLabel === this.modeLabel(this.mode))
+      .slice(0, SUBSCRIPTIONS_AVATAR_HYDRATION_LIMIT)
     if (candidates.length === 0) {
       this.avatarHydrationPending = false
+      this.logSubscriptionsDiag(`avatar hydrate skipped no candidates mode=${this.mode}`)
       return
     }
 
@@ -407,9 +416,10 @@ export struct SubscriptionsContent {
     const currentToken = this.avatarHydrationToken + 1
     this.avatarHydrationToken = currentToken
     this.avatarHydrationRunning = true
+    const startedAt = Date.now()
+    this.logSubscriptionsDiag(`avatar hydrate start mode=${this.mode} count=${candidates.length}`)
 
     let changedCount = 0
-    let hasPendingNotification = false
     try {
       for (const feed of candidates) {
         if (this.avatarHydrationToken !== currentToken) {
@@ -420,13 +430,6 @@ export struct SubscriptionsContent {
           const changed = await AppRepository.resolveFeedAvatarOnly(feed.id)
           if (changed) {
             changedCount += 1
-            hasPendingNotification = true
-            const now = Date.now()
-            if (now - this.avatarHydrationLastNotifyAt >= 360) {
-              this.avatarHydrationLastNotifyAt = now
-              hasPendingNotification = false
-              AppStorage.setOrCreate('feedsChangedAt', now)
-            }
           }
         } catch (_) {
           continue
@@ -436,11 +439,11 @@ export struct SubscriptionsContent {
       this.avatarHydrationRunning = false
     }
 
-    if (changedCount > 0 && this.avatarHydrationToken === currentToken && hasPendingNotification) {
-      const now = Date.now()
-      this.avatarHydrationLastNotifyAt = now
-      AppStorage.setOrCreate('feedsChangedAt', now)
+    if (changedCount > 0 && this.avatarHydrationToken === currentToken) {
+      bumpFeedsChangedSignal()
     }
+
+    this.logSubscriptionsDiag(`avatar hydrate finished elapsedMs=${Date.now() - startedAt} changed=${changedCount} mode=${this.mode}`)
 
     if (this.avatarHydrationPending && !this.avatarHydrationRunning) {
       void this.hydrateFeedAvatarsInBackground()
@@ -740,7 +743,7 @@ export struct SubscriptionsContent {
 
   private closeFeedDetailPage(): void {
     this.syncOverlayLevel(0)
-    this.subscriptionPathStack.pop(false)
+    this.subscriptionPathStack.pop(true)
   }
 
   private createFeedConfigParams(feed: Feed): SubscriptionFeedConfigParams {
@@ -787,7 +790,7 @@ export struct SubscriptionsContent {
       const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
       if (currentLevel <= 1) {
         // Refresh feeds when returning to subscriptions list to ensure avatars display correctly
-        AppStorage.setOrCreate('feedsChangedAt', Date.now())
+        bumpFeedsChangedSignal()
         this.syncOverlayLevel(0)
       }
     })

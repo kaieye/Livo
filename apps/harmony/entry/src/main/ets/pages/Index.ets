@@ -39,7 +39,7 @@ import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } f
 import { buildInlineHighlightSegments, normalizeInlineSearchQuery } from '../common/utils/HomeInlineSearch'
 import { rememberVisitedMode } from '../common/utils/HomeModeVisitedCache'
 import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
-import { presentTweetEntryFromCard } from '../common/utils/TweetEntryPresentation'
+import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
 import { livoMotion } from '../common/ui/Motion'
 import { resolveModeSceneRenderState } from '../common/utils/ModeSceneTransition'
 import {
@@ -84,13 +84,13 @@ const HOME_REFRESH_FINALIZE_DEBOUNCE_MS: number = 48
 const HOME_REFRESH_TRIGGER_DEFER_MS: number = 180
 const HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS: number = 16
 const HOME_LIST_SWAP_EXIT_DURATION: number = 120
-const HOME_LIST_SWAP_ENTER_DURATION: number = 150
+const HOME_LIST_SWAP_ENTER_DURATION: number = 180
 const HOME_LIST_SWAP_OFFSET_Y: number = 0
-const HOME_LIST_SWAP_ENTRY_OFFSET_Y: number = 0
+const HOME_LIST_SWAP_ENTRY_OFFSET_Y: number = 8
 const HOME_LIST_SWAP_EXIT_SCALE: number = 1
 const HOME_LIST_SWAP_ENTRY_SCALE: number = 1
 const HOME_LIST_SWAP_EXIT_MIN_OPACITY: number = 0.56
-const HOME_LIST_SWAP_ENTRY_MIN_OPACITY: number = 0.9
+const HOME_LIST_SWAP_ENTRY_MIN_OPACITY: number = 0.88
 const HOME_LIST_SWAP_ANIMATION_ENABLED: boolean = true
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56
@@ -122,8 +122,8 @@ const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
 const HOME_REFRESH_FIRST_SWAP_DELAY_MS: number = 72
 const HOME_REFRESH_MEDIUM_RELOAD_DELAY_MS: number = 220
 const HOME_REFRESH_FINAL_RELOAD_DELAY_MS: number = 460
-const HOME_REFRESH_PERCENT_COALESCE_MS: number = 24
-const HOME_REFRESH_PROGRESS_UI_THROTTLE_MS: number = 72
+const HOME_REFRESH_PERCENT_COALESCE_MS: number = 60
+const HOME_REFRESH_PROGRESS_UI_THROTTLE_MS: number = 180
 const HOME_FINAL_RELOAD_IDLE_RETRY_MS: number = 120
 const HOME_FINAL_RELOAD_IDLE_MAX_RETRIES: number = 10
 const HOME_REFRESH_RESET_DEFER_MS: number = 32
@@ -160,7 +160,7 @@ const HOME_LOAD_MORE_SCROLL_PROGRESS_START_PX: number = 720
 const HOME_LOAD_MORE_SCROLL_PROGRESS_STEP_PX: number = 640
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3
-const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 5000
+const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 1200
 const HOME_STARTUP_REFRESH_COOLDOWN_MS: number = 3 * 60 * 1000
 const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 const HOME_PULL_DEBUG_LOG_ENABLED: boolean = false
@@ -441,6 +441,7 @@ struct Index {
   private lastHomeRefreshFinishedAt: number = 0
   private homePerfSessionId: number = 0
   private homePerfSessionStartedAt: number = 0
+  private readonly tweetPresentationCache: Map<string, TweetEntryPresentation> = new Map()
 
   aboutToAppear(): void {
     this.isComponentActive = true
@@ -453,7 +454,12 @@ struct Index {
       this.configureAutoRefreshTimer()
       this.tryFlushDeferredFeedsChangedReload('about-to-appear')
       if (this.featuredEntries.length === 0) {
-        void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+        void this.reloadFeaturedEntriesFromLocal(
+          this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
+          false,
+          true,
+          true,
+        )
       }
       return
     }
@@ -567,8 +573,11 @@ struct Index {
       this.schedulePersistHomeSnapshot(this.featuredEntries)
       this.feedSourceLabel = '已恢复本地内容'
     } else {
-      // Reference project loads all entries at once, not just current mode
-      this.featuredEntries = await AppRepository.featuredEntries()
+      // Use the faster recent-entry path first so first launch can paint sooner.
+      this.featuredEntries = await AppRepository.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
+      if (this.featuredEntries.length === 0) {
+        this.featuredEntries = await AppRepository.featuredEntries()
+      }
       this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
       this.feedSourceLabel = '本地内容已加载'
     }
@@ -673,6 +682,9 @@ struct Index {
         if (!this.isComponentActive) {
           return
         }
+        if (this.isHomeScrollInteracting && completedCount < totalCount) {
+          return
+        }
 
         const now = Date.now()
         const shouldFlushNow = completedCount >= totalCount
@@ -716,7 +728,6 @@ struct Index {
         this.animateHomePullRefreshReset()
       }, HOME_REFRESH_RESET_DEFER_MS)
       this.scheduleHomeLoadMorePrefetch()
-      this.tryFlushDeferredFeedsChangedReload('refresh-finally')
       this.logHomePerf(`refresh done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
     }
   }
@@ -783,17 +794,21 @@ struct Index {
       return
     }
 
+    if (this.isHomeStartupRefreshing) {
+      return
+    }
+
     if (this.featuredEntries.length > 0) {
       this.homeInitialLoadPending = false
       return
     }
 
-    if (this.initialFeedCount === 0 && !this.isRefreshing && !this.isHomeStartupRefreshing) {
+    if (this.initialFeedCount === 0 && !this.isRefreshing) {
       this.homeInitialLoadPending = false
       return
     }
 
-    if (force && !this.isRefreshing && !this.isHomeStartupRefreshing) {
+    if (force && !this.isRefreshing) {
       this.homeInitialLoadPending = false
     }
   }
@@ -806,6 +821,52 @@ struct Index {
     return this.isHomeContentLoading()
       ? '正在后台刷新订阅源，请稍候。'
       : '请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。'
+  }
+
+  @Builder
+  private HomeModeStatusCard(title: string, subtitle: string, showLoading: boolean = false) {
+    Column({ space: 12 }) {
+      if (showLoading) {
+        LoadingProgress()
+          .width(40)
+          .height(40)
+          .color(this.theme.accent)
+      }
+
+      Text(title)
+        .fontSize(18)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.theme.textPrimary)
+
+      Text(subtitle)
+        .fontSize(14)
+        .lineHeight(22)
+        .fontColor(this.theme.textSecondary)
+        .textAlign(TextAlign.Start)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .padding(20)
+    .backgroundColor(this.theme.surface)
+    .borderRadius(CARD_RADIUS_MD)
+    .border({ width: 0.8, color: this.theme.divider })
+  }
+
+  @Builder
+  private HomeModeLoadingState(message: string = '正在加载内容...') {
+    Column({ space: 16 }) {
+      LoadingProgress()
+        .width(42)
+        .height(42)
+        .color(this.theme.accent)
+
+      Text(message)
+        .fontSize(14)
+        .fontColor(this.theme.textSecondary)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: 80, bottom: 80 })
   }
 
   private updateHomePullRefreshState(offset: number): void {
@@ -1987,7 +2048,12 @@ struct Index {
     if (tabId === 'home') {
       this.syncHomeModeRailState(this.mode)
       if (this.hasLoadedInitialData && !this.isRefreshing && !this.isHomeStartupRefreshing) {
-        void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+        void this.reloadFeaturedEntriesFromLocal(
+          this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
+          false,
+          true,
+          true,
+        )
       }
       this.tryFlushDeferredFeedsChangedReload('tab-home')
     }
@@ -2102,6 +2168,42 @@ struct Index {
     }
   }
 
+  private tweetPresentationCacheKey(entry: EntryCardModel): string {
+    const mediaUrls = (entry.mediaUrls ?? []).join('|')
+    return [
+      entry.id,
+      entry.title,
+      entry.summary,
+      entry.content,
+      entry.author,
+      entry.articleUrl,
+      entry.imageUrl,
+      entry.feedImageUrl,
+      entry.publishedAt,
+      entry.publishedLabel,
+      mediaUrls,
+    ].join('|')
+  }
+
+  private presentTweetEntry(entry: EntryCardModel): TweetEntryPresentation {
+    const cacheKey = this.tweetPresentationCacheKey(entry)
+    const cached = this.tweetPresentationCache.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+
+    const presentation = presentTweetEntryFromCard(entry)
+    this.tweetPresentationCache.set(cacheKey, presentation)
+    return presentation
+  }
+
+  private resetTweetPresentationCache(): void {
+    if (this.tweetPresentationCache.size === 0) {
+      return
+    }
+    this.tweetPresentationCache.clear()
+  }
+
   private markDeferredFeedsChangedReload(reason: string): void {
     this.hasDeferredFeedsChangedReload = true
     this.logHomePerf(`feedsChanged deferred reason=${reason}`)
@@ -2124,33 +2226,12 @@ struct Index {
     this.feedsChangedReloadVersion = currentVersion
     this.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
     this.invalidateHomeLoadMorePrefetch()
-    void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_SWAP_PRIME_CANDIDATE_LIMIT))
-
-    this.runManagedTimeout(() => {
-      if (this.feedsChangedReloadVersion !== currentVersion) {
-        return
-      }
-      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_SWAP_CANDIDATE_LIMIT))
-    }, HOME_FEEDS_CHANGED_RELOAD_DELAY_MS)
-
-    this.runManagedTimeout(() => {
-      if (this.feedsChangedReloadVersion !== currentVersion) {
-        return
-      }
-      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
-    }, HOME_FEEDS_CHANGED_FULL_RELOAD_DELAY_MS)
-
-    // Keep non-active modes in sync so category tabs do not stay empty after startup refresh.
-    const nonActiveModes = SUBSCRIPTION_MODES.filter((mode: SubscriptionMode) => mode !== this.mode)
-    nonActiveModes.forEach((mode: SubscriptionMode, index: number) => {
-      this.runManagedTimeout(() => {
-        if (this.feedsChangedReloadVersion !== currentVersion || !this.isComponentActive || !this.isHomeRootTab()) {
-          return
-        }
-        const modeLimit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
-        void this.reloadFeaturedEntriesFromLocal(modeLimit, false, true, true, mode)
-      }, HOME_FEEDS_CHANGED_RELOAD_DELAY_MS + index * HOME_MODE_PREWARM_STEP_DELAY_MS)
-    })
+    void this.reloadFeaturedEntriesFromLocal(
+      this.resolveHomeCandidateLimit(HOME_SWAP_PRIME_CANDIDATE_LIMIT),
+      false,
+      true,
+      true,
+    )
   }
 
   private tryFlushDeferredFeedsChangedReload(source: string): void {
@@ -2258,7 +2339,7 @@ struct Index {
       if (!this.shouldRunFinalHomeReloadNow()) {
         return
       }
-      void this.reloadFeaturedEntriesFromLocal(primeLimit, false, true, true)
+      void this.reloadFeaturedEntriesFromLocal(primeLimit, true, true, true)
     }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
   }
 
@@ -2271,7 +2352,9 @@ struct Index {
   }
 
   private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    return true
+    // Keep the home page in paged mode; full rendering makes feeds-changed reloads
+    // explode after large OPML imports and can freeze or crash the app.
+    return false
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
@@ -3211,7 +3294,7 @@ struct Index {
       // Only precache if not already loaded and not currently loading
       if (!this.isModeLoaded(mode) && !this.isModeLoading(mode)) {
         this.setModeLoading(mode, true)
-        void AppRepository.featuredEntriesByMode(mode, precacheLimit)
+        void AppRepository.featuredEntriesFastByMode(mode, precacheLimit)
           .then((entries) => {
             this.applyEntriesForMode(mode, entries, true, true, true)
           })
@@ -3237,7 +3320,9 @@ struct Index {
     this.logHomePerf(
       `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${preferFastPath}`,
     )
-    const nextEntries = await AppRepository.featuredEntriesByMode(targetMode, safeCandidateLimit)
+    const nextEntries = preferFastPath
+      ? await AppRepository.featuredEntriesFastByMode(targetMode, safeCandidateLimit)
+      : await AppRepository.featuredEntriesByMode(targetMode, safeCandidateLimit)
     this.syncModePaginationFromReloadResult(targetMode, nextEntries, safeCandidateLimit)
     this.logHomeGroupStats(
       `reloadFeaturedEntriesFromLocal mode=${targetMode} limit=${safeCandidateLimit} animated=${animated}`,
@@ -3307,6 +3392,7 @@ struct Index {
   }
 
   private applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
+    this.resetTweetPresentationCache()
     this.featuredEntries = nextEntries
     this.schedulePersistHomeSnapshot(nextEntries)
     this.settleInitialHomeLoadState()
@@ -3335,6 +3421,7 @@ struct Index {
     mode: SubscriptionMode,
     token: number,
   ): void {
+    this.resetTweetPresentationCache()
     this.featuredEntries = nextEntries
     this.schedulePersistHomeSnapshot(nextEntries)
     const currentModeEntries = nextEntries.filter((entry: EntryCardModel) => this.resolveEntryMode(entry) === mode)
@@ -3435,7 +3522,7 @@ struct Index {
     const currentToken = this.homeListSwapToken + 1
     this.homeListSwapToken = currentToken
 
-    // Apply refreshed data once, then play a fade-only update with no translate or scale changes.
+    // Apply refreshed data once, then play a gentle fade + slight settle on the current mode only.
     this.applyHomeEntries(nextEntries, false)
 
     if (!HOME_LIST_SWAP_ANIMATION_ENABLED) {
@@ -3446,9 +3533,8 @@ struct Index {
       return
     }
 
-    // Refresh animation only fades content; no vertical movement or scaling.
     this.homeListSwapOpacity = HOME_LIST_SWAP_ENTRY_MIN_OPACITY
-    this.homeListSwapTranslateY = 0
+    this.homeListSwapTranslateY = HOME_LIST_SWAP_ENTRY_OFFSET_Y
     this.homeListSwapScale = 1
 
     this.animateWithUiContext({
@@ -3782,7 +3868,7 @@ struct Index {
     .width('100%')
     .padding({ left: 14, right: 14, top: 10, bottom: 10 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(14)
+    .borderRadius(CARD_RADIUS_MD)
     .border({ width: 0.8, color: this.theme.divider })
     .shadow({
       radius: this.theme.isDark ? 10 : 14,
@@ -3909,7 +3995,7 @@ struct Index {
   private SocialEntryCard(entry: EntryCardModel, index: number = 0) {
     if (this.isXSocialEntry(entry)) {
       TweetEntryCard({
-        presentation: presentTweetEntryFromCard(entry),
+        presentation: this.presentTweetEntry(entry),
         theme: this.theme,
         isUnread: !entry.isRead,
         flatMode: true,
@@ -4348,16 +4434,31 @@ struct Index {
       }
       .width('100%')
 
-      ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel, index: number) => {
+      if (this.filteredEntriesFor(mode).length === 0) {
         ListItem() {
-          if (mode === 'social') {
-            this.SocialEntryCard(entry, index)
+          if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading(mode)) {
+            this.HomeModeLoadingState()
           } else {
-            this.EntryCard(entry)
+            this.HomeModeStatusCard(
+              this.homeEmptyStateTitle(),
+              this.homeEmptyStateSubtitle(),
+              false,
+            )
           }
         }
         .width('100%')
-      }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
+      } else {
+        ForEach(this.filteredEntriesFor(mode), (entry: EntryCardModel, index: number) => {
+          ListItem() {
+            if (mode === 'social') {
+              this.SocialEntryCard(entry, index)
+            } else {
+              this.EntryCard(entry)
+            }
+          }
+          .width('100%')
+        }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
+      }
 
       ListItem() {
         Row().height(100).width('100%')
@@ -4394,24 +4495,39 @@ struct Index {
       }
       .width('100%')
 
-      ForEach(this.filteredEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
+      if (this.filteredEntriesFor('pictures').length === 0) {
         ListItem() {
-          PictureEntryCard({
-            entry: this.pictureCardEntry(entry),
-            index,
-            authorLabel: entry.author || entry.feedTitle,
-            feedImageUrl: entry.feedImageUrl,
-            caption: this.pictureCaption(entry),
-            pictureUrl: entry.imageUrl,
-            galleryUrls: this.pictureGalleryUrls(entry),
-            theme: this.theme,
-            highlightQuery: this.searchQuery,
-            enableEnterTransition: false,
-            onOpen: () => this.openEntry(entry),
-          })
+          if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading('pictures')) {
+            this.HomeModeLoadingState()
+          } else {
+            this.HomeModeStatusCard(
+              this.homeEmptyStateTitle(),
+              this.homeEmptyStateSubtitle(),
+              false,
+            )
+          }
         }
         .width('100%')
-      }, (entry: EntryCardModel) => entry.id)
+      } else {
+        ForEach(this.filteredEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
+          ListItem() {
+            PictureEntryCard({
+              entry: this.pictureCardEntry(entry),
+              index,
+              authorLabel: entry.author || entry.feedTitle,
+              feedImageUrl: entry.feedImageUrl,
+              caption: this.pictureCaption(entry),
+              pictureUrl: entry.imageUrl,
+              galleryUrls: this.pictureGalleryUrls(entry),
+              theme: this.theme,
+              highlightQuery: this.searchQuery,
+              enableEnterTransition: false,
+              onOpen: () => this.openEntry(entry),
+            })
+          }
+          .width('100%')
+        }, (entry: EntryCardModel) => entry.id)
+      }
 
       ListItem() {
         Row().height(100).width('100%')
@@ -4453,7 +4569,7 @@ struct Index {
                 entries: this.filteredEntriesFor(mode),
                 highlightQuery: this.searchQuery,
                 inheritedTheme: this.theme,
-                isLoading: this.isModeLoading(mode),
+                isLoading: this.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
                 onOpenEntry: (entry: EntryCardModel) => {
                   this.openEntry(entry)
                 },
@@ -4495,8 +4611,13 @@ struct Index {
     .width('100%')
     .height('100%')
     .visibility(this.modeSceneVisible(mode))
-    .opacity(this.modeSceneOpacity(mode))
-    .translate({ x: this.modeSceneOffset(mode) })
+    .opacity(this.homeListSwapAnimating && mode === this.homeListSwapMode
+      ? this.homeListSwapOpacity
+      : this.modeSceneOpacity(mode))
+    .translate({
+      x: this.modeSceneOffset(mode),
+      y: this.modeListSwapTranslateY(mode),
+    })
     .zIndex(this.modeSceneZIndex(mode))
   }
 

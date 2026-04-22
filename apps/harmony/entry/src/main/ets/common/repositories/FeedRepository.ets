@@ -142,7 +142,9 @@ export class FeedRepository {
     try {
       const store = await AppDatabaseService.getStore()
       const predicates = new relationalStore.RdbPredicates('feeds')
-      predicates.orderByDesc('updated_at')
+      // Keep the subscription list stable so refreshes do not reshuffle cards.
+      predicates.orderByAsc('created_at')
+      predicates.orderByAsc('id')
       const result = await store.query(predicates)
       const feeds: Feed[] = []
 

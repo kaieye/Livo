@@ -10,6 +10,7 @@ import { canonicalFeedUrl, extractInstagramUsername, extractXUsername } from '..
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 
 const PANEL_ROW_MIN_HEIGHT: number = 56
 const PANEL_ICON_SIZE: number = 22
@@ -24,8 +25,12 @@ const PANEL_SECTION_SPACING: number = 2
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 6
 const REFRESH_INTERVAL_OPTIONS: string[] = ['15', '30', '60', '120']
-const OPML_IMPORT_REFRESH_CONCURRENCY: number = 4
-const OPML_IMPORT_REFRESH_NOTIFY_BATCH: number = 3
+const OPML_IMPORT_REFRESH_START_DELAY_MS: number = 800
+const OPML_IMPORT_REFRESH_GAP_MS: number = 180
+const OPML_IMPORT_IMPORT_YIELD_BATCH_SIZE: number = 12
+const OPML_IMPORT_AUTO_REFRESH_LIMIT: number = 8
+const OPML_IMPORT_LARGE_BATCH_HINT: string = '订阅较多，已暂停自动同步以避免卡顿。你可以稍后手动刷新。'
+const OPML_IMPORT_DIAG_PREFIX: string = '[OPMLImportDiag]'
 
 interface SelectOption {
   label: string
@@ -54,9 +59,19 @@ export struct GeneralSettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State saveHint: string = '通用设置将保存到本地'
   @State refreshIntervalSelection: string = `${DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes}`
+  @Prop useInheritedState: boolean = false
+  @Prop initialSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
+  @Prop initialTheme: ThemePalette = ThemeService.currentPalette()
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
 
   aboutToAppear(): void {
+    if (this.useInheritedState) {
+      this.config = this.initialSettings
+      this.theme = this.initialTheme
+      this.refreshIntervalSelection = `${this.config.refreshIntervalMinutes}`
+      this.saveHint = '已加载通用配置'
+      return
+    }
     void this.loadSettings()
   }
 
@@ -772,8 +787,14 @@ export struct FavoritesPanel {
 export struct SubscriptionsSettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State isOpmlProcessing: boolean = false
+  @Prop useInheritedTheme: boolean = false
+  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
   aboutToAppear(): void {
+    if (this.useInheritedTheme) {
+      this.theme = this.inheritedTheme
+      return
+    }
     void this.loadTheme()
   }
 
@@ -787,6 +808,10 @@ export struct SubscriptionsSettingsPanel {
       this.getUIContext().getPromptAction().showToast({ message, duration })
     } catch (_error) {
     }
+  }
+
+  private logOpmlImport(message: string): void {
+    console.info(`${OPML_IMPORT_DIAG_PREFIX} ${message}`)
   }
 
   private normalizeFeedUrl(url: string): string {
@@ -988,51 +1013,53 @@ export struct SubscriptionsSettingsPanel {
   private async refreshImportedFeedsInBackground(feedIds: string[]): Promise<void> {
     const targetFeedIds = this.dedupeFeedIds(feedIds)
     if (targetFeedIds.length === 0) {
+      this.logOpmlImport('background refresh skipped, no targets')
       return
     }
 
     const total = targetFeedIds.length
-    const workerCount = Math.min(OPML_IMPORT_REFRESH_CONCURRENCY, total)
-    let nextIndex = 0
     let completed = 0
     let success = 0
     let failed = 0
 
-    const worker = async (): Promise<void> => {
-      while (true) {
-        const currentIndex = nextIndex
-        nextIndex += 1
-        if (currentIndex >= total) {
-          return
-        }
+    const delay = (ms: number): Promise<void> => {
+      return new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), ms)
+      })
+    }
 
-        const feedId = targetFeedIds[currentIndex]
-        if (!feedId) {
-          completed += 1
-          continue
-        }
+    const startedAt = Date.now()
+    this.logOpmlImport(`background refresh scheduled total=${total} startDelayMs=${OPML_IMPORT_REFRESH_START_DELAY_MS}`)
+    await delay(OPML_IMPORT_REFRESH_START_DELAY_MS)
+    this.logOpmlImport(`background refresh started total=${total}`)
 
-        try {
-          await AppRepository.refreshFeed(feedId, true, false, false)
-          success += 1
-        } catch (_error) {
-          failed += 1
-        }
-
+    for (let index = 0; index < total; index += 1) {
+      const feedId = targetFeedIds[index]
+      if (!feedId) {
         completed += 1
-        if (completed === total || completed % OPML_IMPORT_REFRESH_NOTIFY_BATCH === 0) {
-          AppStorage.setOrCreate('feedsChangedAt', Date.now())
-        }
+        continue
       }
+
+      if (index % 5 === 0 || index + 1 === total) {
+        this.logOpmlImport(`background refresh progress index=${index + 1}/${total} completed=${completed} success=${success} failed=${failed}`)
+      }
+
+      if (index > 0) {
+        await delay(OPML_IMPORT_REFRESH_GAP_MS)
+      }
+
+      try {
+        await AppRepository.refreshFeed(feedId, true, false, false, false)
+        success += 1
+      } catch (_error) {
+        failed += 1
+      }
+
+      completed += 1
     }
 
-    const workers: Promise<void>[] = []
-    for (let index = 0; index < workerCount; index += 1) {
-      workers.push(worker())
-    }
-    await Promise.all(workers)
-
-    AppStorage.setOrCreate('feedsChangedAt', Date.now())
+    bumpFeedsChangedSignal()
+    this.logOpmlImport(`background refresh finished elapsedMs=${Date.now() - startedAt} total=${total} success=${success} failed=${failed}`)
     const failedSuffix = failed > 0 ? `，失败 ${failed}` : ''
     this.showToast(`后台同步完成：成功 ${success}/${total}${failedSuffix}`, 3200)
   }
@@ -1072,21 +1099,33 @@ export struct SubscriptionsSettingsPanel {
       return
     }
     this.isOpmlProcessing = true
+    const importStartedAt = Date.now()
+    this.logOpmlImport(`import started mode=${mode}`)
     try {
       const targetUri = await this.pickImportOpmlUri()
       if (!targetUri) {
         this.showToast('已取消导入')
+        this.logOpmlImport(`import cancelled mode=${mode} elapsedMs=${Date.now() - importStartedAt}`)
         return
       }
+      this.logOpmlImport(`import picked uri mode=${mode}`)
 
+      const readStartedAt = Date.now()
       const xml = this.readTextFromUri(targetUri)
+      this.logOpmlImport(`import read file elapsedMs=${Date.now() - readStartedAt} size=${xml.length}`)
+
+      const parseStartedAt = Date.now()
       const opmlFeeds = parseOpml(xml)
+      this.logOpmlImport(`import parsed feeds elapsedMs=${Date.now() - parseStartedAt} count=${opmlFeeds.length}`)
       if (opmlFeeds.length === 0) {
         this.showToast('OPML 文件中未发现可导入订阅', 3000)
+        this.logOpmlImport(`import aborted, no feeds mode=${mode} elapsedMs=${Date.now() - importStartedAt}`)
         return
       }
 
+      const existingStartedAt = Date.now()
       const existingFeeds = await AppRepository.feedEntities()
+      this.logOpmlImport(`import loaded existing feeds elapsedMs=${Date.now() - existingStartedAt} count=${existingFeeds.length}`)
       const existingIdentityKeySet: Set<string> = new Set<string>()
       const existingFeedByIdentityKey: Map<string, Feed> = new Map<string, Feed>()
       existingFeeds.forEach((feed: Feed) => {
@@ -1100,9 +1139,11 @@ export struct SubscriptionsSettingsPanel {
       })
 
       if (mode === 'overwrite') {
+        const overwriteStartedAt = Date.now()
         for (const feed of existingFeeds) {
           await AppRepository.removeFeed(feed.id)
         }
+        this.logOpmlImport(`import overwrite removed feeds count=${existingFeeds.length} elapsedMs=${Date.now() - overwriteStartedAt}`)
         existingIdentityKeySet.clear()
         existingFeedByIdentityKey.clear()
       }
@@ -1112,8 +1153,23 @@ export struct SubscriptionsSettingsPanel {
       let imported = 0
       let skipped = 0
       let failed = 0
+      const delay = (ms: number): Promise<void> => {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), ms)
+        })
+      }
 
-      for (const opmlFeed of opmlFeeds) {
+      for (let index = 0; index < opmlFeeds.length; index += 1) {
+        const opmlFeed = opmlFeeds[index]
+        if (!opmlFeed) {
+          skipped += 1
+          continue
+        }
+        if (index > 0 && index % OPML_IMPORT_IMPORT_YIELD_BATCH_SIZE === 0) {
+          await delay(0)
+          this.logOpmlImport(`import yielded index=${index} imported=${imported} skipped=${skipped} failed=${failed}`)
+        }
+
         const url = this.normalizeImportedUrl(opmlFeed.xmlUrl || '')
         const siteUrl = this.normalizeImportedUrl(opmlFeed.htmlUrl || '')
         if (!url) {
@@ -1214,13 +1270,23 @@ export struct SubscriptionsSettingsPanel {
         }
       }
 
-      AppStorage.setOrCreate('feedsChangedAt', Date.now())
+      bumpFeedsChangedSignal()
+      this.logOpmlImport(`import finished mode=${mode} elapsedMs=${Date.now() - importStartedAt} imported=${imported} skipped=${skipped} failed=${failed} pendingRefresh=${importedFeedIds.length}`)
       this.showToast(`导入完成：新增 ${imported}，跳过 ${skipped}，失败 ${failed}`, 3200)
       if (importedFeedIds.length > 0) {
-        this.showToast('正在后台同步导入订阅的头像与内容…', 2200)
-        void this.refreshImportedFeedsInBackground(importedFeedIds)
+        if (importedFeedIds.length > OPML_IMPORT_AUTO_REFRESH_LIMIT) {
+          this.logOpmlImport(`import auto refresh suppressed count=${importedFeedIds.length} limit=${OPML_IMPORT_AUTO_REFRESH_LIMIT}`)
+          this.showToast(OPML_IMPORT_LARGE_BATCH_HINT, 3000)
+        } else {
+          this.logOpmlImport(`import auto refresh started count=${importedFeedIds.length}`)
+          this.showToast('正在后台同步导入订阅的头像与内容…', 2200)
+          void this.refreshImportedFeedsInBackground(importedFeedIds)
+        }
+      } else {
+        this.logOpmlImport('import no new feeds to refresh')
       }
     } catch (error) {
+      this.logOpmlImport(`import failed mode=${mode} elapsedMs=${Date.now() - importStartedAt} error=${error instanceof Error ? error.message : String(error)}`)
       this.showToast(`导入失败：${error instanceof Error ? error.message : String(error)}`, 3200)
     } finally {
       this.isOpmlProcessing = false
@@ -1337,17 +1403,24 @@ export struct RefreshLogSettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State logs: RefreshLogEntry[] = []
   @State isLoading: boolean = true
+  @Prop useInheritedTheme: boolean = false
+  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
 
   aboutToAppear(): void {
+    if (this.useInheritedTheme) {
+      this.theme = this.inheritedTheme
+    }
     void this.loadData()
   }
 
   private async loadData(): Promise<void> {
     this.isLoading = true
     try {
-      const settings = await AppRepository.settings()
-      this.theme = await ThemeService.resolvePalette(settings)
+      if (!this.useInheritedTheme) {
+        const settings = await AppRepository.settings()
+        this.theme = await ThemeService.resolvePalette(settings)
+      }
       this.logs = await AppRepository.refreshLogs()
     } finally {
       this.isLoading = false
@@ -1538,8 +1611,14 @@ export struct RefreshLogSettingsPanel {
 @Component
 export struct PrivacySettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @Prop useInheritedTheme: boolean = false
+  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
   aboutToAppear(): void {
+    if (this.useInheritedTheme) {
+      this.theme = this.inheritedTheme
+      return
+    }
     void this.loadTheme()
   }
 
@@ -1646,8 +1725,14 @@ export struct PrivacySettingsPanel {
 @Component
 export struct AboutSettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @Prop useInheritedTheme: boolean = false
+  @Prop inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
   aboutToAppear(): void {
+    if (this.useInheritedTheme) {
+      this.theme = this.inheritedTheme
+      return
+    }
     void this.loadTheme()
   }
 

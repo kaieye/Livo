@@ -189,6 +189,7 @@ export struct DiscoverContent {
   private platformSwitchSession: number = 0
   private searchFocusGuardToken: number = 0
   @State private searchInputFocusable: boolean = false
+  @State private searchInputHasFocus: boolean = false
   private searchInputUserFocusArmed: boolean = false
   private searchInputController: TextInputController = new TextInputController()
   private readonly contentScroller: Scroller = new Scroller()
@@ -326,6 +327,9 @@ export struct DiscoverContent {
   }
 
   private armSearchInputFocus(source: string): void {
+    if (this.searchInputHasFocus) {
+      return
+    }
     this.searchInputUserFocusArmed = true
     this.searchInputFocusable = true
     this.logDiscoverFocusDebug('arm-search-input-focus', `source=${source}`)
@@ -355,7 +359,9 @@ export struct DiscoverContent {
       }
 
       focusControl.requestFocus(DISCOVER_SEARCH_INPUT_ID)
-      this.searchInputController.caretPosition(this.query.length)
+      if (!this.searchInputHasFocus) {
+        this.searchInputController.caretPosition(this.query.length)
+      }
       this.logDiscoverFocusDebug('apply-search-input-focus-request', `source=${source}`)
     }, 16)
   }
@@ -393,6 +399,7 @@ export struct DiscoverContent {
     this.logDiscoverFocusDebug('dismiss-search-focus', `reason=${reason}`)
     this.disarmSearchInputFocus(`dismiss-${reason}`)
     this.searchInputController.stopEditing()
+    this.searchInputHasFocus = false
     this.showPlatformChips = false
     this.keepPlatformChipsOnBlur = false
   }
@@ -947,15 +954,21 @@ export struct DiscoverContent {
           .layoutWeight(1)
           .onTouch((event: TouchEvent) => {
             if (event.type === TouchType.Down) {
+              if (this.searchInputHasFocus) {
+                return
+              }
               this.armSearchInputFocus('input-touch-down')
             }
           })
           .onClick(() => {
             this.logDiscoverFocusDebug('search-input-click')
-            this.armSearchInputFocus('input-click')
+            if (!this.searchInputHasFocus) {
+              this.armSearchInputFocus('input-click')
+            }
             this.showPlatformChips = true
           })
           .onFocus(() => {
+            this.searchInputHasFocus = true
             this.logDiscoverFocusDebug(
               'search-input-focus',
               `armed=${this.searchInputUserFocusArmed ? 'true' : 'false'} focusable=${this.searchInputFocusable ? 'true' : 'false'}`,
@@ -963,6 +976,7 @@ export struct DiscoverContent {
             this.showPlatformChips = true
           })
           .onBlur(() => {
+            this.searchInputHasFocus = false
             this.logDiscoverFocusDebug('search-input-blur', `keepChips=${this.keepPlatformChipsOnBlur ? 'true' : 'false'}`)
             this.disarmSearchInputFocus('input-blur')
             if (this.keepPlatformChipsOnBlur) {
@@ -1580,17 +1594,14 @@ struct DiscoverSubscribeConfigDestination {
       },
       onSubscribed: () => {
         AppStorage.setOrCreate('discoverSearchDismissAt', Date.now())
-        AppStorage.setOrCreate('feedsChangedAt', Date.now())
-        this.discoverPathStack.clear()
-        this.settleRootOverlayClosed()
+        this.restoreRootOverlayAfterConfigClose()
+        this.discoverPathStack.pop(true)
       },
       onSaved: () => {
-        AppStorage.setOrCreate('feedsChangedAt', Date.now())
         this.restoreRootOverlayAfterConfigClose()
         this.discoverPathStack.pop(true)
       },
       onUnsubscribed: () => {
-        AppStorage.setOrCreate('feedsChangedAt', Date.now())
         this.discoverPathStack.clear()
         this.settleRootOverlayClosed()
       }

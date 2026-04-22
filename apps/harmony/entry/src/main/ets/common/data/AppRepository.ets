@@ -37,6 +37,7 @@ import {
   resolvePreferredStoredFeedTitle,
 } from '../utils/SocialFeedPresentation'
 import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
+import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 
 function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardModel[] {
   const result: EntryCardModel[] = []
@@ -50,7 +51,7 @@ function compactEntryCards(items: Array<EntryCardModel | undefined>): EntryCardM
   return result
 }
 
-const HOME_ENTRY_CANDIDATE_LIMIT: number = 320
+const HOME_ENTRY_CANDIDATE_LIMIT: number = 480
 const HOME_ENTRY_BALANCED_POOL_MULTIPLIER: number = 6
 const HOME_ENTRY_BALANCED_POOL_MAX: number = 6000
 const HOME_ENTRY_BALANCED_MAX_ATTEMPTS: number = 4
@@ -130,6 +131,39 @@ async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
     updatedAt: feed.updatedAt,
     unreadCount,
   }
+}
+
+function feedCardFromFeed(feed: Feed, unreadCount: number = 0): FeedCardModel {
+  return toFeedCardModel({
+    id: feed.id,
+    title: feed.title,
+    url: feed.url,
+    siteUrl: feed.siteUrl,
+    imageUrl: feed.imageUrl,
+    description: feed.description,
+    category: feed.category,
+    view: feed.view,
+    showInAll: feed.showInAll,
+    lastFetched: feed.lastFetched,
+    etag: feed.etag,
+    lastModified: feed.lastModified,
+    errorCount: feed.errorCount,
+    createdAt: feed.createdAt,
+    updatedAt: feed.updatedAt,
+    unreadCount,
+  })
+}
+
+function sortFeedsStable(feeds: Feed[]): Feed[] {
+  return [...feeds].sort((left: Feed, right: Feed) => {
+    const leftCreatedAt = left.createdAt || 0
+    const rightCreatedAt = right.createdAt || 0
+    if (leftCreatedAt !== rightCreatedAt) {
+      return leftCreatedAt - rightCreatedAt
+    }
+
+    return left.id.localeCompare(right.id)
+  })
 }
 
 function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryCardModel | undefined {
@@ -404,8 +438,8 @@ export class AppRepository {
   private static seedFeedHydrationStarted: boolean = false
   private static feedMetadataRepairStarted: boolean = false
   private static readonly successfulRefreshCooldownMs: number = 3 * 60 * 1000
-  private static readonly refreshConcurrencyMin: number = 2
-  private static readonly refreshConcurrencyMax: number = 4
+  private static readonly refreshConcurrencyMin: number = 4
+  private static readonly refreshConcurrencyMax: number = 8
 
   private static async repairFeedMetadataInBackground(): Promise<void> {
     if (AppRepository.feedMetadataRepairStarted) {
@@ -415,7 +449,7 @@ export class AppRepository {
     AppRepository.feedMetadataRepairStarted = true
 
     try {
-      const feeds = await FeedRepository.list()
+      const feeds = sortFeedsStable(await FeedRepository.list())
       let repaired = false
 
       for (const feed of feeds) {
@@ -440,7 +474,7 @@ export class AppRepository {
       }
 
       if (repaired) {
-        AppStorage.setOrCreate('feedsChangedAt', Date.now())
+        bumpFeedsChangedSignal()
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -500,7 +534,7 @@ export class AppRepository {
         }
 
         try {
-          const value = await AppRepository.refreshFeed(feed.id, true, false, false)
+          const value = await AppRepository.refreshFeed(feed.id, true, false, false, false)
           const fulfilled: PromiseSettledResult<RemoteFeedResult> = {
             status: 'fulfilled',
             value,
@@ -585,7 +619,7 @@ export class AppRepository {
           lastModified: payload.lastModified,
           errorCount: 0,
         })
-        AppStorage.setOrCreate('feedsChangedAt', Date.now())
+        bumpFeedsChangedSignal()
       } catch (error) {
         const message = error instanceof Error ? error.message : 'unknown error'
         console.error(`Failed to hydrate built-in feed ${feed.id}: ${message}`)
@@ -608,7 +642,7 @@ export class AppRepository {
 
   static async feeds(): Promise<FeedCardModel[]> {
     await AppRepository.bootstrap()
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     const cards: FeedCardModel[] = []
 
     for (const feed of feeds) {
@@ -618,9 +652,15 @@ export class AppRepository {
     return cards
   }
 
+  static async feedsFast(): Promise<FeedCardModel[]> {
+    await AppRepository.bootstrap()
+    const feeds = sortFeedsStable(await FeedRepository.list())
+    return feeds.map((feed: Feed) => feedCardFromFeed(feed))
+  }
+
   static async feedEntities(): Promise<Feed[]> {
     await AppRepository.bootstrap()
-    return FeedRepository.list()
+    return sortFeedsStable(await FeedRepository.list())
   }
 
   static async feedById(feedId: string): Promise<FeedCardModel | undefined> {
@@ -662,6 +702,7 @@ export class AppRepository {
       view: feed.view,
       showInAll: feed.showInAll,
     })
+    bumpFeedsChangedSignal()
     return true
   }
 
@@ -669,7 +710,7 @@ export class AppRepository {
     await AppRepository.bootstrap()
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(1, candidateLimit)
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
     const feedModePresence = resolveFeedModePresence(feeds)
@@ -726,7 +767,7 @@ export class AppRepository {
     await AppRepository.bootstrap()
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(1, candidateLimit)
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
@@ -743,7 +784,7 @@ export class AppRepository {
     const startedAt = Date.now()
     const safeLimit = Math.max(1, limit)
     const safeOffset = Math.max(0, offset)
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
@@ -762,7 +803,7 @@ export class AppRepository {
     await AppRepository.bootstrap()
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(1, candidateLimit)
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     const feedMap = new Map<string, Feed>()
     const allowedFeedIds = new Set<string>()
     feeds.forEach((feed: Feed) => {
@@ -812,6 +853,39 @@ export class AppRepository {
     return result
   }
 
+  static async featuredEntriesFastByMode(
+    mode: HomeEntryMode,
+    candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT,
+  ): Promise<EntryCardModel[]> {
+    await AppRepository.bootstrap()
+    const startedAt = Date.now()
+    const safeCandidateLimit = Math.max(1, candidateLimit)
+    const feeds = sortFeedsStable(await FeedRepository.list())
+    const feedMap = new Map<string, Feed>()
+    const allowedFeedIds = new Set<string>()
+    feeds.forEach((feed: Feed) => {
+      feedMap.set(feed.id, feed)
+      if (modeMatchesFeedView(mode, feed.view)) {
+        allowedFeedIds.add(feed.id)
+      }
+    })
+
+    if (allowedFeedIds.size === 0) {
+      return []
+    }
+
+    const pageSize = Math.max(60, Math.min(360, safeCandidateLimit * 2))
+    const entries = await EntryRepository.listRecentPage(pageSize, 0)
+    const scopedEntries = entries.filter((entry: Entry) => allowedFeedIds.has(entry.feedId))
+    const cards = await buildEntryCardsChunked(scopedEntries, (entry: Entry) => feedMap.get(entry.feedId))
+
+    logHomeFeedDebug(
+      `featuredEntriesFastByMode mode=${mode} limit=${safeCandidateLimit} recent=${entries.length} ` +
+      `scoped=${scopedEntries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
+    )
+    return cards.slice(0, safeCandidateLimit)
+  }
+
   static async featuredEntriesFastPageByMode(
     mode: HomeEntryMode,
     limit: number,
@@ -827,7 +901,7 @@ export class AppRepository {
   static async starredEntries(): Promise<EntryCardModel[]> {
     await AppRepository.bootstrap()
     const entries = await EntryRepository.listStarred(100)
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
@@ -1032,6 +1106,7 @@ export class AppRepository {
     preferFastImageResolve: boolean = false,
     includeEntries: boolean = true,
     includeNewEntryCount: boolean = true,
+    notifyFeedsChanged: boolean = true,
   ): Promise<RemoteFeedResult> {
     await AppRepository.bootstrap()
     const feed = await FeedRepository.getById(feedId)
@@ -1103,6 +1178,9 @@ export class AppRepository {
         failedFeedDetails: [],
         fallbackUsed: false,
       }
+      if (notifyFeedsChanged) {
+        bumpFeedsChangedSignal()
+      }
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error'
@@ -1123,6 +1201,9 @@ export class AppRepository {
         failedFeedLabels: [feed.title],
         failedFeedDetails: [`${feed.title}：${message}`],
         fallbackUsed: true,
+      }
+      if (notifyFeedsChanged) {
+        bumpFeedsChangedSignal()
       }
       return result
     }
@@ -1182,7 +1263,7 @@ export class AppRepository {
     onProgress?: (completedCount: number, totalCount: number) => void,
   ): Promise<RemoteFeedResult> {
     await AppRepository.bootstrap()
-    const feeds = await FeedRepository.list()
+    const feeds = sortFeedsStable(await FeedRepository.list())
     if (feeds.length === 0) {
       await AppRepository.recordRefreshLog(0, 0, [])
       return {

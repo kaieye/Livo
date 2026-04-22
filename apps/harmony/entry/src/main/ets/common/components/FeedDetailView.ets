@@ -22,6 +22,7 @@ import {
   resolveSocialFeedDisplayTitle,
 } from '../utils/SocialFeedPresentation'
 import { presentTweetEntryFromEntry, TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { TweetEntryCard } from './TweetEntryCard'
@@ -270,10 +271,11 @@ export struct FeedDetailView {
         const previousEntries = this.previewPayload?.entries ?? []
         const previousCount = previousEntries.length
         const previousLatestPublishedAt = this.latestPublishedAt(previousEntries)
-        await AppRepository.refreshFeed(this.existingFeed.id, true, false, false)
+        await AppRepository.refreshFeed(this.existingFeed.id, true, false, false, false)
         const refreshedFeed = await AppRepository.feedEntityById(this.existingFeed.id)
         const entries = await AppRepository.entryEntitiesByFeed(this.existingFeed.id)
         if (refreshedFeed) {
+          this.signalFeedsChanged()
           this.existingFeed = refreshedFeed
           const displayFeed = this.displayFeedState(
             refreshedFeed.title,
@@ -541,6 +543,17 @@ export struct FeedDetailView {
     }
 
     this.targetImageUrl = resolvedAvatar
+    await AppRepository.updateFeed(feed.id, {
+      title: feed.title,
+      url: feed.url,
+      siteUrl: feed.siteUrl || '',
+      imageUrl: resolvedAvatar,
+      description: feed.description || '',
+      category: feed.category || '',
+      view: feed.view,
+      showInAll: feed.showInAll,
+    })
+    this.signalFeedsChanged()
     if (this.previewPayload) {
       this.applyPreviewPayload({
         etag: this.previewPayload.etag,
@@ -653,7 +666,12 @@ export struct FeedDetailView {
 
   private async reseedSubscribedFeedFromCachedPreview(feedId: string, payload: FeedRefreshPayload): Promise<Entry[]> {
     await AppRepository.seedFeedFromPreview(feedId, payload)
+    this.signalFeedsChanged()
     return AppRepository.entryEntitiesByFeed(feedId)
+  }
+
+  private signalFeedsChanged(): void {
+    bumpFeedsChangedSignal()
   }
 
   private normalizeUrl(value: string): string {

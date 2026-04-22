@@ -6,6 +6,7 @@ import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchSer
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { canonicalInstagramFeedUrl } from '../utils/SocialFeedTitles'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
+import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import {
@@ -217,6 +218,10 @@ export struct FeedSubscribeConfigView {
     }
   }
 
+  private signalFeedsChanged(): void {
+    bumpFeedsChangedSignal()
+  }
+
   private async handleUnsubscribe(): Promise<void> {
     if (!this.existingFeed) {
       return
@@ -224,6 +229,7 @@ export struct FeedSubscribeConfigView {
 
     try {
       await AppRepository.removeFeed(this.existingFeed.id)
+      this.signalFeedsChanged()
       this.showToast('已取消订阅', 2000)
     } catch (e) {
       this.showToast(`取消订阅失败: ${e}`, 3000)
@@ -266,7 +272,7 @@ export struct FeedSubscribeConfigView {
         }
         void this.seedPreviewAfterSave(updatedFeed.id, saveSeedPayload)
       }
-      AppStorage.setOrCreate('feedsChangedAt', Date.now())
+      this.signalFeedsChanged()
       this.showToast('保存成功', 2000)
       await this.runCompletion(this.onSaved, 'save')
     } catch (e) {
@@ -331,11 +337,12 @@ export struct FeedSubscribeConfigView {
         }
       }
 
+      this.signalFeedsChanged()
       this.showToast(successMessage, 2000)
       this.isSubmitting = false
       await this.runCompletion(this.onSubscribed, 'subscribe')
       if (!hasSeededPreview && subscribedFeedId) {
-        void this.refreshFeedAfterSubscribe(subscribedFeedId, successMessage)
+        void this.refreshFeedAfterSubscribe(subscribedFeedId)
       }
       return
     } catch (e) {
@@ -345,12 +352,9 @@ export struct FeedSubscribeConfigView {
     }
   }
 
-  private async refreshFeedAfterSubscribe(feedId: string, successMessage: string): Promise<void> {
+  private async refreshFeedAfterSubscribe(feedId: string): Promise<void> {
     try {
-      const refreshResult = await AppRepository.refreshFeed(feedId)
-      if (refreshResult.fallbackUsed) {
-        this.showToast(`${successMessage}，内容将在稍后刷新`, 2000)
-      }
+      await AppRepository.refreshFeed(feedId)
     } catch (error) {
       console.error(`subscribe refresh failed: ${error instanceof Error ? error.message : error}`)
     }
