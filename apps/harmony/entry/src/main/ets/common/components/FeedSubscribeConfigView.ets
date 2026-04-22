@@ -229,7 +229,6 @@ export struct FeedSubscribeConfigView {
 
     try {
       await AppRepository.removeFeed(this.existingFeed.id)
-      this.signalFeedsChanged()
       this.showToast('已取消订阅', 2000)
     } catch (e) {
       this.showToast(`取消订阅失败: ${e}`, 3000)

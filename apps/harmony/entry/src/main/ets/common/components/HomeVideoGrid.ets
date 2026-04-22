@@ -1,8 +1,8 @@
 import { EntryCardModel } from '../models/LivoModels'
 import { AvatarTile } from './AvatarTile'
+import { HomeEmptyStateCard } from './HomeEmptyStateCard'
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import {
   chunkHomeVideoEntries,
   resolveHomeVideoCardTokens,
@@ -301,37 +301,17 @@ export struct HomeVideoGrid {
   build() {
     Column({ space: 12 }) {
       if (this.isLoading && this.entries.length === 0) {
-        Column({ space: 16 }) {
-          LoadingProgress()
-            .width(42)
-            .height(42)
-            .color(this.theme.accent)
-
-          Text('正在加载内容...')
-            .fontSize(14)
-            .fontColor(this.theme.textSecondary)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Center)
-        .padding({ top: 80, bottom: 80 })
+        HomeEmptyStateCard({
+          message: '',
+          loading: true,
+          loadingMessage: '正在加载内容...',
+          theme: this.theme,
+        })
       } else if (this.entries.length === 0) {
-        Column({ space: 8 }) {
-          Text('还没有可展示的条目')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-
-          Text('请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。')
-            .fontSize(14)
-            .lineHeight(22)
-            .fontColor(this.theme.textSecondary)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(20)
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_MD)
-        .border({ width: 0.8, color: this.theme.divider })
+        HomeEmptyStateCard({
+          message: '未发现订阅推文，请先到发现页面添加或刷新订阅源',
+          theme: this.theme,
+        })
       } else {
         ForEach(this.rows(), (rowEntries: EntryCardModel[]) => {
           Row({ space: 12 }) {

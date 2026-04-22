@@ -84,6 +84,17 @@ function normalizeHomeEntrySnapshotEntries(entries: EntryCardModel[]): EntryCard
   return normalizedEntries
 }
 
+function filterHomeEntrySnapshotEntriesByFeedId(entries: EntryCardModel[], feedId: string): EntryCardModel[] {
+  const targetFeedId = (feedId || '').trim()
+  if (!targetFeedId) {
+    return normalizeHomeEntrySnapshotEntries(entries)
+  }
+
+  return normalizeHomeEntrySnapshotEntries(entries.filter((entry: EntryCardModel) => {
+    return (entry.feedId || '').trim() !== targetFeedId
+  }))
+}
+
 function normalizeRefreshLogEntry(item: RefreshLogEntry): RefreshLogEntry {
   const normalized: RefreshLogEntry = {
     id: item.id,
@@ -313,5 +324,18 @@ export class AppPreferenceService {
     await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(normalizedEntries))
     await pref.flush()
     return normalizedEntries
+  }
+
+  static async removeHomeEntrySnapshotEntriesByFeedId(feedId: string): Promise<EntryCardModel[]> {
+    const pref = await AppPreferenceService.getPref()
+    const currentEntries = await AppPreferenceService.loadHomeEntrySnapshot()
+    const nextEntries = filterHomeEntrySnapshotEntriesByFeedId(currentEntries, feedId)
+    if (nextEntries.length === currentEntries.length) {
+      return currentEntries
+    }
+
+    await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(nextEntries))
+    await pref.flush()
+    return nextEntries
   }
 }

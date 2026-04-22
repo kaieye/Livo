@@ -1089,6 +1089,8 @@ export class AppRepository {
   static async removeFeed(feedId: string): Promise<void> {
     await AppRepository.bootstrap()
     await FeedRepository.remove(feedId)
+    await AppPreferenceService.removeHomeEntrySnapshotEntriesByFeedId(feedId)
+    bumpFeedsChangedSignal()
   }
 
   static async markRead(entryId: string, isRead: boolean): Promise<void> {

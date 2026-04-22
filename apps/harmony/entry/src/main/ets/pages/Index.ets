@@ -53,6 +53,7 @@ import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { DiscoverContent } from '../common/components/DiscoverContent'
 import { SettingsContent } from '../common/components/SettingsContent'
 import { AvatarTile } from '../common/components/AvatarTile'
+import { HomeEmptyStateCard } from '../common/components/HomeEmptyStateCard'
 import {
   HdsBottomTabId,
   HdsBottomTabItem,
@@ -814,59 +815,33 @@ struct Index {
   }
 
   private homeEmptyStateTitle(): string {
-    return this.isHomeContentLoading() ? '正在加载订阅内容' : '还没有可展示的条目'
-  }
-
-  private homeEmptyStateSubtitle(): string {
     return this.isHomeContentLoading()
-      ? '正在后台刷新订阅源，请稍候。'
-      : '请先到订阅页添加或刷新订阅源，然后回到首页查看整理后的内容流。'
+      ? '正在加载订阅内容'
+      : '未发现订阅推文，请先到发现页面添加或刷新订阅源'
   }
 
   @Builder
-  private HomeModeStatusCard(title: string, subtitle: string, showLoading: boolean = false) {
-    Column({ space: 12 }) {
-      if (showLoading) {
-        LoadingProgress()
-          .width(40)
-          .height(40)
-          .color(this.theme.accent)
-      }
+  private HomeModeStatusCard(message: string, showLoading: boolean = false) {
+    HomeEmptyStateCard({
+      message,
+      loading: showLoading,
+      loadingMessage: '正在加载内容...',
+      theme: this.theme,
+    })
+  }
 
-      Text(title)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-
-      Text(subtitle)
-        .fontSize(14)
-        .lineHeight(22)
-        .fontColor(this.theme.textSecondary)
-        .textAlign(TextAlign.Start)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(20)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_MD)
-    .border({ width: 0.8, color: this.theme.divider })
+  private homeEmptyStateTopGap(mode: SubscriptionMode): number {
+    return mode === 'social' ? HOME_MODE_CONTENT_GAP : 0
   }
 
   @Builder
   private HomeModeLoadingState(message: string = '正在加载内容...') {
-    Column({ space: 16 }) {
-      LoadingProgress()
-        .width(42)
-        .height(42)
-        .color(this.theme.accent)
-
-      Text(message)
-        .fontSize(14)
-        .fontColor(this.theme.textSecondary)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Center)
-    .padding({ top: 80, bottom: 80 })
+    HomeEmptyStateCard({
+      message: '',
+      loading: true,
+      loadingMessage: message,
+      theme: this.theme,
+    })
   }
 
   private updateHomePullRefreshState(offset: number): void {
@@ -2036,6 +2011,18 @@ struct Index {
     if (tabId !== 'home') {
       this.resetHomePullRefreshState()
       this.closeHomeInlineSearch(true)
+      return
+    }
+
+    this.syncHomeModeRailState(this.mode)
+    this.tryFlushDeferredFeedsChangedReload('tab-change')
+    if (this.hasLoadedInitialData && !this.isRefreshing && !this.isHomeStartupRefreshing) {
+      void this.reloadFeaturedEntriesFromLocal(
+        this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
+        false,
+        true,
+        true,
+      )
     }
   }
 
@@ -2047,14 +2034,6 @@ struct Index {
     this.activeRootTabId = tabId
     if (tabId === 'home') {
       this.syncHomeModeRailState(this.mode)
-      if (this.hasLoadedInitialData && !this.isRefreshing && !this.isHomeStartupRefreshing) {
-        void this.reloadFeaturedEntriesFromLocal(
-          this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
-          false,
-          true,
-          true,
-        )
-      }
       this.tryFlushDeferredFeedsChangedReload('tab-home')
     }
   }
@@ -2226,12 +2205,7 @@ struct Index {
     this.feedsChangedReloadVersion = currentVersion
     this.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
     this.invalidateHomeLoadMorePrefetch()
-    void this.reloadFeaturedEntriesFromLocal(
-      this.resolveHomeCandidateLimit(HOME_SWAP_PRIME_CANDIDATE_LIMIT),
-      false,
-      true,
-      true,
-    )
+    void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, false, false)
   }
 
   private tryFlushDeferredFeedsChangedReload(source: string): void {
@@ -2312,14 +2286,14 @@ struct Index {
 
       if (!this.shouldRunFinalHomeReloadNow()) {
         if (attempt >= HOME_FINAL_RELOAD_IDLE_MAX_RETRIES) {
-          void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+          void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
           return
         }
         this.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt + 1)
         return
       }
 
-      void this.reloadFeaturedEntriesFromLocal(this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT))
+      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
     }, attempt === 0 ? HOME_REFRESH_FINAL_RELOAD_DELAY_MS : HOME_FINAL_RELOAD_IDLE_RETRY_MS)
   }
 
@@ -2330,8 +2304,6 @@ struct Index {
       + HOME_REFRESH_FINAL_RELOAD_DELAY_MS
       + HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS
 
-    const primeLimit = HOME_SWAP_CANDIDATE_LIMIT
-
     this.runManagedTimeout(() => {
       if (this.postRefreshReloadVersion !== currentVersion) {
         return
@@ -2339,7 +2311,7 @@ struct Index {
       if (!this.shouldRunFinalHomeReloadNow()) {
         return
       }
-      void this.reloadFeaturedEntriesFromLocal(primeLimit, true, true, true)
+      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true, true)
     }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
   }
 
@@ -3335,6 +3307,34 @@ struct Index {
     this.applyEntriesForMode(targetMode, nextEntries, deferredGrouping)
     this.logHomePerf(
       `reload done mode=${targetMode} limit=${safeCandidateLimit} elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`,
+    )
+  }
+
+  private async reloadHomeEntriesFromLocal(
+    candidateLimit: number = HOME_MAX_CANDIDATE_LIMIT,
+    animated: boolean = false,
+    deferredGrouping: boolean = true,
+    preferFastPath: boolean = true,
+  ): Promise<void> {
+    const startedAt = Date.now()
+    const safeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
+    this.logHomePerf(
+      `reload-home start limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${preferFastPath}`,
+    )
+    const nextEntries = preferFastPath
+      ? await AppRepository.featuredEntriesFast(safeCandidateLimit)
+      : await AppRepository.featuredEntries(safeCandidateLimit)
+    this.logHomeGroupStats(
+      `reloadHomeEntriesFromLocal limit=${safeCandidateLimit} animated=${animated}`,
+      nextEntries,
+    )
+    if (animated) {
+      this.playHomeListSwapTransition(nextEntries, this.mode)
+      return
+    }
+    this.applyHomeEntries(nextEntries, deferredGrouping)
+    this.logHomePerf(
+      `reload-home done limit=${safeCandidateLimit} elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`,
     )
   }
 
@@ -4436,15 +4436,18 @@ struct Index {
 
       if (this.filteredEntriesFor(mode).length === 0) {
         ListItem() {
-          if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading(mode)) {
-            this.HomeModeLoadingState()
-          } else {
-            this.HomeModeStatusCard(
-              this.homeEmptyStateTitle(),
-              this.homeEmptyStateSubtitle(),
-              false,
-            )
+          Column({ space: 0 }) {
+            if (this.homeEmptyStateTopGap(mode) > 0) {
+              Blank().height(this.homeEmptyStateTopGap(mode))
+            }
+
+            if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading(mode)) {
+              this.HomeModeLoadingState()
+            } else {
+              this.HomeModeStatusCard(this.homeEmptyStateTitle(), false)
+            }
           }
+          .width('100%')
         }
         .width('100%')
       } else {
@@ -4497,15 +4500,14 @@ struct Index {
 
       if (this.filteredEntriesFor('pictures').length === 0) {
         ListItem() {
-          if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading('pictures')) {
-            this.HomeModeLoadingState()
-          } else {
-            this.HomeModeStatusCard(
-              this.homeEmptyStateTitle(),
-              this.homeEmptyStateSubtitle(),
-              false,
-            )
+          Column({ space: 0 }) {
+            if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading('pictures')) {
+              this.HomeModeLoadingState()
+            } else {
+              this.HomeModeStatusCard(this.homeEmptyStateTitle(), false)
+            }
           }
+          .width('100%')
         }
         .width('100%')
       } else {
