@@ -10,7 +10,7 @@ import { canonicalFeedUrl, extractInstagramUsername, extractXUsername } from '..
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
-import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
+import { bumpFeedsChangedSignal, shouldBumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 
 const PANEL_ROW_MIN_HEIGHT: number = 56
 const PANEL_ICON_SIZE: number = 22
@@ -25,9 +25,10 @@ const PANEL_SECTION_SPACING: number = 2
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 6
 const REFRESH_INTERVAL_OPTIONS: string[] = ['15', '30', '60', '120']
-const OPML_IMPORT_REFRESH_START_DELAY_MS: number = 800
+const OPML_IMPORT_REFRESH_START_DELAY_MS: number = 0
 const OPML_IMPORT_REFRESH_GAP_MS: number = 180
 const OPML_IMPORT_IMPORT_YIELD_BATCH_SIZE: number = 12
+const OPML_IMPORT_REFRESH_NOTIFY_BATCH: number = 3
 const OPML_IMPORT_AUTO_REFRESH_LIMIT: number = 8
 const OPML_IMPORT_LARGE_BATCH_HINT: string = '订阅较多，已暂停自动同步以避免卡顿。你可以稍后手动刷新。'
 const OPML_IMPORT_DIAG_PREFIX: string = '[OPMLImportDiag]'
@@ -1037,6 +1038,9 @@ export struct SubscriptionsSettingsPanel {
       const feedId = targetFeedIds[index]
       if (!feedId) {
         completed += 1
+        if (shouldBumpFeedsChangedSignal(completed, total, OPML_IMPORT_REFRESH_NOTIFY_BATCH)) {
+          bumpFeedsChangedSignal()
+        }
         continue
       }
 
@@ -1056,9 +1060,13 @@ export struct SubscriptionsSettingsPanel {
       }
 
       completed += 1
+
+      // Spread UI invalidation across the sync, so the last feed does not trigger one giant repaint.
+      if (shouldBumpFeedsChangedSignal(completed, total, OPML_IMPORT_REFRESH_NOTIFY_BATCH)) {
+        bumpFeedsChangedSignal()
+      }
     }
 
-    bumpFeedsChangedSignal()
     this.logOpmlImport(`background refresh finished elapsedMs=${Date.now() - startedAt} total=${total} success=${success} failed=${failed}`)
     const failedSuffix = failed > 0 ? `，失败 ${failed}` : ''
     this.showToast(`后台同步完成：成功 ${success}/${total}${failedSuffix}`, 3200)

@@ -39,9 +39,9 @@ import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } f
 import { buildInlineHighlightSegments, normalizeInlineSearchQuery } from '../common/utils/HomeInlineSearch'
 import { rememberVisitedMode } from '../common/utils/HomeModeVisitedCache'
 import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
+import { resolveHomeVisibleEntryInitialLimit } from '../common/utils/HomeVisibleEntryPolicy'
 import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
 import { livoMotion } from '../common/ui/Motion'
-import { resolveModeSceneRenderState } from '../common/utils/ModeSceneTransition'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
   BOTTOM_TAB_FLOAT_GAP,
@@ -145,7 +145,6 @@ const HOME_MODE_SWITCH_ENTRY_DEFER_MS: number = 32
 const HOME_LOAD_MORE_STEP_LIMIT: number = 18
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
 const HOME_FULL_MODE_CANDIDATE_LIMIT: number = 2147483647
-const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 48
 const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = 12
 const HOME_LOAD_MORE_PREFETCH_REMAINING_COUNT: number = 20
 const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 180
@@ -291,10 +290,8 @@ struct Index {
   @State homeRefreshStatus: RefreshStatus = RefreshStatus.Inactive
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
-  @State previousMode: SubscriptionMode = 'articles'
   @State visitedModes: SubscriptionMode[] = ['articles']
   @State isModeTransitioning: boolean = false
-  @State modeTransitionDirection: number = 1
   @State headerBlurProgress: number = 0
   @State currentHomeModeScrollOffset: number = 0
   @State homeModeRailDismissedByScroll: boolean = false
@@ -334,10 +331,10 @@ struct Index {
   }
   @State homeLoadMoreInProgress: boolean = false
   @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = {
-    articles: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
-    social: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
-    pictures: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
-    videos: HOME_VISIBLE_ENTRY_INITIAL_LIMIT,
+    articles: resolveHomeVisibleEntryInitialLimit('articles'),
+    social: resolveHomeVisibleEntryInitialLimit('social'),
+    pictures: resolveHomeVisibleEntryInitialLimit('pictures'),
+    videos: resolveHomeVisibleEntryInitialLimit('videos'),
   }
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
@@ -364,6 +361,7 @@ struct Index {
   private autoRefreshTimer: number = -1
   private homeEntryGroupVersion: number = 0
   private postRefreshReloadVersion: number = 0
+  private homePostRefreshReloadPending: boolean = false
   private feedsChangedReloadVersion: number = 0
   private hasDeferredFeedsChangedReload: boolean = false
   private deferredFeedsChangedRetryToken: number = 0
@@ -474,6 +472,7 @@ struct Index {
     this.clearRefreshPercentAnimation()
     this.clearAutoRefreshTimer()
     this.clearManagedTimeouts()
+    this.homePostRefreshReloadPending = false
     this.homeListSwapToken += 1
     this.homeListSwapAnimating = false
     this.homeListSwapOpacity = 1
@@ -2015,14 +2014,23 @@ struct Index {
     }
 
     this.syncHomeModeRailState(this.mode)
-    this.tryFlushDeferredFeedsChangedReload('tab-change')
-    if (this.hasLoadedInitialData && !this.isRefreshing && !this.isHomeStartupRefreshing) {
-      void this.reloadFeaturedEntriesFromLocal(
-        this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
-        false,
-        true,
-        true,
-      )
+    this.activeRootTabId = tabId
+    this.primeHomeModeRailForRootActivation()
+    const flushedDeferredReload = this.tryFlushDeferredFeedsChangedReload('tab-change')
+    if (!flushedDeferredReload
+      && this.hasLoadedInitialData
+      && this.featuredEntries.length === 0
+      && !this.isRefreshing
+      && !this.isHomeStartupRefreshing
+    ) {
+      this.runManagedTimeout(() => {
+        void this.reloadFeaturedEntriesFromLocal(
+          this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
+          false,
+          true,
+          true,
+        )
+      }, 0)
     }
   }
 
@@ -2034,6 +2042,7 @@ struct Index {
     this.activeRootTabId = tabId
     if (tabId === 'home') {
       this.syncHomeModeRailState(this.mode)
+      this.primeHomeModeRailForRootActivation()
       this.tryFlushDeferredFeedsChangedReload('tab-home')
     }
   }
@@ -2047,23 +2056,18 @@ struct Index {
   }
 
   private requestModeSwitch(nextMode: SubscriptionMode): void {
-    console.info(`[MODE_SWITCH] requestModeSwitch START mode=${this.mode} -> ${nextMode}`)
-    const switchStart = Date.now()
     if (!shouldAcceptModeSwitch({
       currentMode: this.mode,
       nextMode,
       isTransitioning: this.isModeTransitioning,
     })) {
-      console.info(`[MODE_SWITCH] requestModeSwitch REJECTED mode=${this.mode} -> ${nextMode}`)
       return
     }
 
     const nextModeOffset = this.homeModeScrollOffsetFor(nextMode)
-    console.info(`[MODE_SWITCH] setting state mode=${nextMode} offset=${nextModeOffset}`)
 
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
-    console.info(`[MODE_SWITCH] visitedModes updated=${JSON.stringify(this.visitedModes)}`)
     this.resetHomePullRefreshState()
     this.homeModeRailExpandedOverride = false
     this.homeModeRailExpandedLockOffset = -1
@@ -2071,7 +2075,6 @@ struct Index {
     this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
-    console.info(`[MODE_SWITCH] requestModeSwitch END elapsed=${Date.now() - switchStart}ms`)
   }
 
   private logModeSwitchSnapshot(stage: string, mode: SubscriptionMode): void {
@@ -2094,13 +2097,7 @@ struct Index {
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
-    console.info(`[MODE_SWITCH] startModeTransition START mode=${nextMode} currentRendered=${this.renderedMode}`)
-    const t0 = Date.now()
-    // Reference project uses nextMode for previousMode, not renderedMode
-    this.previousMode = nextMode
     this.renderedMode = nextMode
-    this.modeTransitionDirection = 1
-    console.info(`[MODE_SWITCH] startModeTransition END elapsed=${Date.now() - t0}ms renderedMode=${this.renderedMode}`)
   }
 
   private adjacentMode(offsetX: number): SubscriptionMode | undefined {
@@ -2205,28 +2202,34 @@ struct Index {
     this.feedsChangedReloadVersion = currentVersion
     this.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
     this.invalidateHomeLoadMorePrefetch()
-    void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, false, false)
+    this.runManagedTimeout(() => {
+      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, false, false)
+    }, 0)
   }
 
-  private tryFlushDeferredFeedsChangedReload(source: string): void {
+  private tryFlushDeferredFeedsChangedReload(source: string): boolean {
     if (!this.hasDeferredFeedsChangedReload) {
-      return
+      return false
     }
     if (!this.isComponentActive || !this.isHomeRootTab()) {
-      return
+      return false
+    }
+    if (this.homePostRefreshReloadPending) {
+      return false
     }
 
     const now = Date.now()
     if (this.isRefreshing || this.isHomeStartupRefreshing || this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
-      return
+      return false
     }
     if (now < this.suppressFeedsChangedUntilMs) {
       this.scheduleDeferredFeedsChangedRetry(this.suppressFeedsChangedUntilMs - now + 16)
-      return
+      return true
     }
 
     this.hasDeferredFeedsChangedReload = false
     this.scheduleFeedsChangedReload(`deferred-${source}`)
+    return true
   }
 
   private handleFeedsChanged(): void {
@@ -2242,6 +2245,10 @@ struct Index {
 
     if (this.isRefreshing || this.isHomeStartupRefreshing || this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
       this.markDeferredFeedsChangedReload('busy')
+      return
+    }
+    if (this.homePostRefreshReloadPending) {
+      this.markDeferredFeedsChangedReload('post-refresh-pending')
       return
     }
 
@@ -2300,6 +2307,7 @@ struct Index {
   private scheduleHomeReloadAfterRefresh(): void {
     const currentVersion = this.postRefreshReloadVersion + 1
     this.postRefreshReloadVersion = currentVersion
+    this.homePostRefreshReloadPending = true
     this.suppressFeedsChangedUntilMs = Date.now()
       + HOME_REFRESH_FINAL_RELOAD_DELAY_MS
       + HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS
@@ -2309,9 +2317,15 @@ struct Index {
         return
       }
       if (!this.shouldRunFinalHomeReloadNow()) {
+        this.homePostRefreshReloadPending = false
         return
       }
-      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true, true)
+      this.hasDeferredFeedsChangedReload = false
+      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true, true).finally(() => {
+        if (this.postRefreshReloadVersion === currentVersion) {
+          this.homePostRefreshReloadPending = false
+        }
+      })
     }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
   }
 
@@ -2420,7 +2434,7 @@ struct Index {
   }
 
   private setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
-    const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
+    const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
     this.homeVisibleEntryLimits = {
       articles: mode === 'articles' ? safeLimit : this.homeVisibleEntryLimits.articles,
       social: mode === 'social' ? safeLimit : this.homeVisibleEntryLimits.social,
@@ -2446,7 +2460,7 @@ struct Index {
       return entries
     }
     const limit = this.visibleEntryLimitFor(mode)
-    const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
+    const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
     return entries.slice(0, Math.min(entries.length, safeLimit))
   }
 
@@ -2456,7 +2470,7 @@ struct Index {
       return totalCount
     }
     const limit = this.visibleEntryLimitFor(mode)
-    const safeLimit = Math.max(HOME_VISIBLE_ENTRY_INITIAL_LIMIT, limit)
+    const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
     return Math.min(totalCount, safeLimit)
   }
 
@@ -3752,29 +3766,22 @@ struct Index {
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
-    const result = mode === this.renderedMode ? Visibility.Visible : Visibility.Hidden
-    console.info(`[VISIBILITY] modeSceneVisible mode=${mode} renderedMode=${this.renderedMode} result=${result === Visibility.Visible ? 'Visible' : 'Hidden'}`)
-    return result
+    return mode === this.renderedMode ? Visibility.Visible : Visibility.Hidden
   }
 
   private shouldMountModeScene(mode: SubscriptionMode): boolean {
-    const result = mode === this.renderedMode || this.visitedModes.includes(mode)
-    console.info(`[SHOULD_MOUNT] shouldMountModeScene mode=${mode} renderedMode=${this.renderedMode} visited=${JSON.stringify(this.visitedModes)} result=${result}`)
-    return result
+    return true
   }
 
   private modeSceneOpacity(mode: SubscriptionMode): number {
-    // No fade transition needed
     return 1
   }
 
   private modeSceneOffset(mode: SubscriptionMode): number {
-    // No slide transition needed
     return 0
   }
 
   private modeSceneZIndex(mode: SubscriptionMode): number {
-    // Current mode on top
     return mode === this.renderedMode ? 2 : 1
   }
 
@@ -4103,6 +4110,14 @@ struct Index {
     this.homeModeRailDismissedByScroll = false
     this.currentHomeModeScrollOffset = this.homeModeRailExpandedLockOffset
     this.updateHeaderBlurProgress(this.homeModeRailExpandedLockOffset)
+  }
+
+  private primeHomeModeRailForRootActivation(): void {
+    this.homeModeRailExpandedOverride = false
+    this.homeModeRailExpandedLockOffset = -1
+    this.homeModeRailDismissedByScroll = false
+    this.currentHomeModeScrollOffset = 0
+    this.updateHeaderBlurProgress(0)
   }
 
   private homeFirstCardTopBoundary(): number {
@@ -4568,7 +4583,7 @@ struct Index {
               .width('100%')
 
               HomeVideoGrid({
-                entries: this.filteredEntriesFor(mode),
+                entries: this.visibleEntriesFor(mode),
                 highlightQuery: this.searchQuery,
                 inheritedTheme: this.theme,
                 isLoading: this.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
@@ -4625,8 +4640,7 @@ struct Index {
 
   @Builder
   private HomeRootPage() {
-    // Always build all mode scenes - visibility is controlled by modeSceneVisible(), not if conditions
-    // This avoids re-building when switching modes, eliminating lag
+    // Build all mode scenes up front so first-time switches stay warm.
     Stack({ alignContent: Alignment.TopStart }) {
       this.HomeRefreshIndicatorLayer()
 
