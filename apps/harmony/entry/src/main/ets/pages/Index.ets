@@ -441,6 +441,7 @@ struct Index {
   private homePerfSessionId: number = 0
   private homePerfSessionStartedAt: number = 0
   private readonly tweetPresentationCache: Map<string, TweetEntryPresentation> = new Map()
+  private lastHandledRequestedRootTabId: RootTabId | '' = ''
 
   aboutToAppear(): void {
     this.isComponentActive = true
@@ -1848,9 +1849,14 @@ struct Index {
       return
     }
 
+    if (requestedTab === this.lastHandledRequestedRootTabId) {
+      return
+    }
+
     this.highlightedRootTabId = requestedTab
     this.activeRootTabId = requestedTab
     this.rootTabIndex = rootTabIndexForId(requestedTab)
+    this.lastHandledRequestedRootTabId = requestedTab
     this.syncRootTabsController()
   }
 

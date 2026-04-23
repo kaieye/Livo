@@ -9,6 +9,9 @@ import {
   resolveHomeVideoGridColumns,
 } from '../utils/HomeVideoGrid'
 
+const HOME_VIDEO_CARD_TITLE_HEIGHT: number = 36
+const HOME_VIDEO_CARD_META_HEIGHT: number = 16
+
 @Component
 export struct HomeVideoGrid {
   @Prop entries: EntryCardModel[] = []
@@ -249,6 +252,7 @@ export struct HomeVideoGrid {
           maxLines: 2,
         })
           .width('100%')
+          .height(HOME_VIDEO_CARD_TITLE_HEIGHT)
 
         if (this.cardMetaLine(entry)) {
           Row({ space: 6 }) {
@@ -285,7 +289,12 @@ export struct HomeVideoGrid {
             }
           }
           .width('100%')
+          .height(HOME_VIDEO_CARD_META_HEIGHT)
           .alignItems(VerticalAlign.Center)
+        } else {
+          Blank()
+            .width('100%')
+            .height(HOME_VIDEO_CARD_META_HEIGHT)
         }
       }
       .width('100%')

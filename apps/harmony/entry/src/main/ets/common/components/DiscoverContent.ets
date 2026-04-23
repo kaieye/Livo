@@ -314,7 +314,6 @@ export struct DiscoverContent {
 
   private discoverFeaturedFeeds(): RecommendedFeed[] {
     return this.featuredTrendingFeeds
-      .filter((feed: RecommendedFeed) => !this.isSubscribedRecommendedFeed(feed))
       .slice(0, 7)
   }
 
