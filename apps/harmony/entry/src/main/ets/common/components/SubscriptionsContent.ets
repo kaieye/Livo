@@ -301,43 +301,19 @@ export struct SubscriptionsContent {
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
-    if (mode === this.renderedMode) {
-      return Visibility.Visible
-    }
-
-    if (this.isModeTransitioning && mode === this.previousMode) {
-      return Visibility.Visible
-    }
-
-    return Visibility.Hidden
+    return mode === this.mode ? Visibility.Visible : Visibility.Hidden
   }
 
   private modeSceneOpacity(mode: SubscriptionMode): number {
-    return mode === this.renderedMode ? 1 : 0
+    return mode === this.mode ? 1 : 0
   }
 
   private modeSceneOffset(mode: SubscriptionMode): number {
-    if (mode === this.renderedMode) {
-      return 0
-    }
-
-    if (!this.isModeTransitioning || mode !== this.previousMode) {
-      return 0
-    }
-
-    return this.modeTransitionDirection > 0 ? -16 : 16
+    return 0
   }
 
   private modeSceneZIndex(mode: SubscriptionMode): number {
-    if (mode === this.renderedMode) {
-      return 2
-    }
-
-    if (this.isModeTransitioning && mode === this.previousMode) {
-      return 1
-    }
-
-    return 0
+    return mode === this.mode ? 2 : 0
   }
 
   private deriveFallbackIcon(siteUrl: string): string {
