@@ -1998,6 +1998,7 @@ struct Index {
       return
     }
 
+    const previousTabId = this.currentRootTabId()
     const item = resolveHdsBottomTabItems()[index]
     if (!item) {
       return
@@ -2007,6 +2008,11 @@ struct Index {
     this.rootTabIndex = index
     this.highlightedRootTabId = tabId
     this.logHomeSearchFocusDebug('root-tab-change', `nextTab=${tabId}`)
+    if (previousTabId === 'discover' && tabId !== 'discover') {
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+      AppStorage.setOrCreate('discoverOverlayLevel', 0)
+      AppStorage.setOrCreate('discoverNavigationResetAt', Date.now())
+    }
     if (tabId !== 'home') {
       this.resetHomePullRefreshState()
       this.closeHomeInlineSearch(true)
@@ -2048,7 +2054,7 @@ struct Index {
   }
 
   private currentRootTabId(): RootTabId {
-    return this.highlightedRootTabId
+    return this.activeRootTabId
   }
 
   private modeIndex(mode: SubscriptionMode): number {

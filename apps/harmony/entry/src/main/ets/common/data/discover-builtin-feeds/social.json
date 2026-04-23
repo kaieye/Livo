@@ -1,0 +1,321 @@
+{
+  "description": "Folo built-in feeds split by view type",
+  "view": "social",
+  "feeds": [
+    {
+      "title": "Hacker News",
+      "url": "rsshub://hackernews",
+      "language": "English"
+    },
+    {
+      "title": "Product Hunt",
+      "url": "https://www.producthunt.com/feed",
+      "language": "English"
+    },
+    {
+      "title": "Trending repositories on GitHub this week",
+      "url": "rsshub://github/trending/weekly/any",
+      "language": "English"
+    },
+    {
+      "title": "Trending repositories on GitHub today",
+      "url": "rsshub://github/trending/daily/any",
+      "language": "English"
+    },
+    {
+      "title": "David Sinclair - X",
+      "url": "rsshub://twitter/user/davidasinclair",
+      "language": "English"
+    },
+    {
+      "title": "Elon Musk - X",
+      "url": "rsshub://twitter/user/elonmusk",
+      "language": "English"
+    },
+    {
+      "title": "Follow - X",
+      "url": "rsshub://twitter/user/folo_is",
+      "language": "English"
+    },
+    {
+      "title": "James Clear - X",
+      "url": "rsshub://twitter/user/JamesClear",
+      "language": "English"
+    },
+    {
+      "title": "Stock Edge",
+      "url": "rsshub://stockedge/daily-updates/news",
+      "language": "English"
+    },
+    {
+      "title": "Bloomberg - News",
+      "url": "rsshub://bloomberg/%2F",
+      "language": "English"
+    },
+    {
+      "title": "AInvest - Latest News",
+      "url": "rsshub://ainvest/news",
+      "language": "English"
+    },
+    {
+      "title": "GQ",
+      "url": "rsshub://gq/news",
+      "language": "English"
+    },
+    {
+      "title": "知乎热榜 - 全站",
+      "url": "rsshub://zhihu/hot/total",
+      "language": "Chinese"
+    },
+    {
+      "title": "V2EX-最热主题",
+      "url": "rsshub://v2ex/topics/hot",
+      "language": "Chinese"
+    },
+    {
+      "title": "V2EX-最新主题",
+      "url": "rsshub://v2ex/topics/latest",
+      "language": "Chinese"
+    },
+    {
+      "title": "bilibili 排行榜-全站 - Bilibili",
+      "url": "rsshub://bilibili/ranking/0",
+      "language": "Chinese"
+    },
+    {
+      "title": "DIYgod - X",
+      "url": "rsshub://twitter/user/DIYgod",
+      "language": "Chinese"
+    },
+    {
+      "title": "实时财经快讯 - FastBull",
+      "url": "rsshub://fastbull/express-news",
+      "language": "Chinese"
+    },
+    {
+      "title": "格隆汇快讯",
+      "url": "rsshub://gelonghui/live",
+      "language": "Chinese"
+    },
+    {
+      "title": "深潮TechFlow - 快讯",
+      "url": "rsshub://techflowpost/express",
+      "language": "Chinese"
+    },
+    {
+      "title": "TheBlockBeats - 快讯",
+      "url": "rsshub://theblockbeats/newsflash/0",
+      "language": "Chinese"
+    },
+    {
+      "title": "律动BlockBeats",
+      "url": "https://api.theblockbeats.news/v1/open-api/home-xml",
+      "language": "Chinese"
+    },
+    {
+      "title": "36氪 - 24小时热榜",
+      "url": "rsshub://36kr/hot-list",
+      "language": "Chinese"
+    },
+    {
+      "title": "奇客的资讯，重要的东西",
+      "url": "rsshub://solidot/www",
+      "language": "Chinese"
+    },
+    {
+      "title": "资讯列表 - 人人影视",
+      "url": "rsshub://yyets/article/all",
+      "language": "Chinese"
+    },
+    {
+      "title": "科技圈在花频道 - Telegram Channel",
+      "url": "rsshub://telegram/channel/TestFlightCN",
+      "language": "Chinese"
+    },
+    {
+      "title": "竹新社 - Telegram Channel",
+      "url": "rsshub://telegram/channel/tnews365",
+      "language": "Chinese"
+    },
+    {
+      "title": "分享创造日报",
+      "url": "https://v2ex-create.nexmm.com/rss.xml",
+      "language": "Chinese"
+    },
+    {
+      "title": "金色财经 - 全部",
+      "url": "rsshub://jinse/lives/0",
+      "language": "Chinese"
+    },
+    {
+      "title": "7x24小时快讯",
+      "url": "rsshub://fx678/kx",
+      "language": "Chinese"
+    },
+    {
+      "title": "V2EX",
+      "url": "https://www.v2ex.com/index.xml",
+      "language": "Chinese"
+    },
+    {
+      "title": "ahhhhfs｜A姐分享 - Telegram Channel",
+      "url": "rsshub://telegram/channel/abskoop",
+      "language": "Chinese"
+    },
+    {
+      "title": "小声逼逼 - Telegram Channel",
+      "url": "rsshub://telegram/channel/me888888888888",
+      "language": "Chinese"
+    },
+    {
+      "title": "阿里、夸克、百度等网盘4K影视资源 - Telegram Channel",
+      "url": "rsshub://telegram/channel/Aliyun_4K_Movies",
+      "language": "Chinese"
+    },
+    {
+      "title": "社群 - 韭研公社",
+      "url": "rsshub://jiuyangongshe/community",
+      "language": "Chinese"
+    },
+    {
+      "title": "阿里云盘吧 - Telegram Channel",
+      "url": "rsshub://telegram/channel/Q66Share",
+      "language": "Chinese"
+    },
+    {
+      "title": "阿里云盘发布频道 - Telegram Channel",
+      "url": "rsshub://telegram/channel/shareAliyun",
+      "language": "Chinese"
+    },
+    {
+      "title": "一觉醒来发生了什么 - 即刻圈子",
+      "url": "rsshub://jike/topic/553870e8e4b0cafb0a1bef68",
+      "language": "Chinese"
+    },
+    {
+      "title": "Follow - X",
+      "url": "rsshub://twitter/user/folo_is",
+      "language": "English"
+    },
+    {
+      "title": "即刻精选 - Telegram Channel",
+      "url": "rsshub://telegram/channel/jike_collection",
+      "language": "Chinese"
+    },
+    {
+      "title": "cnBeta.COM - 中文业界资讯站",
+      "url": "rsshub://cnbeta",
+      "language": "Chinese"
+    },
+    {
+      "title": "36氪资讯热榜",
+      "url": "https://feeds.feedburner.com/36kr/hot-list",
+      "language": "Chinese"
+    },
+    {
+      "title": "宝玉 - X",
+      "url": "rsshub://twitter/user/dotey",
+      "language": "English"
+    },
+    {
+      "title": "风向旗参考快讯 - Telegram Channel",
+      "url": "rsshub://telegram/channel/xhqcankao",
+      "language": "Chinese"
+    },
+    {
+      "title": "掘金本周最热",
+      "url": "https://rsshub.bestblogs.dev/juejin/trending/all/weekly",
+      "language": "Chinese"
+    },
+    {
+      "title": "分享创造",
+      "url": "https://www.v2ex.com/feed/create.xml",
+      "language": "Chinese"
+    },
+    {
+      "title": "V2EX - 创意",
+      "url": "https://www.v2ex.com/feed/tab/creative.xml",
+      "language": "Chinese"
+    },
+    {
+      "title": "Yu's Life - Telegram Channel",
+      "url": "rsshub://telegram/channel/pseudoyulife",
+      "language": "Chinese"
+    },
+    {
+      "title": "Hacker News",
+      "url": "https://hnrss.org/frontpage",
+      "language": ""
+    },
+    {
+      "title": "Lobsters",
+      "url": "https://lobste.rs/rss",
+      "language": ""
+    },
+    {
+      "title": "老番茄 - Bilibili",
+      "url": "https://rsshub.pseudoyu.com/bilibili/user/dynamic/546195",
+      "language": ""
+    },
+    {
+      "title": "OpenAI - X",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/openai",
+      "language": ""
+    },
+    {
+      "title": "GitHub - X",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/github",
+      "language": ""
+    },
+    {
+      "title": "verge - X",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/verge",
+      "language": ""
+    },
+    {
+      "title": "Figma - X",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/figma",
+      "language": ""
+    },
+    {
+      "title": "MiniMax (official)",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/minimax_ai",
+      "language": ""
+    },
+    {
+      "title": "Z.ai",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/zai_org",
+      "language": ""
+    },
+    {
+      "title": "Elon Musk",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/elonmusk",
+      "language": ""
+    },
+    {
+      "title": "DAN KOE",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/thedankoe",
+      "language": ""
+    },
+    {
+      "title": "DeepSeek",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/deepseek_ai",
+      "language": ""
+    },
+    {
+      "title": "Andrej Karpathy",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/karpathy",
+      "language": ""
+    },
+    {
+      "title": "Greg Brockman",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/gdb",
+      "language": ""
+    },
+    {
+      "title": "Sam Altman",
+      "url": "https://rsshub.pseudoyu.com/twitter/user/sama",
+      "language": ""
+    }
+  ]
+}

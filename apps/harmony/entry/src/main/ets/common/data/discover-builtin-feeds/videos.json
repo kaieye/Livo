@@ -1,0 +1,136 @@
+{
+  "description": "Folo built-in feeds split by view type",
+  "view": "videos",
+  "feeds": [
+    {
+      "title": "Andrew Huberman - YouTube",
+      "url": "rsshub://youtube/user/@hubermanlab",
+      "language": "English"
+    },
+    {
+      "title": "Lex Fridman - YouTube",
+      "url": "rsshub://youtube/user/%40lexfridman",
+      "language": "English"
+    },
+    {
+      "title": "Marques Brownlee - YouTube",
+      "url": "rsshub://youtube/user/@mkbhd",
+      "language": "English"
+    },
+    {
+      "title": "Sabine Hossenfelder - YouTube",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC1yNl2E66ZzKApQdRuTQ4tw",
+      "language": "English"
+    },
+    {
+      "title": "TED Talks Daily",
+      "url": "https://feeds.acast.com/public/shows/67587e77c705e441797aff96",
+      "language": "English"
+    },
+    {
+      "title": "小Lin说 - YouTube",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCilwQlk62k1z7aUEZPOB6yw",
+      "language": "Chinese"
+    },
+    {
+      "title": "胡子观币 - YouTube",
+      "url": "rsshub://youtube/user/%40huziguanbi",
+      "language": "Chinese"
+    },
+    {
+      "title": "影视飓风 - Bilibili",
+      "url": "rsshub://bilibili/user/video/946974",
+      "language": "Chinese"
+    },
+    {
+      "title": "小Lin说 - YouTube",
+      "url": "rsshub://youtube/user/%40xiao_lin_shuo",
+      "language": "Chinese"
+    },
+    {
+      "title": "王志安 - YouTube",
+      "url": "rsshub://youtube/user/%40wangzhian",
+      "language": "Chinese"
+    },
+    {
+      "title": "Mediastorm影视飓风 - YouTube",
+      "url": "rsshub://youtube/user/%40mediastorm6801",
+      "language": "Chinese"
+    },
+    {
+      "title": "极客湾Geekerwan - Bilibili",
+      "url": "rsshub://bilibili/user/video/25876945",
+      "language": "Chinese"
+    },
+    {
+      "title": "不良林 - YouTube",
+      "url": "rsshub://youtube/user/%40bulianglin",
+      "language": "Chinese"
+    },
+    {
+      "title": "老高與小茉 Mr & Mrs Gao - YouTube",
+      "url": "rsshub://youtube/user/%40laogao",
+      "language": "Chinese"
+    },
+    {
+      "title": "TED Talks Daily",
+      "url": "https://feeds.feedburner.com/TEDTalks_audio",
+      "language": ""
+    },
+    {
+      "title": "NPR Video",
+      "url": "https://feeds.npr.org/1004/rss.xml",
+      "language": ""
+    },
+    {
+      "title": "OpenAI - YouTube",
+      "url": "https://rsshub.pseudoyu.com/youtube/channel/UCXZCJLdBC09xxGZ6gcdrc6A",
+      "language": ""
+    },
+    {
+      "title": "Google Developers - YouTube",
+      "url": "https://rsshub.pseudoyu.com/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+      "language": ""
+    },
+    {
+      "title": "Fireship - YouTube",
+      "url": "https://rsshub.pseudoyu.com/youtube/channel/UC2Xd-TjJByJyK2w1zNwY0zQ",
+      "language": ""
+    },
+    {
+      "title": "Veritasium - YouTube",
+      "url": "https://rsshub.pseudoyu.com/youtube/channel/UCHnyfMqiRRG1u-2MsSQLbXA",
+      "language": ""
+    },
+    {
+      "title": "罗翔说刑法 - Bilibili",
+      "url": "https://rsshub.pseudoyu.com/bilibili/user/video/517327498",
+      "language": ""
+    },
+    {
+      "title": "影视飓风 - Bilibili",
+      "url": "https://rsshub.pseudoyu.com/bilibili/user/video/946974",
+      "language": ""
+    },
+    {
+      "title": "老师好我叫何同学 - Bilibili",
+      "url": "https://rsshub.pseudoyu.com/bilibili/user/video/163637592",
+      "language": ""
+    },
+    {
+      "title": "Google for Developers - YouTube",
+      "url": "https://rsshub.liumingye.cn/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+      "language": ""
+    },
+    {
+      "title": "Dan Koe - YouTube",
+      "url": "https://rsshub.liumingye.cn/youtube/channel/UCWXYDYv5STLk-zoxMP2I1Lw",
+      "language": ""
+    },
+    {
+      "title": "Beyond Fireship - YouTube",
+      "url": "https://rsshub.ktachibana.party/youtube/channel/UC2Xd-TjJByJyK2w1zNwY0zQ",
+      "language": ""
+    }
+  ]
+}

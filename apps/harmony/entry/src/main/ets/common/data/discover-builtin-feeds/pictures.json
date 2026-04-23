@@ -1,0 +1,61 @@
+{
+  "description": "Folo built-in feeds split by view type",
+  "view": "pictures",
+  "feeds": [
+    {
+      "title": "NASA Astronomy Picture of the Day",
+      "url": "rsshub://nasa/apod",
+      "language": "English"
+    },
+    {
+      "title": "Nat Geo Photo of the Day",
+      "url": "rsshub://natgeo/dailyphoto",
+      "language": "English"
+    },
+    {
+      "title": "每日一图-北京天文馆",
+      "url": "rsshub://bjp/apod",
+      "language": "Chinese"
+    },
+    {
+      "title": "Nat Geo Photo of the Day",
+      "url": "rsshub://natgeo/dailyphoto",
+      "language": "English"
+    },
+    {
+      "title": "爱范儿",
+      "url": "https://www.ifanr.com/feed",
+      "language": ""
+    },
+    {
+      "title": "NASA Image of the Day",
+      "url": "https://www.nasa.gov/feeds/iotd-feed/",
+      "language": ""
+    },
+    {
+      "title": "Astronomy Picture of the Day",
+      "url": "https://apod.nasa.gov/apod.rss",
+      "language": ""
+    },
+    {
+      "title": "NASA - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/nasa",
+      "language": ""
+    },
+    {
+      "title": "National Geographic - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/natgeo",
+      "language": ""
+    },
+    {
+      "title": "Figma - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/figma",
+      "language": ""
+    },
+    {
+      "title": "Google - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/google",
+      "language": ""
+    }
+  ]
+}

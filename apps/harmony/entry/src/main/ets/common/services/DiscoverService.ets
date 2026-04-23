@@ -3,6 +3,8 @@ import {
   DEFAULT_NITTER_INSTANCE,
   DEFAULT_RSSHUB_INSTANCE as APP_DEFAULT_RSSHUB_INSTANCE,
 } from '../AppConfig'
+import { builtinDiscoverFeedsAll } from '../data/DiscoverBuiltinFeeds'
+import trendingFeedSeeds from '../data/discover-builtin-feeds/trending-feeds.json'
 
 export type DiscoverSearchPlatform = 'all' | 'youtube' | 'bilibili' | 'x' | 'instagram'
 
@@ -13,6 +15,7 @@ export interface RecommendedFeed {
   description: string
   view: FeedViewType
   category: string
+  sourceKey?: string
   imageUrl?: string
   followers?: string
 }
@@ -34,6 +37,22 @@ export interface ResolvedDiscoverCandidate {
   followers?: string
 }
 
+interface TrendingFeedSeed {
+  title: string
+  url: string
+  siteUrl: string
+  description?: string
+  view: string
+  category?: string
+  sourceKey?: string
+  imageUrl?: string
+  followers?: string
+}
+
+interface TrendingFeedSeedFileShape {
+  feeds?: TrendingFeedSeed[]
+}
+
 function discoverInstagramAvatarUrl(usernameRaw: string): string {
   const username = (usernameRaw || '').trim().replace(/^@+/, '')
   return username ? `https://unavatar.io/instagram/${encodeURIComponent(username)}?fallback=false` : ''
@@ -41,285 +60,56 @@ function discoverInstagramAvatarUrl(usernameRaw: string): string {
 
 export const DEFAULT_RSSHUB_INSTANCE = APP_DEFAULT_RSSHUB_INSTANCE
 
-export const RECOMMENDED_FEEDS: RecommendedFeed[] = [
-  {
-    title: '少数派',
-    url: 'https://sspai.com/feed',
-    siteUrl: 'https://sspai.com',
-    description: '高效工作，品质生活',
-    view: FeedViewType.Articles,
-    category: '精选',
-  },
-  {
-    title: '阮一峰的网络日志',
-    url: 'https://www.ruanyifeng.com/blog/atom.xml',
-    siteUrl: 'https://www.ruanyifeng.com/blog',
-    description: '技术、互联网与个人思考',
-    view: FeedViewType.Articles,
-    category: '博客',
-  },
-  {
-    title: 'The Verge',
-    url: 'https://www.theverge.com/rss/index.xml',
-    siteUrl: 'https://www.theverge.com',
-    description: '科技新闻与深度报道',
-    view: FeedViewType.Articles,
-    category: '科技',
-  },
-  {
-    title: 'OpenAI News',
-    url: 'https://openai.com/news/rss.xml',
-    siteUrl: 'https://openai.com/news',
-    description: 'OpenAI 官方动态',
-    view: FeedViewType.Articles,
-    category: 'AI',
-  },
-  {
-    title: 'Google AI Blog',
-    url: 'https://blog.google/technology/ai/rss/',
-    siteUrl: 'https://blog.google/technology/ai/',
-    description: 'Google AI 团队的官方更新',
-    view: FeedViewType.Articles,
-    category: 'AI',
-  },
-  {
-    title: 'GitHub Changelog',
-    url: 'https://github.blog/changelog/feed/',
-    siteUrl: 'https://github.blog/changelog',
-    description: 'GitHub 产品更新',
-    view: FeedViewType.Articles,
-    category: '开发',
-  },
-  {
-    title: 'V2EX 技术',
-    url: 'https://www.v2ex.com/feed/tab/tech.xml',
-    siteUrl: 'https://www.v2ex.com',
-    description: '技术社区热门讨论',
-    view: FeedViewType.Articles,
-    category: '社区',
-  },
-  {
-    title: 'Hacker News',
-    url: 'https://hnrss.org/frontpage',
-    siteUrl: 'https://news.ycombinator.com',
-    description: '开发者热点讨论',
-    view: FeedViewType.SocialMedia,
-    category: '讨论',
-  },
-  {
-    title: 'Lobsters',
-    url: 'https://lobste.rs/rss',
-    siteUrl: 'https://lobste.rs',
-    description: '开发者社区的链接与讨论',
-    view: FeedViewType.SocialMedia,
-    category: '社区',
-  },
-  {
-    title: 'Product Hunt',
-    url: 'https://www.producthunt.com/feed',
-    siteUrl: 'https://www.producthunt.com',
-    description: '每日产品讨论与发布',
-    view: FeedViewType.SocialMedia,
-    category: '社区',
-  },
-  {
-    title: '爱范儿',
-    url: 'https://www.ifanr.com/feed',
-    siteUrl: 'https://www.ifanr.com',
-    description: '创新与消费科技',
-    view: FeedViewType.Pictures,
-    category: '图文',
-  },
-  {
-    title: 'NASA Image of the Day',
-    url: 'https://www.nasa.gov/feeds/iotd-feed/',
-    siteUrl: 'https://www.nasa.gov',
-    description: '每日精选太空图片',
-    view: FeedViewType.Pictures,
-    category: '摄影',
-  },
-  {
-    title: 'Astronomy Picture of the Day',
-    url: 'https://apod.nasa.gov/apod.rss',
-    siteUrl: 'https://apod.nasa.gov/apod/astropix.html',
-    description: 'NASA 每日天文图集',
-    view: FeedViewType.Pictures,
-    category: '摄影',
-  },
-  {
-    title: 'TED Talks Daily',
-    url: 'https://feeds.feedburner.com/TEDTalks_audio',
-    siteUrl: 'https://www.ted.com/talks',
-    description: '全球演讲精选',
-    view: FeedViewType.Videos,
-    category: '演讲',
-  },
-  {
-    title: 'NPR Video',
-    url: 'https://feeds.npr.org/1004/rss.xml',
-    siteUrl: 'https://www.npr.org',
-    description: '新闻视频与故事',
-    view: FeedViewType.Videos,
-    category: '资讯',
-  },
-  {
-    title: 'OpenAI',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UCXZCJLdBC09xxGZ6gcdrc6A`,
-    siteUrl: 'https://www.youtube.com/@OpenAI',
-    description: 'OpenAI 官方频道更新',
-    view: FeedViewType.Videos,
-    category: 'YouTube',
-    imageUrl: 'https://yt3.googleusercontent.com/MopgmVAFV9BqlzOJ-UINtmutvEPcNe5IbKMmP_4vZZo3vnJXcZGtybUBsXaEVxkmxKyGqX9R=s900-c-k-c0x00ffffff-no-rj',
-    followers: '362K 订阅者',
-  },
-  {
-    title: 'Google Developers',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw`,
-    siteUrl: 'https://www.youtube.com/@GoogleDevelopers',
-    description: 'Google Developers 官方视频更新',
-    view: FeedViewType.Videos,
-    category: 'YouTube',
-    imageUrl: 'https://yt3.googleusercontent.com/WZ_63J_-745xyW_DGxGi3VUyTZAe0Jvhw2ZCg7fdz-tv9esTbNPZTFR9X79QzA0ArIrMjYJCDA=s900-c-k-c0x00ffffff-no-rj',
-    followers: '2.61M 订阅者',
-  },
-  {
-    title: 'Fireship',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UC2Xd-TjJByJyK2w1zNwY0zQ`,
-    siteUrl: 'https://www.youtube.com/@Fireship',
-    description: '开发者视频推荐源',
-    view: FeedViewType.Videos,
-    category: 'YouTube',
-    imageUrl: 'https://yt3.googleusercontent.com/3fPNbkf_xPyCleq77ZhcxyeorY97NtMHVNUbaAON_RBDH9ydL4hJkjxC8x_4mpuopkB8oI7Ct6Y=s900-c-k-c0x00ffffff-no-rj',
-    followers: '469K 订阅者',
-  },
-  {
-    title: 'Veritasium',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/youtube/channel/UCHnyfMqiRRG1u-2MsSQLbXA`,
-    siteUrl: 'https://www.youtube.com/@veritasium',
-    description: '科普视频推荐源',
-    view: FeedViewType.Videos,
-    category: 'YouTube',
-    imageUrl: 'https://yt3.googleusercontent.com/7vCbvtCqtjQ3YLgsJt7Y952MQV1sBvhllSCSxHP8_sVZdcPCBrITfhkN2RdyCuwPnsByq-1GoA=s900-c-k-c0x00ffffff-no-rj',
-    followers: '20.5M 订阅者',
-  },
-  {
-    title: '罗翔说刑法',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/video/517327498`,
-    siteUrl: 'https://space.bilibili.com/517327498',
-    description: 'Bilibili 视频更新示例源',
-    view: FeedViewType.Videos,
-    category: 'Bilibili',
-    imageUrl: 'https://i1.hdslb.com/bfs/face/4e5d0a51273fe3f8fabc700b6a71bb8a38c9e21e.jpg',
-    followers: '3206万粉丝',
-  },
-  {
-    title: '影视飓风',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/video/946974`,
-    siteUrl: 'https://space.bilibili.com/946974',
-    description: '影像与数码创作内容',
-    view: FeedViewType.Videos,
-    category: 'Bilibili',
-    imageUrl: 'https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg',
-    followers: '1568万粉丝',
-  },
-  {
-    title: '老师好我叫何同学',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/video/163637592`,
-    siteUrl: 'https://space.bilibili.com/163637592',
-    description: '数码与创意视频更新',
-    view: FeedViewType.Videos,
-    category: 'Bilibili',
-    imageUrl: 'https://i0.hdslb.com/bfs/face/492d0bb71749332040f9d812954fa0b52e66c490.jpg',
-    followers: '1269万粉丝',
-  },
-  {
-    title: '老番茄',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/bilibili/user/dynamic/546195`,
-    siteUrl: 'https://space.bilibili.com/546195',
-    description: 'Bilibili 动态示例源',
-    view: FeedViewType.SocialMedia,
-    category: 'Bilibili',
-    imageUrl: 'https://i0.hdslb.com/bfs/face/bc5ca101313d4db223c395d64779e76eb3482d60.jpg',
-    followers: '2017万粉丝',
-  },
-  {
-    title: 'OpenAI on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/openai`,
-    siteUrl: 'https://x.com/OpenAI',
-    description: 'OpenAI 在 X 上的公开动态',
-    view: FeedViewType.SocialMedia,
-    category: 'X',
-    imageUrl: 'https://unavatar.io/x/openai',
-  },
-  {
-    title: 'GitHub on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/github`,
-    siteUrl: 'https://x.com/github',
-    description: 'GitHub 官方动态',
-    view: FeedViewType.SocialMedia,
-    category: 'X',
-    imageUrl: 'https://unavatar.io/x/github',
-  },
-  {
-    title: 'verge on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/verge`,
-    siteUrl: 'https://x.com/verge',
-    description: 'The Verge 社交动态',
-    view: FeedViewType.SocialMedia,
-    category: 'X',
-    imageUrl: 'https://unavatar.io/x/verge',
-    followers: '3.4M followers',
-  },
-  {
-    title: 'Figma on X',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/figma`,
-    siteUrl: 'https://x.com/figma',
-    description: 'Figma 官方动态',
-    view: FeedViewType.SocialMedia,
-    category: 'X',
-    imageUrl: 'https://unavatar.io/x/figma',
-  },
-  {
-    title: 'NASA',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/nasa`,
-    siteUrl: 'https://www.instagram.com/nasa/',
-    description: 'Instagram 图片流示例源',
-    view: FeedViewType.Pictures,
-    category: 'Instagram',
-    imageUrl: discoverInstagramAvatarUrl('nasa'),
-    followers: '100M followers',
-  },
-  {
-    title: 'National Geographic',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/natgeo`,
-    siteUrl: 'https://www.instagram.com/natgeo/',
-    description: '国家地理图片更新',
-    view: FeedViewType.Pictures,
-    category: 'Instagram',
-    imageUrl: discoverInstagramAvatarUrl('natgeo'),
-    followers: '275M followers',
-  },
-  {
-    title: 'Figma',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/figma`,
-    siteUrl: 'https://www.instagram.com/figma/',
-    description: 'Figma 官方视觉内容',
-    view: FeedViewType.Pictures,
-    category: 'Instagram',
-    imageUrl: discoverInstagramAvatarUrl('figma'),
-    followers: '898K followers',
-  },
-  {
-    title: 'Google',
-    url: `${DEFAULT_RSSHUB_INSTANCE}/instagram/user/google`,
-    siteUrl: 'https://www.instagram.com/google/',
-    description: 'Google 官方图片内容',
-    view: FeedViewType.Pictures,
-    category: 'Instagram',
-    imageUrl: discoverInstagramAvatarUrl('google'),
-    followers: '16M followers',
-  },
-]
+const RECOMMENDED_FEEDS: RecommendedFeed[] = builtinDiscoverFeedsAll()
+let cachedTrendingFeedsFromJson: RecommendedFeed[] | null = null
+
+function parseFeedView(viewRaw: string): FeedViewType {
+  const normalized = (viewRaw || '').trim().toLowerCase()
+  if (normalized === 'social' || normalized === 'socialmedia') {
+    return FeedViewType.SocialMedia
+  }
+  if (normalized === 'pictures' || normalized === 'picture') {
+    return FeedViewType.Pictures
+  }
+  if (normalized === 'videos' || normalized === 'video') {
+    return FeedViewType.Videos
+  }
+  return FeedViewType.Articles
+}
+
+function normalizeTrendingFeedSeed(seed: TrendingFeedSeed): RecommendedFeed | undefined {
+  const title = (seed.title || '').trim()
+  const url = (seed.url || '').trim()
+  const siteUrl = (seed.siteUrl || '').trim()
+  if (!title || !url || !siteUrl) {
+    return undefined
+  }
+
+  return {
+    title,
+    url,
+    siteUrl,
+    description: (seed.description || '').trim(),
+    view: parseFeedView(seed.view),
+    category: (seed.category || '热门推荐').trim(),
+    sourceKey: (seed.sourceKey || '').trim(),
+    imageUrl: (seed.imageUrl || '').trim(),
+    followers: (seed.followers || '').trim(),
+  }
+}
+
+function extractTrendingFeedSeeds(raw: Object | TrendingFeedSeed[] | TrendingFeedSeedFileShape): TrendingFeedSeed[] {
+  if (Array.isArray(raw)) {
+    return raw as TrendingFeedSeed[]
+  }
+
+  const fileShape = raw as TrendingFeedSeedFileShape
+  if (Array.isArray(fileShape.feeds)) {
+    return fileShape.feeds
+  }
+
+  return []
+}
 
 export function discoverViewLabel(view: FeedViewType): string {
   switch (view) {
@@ -581,8 +371,14 @@ export function matchesRecommended(feed: RecommendedFeed, query: string): boolea
     || feed.siteUrl.toLowerCase().includes(keyword)
 }
 
-export function filteredRecommendedFeeds(selectedView: FeedViewType): RecommendedFeed[] {
-  return RECOMMENDED_FEEDS.filter((feed: RecommendedFeed) => feed.view === selectedView)
+export function filteredRecommendedFeeds(selectedView: FeedViewType, sourceKey: string = ''): RecommendedFeed[] {
+  if (sourceKey) {
+    return RECOMMENDED_FEEDS.filter((feed: RecommendedFeed) => (feed.sourceKey || '') === sourceKey)
+  }
+
+  return RECOMMENDED_FEEDS.filter((feed: RecommendedFeed) => {
+    return feed.view === selectedView && !(feed.sourceKey || '')
+  })
 }
 
 export function filteredRecommendedFeedsByPlatform(platform: DiscoverSearchPlatform): RecommendedFeed[] {
@@ -625,6 +421,33 @@ export function searchedRecommendedFeedsByPlatform(
 
 export function trendingDiscoverFeeds(): RecommendedFeed[] {
   return RECOMMENDED_FEEDS.slice(0, 8)
+}
+
+export function trendingDiscoverFeedsFromJsonNow(): RecommendedFeed[] {
+  if (cachedTrendingFeedsFromJson) {
+    return cachedTrendingFeedsFromJson
+  }
+
+  try {
+    const parsed = extractTrendingFeedSeeds(trendingFeedSeeds as Object | TrendingFeedSeed[] | TrendingFeedSeedFileShape)
+    const normalized: RecommendedFeed[] = []
+    parsed.forEach((seed: TrendingFeedSeed) => {
+      const item = normalizeTrendingFeedSeed(seed)
+      if (item) {
+        normalized.push(item)
+      }
+    })
+    cachedTrendingFeedsFromJson = normalized.length > 0 ? normalized : trendingDiscoverFeeds()
+  } catch (error) {
+    console.warn(`[DiscoverService] Failed to load trending feeds from JSON: ${error instanceof Error ? error.message : 'unknown error'}`)
+    cachedTrendingFeedsFromJson = trendingDiscoverFeeds()
+  }
+
+  return cachedTrendingFeedsFromJson
+}
+
+export async function trendingDiscoverFeedsFromJson(): Promise<RecommendedFeed[]> {
+  return trendingDiscoverFeedsFromJsonNow()
 }
 
 export function resolveKeywordCandidates(query: string, preferredView: FeedViewType): ResolvedDiscoverCandidate[] {

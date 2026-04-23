@@ -34,11 +34,14 @@ import {
   ResolvedDiscoverCandidate,
   searchedRecommendedFeedsByPlatform,
   trendingDiscoverFeeds,
+  trendingDiscoverFeedsFromJson,
+  trendingDiscoverFeedsFromJsonNow,
 } from '../services/DiscoverService'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { resolveDiscoverOverlayReturnLevel } from '../utils/DiscoverNavigationPolicy'
 import { FeedDetailView } from './FeedDetailView'
 import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
@@ -85,6 +88,7 @@ class DiscoverFlowRouteParams {
   description: string = ''
   sourceKind: string = ''
   category: string = ''
+  restoreOverlayLevel: number = 0
 }
 
 class EntryDetailParams {
@@ -96,6 +100,8 @@ class EntryDetailParams {
 class DiscoverBrowseRouteParams {
   view: FeedViewType = FeedViewType.Articles
   title: string = ''
+  sourceKey: string = ''
+  restoreOverlayLevel: number = 0
 }
 
 interface ConfigOption {
@@ -105,9 +111,12 @@ interface ConfigOption {
 }
 
 interface DiscoverCategoryCard {
+  id: string
   view: FeedViewType
   label: string
   accent: string
+  sourceKey?: string
+  icon?: Resource
 }
 
 function createDiscoverResultFromFeed(feed: RecommendedFeed): ResolvedDiscoverCandidate {
@@ -147,6 +156,7 @@ function createDiscoverFlowRouteParams(
   description: string,
   sourceKind: string,
   category: string,
+  restoreOverlayLevel: number = 0,
 ): DiscoverFlowRouteParams {
   const params = new DiscoverFlowRouteParams()
   params.targetUrl = targetUrl
@@ -157,6 +167,7 @@ function createDiscoverFlowRouteParams(
   params.description = description
   params.sourceKind = sourceKind
   params.category = category
+  params.restoreOverlayLevel = restoreOverlayLevel
   return params
 }
 
@@ -183,11 +194,13 @@ export struct DiscoverContent {
   @State hasLoaded: boolean = false
   @State isLoadingPage: boolean = false
   @State subscribedFeeds: Feed[] = []
+  @State featuredTrendingFeeds: RecommendedFeed[] = trendingDiscoverFeedsFromJsonNow()
   @Prop showBottomTabs: boolean = true
   @Prop reserveBottomTabInset: boolean = false
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
+  @StorageProp('discoverNavigationResetAt') @Watch('handleNavigationResetSignal') discoverNavigationResetAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @StorageProp('discoverSearchDismissAt') @Watch('handleSearchDismissSignal') discoverSearchDismissAt: number = 0
   @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
@@ -265,6 +278,7 @@ export struct DiscoverContent {
         this.theme = this.inheritedTheme
       }
       this.subscribedFeeds = await AppRepository.feedEntities()
+      this.featuredTrendingFeeds = trendingDiscoverFeedsFromJsonNow()
 
       this.hasLoaded = true
       this.onReady()
@@ -288,42 +302,90 @@ export struct DiscoverContent {
     return this.showPlatformChips || !this.query.trim()
   }
 
+  private handleNavigationResetSignal(): void {
+    this.dismissSearchFocus('navigation-reset')
+    this.remoteResults = []
+    this.isSearchingRemote = false
+    this.isPlatformSwitchSearching = false
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+    AppStorage.setOrCreate('discoverOverlayLevel', 0)
+    this.discoverPathStack.clear()
+  }
+
   private discoverFeaturedFeeds(): RecommendedFeed[] {
-    return trendingDiscoverFeeds()
+    return this.featuredTrendingFeeds
       .filter((feed: RecommendedFeed) => !this.isSubscribedRecommendedFeed(feed))
-      .slice(0, 4)
+      .slice(0, 7)
   }
 
   private discoverCategoryCards(): DiscoverCategoryCard[] {
     return [
       {
+        id: 'articles',
         view: FeedViewType.Articles,
         label: '文章',
         accent: '#2563EB',
       },
       {
+        id: 'social',
         view: FeedViewType.SocialMedia,
         label: '社交',
         accent: '#0F766E',
       },
       {
+        id: 'pictures',
         view: FeedViewType.Pictures,
         label: '图片',
         accent: '#DB2777',
       },
       {
+        id: 'videos',
         view: FeedViewType.Videos,
         label: '视频',
         accent: '#F97316',
       },
+      {
+        id: 'ins-1',
+        view: FeedViewType.Pictures,
+        label: 'Ins',
+        accent: '#C13584',
+        sourceKey: 'ins',
+        icon: $r('app.media.account_instagram'),
+      },
+      {
+        id: 'ins-2',
+        view: FeedViewType.Pictures,
+        label: 'Ins',
+        accent: '#C13584',
+        sourceKey: 'ins',
+        icon: $r('app.media.account_instagram'),
+      },
+      {
+        id: 'ins-3',
+        view: FeedViewType.Pictures,
+        label: 'Ins',
+        accent: '#C13584',
+        sourceKey: 'ins',
+        icon: $r('app.media.account_instagram'),
+      },
+      {
+        id: 'ins-4',
+        view: FeedViewType.Pictures,
+        label: 'Ins',
+        accent: '#C13584',
+        sourceKey: 'ins',
+        icon: $r('app.media.account_instagram'),
+      },
     ]
   }
 
-  private openBrowsePage(view: FeedViewType, title: string): void {
+  private openBrowsePage(view: FeedViewType, title: string, sourceKey: string = ''): void {
     this.scheduleOverlayNavigation(() => {
       const params = new DiscoverBrowseRouteParams()
       params.view = view
       params.title = title
+      params.sourceKey = sourceKey
+      params.restoreOverlayLevel = resolveDiscoverOverlayReturnLevel('root')
       this.discoverPathStack.pushPathByName(DISCOVER_ROUTE_BROWSE, params, true)
     })
   }
@@ -651,6 +713,10 @@ export struct DiscoverContent {
     return (candidate.followers || candidate.description).trim()
   }
 
+  private hasCandidateMetaText(candidate: ResolvedDiscoverCandidate): boolean {
+    return !!this.candidateMetaText(candidate)
+  }
+
   private hasSearchResults(): boolean {
     return this.searchResults().length > 0
   }
@@ -738,6 +804,7 @@ export struct DiscoverContent {
     description: string,
     sourceKind: string,
     category: string,
+    restoreOverlayLevel: number = 0,
   ): void {
     this.scheduleOverlayNavigation(() => {
       this.discoverPathStack.pushPathByName(
@@ -751,13 +818,14 @@ export struct DiscoverContent {
           description,
           sourceKind,
           category,
+          restoreOverlayLevel,
         ),
         true,
       )
     })
   }
 
-  private openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate): void {
+  private openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate, restoreOverlayLevel: number = 0): void {
     this.scheduleOverlayNavigation(() => {
       this.discoverPathStack.pushPathByName(
         DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
@@ -770,6 +838,7 @@ export struct DiscoverContent {
           candidate.description,
           candidate.sourceKind,
           this.resolvedPlatformLabel(candidate),
+          restoreOverlayLevel,
         ),
         true,
       )
@@ -786,6 +855,7 @@ export struct DiscoverContent {
       result.description,
       '地址',
       discoverPlatformLabel(this.searchPlatform),
+      resolveDiscoverOverlayReturnLevel('root'),
     )
   }
 
@@ -799,6 +869,7 @@ export struct DiscoverContent {
       candidate.description,
       candidate.sourceKind,
       this.resolvedPlatformLabel(candidate),
+      resolveDiscoverOverlayReturnLevel('root'),
     )
   }
 
@@ -1158,16 +1229,16 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private AvatarBox(imageUrl: string, fallbackLabel: string, accent: string) {
+  private AvatarBox(imageUrl: string, fallbackLabel: string, accent: string, compact: boolean = false) {
     AvatarTile({
       imageUrl,
       refreshToken: this.feedsChangedAt + this.discoverOverlayLevel,
       fallbackLabel,
       accent,
       theme: this.theme,
-      avatarSize: 38,
-      radius: 10,
-      textSize: 14,
+      avatarSize: compact ? 30 : 38,
+      radius: compact ? 8 : 10,
+      textSize: compact ? 12 : 14,
       useAccentFallback: true,
     })
   }
@@ -1237,17 +1308,23 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private CandidateRow(candidate: ResolvedDiscoverCandidate, showDivider: boolean) {
+  private CandidateRow(
+    candidate: ResolvedDiscoverCandidate,
+    showDivider: boolean,
+    compact: boolean = false,
+    showActionButton: boolean = true,
+  ) {
     Column() {
-      Row({ space: 12 }) {
-        Row({ space: 12 }) {
+      Row({ space: compact ? 10 : 12 }) {
+        Row({ space: compact ? 10 : 12 }) {
           this.AvatarBox(
             this.resolvedCandidateAvatarUrl(candidate),
             candidate.targetTitle,
             this.platformColor(this.resolvedPlatformLabel(candidate)),
+            compact,
           )
 
-          Column({ space: 6 }) {
+          Column({ space: compact ? 2 : 6 }) {
             Text(candidate.targetTitle)
               .fontSize(LIST_ROW_TITLE_SIZE)
               .fontWeight(FontWeight.Bold)
@@ -1255,11 +1332,13 @@ export struct DiscoverContent {
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-            Text(this.candidateMetaText(candidate))
-              .fontSize(LIST_ROW_META_SIZE)
-              .fontColor(this.theme.textSecondary)
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.hasCandidateMetaText(candidate)) {
+              Text(this.candidateMetaText(candidate))
+                .fontSize(LIST_ROW_META_SIZE)
+                .fontColor(this.theme.textSecondary)
+                .maxLines(compact ? 1 : 2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
           }
           .layoutWeight(1)
           .alignItems(HorizontalAlign.Start)
@@ -1269,19 +1348,26 @@ export struct DiscoverContent {
           this.openCandidate(candidate)
         })
 
-        Button(this.candidateActionLabel(candidate))
-          .type(ButtonType.Capsule)
-          .fontSize(LIST_ROW_META_SIZE)
+        if (showActionButton) {
+          Button(this.candidateActionLabel(candidate))
+            .type(ButtonType.Capsule)
+            .fontSize(LIST_ROW_META_SIZE)
           .fontWeight(FontWeight.Medium)
           .height(LIST_ACTION_HEIGHT)
           .backgroundColor(this.candidateActionBackground(candidate))
           .fontColor(this.candidateActionFontColor(candidate))
-          .onClick(() => {
-            this.openSubscribeConfigPage(candidate)
-          })
+            .onClick(() => {
+              this.openSubscribeConfigPage(candidate, resolveDiscoverOverlayReturnLevel('root'))
+            })
+        }
       }
       .width('100%')
-      .padding({ left: LIST_ROW_HORIZONTAL_PADDING, right: LIST_ROW_HORIZONTAL_PADDING, top: LIST_ROW_VERTICAL_PADDING, bottom: LIST_ROW_VERTICAL_PADDING })
+      .padding({
+        left: LIST_ROW_HORIZONTAL_PADDING,
+        right: LIST_ROW_HORIZONTAL_PADDING,
+        top: compact ? 8 : LIST_ROW_VERTICAL_PADDING,
+        bottom: compact ? 8 : LIST_ROW_VERTICAL_PADDING,
+      })
 
       if (showDivider) {
         Divider()
@@ -1294,21 +1380,43 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private CandidateSection(title: string, items: ResolvedDiscoverCandidate[]) {
+  private CandidateSection(
+    title: string,
+    items: ResolvedDiscoverCandidate[],
+    compact: boolean = false,
+    separateCards: boolean = false,
+    showActionButton: boolean = true,
+  ) {
     if (items.length > 0) {
       Column({ space: 12 }) {
         this.SectionHeader(title)
 
-        Column() {
-          ForEach(items, (candidate: ResolvedDiscoverCandidate, index: number) => {
-            this.CandidateRow(candidate, index < items.length - 1)
-          }, (candidate: ResolvedDiscoverCandidate) => `${title}-${candidate.targetUrl}`)
+        if (separateCards) {
+          Column({ space: 6 }) {
+            ForEach(items, (candidate: ResolvedDiscoverCandidate) => {
+              Column() {
+                this.CandidateRow(candidate, false, compact, showActionButton)
+              }
+              .width('100%')
+              .backgroundColor(this.theme.surface)
+              .borderRadius(14)
+              .border({ width: 0.8, color: this.theme.divider })
+              .clip(true)
+            }, (candidate: ResolvedDiscoverCandidate) => `${title}-${candidate.targetUrl}`)
+          }
+          .width('100%')
+        } else {
+          Column() {
+            ForEach(items, (candidate: ResolvedDiscoverCandidate, index: number) => {
+              this.CandidateRow(candidate, index < items.length - 1, compact, showActionButton)
+            }, (candidate: ResolvedDiscoverCandidate) => `${title}-${candidate.targetUrl}`)
+          }
+          .width('100%')
+          .backgroundColor(this.theme.surface)
+          .borderRadius(CARD_RADIUS_XL)
+          .border({ width: 0.8, color: this.theme.divider })
+          .clip(true)
         }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_XL)
-        .border({ width: 0.8, color: this.theme.divider })
-        .clip(true)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -1361,12 +1469,19 @@ export struct DiscoverContent {
       Column({ space: 12 }) {
         this.SectionHeader('分类精选')
 
-        Flex({ wrap: FlexWrap.NoWrap, justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
           ForEach(this.discoverCategoryCards(), (card: DiscoverCategoryCard) => {
             Row({ space: 8 }) {
-              SymbolGlyph(this.categoryCardSymbol(card.view))
-                .fontSize(19)
-                .fontColor([card.accent])
+              if (card.icon) {
+                Image(card.icon)
+                  .width(18)
+                  .height(18)
+                  .objectFit(ImageFit.Contain)
+              } else {
+                SymbolGlyph(this.categoryCardSymbol(card.view))
+                  .fontSize(19)
+                  .fontColor([card.accent])
+              }
 
               Text(card.label)
                 .fontSize(13)
@@ -1390,9 +1505,10 @@ export struct DiscoverContent {
             })
             .clickEffect({ level: ClickEffectLevel.MIDDLE })
             .onClick(() => {
-              this.openBrowsePage(card.view, card.label)
+              this.openBrowsePage(card.view, card.label, card.sourceKey || '')
             })
-          }, (card: DiscoverCategoryCard) => card.label)
+            .margin({ bottom: 6 })
+          }, (card: DiscoverCategoryCard) => card.id)
         }
         .width('100%')
       }
@@ -1444,6 +1560,9 @@ export struct DiscoverContent {
         this.CandidateSection(
           '热门推荐',
           this.discoverFeaturedFeeds().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)),
+          true,
+          true,
+          false,
         )
         this.CategoryBrowserSection()
       }
@@ -1542,6 +1661,7 @@ export struct DiscoverContent {
           initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
           targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
           targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
+          restoreOverlayLevel: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).restoreOverlayLevel,
           theme: this.theme,
         })
       }
@@ -1552,6 +1672,8 @@ export struct DiscoverContent {
         DiscoverBrowseDestination({
           view: (params as DiscoverBrowseRouteParams)?.view ?? FeedViewType.Articles,
           title: (params as DiscoverBrowseRouteParams)?.title ?? '',
+          sourceKey: (params as DiscoverBrowseRouteParams)?.sourceKey ?? '',
+          restoreOverlayLevel: (params as DiscoverBrowseRouteParams)?.restoreOverlayLevel ?? 0,
           theme: this.theme,
         })
       }
@@ -1568,6 +1690,7 @@ export struct DiscoverContent {
           targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
           sourceKind: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).sourceKind,
           initialSelectedView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
+          restoreOverlayLevel: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).restoreOverlayLevel,
           theme: this.theme,
         })
       }
@@ -1707,6 +1830,7 @@ struct DiscoverSubscribeConfigDestination {
   @Prop targetCategory: string = ''
   @Prop sourceKind: string = ''
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
+  @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
   private settleRootOverlayClosed(): void {
@@ -1714,14 +1838,9 @@ struct DiscoverSubscribeConfigDestination {
     AppStorage.setOrCreate('discoverOverlayLevel', 0)
   }
 
-  private restoreRootOverlayAfterConfigClose(): void {
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    if (currentLevel > 1) {
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-      AppStorage.setOrCreate('discoverOverlayLevel', 1)
-    } else {
-      this.settleRootOverlayClosed()
-    }
+  private restoreOverlayAfterConfigClose(): void {
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', this.restoreOverlayLevel > 0)
+    AppStorage.setOrCreate('discoverOverlayLevel', this.restoreOverlayLevel)
   }
 
   build() {
@@ -1736,16 +1855,16 @@ struct DiscoverSubscribeConfigDestination {
       initialSelectedView: this.initialSelectedView,
       theme: this.theme,
       onBack: () => {
-        this.restoreRootOverlayAfterConfigClose()
+        this.restoreOverlayAfterConfigClose()
         this.discoverPathStack.pop(true)
       },
       onSubscribed: () => {
         AppStorage.setOrCreate('discoverSearchDismissAt', Date.now())
-        this.restoreRootOverlayAfterConfigClose()
+        this.restoreOverlayAfterConfigClose()
         this.discoverPathStack.pop(true)
       },
       onSaved: () => {
-        this.restoreRootOverlayAfterConfigClose()
+        this.restoreOverlayAfterConfigClose()
         this.discoverPathStack.pop(true)
       },
       onUnsubscribed: () => {
@@ -1769,15 +1888,17 @@ struct DiscoverBrowseDestination {
   @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Prop view: FeedViewType = FeedViewType.Articles
   @Prop title: string = ''
+  @Prop sourceKey: string = ''
+  @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @State private cachedFeeds: RecommendedFeed[] = []
 
   aboutToAppear(): void {
-    this.cachedFeeds = filteredRecommendedFeeds(this.view)
+    this.cachedFeeds = filteredRecommendedFeeds(this.view, this.sourceKey)
   }
 
   private browseFeeds(): RecommendedFeed[] {
-    return filteredRecommendedFeeds(this.view)
+    return filteredRecommendedFeeds(this.view, this.sourceKey)
   }
 
   private browseTitle(): string {
@@ -1798,6 +1919,7 @@ struct DiscoverBrowseDestination {
         result.description,
         result.sourceKind,
         feed.category || '',
+        resolveDiscoverOverlayReturnLevel('browse'),
       ),
       true,
     )
@@ -1817,6 +1939,7 @@ struct DiscoverBrowseDestination {
         result.description,
         result.sourceKind,
         feed.category || '',
+        resolveDiscoverOverlayReturnLevel('browse'),
       ),
       true,
     )
@@ -1837,32 +1960,34 @@ struct DiscoverBrowseDestination {
           fallbackLabel: feed.title,
           accent: this.theme.accent,
           theme: this.theme,
-          avatarSize: 34,
-          radius: 10,
-          textSize: 13,
+          avatarSize: 28,
+          radius: 8,
+          textSize: 11,
           useAccentFallback: true,
         })
 
-        Column({ space: 3 }) {
+        Column({ space: 1 }) {
           Text(feed.title)
-            .fontSize(14)
+            .fontSize(13)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.theme.textPrimary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          Text((feed.followers || feed.description).trim())
-            .fontSize(11)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          if ((feed.followers || feed.description).trim()) {
+            Text((feed.followers || feed.description).trim())
+              .fontSize(11)
+              .fontColor(this.theme.textSecondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
-      .height(52)
-      .padding({ left: 14, right: 14, top: 9, bottom: 9 })
+      .height(44)
+      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
       .backgroundColor('transparent')
       .onClick(() => {
         this.openPreviewPage(feed)
@@ -1872,7 +1997,7 @@ struct DiscoverBrowseDestination {
         Divider()
           .strokeWidth(1)
           .color(this.theme.divider)
-          .margin({ left: 58, right: 14 })
+          .margin({ left: 50, right: 14 })
       }
     }
     .width('100%')
@@ -1890,8 +2015,7 @@ struct DiscoverBrowseDestination {
         bottomPadding: 0,
         onBack: () => {
           AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-          const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-          AppStorage.setOrCreate('discoverOverlayLevel', currentLevel > 0 ? currentLevel - 1 : 0)
+          AppStorage.setOrCreate('discoverOverlayLevel', 0)
           this.discoverPathStack.pop(true)
         },
       })
@@ -1908,7 +2032,7 @@ struct DiscoverBrowseDestination {
           Column({ space: 0 }) {
             ForEach(this.cachedFeeds, (feed: RecommendedFeed, index: number) => {
               this.FeedRow(feed, index < this.cachedFeeds.length - 1)
-            }, (feed: RecommendedFeed) => `${this.view}-${feed.url}`)
+            }, (feed: RecommendedFeed) => `${this.sourceKey || this.view}-${feed.url}`)
           }
           .width('100%')
           .backgroundColor(this.theme.surface)
@@ -1944,6 +2068,7 @@ struct DiscoverPreviewDestination {
   @Prop initialTargetDescription: string = ''
   @Prop targetCategory: string = ''
   @Prop targetView: FeedViewType = FeedViewType.Articles
+  @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
 
   private openEditConfigPage(feed: Feed): void {
@@ -1965,6 +2090,7 @@ struct DiscoverPreviewDestination {
         feed.description || this.initialTargetDescription,
         '编辑',
         feed.category || '',
+        resolveDiscoverOverlayReturnLevel('preview'),
       ),
       true,
     )
@@ -1990,6 +2116,7 @@ struct DiscoverPreviewDestination {
         payload.description || this.initialTargetDescription,
         '',
         this.targetCategory,
+        resolveDiscoverOverlayReturnLevel('preview'),
       ),
       true,
     )
@@ -2024,9 +2151,8 @@ struct DiscoverPreviewDestination {
       targetView: this.targetView,
       theme: this.theme,
       onBack: () => {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-        const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-        AppStorage.setOrCreate('discoverOverlayLevel', currentLevel > 1 ? currentLevel - 1 : 0)
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', this.restoreOverlayLevel > 0)
+        AppStorage.setOrCreate('discoverOverlayLevel', this.restoreOverlayLevel)
         this.discoverPathStack.pop(true)
       },
       onEdit: (feed: Feed) => { this.openEditConfigPage(feed) },
@@ -2038,9 +2164,7 @@ struct DiscoverPreviewDestination {
     })
     .onDisAppear(() => {
       const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-      if (currentLevel <= 1) {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-      }
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', currentLevel > 0)
     })
   }
 }
