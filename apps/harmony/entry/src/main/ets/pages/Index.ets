@@ -2007,6 +2007,7 @@ struct Index {
     const tabId = item.id as RootTabId
     this.rootTabIndex = index
     this.highlightedRootTabId = tabId
+    this.activeRootTabId = tabId
     this.logHomeSearchFocusDebug('root-tab-change', `nextTab=${tabId}`)
     if (previousTabId === 'discover' && tabId !== 'discover') {
       AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
@@ -2020,7 +2021,6 @@ struct Index {
     }
 
     this.syncHomeModeRailState(this.mode)
-    this.activeRootTabId = tabId
     this.primeHomeModeRailForRootActivation()
     const flushedDeferredReload = this.tryFlushDeferredFeedsChangedReload('tab-change')
     if (!flushedDeferredReload
