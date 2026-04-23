@@ -1256,6 +1256,76 @@
       "title": "tedunangst.com",
       "url": "https://www.tedunangst.com/flak/rss",
       "language": "English"
+    },
+    {
+      "title": "Seth's Blog",
+      "url": "https://seths.blog/feed/",
+      "language": "English"
+    },
+    {
+      "title": "Stratechery by Ben Thompson",
+      "url": "https://stratechery.com/feed/",
+      "language": "English"
+    },
+    {
+      "title": "The Blog of Author Tim Ferriss",
+      "url": "https://tim.blog/feed/",
+      "language": "English"
+    },
+    {
+      "title": "Wait But Why",
+      "url": "https://waitbutwhy.com/feed?code=c6f56c4214621ab98b86acbcae6b4405",
+      "language": "English"
+    },
+    {
+      "title": "RSSHub 有新路由啦",
+      "url": "rsshub://rsshub/routes/zh",
+      "language": "Chinese"
+    },
+    {
+      "title": "虹线",
+      "url": "https://1q43.blog/feed/",
+      "language": "Chinese"
+    },
+    {
+      "title": "莫比乌斯",
+      "url": "https://onojyun.com/feed/",
+      "language": "Chinese"
+    },
+    {
+      "title": "0x01 byte",
+      "url": "https://1byte.io/articles/index.xml",
+      "language": "Chinese"
+    },
+    {
+      "title": "可能吧",
+      "url": "https://feeds.feedburner.com/kenengbarss",
+      "language": "Chinese"
+    },
+    {
+      "title": "蓝点网",
+      "url": "https://www.landiannews.com/feed",
+      "language": "Chinese"
+    },
+    {
+      "title": "量子位",
+      "url": "https://www.qbitai.com/feed",
+      "language": "Chinese"
+    },
+    {
+      "title": "Tony Bai",
+      "url": "https://tonybai.com/feed/",
+      "language": "Chinese"
+    },
+    {
+      "title": "Kotaku",
+      "url": "https://kotaku.com/rss",
+      "language": "English"
+    },
+    {
+      "title": "纽约时报中文网",
+      "url": "rsshub://nytimes",
+      "language": "Chinese"
     }
   ]
 }
