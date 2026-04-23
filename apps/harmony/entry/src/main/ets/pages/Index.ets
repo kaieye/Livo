@@ -3682,16 +3682,16 @@ struct Index {
     return this.filteredEntriesFor(this.mode)
   }
 
+  private pictureGalleryUrls(entry: EntryCardModel): string[] {
+    return selectPictureMediaUrls(entry.mediaUrls ?? [])
+  }
+
   private pictureCaption(entry: EntryCardModel): string {
     const title = (entry.title || '').trim()
     if (title && title !== '远程条目') {
       return title
     }
     return (entry.summary || '').trim()
-  }
-
-  private pictureGalleryUrls(entry: EntryCardModel): string[] {
-    return selectPictureMediaUrls(entry.mediaUrls ?? [])
   }
 
   private pictureCardEntry(entry: EntryCardModel): Entry {
@@ -4501,7 +4501,7 @@ struct Index {
 
   @Builder
   private PictureEntryList() {
-    List({ space: HOME_MODE_CONTENT_GAP, scroller: this.picturesScroller }) {
+    List({ space: 0, scroller: this.picturesScroller }) {
       ListItem() {
         Column() {
           Blank()
@@ -4539,6 +4539,8 @@ struct Index {
               theme: this.theme,
               highlightQuery: this.searchQuery,
               enableEnterTransition: false,
+              flatMode: true,
+              showBottomDivider: index < this.homeEntryCountFor('pictures') - 1,
               onOpen: () => this.openEntry(entry),
             })
           }

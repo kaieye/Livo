@@ -10,11 +10,19 @@ interface MediaNaturalSize {
   height: number
 }
 
+interface PictureEntryCardPadding {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
 @Component
 export struct PictureEntryCard {
   @Prop entry: Entry = {} as Entry
   @Prop index: number = 0
   @Prop enableEnterTransition: boolean = true
+  @Prop flatMode: boolean = false
   @Prop authorLabel: string = ''
   @Prop feedImageUrl: string = ''
   @Prop caption: string = ''
@@ -23,6 +31,7 @@ export struct PictureEntryCard {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop highlightQuery: string = ''
   @Prop isUnread: boolean = false
+  @Prop showBottomDivider: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @State private activeMediaIndex: number = 0
   @State private playingLivePhotoIndex: number = -1
@@ -420,6 +429,25 @@ export struct PictureEntryCard {
     return this.theme.isDark ? 'rgba(0,0,0,0.34)' : 'rgba(15,23,42,0.16)'
   }
 
+  private cardPadding(): PictureEntryCardPadding {
+    if (this.flatMode) {
+      return { left: 0, right: 0, top: 4, bottom: 6 }
+    }
+    return { left: 14, right: 14, top: 10, bottom: 10 }
+  }
+
+  private cardBackgroundColor(): string {
+    return this.flatMode ? '#00000000' : this.theme.surface
+  }
+
+  private cardBorderWidth(): number {
+    return this.flatMode ? 0 : 0.8
+  }
+
+  private cardBorderRadius(): number {
+    return this.flatMode ? 0 : CARD_RADIUS_MD
+  }
+
   @Builder
   private FramedImageSlide(item: PictureCarouselMediaItem, index: number) {
     Stack({ alignContent: Alignment.Center }) {
@@ -660,6 +688,14 @@ export struct PictureEntryCard {
         if (this.carouselMediaItems().length > 0) {
           this.MediaCarousel()
         }
+
+        if (this.flatMode && this.showBottomDivider) {
+          Row()
+            .width('100%')
+            .height(0.8)
+            .backgroundColor(this.theme.divider)
+            .margin({ top: 6 })
+        }
       }
       .width('100%')
       .padding({ top: 8, bottom: 10 })
@@ -685,15 +721,17 @@ export struct PictureEntryCard {
       this.UnreadDot()
     }
     .width('100%')
-    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_MD)
-    .border({ width: 0.8, color: this.theme.divider })
-    .shadow({
-      radius: this.theme.isDark ? 10 : 14,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
-      offsetX: 0,
-      offsetY: 4,
-    })
+    .padding(this.cardPadding())
+    .backgroundColor(this.cardBackgroundColor())
+    .borderRadius(this.cardBorderRadius())
+    .border({ width: this.cardBorderWidth(), color: this.theme.divider })
+    .shadow(this.flatMode
+      ? { radius: 0, color: '#00000000', offsetX: 0, offsetY: 0 }
+      : {
+          radius: this.theme.isDark ? 10 : 14,
+          color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
+          offsetX: 0,
+          offsetY: 4,
+        })
   }
 }
