@@ -25,7 +25,7 @@ import {
   discoverPlatformLabel,
   discoverViewLabel,
   DiscoverSearchPlatform,
-  filteredRecommendedFeedsByPlatform,
+  filteredRecommendedFeeds,
   normalizeDiscoverInput,
   preferredViewForPlatform,
   RecommendedFeed,
@@ -33,6 +33,7 @@ import {
   resolveProfileCandidatesByPlatform,
   ResolvedDiscoverCandidate,
   searchedRecommendedFeedsByPlatform,
+  trendingDiscoverFeeds,
 } from '../services/DiscoverService'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
@@ -43,28 +44,23 @@ import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedT
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import {
   CARD_RADIUS_LG,
-  CARD_RADIUS_MD,
-  CARD_RADIUS_SM,
+  CARD_RADIUS_XL,
   CHIP_FONT_SIZE,
   CHIP_RADIUS,
-  INPUT_RADIUS,
   LIST_ACTION_HEIGHT,
   LIST_ROW_DIVIDER_INSET,
   LIST_ROW_HORIZONTAL_PADDING,
   LIST_ROW_META_SIZE,
   LIST_ROW_TITLE_SIZE,
   LIST_ROW_VERTICAL_PADDING,
-  META_FONT_SIZE,
   PAGE_BOTTOM_GAP,
   PAGE_HORIZONTAL_PADDING,
-  PAGE_TOP_PADDING,
   SECTION_TITLE_FONT_SIZE,
-  BOTTOM_TAB_FLOAT_GAP,
-  BOTTOM_TAB_TOTAL_HEIGHT,
 } from '../ui/UiTokens'
 
 const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
 const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
+const DISCOVER_ROUTE_BROWSE: string = 'discover-browse'
 const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
@@ -97,10 +93,21 @@ class EntryDetailParams {
   feedImageUrl: string = ''
 }
 
+class DiscoverBrowseRouteParams {
+  view: FeedViewType = FeedViewType.Articles
+  title: string = ''
+}
+
 interface ConfigOption {
   view: FeedViewType
   label: string
   description: string
+}
+
+interface DiscoverCategoryCard {
+  view: FeedViewType
+  label: string
+  accent: string
 }
 
 function createDiscoverResultFromFeed(feed: RecommendedFeed): ResolvedDiscoverCandidate {
@@ -214,7 +221,7 @@ export struct DiscoverContent {
   private DiscoverLowerTitleBuilder() {
     Row() {
       Text('发现')
-        .fontSize(28)
+        .fontSize(30)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
@@ -261,7 +268,7 @@ export struct DiscoverContent {
 
       this.hasLoaded = true
       this.onReady()
-      void this.hydrateAvatarsForCandidates(this.recommendedFallback().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
+      void this.hydrateAvatarsForCandidates(this.discoverFeaturedFeeds().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
     } finally {
       this.isLoadingPage = false
     }
@@ -275,6 +282,63 @@ export struct DiscoverContent {
 
   private viewLabel(view: FeedViewType): string {
     return discoverViewLabel(view)
+  }
+
+  private shouldShowPlatformChips(): boolean {
+    return this.showPlatformChips || !this.query.trim()
+  }
+
+  private discoverFeaturedFeeds(): RecommendedFeed[] {
+    return trendingDiscoverFeeds()
+      .filter((feed: RecommendedFeed) => !this.isSubscribedRecommendedFeed(feed))
+      .slice(0, 4)
+  }
+
+  private discoverCategoryCards(): DiscoverCategoryCard[] {
+    return [
+      {
+        view: FeedViewType.Articles,
+        label: '文章',
+        accent: '#2563EB',
+      },
+      {
+        view: FeedViewType.SocialMedia,
+        label: '社交',
+        accent: '#0F766E',
+      },
+      {
+        view: FeedViewType.Pictures,
+        label: '图片',
+        accent: '#DB2777',
+      },
+      {
+        view: FeedViewType.Videos,
+        label: '视频',
+        accent: '#F97316',
+      },
+    ]
+  }
+
+  private openBrowsePage(view: FeedViewType, title: string): void {
+    this.scheduleOverlayNavigation(() => {
+      const params = new DiscoverBrowseRouteParams()
+      params.view = view
+      params.title = title
+      this.discoverPathStack.pushPathByName(DISCOVER_ROUTE_BROWSE, params, true)
+    })
+  }
+
+  private categoryCardSymbol(view: FeedViewType): Resource {
+    if (view === FeedViewType.SocialMedia) {
+      return $r('sys.symbol.ellipsis_bubble')
+    }
+    if (view === FeedViewType.Pictures) {
+      return $r('sys.symbol.picture_2')
+    }
+    if (view === FeedViewType.Videos) {
+      return $r('sys.symbol.media_center')
+    }
+    return $r('sys.symbol.doc_text')
   }
 
   private validateInputUrl(targetUrl: string): boolean {
@@ -437,12 +501,6 @@ export struct DiscoverContent {
     }
 
     return this.localRecommendedResults().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed))
-  }
-
-  private recommendedFallback(): RecommendedFeed[] {
-    return filteredRecommendedFeedsByPlatform(this.searchPlatform)
-      .filter((feed: RecommendedFeed) => !this.isSubscribedRecommendedFeed(feed))
-      .slice(0, 8)
   }
 
   private normalizeFeedIdentity(value: string): string {
@@ -612,7 +670,7 @@ export struct DiscoverContent {
     if (!trimmed) {
       this.remoteResults = []
       this.isSearchingRemote = false
-      void this.hydrateAvatarsForCandidates(this.recommendedFallback().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
+      void this.hydrateAvatarsForCandidates(this.discoverFeaturedFeeds().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
       return
     }
 
@@ -651,7 +709,7 @@ export struct DiscoverContent {
     this.remoteResults = []
 
     if (!this.query.trim()) {
-      void this.hydrateAvatarsForCandidates(this.recommendedFallback().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
+      void this.hydrateAvatarsForCandidates(this.discoverFeaturedFeeds().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)))
       return
     }
 
@@ -778,6 +836,33 @@ export struct DiscoverContent {
     }
     if (label === '推荐') {
       return '#F97316'
+    }
+    if (label === '精选') {
+      return '#0EA5E9'
+    }
+    if (label === '博客') {
+      return '#8B5CF6'
+    }
+    if (label === '科技') {
+      return '#2563EB'
+    }
+    if (label === '开发') {
+      return '#0F766E'
+    }
+    if (label === '社区') {
+      return '#D97706'
+    }
+    if (label === '图文') {
+      return '#F59E0B'
+    }
+    if (label === '摄影') {
+      return '#14B8A6'
+    }
+    if (label === '演讲') {
+      return '#7C3AED'
+    }
+    if (label === '资讯') {
+      return '#14A44D'
     }
     return this.theme.accent
   }
@@ -918,9 +1003,15 @@ export struct DiscoverContent {
       .fontSize(CHIP_FONT_SIZE)
       .fontWeight(FontWeight.Medium)
       .fontColor(this.searchPlatform === platform ? '#FFFFFF' : this.theme.textSecondary)
-      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-      .backgroundColor(this.searchPlatform === platform ? this.theme.accent : this.theme.elevated)
+      .padding({ left: 13, right: 13, top: 8, bottom: 8 })
+      .backgroundColor(this.searchPlatform === platform ? this.theme.accent : this.theme.surface)
+      .border({ width: 0.8, color: this.searchPlatform === platform ? this.theme.accent : this.theme.divider })
       .borderRadius(CHIP_RADIUS)
+      .shadow(this.searchPlatform === platform ? {
+        radius: 8,
+        color: this.theme.isDark ? 'rgba(219,39,119,0.24)' : 'rgba(219,39,119,0.18)',
+        offsetY: 1,
+      } : undefined)
       .animation({ duration: 180, curve: Curve.EaseInOut })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
@@ -940,9 +1031,9 @@ export struct DiscoverContent {
       Row({ space: 8 }) {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontSize(20)
-          .fontColor([this.theme.textSecondary])
+          .fontColor([this.theme.textMuted])
 
-        TextInput({ text: this.query, placeholder: '搜索订阅源', controller: this.searchInputController })
+        TextInput({ text: this.query, placeholder: '搜索订阅源 / RSS / 关键词或链接', controller: this.searchInputController })
           .defaultFocus(false)
           .id(DISCOVER_SEARCH_INPUT_ID)
           .focusable(this.searchInputFocusable)
@@ -997,14 +1088,14 @@ export struct DiscoverContent {
 
         if (this.query.trim()) {
           Text('×')
-            .fontSize(18)
+            .fontSize(19)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.theme.textMuted)
-            .width(28)
-            .height(28)
+            .width(30)
+            .height(30)
             .textAlign(TextAlign.Center)
             .borderRadius(CHIP_RADIUS)
-            .backgroundColor(this.theme.surface)
+            .backgroundColor(this.theme.elevated)
             .onClick(() => {
               this.query = ''
               this.remoteResults = []
@@ -1013,14 +1104,14 @@ export struct DiscoverContent {
         }
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .backgroundColor(this.theme.elevated)
-      .borderRadius(INPUT_RADIUS)
+      .padding({ left: 16, right: 16, top: 13, bottom: 13 })
+      .backgroundColor(this.theme.surface)
+      .borderRadius(CARD_RADIUS_XL)
       .border({ width: 0.8, color: this.theme.divider })
       .shadow({
-        radius: 10,
-        color: this.theme.isDark ? 'rgba(0,0,0,0.16)' : 'rgba(15,23,42,0.06)',
-        offsetY: 2,
+        radius: 14,
+        color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.08)',
+        offsetY: 3,
       })
 
       Column() {
@@ -1032,10 +1123,10 @@ export struct DiscoverContent {
         .width('100%')
       }
       .width('100%')
-      .height(this.showPlatformChips ? 36 : 0)
-      .opacity(this.showPlatformChips ? 1 : 0)
-      .translate({ y: this.showPlatformChips ? 0 : -10 })
-      .padding({ top: this.showPlatformChips ? 6 : 0 })
+      .height(this.shouldShowPlatformChips() ? 36 : 0)
+      .opacity(this.shouldShowPlatformChips() ? 1 : 0)
+      .translate({ y: this.shouldShowPlatformChips() ? 0 : -10 })
+      .padding({ top: this.shouldShowPlatformChips() ? 6 : 0 })
       .clip(true)
       .animation({ duration: 260, curve: Curve.FastOutSlowIn })
     }
@@ -1045,12 +1136,22 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private SectionHeader(title: string) {
+  private SectionHeader(title: string, trailingText: string = '') {
     Row() {
       Text(title)
         .fontSize(SECTION_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.theme.textPrimary)
+
+      Blank()
+        .layoutWeight(1)
+
+      if (trailingText) {
+        Text(trailingText)
+          .fontSize(11)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textMuted)
+      }
     }
     .width('100%')
     .transition(this.showBottomTabs ? livoMotion.enterFromRight(20) : TransitionEffect.IDENTITY)
@@ -1075,7 +1176,7 @@ export struct DiscoverContent {
   private ResultMeta(primary: string, secondary: string, tertiary: string) {
     Row({ space: 6 }) {
       Text(primary)
-        .fontSize(10)
+        .fontSize(9)
         .fontColor('#FFFFFF')
         .padding({ left: 8, right: 8, top: 4, bottom: 4 })
         .backgroundColor(this.platformColor(primary))
@@ -1122,7 +1223,13 @@ export struct DiscoverContent {
       .width('100%')
       .padding({ left: LIST_ROW_HORIZONTAL_PADDING, right: LIST_ROW_HORIZONTAL_PADDING, top: LIST_ROW_VERTICAL_PADDING, bottom: LIST_ROW_VERTICAL_PADDING })
       .backgroundColor(this.theme.surface)
-      .borderRadius(CARD_RADIUS_MD)
+      .borderRadius(CARD_RADIUS_LG)
+      .border({ width: 0.8, color: this.theme.divider })
+      .shadow({
+        radius: 8,
+        color: this.theme.isDark ? 'rgba(0,0,0,0.14)' : 'rgba(15,23,42,0.05)',
+        offsetY: 2,
+      })
       .onClick(() => {
         this.openDirectUrlResult(result)
       })
@@ -1199,7 +1306,7 @@ export struct DiscoverContent {
         }
         .width('100%')
         .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
+        .borderRadius(CARD_RADIUS_XL)
         .border({ width: 0.8, color: this.theme.divider })
         .clip(true)
       }
@@ -1212,7 +1319,7 @@ export struct DiscoverContent {
   private SearchResultSection() {
     if (this.hasSearchResults() || this.isSearchingRemote || this.isPlatformSwitchSearching) {
       Column({ space: 12 }) {
-        this.SectionHeader('搜索结果')
+        this.SectionHeader('搜索结果', `${this.searchResults().length}`)
 
         if ((this.isSearchingRemote || this.isPlatformSwitchSearching) && this.searchResults().length === 0) {
           Row({ space: 10 }) {
@@ -1228,7 +1335,8 @@ export struct DiscoverContent {
           .width('100%')
           .padding({ left: 16, right: 16, top: 16, bottom: 16 })
           .backgroundColor(this.theme.surface)
-          .borderRadius(CARD_RADIUS_MD)
+          .borderRadius(CARD_RADIUS_LG)
+          .border({ width: 0.8, color: this.theme.divider })
         } else {
           Column() {
             ForEach(this.searchResults(), (candidate: ResolvedDiscoverCandidate, index: number) => {
@@ -1237,7 +1345,8 @@ export struct DiscoverContent {
           }
           .width('100%')
           .backgroundColor(this.theme.surface)
-          .borderRadius(CARD_RADIUS_LG)
+          .borderRadius(CARD_RADIUS_XL)
+          .border({ width: 0.8, color: this.theme.divider })
           .clip(true)
         }
       }
@@ -1247,22 +1356,45 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private RecommendedFallbackSection() {
-    if (!this.query.trim() && this.recommendedFallback().length > 0) {
-      Column({ space: 6 }) {
-        this.SectionHeader(
-          this.searchPlatform === 'all' ? '推荐订阅' : `${discoverPlatformLabel(this.searchPlatform)} 推荐订阅`,
-        )
+  private CategoryBrowserSection() {
+    if (this.discoverCategoryCards().length > 0) {
+      Column({ space: 12 }) {
+        this.SectionHeader('分类精选')
 
-        Column() {
-          ForEach(this.recommendedFallback(), (feed: RecommendedFeed, index: number) => {
-            this.CandidateRow(createDiscoverResultFromFeed(feed), index < this.recommendedFallback().length - 1)
-          }, (feed: RecommendedFeed) => `recommended-${feed.view}-${feed.url}`)
+        Flex({ wrap: FlexWrap.NoWrap, justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
+          ForEach(this.discoverCategoryCards(), (card: DiscoverCategoryCard) => {
+            Row({ space: 8 }) {
+              SymbolGlyph(this.categoryCardSymbol(card.view))
+                .fontSize(19)
+                .fontColor([card.accent])
+
+              Text(card.label)
+                .fontSize(13)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(this.theme.textPrimary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .width('24%')
+            .height(46)
+            .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+            .justifyContent(FlexAlign.Start)
+            .alignItems(VerticalAlign.Center)
+            .borderRadius(16)
+            .backgroundColor(this.theme.surface)
+            .border({ width: 0.8, color: this.theme.divider })
+            .shadow({
+              radius: 6,
+              color: this.theme.isDark ? 'rgba(0,0,0,0.12)' : 'rgba(15,23,42,0.04)',
+              offsetY: 2,
+            })
+            .clickEffect({ level: ClickEffectLevel.MIDDLE })
+            .onClick(() => {
+              this.openBrowsePage(card.view, card.label)
+            })
+          }, (card: DiscoverCategoryCard) => card.label)
         }
         .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .clip(true)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -1286,7 +1418,8 @@ export struct DiscoverContent {
     .width('100%')
     .padding({ left: 20, right: 20, top: 24, bottom: 24 })
     .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
+    .borderRadius(CARD_RADIUS_XL)
+    .border({ width: 0.8, color: this.theme.divider })
   }
 
   private isSearchModeActive(): boolean {
@@ -1308,7 +1441,11 @@ export struct DiscoverContent {
           this.NoResultState()
         }
       } else {
-        this.RecommendedFallbackSection()
+        this.CandidateSection(
+          '热门推荐',
+          this.discoverFeaturedFeeds().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed)),
+        )
+        this.CategoryBrowserSection()
       }
 
       Row()
@@ -1394,7 +1531,7 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private DiscoverDestinations(name: string, params?: DiscoverFlowRouteParams | EntryDetailParams) {
+  private DiscoverDestinations(name: string, params?: DiscoverFlowRouteParams | DiscoverBrowseRouteParams | EntryDetailParams) {
     if (name === DISCOVER_ROUTE_PREVIEW) {
       NavDestination() {
         DiscoverPreviewDestination({
@@ -1405,6 +1542,16 @@ export struct DiscoverContent {
           initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
           targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
           targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
+          theme: this.theme,
+        })
+      }
+      .hideTitleBar(true)
+      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+    } else if (name === DISCOVER_ROUTE_BROWSE) {
+      NavDestination() {
+        DiscoverBrowseDestination({
+          view: (params as DiscoverBrowseRouteParams)?.view ?? FeedViewType.Articles,
+          title: (params as DiscoverBrowseRouteParams)?.title ?? '',
           theme: this.theme,
         })
       }
@@ -1613,6 +1760,176 @@ struct DiscoverSubscribeConfigDestination {
       const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
       AppStorage.setOrCreate('discoverHasForegroundOverlay', currentLevel > 0)
     })
+  }
+}
+
+@Component
+struct DiscoverBrowseDestination {
+  @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
+  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
+  @Prop view: FeedViewType = FeedViewType.Articles
+  @Prop title: string = ''
+  @Prop theme: ThemePalette = ThemeService.darkPalette()
+  @State private cachedFeeds: RecommendedFeed[] = []
+
+  aboutToAppear(): void {
+    this.cachedFeeds = filteredRecommendedFeeds(this.view)
+  }
+
+  private browseFeeds(): RecommendedFeed[] {
+    return filteredRecommendedFeeds(this.view)
+  }
+
+  private browseTitle(): string {
+    return this.title || discoverViewLabel(this.view)
+  }
+
+  private openPreviewPage(feed: RecommendedFeed): void {
+    const result = createDiscoverResultFromFeed(feed)
+    AppStorage.setOrCreate('discoverOverlayLevel', 2)
+    this.discoverPathStack.pushPathByName(
+      DISCOVER_ROUTE_PREVIEW,
+      createDiscoverFlowRouteParams(
+        result.targetUrl,
+        result.targetTitle,
+        result.targetView,
+        result.siteUrl,
+        result.imageUrl || '',
+        result.description,
+        result.sourceKind,
+        feed.category || '',
+      ),
+      true,
+    )
+  }
+
+  private openSubscribeConfigPage(feed: RecommendedFeed): void {
+    const result = createDiscoverResultFromFeed(feed)
+    AppStorage.setOrCreate('discoverOverlayLevel', 2)
+    this.discoverPathStack.pushPathByName(
+      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
+      createDiscoverFlowRouteParams(
+        result.targetUrl,
+        result.targetTitle,
+        result.targetView,
+        result.siteUrl,
+        result.imageUrl || '',
+        result.description,
+        result.sourceKind,
+        feed.category || '',
+      ),
+      true,
+    )
+  }
+
+  @Builder
+  private FeedRow(feed: RecommendedFeed, showDivider: boolean) {
+    Column({ space: 0 }) {
+      Row({ space: 10 }) {
+        AvatarTile({
+          imageUrl: resolveSocialFeedDisplayImageUrl(
+            feed.imageUrl || '',
+            feed.url,
+            feed.siteUrl,
+            feed.title,
+          ),
+          refreshToken: this.discoverOverlayLevel,
+          fallbackLabel: feed.title,
+          accent: this.theme.accent,
+          theme: this.theme,
+          avatarSize: 34,
+          radius: 10,
+          textSize: 13,
+          useAccentFallback: true,
+        })
+
+        Column({ space: 3 }) {
+          Text(feed.title)
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text((feed.followers || feed.description).trim())
+            .fontSize(11)
+            .fontColor(this.theme.textSecondary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .height(52)
+      .padding({ left: 14, right: 14, top: 9, bottom: 9 })
+      .backgroundColor('transparent')
+      .onClick(() => {
+        this.openPreviewPage(feed)
+      })
+
+      if (showDivider) {
+        Divider()
+          .strokeWidth(1)
+          .color(this.theme.divider)
+          .margin({ left: 58, right: 14 })
+      }
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private HeaderSection() {
+    SecondaryPageHeaderShell() {
+      PageHeader({
+        title: this.browseTitle(),
+        theme: this.theme,
+        showBackButton: true,
+        titleSize: 20,
+        topPadding: 0,
+        bottomPadding: 0,
+        onBack: () => {
+          AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+          const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+          AppStorage.setOrCreate('discoverOverlayLevel', currentLevel > 0 ? currentLevel - 1 : 0)
+          this.discoverPathStack.pop(true)
+        },
+      })
+        .width('100%')
+    }
+  }
+
+  build() {
+    Column() {
+      this.HeaderSection()
+
+      Scroll() {
+        Column({ space: 0 }) {
+          Column({ space: 0 }) {
+            ForEach(this.cachedFeeds, (feed: RecommendedFeed, index: number) => {
+              this.FeedRow(feed, index < this.cachedFeeds.length - 1)
+            }, (feed: RecommendedFeed) => `${this.view}-${feed.url}`)
+          }
+          .width('100%')
+          .backgroundColor(this.theme.surface)
+          .borderRadius(18)
+          .border({ width: 0.8, color: this.theme.divider })
+          .clip(true)
+        }
+        .width('100%')
+        .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 4, bottom: 16 })
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start)
+        .constraintSize({ minHeight: '100%' })
+      }
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
+      .width('100%')
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
   }
 }
 
