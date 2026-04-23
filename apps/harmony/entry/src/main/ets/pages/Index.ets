@@ -2041,6 +2041,10 @@ struct Index {
   }
 
   private confirmRootTabSelection(tabId: RootTabId): void {
+    if (tabId !== this.highlightedRootTabId) {
+      return
+    }
+
     if (this.activeRootTabId === tabId) {
       return
     }
