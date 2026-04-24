@@ -64,6 +64,7 @@ import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/Theme
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
 import { RefreshStateManager } from '../common/utils/RefreshStateManager'
+import { shouldHideRootBottomBar, shouldHideRootTitleBar } from '../common/utils/RootTabVisibilityPolicy'
 
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
@@ -1722,9 +1723,7 @@ struct Index {
   }
 
   private shouldHideRootTitleBar(): boolean {
-    return this.currentRootTabId() === 'subscriptions'
-      || this.currentRootTabId() === 'discover'
-      || this.currentRootTabId() === 'settings'
+    return shouldHideRootTitleBar(this.currentRootTabId())
   }
 
   private currentRootScrollEffectType(): ScrollEffectType {
@@ -4698,11 +4697,11 @@ struct Index {
   }
 
   private shouldHideBottomTabs(): boolean {
-    return (
-      (this.currentRootTabId() === 'discover' && this.discoverHasForegroundOverlay)
-      || (this.currentRootTabId() === 'subscriptions' && this.subscriptionsOverlayLevel > 0)
-      || (this.currentRootTabId() === 'settings' && this.settingsOverlayLevel > 0)
-    )
+    return shouldHideRootBottomBar(this.currentRootTabId(), {
+      discoverHasForegroundOverlay: this.discoverHasForegroundOverlay,
+      subscriptionsOverlayLevel: this.subscriptionsOverlayLevel,
+      settingsOverlayLevel: this.settingsOverlayLevel,
+    })
   }
 
   build() {

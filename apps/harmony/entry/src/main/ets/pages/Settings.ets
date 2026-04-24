@@ -1,4 +1,3 @@
-import { SettingsContent } from '../common/components/SettingsContent'
 import { openRootTab } from '../common/navigation/AppRouter'
 
 @Entry
@@ -9,9 +8,7 @@ struct Settings {
   }
 
   build() {
-    Stack() {
-      SettingsContent({ showBottomTabs: true })
-    }
+    Column()
     .width('100%')
     .height('100%')
   }

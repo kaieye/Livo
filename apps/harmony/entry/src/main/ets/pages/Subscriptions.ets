@@ -1,4 +1,3 @@
-import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { openRootTab } from '../common/navigation/AppRouter'
 
 @Entry
@@ -9,9 +8,7 @@ struct Subscriptions {
   }
 
   build() {
-    Stack() {
-      SubscriptionsContent({ showBottomTabs: true })
-    }
+    Column()
     .width('100%')
     .height('100%')
   }

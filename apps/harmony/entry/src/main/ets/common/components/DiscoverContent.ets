@@ -41,7 +41,11 @@ import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { resolveDiscoverOverlayReturnLevel } from '../utils/DiscoverNavigationPolicy'
+import {
+  resolveDiscoverOverlayLevelAfterDestinationDisappear,
+  resolveDiscoverOverlayReturnLevel,
+  shouldShowDiscoverForegroundOverlay,
+} from '../utils/DiscoverNavigationPolicy'
 import { FeedDetailView } from './FeedDetailView'
 import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
@@ -1710,7 +1714,7 @@ export struct DiscoverContent {
   }
 
   build() {
-    if (this.showBottomTabs || this.discoverOverlayLevel > 0) {
+    if (this.showBottomTabs) {
       Navigation(this.discoverPathStack) {
         this.DiscoverRoot()
       }
@@ -1807,7 +1811,7 @@ export struct DiscoverContent {
       })
       .titleMode(HdsNavigationTitleMode.MINI)
       .hideBackButton(true)
-      .hideTitleBar(false)
+      .hideTitleBar(this.discoverOverlayLevel > 0)
       .bindToScrollable([this.contentScroller])
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')
@@ -1838,8 +1842,19 @@ struct DiscoverSubscribeConfigDestination {
   }
 
   private restoreOverlayAfterConfigClose(): void {
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', this.restoreOverlayLevel > 0)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.restoreOverlayLevel))
     AppStorage.setOrCreate('discoverOverlayLevel', this.restoreOverlayLevel)
+  }
+
+  private restoreOverlayAfterDisappearIfNeeded(): void {
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
+    AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
+  }
+
+  aboutToDisappear(): void {
+    this.restoreOverlayAfterDisappearIfNeeded()
   }
 
   build() {
@@ -1902,6 +1917,17 @@ struct DiscoverBrowseDestination {
 
   private browseTitle(): string {
     return this.title || discoverViewLabel(this.view)
+  }
+
+  private restoreOverlayAfterDisappearIfNeeded(): void {
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
+    AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
+  }
+
+  aboutToDisappear(): void {
+    this.restoreOverlayAfterDisappearIfNeeded()
   }
 
   private openPreviewPage(feed: RecommendedFeed): void {
@@ -2053,6 +2079,9 @@ struct DiscoverBrowseDestination {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+    .onDisAppear(() => {
+      this.restoreOverlayAfterDisappearIfNeeded()
+    })
   }
 }
 
@@ -2069,6 +2098,17 @@ struct DiscoverPreviewDestination {
   @Prop targetView: FeedViewType = FeedViewType.Articles
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+
+  private restoreOverlayAfterDisappearIfNeeded(): void {
+    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
+    const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
+    AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
+  }
+
+  aboutToDisappear(): void {
+    this.restoreOverlayAfterDisappearIfNeeded()
+  }
 
   private openEditConfigPage(feed: Feed): void {
     const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
@@ -2150,7 +2190,7 @@ struct DiscoverPreviewDestination {
       targetView: this.targetView,
       theme: this.theme,
       onBack: () => {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', this.restoreOverlayLevel > 0)
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.restoreOverlayLevel))
         AppStorage.setOrCreate('discoverOverlayLevel', this.restoreOverlayLevel)
         this.discoverPathStack.pop(true)
       },
@@ -2162,8 +2202,7 @@ struct DiscoverPreviewDestination {
       AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
     })
     .onDisAppear(() => {
-      const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', currentLevel > 0)
+      this.restoreOverlayAfterDisappearIfNeeded()
     })
   }
 }

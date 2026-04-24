@@ -1,4 +1,3 @@
-import { DiscoverContent } from '../common/components/DiscoverContent'
 import { openRootTab } from '../common/navigation/AppRouter'
 
 @Entry
@@ -9,9 +8,7 @@ struct Discover {
   }
 
   build() {
-    Stack() {
-      DiscoverContent({ showBottomTabs: true })
-    }
+    Column()
     .width('100%')
     .height('100%')
   }

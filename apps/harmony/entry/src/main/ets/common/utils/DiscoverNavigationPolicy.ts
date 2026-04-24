@@ -16,3 +16,19 @@ export function resolveDiscoverOverlayReturnLevel(
       return DISCOVER_OVERLAY_LEVEL_ROOT
   }
 }
+
+export function resolveDiscoverOverlayLevelAfterDestinationDisappear(
+  currentLevel: number,
+  restoreLevel: number,
+): number {
+  if (currentLevel > DISCOVER_OVERLAY_LEVEL_BROWSE) {
+    return currentLevel
+  }
+  return restoreLevel
+}
+
+export function shouldShowDiscoverForegroundOverlay(
+  overlayLevel: number,
+): boolean {
+  return overlayLevel > DISCOVER_OVERLAY_LEVEL_ROOT
+}
