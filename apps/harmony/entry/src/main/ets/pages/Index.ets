@@ -224,13 +224,6 @@ interface HomeModeLoadMoreTimestampMap {
   videos: number
 }
 
-interface HomeModeFooterStateMap {
-  articles: string
-  social: string
-  pictures: string
-  videos: string
-}
-
 interface HomeModeHasMoreMap {
   articles: boolean
   social: boolean
@@ -413,12 +406,6 @@ struct Index {
     pictures: 0,
     videos: 0,
   }
-  private homeLastFooterStateByMode: HomeModeFooterStateMap = {
-    articles: '',
-    social: '',
-    pictures: '',
-    videos: '',
-  }
   private homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = {
     articles: 0,
     social: 0,
@@ -596,6 +583,7 @@ struct Index {
     void this.startStartupRefreshIfNeeded(restoredFromSnapshot)
     this.configureAutoRefreshTimer()
     this.hasLoadedInitialData = true
+    this.ensureModeEntriesLoaded(currentMode)
 
     // Preload other modes in background to avoid first-switch lag
     this.precacheNonActiveModes()
@@ -2090,6 +2078,7 @@ struct Index {
     this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
+    this.ensureModeEntriesLoaded(nextMode)
   }
 
   private logModeSwitchSnapshot(stage: string, mode: SubscriptionMode): void {
@@ -2285,6 +2274,7 @@ struct Index {
 
   private shouldRunFinalHomeReloadNow(): boolean {
     const currentOffset = this.readHomeModeScrollOffset(this.mode)
+    const shouldApplyLengthGuard = !this.shouldRenderAllEntriesForMode(this.mode)
     return this.isComponentActive
       && this.isHomeRootTab()
       && !this.isRefreshing
@@ -2297,7 +2287,7 @@ struct Index {
       && !this.pendingLoadMoreForMode(this.mode)
       && !this.hasRecentHomeScrollIntent()
       && currentOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET
-      && this.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT
+      && (!shouldApplyLengthGuard || this.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT)
   }
 
   private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void {
@@ -2345,6 +2335,9 @@ struct Index {
   }
 
   private resolveHomeCandidateLimit(minimumLimit: number): number {
+    if (this.shouldRenderAllEntriesForMode(this.mode)) {
+      return this.resolveHomeCandidateLimitForMode(this.mode, minimumLimit)
+    }
     return Math.max(minimumLimit, this.homeCandidateLimit)
   }
 
@@ -2353,9 +2346,7 @@ struct Index {
   }
 
   private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    // Keep the home page in paged mode; full rendering makes feeds-changed reloads
-    // explode after large OPML imports and can freeze or crash the app.
-    return false
+    return true
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
@@ -2668,55 +2659,6 @@ struct Index {
       videos: 0,
     }
     this.logHomeLoadState(`mode loadMore state reset reason=${reason}`)
-  }
-
-  private resolveHomeFooterState(mode: SubscriptionMode): string {
-    if (this.homeLoadMoreInProgress) {
-      return 'loading'
-    }
-    if (!this.hasBufferedEntriesForMode(mode) && (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) {
-      return 'end'
-    }
-    return 'hint'
-  }
-
-  private footerStateForMode(mode: SubscriptionMode): string {
-    switch (mode) {
-      case 'social':
-        return this.homeLastFooterStateByMode.social
-      case 'pictures':
-        return this.homeLastFooterStateByMode.pictures
-      case 'videos':
-        return this.homeLastFooterStateByMode.videos
-      default:
-        return this.homeLastFooterStateByMode.articles
-    }
-  }
-
-  private setFooterStateForMode(mode: SubscriptionMode, state: string): void {
-    this.homeLastFooterStateByMode = {
-      articles: mode === 'articles' ? state : this.homeLastFooterStateByMode.articles,
-      social: mode === 'social' ? state : this.homeLastFooterStateByMode.social,
-      pictures: mode === 'pictures' ? state : this.homeLastFooterStateByMode.pictures,
-      videos: mode === 'videos' ? state : this.homeLastFooterStateByMode.videos,
-    }
-  }
-
-  private traceHomeFooterStateIfChanged(mode: SubscriptionMode): void {
-    const nextState = this.resolveHomeFooterState(mode)
-    const previousState = this.footerStateForMode(mode)
-    if (previousState === nextState) {
-      return
-    }
-
-    this.setFooterStateForMode(mode, nextState)
-    this.logHomeLoadState(
-      `footer state mode=${mode} ${previousState || 'none'}=>${nextState} `
-      + `hasMore=${this.homeHasMoreEntries} modeHasMore=${this.modeHasMoreEntries(mode)} `
-      + `inProgress=${this.homeLoadMoreInProgress} `
-      + `buffered=${this.hasBufferedEntriesForMode(mode)} `
-      + `visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
-    )
   }
 
   private loadMoreBlockedReason(mode: SubscriptionMode): string {
@@ -3265,7 +3207,9 @@ struct Index {
 
   private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
     const hasModeEntries = this.totalEntryCountFor(mode) > 0
-    if (this.isModeLoaded(mode) && hasModeEntries) {
+    const fullModeReady = !this.shouldRenderAllEntriesForMode(mode)
+      || this.candidateLimitForMode(mode) >= HOME_FULL_MODE_CANDIDATE_LIMIT
+    if (this.isModeLoaded(mode) && hasModeEntries && fullModeReady) {
       return
     }
     if (this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
@@ -3318,10 +3262,11 @@ struct Index {
   ): Promise<void> {
     const startedAt = Date.now()
     const safeCandidateLimit = this.resolveHomeCandidateLimitForMode(targetMode, candidateLimit)
+    const shouldUseFastPath = preferFastPath && !this.shouldRenderAllEntriesForMode(targetMode)
     this.logHomePerf(
-      `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${preferFastPath}`,
+      `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${shouldUseFastPath}`,
     )
-    const nextEntries = preferFastPath
+    const nextEntries = shouldUseFastPath
       ? await AppRepository.featuredEntriesFastByMode(targetMode, safeCandidateLimit)
       : await AppRepository.featuredEntriesByMode(targetMode, safeCandidateLimit)
     this.syncModePaginationFromReloadResult(targetMode, nextEntries, safeCandidateLimit)
@@ -3345,6 +3290,17 @@ struct Index {
     deferredGrouping: boolean = true,
     preferFastPath: boolean = true,
   ): Promise<void> {
+    if (this.shouldRenderAllEntriesForMode(this.mode)) {
+      await this.reloadFeaturedEntriesFromLocal(
+        this.resolveHomeCandidateLimitForMode(this.mode, candidateLimit),
+        animated,
+        deferredGrouping,
+        false,
+        this.mode,
+      )
+      return
+    }
+
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
     this.logHomePerf(
@@ -3727,57 +3683,6 @@ struct Index {
       createdAt: entry.publishedAt,
       updatedAt: entry.publishedAt,
     }
-  }
-
-  @Builder
-  private HomeLoadMoreFooter(mode: SubscriptionMode) {
-    Column({ space: 8 }) {
-      if (this.homeLoadMoreInProgress) {
-        LoadingProgress()
-          .width(18)
-          .height(18)
-          .color(this.theme.accent)
-
-        Text('正在加载更多...')
-          .fontSize(12)
-          .fontColor(this.theme.textSecondary)
-      } else if (this.shouldShowEndForMode(mode)) {
-        Text('已经到底了')
-          .fontSize(12)
-          .fontColor(this.theme.textMuted)
-      } else {
-        Row()
-          .width(1)
-          .height(1)
-      }
-    }
-    .width('100%')
-    .height(72)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .opacity(0.92)
-    .onAppear(() => {
-      this.traceHomeFooterStateIfChanged(mode)
-    })
-    .onVisibleAreaChange([0.01], (isVisible: boolean, _currentRatio: number) => {
-      this.traceHomeFooterStateIfChanged(mode)
-      if (!isVisible) {
-        return
-      }
-      const totalCount = this.totalEntryCountFor(mode)
-      if (totalCount <= 0 || this.homeInitialLoadPending || !this.hasRecentHomeScrollIntent()) {
-        this.logHomePerf(
-          `footer visible ignored mode=${mode} total=${totalCount} initialPending=${this.homeInitialLoadPending} recentIntent=${this.hasRecentHomeScrollIntent()}`,
-        )
-        return
-      }
-      this.logHomePerf(`footer visible mode=${mode} total=${this.totalEntryCountFor(mode)} visible=${this.visibleEntryCountFor(mode)}`)
-      this.enqueueLoadMoreForMode(mode, 'footer-visible')
-    })
-  }
-
-  private shouldShowEndForMode(mode: SubscriptionMode): boolean {
-    return !this.hasBufferedEntriesForMode(mode) && (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode))
   }
 
   private modeSceneVisible(mode: SubscriptionMode): Visibility {
