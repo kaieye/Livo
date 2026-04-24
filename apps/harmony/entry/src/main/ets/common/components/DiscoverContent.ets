@@ -2077,6 +2077,18 @@ struct DiscoverBrowseDestination {
   private InsFeedRow(member: DiscoverBuiltinFeedSeed, showDivider: boolean) {
     Column({ space: 0 }) {
       Row({ space: 10 }) {
+        AvatarTile({
+          imageUrl: resolveSocialFeedDisplayImageUrl('', member.url, '', member.title),
+          refreshToken: this.discoverOverlayLevel,
+          fallbackLabel: member.title,
+          accent: this.theme.accent,
+          theme: this.theme,
+          avatarSize: 28,
+          radius: 8,
+          textSize: 11,
+          useAccentFallback: true,
+        })
+
         Column({ space: 1 }) {
           Text(member.title)
             .fontSize(13)
@@ -2108,7 +2120,7 @@ struct DiscoverBrowseDestination {
         Divider()
           .strokeWidth(1)
           .color(this.theme.divider)
-          .margin({ left: 14, right: 14 })
+          .margin({ left: 50, right: 14 })
       }
     }
     .width('100%')
