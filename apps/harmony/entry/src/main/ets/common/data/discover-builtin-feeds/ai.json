@@ -1,0 +1,96 @@
+{
+  "description": "AI related feeds - blogs, papers, tools and products",
+  "view": "articles",
+  "feeds": [
+    {
+      "title": "OpenAI 博客",
+      "url": "https://openai.com/news/rss.xml",
+      "language": "English",
+      "description": "GPT 官方动态"
+    },
+    {
+      "title": "Google DeepMind",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "language": "English",
+      "description": "DeepMind 研究"
+    },
+    {
+      "title": "Google AI Blog",
+      "url": "https://blog.google/technology/ai/rss/",
+      "language": "English",
+      "description": "Google AI 综合动态"
+    },
+    {
+      "title": "arXiv AI",
+      "url": "https://rss.arxiv.org/rss/cs.AI",
+      "language": "English",
+      "description": "AI 论文预印本"
+    },
+    {
+      "title": "arXiv 机器学习",
+      "url": "https://rss.arxiv.org/rss/cs.LG",
+      "language": "English",
+      "description": "机器学习论文"
+    },
+    {
+      "title": "arXiv NLP",
+      "url": "https://rss.arxiv.org/rss/cs.CL",
+      "language": "English",
+      "description": "自然语言处理"
+    },
+    {
+      "title": "Hacker News AI",
+      "url": "https://hnrss.org/newest?q=AI",
+      "language": "English",
+      "description": "HN AI 相关"
+    },
+    {
+      "title": "Hacker News LLM",
+      "url": "https://hnrss.org/newest?q=LLM",
+      "language": "English",
+      "description": "HN 大模型相关"
+    },
+    {
+      "title": "Hacker News OpenClaw",
+      "url": "https://hnrss.org/newest?q=OpenClaw",
+      "language": "English",
+      "description": "HN 上的 OpenClaw 讨论"
+    },
+    {
+      "title": "Hugging Face 博客",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "language": "English",
+      "description": "开源 AI 社区"
+    },
+    {
+      "title": "Stability AI",
+      "url": "https://stability.ai/news?format=rss",
+      "language": "English",
+      "description": "Stable Diffusion"
+    },
+    {
+      "title": "OpenClaw Releases",
+      "url": "https://github.com/openclaw/openclaw/releases.atom",
+      "language": "English",
+      "description": "OpenClaw 版本发布"
+    },
+    {
+      "title": "OpenClaw Commits",
+      "url": "https://github.com/openclaw/openclaw/commits/main.atom",
+      "language": "English",
+      "description": "主分支开发动态"
+    },
+    {
+      "title": "机器之心",
+      "url": "https://www.jiqizhixin.com/rss",
+      "language": "Chinese",
+      "description": "国内顶尖 AI 媒体"
+    },
+    {
+      "title": "Simon Willison 博客",
+      "url": "https://simonwillison.net/atom/everything/",
+      "language": "English",
+      "description": "LLM 洞察，Django 联合创始人"
+    }
+  ]
+}

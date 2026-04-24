@@ -348,12 +348,12 @@ export struct DiscoverContent {
         accent: '#F97316',
       },
       {
-        id: 'ins-1',
-        view: FeedViewType.Pictures,
-        label: 'Ins',
-        accent: '#C13584',
-        sourceKey: 'ins',
-        icon: $r('app.media.account_instagram'),
+        id: 'ai',
+        view: FeedViewType.Articles,
+        label: 'AI',
+        accent: '#6C63FF',
+        sourceKey: 'ai',
+        icon: $r('app.media.ri_ai'),
       },
       {
         id: 'ins-2',
@@ -1208,7 +1208,7 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private SectionHeader(title: string, trailingText: string = '') {
+  private SectionHeader(title: string, trailingText: string = '', showMoreButton: boolean = false) {
     Row() {
       Text(title)
         .fontSize(SECTION_TITLE_FONT_SIZE)
@@ -1223,6 +1223,16 @@ export struct DiscoverContent {
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textMuted)
+      }
+
+      if (showMoreButton) {
+        Text('更多')
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textMuted)
+          .padding({ left: 8, right: 4, top: 2, bottom: 2 })
+          .clickEffect({ level: ClickEffectLevel.LIGHT })
+          .onClick(() => {})
       }
     }
     .width('100%')
@@ -1387,10 +1397,11 @@ export struct DiscoverContent {
     compact: boolean = false,
     separateCards: boolean = false,
     showActionButton: boolean = true,
+    showMoreButton: boolean = false,
   ) {
     if (items.length > 0) {
       Column({ space: 12 }) {
-        this.SectionHeader(title)
+        this.SectionHeader(title, '', showMoreButton)
 
         if (separateCards) {
           Column({ space: 6 }) {
@@ -1564,6 +1575,7 @@ export struct DiscoverContent {
           true,
           true,
           false,
+          true,
         )
         this.CategoryBrowserSection()
       }

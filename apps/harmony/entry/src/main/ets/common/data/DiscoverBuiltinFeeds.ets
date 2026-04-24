@@ -1,6 +1,6 @@
 import { FeedViewType } from '../models/LivoModels'
 
-export type DiscoverBuiltinFeedSourceKey = '' | 'ins'
+export type DiscoverBuiltinFeedSourceKey = '' | 'ins' | 'ai'
 
 export interface DiscoverBuiltinFeedSeed {
   title: string
@@ -26,6 +26,7 @@ export interface DiscoverBuiltinFeedViewMap {
   pictures: DiscoverBuiltinFeed[]
   videos: DiscoverBuiltinFeed[]
   ins: DiscoverBuiltinFeed[]
+  ai: DiscoverBuiltinFeed[]
 }
 
 function normalizeBuiltinFeedUrl(url: string): string {
@@ -556,6 +557,23 @@ export const BUILTIN_DISCOVER_FEEDS_BY_VIEW: DiscoverBuiltinFeedViewMap = {
     { title: "public posts", url: "https://rsshub.liumingye.cn/picnob/user/aerichandesu", language: "" },
     { title: "BABYMONSTER RAMI (라미) FANPAGE", url: "https://rsshub.liumingye.cn/picnob/user/rami.babymonster", language: "" },
   ], 'ins'),
+  ai: buildBuiltinFeeds(FeedViewType.Articles, [
+    { title: "OpenAI 博客", url: "https://openai.com/news/rss.xml", language: "English" },
+    { title: "Google DeepMind", url: "https://deepmind.google/blog/rss.xml", language: "English" },
+    { title: "Google AI Blog", url: "https://blog.google/technology/ai/rss/", language: "English" },
+    { title: "arXiv AI", url: "https://rss.arxiv.org/rss/cs.AI", language: "English" },
+    { title: "arXiv 机器学习", url: "https://rss.arxiv.org/rss/cs.LG", language: "English" },
+    { title: "arXiv NLP", url: "https://rss.arxiv.org/rss/cs.CL", language: "English" },
+    { title: "Hacker News AI", url: "https://hnrss.org/newest?q=AI", language: "English" },
+    { title: "Hacker News LLM", url: "https://hnrss.org/newest?q=LLM", language: "English" },
+    { title: "Hacker News OpenClaw", url: "https://hnrss.org/newest?q=OpenClaw", language: "English" },
+    { title: "Hugging Face 博客", url: "https://huggingface.co/blog/feed.xml", language: "English" },
+    { title: "Stability AI", url: "https://stability.ai/news?format=rss", language: "English" },
+    { title: "OpenClaw Releases", url: "https://github.com/openclaw/openclaw/releases.atom", language: "English" },
+    { title: "OpenClaw Commits", url: "https://github.com/openclaw/openclaw/commits/main.atom", language: "English" },
+    { title: "机器之心", url: "https://www.jiqizhixin.com/rss", language: "Chinese" },
+    { title: "Simon Willison 博客", url: "https://simonwillison.net/atom/everything/", language: "English" },
+  ], 'ai'),
 }
 
 export function builtinDiscoverFeedsByView(view: FeedViewType): DiscoverBuiltinFeed[] {
@@ -575,6 +593,9 @@ export function builtinDiscoverFeedsBySourceKey(sourceKey: DiscoverBuiltinFeedSo
   if (sourceKey === 'ins') {
     return BUILTIN_DISCOVER_FEEDS_BY_VIEW.ins
   }
+  if (sourceKey === 'ai') {
+    return BUILTIN_DISCOVER_FEEDS_BY_VIEW.ai
+  }
   return []
 }
 
@@ -585,5 +606,6 @@ export function builtinDiscoverFeedsAll(): DiscoverBuiltinFeed[] {
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.pictures,
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.videos,
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.ins,
+    ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.ai,
   ]
 }
