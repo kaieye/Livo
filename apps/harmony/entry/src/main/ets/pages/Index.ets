@@ -561,6 +561,7 @@ struct Index {
       this.notifyHomeEntryDataReloaded()
       this.schedulePersistHomeSnapshot(this.featuredEntries)
       this.feedSourceLabel = '已恢复本地内容'
+      // Snapshot already covers all modes; no precache needed.
     } else {
       // Use the faster recent-entry path first so first launch can paint sooner.
       this.featuredEntries = await AppRepository.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
@@ -569,6 +570,8 @@ struct Index {
       }
       this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
       this.feedSourceLabel = '本地内容已加载'
+      // Start precaching other modes immediately so they are ready before the user switches.
+      this.precacheNonActiveModes()
     }
     this.settleInitialHomeLoadState()
 
@@ -584,8 +587,6 @@ struct Index {
     this.configureAutoRefreshTimer()
     this.hasLoadedInitialData = true
     this.ensureModeEntriesLoaded(currentMode)
-
-    // Preload other modes in background to avoid first-switch lag
     this.precacheNonActiveModes()
 
     this.scheduleHomeLoadMorePrefetch(800)
@@ -1251,7 +1252,13 @@ struct Index {
     }
 
     if (!this.homeModeRailExpandedOverride) {
-      this.homeModeRailDismissedByScroll = nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET
+      const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
+      if (isReturningTowardsTop) {
+        // Expand immediately when user scrolls back towards top.
+        this.homeModeRailDismissedByScroll = false
+      } else if (nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
+        this.homeModeRailDismissedByScroll = true
+      }
     }
 
     this.currentHomeModeScrollOffset = nextOffset
@@ -2072,10 +2079,10 @@ struct Index {
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
     this.resetHomePullRefreshState()
-    this.homeModeRailExpandedOverride = false
-    this.homeModeRailExpandedLockOffset = -1
+    this.homeModeRailExpandedLockOffset = nextModeOffset
+    this.homeModeRailExpandedOverride = true
     this.currentHomeModeScrollOffset = nextModeOffset
-    this.homeModeRailDismissedByScroll = nextModeOffset > 0.5
+    this.homeModeRailDismissedByScroll = false
     this.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
     this.ensureModeEntriesLoaded(nextMode)
@@ -2346,7 +2353,8 @@ struct Index {
   }
 
   private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    return true
+    // Keep picture mode paginated to avoid first-switch full-scan stalls.
+    return _mode !== 'pictures'
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
@@ -3654,7 +3662,7 @@ struct Index {
   }
 
   private pictureGalleryUrls(entry: EntryCardModel): string[] {
-    return selectPictureMediaUrls(entry.mediaUrls ?? [])
+    return entry.mediaUrls ?? []
   }
 
   private pictureCaption(entry: EntryCardModel): string {
@@ -4111,6 +4119,11 @@ struct Index {
     return Math.max(0, 1 - progress)
   }
 
+  private homeModeRailDismissScale(): number {
+    const progress = this.homeModeRailCollapseProgress()
+    return 1 - (progress * 0.12)
+  }
+
   @Builder
   private HomeCollapsingModeRailLayer() {
     Stack({ alignContent: Alignment.Top }) {
@@ -4140,6 +4153,8 @@ struct Index {
     })
     .translate({ y: this.homeModeRailDismissTranslateY() })
     .opacity(this.homeModeRailDismissOpacity())
+    .scale({ x: this.homeModeRailDismissScale(), y: this.homeModeRailDismissScale() })
+    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
     .enabled(!this.isHomeModeRailCollapsed())
     .zIndex(100)
   }
@@ -4157,9 +4172,13 @@ struct Index {
       left: PAGE_HORIZONTAL_PADDING,
       right: this.homeModeRailRightInset(),
     })
-    .opacity(this.homeModeRailCollapseProgress())
-    .translate({ y: (1 - this.homeModeRailCollapseProgress()) * 14 })
-    .enabled(this.isHomeModeRailCollapsed())
+    .opacity(this.showSearch ? 0 : this.homeModeRailCollapseProgress())
+    .translate({
+      x: this.showSearch ? 10 : 0,
+      y: (1 - this.homeModeRailCollapseProgress()) * 14,
+    })
+    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
+    .enabled(this.isHomeModeRailCollapsed() && !this.showSearch)
     .zIndex(132)
   }
 
@@ -4176,7 +4195,7 @@ struct Index {
       left: PAGE_HORIZONTAL_PADDING,
       right: PAGE_HORIZONTAL_PADDING,
     })
-    .zIndex(130)
+    .zIndex(133)
   }
 
   @Builder

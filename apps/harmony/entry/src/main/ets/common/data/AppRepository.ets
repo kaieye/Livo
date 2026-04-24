@@ -438,8 +438,7 @@ export class AppRepository {
   private static seedFeedHydrationStarted: boolean = false
   private static feedMetadataRepairStarted: boolean = false
   private static readonly successfulRefreshCooldownMs: number = 3 * 60 * 1000
-  private static readonly refreshConcurrencyMin: number = 4
-  private static readonly refreshConcurrencyMax: number = 8
+  private static readonly refreshConcurrency: number = 12
 
   private static async repairFeedMetadataInBackground(): Promise<void> {
     if (AppRepository.feedMetadataRepairStarted) {
@@ -492,15 +491,10 @@ export class AppRepository {
   }
 
   private static resolveRefreshConcurrency(totalFeeds: number): number {
-    if (totalFeeds >= 24) {
-      return AppRepository.refreshConcurrencyMax
+    if (totalFeeds <= 0) {
+      return 1
     }
-
-    if (totalFeeds >= 12) {
-      return 6
-    }
-
-    return AppRepository.refreshConcurrencyMin
+    return AppRepository.refreshConcurrency
   }
 
   private static async refreshFeedsWithPool(

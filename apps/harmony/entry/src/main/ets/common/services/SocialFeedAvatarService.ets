@@ -26,6 +26,7 @@ function isPlaceholderAvatar(url?: string): boolean {
   return raw.includes('unavatar.io/instagram/')
     || raw.includes('unavatar.io/youtube/')
     || raw.includes('unavatar.io/bilibili/')
+    || raw.includes('unavatar.io/x/')
     || raw.includes('instagram.com/static/images/ico')
     || raw.includes('instagram_static/images/ico')
     || raw.includes('instagram_logo')

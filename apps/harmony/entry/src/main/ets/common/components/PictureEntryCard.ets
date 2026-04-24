@@ -43,9 +43,40 @@ export struct PictureEntryCard {
   @State private livePhotoMuted: boolean = true
   @State private isFullyVisible: boolean = false
   @State private isNearlyVisible: boolean = false
+  @State private cachedCarouselItems: PictureCarouselMediaItem[] = []
   private readonly livePhotoControllers: VideoController[] = []
 
   onOpen: () => void = () => {}
+
+  aboutToAppear(): void {
+    this.cachedCarouselItems = this.computeCarouselMediaItems()
+  }
+
+  private computeCarouselMediaItems(): PictureCarouselMediaItem[] {
+    const rawMediaUrls = this.entry.mediaUrls ?? []
+    const resolvedItems = resolvePictureCarouselMediaItems(rawMediaUrls, this.pictureUrl)
+    if (resolvedItems.length > 0) {
+      return resolvedItems
+    }
+
+    const galleryMediaUrls = this.normalizedGalleryUrls()
+    if (galleryMediaUrls.length > 0) {
+      return galleryMediaUrls.map((url: string): PictureCarouselMediaItem => ({
+        kind: 'image',
+        imageUrl: url,
+        videoUrl: '',
+      }))
+    }
+
+    const singleMediaUrl = (this.pictureUrl || '').trim()
+    return singleMediaUrl
+      ? [{
+          kind: 'image',
+          imageUrl: singleMediaUrl,
+          videoUrl: '',
+        }]
+      : []
+  }
 
   private displayAuthor(): string {
     return (this.authorLabel || this.entry.author || '').trim() || '未知来源'
@@ -92,29 +123,7 @@ export struct PictureEntryCard {
   }
 
   private carouselMediaItems(): PictureCarouselMediaItem[] {
-    const rawMediaUrls = this.entry.mediaUrls ?? []
-    const resolvedItems = resolvePictureCarouselMediaItems(rawMediaUrls, this.pictureUrl)
-    if (resolvedItems.length > 0) {
-      return resolvedItems
-    }
-
-    const galleryMediaUrls = this.normalizedGalleryUrls()
-    if (galleryMediaUrls.length > 0) {
-      return galleryMediaUrls.map((url: string): PictureCarouselMediaItem => ({
-        kind: 'image',
-        imageUrl: url,
-        videoUrl: '',
-      }))
-    }
-
-    const singleMediaUrl = (this.pictureUrl || '').trim()
-    return singleMediaUrl
-      ? [{
-          kind: 'image',
-          imageUrl: singleMediaUrl,
-          videoUrl: '',
-        }]
-      : []
+    return this.cachedCarouselItems
   }
 
   private controllerFor(index: number): VideoController {

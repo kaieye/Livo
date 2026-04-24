@@ -537,9 +537,7 @@ export struct DiscoverContent {
     this.dismissSearchFocus('overlay-navigation')
     AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
     AppStorage.setOrCreate('discoverOverlayLevel', 1)
-    setTimeout(() => {
-      action()
-    }, 90)
+    action()
   }
 
   private settleDiscoverRootVisible(): void {

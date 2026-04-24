@@ -99,5 +99,13 @@ export struct AvatarTile {
         }
       }
     }
+    .onAppear(() => {
+      // Reset when the component becomes visible again (e.g. returning from a navigation page).
+      // Navigation stack keeps previous pages alive but hidden; aboutToAppear is not called again,
+      // so a failed image state would persist. Resetting here ensures a fresh load attempt.
+      if (this.currentImageIndex >= this.candidateImageUrls().length && this.candidateImageUrls().length > 0) {
+        this.currentImageIndex = 0
+      }
+    })
   }
 }
