@@ -20,6 +20,11 @@ export interface DiscoverBuiltinFeed {
   followers?: string
 }
 
+export interface InsGroupFeed {
+  groupName: string
+  members: DiscoverBuiltinFeedSeed[]
+}
+
 export interface DiscoverBuiltinFeedViewMap {
   articles: DiscoverBuiltinFeed[]
   social: DiscoverBuiltinFeed[]
@@ -576,6 +581,116 @@ export const BUILTIN_DISCOVER_FEEDS_BY_VIEW: DiscoverBuiltinFeedViewMap = {
   ], 'ai'),
 }
 
+export const BUILTIN_INS_GROUPS: InsGroupFeed[] = [
+  {
+    groupName: "TWICE",
+    members: [
+      { title: "나연 (NAYEON)", url: "https://rsshub.liumingye.cn/picnob/user/nayeonyny", language: "" },
+      { title: "정연 (JEONGYEON)", url: "https://rsshub.pseudoyu.com/picnob/user/jy_piece", language: "" },
+      { title: "모모 (MOMO)", url: "https://rsshub.ktachibana.party/picnob/user/momo", language: "" },
+      { title: "사나 𝚂𝚊𝚗𝚊", url: "https://rsshub.liumingye.cn/picnob/user/m.by__sana", language: "" },
+      { title: "미나 (MINA)", url: "https://rsshub.ktachibana.party/picnob/user/mina_sr_my", language: "" },
+      { title: "다현 (DAHYUN)", url: "https://rsshub.liumingye.cn/picnob/user/dahhyunnee", language: "" },
+      { title: "채영 CHAEYOUNG", url: "https://rsshub.pseudoyu.com/picnob/user/chaeyo.0", language: "" },
+      { title: "쯔위 (TZUYU)", url: "https://rsshub.liumingye.cn/picnob/user/thinkaboutzu", language: "" },
+      { title: "JIHYO", url: "https://rsshub.liumingye.cn/picnob/user/_zyozyo", language: "" },
+    ]
+  },
+  {
+    groupName: "BLACKPINK",
+    members: [
+      { title: "JISOO🪐", url: "https://rsshub.liumingye.cn/picnob/user/sooyaaa__", language: "" },
+      { title: "J", url: "https://rsshub.liumingye.cn/picnob/user/jennierubyjane", language: "" },
+      { title: "ROSÉ", url: "https://rsshub.liumingye.cn/picnob/user/roses_are_rosie", language: "" },
+      { title: "LISA", url: "https://rsshub.ktachibana.party/picnob/user/lalalalisa_m", language: "" },
+    ]
+  },
+  {
+    groupName: "NewJeans",
+    members: [
+      { title: "NewJeans", url: "https://rsshub.liumingye.cn/picnob/user/newjeans_official", language: "" },
+    ]
+  },
+  {
+    groupName: "IVE",
+    members: [
+      { title: "안유진 AN YUJIN", url: "https://rsshub.liumingye.cn/picnob/user/_yujin_an", language: "" },
+      { title: "가을 GAEUL", url: "https://rsshub.pseudoyu.com/picnob/user/fallingin__fall", language: "" },
+      { title: "레이 REI", url: "https://rsshub.pseudoyu.com/picnob/user/reinyourheart", language: "" },
+      { title: "장원영 WONYOUNG", url: "https://rsshub.rssforever.com/picnob/user/for_everyoung10", language: "" },
+      { title: "리즈 LIZ", url: "https://rsshub.liumingye.cn/picnob/user/liz.yeyo", language: "" },
+      { title: "이서 LEESEO", url: "https://rsshub.liumingye.cn/picnob/user/eeseooes", language: "" },
+    ]
+  },
+  {
+    groupName: "LE SSERAFIM",
+    members: [
+      { title: "Sakura Miyawaki", url: "https://rsshub.liumingye.cn/picnob/user/39saku_chan", language: "" },
+      { title: "김채원 (CHAEWON)", url: "https://rsshub.liumingye.cn/picnob/user/_chaechae_1", language: "" },
+      { title: "HUH YUNJIN", url: "https://rsshub.liumingye.cn/picnob/user/jenaissante", language: "" },
+      { title: "KAZUHA", url: "https://rsshub.pseudoyu.com/picnob/user/zuhazana", language: "" },
+      { title: "HONG EUNCHAE", url: "https://rsshub.liumingye.cn/picnob/user/hhh.e_c.v", language: "" },
+    ]
+  },
+  {
+    groupName: "aespa",
+    members: [
+      { title: "KARINA", url: "https://rsshub.liumingye.cn/picnob/user/katarinabluu", language: "" },
+      { title: "WINTER", url: "https://rsshub.liumingye.cn/picnob/user/imwinter", language: "" },
+      { title: "NINGNING", url: "https://rsshub.liumingye.cn/picnob/user/imnotningning", language: "" },
+    ]
+  },
+  {
+    groupName: "(G)I-DLE",
+    members: [
+      { title: "YUQI", url: "https://rsshub.liumingye.cn/picnob/user/yuqisong.923", language: "" },
+      { title: "SOYEON / 전소연", url: "https://rsshub.liumingye.cn/picnob/user/tiny.pretty.j", language: "" },
+      { title: "MIYEON / 미연", url: "https://rsshub.liumingye.cn/picnob/user/noodle.zip", language: "" },
+      { title: "MINNIE", url: "https://rsshub.pseudoyu.com/picnob/user/min.nicha", language: "" },
+    ]
+  },
+  {
+    groupName: "Red Velvet",
+    members: [
+      { title: "IRENE", url: "https://rsshub.liumingye.cn/picnob/user/renebaebae", language: "" },
+      { title: "슬기 Seulgi", url: "https://rsshub.rssforever.com/picnob/user/hi_sseulgi", language: "" },
+      { title: "Wendy", url: "https://rsshub.liumingye.cn/picnob/user/todayis_wendy", language: "" },
+      { title: "Joy", url: "https://rsshub.liumingye.cn/picnob/user/_imyour_joy", language: "" },
+      { title: "김예림 🪽 yeri", url: "https://rsshub.liumingye.cn/picnob/user/yerimiese", language: "" },
+    ]
+  },
+  {
+    groupName: "ITZY",
+    members: [
+      { title: "YEJI", url: "https://rsshub.liumingye.cn/picnob/user/yezyizhere", language: "" },
+      { title: "LIA", url: "https://rsshub.pseudoyu.com/picnob/user/lia_loves___", language: "" },
+      { title: "CHAERYEONG", url: "https://rsshub.pseudoyu.com/picnob/user/chaerrry0", language: "" },
+      { title: "YUNA", url: "https://rsshub.pseudoyu.com/picnob/user/igotyuandme", language: "" },
+    ]
+  },
+  {
+    groupName: "BABYMONSTER",
+    members: [
+      { title: "BABYMONSTER PHARITA (파리타)", url: "https://rsshub.ktachibana.party/picnob/user/pharitas.babymonsters", language: "" },
+      { title: "BABYMONSTER ASA (아사) FANPAGE", url: "https://rsshub.ktachibana.party/picnob/user/asa__babymonsters", language: "" },
+      { title: "BABYMONSTER AHYEON (정아현)", url: "https://rsshub.ktachibana.party/picnob/user/ahyeon_babymoster", language: "" },
+      { title: "BABYMONSTER RUKA 루카 𝘒𝘢𝘮𝘢𝘭 𝘞𝘢𝘭𝘪𝘢", url: "https://rsshub.ktachibana.party/picnob/user/ruka.babymonstar", language: "" },
+      { title: "BABYMONSTER RAMI (라미) FANPAGE", url: "https://rsshub.liumingye.cn/picnob/user/rami.babymonster", language: "" },
+    ]
+  },
+  {
+    groupName: "其他",
+    members: [
+      { title: "鞠婧祎 ju jingyi", url: "https://rsshub.liumingye.cn/picnob/user/jujingyi_kikuuu", language: "" },
+      { title: "陈都灵", url: "https://rsshub.liumingye.cn/picnob/user/du_chenduling", language: "" },
+      { title: "nana", url: "https://rsshub.liumingye.cn/picnob/user/nanaouyang", language: "" },
+      { title: "Shuhua", url: "https://rsshub.ktachibana.party/picnob/user/yeh.shaa_", language: "" },
+      { title: "周也 Zhou Ye", url: "https://rsshub.ktachibana.party/picnob/user/yeahzhoou", language: "" },
+      { title: "public posts", url: "https://rsshub.liumingye.cn/picnob/user/aerichandesu", language: "" },
+    ]
+  },
+]
+
 export function builtinDiscoverFeedsByView(view: FeedViewType): DiscoverBuiltinFeed[] {
   switch (view) {
     case FeedViewType.SocialMedia:
@@ -597,6 +712,10 @@ export function builtinDiscoverFeedsBySourceKey(sourceKey: DiscoverBuiltinFeedSo
     return BUILTIN_DISCOVER_FEEDS_BY_VIEW.ai
   }
   return []
+}
+
+export function builtinDiscoverInsGroups(): InsGroupFeed[] {
+  return BUILTIN_INS_GROUPS
 }
 
 export function builtinDiscoverFeedsAll(): DiscoverBuiltinFeed[] {

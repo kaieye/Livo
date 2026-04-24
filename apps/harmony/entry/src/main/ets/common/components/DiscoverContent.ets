@@ -1,4 +1,5 @@
 import { AppRepository } from '../data/AppRepository'
+import { builtinDiscoverInsGroups, InsGroupFeed, DiscoverBuiltinFeedSeed } from '../data/DiscoverBuiltinFeeds'
 import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
@@ -1208,8 +1209,16 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private SectionHeader(title: string, trailingText: string = '', showMoreButton: boolean = false) {
+  private SectionHeader(title: string, trailingText: string = '', showMoreButton: boolean = false, leadingIcon?: Resource) {
     Row() {
+      if (leadingIcon) {
+        Image(leadingIcon)
+          .width(20)
+          .height(20)
+          .objectFit(ImageFit.Contain)
+          .margin({ right: 6 })
+      }
+
       Text(title)
         .fontSize(SECTION_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
@@ -1398,10 +1407,11 @@ export struct DiscoverContent {
     separateCards: boolean = false,
     showActionButton: boolean = true,
     showMoreButton: boolean = false,
+    leadingIcon?: Resource,
   ) {
     if (items.length > 0) {
       Column({ space: 12 }) {
-        this.SectionHeader(title, '', showMoreButton)
+        this.SectionHeader(title, '', showMoreButton, leadingIcon)
 
         if (separateCards) {
           Column({ space: 6 }) {
@@ -1576,6 +1586,7 @@ export struct DiscoverContent {
           true,
           false,
           true,
+          $r('app.media.Flame'),
         )
         this.CategoryBrowserSection()
       }
@@ -1916,9 +1927,13 @@ struct DiscoverBrowseDestination {
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @State private cachedFeeds: RecommendedFeed[] = []
+  @State private insGroups: InsGroupFeed[] = []
 
   aboutToAppear(): void {
     this.cachedFeeds = filteredRecommendedFeeds(this.view, this.sourceKey)
+    if (this.sourceKey === 'ins') {
+      this.insGroups = builtinDiscoverInsGroups()
+    }
   }
 
   private browseFeeds(): RecommendedFeed[] {
@@ -2058,22 +2073,84 @@ struct DiscoverBrowseDestination {
     }
   }
 
+  @Builder
+  private InsFeedRow(member: DiscoverBuiltinFeedSeed, showDivider: boolean) {
+    Column({ space: 0 }) {
+      Row({ space: 10 }) {
+        Column({ space: 1 }) {
+          Text(member.title)
+            .fontSize(13)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .height(44)
+      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+      .backgroundColor('transparent')
+      .onClick(() => {
+        const feed: RecommendedFeed = {
+          title: member.title,
+          url: member.url,
+          siteUrl: '',
+          description: '',
+          view: FeedViewType.Pictures,
+          category: '内置-Ins',
+        }
+        this.openPreviewPage(feed)
+      })
+
+      if (showDivider) {
+        Divider()
+          .strokeWidth(1)
+          .color(this.theme.divider)
+          .margin({ left: 14, right: 14 })
+      }
+    }
+    .width('100%')
+  }
+
   build() {
     Column() {
       this.HeaderSection()
 
       Scroll() {
-        Column({ space: 0 }) {
-          Column({ space: 0 }) {
-            ForEach(this.cachedFeeds, (feed: RecommendedFeed, index: number) => {
-              this.FeedRow(feed, index < this.cachedFeeds.length - 1)
-            }, (feed: RecommendedFeed) => `${this.sourceKey || this.view}-${feed.url}`)
+        Column({ space: 12 }) {
+          if (this.sourceKey === 'ins' && this.insGroups.length > 0) {
+            ForEach(this.insGroups, (group: InsGroupFeed) => {
+              Column({ space: 0 }) {
+                Text(group.groupName)
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.theme.textPrimary)
+                  .margin({ left: 14, top: 10, bottom: 6 })
+
+                ForEach(group.members, (member: DiscoverBuiltinFeedSeed, index: number) => {
+                  this.InsFeedRow(member, index < group.members.length - 1)
+                }, (member: DiscoverBuiltinFeedSeed) => `${group.groupName}-${member.url}`)
+              }
+              .width('100%')
+              .backgroundColor(this.theme.surface)
+              .borderRadius(18)
+              .border({ width: 0.8, color: this.theme.divider })
+              .clip(true)
+            }, (group: InsGroupFeed) => group.groupName)
+          } else {
+            Column({ space: 0 }) {
+              ForEach(this.cachedFeeds, (feed: RecommendedFeed, index: number) => {
+                this.FeedRow(feed, index < this.cachedFeeds.length - 1)
+              }, (feed: RecommendedFeed) => `${this.sourceKey || this.view}-${feed.url}`)
+            }
+            .width('100%')
+            .backgroundColor(this.theme.surface)
+            .borderRadius(18)
+            .border({ width: 0.8, color: this.theme.divider })
+            .clip(true)
           }
-          .width('100%')
-          .backgroundColor(this.theme.surface)
-          .borderRadius(18)
-          .border({ width: 0.8, color: this.theme.divider })
-          .clip(true)
         }
         .width('100%')
         .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 4, bottom: 16 })

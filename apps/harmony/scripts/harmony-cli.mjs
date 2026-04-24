@@ -369,7 +369,7 @@ function runDebug() {
 
   execFileSync(
     hdc,
-    ['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'com.livo.harmony'],
+    ['shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'com.chos1nz.livo'],
     {
       cwd: appRoot,
       stdio: 'inherit',
