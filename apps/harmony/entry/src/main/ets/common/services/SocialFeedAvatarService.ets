@@ -57,7 +57,8 @@ function extractYouTubeIdentity(value: string): string {
     trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/youtube\/user\/(@?[^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/@([^/?#]+)/i)?.[1]?.trim() ||
-    trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim() ||
+    // /user/ and /c/ only match when the host is clearly YouTube
+    (trimmed.match(/youtube\.com\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim()) ||
     ''
   )
 }
@@ -120,6 +121,7 @@ export class SocialFeedAvatarService {
       if (fetched) {
         return fetched
       }
+      return `https://unavatar.io/youtube/${encodeURIComponent(youTubeIdentity)}?fallback=false`
     }
 
     const bilibiliUid = extractBilibiliUid(feedUrl) || extractBilibiliUid(siteUrl)
@@ -128,6 +130,7 @@ export class SocialFeedAvatarService {
       if (fetched) {
         return fetched
       }
+      return `https://unavatar.io/bilibili/${encodeURIComponent(bilibiliUid)}?fallback=false`
     }
 
     const username = extractInstagramUsername(feedUrl) || extractInstagramUsername(siteUrl)
@@ -276,6 +279,10 @@ export class SocialFeedAvatarService {
       }
 
       const payload = JSON.parse(String(response.result)) as BilibiliAvatarPayload
+      // code 必须为 0 才表示成功，否则可能是限流或错误响应
+      if (payload.code !== 0) {
+        return ''
+      }
       const face = typeof payload.data?.card?.face === 'string' ? payload.data.card.face : ''
       return normalizeUsableAvatarUrl(face)
     } catch (_) {

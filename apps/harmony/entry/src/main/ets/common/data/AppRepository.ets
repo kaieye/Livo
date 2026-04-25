@@ -678,11 +678,12 @@ export class AppRepository {
     const resolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
       feed.url,
       feed.siteUrl || '',
-      feed.imageUrl || '',
+      '',
       feed.imageUrl || '',
     )
-    const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', resolvedImageUrl)
-    if (!nextImageUrl || nextImageUrl === (feed.imageUrl || '')) {
+    // 直接使用解析结果，不走评分比较——此函数的目的是强制更新到最新平台头像
+    const nextImageUrl = (resolvedImageUrl || '').trim()
+    if (!nextImageUrl || nextImageUrl === (feed.imageUrl || '').trim()) {
       return false
     }
 

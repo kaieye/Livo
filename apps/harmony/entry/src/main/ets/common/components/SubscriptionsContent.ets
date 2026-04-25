@@ -95,6 +95,7 @@ export struct SubscriptionsContent {
   private avatarHydrationToken: number = 0
   private avatarHydrationRunning: boolean = false
   private avatarHydrationPending: boolean = false
+  private readonly hydratedFeedIds: Set<string> = new Set()
   onReady: () => void = () => {}
 
   private logSubscriptionsDiag(message: string): void {
@@ -346,30 +347,15 @@ export struct SubscriptionsContent {
   }
 
   private shouldHydrateAvatar(feed: FeedCardModel): boolean {
-    const imageUrl = (feed.imageUrl || '').trim().toLowerCase()
+    if (this.hydratedFeedIds.has(feed.id)) {
+      return false
+    }
     const primaryUrl = this.normalizeSiteUrl(feed.url)
     const secondaryUrl = this.normalizeSiteUrl(feed.siteUrl)
-    const hasPlatformIdentity =
-      !!(extractXUsername(primaryUrl) || extractXUsername(secondaryUrl))
+    return !!(extractXUsername(primaryUrl) || extractXUsername(secondaryUrl))
       || !!(extractInstagramUsername(primaryUrl) || extractInstagramUsername(secondaryUrl))
       || !!(this.extractYouTubeIdentity(primaryUrl) || this.extractYouTubeIdentity(secondaryUrl))
       || !!(this.extractBilibiliUid(primaryUrl) || this.extractBilibiliUid(secondaryUrl))
-
-    if (!hasPlatformIdentity) {
-      return false
-    }
-
-    if (!imageUrl) {
-      return true
-    }
-
-    return imageUrl.includes('favicon')
-      || imageUrl.includes('apple-touch-icon')
-      || imageUrl.includes('/logo')
-      || imageUrl.includes('unavatar.io/youtube/')
-      || imageUrl.includes('unavatar.io/bilibili/')
-      || imageUrl.includes('unavatar.io/instagram/')
-      || imageUrl.includes('unavatar.io/x/')
   }
 
   private async hydrateFeedAvatarsInBackground(): Promise<void> {
@@ -409,8 +395,10 @@ export struct SubscriptionsContent {
             changedCount += 1
           }
         } catch (_) {
-          continue
+          // ignore
         }
+        // 无论成功与否，本次会话内不再重复水合同一个订阅源
+        this.hydratedFeedIds.add(feed.id)
       }
     } finally {
       this.avatarHydrationRunning = false
@@ -501,7 +489,7 @@ export struct SubscriptionsContent {
       || trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]
       || trimmed.match(/\/youtube\/user\/(@?[^/?#]+)/i)?.[1]
       || trimmed.match(/\/@([^/?#]+)/i)?.[1]
-      || trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]
+      || trimmed.match(/youtube\.com\/(?:user|c)\/([^/?#]+)/i)?.[1]
 
     return identity ? decodeURIComponent(identity).trim().replace(/^@+/, '').toLowerCase() : ''
   }
@@ -542,7 +530,7 @@ export struct SubscriptionsContent {
   @Builder
   private FeedAvatar(feed: FeedCardModel | undefined) {
     AvatarTile({
-      imageUrl: feed?.imageUrl ?? '',
+      imageUrl: this.iconSource(feed),
       fallbackImageUrls: this.iconCandidates(feed),
       refreshToken: 0,
       fallbackLabel: feed ? feed.title : 'Livo',
@@ -862,6 +850,11 @@ export struct SubscriptionsContent {
     .backgroundColor(this.theme.background)
     .onAppear(() => {
       this.settleSubscriptionsRootVisible()
+      // 从详情页返回时，清除水合缓存并重新加载数据，以反映可能的头像更新
+      if (this.hasLoaded) {
+        this.hydratedFeedIds.clear()
+        void this.refreshFeeds()
+      }
     })
   }
 

@@ -81,7 +81,8 @@ function extractYouTubeIdentity(value: string): string {
     trimmed.match(/\/channel\/([^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/youtube\/user\/(@[^/?#]+)/i)?.[1]?.trim() ||
     trimmed.match(/\/@([^/?#]+)/i)?.[1]?.trim() ||
-    trimmed.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim() ||
+    // /user/ and /c/ only match when the host is clearly YouTube
+    trimmed.match(/youtube\.com\/(?:user|c)\/([^/?#]+)/i)?.[1]?.trim() ||
     ''
   )
 }

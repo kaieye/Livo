@@ -130,7 +130,6 @@ export struct FeedDetailView {
       const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(feed.url)
       const previewEntries = this.preferredPreviewEntries(entries, cachedPayload?.entries ?? [])
       const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
-      this.targetImageUrl = payloadImageUrl
       this.applyPreviewPayload({
         etag: feed.etag || '',
         lastModified: feed.lastModified || '',
@@ -174,7 +173,7 @@ export struct FeedDetailView {
           const payloadTitle = displayFeed.title || cachedPayload?.feedTitle || ''
           const payloadDescription = displayFeed.description || cachedPayload?.description || ''
           const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
-          this.targetImageUrl = payloadImageUrl
+          // targetImageUrl 保持 displayFeed.imageUrl（经过平台处理），与列表页 iconSource 保持一致
           // For the shared view, we'll construct a pseudo-payload
           this.applyPreviewPayload({
             etag: feed.etag || '',
@@ -291,7 +290,8 @@ export struct FeedDetailView {
           // 在订阅详情页刷新时优先展示本地最新拉取结果，仅在本地为空时回退缓存预览。
           const previewEntries = entries.length > 0 ? entries : (cachedPayload?.entries ?? [])
           const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
-          this.targetImageUrl = payloadImageUrl
+          // targetImageUrl 保持 displayFeed.imageUrl，与列表页 iconSource 保持一致
+          this.targetImageUrl = displayFeed.imageUrl
           this.applyPreviewPayload({
             etag: refreshedFeed.etag || '',
             lastModified: refreshedFeed.lastModified || '',
@@ -722,8 +722,9 @@ export struct FeedDetailView {
       candidates.push(trimmed)
     }
 
-    pushCandidate(this.previewPayload?.imageUrl || '')
+    // targetImageUrl 经过 resolveSocialFeedDisplayImageUrl 处理，与列表页 iconSource 逻辑一致，优先使用
     pushCandidate(this.targetImageUrl)
+    pushCandidate(this.previewPayload?.imageUrl || '')
 
     const instagramUsername = extractInstagramUsername(this.previewPayload?.resolvedFeedUrl || '')
       || extractInstagramUsername(this.existingFeed?.url || '')
