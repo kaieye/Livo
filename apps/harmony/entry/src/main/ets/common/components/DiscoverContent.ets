@@ -354,7 +354,7 @@ export struct DiscoverContent {
         label: 'AI',
         accent: '#6C63FF',
         sourceKey: 'ai',
-        icon: $r('app.media.ri_ai'),
+        icon: $r('app.media.HugeiconsAiCloud01'),
       },
       {
         id: 'ins-2',
@@ -1489,7 +1489,7 @@ export struct DiscoverContent {
   private CategoryBrowserSection() {
     if (this.discoverCategoryCards().length > 0) {
       Column({ space: 12 }) {
-        this.SectionHeader('分类精选')
+        this.SectionHeader('分类精选', '', false, $r('app.media.MingcuteClassify2Line'))
 
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
           ForEach(this.discoverCategoryCards(), (card: DiscoverCategoryCard) => {

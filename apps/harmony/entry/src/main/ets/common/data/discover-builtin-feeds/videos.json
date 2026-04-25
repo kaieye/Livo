@@ -190,6 +190,27 @@
       "language": "Chinese",
       "descriptionZh": "分享编程技术、开发工具与 AI 应用实践的 Bilibili 频道",
       "descriptionEn": "Bilibili channel sharing programming, dev tools and AI practice"
+    },
+    {
+      "title": "Bilibili 全站排行榜",
+      "url": "rsshub://bilibili/ranking/0/3/1",
+      "language": "Chinese",
+      "descriptionZh": "Bilibili 全站热门视频排行榜",
+      "descriptionEn": "Bilibili site-wide hot video ranking"
+    },
+    {
+      "title": "豆瓣电影 - 正在热映",
+      "url": "rsshub://douban/movie/playing",
+      "language": "Chinese",
+      "descriptionZh": "豆瓣电影院线正在热映",
+      "descriptionEn": "Douban movies currently playing in theaters"
+    },
+    {
+      "title": "豆瓣电影 - 即将上映",
+      "url": "rsshub://douban/movie/later",
+      "language": "Chinese",
+      "descriptionZh": "豆瓣电影即将上映",
+      "descriptionEn": "Douban movies coming soon to theaters"
     }
   ]
 }

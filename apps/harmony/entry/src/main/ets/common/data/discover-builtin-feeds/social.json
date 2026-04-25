@@ -414,6 +414,69 @@
       "language": "English",
       "descriptionZh": "Balaji Srinivasan 的 X 动态，科技与加密货币思想领袖",
       "descriptionEn": "Balaji Srinivasan's X updates on tech and crypto"
+    },
+    {
+      "title": "微博热搜",
+      "url": "rsshub://weibo/search/hot",
+      "language": "Chinese",
+      "descriptionZh": "微博实时热搜榜",
+      "descriptionEn": "Weibo real-time hot search list"
+    },
+    {
+      "title": "知乎热榜",
+      "url": "rsshub://zhihu/hot",
+      "language": "Chinese",
+      "descriptionZh": "知乎全站热门话题",
+      "descriptionEn": "Zhihu site-wide hot topics"
+    },
+    {
+      "title": "抖音热搜",
+      "url": "rsshub://douyin/hot",
+      "language": "Chinese",
+      "descriptionZh": "抖音实时热搜榜",
+      "descriptionEn": "Douyin real-time hot search list"
+    },
+    {
+      "title": "GitHub Trending 每日",
+      "url": "rsshub://github/trending/daily",
+      "language": "English",
+      "descriptionZh": "GitHub 每日热门项目",
+      "descriptionEn": "GitHub daily trending repositories"
+    },
+    {
+      "title": "GitHub Trending 每周",
+      "url": "rsshub://github/trending/weekly",
+      "language": "English",
+      "descriptionZh": "GitHub 每周热门项目",
+      "descriptionEn": "GitHub weekly trending repositories"
+    },
+    {
+      "title": "掘金全站热榜",
+      "url": "rsshub://juejin/trending/all/weekly",
+      "language": "Chinese",
+      "descriptionZh": "掘金本周全站热门文章",
+      "descriptionEn": "Juejin weekly site-wide trending articles"
+    },
+    {
+      "title": "掘金前端热榜",
+      "url": "rsshub://juejin/trending/frontend/weekly",
+      "language": "Chinese",
+      "descriptionZh": "掘金本周前端热门文章",
+      "descriptionEn": "Juejin weekly frontend trending articles"
+    },
+    {
+      "title": "掘金后端热榜",
+      "url": "rsshub://juejin/trending/backend/weekly",
+      "language": "Chinese",
+      "descriptionZh": "掘金本周后端热门文章",
+      "descriptionEn": "Juejin weekly backend trending articles"
+    },
+    {
+      "title": "CSDN 博客热榜",
+      "url": "rsshub://csdn/blog",
+      "language": "Chinese",
+      "descriptionZh": "CSDN 热门博客文章",
+      "descriptionEn": "CSDN hot blog articles"
     }
   ]
 }

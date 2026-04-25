@@ -106,6 +106,41 @@
       "language": "English",
       "descriptionZh": "Django 联合创始人，深度分析 LLM 与开发工具的技术博客",
       "descriptionEn": "Django co-creator's blog with deep dives into LLMs and developer tools"
+    },
+    {
+      "title": "Sam Altman",
+      "url": "https://blog.samaltman.com/posts.atom",
+      "language": "English",
+      "descriptionZh": "OpenAI CEO Sam Altman 的博客，分享 AI 与创业思考",
+      "descriptionEn": "OpenAI CEO Sam Altman's blog on AI and entrepreneurship"
+    },
+    {
+      "title": "专题报告 - AI量化知识库",
+      "url": "rsshub://bigquant/collections",
+      "language": "Chinese",
+      "descriptionZh": "BigQuant AI 量化投资平台专题报告，聚焦量化策略",
+      "descriptionEn": "BigQuant AI quantitative investment platform topic reports"
+    },
+    {
+      "title": "AIGC Weekly",
+      "url": "https://quaily.com/op7418/feed/atom",
+      "language": "Chinese",
+      "descriptionZh": "AIGC Weekly，追踪生成式 AI 最新工具与动态",
+      "descriptionEn": "AIGC Weekly tracking the latest generative AI tools and news"
+    },
+    {
+      "title": "量子位",
+      "url": "https://www.qbitai.com/feed",
+      "language": "Chinese",
+      "descriptionZh": "量子位，追踪人工智能新趋势，报道科技行业新突破",
+      "descriptionEn": "QbitAI tracking AI trends and reporting tech breakthroughs"
+    },
+    {
+      "title": "arXiv 计算机视觉",
+      "url": "https://rss.arxiv.org/rss/cs.CV",
+      "language": "English",
+      "descriptionZh": "arXiv 计算机视觉方向最新论文预印本",
+      "descriptionEn": "Latest computer vision preprint papers from arXiv cs.CV"
     }
   ]
 }

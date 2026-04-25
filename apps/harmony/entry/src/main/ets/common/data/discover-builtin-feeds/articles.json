@@ -164,13 +164,6 @@
       "descriptionEn": "Bloomberg news in Chinese translation"
     },
     {
-      "title": "Sam Altman",
-      "url": "https://blog.samaltman.com/posts.atom",
-      "language": "English",
-      "descriptionZh": "OpenAI CEO Sam Altman 的博客，分享 AI 与创业思考",
-      "descriptionEn": "OpenAI CEO Sam Altman's blog on AI and entrepreneurship"
-    },
-    {
       "title": "少数派",
       "url": "rsshub://sspai/index",
       "language": "Chinese",
@@ -414,20 +407,6 @@
       "language": "Chinese",
       "descriptionZh": "让小产品的独立变现更简单，技术变现与可持续盈利",
       "descriptionEn": "Making indie product monetization simpler and sustainable"
-    },
-    {
-      "title": "专题报告 - AI量化知识库",
-      "url": "rsshub://bigquant/collections",
-      "language": "Chinese",
-      "descriptionZh": "BigQuant AI 量化投资平台专题报告，聚焦量化策略",
-      "descriptionEn": "BigQuant AI quantitative investment platform topic reports"
-    },
-    {
-      "title": "AIGC Weekly",
-      "url": "https://quaily.com/op7418/feed/atom",
-      "language": "Chinese",
-      "descriptionZh": "AIGC Weekly，追踪生成式 AI 最新工具与动态",
-      "descriptionEn": "AIGC Weekly tracking the latest generative AI tools and news"
     },
     {
       "title": "槿呈Goidea",
@@ -1816,13 +1795,6 @@
       "descriptionEn": "Landiannews delivering content you're interested in"
     },
     {
-      "title": "量子位",
-      "url": "https://www.qbitai.com/feed",
-      "language": "Chinese",
-      "descriptionZh": "量子位，追踪人工智能新趋势，报道科技行业新突破",
-      "descriptionEn": "QbitAI tracking AI trends and reporting tech breakthroughs"
-    },
-    {
       "title": "Tony Bai",
       "url": "https://tonybai.com/feed/",
       "language": "Chinese",
@@ -1842,6 +1814,461 @@
       "language": "Chinese",
       "descriptionZh": "纽约时报中文网，全球重要新闻的中文报道",
       "descriptionEn": "New York Times Chinese edition with global news coverage"
+    },
+    {
+      "title": "Hacker News 首页",
+      "url": "https://hnrss.org/frontpage",
+      "language": "English",
+      "descriptionZh": "Hacker News 首页热门内容",
+      "descriptionEn": "Hacker News frontpage hot content"
+    },
+    {
+      "title": "Hacker News 最新",
+      "url": "https://hnrss.org/newest",
+      "language": "English",
+      "descriptionZh": "Hacker News 最新提交内容",
+      "descriptionEn": "Hacker News newest submissions"
+    },
+    {
+      "title": "Hacker News 最佳",
+      "url": "https://hnrss.org/best",
+      "language": "English",
+      "descriptionZh": "Hacker News 最佳文章精选",
+      "descriptionEn": "Hacker News best articles"
+    },
+    {
+      "title": "Hacker News Ask HN",
+      "url": "https://hnrss.org/ask",
+      "language": "English",
+      "descriptionZh": "Hacker News Ask HN 问答帖",
+      "descriptionEn": "Hacker News Ask HN Q&A posts"
+    },
+    {
+      "title": "Hacker News Show HN",
+      "url": "https://hnrss.org/show",
+      "language": "English",
+      "descriptionZh": "Hacker News Show HN 项目展示",
+      "descriptionEn": "Hacker News Show HN project showcases"
+    },
+    {
+      "title": "V2EX 最热主题",
+      "url": "https://www.v2ex.com/feed/tab/hot.xml",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 今日热门主题",
+      "descriptionEn": "V2EX today hot topics"
+    },
+    {
+      "title": "V2EX 最新主题",
+      "url": "https://www.v2ex.com/feed/tab/all.xml",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 全站最新主题",
+      "descriptionEn": "V2EX all latest topics"
+    },
+    {
+      "title": "V2EX 好玩节点",
+      "url": "https://www.v2ex.com/feed/tab/play.xml",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 好玩内容节点",
+      "descriptionEn": "V2EX play tab content"
+    },
+    {
+      "title": "LinuxDo 热门话题",
+      "url": "https://linux.do/top.rss",
+      "language": "Chinese",
+      "descriptionZh": "LINUX DO 社区热门讨论",
+      "descriptionEn": "LINUX DO community hot discussions"
+    },
+    {
+      "title": "LinuxDo 最新帖子",
+      "url": "https://linux.do/posts.rss",
+      "language": "Chinese",
+      "descriptionZh": "LINUX DO 社区所有新帖",
+      "descriptionEn": "LINUX DO community all new posts"
+    },
+    {
+      "title": "Ars Technica",
+      "url": "https://feeds.arstechnica.com/arstechnica/index",
+      "language": "English",
+      "descriptionZh": "Ars Technica 深度技术分析与科技新闻",
+      "descriptionEn": "Ars Technica in-depth technology analysis and news"
+    },
+    {
+      "title": "The Hacker News",
+      "url": "https://feeds.feedburner.com/TheHackersNews",
+      "language": "English",
+      "descriptionZh": "The Hacker News 网络安全资讯",
+      "descriptionEn": "The Hacker News cybersecurity news"
+    },
+    {
+      "title": "Schneier on Security",
+      "url": "https://www.schneier.com/feed/",
+      "language": "English",
+      "descriptionZh": "安全专家 Bruce Schneier 的博客",
+      "descriptionEn": "Security expert Bruce Schneier blog"
+    },
+    {
+      "title": "CISA News",
+      "url": "https://www.cisa.gov/news.xml",
+      "language": "English",
+      "descriptionZh": "美国网络安全和基础设施安全局预警",
+      "descriptionEn": "US Cybersecurity and Infrastructure Security Agency news"
+    },
+    {
+      "title": "Google Security Blog",
+      "url": "https://security.googleblog.com/atom.xml",
+      "language": "English",
+      "descriptionZh": "Google 安全团队官方博客",
+      "descriptionEn": "Google Security team official blog"
+    },
+    {
+      "title": "FreeBuf",
+      "url": "https://www.freebuf.com/feed",
+      "language": "Chinese",
+      "descriptionZh": "FreeBuf 国内安全资讯与技术分享",
+      "descriptionEn": "FreeBuf Chinese security news and tech sharing"
+    },
+    {
+      "title": "安全客",
+      "url": "https://api.anquanke.com/data/v1/rss",
+      "language": "Chinese",
+      "descriptionZh": "安全客安全技术资讯",
+      "descriptionEn": "Anquanke security technology news"
+    },
+    {
+      "title": "Smashing Magazine",
+      "url": "https://www.smashingmagazine.com/feed/",
+      "language": "English",
+      "descriptionZh": "Smashing Magazine 前端设计杂志",
+      "descriptionEn": "Smashing Magazine frontend design magazine"
+    },
+    {
+      "title": "A List Apart",
+      "url": "https://alistapart.com/main/feed/",
+      "language": "English",
+      "descriptionZh": "A List Apart Web 标准与设计",
+      "descriptionEn": "A List Apart on web standards and design"
+    },
+    {
+      "title": "Codrops",
+      "url": "https://tympanus.net/codrops/feed/",
+      "language": "English",
+      "descriptionZh": "Codrops 创意前端效果与教程",
+      "descriptionEn": "Codrops creative frontend effects and tutorials"
+    },
+    {
+      "title": "CSS-Tricks",
+      "url": "https://css-tricks.com/feed/",
+      "language": "English",
+      "descriptionZh": "CSS-Tricks CSS 技巧与教程",
+      "descriptionEn": "CSS-Tricks CSS tips and tutorials"
+    },
+    {
+      "title": "Astro Blog",
+      "url": "https://astro.build/rss.xml",
+      "language": "English",
+      "descriptionZh": "Astro 框架官方博客与动态",
+      "descriptionEn": "Astro framework official blog and updates"
+    },
+    {
+      "title": "Svelte Blog",
+      "url": "https://svelte.dev/blog/rss.xml",
+      "language": "English",
+      "descriptionZh": "Svelte / SvelteKit 官方更新",
+      "descriptionEn": "Svelte / SvelteKit official updates"
+    },
+    {
+      "title": "Next.js Blog",
+      "url": "https://nextjs.org/feed.xml",
+      "language": "English",
+      "descriptionZh": "Next.js 官方博客动态",
+      "descriptionEn": "Next.js official blog updates"
+    },
+    {
+      "title": "Nuxt Blog",
+      "url": "https://nuxt.com/blog/rss.xml",
+      "language": "English",
+      "descriptionZh": "Nuxt 框架官方更新",
+      "descriptionEn": "Nuxt framework official updates"
+    },
+    {
+      "title": "Tailwind CSS Blog",
+      "url": "https://tailwindcss.com/feeds/feed.xml",
+      "language": "English",
+      "descriptionZh": "Tailwind CSS 官方博客更新",
+      "descriptionEn": "Tailwind CSS official blog updates"
+    },
+    {
+      "title": "Dev.to",
+      "url": "https://dev.to/feed",
+      "language": "English",
+      "descriptionZh": "Dev.to 开发者社区文章",
+      "descriptionEn": "Dev.to developer community articles"
+    },
+    {
+      "title": "Chrome Developer Blog",
+      "url": "https://developer.chrome.com/blog/feed.xml",
+      "language": "English",
+      "descriptionZh": "Chrome 开发者博客，Web 平台新特性",
+      "descriptionEn": "Chrome developer blog on web platform features"
+    },
+    {
+      "title": "Dribbble Popular",
+      "url": "https://dribbble.com/shots/popular.rss",
+      "language": "English",
+      "descriptionZh": "Dribbble 热门设计作品精选",
+      "descriptionEn": "Dribbble popular design shots"
+    },
+    {
+      "title": "React Blog",
+      "url": "https://react.dev/rss.xml",
+      "language": "English",
+      "descriptionZh": "React 官方博客",
+      "descriptionEn": "React official blog"
+    },
+    {
+      "title": "Vue Blog",
+      "url": "https://blog.vuejs.org/feed.rss",
+      "language": "English",
+      "descriptionZh": "Vue.js 官方博客",
+      "descriptionEn": "Vue.js official blog"
+    },
+    {
+      "title": "Rust Blog",
+      "url": "https://blog.rust-lang.org/feed.xml",
+      "language": "English",
+      "descriptionZh": "Rust 官方博客",
+      "descriptionEn": "Rust official blog"
+    },
+    {
+      "title": "Go Blog",
+      "url": "https://go.dev/blog/feed.atom",
+      "language": "English",
+      "descriptionZh": "Go 官方博客",
+      "descriptionEn": "Go official blog"
+    },
+    {
+      "title": "Python Blog",
+      "url": "https://blog.python.org/feeds/posts/default",
+      "language": "English",
+      "descriptionZh": "Python 官方博客",
+      "descriptionEn": "Python official blog"
+    },
+    {
+      "title": "Node.js Blog",
+      "url": "https://nodejs.org/en/feed/blog.xml",
+      "language": "English",
+      "descriptionZh": "Node.js 官方博客",
+      "descriptionEn": "Node.js official blog"
+    },
+    {
+      "title": "Deno Blog",
+      "url": "https://deno.com/blog/feed.xml",
+      "language": "English",
+      "descriptionZh": "Deno 官方博客",
+      "descriptionEn": "Deno official blog"
+    },
+    {
+      "title": "TypeScript Blog",
+      "url": "https://devblogs.microsoft.com/typescript/feed/",
+      "language": "English",
+      "descriptionZh": "TypeScript 官方博客",
+      "descriptionEn": "TypeScript official blog"
+    },
+    {
+      "title": "Swift Blog",
+      "url": "https://www.swift.org/atom.xml",
+      "language": "English",
+      "descriptionZh": "Swift 官方博客",
+      "descriptionEn": "Swift official blog"
+    },
+    {
+      "title": "Kotlin Blog",
+      "url": "https://blog.jetbrains.com/kotlin/feed/",
+      "language": "English",
+      "descriptionZh": "Kotlin 官方博客",
+      "descriptionEn": "Kotlin official blog"
+    },
+    {
+      "title": "GitHub Blog",
+      "url": "https://github.blog/feed/",
+      "language": "English",
+      "descriptionZh": "GitHub 官方博客",
+      "descriptionEn": "GitHub official blog"
+    },
+    {
+      "title": "Netflix Tech Blog",
+      "url": "https://netflixtechblog.com/feed",
+      "language": "English",
+      "descriptionZh": "Netflix 技术博客，工程实践与架构分享",
+      "descriptionEn": "Netflix tech blog on engineering practices and architecture"
+    },
+    {
+      "title": "AWS Blog",
+      "url": "https://aws.amazon.com/blogs/aws/feed/",
+      "language": "English",
+      "descriptionZh": "AWS 官方博客，云服务新功能与最佳实践",
+      "descriptionEn": "AWS official blog on cloud services and best practices"
+    },
+    {
+      "title": "Cloudflare Blog",
+      "url": "https://blog.cloudflare.com/rss/",
+      "language": "English",
+      "descriptionZh": "Cloudflare 技术博客，网络与安全前沿",
+      "descriptionEn": "Cloudflare tech blog on networking and security"
+    },
+    {
+      "title": "Google Developers Blog",
+      "url": "https://developers.googleblog.com/feeds/posts/default/",
+      "language": "English",
+      "descriptionZh": "Google 开发者博客",
+      "descriptionEn": "Google developers blog"
+    },
+    {
+      "title": "Mozilla Hacks",
+      "url": "https://hacks.mozilla.org/feed/",
+      "language": "English",
+      "descriptionZh": "Mozilla 开发者博客，Web 技术前沿",
+      "descriptionEn": "Mozilla developer blog on web technology"
+    },
+    {
+      "title": "Vercel Blog",
+      "url": "https://vercel.com/atom",
+      "language": "English",
+      "descriptionZh": "Vercel 官方博客",
+      "descriptionEn": "Vercel official blog"
+    },
+    {
+      "title": "Supabase Blog",
+      "url": "https://supabase.com/blog/rss.xml",
+      "language": "English",
+      "descriptionZh": "Supabase 官方博客",
+      "descriptionEn": "Supabase official blog"
+    },
+    {
+      "title": "Stripe Blog",
+      "url": "https://stripe.com/blog/feed.rss",
+      "language": "English",
+      "descriptionZh": "Stripe 技术博客",
+      "descriptionEn": "Stripe tech blog"
+    },
+    {
+      "title": "Spotify Engineering",
+      "url": "https://engineering.atspotify.com/feed/",
+      "language": "English",
+      "descriptionZh": "Spotify 工程团队技术博客",
+      "descriptionEn": "Spotify engineering team tech blog"
+    },
+    {
+      "title": "Meta Engineering",
+      "url": "https://engineering.fb.com/feed/",
+      "language": "English",
+      "descriptionZh": "Meta/Facebook 工程团队技术博客",
+      "descriptionEn": "Meta/Facebook engineering team tech blog"
+    },
+    {
+      "title": "JavaScript Weekly",
+      "url": "https://javascriptweekly.com/rss/",
+      "language": "English",
+      "descriptionZh": "JavaScript Weekly JS 生态精选周刊",
+      "descriptionEn": "JavaScript Weekly curated JS ecosystem newsletter"
+    },
+    {
+      "title": "This Week in Rust",
+      "url": "https://this-week-in-rust.org/atom.xml",
+      "language": "English",
+      "descriptionZh": "This Week in Rust Rust 社区周报",
+      "descriptionEn": "This Week in Rust community weekly report"
+    },
+    {
+      "title": "Golang Weekly",
+      "url": "https://golangweekly.com/rss/",
+      "language": "English",
+      "descriptionZh": "Golang Weekly Go 生态精选周刊",
+      "descriptionEn": "Golang Weekly curated Go ecosystem newsletter"
+    },
+    {
+      "title": "ByteByteGo Newsletter",
+      "url": "https://blog.bytebytego.com/feed",
+      "language": "English",
+      "descriptionZh": "ByteByteGo 系统设计 Newsletter",
+      "descriptionEn": "ByteByteGo system design newsletter"
+    },
+    {
+      "title": "Nature",
+      "url": "https://www.nature.com/nature.rss",
+      "language": "English",
+      "descriptionZh": "Nature 期刊最新论文",
+      "descriptionEn": "Nature journal latest papers"
+    },
+    {
+      "title": "今日头条热榜",
+      "url": "rsshub://toutiao/hot",
+      "language": "Chinese",
+      "descriptionZh": "今日头条实时热榜",
+      "descriptionEn": "Toutiao real-time hot list"
+    },
+    {
+      "title": "百度热搜",
+      "url": "rsshub://baidu/hot",
+      "language": "Chinese",
+      "descriptionZh": "百度实时热点搜索",
+      "descriptionEn": "Baidu real-time hot search"
+    },
+    {
+      "title": "36氪快讯",
+      "url": "rsshub://36kr/newsflash",
+      "language": "Chinese",
+      "descriptionZh": "36氪科技快讯",
+      "descriptionEn": "36Kr tech newsflash"
+    },
+    {
+      "title": "什么值得买 - 数码好价",
+      "url": "rsshub://smzdm/ranking/pinlei/11",
+      "language": "Chinese",
+      "descriptionZh": "什么值得买数码产品好价榜",
+      "descriptionEn": "Smzdm digital products best deals"
+    },
+    {
+      "title": "什么值得买 - 电脑配件",
+      "url": "rsshub://smzdm/ranking/pinlei/12",
+      "language": "Chinese",
+      "descriptionZh": "什么值得买电脑外设好价榜",
+      "descriptionEn": "Smzdm computer peripherals best deals"
+    },
+    {
+      "title": "Sam Altman",
+      "url": "https://blog.samaltman.com/posts.atom",
+      "language": "English",
+      "descriptionZh": "OpenAI CEO Sam Altman 的博客，分享 AI 与创业思考",
+      "descriptionEn": "OpenAI CEO Sam Altman's blog on AI and entrepreneurship"
+    },
+    {
+      "title": "专题报告 - AI量化知识库",
+      "url": "rsshub://bigquant/collections",
+      "language": "Chinese",
+      "descriptionZh": "BigQuant AI 量化投资平台专题报告，聚焦量化策略",
+      "descriptionEn": "BigQuant AI quantitative investment platform topic reports"
+    },
+    {
+      "title": "AIGC Weekly",
+      "url": "https://quaily.com/op7418/feed/atom",
+      "language": "Chinese",
+      "descriptionZh": "AIGC Weekly，追踪生成式 AI 最新工具与动态",
+      "descriptionEn": "AIGC Weekly tracking the latest generative AI tools and news"
+    },
+    {
+      "title": "量子位",
+      "url": "https://www.qbitai.com/feed",
+      "language": "Chinese",
+      "descriptionZh": "量子位，追踪人工智能新趋势，报道科技行业新突破",
+      "descriptionEn": "QbitAI tracking AI trends and reporting tech breakthroughs"
+    },
+    {
+      "title": "arXiv 计算机视觉",
+      "url": "https://rss.arxiv.org/rss/cs.CV",
+      "language": "English",
+      "descriptionZh": "arXiv 计算机视觉方向最新论文预印本",
+      "descriptionEn": "Latest computer vision preprint papers from arXiv cs.CV"
     }
   ]
 }
