@@ -681,9 +681,17 @@ export class AppRepository {
       '',
       feed.imageUrl || '',
     )
-    // 直接使用解析结果，不走评分比较——此函数的目的是强制更新到最新平台头像
-    const nextImageUrl = (resolvedImageUrl || '').trim()
+    // 使用评分比较，避免用低质量的 unavatar.io 代理 URL 覆盖已存储的真实头像 URL
+    const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', (resolvedImageUrl || '').trim())
     if (!nextImageUrl || nextImageUrl === (feed.imageUrl || '').trim()) {
+      return false
+    }
+
+    // 如果新 URL 与当前展示效果等价（iconSource 会推断出相同结果），则无需写库，避免触发不必要的刷新
+    const feedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+    const currentDisplayUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', feedTitle)
+    const nextDisplayUrl = resolveSocialFeedDisplayImageUrl(nextImageUrl, feed.url, feed.siteUrl || '', feedTitle)
+    if (currentDisplayUrl === nextDisplayUrl) {
       return false
     }
 
