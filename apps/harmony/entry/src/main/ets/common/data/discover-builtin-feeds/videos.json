@@ -5,137 +5,191 @@
     {
       "title": "Andrew Huberman - YouTube",
       "url": "rsshub://youtube/user/@hubermanlab",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "斯坦福神经科学教授，专注睡眠、压力与健康科学的播客频道",
+      "descriptionEn": "Stanford neuroscientist covering sleep, stress and health science"
     },
     {
       "title": "Lex Fridman - YouTube",
       "url": "rsshub://youtube/user/%40lexfridman",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "MIT 研究员，深度访谈 AI、科学与人类未来的长篇播客",
+      "descriptionEn": "MIT researcher hosting long-form interviews on AI, science and humanity"
     },
     {
       "title": "Marques Brownlee - YouTube",
       "url": "rsshub://youtube/user/@mkbhd",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "MKBHD，全球顶级科技数码评测 YouTuber",
+      "descriptionEn": "MKBHD, one of the world's top tech reviewers on YouTube"
     },
     {
       "title": "Sabine Hossenfelder - YouTube",
       "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC1yNl2E66ZzKApQdRuTQ4tw",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "理论物理学家，用通俗语言解读前沿物理与科学争议",
+      "descriptionEn": "Theoretical physicist explaining frontier physics and scientific controversies"
     },
     {
       "title": "TED Talks Daily",
       "url": "https://feeds.acast.com/public/shows/67587e77c705e441797aff96",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "TED 每日精选演讲，涵盖科技、设计、人文等领域",
+      "descriptionEn": "Daily TED talks covering technology, design, and humanities"
     },
     {
       "title": "小Lin说 - YouTube",
       "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCilwQlk62k1z7aUEZPOB6yw",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "用生动故事讲解商业与财经知识的中文 YouTube 频道",
+      "descriptionEn": "Chinese YouTube channel explaining business and finance through storytelling"
     },
     {
       "title": "胡子观币 - YouTube",
       "url": "rsshub://youtube/user/%40huziguanbi",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "专注加密货币与区块链行情分析的中文频道",
+      "descriptionEn": "Chinese channel focused on crypto and blockchain market analysis"
     },
     {
       "title": "影视飓风 - Bilibili",
       "url": "rsshub://bilibili/user/video/946974",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "专业影视制作团队，分享摄影、剪辑与创作幕后",
+      "descriptionEn": "Professional filmmaking team sharing cinematography and editing insights"
     },
     {
       "title": "小Lin说 - YouTube",
       "url": "rsshub://youtube/user/%40xiao_lin_shuo",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "用生动故事讲解商业与财经知识的中文 YouTube 频道",
+      "descriptionEn": "Chinese YouTube channel explaining business and finance through storytelling"
     },
     {
       "title": "王志安 - YouTube",
       "url": "rsshub://youtube/user/%40wangzhian",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "资深媒体人王志安，深度评论时事与社会议题",
+      "descriptionEn": "Senior journalist Wang Zhian with in-depth commentary on current affairs"
     },
     {
       "title": "Mediastorm影视飓风 - YouTube",
       "url": "rsshub://youtube/user/%40mediastorm6801",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "影视飓风 YouTube 频道，专业影视制作与创作分享",
+      "descriptionEn": "Mediastorm's YouTube channel for professional filmmaking content"
     },
     {
       "title": "极客湾Geekerwan - Bilibili",
       "url": "rsshub://bilibili/user/video/25876945",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "专注芯片与硬件性能深度测评的科技频道",
+      "descriptionEn": "Tech channel focused on in-depth chip and hardware performance reviews"
     },
     {
       "title": "不良林 - YouTube",
       "url": "rsshub://youtube/user/%40bulianglin",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "分享网络工具、翻墙技术与科技资讯的中文频道",
+      "descriptionEn": "Chinese channel sharing network tools, VPN tech and tech news"
     },
     {
       "title": "老高與小茉 Mr & Mrs Gao - YouTube",
       "url": "rsshub://youtube/user/%40laogao",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "探索未解之谜、历史与宇宙奥秘的中文科普频道",
+      "descriptionEn": "Chinese science channel exploring mysteries, history and the cosmos"
     },
     {
       "title": "TED Talks Daily",
       "url": "https://feeds.feedburner.com/TEDTalks_audio",
-      "language": ""
+      "language": "",
+      "descriptionZh": "TED 每日精选演讲，涵盖科技、设计、人文等领域",
+      "descriptionEn": "Daily TED talks covering technology, design, and humanities"
     },
     {
       "title": "NPR Video",
       "url": "https://feeds.npr.org/1004/rss.xml",
-      "language": ""
+      "language": "",
+      "descriptionZh": "美国国家公共广播电台视频内容精选",
+      "descriptionEn": "Video content from National Public Radio"
     },
     {
       "title": "OpenAI - YouTube",
       "url": "https://rsshub.pseudoyu.com/youtube/channel/UCXZCJLdBC09xxGZ6gcdrc6A",
-      "language": ""
+      "language": "",
+      "descriptionZh": "OpenAI 官方 YouTube 频道，发布产品演示与研究成果",
+      "descriptionEn": "OpenAI's official YouTube channel with product demos and research"
     },
     {
       "title": "Google Developers - YouTube",
       "url": "https://rsshub.pseudoyu.com/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
-      "language": ""
+      "language": "",
+      "descriptionZh": "Google 开发者官方频道，分享技术教程与 Google I/O 内容",
+      "descriptionEn": "Google Developers channel with tutorials and Google I/O content"
     },
     {
       "title": "Fireship - YouTube",
       "url": "https://rsshub.pseudoyu.com/youtube/channel/UC2Xd-TjJByJyK2w1zNwY0zQ",
-      "language": ""
+      "language": "",
+      "descriptionZh": "以极简风格快速讲解编程概念与最新技术趋势",
+      "descriptionEn": "Fast-paced coding tutorials and tech trend breakdowns"
     },
     {
       "title": "Veritasium - YouTube",
       "url": "https://rsshub.pseudoyu.com/youtube/channel/UCHnyfMqiRRG1u-2MsSQLbXA",
-      "language": ""
+      "language": "",
+      "descriptionZh": "用实验与故事探索科学、工程与数学的奥秘",
+      "descriptionEn": "Exploring science, engineering and math through experiments and stories"
     },
     {
       "title": "罗翔说刑法 - Bilibili",
       "url": "https://rsshub.pseudoyu.com/bilibili/user/video/517327498",
-      "language": ""
+      "language": "",
+      "descriptionZh": "中国政法大学教授罗翔，用案例生动讲解刑法知识",
+      "descriptionEn": "Law professor Luo Xiang explaining criminal law through vivid cases"
     },
     {
       "title": "影视飓风 - Bilibili",
       "url": "https://rsshub.pseudoyu.com/bilibili/user/video/946974",
-      "language": ""
+      "language": "",
+      "descriptionZh": "专业影视制作团队，分享摄影、剪辑与创作幕后",
+      "descriptionEn": "Professional filmmaking team sharing cinematography and editing insights"
     },
     {
       "title": "老师好我叫何同学 - Bilibili",
       "url": "https://rsshub.pseudoyu.com/bilibili/user/video/163637592",
-      "language": ""
+      "language": "",
+      "descriptionZh": "用创意视频探索科技与生活交叉点的 Bilibili 知名 UP 主",
+      "descriptionEn": "Popular Bilibili creator exploring the intersection of tech and daily life"
     },
     {
       "title": "Google for Developers - YouTube",
       "url": "https://rsshub.liumingye.cn/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
-      "language": ""
+      "language": "",
+      "descriptionZh": "Google 开发者官方频道，分享技术教程与 Google I/O 内容",
+      "descriptionEn": "Google Developers channel with tutorials and Google I/O content"
     },
     {
       "title": "Dan Koe - YouTube",
       "url": "https://rsshub.liumingye.cn/youtube/channel/UCWXYDYv5STLk-zoxMP2I1Lw",
-      "language": ""
+      "language": "",
+      "descriptionZh": "分享个人成长、创意写作与数字创业理念的内容创作者",
+      "descriptionEn": "Creator sharing personal growth, creative writing and digital entrepreneurship"
     },
     {
       "title": "Beyond Fireship - YouTube",
       "url": "https://rsshub.ktachibana.party/youtube/channel/UC2Xd-TjJByJyK2w1zNwY0zQ",
-      "language": ""
+      "language": "",
+      "descriptionZh": "以极简风格快速讲解编程概念与最新技术趋势",
+      "descriptionEn": "Fast-paced coding tutorials and tech trend breakdowns"
     },
     {
       "title": "技术爬爬虾 的 bilibili 空间",
       "url": "rsshub://bilibili/user/video/316183842",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "分享编程技术、开发工具与 AI 应用实践的 Bilibili 频道",
+      "descriptionEn": "Bilibili channel sharing programming, dev tools and AI practice"
     }
   ]
 }

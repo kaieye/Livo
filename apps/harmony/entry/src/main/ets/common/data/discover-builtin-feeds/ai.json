@@ -6,91 +6,106 @@
       "title": "OpenAI 博客",
       "url": "https://openai.com/news/rss.xml",
       "language": "English",
-      "description": "GPT 官方动态"
+      "descriptionZh": "OpenAI 官方博客，发布 GPT 系列最新研究与产品动态",
+      "descriptionEn": "OpenAI's official blog covering GPT research and product updates"
     },
     {
       "title": "Google DeepMind",
       "url": "https://deepmind.google/blog/rss.xml",
       "language": "English",
-      "description": "DeepMind 研究"
+      "descriptionZh": "DeepMind 前沿 AI 研究博客，涵盖 AlphaFold 等突破性成果",
+      "descriptionEn": "DeepMind's research blog covering breakthroughs like AlphaFold"
     },
     {
       "title": "Google AI Blog",
       "url": "https://blog.google/technology/ai/rss/",
       "language": "English",
-      "description": "Google AI 综合动态"
+      "descriptionZh": "Google AI 综合动态，涵盖研究、产品与技术进展",
+      "descriptionEn": "Google's AI blog covering research, products and technology"
     },
     {
       "title": "arXiv AI",
       "url": "https://rss.arxiv.org/rss/cs.AI",
       "language": "English",
-      "description": "AI 论文预印本"
+      "descriptionZh": "arXiv 人工智能方向最新论文预印本",
+      "descriptionEn": "Latest AI preprint papers from arXiv cs.AI"
     },
     {
       "title": "arXiv 机器学习",
       "url": "https://rss.arxiv.org/rss/cs.LG",
       "language": "English",
-      "description": "机器学习论文"
+      "descriptionZh": "arXiv 机器学习方向最新论文预印本",
+      "descriptionEn": "Latest machine learning preprint papers from arXiv cs.LG"
     },
     {
       "title": "arXiv NLP",
       "url": "https://rss.arxiv.org/rss/cs.CL",
       "language": "English",
-      "description": "自然语言处理"
+      "descriptionZh": "arXiv 自然语言处理方向最新论文预印本",
+      "descriptionEn": "Latest NLP preprint papers from arXiv cs.CL"
     },
     {
       "title": "Hacker News AI",
       "url": "https://hnrss.org/newest?q=AI",
       "language": "English",
-      "description": "HN AI 相关"
+      "descriptionZh": "Hacker News 上关于 AI 的最新讨论与链接",
+      "descriptionEn": "Latest AI discussions and links on Hacker News"
     },
     {
       "title": "Hacker News LLM",
       "url": "https://hnrss.org/newest?q=LLM",
       "language": "English",
-      "description": "HN 大模型相关"
+      "descriptionZh": "Hacker News 上关于大语言模型的最新讨论",
+      "descriptionEn": "Latest LLM discussions on Hacker News"
     },
     {
       "title": "Hacker News OpenClaw",
       "url": "https://hnrss.org/newest?q=OpenClaw",
       "language": "English",
-      "description": "HN 上的 OpenClaw 讨论"
+      "descriptionZh": "Hacker News 上的 OpenClaw 相关讨论",
+      "descriptionEn": "OpenClaw-related discussions on Hacker News"
     },
     {
       "title": "Hugging Face 博客",
       "url": "https://huggingface.co/blog/feed.xml",
       "language": "English",
-      "description": "开源 AI 社区"
+      "descriptionZh": "Hugging Face 开源 AI 社区博客，分享模型与工具进展",
+      "descriptionEn": "Hugging Face blog covering open-source AI models and tools"
     },
     {
       "title": "Stability AI",
       "url": "https://stability.ai/news?format=rss",
       "language": "English",
-      "description": "Stable Diffusion"
+      "descriptionZh": "Stability AI 官方动态，Stable Diffusion 背后的公司",
+      "descriptionEn": "Stability AI news, the company behind Stable Diffusion"
     },
     {
       "title": "OpenClaw Releases",
       "url": "https://github.com/openclaw/openclaw/releases.atom",
       "language": "English",
-      "description": "OpenClaw 版本发布"
+      "descriptionZh": "OpenClaw 版本发布通知",
+      "descriptionEn": "OpenClaw release notifications"
     },
     {
       "title": "OpenClaw Commits",
       "url": "https://github.com/openclaw/openclaw/commits/main.atom",
       "language": "English",
-      "description": "主分支开发动态"
+      "descriptionZh": "OpenClaw 主分支开发动态",
+      "descriptionEn": "OpenClaw main branch development activity"
     },
     {
       "title": "机器之心",
       "url": "https://www.jiqizhixin.com/rss",
       "language": "Chinese",
-      "description": "国内顶尖 AI 媒体"
+      "descriptionZh": "国内领先 AI 科技媒体，深度报道人工智能前沿研究与产业动态",
+      "descriptionEn": "Leading Chinese AI media covering frontier research and industry news"
     },
     {
       "title": "Simon Willison 博客",
       "url": "https://simonwillison.net/atom/everything/",
       "language": "English",
-      "description": "LLM 洞察，Django 联合创始人"
+      "descriptionZh": "Django 联合创始人，深度分析 LLM 与开发工具的技术博客",
+      "descriptionEn": "Django co-creator's blog with deep dives into LLMs and developer tools"
     }
   ]
 }

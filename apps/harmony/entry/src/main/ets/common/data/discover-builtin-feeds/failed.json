@@ -4,159 +4,197 @@
     {
       "title": "Nassim Taleb",
       "url": "https://nassimtaleb.org/feed/",
-      "language": "English"
+      "language": "English",
+      "description": "《黑天鹅》作者 Nassim Taleb，探讨不确定性与风险管理的思想博客"
     },
     {
       "title": "The world in brief | The Economist",
       "url": "rsshub://economist/espresso",
-      "language": "English"
+      "language": "English",
+      "description": "经济学人每日简报，用五分钟了解全球重要新闻"
     },
     {
       "title": "Followin",
       "url": "rsshub://followin/news",
-      "language": "English"
+      "language": "English",
+      "description": "Followin 加密货币资讯聚合，追踪 Web3 与区块链行业动态"
     },
     {
       "title": "AP Top News - AP News",
       "url": "rsshub://apnews/api/apf-topnews",
-      "language": "English"
+      "language": "English",
+      "description": "美联社头条新闻，全球权威新闻通讯社实时报道"
     },
     {
       "title": "Breaking News Headlines | Reuters",
       "url": "rsshub://reuters/breakingviews",
-      "language": "English"
+      "language": "English",
+      "description": "路透社突发新闻与深度评论，全球财经与时事报道"
     }
   ],
   "chinese_feeds": [
     {
       "title": "微博热搜榜",
       "url": "rsshub://weibo/search/hot",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "微博实时热搜榜单，掌握中文互联网最热话题"
     },
     {
       "title": "Joshua Meng - X",
       "url": "rsshub://twitter/user/JoshuaRSS3",
-      "language": "English"
+      "language": "English",
+      "description": "RSS3 联合创始人 Joshua Meng 的 X 动态与 Web3 见解"
     },
     {
       "title": "极客公园",
       "url": "https://www.geekpark.net/rss",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "极客公园科技媒体，聚焦创新创业与前沿科技报道"
     },
     {
       "title": "今日热门-什么值得买好文",
       "url": "rsshub://smzdm/haowen/1",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "什么值得买今日热门好文，精选消费与生活方式内容"
     },
     {
       "title": "信息差——独立开发者出海周刊",
       "url": "https://gapis.money/rss.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "独立开发者出海周刊，分享海外市场机会与产品变现经验"
     },
     {
       "title": "司机社综合周排行榜",
       "url": "rsshub://xsijishe/rank/weekly",
-      "language": "English"
+      "language": "English",
+      "description": "司机社每周综合排行榜，汇聚热门内容精选"
     },
     {
       "title": "pixiv 日排行",
       "url": "rsshub://pixiv/ranking/day",
-      "language": "Japanese"
+      "language": "Japanese",
+      "description": "Pixiv 每日插画排行榜，发现全球顶尖二次元画师作品"
     },
     {
       "title": "周热门-什么值得买好文",
       "url": "rsshub://smzdm/haowen/7",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "什么值得买本周热门好文，精选消费与生活方式内容"
     },
     {
       "title": "零度解说 - YouTube",
       "url": "rsshub://youtube/user/lingdujieshuo",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "零度解说 YouTube 频道，深度解析时事与社会热点"
     },
     {
       "title": "司机社综合月排行榜",
       "url": "rsshub://xsijishe/rank/monthly",
-      "language": "English"
+      "language": "English",
+      "description": "司机社每月综合排行榜，汇聚热门内容精选"
     },
     {
       "title": "虎嗅网",
       "url": "https://www.huxiu.com/rss/0.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "虎嗅网科技商业深度报道与分析"
     },
     {
       "title": "土木坛子",
       "url": "https://tumutanzi.com/feed",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "土木坛子个人博客，分享生活感悟与互联网观察"
     },
     {
       "title": "有用经验",
       "url": "https://yyjingyan.com/index.php/feed/",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "分享实用生活经验与技巧的内容平台"
     },
     {
       "title": "财新周刊 Caixin Weekly",
       "url": "https://the.bi/s/rawatssj2a2mog",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "财新传媒旗下深度财经新闻周刊"
     },
     {
       "title": "pixiv 周排行",
       "url": "rsshub://pixiv/ranking/week",
-      "language": "Yoruba"
+      "language": "Yoruba",
+      "description": "Pixiv 每周插画排行榜，发现全球顶尖二次元画师作品"
     },
     {
       "title": "pinlei榜-11-3小时",
       "url": "rsshub://smzdm/ranking/pinlei/11/3",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "什么值得买品类榜单，精选高性价比商品推荐"
     },
     {
       "title": "东西智库",
       "url": "rsshub://dx2025",
-      "language": "English"
+      "language": "English",
+      "description": "东西智库科技战略研究，聚焦中美科技竞争与产业分析"
     },
     {
       "title": "小Lin说 的 bilibili 空间",
       "url": "rsshub://bilibili/user/video/520819684",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "用生动故事讲解商业与财经知识的 Bilibili 频道"
     },
     {
       "title": "小米有品众筹",
       "url": "rsshub://xiaomiyoupin/crowdfunding",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "小米有品众筹项目更新，发现创意科技与生活好物"
     },
     {
       "title": "财联社快讯",
       "url": "https://feeds.crabpi.com/cls-telegraph",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "财联社实时财经快讯，覆盖 A 股与宏观经济动态"
     },
     {
       "title": "海德沙龙（HeadSalon）",
       "url": "https://headsalon.org/feed",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "海德沙龙思想博客，探讨历史、经济与自由主义议题"
     },
     {
       "title": "陈仓颉",
       "url": "https://imzm.im/feed/",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "独立开发者陈仓颉的博客，分享产品设计与技术思考"
     },
     {
       "title": "歸藏的AI工具箱",
       "url": "https://werss.bestblogs.dev/feeds/MP_WXS_3540975510.atom",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "归藏的 AI 工具箱，每日精选最新 AI 工具与应用资讯"
     },
     {
       "title": "技术爬爬虾 TechShrimp - YouTube",
       "url": "rsshub://youtube/user/tech-shrimp",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "分享编程技术、开发工具与 AI 应用实践的 YouTube 频道"
     },
     {
       "title": "阳志平的网志",
       "url": "https://www.yangzhiping.com/feed.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "认知科学研究者阳志平，分享心理学、认知与学习方法"
     },
     {
       "title": "机器之心",
       "url": "https://www.jiqizhixin.com/rss",
-      "language": "Chinese"
+      "language": "Chinese",
+      "description": "机器之心 AI 科技媒体，深度报道人工智能前沿研究与产业动态"
+    },
+    {
+      "title": "RSSHub has new routes",
+      "url": "rsshub://rsshub/routes",
+      "language": "English",
+      "descriptionZh": "RSSHub 新路由更新通知，第一时间获取新增订阅源支持",
+      "descriptionEn": "RSSHub new route notifications for newly supported feeds"
     }
   ]
 }

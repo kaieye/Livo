@@ -5,317 +5,415 @@
     {
       "title": "Hacker News",
       "url": "rsshub://hackernews",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "Hacker News 技术社区，汇聚程序员与创业者的讨论",
+      "descriptionEn": "Hacker News community for programmers and entrepreneurs"
     },
     {
       "title": "Product Hunt",
       "url": "https://www.producthunt.com/feed",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "Product Hunt 每日最新科技产品发现与评测",
+      "descriptionEn": "Daily discovery of new tech products on Product Hunt"
     },
     {
       "title": "Trending repositories on GitHub this week",
       "url": "rsshub://github/trending/weekly/any",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "GitHub 每周热门仓库榜单",
+      "descriptionEn": "GitHub weekly trending repositories"
     },
     {
       "title": "Trending repositories on GitHub today",
       "url": "rsshub://github/trending/daily/any",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "GitHub 每日热门仓库榜单",
+      "descriptionEn": "GitHub daily trending repositories"
     },
     {
       "title": "David Sinclair - X",
       "url": "rsshub://twitter/user/davidasinclair",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "哈佛医学院教授 David Sinclair 的 X 动态，专注长寿科学",
+      "descriptionEn": "Harvard professor David Sinclair's X updates on longevity science"
     },
     {
       "title": "Elon Musk - X",
       "url": "rsshub://twitter/user/elonmusk",
-      "language": "English"
-    },
-    {
-      "title": "Follow - X",
-      "url": "rsshub://twitter/user/folo_is",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "特斯拉与 SpaceX CEO Elon Musk 的 X 动态",
+      "descriptionEn": "Tesla and SpaceX CEO Elon Musk's X updates"
     },
     {
       "title": "James Clear - X",
       "url": "rsshub://twitter/user/JamesClear",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "《原子习惯》作者 James Clear 的 X 动态",
+      "descriptionEn": "Atomic Habits author James Clear's X updates"
     },
     {
       "title": "Stock Edge",
       "url": "rsshub://stockedge/daily-updates/news",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "印度股市每日资讯与行情更新",
+      "descriptionEn": "Daily Indian stock market news and updates"
     },
     {
       "title": "Bloomberg - News",
       "url": "rsshub://bloomberg/%2F",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "彭博社财经与商业资讯",
+      "descriptionEn": "Bloomberg financial and business news"
     },
     {
       "title": "AInvest - Latest News",
       "url": "rsshub://ainvest/news",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "AI 驱动的投资资讯平台，聚合全球金融与科技新闻",
+      "descriptionEn": "AI-powered investment news aggregating global finance and tech"
     },
     {
       "title": "GQ",
       "url": "rsshub://gq/news",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "GQ 时尚男士杂志，涵盖时尚、文化与生活方式资讯",
+      "descriptionEn": "GQ men's magazine covering fashion, culture and lifestyle"
     },
     {
       "title": "知乎热榜 - 全站",
       "url": "rsshub://zhihu/hot/total",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "知乎全站热榜，汇聚各领域热门问答与讨论",
+      "descriptionEn": "Zhihu site-wide hot list with trending Q&A and discussions"
     },
     {
       "title": "V2EX-最热主题",
       "url": "rsshub://v2ex/topics/hot",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "V2EX 最热主题，创意工作者社区讨论精华",
+      "descriptionEn": "V2EX hottest topics from the creative workers community"
     },
     {
       "title": "V2EX-最新主题",
       "url": "rsshub://v2ex/topics/latest",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "V2EX 最新主题，创意工作者社区实时讨论",
+      "descriptionEn": "V2EX latest topics from the creative workers community"
     },
     {
       "title": "bilibili 排行榜-全站 - Bilibili",
       "url": "rsshub://bilibili/ranking/0",
-      "language": "Chinese"
-    },
-    {
-      "title": "DIYgod - X",
-      "url": "rsshub://twitter/user/DIYgod",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "Bilibili 全站排行榜，发现最受欢迎的视频内容",
+      "descriptionEn": "Bilibili site-wide ranking of most popular videos"
     },
     {
       "title": "实时财经快讯 - FastBull",
       "url": "rsshub://fastbull/express-news",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "FastBull 实时财经快讯，覆盖外汇、大宗商品与全球市场",
+      "descriptionEn": "FastBull real-time financial news on forex and commodities"
     },
     {
       "title": "格隆汇快讯",
       "url": "rsshub://gelonghui/live",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "格隆汇实时快讯，聚焦港股与全球投资资讯",
+      "descriptionEn": "Gelonghui live updates on HK stocks and global investments"
     },
     {
       "title": "深潮TechFlow - 快讯",
       "url": "rsshub://techflowpost/express",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "深潮 TechFlow Web3 与加密货币实时快讯",
+      "descriptionEn": "TechFlow real-time Web3 and crypto news"
     },
     {
       "title": "TheBlockBeats - 快讯",
       "url": "rsshub://theblockbeats/newsflash/0",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "律动 BlockBeats 区块链与加密货币实时快讯",
+      "descriptionEn": "BlockBeats real-time blockchain and crypto news"
     },
     {
       "title": "律动BlockBeats",
       "url": "https://api.theblockbeats.news/v1/open-api/home-xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "律动 BlockBeats 区块链行业深度报道与资讯",
+      "descriptionEn": "BlockBeats in-depth blockchain industry coverage"
     },
     {
       "title": "36氪 - 24小时热榜",
       "url": "rsshub://36kr/hot-list",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "36氪 24 小时热榜，科技创业资讯与深度报道",
+      "descriptionEn": "36Kr 24-hour hot list of tech startup news"
     },
     {
       "title": "奇客的资讯，重要的东西",
       "url": "rsshub://solidot/www",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "奇客 Solidot，汇聚科技与互联网领域重要资讯",
+      "descriptionEn": "Solidot aggregating important tech and internet news"
     },
     {
       "title": "资讯列表 - 人人影视",
       "url": "rsshub://yyets/article/all",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "人人影视字幕组资讯，影视剧集更新与字幕动态",
+      "descriptionEn": "YYeTs subtitle group news and TV series updates"
     },
     {
       "title": "科技圈在花频道 - Telegram Channel",
       "url": "rsshub://telegram/channel/TestFlightCN",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "科技圈在花 Telegram 频道，分享 TestFlight 与科技资讯",
+      "descriptionEn": "Tech circle Telegram channel sharing TestFlight and tech news"
     },
     {
       "title": "竹新社 - Telegram Channel",
       "url": "rsshub://telegram/channel/tnews365",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "竹新社 Telegram 频道，聚焦中文世界重要新闻",
+      "descriptionEn": "Bamboo News Telegram channel covering important Chinese news"
     },
     {
       "title": "分享创造日报",
       "url": "https://v2ex-create.nexmm.com/rss.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "V2EX 分享创造节点每日精华，独立开发者产品展示",
+      "descriptionEn": "Daily highlights from V2EX's creative sharing node"
     },
     {
       "title": "金色财经 - 全部",
       "url": "rsshub://jinse/lives/0",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "金色财经区块链与加密货币全品类实时资讯",
+      "descriptionEn": "Jinse Finance real-time blockchain and crypto news"
     },
     {
       "title": "7x24小时快讯",
       "url": "rsshub://fx678/kx",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "汇通财经 7×24 小时外汇与财经实时快讯",
+      "descriptionEn": "Huitong Finance 7x24 forex and financial news"
     },
     {
       "title": "V2EX",
       "url": "https://www.v2ex.com/index.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "V2EX 创意工作者社区，分享技术与生活",
+      "descriptionEn": "V2EX community for creative workers sharing tech and life"
     },
     {
       "title": "ahhhhfs｜A姐分享 - Telegram Channel",
       "url": "rsshub://telegram/channel/abskoop",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "A 姐分享 Telegram 频道，每日精选优质资源",
+      "descriptionEn": "A-jie sharing Telegram channel with daily quality resources"
     },
     {
       "title": "小声逼逼 - Telegram Channel",
       "url": "rsshub://telegram/channel/me888888888888",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "小声逼逼 Telegram 频道，分享互联网资讯与工具",
+      "descriptionEn": "Telegram channel sharing internet news and tools"
     },
     {
       "title": "阿里、夸克、百度等网盘4K影视资源 - Telegram Channel",
       "url": "rsshub://telegram/channel/Aliyun_4K_Movies",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "阿里云盘 4K 影视资源 Telegram 频道",
+      "descriptionEn": "Telegram channel for 4K movie resources on Aliyun Drive"
     },
     {
       "title": "社群 - 韭研公社",
       "url": "rsshub://jiuyangongshe/community",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "韭研公社股票投资社区，分享炒股心得与市场分析",
+      "descriptionEn": "Stock investment community sharing trading insights"
     },
     {
       "title": "阿里云盘吧 - Telegram Channel",
       "url": "rsshub://telegram/channel/Q66Share",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "阿里云盘吧 Telegram 频道，分享网盘资源",
+      "descriptionEn": "Telegram channel sharing Aliyun Drive resources"
     },
     {
       "title": "阿里云盘发布频道 - Telegram Channel",
       "url": "rsshub://telegram/channel/shareAliyun",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "阿里云盘发布频道，官方资源分享",
+      "descriptionEn": "Aliyun Drive official resource sharing channel"
     },
     {
       "title": "一觉醒来发生了什么 - 即刻圈子",
       "url": "rsshub://jike/topic/553870e8e4b0cafb0a1bef68",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "即刻「一觉醒来发生了什么」圈子，汇聚每日重要新闻",
+      "descriptionEn": "Jike circle aggregating daily important news"
     },
     {
       "title": "即刻精选 - Telegram Channel",
       "url": "rsshub://telegram/channel/jike_collection",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "即刻精选 Telegram 频道，汇聚优质内容",
+      "descriptionEn": "Jike curated Telegram channel with quality content"
     },
     {
       "title": "cnBeta.COM - 中文业界资讯站",
       "url": "rsshub://cnbeta",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "cnBeta 中文科技资讯站，聚合国内外 IT 与互联网新闻",
+      "descriptionEn": "cnBeta Chinese tech news aggregating IT and internet news"
     },
     {
       "title": "36氪资讯热榜",
       "url": "https://feeds.feedburner.com/36kr/hot-list",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "36氪资讯热榜，48 小时人气与综合榜单",
+      "descriptionEn": "36Kr news hot list with 48-hour popularity rankings"
     },
     {
       "title": "宝玉 - X",
       "url": "rsshub://twitter/user/dotey",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "宝玉的 X 动态，专注 AI 与软件工程知识分享",
+      "descriptionEn": "Baoyu's X updates focused on AI and software engineering"
     },
     {
       "title": "风向旗参考快讯 - Telegram Channel",
       "url": "rsshub://telegram/channel/xhqcankao",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "风向旗参考快讯 Telegram 频道，聚焦时事与财经",
+      "descriptionEn": "Fengxiangqi reference news Telegram channel on current affairs"
     },
     {
       "title": "掘金本周最热",
       "url": "https://rsshub.bestblogs.dev/juejin/trending/all/weekly",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "掘金本周最热文章，聚焦前端与后端开发技术",
+      "descriptionEn": "Juejin weekly trending articles on frontend and backend dev"
     },
     {
       "title": "分享创造",
       "url": "https://www.v2ex.com/feed/create.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "V2EX 分享创造节点，独立开发者产品与创意展示",
+      "descriptionEn": "V2EX creative sharing node for indie developers"
     },
     {
       "title": "V2EX - 创意",
       "url": "https://www.v2ex.com/feed/tab/creative.xml",
-      "language": "Chinese"
+      "language": "Chinese",
+      "descriptionZh": "V2EX 创意标签，汇聚创新想法与产品讨论",
+      "descriptionEn": "V2EX creative tab with innovative ideas and product discussions"
     },
     {
       "title": "Yu's Life - Telegram Channel",
       "url": "rsshub://telegram/channel/pseudoyulife",
-      "language": "Chinese"
-    },
-    {
-      "title": "Hacker News",
-      "url": "https://hnrss.org/frontpage",
-      "language": ""
+      "language": "Chinese",
+      "descriptionZh": "Yu's Life Telegram 频道，分享技术与生活感悟",
+      "descriptionEn": "Yu's Life Telegram channel sharing tech and life insights"
     },
     {
       "title": "Lobsters",
       "url": "https://lobste.rs/rss",
-      "language": ""
+      "language": "",
+      "descriptionZh": "Lobsters 技术社区精选链接，高质量技术讨论",
+      "descriptionEn": "Lobsters tech community curated links with quality discussions"
     },
     {
       "title": "老番茄 - Bilibili",
       "url": "https://rsshub.pseudoyu.com/bilibili/user/dynamic/546195",
-      "language": ""
+      "language": "",
+      "descriptionZh": "老番茄 Bilibili 动态，游戏与生活内容创作者",
+      "descriptionEn": "Laofanqie's Bilibili updates, gaming and lifestyle creator"
     },
     {
       "title": "OpenAI - X",
       "url": "https://rsshub.pseudoyu.com/twitter/user/openai",
-      "language": ""
+      "language": "",
+      "descriptionZh": "OpenAI 官方 X 账号，第一时间发布产品与研究动态",
+      "descriptionEn": "OpenAI's official X account with product and research updates"
     },
     {
       "title": "GitHub - X",
       "url": "https://rsshub.pseudoyu.com/twitter/user/github",
-      "language": ""
+      "language": "",
+      "descriptionZh": "GitHub 官方 X 账号，分享开发者工具与社区动态",
+      "descriptionEn": "GitHub's official X account sharing developer tools and news"
     },
     {
       "title": "verge - X",
       "url": "https://rsshub.pseudoyu.com/twitter/user/verge",
-      "language": ""
+      "language": "",
+      "descriptionZh": "The Verge 官方 X 账号，科技媒体资讯动态",
+      "descriptionEn": "The Verge's official X account with tech media news"
     },
     {
       "title": "Figma - X",
       "url": "https://rsshub.pseudoyu.com/twitter/user/figma",
-      "language": ""
+      "language": "",
+      "descriptionZh": "Figma 官方 X 账号，设计工具与社区动态",
+      "descriptionEn": "Figma's official X account with design tool updates"
     },
     {
       "title": "MiniMax (official)",
       "url": "https://rsshub.pseudoyu.com/twitter/user/minimax_ai",
-      "language": ""
+      "language": "",
+      "descriptionZh": "MiniMax AI 官方 X 账号，国内领先多模态大模型动态",
+      "descriptionEn": "MiniMax AI's official X account on multimodal AI"
     },
     {
       "title": "Z.ai",
       "url": "https://rsshub.pseudoyu.com/twitter/user/zai_org",
-      "language": ""
-    },
-    {
-      "title": "Elon Musk",
-      "url": "https://rsshub.pseudoyu.com/twitter/user/elonmusk",
-      "language": ""
+      "language": "",
+      "descriptionZh": "Z.ai 官方 X 账号，追踪 AI 产品与技术最新动态",
+      "descriptionEn": "Z.ai's official X account tracking AI products and tech"
     },
     {
       "title": "DAN KOE",
       "url": "https://rsshub.pseudoyu.com/twitter/user/thedankoe",
-      "language": ""
+      "language": "",
+      "descriptionZh": "数字创业者 Dan Koe，分享个人成长与创意写作理念",
+      "descriptionEn": "Digital entrepreneur Dan Koe sharing growth and creative writing"
     },
     {
       "title": "DeepSeek",
       "url": "https://rsshub.pseudoyu.com/twitter/user/deepseek_ai",
-      "language": ""
+      "language": "",
+      "descriptionZh": "DeepSeek 官方 X 账号，国产顶级大语言模型动态",
+      "descriptionEn": "DeepSeek's official X account on Chinese frontier LLM"
     },
     {
       "title": "Andrej Karpathy",
       "url": "https://rsshub.pseudoyu.com/twitter/user/karpathy",
-      "language": ""
+      "language": "",
+      "descriptionZh": "前 OpenAI 研究员 Andrej Karpathy 的 AI 洞察",
+      "descriptionEn": "Former OpenAI researcher Andrej Karpathy's AI insights"
     },
     {
       "title": "Greg Brockman",
       "url": "https://rsshub.pseudoyu.com/twitter/user/gdb",
-      "language": ""
+      "language": "",
+      "descriptionZh": "OpenAI 联合创始人 Greg Brockman 的 AI 与创业动态",
+      "descriptionEn": "OpenAI co-founder Greg Brockman's AI and startup updates"
     },
     {
       "title": "Sam Altman",
       "url": "https://rsshub.pseudoyu.com/twitter/user/sama",
-      "language": ""
+      "language": "",
+      "descriptionZh": "OpenAI CEO Sam Altman 的 X 动态与 AI 行业观点",
+      "descriptionEn": "OpenAI CEO Sam Altman's X updates and AI industry views"
     },
     {
       "title": "Balaji - X",
       "url": "rsshub://twitter/user/balajis",
-      "language": "English"
+      "language": "English",
+      "descriptionZh": "Balaji Srinivasan 的 X 动态，科技与加密货币思想领袖",
+      "descriptionEn": "Balaji Srinivasan's X updates on tech and crypto"
     }
   ]
 }

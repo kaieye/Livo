@@ -1,5 +1,5 @@
 import { AppRepository } from '../data/AppRepository'
-import { builtinDiscoverInsGroups, InsGroupFeed, DiscoverBuiltinFeedSeed } from '../data/DiscoverBuiltinFeeds'
+import { builtinDiscoverInsGroups, InsGroupFeed, DiscoverBuiltinFeedSeed, resolveDescription } from '../data/DiscoverBuiltinFeeds'
 import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
@@ -2016,7 +2016,7 @@ struct DiscoverBrowseDestination {
           useAccentFallback: true,
         })
 
-        Column({ space: 1 }) {
+        Column({ space: 6 }) {
           Text(feed.title)
             .fontSize(13)
             .fontWeight(FontWeight.Bold)
@@ -2024,8 +2024,14 @@ struct DiscoverBrowseDestination {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          if ((feed.followers || feed.description).trim()) {
-            Text((feed.followers || feed.description).trim())
+          if (feed.description.trim()) {
+            Text(feed.description.trim())
+              .fontSize(11)
+              .fontColor(this.theme.textSecondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          } else if (feed.followers) {
+            Text(feed.followers)
               .fontSize(11)
               .fontColor(this.theme.textSecondary)
               .maxLines(1)
@@ -2036,8 +2042,8 @@ struct DiscoverBrowseDestination {
         .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
-      .height(44)
-      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+      .height(feed.description.trim() ? 56 : 46)
+      .padding({ left: 14, right: 14, top: 6, bottom: 6 })
       .backgroundColor('transparent')
       .onClick(() => {
         this.openPreviewPage(feed)
@@ -2089,20 +2095,28 @@ struct DiscoverBrowseDestination {
           useAccentFallback: true,
         })
 
-        Column({ space: 1 }) {
+        Column({ space: 6 }) {
           Text(member.title)
             .fontSize(13)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.theme.textPrimary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          if (member.descriptionZh || member.descriptionEn) {
+            Text(resolveDescription(member))
+              .fontSize(11)
+              .fontColor(this.theme.textSecondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
-      .height(44)
-      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+      .height((member.descriptionZh || member.descriptionEn) ? 56 : 46)
+      .padding({ left: 14, right: 14, top: 6, bottom: 6 })
       .backgroundColor('transparent')
       .onClick(() => {
         const feed: RecommendedFeed = {
