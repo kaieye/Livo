@@ -141,16 +141,14 @@ const HOME_SWAP_PRIME_CANDIDATE_LIMIT: number = 48
 const HOME_SWAP_CANDIDATE_LIMIT: number = 120
 const HOME_MAX_CANDIDATE_LIMIT: number = 480
 const HOME_INITIAL_CANDIDATE_LIMIT: number = HOME_MAX_CANDIDATE_LIMIT
-const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = 120
-const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = 120
+const HOME_MODE_INITIAL_CANDIDATE_LIMIT: number = resolveHomeVisibleEntryInitialLimit('articles')
+const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT
 const HOME_MODE_PREWARM_CANDIDATE_LIMIT: number = 300
 const HOME_MODE_PREWARM_DELAY_MS: number = 120
 const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 0
 const HOME_MODE_SWITCH_ENTRY_DEFER_MS: number = 32
-const HOME_LOAD_MORE_STEP_LIMIT: number = resolveHomeVisibleEntryLoadMoreStep()
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
 const HOME_FULL_MODE_CANDIDATE_LIMIT: number = 2147483647
-const HOME_VISIBLE_ENTRY_STEP_LIMIT: number = resolveHomeVisibleEntryLoadMoreStep()
 const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 180
 const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
 const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = false
@@ -159,7 +157,7 @@ const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 64
 const HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS: number = 800
 const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 120
 const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 200
-const HOME_LOAD_MORE_FETCH_AHEAD_BUFFER_THRESHOLD: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT
+const HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER: number = 0
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3
 const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 1200
@@ -402,6 +400,18 @@ struct Index {
     videos: 0,
   }
   private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
+  private homeModeScrollIntentVersions: HomeModeScrollOffsetMap = {
+    articles: 0,
+    social: 0,
+    pictures: 0,
+    videos: 0,
+  }
+  private homeModeConsumedScrollIntentVersions: HomeModeScrollOffsetMap = {
     articles: 0,
     social: 0,
     pictures: 0,
@@ -1263,11 +1273,88 @@ struct Index {
     }
 
     this.currentHomeModeScrollOffset = nextOffset
-    if (Math.abs(nextOffset - previousOffset) > 0.5) {
-      this.lastHomeUserScrollAt = Date.now()
-    }
     this.updateHeaderBlurProgress(nextOffset)
     this.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
+  }
+
+  private isUserDrivenHomeScrollSource(scrollSource: ScrollSource): boolean {
+    return scrollSource === ScrollSource.DRAG
+      || scrollSource === ScrollSource.FLING
+      || scrollSource === ScrollSource.OTHER_USER_INPUT
+      || scrollSource === ScrollSource.SCROLL_BAR
+      || scrollSource === ScrollSource.SCROLL_BAR_FLING
+  }
+
+  private markHomeUserScrollIntent(mode: SubscriptionMode, scrollSource: ScrollSource): void {
+    if (mode !== this.mode || !this.isUserDrivenHomeScrollSource(scrollSource)) {
+      return
+    }
+    this.lastHomeUserScrollAt = Date.now()
+    if (scrollSource === ScrollSource.DRAG || scrollSource === ScrollSource.SCROLL_BAR) {
+      if (!this.isHomeScrollInteracting) {
+        this.bumpModeScrollIntentVersion(mode)
+      }
+      this.setHomeScrollInteracting(true, mode)
+      return
+    }
+    if (scrollSource === ScrollSource.OTHER_USER_INPUT) {
+      this.bumpModeScrollIntentVersion(mode)
+    }
+  }
+
+  private modeScrollIntentVersion(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeModeScrollIntentVersions.social
+      case 'pictures':
+        return this.homeModeScrollIntentVersions.pictures
+      case 'videos':
+        return this.homeModeScrollIntentVersions.videos
+      default:
+        return this.homeModeScrollIntentVersions.articles
+    }
+  }
+
+  private consumedModeScrollIntentVersion(mode: SubscriptionMode): number {
+    switch (mode) {
+      case 'social':
+        return this.homeModeConsumedScrollIntentVersions.social
+      case 'pictures':
+        return this.homeModeConsumedScrollIntentVersions.pictures
+      case 'videos':
+        return this.homeModeConsumedScrollIntentVersions.videos
+      default:
+        return this.homeModeConsumedScrollIntentVersions.articles
+    }
+  }
+
+  private setModeScrollIntentVersion(mode: SubscriptionMode, value: number): void {
+    this.homeModeScrollIntentVersions = {
+      articles: mode === 'articles' ? value : this.homeModeScrollIntentVersions.articles,
+      social: mode === 'social' ? value : this.homeModeScrollIntentVersions.social,
+      pictures: mode === 'pictures' ? value : this.homeModeScrollIntentVersions.pictures,
+      videos: mode === 'videos' ? value : this.homeModeScrollIntentVersions.videos,
+    }
+  }
+
+  private setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void {
+    this.homeModeConsumedScrollIntentVersions = {
+      articles: mode === 'articles' ? value : this.homeModeConsumedScrollIntentVersions.articles,
+      social: mode === 'social' ? value : this.homeModeConsumedScrollIntentVersions.social,
+      pictures: mode === 'pictures' ? value : this.homeModeConsumedScrollIntentVersions.pictures,
+      videos: mode === 'videos' ? value : this.homeModeConsumedScrollIntentVersions.videos,
+    }
+  }
+
+  private bumpModeScrollIntentVersion(mode: SubscriptionMode): void {
+    this.setModeScrollIntentVersion(mode, this.modeScrollIntentVersion(mode) + 1)
+  }
+
+  private resetModeScrollIntent(mode: SubscriptionMode): void {
+    this.lastHomeUserScrollAt = 0
+    this.setModeScrollIntentVersion(mode, 0)
+    this.setConsumedModeScrollIntentVersion(mode, 0)
+    this.setModeScrollProgressLoadMoreValue(mode, 0)
   }
 
   private setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
@@ -2082,6 +2169,7 @@ struct Index {
 
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
+    this.resetModeScrollIntent(nextMode)
     this.resetHomePullRefreshState()
     this.homeModeRailExpandedLockOffset = nextModeOffset
     this.homeModeRailExpandedOverride = true
@@ -2357,8 +2445,7 @@ struct Index {
   }
 
   private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    // Keep picture mode paginated to avoid first-switch full-scan stalls.
-    return _mode !== 'pictures'
+    return false
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
@@ -2375,7 +2462,8 @@ struct Index {
   }
 
   private setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
-    const safeLimit = Math.max(HOME_MODE_INITIAL_CANDIDATE_LIMIT, limit)
+    const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
+    const safeLimit = Math.max(minimumLimit, limit)
     this.homeCandidateLimitsByMode = {
       articles: mode === 'articles' ? safeLimit : this.homeCandidateLimitsByMode.articles,
       social: mode === 'social' ? safeLimit : this.homeCandidateLimitsByMode.social,
@@ -2502,7 +2590,7 @@ struct Index {
       return false
     }
 
-    const nextLimit = Math.min(total, currentLimit + HOME_VISIBLE_ENTRY_STEP_LIMIT)
+    const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode))
     this.setVisibleEntryLimitFor(mode, nextLimit)
     this.logHomeLoadMore(
       `expand-visible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total}`,
@@ -2519,7 +2607,8 @@ struct Index {
     entries: EntryCardModel[],
     candidateLimit: number,
   ): void {
-    const safeLimit = Math.max(HOME_MODE_INITIAL_CANDIDATE_LIMIT, candidateLimit)
+    const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
+    const safeLimit = Math.max(minimumLimit, candidateLimit)
     this.setCandidateLimitForMode(mode, safeLimit)
     if (entries.length >= safeLimit) {
       this.setModeHasMoreEntries(mode, true, `sync-pagination-full entries=${entries.length} limit=${safeLimit}`)
@@ -2747,7 +2836,10 @@ struct Index {
 
     const mode = this.mode
     const currentLimit = this.candidateLimitForMode(mode)
-    const targetLimit = Math.min(HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT, currentLimit + HOME_LOAD_MORE_STEP_LIMIT)
+    const targetLimit = Math.min(
+      HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
+      currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
+    )
     if (targetLimit <= currentLimit) {
       return
     }
@@ -2830,7 +2922,8 @@ struct Index {
     const totalCount = this.totalEntryCountFor(mode)
     const visibleLimit = this.visibleEntryLimitFor(mode)
     const remainingBufferedCount = Math.max(0, totalCount - visibleLimit)
-    if (expandedVisible && remainingBufferedCount > HOME_LOAD_MORE_FETCH_AHEAD_BUFFER_THRESHOLD) {
+    const fetchAheadBufferThreshold = resolveHomeVisibleEntryLoadMoreStep(mode) * HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
+    if (expandedVisible && remainingBufferedCount > fetchAheadBufferThreshold) {
       return true
     }
 
@@ -2841,7 +2934,10 @@ struct Index {
     const previousTotal = this.featuredEntries.length
     const previousModeTotal = this.totalEntryCountFor(mode)
     const currentModeLimit = this.candidateLimitForMode(mode)
-    const nextLimit = Math.min(HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT, currentModeLimit + HOME_LOAD_MORE_STEP_LIMIT)
+    const nextLimit = Math.min(
+      HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
+      currentModeLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
+    )
     if (nextLimit <= currentModeLimit) {
       this.setModeHasMoreEntries(mode, false, `next-limit-clamped nextLimit=${nextLimit} currentLimit=${currentModeLimit}`)
       return true
@@ -2880,19 +2976,14 @@ struct Index {
         } else if (!this.hasBufferedEntriesForMode(mode)) {
           const nextNoProgressCount = this.modeNoProgressCount(mode) + 1
           this.setModeNoProgressCount(mode, nextNoProgressCount)
-          if (nextNoProgressCount >= 2 || !this.homeHasMoreEntries) {
-            this.setModeHasMoreEntries(
-              mode,
-              false,
-              `mode-no-progress count=${nextNoProgressCount} prev=${previousModeTotal} current=${currentModeTotal}`,
-            )
-          }
         }
         if (this.candidateLimitForMode(mode) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT) {
           this.setModeHasMoreEntries(mode, false, `candidate-limit-max mode=${mode} limit=${this.candidateLimitForMode(mode)}`)
         }
 
-        this.expandVisibleEntriesForMode(mode)
+        if (expandedVisible && !this.hasBufferedEntriesForMode(mode)) {
+          this.expandVisibleEntriesForMode(mode)
+        }
         this.logHomeLoadMore(
           `request done mode=${mode} prevTotal=${previousTotal} currentTotal=${currentTotal} `
           + `prevModeTotal=${previousModeTotal} currentModeTotal=${currentModeTotal} `
@@ -2930,11 +3021,20 @@ struct Index {
     const nextPage = await AppRepository.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
 
     if (nextPage.length === 0) {
-      this.setModeHasMoreEntries(mode, false, `append-empty appendCount=${appendCount} nextLimit=${nextLimit}`)
       this.setCandidateLimitForMode(mode, nextLimit)
       this.logHomeLoadMore(
         `append-fast-empty mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextLimit=${nextLimit}`,
       )
+      const fallbackEntries = await AppRepository.featuredEntriesByMode(mode, nextLimit)
+      this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
+      if (fallbackEntries.length <= previousTotal) {
+        this.setModeHasMoreEntries(
+          mode,
+          false,
+          `append-empty-fallback prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
+        )
+      }
+      this.applyEntriesForMode(mode, fallbackEntries, true)
       return
     }
 
@@ -2972,9 +3072,6 @@ struct Index {
     }
 
     this.setCandidateLimitForMode(mode, nextLimit)
-    if (nextPage.length < appendCount) {
-      this.setModeHasMoreEntries(mode, false, `append-short page=${nextPage.length} appendCount=${appendCount} nextLimit=${nextLimit}`)
-    }
     this.applyEntriesForMode(mode, merged, true)
   }
 
@@ -3060,19 +3157,24 @@ struct Index {
     if (!hasBufferedEntries && (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) {
       return
     }
-    if (!this.hasRecentHomeScrollIntent()) {
+    if (!shouldPreloadHomeVisibleEntries(mode, currentOffset, totalCount, visibleCount)) {
       return
     }
-    if (!shouldPreloadHomeVisibleEntries(currentOffset, totalCount, visibleCount)) {
+    if (this.isHomeScrollInteracting && !this.hasRecentHomeScrollIntent()) {
+      return
+    }
+    const scrollIntentVersion = this.modeScrollIntentVersion(mode)
+    if (this.isHomeScrollInteracting && scrollIntentVersion <= this.consumedModeScrollIntentVersion(mode)) {
       return
     }
 
     const previousOffset = this.modeScrollProgressLoadMoreValue(mode)
-    if (currentOffset <= previousOffset && visibleCount >= HOME_VISIBLE_ENTRY_STEP_LIMIT) {
+    if (currentOffset <= previousOffset && visibleCount >= resolveHomeVisibleEntryLoadMoreStep(mode)) {
       return
     }
 
     this.setModeScrollProgressLoadMoreValue(mode, currentOffset)
+    this.setConsumedModeScrollIntentVersion(mode, scrollIntentVersion)
     this.enqueueLoadMoreForMode(mode, 'scroll-progress')
   }
 
@@ -3275,7 +3377,10 @@ struct Index {
   ): Promise<void> {
     const startedAt = Date.now()
     const safeCandidateLimit = this.resolveHomeCandidateLimitForMode(targetMode, candidateLimit)
-    const shouldUseFastPath = preferFastPath && !this.shouldRenderAllEntriesForMode(targetMode)
+    const initialVisibleLimit = resolveHomeVisibleEntryInitialLimit(targetMode)
+    const shouldUseFastPath = preferFastPath
+      && !this.shouldRenderAllEntriesForMode(targetMode)
+      && (targetMode !== 'pictures' || safeCandidateLimit < initialVisibleLimit)
     this.logHomePerf(
       `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${shouldUseFastPath}`,
     )
@@ -3933,7 +4038,7 @@ struct Index {
 
   @Builder
   private SocialEntryCard(entry: EntryCardModel, index: number = 0) {
-    if (this.isXSocialEntry(entry)) {
+    if (this.isTweetLikeEntry(entry)) {
       TweetEntryCard({
         presentation: this.presentTweetEntry(entry),
         theme: this.theme,
@@ -4432,13 +4537,17 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
+      this.markHomeUserScrollIntent(mode, scrollSource)
       return this.consumeHomePullScroll(mode, scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState(mode)
+      this.flushPendingLoadMoreForMode(mode)
     })
     .onDidStopDragging((_willFling: boolean) => {
+      this.setHomeScrollInteracting(false, mode)
+      this.flushPendingLoadMoreForMode(mode)
       this.finalizeHomePullRefresh()
     })
   }
@@ -4502,13 +4611,17 @@ struct Index {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
-    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
+      this.markHomeUserScrollIntent('pictures', scrollSource)
       return this.consumeHomePullScroll('pictures', scrollOffset)
     })
     .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
       this.syncHomeModeRailState('pictures')
+      this.flushPendingLoadMoreForMode('pictures')
     })
     .onDidStopDragging((_willFling: boolean) => {
+      this.setHomeScrollInteracting(false, 'pictures')
+      this.flushPendingLoadMoreForMode('pictures')
       this.finalizeHomePullRefresh()
     })
   }
@@ -4553,13 +4666,17 @@ struct Index {
           .height('100%')
           .scrollBar(BarState.On)
           .edgeEffect(EdgeEffect.Spring)
-          .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+          .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
+            this.markHomeUserScrollIntent(mode, scrollSource)
             return this.consumeHomePullScrollOffset(mode, yOffset)
           })
             .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
             this.syncHomeModeRailState(mode)
+            this.flushPendingLoadMoreForMode(mode)
           })
           .onDidStopDragging((_willFling: boolean) => {
+            this.setHomeScrollInteracting(false, mode)
+            this.flushPendingLoadMoreForMode(mode)
             this.finalizeHomePullRefresh()
           })
         } else if (mode === 'pictures') {

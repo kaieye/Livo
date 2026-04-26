@@ -247,13 +247,7 @@
       "descriptionZh": "异次元软件世界，软件改变生活",
       "descriptionEn": "iPlaySoft software world where software changes life"
     },
-    {
-      "title": "知乎每日精选",
-      "url": "https://www.zhihu.com/rss",
-      "language": "Chinese",
-      "descriptionZh": "知乎每日精选，热门问答与精选内容",
-      "descriptionEn": "Zhihu daily picks with popular Q&A and curated content"
-    },
+
     {
       "title": "爱范儿",
       "url": "https://www.ifanr.com/feed",
@@ -533,13 +527,6 @@
       "language": "Chinese",
       "descriptionZh": "编程随想的博客，深度分析政治、社会与信息安全话题",
       "descriptionEn": "Programthink blog with deep analysis on politics, society and security"
-    },
-    {
-      "title": "草榴社区 - 技术讨论区",
-      "url": "rsshub://t66y/7",
-      "language": "Chinese",
-      "descriptionZh": "草榴社区技术讨论版块，分享网络技术与工具资源",
-      "descriptionEn": "T66y tech discussion board sharing network tools and resources"
     },
     {
       "title": "二丫讲梵",

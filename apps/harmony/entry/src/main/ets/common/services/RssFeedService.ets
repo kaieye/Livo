@@ -16,6 +16,7 @@ import {
   BILIBILI_ORIGIN,
   LONG_REQUEST_TIMEOUT_MS,
   bilibiliSpaceReferer,
+  FALLBACK_NITTER_INSTANCES,
 } from '../AppConfig'
 import {
   decodeNumericEntities,
@@ -379,8 +380,28 @@ function rssHubRequestTimeoutMs(route: string): number {
   return RSSHUB_REQUEST_TIMEOUT_MS
 }
 
+function isXRoute(route: string): boolean {
+  const normalized = route.trim().toLowerCase()
+  return normalized.includes('/x/user/') || normalized.includes('/twitter/user/')
+}
+
+function extractXRouteUsername(route: string): string {
+  const matched = route.trim().match(/^\/(?:x|twitter)\/user\/([^/?#]+)/i)
+  return matched?.[1] ? decodeURIComponent(matched[1]).replace(/^@+/, '').trim().toLowerCase() : ''
+}
+
+function isNitterFeedUrl(url: string): boolean {
+  return /https?:\/\/[^/]*nitter[^/]*\//i.test((url || '').trim())
+}
+
 // RSSHub 实例尝试结果
 interface RssHubInstanceResult {
+  response: http.HttpResponse
+  request: http.HttpRequest
+  finalUrl: string
+}
+
+interface FeedRequestResult {
   response: http.HttpResponse
   request: http.HttpRequest
   finalUrl: string
@@ -629,13 +650,70 @@ export class RssFeedService {
       }
     }
 
-    // 如果有保存的最佳结果，返回它
     if (bestResult) {
       console.info(`[RssFeedService] Returning best result with status ${bestStatusCode}`)
       return bestResult
     }
-    
+
     console.error(`[RssFeedService] All RSSHub instances failed:`, errors.join('; '))
+    return null
+  }
+
+  private static async tryNitterInstances(
+    username: string,
+    headers: Record<string, string>,
+  ): Promise<FeedRequestResult | null> {
+    const normalizedUsername = username.trim().toLowerCase()
+    if (!normalizedUsername) {
+      return null
+    }
+
+    const errors: string[] = []
+
+    for (const instance of FALLBACK_NITTER_INSTANCES) {
+      const url = `${instance.replace(/\/+$/g, '')}/${encodeURIComponent(normalizedUsername)}/rss`
+      console.info(`[RssFeedService] Trying Nitter instance: ${url}`)
+
+      const instanceHeaders: Record<string, string> = {}
+      const headerKeys = Object.keys(headers)
+      for (let i = 0; i < headerKeys.length; i++) {
+        const key = headerKeys[i]
+        if (key !== 'Accept-Encoding') {
+          instanceHeaders[key] = headers[key]
+        }
+      }
+      instanceHeaders['Referer'] = instance
+
+      const request = http.createHttp()
+      try {
+        const response = await request.request(url, {
+          method: http.RequestMethod.GET,
+          connectTimeout: RSS_REQUEST_TIMEOUT_MS,
+          readTimeout: RSS_REQUEST_TIMEOUT_MS,
+          header: instanceHeaders,
+        })
+
+        if (response.responseCode === 200) {
+          return {
+            response,
+            request,
+            finalUrl: url,
+          }
+        }
+
+        const errorMsg = `Nitter ${url} returned ${response.responseCode}`
+        console.warn(`[RssFeedService] ${errorMsg}`)
+        errors.push(errorMsg)
+        request.destroy()
+      } catch (error) {
+        const errorMsg = `Nitter ${url} failed: ${error instanceof Error ? error.message : String(error)}`
+        console.warn(`[RssFeedService] ${errorMsg}`)
+        errors.push(errorMsg)
+        request.destroy()
+      }
+    }
+
+    console.error(`[RssFeedService] All Nitter instances failed:`, errors.join('; '))
     return null
   }
 
@@ -681,27 +759,48 @@ export class RssFeedService {
       console.info(`[RssFeedService] Original URL: ${feed.url}`)
 
       let response: http.HttpResponse
-      
-      // 如果是 RSSHub URL，尝试多个实例
-      if (RssFeedService.isRssHubUrl(actualUrl)) {
+
+      if (isNitterFeedUrl(actualUrl)) {
+        try {
+          response = await mainRequest.request(actualUrl, {
+            method: http.RequestMethod.GET,
+            connectTimeout: RSS_REQUEST_TIMEOUT_MS,
+            readTimeout: RSS_REQUEST_TIMEOUT_MS,
+            header: headers,
+          })
+        } catch (error) {
+          throw new Error(`RSS request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+        }
+      } else if (RssFeedService.isRssHubUrl(actualUrl)) {
         const route = RssFeedService.extractRssHubRoute(actualUrl)
         if (route) {
           console.info(`[RssFeedService] Detected RSSHub route: ${route}`)
           const result = await RssFeedService.tryRssHubInstances(route, headers)
-          
-          if (!result) {
+
+          if (!result && isXRoute(route)) {
+            const xUsername = extractXRouteUsername(route)
+            const nitterResult = await RssFeedService.tryNitterInstances(xUsername, headers)
+            if (nitterResult) {
+              response = nitterResult.response
+              activeRequest = nitterResult.request
+              actualUrl = nitterResult.finalUrl
+              if (mainRequest !== activeRequest) {
+                mainRequest.destroy()
+              }
+            } else {
+              throw new Error('All RSSHub and Nitter instances failed')
+            }
+          } else if (!result) {
             throw new Error('All RSSHub instances failed')
-          }
-          
-          response = result.response
-          activeRequest = result.request
-          actualUrl = result.finalUrl
-          // 销毁原始的 mainRequest，因为我们使用了新的 request
-          if (mainRequest !== activeRequest) {
-            mainRequest.destroy()
+          } else {
+            response = result.response
+            activeRequest = result.request
+            actualUrl = result.finalUrl
+            if (mainRequest !== activeRequest) {
+              mainRequest.destroy()
+            }
           }
         } else {
-          // 无法提取路由，使用原始 URL
           try {
             response = await mainRequest.request(actualUrl, {
               method: http.RequestMethod.GET,
@@ -714,7 +813,6 @@ export class RssFeedService {
           }
         }
       } else {
-        // 不是 RSSHub URL，使用原始 URL
         try {
           response = await mainRequest.request(actualUrl, {
             method: http.RequestMethod.GET,
