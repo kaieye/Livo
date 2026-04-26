@@ -21,9 +21,18 @@ const AI_KEY_SYSTEM_PROMPT_TEMPLATE: string = 'aiSystemPromptTemplate'
 const AI_KEY_CHAT_PERSONA_PROMPT: string = 'aiChatPersonaPrompt'
 const REFRESH_LOGS_KEY: string = 'refreshLogs'
 const HOME_ENTRY_SNAPSHOT_KEY: string = 'homeEntrySnapshotV1'
+const DISCOVER_AVATAR_CACHE_KEY: string = 'discoverAvatarCacheV1'
 const MAX_REFRESH_LOGS: number = 60
 const MAX_HOME_ENTRY_SNAPSHOT_ENTRIES: number = 240
+const MAX_DISCOVER_AVATAR_CACHE_ENTRIES: number = 600
 const AI_PROVIDERS: string[] = ['minimax', 'deepseek', 'openai', 'anthropic', 'glm', 'custom']
+
+export interface DiscoverAvatarCacheEntry {
+  targetUrl: string
+  siteUrl: string
+  imageUrl: string
+  updatedAt: number
+}
 
 function cloneHomeEntrySnapshotItem(item: EntryCardModel): EntryCardModel | undefined {
   const id = (item.id || '').trim()
@@ -106,6 +115,26 @@ function normalizeRefreshLogEntry(item: RefreshLogEntry): RefreshLogEntry {
       : [],
   }
   return normalized
+}
+
+function normalizeDiscoverAvatarCacheEntry(item: DiscoverAvatarCacheEntry): DiscoverAvatarCacheEntry | undefined {
+  const targetUrl = (item.targetUrl || '').trim()
+  const siteUrl = (item.siteUrl || '').trim()
+  const imageUrl = (item.imageUrl || '').trim()
+  if (!targetUrl || !imageUrl) {
+    return undefined
+  }
+
+  return {
+    targetUrl,
+    siteUrl,
+    imageUrl,
+    updatedAt: Number(item.updatedAt) || Date.now(),
+  }
+}
+
+function discoverAvatarCacheKey(targetUrl: string, siteUrl: string): string {
+  return `${targetUrl.trim()}|${siteUrl.trim()}`
 }
 export class AppPreferenceService {
   private static pref: preferences.Preferences | null = null
@@ -337,5 +366,83 @@ export class AppPreferenceService {
     await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(nextEntries))
     await pref.flush()
     return nextEntries
+  }
+
+  static async loadDiscoverAvatarCache(): Promise<DiscoverAvatarCacheEntry[]> {
+    try {
+      const pref = await AppPreferenceService.getPref()
+      const raw = await pref.get(DISCOVER_AVATAR_CACHE_KEY, '[]')
+      const text = typeof raw === 'string' ? raw : '[]'
+      const parsed = JSON.parse(text) as DiscoverAvatarCacheEntry[]
+      if (!Array.isArray(parsed)) {
+        return []
+      }
+
+      const entries: DiscoverAvatarCacheEntry[] = []
+      parsed.forEach((item: DiscoverAvatarCacheEntry) => {
+        if (entries.length >= MAX_DISCOVER_AVATAR_CACHE_ENTRIES) {
+          return
+        }
+
+        const normalized = normalizeDiscoverAvatarCacheEntry(item)
+        if (normalized) {
+          entries.push(normalized)
+        }
+      })
+      return entries
+    } catch (_error) {
+      return []
+    }
+  }
+
+  static async saveDiscoverAvatarCache(entries: DiscoverAvatarCacheEntry[]): Promise<DiscoverAvatarCacheEntry[]> {
+    const normalizedEntries: DiscoverAvatarCacheEntry[] = []
+    const seenKeys: Set<string> = new Set<string>()
+    const normalizedCandidates: DiscoverAvatarCacheEntry[] = []
+    entries.forEach((entry: DiscoverAvatarCacheEntry) => {
+      const normalized = normalizeDiscoverAvatarCacheEntry(entry)
+      if (normalized) {
+        normalizedCandidates.push(normalized)
+      }
+    })
+    normalizedCandidates.sort((left: DiscoverAvatarCacheEntry, right: DiscoverAvatarCacheEntry) => right.updatedAt - left.updatedAt)
+    normalizedCandidates.forEach((entry: DiscoverAvatarCacheEntry) => {
+      if (normalizedEntries.length >= MAX_DISCOVER_AVATAR_CACHE_ENTRIES) {
+        return
+      }
+
+      const key = discoverAvatarCacheKey(entry.targetUrl, entry.siteUrl)
+      if (seenKeys.has(key)) {
+        return
+      }
+      seenKeys.add(key)
+      normalizedEntries.push(entry)
+    })
+
+    const pref = await AppPreferenceService.getPref()
+    await pref.put(DISCOVER_AVATAR_CACHE_KEY, JSON.stringify(normalizedEntries))
+    await pref.flush()
+    return normalizedEntries
+  }
+
+  static async rememberDiscoverAvatar(targetUrl: string, siteUrl: string, imageUrl: string): Promise<void> {
+    const normalized = normalizeDiscoverAvatarCacheEntry({
+      targetUrl,
+      siteUrl,
+      imageUrl,
+      updatedAt: Date.now(),
+    })
+    if (!normalized) {
+      return
+    }
+
+    const currentEntries = await AppPreferenceService.loadDiscoverAvatarCache()
+    const nextEntries = [
+      normalized,
+      ...currentEntries.filter((entry: DiscoverAvatarCacheEntry) => {
+        return discoverAvatarCacheKey(entry.targetUrl, entry.siteUrl) !== discoverAvatarCacheKey(normalized.targetUrl, normalized.siteUrl)
+      }),
+    ]
+    await AppPreferenceService.saveDiscoverAvatarCache(nextEntries)
   }
 }

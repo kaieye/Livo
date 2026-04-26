@@ -6,6 +6,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
@@ -352,10 +353,38 @@ export struct FeedDetailView {
 
   private applyPreviewPayload(payload: FeedRefreshPayload | undefined): void {
     this.previewPayload = payload
+    this.rememberPreviewAvatar(payload)
     this.resolvedPreviewEntries = this.resolvePreviewEntries(payload)
     this.reconcilePicturePreviewLeadUrlCache()
     this.previewEntryDataSource.notifyDataReloaded()
     this.reconcileTweetPresentationCache()
+  }
+
+  private rememberPreviewAvatar(payload: FeedRefreshPayload | undefined): void {
+    const imageUrl = (payload?.imageUrl || '').trim()
+    if (!imageUrl) {
+      return
+    }
+
+    const targetUrl = (payload?.resolvedFeedUrl || this.targetUrl || this.existingFeed?.url || '').trim()
+    if (!targetUrl) {
+      return
+    }
+
+    void AppPreferenceService.rememberDiscoverAvatar(
+      targetUrl,
+      payload?.siteUrl || this.targetSiteUrl || this.existingFeed?.siteUrl || '',
+      imageUrl,
+    )
+    void AppPreferenceService.rememberDiscoverAvatar(targetUrl, '', imageUrl)
+    if (this.targetUrl && this.targetUrl !== targetUrl) {
+      void AppPreferenceService.rememberDiscoverAvatar(
+        this.targetUrl,
+        payload?.siteUrl || this.targetSiteUrl || this.existingFeed?.siteUrl || '',
+        imageUrl,
+      )
+      void AppPreferenceService.rememberDiscoverAvatar(this.targetUrl, '', imageUrl)
+    }
   }
 
   private resolvePreviewEntries(payload: FeedRefreshPayload | undefined): Entry[] {
@@ -532,35 +561,52 @@ export struct FeedDetailView {
   }
 
   private async hydrateSubscribedAvatar(feed: Feed, currentImageUrl: string): Promise<void> {
-    const resolvedAvatar = await SocialFeedAvatarService.resolveFeedAvatar(
+    const resolvedAvatar = (await SocialFeedAvatarService.resolveFeedAvatar(
       feed.url,
       feed.siteUrl || '',
       currentImageUrl,
       feed.imageUrl || '',
-    )
-    if (!resolvedAvatar || resolvedAvatar === this.targetImageUrl) {
+    ) || '').trim()
+    if (!resolvedAvatar) {
       return
     }
 
-    this.targetImageUrl = resolvedAvatar
-    await AppRepository.updateFeed(feed.id, {
-      title: feed.title,
-      url: feed.url,
-      siteUrl: feed.siteUrl || '',
-      imageUrl: resolvedAvatar,
-      description: feed.description || '',
-      category: feed.category || '',
-      view: feed.view,
-      showInAll: feed.showInAll,
-    })
-    this.signalFeedsChanged()
+    // 以持久化值为准进行比较，避免“详情页已显示新头像，但数据库未更新”导致返回列表仍是旧头像。
+    const currentStoredImageUrl = (feed.imageUrl || '').trim()
+    const nextStoredImageUrl = resolvePreferredStoredFeedImageUrl(currentStoredImageUrl, resolvedAvatar)
+    if (!nextStoredImageUrl) {
+      return
+    }
+
+    const shouldPersist = nextStoredImageUrl !== currentStoredImageUrl
+    const shouldUpdateDetailState = nextStoredImageUrl !== this.targetImageUrl
+    if (!shouldPersist && !shouldUpdateDetailState) {
+      return
+    }
+
+    if (shouldUpdateDetailState) {
+      this.targetImageUrl = nextStoredImageUrl
+    }
+    if (shouldPersist) {
+      await AppRepository.updateFeed(feed.id, {
+        title: feed.title,
+        url: feed.url,
+        siteUrl: feed.siteUrl || '',
+        imageUrl: nextStoredImageUrl,
+        description: feed.description || '',
+        category: feed.category || '',
+        view: feed.view,
+        showInAll: feed.showInAll,
+      })
+      this.signalFeedsChanged()
+    }
     if (this.previewPayload) {
       this.applyPreviewPayload({
         etag: this.previewPayload.etag,
         lastModified: this.previewPayload.lastModified,
         feedTitle: this.previewPayload.feedTitle,
         siteUrl: this.previewPayload.siteUrl,
-        imageUrl: resolvedAvatar,
+        imageUrl: nextStoredImageUrl,
         description: this.previewPayload.description,
         resolvedFeedUrl: this.previewPayload.resolvedFeedUrl,
         entries: this.previewPayload.entries,
@@ -586,6 +632,8 @@ export struct FeedDetailView {
     }
 
     this.targetImageUrl = preferred
+    void AppPreferenceService.rememberDiscoverAvatar(feedUrl, siteUrl, preferred)
+    void AppPreferenceService.rememberDiscoverAvatar(feedUrl, '', preferred)
     if (this.previewPayload) {
       this.applyPreviewPayload({
         etag: this.previewPayload.etag,
@@ -748,6 +796,32 @@ export struct FeedDetailView {
   private resetHeroAvatarCandidates(): void {
     this.heroAvatarCandidates = this.buildHeroAvatarCandidates()
     this.heroAvatarIndex = 0
+  }
+
+  private rememberCurrentPreviewAvatar(imageUrl: string): void {
+    const normalizedImageUrl = (imageUrl || '').trim()
+    if (!normalizedImageUrl) {
+      return
+    }
+
+    const targetUrl = (this.previewPayload?.resolvedFeedUrl || this.targetUrl || this.existingFeed?.url || '').trim()
+    if (targetUrl) {
+      void AppPreferenceService.rememberDiscoverAvatar(
+        targetUrl,
+        this.previewPayload?.siteUrl || this.targetSiteUrl || this.existingFeed?.siteUrl || '',
+        normalizedImageUrl,
+      )
+      void AppPreferenceService.rememberDiscoverAvatar(targetUrl, '', normalizedImageUrl)
+    }
+
+    if (this.targetUrl && this.targetUrl !== targetUrl) {
+      void AppPreferenceService.rememberDiscoverAvatar(
+        this.targetUrl,
+        this.previewPayload?.siteUrl || this.targetSiteUrl || this.existingFeed?.siteUrl || '',
+        normalizedImageUrl,
+      )
+      void AppPreferenceService.rememberDiscoverAvatar(this.targetUrl, '', normalizedImageUrl)
+    }
   }
 
   private currentHeroAvatarUrl(): string {
@@ -1240,6 +1314,9 @@ export struct FeedDetailView {
           .borderRadius(radius)
           .backgroundColor(this.theme.elevated)
           .objectFit(ImageFit.Cover)
+          .onComplete(() => {
+            this.rememberCurrentPreviewAvatar(this.resolvedAvatarUrl())
+          })
           .onError(() => {
             this.advanceHeroAvatar()
           })

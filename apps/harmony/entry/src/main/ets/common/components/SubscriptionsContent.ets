@@ -50,7 +50,7 @@ const SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER: number =
   SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT + SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
-const SUBSCRIPTIONS_AVATAR_HYDRATION_LIMIT: number = 6
+const SUBSCRIPTIONS_AVATAR_HYDRATION_LIMIT: number = 12
 const SUBSCRIPTIONS_REFRESH_DIAG_PREFIX: string = '[SubscriptionsDiag]'
 
 class SubscriptionFeedDetailParams {
@@ -709,6 +709,8 @@ export struct SubscriptionsContent {
   private closeFeedDetailPage(): void {
     this.syncOverlayLevel(0)
     this.subscriptionPathStack.pop(true)
+    this.hydratedFeedIds.clear()
+    void this.refreshFeeds()
   }
 
   private createFeedConfigParams(feed: Feed): SubscriptionFeedConfigParams {

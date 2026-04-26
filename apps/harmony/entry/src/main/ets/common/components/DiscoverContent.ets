@@ -40,6 +40,7 @@ import {
 } from '../services/DiscoverService'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
+import { AppPreferenceService, DiscoverAvatarCacheEntry } from '../services/AppPreferenceService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import {
@@ -47,8 +48,14 @@ import {
   resolveDiscoverOverlayReturnLevel,
   shouldShowDiscoverForegroundOverlay,
 } from '../utils/DiscoverNavigationPolicy'
+import {
+  initialDiscoverBrowseVisibleCount,
+  nextDiscoverBrowseVisibleCount,
+  shouldPreloadDiscoverBrowseMore,
+} from '../utils/DiscoverBrowsePagination'
 import { FeedDetailView } from './FeedDetailView'
 import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import { resolveDiscoverAvatarImageUrl } from '../utils/DiscoverAvatarPresentation'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import {
   CARD_RADIUS_LG,
@@ -122,6 +129,15 @@ interface DiscoverCategoryCard {
   accent: string
   sourceKey?: string
   icon?: Resource
+}
+
+interface DiscoverBrowseAvatarHydrationTask {
+  key: string
+  title: string
+  targetUrl: string
+  siteUrl: string
+  imageUrl: string
+  currentImageUrl: string
 }
 
 function createDiscoverResultFromFeed(feed: RecommendedFeed): ResolvedDiscoverCandidate {
@@ -1005,6 +1021,85 @@ export struct DiscoverContent {
     return this.faviconUrl(candidate.siteUrl)
   }
 
+  private normalizeSiteUrl(value: string): string {
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(trimmed)) {
+      return `https://${trimmed.replace(/^\/\/+/, '')}`
+    }
+    return trimmed
+  }
+
+  private hostOfAny(primaryUrl: string, secondaryUrl: string): string {
+    const primaryHost = this.hostOf(this.normalizeSiteUrl(primaryUrl))
+    if (primaryHost) {
+      return primaryHost
+    }
+    return this.hostOf(this.normalizeSiteUrl(secondaryUrl))
+  }
+
+  private candidateAvatarFallbackUrls(
+    imageUrl: string,
+    targetUrl: string,
+    siteUrl: string,
+    title: string,
+  ): string[] {
+    const candidates: string[] = []
+    const pushCandidate = (value: string): void => {
+      const trimmed = (value || '').trim()
+      if (!trimmed || candidates.includes(trimmed)) {
+        return
+      }
+      candidates.push(trimmed)
+    }
+
+    pushCandidate(imageUrl)
+
+    const normalizedTargetUrl = this.normalizeSiteUrl(targetUrl)
+    const normalizedSiteUrl = this.normalizeSiteUrl(siteUrl)
+    const host = this.hostOfAny(normalizedSiteUrl, normalizedTargetUrl)
+
+    const xUsername = extractXUsername(normalizedTargetUrl) || extractXUsername(normalizedSiteUrl) || extractXUsername(title || '')
+    if (xUsername) {
+      pushCandidate(`https://unavatar.io/x/${encodeURIComponent(xUsername)}`)
+    }
+
+    const instagramUsername = extractInstagramUsername(normalizedTargetUrl)
+      || extractInstagramUsername(normalizedSiteUrl)
+      || extractInstagramUsername(title || '')
+    if (instagramUsername) {
+      pushCandidate(`https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`)
+    }
+
+    const bilibiliIdentity = this.extractBilibiliIdentity(normalizedTargetUrl) || this.extractBilibiliIdentity(normalizedSiteUrl)
+    if (bilibiliIdentity.startsWith('bilibili:')) {
+      pushCandidate(`https://unavatar.io/bilibili/${encodeURIComponent(bilibiliIdentity.replace(/^bilibili:/, ''))}?fallback=false`)
+    }
+
+    const youtubeIdentity = this.extractYouTubeIdentity(normalizedTargetUrl) || this.extractYouTubeIdentity(normalizedSiteUrl)
+    if (youtubeIdentity.startsWith('youtube:channel:')) {
+      pushCandidate(`https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:channel:/, ''))}?fallback=false`)
+    } else if (youtubeIdentity.startsWith('youtube:handle:')) {
+      pushCandidate(`https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:handle:/, ''))}?fallback=false`)
+    } else if (youtubeIdentity.startsWith('youtube:user:')) {
+      pushCandidate(`https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:user:/, ''))}?fallback=false`)
+    }
+
+    if (host) {
+      pushCandidate(`https://icons.duckduckgo.com/ip3/${host}.ico`)
+      pushCandidate(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`)
+      pushCandidate(`https://${host}/favicon.ico`)
+      pushCandidate(`https://www.${host}/favicon.ico`)
+    }
+
+    return candidates
+  }
+
   private candidateAvatarCacheKey(candidate: ResolvedDiscoverCandidate): string {
     return `${candidate.targetUrl.trim()}|${candidate.siteUrl.trim()}`
   }
@@ -1249,9 +1344,16 @@ export struct DiscoverContent {
   }
 
   @Builder
-  private AvatarBox(imageUrl: string, fallbackLabel: string, accent: string, compact: boolean = false) {
+  private AvatarBox(
+    imageUrl: string,
+    fallbackLabel: string,
+    accent: string,
+    compact: boolean = false,
+    fallbackImageUrls: string[] = [],
+  ) {
     AvatarTile({
       imageUrl,
+      fallbackImageUrls,
       refreshToken: this.feedsChangedAt + this.discoverOverlayLevel,
       fallbackLabel,
       accent,
@@ -1290,7 +1392,13 @@ export struct DiscoverContent {
   private DirectUrlRow(result: DirectUrlResult | undefined) {
     if (result) {
       Row({ space: 12 }) {
-        this.AvatarBox('', result.title, this.theme.accent)
+        this.AvatarBox(
+          '',
+          result.title,
+          this.theme.accent,
+          false,
+          this.candidateAvatarFallbackUrls('', result.targetUrl, result.siteUrl, result.title),
+        )
 
         Column({ space: 4 }) {
           Text(result.title)
@@ -1342,6 +1450,12 @@ export struct DiscoverContent {
             candidate.targetTitle,
             this.platformColor(this.resolvedPlatformLabel(candidate)),
             compact,
+            this.candidateAvatarFallbackUrls(
+              this.resolvedCandidateAvatarUrl(candidate),
+              candidate.targetUrl,
+              candidate.siteUrl,
+              candidate.targetTitle,
+            ),
           )
 
           Column({ space: compact ? 2 : 6 }) {
@@ -1928,20 +2042,320 @@ struct DiscoverBrowseDestination {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @State private cachedFeeds: RecommendedFeed[] = []
   @State private insGroups: InsGroupFeed[] = []
+  @State private visibleFeedCount: number = 0
+  @State private avatarHydrationVersion: number = 0
+  @State private persistedAvatarCacheLoaded: boolean = false
+  private readonly browseScroller: Scroller = new Scroller()
+  private readonly browseAvatarOverrideMap: Map<string, string> = new Map<string, string>()
+  private readonly browseAvatarHydratingKeys: Set<string> = new Set<string>()
+  private readonly browseAvatarHydrationQueue: DiscoverBrowseAvatarHydrationTask[] = []
+  private browseAvatarHydrationRunning: boolean = false
+  private browseDestinationActive: boolean = false
 
   aboutToAppear(): void {
+    this.browseDestinationActive = true
     this.cachedFeeds = filteredRecommendedFeeds(this.view, this.sourceKey)
+    this.visibleFeedCount = initialDiscoverBrowseVisibleCount(this.cachedFeeds.length)
     if (this.sourceKey === 'ins') {
       this.insGroups = builtinDiscoverInsGroups()
     }
+    setTimeout(() => {
+      if (this.browseDestinationActive) {
+        void this.loadPersistedAvatarCache()
+      }
+    }, 120)
   }
 
   private browseFeeds(): RecommendedFeed[] {
     return filteredRecommendedFeeds(this.view, this.sourceKey)
   }
 
+  private visibleBrowseFeeds(): RecommendedFeed[] {
+    return this.cachedFeeds.slice(0, this.visibleFeedCount)
+  }
+
+  private hasMoreBrowseFeeds(): boolean {
+    return this.visibleFeedCount < this.cachedFeeds.length
+  }
+
+  private loadMoreBrowseFeeds(): void {
+    if (!this.hasMoreBrowseFeeds()) {
+      return
+    }
+
+    this.visibleFeedCount = nextDiscoverBrowseVisibleCount(this.visibleFeedCount, this.cachedFeeds.length)
+  }
+
+  private handleBrowseScrollLoadMore(): void {
+    if (!this.hasMoreBrowseFeeds()) {
+      return
+    }
+
+    const currentOffset = Math.max(0, this.browseScroller.currentOffset().yOffset)
+    if (shouldPreloadDiscoverBrowseMore(
+      currentOffset,
+      this.cachedFeeds.length,
+      this.visibleFeedCount,
+    )) {
+      this.loadMoreBrowseFeeds()
+    }
+  }
+
   private browseTitle(): string {
     return this.title || discoverViewLabel(this.view)
+  }
+
+  private hostOf(url: string): string {
+    const matched = (url || '').match(/^https?:\/\/([^/]+)/i)
+    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
+  }
+
+  private normalizeSiteUrl(value: string): string {
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      return ''
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(trimmed)) {
+      return `https://${trimmed.replace(/^\/\/+/, '')}`
+    }
+    return trimmed
+  }
+
+  private fallbackAvatarCandidates(imageUrl: string, targetUrl: string, siteUrl: string, title: string): string[] {
+    const candidates: string[] = []
+    const push = (value: string): void => {
+      const trimmed = (value || '').trim()
+      if (!trimmed || candidates.includes(trimmed)) {
+        return
+      }
+      candidates.push(trimmed)
+    }
+
+    push(imageUrl)
+    const normalizedTarget = this.normalizeSiteUrl(targetUrl)
+    const normalizedSite = this.normalizeSiteUrl(siteUrl)
+    const host = this.hostOf(normalizedSite) || this.hostOf(normalizedTarget)
+
+    const xUsername = extractXUsername(normalizedTarget) || extractXUsername(normalizedSite) || extractXUsername(title || '')
+    if (xUsername) {
+      push(`https://unavatar.io/x/${encodeURIComponent(xUsername)}`)
+    }
+
+    const instagramUsername = extractInstagramUsername(normalizedTarget)
+      || extractInstagramUsername(normalizedSite)
+      || extractInstagramUsername(title || '')
+    if (instagramUsername) {
+      push(`https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`)
+    }
+
+    if (host) {
+      push(`https://icons.duckduckgo.com/ip3/${host}.ico`)
+      push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`)
+      push(`https://${host}/favicon.ico`)
+      push(`https://www.${host}/favicon.ico`)
+    }
+
+    return candidates
+  }
+
+  private cachedPreviewPayloadForFeed(targetUrl: string, siteUrl: string): FeedRefreshPayload | undefined {
+    return DiscoverRemoteSearchService.cachedPreviewPayload(targetUrl)
+      || DiscoverRemoteSearchService.cachedPreviewPayload(siteUrl)
+  }
+
+  private browseAvatarCacheKey(targetUrl: string, siteUrl: string): string {
+    return `${targetUrl.trim()}|${siteUrl.trim()}`
+  }
+
+  private browseAvatarOverride(targetUrl: string, siteUrl: string): string {
+    return this.browseAvatarOverrideMap.get(this.browseAvatarCacheKey(targetUrl, siteUrl))
+      || this.browseAvatarOverrideMap.get(this.browseAvatarCacheKey(targetUrl, ''))
+      || ''
+  }
+
+  private async loadPersistedAvatarCache(): Promise<void> {
+    if (this.persistedAvatarCacheLoaded) {
+      return
+    }
+
+    try {
+      const entries = await AppPreferenceService.loadDiscoverAvatarCache()
+      entries.forEach((entry: DiscoverAvatarCacheEntry) => {
+        this.browseAvatarOverrideMap.set(this.browseAvatarCacheKey(entry.targetUrl, entry.siteUrl), entry.imageUrl)
+      })
+      this.persistedAvatarCacheLoaded = true
+      this.avatarHydrationVersion += 1
+    } catch (error) {
+      this.persistedAvatarCacheLoaded = true
+      console.warn(`load discover avatar cache failed: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+
+  private browseFeedAvatarImageUrl(feed: RecommendedFeed): string {
+    const cachedPayload = this.cachedPreviewPayloadForFeed(feed.url, feed.siteUrl)
+    return resolveDiscoverAvatarImageUrl({
+      imageUrl: feed.imageUrl || '',
+      targetUrl: feed.url,
+      siteUrl: feed.siteUrl,
+      title: feed.title,
+      cachedImageUrl: cachedPayload?.imageUrl || '',
+      cachedSiteUrl: cachedPayload?.siteUrl || '',
+      cachedTitle: cachedPayload?.feedTitle || '',
+      cachedResolvedFeedUrl: cachedPayload?.resolvedFeedUrl || '',
+      hydratedImageUrl: this.browseAvatarOverride(feed.url, feed.siteUrl),
+    })
+  }
+
+  private insMemberAvatarImageUrl(member: DiscoverBuiltinFeedSeed): string {
+    const cachedPayload = this.cachedPreviewPayloadForFeed(member.url, '')
+    return resolveDiscoverAvatarImageUrl({
+      imageUrl: '',
+      targetUrl: member.url,
+      siteUrl: '',
+      title: member.title,
+      cachedImageUrl: cachedPayload?.imageUrl || '',
+      cachedSiteUrl: cachedPayload?.siteUrl || '',
+      cachedTitle: cachedPayload?.feedTitle || '',
+      cachedResolvedFeedUrl: cachedPayload?.resolvedFeedUrl || '',
+      hydratedImageUrl: this.browseAvatarOverride(member.url, ''),
+    })
+  }
+
+  private shouldHydrateBrowseAvatar(currentImageUrl: string): boolean {
+    const normalized = (currentImageUrl || '').trim().toLowerCase()
+    if (!normalized) {
+      return true
+    }
+
+    return normalized.includes('google.com/s2/favicons')
+      || normalized.includes('/favicon')
+      || normalized.includes('/apple-touch-icon')
+      || normalized.includes('unavatar.io/')
+  }
+
+  private rememberBrowseAvatarPayload(targetUrl: string, payload: FeedRefreshPayload, imageUrl: string): void {
+    DiscoverRemoteSearchService.rememberPreviewPayload(targetUrl, {
+      etag: payload.etag,
+      lastModified: payload.lastModified,
+      feedTitle: payload.feedTitle,
+      siteUrl: payload.siteUrl,
+      imageUrl,
+      description: payload.description,
+      resolvedFeedUrl: payload.resolvedFeedUrl,
+      entries: payload.entries,
+    })
+  }
+
+  private async hydrateBrowseFeedAvatar(
+    title: string,
+    targetUrl: string,
+    siteUrl: string,
+    imageUrl: string,
+  ): Promise<void> {
+    if (!this.browseDestinationActive) {
+      return
+    }
+
+    const key = this.browseAvatarCacheKey(targetUrl, siteUrl)
+    if (this.browseAvatarOverrideMap.has(key) || this.browseAvatarHydratingKeys.has(key)) {
+      return
+    }
+
+    const cachedPayload = this.cachedPreviewPayloadForFeed(targetUrl, siteUrl)
+    const currentImageUrl = resolveDiscoverAvatarImageUrl({
+      imageUrl,
+      targetUrl,
+      siteUrl,
+      title,
+      cachedImageUrl: cachedPayload?.imageUrl || '',
+      cachedSiteUrl: cachedPayload?.siteUrl || '',
+      cachedTitle: cachedPayload?.feedTitle || '',
+      cachedResolvedFeedUrl: cachedPayload?.resolvedFeedUrl || '',
+      hydratedImageUrl: this.browseAvatarOverride(targetUrl, siteUrl),
+    })
+    if (!this.shouldHydrateBrowseAvatar(currentImageUrl)) {
+      return
+    }
+
+    this.browseAvatarHydratingKeys.add(key)
+    this.browseAvatarHydrationQueue.push({
+      key,
+      title,
+      targetUrl,
+      siteUrl,
+      imageUrl,
+      currentImageUrl,
+    })
+    void this.processBrowseAvatarHydrationQueue()
+  }
+
+  private async processBrowseAvatarHydrationQueue(): Promise<void> {
+    if (this.browseAvatarHydrationRunning) {
+      return
+    }
+
+    this.browseAvatarHydrationRunning = true
+    try {
+      while (this.browseDestinationActive && this.browseAvatarHydrationQueue.length > 0) {
+        const task = this.browseAvatarHydrationQueue.shift()
+        if (!task) {
+          continue
+        }
+        await this.runBrowseAvatarHydrationTask(task)
+      }
+    } finally {
+      this.browseAvatarHydrationRunning = false
+    }
+  }
+
+  private async runBrowseAvatarHydrationTask(task: DiscoverBrowseAvatarHydrationTask): Promise<void> {
+    try {
+      if (!this.browseDestinationActive) {
+        return
+      }
+      const cachedPayload = this.cachedPreviewPayloadForFeed(task.targetUrl, task.siteUrl)
+      const payload = cachedPayload || await RssFeedService.previewFeedUrl(task.targetUrl)
+      if (!this.browseDestinationActive) {
+        return
+      }
+      const resolvedAvatar = await SocialFeedAvatarService.resolveFeedAvatar(
+        payload.resolvedFeedUrl || task.targetUrl,
+        payload.siteUrl || task.siteUrl,
+        payload.imageUrl || '',
+        task.imageUrl || '',
+      )
+      const hydratedImageUrl = (resolvedAvatar || payload.imageUrl || '').trim()
+      if (!hydratedImageUrl) {
+        return
+      }
+
+      this.rememberBrowseAvatarPayload(task.targetUrl, payload, hydratedImageUrl)
+      void AppPreferenceService.rememberDiscoverAvatar(task.targetUrl, task.siteUrl, hydratedImageUrl)
+      if (task.siteUrl) {
+        void AppPreferenceService.rememberDiscoverAvatar(task.targetUrl, '', hydratedImageUrl)
+      }
+      const nextImageUrl = resolveDiscoverAvatarImageUrl({
+        imageUrl: task.imageUrl,
+        targetUrl: task.targetUrl,
+        siteUrl: task.siteUrl,
+        title: task.title,
+        cachedImageUrl: hydratedImageUrl,
+        cachedSiteUrl: payload.siteUrl || '',
+        cachedTitle: payload.feedTitle || '',
+        cachedResolvedFeedUrl: payload.resolvedFeedUrl || '',
+      })
+      if (nextImageUrl && nextImageUrl !== task.currentImageUrl) {
+        this.browseAvatarOverrideMap.set(task.key, hydratedImageUrl)
+        this.avatarHydrationVersion += 1
+      }
+    } catch (error) {
+      console.warn(`hydrate discover browse avatar failed: ${task.targetUrl} ${error instanceof Error ? error.message : error}`)
+    } finally {
+      this.browseAvatarHydratingKeys.delete(task.key)
+    }
   }
 
   private restoreOverlayAfterDisappearIfNeeded(): void {
@@ -1951,7 +2365,14 @@ struct DiscoverBrowseDestination {
     AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
   }
 
+  private stopBrowseAvatarHydration(): void {
+    this.browseDestinationActive = false
+    this.browseAvatarHydrationQueue.splice(0, this.browseAvatarHydrationQueue.length)
+    this.browseAvatarHydratingKeys.clear()
+  }
+
   aboutToDisappear(): void {
+    this.stopBrowseAvatarHydration()
     this.restoreOverlayAfterDisappearIfNeeded()
   }
 
@@ -2000,13 +2421,14 @@ struct DiscoverBrowseDestination {
     Column({ space: 0 }) {
       Row({ space: 10 }) {
         AvatarTile({
-          imageUrl: resolveSocialFeedDisplayImageUrl(
-            feed.imageUrl || '',
+          imageUrl: this.browseFeedAvatarImageUrl(feed),
+          fallbackImageUrls: this.fallbackAvatarCandidates(
+            this.browseFeedAvatarImageUrl(feed),
             feed.url,
             feed.siteUrl,
             feed.title,
           ),
-          refreshToken: this.discoverOverlayLevel,
+          refreshToken: this.discoverOverlayLevel + this.avatarHydrationVersion,
           fallbackLabel: feed.title,
           accent: this.theme.accent,
           theme: this.theme,
@@ -2070,6 +2492,7 @@ struct DiscoverBrowseDestination {
         topPadding: 0,
         bottomPadding: 0,
         onBack: () => {
+          this.stopBrowseAvatarHydration()
           AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
           AppStorage.setOrCreate('discoverOverlayLevel', 0)
           this.discoverPathStack.pop(true)
@@ -2084,8 +2507,14 @@ struct DiscoverBrowseDestination {
     Column({ space: 0 }) {
       Row({ space: 10 }) {
         AvatarTile({
-          imageUrl: resolveSocialFeedDisplayImageUrl('', member.url, '', member.title),
-          refreshToken: this.discoverOverlayLevel,
+          imageUrl: this.insMemberAvatarImageUrl(member),
+          fallbackImageUrls: this.fallbackAvatarCandidates(
+            this.insMemberAvatarImageUrl(member),
+            member.url,
+            '',
+            member.title,
+          ),
+          refreshToken: this.discoverOverlayLevel + this.avatarHydrationVersion,
           fallbackLabel: member.title,
           accent: this.theme.accent,
           theme: this.theme,
@@ -2129,6 +2558,13 @@ struct DiscoverBrowseDestination {
         }
         this.openPreviewPage(feed)
       })
+      .onAppear(() => {
+        setTimeout(() => {
+          if (this.browseDestinationActive) {
+            void this.hydrateBrowseFeedAvatar(member.title, member.url, '', '')
+          }
+        }, 520)
+      })
 
       if (showDivider) {
         Divider()
@@ -2144,7 +2580,7 @@ struct DiscoverBrowseDestination {
     Column() {
       this.HeaderSection()
 
-      Scroll() {
+      Scroll(this.browseScroller) {
         Column({ space: 12 }) {
           if (this.sourceKey === 'ins' && this.insGroups.length > 0) {
             ForEach(this.insGroups, (group: InsGroupFeed) => {
@@ -2167,9 +2603,19 @@ struct DiscoverBrowseDestination {
             }, (group: InsGroupFeed) => group.groupName)
           } else {
             Column({ space: 0 }) {
-              ForEach(this.cachedFeeds, (feed: RecommendedFeed, index: number) => {
-                this.FeedRow(feed, index < this.cachedFeeds.length - 1)
+              ForEach(this.visibleBrowseFeeds(), (feed: RecommendedFeed, index: number) => {
+                this.FeedRow(feed, index < this.visibleBrowseFeeds().length - 1)
               }, (feed: RecommendedFeed) => `${this.sourceKey || this.view}-${feed.url}`)
+              if (this.hasMoreBrowseFeeds()) {
+                Row() {
+                  Text('继续下滑加载更多')
+                    .fontSize(12)
+                    .fontColor(this.theme.textMuted)
+                }
+                .width('100%')
+                .height(44)
+                .justifyContent(FlexAlign.Center)
+              }
             }
             .width('100%')
             .backgroundColor(this.theme.surface)
@@ -2184,15 +2630,22 @@ struct DiscoverBrowseDestination {
         .justifyContent(FlexAlign.Start)
         .constraintSize({ minHeight: '100%' })
       }
-      .scrollBar(BarState.Off)
+      .scrollBar(BarState.On)
       .edgeEffect(EdgeEffect.Spring)
       .width('100%')
       .layoutWeight(1)
+      .onReachEnd(() => {
+        this.loadMoreBrowseFeeds()
+      })
+      .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
+        this.handleBrowseScrollLoadMore()
+      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
     .onDisAppear(() => {
+      this.stopBrowseAvatarHydration()
       this.restoreOverlayAfterDisappearIfNeeded()
     })
   }

@@ -13,6 +13,7 @@ export struct AvatarTile {
   @Prop textSize: number = 14
   @Prop showFallbackLabel: boolean = true
   @Prop useAccentFallback: boolean = false
+  onImageLoaded: (url: string) => void = () => {}
   @State private currentImageIndex: number = 0
 
   aboutToAppear(): void {
@@ -77,6 +78,9 @@ export struct AvatarTile {
           .borderRadius(this.radius)
           .backgroundColor(this.theme.elevated)
           .objectFit(ImageFit.Cover)
+          .onComplete(() => {
+            this.onImageLoaded(this.currentCandidateImageUrl())
+          })
           .onError(() => {
             this.advanceImageCandidate()
           })
