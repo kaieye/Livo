@@ -62,29 +62,45 @@ export class MediaSaveService {
       photoType: resolvePhotoType(kind),
       subtype: photoAccessHelper.PhotoSubtype.DEFAULT,
     }]
-    const destinationUris = await helper.showAssetsCreationDialog(
-      [sourceFileUri],
-      photoCreationConfigs,
-    )
+    let destinationUris: Array<string> | undefined = undefined
+    try {
+      destinationUris = await helper.showAssetsCreationDialog(
+        [sourceFileUri],
+        photoCreationConfigs,
+      )
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '打开保存对话框失败')
+    }
 
     if (!destinationUris || destinationUris.length === 0 || !destinationUris[0]) {
       throw new Error('用户取消保存')
     }
 
-    const sourceFile: fileIo.File = await fileIo.open(
-      sourceFileUri,
-      fileIo.OpenMode.READ_ONLY,
-    )
-    const destinationFile: fileIo.File = await fileIo.open(
-      destinationUris[0],
-      fileIo.OpenMode.WRITE_ONLY,
-    )
-
+    let sourceFile: fileIo.File | undefined = undefined
+    let destinationFile: fileIo.File | undefined = undefined
     try {
+      sourceFile = await fileIo.open(
+        sourceFileUri,
+        fileIo.OpenMode.READ_ONLY,
+      )
+      destinationFile = await fileIo.open(
+        destinationUris[0],
+        fileIo.OpenMode.WRITE_ONLY,
+      )
       await fileIo.copyFile(sourceFile.fd, destinationFile.fd)
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '保存媒体失败')
     } finally {
-      fileIo.closeSync(sourceFile)
-      fileIo.closeSync(destinationFile)
+      if (sourceFile) {
+        try {
+          fileIo.closeSync(sourceFile)
+        } catch (_error) {}
+      }
+      if (destinationFile) {
+        try {
+          fileIo.closeSync(destinationFile)
+        } catch (_error) {}
+      }
     }
   }
 

@@ -199,6 +199,10 @@ export struct HomeVideoGrid {
     })
   }
 
+  private videoDurationOverlay(entry: EntryCardModel): string {
+    return this.videoDurationLabel(entry)
+  }
+
   @Builder
   private VideoCard(entry: EntryCardModel) {
     Column({ space: 8 }) {
@@ -218,8 +222,8 @@ export struct HomeVideoGrid {
               .borderRadius(14)
           }
 
-          if (this.videoDurationLabel(entry)) {
-            Text(this.videoDurationLabel(entry))
+          if (this.videoDurationOverlay(entry)) {
+            Text(this.videoDurationOverlay(entry))
               .fontSize(10)
               .fontWeight(FontWeight.Medium)
               .fontColor('#FFFFFF')

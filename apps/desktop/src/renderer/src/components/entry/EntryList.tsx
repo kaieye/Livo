@@ -98,6 +98,9 @@ const SharePoster = lazy(() =>
   })),
 )
 
+const SOCIAL_LIST_SCROLL_GUARD_PX = 120
+const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
+
 /** Return a copy of the media item with decoded URLs.
  *  previewUrl is intentionally kept as-is (only HTML-entity decoded) so that
  *  mirror/proxy URLs (e.g. picnob/pixnoy) survive for rendering.
@@ -955,8 +958,10 @@ export function EntryList({ width }: { width?: number }) {
   const handleListScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget
-      const hasScrolledEnough = el.scrollTop > 120
-      const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 600
+      const hasScrolledEnough = el.scrollTop > SOCIAL_LIST_SCROLL_GUARD_PX
+      const nearBottom =
+        el.scrollTop + el.clientHeight >=
+        el.scrollHeight - SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX
 
       if (isGridMode && hasMoreGridEntries && hasScrolledEnough && nearBottom) {
         setGridVisibleCount((prev) =>
@@ -1373,8 +1378,8 @@ function EntryContextMenuWrapper({
   onSharePoster: () => void
 }) {
   const { markRead, toggleStar } = useEntryStore()
-  const feedSiteUrl = useFeedStore((state) =>
-    state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
+  const feedSiteUrl = useFeedStore(
+    (state) => state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
   )
   const browserOpenUrl = resolveEntryBrowserOpenUrl(entry)
   const actions = useEntryContextActions({

@@ -979,24 +979,28 @@ export struct SubscriptionsSettingsPanel {
   }
 
   private readTextFromUri(uri: string): string {
-    const file = fileIo.openSync(uri, fileIo.OpenMode.READ_ONLY)
     try {
-      const bytes: number[] = []
-      const bufferSize = 4096
-      while (true) {
-        const buffer = new ArrayBuffer(bufferSize)
-        const readLength = fileIo.readSync(file.fd, buffer)
-        if (readLength <= 0) {
-          break
+      const file = fileIo.openSync(uri, fileIo.OpenMode.READ_ONLY)
+      try {
+        const bytes: number[] = []
+        const bufferSize = 4096
+        while (true) {
+          const buffer = new ArrayBuffer(bufferSize)
+          const readLength = fileIo.readSync(file.fd, buffer)
+          if (readLength <= 0) {
+            break
+          }
+          const view = new Uint8Array(buffer).subarray(0, readLength)
+          view.forEach((value: number) => {
+            bytes.push(value)
+          })
         }
-        const view = new Uint8Array(buffer).subarray(0, readLength)
-        view.forEach((value: number) => {
-          bytes.push(value)
-        })
+        return this.decodeUtf8Bytes(new Uint8Array(bytes))
+      } finally {
+        fileIo.closeSync(file)
       }
-      return this.decodeUtf8Bytes(new Uint8Array(bytes))
-    } finally {
-      fileIo.closeSync(file)
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '读取文件失败')
     }
   }
 

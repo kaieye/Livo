@@ -1,16 +1,17 @@
-import { createAppStore } from "./helpers"
-import type { FeedWithCount } from "../../../shared/types"
-import { FeedViewType } from "../../../shared/types"
-import { useSettingsStore } from "./settings-store"
-import { useEntryStore } from "./entry-store"
-import { getEntryLoadLimit } from "../lib/entry-load-limit"
+import { createAppStore } from './helpers'
+import type { FeedWithCount } from '../../../shared/types'
+import { FeedViewType } from '../../../shared/types'
+import { useSettingsStore } from './settings-store'
+import { useEntryStore } from './entry-store'
+import { getEntryLoadLimit } from '../lib/entry-load-limit'
 
-const RECOMMENDED_CATEGORY = "Recommended"
+const RECOMMENDED_CATEGORY = 'Recommended'
 
 function isSlowSocialFeed(feed?: Partial<FeedWithCount>): boolean {
-  const rawUrl = String(feed?.url || "").toLowerCase()
+  const rawUrl = String(feed?.url || '').toLowerCase()
   const view = feed?.view
-  if (view === FeedViewType.SocialMedia || view === FeedViewType.Pictures) return true
+  if (view === FeedViewType.SocialMedia || view === FeedViewType.Pictures)
+    return true
   return (
     /\/instagram\/user\//i.test(rawUrl) ||
     /\/picnob(?:\.info)?\/user\//i.test(rawUrl) ||
@@ -31,14 +32,15 @@ async function reloadEntriesForCurrentScope(state: {
 }): Promise<void> {
   const { clearListCache, loadEntries } = useEntryStore.getState()
   const limit = getEntryLoadLimit(state.activeView)
-  const viewFeedIds = state.activeView !== null
-    ? state.feeds
-        .filter((f) => (f.view ?? FeedViewType.Articles) === state.activeView)
-        .map((f) => f.id)
-    : []
+  const viewFeedIds =
+    state.activeView !== null
+      ? state.feeds
+          .filter((f) => (f.view ?? FeedViewType.Articles) === state.activeView)
+          .map((f) => f.id)
+      : []
 
   clearListCache()
-  if (state.selectedFeedId === "starred") {
+  if (state.selectedFeedId === 'starred') {
     await loadEntries({ starred: true, limit })
     return
   }
@@ -73,7 +75,16 @@ interface FeedState {
 
   // Actions
   loadFeeds: () => Promise<void>
-  addFeed: (url: string, category?: string, view?: FeedViewType, title?: string) => Promise<{ success: boolean; error?: string; feed?: Partial<FeedWithCount> }>
+  addFeed: (
+    url: string,
+    category?: string,
+    view?: FeedViewType,
+    title?: string,
+  ) => Promise<{
+    success: boolean
+    error?: string
+    feed?: Partial<FeedWithCount>
+  }>
   removeFeed: (feedId: string) => Promise<void>
   removeFeeds: (feedIds: string[]) => Promise<void>
   refreshFeed: (feedId: string) => Promise<void>
@@ -81,9 +92,33 @@ interface FeedState {
   refreshAll: () => Promise<void>
   setSelectedFeed: (feedId: string | null) => void
   setActiveView: (view: FeedViewType | null) => void
-  updateFeed: (feedId: string, updates: { title?: string; url?: string; folder?: string; category?: string; view?: FeedViewType; imageUrl?: string; showInAll?: boolean; maxEntries?: number }) => Promise<void>
-  importOPML: () => Promise<{ success: boolean; imported?: number; skipped?: number; errors?: string[]; error?: string; canceled?: boolean }>
-  exportOPML: () => Promise<{ success: boolean; count?: number; error?: string; canceled?: boolean }>
+  updateFeed: (
+    feedId: string,
+    updates: {
+      title?: string
+      url?: string
+      folder?: string
+      category?: string
+      view?: FeedViewType
+      imageUrl?: string
+      showInAll?: boolean
+      maxEntries?: number
+    },
+  ) => Promise<void>
+  importOPML: () => Promise<{
+    success: boolean
+    imported?: number
+    skipped?: number
+    errors?: string[]
+    error?: string
+    canceled?: boolean
+  }>
+  exportOPML: () => Promise<{
+    success: boolean
+    count?: number
+    error?: string
+    canceled?: boolean
+  }>
 }
 
 export const useFeedStore = createAppStore<FeedState>((set, get) => ({
@@ -124,7 +159,9 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
           })
           set((state) => ({
             feeds: state.feeds.map((f) =>
-              f.id === newFeedId ? { ...f, unreadCount: unreadEntries.length } : f,
+              f.id === newFeedId
+                ? { ...f, unreadCount: unreadEntries.entries.length }
+                : f,
             ),
           }))
 
@@ -181,12 +218,15 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   // Falls back to a full reload only when backend did not return enough data.
   refreshFeed: async (feedId) => {
     const applyRefreshPatch = (
-      result: {
-        success?: boolean
-        newEntries?: number
-        unreadCount?: number
-        feed?: Partial<FeedWithCount>
-      } | null | undefined,
+      result:
+        | {
+            success?: boolean
+            newEntries?: number
+            unreadCount?: number
+            feed?: Partial<FeedWithCount>
+          }
+        | null
+        | undefined,
       targetFeedId: string,
     ): boolean => {
       if (!result?.success) return false
@@ -195,9 +235,9 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
         if (idx === -1) return state
         const current = state.feeds[idx]
         const nextUnread =
-          typeof result.unreadCount === "number"
+          typeof result.unreadCount === 'number'
             ? result.unreadCount
-            : (current.unreadCount + (result.newEntries || 0))
+            : current.unreadCount + (result.newEntries || 0)
         const patched: FeedWithCount = {
           ...current,
           ...(result.feed || {}),
@@ -210,7 +250,8 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
       return true
     }
 
-    const receiveRecommended = useSettingsStore.getState().settings.general.showRecommended
+    const receiveRecommended =
+      useSettingsStore.getState().settings.general.showRecommended
     if (!receiveRecommended) {
       const feed = get().feeds.find((f) => f.id === feedId)
       if (feed?.category === RECOMMENDED_CATEGORY) return
@@ -232,7 +273,8 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   },
 
   refreshMultiple: async (feedIds) => {
-    const receiveRecommended = useSettingsStore.getState().settings.general.showRecommended
+    const receiveRecommended =
+      useSettingsStore.getState().settings.general.showRecommended
     const targets = receiveRecommended
       ? feedIds
       : feedIds.filter((id) => {
@@ -263,9 +305,9 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
             }
             const current = state.feeds[idx]
             const nextUnread =
-              typeof result.unreadCount === "number"
+              typeof result.unreadCount === 'number'
                 ? result.unreadCount
-                : (current.unreadCount + (result.newEntries || 0))
+                : current.unreadCount + (result.newEntries || 0)
             const patched: FeedWithCount = {
               ...current,
               ...(result.feed || {}),
@@ -278,7 +320,9 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
         }
       }
       await Promise.all(
-        Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()),
+        Array.from({ length: Math.min(concurrency, queue.length) }, () =>
+          worker(),
+        ),
       )
       if (needsFallbackReload) {
         await get().loadFeeds()
@@ -291,11 +335,14 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
 
   refreshAll: async () => {
     set({ isRefreshing: true })
-    const removeListener = window.api.on("feeds:refresh-progress", (payload) => {
-      const progress = payload as FeedState["refreshProgress"]
-      if (!progress || typeof progress !== "object") return
-      set({ refreshProgress: progress })
-    })
+    const removeListener = window.api.on(
+      'feeds:refresh-progress',
+      (payload) => {
+        const progress = payload as FeedState['refreshProgress']
+        if (!progress || typeof progress !== 'object') return
+        set({ refreshProgress: progress })
+      },
+    )
     try {
       await window.api.feeds.refreshAll()
       await get().loadFeeds()

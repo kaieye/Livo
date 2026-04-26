@@ -4,6 +4,7 @@ import type {
   AppSettings,
   Feed,
   Entry,
+  EntryListResult,
   FeedWithCount,
   FeedViewType,
   AccountProvider,
@@ -47,7 +48,7 @@ const api = {
       compact?: boolean
       maxContentLength?: number
       skipDedupe?: boolean
-    }): Promise<Entry[]> => ipcRenderer.invoke(IPC.ENTRY_LIST, options),
+    }): Promise<EntryListResult> => ipcRenderer.invoke(IPC.ENTRY_LIST, options),
     get: (entryId: string): Promise<Entry | null> =>
       ipcRenderer.invoke(IPC.ENTRY_GET, entryId),
     markRead: (entryId: string, isRead: boolean) =>

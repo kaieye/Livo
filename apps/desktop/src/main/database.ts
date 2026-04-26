@@ -292,15 +292,18 @@ export function deleteFeed(id: string): void {
 
 // ---- Entry operations ----
 
-export function getEntries(options: {
+export interface EntryListResult {
+  entries: Entry[]
+  hasMore: boolean
+}
+
+function getFilteredEntries(options: {
   feedId?: string
   feedIds?: string[]
   starred?: boolean
   unreadOnly?: boolean
   limit?: number
   offset?: number
-  compact?: boolean
-  maxContentLength?: number
   skipDedupe?: boolean
 }): Entry[] {
   const offset = options.offset || 0
@@ -331,8 +334,26 @@ export function getEntries(options: {
     result = dedupeEntriesForRead(result, markEntriesOrderDirty)
     result.sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
   }
-  const page = result.slice(offset, offset + limit)
-  if (!options.compact) return page
+  return result
+}
+
+export function getEntries(options: {
+  feedId?: string
+  feedIds?: string[]
+  starred?: boolean
+  unreadOnly?: boolean
+  limit?: number
+  offset?: number
+  compact?: boolean
+  maxContentLength?: number
+  skipDedupe?: boolean
+}): EntryListResult {
+  const offset = options.offset || 0
+  const limit = options.limit || 1000
+  const filteredEntries = getFilteredEntries(options)
+  const pageEntries = filteredEntries.slice(offset, offset + limit)
+  const hasMore = filteredEntries.length > offset + limit
+  if (!options.compact) return { entries: pageEntries, hasMore }
 
   const trimCompactContent = (
     value: string | undefined,
@@ -373,12 +394,15 @@ export function getEntries(options: {
     120,
     Math.min(Math.floor(maxContentLength / 2), 2400),
   )
-  return page.map((entry) => ({
-    ...entry,
-    content: trimCompactContent(entry.content, maxContentLength),
-    summary: trimCompactContent(entry.summary, maxSummaryLength),
-    media: entry.media || [],
-  }))
+  return {
+    entries: pageEntries.map((entry) => ({
+      ...entry,
+      content: trimCompactContent(entry.content, maxContentLength),
+      summary: trimCompactContent(entry.summary, maxSummaryLength),
+      media: entry.media || [],
+    })),
+    hasMore,
+  }
 }
 
 export function getOrphanEntries(): Entry[] {

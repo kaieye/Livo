@@ -110,6 +110,11 @@ export interface Entry {
   createdAt: number
 }
 
+export interface EntryListResult {
+  entries: Entry[]
+  hasMore: boolean
+}
+
 export interface FeedWithCount extends Feed {
   unreadCount: number
 }

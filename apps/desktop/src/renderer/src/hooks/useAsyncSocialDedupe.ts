@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import type { Entry } from "../../../shared/types"
-import { dedupeSocialEntries } from "../lib/dedupe-social"
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Entry } from '../../../shared/types'
+import { dedupeSocialEntries } from '../lib/dedupe-social'
 
 type DedupeWorkerRequest = {
   id: number
@@ -18,14 +18,18 @@ type UseAsyncSocialDedupeOptions = {
   workerThreshold?: number
 }
 
-const DEFAULT_WORKER_THRESHOLD = 24
+const DEFAULT_WORKER_THRESHOLD = 12
 const dedupeCacheByKey = new Map<string, Entry[]>()
 
 export function useAsyncSocialDedupe(
   sourceEntries: Entry[],
   options: UseAsyncSocialDedupeOptions,
 ): { entries: Entry[]; isProcessing: boolean } {
-  const { enabled, cacheKey, workerThreshold = DEFAULT_WORKER_THRESHOLD } = options
+  const {
+    enabled,
+    cacheKey,
+    workerThreshold = DEFAULT_WORKER_THRESHOLD,
+  } = options
   const [dedupedEntries, setDedupedEntries] = useState<Entry[]>(sourceEntries)
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -34,7 +38,10 @@ export function useAsyncSocialDedupe(
   const activeKeyRef = useRef(cacheKey)
 
   const shouldUseWorker = useMemo(
-    () => enabled && sourceEntries.length >= workerThreshold && typeof Worker !== "undefined",
+    () =>
+      enabled &&
+      sourceEntries.length >= workerThreshold &&
+      typeof Worker !== 'undefined',
     [enabled, sourceEntries.length, workerThreshold],
   )
   const renderEntries = useMemo(() => {
@@ -45,7 +52,10 @@ export function useAsyncSocialDedupe(
   useEffect(() => {
     if (!shouldUseWorker) return
     if (workerRef.current) return
-    workerRef.current = new Worker(new URL("../workers/social-dedupe.worker.ts", import.meta.url), { type: "module" })
+    workerRef.current = new Worker(
+      new URL('../workers/social-dedupe.worker.ts', import.meta.url),
+      { type: 'module' },
+    )
   }, [shouldUseWorker])
 
   useEffect(() => {
@@ -106,14 +116,17 @@ export function useAsyncSocialDedupe(
       setIsProcessing(false)
     }
 
-    worker.addEventListener("message", handleMessage)
-    worker.addEventListener("error", handleError)
-    const payload: DedupeWorkerRequest = { id: requestId, entries: sourceEntries }
+    worker.addEventListener('message', handleMessage)
+    worker.addEventListener('error', handleError)
+    const payload: DedupeWorkerRequest = {
+      id: requestId,
+      entries: sourceEntries,
+    }
     worker.postMessage(payload)
 
     return () => {
-      worker.removeEventListener("message", handleMessage)
-      worker.removeEventListener("error", handleError)
+      worker.removeEventListener('message', handleMessage)
+      worker.removeEventListener('error', handleError)
     }
   }, [cacheKey, enabled, shouldUseWorker, sourceEntries])
 

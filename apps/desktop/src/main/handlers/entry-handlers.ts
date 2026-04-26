@@ -1,12 +1,13 @@
-﻿import { ipcMain } from "electron"
-import { IPC } from "../../shared/types"
+﻿import { ipcMain } from 'electron'
+import { IPC } from '../../shared/types'
 import {
   getEntries,
   getEntryById,
   updateEntry,
   markAllRead as dbMarkAllRead,
   searchEntries,
-} from "../database"
+  type EntryListResult,
+} from '../database'
 
 export function registerEntryHandlers(): void {
   // List entries
@@ -24,10 +25,10 @@ export function registerEntryHandlers(): void {
         compact?: boolean
         maxContentLength?: number
         skipDedupe?: boolean
-      }
-    ) => {
+      },
+    ): Promise<EntryListResult> => {
       return getEntries(options)
-    }
+    },
   )
 
   // Get single entry
@@ -36,10 +37,13 @@ export function registerEntryHandlers(): void {
   })
 
   // Mark entry as read
-  ipcMain.handle(IPC.ENTRY_MARK_READ, (_event, entryId: string, isRead: boolean) => {
-    updateEntry(entryId, { isRead })
-    return { success: true }
-  })
+  ipcMain.handle(
+    IPC.ENTRY_MARK_READ,
+    (_event, entryId: string, isRead: boolean) => {
+      updateEntry(entryId, { isRead })
+      return { success: true }
+    },
+  )
 
   // Mark all entries as read
   ipcMain.handle(IPC.ENTRY_MARK_ALL_READ, (_event, feedId?: string) => {
@@ -61,6 +65,3 @@ export function registerEntryHandlers(): void {
     return searchEntries(query, limit)
   })
 }
-
-
-

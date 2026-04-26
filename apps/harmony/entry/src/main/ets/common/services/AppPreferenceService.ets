@@ -305,8 +305,12 @@ export class AppPreferenceService {
       .map((entry: RefreshLogEntry) => normalizeRefreshLogEntry(entry))
 
     const pref = await AppPreferenceService.getPref()
-    await pref.put(REFRESH_LOGS_KEY, JSON.stringify(normalizedEntries))
-    await pref.flush()
+    try {
+      await pref.put(REFRESH_LOGS_KEY, JSON.stringify(normalizedEntries))
+      await pref.flush()
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '保存刷新日志失败')
+    }
     return normalizedEntries
   }
 
@@ -350,8 +354,12 @@ export class AppPreferenceService {
   static async saveHomeEntrySnapshot(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
     const normalizedEntries = normalizeHomeEntrySnapshotEntries(entries)
     const pref = await AppPreferenceService.getPref()
-    await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(normalizedEntries))
-    await pref.flush()
+    try {
+      await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(normalizedEntries))
+      await pref.flush()
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '保存首页快照失败')
+    }
     return normalizedEntries
   }
 
@@ -363,8 +371,12 @@ export class AppPreferenceService {
       return currentEntries
     }
 
-    await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(nextEntries))
-    await pref.flush()
+    try {
+      await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(nextEntries))
+      await pref.flush()
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '移除首页快照失败')
+    }
     return nextEntries
   }
 
@@ -420,8 +432,12 @@ export class AppPreferenceService {
     })
 
     const pref = await AppPreferenceService.getPref()
-    await pref.put(DISCOVER_AVATAR_CACHE_KEY, JSON.stringify(normalizedEntries))
-    await pref.flush()
+    try {
+      await pref.put(DISCOVER_AVATAR_CACHE_KEY, JSON.stringify(normalizedEntries))
+      await pref.flush()
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : '保存发现页头像缓存失败')
+    }
     return normalizedEntries
   }
 

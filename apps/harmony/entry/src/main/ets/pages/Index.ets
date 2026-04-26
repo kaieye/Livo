@@ -149,15 +149,15 @@ const HOME_MODE_PREWARM_STEP_DELAY_MS: number = 0
 const HOME_MODE_SWITCH_ENTRY_DEFER_MS: number = 32
 const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
 const HOME_FULL_MODE_CANDIDATE_LIMIT: number = 2147483647
-const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 180
+const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 120
 const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
 const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = false
 const HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED: boolean = true
-const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 64
+const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 32
 const HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS: number = 800
-const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 120
-const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 200
-const HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER: number = 0
+const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 80
+const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 120
+const HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER: number = 2
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
 const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3
 const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 1200
@@ -2169,6 +2169,7 @@ struct Index {
 
     this.mode = nextMode
     this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
+    this.setHomeScrollInteracting(false, nextMode)
     this.resetModeScrollIntent(nextMode)
     this.resetHomePullRefreshState()
     this.homeModeRailExpandedLockOffset = nextModeOffset
@@ -2609,9 +2610,24 @@ struct Index {
   ): void {
     const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
     const safeLimit = Math.max(minimumLimit, candidateLimit)
+    const currentEntries = this.filteredEntriesFor(mode)
+    const currentCount = currentEntries.length
     this.setCandidateLimitForMode(mode, safeLimit)
     if (entries.length >= safeLimit) {
       this.setModeHasMoreEntries(mode, true, `sync-pagination-full entries=${entries.length} limit=${safeLimit}`)
+      return
+    }
+
+    if (entries.length > currentCount) {
+      this.setModeHasMoreEntries(mode, true, `sync-pagination-growth entries=${entries.length} current=${currentCount} limit=${safeLimit}`)
+      return
+    }
+
+    const visibleCount = this.visibleEntryCountFor(mode)
+    const currentCandidateLimit = this.candidateLimitForMode(mode)
+    const reachedCurrentBoundary = visibleCount >= currentCount && safeLimit > currentCandidateLimit
+    if (currentCount > 0 && reachedCurrentBoundary) {
+      this.setModeHasMoreEntries(mode, true, `sync-pagination-boundary visible=${visibleCount} current=${currentCount} limit=${safeLimit}`)
       return
     }
 
@@ -3041,14 +3057,15 @@ struct Index {
     const seen = new Set<string>()
     const merged: EntryCardModel[] = []
     previousEntries.forEach((entry: EntryCardModel) => {
-      seen.add(entry.id)
+      seen.add(`${entry.id}|${entry.feedId}|${entry.articleUrl}`)
       merged.push(entry)
     })
     nextPage.forEach((entry: EntryCardModel) => {
-      if (seen.has(entry.id)) {
+      const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+      if (seen.has(key)) {
         return
       }
-      seen.add(entry.id)
+      seen.add(key)
       merged.push(entry)
     })
 
@@ -3072,6 +3089,20 @@ struct Index {
     }
 
     this.setCandidateLimitForMode(mode, nextLimit)
+    if (mode === 'articles') {
+      this.entryGroups = {
+        articles: merged,
+        social: this.entryGroups.social,
+        pictures: this.entryGroups.pictures,
+        videos: this.entryGroups.videos,
+      }
+      this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
+      this.markModeLoaded(mode, true)
+      this.settleInitialHomeLoadState()
+      this.schedulePersistHomeSnapshot(this.featuredEntries)
+      this.notifyHomeEntryDataReloadedForMode(mode)
+      return
+    }
     this.applyEntriesForMode(mode, merged, true)
   }
 
@@ -3252,7 +3283,7 @@ struct Index {
       }
       this.runManagedTimeout(() => {
         this.flushPendingLoadMoreForMode(mode)
-      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
+      }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
     }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
   }
 

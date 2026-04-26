@@ -419,20 +419,25 @@ export class RssFeedService {
     const request = http.createHttp()
 
     try {
-      const response = await request.request(
-        `https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space?host_mid=${encodeURIComponent(uid)}`,
-        {
-          method: http.RequestMethod.GET,
-          connectTimeout: LONG_REQUEST_TIMEOUT_MS,
-          readTimeout: LONG_REQUEST_TIMEOUT_MS,
-          header: {
-            'User-Agent': DESKTOP_BROWSER_USER_AGENT,
-            'Accept': ACCEPT_JSON,
-            'Referer': bilibiliSpaceReferer(uid),
-            'Origin': BILIBILI_ORIGIN,
+      let response: http.HttpResponse
+      try {
+        response = await request.request(
+          `https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space?host_mid=${encodeURIComponent(uid)}`,
+          {
+            method: http.RequestMethod.GET,
+            connectTimeout: LONG_REQUEST_TIMEOUT_MS,
+            readTimeout: LONG_REQUEST_TIMEOUT_MS,
+            header: {
+              'User-Agent': DESKTOP_BROWSER_USER_AGENT,
+              'Accept': ACCEPT_JSON,
+              'Referer': bilibiliSpaceReferer(uid),
+              'Origin': BILIBILI_ORIGIN,
+            },
           },
-        },
-      )
+        )
+      } catch (error) {
+        throw new Error(error instanceof Error ? error.message : 'Bilibili 动态请求失败')
+      }
 
       if (response.responseCode !== 200) {
         throw new Error(`Bilibili dynamic request failed with status ${response.responseCode}`)

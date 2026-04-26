@@ -1759,7 +1759,6 @@ export struct AIAssistantSettingsPanel {
       .width('100%')
 
       TextInput({ text: value, placeholder })
-        .key(rebuildKey)
         .height(INPUT_HEIGHT)
         .width('100%')
         .backgroundColor(this.theme.elevated)

@@ -1,48 +1,55 @@
-import { createAppStore } from "./helpers"
-import type { Entry } from "../../../shared/types"
+import { createAppStore } from './helpers'
+import type { Entry, EntryListResult } from '../../../shared/types'
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
 const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
 const ENTRY_LIST_CACHE_VERSION = 3
 const DEFAULT_ENTRY_PAGE_SIZE = 10
 const MAX_ENTRY_PAGE_SIZE = 1000
-const entryListCache = new Map<string, { entries: Entry[]; cachedAt: number }>()
-const entryListInFlight = new Map<string, Promise<Entry[]>>()
+const entryListCache = new Map<
+  string,
+  { result: EntryListResult; cachedAt: number }
+>()
+const entryListInFlight = new Map<string, Promise<EntryListResult>>()
 const entryDetailCache = new Map<string, Entry>()
 const entryDetailInFlight = new Map<string, Promise<Entry | null>>()
 
 function isPicnobMirrorHost(host: string): boolean {
   const lower = host.toLowerCase()
   return (
-    lower === "media.picnob.info" ||
-    lower === "media.pixnoy.com" ||
-    lower.includes("piokok.com") ||
-    lower.includes("picnob.com") ||
-    lower.includes("pixnoy.com") ||
-    lower.includes("pixwox.com") ||
-    lower.includes("sp1.pixnoy.com") ||
-    lower.includes("sp2.pixnoy.com") ||
-    lower.includes("sp3.pixnoy.com") ||
-    lower.includes("sp4.pixnoy.com") ||
-    lower.includes("sp5.pixnoy.com")
+    lower === 'media.picnob.info' ||
+    lower === 'media.pixnoy.com' ||
+    lower.includes('piokok.com') ||
+    lower.includes('picnob.com') ||
+    lower.includes('pixnoy.com') ||
+    lower.includes('pixwox.com') ||
+    lower.includes('sp1.pixnoy.com') ||
+    lower.includes('sp2.pixnoy.com') ||
+    lower.includes('sp3.pixnoy.com') ||
+    lower.includes('sp4.pixnoy.com') ||
+    lower.includes('sp5.pixnoy.com')
   )
 }
 
 function extractAssetIdFromRaw(input?: string): string {
-  const raw = (input || "").trim()
-  if (!raw) return ""
+  const raw = (input || '').trim()
+  if (!raw) return ''
   try {
     const parsed = new URL(raw)
     const host = parsed.hostname.toLowerCase()
-    if (isPicnobMirrorHost(host) && parsed.pathname === "/get") {
-      const nested = parsed.searchParams.get("url") || ""
+    if (isPicnobMirrorHost(host) && parsed.pathname === '/get') {
+      const nested = parsed.searchParams.get('url') || ''
       if (nested) return extractAssetIdFromRaw(nested)
     }
-    if ((host.includes("pixnoy") || host.includes("picnob")) && parsed.searchParams.has("o")) {
-      const encoded = parsed.searchParams.get("o") || ""
+    if (
+      (host.includes('pixnoy') || host.includes('picnob')) &&
+      parsed.searchParams.has('o')
+    ) {
+      const encoded = parsed.searchParams.get('o') || ''
       if (encoded) {
-        const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/")
-        const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
+        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
+        const padded =
+          normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
         try {
           const decoded = atob(padded)
           const nested = decoded.match(/https?:\/\/\S+/i)?.[0] || decoded
@@ -63,23 +70,34 @@ function extractAssetIdFromRaw(input?: string): string {
   }
   const direct = raw.match(/_(\d{14,})_/)
   if (direct?.[1]) return direct[1]
-  return ""
+  return ''
 }
 
 function getEntryClientDedupKey(entry: Entry): string {
-  const candidates: string[] = [entry.url || "", entry.imageUrl || "", entry.content || "", entry.summary || ""]
-  for (const m of entry.media || []) candidates.push(m.url || "", m.previewUrl || "")
+  const candidates: string[] = [
+    entry.url || '',
+    entry.imageUrl || '',
+    entry.content || '',
+    entry.summary || '',
+  ]
+  for (const m of entry.media || [])
+    candidates.push(m.url || '', m.previewUrl || '')
   for (const s of candidates) {
     const asset = extractAssetIdFromRaw(s)
     if (asset) return `asset:${entry.feedId}:${asset}`
   }
-  const title = (entry.title || "").toLowerCase().trim().slice(0, 80)
+  const title = (entry.title || '').toLowerCase().trim().slice(0, 80)
   const bucket = Math.floor((entry.publishedAt || 0) / (5 * 60 * 1000))
   return `fallback:${entry.feedId}:${title}:${bucket}`
 }
 
 function entryClientRichness(entry: Entry): number {
-  return (entry.media?.length || 0) * 400 + (entry.content?.length || 0) + (entry.summary?.length || 0) + (entry.imageUrl ? 40 : 0)
+  return (
+    (entry.media?.length || 0) * 400 +
+    (entry.content?.length || 0) +
+    (entry.summary?.length || 0) +
+    (entry.imageUrl ? 40 : 0)
+  )
 }
 
 function dedupeEntriesForClient(entries: Entry[]): Entry[] {
@@ -91,9 +109,16 @@ function dedupeEntriesForClient(entries: Entry[]): Entry[] {
       byKey.set(key, entry)
       continue
     }
-    byKey.set(key, entryClientRichness(entry) >= entryClientRichness(existing) ? entry : existing)
+    byKey.set(
+      key,
+      entryClientRichness(entry) >= entryClientRichness(existing)
+        ? entry
+        : existing,
+    )
   }
-  return Array.from(byKey.values()).sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+  return Array.from(byKey.values()).sort(
+    (a, b) => (b.publishedAt || 0) - (a.publishedAt || 0),
+  )
 }
 
 function buildListCacheKey(options?: {
@@ -107,7 +132,7 @@ function buildListCacheKey(options?: {
   const feedIds = [...(options?.feedIds || [])].sort()
   return JSON.stringify({
     v: ENTRY_LIST_CACHE_VERSION,
-    feedId: options?.feedId || "",
+    feedId: options?.feedId || '',
     feedIds,
     starred: !!options?.starred,
     unreadOnly: !!options?.unreadOnly,
@@ -117,7 +142,9 @@ function buildListCacheKey(options?: {
 }
 
 function sortEntriesByPublishedDesc(entries: Entry[]): Entry[] {
-  return [...entries].sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+  return [...entries].sort(
+    (a, b) => (b.publishedAt || 0) - (a.publishedAt || 0),
+  )
 }
 
 function mergeEntriesById(prev: Entry[], next: Entry[]): Entry[] {
@@ -206,13 +233,16 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   isLoading: false,
   isLoadingMore: false,
   hasMoreEntries: false,
-  paginationQueryKey: "",
+  paginationQueryKey: '',
   paginationOptions: null,
   paginationPageSize: 0,
-  searchQuery: "",
+  searchQuery: '',
 
   loadEntries: async (options) => {
-    const pageSize = Math.max(1, Math.min(options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE))
+    const pageSize = Math.max(
+      1,
+      Math.min(options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE),
+    )
     const normalizedOptions = {
       feedId: options?.feedId,
       feedIds: options?.feedIds,
@@ -222,7 +252,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       offset: 0,
     }
     const queryKey = JSON.stringify({
-      feedId: normalizedOptions.feedId || "",
+      feedId: normalizedOptions.feedId || '',
       feedIds: [...(normalizedOptions.feedIds || [])].sort(),
       starred: !!normalizedOptions.starred,
       unreadOnly: !!normalizedOptions.unreadOnly,
@@ -241,13 +271,15 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
 
     const cacheKey = buildListCacheKey(normalizedOptions)
     const cached = entryListCache.get(cacheKey)
-    const ttl = cached?.entries?.length ? ENTRY_LIST_CACHE_TTL_MS : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+    const ttl = cached?.result?.entries?.length
+      ? ENTRY_LIST_CACHE_TTL_MS
+      : EMPTY_ENTRY_LIST_CACHE_TTL_MS
     if (cached && Date.now() - cached.cachedAt < ttl) {
       set({
-        entries: cached.entries,
+        entries: cached.result.entries,
         isLoading: false,
         isLoadingMore: false,
-        hasMoreEntries: cached.entries.length >= pageSize,
+        hasMoreEntries: cached.result.hasMore,
       })
       return
     }
@@ -257,31 +289,34 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       const existing = entryListInFlight.get(cacheKey)
       const entriesPromise =
         existing ??
-        window.api.entries.list({
-          feedId: normalizedOptions.feedId,
-          feedIds: normalizedOptions.feedIds,
-          starred: normalizedOptions.starred,
-          unreadOnly: normalizedOptions.unreadOnly,
-          limit: normalizedOptions.limit,
-          offset: 0,
-          compact: true,
-          maxContentLength: 520,
-          skipDedupe: false,
-        }).then((entries) => {
-          entryListCache.set(cacheKey, { entries, cachedAt: Date.now() })
-          return entries
-        }).finally(() => {
-          entryListInFlight.delete(cacheKey)
-        })
+        window.api.entries
+          .list({
+            feedId: normalizedOptions.feedId,
+            feedIds: normalizedOptions.feedIds,
+            starred: normalizedOptions.starred,
+            unreadOnly: normalizedOptions.unreadOnly,
+            limit: normalizedOptions.limit,
+            offset: 0,
+            compact: true,
+            maxContentLength: 520,
+            skipDedupe: false,
+          })
+          .then((result) => {
+            entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
+            return result
+          })
+          .finally(() => {
+            entryListInFlight.delete(cacheKey)
+          })
       if (!existing) entryListInFlight.set(cacheKey, entriesPromise)
-      const entries = await entriesPromise
+      const result = await entriesPromise
       const isLatestQuery = get().paginationQueryKey === queryKey
       if (!isLatestQuery) return
       set({
-        entries: sortEntriesByPublishedDesc(entries),
+        entries: sortEntriesByPublishedDesc(result.entries),
         isLoading: false,
         isLoadingMore: false,
-        hasMoreEntries: entries.length >= pageSize,
+        hasMoreEntries: result.hasMore,
       })
     } catch {
       set({ isLoading: false, isLoadingMore: false })
@@ -291,28 +326,33 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   prefetchEntries: async (options) => {
     const cacheKey = buildListCacheKey(options)
     const cached = entryListCache.get(cacheKey)
-    const ttl = cached?.entries?.length ? ENTRY_LIST_CACHE_TTL_MS : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+    const ttl = cached?.result?.entries?.length
+      ? ENTRY_LIST_CACHE_TTL_MS
+      : EMPTY_ENTRY_LIST_CACHE_TTL_MS
     if (cached && Date.now() - cached.cachedAt < ttl) return
     if (entryListInFlight.has(cacheKey)) {
       await entryListInFlight.get(cacheKey)
       return
     }
 
-    const promise = window.api.entries.list({
-      feedId: options?.feedId,
-      feedIds: options?.feedIds,
-      starred: options?.starred,
-      unreadOnly: options?.unreadOnly,
-      limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
-      compact: true,
-      maxContentLength: 520,
-      skipDedupe: false,
-    }).then((entries) => {
-      entryListCache.set(cacheKey, { entries, cachedAt: Date.now() })
-      return entries
-    }).finally(() => {
-      entryListInFlight.delete(cacheKey)
-    })
+    const promise = window.api.entries
+      .list({
+        feedId: options?.feedId,
+        feedIds: options?.feedIds,
+        starred: options?.starred,
+        unreadOnly: options?.unreadOnly,
+        limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
+        compact: true,
+        maxContentLength: 520,
+        skipDedupe: false,
+      })
+      .then((result) => {
+        entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
+        return result
+      })
+      .finally(() => {
+        entryListInFlight.delete(cacheKey)
+      })
     entryListInFlight.set(cacheKey, promise)
     await promise
   },
@@ -321,7 +361,13 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const state = get()
     if (state.isLoading || state.isLoadingMore || !state.hasMoreEntries) return
     const baseOptions = state.paginationOptions
-    const pageSize = Math.max(1, Math.min(state.paginationPageSize || DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE))
+    const pageSize = Math.max(
+      1,
+      Math.min(
+        state.paginationPageSize || DEFAULT_ENTRY_PAGE_SIZE,
+        MAX_ENTRY_PAGE_SIZE,
+      ),
+    )
     if (!baseOptions) return
 
     const offset = state.entries.length
@@ -332,42 +378,47 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     }
     const cacheKey = buildListCacheKey(pageOptions)
     const cached = entryListCache.get(cacheKey)
-    const ttl = cached?.entries?.length ? ENTRY_LIST_CACHE_TTL_MS : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+    const ttl = cached?.result?.entries?.length
+      ? ENTRY_LIST_CACHE_TTL_MS
+      : EMPTY_ENTRY_LIST_CACHE_TTL_MS
 
     set({ isLoadingMore: true })
 
     try {
-      let nextPage: Entry[]
+      let nextPage: EntryListResult
       if (cached && Date.now() - cached.cachedAt < ttl) {
-        nextPage = cached.entries
+        nextPage = cached.result
       } else {
         const existing = entryListInFlight.get(cacheKey)
         const promise =
           existing ??
-          window.api.entries.list({
-            feedId: pageOptions.feedId,
-            feedIds: pageOptions.feedIds,
-            starred: pageOptions.starred,
-            unreadOnly: pageOptions.unreadOnly,
-            limit: pageOptions.limit,
-            offset: pageOptions.offset,
-            compact: true,
-            maxContentLength: 520,
-            skipDedupe: false,
-          }).then((entries) => {
-            entryListCache.set(cacheKey, { entries, cachedAt: Date.now() })
-            return entries
-          }).finally(() => {
-            entryListInFlight.delete(cacheKey)
-          })
+          window.api.entries
+            .list({
+              feedId: pageOptions.feedId,
+              feedIds: pageOptions.feedIds,
+              starred: pageOptions.starred,
+              unreadOnly: pageOptions.unreadOnly,
+              limit: pageOptions.limit,
+              offset: pageOptions.offset,
+              compact: true,
+              maxContentLength: 520,
+              skipDedupe: false,
+            })
+            .then((result) => {
+              entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
+              return result
+            })
+            .finally(() => {
+              entryListInFlight.delete(cacheKey)
+            })
         if (!existing) entryListInFlight.set(cacheKey, promise)
         nextPage = await promise
       }
 
       set((current) => ({
-        entries: mergeEntriesById(current.entries, nextPage),
+        entries: mergeEntriesById(current.entries, nextPage.entries),
         isLoadingMore: false,
-        hasMoreEntries: nextPage.length >= pageSize,
+        hasMoreEntries: nextPage.hasMore,
       }))
     } catch {
       set({ isLoadingMore: false })
@@ -395,8 +446,11 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     entryDetailCache.set(entryId, refreshed)
 
     set((state) => ({
-      entries: state.entries.map((entry) => (entry.id === entryId ? refreshed : entry)),
-      selectedEntry: state.selectedEntry?.id === entryId ? refreshed : state.selectedEntry,
+      entries: state.entries.map((entry) =>
+        entry.id === entryId ? refreshed : entry,
+      ),
+      selectedEntry:
+        state.selectedEntry?.id === entryId ? refreshed : state.selectedEntry,
     }))
 
     return refreshed
@@ -417,9 +471,13 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       await window.api.entries.markRead(entry.id, true)
       // Update local state
       set((state) => ({
-        entries: state.entries.map((e) => (e.id === entry.id ? { ...e, isRead: true } : e)),
+        entries: state.entries.map((e) =>
+          e.id === entry.id ? { ...e, isRead: true } : e,
+        ),
         selectedEntry:
-          state.selectedEntry?.id === entry.id ? { ...state.selectedEntry, isRead: true } : state.selectedEntry,
+          state.selectedEntry?.id === entry.id
+            ? { ...state.selectedEntry, isRead: true }
+            : state.selectedEntry,
       }))
       const cached = entryDetailCache.get(entry.id)
       if (cached) {
@@ -446,8 +504,11 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         const detail = await fetchEntryDetail(id)
         if (!detail) return
         set((state) => ({
-          entries: state.entries.map((entry) => (entry.id === id ? detail : entry)),
-          selectedEntry: state.selectedEntry?.id === id ? detail : state.selectedEntry,
+          entries: state.entries.map((entry) =>
+            entry.id === id ? detail : entry,
+          ),
+          selectedEntry:
+            state.selectedEntry?.id === id ? detail : state.selectedEntry,
         }))
       }),
     )
@@ -456,8 +517,13 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   markRead: async (entryId, isRead) => {
     await window.api.entries.markRead(entryId, isRead)
     set((state) => ({
-      entries: state.entries.map((e) => (e.id === entryId ? { ...e, isRead } : e)),
-      selectedEntry: state.selectedEntry?.id === entryId ? { ...state.selectedEntry, isRead } : state.selectedEntry,
+      entries: state.entries.map((e) =>
+        e.id === entryId ? { ...e, isRead } : e,
+      ),
+      selectedEntry:
+        state.selectedEntry?.id === entryId
+          ? { ...state.selectedEntry, isRead }
+          : state.selectedEntry,
     }))
     const cached = entryDetailCache.get(entryId)
     if (cached) {
@@ -469,7 +535,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     await window.api.entries.markAllRead(feedId)
     set((state) => ({
       entries: state.entries.map((e) =>
-        !feedId || e.feedId === feedId ? { ...e, isRead: true } : e
+        !feedId || e.feedId === feedId ? { ...e, isRead: true } : e,
       ),
     }))
   },
@@ -483,7 +549,9 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       await window.api.entries.markRead(e.id, true)
     }
     set((state) => ({
-      entries: state.entries.map((e, i) => (i < idx ? { ...e, isRead: true } : e)),
+      entries: state.entries.map((e, i) =>
+        i < idx ? { ...e, isRead: true } : e,
+      ),
     }))
   },
 
@@ -496,7 +564,9 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       await window.api.entries.markRead(e.id, true)
     }
     set((state) => ({
-      entries: state.entries.map((e, i) => (i > idx ? { ...e, isRead: true } : e)),
+      entries: state.entries.map((e, i) =>
+        i > idx ? { ...e, isRead: true } : e,
+      ),
     }))
   },
 
@@ -504,7 +574,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const result = await window.api.entries.toggleStar(entryId)
     set((state) => ({
       entries: state.entries.map((e) =>
-        e.id === entryId ? { ...e, isStarred: result.isStarred } : e
+        e.id === entryId ? { ...e, isStarred: result.isStarred } : e,
       ),
       selectedEntry:
         state.selectedEntry?.id === entryId
@@ -527,13 +597,18 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       isLoading: true,
       isLoadingMore: false,
       hasMoreEntries: false,
-      paginationQueryKey: "",
+      paginationQueryKey: '',
       paginationOptions: null,
       paginationPageSize: 0,
     })
     try {
       const entries = await window.api.entries.search(query)
-      set({ entries: dedupeEntriesForClient(entries), isLoading: false, isLoadingMore: false, hasMoreEntries: false })
+      set({
+        entries: dedupeEntriesForClient(entries),
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: false,
+      })
     } catch {
       set({ isLoading: false, isLoadingMore: false })
     }

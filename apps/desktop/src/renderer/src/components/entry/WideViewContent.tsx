@@ -148,6 +148,9 @@ function getMasonryColumnCount(containerWidth: number): number {
 
 const MASONRY_INITIAL_RENDER = 30
 const MASONRY_RENDER_BATCH = 40
+const PAGED_LOAD_MORE_SCROLL_GUARD_PX = 120
+const SOCIAL_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX = 280
+const VIDEO_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX = 1100
 
 const rememberedContainerWidthByView = new Map<string, number>()
 
@@ -566,14 +569,19 @@ export function WideViewContent() {
   const handlePagedEntryScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget
-      const hasScrolledEnough = el.scrollTop > 120
-      const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 700
+      const hasScrolledEnough = el.scrollTop > PAGED_LOAD_MORE_SCROLL_GUARD_PX
+      const bottomOffset =
+        activeView === FeedViewType.Videos
+          ? VIDEO_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX
+          : SOCIAL_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX
+      const nearBottom =
+        el.scrollTop + el.clientHeight >= el.scrollHeight - bottomOffset
       if (!nearBottom || !hasScrolledEnough) return
       if (searchQuery.trim()) return
       if (!hasMoreEntries || isLoadingMore) return
       void loadMoreEntries()
     },
-    [hasMoreEntries, isLoadingMore, loadMoreEntries, searchQuery],
+    [activeView, hasMoreEntries, isLoadingMore, loadMoreEntries, searchQuery],
   )
 
   useEffect(() => {
@@ -1412,8 +1420,8 @@ function WideViewContextMenuWrapper({
   onSharePoster: () => void
 }) {
   const { markRead, toggleStar } = useEntryStore()
-  const feedSiteUrl = useFeedStore((state) =>
-    state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
+  const feedSiteUrl = useFeedStore(
+    (state) => state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
   )
   const browserOpenUrl = resolveEntryBrowserOpenUrl(entry)
   const actions = useEntryContextActions({

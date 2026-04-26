@@ -2,7 +2,8 @@ export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
 const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 24
-const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 10
+const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 16
+const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 18
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -10,24 +11,31 @@ interface HomeVisibleEntryPreloadPolicy {
   estimatedVisibleItemCount: number
 }
 
-const HOME_VISIBLE_ENTRY_DEFAULT_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
+const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 12,
-    estimatedItemHeight: 56,
-    estimatedVisibleItemCount: 8,
+    preloadRemainingCount: 10,
+    estimatedItemHeight: 112,
+    estimatedVisibleItemCount: 5,
+  }
+
+const HOME_VISIBLE_ENTRY_SOCIAL_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
+  {
+    preloadRemainingCount: 0,
+    estimatedItemHeight: 220,
+    estimatedVisibleItemCount: 2,
   }
 
 const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 7,
-    estimatedItemHeight: 560,
-    estimatedVisibleItemCount: 1,
+    preloadRemainingCount: 8,
+    estimatedItemHeight: 520,
+    estimatedVisibleItemCount: 2,
   }
 
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 12,
-  estimatedItemHeight: 110,
-  estimatedVisibleItemCount: 6,
+  preloadRemainingCount: 18,
+  estimatedItemHeight: 280,
+  estimatedVisibleItemCount: 5,
 }
 
 export function resolveHomeVisibleEntryInitialLimit(
@@ -39,21 +47,28 @@ export function resolveHomeVisibleEntryInitialLimit(
 export function resolveHomeVisibleEntryLoadMoreStep(
   mode?: HomeVisibleEntryMode,
 ): number {
-  return mode === 'pictures'
-    ? HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP
-    : HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP
+  if (mode === 'pictures') {
+    return HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP
+  }
+  if (mode === 'videos') {
+    return HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP
+  }
+  return HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP
 }
 
 function resolveHomeVisibleEntryPreloadPolicy(
   mode: HomeVisibleEntryMode,
 ): HomeVisibleEntryPreloadPolicy {
+  if (mode === 'social') {
+    return HOME_VISIBLE_ENTRY_SOCIAL_PRELOAD_POLICY
+  }
   if (mode === 'pictures') {
     return HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY
   }
   if (mode === 'videos') {
     return HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY
   }
-  return HOME_VISIBLE_ENTRY_DEFAULT_PRELOAD_POLICY
+  return HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY
 }
 
 export function shouldPreloadHomeVisibleEntries(

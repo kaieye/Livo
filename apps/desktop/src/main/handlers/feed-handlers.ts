@@ -646,7 +646,7 @@ async function bootstrapFeedEntries(
       feedId: feed.id,
       limit: 1,
       skipDedupe: true,
-    }).length > 0
+    }).entries.length > 0
   if (hasEntriesAfterFirstTry) return
 
   // One extra retry for unstable social routes/instances.
@@ -677,7 +677,7 @@ function hasAnyEntries(feedId: string): boolean {
       feedId,
       limit: 1,
       skipDedupe: true,
-    }).length > 0
+    }).entries.length > 0
   )
 }
 
