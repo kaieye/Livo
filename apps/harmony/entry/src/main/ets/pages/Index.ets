@@ -1253,8 +1253,14 @@ struct Index {
       this.dismissHomeRefreshIndicatorDuringRefresh()
     }
 
+    const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
+    const isScrollingDeeper = nextOffset > previousOffset + 0.5
+
     if (this.homeModeRailExpandedOverride) {
-      if (Math.abs(nextOffset - this.homeModeRailExpandedLockOffset) < 2) {
+      if (!isScrollingDeeper) {
+        this.currentHomeModeScrollOffset = nextOffset
+        this.updateHeaderBlurProgress(nextOffset)
+        this.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
         return
       }
 
@@ -1262,14 +1268,10 @@ struct Index {
       this.homeModeRailExpandedLockOffset = -1
     }
 
-    if (!this.homeModeRailExpandedOverride) {
-      const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
-      if (isReturningTowardsTop) {
-        // Expand immediately when user scrolls back towards top.
-        this.homeModeRailDismissedByScroll = false
-      } else if (nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
-        this.homeModeRailDismissedByScroll = true
-      }
+    if (isReturningTowardsTop) {
+      this.homeModeRailDismissedByScroll = false
+    } else if (isScrollingDeeper && nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
+      this.homeModeRailDismissedByScroll = true
     }
 
     this.currentHomeModeScrollOffset = nextOffset
