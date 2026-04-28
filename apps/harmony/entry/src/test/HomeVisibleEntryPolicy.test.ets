@@ -15,27 +15,27 @@ export default function homeVisibleEntryPolicyTest() {
     })
 
     it('loads one visible page at a time', 0, () => {
-      expect(resolveHomeVisibleEntryLoadMoreStep()).assertEqual(24)
-      expect(resolveHomeVisibleEntryLoadMoreStep('pictures')).assertEqual(10)
-      expect(resolveHomeVisibleEntryLoadMoreStep('videos')).assertEqual(24)
+      expect(resolveHomeVisibleEntryLoadMoreStep()).assertEqual(20)
+      expect(resolveHomeVisibleEntryLoadMoreStep('pictures')).assertEqual(12)
+      expect(resolveHomeVisibleEntryLoadMoreStep('videos')).assertEqual(12)
     })
 
     it('preloads before the visible rendered page bottom', 0, () => {
-      expect(shouldPreloadHomeVisibleEntries('articles', 168, 324, 24)).assertEqual(false)
-      expect(shouldPreloadHomeVisibleEntries('articles', 224, 324, 24)).assertEqual(true)
-      expect(shouldPreloadHomeVisibleEntries('articles', 1512, 324, 48)).assertEqual(false)
-      expect(shouldPreloadHomeVisibleEntries('articles', 1568, 324, 48)).assertEqual(true)
-      expect(shouldPreloadHomeVisibleEntries('articles', 224, 24, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('articles', 671, 324, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('articles', 672, 324, 24)).assertEqual(true)
+      expect(shouldPreloadHomeVisibleEntries('articles', 3135, 324, 48)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('articles', 3136, 324, 48)).assertEqual(true)
+      expect(shouldPreloadHomeVisibleEntries('articles', 672, 24, 24)).assertEqual(false)
     })
 
     it('uses a near-end picture preload threshold for tall cards', 0, () => {
-      expect(shouldPreloadHomeVisibleEntries('pictures', 8959, 324, 24)).assertEqual(false)
-      expect(shouldPreloadHomeVisibleEntries('pictures', 8960, 324, 24)).assertEqual(true)
+      expect(shouldPreloadHomeVisibleEntries('pictures', 5719, 324, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('pictures', 5720, 324, 24)).assertEqual(true)
     })
 
     it('uses grid-aware video preloading', 0, () => {
-      expect(shouldPreloadHomeVisibleEntries('videos', 659, 324, 24)).assertEqual(false)
-      expect(shouldPreloadHomeVisibleEntries('videos', 660, 324, 24)).assertEqual(true)
+      expect(shouldPreloadHomeVisibleEntries('videos', 1119, 324, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('videos', 1120, 324, 24)).assertEqual(true)
     })
   })
 }

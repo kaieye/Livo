@@ -1,3 +1,4 @@
+import { curves } from '@kit.ArkUI'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 
@@ -78,5 +79,16 @@ struct ImageViewer {
       top: this.topAvoidArea,
       bottom: this.bottomAvoidArea,
     })
+  }
+
+  pageTransition() {
+    PageTransitionEnter({ type: RouteType.Push, duration: 260, curve: curves.springMotion(0.82, 0.94) })
+      .opacity(0)
+    PageTransitionExit({ type: RouteType.Push, duration: 220, curve: Curve.EaseInOut })
+      .opacity(1)
+    PageTransitionEnter({ type: RouteType.Pop, duration: 220, curve: Curve.EaseOut })
+      .opacity(1)
+    PageTransitionExit({ type: RouteType.Pop, duration: 220, curve: Curve.EaseInOut })
+      .opacity(0)
   }
 }

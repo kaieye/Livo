@@ -65,7 +65,7 @@ export interface DiscoverPreviewRouteParams {
 export interface DiscoverSubscribeConfigRouteParams {
   targetUrl: string
   targetTitle: string
-  targetView: FeedViewType
+  view: FeedViewType
   siteUrl: string
   imageUrl: string
   description: string
@@ -393,7 +393,7 @@ export async function openDiscoverSubscribeConfig(
   const routeParams = new DiscoverRouteParams()
   routeParams.targetUrl = params.targetUrl
   routeParams.targetTitle = params.targetTitle
-  routeParams.view = `${params.targetView}`
+  routeParams.view = `${params.view}`
   routeParams.siteUrl = params.siteUrl
   routeParams.imageUrl = params.imageUrl
   routeParams.description = params.description

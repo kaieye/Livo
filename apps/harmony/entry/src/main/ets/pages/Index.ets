@@ -153,7 +153,7 @@ const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 120
 const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
 const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = false
 const HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED: boolean = true
-const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 32
+const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 100
 const HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS: number = 800
 const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 80
 const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 120
@@ -4969,5 +4969,16 @@ struct Index {
       return true
     }
     return false
+  }
+
+  pageTransition() {
+    PageTransitionEnter({ type: RouteType.Push, duration: 260, curve: Curve.EaseOut })
+      .opacity(0)
+    PageTransitionExit({ type: RouteType.Push, duration: 220, curve: Curve.EaseInOut })
+      .opacity(1)
+    PageTransitionEnter({ type: RouteType.Pop, duration: 220, curve: Curve.EaseOut })
+      .opacity(1)
+    PageTransitionExit({ type: RouteType.Pop, duration: 220, curve: Curve.EaseInOut })
+      .opacity(0)
   }
 }

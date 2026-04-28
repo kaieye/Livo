@@ -1,4 +1,5 @@
 import { AppRepository } from '../data/AppRepository'
+import { curves } from '@kit.ArkUI'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { openArticleDetail } from '../navigation/AppRouter'
@@ -43,8 +44,6 @@ import {
 type SubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
 const SUBSCRIPTION_MODES: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
 const MODE_SWIPE_TRIGGER_OFFSET: number = 56
-const SUBSCRIPTIONS_ROUTE_FEED_DETAIL: string = 'subscriptions-feed-detail'
-const SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG: string = 'subscriptions-subscribe-config'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const SUBSCRIPTIONS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SUBSCRIPTIONS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -82,11 +81,12 @@ export struct SubscriptionsContent {
   @State hasLoaded: boolean = false
   @State isLoading: boolean = false
   @State overlayLevel: number = 0
+  @State activeFeedDetailParams?: SubscriptionFeedDetailParams = undefined
+  @State activeFeedConfigParams?: SubscriptionFeedConfigParams = undefined
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
-  private subscriptionPathStack: NavPathStack = new NavPathStack()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
   private readonly picturesScroller: Scroller = new Scroller()
@@ -196,8 +196,16 @@ export struct SubscriptionsContent {
     void this.refreshFeeds()
   }
 
-  private rootEnterTransition(delay: number): TransitionEffect {
-    return this.showBottomTabs ? livoMotion.enterScale(delay) : TransitionEffect.IDENTITY
+  private rootEnterTransition(delay: number) {
+    return this.showBottomTabs ? livoMotion.enterScale(delay) : undefined
+  }
+
+  private overlayEnterTransition() {
+    return livoMotion.enterSoft()
+  }
+
+  private syncOverlayState(level: number): void {
+    this.syncOverlayLevel(level)
   }
 
   @Builder
@@ -389,16 +397,21 @@ export struct SubscriptionsContent {
           break
         }
 
+        let didHydrate = false
         try {
           const changed = await AppRepository.resolveFeedAvatarOnly(feed.id)
           if (changed) {
             changedCount += 1
           }
-        } catch (_) {
-          // ignore
+          didHydrate = true
+        } catch (error) {
+          this.logSubscriptionsDiag(
+            `avatar hydrate failed feedId=${feed.id} error=${error instanceof Error ? error.message : error}`,
+          )
         }
-        // 无论成功与否，本次会话内不再重复水合同一个订阅源
-        this.hydratedFeedIds.add(feed.id)
+        if (didHydrate) {
+          this.hydratedFeedIds.add(feed.id)
+        }
       }
     } finally {
       this.avatarHydrationRunning = false
@@ -708,8 +721,8 @@ export struct SubscriptionsContent {
     })
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring)
-    .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
-      this.handleHeaderBlurScrollDelta(scrollOffset)
+    .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+      this.handleHeaderBlurScrollDelta(yOffset)
     })
     .visibility(this.modeSceneVisible(mode))
     .opacity(this.modeSceneOpacity(mode))
@@ -720,13 +733,15 @@ export struct SubscriptionsContent {
   private openFeedDetailPage(feedId: string): void {
     const params = new SubscriptionFeedDetailParams()
     params.feedId = feedId
-    this.syncOverlayLevel(1)
-    this.subscriptionPathStack.pushPathByName(SUBSCRIPTIONS_ROUTE_FEED_DETAIL, params, true)
+    this.activeFeedDetailParams = params
+    this.activeFeedConfigParams = undefined
+    this.syncOverlayState(1)
   }
 
   private closeFeedDetailPage(): void {
-    this.syncOverlayLevel(0)
-    this.subscriptionPathStack.pop(true)
+    this.activeFeedDetailParams = undefined
+    this.activeFeedConfigParams = undefined
+    this.syncOverlayState(0)
     this.hydratedFeedIds.clear()
     void this.refreshFeeds()
   }
@@ -745,12 +760,8 @@ export struct SubscriptionsContent {
   }
 
   private openEditPage(feed: Feed): void {
-    this.syncOverlayLevel(2)
-    this.subscriptionPathStack.pushPathByName(
-      SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG,
-      this.createFeedConfigParams(feed),
-      true,
-    )
+    this.activeFeedConfigParams = this.createFeedConfigParams(feed)
+    this.syncOverlayState(2)
   }
 
   private openEntryDetail(entry: Entry, feed: Feed): void {
@@ -768,15 +779,6 @@ export struct SubscriptionsContent {
       onSubscribe: (_payload: FeedRefreshPayload) => {},
       onOpenArticle: (entry: Entry, feed: Feed) => { this.openEntryDetail(entry, feed) },
     })
-    .onAppear(() => {
-      this.syncOverlayLevel(1)
-    })
-    .onDisAppear(() => {
-      const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
-      if (currentLevel <= 1) {
-        this.syncOverlayLevel(0)
-      }
-    })
   }
 
   @Builder
@@ -792,52 +794,51 @@ export struct SubscriptionsContent {
       initialSelectedView: params?.initialSelectedView ?? FeedViewType.Articles,
       theme: this.theme,
       onBack: () => {
-        this.syncOverlayLevel(1)
-        this.subscriptionPathStack.pop(true)
+        this.activeFeedConfigParams = undefined
+        this.syncOverlayState(1)
       },
       onSubscribed: async () => {
         await this.refreshFeeds()
-        this.syncOverlayLevel(0)
-        this.subscriptionPathStack.clear()
+        this.activeFeedDetailParams = undefined
+        this.activeFeedConfigParams = undefined
+        this.syncOverlayState(0)
       },
       onSaved: async () => {
         await this.refreshFeeds()
-        this.syncOverlayLevel(1)
-        this.subscriptionPathStack.pop(true)
+        this.activeFeedConfigParams = undefined
+        this.syncOverlayState(1)
       },
       onUnsubscribed: async () => {
         await this.refreshFeeds()
-        this.syncOverlayLevel(0)
-        this.subscriptionPathStack.clear()
+        this.activeFeedDetailParams = undefined
+        this.activeFeedConfigParams = undefined
+        this.syncOverlayState(0)
       },
-    })
-    .onAppear(() => {
-      this.syncOverlayLevel(2)
-    })
-    .onDisAppear(() => {
-      const currentLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
-      if (currentLevel > 1) {
-        this.syncOverlayLevel(1)
-      } else {
-        this.syncOverlayLevel(currentLevel)
-      }
     })
   }
 
   @Builder
-  private Destinations(name: string, params?: SubscriptionFeedDetailParams | SubscriptionFeedConfigParams) {
-    if (name === SUBSCRIPTIONS_ROUTE_FEED_DETAIL) {
-      NavDestination() {
-        this.FeedDetailDestination(params as SubscriptionFeedDetailParams)
+  private OverlayLayer() {
+    if (this.activeFeedDetailParams) {
+      Stack() {
+        this.FeedDetailDestination(this.activeFeedDetailParams)
       }
-      .hideTitleBar(true)
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    } else if (name === SUBSCRIPTIONS_ROUTE_SUBSCRIBE_CONFIG) {
-      NavDestination() {
-        this.FeedSubscribeConfigDestination(params as SubscriptionFeedConfigParams)
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+      .transition(this.overlayEnterTransition())
+      .zIndex(this.activeFeedConfigParams ? 1 : 2)
+    }
+
+    if (this.activeFeedConfigParams) {
+      Stack() {
+        this.FeedSubscribeConfigDestination(this.activeFeedConfigParams)
       }
-      .hideTitleBar(true)
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+      .transition(this.overlayEnterTransition())
+      .zIndex(3)
     }
   }
 
@@ -860,6 +861,8 @@ export struct SubscriptionsContent {
           })
       )
 
+      this.OverlayLayer()
+
       if (this.showBottomTabs && this.overlayLevel === 0) {
         BottomTabs({ activeTab: 'subscriptions', theme: this.theme })
           .align(Alignment.Bottom)
@@ -870,8 +873,7 @@ export struct SubscriptionsContent {
     .backgroundColor(this.theme.background)
     .onAppear(() => {
       this.settleSubscriptionsRootVisible()
-      // 从详情页返回时，清除水合缓存并重新加载数据，以反映可能的头像更新
-      if (this.hasLoaded) {
+      if (this.hasLoaded && !this.activeFeedDetailParams && !this.activeFeedConfigParams) {
         this.hydratedFeedIds.clear()
         void this.refreshFeeds()
       }
@@ -880,30 +882,10 @@ export struct SubscriptionsContent {
 
   build() {
     if (this.showBottomTabs) {
-      Navigation(this.subscriptionPathStack) {
-        this.SubscriptionsRoot()
-      }
-      .hideToolBar(true)
-      .hideTitleBar(true)
-      .hideBackButton(true)
-      .mode(NavigationMode.Stack)
-      .navDestination(this.Destinations)
-      .width('100%')
-      .height('100%')
-      .backgroundColor(this.theme.background)
+      this.SubscriptionsRoot()
     } else {
       HdsNavigation() {
-        Navigation(this.subscriptionPathStack) {
-          this.SubscriptionsRoot()
-        }
-        .hideToolBar(true)
-        .hideTitleBar(true)
-        .hideBackButton(true)
-        .mode(NavigationMode.Stack)
-        .navDestination(this.Destinations)
-        .width('100%')
-        .height('100%')
-        .backgroundColor(this.theme.background)
+        this.SubscriptionsRoot()
       }
       .titleBar({
         padding: {

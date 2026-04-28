@@ -1,9 +1,9 @@
 export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
-const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 24
-const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 16
-const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 18
+const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 20
+const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 12
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -13,29 +13,29 @@ interface HomeVisibleEntryPreloadPolicy {
 
 const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 10,
+    preloadRemainingCount: 12,
     estimatedItemHeight: 112,
-    estimatedVisibleItemCount: 5,
+    estimatedVisibleItemCount: 6,
   }
 
 const HOME_VISIBLE_ENTRY_SOCIAL_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 0,
+    preloadRemainingCount: 2,
     estimatedItemHeight: 220,
-    estimatedVisibleItemCount: 2,
+    estimatedVisibleItemCount: 3,
   }
 
 const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 8,
+    preloadRemainingCount: 10,
     estimatedItemHeight: 520,
-    estimatedVisibleItemCount: 2,
+    estimatedVisibleItemCount: 3,
   }
 
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 18,
+  preloadRemainingCount: 14,
   estimatedItemHeight: 280,
-  estimatedVisibleItemCount: 5,
+  estimatedVisibleItemCount: 6,
 }
 
 export function resolveHomeVisibleEntryInitialLimit(

@@ -1,4 +1,5 @@
 import { AppRepository } from '../data/AppRepository'
+import { curves } from '@kit.ArkUI'
 import { builtinDiscoverInsGroups, InsGroupFeed, DiscoverBuiltinFeedSeed, resolveDescription } from '../data/DiscoverBuiltinFeeds'
 import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
@@ -44,11 +45,7 @@ import { AppPreferenceService, DiscoverAvatarCacheEntry } from '../services/AppP
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import {
-  resolveDiscoverOverlayLevelAfterDestinationDisappear,
   resolveDiscoverOverlayReturnLevel,
-  shouldApplyDiscoverOverlayAfterDestinationAppear,
-  shouldSkipDiscoverOverlayRestoreAfterRootVisible,
-  shouldShowDiscoverForegroundOverlay,
 } from '../utils/DiscoverNavigationPolicy'
 import {
   initialDiscoverBrowseVisibleCount,
@@ -81,10 +78,6 @@ import {
   SECTION_TITLE_FONT_SIZE,
 } from '../ui/UiTokens'
 
-const DISCOVER_ROUTE_PREVIEW: string = 'discover-preview'
-const DISCOVER_ROUTE_SUBSCRIBE_CONFIG: string = 'discover-subscribe-config'
-const DISCOVER_ROUTE_BROWSE: string = 'discover-browse'
-const DISCOVER_ROUTE_ENTRY_DETAIL: string = 'entry-detail'
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
 const DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
@@ -147,6 +140,9 @@ interface DiscoverBrowseAvatarHydrationTask {
   imageUrl: string
   currentImageUrl: string
 }
+
+type DiscoverOverlayRoute = 'none' | 'browse' | 'preview' | 'subscribe-config'
+type DiscoverConfigReturnTarget = 'root' | 'browse' | 'preview'
 
 function createDiscoverResultFromFeed(feed: RecommendedFeed): ResolvedDiscoverCandidate {
   return {
@@ -225,6 +221,11 @@ export struct DiscoverContent {
   @State subscribedFeeds: Feed[] = []
   @State featuredTrendingFeeds: RecommendedFeed[] = trendingDiscoverFeedsFromJsonNow()
   @State overlayLevel: number = 0
+  @State activeOverlayRoute: DiscoverOverlayRoute = 'none'
+  @State activeBrowseParams?: DiscoverBrowseRouteParams = undefined
+  @State activePreviewParams?: DiscoverFlowRouteParams = undefined
+  @State activeSubscribeConfigParams?: DiscoverFlowRouteParams = undefined
+  @State subscribeConfigReturnTarget: DiscoverConfigReturnTarget = 'root'
   @Prop showBottomTabs: boolean = true
   @Prop reserveBottomTabInset: boolean = false
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
@@ -233,7 +234,6 @@ export struct DiscoverContent {
   @StorageProp('discoverNavigationResetAt') @Watch('handleNavigationResetSignal') discoverNavigationResetAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @StorageProp('discoverSearchDismissAt') @Watch('handleSearchDismissSignal') discoverSearchDismissAt: number = 0
-  @Provide('DiscoverNavPathStack') discoverPathStack: NavPathStack = new NavPathStack()
   onReady: () => void = () => {}
   private searchSession: number = 0
   private platformSwitchSession: number = 0
@@ -256,8 +256,40 @@ export struct DiscoverContent {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
   }
 
-  private rootEnterTransition(delay: number): TransitionEffect {
-    return this.showBottomTabs ? livoMotion.enterSoft(delay) : TransitionEffect.IDENTITY
+  private rootEnterTransition(delay: number) {
+    return this.showBottomTabs ? livoMotion.enterScale(delay) : undefined
+  }
+
+  private overlayEnterTransition() {
+    return livoMotion.enterSoft()
+  }
+
+  private syncRootOverlayLevel(level: number): void {
+    this.overlayLevel = level
+    this.activeOverlayRoute = level <= 0 ? 'none' : this.activeOverlayRoute
+    AppStorage.setOrCreate('discoverOverlayLevel', level)
+  }
+
+  private syncOverlayRoute(route: DiscoverOverlayRoute, level: number): void {
+    this.activeOverlayRoute = route
+    this.overlayLevel = level
+    AppStorage.setOrCreate('discoverOverlayLevel', level)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', level > 0)
+  }
+
+  private closeSubscribeConfigToTarget(): void {
+    this.activeSubscribeConfigParams = undefined
+    if (this.subscribeConfigReturnTarget === 'preview' && this.activePreviewParams) {
+      this.syncOverlayRoute('preview', 2)
+      return
+    }
+    if (this.subscribeConfigReturnTarget === 'browse' && this.activeBrowseParams) {
+      this.syncOverlayRoute('browse', 1)
+      return
+    }
+    this.activePreviewParams = undefined
+    this.activeBrowseParams = undefined
+    this.syncOverlayRoute('none', 0)
   }
 
   @Builder
@@ -325,25 +357,9 @@ export struct DiscoverContent {
   }
 
   private handleDiscoverOverlayLevelChanged(): void {
-    if (this.discoverOverlayLevel <= this.overlayLevel) {
+    if (this.discoverOverlayLevel < this.overlayLevel) {
       this.overlayLevel = this.discoverOverlayLevel
-      if (this.overlayLevel === 0) {
-        AppStorage.setOrCreate('discoverRootVisibleSince', Date.now())
-      }
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.overlayLevel))
-      return
     }
-
-    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-    if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
-      this.overlayLevel = this.discoverOverlayLevel
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.overlayLevel))
-      return
-    }
-
-    // 根页已可见后出现的升高值来自晚到的子页生命周期回调，必须回写当前根页状态。
-    AppStorage.setOrCreate('discoverOverlayLevel', this.overlayLevel)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.overlayLevel))
   }
 
   private viewLabel(view: FeedViewType): string {
@@ -359,9 +375,10 @@ export struct DiscoverContent {
     this.remoteResults = []
     this.isSearchingRemote = false
     this.isPlatformSwitchSearching = false
-    this.syncRootOverlayLevel(0)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-    this.discoverPathStack.clear()
+    this.activeBrowseParams = undefined
+    this.activePreviewParams = undefined
+    this.activeSubscribeConfigParams = undefined
+    this.syncOverlayRoute('none', 0)
   }
 
   private discoverFeaturedFeeds(): RecommendedFeed[] {
@@ -436,8 +453,12 @@ export struct DiscoverContent {
       params.view = view
       params.title = title
       params.sourceKey = sourceKey
-      params.restoreOverlayLevel = resolveDiscoverOverlayReturnLevel('root')
-      this.discoverPathStack.pushPathByName(DISCOVER_ROUTE_BROWSE, params, true)
+      params.restoreOverlayLevel = 0
+      this.activeBrowseParams = params
+      this.activePreviewParams = undefined
+      this.activeSubscribeConfigParams = undefined
+      this.subscribeConfigReturnTarget = 'root'
+      this.syncOverlayRoute('browse', 1)
     })
   }
 
@@ -583,24 +604,15 @@ export struct DiscoverContent {
 
   private scheduleOverlayNavigation(action: () => void): void {
     this.dismissSearchFocus('overlay-navigation')
-    AppStorage.setOrCreate('discoverRootVisibleSince', 0)
-    this.syncRootOverlayLevel(1)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
     action()
-  }
-
-  private syncRootOverlayLevel(level: number): void {
-    this.overlayLevel = level
-    AppStorage.setOrCreate('discoverOverlayLevel', level)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', this.overlayLevel > 0)
   }
 
   private settleDiscoverRootVisible(): void {
-    // 根视图已经重新成为可见页面时，导航栈中不再有发现页前景覆盖层。
-    // 这里必须主动清零，避免子页面 onDisAppear 与根视图 onAppear 的回调顺序
-    // 让旧的 overlay level 短暂保留下来，导致页头和底部栏闪烁或延迟出现。
     AppStorage.setOrCreate('discoverRootVisibleSince', Date.now())
-    this.syncRootOverlayLevel(0)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+    if (this.activeOverlayRoute === 'none') {
+      this.syncOverlayRoute('none', 0)
+    }
   }
 
   private handleFeedsChanged(): void {
@@ -861,41 +873,38 @@ export struct DiscoverContent {
     restoreOverlayLevel: number = 0,
   ): void {
     this.scheduleOverlayNavigation(() => {
-      this.discoverPathStack.pushPathByName(
-        DISCOVER_ROUTE_PREVIEW,
-        createDiscoverFlowRouteParams(
-          targetUrl,
-          targetTitle,
-          targetView,
-          siteUrl,
-          imageUrl,
-          description,
-          sourceKind,
-          category,
-          restoreOverlayLevel,
-        ),
-        true,
+      this.activePreviewParams = createDiscoverFlowRouteParams(
+        targetUrl,
+        targetTitle,
+        targetView,
+        siteUrl,
+        imageUrl,
+        description,
+        sourceKind,
+        category,
+        restoreOverlayLevel,
       )
+      this.activeSubscribeConfigParams = undefined
+      this.subscribeConfigReturnTarget = restoreOverlayLevel > 0 ? 'browse' : 'root'
+      this.syncOverlayRoute('preview', restoreOverlayLevel > 0 ? 2 : 1)
     })
   }
 
   private openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate, restoreOverlayLevel: number = 0): void {
     this.scheduleOverlayNavigation(() => {
-      this.discoverPathStack.pushPathByName(
-        DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
-        createDiscoverFlowRouteParams(
-          candidate.targetUrl,
-          candidate.targetTitle,
-          candidate.targetView,
-          candidate.siteUrl,
-          this.resolvedCandidateAvatarUrl(candidate),
-          candidate.description,
-          candidate.sourceKind,
-          this.resolvedPlatformLabel(candidate),
-          restoreOverlayLevel,
-        ),
-        true,
+      this.activeSubscribeConfigParams = createDiscoverFlowRouteParams(
+        candidate.targetUrl,
+        candidate.targetTitle,
+        candidate.targetView,
+        candidate.siteUrl,
+        this.resolvedCandidateAvatarUrl(candidate),
+        candidate.description,
+        candidate.sourceKind,
+        this.resolvedPlatformLabel(candidate),
+        restoreOverlayLevel,
       )
+      this.subscribeConfigReturnTarget = restoreOverlayLevel > 0 ? 'browse' : (this.activePreviewParams ? 'preview' : 'root')
+      this.syncOverlayRoute('subscribe-config', restoreOverlayLevel > 0 ? 2 : 1)
     })
   }
 
@@ -1781,6 +1790,201 @@ export struct DiscoverContent {
   }
 
   @Builder
+  private DiscoverBrowseOverlay() {
+    if (this.activeBrowseParams) {
+      Stack() {
+        DiscoverBrowseDestination({
+          view: this.activeBrowseParams.view,
+          title: this.activeBrowseParams.title,
+          sourceKey: this.activeBrowseParams.sourceKey,
+          restoreOverlayLevel: this.activeBrowseParams.restoreOverlayLevel,
+          theme: this.theme,
+          onBack: () => {
+            this.activeBrowseParams = undefined
+            this.activePreviewParams = undefined
+            this.activeSubscribeConfigParams = undefined
+            this.syncOverlayRoute('none', 0)
+          },
+          onOpenPreview: (feed: RecommendedFeed) => {
+            const result = createDiscoverResultFromFeed(feed)
+            this.activePreviewParams = createDiscoverFlowRouteParams(
+              result.targetUrl,
+              result.targetTitle,
+              result.targetView,
+              result.siteUrl,
+              result.imageUrl || '',
+              result.description,
+              result.sourceKind,
+              feed.category || '',
+              1,
+            )
+            this.syncOverlayRoute('preview', 2)
+          },
+          onOpenSubscribeConfig: (feed: RecommendedFeed) => {
+            const result = createDiscoverResultFromFeed(feed)
+            this.activeSubscribeConfigParams = createDiscoverFlowRouteParams(
+              result.targetUrl,
+              result.targetTitle,
+              result.targetView,
+              result.siteUrl,
+              result.imageUrl || '',
+              result.description,
+              result.sourceKind,
+              feed.category || '',
+              1,
+            )
+            this.subscribeConfigReturnTarget = 'browse'
+            this.syncOverlayRoute('subscribe-config', 2)
+          },
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+      .transition(this.overlayEnterTransition())
+      .zIndex(this.activeOverlayRoute === 'browse' ? 2 : 1)
+    }
+  }
+
+  @Builder
+  private DiscoverPreviewOverlay() {
+    if (this.activePreviewParams) {
+      Stack() {
+        DiscoverPreviewDestination({
+          targetUrl: this.activePreviewParams.targetUrl,
+          initialTargetTitle: this.activePreviewParams.targetTitle,
+          initialTargetSiteUrl: this.activePreviewParams.siteUrl,
+          initialTargetImageUrl: this.activePreviewParams.imageUrl,
+          initialTargetDescription: this.activePreviewParams.description,
+          targetCategory: this.activePreviewParams.category,
+          targetView: this.activePreviewParams.targetView,
+          restoreOverlayLevel: this.activePreviewParams.restoreOverlayLevel,
+          theme: this.theme,
+          onBack: () => {
+            this.activePreviewParams = undefined
+            if (this.activeBrowseParams) {
+              this.syncOverlayRoute('browse', 1)
+              return
+            }
+            this.syncOverlayRoute('none', 0)
+          },
+          onEdit: (feed: Feed) => {
+            const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
+              feed.imageUrl || this.activePreviewParams?.imageUrl || '',
+              feed.url || this.activePreviewParams?.targetUrl || '',
+              feed.siteUrl || this.activePreviewParams?.siteUrl || '',
+              feed.title || this.activePreviewParams?.targetTitle || '',
+            )
+            this.activeSubscribeConfigParams = createDiscoverFlowRouteParams(
+              this.activePreviewParams?.targetUrl || '',
+              feed.title,
+              feed.view,
+              feed.siteUrl || this.activePreviewParams?.siteUrl || '',
+              resolvedImageUrl,
+              feed.description || this.activePreviewParams?.description || '',
+              '编辑',
+              feed.category || '',
+              1,
+            )
+            this.subscribeConfigReturnTarget = 'preview'
+            this.syncOverlayRoute('subscribe-config', 2)
+          },
+          onSubscribe: (payload: FeedRefreshPayload) => {
+            DiscoverRemoteSearchService.rememberPreviewPayload(this.activePreviewParams?.targetUrl || '', payload)
+            const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
+              payload.imageUrl || this.activePreviewParams?.imageUrl || '',
+              payload.resolvedFeedUrl || this.activePreviewParams?.targetUrl || '',
+              payload.siteUrl || this.activePreviewParams?.siteUrl || '',
+              payload.feedTitle || this.activePreviewParams?.targetTitle || '',
+            )
+            this.activeSubscribeConfigParams = createDiscoverFlowRouteParams(
+              this.activePreviewParams?.targetUrl || '',
+              payload.feedTitle || this.activePreviewParams?.targetTitle || '',
+              this.activePreviewParams?.targetView || FeedViewType.Articles,
+              payload.siteUrl || this.activePreviewParams?.siteUrl || '',
+              resolvedImageUrl,
+              payload.description || this.activePreviewParams?.description || '',
+              '',
+              this.activePreviewParams?.category || '',
+              1,
+            )
+            this.subscribeConfigReturnTarget = 'preview'
+            this.syncOverlayRoute('subscribe-config', 2)
+          },
+          onOpenArticle: (entry: Entry, _feed: Feed) => {
+            const tempFeed: Feed = {
+              id: entry.feedId || 'preview',
+              title: '',
+              url: entry.url,
+              siteUrl: entry.url,
+              view: FeedViewType.Articles,
+              showInAll: true,
+              errorCount: 0,
+              createdAt: 0,
+              updatedAt: 0,
+            }
+            const model = toArticleDetailModel(entry, tempFeed)
+            void openArticleDetail(entry.id || 'preview', JSON.stringify(model))
+          },
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+      .transition(this.overlayEnterTransition())
+      .zIndex(this.activeOverlayRoute === 'preview' ? 3 : 2)
+    }
+  }
+
+  @Builder
+  private DiscoverSubscribeConfigOverlay() {
+    if (this.activeSubscribeConfigParams) {
+      Stack() {
+        DiscoverSubscribeConfigDestination({
+          targetUrl: this.activeSubscribeConfigParams.targetUrl,
+          targetTitle: this.activeSubscribeConfigParams.targetTitle,
+          targetSiteUrl: this.activeSubscribeConfigParams.siteUrl,
+          targetImageUrl: this.activeSubscribeConfigParams.imageUrl,
+          targetDescription: this.activeSubscribeConfigParams.description,
+          targetCategory: this.activeSubscribeConfigParams.category,
+          sourceKind: this.activeSubscribeConfigParams.sourceKind,
+          initialSelectedView: this.activeSubscribeConfigParams.targetView,
+          restoreOverlayLevel: this.activeSubscribeConfigParams.restoreOverlayLevel,
+          theme: this.theme,
+          onBack: () => {
+            this.closeSubscribeConfigToTarget()
+          },
+          onSubscribed: () => {
+            AppStorage.setOrCreate('discoverSearchDismissAt', Date.now())
+            this.closeSubscribeConfigToTarget()
+          },
+          onSaved: () => {
+            this.closeSubscribeConfigToTarget()
+          },
+          onUnsubscribed: () => {
+            this.activeBrowseParams = undefined
+            this.activePreviewParams = undefined
+            this.activeSubscribeConfigParams = undefined
+            this.syncOverlayRoute('none', 0)
+          },
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+      .transition(this.overlayEnterTransition())
+      .zIndex(4)
+    }
+  }
+
+  @Builder
+  private DiscoverOverlayLayer() {
+    this.DiscoverBrowseOverlay()
+    this.DiscoverPreviewOverlay()
+    this.DiscoverSubscribeConfigOverlay()
+  }
+
+  @Builder
   private DiscoverRoot() {
     Stack({ alignContent: Alignment.TopStart }) {
       Scroll(this.contentScroller) {
@@ -1795,8 +1999,8 @@ export struct DiscoverContent {
         scrollForward: NestedScrollMode.SELF_FIRST,
         scrollBackward: NestedScrollMode.SELF_FIRST,
       })
-      .onWillScroll((scrollOffset: number, _scrollSource: ScrollSource, _scrollState: ScrollState) => {
-        this.handleHeaderBlurScrollDelta(scrollOffset)
+      .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
+        this.handleHeaderBlurScrollDelta(yOffset)
         this.keepPlatformChipsOnBlur = true
         this.logDiscoverFocusDebug('discover-scroll-stop-editing')
         this.searchInputController.stopEditing()
@@ -1807,6 +2011,8 @@ export struct DiscoverContent {
         top: 0,
         bottom: this.isSearchModeActive() ? 16 : this.discoverListBottomPadding(),
       })
+
+      this.DiscoverOverlayLayer()
 
       if (this.showBottomTabs && this.overlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })
@@ -1823,93 +2029,13 @@ export struct DiscoverContent {
     })
   }
 
-  @Builder
-  private DiscoverDestinations(name: string, params?: DiscoverFlowRouteParams | DiscoverBrowseRouteParams | EntryDetailParams) {
-    if (name === DISCOVER_ROUTE_PREVIEW) {
-      NavDestination() {
-        DiscoverPreviewDestination({
-          targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
-          initialTargetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
-          initialTargetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
-          initialTargetImageUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).imageUrl,
-          initialTargetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
-          targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
-          targetView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
-          restoreOverlayLevel: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).restoreOverlayLevel,
-          theme: this.theme,
-        })
-      }
-      .hideTitleBar(true)
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    } else if (name === DISCOVER_ROUTE_BROWSE) {
-      NavDestination() {
-        DiscoverBrowseDestination({
-          view: (params as DiscoverBrowseRouteParams)?.view ?? FeedViewType.Articles,
-          title: (params as DiscoverBrowseRouteParams)?.title ?? '',
-          sourceKey: (params as DiscoverBrowseRouteParams)?.sourceKey ?? '',
-          restoreOverlayLevel: (params as DiscoverBrowseRouteParams)?.restoreOverlayLevel ?? 0,
-          theme: this.theme,
-        })
-      }
-      .hideTitleBar(true)
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    } else if (name === DISCOVER_ROUTE_SUBSCRIBE_CONFIG) {
-      NavDestination() {
-        DiscoverSubscribeConfigDestination({
-          targetUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetUrl,
-          targetTitle: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetTitle,
-          targetSiteUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).siteUrl,
-          targetImageUrl: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).imageUrl,
-          targetDescription: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).description,
-          targetCategory: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).category,
-          sourceKind: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).sourceKind,
-          initialSelectedView: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).targetView,
-          restoreOverlayLevel: normalizeDiscoverFlowRouteParams(params as DiscoverFlowRouteParams).restoreOverlayLevel,
-          theme: this.theme,
-        })
-      }
-      .hideTitleBar(true)
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    } else if (name === DISCOVER_ROUTE_ENTRY_DETAIL) {
-      NavDestination() {
-        DiscoverEntryDetailDestination({
-          entry: (params as EntryDetailParams)?.entry,
-          feedTitle: (params as EntryDetailParams)?.feedTitle ?? '',
-          feedImageUrl: (params as EntryDetailParams)?.feedImageUrl ?? '',
-          theme: this.theme,
-        })
-      }
-      .hideTitleBar(true)
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    }
-  }
 
   build() {
     if (this.showBottomTabs) {
-      Navigation(this.discoverPathStack) {
-        this.DiscoverRoot()
-      }
-      .hideToolBar(true)
-      .hideTitleBar(true)
-      .hideBackButton(true)
-      .mode(NavigationMode.Stack)
-      .navDestination(this.DiscoverDestinations)
-      .width('100%')
-      .height('100%')
-      .backgroundColor(this.theme.background)
+      this.DiscoverRoot()
     } else {
       HdsNavigation() {
-        Navigation(this.discoverPathStack) {
-          this.DiscoverRoot()
-        }
-        .hideToolBar(true)
-        .hideTitleBar(true)
-        .hideBackButton(true)
-        .mode(NavigationMode.Stack)
-        .navDestination(this.DiscoverDestinations)
-        .width('100%')
-        .height('100%')
-        .backgroundColor(this.theme.background)
+        this.DiscoverRoot()
       }
       .titleBar({
         padding: {
@@ -1994,8 +2120,6 @@ export struct DiscoverContent {
 
 @Component
 struct DiscoverSubscribeConfigDestination {
-  @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
-  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Prop targetUrl: string = ''
   @Prop targetTitle: string = ''
   @Prop targetSiteUrl: string = ''
@@ -2006,33 +2130,10 @@ struct DiscoverSubscribeConfigDestination {
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
-  private destinationVisibleSince: number = 0
-
-  private settleRootOverlayClosed(): void {
-    AppStorage.setOrCreate('discoverRootVisibleSince', Date.now())
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-    AppStorage.setOrCreate('discoverOverlayLevel', 0)
-  }
-
-  private restoreOverlayAfterConfigClose(): void {
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.restoreOverlayLevel))
-    AppStorage.setOrCreate('discoverOverlayLevel', this.restoreOverlayLevel)
-  }
-
-  private restoreOverlayAfterDisappearIfNeeded(): void {
-    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-    if (shouldSkipDiscoverOverlayRestoreAfterRootVisible(this.destinationVisibleSince, rootVisibleSince)) {
-      return
-    }
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
-    AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
-  }
-
-  aboutToDisappear(): void {
-    this.restoreOverlayAfterDisappearIfNeeded()
-  }
+  onBack: () => void = () => {}
+  onSubscribed: () => void = () => {}
+  onSaved: () => void = () => {}
+  onUnsubscribed: () => void = () => {}
 
   build() {
     FeedSubscribeConfigView({
@@ -2045,53 +2146,25 @@ struct DiscoverSubscribeConfigDestination {
       sourceKind: this.sourceKind,
       initialSelectedView: this.initialSelectedView,
       theme: this.theme,
-      onBack: () => {
-        this.restoreOverlayAfterConfigClose()
-        this.discoverPathStack.pop(true)
-      },
-      onSubscribed: () => {
-        AppStorage.setOrCreate('discoverSearchDismissAt', Date.now())
-        this.restoreOverlayAfterConfigClose()
-        this.discoverPathStack.pop(true)
-      },
-      onSaved: () => {
-        this.restoreOverlayAfterConfigClose()
-        this.discoverPathStack.pop(true)
-      },
-      onUnsubscribed: () => {
-        this.discoverPathStack.clear()
-        this.settleRootOverlayClosed()
-      }
-    })
-    .onAppear(() => {
-      this.destinationVisibleSince = Date.now()
-      const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-      if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
-        AppStorage.setOrCreate('discoverRootVisibleSince', 0)
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-      }
-    })
-    .onDisAppear(() => {
-      const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-      if (!shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-        return
-      }
-      const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', currentLevel > 0)
+      onBack: this.onBack,
+      onSubscribed: this.onSubscribed,
+      onSaved: this.onSaved,
+      onUnsubscribed: this.onUnsubscribed,
     })
   }
 }
 
 @Component
 struct DiscoverBrowseDestination {
-  @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
-  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Prop view: FeedViewType = FeedViewType.Articles
   @Prop title: string = ''
   @Prop sourceKey: string = ''
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  onBack: () => void = () => {}
+  onOpenPreview: (feed: RecommendedFeed) => void = (_feed: RecommendedFeed) => {}
+  onOpenSubscribeConfig: (feed: RecommendedFeed) => void = (_feed: RecommendedFeed) => {}
+  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @State private cachedFeeds: RecommendedFeed[] = []
   @State private insGroups: InsGroupFeed[] = []
   @State private visibleFeedCount: number = 0
@@ -2103,16 +2176,8 @@ struct DiscoverBrowseDestination {
   private readonly browseAvatarHydrationQueue: DiscoverBrowseAvatarHydrationTask[] = []
   private browseAvatarHydrationRunning: boolean = false
   private browseDestinationActive: boolean = false
-  private destinationVisibleSince: number = 0
 
   aboutToAppear(): void {
-    this.destinationVisibleSince = Date.now()
-    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-    if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
-      AppStorage.setOrCreate('discoverRootVisibleSince', 0)
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-      AppStorage.setOrCreate('discoverOverlayLevel', 1)
-    }
     this.browseDestinationActive = true
     this.cachedFeeds = filteredRecommendedFeeds(this.view, this.sourceKey)
     this.visibleFeedCount = initialDiscoverBrowseVisibleCount(this.cachedFeeds.length)
@@ -2434,17 +2499,6 @@ struct DiscoverBrowseDestination {
     }
   }
 
-  private restoreOverlayAfterDisappearIfNeeded(): void {
-    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-    if (shouldSkipDiscoverOverlayRestoreAfterRootVisible(this.destinationVisibleSince, rootVisibleSince)) {
-      return
-    }
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
-    AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
-  }
-
   private stopBrowseAvatarHydration(): void {
     this.browseDestinationActive = false
     this.browseAvatarHydrationQueue.splice(0, this.browseAvatarHydrationQueue.length)
@@ -2453,47 +2507,14 @@ struct DiscoverBrowseDestination {
 
   aboutToDisappear(): void {
     this.stopBrowseAvatarHydration()
-    this.restoreOverlayAfterDisappearIfNeeded()
   }
 
   private openPreviewPage(feed: RecommendedFeed): void {
-    const result = createDiscoverResultFromFeed(feed)
-    AppStorage.setOrCreate('discoverOverlayLevel', 2)
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_PREVIEW,
-      createDiscoverFlowRouteParams(
-        result.targetUrl,
-        result.targetTitle,
-        result.targetView,
-        result.siteUrl,
-        result.imageUrl || '',
-        result.description,
-        result.sourceKind,
-        feed.category || '',
-        resolveDiscoverOverlayReturnLevel('browse'),
-      ),
-      true,
-    )
+    this.onOpenPreview(feed)
   }
 
   private openSubscribeConfigPage(feed: RecommendedFeed): void {
-    const result = createDiscoverResultFromFeed(feed)
-    AppStorage.setOrCreate('discoverOverlayLevel', 2)
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
-      createDiscoverFlowRouteParams(
-        result.targetUrl,
-        result.targetTitle,
-        result.targetView,
-        result.siteUrl,
-        result.imageUrl || '',
-        result.description,
-        result.sourceKind,
-        feed.category || '',
-        resolveDiscoverOverlayReturnLevel('browse'),
-      ),
-      true,
-    )
+    this.onOpenSubscribeConfig(feed)
   }
 
   @Builder
@@ -2551,7 +2572,7 @@ struct DiscoverBrowseDestination {
       .padding({ left: 14, right: 14, top: 6, bottom: 6 })
       .backgroundColor('transparent')
       .onClick(() => {
-        this.openPreviewPage(feed)
+        this.onOpenPreview(feed)
       })
       .onAppear(() => {
         setTimeout(() => {
@@ -2583,9 +2604,7 @@ struct DiscoverBrowseDestination {
         bottomPadding: 0,
         onBack: () => {
           this.stopBrowseAvatarHydration()
-          AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-          AppStorage.setOrCreate('discoverOverlayLevel', 0)
-          this.discoverPathStack.pop(true)
+          this.onBack()
         },
       })
         .width('100%')
@@ -2739,15 +2758,12 @@ struct DiscoverBrowseDestination {
     .backgroundColor(this.theme.background)
     .onDisAppear(() => {
       this.stopBrowseAvatarHydration()
-      this.restoreOverlayAfterDisappearIfNeeded()
     })
   }
 }
 
 @Component
 struct DiscoverPreviewDestination {
-  @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
-  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
   @Prop targetUrl: string = ''
   @Prop initialTargetTitle: string = ''
   @Prop initialTargetSiteUrl: string = ''
@@ -2757,91 +2773,10 @@ struct DiscoverPreviewDestination {
   @Prop targetView: FeedViewType = FeedViewType.Articles
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
-  private destinationVisibleSince: number = 0
-
-  private restoreOverlayAfterDisappearIfNeeded(): void {
-    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-    if (shouldSkipDiscoverOverlayRestoreAfterRootVisible(this.destinationVisibleSince, rootVisibleSince)) {
-      return
-    }
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
-    AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
-    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(nextLevel))
-  }
-
-  aboutToDisappear(): void {
-    this.restoreOverlayAfterDisappearIfNeeded()
-  }
-
-  private openEditConfigPage(feed: Feed): void {
-    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
-      feed.imageUrl || this.initialTargetImageUrl,
-      feed.url || this.targetUrl,
-      feed.siteUrl || this.initialTargetSiteUrl,
-      feed.title || this.initialTargetTitle,
-    )
-    AppStorage.setOrCreate('discoverOverlayLevel', 2)
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
-      createDiscoverFlowRouteParams(
-        this.targetUrl,
-        feed.title,
-        feed.view,
-        feed.siteUrl || this.initialTargetSiteUrl,
-        resolvedImageUrl,
-        feed.description || this.initialTargetDescription,
-        '编辑',
-        feed.category || '',
-        resolveDiscoverOverlayReturnLevel('preview'),
-      ),
-      true,
-    )
-  }
-
-  private openNewSubscribeConfigPage(payload: FeedRefreshPayload): void {
-    DiscoverRemoteSearchService.rememberPreviewPayload(this.targetUrl, payload)
-    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
-      payload.imageUrl || this.initialTargetImageUrl,
-      payload.resolvedFeedUrl || this.targetUrl,
-      payload.siteUrl || this.initialTargetSiteUrl,
-      payload.feedTitle || this.initialTargetTitle,
-    )
-    AppStorage.setOrCreate('discoverOverlayLevel', 2)
-    this.discoverPathStack.pushPathByName(
-      DISCOVER_ROUTE_SUBSCRIBE_CONFIG,
-      createDiscoverFlowRouteParams(
-        this.targetUrl,
-        payload.feedTitle || this.initialTargetTitle,
-        this.targetView,
-        payload.siteUrl || this.initialTargetSiteUrl,
-        resolvedImageUrl,
-        payload.description || this.initialTargetDescription,
-        '',
-        this.targetCategory,
-        resolveDiscoverOverlayReturnLevel('preview'),
-      ),
-      true,
-    )
-  }
-
-  private openEntryDetail(entry: Entry): void {
-    console.info(`[DiscoverPreview] Opening entry: ${entry.title}`)
-    // 构造临时 Feed 以复用完整的 HTML 解析逻辑
-    const tempFeed: Feed = {
-      id: entry.feedId || 'preview',
-      title: '',
-      url: entry.url,
-      siteUrl: entry.url,
-      view: FeedViewType.Articles,
-      showInAll: true,
-      errorCount: 0,
-      createdAt: 0,
-      updatedAt: 0,
-    }
-    const model = toArticleDetailModel(entry, tempFeed)
-    void openArticleDetail(entry.id || 'preview', JSON.stringify(model))
-  }
+  onBack: () => void = () => {}
+  onEdit: (feed: Feed) => void = (_feed: Feed) => {}
+  onSubscribe: (payload: FeedRefreshPayload) => void = (_payload: FeedRefreshPayload) => {}
+  onOpenArticle: (entry: Entry, feed: Feed) => void = (_entry: Entry, _feed: Feed) => {}
 
   build() {
     FeedDetailView({
@@ -2853,26 +2788,10 @@ struct DiscoverPreviewDestination {
       targetCategory: this.targetCategory,
       targetView: this.targetView,
       theme: this.theme,
-      onBack: () => {
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.restoreOverlayLevel))
-        AppStorage.setOrCreate('discoverOverlayLevel', this.restoreOverlayLevel)
-        this.discoverPathStack.pop(true)
-      },
-      onEdit: (feed: Feed) => { this.openEditConfigPage(feed) },
-      onSubscribe: (payload: FeedRefreshPayload) => { this.openNewSubscribeConfigPage(payload) },
-      onOpenArticle: (entry: Entry, _feed: Feed) => { this.openEntryDetail(entry) }
-    })
-    .onAppear(() => {
-      this.destinationVisibleSince = Date.now()
-      const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
-      if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
-        AppStorage.setOrCreate('discoverRootVisibleSince', 0)
-        AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-        AppStorage.setOrCreate('discoverOverlayLevel', 2)
-      }
-    })
-    .onDisAppear(() => {
-      this.restoreOverlayAfterDisappearIfNeeded()
+      onBack: this.onBack,
+      onEdit: this.onEdit,
+      onSubscribe: this.onSubscribe,
+      onOpenArticle: this.onOpenArticle,
     })
   }
 }
@@ -2882,7 +2801,6 @@ struct DiscoverPreviewDestination {
 
 @Component
 struct DiscoverEntryDetailDestination {
-  @Consume('DiscoverNavPathStack') discoverPathStack: NavPathStack
   @Prop entry?: Entry = undefined
   @Prop feedTitle: string = ''
   @Prop feedImageUrl: string = ''
@@ -2903,7 +2821,6 @@ struct DiscoverEntryDetailDestination {
         topPadding: 0,
         bottomPadding: 0,
         onBack: () => {
-          this.discoverPathStack.pop(true)
         },
       })
         .width('100%')

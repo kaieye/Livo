@@ -1080,6 +1080,7 @@ export function presentTweetEntryFromCard(card: {
   articleUrl?: string
   imageUrl?: string
   feedImageUrl?: string
+  feedTitle?: string
   publishedAt?: number
   publishedLabel?: string
   mediaUrls?: string[]
@@ -1091,10 +1092,76 @@ export function presentTweetEntryFromCard(card: {
   const presentation = presentTweetEntryFromSource(source)
   const sourceAvatarUrl = preferredSourceAvatarUrl(source)
 
+  const feedDisplayName = resolveFeedDisplayName(
+    card.feedTitle || '',
+    card.articleUrl || '',
+  )
+
   return {
     ...presentation,
+    displayName: feedDisplayName || presentation.displayName,
     username:
       presentation.username || normalizeUsernameLabel(extractUsername(source)),
     avatarUrl: sourceAvatarUrl || presentation.avatarUrl,
   }
+}
+
+function resolveFeedDisplayName(feedTitle: string, articleUrl: string): string {
+  const trimmed = (feedTitle || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  const xUsername = extractXUsernameFromUrl(articleUrl)
+  if (xUsername) {
+    const escaped = xUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const stripped = trimmed
+      .replace(/\s*-\s*x\s*$/i, '')
+      .replace(new RegExp(`\\s*@?${escaped}$`, 'i'), '')
+      .trim()
+    return (stripped || trimmed) + ' - X'
+  }
+
+  const igUsername = extractInstagramUsernameFromUrl(articleUrl)
+  if (igUsername) {
+    return trimmed + ' - Ins'
+  }
+
+  return trimmed
+}
+
+function extractXUsernameFromUrl(url: string): string {
+  const match = (url || '').match(
+    /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/([^/?#]+)/i,
+  )
+  if (match?.[1]) {
+    const segment = match[1].trim().toLowerCase()
+    if (
+      segment &&
+      segment !== 'i' &&
+      segment !== 'user' &&
+      segment !== 'search'
+    ) {
+      return segment
+    }
+  }
+  return ''
+}
+
+function extractInstagramUsernameFromUrl(url: string): string {
+  const match = (url || '').match(
+    /^https?:\/\/(?:www\.)?instagram\.com\/([^/?#]+)/i,
+  )
+  if (match?.[1]) {
+    const segment = match[1].trim().toLowerCase()
+    if (
+      segment &&
+      segment !== 'i' &&
+      segment !== 'p' &&
+      segment !== 'explore'
+    ) {
+      return segment
+    }
+  }
+  return ''
 }

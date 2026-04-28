@@ -1,3 +1,4 @@
+import { curves } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
 import window from '@ohos.window'
 import webview from '@ohos.web.webview'
@@ -44,8 +45,12 @@ struct VideoPlayer {
   }
 
   private async loadTheme(): Promise<void> {
-    const settings = await AppRepository.settings()
-    this.theme = await ThemeService.resolvePalette(settings)
+    try {
+      const settings = await AppRepository.settings()
+      this.theme = await ThemeService.resolvePalette(settings)
+    } catch (error) {
+      console.error(`Failed to load video player theme: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   private initializePlayer(): void {
@@ -182,7 +187,7 @@ struct VideoPlayer {
       .padding({ left: 16, right: 16 })
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .bindMenu(this.SaveVideoMenu())
+      .bindMenu(this.SaveVideoMenu)
     } else if (this.mode === 'web' && this.fallbackUrl) {
       Web({
         src: this.fallbackUrl,
@@ -192,13 +197,14 @@ struct VideoPlayer {
         .height('100%')
         .javaScriptAccess(true)
         .domStorageAccess(true)
-        .mixedMode(MixedMode.All)
+        .mixedMode(MixedMode.None)
         .onControllerAttached(() => {
           try {
             webview.WebCookieManager.putAcceptCookieEnabled(true)
             webview.WebCookieManager.putAcceptThirdPartyCookieEnabled(true)
             this.webController.setCustomUserAgent(this.webVideoUserAgent)
-          } catch (_error) {
+          } catch (error) {
+            console.error(`Failed to configure video webview: ${error instanceof Error ? error.message : error}`)
           }
         })
         .onPageBegin((_event: OnPageBeginEvent) => {
@@ -285,5 +291,16 @@ struct VideoPlayer {
       bottom: this.bottomAvoidArea,
     })
     .backgroundColor('#000000')
+  }
+
+  pageTransition() {
+    PageTransitionEnter({ type: RouteType.Push, duration: 260, curve: curves.springMotion(0.82, 0.94) })
+      .opacity(0)
+    PageTransitionExit({ type: RouteType.Push, duration: 220, curve: Curve.EaseInOut })
+      .opacity(1)
+    PageTransitionEnter({ type: RouteType.Pop, duration: 220, curve: Curve.EaseOut })
+      .opacity(1)
+    PageTransitionExit({ type: RouteType.Pop, duration: 220, curve: Curve.EaseInOut })
+      .opacity(0)
   }
 }
