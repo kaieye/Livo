@@ -7,6 +7,7 @@ import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { AppPreferenceService } from '../services/AppPreferenceService'
+import { isDiscoverAvatarCacheableImageUrl } from '../utils/DiscoverAvatarPresentation'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
@@ -362,7 +363,7 @@ export struct FeedDetailView {
 
   private rememberPreviewAvatar(payload: FeedRefreshPayload | undefined): void {
     const imageUrl = (payload?.imageUrl || '').trim()
-    if (!imageUrl) {
+    if (!isDiscoverAvatarCacheableImageUrl(imageUrl)) {
       return
     }
 
@@ -800,7 +801,7 @@ export struct FeedDetailView {
 
   private rememberCurrentPreviewAvatar(imageUrl: string): void {
     const normalizedImageUrl = (imageUrl || '').trim()
-    if (!normalizedImageUrl) {
+    if (!isDiscoverAvatarCacheableImageUrl(normalizedImageUrl)) {
       return
     }
 

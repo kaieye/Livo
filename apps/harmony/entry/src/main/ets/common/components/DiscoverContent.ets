@@ -55,7 +55,13 @@ import {
 } from '../utils/DiscoverBrowsePagination'
 import { FeedDetailView } from './FeedDetailView'
 import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
-import { resolveDiscoverAvatarImageUrl } from '../utils/DiscoverAvatarPresentation'
+import {
+  discoverAvatarCacheKey,
+  discoverAvatarCacheKeys,
+  isDiscoverAvatarCacheableImageUrl,
+  isDiscoverAvatarPlaceholderUrl,
+  resolveDiscoverAvatarImageUrl,
+} from '../utils/DiscoverAvatarPresentation'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import {
   CARD_RADIUS_LG,
@@ -2167,13 +2173,18 @@ struct DiscoverBrowseDestination {
   }
 
   private browseAvatarCacheKey(targetUrl: string, siteUrl: string): string {
-    return `${targetUrl.trim()}|${siteUrl.trim()}`
+    return discoverAvatarCacheKey(targetUrl, siteUrl)
   }
 
   private browseAvatarOverride(targetUrl: string, siteUrl: string): string {
-    return this.browseAvatarOverrideMap.get(this.browseAvatarCacheKey(targetUrl, siteUrl))
-      || this.browseAvatarOverrideMap.get(this.browseAvatarCacheKey(targetUrl, ''))
-      || ''
+    const keys = discoverAvatarCacheKeys(targetUrl, siteUrl)
+    for (const key of keys) {
+      const value = this.browseAvatarOverrideMap.get(key)
+      if (value) {
+        return value
+      }
+    }
+    return ''
   }
 
   private async loadPersistedAvatarCache(): Promise<void> {
@@ -2184,7 +2195,9 @@ struct DiscoverBrowseDestination {
     try {
       const entries = await AppPreferenceService.loadDiscoverAvatarCache()
       entries.forEach((entry: DiscoverAvatarCacheEntry) => {
-        this.browseAvatarOverrideMap.set(this.browseAvatarCacheKey(entry.targetUrl, entry.siteUrl), entry.imageUrl)
+        discoverAvatarCacheKeys(entry.targetUrl, entry.siteUrl).forEach((key: string) => {
+          this.browseAvatarOverrideMap.set(key, entry.imageUrl)
+        })
       })
       this.persistedAvatarCacheLoaded = true
       this.avatarHydrationVersion += 1
@@ -2225,15 +2238,22 @@ struct DiscoverBrowseDestination {
   }
 
   private shouldHydrateBrowseAvatar(currentImageUrl: string): boolean {
-    const normalized = (currentImageUrl || '').trim().toLowerCase()
-    if (!normalized) {
-      return true
+    return isDiscoverAvatarPlaceholderUrl(currentImageUrl)
+  }
+
+  private rememberLoadedBrowseAvatar(targetUrl: string, siteUrl: string, imageUrl: string): void {
+    const normalizedImageUrl = (imageUrl || '').trim()
+    if (!isDiscoverAvatarCacheableImageUrl(normalizedImageUrl)) {
+      return
     }
 
-    return normalized.includes('google.com/s2/favicons')
-      || normalized.includes('/favicon')
-      || normalized.includes('/apple-touch-icon')
-      || normalized.includes('unavatar.io/')
+    discoverAvatarCacheKeys(targetUrl, siteUrl).forEach((key: string) => {
+      this.browseAvatarOverrideMap.set(key, normalizedImageUrl)
+    })
+    void AppPreferenceService.rememberDiscoverAvatar(targetUrl, siteUrl, normalizedImageUrl)
+    if (siteUrl) {
+      void AppPreferenceService.rememberDiscoverAvatar(targetUrl, '', normalizedImageUrl)
+    }
   }
 
   private rememberBrowseAvatarPayload(targetUrl: string, payload: FeedRefreshPayload, imageUrl: string): void {
@@ -2348,7 +2368,9 @@ struct DiscoverBrowseDestination {
         cachedResolvedFeedUrl: payload.resolvedFeedUrl || '',
       })
       if (nextImageUrl && nextImageUrl !== task.currentImageUrl) {
-        this.browseAvatarOverrideMap.set(task.key, hydratedImageUrl)
+        discoverAvatarCacheKeys(task.targetUrl, task.siteUrl).forEach((key: string) => {
+          this.browseAvatarOverrideMap.set(key, hydratedImageUrl)
+        })
         this.avatarHydrationVersion += 1
       }
     } catch (error) {
@@ -2436,6 +2458,9 @@ struct DiscoverBrowseDestination {
           radius: 8,
           textSize: 11,
           useAccentFallback: true,
+          onImageLoaded: (url: string) => {
+            this.rememberLoadedBrowseAvatar(feed.url, feed.siteUrl, url)
+          },
         })
 
         Column({ space: 6 }) {
@@ -2469,6 +2494,13 @@ struct DiscoverBrowseDestination {
       .backgroundColor('transparent')
       .onClick(() => {
         this.openPreviewPage(feed)
+      })
+      .onAppear(() => {
+        setTimeout(() => {
+          if (this.browseDestinationActive) {
+            void this.hydrateBrowseFeedAvatar(feed.title, feed.url, feed.siteUrl, feed.imageUrl || '')
+          }
+        }, 520)
       })
 
       if (showDivider) {
@@ -2522,6 +2554,9 @@ struct DiscoverBrowseDestination {
           radius: 8,
           textSize: 11,
           useAccentFallback: true,
+          onImageLoaded: (url: string) => {
+            this.rememberLoadedBrowseAvatar(member.url, '', url)
+          },
         })
 
         Column({ space: 6 }) {

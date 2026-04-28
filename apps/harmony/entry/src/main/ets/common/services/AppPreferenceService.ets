@@ -11,6 +11,7 @@ import {
   RefreshLogEntry,
 } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
+import { discoverAvatarCacheKey, isDiscoverAvatarCacheableImageUrl } from '../utils/DiscoverAvatarPresentation'
 
 const SETTINGS_NAME = 'livo_harmony_settings'
 const AI_KEY_PROVIDER: string = 'aiProvider'
@@ -121,7 +122,7 @@ function normalizeDiscoverAvatarCacheEntry(item: DiscoverAvatarCacheEntry): Disc
   const targetUrl = (item.targetUrl || '').trim()
   const siteUrl = (item.siteUrl || '').trim()
   const imageUrl = (item.imageUrl || '').trim()
-  if (!targetUrl || !imageUrl) {
+  if (!targetUrl || !isDiscoverAvatarCacheableImageUrl(imageUrl)) {
     return undefined
   }
 
@@ -133,9 +134,6 @@ function normalizeDiscoverAvatarCacheEntry(item: DiscoverAvatarCacheEntry): Disc
   }
 }
 
-function discoverAvatarCacheKey(targetUrl: string, siteUrl: string): string {
-  return `${targetUrl.trim()}|${siteUrl.trim()}`
-}
 export class AppPreferenceService {
   private static pref: preferences.Preferences | null = null
   private static async getPref(): Promise<preferences.Preferences> {
