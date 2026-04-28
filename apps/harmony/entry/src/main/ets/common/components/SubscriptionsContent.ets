@@ -26,7 +26,7 @@ import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { shouldAcceptModeSwitch } from '../utils/ModeSwitchGuard'
-import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
+import { resolveSocialFeedDisplayImageUrl, resolveSocialFeedDisplayTitle } from '../utils/SocialFeedPresentation'
 import { extractXUsername, extractInstagramUsername } from '../utils/SocialFeedTitles'
 import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import {
@@ -556,35 +556,7 @@ export struct SubscriptionsContent {
   }
 
   private getDisplaySubscriptionTitle(feed: FeedCardModel): string {
-    const xUsername = extractXUsername(feed.url) || extractXUsername(feed.siteUrl)
-    if (xUsername) {
-      return this.formatXSubscriptionTitle(feed.title, xUsername) + ' - X'
-    }
-
-    const instagramUsername = extractInstagramUsername(feed.url) || extractInstagramUsername(feed.siteUrl)
-    if (instagramUsername) {
-      return feed.title + ' - Ins'
-    }
-
-    return feed.title
-  }
-
-  private formatXSubscriptionTitle(title: string, xUsername: string): string {
-    const normalizedTitle = (title || '').trim()
-    const normalizedUsername = (xUsername || '').trim().toLowerCase()
-    if (!normalizedTitle || !normalizedUsername) {
-      return normalizedTitle.replace(/\s*-\s*x\s*$/i, '').trim()
-    }
-
-    const escapedUsername = normalizedUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const trailingHandlePattern = new RegExp(`\\s*@\\s*${escapedUsername}$`, 'i')
-    const stripped = normalizedTitle
-      .replace(/\s*-\s*x\s*$/i, '')
-      .replace(trailingHandlePattern, '')
-      .replace(new RegExp(`^@?${escapedUsername}$`, 'i'), '')
-      .trim()
-
-    return stripped || normalizedTitle
+    return resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
   }
 
   @Builder

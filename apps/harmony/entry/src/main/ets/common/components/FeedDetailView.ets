@@ -16,7 +16,7 @@ import {
   extractEntryGalleryImageUrls,
   shouldUseCachedPicturePreview,
 } from '../utils/PictureGallery'
-import { canonicalInstagramFeedUrl, extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import { canonicalInstagramFeedUrl, extractInstagramUsername } from '../utils/SocialFeedTitles'
 import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
@@ -535,30 +535,7 @@ export struct FeedDetailView {
   }
 
   private formatFeedDisplayTitle(title: string, feedUrl: string, siteUrl: string): string {
-    const normalizedTitle = (title || '').trim()
-    if (!normalizedTitle) {
-      return resolveSocialFeedDisplayTitle(title, feedUrl, siteUrl)
-    }
-
-    const xUsername = extractXUsername(feedUrl) || extractXUsername(siteUrl)
-    if (xUsername) {
-      const normalizedUsername = xUsername.trim().toLowerCase()
-      const escapedUsername = normalizedUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const trailingHandlePattern = new RegExp(`\\s*@\\s*${escapedUsername}$`, 'i')
-      const stripped = normalizedTitle
-        .replace(/\s*-\s*x\s*$/i, '')
-        .replace(trailingHandlePattern, '')
-        .replace(new RegExp(`^@?${escapedUsername}$`, 'i'), '')
-        .trim()
-      return (stripped || normalizedTitle) + ' - X'
-    }
-
-    const igUsername = extractInstagramUsername(feedUrl) || extractInstagramUsername(siteUrl)
-    if (igUsername) {
-      return normalizedTitle + ' - Ins'
-    }
-
-    return normalizedTitle
+    return resolveSocialFeedDisplayTitle(title, feedUrl, siteUrl)
   }
 
   private normalizedPreviewPayload(payload: FeedRefreshPayload, fallbackUrl: string): FeedRefreshPayload {

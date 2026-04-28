@@ -330,32 +330,11 @@ export function formatXFeedTitle(
   candidateTitle: string | undefined,
   usernameOrUrl: string,
 ): string {
-  const composeTitleWithHandle = (
-    displayName: string,
-    handle: string,
-  ): string => {
-    const normalizedHandle = handle.trim().toLowerCase()
-    if (!normalizedHandle) {
-      return trimTitle(displayName)
-    }
-
-    const normalizedDisplayName = trimTitle(displayName)
-      .replace(
-        new RegExp(`\\s*@\\s*${escapeRegex(normalizedHandle)}$`, 'i'),
-        '',
-      )
-      .replace(new RegExp(`^@?${escapeRegex(normalizedHandle)}$`, 'i'), '')
-      .trim()
-
-    const fallbackDisplayName = normalizedDisplayName || normalizedHandle
-    return `${fallbackDisplayName} @ ${normalizedHandle}`
-  }
-
   const extractedUsername = extractXUsername(usernameOrUrl)
   const fallbackUsername =
     extractedUsername || trimTitle(usernameOrUrl).replace(/^@/, '')
   const normalizedHandle = fallbackUsername.toLowerCase()
-  const fallback = composeTitleWithHandle('', normalizedHandle)
+  const fallback = `${normalizedHandle || fallbackUsername} - X`.trim()
   const cleaned = trimTitle(candidateTitle || '')
   if (
     !cleaned ||
@@ -368,7 +347,8 @@ export function formatXFeedTitle(
 
   const fromParenAt = cleaned.match(/^(.*?)\s*\(@([a-zA-Z0-9_]+)\)\s*\/\s*X$/i)
   if (fromParenAt?.[1]) {
-    return composeTitleWithHandle(fromParenAt[1], normalizedHandle)
+    const normalizedName = trimTitle(fromParenAt[1])
+    return `${normalizedName || normalizedHandle} - X`
   }
 
   const normalizedLower = cleaned.toLowerCase()
@@ -387,7 +367,7 @@ export function formatXFeedTitle(
     if (trailingHandle.test(cleaned)) {
       const withoutHandle = trimTitle(cleaned.replace(trailingHandle, ''))
       if (withoutHandle) {
-        return composeTitleWithHandle(withoutHandle, normalizedHandle)
+        return `${withoutHandle} - X`
       }
     }
   }
@@ -395,6 +375,8 @@ export function formatXFeedTitle(
   const strippedPrefix = cleaned
     .replace(/^twitter\s*@?/i, '')
     .replace(/^x\s*@?/i, '')
+    .replace(/\s*\/\s*x\s*$/i, '')
+    .replace(/\s*-\s*x\s*$/i, '')
     .trim()
 
   if (normalizedHandle) {
@@ -407,11 +389,10 @@ export function formatXFeedTitle(
     }
   }
 
-  return (
-    composeTitleWithHandle(strippedPrefix || cleaned, normalizedHandle) ||
-    fallback ||
-    cleaned
-  )
+  const displayName = (strippedPrefix || cleaned)
+    .replace(/\s+@\s*[a-z0-9_]{1,15}\s*$/i, '')
+    .trim()
+  return `${displayName || normalizedHandle || cleaned} - X`.trim()
 }
 
 export function formatBilibiliFeedTitle(

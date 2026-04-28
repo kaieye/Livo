@@ -1,4 +1,5 @@
 import { extractPictureCarouselMediaUrls } from './PictureGallery.ts'
+import { normalizeSocialFeedTitle } from './SocialFeedTitles.ts'
 
 export interface TweetQuotedPresentation {
   displayName: string
@@ -1111,57 +1112,5 @@ function resolveFeedDisplayName(feedTitle: string, articleUrl: string): string {
   if (!trimmed) {
     return ''
   }
-
-  const xUsername = extractXUsernameFromUrl(articleUrl)
-  if (xUsername) {
-    const escaped = xUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const stripped = trimmed
-      .replace(/\s*-\s*x\s*$/i, '')
-      .replace(new RegExp(`\\s*@?${escaped}$`, 'i'), '')
-      .trim()
-    return (stripped || trimmed) + ' - X'
-  }
-
-  const igUsername = extractInstagramUsernameFromUrl(articleUrl)
-  if (igUsername) {
-    return trimmed + ' - Ins'
-  }
-
-  return trimmed
-}
-
-function extractXUsernameFromUrl(url: string): string {
-  const match = (url || '').match(
-    /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/([^/?#]+)/i,
-  )
-  if (match?.[1]) {
-    const segment = match[1].trim().toLowerCase()
-    if (
-      segment &&
-      segment !== 'i' &&
-      segment !== 'user' &&
-      segment !== 'search'
-    ) {
-      return segment
-    }
-  }
-  return ''
-}
-
-function extractInstagramUsernameFromUrl(url: string): string {
-  const match = (url || '').match(
-    /^https?:\/\/(?:www\.)?instagram\.com\/([^/?#]+)/i,
-  )
-  if (match?.[1]) {
-    const segment = match[1].trim().toLowerCase()
-    if (
-      segment &&
-      segment !== 'i' &&
-      segment !== 'p' &&
-      segment !== 'explore'
-    ) {
-      return segment
-    }
-  }
-  return ''
+  return normalizeSocialFeedTitle(trimmed, articleUrl, '')
 }
