@@ -11,7 +11,7 @@
     },
     {
       "title": "Lex Fridman - YouTube",
-      "url": "rsshub://youtube/user/%40lexfridman",
+      "url": "rsshub://youtube/user/@lexfridman",
       "language": "English",
       "descriptionZh": "MIT 研究员，深度访谈 AI、科学与人类未来的长篇播客",
       "descriptionEn": "MIT researcher hosting long-form interviews on AI, science and humanity"
@@ -46,7 +46,7 @@
     },
     {
       "title": "胡子观币 - YouTube",
-      "url": "rsshub://youtube/user/%40huziguanbi",
+      "url": "rsshub://youtube/user/@huziguanbi",
       "language": "Chinese",
       "descriptionZh": "专注加密货币与区块链行情分析的中文频道",
       "descriptionEn": "Chinese channel focused on crypto and blockchain market analysis"
@@ -60,21 +60,21 @@
     },
     {
       "title": "小Lin说 - YouTube",
-      "url": "rsshub://youtube/user/%40xiao_lin_shuo",
+      "url": "rsshub://youtube/user/@xiao_lin_shuo",
       "language": "Chinese",
       "descriptionZh": "用生动故事讲解商业与财经知识的中文 YouTube 频道",
       "descriptionEn": "Chinese YouTube channel explaining business and finance through storytelling"
     },
     {
       "title": "王志安 - YouTube",
-      "url": "rsshub://youtube/user/%40wangzhian",
+      "url": "rsshub://youtube/user/@wangzhian",
       "language": "Chinese",
       "descriptionZh": "资深媒体人王志安，深度评论时事与社会议题",
       "descriptionEn": "Senior journalist Wang Zhian with in-depth commentary on current affairs"
     },
     {
       "title": "Mediastorm影视飓风 - YouTube",
-      "url": "rsshub://youtube/user/%40mediastorm6801",
+      "url": "rsshub://youtube/user/@mediastorm6801",
       "language": "Chinese",
       "descriptionZh": "影视飓风 YouTube 频道，专业影视制作与创作分享",
       "descriptionEn": "Mediastorm's YouTube channel for professional filmmaking content"
@@ -88,14 +88,14 @@
     },
     {
       "title": "不良林 - YouTube",
-      "url": "rsshub://youtube/user/%40bulianglin",
+      "url": "rsshub://youtube/user/@bulianglin",
       "language": "Chinese",
       "descriptionZh": "分享网络工具、翻墙技术与科技资讯的中文频道",
       "descriptionEn": "Chinese channel sharing network tools, VPN tech and tech news"
     },
     {
       "title": "老高與小茉 Mr & Mrs Gao - YouTube",
-      "url": "rsshub://youtube/user/%40laogao",
+      "url": "rsshub://youtube/user/@laogao",
       "language": "Chinese",
       "descriptionZh": "探索未解之谜、历史与宇宙奥秘的中文科普频道",
       "descriptionEn": "Chinese science channel exploring mysteries, history and the cosmos"
@@ -172,7 +172,7 @@
     },
     {
       "title": "Dan Koe - YouTube",
-      "url": "https://rsshub.liumingye.cn/youtube/channel/UCWXYDYv5STLk-zoxMP2I1Lw",
+      "url": "rsshub://youtube/user/@thedankoe",
       "language": "",
       "descriptionZh": "分享个人成长、创意写作与数字创业理念的内容创作者",
       "descriptionEn": "Creator sharing personal growth, creative writing and digital entrepreneurship"
@@ -186,7 +186,7 @@
     },
     {
       "title": "技术爬爬虾 的 bilibili 空间",
-      "url": "rsshub://bilibili/user/video/316183842",
+      "url": "https://rsshub.pseudoyu.com/bilibili/user/video/316183842",
       "language": "Chinese",
       "descriptionZh": "分享编程技术、开发工具与 AI 应用实践的 Bilibili 频道",
       "descriptionEn": "Bilibili channel sharing programming, dev tools and AI practice"

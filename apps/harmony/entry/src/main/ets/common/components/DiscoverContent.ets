@@ -46,6 +46,8 @@ import { livoMotion } from '../ui/Motion'
 import {
   resolveDiscoverOverlayLevelAfterDestinationDisappear,
   resolveDiscoverOverlayReturnLevel,
+  shouldApplyDiscoverOverlayAfterDestinationAppear,
+  shouldSkipDiscoverOverlayRestoreAfterRootVisible,
   shouldShowDiscoverForegroundOverlay,
 } from '../utils/DiscoverNavigationPolicy'
 import {
@@ -222,11 +224,12 @@ export struct DiscoverContent {
   @State isLoadingPage: boolean = false
   @State subscribedFeeds: Feed[] = []
   @State featuredTrendingFeeds: RecommendedFeed[] = trendingDiscoverFeedsFromJsonNow()
+  @State overlayLevel: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop reserveBottomTabInset: boolean = false
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
-  @StorageProp('discoverOverlayLevel') discoverOverlayLevel: number = 0
+  @StorageProp('discoverOverlayLevel') @Watch('handleDiscoverOverlayLevelChanged') discoverOverlayLevel: number = 0
   @StorageProp('discoverNavigationResetAt') @Watch('handleNavigationResetSignal') discoverNavigationResetAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @StorageProp('discoverSearchDismissAt') @Watch('handleSearchDismissSignal') discoverSearchDismissAt: number = 0
@@ -321,6 +324,28 @@ export struct DiscoverContent {
     }
   }
 
+  private handleDiscoverOverlayLevelChanged(): void {
+    if (this.discoverOverlayLevel <= this.overlayLevel) {
+      this.overlayLevel = this.discoverOverlayLevel
+      if (this.overlayLevel === 0) {
+        AppStorage.setOrCreate('discoverRootVisibleSince', Date.now())
+      }
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.overlayLevel))
+      return
+    }
+
+    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+    if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
+      this.overlayLevel = this.discoverOverlayLevel
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.overlayLevel))
+      return
+    }
+
+    // 根页已可见后出现的升高值来自晚到的子页生命周期回调，必须回写当前根页状态。
+    AppStorage.setOrCreate('discoverOverlayLevel', this.overlayLevel)
+    AppStorage.setOrCreate('discoverHasForegroundOverlay', shouldShowDiscoverForegroundOverlay(this.overlayLevel))
+  }
+
   private viewLabel(view: FeedViewType): string {
     return discoverViewLabel(view)
   }
@@ -334,8 +359,8 @@ export struct DiscoverContent {
     this.remoteResults = []
     this.isSearchingRemote = false
     this.isPlatformSwitchSearching = false
+    this.syncRootOverlayLevel(0)
     AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-    AppStorage.setOrCreate('discoverOverlayLevel', 0)
     this.discoverPathStack.clear()
   }
 
@@ -474,7 +499,7 @@ export struct DiscoverContent {
   private logDiscoverFocusDebug(event: string, detail: string = ''): void {
     const suffix = detail ? ` ${detail}` : ''
     console.info(
-      `[DiscoverFocusDebug] ${event}${suffix} overlay=${this.discoverOverlayLevel} chips=${this.showPlatformChips} queryLength=${this.query.length} token=${this.searchFocusGuardToken}`,
+      `[DiscoverFocusDebug] ${event}${suffix} overlay=${this.overlayLevel} chips=${this.showPlatformChips} queryLength=${this.query.length} token=${this.searchFocusGuardToken}`,
     )
   }
 
@@ -558,19 +583,24 @@ export struct DiscoverContent {
 
   private scheduleOverlayNavigation(action: () => void): void {
     this.dismissSearchFocus('overlay-navigation')
+    AppStorage.setOrCreate('discoverRootVisibleSince', 0)
+    this.syncRootOverlayLevel(1)
     AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-    AppStorage.setOrCreate('discoverOverlayLevel', 1)
     action()
   }
 
+  private syncRootOverlayLevel(level: number): void {
+    this.overlayLevel = level
+    AppStorage.setOrCreate('discoverOverlayLevel', level)
+  }
+
   private settleDiscoverRootVisible(): void {
-    const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
-    if (currentLevel > 0) {
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
-      return
-    }
+    // 根视图已经重新成为可见页面时，导航栈中不再有发现页前景覆盖层。
+    // 这里必须主动清零，避免子页面 onDisAppear 与根视图 onAppear 的回调顺序
+    // 让旧的 overlay level 短暂保留下来，导致页头和底部栏闪烁或延迟出现。
+    AppStorage.setOrCreate('discoverRootVisibleSince', Date.now())
+    this.syncRootOverlayLevel(0)
     AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-    AppStorage.setOrCreate('discoverOverlayLevel', 0)
   }
 
   private handleFeedsChanged(): void {
@@ -1360,7 +1390,7 @@ export struct DiscoverContent {
     AvatarTile({
       imageUrl,
       fallbackImageUrls,
-      refreshToken: this.feedsChangedAt + this.discoverOverlayLevel,
+      refreshToken: this.feedsChangedAt + this.overlayLevel,
       fallbackLabel,
       accent,
       theme: this.theme,
@@ -1723,7 +1753,7 @@ export struct DiscoverContent {
   }
 
   private shouldReserveBottomDock(): boolean {
-    if (this.discoverOverlayLevel > 0) {
+    if (this.overlayLevel > 0) {
       return false
     }
 
@@ -1778,7 +1808,7 @@ export struct DiscoverContent {
         bottom: this.isSearchModeActive() ? 16 : this.discoverListBottomPadding(),
       })
 
-      if (this.showBottomTabs && this.discoverOverlayLevel === 0) {
+      if (this.showBottomTabs && this.overlayLevel === 0) {
         BottomTabs({ activeTab: 'discover', theme: this.theme })
           .align(Alignment.Bottom)
       }
@@ -1952,7 +1982,7 @@ export struct DiscoverContent {
       })
       .titleMode(HdsNavigationTitleMode.MINI)
       .hideBackButton(true)
-      .hideTitleBar(this.discoverOverlayLevel > 0)
+      .hideTitleBar(this.overlayLevel > 0)
       .bindToScrollable([this.contentScroller])
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
       .width('100%')
@@ -1976,8 +2006,10 @@ struct DiscoverSubscribeConfigDestination {
   @Prop initialSelectedView: FeedViewType = FeedViewType.Articles
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  private destinationVisibleSince: number = 0
 
   private settleRootOverlayClosed(): void {
+    AppStorage.setOrCreate('discoverRootVisibleSince', Date.now())
     AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
     AppStorage.setOrCreate('discoverOverlayLevel', 0)
   }
@@ -1988,6 +2020,10 @@ struct DiscoverSubscribeConfigDestination {
   }
 
   private restoreOverlayAfterDisappearIfNeeded(): void {
+    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+    if (shouldSkipDiscoverOverlayRestoreAfterRootVisible(this.destinationVisibleSince, rootVisibleSince)) {
+      return
+    }
     const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
     const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
     AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
@@ -2028,9 +2064,19 @@ struct DiscoverSubscribeConfigDestination {
       }
     })
     .onAppear(() => {
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+      this.destinationVisibleSince = Date.now()
+      const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+      if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
+        AppStorage.setOrCreate('discoverRootVisibleSince', 0)
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+      }
     })
     .onDisAppear(() => {
+      const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+      if (!shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
+        return
+      }
       const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
       AppStorage.setOrCreate('discoverHasForegroundOverlay', currentLevel > 0)
     })
@@ -2057,8 +2103,16 @@ struct DiscoverBrowseDestination {
   private readonly browseAvatarHydrationQueue: DiscoverBrowseAvatarHydrationTask[] = []
   private browseAvatarHydrationRunning: boolean = false
   private browseDestinationActive: boolean = false
+  private destinationVisibleSince: number = 0
 
   aboutToAppear(): void {
+    this.destinationVisibleSince = Date.now()
+    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+    if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
+      AppStorage.setOrCreate('discoverRootVisibleSince', 0)
+      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+      AppStorage.setOrCreate('discoverOverlayLevel', 1)
+    }
     this.browseDestinationActive = true
     this.cachedFeeds = filteredRecommendedFeeds(this.view, this.sourceKey)
     this.visibleFeedCount = initialDiscoverBrowseVisibleCount(this.cachedFeeds.length)
@@ -2381,6 +2435,10 @@ struct DiscoverBrowseDestination {
   }
 
   private restoreOverlayAfterDisappearIfNeeded(): void {
+    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+    if (shouldSkipDiscoverOverlayRestoreAfterRootVisible(this.destinationVisibleSince, rootVisibleSince)) {
+      return
+    }
     const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
     const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
     AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
@@ -2699,8 +2757,13 @@ struct DiscoverPreviewDestination {
   @Prop targetView: FeedViewType = FeedViewType.Articles
   @Prop restoreOverlayLevel: number = 0
   @Prop theme: ThemePalette = ThemeService.darkPalette()
+  private destinationVisibleSince: number = 0
 
   private restoreOverlayAfterDisappearIfNeeded(): void {
+    const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+    if (shouldSkipDiscoverOverlayRestoreAfterRootVisible(this.destinationVisibleSince, rootVisibleSince)) {
+      return
+    }
     const currentLevel = AppStorage.get<number>('discoverOverlayLevel') ?? 0
     const nextLevel = resolveDiscoverOverlayLevelAfterDestinationDisappear(currentLevel, this.restoreOverlayLevel)
     AppStorage.setOrCreate('discoverOverlayLevel', nextLevel)
@@ -2800,7 +2863,13 @@ struct DiscoverPreviewDestination {
       onOpenArticle: (entry: Entry, _feed: Feed) => { this.openEntryDetail(entry) }
     })
     .onAppear(() => {
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+      this.destinationVisibleSince = Date.now()
+      const rootVisibleSince = AppStorage.get<number>('discoverRootVisibleSince') ?? 0
+      if (shouldApplyDiscoverOverlayAfterDestinationAppear(rootVisibleSince)) {
+        AppStorage.setOrCreate('discoverRootVisibleSince', 0)
+        AppStorage.setOrCreate('discoverHasForegroundOverlay', true)
+        AppStorage.setOrCreate('discoverOverlayLevel', 2)
+      }
     })
     .onDisAppear(() => {
       this.restoreOverlayAfterDisappearIfNeeded()

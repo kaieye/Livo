@@ -32,3 +32,20 @@ export function shouldShowDiscoverForegroundOverlay(
 ): boolean {
   return overlayLevel > DISCOVER_OVERLAY_LEVEL_ROOT
 }
+
+export function shouldSkipDiscoverOverlayRestoreAfterRootVisible(
+  destinationVisibleSince: number,
+  rootVisibleSince: number,
+): boolean {
+  return (
+    destinationVisibleSince > 0 &&
+    rootVisibleSince > 0 &&
+    rootVisibleSince >= destinationVisibleSince
+  )
+}
+
+export function shouldApplyDiscoverOverlayAfterDestinationAppear(
+  rootVisibleSince: number,
+): boolean {
+  return rootVisibleSince <= 0
+}
