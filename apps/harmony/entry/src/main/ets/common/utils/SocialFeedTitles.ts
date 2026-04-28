@@ -1,3 +1,7 @@
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function decodeNumericEntities(value: string): string {
   return value
     .replace(/&#x([0-9a-f]+);/gi, (_matched: string, hex: string) => {
@@ -326,9 +330,32 @@ export function formatXFeedTitle(
   candidateTitle: string | undefined,
   usernameOrUrl: string,
 ): string {
-  const fallback =
-    extractXUsername(usernameOrUrl) ||
-    trimTitle(usernameOrUrl).replace(/^@/, '')
+  const composeTitleWithHandle = (
+    displayName: string,
+    handle: string,
+  ): string => {
+    const normalizedHandle = handle.trim().toLowerCase()
+    if (!normalizedHandle) {
+      return trimTitle(displayName)
+    }
+
+    const normalizedDisplayName = trimTitle(displayName)
+      .replace(
+        new RegExp(`\\s*@\\s*${escapeRegex(normalizedHandle)}$`, 'i'),
+        '',
+      )
+      .replace(new RegExp(`^@?${escapeRegex(normalizedHandle)}$`, 'i'), '')
+      .trim()
+
+    const fallbackDisplayName = normalizedDisplayName || normalizedHandle
+    return `${fallbackDisplayName} @ ${normalizedHandle}`
+  }
+
+  const extractedUsername = extractXUsername(usernameOrUrl)
+  const fallbackUsername =
+    extractedUsername || trimTitle(usernameOrUrl).replace(/^@/, '')
+  const normalizedHandle = fallbackUsername.toLowerCase()
+  const fallback = composeTitleWithHandle('', normalizedHandle)
   const cleaned = trimTitle(candidateTitle || '')
   if (
     !cleaned ||
@@ -339,22 +366,52 @@ export function formatXFeedTitle(
     return fallback
   }
 
-  const fromAt = cleaned.match(/^(.*?)\s*\(@[a-zA-Z0-9_]+\)\s*\/\s*X$/i)
-  if (fromAt?.[1]) {
-    return trimTitle(fromAt[1])
+  const fromParenAt = cleaned.match(/^(.*?)\s*\(@([a-zA-Z0-9_]+)\)\s*\/\s*X$/i)
+  if (fromParenAt?.[1]) {
+    return composeTitleWithHandle(fromParenAt[1], normalizedHandle)
+  }
+
+  const normalizedLower = cleaned.toLowerCase()
+  if (normalizedHandle) {
+    if (
+      normalizedLower === normalizedHandle ||
+      normalizedLower === `@${normalizedHandle}`
+    ) {
+      return fallback
+    }
+
+    const trailingHandle = new RegExp(
+      `\\s+@\\s*${escapeRegex(normalizedHandle)}$`,
+      'i',
+    )
+    if (trailingHandle.test(cleaned)) {
+      const withoutHandle = trimTitle(cleaned.replace(trailingHandle, ''))
+      if (withoutHandle) {
+        return composeTitleWithHandle(withoutHandle, normalizedHandle)
+      }
+    }
   }
 
   const strippedPrefix = cleaned
     .replace(/^twitter\s*@?/i, '')
     .replace(/^x\s*@?/i, '')
-    .replace(/^@+/, '')
     .trim()
 
-  if (strippedPrefix) {
-    return strippedPrefix
+  if (normalizedHandle) {
+    const strippedLower = strippedPrefix.toLowerCase()
+    if (
+      strippedLower === normalizedHandle ||
+      strippedLower === `@${normalizedHandle}`
+    ) {
+      return fallback
+    }
   }
 
-  return cleaned
+  return (
+    composeTitleWithHandle(strippedPrefix || cleaned, normalizedHandle) ||
+    fallback ||
+    cleaned
+  )
 }
 
 export function formatBilibiliFeedTitle(

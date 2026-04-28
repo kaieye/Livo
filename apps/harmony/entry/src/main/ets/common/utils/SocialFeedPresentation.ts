@@ -152,7 +152,11 @@ function scoreStoredFeedTitle(
   const xUsername = extractXUsername(feedUrl) || extractXUsername(siteUrl)
   if (xUsername) {
     const lowered = normalized.toLowerCase()
-    if (lowered === xUsername || lowered === `@${xUsername}`) {
+    if (
+      lowered === xUsername ||
+      lowered === `@${xUsername}` ||
+      lowered === `${xUsername} @ ${xUsername}`
+    ) {
       return 1
     }
     return 4
@@ -347,7 +351,8 @@ export function resolvePreferredStoredFeedTitle(
           loweredIncoming === `@${instagramUsername}`)) ||
       (xUsername &&
         (loweredIncoming === xUsername ||
-          loweredIncoming === `@${xUsername}`)) ||
+          loweredIncoming === `@${xUsername}` ||
+          loweredIncoming === `${xUsername} @ ${xUsername}`)) ||
       (bilibiliUid &&
         new RegExp(`^bilibili\\s+${bilibiliUid}$`, 'i').test(
           normalizedIncoming,

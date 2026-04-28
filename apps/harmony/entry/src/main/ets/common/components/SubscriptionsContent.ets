@@ -545,7 +545,7 @@ export struct SubscriptionsContent {
   private getDisplaySubscriptionTitle(feed: FeedCardModel): string {
     const xUsername = extractXUsername(feed.url) || extractXUsername(feed.siteUrl)
     if (xUsername) {
-      return feed.title + ' - X'
+      return this.formatXSubscriptionTitle(feed.title, xUsername) + ' - X'
     }
 
     const instagramUsername = extractInstagramUsername(feed.url) || extractInstagramUsername(feed.siteUrl)
@@ -554,6 +554,24 @@ export struct SubscriptionsContent {
     }
 
     return feed.title
+  }
+
+  private formatXSubscriptionTitle(title: string, xUsername: string): string {
+    const normalizedTitle = (title || '').trim()
+    const normalizedUsername = (xUsername || '').trim().toLowerCase()
+    if (!normalizedTitle || !normalizedUsername) {
+      return normalizedTitle.replace(/\s*-\s*x\s*$/i, '').trim()
+    }
+
+    const escapedUsername = normalizedUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const trailingHandlePattern = new RegExp(`\\s*@\\s*${escapedUsername}$`, 'i')
+    const stripped = normalizedTitle
+      .replace(/\s*-\s*x\s*$/i, '')
+      .replace(trailingHandlePattern, '')
+      .replace(new RegExp(`^@?${escapedUsername}$`, 'i'), '')
+      .trim()
+
+    return stripped || normalizedTitle
   }
 
   @Builder
