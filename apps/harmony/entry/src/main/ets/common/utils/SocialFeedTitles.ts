@@ -177,6 +177,27 @@ export function extractXUsername(value: string): string {
     return decodeURIComponent(rsshub[1]).replace(/^@/, '').trim().toLowerCase()
   }
 
+  const host = getHostLike(trimmed)
+  if (looksLikeUrl(trimmed) && isKnownXHost(host)) {
+    const knownPath = pathLike.match(/^\/([^/?#]+)(?:\/|$)/)
+    const firstSegment = decodeURIComponent(knownPath?.[1] || '')
+      .replace(/^@/, '')
+      .trim()
+      .toLowerCase()
+    if (
+      firstSegment &&
+      firstSegment !== 'home' &&
+      firstSegment !== 'explore' &&
+      firstSegment !== 'search' &&
+      firstSegment !== 'hashtag' &&
+      firstSegment !== 'i' &&
+      firstSegment !== 'intent' &&
+      firstSegment !== 'share'
+    ) {
+      return isLikelyXHandle(firstSegment) ? firstSegment : ''
+    }
+  }
+
   if (looksLikeUrl(trimmed) && !isKnownXHost(getHostLike(trimmed))) {
     return ''
   }

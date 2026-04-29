@@ -2274,7 +2274,24 @@ struct Index {
       return cached
     }
 
-    const presentation = presentTweetEntryFromCard(entry)
+    const base = presentTweetEntryFromCard(entry)
+    const presentation: TweetEntryPresentation = {
+      kind: base.kind,
+      retweetStyle: base.retweetStyle,
+      displayName: base.displayName,
+      username: '',
+      avatarUrl: base.avatarUrl,
+      text: base.text,
+      mediaUrls: base.mediaUrls,
+      publishedLabel: base.publishedLabel,
+      articleUrl: base.articleUrl,
+      replyCount: base.replyCount,
+      repostCount: base.repostCount,
+      likeCount: base.likeCount,
+      viewCount: base.viewCount,
+      retweetByLabel: base.retweetByLabel,
+      quotedTweet: base.quotedTweet,
+    }
     this.tweetPresentationCache.set(cacheKey, presentation)
     return presentation
   }

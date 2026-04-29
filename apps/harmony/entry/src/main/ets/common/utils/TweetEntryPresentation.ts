@@ -1100,11 +1100,26 @@ export function presentTweetEntryFromCard(card: {
 
   return {
     ...presentation,
-    displayName: feedDisplayName || presentation.displayName,
+    displayName: normalizeFinalDisplayName(
+      feedDisplayName || presentation.displayName,
+    ),
     username:
       presentation.username || normalizeUsernameLabel(extractUsername(source)),
     avatarUrl: sourceAvatarUrl || presentation.avatarUrl,
   }
+}
+
+function normalizeFinalDisplayName(value: string): string {
+  const trimmed = trimValue(value)
+  if (!trimmed) {
+    return ''
+  }
+
+  return trimmed
+    .replace(/\s*[/-]\s*@\s*[a-z0-9_]{1,15}\s*$/i, '')
+    .replace(/\s+@\s*[a-z0-9_]{1,15}\s*$/i, '')
+    .replace(/\s*-\s*(?:x|ins)\s*$/i, '')
+    .trim()
 }
 
 function resolveFeedDisplayName(feedTitle: string, articleUrl: string): string {
@@ -1112,5 +1127,9 @@ function resolveFeedDisplayName(feedTitle: string, articleUrl: string): string {
   if (!trimmed) {
     return ''
   }
-  return normalizeSocialFeedTitle(trimmed, articleUrl, '')
+  const normalized = normalizeSocialFeedTitle(trimmed, articleUrl, '')
+  return normalized
+    .replace(/\s*-\s*(?:x|ins)\s*$/i, '')
+    .replace(/\s+@[a-z0-9_]{1,15}\s*$/i, '')
+    .trim()
 }
