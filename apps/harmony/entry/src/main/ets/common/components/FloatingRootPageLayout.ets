@@ -10,6 +10,8 @@ export const ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT: number = 68
 export const ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING: number = 24
 export const ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET: number = 4
 export const ROOT_PAGE_MODE_TOP_OFFSET: number = -26
+export const ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE: number = 28
+export const ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE: number = 24
 
 @Component
 export struct FloatingRootPageLayout {

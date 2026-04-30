@@ -18,6 +18,8 @@ import { HomeArticleEntryCard } from '../common/components/HomeArticleEntryCard'
 import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 import {
   ROOT_MODE_RAIL_TOP_GAP,
+  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
+  ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from '../common/components/FloatingRootPageLayout'
@@ -1473,7 +1475,7 @@ struct Index {
   private SettingsRootLowerTitleBuilder() {
     Row() {
       Text(this.currentRootTitle())
-        .fontSize(24)
+        .fontSize(ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
@@ -1492,7 +1494,7 @@ struct Index {
   private HomeRootLowerTitleBuilder() {
     Row() {
       Text('首页')
-        .fontSize(28)
+        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
@@ -1511,7 +1513,7 @@ struct Index {
   private HomeRootTitleOverlayLayer() {
     Row() {
       Text('首页')
-        .fontSize(28)
+        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
@@ -4089,6 +4091,8 @@ struct Index {
       if (this.totalEntryCountFor('pictures') === 0) {
         ListItem() {
           Column({ space: 0 }) {
+            Blank().height(HOME_MODE_CONTENT_GAP)
+
             if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading('pictures')) {
               this.HomeModeLoadingState()
             } else {
@@ -4478,6 +4482,11 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.currentRootTabId() === 'discover' && this.discoverOverlayLevel > 0) {
+      AppStorage.setOrCreate('discoverOverlayBackAt', Date.now())
+      return true
+    }
+
     if (this.isHomeRootTab() && this.searchOverlayVisible) {
       this.closeHomeInlineSearch(true)
       return true

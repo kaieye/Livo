@@ -16,6 +16,7 @@ import {
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import {
   ROOT_MODE_RAIL_TOP_GAP,
+  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_MODE_TOP_OFFSET,
@@ -212,7 +213,7 @@ export struct SubscriptionsContent {
   private SubscriptionsLowerTitleBuilder() {
     Row() {
       Text('订阅')
-        .fontSize(28)
+        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })

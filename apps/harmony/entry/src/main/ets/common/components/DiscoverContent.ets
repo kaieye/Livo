@@ -16,6 +16,7 @@ import {
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import {
+  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_MODE_TOP_OFFSET,
@@ -232,6 +233,7 @@ export struct DiscoverContent {
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @StorageProp('discoverOverlayLevel') @Watch('handleDiscoverOverlayLevelChanged') discoverOverlayLevel: number = 0
   @StorageProp('discoverNavigationResetAt') @Watch('handleNavigationResetSignal') discoverNavigationResetAt: number = 0
+  @StorageProp('discoverOverlayBackAt') @Watch('handleOverlayBackSignal') discoverOverlayBackAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @StorageProp('discoverSearchDismissAt') @Watch('handleSearchDismissSignal') discoverSearchDismissAt: number = 0
   onReady: () => void = () => {}
@@ -296,7 +298,7 @@ export struct DiscoverContent {
   private DiscoverLowerTitleBuilder() {
     Row() {
       Text('发现')
-        .fontSize(30)
+        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
@@ -379,6 +381,42 @@ export struct DiscoverContent {
     this.activePreviewParams = undefined
     this.activeSubscribeConfigParams = undefined
     this.syncOverlayRoute('none', 0)
+  }
+
+  private handleOverlayBackSignal(): void {
+    this.consumeOverlayBack()
+  }
+
+  private consumeOverlayBack(): boolean {
+    if (this.activeSubscribeConfigParams) {
+      this.closeSubscribeConfigToTarget()
+      return true
+    }
+
+    if (this.activePreviewParams) {
+      this.activePreviewParams = undefined
+      if (this.activeBrowseParams) {
+        this.syncOverlayRoute('browse', 1)
+      } else {
+        this.syncOverlayRoute('none', 0)
+      }
+      return true
+    }
+
+    if (this.activeBrowseParams) {
+      this.activeBrowseParams = undefined
+      this.activePreviewParams = undefined
+      this.activeSubscribeConfigParams = undefined
+      this.syncOverlayRoute('none', 0)
+      return true
+    }
+
+    if (this.overlayLevel > 0) {
+      this.syncOverlayRoute('none', 0)
+      return true
+    }
+
+    return false
   }
 
   private discoverFeaturedFeeds(): RecommendedFeed[] {
