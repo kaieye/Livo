@@ -1,8 +1,8 @@
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_SM, CHIP_RADIUS } from '../ui/UiTokens'
-export type ContentMode = 'articles' | 'social' | 'pictures' | 'videos'
-const CONTENT_MODES: ContentMode[] = ['articles', 'social', 'pictures', 'videos']
+import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
+export type ContentMode = HomeMode
 
 @Component
 export struct ContentModeRail {
@@ -18,7 +18,7 @@ export struct ContentModeRail {
   onChange: (mode: ContentMode) => void = () => {}
 
   private modeIndex(mode: ContentMode): number {
-    return CONTENT_MODES.indexOf(mode)
+    return HOME_MODES.indexOf(mode)
   }
 
   private isPressed(mode: ContentMode): boolean {
@@ -30,7 +30,7 @@ export struct ContentModeRail {
       return 0
     }
 
-    return (this.railWidth - 8) / CONTENT_MODES.length
+    return (this.railWidth - 8) / HOME_MODES.length
   }
 
   private indicatorOffsetX(): number {
@@ -186,32 +186,11 @@ export struct ContentModeRail {
   }
 
   private labelFor(mode: ContentMode): string {
-    switch (mode) {
-      case 'articles':
-        return '文章'
-      case 'social':
-        return '社交'
-      case 'pictures':
-        return '图片'
-      case 'videos':
-        return '视频'
-      default:
-        return ''
-    }
+    return resolveHomeModeTitle(mode)
   }
 
   private modeSymbol(mode: ContentMode): Resource {
-    switch (mode) {
-      case 'articles':
-        return $r('sys.symbol.doc_text')
-      case 'social':
-        return $r('sys.symbol.ellipsis_bubble')
-      case 'pictures':
-        return $r('sys.symbol.picture_2')
-      case 'videos':
-      default:
-        return $r('sys.symbol.media_center')
-    }
+    return resolveHomeModeSymbol(mode)
   }
 
   @Builder
@@ -327,7 +306,7 @@ export struct ContentModeRail {
       .justifyContent(FlexAlign.Start)
 
       Row({ space: 0 }) {
-        ForEach(CONTENT_MODES, (mode: ContentMode) => {
+        ForEach(HOME_MODES, (mode: ContentMode) => {
           this.ModeTab(mode)
         }, (mode: ContentMode) => mode)
       }
