@@ -30,9 +30,7 @@ export struct HomeModeEntriesPage {
   @Prop totalCount: number = 0
   @Prop isLoading: boolean = false
   @Prop emptyStateTitle: string = ''
-  @Prop refreshGapHeight: number = 0
   @Prop theme: ThemePalette = {} as ThemePalette
-  @Prop searchQuery: string = ''
   @Prop showUnreadDot: boolean = true
   @Prop sceneOpacity: number = 1
   @Prop sceneOffsetX: number = 0
@@ -51,14 +49,6 @@ export struct HomeModeEntriesPage {
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
-  }
-
-  @Builder
-  private RefreshGapSlot() {
-    Column()
-      .width('100%')
-      .height(this.refreshGapHeight)
-      .animation({ duration: 180, curve: Curve.EaseOut })
   }
 
   @Builder
@@ -92,7 +82,6 @@ export struct HomeModeEntriesPage {
       ListItem() {
         Column() {
           Blank().height(HOME_MODE_SCENE_TOP_INSET)
-          this.RefreshGapSlot()
         }
         .width('100%')
       }
@@ -113,7 +102,7 @@ export struct HomeModeEntriesPage {
                 isUnread: !entry.isRead,
                 flatMode: true,
                 showBottomDivider: index < this.entries.length - 1,
-                highlightQuery: this.searchQuery,
+                highlightQuery: '',
                 collapsedTextLines: 7,
                 enableEnterTransition: false,
                 onOpen: () => this.callbacks.onEntryOpen(entry),
@@ -123,7 +112,7 @@ export struct HomeModeEntriesPage {
                 entry,
                 theme: this.theme,
                 showUnreadDot: this.showUnreadDot,
-                highlightQuery: this.searchQuery,
+                highlightQuery: '',
                 onOpen: () => this.callbacks.onEntryOpen(entry),
               })
             }
@@ -160,7 +149,6 @@ export struct HomeModeEntriesPage {
       ListItem() {
         Column() {
           Blank().height(HOME_MODE_SCENE_TOP_INSET)
-          this.RefreshGapSlot()
         }
         .width('100%')
       }
@@ -183,7 +171,7 @@ export struct HomeModeEntriesPage {
               pictureUrl: entry.imageUrl,
               galleryUrls: this.callbacks.getPictureGalleryUrls(entry),
               theme: this.theme,
-              highlightQuery: this.searchQuery,
+              highlightQuery: '',
               enableEnterTransition: false,
               flatMode: true,
               showBottomDivider: index < this.entries.length - 1,
@@ -220,15 +208,11 @@ export struct HomeModeEntriesPage {
   private VideoGrid() {
     Scroll(this.scroller) {
       Column({ space: HOME_MODE_CONTENT_GAP }) {
-        Column() {
-          Blank().height(HOME_MODE_SCENE_TOP_INSET)
-          this.RefreshGapSlot()
-        }
-        .width('100%')
+        Blank().height(HOME_MODE_SCENE_TOP_INSET)
 
         HomeVideoGrid({
           entries: this.entries,
-          highlightQuery: this.searchQuery,
+          highlightQuery: '',
           inheritedTheme: this.theme,
           isLoading: this.isLoading,
           onOpenEntry: (entry: EntryCardModel) => {

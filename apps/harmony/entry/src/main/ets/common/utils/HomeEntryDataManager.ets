@@ -13,7 +13,8 @@ export interface HomeEntryDataDelegate {
   isComponentActive(): boolean
   setFeaturedEntries(entries: EntryCardModel[]): void
   setEntryGroups(groups: HomeEntryGroups<EntryCardModel>): void
-  onEntriesSettled(): void
+  onEntriesSettled(mode?: SubscriptionMode): void
+  resetTweetPresentationCache(): void
   setListSwapAnimating(v: boolean): void
   setListSwapOpacity(v: number): void
   setListSwapTranslateY(v: number): void
@@ -27,7 +28,6 @@ export class HomeEntryDataManager {
   private readonly delegate: HomeEntryDataDelegate
   private entryGroupVersion: number = 0
   private snapshotPersistVersion: number = 0
-  private tweetPresentationCache: Map<string, object> = new Map()
 
   constructor(delegate: HomeEntryDataDelegate) {
     this.delegate = delegate
@@ -73,7 +73,7 @@ export class HomeEntryDataManager {
     if (!skipMerge) {
       this.delegate.setFeaturedEntries(this.mergeFeaturedEntriesFromGroups())
     }
-    this.delegate.onEntriesSettled()
+    this.delegate.onEntriesSettled(mode)
     if (deferredPersist) {
       this.schedulePersistSnapshot(this.delegate.getFeaturedEntries())
     } else {
@@ -248,9 +248,7 @@ export class HomeEntryDataManager {
   }
 
   resetTweetPresentationCache(): void {
-    if (this.tweetPresentationCache.size > 0) {
-      this.tweetPresentationCache.clear()
-    }
+    this.delegate.resetTweetPresentationCache()
   }
 
   notifyAllReloaded(): void {

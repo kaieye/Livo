@@ -5,8 +5,6 @@ import { HighlightedInlineText } from './HighlightedInlineText'
 const HOME_INLINE_SEARCH_INPUT_HEIGHT: number = 40
 const HOME_INLINE_SEARCH_MAX_WIDTH: number = 360
 const HOME_INLINE_SEARCH_RESULT_MAX_WIDTH: number = 360
-const HOME_INLINE_SEARCH_ACTION_SIZE: number = 40
-const HOME_INLINE_SEARCH_ACTION_GAP: number = 8
 
 export const HOME_INLINE_SEARCH_MOTION_DURATION: number = 240
 export const HOME_INLINE_SEARCH_INPUT_ID: string = 'home-inline-search-input'
@@ -30,8 +28,6 @@ export struct HomeInlineSearchOverlay {
 
   onQueryChange: (value: string) => void = () => {}
   onClose: (clearQuery: boolean) => void = () => {}
-  onOpen: () => void = () => {}
-  onRefresh: () => void = () => {}
   onEntryClick: (entry: EntryCardModel) => void = () => {}
   onInputAppear: () => void = () => {}
   summaryTextForEntry: (entry: EntryCardModel) => string = () => ''
@@ -122,62 +118,6 @@ export struct HomeInlineSearchOverlay {
       y: this.searchFieldOffsetY,
     })
     .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-  }
-
-  @Builder
-  private SearchActions() {
-    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
-      Row() {
-        if (this.isRefreshing && this.refreshTotalCount > 0) {
-          Text(`${this.displayRefreshPercent}%`)
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-        } else {
-          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
-            .fontSize(18)
-            .fontColor([this.theme.textPrimary])
-        }
-      }
-      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.shellBackgroundColor())
-      .backdropBlur(this.isRefreshing ? this.shellBackdropBlur() + 2 : this.shellBackdropBlur())
-      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
-      .border({ width: 0.8, color: this.shellBorderColor() })
-      .shadow(this.shellShadow())
-      .opacity(this.showSearch ? 0 : 1)
-      .translate({ x: this.showSearch ? 10 : 0 })
-      .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-      .enabled(!this.showSearch)
-      .onClick(() => {
-        this.onRefresh()
-      })
-
-      Row() {
-        SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontSize(18)
-          .fontColor([this.theme.textPrimary])
-      }
-      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.shellBackgroundColor())
-      .backdropBlur(this.shellBackdropBlur())
-      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
-      .border({ width: 0.8, color: this.shellBorderColor() })
-      .shadow(this.shellShadow())
-      .opacity(this.showSearch ? 0 : 1)
-      .translate({ x: this.showSearch ? 10 : 0 })
-      .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-      .enabled(!this.showSearch)
-      .onClick(() => {
-        this.onOpen()
-      })
-    }
   }
 
   @Builder
@@ -287,8 +227,8 @@ export struct HomeInlineSearchOverlay {
   }
 
   build() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      if (this.visible) {
+    if (this.visible) {
+      Stack({ alignContent: Alignment.TopStart }) {
         Column()
           .width('100%')
           .height('100%')
@@ -298,42 +238,33 @@ export struct HomeInlineSearchOverlay {
             this.onClose(true)
           })
           .zIndex(125)
-      }
 
-      Column({ space: 10 }) {
-        if (this.visible) {
+        Column({ space: 10 }) {
           this.SearchField()
           if (this.resultEntries.length > 0 || this.showEmptyState) {
             this.SearchResults()
           }
         }
+        .width('100%')
+        .align(Alignment.Top)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .padding({
+          top: this.topPadding,
+          left: this.horizontalPadding,
+          right: this.horizontalPadding,
+        })
+        .zIndex(131)
       }
       .width('100%')
-      .align(Alignment.Top)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-      .padding({
-        top: this.topPadding,
-        left: this.horizontalPadding,
-        right: this.horizontalPadding,
-      })
-      .zIndex(131)
-
-      Row() {
-        this.SearchActions()
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.End)
-      .alignItems(VerticalAlign.Top)
-      .padding({
-        top: this.topPadding,
-        left: this.horizontalPadding,
-        right: this.horizontalPadding,
-      })
-      .zIndex(133)
+      .height('100%')
+      // 整个搜索浮层需要作为同级顶层，避免被首页其它悬浮层压住。
+      .zIndex(220)
+    } else {
+      Row()
+        .width(0)
+        .height(0)
+        .hitTestBehavior(HitTestMode.None)
     }
-    .width('100%')
-    .height('100%')
-    .hitTestBehavior(HitTestMode.Transparent)
   }
 }

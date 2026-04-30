@@ -14,8 +14,6 @@ import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import window from '@ohos.window'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import { ContentModeRail } from '../common/components/ContentModeRail'
-import { HomeArticleEntryCard } from '../common/components/HomeArticleEntryCard'
-import { HomeVideoGrid } from '../common/components/HomeVideoGrid'
 import {
   ROOT_MODE_RAIL_TOP_GAP,
   ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
@@ -23,8 +21,6 @@ import {
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from '../common/components/FloatingRootPageLayout'
-import { PictureEntryCard } from '../common/components/PictureEntryCard'
-import { TweetEntryCard } from '../common/components/TweetEntryCard'
 import {
   DEFAULT_HARMONY_SETTINGS,
   Entry,
@@ -35,14 +31,23 @@ import {
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
-import { buildInlineHighlightSegments, normalizeInlineSearchQuery } from '../common/utils/HomeInlineSearch'
-import { rememberVisitedMode } from '../common/utils/HomeModeVisitedCache'
-import { resolveHomeVideoSceneKind } from '../common/utils/HomeVideoGrid'
 import {
   resolveHomeVisibleEntryInitialLimit,
   resolveHomeVisibleEntryLoadMoreStep,
   shouldPreloadHomeVisibleEntries,
 } from '../common/utils/HomeVisibleEntryPolicy'
+import {
+  cloneHomeSnapshotEntry,
+  describeError,
+  duplicateKeyCount,
+  filterEntriesByMode,
+  homeEntryListRenderKey,
+  homeEntryRenderBaseKey,
+  resolveEntryMode,
+} from '../common/utils/HomeEntryUtils'
+import { HomeEntryDataDelegate, HomeEntryDataManager } from '../common/utils/HomeEntryDataManager'
+import { HomeInlineSearchController, HomeInlineSearchDelegate } from '../common/utils/HomeInlineSearchController'
+import { HomeModeController, HomeModeDelegate } from '../common/utils/HomeModeController'
 import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
@@ -52,8 +57,8 @@ import {
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { DiscoverContent } from '../common/components/DiscoverContent'
 import { SettingsContent } from '../common/components/SettingsContent'
-import { HomeEmptyStateCard } from '../common/components/HomeEmptyStateCard'
-import { HomeInlineSearchOverlay, HOME_INLINE_SEARCH_INPUT_ID, HOME_INLINE_SEARCH_MOTION_DURATION } from '../common/components/HomeInlineSearchOverlay'
+import { HomeInlineSearchOverlay, HOME_INLINE_SEARCH_MOTION_DURATION } from '../common/components/HomeInlineSearchOverlay'
+import { HomeModeEntriesPage } from '../common/components/HomeModeEntriesPage'
 import {
   HdsBottomTabId,
   HdsBottomTabItem,
@@ -62,7 +67,6 @@ import {
 } from '../common/utils/HdsBottomTabConfig'
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
-import { shouldAcceptModeSwitch } from '../common/utils/ModeSwitchGuard'
 import { RefreshStateManager } from '../common/utils/RefreshStateManager'
 import { shouldHideRootBottomBar, shouldHideRootTitleBar } from '../common/utils/RootTabVisibilityPolicy'
 import { resolveHomeModeTitle } from '../common/utils/HomeModeMeta'
@@ -121,29 +125,11 @@ import {
   HOME_MODE_SWITCH_CANDIDATE_LIMIT,
   HOME_PERF_DIAG_ENABLED,
   HOME_PERF_DIAG_PREFIX,
-  HOME_PULL_DEBUG_LOG_ENABLED,
-  HOME_PULL_DEBUG_LOG_PREFIX,
-  HOME_REFRESH_CONTENT_HOLD_DISTANCE,
-  HOME_REFRESH_DISMISS_SCROLL_OFFSET,
   HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS,
   HOME_REFRESH_FINAL_RELOAD_DELAY_MS,
-  HOME_REFRESH_FINALIZE_DEBOUNCE_MS,
   HOME_REFRESH_FIRST_SWAP_DELAY_MS,
-  HOME_REFRESH_FOLLOW_RATIO,
-  HOME_REFRESH_GAP_OPEN_PULL_DISTANCE,
-  HOME_REFRESH_INDICATOR_BOTTOM_MARGIN,
-  HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y,
-  HOME_REFRESH_INDICATOR_SIZE,
-  HOME_REFRESH_INDICATOR_VISUAL_OFFSET,
-  HOME_REFRESH_MAX_PULL_DISTANCE,
   HOME_REFRESH_PERCENT_COALESCE_MS,
   HOME_REFRESH_PROGRESS_UI_THROTTLE_MS,
-  HOME_REFRESH_PULL_DISTANCE,
-  HOME_REFRESH_PULL_DISTANCE_STEP,
-  HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS,
-  HOME_REFRESH_RESET_DEFER_MS,
-  HOME_REFRESH_RESET_DURATION,
-  HOME_REFRESH_TRIGGER_DEFER_MS,
   HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT,
   HOME_STARTUP_REFRESH_COOLDOWN_MS,
   MODE_SWIPE_TRIGGER_OFFSET,
@@ -165,6 +151,93 @@ import {
   SubscriptionMode,
 } from '../common/components/HomeRootConfig'
 
+class IndexHomeModeDelegate implements HomeModeDelegate {
+  private readonly owner: Index
+
+  constructor(owner: Index) {
+    this.owner = owner
+  }
+
+  getMode(): SubscriptionMode { return this.owner.mode }
+  getRenderedMode(): SubscriptionMode { return this.owner.renderedMode }
+  getPreviousMode(): SubscriptionMode { return this.owner.previousMode }
+  getVisitedModes(): SubscriptionMode[] { return this.owner.visitedModes }
+  isModeTransitioning(): boolean { return this.owner.isModeTransitioning }
+  getModeTransitionDirection(): number { return this.owner.modeTransitionDirection }
+  getScrollOffsetForMode(mode: SubscriptionMode): number { return this.owner.readHomeModeScrollOffset(mode) }
+  getEntryCountForMode(mode: SubscriptionMode): number { return this.owner.totalEntryCountFor(mode) }
+  getFirstEntryIdForMode(mode: SubscriptionMode): string { return (this.owner.filteredEntriesFor(mode)[0]?.id || '').trim() }
+  getLastEntryIdForMode(mode: SubscriptionMode): string {
+    const entries = this.owner.filteredEntriesFor(mode)
+    return (entries[entries.length - 1]?.id || '').trim()
+  }
+  setMode(mode: SubscriptionMode): void { this.owner.mode = mode }
+  setRenderedMode(mode: SubscriptionMode): void { this.owner.renderedMode = mode }
+  setPreviousMode(mode: SubscriptionMode): void { this.owner.previousMode = mode }
+  setVisitedModes(modes: SubscriptionMode[]): void { this.owner.visitedModes = modes }
+  setModeTransitioning(v: boolean): void { this.owner.isModeTransitioning = v }
+  setModeTransitionDirection(v: number): void { this.owner.modeTransitionDirection = v }
+  setScrollInteracting(interacting: boolean, mode: SubscriptionMode): void { this.owner.setHomeScrollInteracting(interacting, mode) }
+  setHomeModeRailExpandedLockOffset(v: number): void { this.owner.homeModeRailExpandedLockOffset = v }
+  setHomeModeRailExpandedOverride(v: boolean): void { this.owner.homeModeRailExpandedOverride = v }
+  setCurrentHomeModeScrollOffset(v: number): void { this.owner.currentHomeModeScrollOffset = v }
+  setHomeModeRailDismissedByScroll(v: boolean): void { this.owner.homeModeRailDismissedByScroll = v }
+  updateHeaderBlurProgress(offset: number): void { this.owner.updateHeaderBlurProgress(offset) }
+  resetScrollIntent(mode: SubscriptionMode): void { this.owner.resetModeScrollIntent(mode) }
+  ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.owner.ensureModeEntriesLoaded(mode) }
+  runManagedTimeout(cb: () => void, delayMs: number): void { this.owner.runManagedTimeout(cb, delayMs) }
+}
+
+class IndexHomeEntryDataDelegate implements HomeEntryDataDelegate {
+  private readonly owner: Index
+
+  constructor(owner: Index) {
+    this.owner = owner
+  }
+
+  getFeaturedEntries(): EntryCardModel[] { return this.owner.featuredEntries }
+  getEntryGroups(): HomeEntryGroups<EntryCardModel> { return this.owner.entryGroups }
+  getMode(): SubscriptionMode { return this.owner.mode }
+  getDataSources(): HomeEntryDataSourceMap { return this.owner.homeEntryDataSources }
+  isComponentActive(): boolean { return this.owner.isComponentActive }
+  setFeaturedEntries(entries: EntryCardModel[]): void { this.owner.featuredEntries = entries }
+  setEntryGroups(groups: HomeEntryGroups<EntryCardModel>): void { this.owner.entryGroups = groups }
+  onEntriesSettled(mode?: SubscriptionMode): void {
+    this.owner.markModeLoaded(mode ?? this.owner.mode, true)
+    this.owner.settleInitialHomeLoadState()
+  }
+  resetTweetPresentationCache(): void { this.owner.resetTweetPresentationCache() }
+  setListSwapAnimating(v: boolean): void { this.owner.homeListSwapAnimating = v }
+  setListSwapOpacity(v: number): void { this.owner.homeListSwapOpacity = v }
+  setListSwapTranslateY(v: number): void { this.owner.homeListSwapTranslateY = v }
+  getListSwapToken(): number { return this.owner.homeListSwapToken }
+  getListSwapAnimating(): boolean { return this.owner.homeListSwapAnimating }
+  animateWithUiContext(options: AnimateParam, event: () => void): void { this.owner.animateWithUiContext(options, event) }
+  runManagedTimeout(cb: () => void, delayMs: number): void { this.owner.runManagedTimeout(cb, delayMs) }
+}
+
+class IndexHomeInlineSearchDelegate implements HomeInlineSearchDelegate {
+  private readonly owner: Index
+
+  constructor(owner: Index) {
+    this.owner = owner
+  }
+
+  getCurrentRootTabId(): RootTabId { return this.owner.currentRootTabId() }
+  getSearchQuery(): string { return this.owner.searchQuery }
+  setSearchQuery(query: string): void { this.owner.searchQuery = query }
+  getShowSearch(): boolean { return this.owner.showSearch }
+  setShowSearch(visible: boolean): void { this.owner.showSearch = visible }
+  getSearchOverlayVisible(): boolean { return this.owner.searchOverlayVisible }
+  setSearchOverlayVisible(visible: boolean): void { this.owner.searchOverlayVisible = visible }
+  getSearchFocusRequestToken(): number { return this.owner.getHomeInlineSearchFocusRequestToken() }
+  setSearchFocusRequestToken(token: number): void { this.owner.setHomeInlineSearchFocusRequestToken(token) }
+  getSearchEntries(): EntryCardModel[] { return this.owner.currentSearchEntries() }
+  getSearchResultLimit(): number { return HOME_INLINE_SEARCH_RESULT_LIMIT }
+  getSearchInputController(): TextInputController { return this.owner.getSearchInputController() }
+  runManagedTimeout(cb: () => void, delayMs: number): void { this.owner.runManagedTimeout(cb, delayMs) }
+}
+
 @Entry
 @Component
 struct Index {
@@ -183,11 +256,6 @@ struct Index {
   @State refreshCompletedCount: number = 0
   @State refreshTotalCount: number = 0
   @State displayRefreshPercent: number = 0
-  @State homeRefreshPullDistance: number = 0
-  @State homeRefreshIndicatorOffset: number = 0
-  @State homeRefreshContentHoldOffset: number = 0
-  @State homeRefreshIndicatorDismissed: boolean = false
-  @State homeRefreshStatus: RefreshStatus = RefreshStatus.Inactive
   @State mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
   @State previousMode: SubscriptionMode = 'articles'
@@ -250,7 +318,7 @@ struct Index {
     pictures: 0,
     videos: 0,
   }
-  private readonly homeEntryDataSources: HomeEntryDataSourceMap = {
+  readonly homeEntryDataSources: HomeEntryDataSourceMap = {
     articles: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.articles),
     social: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.social),
     pictures: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.pictures),
@@ -261,31 +329,17 @@ struct Index {
   private refreshPercentAnimationTimer: number = -1
   private pendingRefreshPercentTarget: number = 0
   private autoRefreshTimer: number = -1
-  private homeEntryGroupVersion: number = 0
   private postRefreshReloadVersion: number = 0
   private homePostRefreshReloadPending: boolean = false
   private feedsChangedReloadVersion: number = 0
   private hasDeferredFeedsChangedReload: boolean = false
   private deferredFeedsChangedRetryToken: number = 0
   private suppressFeedsChangedUntilMs: number = 0
-  private homeListSwapToken: number = 0
-  private lastHomePullFinalizeAt: number = 0
-  private homePullFinalizeQueued: boolean = false
+  homeListSwapToken: number = 0
   private lastRefreshProgressUiUpdateAt: number = 0
-  private homePullDebugSessionId: number = 0
-  private homePullDebugMode: SubscriptionMode = 'articles'
-  private homePullDebugStartedAt: number = 0
-  private homePullDebugReleasedAt: number = 0
-  private homePullDebugWillScrollCount: number = 0
-  private homePullDebugPostReleaseWillScrollCount: number = 0
-  private homePullDebugIgnoredWillScrollCount: number = 0
-  private homePullDebugStateWriteCount: number = 0
-  private homePullDebugFinalizeScheduleCount: number = 0
-  private homePullDebugFinalizeRunCount: number = 0
-  private isComponentActive: boolean = false
+  isComponentActive: boolean = false
   private hasLoadedInitialData: boolean = false
   private initialFeedCount: number = 0
-  private homeSnapshotPersistVersion: number = 0
   private managedTimeoutIds: number[] = []
   private homeInlineSearchFocusRequestToken: number = 0
   private homeLoadMoreRequestToken: number = 0
@@ -349,7 +403,24 @@ struct Index {
   private homePerfSessionId: number = 0
   private homePerfSessionStartedAt: number = 0
   private readonly tweetPresentationCache: Map<string, TweetEntryPresentation> = new Map()
+  private readonly homeModeController: HomeModeController = new HomeModeController(this.createHomeModeDelegate())
+  private readonly homeEntryDataManager: HomeEntryDataManager = new HomeEntryDataManager(this.createHomeEntryDataDelegate())
+  private readonly homeInlineSearchController: HomeInlineSearchController = new HomeInlineSearchController(
+    this.createHomeInlineSearchDelegate(),
+  )
   private lastHandledRequestedRootTabId: RootTabId | '' = ''
+
+  private createHomeModeDelegate(): HomeModeDelegate {
+    return new IndexHomeModeDelegate(this)
+  }
+
+  private createHomeEntryDataDelegate(): HomeEntryDataDelegate {
+    return new IndexHomeEntryDataDelegate(this)
+  }
+
+  private createHomeInlineSearchDelegate(): HomeInlineSearchDelegate {
+    return new IndexHomeInlineSearchDelegate(this)
+  }
 
   aboutToAppear(): void {
     this.isComponentActive = true
@@ -389,7 +460,7 @@ struct Index {
     this.homeListSwapScale = 1
   }
 
-  private runManagedTimeout(callback: () => void, delayMs: number): void {
+  runManagedTimeout(callback: () => void, delayMs: number): void {
     const timeoutId = setTimeout(() => {
       const pendingIndex = this.managedTimeoutIds.indexOf(timeoutId)
       if (pendingIndex >= 0) {
@@ -415,18 +486,7 @@ struct Index {
   }
 
   private describeError(error: Error | string | Object): string {
-    if (error instanceof Error) {
-      const stack = error.stack ? ` stack=${error.stack}` : ''
-      return `${error.name}: ${error.message}${stack}`
-    }
-    if (typeof error === 'string') {
-      return error
-    }
-    try {
-      return JSON.stringify(error)
-    } catch (_) {
-      return String(error)
-    }
+    return describeError(error)
   }
 
   private logHomeAsyncError(stage: string, error: Error | string | Object): void {
@@ -572,7 +632,7 @@ struct Index {
     })
   }
 
-  private async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
+  async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
     if (this.isRefreshing || !this.isComponentActive) {
       return
     }
@@ -635,9 +695,6 @@ struct Index {
       this.lastHomeRefreshFinishedAt = Date.now()
       this.clearRefreshPercentAnimation()
       this.displayRefreshPercent = 0
-      this.runManagedTimeout(() => {
-        this.animateHomePullRefreshReset()
-      }, HOME_REFRESH_RESET_DEFER_MS)
       this.scheduleHomeLoadMorePrefetch()
       this.logHomePerf(`refresh done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
     }
@@ -685,7 +742,7 @@ struct Index {
     }
   }
 
-  private animateWithUiContext(options: AnimateParam, event: () => void): void {
+  animateWithUiContext(options: AnimateParam, event: () => void): void {
     if (!this.isComponentActive) {
       event()
       return
@@ -700,7 +757,7 @@ struct Index {
     return this.homeInitialLoadPending || this.isRefreshing || this.isHomeStartupRefreshing
   }
 
-  private settleInitialHomeLoadState(force: boolean = false): void {
+  settleInitialHomeLoadState(force: boolean = false): void {
     if (!this.homeInitialLoadPending) {
       return
     }
@@ -730,383 +787,12 @@ struct Index {
       : '未发现订阅推文，请先到发现页面添加或刷新订阅源'
   }
 
-  @Builder
-  private HomeModeStatusCard(message: string, showLoading: boolean = false) {
-    HomeEmptyStateCard({
-      message,
-      loading: showLoading,
-      loadingMessage: '正在加载内容...',
-      theme: this.theme,
-    })
-  }
-
-  private homeEmptyStateTopGap(mode: SubscriptionMode): number {
-    return mode === 'social' ? HOME_MODE_CONTENT_GAP : 0
-  }
-
-  @Builder
-  private HomeModeLoadingState(message: string = '正在加载内容...') {
-    HomeEmptyStateCard({
-      message: '',
-      loading: true,
-      loadingMessage: message,
-      theme: this.theme,
-    })
-  }
-
-  private updateHomePullRefreshState(offset: number): void {
-    const rawOffset = RefreshStateManager.resolvePullDistance(offset, HOME_REFRESH_MAX_PULL_DISTANCE)
-    const nextOffset = Math.round(rawOffset / HOME_REFRESH_PULL_DISTANCE_STEP) * HOME_REFRESH_PULL_DISTANCE_STEP
-    if (!this.isRefreshing && Math.abs(nextOffset - this.homeRefreshPullDistance) < 0.5) {
-      return
-    }
-
-    this.homeRefreshPullDistance = nextOffset
-    this.homeRefreshIndicatorOffset = nextOffset
-    this.homePullDebugStateWriteCount += 1
-    if (this.isRefreshing) {
-      this.homeRefreshStatus = RefreshStatus.Refresh
-      return
-    }
-
-    if (nextOffset <= 0.5) {
-      this.homeRefreshStatus = RefreshStatus.Inactive
-    } else if (nextOffset >= HOME_REFRESH_PULL_DISTANCE) {
-      this.homeRefreshStatus = RefreshStatus.OverDrag
-    } else {
-      this.homeRefreshStatus = RefreshStatus.Drag
-    }
-  }
-
-  private resetHomePullRefreshState(): void {
-    this.homeRefreshPullDistance = 0
-    this.homeRefreshIndicatorOffset = 0
-    this.homeRefreshContentHoldOffset = 0
-    this.homeRefreshIndicatorDismissed = false
-    this.homeRefreshStatus = RefreshStatus.Inactive
-  }
-
-  private dismissHomeRefreshIndicatorDuringRefresh(): void {
-    if (!this.isRefreshing || this.homeRefreshIndicatorDismissed) {
-      return
-    }
-
-    this.homeRefreshIndicatorDismissed = true
-    this.homeRefreshPullDistance = 0
-    this.homeRefreshIndicatorOffset = 0
-    // Keep the same hold distance during dismiss so the rebound position stays fixed.
-    this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
-    this.homeRefreshStatus = RefreshStatus.Drag
-    this.runManagedTimeout(() => {
-      if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
-        return
-      }
-
-      if (this.homeRefreshIndicatorOffset > 0.5 || this.homeRefreshContentHoldOffset > 0.5) {
-        return
-      }
-
-      this.homeRefreshStatus = RefreshStatus.Inactive
-    }, HOME_REFRESH_RESET_DURATION)
-  }
-
-  private reopenHomeRefreshGapDuringRefresh(): void {
-    if (!this.isRefreshing || !this.homeRefreshIndicatorDismissed) {
-      return
-    }
-
-    this.homeRefreshIndicatorDismissed = false
-    this.homeRefreshIndicatorOffset = HOME_REFRESH_PULL_DISTANCE
-    this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
-    this.homeRefreshStatus = RefreshStatus.Refresh
-  }
-
-  private animateHomePullRefreshReset(): void {
-    this.homeRefreshPullDistance = 0
-    this.homeRefreshIndicatorOffset = 0
-    this.homeRefreshContentHoldOffset = 0
-
-    if (this.isRefreshing) {
-      this.homeRefreshStatus = RefreshStatus.Refresh
-      return
-    }
-
-    this.homeRefreshStatus = RefreshStatus.Drag
-    this.runManagedTimeout(() => {
-      if (this.isRefreshing) {
-        return
-      }
-
-      if (this.homeRefreshIndicatorOffset > 0.5 || this.homeRefreshContentHoldOffset > 0.5) {
-        return
-      }
-
-      this.homeRefreshStatus = RefreshStatus.Inactive
-    }, HOME_REFRESH_RESET_DURATION)
-  }
-
-  private shouldConsumeHomePullScroll(mode: SubscriptionMode): boolean {
-    return !this.shouldDisableHomePullRefresh()
-      && this.currentRootTabId() === 'home'
-      && mode === this.mode
-      && !this.searchOverlayVisible
-  }
-
-  private consumeHomePullScroll(mode: SubscriptionMode, scrollOffset: number) {
-    if (!this.shouldConsumeHomePullScroll(mode)) {
-      return undefined
-    }
-
-    this.homePullDebugWillScrollCount += 1
-    if (this.homePullDebugReleasedAt > 0) {
-      this.homePullDebugPostReleaseWillScrollCount += 1
-    }
-
-    if (!this.isHomeScrollInteracting && !this.isRefreshing) {
-      this.homePullDebugIgnoredWillScrollCount += 1
-      return undefined
-    }
-
-    if (this.isRefreshing) {
-      if (scrollOffset < 0 && this.homeModeScrollOffsetFor(mode) <= 0.5 && this.homeRefreshIndicatorDismissed) {
-        this.reopenHomeRefreshGapDuringRefresh()
-      }
-      return undefined
-    }
-
-    const isAtTop = this.homeModeScrollOffsetFor(mode) <= 0.5
-    const hasPullDistance = this.homeRefreshPullDistance > 0.5
-    if (scrollOffset < 0 && (isAtTop || hasPullDistance)) {
-      if (this.homeRefreshIndicatorDismissed) {
-        this.homeRefreshIndicatorDismissed = false
-      }
-      this.updateHomePullRefreshState(
-        this.homeRefreshPullDistance + (-1 * scrollOffset * HOME_REFRESH_FOLLOW_RATIO),
-      )
-      return undefined
-    }
-
-    if (scrollOffset > 0 && hasPullDistance) {
-      this.updateHomePullRefreshState(this.homeRefreshPullDistance - scrollOffset)
-      return undefined
-    }
-
-    return undefined
-  }
-
-  private consumeHomePullScrollOffset(mode: SubscriptionMode, yOffset: number) {
-    this.consumeHomePullScroll(mode, yOffset)
-    return undefined
-  }
-
-  private finalizeHomePullRefresh(): void {
-    this.homePullDebugFinalizeRunCount += 1
-    const now = Date.now()
-    if (now - this.lastHomePullFinalizeAt < HOME_REFRESH_FINALIZE_DEBOUNCE_MS) {
-      this.flushHomePullDebugSummary('debounced')
-      return
-    }
-    this.lastHomePullFinalizeAt = now
-
-    if (!this.shouldConsumeHomePullScroll(this.mode)) {
-      this.flushHomePullDebugSummary('skip-not-consume')
-      return
-    }
-
-    if (this.isRefreshing) {
-      if (this.homeRefreshIndicatorDismissed) {
-        this.homeRefreshIndicatorOffset = 0
-      }
-      this.flushHomePullDebugSummary('already-refreshing')
-      return
-    }
-
-    if (this.homeRefreshPullDistance >= HOME_REFRESH_PULL_DISTANCE) {
-      this.homeRefreshPullDistance = HOME_REFRESH_PULL_DISTANCE
-      this.homeRefreshIndicatorOffset = HOME_REFRESH_PULL_DISTANCE
-      this.homeRefreshContentHoldOffset = HOME_REFRESH_CONTENT_HOLD_DISTANCE
-      this.homeRefreshIndicatorDismissed = false
-      this.homeRefreshStatus = RefreshStatus.Refresh
-      this.runManagedTimeout(() => {
-        if (this.isRefreshing || this.homeRefreshStatus !== RefreshStatus.Refresh) {
-          return
-        }
-        void this.refreshFeaturedEntries()
-      }, HOME_REFRESH_TRIGGER_DEFER_MS)
-      this.flushHomePullDebugSummary('trigger-refresh')
-      return
-    }
-
-    if (this.homeRefreshPullDistance <= 0.5
-      && this.homeRefreshIndicatorOffset <= 0.5
-      && this.homeRefreshContentHoldOffset <= 0.5) {
-      this.homeRefreshStatus = RefreshStatus.Inactive
-      this.flushHomePullDebugSummary('inactive-no-distance')
-      return
-    }
-
-    this.animateHomePullRefreshReset()
-    this.flushHomePullDebugSummary('animate-reset')
-  }
-
-  private scheduleHomePullRefreshFinalizeForMode(mode: SubscriptionMode): void {
-    if (mode !== this.mode || !this.isHomeRootTab()) {
-      return
-    }
-
-    if (this.homePullFinalizeQueued) {
-      return
-    }
-
-    this.homePullFinalizeQueued = true
-    this.homePullDebugFinalizeScheduleCount += 1
-    this.logHomePullDebug(`session=${this.homePullDebugSessionId} schedule-finalize mode=${mode} delay=${HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS}ms`)
-    this.runManagedTimeout(() => {
-      this.homePullFinalizeQueued = false
-      this.finalizeHomePullRefresh()
-    }, HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS)
-  }
-
-  private logHomePullDebug(message: string): void {
-    if (!HOME_PULL_DEBUG_LOG_ENABLED) {
-      return
-    }
-    console.info(`${HOME_PULL_DEBUG_LOG_PREFIX} ${message}`)
-  }
-
-  private startHomePullDebugSession(mode: SubscriptionMode): void {
-    this.homePullDebugSessionId += 1
-    this.homePullDebugMode = mode
-    this.homePullDebugStartedAt = Date.now()
-    this.homePullDebugReleasedAt = 0
-    this.homePullDebugWillScrollCount = 0
-    this.homePullDebugPostReleaseWillScrollCount = 0
-    this.homePullDebugIgnoredWillScrollCount = 0
-    this.homePullDebugStateWriteCount = 0
-    this.homePullDebugFinalizeScheduleCount = 0
-    this.homePullDebugFinalizeRunCount = 0
-    this.logHomePullDebug(`session=${this.homePullDebugSessionId} start mode=${mode}`)
-  }
-
-  private markHomePullDebugReleased(mode: SubscriptionMode): void {
-    if (this.homePullDebugStartedAt <= 0) {
-      return
-    }
-
-    this.homePullDebugReleasedAt = Date.now()
-    const activeDuration = this.homePullDebugReleasedAt - this.homePullDebugStartedAt
-    this.logHomePullDebug(
-      `session=${this.homePullDebugSessionId} release mode=${mode} activeMs=${activeDuration} `
-      + `willScroll=${this.homePullDebugWillScrollCount} stateWrites=${this.homePullDebugStateWriteCount}`,
-    )
-  }
-
-  private flushHomePullDebugSummary(outcome: string): void {
-    if (this.homePullDebugStartedAt <= 0) {
-      return
-    }
-
-    const now = Date.now()
-    const totalMs = now - this.homePullDebugStartedAt
-    const releaseToFinalizeMs = this.homePullDebugReleasedAt > 0 ? now - this.homePullDebugReleasedAt : -1
-    this.logHomePullDebug(
-      `session=${this.homePullDebugSessionId} summary mode=${this.homePullDebugMode} outcome=${outcome} `
-      + `totalMs=${totalMs} releaseToFinalizeMs=${releaseToFinalizeMs} willScroll=${this.homePullDebugWillScrollCount} `
-      + `postReleaseWillScroll=${this.homePullDebugPostReleaseWillScrollCount} ignoredWillScroll=${this.homePullDebugIgnoredWillScrollCount} `
-      + `stateWrites=${this.homePullDebugStateWriteCount} finalizeScheduled=${this.homePullDebugFinalizeScheduleCount} `
-      + `finalizeRun=${this.homePullDebugFinalizeRunCount}`,
-    )
-
-    this.homePullDebugStartedAt = 0
-    this.homePullDebugReleasedAt = 0
-  }
-
-  private homeRefreshIndicatorProgress(): number {
-    return RefreshStateManager.resolveIndicatorProgress(this.homeRefreshIndicatorOffset, HOME_REFRESH_PULL_DISTANCE)
-  }
-
-  private shouldShowHomeRefreshGap(mode: SubscriptionMode): boolean {
-    if (this.shouldDisableHomePullRefresh() || !this.isHomeRootTab() || mode !== this.mode) {
-      return false
-    }
-
-    if (this.homeRefreshIndicatorDismissed) {
-      return this.homeRefreshContentHoldOffset > 0.5
-    }
-
-    return this.homeRefreshIndicatorOffset >= HOME_REFRESH_GAP_OPEN_PULL_DISTANCE
-      || this.homeRefreshContentHoldOffset > 0.5
-      || this.isRefreshing
-  }
-
-  private shouldShowHomeRefreshIndicator(mode: SubscriptionMode): boolean {
-    if (this.shouldDisableHomePullRefresh() || !this.isHomeRootTab() || mode !== this.mode) {
-      return false
-    }
-
-    if (this.homeRefreshIndicatorDismissed) {
-      return false
-    }
-
-    if (this.homeRefreshGapHeight(mode) <= 0.5) {
-      return false
-    }
-
-    return this.isRefreshing
-      || this.homeRefreshStatus !== RefreshStatus.Inactive
-      || this.homeRefreshIndicatorOffset > 0.5
-  }
-
-  private homeRefreshGapHeight(mode: SubscriptionMode): number {
-    return RefreshStateManager.resolveGapHeight({
-      shouldShowGap: this.shouldShowHomeRefreshGap(mode),
-      indicatorOffset: this.homeRefreshIndicatorOffset,
-      contentHoldOffset: this.homeRefreshContentHoldOffset,
-      gapOpenPullDistance: HOME_REFRESH_GAP_OPEN_PULL_DISTANCE,
-      followRatio: HOME_REFRESH_FOLLOW_RATIO,
-      visualOffset: HOME_REFRESH_INDICATOR_VISUAL_OFFSET,
-    })
-  }
-
-  private homeRefreshIndicatorOpacity(): number {
-    return RefreshStateManager.resolveIndicatorOpacity(
-      this.isRefreshing,
-      this.homeRefreshStatus === RefreshStatus.Refresh,
-      this.homeRefreshIndicatorProgress(),
-    )
-  }
-
-  private homeRefreshIndicatorScale(): number {
-    return RefreshStateManager.resolveIndicatorScale(this.homeRefreshIndicatorProgress())
-  }
-
-  private homeRefreshIndicatorTranslateY(): number {
-    return HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y
-  }
-
-  private homeRefreshIndicatorBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(24,28,36,0.92)' : 'rgba(255,255,255,0.94)'
-  }
-
-  private homeRefreshIndicatorBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)'
-  }
-
-  private homeRefreshIndicatorShadow(): ShadowOptions {
-    return {
-      radius: this.theme.isDark ? 10 : 14,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.22)' : 'rgba(15,23,42,0.08)',
-      offsetX: 0,
-      offsetY: 2,
-    }
-  }
-
   private refreshRootTheme(): void {
     this.theme = ThemeService.currentPalette()
     void this.applySystemBarStyle(this.theme)
   }
 
-  private updateHeaderBlurProgress(offset: number): void {
+  updateHeaderBlurProgress(offset: number): void {
     const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
     this.headerBlurOffset = clampedOffset
     this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
@@ -1142,7 +828,7 @@ struct Index {
     }
   }
 
-  private readHomeModeScrollOffset(mode: SubscriptionMode): number {
+  readHomeModeScrollOffset(mode: SubscriptionMode): number {
     try {
       return Math.max(0, this.homeScrollerForMode(mode).currentOffset().yOffset)
     } catch (_) {
@@ -1156,10 +842,6 @@ struct Index {
     this.updateHomeModeScrollOffset(mode, nextOffset)
     if (mode !== this.mode) {
       return
-    }
-
-    if (this.isRefreshing && nextOffset > HOME_REFRESH_DISMISS_SCROLL_OFFSET) {
-      this.dismissHomeRefreshIndicatorDuringRefresh()
     }
 
     const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
@@ -1261,24 +943,16 @@ struct Index {
     this.setModeScrollIntentVersion(mode, this.modeScrollIntentVersion(mode) + 1)
   }
 
-  private resetModeScrollIntent(mode: SubscriptionMode): void {
+  resetModeScrollIntent(mode: SubscriptionMode): void {
     this.lastHomeUserScrollAt = 0
     this.setModeScrollIntentVersion(mode, 0)
     this.setConsumedModeScrollIntentVersion(mode, 0)
     this.setModeScrollProgressLoadMoreValue(mode, 0)
   }
 
-  private setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
-    if (interacting && !this.isHomeScrollInteracting) {
-      this.startHomePullDebugSession(mode)
-    }
-
+  setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
     if (interacting) {
       this.lastHomeUserScrollAt = Date.now()
-    }
-
-    if (!interacting && this.isHomeScrollInteracting) {
-      this.markHomePullDebugReleased(mode)
     }
 
     this.isHomeScrollInteracting = interacting
@@ -1297,11 +971,7 @@ struct Index {
     }
   }
 
-  private normalizedSearchQuery(): string {
-    return normalizeInlineSearchQuery(this.searchQuery)
-  }
-
-  private currentSearchEntries(): EntryCardModel[] {
+  currentSearchEntries(): EntryCardModel[] {
     if (this.rootSettings.searchAllHomeCategories) {
       return this.featuredEntries
     }
@@ -1309,166 +979,16 @@ struct Index {
     return this.filteredEntriesFor(this.mode)
   }
 
-  private entrySearchTexts(entry: EntryCardModel): string[] {
-    return [
-      entry.feedTitle || '',
-      entry.title || '',
-      entry.summary || '',
-      entry.author || '',
-    ]
+  getHomeInlineSearchFocusRequestToken(): number {
+    return this.homeInlineSearchFocusRequestToken
   }
 
-  private hasSearchMatches(): boolean {
-    const query = this.normalizedSearchQuery()
-    if (!query) {
-      return false
-    }
-
-    return this.currentSearchEntries().some((entry: EntryCardModel) => {
-      return this.entrySearchTexts(entry).some((text: string) => {
-        return buildInlineHighlightSegments(text, query).some((segment) => segment.matched)
-      })
-    })
+  setHomeInlineSearchFocusRequestToken(token: number): void {
+    this.homeInlineSearchFocusRequestToken = token
   }
 
-  private searchResultEntries(): EntryCardModel[] {
-    const query = this.normalizedSearchQuery()
-    if (!query) {
-      return []
-    }
-
-    return this.currentSearchEntries()
-      .filter((entry: EntryCardModel) => {
-        return this.entrySearchTexts(entry).some((text: string) => {
-          return buildInlineHighlightSegments(text, query).some((segment) => segment.matched)
-        })
-      })
-      .slice(0, HOME_INLINE_SEARCH_RESULT_LIMIT)
-  }
-
-  private hasSearchResultEmptyState(): boolean {
-    return !!this.normalizedSearchQuery() && this.searchResultEntries().length === 0
-  }
-
-  private searchResultSummaryText(entry: EntryCardModel): string {
-    const candidates: string[] = [
-      entry.summary || '',
-      entry.author || '',
-      entry.feedTitle || '',
-      entry.title || '',
-    ]
-
-    for (const text of candidates) {
-      const snippet = this.searchResultSnippet(text)
-      if (snippet) {
-        return snippet
-      }
-    }
-
-    return ''
-  }
-
-  private searchResultSnippet(text: string): string {
-    const query = this.normalizedSearchQuery()
-    if (!query || !text) {
-      return ''
-    }
-
-    const lowerText = text.toLocaleLowerCase()
-    const index = lowerText.indexOf(query)
-    if (index < 0) {
-      return ''
-    }
-
-    const start = Math.max(0, index - 20)
-    const end = Math.min(text.length, index + query.length + 30)
-    let snippet = text.slice(start, end).trim()
-    if (start > 0) {
-      snippet = `...${snippet}`
-    }
-    if (end < text.length) {
-      snippet = `${snippet}...`
-    }
-    return snippet
-  }
-
-  private logHomeSearchFocusDebug(event: string, detail: string = ''): void {
-    const suffix = detail ? ` ${detail}` : ''
-    console.info(
-      `[HomeSearchFocusDebug] ${event}${suffix} tab=${this.currentRootTabId()} overlay=${this.searchOverlayVisible} visible=${this.showSearch} token=${this.homeInlineSearchFocusRequestToken}`,
-    )
-  }
-
-  private openHomeInlineSearch(): void {
-    this.logHomeSearchFocusDebug('open-search')
-    if (!this.searchOverlayVisible) {
-      this.searchOverlayVisible = true
-      this.runManagedTimeout(() => {
-        this.showSearch = true
-        this.logHomeSearchFocusDebug('show-search-overlay')
-        this.focusHomeInlineSearch()
-      }, 16)
-      return
-    }
-
-    this.showSearch = true
-    this.focusHomeInlineSearch()
-  }
-
-  private focusHomeInlineSearch(): void {
-    this.homeInlineSearchFocusRequestToken += 1
-    const requestToken = this.homeInlineSearchFocusRequestToken
-    this.logHomeSearchFocusDebug('schedule-focus-batch', `requestToken=${requestToken}`)
-    this.requestHomeInlineSearchFocus(24, requestToken)
-    this.requestHomeInlineSearchFocus(80, requestToken)
-    this.requestHomeInlineSearchFocus(180, requestToken)
-    this.requestHomeInlineSearchFocus(320, requestToken)
-  }
-
-  private requestHomeInlineSearchFocus(delayMs: number, requestToken: number): void {
-    this.runManagedTimeout(() => {
-      if (!this.canFocusHomeInlineSearch(requestToken)) {
-        this.logHomeSearchFocusDebug('skip-focus-request', `delayMs=${delayMs} requestToken=${requestToken}`)
-        return
-      }
-
-      focusControl.requestFocus(HOME_INLINE_SEARCH_INPUT_ID)
-      this.searchInputController.caretPosition(this.searchQuery.length)
-      this.logHomeSearchFocusDebug('apply-focus-request', `delayMs=${delayMs} requestToken=${requestToken}`)
-    }, delayMs)
-  }
-
-  private canFocusHomeInlineSearch(requestToken: number): boolean {
-    return requestToken === this.homeInlineSearchFocusRequestToken
-      && this.currentRootTabId() === 'home'
-      && this.searchOverlayVisible
-      && this.showSearch
-  }
-
-  private cancelHomeInlineSearchFocusRequests(reason: string = 'unknown'): void {
-    this.homeInlineSearchFocusRequestToken += 1
-    this.logHomeSearchFocusDebug('cancel-focus-requests', `reason=${reason}`)
-  }
-
-  private closeHomeInlineSearch(clearQuery: boolean = true): void {
-    this.cancelHomeInlineSearchFocusRequests('close-search')
-    this.showSearch = false
-    this.searchInputController.stopEditing()
-    this.logHomeSearchFocusDebug('close-search', `clearQuery=${clearQuery ? 'true' : 'false'}`)
-    if (clearQuery) {
-      this.searchQuery = ''
-    }
-    this.runManagedTimeout(() => {
-      this.finalizeHomeInlineSearchClose()
-    }, HOME_INLINE_SEARCH_MOTION_DURATION)
-  }
-
-  private finalizeHomeInlineSearchClose(): void {
-    if (this.showSearch) {
-      return
-    }
-
-    this.searchOverlayVisible = false
+  getSearchInputController(): TextInputController {
+    return this.searchInputController
   }
 
   @Builder
@@ -1535,7 +1055,7 @@ struct Index {
     return this.showSearch ? 0 : -1 * HOME_INLINE_SEARCH_VERTICAL_TRAVEL
   }
 
-  private isHomeRootTab(): boolean {
+  isHomeRootTab(): boolean {
     return this.currentRootTabId() === 'home'
   }
 
@@ -1700,76 +1220,7 @@ struct Index {
   }
 
   private markEntryReadLocally(target: EntryCardModel): void {
-    const targetId = (target.id || '').trim()
-    const targetArticleUrl = (target.articleUrl || '').trim()
-    const targetFeedId = (target.feedId || '').trim()
-    const targetPublishedAt = target.publishedAt
-    const targetTitle = (target.title || '').trim()
-
-    let updated = false
-    const updatedEntries = this.featuredEntries.map((item: EntryCardModel) => {
-      if (item.isRead) {
-        return item
-      }
-
-      const itemId = (item.id || '').trim()
-      const itemArticleUrl = (item.articleUrl || '').trim()
-      const itemFeedId = (item.feedId || '').trim()
-      const itemTitle = (item.title || '').trim()
-
-      const matchById = !!targetId && itemId === targetId
-      const matchByUrl = !targetId && !!targetArticleUrl && itemArticleUrl === targetArticleUrl
-      const matchBySnapshot = !targetId
-        && !targetArticleUrl
-        && !!targetFeedId
-        && itemFeedId === targetFeedId
-        && item.publishedAt === targetPublishedAt
-        && itemTitle === targetTitle
-
-      if (!matchById && !matchByUrl && !matchBySnapshot) {
-        return item
-      }
-
-      updated = true
-      return {
-        id: item.id,
-        feedId: item.feedId,
-        title: item.title,
-        summary: item.summary,
-        content: item.content,
-        imageUrl: item.imageUrl,
-        feedImageUrl: item.feedImageUrl,
-        author: item.author,
-        articleUrl: item.articleUrl,
-        publishedAt: item.publishedAt,
-        publishedLabel: item.publishedLabel,
-        readingLabel: item.readingLabel,
-        tags: item.tags,
-        mediaUrls: item.mediaUrls,
-        rawMediaUrls: item.rawMediaUrls,
-        feedTitle: item.feedTitle,
-        feedCategory: item.feedCategory,
-        viewLabel: item.viewLabel,
-        viewBadgeColor: item.viewBadgeColor,
-        hasVideoMedia: item.hasVideoMedia,
-        isRead: true,
-        isStarred: item.isStarred,
-      }
-    })
-
-    if (!updated) {
-      return
-    }
-
-    this.featuredEntries = updatedEntries
-    this.schedulePersistHomeSnapshot(updatedEntries)
-    const regrouped = groupHomeEntriesByMode(this.featuredEntries)
-    this.entryGroups = {
-      articles: [...regrouped.articles],
-      social: [...regrouped.social],
-      pictures: [...regrouped.pictures],
-      videos: [...regrouped.videos],
-    }
+    this.homeEntryDataManager.markEntryReadLocally(target)
   }
 
   private bottomTabSymbol(
@@ -1830,15 +1281,14 @@ struct Index {
     this.rootTabIndex = index
     this.highlightedRootTabId = tabId
     this.activeRootTabId = tabId
-    this.logHomeSearchFocusDebug('root-tab-change', `nextTab=${tabId}`)
+    this.homeInlineSearchController.logFocusDebug('root-tab-change', `nextTab=${tabId}`)
     if (previousTabId === 'discover' && tabId !== 'discover') {
       AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
       AppStorage.setOrCreate('discoverOverlayLevel', 0)
       AppStorage.setOrCreate('discoverNavigationResetAt', Date.now())
     }
     if (tabId !== 'home') {
-      this.resetHomePullRefreshState()
-      this.closeHomeInlineSearch(true)
+      this.homeInlineSearchController.close(true)
       return
     }
 
@@ -1879,105 +1329,35 @@ struct Index {
     }
   }
 
-  private currentRootTabId(): RootTabId {
+  currentRootTabId(): RootTabId {
     return this.activeRootTabId
   }
 
   private modeIndex(mode: SubscriptionMode): number {
-    return SUBSCRIPTION_MODES.indexOf(mode)
+    return this.homeModeController.modeIndex(mode)
   }
 
   private requestModeSwitch(nextMode: SubscriptionMode): void {
-    if (!shouldAcceptModeSwitch({
-      currentMode: this.mode,
-      nextMode,
-      isTransitioning: this.isModeTransitioning,
-    })) {
-      return
-    }
-
-    const nextModeOffset = this.homeModeScrollOffsetFor(nextMode)
-
-    this.mode = nextMode
-    this.visitedModes = rememberVisitedMode(this.visitedModes, nextMode)
-    this.setHomeScrollInteracting(false, nextMode)
-    this.resetModeScrollIntent(nextMode)
-    this.resetHomePullRefreshState()
-    this.homeModeRailExpandedLockOffset = nextModeOffset
-    this.homeModeRailExpandedOverride = true
-    this.currentHomeModeScrollOffset = nextModeOffset
-    this.homeModeRailDismissedByScroll = false
-    this.updateHeaderBlurProgress(nextModeOffset)
-    this.startModeTransition(nextMode)
-    this.ensureModeEntriesLoaded(nextMode)
+    this.homeModeController.requestModeSwitch(nextMode)
   }
 
   private logModeSwitchSnapshot(stage: string, mode: SubscriptionMode): void {
-    if (!HOME_MODE_DEBUG_ENABLED) {
-      return
-    }
-
-    const entries = this.filteredEntriesFor(mode)
-    const firstEntry = entries.length > 0 ? entries[0] : undefined
-    const lastEntry = entries.length > 0 ? entries[entries.length - 1] : undefined
-    const firstId = firstEntry ? firstEntry.id : ''
-    const lastId = lastEntry ? lastEntry.id : ''
-    const currentOffset = this.homeModeScrollOffsetFor(mode)
-
-    console.info(
-      `${HOME_MODE_DEBUG_PREFIX} stage=${stage} target=${mode} count=${entries.length} `
-      + `activeMode=${this.mode} renderedMode=${this.renderedMode} offset=${currentOffset.toFixed(1)} `
-      + `firstId=${firstId} lastId=${lastId}`,
-    )
+    this.homeModeController.logModeSwitchSnapshot(stage, mode)
   }
 
   private startModeTransition(nextMode: SubscriptionMode): void {
-    const previousRenderedMode = this.renderedMode
-    this.modeTransitionDirection = this.modeIndex(nextMode) > this.modeIndex(previousRenderedMode) ? 1 : -1
-    this.previousMode = previousRenderedMode
-    this.renderedMode = nextMode
-    this.isModeTransitioning = true
-    this.runManagedTimeout(() => {
-      if (this.renderedMode !== nextMode || this.previousMode !== previousRenderedMode) {
-        return
-      }
-
-      this.isModeTransitioning = false
-    }, HOME_MODE_SCENE_TRANSITION_DURATION)
+    this.homeModeController.startModeTransition(nextMode)
   }
 
   private adjacentMode(offsetX: number): SubscriptionMode | undefined {
-    const currentIndex = this.modeIndex(this.mode)
-    if (currentIndex < 0) {
-      return undefined
-    }
-
-    const nextIndex = offsetX < 0 ? currentIndex + 1 : currentIndex - 1
-    if (nextIndex < 0 || nextIndex >= SUBSCRIPTION_MODES.length) {
-      return undefined
-    }
-
-    return SUBSCRIPTION_MODES[nextIndex]
+    return this.homeModeController.adjacentMode(offsetX)
   }
 
   private handleModeSwipe(event: GestureEvent): void {
-    if (this.isModeTransitioning) {
-      return
-    }
-
-    const offsetX = event.offsetX
-    const offsetY = event.offsetY
-    if (Math.abs(offsetX) < MODE_SWIPE_TRIGGER_OFFSET || Math.abs(offsetX) <= Math.abs(offsetY)) {
-      return
-    }
-
-    const nextMode = this.adjacentMode(offsetX)
-    if (nextMode) {
-      this.requestModeSwitch(nextMode)
-    }
+    this.homeModeController.handleModeSwipe(event)
   }
 
-  private filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
+  filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     switch (mode) {
       case 'social':
         return this.entryGroups.social
@@ -2036,7 +1416,7 @@ struct Index {
     return presentation
   }
 
-  private resetTweetPresentationCache(): void {
+  resetTweetPresentationCache(): void {
     if (this.tweetPresentationCache.size === 0) {
       return
     }
@@ -2200,10 +1580,6 @@ struct Index {
     return Math.max(minimumLimit, this.homeCandidateLimit)
   }
 
-  private shouldDisableHomePullRefresh(): boolean {
-    return true
-  }
-
   private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
     return false
   }
@@ -2242,7 +1618,7 @@ struct Index {
     return Math.max(minimumLimit, this.candidateLimitForMode(mode))
   }
 
-  private markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
+  markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
     this.homeModeLoaded = {
       articles: mode === 'articles' ? loaded : this.homeModeLoaded.articles,
       social: mode === 'social' ? loaded : this.homeModeLoaded.social,
@@ -2309,7 +1685,7 @@ struct Index {
     }
   }
 
-  private totalEntryCountFor(mode: SubscriptionMode): number {
+  totalEntryCountFor(mode: SubscriptionMode): number {
     return this.filteredEntriesFor(mode).length
   }
 
@@ -2412,7 +1788,7 @@ struct Index {
       && mode === this.mode
       && (hasBufferedEntries || this.modeHasMoreEntries(mode))
       && !this.searchOverlayVisible
-      && !this.normalizedSearchQuery()
+      && !this.homeInlineSearchController.normalizedQuery()
       && !this.homeInitialLoadPending
       && !this.homeLoadMoreInProgress
       && (hasBufferedEntries || this.homeHasMoreEntries)
@@ -2548,7 +1924,7 @@ struct Index {
     if (this.searchOverlayVisible) {
       return 'search-overlay'
     }
-    if (!!this.normalizedSearchQuery()) {
+    if (!!this.homeInlineSearchController.normalizedQuery()) {
       return 'search-query-active'
     }
     if (this.homeInitialLoadPending) {
@@ -2589,7 +1965,7 @@ struct Index {
       && this.isHomeRootTab()
       && !this.shouldRenderAllEntriesForMode(this.mode)
       && !this.searchOverlayVisible
-      && !this.normalizedSearchQuery()
+      && !this.homeInlineSearchController.normalizedQuery()
       && !this.isRefreshing
       && !this.isHomeStartupRefreshing
       && !this.homeInitialLoadPending
@@ -2932,7 +2308,12 @@ struct Index {
   }
 
   private maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
-    if (mode !== this.mode || !this.isHomeRootTab() || this.searchOverlayVisible || !!this.normalizedSearchQuery()) {
+    if (
+      mode !== this.mode
+      || !this.isHomeRootTab()
+      || this.searchOverlayVisible
+      || !!this.homeInlineSearchController.normalizedQuery()
+    ) {
       return
     }
     if (this.shouldRenderAllEntriesForMode(mode)) {
@@ -3077,40 +2458,14 @@ struct Index {
   }
 
   private mergeFeaturedEntriesFromGroups(): EntryCardModel[] {
-    const merged = [
-      ...this.entryGroups.articles,
-      ...this.entryGroups.social,
-      ...this.entryGroups.pictures,
-      ...this.entryGroups.videos,
-    ]
-    merged.sort((left: EntryCardModel, right: EntryCardModel) => (right.publishedAt || 0) - (left.publishedAt || 0))
-    return merged
+    return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups()
   }
 
   private applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void {
-    const scopedEntries = this.filterEntriesByMode(mode, entries)
-    this.entryGroups = {
-      articles: mode === 'articles' ? scopedEntries : this.entryGroups.articles,
-      social: mode === 'social' ? scopedEntries : this.entryGroups.social,
-      pictures: mode === 'pictures' ? scopedEntries : this.entryGroups.pictures,
-      videos: mode === 'videos' ? scopedEntries : this.entryGroups.videos,
-    }
-    if (!skipMerge) {
-      this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
-    }
-    this.markModeLoaded(mode, true)
-    this.settleInitialHomeLoadState()
-    if (deferredPersist) {
-      this.schedulePersistHomeSnapshot(this.featuredEntries)
-    } else {
-      this.persistHomeSnapshotNow()
-    }
-    if (!skipNotify) {
-      this.notifyHomeEntryDataReloadedForMode(mode)
-    }
+    this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge)
   }
 
-  private ensureModeEntriesLoaded(mode: SubscriptionMode): void {
+  ensureModeEntriesLoaded(mode: SubscriptionMode): void {
     const hasModeEntries = this.totalEntryCountFor(mode) > 0
     const fullModeReady = !this.shouldRenderAllEntriesForMode(mode)
       || this.candidateLimitForMode(mode) >= HOME_FULL_MODE_CANDIDATE_LIMIT
@@ -3232,81 +2587,19 @@ struct Index {
   }
 
   private cloneHomeSnapshotEntry(entry: EntryCardModel): EntryCardModel {
-    return {
-      id: entry.id,
-      feedId: entry.feedId,
-      title: entry.title,
-      summary: entry.summary,
-      content: entry.content,
-      imageUrl: entry.imageUrl,
-      feedImageUrl: entry.feedImageUrl,
-      author: entry.author,
-      articleUrl: entry.articleUrl,
-      publishedAt: entry.publishedAt,
-      publishedLabel: entry.publishedLabel,
-      readingLabel: entry.readingLabel,
-      tags: [...entry.tags],
-      mediaUrls: entry.mediaUrls ? [...entry.mediaUrls] : undefined,
-      rawMediaUrls: entry.rawMediaUrls ? [...entry.rawMediaUrls] : undefined,
-      feedTitle: entry.feedTitle,
-      feedCategory: entry.feedCategory,
-      viewLabel: entry.viewLabel,
-      viewBadgeColor: entry.viewBadgeColor,
-      hasVideoMedia: entry.hasVideoMedia,
-      isRead: entry.isRead,
-      isStarred: entry.isStarred,
-    }
+    return cloneHomeSnapshotEntry(entry)
   }
 
   private schedulePersistHomeSnapshot(entries: EntryCardModel[]): void {
-    if (entries.length === 0) {
-      return
-    }
-
-    const snapshotEntries = entries.map((entry: EntryCardModel) => this.cloneHomeSnapshotEntry(entry))
-    const persistVersion = this.homeSnapshotPersistVersion + 1
-    this.homeSnapshotPersistVersion = persistVersion
-    this.runManagedTimeout(() => {
-      if (this.homeSnapshotPersistVersion !== persistVersion) {
-        return
-      }
-
-      void AppRepository.persistHomeEntrySnapshot(snapshotEntries)
-    }, 180)
+    this.homeEntryDataManager.schedulePersistSnapshot(entries)
   }
 
   private persistHomeSnapshotNow(): void {
-    if (this.featuredEntries.length === 0) {
-      return
-    }
-
-    const snapshotEntries = this.featuredEntries.map((entry: EntryCardModel) => this.cloneHomeSnapshotEntry(entry))
-    void AppRepository.persistHomeEntrySnapshot(snapshotEntries)
+    this.homeEntryDataManager.persistSnapshotNow()
   }
 
   private applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
-    this.resetTweetPresentationCache()
-    this.featuredEntries = nextEntries
-    this.schedulePersistHomeSnapshot(nextEntries)
-    this.settleInitialHomeLoadState()
-
-    if (!deferredGrouping) {
-      this.entryGroups = groupHomeEntriesByMode(nextEntries)
-      this.logHomeGroupStats('applyHomeEntries immediate-group', nextEntries)
-      this.notifyHomeEntryDataReloaded()
-      return
-    }
-
-    const currentGroupVersion = this.homeEntryGroupVersion + 1
-    this.homeEntryGroupVersion = currentGroupVersion
-    this.runManagedTimeout(() => {
-      if (this.homeEntryGroupVersion !== currentGroupVersion) {
-        return
-      }
-      this.entryGroups = groupHomeEntriesByMode(nextEntries)
-      this.logHomeGroupStats('applyHomeEntries deferred-group', nextEntries)
-      this.notifyHomeEntryDataReloaded()
-    }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
+    this.homeEntryDataManager.applyHomeEntries(nextEntries, deferredGrouping)
   }
 
   private applyHomeEntriesForAnimatedMode(
@@ -3314,37 +2607,7 @@ struct Index {
     mode: SubscriptionMode,
     token: number,
   ): void {
-    this.resetTweetPresentationCache()
-    this.featuredEntries = nextEntries
-    this.schedulePersistHomeSnapshot(nextEntries)
-    const currentModeEntries = nextEntries.filter((entry: EntryCardModel) => this.resolveEntryMode(entry) === mode)
-    this.entryGroups = {
-      articles: mode === 'articles' ? currentModeEntries : this.entryGroups.articles,
-      social: mode === 'social' ? currentModeEntries : this.entryGroups.social,
-      pictures: mode === 'pictures' ? currentModeEntries : this.entryGroups.pictures,
-      videos: mode === 'videos' ? currentModeEntries : this.entryGroups.videos,
-    }
-    this.notifyHomeEntryDataReloadedForMode(mode)
-    this.logHomeGroupStats(`applyHomeEntriesForAnimatedMode mode=${mode} current-slice`, currentModeEntries)
-
-    const currentGroupVersion = this.homeEntryGroupVersion + 1
-    this.homeEntryGroupVersion = currentGroupVersion
-    this.runManagedTimeout(() => {
-      if (this.homeEntryGroupVersion !== currentGroupVersion || this.homeListSwapToken !== token) {
-        return
-      }
-
-      const regrouped = groupHomeEntriesByMode(nextEntries)
-
-      this.entryGroups = {
-        articles: [...regrouped.articles],
-        social: [...regrouped.social],
-        pictures: [...regrouped.pictures],
-        videos: [...regrouped.videos],
-      }
-      this.logHomeGroupStats(`applyHomeEntriesForAnimatedMode mode=${mode} regrouped`, nextEntries)
-      this.notifyHomeEntryDataReloadedExcept(mode)
-    }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
+    this.homeEntryDataManager.applyHomeEntriesForAnimatedMode(nextEntries, mode, token)
   }
 
   private logHomeGroupStats(stage: string, entries: EntryCardModel[]): void {
@@ -3397,56 +2660,17 @@ struct Index {
   }
 
   private playHomeListSwapTransition(nextEntries: EntryCardModel[], mode: SubscriptionMode): void {
-    if (!this.isComponentActive) {
-      this.applyHomeEntries(nextEntries)
-      return
-    }
-
-    if (this.homeListSwapAnimating || this.featuredEntries.length === 0) {
-      this.applyHomeEntries(nextEntries)
-      this.homeListSwapOpacity = 1
-      this.homeListSwapTranslateY = 0
-      this.homeListSwapScale = 1
-      return
-    }
-
-    this.homeListSwapAnimating = true
     this.homeListSwapMode = mode
-    const currentToken = this.homeListSwapToken + 1
-    this.homeListSwapToken = currentToken
-
-    // Apply refreshed data once, then play a gentle fade + slight settle on the current mode only.
-    this.applyHomeEntries(nextEntries, false)
-
-    if (!HOME_LIST_SWAP_ANIMATION_ENABLED) {
-      this.homeListSwapOpacity = 1
-      this.homeListSwapTranslateY = 0
-      this.homeListSwapScale = 1
-      this.homeListSwapAnimating = false
-      return
-    }
-
-    this.homeListSwapOpacity = HOME_LIST_SWAP_ENTRY_MIN_OPACITY
-    this.homeListSwapTranslateY = HOME_LIST_SWAP_ENTRY_OFFSET_Y
-    this.homeListSwapScale = 1
-
-    this.animateWithUiContext({
-      duration: HOME_LIST_SWAP_ENTER_DURATION,
-      curve: Curve.EaseOut,
-      onFinish: () => {
-        if (this.homeListSwapToken !== currentToken) {
-          return
-        }
-        this.homeListSwapOpacity = 1
-        this.homeListSwapTranslateY = 0
-        this.homeListSwapScale = 1
-        this.homeListSwapAnimating = false
-      },
-    }, () => {
-      this.homeListSwapOpacity = 1
-      this.homeListSwapTranslateY = 0
-      this.homeListSwapScale = 1
-    })
+    this.homeListSwapToken += 1
+    this.homeEntryDataManager.playListSwapTransition(
+      nextEntries,
+      mode,
+      this.homeListSwapToken,
+      HOME_LIST_SWAP_ENTRY_MIN_OPACITY,
+      HOME_LIST_SWAP_ENTRY_OFFSET_Y,
+      HOME_LIST_SWAP_ENTER_DURATION,
+      HOME_LIST_SWAP_ANIMATION_ENABLED,
+    )
   }
 
   private modeListSwapOpacity(mode: SubscriptionMode): number {
@@ -3471,73 +2695,35 @@ struct Index {
   }
 
   private resolveEntryMode(entry: EntryCardModel): SubscriptionMode {
-    if (entry.viewLabel === '图片' && entry.hasVideoMedia && (!entry.mediaUrls || entry.mediaUrls.length === 0)) {
-      return 'videos'
-    }
-    switch (entry.viewLabel) {
-      case '社交':
-        return 'social'
-      case '图片':
-        return 'pictures'
-      case '视频':
-        return 'videos'
-      default:
-        return 'articles'
-    }
+    return resolveEntryMode(entry)
   }
 
   private filterEntriesByMode(mode: SubscriptionMode, entries: EntryCardModel[]): EntryCardModel[] {
-    return entries.filter((entry: EntryCardModel) => this.resolveEntryMode(entry) === mode)
+    return filterEntriesByMode(mode, entries)
   }
 
   private homeEntryRenderBaseKey(entry: EntryCardModel): string {
-    const id = (entry.id || '').trim()
-    const feedId = (entry.feedId || '').trim()
-    const articleUrl = (entry.articleUrl || '').trim()
-    const title = (entry.title || '').trim()
-    const publishedAt = entry.publishedAt > 0 ? String(entry.publishedAt) : '0'
-    return `${id}|${feedId}|${articleUrl}|${title}|${publishedAt}`
+    return homeEntryRenderBaseKey(entry)
   }
 
   private homeEntryListRenderKey(entry: EntryCardModel, index: number): string {
-    const readFlag = entry.isRead ? '1' : '0'
-    return `${this.homeEntryRenderBaseKey(entry)}|${readFlag}|${index}`
+    return homeEntryListRenderKey(entry, index)
   }
 
   private duplicateKeyCount(counter: Map<string, number>): number {
-    let duplicateCount = 0
-    counter.forEach((count: number) => {
-      if (count > 1) {
-        duplicateCount += count - 1
-      }
-    })
-    return duplicateCount
+    return duplicateKeyCount(counter)
   }
 
   private notifyHomeEntryDataReloaded(): void {
-    this.homeEntryDataSources.articles.notifyDataReloaded()
-    this.homeEntryDataSources.social.notifyDataReloaded()
-    this.homeEntryDataSources.pictures.notifyDataReloaded()
-    this.homeEntryDataSources.videos.notifyDataReloaded()
+    this.homeEntryDataManager.notifyAllReloaded()
   }
 
   private notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void {
-    this.homeEntryDataSourceFor(mode).notifyDataReloaded()
+    this.homeEntryDataManager.notifyModeReloaded(mode)
   }
 
   private notifyHomeEntryDataReloadedExcept(mode: SubscriptionMode): void {
-    if (mode !== 'articles') {
-      this.homeEntryDataSources.articles.notifyDataReloaded()
-    }
-    if (mode !== 'social') {
-      this.homeEntryDataSources.social.notifyDataReloaded()
-    }
-    if (mode !== 'pictures') {
-      this.homeEntryDataSources.pictures.notifyDataReloaded()
-    }
-    if (mode !== 'videos') {
-      this.homeEntryDataSources.videos.notifyDataReloaded()
-    }
+    this.homeEntryDataManager.notifyAllReloadedExcept(mode)
   }
 
   private homeEntryDataSourceFor(mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> {
@@ -3644,17 +2830,6 @@ struct Index {
     }).zIndex
   }
 
-  @Builder
-  private EntryCard(entry: EntryCardModel) {
-    HomeArticleEntryCard({
-      entry,
-      theme: this.theme,
-      showUnreadDot: this.showUnreadDot,
-      highlightQuery: this.searchQuery,
-      onOpen: () => this.openEntry(entry),
-    })
-  }
-
   private clearAutoRefreshTimer(): void {
     if (this.autoRefreshTimer < 0) {
       return
@@ -3681,60 +2856,6 @@ struct Index {
     this.autoRefreshTimer = setInterval(() => {
       void this.refreshFeaturedEntries(false)
     }, intervalMs)
-  }
-
-  private isXSocialEntry(entry: EntryCardModel): boolean {
-    const articleUrl = (entry.articleUrl || '').toLowerCase()
-    const feedTitle = (entry.feedTitle || '').toLowerCase()
-    return articleUrl.includes('x.com/')
-      || articleUrl.includes('twitter.com/')
-      || feedTitle.includes('x / twitter')
-  }
-
-  private isTweetLikeEntry(entry: EntryCardModel): boolean {
-    if (this.isXSocialEntry(entry)) {
-      return true
-    }
-
-    const articleUrl = (entry.articleUrl || '').toLowerCase()
-    const feedTitle = (entry.feedTitle || '').toLowerCase()
-    const author = (entry.author || '').toLowerCase()
-    const title = (entry.title || '').toLowerCase()
-    const summary = (entry.summary || '').toLowerCase()
-    const content = (entry.content || '').toLowerCase()
-    const combinedText = `${title}\n${summary}\n${content}`
-    return articleUrl.includes('/status/')
-      || articleUrl.includes('x.com/')
-      || articleUrl.includes('twitter.com/')
-      || articleUrl.includes('nitter.')
-      || articleUrl.includes('/x/user/')
-      || feedTitle.includes('twitter')
-      || feedTitle.includes('x.com')
-      || feedTitle.includes('nitter')
-      || feedTitle.includes(' on x')
-      || author.startsWith('@')
-      || /(^|\s)rt\s+@[a-z0-9_]{1,15}\s*:/i.test(combinedText)
-      || combinedText.includes('/twitter/user/')
-      || combinedText.includes('/x/user/')
-  }
-
-  @Builder
-  private SocialEntryCard(entry: EntryCardModel, index: number = 0) {
-    if (this.isTweetLikeEntry(entry)) {
-      TweetEntryCard({
-        presentation: this.presentTweetEntry(entry),
-        theme: this.theme,
-        isUnread: !entry.isRead,
-        flatMode: true,
-        showBottomDivider: index < this.homeEntryCountFor('social') - 1,
-        highlightQuery: this.searchQuery,
-        collapsedTextLines: 7,
-        enableEnterTransition: false,
-        onOpen: () => this.openEntry(entry),
-      })
-    } else {
-      this.EntryCard(entry)
-    }
   }
 
   @Builder
@@ -3824,7 +2945,7 @@ struct Index {
   }
 
   private requestExpandedModeRail(): void {
-    this.closeHomeInlineSearch()
+    this.homeInlineSearchController.close()
     this.homeModeRailExpandedLockOffset = this.readHomeModeScrollOffset(this.mode)
     this.homeModeRailExpandedOverride = true
     this.homeModeRailDismissedByScroll = false
@@ -3912,6 +3033,90 @@ struct Index {
     return 1 - (progress * 0.12)
   }
 
+  private homeInlineActionBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.74)' : 'rgba(255,255,255,0.84)'
+  }
+
+  private homeInlineActionBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.08)'
+  }
+
+  private homeInlineActionBackdropBlur(): number {
+    return this.theme.isDark ? 10 : 18
+  }
+
+  private homeInlineActionShadow(): ShadowOptions {
+    return {
+      radius: 10,
+      color: this.theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(15,23,42,0.12)',
+      offsetX: 0,
+      offsetY: 2,
+    }
+  }
+
+  @Builder
+  private HomeCollapsedQuickActionsLayer() {
+    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
+      Row() {
+        if (this.isRefreshing && this.refreshTotalCount > 0) {
+          Text(`${this.displayRefreshPercent}%`)
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+        } else {
+          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+            .fontSize(18)
+            .fontColor([this.theme.textPrimary])
+        }
+      }
+      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(this.homeInlineActionBackgroundColor())
+      .backdropBlur(this.isRefreshing ? this.homeInlineActionBackdropBlur() + 2 : this.homeInlineActionBackdropBlur())
+      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
+      .border({ width: 0.8, color: this.homeInlineActionBorderColor() })
+      .shadow(this.homeInlineActionShadow())
+      .enabled(!this.showSearch)
+      .onClick(() => {
+        void this.refreshFeaturedEntries()
+      })
+
+      Row() {
+        SymbolGlyph($r('sys.symbol.magnifyingglass'))
+          .fontSize(18)
+          .fontColor([this.theme.textPrimary])
+      }
+      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(this.homeInlineActionBackgroundColor())
+      .backdropBlur(this.homeInlineActionBackdropBlur())
+      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
+      .border({ width: 0.8, color: this.homeInlineActionBorderColor() })
+      .shadow(this.homeInlineActionShadow())
+      .enabled(!this.showSearch)
+      .onClick(() => {
+        this.homeInlineSearchController.open()
+      })
+    }
+    .padding({
+      top: this.homeCollapsedModeRailTopPadding(),
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+    })
+    .width('100%')
+    .justifyContent(FlexAlign.End)
+    .alignItems(VerticalAlign.Top)
+    .opacity(this.showSearch ? 0 : 1)
+    .translate({ x: this.showSearch ? 10 : 0 })
+    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
+    .enabled(!this.showSearch)
+    .zIndex(130)
+  }
+
   @Builder
   private HomeCollapsingModeRailLayer() {
     Stack({ alignContent: Alignment.Top }) {
@@ -3974,263 +3179,53 @@ struct Index {
   }
 
   @Builder
-  private HomeRefreshGapSlot(mode: SubscriptionMode) {
-    Column()
-    .width('100%')
-    .height(this.homeRefreshGapHeight(mode))
-    .animation({ duration: 180, curve: Curve.EaseOut })
-  }
-
-  @Builder
-  private HomeRefreshIndicatorLayer() {
-    if (this.shouldShowHomeRefreshIndicator(this.mode)) {
-      Column() {
-        LoadingProgress()
-          .width(HOME_REFRESH_INDICATOR_SIZE)
-          .height(HOME_REFRESH_INDICATOR_SIZE)
-          .margin({ bottom: HOME_REFRESH_INDICATOR_BOTTOM_MARGIN })
-          .color(this.theme.accent)
-      }
-      .opacity(this.homeRefreshIndicatorOpacity())
-      .scale({
-        x: this.homeRefreshIndicatorScale(),
-        y: this.homeRefreshIndicatorScale(),
-      })
-      .translate({ y: this.homeRefreshIndicatorTranslateY() })
-      .animation({ duration: 160, curve: Curve.EaseOut })
-      .width('100%')
-      .alignItems(HorizontalAlign.Center)
-      .padding({ top: HOME_MODE_SCENE_TOP_INSET })
-      .align(Alignment.Top)
-      .zIndex(-1)
-    }
-  }
-
-  @Builder
-  private EntryList(mode: SubscriptionMode) {
-    List({ space: mode === 'social' ? 0 : HOME_MODE_CONTENT_GAP, scroller: this.homeScrollerForMode(mode) }) {
-      ListItem() {
-        Column() {
-          Blank()
-            .height(HOME_MODE_SCENE_TOP_INSET)
-
-          this.HomeRefreshGapSlot(mode)
-        }
-        .width('100%')
-      }
-      .width('100%')
-
-      if (this.totalEntryCountFor(mode) === 0) {
-        ListItem() {
-          Column({ space: 0 }) {
-            if (this.homeEmptyStateTopGap(mode) > 0) {
-              Blank().height(this.homeEmptyStateTopGap(mode))
-            }
-
-            if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading(mode)) {
-              this.HomeModeLoadingState()
-            } else {
-              this.HomeModeStatusCard(this.homeEmptyStateTitle(), false)
-            }
-          }
-          .width('100%')
-        }
-        .width('100%')
-      } else {
-        ForEach(this.visibleEntriesFor(mode), (entry: EntryCardModel, index: number) => {
-          ListItem() {
-            if (mode === 'social') {
-              this.SocialEntryCard(entry, index)
-            } else {
-              this.EntryCard(entry)
-            }
-          }
-          .width('100%')
-        }, (entry: EntryCardModel, index: number) => this.homeEntryListRenderKey(entry, index))
-      }
-
-      ListItem() {
-        Row().height(100).width('100%')
-      }
-
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.On)
-    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
-      this.markHomeUserScrollIntent(mode, scrollSource)
-      return this.consumeHomePullScroll(mode, scrollOffset)
-    })
-    .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
-      this.syncHomeModeRailState(mode)
-      this.flushPendingLoadMoreForMode(mode)
-    })
-    .onDidStopDragging((_willFling: boolean) => {
-      this.setHomeScrollInteracting(false, mode)
-      this.flushPendingLoadMoreForMode(mode)
-      this.finalizeHomePullRefresh()
-    })
-  }
-
-  @Builder
-  private PictureEntryList() {
-    List({ space: 0, scroller: this.picturesScroller }) {
-      ListItem() {
-        Column() {
-          Blank()
-            .height(HOME_MODE_SCENE_TOP_INSET)
-
-          this.HomeRefreshGapSlot('pictures')
-        }
-        .width('100%')
-      }
-      .width('100%')
-
-      if (this.totalEntryCountFor('pictures') === 0) {
-        ListItem() {
-          Column({ space: 0 }) {
-            Blank().height(HOME_MODE_CONTENT_GAP)
-
-            if (this.homeInitialLoadPending || this.isHomeStartupRefreshing || this.isModeLoading('pictures')) {
-              this.HomeModeLoadingState()
-            } else {
-              this.HomeModeStatusCard(this.homeEmptyStateTitle(), false)
-            }
-          }
-          .width('100%')
-        }
-        .width('100%')
-      } else {
-        ForEach(this.visibleEntriesFor('pictures'), (entry: EntryCardModel, index: number) => {
-          ListItem() {
-            PictureEntryCard({
-              entry: this.pictureCardEntry(entry),
-              index,
-              authorLabel: entry.author || entry.feedTitle,
-              feedImageUrl: entry.feedImageUrl,
-              caption: this.pictureCaption(entry),
-              pictureUrl: entry.imageUrl,
-              galleryUrls: this.pictureGalleryUrls(entry),
-              theme: this.theme,
-              highlightQuery: this.searchQuery,
-              enableEnterTransition: false,
-              flatMode: true,
-              showBottomDivider: index < this.homeEntryCountFor('pictures') - 1,
-              onOpen: () => this.openEntry(entry),
-            })
-          }
-          .width('100%')
-        }, (entry: EntryCardModel) => entry.id)
-      }
-
-      ListItem() {
-        Row().height(100).width('100%')
-      }
-
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.On)
-    .edgeEffect(EdgeEffect.Spring)
-    .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
-      this.markHomeUserScrollIntent('pictures', scrollSource)
-      return this.consumeHomePullScroll('pictures', scrollOffset)
-    })
-    .onDidScroll((_scrollOffset: number, _scrollState: ScrollState) => {
-      this.syncHomeModeRailState('pictures')
-      this.flushPendingLoadMoreForMode('pictures')
-    })
-    .onDidStopDragging((_willFling: boolean) => {
-      this.setHomeScrollInteracting(false, 'pictures')
-      this.flushPendingLoadMoreForMode('pictures')
-      this.finalizeHomePullRefresh()
-    })
-  }
-
-  @Builder
   private ModeEntriesScene(mode: SubscriptionMode) {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Stack({ alignContent: Alignment.TopStart }) {
-        if (resolveHomeVideoSceneKind(mode) === 'grid') {
-          Scroll(this.homeScrollerForMode(mode)) {
-            Column({ space: HOME_MODE_CONTENT_GAP }) {
-              Column() {
-                Blank()
-                  .height(HOME_MODE_SCENE_TOP_INSET)
-
-                this.HomeRefreshGapSlot(mode)
-              }
-              .width('100%')
-
-              HomeVideoGrid({
-                entries: this.visibleEntriesFor(mode),
-                highlightQuery: this.searchQuery,
-                inheritedTheme: this.theme,
-                isLoading: this.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
-                onOpenEntry: (entry: EntryCardModel) => {
-                  this.openEntry(entry)
-                },
-              })
-
-              Row()
-                .width('100%')
-                .height(100)
-
-            }
-            .width('100%')
-            .constraintSize({ minHeight: '100%' })
-            .alignItems(HorizontalAlign.Start)
-            .justifyContent(FlexAlign.Start)
-            .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, top: 0, bottom: 100 })
-          }
-          .width('100%')
-          .height('100%')
-          .scrollBar(BarState.On)
-          .edgeEffect(EdgeEffect.Spring)
-          .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
-            this.markHomeUserScrollIntent(mode, scrollSource)
-            return this.consumeHomePullScrollOffset(mode, yOffset)
-          })
-            .onDidScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState) => {
-            this.syncHomeModeRailState(mode)
-            this.flushPendingLoadMoreForMode(mode)
-          })
-          .onDidStopDragging((_willFling: boolean) => {
-            this.setHomeScrollInteracting(false, mode)
-            this.flushPendingLoadMoreForMode(mode)
-            this.finalizeHomePullRefresh()
-          })
-        } else if (mode === 'pictures') {
-          this.PictureEntryList()
-        } else {
-          this.EntryList(mode)
-        }
-      }
-      .width('100%')
-      .height('100%')
-    }
-    .width('100%')
-    .height('100%')
-    .visibility(this.modeSceneVisible(mode))
-    .opacity(this.homeListSwapAnimating && mode === this.homeListSwapMode
-      ? this.homeListSwapOpacity
-      : this.modeSceneOpacity(mode))
-    .translate({
-      x: this.modeSceneOffset(mode),
-      y: this.modeListSwapTranslateY(mode),
+    HomeModeEntriesPage({
+      mode,
+      entries: this.visibleEntriesFor(mode),
+      totalCount: this.totalEntryCountFor(mode),
+      isLoading: this.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
+      emptyStateTitle: this.homeEmptyStateTitle(),
+      theme: this.theme,
+      showUnreadDot: this.showUnreadDot,
+      sceneOpacity: this.modeSceneOpacity(mode),
+      sceneOffsetX: this.modeSceneOffset(mode),
+      sceneZIndex: this.modeSceneZIndex(mode),
+      sceneVisible: this.modeSceneVisible(mode),
+      listSwapOpacity: this.homeListSwapAnimating && mode === this.homeListSwapMode ? this.homeListSwapOpacity : 1,
+      listSwapTranslateY: this.modeListSwapTranslateY(mode),
+      scroller: this.homeScrollerForMode(mode),
+      callbacks: {
+        onWillScroll: (_scrollOffset: number, scrollSource: ScrollSource): ScrollResult | void => {
+          this.markHomeUserScrollIntent(mode, scrollSource)
+          return undefined
+        },
+        onDidScroll: (): void => {
+          this.syncHomeModeRailState(mode)
+          this.flushPendingLoadMoreForMode(mode)
+        },
+        onStopDragging: (): void => {
+          this.setHomeScrollInteracting(false, mode)
+          this.flushPendingLoadMoreForMode(mode)
+        },
+        onEntryOpen: (entry: EntryCardModel): void => {
+          this.openEntry(entry)
+        },
+        onItemAppear: (index: number, totalCount: number): void => {
+          this.handleHomeEntryAppear(mode, index, totalCount)
+        },
+        getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
+        getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
+        getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
+        getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
+      },
     })
-    .zIndex(this.modeSceneZIndex(mode))
   }
 
   @Builder
   private HomeRootPage() {
     // Build all mode scenes up front so first-time switches stay warm.
     Stack({ alignContent: Alignment.TopStart }) {
-      this.HomeRefreshIndicatorLayer()
-
       this.ModeEntriesScene('articles')
       this.ModeEntriesScene('social')
       this.ModeEntriesScene('pictures')
@@ -4437,6 +3432,10 @@ struct Index {
       }
 
       if (this.isHomeRootTab()) {
+        this.HomeCollapsedQuickActionsLayer()
+      }
+
+      if (this.isHomeRootTab() && this.searchOverlayVisible) {
         HomeInlineSearchOverlay({
           visible: this.searchOverlayVisible,
           showSearch: this.showSearch,
@@ -4449,29 +3448,23 @@ struct Index {
           refreshTotalCount: this.refreshTotalCount,
           displayRefreshPercent: this.displayRefreshPercent,
           theme: this.theme,
-          resultEntries: this.searchResultEntries(),
-          showEmptyState: this.hasSearchResultEmptyState(),
+          resultEntries: this.homeInlineSearchController.searchResultEntries(),
+          showEmptyState: this.homeInlineSearchController.hasSearchResultEmptyState(),
           inputController: this.searchInputController,
           onQueryChange: (value: string) => {
             this.searchQuery = value
           },
           onClose: (clearQuery: boolean) => {
-            this.closeHomeInlineSearch(clearQuery)
-          },
-          onOpen: () => {
-            this.openHomeInlineSearch()
-          },
-          onRefresh: () => {
-            void this.refreshFeaturedEntries()
+            this.homeInlineSearchController.close(clearQuery)
           },
           onEntryClick: (entry: EntryCardModel) => {
             this.openEntry(entry)
-            this.closeHomeInlineSearch(true)
+            this.homeInlineSearchController.close(true)
           },
           onInputAppear: () => {
-            this.focusHomeInlineSearch()
+            this.homeInlineSearchController.focus()
           },
-          summaryTextForEntry: (entry: EntryCardModel) => this.searchResultSummaryText(entry),
+          summaryTextForEntry: (entry: EntryCardModel) => this.homeInlineSearchController.searchResultSummaryText(entry),
         })
       }
 
@@ -4488,7 +3481,7 @@ struct Index {
     }
 
     if (this.isHomeRootTab() && this.searchOverlayVisible) {
-      this.closeHomeInlineSearch(true)
+      this.homeInlineSearchController.close(true)
       return true
     }
     return false

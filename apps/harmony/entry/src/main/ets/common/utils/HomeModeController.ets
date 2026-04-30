@@ -27,7 +27,6 @@ export interface HomeModeDelegate {
   setHomeModeRailDismissedByScroll(v: boolean): void
   updateHeaderBlurProgress(offset: number): void
   resetScrollIntent(mode: SubscriptionMode): void
-  resetPullRefreshState(): void
   ensureModeEntriesLoaded(mode: SubscriptionMode): void
   runManagedTimeout(cb: () => void, delayMs: number): void
 }
@@ -57,7 +56,6 @@ export class HomeModeController {
     this.delegate.setVisitedModes(rememberVisitedMode(this.delegate.getVisitedModes(), nextMode))
     this.delegate.setScrollInteracting(false, nextMode)
     this.delegate.resetScrollIntent(nextMode)
-    this.delegate.resetPullRefreshState()
     this.delegate.setHomeModeRailExpandedLockOffset(nextModeOffset)
     this.delegate.setHomeModeRailExpandedOverride(true)
     this.delegate.setCurrentHomeModeScrollOffset(nextModeOffset)

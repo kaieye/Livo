@@ -13,24 +13,9 @@ export type SubscriptionMode = HomeMode
 
 export const SUBSCRIPTION_MODES: SubscriptionMode[] = HOME_MODES
 
-// 首页根页面的布局、刷新和分页调参集中放置，避免页面文件继续膨胀。
+// 首页根页面的布局和分页调参集中放置，避免页面文件继续膨胀。
 export const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 export const HOME_MODE_CONTENT_GAP: number = 6
-export const HOME_REFRESH_PULL_DISTANCE: number = 40
-export const HOME_REFRESH_MAX_PULL_DISTANCE: number = 120
-export const HOME_REFRESH_PULL_DISTANCE_STEP: number = 1
-export const HOME_REFRESH_FOLLOW_RATIO: number = 0.72
-export const HOME_REFRESH_CONTENT_HOLD_DISTANCE: number = 44
-export const HOME_REFRESH_INDICATOR_VISUAL_OFFSET: number = 32
-export const HOME_REFRESH_GAP_OPEN_PULL_DISTANCE: number = 12
-export const HOME_REFRESH_INDICATOR_RESTING_TRANSLATE_Y: number = 12
-export const HOME_REFRESH_INDICATOR_SIZE: number = 40
-export const HOME_REFRESH_INDICATOR_BOTTOM_MARGIN: number = 15
-export const HOME_REFRESH_RESET_DURATION: number = 220
-export const HOME_REFRESH_DISMISS_SCROLL_OFFSET: number = 18
-export const HOME_REFRESH_FINALIZE_DEBOUNCE_MS: number = 48
-export const HOME_REFRESH_TRIGGER_DEFER_MS: number = 180
-export const HOME_REFRESH_RELEASE_FINALIZE_DEFER_MS: number = 16
 
 export const HOME_LIST_SWAP_ENTER_DURATION: number = 180
 export const HOME_LIST_SWAP_ENTRY_OFFSET_Y: number = 8
@@ -94,8 +79,6 @@ export const HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS: number = 1200
 export const HOME_STARTUP_REFRESH_COOLDOWN_MS: number = 3 * 60 * 1000
 export const AUTO_REFRESH_MIN_INTERVAL_MINUTES: number = 1
 
-export const HOME_PULL_DEBUG_LOG_ENABLED: boolean = false
-export const HOME_PULL_DEBUG_LOG_PREFIX: string = '[HomePullDebug]'
 export const HOME_GROUP_DEBUG_ENABLED: boolean = false
 export const HOME_GROUP_DEBUG_PREFIX: string = '[FeedFetchStateDebug][HomeGroup]'
 export const HOME_MODE_DEBUG_ENABLED: boolean = false
