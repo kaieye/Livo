@@ -1,11 +1,10 @@
 import { AppRepository } from '../common/data/AppRepository'
 import { ArrayLazyDataSource } from '../common/data/ArrayLazyDataSource'
-import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
+import { LengthMetrics } from '@kit.ArkUI'
 import {
   HdsTabsController,
   ScrollEffectType,
   SystemMaterialParams,
-  hdsMaterial,
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import window from '@ohos.window'
@@ -19,7 +18,6 @@ import {
   EntryCardModel,
   HarmonySettings,
   articleDetailModelFromCard,
-  selectPictureCarouselMediaUrls,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
@@ -51,6 +49,18 @@ import {
   HdsBottomTabId,
   resolveHdsBottomTabItems,
 } from '../common/utils/HdsBottomTabConfig'
+import {
+  rootBlurEffectiveEndOffset,
+  rootBlurStrategy,
+  rootOriginalTitleBarBlurRadius,
+  rootScrollEffectTitleBarBlurRadius,
+  rootScrollEffectType,
+  rootSystemMaterialEffect,
+  rootTabSymbolPair,
+  rootTitleBarMaskExtraHeight,
+  rootTitleFor,
+  rootTransparentBackgroundColor,
+} from '../common/utils/IndexRootChrome'
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 import { RefreshStateManager } from '../common/utils/RefreshStateManager'
@@ -61,6 +71,39 @@ import {
   IndexHomeInlineSearchDelegate,
   IndexHomeModeDelegate,
 } from '../common/utils/IndexHomeDelegates'
+import {
+  createHomeCandidateLimitMap,
+  createHomeLoadedMap,
+  createHomeLoadingMap,
+  createHomeLoadMoreTimestampMap,
+  createHomeModeBooleanMap,
+  createHomeNoProgressCountMap,
+  createHomePendingLoadMoreMap,
+  createHomeScrollOffsetMap,
+  createHomeVisibleEntryLimitMap,
+  homeCandidateLimitValue,
+  homeLoadMoreTimestampValue,
+  homeModeBooleanValue,
+  homeModeLoadedValue,
+  homeModeLoadingValue,
+  homeModeNumberValue,
+  homeModePendingLoadMoreValue,
+  homeNoProgressCountValue,
+  homeVisibleEntryLimitValue,
+  pictureCaption,
+  pictureCardEntry,
+  pictureGalleryUrls,
+  withHomeCandidateLimitValue,
+  withHomeLoadedValue,
+  withHomeLoadingValue,
+  withHomeLoadMoreTimestampValue,
+  withHomeModeBooleanValue,
+  withHomeModeNumberValue,
+  withHomeNoProgressCountValue,
+  withHomePendingLoadMoreValue,
+  withHomeVisibleEntryLimitValue,
+} from '../common/utils/IndexHomeStateFactory'
+import { createIndexHomeRootContentCallbacks } from '../common/utils/IndexHomeRootContentCallbacksFactory'
 import {
   AUTO_REFRESH_MIN_INTERVAL_MINUTES,
   HEADER_BLUR_SCROLL_RANGE,
@@ -184,38 +227,18 @@ struct Index {
   @State isHomeStartupRefreshing: boolean = false
   @State homeInitialLoadPending: boolean = true
   @State homeCandidateLimit: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT
-  @State homeCandidateLimitsByMode: HomeModeCandidateLimitMap = {
-    articles: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-    social: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-    pictures: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-    videos: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-  }
+  @State homeCandidateLimitsByMode: HomeModeCandidateLimitMap = createHomeCandidateLimitMap()
   @State homeHasMoreEntries: boolean = true
-  @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = {
-    articles: true,
-    social: true,
-    pictures: true,
-    videos: true,
-  }
+  @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = createHomeModeBooleanMap(true)
   @State homeLoadMoreInProgress: boolean = false
-  @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = {
-    articles: resolveHomeVisibleEntryInitialLimit('articles'),
-    social: resolveHomeVisibleEntryInitialLimit('social'),
-    pictures: resolveHomeVisibleEntryInitialLimit('pictures'),
-    videos: resolveHomeVisibleEntryInitialLimit('videos'),
-  }
+  @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = createHomeVisibleEntryLimitMap()
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly articlesScroller: Scroller = new Scroller()
   private readonly socialScroller: Scroller = new Scroller()
   private readonly picturesScroller: Scroller = new Scroller()
   private readonly videosScroller: Scroller = new Scroller()
   private searchInputController: TextInputController = new TextInputController()
-  private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = {
-    articles: 0,
-    social: 0,
-    pictures: 0,
-    videos: 0,
-  }
+  private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   readonly homeEntryDataSources: HomeEntryDataSourceMap = {
     articles: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.articles),
     social: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.social),
@@ -248,54 +271,14 @@ struct Index {
   private homeLoadMorePrefetchMode: SubscriptionMode = 'articles'
   private homeLoadMorePrefetchInProgress: boolean = false
   private lastHomeUserScrollAt: number = 0
-  private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = {
-    articles: false,
-    social: false,
-    pictures: false,
-    videos: false,
-  }
-  private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = {
-    articles: 0,
-    social: 0,
-    pictures: 0,
-    videos: 0,
-  }
-  private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = {
-    articles: 0,
-    social: 0,
-    pictures: 0,
-    videos: 0,
-  }
-  private homeModeScrollIntentVersions: HomeModeScrollOffsetMap = {
-    articles: 0,
-    social: 0,
-    pictures: 0,
-    videos: 0,
-  }
-  private homeModeConsumedScrollIntentVersions: HomeModeScrollOffsetMap = {
-    articles: 0,
-    social: 0,
-    pictures: 0,
-    videos: 0,
-  }
-  private homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = {
-    articles: 0,
-    social: 0,
-    pictures: 0,
-    videos: 0,
-  }
-  private homeModeLoaded: HomeModeLoadedMap = {
-    articles: false,
-    social: false,
-    pictures: false,
-    videos: false,
-  }
-  private homeModeLoading: HomeModeLoadingMap = {
-    articles: false,
-    social: false,
-    pictures: false,
-    videos: false,
-  }
+  private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
+  private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = createHomeLoadMoreTimestampMap()
+  private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
+  private homeModeScrollIntentVersions: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
+  private homeModeConsumedScrollIntentVersions: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
+  private homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = createHomeNoProgressCountMap()
+  private homeModeLoaded: HomeModeLoadedMap = createHomeLoadedMap()
+  private homeModeLoading: HomeModeLoadingMap = createHomeLoadingMap()
   private lastHomeLoadMoreCompletedAt: number = 0
   private lastHomeRefreshFinishedAt: number = 0
   private homePerfSessionId: number = 0
@@ -679,7 +662,7 @@ struct Index {
     }
   }
 
-  private homeEmptyStateTitle(): string {
+  homeEmptyStateTitle(): string {
     return this.isHomeContentLoading()
       ? '正在加载订阅内容'
       : '未发现订阅推文，请先到发现页面添加或刷新订阅源'
@@ -697,16 +680,7 @@ struct Index {
   }
 
   private homeModeScrollOffsetFor(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeModeScrollOffsets.social
-      case 'pictures':
-        return this.homeModeScrollOffsets.pictures
-      case 'videos':
-        return this.homeModeScrollOffsets.videos
-      default:
-        return this.homeModeScrollOffsets.articles
-    }
+    return homeModeNumberValue(mode, this.homeModeScrollOffsets)
   }
 
   private updateHomeModeScrollOffset(mode: SubscriptionMode, offset: number): void {
@@ -734,7 +708,7 @@ struct Index {
     }
   }
 
-  private syncHomeModeRailState(mode: SubscriptionMode = this.mode): void {
+  syncHomeModeRailState(mode: SubscriptionMode = this.mode): void {
     const previousOffset = this.currentHomeModeScrollOffset
     const nextOffset = this.readHomeModeScrollOffset(mode)
     this.updateHomeModeScrollOffset(mode, nextOffset)
@@ -776,7 +750,7 @@ struct Index {
       || scrollSource === ScrollSource.SCROLL_BAR_FLING
   }
 
-  private markHomeUserScrollIntent(mode: SubscriptionMode, scrollSource: ScrollSource): void {
+  markHomeUserScrollIntent(mode: SubscriptionMode, scrollSource: ScrollSource): void {
     if (mode !== this.mode || !this.isUserDrivenHomeScrollSource(scrollSource)) {
       return
     }
@@ -794,47 +768,20 @@ struct Index {
   }
 
   private modeScrollIntentVersion(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeModeScrollIntentVersions.social
-      case 'pictures':
-        return this.homeModeScrollIntentVersions.pictures
-      case 'videos':
-        return this.homeModeScrollIntentVersions.videos
-      default:
-        return this.homeModeScrollIntentVersions.articles
-    }
+    return homeModeNumberValue(mode, this.homeModeScrollIntentVersions)
   }
 
   private consumedModeScrollIntentVersion(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeModeConsumedScrollIntentVersions.social
-      case 'pictures':
-        return this.homeModeConsumedScrollIntentVersions.pictures
-      case 'videos':
-        return this.homeModeConsumedScrollIntentVersions.videos
-      default:
-        return this.homeModeConsumedScrollIntentVersions.articles
-    }
+    return homeModeNumberValue(mode, this.homeModeConsumedScrollIntentVersions)
   }
 
   private setModeScrollIntentVersion(mode: SubscriptionMode, value: number): void {
-    this.homeModeScrollIntentVersions = {
-      articles: mode === 'articles' ? value : this.homeModeScrollIntentVersions.articles,
-      social: mode === 'social' ? value : this.homeModeScrollIntentVersions.social,
-      pictures: mode === 'pictures' ? value : this.homeModeScrollIntentVersions.pictures,
-      videos: mode === 'videos' ? value : this.homeModeScrollIntentVersions.videos,
-    }
+    this.homeModeScrollIntentVersions = withHomeModeNumberValue(mode, value, this.homeModeScrollIntentVersions)
   }
 
   private setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void {
-    this.homeModeConsumedScrollIntentVersions = {
-      articles: mode === 'articles' ? value : this.homeModeConsumedScrollIntentVersions.articles,
-      social: mode === 'social' ? value : this.homeModeConsumedScrollIntentVersions.social,
-      pictures: mode === 'pictures' ? value : this.homeModeConsumedScrollIntentVersions.pictures,
-      videos: mode === 'videos' ? value : this.homeModeConsumedScrollIntentVersions.videos,
-    }
+    this.homeModeConsumedScrollIntentVersions =
+      withHomeModeNumberValue(mode, value, this.homeModeConsumedScrollIntentVersions)
   }
 
   private bumpModeScrollIntentVersion(mode: SubscriptionMode): void {
@@ -857,16 +804,7 @@ struct Index {
   }
 
   private currentRootTitle(): string {
-    switch (this.currentRootTabId()) {
-      case 'subscriptions':
-        return '订阅库'
-      case 'settings':
-        return '设置'
-      case 'discover':
-        return '添加订阅'
-      default:
-        return '今日推荐'
-    }
+    return rootTitleFor(this.currentRootTabId())
   }
 
   currentSearchEntries(): EntryCardModel[] {
@@ -902,7 +840,7 @@ struct Index {
   }
 
   private currentRootScrollEffectType(): ScrollEffectType {
-    return ScrollEffectType.IMMERSIVE_GRADIENT_BLUR
+    return rootScrollEffectType()
   }
 
   private isSettingsRootTab(): boolean {
@@ -910,42 +848,39 @@ struct Index {
   }
 
   private currentRootBlurEffectiveEndOffset(): LengthMetrics {
-    return LengthMetrics.vp(30)
+    return rootBlurEffectiveEndOffset()
   }
 
   private currentRootOriginalTitleBarBackgroundColor(): ResourceColor {
-    return '#00000000'
+    return rootTransparentBackgroundColor()
   }
 
   private currentRootScrollEffectBackgroundColor(): ResourceColor {
-    return '#00000000'
+    return rootTransparentBackgroundColor()
   }
 
   private currentRootOriginalTitleBarBlurRadius(): number {
-    return 28
+    return rootOriginalTitleBarBlurRadius()
   }
 
   private currentRootScrollEffectTitleBarBlurRadius(): number {
-    return 48
+    return rootScrollEffectTitleBarBlurRadius()
   }
 
   private currentRootOriginalTitleBarMaskExtraHeight(): number {
-    return 0
+    return rootTitleBarMaskExtraHeight()
   }
 
   private currentRootScrollEffectTitleBarMaskExtraHeight(): number {
-    return 0
+    return rootTitleBarMaskExtraHeight()
   }
 
   private currentRootBlurStrategy(): BlurStrategy | undefined {
-    return BlurStrategy.ENABLE
+    return rootBlurStrategy()
   }
 
   private currentRootSystemMaterialEffect(): SystemMaterialParams | undefined {
-    return {
-      materialType: hdsMaterial.MaterialType.IMMERSIVE,
-      materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-    }
+    return rootSystemMaterialEffect()
   }
 
   private currentRootBindScrollers(): Scroller[] {
@@ -963,7 +898,7 @@ struct Index {
     return []
   }
 
-  private homeScrollerForMode(mode: SubscriptionMode): Scroller {
+  homeScrollerForMode(mode: SubscriptionMode): Scroller {
     switch (mode) {
       case 'social':
         return this.socialScroller
@@ -1044,7 +979,7 @@ struct Index {
     }
   }
 
-  private openEntry(entry: EntryCardModel): void {
+  openEntry(entry: EntryCardModel): void {
     this.runManagedTimeout(() => {
       this.markEntryReadLocally(entry)
     }, 120)
@@ -1061,47 +996,8 @@ struct Index {
     this.homeEntryDataManager.markEntryReadLocally(target)
   }
 
-  private bottomTabSymbol(
-    symbol: Resource,
-    colors: ResourceColor[],
-  ): SymbolGlyphModifier {
-    return new SymbolGlyphModifier(symbol)
-      .renderingStrategy(SymbolRenderingStrategy.MULTIPLE_COLOR)
-      .fontColor(colors)
-  }
-
   private rootTabSymbolPair(tabId: HdsBottomTabId): RootTabSymbolPair {
-    const normalColors: ResourceColor[] = [
-      $r('sys.color.ohos_id_color_bottom_tab_icon_off'),
-      $r('sys.color.ohos_id_color_bottom_tab_icon_auxcolor_off02'),
-    ]
-    const selectedColors: ResourceColor[] = [
-      $r('sys.color.ohos_id_color_activated'),
-      $r('sys.color.ohos_id_color_primary_contrary'),
-    ]
-
-    switch (tabId) {
-      case 'subscriptions':
-        return {
-          normal: this.bottomTabSymbol($r('sys.symbol.folder_fill'), normalColors),
-          selected: this.bottomTabSymbol($r('sys.symbol.folder_fill'), selectedColors),
-        } as RootTabSymbolPair
-      case 'discover':
-        return {
-          normal: this.bottomTabSymbol($r('sys.symbol.magnifyingglass'), normalColors),
-          selected: this.bottomTabSymbol($r('sys.symbol.magnifyingglass'), selectedColors),
-        } as RootTabSymbolPair
-      case 'settings':
-        return {
-          normal: this.bottomTabSymbol($r('sys.symbol.gearshape'), normalColors),
-          selected: this.bottomTabSymbol($r('sys.symbol.gearshape_fill'), selectedColors),
-        } as RootTabSymbolPair
-      default:
-        return {
-          normal: this.bottomTabSymbol($r('sys.symbol.house'), normalColors),
-          selected: this.bottomTabSymbol($r('sys.symbol.house_fill'), selectedColors),
-        } as RootTabSymbolPair
-    }
+    return rootTabSymbolPair(tabId)
   }
 
   private handleRootTabChange(index: number): void {
@@ -1191,7 +1087,7 @@ struct Index {
     return this.homeModeController.adjacentMode(offsetX)
   }
 
-  private handleModeSwipe(event: GestureEvent): void {
+  handleModeSwipe(event: GestureEvent): void {
     this.homeModeController.handleModeSwipe(event)
   }
 
@@ -1225,7 +1121,7 @@ struct Index {
     ].join('|')
   }
 
-  private presentTweetEntry(entry: EntryCardModel): TweetEntryPresentation {
+  presentTweetEntry(entry: EntryCardModel): TweetEntryPresentation {
     const cacheKey = this.tweetPresentationCacheKey(entry)
     const cached = this.tweetPresentationCache.get(cacheKey)
     if (cached) {
@@ -1423,27 +1319,13 @@ struct Index {
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeCandidateLimitsByMode.social
-      case 'pictures':
-        return this.homeCandidateLimitsByMode.pictures
-      case 'videos':
-        return this.homeCandidateLimitsByMode.videos
-      default:
-        return this.homeCandidateLimitsByMode.articles
-    }
+    return homeCandidateLimitValue(mode, this.homeCandidateLimitsByMode)
   }
 
   private setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
     const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
     const safeLimit = Math.max(minimumLimit, limit)
-    this.homeCandidateLimitsByMode = {
-      articles: mode === 'articles' ? safeLimit : this.homeCandidateLimitsByMode.articles,
-      social: mode === 'social' ? safeLimit : this.homeCandidateLimitsByMode.social,
-      pictures: mode === 'pictures' ? safeLimit : this.homeCandidateLimitsByMode.pictures,
-      videos: mode === 'videos' ? safeLimit : this.homeCandidateLimitsByMode.videos,
-    }
+    this.homeCandidateLimitsByMode = withHomeCandidateLimitValue(mode, safeLimit, this.homeCandidateLimitsByMode)
     if (mode === this.mode) {
       this.homeCandidateLimit = safeLimit
     }
@@ -1457,70 +1339,28 @@ struct Index {
   }
 
   markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
-    this.homeModeLoaded = {
-      articles: mode === 'articles' ? loaded : this.homeModeLoaded.articles,
-      social: mode === 'social' ? loaded : this.homeModeLoaded.social,
-      pictures: mode === 'pictures' ? loaded : this.homeModeLoaded.pictures,
-      videos: mode === 'videos' ? loaded : this.homeModeLoaded.videos,
-    }
+    this.homeModeLoaded = withHomeLoadedValue(mode, loaded, this.homeModeLoaded)
   }
 
   private isModeLoaded(mode: SubscriptionMode): boolean {
-    switch (mode) {
-      case 'social':
-        return this.homeModeLoaded.social
-      case 'pictures':
-        return this.homeModeLoaded.pictures
-      case 'videos':
-        return this.homeModeLoaded.videos
-      default:
-        return this.homeModeLoaded.articles
-    }
+    return homeModeLoadedValue(mode, this.homeModeLoaded)
   }
 
-  private isModeLoading(mode: SubscriptionMode): boolean {
-    switch (mode) {
-      case 'social':
-        return this.homeModeLoading.social
-      case 'pictures':
-        return this.homeModeLoading.pictures
-      case 'videos':
-        return this.homeModeLoading.videos
-      default:
-        return this.homeModeLoading.articles
-    }
+  isModeLoading(mode: SubscriptionMode): boolean {
+    return homeModeLoadingValue(mode, this.homeModeLoading)
   }
 
   private setModeLoading(mode: SubscriptionMode, loading: boolean): void {
-    this.homeModeLoading = {
-      articles: mode === 'articles' ? loading : this.homeModeLoading.articles,
-      social: mode === 'social' ? loading : this.homeModeLoading.social,
-      pictures: mode === 'pictures' ? loading : this.homeModeLoading.pictures,
-      videos: mode === 'videos' ? loading : this.homeModeLoading.videos,
-    }
+    this.homeModeLoading = withHomeLoadingValue(mode, loading, this.homeModeLoading)
   }
 
   private visibleEntryLimitFor(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeVisibleEntryLimits.social
-      case 'pictures':
-        return this.homeVisibleEntryLimits.pictures
-      case 'videos':
-        return this.homeVisibleEntryLimits.videos
-      default:
-        return this.homeVisibleEntryLimits.articles
-    }
+    return homeVisibleEntryLimitValue(mode, this.homeVisibleEntryLimits)
   }
 
   private setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
     const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    this.homeVisibleEntryLimits = {
-      articles: mode === 'articles' ? safeLimit : this.homeVisibleEntryLimits.articles,
-      social: mode === 'social' ? safeLimit : this.homeVisibleEntryLimits.social,
-      pictures: mode === 'pictures' ? safeLimit : this.homeVisibleEntryLimits.pictures,
-      videos: mode === 'videos' ? safeLimit : this.homeVisibleEntryLimits.videos,
-    }
+    this.homeVisibleEntryLimits = withHomeVisibleEntryLimitValue(mode, safeLimit, this.homeVisibleEntryLimits)
   }
 
   totalEntryCountFor(mode: SubscriptionMode): number {
@@ -1534,7 +1374,7 @@ struct Index {
     return this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
   }
 
-  private visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
+  visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
     const entries = this.filteredEntriesFor(mode)
     if (this.shouldRenderAllEntriesForMode(mode)) {
       return entries
@@ -1665,12 +1505,7 @@ struct Index {
     const visible = this.visibleEntryCountFor(mode)
     this.homeHasMoreEntries = next
     if (!next) {
-      this.homeHasMoreEntriesByMode = {
-        articles: false,
-        social: false,
-        pictures: false,
-        videos: false,
-      }
+      this.homeHasMoreEntriesByMode = createHomeModeBooleanMap(false)
     }
     this.logHomeLoadState(
       `hasMore=${next ? 'true' : 'false'} reason=${reason} mode=${mode} `
@@ -1680,16 +1515,7 @@ struct Index {
   }
 
   private modeHasMoreEntries(mode: SubscriptionMode): boolean {
-    switch (mode) {
-      case 'social':
-        return this.homeHasMoreEntriesByMode.social
-      case 'pictures':
-        return this.homeHasMoreEntriesByMode.pictures
-      case 'videos':
-        return this.homeHasMoreEntriesByMode.videos
-      default:
-        return this.homeHasMoreEntriesByMode.articles
-    }
+    return homeModeBooleanValue(mode, this.homeHasMoreEntriesByMode)
   }
 
   private setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
@@ -1697,12 +1523,7 @@ struct Index {
     if (previous === next) {
       return
     }
-    this.homeHasMoreEntriesByMode = {
-      articles: mode === 'articles' ? next : this.homeHasMoreEntriesByMode.articles,
-      social: mode === 'social' ? next : this.homeHasMoreEntriesByMode.social,
-      pictures: mode === 'pictures' ? next : this.homeHasMoreEntriesByMode.pictures,
-      videos: mode === 'videos' ? next : this.homeHasMoreEntriesByMode.videos,
-    }
+    this.homeHasMoreEntriesByMode = withHomeModeBooleanValue(mode, next, this.homeHasMoreEntriesByMode)
     this.logHomeLoadState(
       `modeHasMore mode=${mode} next=${next ? 'true' : 'false'} reason=${reason} `
       + `globalHasMore=${this.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
@@ -1713,41 +1534,18 @@ struct Index {
   }
 
   private modeNoProgressCount(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeModeNoProgressLoadMoreCount.social
-      case 'pictures':
-        return this.homeModeNoProgressLoadMoreCount.pictures
-      case 'videos':
-        return this.homeModeNoProgressLoadMoreCount.videos
-      default:
-        return this.homeModeNoProgressLoadMoreCount.articles
-    }
+    return homeNoProgressCountValue(mode, this.homeModeNoProgressLoadMoreCount)
   }
 
   private setModeNoProgressCount(mode: SubscriptionMode, count: number): void {
     const safeCount = Math.max(0, count)
-    this.homeModeNoProgressLoadMoreCount = {
-      articles: mode === 'articles' ? safeCount : this.homeModeNoProgressLoadMoreCount.articles,
-      social: mode === 'social' ? safeCount : this.homeModeNoProgressLoadMoreCount.social,
-      pictures: mode === 'pictures' ? safeCount : this.homeModeNoProgressLoadMoreCount.pictures,
-      videos: mode === 'videos' ? safeCount : this.homeModeNoProgressLoadMoreCount.videos,
-    }
+    this.homeModeNoProgressLoadMoreCount =
+      withHomeNoProgressCountValue(mode, safeCount, this.homeModeNoProgressLoadMoreCount)
   }
 
   private resetModeLoadMoreStates(reason: string): void {
-    this.homeHasMoreEntriesByMode = {
-      articles: true,
-      social: true,
-      pictures: true,
-      videos: true,
-    }
-    this.homeModeNoProgressLoadMoreCount = {
-      articles: 0,
-      social: 0,
-      pictures: 0,
-      videos: 0,
-    }
+    this.homeHasMoreEntriesByMode = createHomeModeBooleanMap(true)
+    this.homeModeNoProgressLoadMoreCount = createHomeNoProgressCountMap()
     this.logHomeLoadState(`mode loadMore state reset reason=${reason}`)
   }
 
@@ -2080,69 +1878,28 @@ struct Index {
   }
 
   private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
-    this.homePendingLoadMoreModes = {
-      articles: mode === 'articles' ? pending : this.homePendingLoadMoreModes.articles,
-      social: mode === 'social' ? pending : this.homePendingLoadMoreModes.social,
-      pictures: mode === 'pictures' ? pending : this.homePendingLoadMoreModes.pictures,
-      videos: mode === 'videos' ? pending : this.homePendingLoadMoreModes.videos,
-    }
+    this.homePendingLoadMoreModes = withHomePendingLoadMoreValue(mode, pending, this.homePendingLoadMoreModes)
   }
 
   private pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
-    switch (mode) {
-      case 'social':
-        return this.homePendingLoadMoreModes.social
-      case 'pictures':
-        return this.homePendingLoadMoreModes.pictures
-      case 'videos':
-        return this.homePendingLoadMoreModes.videos
-      default:
-        return this.homePendingLoadMoreModes.articles
-    }
+    return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
   }
 
   private modeLoadMoreTimestampValue(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeLastItemAppearLoadMoreAt.social
-      case 'pictures':
-        return this.homeLastItemAppearLoadMoreAt.pictures
-      case 'videos':
-        return this.homeLastItemAppearLoadMoreAt.videos
-      default:
-        return this.homeLastItemAppearLoadMoreAt.articles
-    }
+    return homeLoadMoreTimestampValue(mode, this.homeLastItemAppearLoadMoreAt)
   }
 
   private setModeLoadMoreTimestamp(mode: SubscriptionMode, value: number): void {
-    this.homeLastItemAppearLoadMoreAt = {
-      articles: mode === 'articles' ? value : this.homeLastItemAppearLoadMoreAt.articles,
-      social: mode === 'social' ? value : this.homeLastItemAppearLoadMoreAt.social,
-      pictures: mode === 'pictures' ? value : this.homeLastItemAppearLoadMoreAt.pictures,
-      videos: mode === 'videos' ? value : this.homeLastItemAppearLoadMoreAt.videos,
-    }
+    this.homeLastItemAppearLoadMoreAt = withHomeLoadMoreTimestampValue(mode, value, this.homeLastItemAppearLoadMoreAt)
   }
 
   private modeScrollProgressLoadMoreValue(mode: SubscriptionMode): number {
-    switch (mode) {
-      case 'social':
-        return this.homeLastScrollProgressLoadMoreAt.social
-      case 'pictures':
-        return this.homeLastScrollProgressLoadMoreAt.pictures
-      case 'videos':
-        return this.homeLastScrollProgressLoadMoreAt.videos
-      default:
-        return this.homeLastScrollProgressLoadMoreAt.articles
-    }
+    return homeModeNumberValue(mode, this.homeLastScrollProgressLoadMoreAt)
   }
 
   private setModeScrollProgressLoadMoreValue(mode: SubscriptionMode, value: number): void {
-    this.homeLastScrollProgressLoadMoreAt = {
-      articles: mode === 'articles' ? value : this.homeLastScrollProgressLoadMoreAt.articles,
-      social: mode === 'social' ? value : this.homeLastScrollProgressLoadMoreAt.social,
-      pictures: mode === 'pictures' ? value : this.homeLastScrollProgressLoadMoreAt.pictures,
-      videos: mode === 'videos' ? value : this.homeLastScrollProgressLoadMoreAt.videos,
-    }
+    this.homeLastScrollProgressLoadMoreAt =
+      withHomeModeNumberValue(mode, value, this.homeLastScrollProgressLoadMoreAt)
   }
 
   private maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
@@ -2242,7 +1999,7 @@ struct Index {
     }
   }
 
-  private flushPendingLoadMoreForMode(mode: SubscriptionMode): void {
+  flushPendingLoadMoreForMode(mode: SubscriptionMode): void {
     if (!this.pendingLoadMoreForMode(mode)) {
       return
     }
@@ -2282,7 +2039,7 @@ struct Index {
     return !this.shouldRenderAllEntriesForMode(mode) && this.hasRecentHomeScrollIntent()
   }
 
-  private handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
+  handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
     if (!HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED) {
       return
     }
@@ -2518,7 +2275,7 @@ struct Index {
     return 1
   }
 
-  private modeListSwapTranslateY(mode: SubscriptionMode): number {
+  modeListSwapTranslateY(mode: SubscriptionMode): number {
     if (this.homeListSwapAnimating && mode === this.homeListSwapMode) {
       return this.homeListSwapTranslateY
     }
@@ -2585,39 +2342,19 @@ struct Index {
     return this.filteredEntriesFor(this.mode)
   }
 
-  private pictureGalleryUrls(entry: EntryCardModel): string[] {
-    return entry.mediaUrls ?? []
+  pictureGalleryUrls(entry: EntryCardModel): string[] {
+    return pictureGalleryUrls(entry)
   }
 
-  private pictureCaption(entry: EntryCardModel): string {
-    const title = (entry.title || '').trim()
-    if (title && title !== '远程条目') {
-      return title
-    }
-    return (entry.summary || '').trim()
+  pictureCaption(entry: EntryCardModel): string {
+    return pictureCaption(entry)
   }
 
-  private pictureCardEntry(entry: EntryCardModel): Entry {
-    return {
-      id: entry.id,
-      feedId: entry.feedId,
-      title: entry.title,
-      url: entry.articleUrl,
-      summary: entry.summary,
-      content: '',
-      author: entry.author,
-      publishedAt: entry.publishedAt,
-      readingTimeMinutes: 0,
-      tags: entry.tags,
-      mediaUrls: entry.rawMediaUrls ?? selectPictureCarouselMediaUrls(entry.mediaUrls ?? []),
-      isRead: entry.isRead,
-      isStarred: entry.isStarred,
-      createdAt: entry.publishedAt,
-      updatedAt: entry.publishedAt,
-    }
+  pictureCardEntry(entry: EntryCardModel): Entry {
+    return pictureCardEntry(entry)
   }
 
-  private modeSceneVisible(mode: SubscriptionMode): Visibility {
+  modeSceneVisible(mode: SubscriptionMode): Visibility {
     const state = resolveModeSceneRenderState({
       mode,
       renderedMode: this.renderedMode,
@@ -2638,7 +2375,7 @@ struct Index {
     }).shouldMount
   }
 
-  private modeSceneOpacity(mode: SubscriptionMode): number {
+  modeSceneOpacity(mode: SubscriptionMode): number {
     return resolveModeSceneRenderState({
       mode,
       renderedMode: this.renderedMode,
@@ -2648,7 +2385,7 @@ struct Index {
     }).opacity
   }
 
-  private modeSceneOffset(mode: SubscriptionMode): number {
+  modeSceneOffset(mode: SubscriptionMode): number {
     return resolveModeSceneRenderState({
       mode,
       renderedMode: this.renderedMode,
@@ -2658,7 +2395,7 @@ struct Index {
     }).offset
   }
 
-  private modeSceneZIndex(mode: SubscriptionMode): number {
+  modeSceneZIndex(mode: SubscriptionMode): number {
     return resolveModeSceneRenderState({
       mode,
       renderedMode: this.renderedMode,
@@ -2790,43 +2527,7 @@ struct Index {
   }
 
   private createHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
-    return {
-      onModeSwipe: (event: GestureEvent): void => {
-        this.handleModeSwipe(event)
-      },
-      getEntries: (mode: SubscriptionMode): EntryCardModel[] => this.visibleEntriesFor(mode),
-      getTotalCount: (mode: SubscriptionMode): number => this.totalEntryCountFor(mode),
-      isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
-      getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
-      getSceneOpacity: (mode: SubscriptionMode): number => this.modeSceneOpacity(mode),
-      getSceneOffsetX: (mode: SubscriptionMode): number => this.modeSceneOffset(mode),
-      getSceneZIndex: (mode: SubscriptionMode): number => this.modeSceneZIndex(mode),
-      getSceneVisible: (mode: SubscriptionMode): Visibility => this.modeSceneVisible(mode),
-      getListSwapTranslateY: (mode: SubscriptionMode): number => this.modeListSwapTranslateY(mode),
-      getScroller: (mode: SubscriptionMode): Scroller => this.homeScrollerForMode(mode),
-      onWillScroll: (mode: SubscriptionMode, _scrollOffset: number, scrollSource: ScrollSource): ScrollResult | void => {
-        this.markHomeUserScrollIntent(mode, scrollSource)
-        return undefined
-      },
-      onDidScroll: (mode: SubscriptionMode): void => {
-        this.syncHomeModeRailState(mode)
-        this.flushPendingLoadMoreForMode(mode)
-      },
-      onStopDragging: (mode: SubscriptionMode): void => {
-        this.setHomeScrollInteracting(false, mode)
-        this.flushPendingLoadMoreForMode(mode)
-      },
-      onEntryOpen: (entry: EntryCardModel): void => {
-        this.openEntry(entry)
-      },
-      onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {
-        this.handleHomeEntryAppear(mode, index, totalCount)
-      },
-      getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
-      getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
-      getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
-      getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
-    }
+    return createIndexHomeRootContentCallbacks(this)
   }
 
   onPageShow(): void {
