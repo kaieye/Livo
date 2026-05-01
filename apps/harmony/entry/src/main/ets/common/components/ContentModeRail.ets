@@ -149,15 +149,15 @@ export struct ContentModeRail {
   }
 
   private railShellBackgroundColor(): string {
-    return this.collapsed ? '#00000000' : this.railBackgroundColor()
+    return this.railBackgroundColor()
   }
 
   private railShellBorderWidth(): number {
-    return this.collapsed ? 0 : 0.8
+    return 0.8
   }
 
   private railShellBackdropBlur(): number {
-    return this.collapsed ? 0 : this.railBackdropBlur()
+    return this.railBackdropBlur()
   }
 
   private railShellBorderRadius(): number {
@@ -255,14 +255,6 @@ export struct ContentModeRail {
     .height(this.collapsedCircleSize())
     .justifyContent(FlexAlign.Center)
     .borderRadius(this.collapsedCircleSize())
-    .backgroundColor(this.indicatorColor())
-    .border({ width: 0.6, color: this.indicatorBorderColor() })
-    .shadow({
-      radius: this.indicatorShadowRadius(),
-      color: this.indicatorShadowColor(),
-      offsetX: 0,
-      offsetY: 2,
-    })
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
     .onClick(() => {
       this.handleCollapsedTap()

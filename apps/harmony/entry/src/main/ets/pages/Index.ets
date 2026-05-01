@@ -13,7 +13,6 @@ import {
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import window from '@ohos.window'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
-import { ContentModeRail } from '../common/components/ContentModeRail'
 import {
   ROOT_MODE_RAIL_TOP_GAP,
   ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
@@ -57,8 +56,9 @@ import {
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { DiscoverContent } from '../common/components/DiscoverContent'
 import { SettingsContent } from '../common/components/SettingsContent'
-import { HomeInlineSearchOverlay, HOME_INLINE_SEARCH_MOTION_DURATION } from '../common/components/HomeInlineSearchOverlay'
+import { HomeInlineSearchOverlay } from '../common/components/HomeInlineSearchOverlay'
 import { HomeModeEntriesPage } from '../common/components/HomeModeEntriesPage'
+import { HomeRootOverlayControls } from '../common/components/HomeRootOverlayControls'
 import {
   HdsBottomTabId,
   HdsBottomTabItem,
@@ -144,7 +144,6 @@ import {
   HomeModeLoadMoreTimestampMap,
   HomeModeNoProgressCountMap,
   HomeModePendingLoadMoreMap,
-  HomeModeRailOptions,
   HomeModeScrollOffsetMap,
   HomeModeVisibleEntryLimitMap,
   RootTabSymbolPair,
@@ -2858,88 +2857,6 @@ struct Index {
     }, intervalMs)
   }
 
-  @Builder
-  private HomeModeRail(options: HomeModeRailOptions = {}) {
-    if (options.collapsed ?? false) {
-      if (this.mode === 'articles') {
-        ContentModeRail({
-          mode: 'articles',
-          theme: this.theme,
-          interactionLocked: this.isModeTransitioning,
-          enableEnterTransition: false,
-          collapsed: true,
-          collapseProgress: options.collapseProgress ?? 0,
-          onExpandRequest: () => {
-            this.requestExpandedModeRail()
-          },
-          onChange: (mode: SubscriptionMode) => {
-            this.requestModeSwitch(mode)
-          },
-        })
-      } else if (this.mode === 'social') {
-        ContentModeRail({
-          mode: 'social',
-          theme: this.theme,
-          interactionLocked: this.isModeTransitioning,
-          enableEnterTransition: false,
-          collapsed: true,
-          collapseProgress: options.collapseProgress ?? 0,
-          onExpandRequest: () => {
-            this.requestExpandedModeRail()
-          },
-          onChange: (mode: SubscriptionMode) => {
-            this.requestModeSwitch(mode)
-          },
-        })
-      } else if (this.mode === 'pictures') {
-        ContentModeRail({
-          mode: 'pictures',
-          theme: this.theme,
-          interactionLocked: this.isModeTransitioning,
-          enableEnterTransition: false,
-          collapsed: true,
-          collapseProgress: options.collapseProgress ?? 0,
-          onExpandRequest: () => {
-            this.requestExpandedModeRail()
-          },
-          onChange: (mode: SubscriptionMode) => {
-            this.requestModeSwitch(mode)
-          },
-        })
-      } else {
-        ContentModeRail({
-          mode: 'videos',
-          theme: this.theme,
-          interactionLocked: this.isModeTransitioning,
-          enableEnterTransition: false,
-          collapsed: true,
-          collapseProgress: options.collapseProgress ?? 0,
-          onExpandRequest: () => {
-            this.requestExpandedModeRail()
-          },
-          onChange: (mode: SubscriptionMode) => {
-            this.requestModeSwitch(mode)
-          },
-        })
-      }
-    } else {
-      ContentModeRail({
-        mode: this.mode,
-        theme: this.theme,
-        interactionLocked: this.isModeTransitioning,
-        enableEnterTransition: false,
-        collapsed: false,
-        collapseProgress: options.collapseProgress ?? 0,
-        onExpandRequest: () => {
-          this.requestExpandedModeRail()
-        },
-        onChange: (mode: SubscriptionMode) => {
-          this.requestModeSwitch(mode)
-        },
-      })
-    }
-  }
-
   private currentHomeModeScroller(): Scroller {
     return this.homeScrollerForMode(this.mode)
   }
@@ -3031,151 +2948,6 @@ struct Index {
   private homeModeRailDismissScale(): number {
     const progress = this.homeModeRailCollapseProgress()
     return 1 - (progress * 0.12)
-  }
-
-  private homeInlineActionBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.74)' : 'rgba(255,255,255,0.84)'
-  }
-
-  private homeInlineActionBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.08)'
-  }
-
-  private homeInlineActionBackdropBlur(): number {
-    return this.theme.isDark ? 10 : 18
-  }
-
-  private homeInlineActionShadow(): ShadowOptions {
-    return {
-      radius: 10,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(15,23,42,0.12)',
-      offsetX: 0,
-      offsetY: 2,
-    }
-  }
-
-  @Builder
-  private HomeCollapsedQuickActionsLayer() {
-    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
-      Row() {
-        if (this.isRefreshing && this.refreshTotalCount > 0) {
-          Text(`${this.displayRefreshPercent}%`)
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-        } else {
-          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
-            .fontSize(18)
-            .fontColor([this.theme.textPrimary])
-        }
-      }
-      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.homeInlineActionBackgroundColor())
-      .backdropBlur(this.isRefreshing ? this.homeInlineActionBackdropBlur() + 2 : this.homeInlineActionBackdropBlur())
-      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
-      .border({ width: 0.8, color: this.homeInlineActionBorderColor() })
-      .shadow(this.homeInlineActionShadow())
-      .enabled(!this.showSearch)
-      .onClick(() => {
-        void this.refreshFeaturedEntries()
-      })
-
-      Row() {
-        SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontSize(18)
-          .fontColor([this.theme.textPrimary])
-      }
-      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.homeInlineActionBackgroundColor())
-      .backdropBlur(this.homeInlineActionBackdropBlur())
-      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
-      .border({ width: 0.8, color: this.homeInlineActionBorderColor() })
-      .shadow(this.homeInlineActionShadow())
-      .enabled(!this.showSearch)
-      .onClick(() => {
-        this.homeInlineSearchController.open()
-      })
-    }
-    .padding({
-      top: this.homeCollapsedModeRailTopPadding(),
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-    })
-    .width('100%')
-    .justifyContent(FlexAlign.End)
-    .alignItems(VerticalAlign.Top)
-    .opacity(this.showSearch ? 0 : 1)
-    .translate({ x: this.showSearch ? 10 : 0 })
-    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-    .enabled(!this.showSearch)
-    .zIndex(130)
-  }
-
-  @Builder
-  private HomeCollapsingModeRailLayer() {
-    Stack({ alignContent: Alignment.Top }) {
-      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-        Row()
-          .width('100%')
-          .height(0)
-
-        Row() {
-          this.HomeModeRail({
-            collapsed: false,
-            collapseProgress: this.homeModeRailCollapseProgress(),
-          })
-        }
-          .width('100%')
-          .justifyContent(FlexAlign.Start)
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .padding({
-      top: this.homeModeRailTopPadding(),
-      left: this.homeModeRailLeftPadding(),
-      right: PAGE_HORIZONTAL_PADDING,
-    })
-    .translate({ y: this.homeModeRailDismissTranslateY() })
-    .opacity(this.homeModeRailDismissOpacity())
-    .scale({ x: this.homeModeRailDismissScale(), y: this.homeModeRailDismissScale() })
-    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-    .enabled(!this.isHomeModeRailCollapsed())
-    .zIndex(100)
-  }
-
-  @Builder
-  private HomeCollapsedModeRailLayer() {
-    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
-      this.HomeModeRail({
-        collapsed: true,
-        collapseProgress: this.homeModeRailCollapseProgress(),
-      })
-    }
-    .width('100%')
-    .justifyContent(FlexAlign.End)
-    .alignItems(VerticalAlign.Top)
-    .padding({
-      top: this.homeCollapsedModeRailTopPadding(),
-      left: PAGE_HORIZONTAL_PADDING,
-      right: this.homeModeRailRightInset(),
-    })
-    .opacity(this.showSearch ? 0 : this.homeModeRailCollapseProgress())
-    .translate({
-      x: this.showSearch ? 10 : 0,
-      y: (1 - this.homeModeRailCollapseProgress()) * 14,
-    })
-    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-    .enabled(this.isHomeModeRailCollapsed() && !this.showSearch)
-    .zIndex(132)
   }
 
   @Builder
@@ -3424,15 +3196,37 @@ struct Index {
       .height('100%')
 
       if (this.isHomeRootTab()) {
-        this.HomeCollapsingModeRailLayer()
-      }
-
-      if (this.isHomeRootTab()) {
-        this.HomeCollapsedModeRailLayer()
-      }
-
-      if (this.isHomeRootTab()) {
-        this.HomeCollapsedQuickActionsLayer()
+        HomeRootOverlayControls({
+          theme: this.theme,
+          mode: this.mode,
+          interactionLocked: this.isModeTransitioning,
+          isRefreshing: this.isRefreshing,
+          refreshTotalCount: this.refreshTotalCount,
+          displayRefreshPercent: this.displayRefreshPercent,
+          showSearch: this.showSearch,
+          collapsedModeRailTopPadding: this.homeCollapsedModeRailTopPadding(),
+          collapseProgress: this.homeModeRailCollapseProgress(),
+          modeRailTopPadding: this.homeModeRailTopPadding(),
+          modeRailLeftPadding: this.homeModeRailLeftPadding(),
+          modeRailRightInset: this.homeModeRailRightInset(),
+          modeRailDismissTranslateY: this.homeModeRailDismissTranslateY(),
+          modeRailDismissOpacity: this.homeModeRailDismissOpacity(),
+          modeRailDismissScale: this.homeModeRailDismissScale(),
+          modeRailCollapsed: this.isHomeModeRailCollapsed(),
+          horizontalPadding: PAGE_HORIZONTAL_PADDING,
+          onRefresh: () => {
+            void this.refreshFeaturedEntries()
+          },
+          onSearchOpen: () => {
+            this.homeInlineSearchController.open()
+          },
+          onExpandRequest: () => {
+            this.requestExpandedModeRail()
+          },
+          onModeChange: (mode: SubscriptionMode) => {
+            this.requestModeSwitch(mode)
+          },
+        })
       }
 
       if (this.isHomeRootTab() && this.searchOverlayVisible) {
