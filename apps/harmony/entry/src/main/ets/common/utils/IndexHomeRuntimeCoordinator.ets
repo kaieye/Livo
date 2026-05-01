@@ -1,5 +1,13 @@
-import { EntryCardModel } from '../models/LivoModels'
-import { SubscriptionMode } from '../components/HomeRootConfig'
+import window from '@ohos.window'
+import { AppRepository } from '../data/AppRepository'
+import {
+  AUTO_REFRESH_MIN_INTERVAL_MINUTES,
+  SubscriptionMode,
+} from '../components/HomeRootConfig'
+import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../models/LivoModels'
+import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { resolveSystemBarStyle } from './SystemBarStyle'
+import { shouldRefreshThemeOnSystemColorModeChange } from './ThemeRefresh'
 
 export interface IndexHomeRuntimeOwner {
   isComponentActive: boolean
@@ -14,6 +22,8 @@ export interface IndexHomeRuntimeOwner {
   homeListSwapOpacity: number
   homeListSwapTranslateY: number
   homeListSwapScale: number
+  theme: ThemePalette
+  rootSettings: HarmonySettings
 
   logHomePerf(message: string): void
   syncRequestedRootTab(): void
@@ -22,13 +32,14 @@ export interface IndexHomeRuntimeOwner {
   invalidateHomeLoadMorePrefetch(): void
   persistHomeSnapshotNow(): void
   clearRefreshPercentAnimation(): void
-  clearAutoRefreshTimer(): void
+  refreshFeaturedEntries(showResultToast: boolean): Promise<void>
   logHomeAsyncError(stage: string, error: Error | string | Object): void
 }
 
 export class IndexHomeRuntimeCoordinator {
   private readonly owner: IndexHomeRuntimeOwner
   private managedTimeoutIds: number[] = []
+  private autoRefreshTimer: number = -1
 
   constructor(owner: IndexHomeRuntimeOwner) {
     this.owner = owner
@@ -55,7 +66,7 @@ export class IndexHomeRuntimeCoordinator {
     this.owner.invalidateHomeLoadMorePrefetch()
     this.owner.persistHomeSnapshotNow()
     this.owner.clearRefreshPercentAnimation()
-    this.owner.clearAutoRefreshTimer()
+    this.clearAutoRefreshTimer()
     this.clearManagedTimeouts()
     this.owner.homePostRefreshReloadPending = false
     this.owner.homeListSwapToken += 1
@@ -88,5 +99,61 @@ export class IndexHomeRuntimeCoordinator {
       clearTimeout(timeoutId)
     })
     this.managedTimeoutIds = []
+  }
+
+  async applySystemBarStyle(theme: ThemePalette): Promise<void> {
+    const mainWindow = AppStorage.get<window.Window>('WindowClass')
+    if (!mainWindow) {
+      return
+    }
+
+    try {
+      const systemBarStyle = resolveSystemBarStyle(theme)
+      await mainWindow.setWindowSystemBarProperties({
+        statusBarColor: systemBarStyle.statusBarColor,
+        navigationBarColor: systemBarStyle.navigationBarColor,
+        isStatusBarLightIcon: systemBarStyle.isStatusBarLightIcon,
+        statusBarContentColor: systemBarStyle.statusBarContentColor,
+      })
+    } catch (_) {
+    }
+  }
+
+  async handleSystemThemeChanged(): Promise<void> {
+    const settings = await AppRepository.settings()
+    if (!shouldRefreshThemeOnSystemColorModeChange(settings.themeMode)) {
+      return
+    }
+
+    this.owner.theme = await ThemeService.resolvePaletteForSystemChange(settings)
+    void this.applySystemBarStyle(this.owner.theme)
+  }
+
+  clearAutoRefreshTimer(): void {
+    if (this.autoRefreshTimer < 0) {
+      return
+    }
+    clearInterval(this.autoRefreshTimer)
+    this.autoRefreshTimer = -1
+  }
+
+  configureAutoRefreshTimer(): void {
+    this.clearAutoRefreshTimer()
+    if (!this.owner.rootSettings.autoRefresh) {
+      return
+    }
+    const intervalMs = this.autoRefreshIntervalMs()
+    this.autoRefreshTimer = setInterval(() => {
+      void this.owner.refreshFeaturedEntries(false)
+    }, intervalMs)
+  }
+
+  private autoRefreshIntervalMs(): number {
+    const configuredMinutes = Number(this.owner.rootSettings.refreshIntervalMinutes)
+    const normalizedMinutes = Number.isFinite(configuredMinutes) && configuredMinutes > 0
+      ? configuredMinutes
+      : DEFAULT_HARMONY_SETTINGS.refreshIntervalMinutes
+    const safeMinutes = Math.max(AUTO_REFRESH_MIN_INTERVAL_MINUTES, Math.floor(normalizedMinutes))
+    return safeMinutes * 60 * 1000
   }
 }

@@ -1,5 +1,6 @@
 import { AppRepository } from '../data/AppRepository'
 import { EntryCardModel } from '../models/LivoModels'
+import { HomeScrollIntentTracker } from './HomeScrollIntentTracker'
 import {
   HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS,
   HOME_FINAL_RELOAD_IDLE_MAX_RETRIES,
@@ -19,7 +20,7 @@ import { RefreshStateManager } from './RefreshStateManager'
 export interface IndexHomeRefreshOwner {
   isRefreshing: boolean
   isComponentActive: boolean
-  isHomeScrollInteracting: boolean
+  homeScrollIntent: HomeScrollIntentTracker
   refreshCompletedCount: number
   refreshTotalCount: number
   lastRefreshProgressUiUpdateAt: number
@@ -151,7 +152,7 @@ export class IndexHomeRefreshCoordinator {
         if (!this.owner.isComponentActive) {
           return
         }
-        if (this.owner.isHomeScrollInteracting && completedCount < totalCount) {
+        if (this.owner.homeScrollIntent.isInteracting && completedCount < totalCount) {
           return
         }
 
@@ -277,7 +278,7 @@ export class IndexHomeRefreshCoordinator {
       this.owner.isRefreshing
       || this.owner.isHomeStartupRefreshing
       || this.owner.homeLoadMoreInProgress
-      || this.owner.isHomeScrollInteracting
+      || this.owner.homeScrollIntent.isInteracting
     ) {
       return false
     }
@@ -306,7 +307,7 @@ export class IndexHomeRefreshCoordinator {
       this.owner.isRefreshing
       || this.owner.isHomeStartupRefreshing
       || this.owner.homeLoadMoreInProgress
-      || this.owner.isHomeScrollInteracting
+      || this.owner.homeScrollIntent.isInteracting
     ) {
       this.markDeferredFeedsChangedReload('busy')
       return
@@ -343,7 +344,7 @@ export class IndexHomeRefreshCoordinator {
       && !this.owner.isModeTransitioning
       && !this.owner.homeListSwapAnimating
       && !this.owner.searchOverlayVisible
-      && !this.owner.isHomeScrollInteracting
+      && !this.owner.homeScrollIntent.isInteracting
       && !this.owner.homeLoadMoreInProgress
       && !this.owner.pendingLoadMoreForMode(this.owner.mode)
       && !this.owner.hasRecentHomeScrollIntent()

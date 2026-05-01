@@ -1,5 +1,6 @@
 import { AppRepository } from '../data/AppRepository'
 import { EntryCardModel } from '../models/LivoModels'
+import { HomeScrollIntentTracker } from './HomeScrollIntentTracker'
 import {
   HOME_FULL_MODE_CANDIDATE_LIMIT,
   HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
@@ -13,7 +14,6 @@ import {
   HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR,
   HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
   HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS,
-  HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS,
   HOME_MODE_SWITCH_CANDIDATE_LIMIT,
   HomeModeCandidateLimitMap,
   HomeModeHasMoreMap,
@@ -71,7 +71,6 @@ export interface IndexHomePaginationOwner {
   homeLoadMorePrefetchEntries: EntryCardModel[]
   homeLoadMorePrefetchMode: SubscriptionMode
   homeLoadMorePrefetchInProgress: boolean
-  lastHomeUserScrollAt: number
   lastHomeLoadMoreRequestedAt: number
   homeLoadMoreInProgress: boolean
   homeLoadMoreRequestToken: number
@@ -81,7 +80,7 @@ export interface IndexHomePaginationOwner {
   isComponentActive: boolean
   isRefreshing: boolean
   isHomeStartupRefreshing: boolean
-  isHomeScrollInteracting: boolean
+  homeScrollIntent: HomeScrollIntentTracker
   featuredEntries: EntryCardModel[]
   entryGroups: HomeEntryGroups<EntryCardModel>
 
@@ -105,9 +104,6 @@ export interface IndexHomePaginationOwner {
   settleInitialHomeLoadState(force?: boolean): void
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void
-  modeScrollIntentVersion(mode: SubscriptionMode): number
-  consumedModeScrollIntentVersion(mode: SubscriptionMode): number
-  setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void
   reloadFeaturedEntriesFromLocal(
     candidateLimit?: number,
     animated?: boolean,
@@ -404,7 +400,7 @@ export class IndexHomePaginationCoordinator {
   }
 
   hasRecentHomeScrollIntent(): boolean {
-    return Date.now() - this.owner.lastHomeUserScrollAt <= HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS
+    return this.owner.homeScrollIntent.hasRecentIntent()
   }
 
   invalidateHomeLoadMorePrefetch(): void {
@@ -689,13 +685,13 @@ export class IndexHomePaginationCoordinator {
     if (!shouldPreloadHomeVisibleEntries(mode, currentOffset, totalCount, visibleCount)) {
       return
     }
-    if (this.owner.isHomeScrollInteracting && !this.hasRecentHomeScrollIntent()) {
+    if (this.owner.homeScrollIntent.isInteracting && !this.hasRecentHomeScrollIntent()) {
       return
     }
-    const scrollIntentVersion = this.owner.modeScrollIntentVersion(mode)
+    const scrollIntentVersion = this.owner.homeScrollIntent.intentVersion(mode)
     if (
-      this.owner.isHomeScrollInteracting
-      && scrollIntentVersion <= this.owner.consumedModeScrollIntentVersion(mode)
+      this.owner.homeScrollIntent.isInteracting
+      && scrollIntentVersion <= this.owner.homeScrollIntent.consumedVersion(mode)
     ) {
       return
     }
@@ -706,7 +702,7 @@ export class IndexHomePaginationCoordinator {
     }
 
     this.setModeScrollProgressLoadMoreValue(mode, currentOffset)
-    this.owner.setConsumedModeScrollIntentVersion(mode, scrollIntentVersion)
+    this.owner.homeScrollIntent.setConsumedVersion(mode, scrollIntentVersion)
     this.enqueueLoadMoreForMode(mode, 'scroll-progress')
   }
 
@@ -735,7 +731,7 @@ export class IndexHomePaginationCoordinator {
     const alreadyPending = this.pendingLoadMoreForMode(mode)
     if (!alreadyPending) {
       this.setPendingLoadMoreForMode(mode, true)
-      this.owner.logHomePerf(`loadMore enqueue mode=${mode} source=${source} interacting=${this.owner.isHomeScrollInteracting}`)
+      this.owner.logHomePerf(`loadMore enqueue mode=${mode} source=${source} interacting=${this.owner.homeScrollIntent.isInteracting}`)
     }
 
     if (source === 'item-appear') {
@@ -756,7 +752,7 @@ export class IndexHomePaginationCoordinator {
       }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
       return
     }
-    if (!this.owner.isHomeScrollInteracting) {
+    if (!this.owner.homeScrollIntent.isInteracting) {
       this.flushPendingLoadMoreForMode(mode)
       return
     }
@@ -770,7 +766,7 @@ export class IndexHomePaginationCoordinator {
       return
     }
     // 拖拽中不扩展列表，减少滚动卡顿。
-    if (this.owner.isHomeScrollInteracting) {
+    if (this.owner.homeScrollIntent.isInteracting) {
       return
     }
     this.owner.runManagedTimeout(() => {
