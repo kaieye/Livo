@@ -1,44 +1,53 @@
-import http from '@ohos.net.http'
 import { AppRepository } from '../data/AppRepository'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
-import { Entry, Feed, FeedViewType, formatPublishedAt } from '../models/LivoModels'
+import { Entry, Feed, FeedViewType } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { livoMotion } from '../ui/Motion'
 import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { AppPreferenceService } from '../services/AppPreferenceService'
 import { isDiscoverAvatarCacheableImageUrl } from '../utils/DiscoverAvatarPresentation'
-import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
+import { FeedDetailVideoPreviewService } from '../services/FeedDetailVideoPreviewService'
 import {
-  extractPictureCarouselMediaUrls,
   extractEntryGalleryImageUrls,
   shouldUseCachedPicturePreview,
 } from '../utils/PictureGallery'
 import { canonicalInstagramFeedUrl, extractInstagramUsername } from '../utils/SocialFeedTitles'
 import {
-  resolveSocialFeedDisplayDescription,
-  resolveSocialFeedDisplayImageUrl,
   resolvePreferredStoredFeedImageUrl,
-  resolveSocialFeedDisplayTitle,
 } from '../utils/SocialFeedPresentation'
+import {
+  FeedDetailDisplayFeedState,
+  feedDetailHostOf,
+  feedDetailMatchesTarget,
+  latestFeedDetailEntryPublishedAt,
+  normalizeFeedDetailPreviewPayload,
+  resolveFeedDetailDisplayState,
+  resolveFeedDetailPreferredDisplayImageUrl,
+  resolvePreferredFeedDetailPreviewEntries,
+  shouldReseedFeedDetailFromCachedPreview,
+} from '../utils/FeedDetailPreviewPolicy'
+import {
+  FeedDetailVideoPreviewCacheItem,
+  resolveFeedDetailEntryVideoUrl,
+  resolveFeedDetailVideoSourceLabel,
+  resolveStaticFeedDetailVideoPreviewUrl,
+} from '../utils/FeedDetailVideoPreview'
 import { presentTweetEntryFromEntry, TweetEntryPresentation } from '../utils/TweetEntryPresentation'
 import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { TweetEntryCard } from './TweetEntryCard'
-
-interface VideoPreviewCacheItem {
-  videoUrl: string
-  previewUrl: string
-}
-
-interface DisplayFeedState {
-  title: string
-  imageUrl: string
-  description: string
-}
+import {
+  FeedDetailDescriptionCard,
+  FeedDetailHeroCard,
+  FeedDetailNoticeCard,
+  FeedDetailPicturePreviewEmptyStateCard,
+  FeedDetailPicturePreviewEntryCard,
+  FeedDetailPreviewEntryCard,
+  FeedDetailPreviewSectionHeader,
+} from './FeedDetailPreviewCards'
 
 const X_PREVIEW_COLLAPSED_TEXT_LINES: number = 8
 
@@ -72,7 +81,7 @@ export struct FeedDetailView {
   @State private isRefreshing: boolean = false
   @State private isRefreshBusy: boolean = false
   @State private existingFeed: Feed | undefined = undefined
-  @State private videoPreviewCache: VideoPreviewCacheItem[] = []
+  @State private videoPreviewCache: FeedDetailVideoPreviewCacheItem[] = []
   @State private heroAvatarCandidates: string[] = []
   @State private heroAvatarIndex: number = 0
   private readonly previewEntryDataSource: ArrayLazyDataSource<Entry> = new ArrayLazyDataSource<Entry>(
@@ -525,44 +534,16 @@ export struct FeedDetailView {
     description: string,
     feedUrl: string,
     siteUrl: string,
-  ): DisplayFeedState {
-    const displayTitle = this.formatFeedDisplayTitle(title, feedUrl, siteUrl)
-    return {
-      title: displayTitle,
-      imageUrl: resolveSocialFeedDisplayImageUrl(imageUrl, feedUrl, siteUrl, displayTitle),
-      description: resolveSocialFeedDisplayDescription(description, feedUrl, siteUrl),
-    }
-  }
-
-  private formatFeedDisplayTitle(title: string, feedUrl: string, siteUrl: string): string {
-    return resolveSocialFeedDisplayTitle(title, feedUrl, siteUrl)
+  ): FeedDetailDisplayFeedState {
+    return resolveFeedDetailDisplayState(title, imageUrl, description, feedUrl, siteUrl)
   }
 
   private normalizedPreviewPayload(payload: FeedRefreshPayload, fallbackUrl: string): FeedRefreshPayload {
-    const displayFeed = this.displayFeedState(
-      payload.feedTitle,
-      payload.imageUrl || '',
-      payload.description || '',
-      payload.resolvedFeedUrl || fallbackUrl,
-      payload.siteUrl || '',
-    )
-
-    return {
-      etag: payload.etag,
-      lastModified: payload.lastModified,
-      feedTitle: displayFeed.title,
-      siteUrl: payload.siteUrl || '',
-      imageUrl: displayFeed.imageUrl,
-      description: displayFeed.description,
-      resolvedFeedUrl: payload.resolvedFeedUrl,
-      entries: payload.entries,
-    }
+    return normalizeFeedDetailPreviewPayload(payload, fallbackUrl)
   }
 
   private preferredDisplayImageUrl(primaryImageUrl: string, fallbackImageUrl: string): string {
-    const incoming = (primaryImageUrl || '').trim()
-    const existing = (fallbackImageUrl || '').trim()
-    return resolvePreferredStoredFeedImageUrl(existing, incoming)
+    return resolveFeedDetailPreferredDisplayImageUrl(primaryImageUrl, fallbackImageUrl)
   }
 
   private async hydrateSubscribedAvatar(feed: Feed, currentImageUrl: string): Promise<void> {
@@ -655,66 +636,15 @@ export struct FeedDetailView {
   }
 
   private latestPublishedAt(entries: Entry[]): number {
-    let latest = 0
-    entries.forEach((entry: Entry) => {
-      latest = Math.max(latest, entry.publishedAt || 0)
-    })
-    return latest
-  }
-
-  private oldestPublishedAt(entries: Entry[]): number {
-    let oldest = 0
-    entries.forEach((entry: Entry) => {
-      const publishedAt = entry.publishedAt || 0
-      if (publishedAt <= 0) {
-        return
-      }
-      if (oldest <= 0 || publishedAt < oldest) {
-        oldest = publishedAt
-      }
-    })
-    return oldest
+    return latestFeedDetailEntryPublishedAt(entries)
   }
 
   private preferredPreviewEntries(localEntries: Entry[], cachedEntries: Entry[]): Entry[] {
-    if (localEntries.length === 0) {
-      return cachedEntries
-    }
-    if (cachedEntries.length === 0) {
-      return localEntries
-    }
-
-    const localLatest = this.latestPublishedAt(localEntries)
-    const cachedLatest = this.latestPublishedAt(cachedEntries)
-    if (cachedLatest > localLatest) {
-      return cachedEntries
-    }
-
-    return localEntries
+    return resolvePreferredFeedDetailPreviewEntries(localEntries, cachedEntries)
   }
 
   private shouldReseedFromCachedPreview(localEntries: Entry[], cachedPayload: FeedRefreshPayload | undefined): boolean {
-    if (!cachedPayload || (cachedPayload.entries?.length ?? 0) === 0) {
-      return false
-    }
-
-    const cachedEntries = cachedPayload.entries
-    if (localEntries.length === 0) {
-      return true
-    }
-
-    const localLatest = this.latestPublishedAt(localEntries)
-    const cachedLatest = this.latestPublishedAt(cachedEntries)
-    if (cachedLatest > localLatest) {
-      return true
-    }
-
-    const localOldest = this.oldestPublishedAt(localEntries)
-    const cachedOldest = this.oldestPublishedAt(cachedEntries)
-    const cachedHasEarlierHistory = cachedOldest > 0 && (localOldest <= 0 || cachedOldest < localOldest)
-    const cachedHasMoreEntries = cachedEntries.length > localEntries.length
-    const cachedIsNotStalerThanLocal = cachedLatest >= localLatest
-    return cachedHasEarlierHistory && cachedHasMoreEntries && cachedIsNotStalerThanLocal
+    return shouldReseedFeedDetailFromCachedPreview(localEntries, cachedPayload)
   }
 
   private async reseedSubscribedFeedFromCachedPreview(feedId: string, payload: FeedRefreshPayload): Promise<Entry[]> {
@@ -727,21 +657,12 @@ export struct FeedDetailView {
     bumpFeedsChangedSignal()
   }
 
-  private normalizeUrl(value: string): string {
-    return value.trim().replace(/\/+$/, '').toLowerCase()
-  }
-
   private resolvedPreviewTargetUrl(): string {
     return canonicalInstagramFeedUrl(this.targetUrl, this.targetSiteUrl) || this.targetUrl
   }
 
   private feedMatchesTarget(feed: Feed, targetUrl: string, siteUrl: string): boolean {
-    const normalizedTarget = this.normalizeUrl(targetUrl)
-    const normalizedSite = this.normalizeUrl(siteUrl)
-    return this.normalizeUrl(feed.url) === normalizedTarget
-      || (!!feed.siteUrl && this.normalizeUrl(feed.siteUrl) === normalizedTarget)
-      || (!!siteUrl && this.normalizeUrl(feed.url) === normalizedSite)
-      || (!!feed.siteUrl && !!siteUrl && this.normalizeUrl(feed.siteUrl) === normalizedSite)
+    return feedDetailMatchesTarget(feed, targetUrl, siteUrl)
   }
 
   private async findExistingFeed(targetUrl: string, siteUrl: string): Promise<Feed | undefined> {
@@ -750,8 +671,7 @@ export struct FeedDetailView {
   }
 
   private hostOf(value: string): string {
-    const matched = value.match(/^https?:\/\/([^/]+)/i)
-    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
+    return feedDetailHostOf(value)
   }
 
   private dedupeUrls(urls: string[]): string[] {
@@ -846,102 +766,21 @@ export struct FeedDetailView {
     return title ? title.substring(0, 1).toUpperCase() : '?'
   }
 
-  private extractYouTubeVideoId(value: string): string {
-    const matched = (value || '').match(
-      /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i,
-    )
-    return matched?.[1] ?? ''
-  }
-
-  private extractBilibiliVideoToken(value: string): string {
-    const bvid = (value || '').match(/(?:\/video\/|[?&]bvid=)(BV[a-zA-Z0-9]+)/i)?.[1]
-    if (bvid) {
-      return `BV:${bvid}`
-    }
-
-    const aid = (value || '').match(/(?:\/video\/av|[?&]aid=)(\d+)/i)?.[1]
-    if (aid) {
-      return `AV:${aid}`
-    }
-
-    return ''
-  }
-
-  private normalizeVideoUrl(value: string): string {
-    const trimmed = (value || '').trim()
-    if (!trimmed) {
-      return ''
-    }
-
-    if (isDirectVideoUrl(trimmed)) {
-      return trimmed
-    }
-
-    const youTubeId = this.extractYouTubeVideoId(trimmed)
-    if (youTubeId) {
-      return `https://www.youtube.com/watch?v=${youTubeId}`
-    }
-
-    const bilibiliToken = this.extractBilibiliVideoToken(trimmed)
-    if (bilibiliToken.startsWith('BV:')) {
-      return `https://www.bilibili.com/video/${bilibiliToken.substring(3)}`
-    }
-    if (bilibiliToken.startsWith('AV:')) {
-      return `https://www.bilibili.com/video/av${bilibiliToken.substring(3)}`
-    }
-
-    return ''
-  }
-
   private entryVideoUrl(entry: Entry): string {
-    const directMediaUrl = (entry.mediaUrls ?? []).find((url: string) => isDirectVideoUrl(url))
-    if (directMediaUrl) {
-      return directMediaUrl
-    }
-
-    const candidates: string[] = [entry.url, entry.content, entry.summary]
-    for (const candidate of candidates) {
-      const normalized = this.normalizeVideoUrl(candidate || '')
-      if (normalized) {
-        return normalized
-      }
-    }
-
-    const rawContent = `${entry.content || ''}\n${entry.summary || ''}`
-    const matched = rawContent.match(
-      /https?:\/\/[^\s"'<>]+|(?:www\.)?(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/)[^\s"'<>]+/i,
-    )?.[0] ?? ''
-    if (!matched) {
-      return ''
-    }
-    return this.normalizeVideoUrl(matched.startsWith('http') ? matched : `https://${matched}`)
+    return resolveFeedDetailEntryVideoUrl(entry)
   }
 
   private entryVideoPreviewUrl(entry: Entry): string {
     const videoUrl = this.entryVideoUrl(entry)
-    const cached = this.videoPreviewCache.find((item: VideoPreviewCacheItem) => item.videoUrl === videoUrl)
+    const cached = this.videoPreviewCache.find((item: FeedDetailVideoPreviewCacheItem) => item.videoUrl === videoUrl)
     if (cached?.previewUrl) {
       return cached.previewUrl
     }
-    const youTubeId = this.extractYouTubeVideoId(videoUrl)
-    if (youTubeId) {
-      return `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg`
-    }
-    return ''
+    return resolveStaticFeedDetailVideoPreviewUrl(videoUrl)
   }
 
   private entryVideoSourceLabel(entry: Entry): string {
-    const lower = this.entryVideoUrl(entry).toLowerCase()
-    if (isDirectVideoUrl(lower)) {
-      return '直链'
-    }
-    if (lower.includes('youtube.com')) {
-      return 'YouTube'
-    }
-    if (lower.includes('bilibili.com')) {
-      return 'Bilibili'
-    }
-    return ''
+    return resolveFeedDetailVideoSourceLabel(this.entryVideoUrl(entry))
   }
 
   private async hydrateVideoPreviews(entries: Entry[]): Promise<void> {
@@ -956,9 +795,9 @@ export struct FeedDetailView {
         continue
       }
 
-      const existingIndex = this.videoPreviewCache.findIndex((item: VideoPreviewCacheItem) => item.videoUrl === videoUrl)
+      const existingIndex = this.videoPreviewCache.findIndex((item: FeedDetailVideoPreviewCacheItem) => item.videoUrl === videoUrl)
       const nextCache = [...this.videoPreviewCache]
-      const item: VideoPreviewCacheItem = { videoUrl, previewUrl }
+      const item: FeedDetailVideoPreviewCacheItem = { videoUrl, previewUrl }
       if (existingIndex >= 0) {
         nextCache[existingIndex] = item
       } else {
@@ -969,52 +808,11 @@ export struct FeedDetailView {
   }
 
   private async fetchBilibiliVideoPreviewUrl(videoUrl: string): Promise<string> {
-    if (!videoUrl.toLowerCase().includes('bilibili.com')) {
-      return ''
-    }
-
-    const bvid = videoUrl.match(/\/video\/(BV[a-zA-Z0-9]+)/i)?.[1] ?? ''
-    if (!bvid) {
-      return ''
-    }
-
-    const request = http.createHttp()
-    try {
-      const response = await request.request(
-        `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`,
-        {
-          method: http.RequestMethod.GET,
-          connectTimeout: 5000,
-          readTimeout: 5000,
-          header: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Referer': `https://www.bilibili.com/video/${bvid}`,
-            'Origin': 'https://www.bilibili.com',
-          },
-        },
-      )
-
-      if (response.responseCode !== 200) {
-        return ''
-      }
-
-      const payload = JSON.parse(String(response.result)) as Record<string, Object | string | number>
-      const data = payload['data'] as Record<string, string> | undefined
-      return typeof data?.['pic'] === 'string' ? data['pic'] : ''
-    } catch (_) {
-      return ''
-    } finally {
-      request.destroy()
-    }
+    return FeedDetailVideoPreviewService.fetchBilibiliPreviewUrl(videoUrl)
   }
 
   private heroDescription(): string {
     return this.previewPayload?.description || this.targetDescription || this.previewPayload?.siteUrl || this.targetSiteUrl
-  }
-
-  private previewEntries(): Entry[] {
-    return this.resolvedPreviewEntries
   }
 
   private previewEntryCount(): number {
@@ -1028,44 +826,6 @@ export struct FeedDetailView {
     }
 
     return `${entry.feedId}|${entry.publishedAt}|${entry.url}`
-  }
-
-  private normalizePreviewText(value: string): string {
-    return (value || '')
-      .trim()
-      .normalize('NFKC')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-  }
-
-  private dedupePicturePreviewEntries(entries: Entry[]): Entry[] {
-    const deduped = new Map<string, Entry>()
-
-    entries.forEach((entry: Entry) => {
-      const galleryUrls = this.entryGalleryUrls(entry)
-      const leadImageUrl = galleryUrls[0] || this.entryPictureUrl(entry)
-      const normalizedTitle = this.normalizePreviewText(entry.title || this.galleryCaption(entry))
-      const normalizedAuthor = this.normalizePreviewText(entry.author)
-      const publishedBucket = Math.floor((entry.publishedAt || 0) / (60 * 1000))
-      const key = `${normalizedAuthor}|${publishedBucket}|${normalizedTitle}|${leadImageUrl}`
-      const existing = deduped.get(key)
-
-      if (!existing) {
-        deduped.set(key, entry)
-        return
-      }
-
-      const existingGalleryCount = this.entryGalleryUrls(existing).length
-      const incomingGalleryCount = galleryUrls.length
-      const keepIncoming = incomingGalleryCount > existingGalleryCount
-        || (incomingGalleryCount === existingGalleryCount && (entry.publishedAt || 0) >= (existing.publishedAt || 0))
-
-      if (keepIncoming) {
-        deduped.set(key, entry)
-      }
-    })
-
-    return Array.from(deduped.values()).sort((left: Entry, right: Entry) => (right.publishedAt || 0) - (left.publishedAt || 0))
   }
 
   private isPicturesPreview(): boolean {
@@ -1131,10 +891,6 @@ export struct FeedDetailView {
     })
   }
 
-  private hasEntryPicture(entry: Entry): boolean {
-    return this.entryGalleryUrls(entry).length > 0 || !!this.entryPictureUrl(entry)
-  }
-
   private galleryCaption(entry: Entry): string {
     const title = (entry.title || '').trim()
     if (title && title !== '远程条目') {
@@ -1157,94 +913,18 @@ export struct FeedDetailView {
 
   @Builder
   private PicturePreviewEntryCard(entry: Entry, index: number) {
-    Column({ space: 10 }) {
-      if (this.picturePreviewLeadUrl(entry)) {
-        Image(this.picturePreviewLeadUrl(entry))
-          .width('100%')
-          .height(220)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(16)
-          .backgroundColor(this.theme.elevated)
-      }
-
-      Row({ space: 8 }) {
-        Text(entry.author || this.heroTitle() || '未知作者')
-          .fontSize(11)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.accent)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        Text('·')
-          .fontSize(11)
-          .fontColor(this.theme.textMuted)
-
-        Text(formatPublishedAt(entry.publishedAt))
-          .fontSize(11)
-          .fontColor(this.theme.textMuted)
-      }
-      .width('100%')
-
-      Text(this.galleryCaption(entry) || entry.title)
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-        .lineHeight(22)
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      if (entry.summary) {
-        Text(entry.summary)
-          .fontSize(13)
-          .lineHeight(20)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-    }
-    .width('100%')
-    .padding(14)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-    .border({ width: 0.8, color: this.theme.divider })
-    .shadow({
-      radius: this.theme.isDark ? 10 : 14,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
-      offsetX: 0,
-      offsetY: 4,
+    FeedDetailPicturePreviewEntryCard({
+      entry,
+      index,
+      leadImageUrl: this.picturePreviewLeadUrl(entry),
+      authorLabel: this.heroTitle(),
+      caption: this.galleryCaption(entry),
+      enableTransition: this.shouldEnablePreviewItemTransition(),
+      theme: this.theme,
+      onOpen: () => {
+        this.onOpenArticle(entry, this.articleDetailFeed(entry))
+      },
     })
-    .alignItems(HorizontalAlign.Start)
-    .transition(this.shouldEnablePreviewItemTransition() ? livoMotion.enterSoft(index * 18 + 40) : TransitionEffect.IDENTITY)
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
-    .onClick(() => {
-      this.onOpenArticle(entry, this.articleDetailFeed(entry))
-    })
-  }
-
-  private pictureCardEntry(entry: Entry): Entry {
-    return {
-      id: entry.id,
-      feedId: entry.feedId,
-      title: entry.title,
-      url: entry.url,
-      summary: entry.summary,
-      content: entry.content,
-      author: entry.author,
-      publishedAt: entry.publishedAt,
-      readingTimeMinutes: entry.readingTimeMinutes,
-      tags: entry.tags,
-      mediaUrls: extractPictureCarouselMediaUrls({
-        summary: entry.summary,
-        content: entry.content,
-        articleUrl: entry.url,
-        siteUrl: this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl,
-        mediaUrls: entry.mediaUrls ?? [],
-      }),
-      isRead: entry.isRead,
-      isStarred: entry.isStarred,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-    }
   }
 
   private articleDetailFeed(entry: Entry): Feed {
@@ -1304,42 +984,6 @@ export struct FeedDetailView {
     return this.resolvedFeedDisplayTitle()
   }
 
-  private heroHostLabel(): string {
-    const siteOrTarget = this.previewPayload?.siteUrl || this.targetSiteUrl || this.targetUrl
-    return this.hostOf(siteOrTarget) || siteOrTarget
-  }
-
-  @Builder
-  private FeedAvatar(size: number = 32, radius: number = 10, fontSize: number = 14) {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.resolvedAvatarUrl()) {
-        Image(this.resolvedAvatarUrl())
-          .width(size)
-          .height(size)
-          .borderRadius(radius)
-          .backgroundColor(this.theme.elevated)
-          .objectFit(ImageFit.Cover)
-          .onComplete(() => {
-            this.rememberCurrentPreviewAvatar(this.resolvedAvatarUrl())
-          })
-          .onError(() => {
-            this.advanceHeroAvatar()
-          })
-      } else {
-        Row()
-          .width(size)
-          .height(size)
-          .borderRadius(radius)
-          .backgroundColor(this.theme.accent)
-
-        Text(this.avatarFallback())
-          .fontSize(fontSize)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FFFFFF')
-      }
-    }
-  }
-
   @Builder
   private HeaderSection() {
     SecondaryPageHeaderShell() {
@@ -1364,192 +1008,68 @@ export struct FeedDetailView {
 
   @Builder
   private HeroCard() {
-    Column({ space: 14 }) {
-      this.FeedAvatar(88, 26, 28)
-
-      Column({ space: 6 }) {
-        Text(this.heroTitle())
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-          .maxLines(2)
-          .textAlign(TextAlign.Center)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Center)
-    }
-    .width('100%')
-    .padding({ left: 20, right: 20, top: 24, bottom: 24 })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(28)
-    .alignItems(HorizontalAlign.Center)
+    FeedDetailHeroCard({
+      title: this.heroTitle(),
+      avatarUrl: this.resolvedAvatarUrl(),
+      fallbackLabel: this.avatarFallback(),
+      theme: this.theme,
+      onAvatarLoaded: (imageUrl: string) => {
+        this.rememberCurrentPreviewAvatar(imageUrl)
+      },
+      onAvatarError: () => {
+        this.advanceHeroAvatar()
+      },
+    })
   }
 
   @Builder
   private DescriptionCard() {
     if (this.heroDescription()) {
-      Column({ space: 8 }) {
-        Text('简介')
-          .fontSize(14)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textPrimary)
-
-        Text(this.heroDescription())
-          .fontSize(14)
-          .lineHeight(22)
-          .fontColor(this.theme.textSecondary)
-      }
-      .width('100%')
-      .padding(16)
-      .backgroundColor(this.theme.surface)
-      .borderRadius(20)
-      .alignItems(HorizontalAlign.Start)
+      FeedDetailDescriptionCard({
+        description: this.heroDescription(),
+        theme: this.theme,
+      })
     }
   }
 
   @Builder
   private NoticeCard() {
     if (this.previewNotice) {
-      Row({ space: 10 }) {
-        Text('预览说明')
-          .fontSize(12)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.accent)
-
-        Text(this.previewNotice)
-          .layoutWeight(1)
-          .fontSize(12)
-          .lineHeight(18)
-          .fontColor(this.theme.textSecondary)
-      }
-      .width('100%')
-      .padding(14)
-      .backgroundColor(this.theme.surface)
-      .borderRadius(18)
-      .border({ width: 0.8, color: this.theme.divider })
+      FeedDetailNoticeCard({
+        notice: this.previewNotice,
+        theme: this.theme,
+      })
     }
   }
 
   @Builder
   private EntryCard(entry: Entry, index: number) {
-    Column({ space: 8 }) {
-      if (this.entryVideoPreviewUrl(entry)) {
-        Stack({ alignContent: Alignment.TopStart }) {
-          Image(this.entryVideoPreviewUrl(entry))
-            .width('100%')
-            .height(172)
-            .objectFit(ImageFit.Cover)
-            .borderRadius(16)
-
-          Text(this.entryVideoSourceLabel(entry) || '视频')
-            .fontSize(11)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF')
-            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-            .backgroundColor('rgba(17,24,39,0.72)')
-            .borderRadius(999)
-            .margin({ left: 12, top: 12 })
-        }
-        .width('100%')
-        .clip(true)
-      }
-
-      Row({ space: 8 }) {
-        Text(entry.author || '未知作者')
-          .fontSize(11)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.accent)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        Text('·')
-          .fontSize(11)
-          .fontColor(this.theme.textMuted)
-
-        Text(formatPublishedAt(entry.publishedAt))
-          .fontSize(11)
-          .fontColor(this.theme.textMuted)
-      }
-      .width('100%')
-
-      Text(entry.title)
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-        .lineHeight(22)
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      if (entry.summary) {
-        Text(entry.summary)
-          .fontSize(13)
-          .lineHeight(20)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-
-      if (this.entryVideoSourceLabel(entry)) {
-        Text(`${this.entryVideoSourceLabel(entry)} 视频源`)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.accent)
-      }
-    }
-    .width('100%')
-    .padding(14)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-    .border({ width: 0.8, color: this.theme.divider })
-    .shadow({
-      radius: this.theme.isDark ? 10 : 14,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
-      offsetX: 0,
-      offsetY: 4,
-    })
-    .alignItems(HorizontalAlign.Start)
-    .transition(this.shouldEnablePreviewItemTransition() ? livoMotion.enterSoft(index * 18 + 40) : TransitionEffect.IDENTITY)
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
-    .onClick(() => {
-      this.onOpenArticle(entry, this.articleDetailFeed(entry))
+    FeedDetailPreviewEntryCard({
+      entry,
+      index,
+      videoPreviewUrl: this.entryVideoPreviewUrl(entry),
+      videoSourceLabel: this.entryVideoSourceLabel(entry),
+      enableTransition: this.shouldEnablePreviewItemTransition(),
+      theme: this.theme,
+      onOpen: () => {
+        this.onOpenArticle(entry, this.articleDetailFeed(entry))
+      },
     })
   }
 
   @Builder
   private PreviewSectionHeader() {
-    Row() {
-      Text('内容预览')
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-
-      Blank()
-
-      Text(`${this.previewEntryCount()} 条`)
-        .fontSize(12)
-        .fontColor(this.theme.textMuted)
-    }
-    .width('100%')
+    FeedDetailPreviewSectionHeader({
+      entryCount: this.previewEntryCount(),
+      theme: this.theme,
+    })
   }
 
   @Builder
   private PicturePreviewEmptyStateCard() {
-    Column({ space: 8 }) {
-      Text('图片流预览暂不可用')
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textPrimary)
-
-      Text('这个订阅源已识别为图片类来源。当前先展示订阅源信息，订阅后会在“图片”栏目按图片卡片方式展示。')
-        .fontSize(13)
-        .lineHeight(20)
-        .fontColor(this.theme.textSecondary)
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
+    FeedDetailPicturePreviewEmptyStateCard({
+      theme: this.theme,
+    })
   }
 
   @Builder

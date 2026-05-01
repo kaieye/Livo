@@ -1,5 +1,5 @@
 import { goBack } from '../common/navigation/AppRouter'
-import { GeneralSettingsPanel } from '../common/components/SettingsSecondaryPanels'
+import { GeneralSettingsPanel } from '../common/components/GeneralSettingsPanel'
 
 @Entry
 @Component

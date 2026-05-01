@@ -1,4 +1,4 @@
-import { RefreshLogSettingsPanel } from '../common/components/SettingsSecondaryPanels'
+import { RefreshLogSettingsPanel } from '../common/components/RefreshLogSettingsPanel'
 
 @Entry
 @Component

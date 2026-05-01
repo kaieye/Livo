@@ -9,16 +9,28 @@ import { ExternalUrlService } from '../common/services/ExternalUrlService'
 import { MovingPhotoService } from '../common/services/MovingPhotoService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
 import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
-import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../common/utils/PictureGallery'
+import { PictureCarouselMediaItem } from '../common/utils/PictureGallery'
 import { resolveArticleSourceUrl } from '../common/utils/ArticleSourceUrl'
 import { resolveYouTubePlaybackDisplay } from '../common/utils/YouTubePlaybackDisplay'
 import { resolveVideoPlaybackTarget } from '../common/utils/VideoPlaybackTarget'
+import {
+  articleImageBlockServesAsVideoCover,
+  resolveArticleVideoPreviewImage,
+  resolvePictureDetailMediaItems,
+  resolvePictureDetailTextBlocks,
+  shouldRenderArticleParagraphBlock,
+  shouldRenderArticleSummary,
+} from '../common/utils/ArticleDetailContent'
 import {
   shouldOpenYouTubeExternallyOnFallback,
   shouldUseYouTubeWebFallback,
 } from '../common/utils/YouTubePlaybackMode'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
+import { ArticleSocialDetail } from '../common/components/ArticleSocialDetail'
+import { ArticlePictureDetailMedia } from '../common/components/ArticlePictureDetailMedia'
+import { ArticleDetailHeaderActions } from '../common/components/ArticleDetailHeaderActions'
+import { ArticleAIAssistResultPanel } from '../common/components/ArticleAIAssistResultPanel'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
@@ -27,10 +39,8 @@ import {
   isLegacyPlainArticleContent,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
-import { HEADER_BACK_SLOT_SIZE, PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
-import { presentTweetEntryFromCard, TweetEntryPresentation, TweetQuotedPresentation } from '../common/utils/TweetEntryPresentation'
-import { AvatarTile } from '../common/components/AvatarTile'
-import { HighlightedInlineText } from '../common/components/HighlightedInlineText'
+import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
+import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
 
 @Entry
 @Component
@@ -57,22 +67,11 @@ struct ArticleDetail {
   @State inlineVideoPreparingBlockId: string = ''
   @State mediaAspectRatios: number[] = []
   @State activeMovingPhoto: photoAccessHelper.MovingPhoto | undefined = undefined
-  @State private activePictureMediaIndex: number = 0
-  @State private playingDetailLivePhotoIndex: number = -1
-  @State private pausedDetailLivePhotoIndex: number = -1
-  @State private preparedDetailLivePhotoIndices: number[] = []
-  @State private detailLivePhotoInstanceSeeds: number[] = []
-  @State private detailLivePhotoAspectRatios: number[] = []
-  @State private isPictureMediaFullyVisible: boolean = false
-  @State private isPictureMediaNearlyVisible: boolean = false
-  @State private detailLivePhotoVisibilityRatios: number[] = []
-  @State private detailLivePhotoMuted: boolean = true
   @State private activeSocialInlineVideoKey: string = ''
   private upgradedEntryIds: Set<string> = new Set<string>()
   private videoWebController: webview.WebviewController = new webview.WebviewController()
   private nativeVideoController: VideoController = new VideoController()
   private readonly movingPhotoController: MovingPhotoViewController = new MovingPhotoViewController()
-  private readonly detailLivePhotoControllers: VideoController[] = []
   private readonly socialInlineVideoControllers: Map<string, VideoController> = new Map()
   private readonly webVideoUserAgent: string =
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
@@ -483,19 +482,6 @@ struct ArticleDetail {
     return videoUrl
   }
 
-  private cleanText(value: string): string {
-    return (value || '')
-      .replace(/https?:\/\/[^\s]+/gi, ' ')
-      .replace(/\b(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?/gi, ' ')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/[#@]/g, ' ')
-      .replace(/[._-]+/g, ' ')
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase()
-  }
-
   private isYouTubeVideo(videoUrl: string): boolean {
     return this.extractYouTubeVideoId(videoUrl).length > 0
   }
@@ -518,83 +504,6 @@ struct ArticleDetail {
     return presentTweetEntryFromCard(this.entry ?? {})
   }
 
-  private tweetUsernameLabel(): string {
-    return (this.tweetPresentation().username || '').trim()
-  }
-
-  private tweetMediaItems(): PictureCarouselMediaItem[] {
-    const urls = (this.tweetPresentation().mediaUrls || [])
-      .map((url: string) => url.trim())
-      .filter((url: string) => !!url)
-    const fallbackImage = urls.find((url: string) => !isDirectVideoUrl(url)) || ''
-    return resolvePictureCarouselMediaItems(urls, fallbackImage).slice(0, 4)
-  }
-
-  private hasQuotedTweet(): boolean {
-    return (
-      (this.tweetPresentation().kind === 'quote' || this.tweetPresentation().kind === 'retweet')
-      && !!this.tweetPresentation().quotedTweet
-    )
-  }
-
-  private quotedTweetPresentation(): TweetQuotedPresentation {
-    return this.tweetPresentation().quotedTweet || {
-      displayName: '',
-      username: '',
-      avatarUrl: '',
-      text: '',
-      mediaUrls: [],
-    }
-  }
-
-  private quotedTweetMediaItems(): PictureCarouselMediaItem[] {
-    const urls = (this.quotedTweetPresentation().mediaUrls || [])
-      .map((url: string) => url.trim())
-      .filter((url: string) => !!url)
-    const fallbackImage = urls.find((url: string) => !isDirectVideoUrl(url)) || ''
-    return resolvePictureCarouselMediaItems(urls, fallbackImage).slice(0, 4)
-  }
-
-  private quotedTweetHeaderLabel(): string {
-    const baseLabel = (this.quotedTweetPresentation().displayName || '').trim()
-      || (this.quotedTweetPresentation().username || '').trim()
-      || '未知来源'
-    return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
-  }
-
-  private hasNestedQuotedTweet(): boolean {
-    return this.hasQuotedTweet() && !!this.quotedTweetPresentation().nestedQuotedTweet
-  }
-
-  private nestedQuotedTweetPresentation(): TweetQuotedPresentation {
-    return this.quotedTweetPresentation().nestedQuotedTweet || {
-      displayName: '',
-      username: '',
-      avatarUrl: '',
-      text: '',
-      mediaUrls: [],
-    }
-  }
-
-  private nestedQuotedTweetMediaItems(): PictureCarouselMediaItem[] {
-    const urls = (this.nestedQuotedTweetPresentation().mediaUrls || [])
-      .map((url: string) => url.trim())
-      .filter((url: string) => !!url)
-    const fallbackImage = urls.find((url: string) => !isDirectVideoUrl(url)) || ''
-    return resolvePictureCarouselMediaItems(urls, fallbackImage).slice(0, 4)
-  }
-
-  private nestedQuotedTweetHeaderLabel(): string {
-    const baseLabel = (this.nestedQuotedTweetPresentation().displayName || '').trim()
-      || (this.nestedQuotedTweetPresentation().username || '').trim()
-      || '未知来源'
-    return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
-  }
-
-  private isTweetMediaVideo(item: PictureCarouselMediaItem): boolean {
-    return !!(item.videoUrl || '').trim()
-  }
-
   private socialMediaRenderKey(section: string, item: PictureCarouselMediaItem, index: number): string {
     return `${section}_${index}_${item.imageUrl}_${item.videoUrl}`
   }
@@ -615,7 +524,7 @@ struct ArticleDetail {
   }
 
   private playSocialInlineVideo(section: string, item: PictureCarouselMediaItem, index: number): void {
-    if (!this.isTweetMediaVideo(item)) {
+    if (!(item.videoUrl || '').trim()) {
       return
     }
     this.activeSocialInlineVideoKey = this.socialMediaRenderKey(section, item, index)
@@ -642,349 +551,6 @@ struct ArticleDetail {
     }
   }
 
-  private tweetMediaTileWidth(index: number, count: number): string {
-    if (count <= 1) {
-      return '100%'
-    }
-    if (count === 3 && index === 0) {
-      return '100%'
-    }
-    return '49.2%'
-  }
-
-  private tweetMediaTileHeight(index: number, count: number): number {
-    if (count <= 1) {
-      return 208
-    }
-    if (count === 3 && index === 0) {
-      return 148
-    }
-    return 136
-  }
-
-  @Builder
-  private SocialTweetDetail() {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        AvatarTile({
-          imageUrl: this.tweetPresentation().avatarUrl,
-          fallbackLabel: this.tweetPresentation().displayName,
-          accent: this.theme.accent,
-          theme: this.theme,
-          avatarSize: 17,
-          radius: 999,
-          textSize: 11,
-          showFallbackLabel: false,
-        })
-
-        Row({ space: 4 }) {
-          HighlightedInlineText({
-            text: this.tweetPresentation().displayName || '未知来源',
-            query: '',
-            theme: this.theme,
-            fontSize: 16,
-            lineHeight: 20,
-            fontWeight: FontWeight.Bold,
-            defaultColor: this.theme.textPrimary,
-            maxLines: 1,
-          })
-
-          if (this.tweetUsernameLabel()) {
-            HighlightedInlineText({
-              text: this.tweetUsernameLabel(),
-              query: '',
-              theme: this.theme,
-              fontSize: 14,
-              lineHeight: 18,
-              defaultColor: this.theme.textMuted,
-              maxLines: 1,
-            })
-          }
-
-          if (this.tweetPresentation().publishedLabel) {
-            Text(`· ${this.tweetPresentation().publishedLabel}`)
-              .fontSize(13)
-              .fontColor(this.theme.textMuted)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1)
-          }
-        }
-        .layoutWeight(1)
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Top)
-
-      if (this.tweetPresentation().text) {
-        HighlightedInlineText({
-          text: this.tweetPresentation().text,
-          query: '',
-          theme: this.theme,
-          fontSize: 16,
-          lineHeight: 24,
-          defaultColor: this.theme.textPrimary,
-          maxLines: 99,
-        })
-          .width('100%')
-      }
-
-      if (this.hasQuotedTweet()) {
-        Column({ space: 8 }) {
-          Text('RT')
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textMuted)
-            .width('100%')
-
-          Text() {
-            Span(this.quotedTweetHeaderLabel())
-              .fontWeight(FontWeight.Bold)
-
-            if ((this.quotedTweetPresentation().text || '').trim()) {
-              Span(` ${(this.quotedTweetPresentation().text || '').trim()}`)
-                .fontWeight(FontWeight.Regular)
-            }
-          }
-            .fontSize(13)
-            .lineHeight(20)
-            .fontColor(this.theme.textPrimary)
-            .width('100%')
-
-          if (this.quotedTweetMediaItems().length > 0) {
-            Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-              ForEach(this.quotedTweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-                Stack({ alignContent: Alignment.Center }) {
-                  if (this.isTweetMediaVideo(item) && this.isSocialInlineVideoActive('quoted', item, index)) {
-                    Video({
-                      src: item.videoUrl,
-                      controller: this.socialInlineVideoControllerFor('quoted', item, index),
-                      previewUri: item.imageUrl,
-                    })
-                      .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaItems().length))
-                      .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaItems().length))
-                      .borderRadius(8)
-                      .controls(true)
-                      .autoPlay(true)
-                      .muted(false)
-                  } else {
-                    if ((item.imageUrl || '').trim()) {
-                      Image(item.imageUrl)
-                        .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaItems().length))
-                        .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaItems().length))
-                        .borderRadius(8)
-                        .objectFit(ImageFit.Cover)
-                        .backgroundColor(this.theme.elevated)
-                    } else {
-                      Column()
-                        .width(this.tweetMediaTileWidth(index, this.quotedTweetMediaItems().length))
-                        .height(this.tweetMediaTileHeight(index, this.quotedTweetMediaItems().length))
-                        .borderRadius(8)
-                        .backgroundColor(this.theme.elevated)
-                    }
-
-                    if (this.isTweetMediaVideo(item)) {
-                      Row() {
-                        SymbolGlyph($r('sys.symbol.play_fill'))
-                          .fontSize(28)
-                          .fontColor(['#F5F5F5'])
-                      }
-                      .width(56)
-                      .height(56)
-                      .justifyContent(FlexAlign.Center)
-                      .alignItems(VerticalAlign.Center)
-                      .borderRadius(999)
-                      .backgroundColor('rgba(168,168,168,0.58)')
-                    }
-                  }
-                }
-                  .margin({ bottom: this.quotedTweetMediaItems().length > 1 ? 6 : 0 })
-                  .onClick(() => {
-                    if (this.isTweetMediaVideo(item)) {
-                      this.playSocialInlineVideo('quoted', item, index)
-                    } else {
-                      this.openSocialImage(item)
-                    }
-                  })
-              }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
-            }
-            .width('100%')
-            .clip(true)
-          }
-
-          if (this.hasNestedQuotedTweet()) {
-            Column({ space: 0 }) {
-              Column({ space: 8 }) {
-                Text('RT')
-                  .fontSize(12)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(this.theme.textMuted)
-                  .width('100%')
-
-                Text() {
-                  Span(this.nestedQuotedTweetHeaderLabel())
-                    .fontWeight(FontWeight.Bold)
-
-                  if ((this.nestedQuotedTweetPresentation().text || '').trim()) {
-                    Span(` ${(this.nestedQuotedTweetPresentation().text || '').trim()}`)
-                      .fontWeight(FontWeight.Regular)
-                  }
-                }
-                  .fontSize(13)
-                  .lineHeight(20)
-                  .fontColor(this.theme.textPrimary)
-                  .width('100%')
-              }
-              .width('100%')
-              .padding({
-                left: 10,
-                right: 10,
-                top: 10,
-                bottom: this.nestedQuotedTweetMediaItems().length > 0 ? 8 : 10,
-              })
-
-              if (this.nestedQuotedTweetMediaItems().length > 0) {
-                Column() {
-                  Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-                    ForEach(this.nestedQuotedTweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-                      Stack({ alignContent: Alignment.Center }) {
-                        if (this.isTweetMediaVideo(item) && this.isSocialInlineVideoActive('nested', item, index)) {
-                          Video({
-                            src: item.videoUrl,
-                            controller: this.socialInlineVideoControllerFor('nested', item, index),
-                            previewUri: item.imageUrl,
-                          })
-                            .width(this.tweetMediaTileWidth(index, this.nestedQuotedTweetMediaItems().length))
-                            .height(this.tweetMediaTileHeight(index, this.nestedQuotedTweetMediaItems().length))
-                            .borderRadius(0)
-                            .controls(true)
-                            .autoPlay(true)
-                            .muted(false)
-                        } else {
-                          if ((item.imageUrl || '').trim()) {
-                            Image(item.imageUrl)
-                              .width(this.tweetMediaTileWidth(index, this.nestedQuotedTweetMediaItems().length))
-                              .height(this.tweetMediaTileHeight(index, this.nestedQuotedTweetMediaItems().length))
-                              .borderRadius(0)
-                              .objectFit(ImageFit.Cover)
-                              .backgroundColor(this.theme.elevated)
-                          } else {
-                            Column()
-                              .width(this.tweetMediaTileWidth(index, this.nestedQuotedTweetMediaItems().length))
-                              .height(this.tweetMediaTileHeight(index, this.nestedQuotedTweetMediaItems().length))
-                              .borderRadius(0)
-                              .backgroundColor(this.theme.elevated)
-                          }
-
-                          if (this.isTweetMediaVideo(item)) {
-                            Row() {
-                              SymbolGlyph($r('sys.symbol.play_fill'))
-                                .fontSize(28)
-                                .fontColor(['#F5F5F5'])
-                            }
-                            .width(56)
-                            .height(56)
-                            .justifyContent(FlexAlign.Center)
-                            .alignItems(VerticalAlign.Center)
-                            .borderRadius(999)
-                            .backgroundColor('rgba(168,168,168,0.58)')
-                          }
-                        }
-                      }
-                        .margin({ bottom: this.nestedQuotedTweetMediaItems().length > 1 ? 6 : 0 })
-                        .onClick(() => {
-                          if (this.isTweetMediaVideo(item)) {
-                            this.playSocialInlineVideo('nested', item, index)
-                          } else {
-                            this.openSocialImage(item)
-                          }
-                        })
-                    }, (item: PictureCarouselMediaItem, index: number) => `nested_${item.imageUrl}_${item.videoUrl}_${index}`)
-                  }
-                  .width('100%')
-                }
-                .width('100%')
-                .padding(1)
-                .backgroundColor(this.theme.divider)
-                .clip(true)
-              }
-            }
-            .width('100%')
-            .borderRadius(10)
-            .border({ width: 0.8, color: this.theme.divider })
-            .backgroundColor(this.theme.surface)
-            .clip(true)
-          }
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding({ left: 2, right: 2, top: 2, bottom: 2 })
-      }
-
-      if (this.tweetMediaItems().length > 0) {
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.tweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-            Stack({ alignContent: Alignment.Center }) {
-              if (this.isTweetMediaVideo(item) && this.isSocialInlineVideoActive('main', item, index)) {
-                Video({
-                  src: item.videoUrl,
-                  controller: this.socialInlineVideoControllerFor('main', item, index),
-                  previewUri: item.imageUrl,
-                })
-                  .width(this.tweetMediaTileWidth(index, this.tweetMediaItems().length))
-                  .height(this.tweetMediaTileHeight(index, this.tweetMediaItems().length))
-                  .borderRadius(10)
-                  .controls(true)
-                  .autoPlay(true)
-                  .muted(false)
-              } else {
-                if ((item.imageUrl || '').trim()) {
-                  Image(item.imageUrl)
-                    .width(this.tweetMediaTileWidth(index, this.tweetMediaItems().length))
-                    .height(this.tweetMediaTileHeight(index, this.tweetMediaItems().length))
-                    .borderRadius(10)
-                    .objectFit(ImageFit.Cover)
-                    .backgroundColor(this.theme.elevated)
-                } else {
-                  Column()
-                    .width(this.tweetMediaTileWidth(index, this.tweetMediaItems().length))
-                    .height(this.tweetMediaTileHeight(index, this.tweetMediaItems().length))
-                    .borderRadius(10)
-                    .backgroundColor(this.theme.elevated)
-                }
-
-                if (this.isTweetMediaVideo(item)) {
-                  Row() {
-                    SymbolGlyph($r('sys.symbol.play_fill'))
-                      .fontSize(28)
-                      .fontColor(['#F5F5F5'])
-                  }
-                  .width(56)
-                  .height(56)
-                  .justifyContent(FlexAlign.Center)
-                  .alignItems(VerticalAlign.Center)
-                  .borderRadius(999)
-                  .backgroundColor('rgba(168,168,168,0.58)')
-                }
-              }
-            }
-              .margin({ bottom: this.tweetMediaItems().length > 1 ? 6 : 0 })
-              .onClick(() => {
-                if (this.isTweetMediaVideo(item)) {
-                  this.playSocialInlineVideo('main', item, index)
-                } else {
-                  this.openSocialImage(item)
-                }
-              })
-          }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
-        }
-        .width('100%')
-        .clip(true)
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
   private sourceUrl(): string {
     if (!this.entry) {
       return ''
@@ -995,11 +561,6 @@ struct ArticleDetail {
       siteUrl: this.entry.siteUrl,
       contentBlocks: this.entry.contentBlocks,
     })
-  }
-
-  private sourceLabel(): string {
-    const hasVideoBlock = !!this.entry?.contentBlocks.find((block: ArticleContentBlock) => block.type === 'video')
-    return hasVideoBlock ? '视频来源' : '原始来源'
   }
 
   private browserOpenUrl(): string {
@@ -1032,25 +593,7 @@ struct ArticleDetail {
       return []
     }
 
-    return (this.entry?.contentBlocks ?? []).reduce((result: PictureCarouselMediaItem[], block: ArticleContentBlock) => {
-      if (block.type === 'video' && block.videoUrl) {
-        result.push({
-          kind: 'livePhoto',
-          imageUrl: block.imageUrl || '',
-          videoUrl: block.videoUrl,
-        })
-        return result
-      }
-
-      if (block.type === 'image' && block.imageUrl) {
-        result.push({
-          kind: 'image',
-          imageUrl: block.imageUrl,
-          videoUrl: '',
-        })
-      }
-      return result
-    }, [])
+    return resolvePictureDetailMediaItems(this.entry?.contentBlocks ?? [])
   }
 
   private pictureDetailTextBlocks(): ArticleContentBlock[] {
@@ -1058,437 +601,23 @@ struct ArticleDetail {
       return this.entry?.contentBlocks ?? []
     }
 
-    return (this.entry?.contentBlocks ?? []).filter((block: ArticleContentBlock) => block.type === 'paragraph' && !!block.text)
-  }
-
-  private detailLivePhotoControllerFor(index: number): VideoController {
-    if (!this.detailLivePhotoControllers[index]) {
-      this.detailLivePhotoControllers[index] = new VideoController()
-    }
-    return this.detailLivePhotoControllers[index]
-  }
-
-  private currentDetailLivePhotoItem(index: number): PictureCarouselMediaItem | undefined {
-    const item = this.pictureDetailMediaItems()[index]
-    return item?.kind === 'livePhoto' && item.videoUrl ? item : undefined
-  }
-
-  private firstDetailLivePhotoIndex(): number {
-    const items = this.pictureDetailMediaItems()
-    for (let index = 0; index < items.length; index += 1) {
-      if (items[index]?.kind === 'livePhoto' && items[index].videoUrl) {
-        return index
-      }
-    }
-
-    return -1
-  }
-
-  private preloadDetailLivePhotoIndices(): number[] {
-    // 在垂直列表布局中，所有live图片都会被挂载和显示
-    // 这个方法保留以保持向后兼容，但现在返回空数组
-    return []
-  }
-
-  private mountedDetailLivePhotoIndices(): number[] {
-    // 在垂直列表布局中，所有live图片都被挂载和显示
-    const items = this.pictureDetailMediaItems()
-    const mounted = new Set<number>()
-
-    items.forEach((item: PictureCarouselMediaItem, index: number) => {
-      if (item.kind === 'livePhoto' && item.videoUrl) {
-        mounted.add(index)
-      }
-    })
-
-    return Array.from(mounted.values())
-  }
-
-  private warmMountedDetailLivePhotos(targetIndex: number): void {
-    this.mountedDetailLivePhotoIndices().forEach((index: number) => {
-      if (index !== targetIndex) {
-        return
-      }
-      try {
-        this.detailLivePhotoControllerFor(index).start()
-      } catch (_) {
-      }
-    })
-  }
-
-  private isDetailLivePhotoPrepared(index: number): boolean {
-    return this.preparedDetailLivePhotoIndices.includes(index)
-  }
-
-  private clearPreparedDetailLivePhoto(index: number): void {
-    if (!this.preparedDetailLivePhotoIndices.includes(index)) {
-      return
-    }
-
-    this.preparedDetailLivePhotoIndices = this.preparedDetailLivePhotoIndices.filter((value: number) => value !== index)
-  }
-
-  private markPreparedDetailLivePhoto(index: number): void {
-    if (this.preparedDetailLivePhotoIndices.includes(index)) {
-      return
-    }
-
-    this.preparedDetailLivePhotoIndices = [...this.preparedDetailLivePhotoIndices, index]
-  }
-
-  private detailLivePhotoInstanceSeed(index: number): number {
-    return this.detailLivePhotoInstanceSeeds[index] ?? 0
-  }
-
-  private refreshDetailLivePhotoInstance(index: number): void {
-    this.clearPreparedDetailLivePhoto(index)
-    const nextSeeds = [...this.detailLivePhotoInstanceSeeds]
-    nextSeeds[index] = (nextSeeds[index] ?? 0) + 1
-    this.detailLivePhotoInstanceSeeds = nextSeeds
-  }
-
-  private stopAllDetailLivePhotoPlayback(exceptIndex: number = -1): void {
-    this.detailLivePhotoControllers.forEach((controller: VideoController, index: number) => {
-      if (index === exceptIndex || !controller) {
-        return
-      }
-      try {
-        controller.pause()
-      } catch (_) {
-      }
-    })
-  }
-
-  private stopDetailLivePhotoPlayback(): void {
-    this.playingDetailLivePhotoIndex = -1
-    this.pausedDetailLivePhotoIndex = -1
-    this.preparedDetailLivePhotoIndices = []
-    this.stopAllDetailLivePhotoPlayback()
-  }
-
-  private pauseDetailLivePhotoPlayback(index: number): void {
-    const item = this.currentDetailLivePhotoItem(index)
-    if (!item) {
-      this.pausedDetailLivePhotoIndex = -1
-      this.playingDetailLivePhotoIndex = -1
-      return
-    }
-
-    this.stopAllDetailLivePhotoPlayback(index)
-    try {
-      this.detailLivePhotoControllerFor(index).pause()
-      this.pausedDetailLivePhotoIndex = index
-    } catch (_) {
-      this.pausedDetailLivePhotoIndex = -1
-    }
-    this.playingDetailLivePhotoIndex = -1
-  }
-
-  private syncPictureDetailLivePhotoPlayback(index: number): void {
-    const item = this.currentDetailLivePhotoItem(index)
-    if (!item) {
-      this.playingDetailLivePhotoIndex = -1
-      this.pausedDetailLivePhotoIndex = -1
-      return
-    }
-
-    if (this.detailLivePhotoVisibilityRatio(index) < 0.35) {
-      this.pauseDetailLivePhotoPlayback(index)
-      return
-    }
-
-    this.warmMountedDetailLivePhotos(index)
-
-    if (this.isDetailLivePhotoPrepared(index)) {
-      this.pausedDetailLivePhotoIndex = -1
-      this.playingDetailLivePhotoIndex = index
-      try {
-        this.detailLivePhotoControllerFor(index).start()
-      } catch (_) {
-      }
-      return
-    }
-
-    this.pausedDetailLivePhotoIndex = -1
-    this.playingDetailLivePhotoIndex = -1
-  }
-
-  private detailLivePhotoVisibilityRatio(index: number): number {
-    return this.detailLivePhotoVisibilityRatios[index] ?? 0
-  }
-
-  private resolveCenteredDetailLivePhotoIndex(ratios: number[]): number {
-    const items = this.pictureDetailMediaItems()
-    let bestIndex = -1
-    let bestScore = 0
-
-    items.forEach((item: PictureCarouselMediaItem, index: number) => {
-      if (item.kind !== 'livePhoto' || !item.videoUrl) {
-        return
-      }
-      const score = ratios[index] ?? 0
-      if (score > bestScore) {
-        bestScore = score
-        bestIndex = index
-      }
-    })
-
-    return bestScore >= 0.35 ? bestIndex : -1
-  }
-
-  private updateDetailLivePhotoVisibility(index: number, isVisible: boolean, currentRatio: number): void {
-    if (this.currentDetailLivePhotoItem(index) === undefined) {
-      return
-    }
-
-    const nextRatios = [...this.detailLivePhotoVisibilityRatios]
-    nextRatios[index] = currentRatio
-    this.detailLivePhotoVisibilityRatios = nextRatios
-
-    const centeredIndex = this.resolveCenteredDetailLivePhotoIndex(nextRatios)
-    if (centeredIndex < 0) {
-      this.isPictureMediaNearlyVisible = false
-      this.isPictureMediaFullyVisible = false
-      this.stopDetailLivePhotoPlayback()
-      return
-    }
-
-    this.isPictureMediaNearlyVisible = true
-    this.isPictureMediaFullyVisible = true
-    if (this.activePictureMediaIndex !== centeredIndex) {
-      this.activePictureMediaIndex = centeredIndex
-    }
-    this.syncPictureDetailLivePhotoPlayback(centeredIndex)
-  }
-
-  private toggleDetailLivePhotoMuted(): void {
-    this.detailLivePhotoMuted = !this.detailLivePhotoMuted
-    this.showToast(this.detailLivePhotoMuted ? '已静音' : '已开启声音')
-  }
-
-  private toggleDetailLivePhotoPlayback(index: number): void {
-    const item = this.currentDetailLivePhotoItem(index)
-    if (!item) {
-      return
-    }
-
-    if (this.playingDetailLivePhotoIndex === index) {
-      this.pauseDetailLivePhotoPlayback(index)
-      return
-    }
-
-    if (this.detailLivePhotoVisibilityRatio(index) < 0.35) {
-      return
-    }
-
-    this.syncPictureDetailLivePhotoPlayback(index)
-  }
-
-  private shouldShowPlayingDetailLivePhoto(index: number): boolean {
-    return this.activePictureMediaIndex === index
-      && this.isDetailLivePhotoPrepared(index)
-  }
-
-  private shouldShowPausedDetailLivePhoto(index: number): boolean {
-    return this.pausedDetailLivePhotoIndex === index && this.isDetailLivePhotoPrepared(index)
-  }
-
-  private shouldWarmDetailLivePhoto(index: number): boolean {
-    // 如果可见比例已知且达到阈值，正常预热
-    if (this.detailLivePhotoVisibilityRatio(index) >= 0.35) {
-      return this.activePictureMediaIndex === index
-        && this.mountedDetailLivePhotoIndices().includes(index)
-    }
-    // 可见比例尚未初始化时（页面刚进入），对第一个 live 图片立即预热
-    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
-    return allRatiosZero
-      && index === this.firstDetailLivePhotoIndex()
-      && this.mountedDetailLivePhotoIndices().includes(index)
-  }
-
-  private shouldShowDetailLivePhotoLoading(index: number): boolean {
-    if (this.currentDetailLivePhotoItem(index) === undefined) {
-      return false
-    }
-    if (this.isDetailLivePhotoPrepared(index)) {
-      return false
-    }
-    // 可见比例已知时，只对当前激活且可见的图片显示加载
-    const ratio = this.detailLivePhotoVisibilityRatio(index)
-    if (ratio > 0) {
-      return this.activePictureMediaIndex === index && ratio >= 0.35
-    }
-    // 可见比例尚未初始化时，对第一个 live 图片显示加载
-    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
-    return allRatiosZero && index === this.firstDetailLivePhotoIndex()
-  }
-
-  private handleDetailLivePhotoPrepared(index: number): void {
-    this.markPreparedDetailLivePhoto(index)
-    const ratio = this.detailLivePhotoVisibilityRatio(index)
-    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
-    const isInitialFirstPhoto = allRatiosZero && index === this.firstDetailLivePhotoIndex()
-    if ((this.activePictureMediaIndex === index && ratio >= 0.35) || isInitialFirstPhoto) {
-      this.pausedDetailLivePhotoIndex = -1
-      this.playingDetailLivePhotoIndex = index
-      try {
-        this.detailLivePhotoControllerFor(index).start()
-      } catch (_) {
-      }
-    }
-  }
-
-  private handleDetailLivePhotoStart(index: number): void {
-    this.markPreparedDetailLivePhoto(index)
-    if (this.pausedDetailLivePhotoIndex === index) {
-      this.pausedDetailLivePhotoIndex = -1
-    }
-    const ratio = this.detailLivePhotoVisibilityRatio(index)
-    const allRatiosZero = this.detailLivePhotoVisibilityRatios.every((r: number) => r === 0)
-    const isInitialFirstPhoto = allRatiosZero && index === this.firstDetailLivePhotoIndex()
-    if ((this.activePictureMediaIndex === index && ratio >= 0.35) || isInitialFirstPhoto) {
-      this.playingDetailLivePhotoIndex = index
-    }
-  }
-
-  private handleDetailLivePhotoPause(index: number): void {
-    if (this.isDetailLivePhotoPrepared(index)) {
-      this.pausedDetailLivePhotoIndex = index
-    }
-    if (this.playingDetailLivePhotoIndex === index) {
-      this.playingDetailLivePhotoIndex = -1
-    }
-  }
-
-  private handleDetailLivePhotoStop(index: number): void {
-    if (this.playingDetailLivePhotoIndex === index) {
-      this.playingDetailLivePhotoIndex = -1
-    }
-    if (this.pausedDetailLivePhotoIndex === index) {
-      this.pausedDetailLivePhotoIndex = -1
-    }
-  }
-
-  private handleDetailLivePhotoError(index: number): void {
-    this.clearPreparedDetailLivePhoto(index)
-    if (this.playingDetailLivePhotoIndex === index) {
-      this.playingDetailLivePhotoIndex = -1
-    }
-    if (this.pausedDetailLivePhotoIndex === index) {
-      this.pausedDetailLivePhotoIndex = -1
-    }
-    this.refreshDetailLivePhotoInstance(index)
-  }
-
-  private detailLivePhotoAspectRatio(index: number): number {
-    const ratio = this.detailLivePhotoAspectRatios[index]
-    return ratio && ratio > 0 ? ratio : 4 / 5
-  }
-
-  private rememberDetailLivePhotoAspectRatio(index: number, width: number, height: number): void {
-    if (width <= 0 || height <= 0) {
-      return
-    }
-
-    const nextRatio = width / height
-    const currentRatio = this.detailLivePhotoAspectRatios[index]
-    if (currentRatio && Math.abs(currentRatio - nextRatio) < 0.001) {
-      return
-    }
-
-    const nextAspectRatios = [...this.detailLivePhotoAspectRatios]
-    nextAspectRatios[index] = nextRatio
-    this.detailLivePhotoAspectRatios = nextAspectRatios
+    return resolvePictureDetailTextBlocks(this.entry?.contentBlocks ?? [])
   }
 
   private shouldRenderSummary(): boolean {
-    const summary = this.cleanText(this.entry?.summary ?? '')
-    if (!summary) {
-      return false
-    }
-
-    const title = this.cleanText(this.entry?.title ?? '')
-    if (title && (summary === title || summary.includes(title) || title.includes(summary))) {
-      return false
-    }
-
-    const firstParagraphBlock = this.entry?.contentBlocks.find((block: ArticleContentBlock) => block.type === 'paragraph' && block.text)
-    const firstParagraph = this.cleanText(firstParagraphBlock?.text ?? this.entry?.contentParagraphs[0] ?? '')
-    if (firstParagraph && (summary === firstParagraph || summary.includes(firstParagraph) || firstParagraph.includes(summary))) {
-      return false
-    }
-
-    const openingParagraphs = this.cleanText((this.entry?.contentParagraphs ?? []).slice(0, 3).join(' '))
-    if (openingParagraphs && (openingParagraphs.includes(summary) || summary.includes(openingParagraphs))) {
-      return false
-    }
-
-    return true
+    return shouldRenderArticleSummary(this.entry)
   }
 
   private shouldRenderParagraphBlock(block: ArticleContentBlock, index: number): boolean {
-    if (block.type !== 'paragraph' || !block.text) {
-      return true
-    }
-
-    const normalizedParagraph = this.cleanText(block.text)
-    if (!normalizedParagraph) {
-      return false
-    }
-
-    const title = this.cleanText(this.entry?.title ?? '')
-    if (title && (normalizedParagraph === title || normalizedParagraph.includes(title))) {
-      return false
-    }
-
-    if (!this.shouldRenderSummary()) {
-      return true
-    }
-
-    const normalizedSummary = this.cleanText(this.entry?.summary ?? '')
-    if (!normalizedSummary) {
-      return true
-    }
-
-    if (index <= 2 && (
-      normalizedParagraph === normalizedSummary
-      || normalizedParagraph.includes(normalizedSummary)
-      || normalizedSummary.includes(normalizedParagraph)
-    )) {
-      return false
-    }
-
-    return true
+    return shouldRenderArticleParagraphBlock(this.entry, block, index)
   }
 
   private imageBlockServesAsVideoCover(index: number): boolean {
-    const blocks = this.entry?.contentBlocks ?? []
-    const current = blocks[index]
-    if (!current || current.type !== 'image' || !current.imageUrl) {
-      return false
-    }
-
-    const previous = index > 0 ? blocks[index - 1] : undefined
-    if (!previous || previous.type !== 'video') {
-      return false
-    }
-
-    return !(previous.imageUrl || '').trim()
+    return articleImageBlockServesAsVideoCover(this.entry?.contentBlocks ?? [], index)
   }
 
   private resolveVideoPreviewImage(block: ArticleContentBlock, index: number): string {
-    const ownPreview = (block.imageUrl || '').trim()
-    if (ownPreview) {
-      return ownPreview
-    }
-
-    const blocks = this.entry?.contentBlocks ?? []
-    const next = index + 1 < blocks.length ? blocks[index + 1] : undefined
-    if (next && next.type === 'image' && next.imageUrl) {
-      return next.imageUrl
-    }
-
-    return ''
+    return resolveArticleVideoPreviewImage(this.entry?.contentBlocks ?? [], block, index)
   }
 
   private isVideoPlaying(block: ArticleContentBlock): boolean {
@@ -1656,114 +785,6 @@ struct ArticleDetail {
   }
 
   @Builder
-  private MetaBadge(text: string, active?: boolean) {
-    Text(text)
-      .fontSize(11)
-      .fontWeight(FontWeight.Medium)
-      .fontColor(active ? '#FFFFFF' : this.theme.textSecondary)
-      .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-      .backgroundColor(active ? this.theme.accent : this.theme.elevated)
-      .borderRadius(999)
-  }
-
-  @Builder
-  private HeaderIconAction(
-    symbol: Resource,
-    size: number,
-    onTap?: () => void,
-    symbolColors?: ResourceColor[],
-    backgroundColor?: string,
-    buttonScale: number = 1,
-  ) {
-    Row() {
-      SymbolGlyph(symbol)
-        .fontSize(size)
-        .fontColor(symbolColors ?? [this.theme.textSecondary])
-        .renderingStrategy(symbol === $r('sys.symbol.lightbulb')
-          ? SymbolRenderingStrategy.MULTIPLE_COLOR
-          : SymbolRenderingStrategy.SINGLE)
-    }
-      .width(HEADER_BACK_SLOT_SIZE)
-      .height(HEADER_BACK_SLOT_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(backgroundColor ?? Color.Transparent)
-      .borderRadius(HEADER_BACK_SLOT_SIZE)
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .scale({ x: buttonScale, y: buttonScale })
-      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
-      .onClick(() => {
-        if (onTap) {
-          onTap()
-        }
-      })
-  }
-
-  @Builder
-  private HeaderImageAction(
-    image: Resource,
-    size: number,
-    onTap?: () => void,
-    backgroundColor?: string,
-    buttonScale: number = 1,
-  ) {
-    Row() {
-      Image(image)
-        .width(size)
-        .height(size)
-        .objectFit(ImageFit.Contain)
-    }
-      .width(HEADER_BACK_SLOT_SIZE)
-      .height(HEADER_BACK_SLOT_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(backgroundColor ?? Color.Transparent)
-      .borderRadius(HEADER_BACK_SLOT_SIZE)
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .scale({ x: buttonScale, y: buttonScale })
-      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
-      .onClick(() => {
-        if (onTap) {
-          onTap()
-        }
-      })
-  }
-
-  @Builder
-  private HeaderActions() {
-    Row({ space: 4 }) {
-      this.HeaderImageAction(
-        $r('app.media.ri_ai'),
-        22,
-        () => { void this.handleArticleAIAssist() },
-      )
-
-      this.HeaderIconAction(
-        $r('sys.symbol.arrow_right_up_and_square'),
-        22,
-        () => { void this.openEntryInBrowser() },
-      )
-
-      Row() {
-        SymbolGlyph($r(this.entry?.isStarred ? 'sys.symbol.star_fill' : 'sys.symbol.star'))
-          .fontSize(22)
-          .fontColor([this.entry?.isStarred ? '#F6C343' : this.theme.textSecondary])
-          .renderingStrategy(SymbolRenderingStrategy.SINGLE)
-      }
-      .width(HEADER_BACK_SLOT_SIZE)
-      .height(HEADER_BACK_SLOT_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .borderRadius(HEADER_BACK_SLOT_SIZE)
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .scale({ x: this.starScale, y: this.starScale })
-      .animation({ duration: 180, curve: Curve.FastOutSlowIn })
-      .onClick(() => { void this.toggleStar() })
-    }
-    .height(HEADER_BACK_SLOT_SIZE)
-  }
-
-  @Builder
   private PlayOverlayButton() {
     Row() {
       SymbolGlyph($r('sys.symbol.play_fill'))
@@ -1787,258 +808,6 @@ struct ArticleDetail {
       || this.hasAiAssistResult()
       || !!this.aiSummaryError.trim()
       || !!this.aiTranslationError.trim()
-  }
-
-  @Builder
-  private AIAssistResultCard(title: string, content: string) {
-    Column({ space: 8 }) {
-      Text(title)
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.accent)
-        .width('100%')
-
-      Text(content)
-        .fontSize(14)
-        .lineHeight(22)
-        .fontColor(this.theme.textPrimary)
-        .width('100%')
-    }
-    .width('100%')
-    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-    .backgroundColor(this.theme.elevated)
-    .borderRadius(14)
-  }
-
-  @Builder
-  private AIAssistResultSection() {
-    Column({ space: 10 }) {
-      if (this.isAiProcessing) {
-        Row({ space: 8 }) {
-          LoadingProgress()
-            .width(14)
-            .height(14)
-            .color(this.theme.accent)
-
-          Text('正在生成摘要与翻译...')
-            .fontSize(12)
-            .fontColor(this.theme.textSecondary)
-            .width('100%')
-            .layoutWeight(1)
-        }
-        .width('100%')
-      }
-
-      if (this.aiSummary.trim()) {
-        this.AIAssistResultCard('AI 摘要', this.aiSummary)
-      }
-
-      if (this.aiTranslation.trim()) {
-        this.AIAssistResultCard(`AI 翻译（${this.aiLanguageLabel()}）`, this.aiTranslation)
-      }
-
-      if (this.aiSummaryError.trim()) {
-        Text(`摘要失败：${this.compactErrorMessage(this.aiSummaryError, 120)}`)
-          .fontSize(12)
-          .lineHeight(18)
-          .fontColor('#D94848')
-          .width('100%')
-      }
-
-      if (this.aiTranslationError.trim()) {
-        Text(`翻译失败：${this.compactErrorMessage(this.aiTranslationError, 120)}`)
-          .fontSize(12)
-          .lineHeight(18)
-          .fontColor('#D94848')
-          .width('100%')
-      }
-    }
-    .width('100%')
-    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-    .backgroundColor(this.theme.elevated)
-    .borderRadius(14)
-  }
-
-  @Builder
-  private LiveBadge() {
-    Row({ space: 4 }) {
-      SymbolGlyph($r('sys.symbol.play_fill'))
-        .fontSize(11)
-        .fontColor(['rgba(255,255,255,0.92)'])
-
-      Text('LIVE')
-        .fontSize(10)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('rgba(255,255,255,0.92)')
-    }
-    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
-    .margin({ top: 10, right: 10 })
-    .backgroundColor('rgba(0,0,0,0.22)')
-    .borderRadius(999)
-  }
-
-  @Builder
-  private LiveSoundToggle() {
-    Row({ space: 4 }) {
-      SymbolGlyph($r(this.detailLivePhotoMuted ? 'sys.symbol.speaker_slash_fill' : 'sys.symbol.speaker_wave_2_fill'))
-        .fontSize(11)
-        .fontColor(['rgba(255,255,255,0.92)'])
-
-      Text(this.detailLivePhotoMuted ? '静音' : '有声')
-        .fontSize(10)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('rgba(255,255,255,0.92)')
-    }
-    .padding({ left: 8, right: 8, top: 5, bottom: 5 })
-    .margin({ right: 10, bottom: 10 })
-    .backgroundColor('rgba(0,0,0,0.28)')
-    .borderRadius(999)
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
-    .onClick(() => {
-      this.toggleDetailLivePhotoMuted()
-    })
-  }
-
-  @Builder
-  private DetailLivePhotoSlide(item: PictureCarouselMediaItem, index: number) {
-    Stack({ alignContent: Alignment.Center }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Image(item.imageUrl)
-          .width('100%')
-          .height('100%')
-          .objectFit(ImageFit.Contain)
-          .borderRadius(18)
-          .backgroundColor(this.theme.elevated)
-          .onComplete((event) => {
-            if (event) {
-              this.rememberDetailLivePhotoAspectRatio(index, event.width, event.height)
-            }
-          })
-          .visibility((this.shouldShowPlayingDetailLivePhoto(index) || this.shouldShowPausedDetailLivePhoto(index))
-            ? Visibility.Hidden
-            : Visibility.Visible)
-
-        if (item.kind === 'livePhoto' && item.videoUrl && this.mountedDetailLivePhotoIndices().includes(index)) {
-          Video({
-            src: item.videoUrl,
-            controller: this.detailLivePhotoControllerFor(index),
-            previewUri: item.imageUrl,
-          })
-            .width('100%')
-            .height('100%')
-            .borderRadius(18)
-            .controls(false)
-            .autoPlay(this.shouldWarmDetailLivePhoto(index))
-            .loop(true)
-            .muted(this.detailLivePhotoMuted || !this.shouldShowPlayingDetailLivePhoto(index))
-            .objectFit(ImageFit.Cover)
-            .opacity((this.shouldShowPlayingDetailLivePhoto(index) || this.shouldShowPausedDetailLivePhoto(index)) ? 1 : 0)
-            .onPrepared(() => {
-              this.handleDetailLivePhotoPrepared(index)
-            })
-            .onStart(() => {
-              this.handleDetailLivePhotoStart(index)
-            })
-            .onPause(() => {
-              this.handleDetailLivePhotoPause(index)
-            })
-            .onStop(() => {
-              this.handleDetailLivePhotoStop(index)
-            })
-            .onError(() => {
-              this.handleDetailLivePhotoError(index)
-            })
-        }
-      }
-      .width('100%')
-      .height('100%')
-      .clickEffect({ level: ClickEffectLevel.LIGHT })
-      .onClick(() => {
-        this.toggleDetailLivePhotoPlayback(index)
-      })
-
-      if (this.shouldShowDetailLivePhotoLoading(index)) {
-        Stack() {
-          LoadingProgress()
-            .width(28)
-            .height(28)
-            .color(this.theme.accent)
-        }
-        .width('100%')
-        .height('100%')
-        .align(Alignment.Center)
-      }
-
-      Stack() {
-        this.LiveBadge()
-      }
-      .width('100%')
-      .height('100%')
-      .align(Alignment.TopEnd)
-
-      Stack() {
-        this.LiveSoundToggle()
-      }
-      .width('100%')
-      .height('100%')
-      .align(Alignment.BottomEnd)
-    }
-    .width('100%')
-    .aspectRatio(this.detailLivePhotoAspectRatio(index))
-    .onVisibleAreaChange([0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0], (isVisible: boolean, currentRatio: number) => {
-      this.updateDetailLivePhotoVisibility(index, isVisible, currentRatio)
-    })
-  }
-
-  @Builder
-  private PictureDetailMediaCarousel() {
-    if (this.pictureDetailMediaItems().length > 0) {
-      Column({ space: 20 }) {
-        ForEach(this.pictureDetailMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-          Column() {
-            if (item.kind === 'livePhoto') {
-              this.DetailLivePhotoSlide(item, index)
-            } else {
-              Stack({ alignContent: Alignment.Center }) {
-                Image(item.imageUrl)
-                  .width('100%')
-                  .height('100%')
-                  .objectFit(ImageFit.Contain)
-                  .borderRadius(18)
-                  .backgroundColor(this.theme.elevated)
-                  .onComplete((event) => {
-                    if (event) {
-                      this.rememberDetailLivePhotoAspectRatio(index, event.width, event.height)
-                    }
-                  })
-              }
-              .width('100%')
-              .aspectRatio(this.detailLivePhotoAspectRatio(index))
-              .clip(true)
-              .borderRadius(18)
-              .backgroundColor(this.theme.elevated)
-              .onClick(() => {
-                void openImageViewer(item.imageUrl, this.entry?.title || '图片预览')
-              })
-            }
-          }
-          .width('100%')
-        }, (item: PictureCarouselMediaItem, index: number) =>
-          `${item.kind}-${item.imageUrl}-${item.videoUrl}-${index}-${this.detailLivePhotoInstanceSeed(index)}`)
-      }
-      .width('100%')
-      .onVisibleAreaChange([0], (isVisible: boolean) => {
-        if (!isVisible) {
-          this.isPictureMediaNearlyVisible = false
-          this.isPictureMediaFullyVisible = false
-          this.detailLivePhotoVisibilityRatios = []
-          this.stopDetailLivePhotoPlayback()
-        }
-      })
-      .onDisAppear(() => {
-        this.stopDetailLivePhotoPlayback()
-      })
-    }
   }
 
   @Builder
@@ -2345,7 +1114,14 @@ struct ArticleDetail {
             bottomPadding: 0,
             onBack: () => { void goBack() },
           }) {
-            this.HeaderActions()
+            ArticleDetailHeaderActions({
+              theme: this.theme,
+              isStarred: this.entry?.isStarred ?? false,
+              starScale: this.starScale,
+              onRunAi: () => { void this.handleArticleAIAssist() },
+              onOpenBrowser: () => { void this.openEntryInBrowser() },
+              onToggleStar: () => { void this.toggleStar() },
+            })
           }
         }
         .width('100%')
@@ -2393,11 +1169,34 @@ struct ArticleDetail {
 
             Column({ space: 20 }) {
               if (this.hasAiAssistStatePanel()) {
-                this.AIAssistResultSection()
+                ArticleAIAssistResultPanel({
+                  theme: this.theme,
+                  isProcessing: this.isAiProcessing,
+                  summary: this.aiSummary,
+                  translation: this.aiTranslation,
+                  summaryError: this.aiSummaryError,
+                  translationError: this.aiTranslationError,
+                  targetLanguageLabel: this.aiLanguageLabel(),
+                })
               }
 
               if (this.isSocialDetail()) {
-                this.SocialTweetDetail()
+                ArticleSocialDetail({
+                  presentation: this.tweetPresentation(),
+                  theme: this.theme,
+                  isInlineVideoActive: (section: string, item: PictureCarouselMediaItem, index: number): boolean => {
+                    return this.isSocialInlineVideoActive(section, item, index)
+                  },
+                  inlineVideoControllerFor: (section: string, item: PictureCarouselMediaItem, index: number): VideoController => {
+                    return this.socialInlineVideoControllerFor(section, item, index)
+                  },
+                  onPlayInlineVideo: (section: string, item: PictureCarouselMediaItem, index: number): void => {
+                    this.playSocialInlineVideo(section, item, index)
+                  },
+                  onOpenImage: (item: PictureCarouselMediaItem): void => {
+                    this.openSocialImage(item)
+                  },
+                })
               } else {
                 if (this.isPictureDetail() && (this.entry!.title || '').trim()) {
                   Text(this.entry!.title)
@@ -2409,7 +1208,11 @@ struct ArticleDetail {
                 }
 
                 if (this.isPictureDetail()) {
-                  this.PictureDetailMediaCarousel()
+                  ArticlePictureDetailMedia({
+                    mediaItems: this.pictureDetailMediaItems(),
+                    title: this.entry!.title || '图片预览',
+                    theme: this.theme,
+                  })
                 }
 
                 if (this.shouldRenderSummary()) {

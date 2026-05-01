@@ -1,4 +1,4 @@
-import { AboutSettingsPanel } from '../common/components/SettingsSecondaryPanels'
+import { AboutSettingsPanel } from '../common/components/AboutSettingsPanel'
 
 @Entry
 @Component

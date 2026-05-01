@@ -1,4 +1,4 @@
-import { PrivacySettingsPanel } from '../common/components/SettingsSecondaryPanels'
+import { PrivacySettingsPanel } from '../common/components/PrivacySettingsPanel'
 
 @Entry
 @Component

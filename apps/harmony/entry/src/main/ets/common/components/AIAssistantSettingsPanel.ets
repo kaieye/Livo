@@ -1,20 +1,33 @@
 import { SymbolGlyphModifier } from '@kit.ArkUI'
-import { http } from '@kit.NetworkKit'
 import { AppRepository } from '../data/AppRepository'
 import {
   AIAssistantSettings,
-  AI_PROVIDER_OPTIONS,
-  AIProviderDefinition,
   AIProvider,
   AITargetLanguage,
   DEFAULT_AI_ASSISTANT_SETTINGS,
   DEFAULT_HARMONY_SETTINGS,
   HarmonySettings,
 } from '../models/LivoModels'
+import {
+  AIAssistantConnectionTestResult,
+  AIAssistantConnectionTestService,
+} from '../services/AIAssistantConnectionTestService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+import {
+  aiModelOptions,
+  aiProviderDefinition,
+  aiProviderOptions,
+  copyApiKeys,
+  patchHarmonyAISettings,
+  resolveAIAssistantState,
+  resolveNextAIModel,
+  SelectOption,
+  TRANSLATION_LANGUAGE_OPTIONS,
+  translationLanguageLabel,
+} from '../utils/AIAssistantSettingsResolver'
 
 const PANEL_ROW_MIN_HEIGHT: number = 56
 const PANEL_ICON_SIZE: number = 22
@@ -28,98 +41,6 @@ const PANEL_SECTION_SPACING: number = 14
 const PANEL_ROW_PADDING_HORIZONTAL: number = 12
 const PANEL_ROW_PADDING_VERTICAL: number = 8
 const INPUT_HEIGHT: number = 36
-
-interface SelectOption {
-  label: string
-  value: string
-}
-
-interface ConnectionTestChatMessage {
-  role: string
-  content: string
-}
-
-interface ConnectionTestChatRequest {
-  model: string
-  messages: ConnectionTestChatMessage[]
-  max_tokens: number
-}
-
-interface ConnectionTestAnthropicTextBlock {
-  type: string
-  text: string
-}
-
-interface ConnectionTestAnthropicMessage {
-  role: string
-  content: ConnectionTestAnthropicTextBlock[]
-}
-
-interface ConnectionTestAnthropicRequest {
-  model: string
-  messages: ConnectionTestAnthropicMessage[]
-  max_tokens: number
-}
-
-interface ConnectionTestMiniMaxTextRequest {
-  model: string
-  messages: ConnectionTestChatMessage[]
-  max_completion_tokens: number
-}
-
-interface ConnectionTestAnthropicResponseBlock {
-  type?: string
-  text?: string
-  thinking?: string
-}
-
-interface ConnectionTestChoiceMessage {
-  content?: string | ConnectionTestContentPart[] | ConnectionTestContentPart
-  reasoning_content?: string
-}
-
-interface ConnectionTestContentPart {
-  text?: string
-}
-
-interface ConnectionTestChoiceDelta {
-  content?: string
-}
-
-interface ConnectionTestChoice {
-  message?: ConnectionTestChoiceMessage
-  text?: string
-  delta?: ConnectionTestChoiceDelta
-}
-
-interface ConnectionTestResponse {
-  id?: string
-  model?: string
-  object?: string
-  output_text?: string
-  choices?: ConnectionTestChoice[]
-  content?: ConnectionTestAnthropicResponseBlock[] | ConnectionTestContentPart[] | ConnectionTestContentPart
-  message?: string
-  reply?: string
-  data?: ConnectionTestResponse
-  output_sensitive?: boolean
-  output_sensitive_type?: number
-  base_resp?: ConnectionTestBaseResp
-  error?: ConnectionTestErrorObject
-}
-
-interface ConnectionTestBaseResp {
-  status_code?: number
-  status_msg?: string
-}
-
-interface ConnectionTestErrorObject {
-  message?: string
-}
-
-interface ConnectionTestDeltaChunk {
-  choices?: ConnectionTestChoice[]
-}
 
 @Builder
 function AIPanelHeader(title: string, theme: ThemePalette) {
@@ -140,54 +61,11 @@ export struct AIAssistantSettingsPanel {
   @State saveHint: string = 'AI 助手设置将保存到本地'
   @State providerSelection: string = 'deepseek'
   @State modelSelection: string = 'deepseek-chat'
-  @State baseUrlPlaceholder: string = 'https://api.deepseek.com/v1'
   @State baseUrlDraft: string = ''
   @State apiKeyDraft: string = ''
   @State isTesting: boolean = false
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
   private settingsMutationVersion: number = 0
-
-  private decodeByteArray(bytes: Uint8Array): string {
-    let output = ''
-    for (let index = 0; index < bytes.length; index += 1) {
-      output += String.fromCharCode(bytes[index])
-    }
-    return output
-  }
-
-  private stringifyHttpResult(result: Object | string | number | boolean | null | undefined): string {
-    if (typeof result === 'string') {
-      return result
-    }
-    if (result instanceof ArrayBuffer) {
-      try {
-        return this.decodeByteArray(new Uint8Array(result))
-      } catch (_error) {
-        return ''
-      }
-    }
-    if (result instanceof Uint8Array) {
-      try {
-        return this.decodeByteArray(result)
-      } catch (_error) {
-        return ''
-      }
-    }
-    try {
-      return JSON.stringify(result ?? '')
-    } catch (_error) {
-      return String(result ?? '')
-    }
-  }
-
-  private readonly providerOrder: AIProvider[] = [
-    'minimax',
-    'deepseek',
-    'openai',
-    'anthropic',
-    'glm',
-    'custom',
-  ]
 
   aboutToAppear(): void {
     void this.loadSettings()
@@ -211,27 +89,12 @@ export struct AIAssistantSettingsPanel {
   }
 
   private applyResolvedAIState(settings: AIAssistantSettings): void {
-    const normalizedProvider = this.normalizeProvider(settings.provider)
-    const providerConfig = this.providerDefinition(normalizedProvider)
-    const normalizedModel = providerConfig.models.includes(settings.model)
-      ? settings.model
-      : (providerConfig.models.length > 0 ? providerConfig.models[0] : settings.model)
-    const resolvedBaseUrl = (settings.baseUrl || '').trim() || providerConfig.defaultBaseUrl
-    const normalizedSettings: AIAssistantSettings = {
-      provider: normalizedProvider,
-      apiKeys: settings.apiKeys ?? {},
-      baseUrl: resolvedBaseUrl,
-      model: normalizedModel,
-      enableSystemPrompt: settings.enableSystemPrompt,
-      systemPromptTemplate: settings.systemPromptTemplate,
-      chatPersonaPrompt: settings.chatPersonaPrompt,
-    }
-    this.aiConfig = normalizedSettings
-    this.providerSelection = normalizedProvider
-    this.modelSelection = normalizedModel
-    this.baseUrlPlaceholder = providerConfig.defaultBaseUrl
-    this.baseUrlDraft = resolvedBaseUrl
-    this.apiKeyDraft = normalizedSettings.apiKeys[normalizedProvider] ?? ''
+    const resolved = resolveAIAssistantState(settings)
+    this.aiConfig = resolved.settings
+    this.providerSelection = resolved.providerSelection
+    this.modelSelection = resolved.modelSelection
+    this.baseUrlDraft = resolved.baseUrlDraft
+    this.apiKeyDraft = resolved.apiKeyDraft
   }
 
   private syncGeneralSettings(next: HarmonySettings): void {
@@ -262,60 +125,12 @@ export struct AIAssistantSettingsPanel {
     })
   }
 
-  private providerOptions(): SelectOption[] {
-    return this.providerOrder.map((provider: AIProvider): SelectOption => ({
-      label: this.providerDefinition(provider).label,
-      value: provider,
-    }))
-  }
-
-  private normalizeProvider(provider: AIProvider): AIProvider {
-    return this.providerOrder.includes(provider) ? provider : DEFAULT_AI_ASSISTANT_SETTINGS.provider
-  }
-
-  private providerDefinition(provider: AIProvider): AIProviderDefinition {
-    const normalizedProvider = this.normalizeProvider(provider)
-    switch (normalizedProvider) {
-      case 'minimax':
-        return AI_PROVIDER_OPTIONS.minimax
-      case 'deepseek':
-        return AI_PROVIDER_OPTIONS.deepseek
-      case 'openai':
-        return AI_PROVIDER_OPTIONS.openai
-      case 'anthropic':
-        return AI_PROVIDER_OPTIONS.anthropic
-      case 'glm':
-        return AI_PROVIDER_OPTIONS.glm
-      case 'custom':
-        return AI_PROVIDER_OPTIONS.custom
-      default:
-        return AI_PROVIDER_OPTIONS.deepseek
-    }
-  }
-
   private modelOptions(): SelectOption[] {
-    const provider = this.providerDefinition(this.providerSelection as AIProvider)
-    if (provider.models.length > 0) {
-      return provider.models.map((model: string): SelectOption => ({
-        label: model,
-        value: model,
-      }))
-    }
-
-    const fallbackModel = (this.modelSelection || this.aiConfig.model || 'custom-model').trim() || 'custom-model'
-    return [{
-      label: fallbackModel,
-      value: fallbackModel,
-    }]
+    return aiModelOptions(this.providerSelection as AIProvider, this.modelSelection, this.aiConfig.model)
   }
 
   private resolveNextModel(provider: AIProvider): string {
-    const providerConfig = this.providerDefinition(provider)
-    if (providerConfig.models.length > 0) {
-      return providerConfig.models[0]
-    }
-    const fallbackModel = (this.modelSelection || this.aiConfig.model || 'custom-model').trim()
-    return fallbackModel || 'custom-model'
+    return resolveNextAIModel(provider, this.modelSelection, this.aiConfig.model)
   }
 
   private applyModel(value: string): void {
@@ -333,7 +148,6 @@ export struct AIAssistantSettingsPanel {
 
   private applyProvider(value: string): void {
     const provider = value as AIProvider
-    const providerConfig = this.providerDefinition(provider)
     const nextModel = this.resolveNextModel(provider)
     this.providerSelection = provider
     this.modelSelection = nextModel
@@ -350,122 +164,30 @@ export struct AIAssistantSettingsPanel {
   }
 
   private applyAISummarySwitch(enabled: boolean): void {
-    this.syncGeneralSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: enabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    showUnreadDot: this.config.showUnreadDot,
-    })
+    this.syncGeneralSettings(patchHarmonyAISettings(this.config, { aiSummaryEnabled: enabled }))
   }
 
   private patchTranslationEnabled(value: boolean): void {
-    this.syncGeneralSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: value,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    showUnreadDot: this.config.showUnreadDot,
-    })
+    this.syncGeneralSettings(patchHarmonyAISettings(this.config, { aiTranslationEnabled: value }))
   }
 
   private patchTranslationLanguage(value: AITargetLanguage): void {
-    this.syncGeneralSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: value,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    showUnreadDot: this.config.showUnreadDot,
-    })
+    this.syncGeneralSettings(patchHarmonyAISettings(this.config, { aiTranslationLanguage: value }))
   }
 
   private patchTranslationAutoTrigger(value: boolean): void {
-    this.syncGeneralSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: value,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    showUnreadDot: this.config.showUnreadDot,
-    })
+    this.syncGeneralSettings(patchHarmonyAISettings(this.config, { aiTranslationAutoTrigger: value }))
   }
 
   private patchSummaryAutoTrigger(value: boolean): void {
-    this.syncGeneralSettings({
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: value,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-    showUnreadDot: this.config.showUnreadDot,
-    })
-  }
-
-  private readonly translationLanguageOptions: SelectOption[] = [
-    { label: '简体中文', value: 'zh-CN' },
-    { label: '繁體中文', value: 'zh-TW' },
-    { label: 'English', value: 'en' },
-    { label: '日本語', value: 'ja' },
-    { label: '한국어', value: 'ko' },
-    { label: 'Français', value: 'fr' },
-    { label: 'Deutsch', value: 'de' },
-    { label: 'Español', value: 'es' },
-    { label: 'Русский', value: 'ru' },
-    { label: 'العربية', value: 'ar' },
-  ]
-
-  private translationLanguageLabel(value: AITargetLanguage): string {
-    return this.translationLanguageOptions.find((o: SelectOption) => o.value === value)?.label ?? value
+    this.syncGeneralSettings(patchHarmonyAISettings(this.config, { aiSummaryAutoTrigger: value }))
   }
 
   private persistCurrentDraft(): void {
     const trimmedApiKey = this.apiKeyDraft.trim()
     const trimmedBaseUrl = (this.aiConfig.baseUrl || '').trim()
     const trimmedModel = (this.aiConfig.model || '').trim()
-    const nextApiKeys: Record<string, string> = this.copyApiKeys(this.aiConfig.apiKeys)
+    const nextApiKeys: Record<string, string> = copyApiKeys(this.aiConfig.apiKeys)
     nextApiKeys[this.providerSelection] = trimmedApiKey
     const nextSettings: AIAssistantSettings = {
       provider: this.aiConfig.provider,
@@ -477,14 +199,6 @@ export struct AIAssistantSettingsPanel {
       chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
     }
     this.syncAISettings(nextSettings)
-  }
-
-  private copyApiKeys(source: Record<string, string>): Record<string, string> {
-    const result: Record<string, string> = {}
-    for (const key of Object.keys(source)) {
-      result[key] = source[key]
-    }
-    return result
   }
 
   private showToast(message: string, duration: number = 3000): void {
@@ -501,396 +215,26 @@ export struct AIAssistantSettingsPanel {
     }
     const apiKey = (this.aiConfig.apiKeys[this.providerSelection] ?? this.apiKeyDraft).trim()
     const model = (this.aiConfig.model || this.modelSelection || '').trim()
-    const providerConfig = this.providerDefinition(this.providerSelection as AIProvider)
+    const providerConfig = aiProviderDefinition(this.providerSelection as AIProvider)
     const baseUrl = (this.aiConfig.baseUrl || '').trim() || providerConfig.defaultBaseUrl
     if (!apiKey || !model || !baseUrl) {
       this.showToast('请先填写 API Key、模型和 Base URL')
       return
     }
     this.isTesting = true
-    const endpoint = this.resolveCompletionEndpoint(baseUrl, this.providerSelection as AIProvider)
-    const useAnthropicFormat = endpoint.includes('/anthropic/')
-    const useMiniMaxTextFormat = this.providerSelection === 'minimax' && endpoint.includes('/text/chatcompletion_v2')
-
-    const body = useAnthropicFormat
-      ? JSON.stringify({
-        model,
-        max_tokens: 32,
-        messages: [{
-          role: 'user',
-          content: [{
-            type: 'text',
-            text: '简短告诉我你是什么公司的什么模型、是什么版本，不超过15个字',
-          }],
-        }],
-      } as ConnectionTestAnthropicRequest)
-      : useMiniMaxTextFormat
-        ? JSON.stringify({
-          model,
-          max_completion_tokens: 32,
-          messages: [{
-            role: 'user',
-            content: '简短告诉我你是什么公司的什么模型、是什么版本，不超过15个字',
-          }],
-        } as ConnectionTestMiniMaxTextRequest)
-        : JSON.stringify({
-        model,
-        messages: [{
-          role: 'user',
-          content: '简短告诉我你是什么公司的什么模型、是什么版本，不超过15个字',
-        }],
-        max_tokens: 32,
-      } as ConnectionTestChatRequest)
-    const request = http.createHttp()
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      }
-      if (useAnthropicFormat) {
-        headers['x-api-key'] = apiKey
-        headers['anthropic-version'] = '2023-06-01'
-      }
-      const maxAttempts = 2
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await request.request(endpoint, {
-          method: http.RequestMethod.POST,
-          connectTimeout: 10000,
-          readTimeout: 15000,
-          header: headers,
-          extraData: body,
-        })
-        const raw = this.stringifyHttpResult(response.result)
-        if (response.responseCode === 200) {
-          let content = this.extractConnectionTestContent(raw, useAnthropicFormat)
-          if (!content && this.providerSelection === 'minimax' && endpoint.includes('/chat/completions')) {
-            const fallbackEndpoint = this.resolveMiniMaxTextEndpoint(endpoint)
-            const fallbackBody = JSON.stringify({
-              model,
-              max_completion_tokens: 32,
-              messages: [{
-                role: 'user',
-                content: '简短告诉我你是什么公司的什么模型、是什么版本，不超过15个字',
-              }],
-            } as ConnectionTestMiniMaxTextRequest)
-            const fallbackResponse = await request.request(fallbackEndpoint, {
-              method: http.RequestMethod.POST,
-              connectTimeout: 10000,
-              readTimeout: 15000,
-              header: headers,
-              extraData: fallbackBody,
-            })
-            if (fallbackResponse.responseCode === 200) {
-              const fallbackRaw = this.stringifyHttpResult(fallbackResponse.result)
-              content = this.extractConnectionTestContent(fallbackRaw, false)
-            }
-          }
-          if (content) {
-            this.showToast(content, 4000)
-          } else {
-            const errorDetail = this.extractConnectionTestError(raw)
-            if (errorDetail) {
-              this.showToast(`无响应内容：${errorDetail}`, 4000)
-            } else {
-              if (attempt < maxAttempts - 1) {
-                await this.delay(700)
-                continue
-              }
-              const successHint = this.extractConnectionTestSuccessHint(raw)
-              if (successHint) {
-                this.showToast(successHint, 3500)
-              } else {
-                const debugHint = this.extractConnectionTestDebugHint(raw)
-                this.showToast(debugHint ? `无响应内容（${debugHint}）` : '无响应内容', 4500)
-              }
-            }
-          }
-          return
-        }
-        const errorDetail = this.extractConnectionTestError(raw)
-        if (response.responseCode === 529 && attempt < maxAttempts - 1) {
-          await this.delay(900)
-          continue
-        }
-        if (errorDetail) {
-          this.showToast(`错误 ${response.responseCode}：${errorDetail}`, 4000)
-        } else {
-          this.showToast(`错误 ${response.responseCode}`)
-        }
-        return
-      }
+      const result: AIAssistantConnectionTestResult = await AIAssistantConnectionTestService.run({
+        provider: this.providerSelection as AIProvider,
+        apiKey,
+        model,
+        baseUrl,
+      })
+      this.showToast(result.message, result.duration)
     } catch (error) {
       this.showToast(`连接失败：${error instanceof Error ? error.message : String(error)}`)
     } finally {
-      request.destroy()
       this.isTesting = false
     }
-  }
-
-  private resolveMiniMaxTextEndpoint(endpoint: string): string {
-    const normalized = (endpoint || '').trim().replace(/\/+$/g, '')
-    if (normalized.includes('/text/chatcompletion_v2')) {
-      return normalized
-    }
-    if (normalized.endsWith('/chat/completions')) {
-      return normalized.replace(/\/chat\/completions$/g, '/text/chatcompletion_v2')
-    }
-    return `${normalized}/text/chatcompletion_v2`
-  }
-
-  private resolveCompletionEndpoint(baseUrl: string, provider: AIProvider): string {
-    const trimmed = (baseUrl || '').trim()
-    const normalized = trimmed.toLowerCase()
-    if (
-      normalized.includes('/chat/completions')
-      || normalized.includes('/text/chatcompletion_v2')
-      || normalized.includes('/v1/messages')
-      || normalized.includes('/anthropic/')
-    ) {
-      return trimmed
-    }
-    const normalizedBase = trimmed.replace(/\/+$/g, '')
-    if (provider === 'anthropic') {
-      return `${normalizedBase}/messages`
-    }
-    if (provider === 'minimax') {
-      return `${normalizedBase}/text/chatcompletion_v2`
-    }
-    return `${normalizedBase}/chat/completions`
-  }
-
-  private async delay(milliseconds: number): Promise<void> {
-    await new Promise<void>((resolve: () => void) => {
-      setTimeout(() => resolve(), milliseconds)
-    })
-  }
-
-  private extractConnectionTestError(raw: string): string {
-    try {
-      const parsed = this.parseConnectionTestResponse(raw)
-      if (!parsed) {
-        return ''
-      }
-      if (parsed.output_sensitive) {
-        const sensitiveType = parsed.output_sensitive_type ? `，类型 ${parsed.output_sensitive_type}` : ''
-        return `输出被策略拦截${sensitiveType}`
-      }
-      const statusCode = parsed.base_resp?.status_code
-      if (statusCode && statusCode !== 0) {
-        const statusMessage = (parsed.base_resp?.status_msg || '').trim()
-        return statusMessage ? `${statusCode} ${statusMessage}` : `${statusCode}`
-      }
-      const statusMessage = (parsed.base_resp?.status_msg || '')
-      if ((statusMessage || '').trim()) {
-        return statusMessage.trim()
-      }
-      const message = (parsed.message || '')
-      if ((message || '').trim()) {
-        return message.trim()
-      }
-      const errorMessage = (parsed.error?.message || '').trim()
-      return errorMessage
-    } catch (_error) {
-      return ''
-    }
-  }
-
-  private extractConnectionTestDebugHint(raw: string): string {
-    const normalized = (raw || '').trim()
-    if (!normalized) {
-      return ''
-    }
-    const parsed = this.parseConnectionTestResponse(normalized)
-    if (!parsed) {
-      return normalized.slice(0, 80)
-    }
-    const keys = Object.keys(parsed as Object)
-    if (keys.length > 0) {
-      return `响应字段: ${keys.join(', ').slice(0, 80)}`
-    }
-    return normalized.slice(0, 80)
-  }
-
-  private extractConnectionTestSuccessHint(raw: string): string {
-    const parsed = this.parseConnectionTestResponse(raw)
-    if (!parsed) {
-      return ''
-    }
-    const model = (parsed.model || '').trim()
-    const objectType = (parsed.object || '').trim()
-    if (model && objectType) {
-      return `连接成功（${model} / ${objectType}）`
-    }
-    if (model) {
-      return `连接成功（${model}）`
-    }
-    if (objectType) {
-      return `连接成功（${objectType}）`
-    }
-    if ((parsed.id || '').trim()) {
-      return '连接成功（已返回请求ID）'
-    }
-    return ''
-  }
-
-  private extractConnectionTestContent(raw: string, useAnthropicFormat: boolean): string {
-    const parsed = this.parseConnectionTestResponse(raw)
-    if (!parsed) {
-      return ''
-    }
-    if (parsed.data) {
-      const nested = this.extractConnectionTestContent(JSON.stringify(parsed.data), useAnthropicFormat)
-      if (nested) {
-        return nested
-      }
-    }
-    const reply = (parsed.reply || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    if (reply) {
-      return reply
-    }
-    const rootMessage = (parsed.message || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    if (rootMessage) {
-      return rootMessage
-    }
-    if (useAnthropicFormat) {
-      const content = parsed.content as ConnectionTestAnthropicResponseBlock[]
-      if (!content || !Array.isArray(content)) {
-        return ''
-      }
-      const fragments: string[] = []
-      content.forEach((item: ConnectionTestAnthropicResponseBlock) => {
-        const itemType = (item.type || '').trim()
-        if (itemType === 'text' && (item.text || '').trim()) {
-          fragments.push((item.text || '').trim())
-        } else if (itemType === 'thinking' && (item.thinking || '').trim()) {
-          fragments.push((item.thinking || '').trim())
-        }
-      })
-      return fragments.join('\n').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    }
-
-    const outputText = (parsed.output_text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    if (outputText) {
-      return outputText
-    }
-
-    const choices = parsed.choices as ConnectionTestChoice[]
-    if (!choices || choices.length === 0) {
-    const contentBlocks = parsed.content || []
-      if (Array.isArray(contentBlocks) && contentBlocks.length > 0) {
-        const blockTexts: string[] = []
-        contentBlocks.forEach((block: ConnectionTestAnthropicResponseBlock | ConnectionTestContentPart) => {
-          if ((block.text || '').trim()) {
-            blockTexts.push((block.text || '').trim())
-          }
-        })
-        return blockTexts.join('\n').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      }
-      return ''
-    }
-    const firstChoice = choices[0]
-    if (!firstChoice) {
-      return ''
-    }
-    const message = firstChoice.message as ConnectionTestChoiceMessage
-    if (message) {
-      if (typeof message.content === 'string') {
-        return message.content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      }
-      if (Array.isArray(message.content)) {
-        const messageParts: string[] = []
-        message.content.forEach((part: ConnectionTestContentPart) => {
-          if ((part.text || '').trim()) {
-            messageParts.push((part.text || '').trim())
-          }
-        })
-        const arrayText = messageParts.join('\n').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-        if (arrayText) {
-          return arrayText
-        }
-      }
-      if (message.content && !Array.isArray(message.content)) {
-        const singlePartText = ((message.content as ConnectionTestContentPart).text || '')
-          .replace(/<think>[\s\S]*?<\/think>/g, '')
-          .trim()
-        if (singlePartText) {
-          return singlePartText
-        }
-      }
-      const reasoningContent = (message.reasoning_content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      if (reasoningContent) {
-        return reasoningContent
-      }
-    }
-    const choiceText = firstChoice.text
-    if (typeof choiceText === 'string') {
-      return choiceText.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    }
-    const deltaContent = (firstChoice.delta?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    if (deltaContent) {
-      return deltaContent
-    }
-    return ''
-  }
-
-  private parseConnectionTestResponse(raw: string): ConnectionTestResponse | undefined {
-    const normalizedRaw = (raw || '').trim()
-    if (!normalizedRaw) {
-      return undefined
-    }
-    try {
-      const parsedObject = JSON.parse(normalizedRaw) as ConnectionTestResponse
-      if (parsedObject) {
-        return parsedObject
-      }
-    } catch (_error) {
-    }
-
-    try {
-      const parsedArray = JSON.parse(normalizedRaw) as ConnectionTestDeltaChunk[]
-      if (Array.isArray(parsedArray) && parsedArray.length > 0) {
-        return parsedArray[parsedArray.length - 1] as ConnectionTestResponse
-      }
-    } catch (_error) {
-    }
-
-    const dataLines = normalizedRaw
-      .split(/\r?\n/)
-      .map((line: string) => line.trim())
-      .filter((line: string) => line.startsWith('data:'))
-    for (let index = dataLines.length - 1; index >= 0; index -= 1) {
-      const payload = dataLines[index].slice(5).trim()
-      if (!payload || payload === '[DONE]') {
-        continue
-      }
-      try {
-        return JSON.parse(payload) as ConnectionTestResponse
-      } catch (_error) {
-      }
-    }
-    return undefined
-  }
-
-  private shortenUrl(url: string): string {
-    if (!url) {
-      return ''
-    }
-    try {
-      // 去掉 https:// 前缀，保留 host + path 但截短
-      const withoutScheme = url.replace(/^https?:\/\//, '')
-      return withoutScheme.length > 28 ? withoutScheme.slice(0, 28) + '…' : withoutScheme
-    } catch (_) {
-      return url
-    }
-  }
-
-  private displayBaseUrl(): string {
-    const provider = this.providerDefinition(this.providerSelection as AIProvider)
-    const current = (this.aiConfig.baseUrl || '').trim()
-    if (current) {
-      return current
-    }
-    return provider.defaultBaseUrl
   }
 
   @Builder
@@ -921,71 +265,9 @@ export struct AIAssistantSettingsPanel {
   }
 
   @Builder
-  private ActionLabel(label: string) {
-    Row({ space: 6 }) {
-      Text(label)
-        .fontSize(PANEL_HINT_SIZE)
-        .fontColor(this.theme.textSecondary)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
-        .fontSize(11)
-        .fontColor([this.theme.textMuted])
-    }
-      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-  }
-
-  @Builder
-  private SettingActionRow(
-    symbol: Resource,
-    title: string,
-    subtitle: string,
-    actionLabel: string,
-    onTap: () => void,
-    iconDelay: number = 0,
-  ) {
-    Row({ space: 12 }) {
-      SymbolGlyph(symbol)
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text(title)
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        Text(subtitle)
-          .fontSize(PANEL_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-
-      this.ActionLabel(actionLabel)
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => onTap())
-  }
-
-  @Builder
   private TranslationLanguageMenu() {
     Menu() {
-      ForEach(this.translationLanguageOptions, (option: SelectOption) => {
+      ForEach(TRANSLATION_LANGUAGE_OPTIONS, (option: SelectOption) => {
         MenuItem({
           content: option.label,
           symbolEndIcon: this.config.aiTranslationLanguage === option.value
@@ -1005,7 +287,7 @@ export struct AIAssistantSettingsPanel {
   @Builder
   private SummaryLanguageMenu() {
     Menu() {
-      ForEach(this.translationLanguageOptions, (option: SelectOption) => {
+      ForEach(TRANSLATION_LANGUAGE_OPTIONS, (option: SelectOption) => {
         MenuItem({
           content: option.label,
           symbolEndIcon: this.config.aiTranslationLanguage === option.value
@@ -1039,7 +321,7 @@ export struct AIAssistantSettingsPanel {
           .layoutWeight(1)
 
         Row({ space: 4 }) {
-          Text(this.translationLanguageLabel(this.config.aiTranslationLanguage))
+          Text(translationLanguageLabel(this.config.aiTranslationLanguage))
             .fontSize(PANEL_HINT_SIZE)
             .fontColor(this.theme.textSecondary)
             .maxLines(1)
@@ -1154,7 +436,7 @@ export struct AIAssistantSettingsPanel {
           .layoutWeight(1)
 
         Row({ space: 4 }) {
-          Text(this.translationLanguageLabel(this.config.aiTranslationLanguage))
+          Text(translationLanguageLabel(this.config.aiTranslationLanguage))
             .fontSize(PANEL_HINT_SIZE)
             .fontColor(this.theme.textSecondary)
             .maxLines(1)
@@ -1266,7 +548,7 @@ export struct AIAssistantSettingsPanel {
   @Builder
   private ProviderOptionMenu() {
     Menu() {
-      ForEach(this.providerOptions(), (option: SelectOption) => {
+      ForEach(aiProviderOptions(), (option: SelectOption) => {
         MenuItem({
           content: option.label,
           symbolEndIcon: this.providerSelection === option.value
@@ -1318,7 +600,7 @@ export struct AIAssistantSettingsPanel {
         .layoutWeight(1)
 
       Row() {
-        Text(this.providerDefinition(this.providerSelection as AIProvider).label)
+        Text(aiProviderDefinition(this.providerSelection as AIProvider).label)
           .fontSize(PANEL_HINT_SIZE)
           .fontColor(this.theme.textSecondary)
           .maxLines(1)
@@ -1408,134 +690,6 @@ export struct AIAssistantSettingsPanel {
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
-  }
-
-  @Builder
-  private InlineOptionList(
-    options: SelectOption[],
-    selectedValue: string,
-    onSelect: (value: string) => void,
-  ) {
-    Column({ space: 0 }) {
-      ForEach(options, (option: SelectOption, index: number) => {
-        Row({ space: 8 }) {
-          Text(option.label)
-            .layoutWeight(1)
-            .fontSize(14)
-            .fontColor(selectedValue === option.value ? this.theme.accent : this.theme.textPrimary)
-            .fontWeight(selectedValue === option.value ? FontWeight.Medium : FontWeight.Regular)
-
-          if (selectedValue === option.value) {
-            SymbolGlyph($r('sys.symbol.checkmark'))
-              .fontSize(14)
-              .fontColor([this.theme.accent])
-          }
-        }
-        .width('100%')
-        .height(40)
-        .padding({ left: 14, right: 14 })
-        .clickEffect({ level: ClickEffectLevel.MIDDLE })
-        .onClick(() => onSelect(option.value))
-
-        if (index < options.length - 1) {
-          Row()
-            .width('100%')
-            .height(0.5)
-            .backgroundColor(this.theme.divider)
-        }
-      }, (option: SelectOption) => option.value)
-    }
-    .width('100%')
-    .backgroundColor(this.theme.surface)
-    .borderRadius(12)
-    .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-  }
-
-  @Builder
-  private SelectionListRow(
-    symbol: Resource,
-    kind: 'provider' | 'model',
-    title: string,
-    subtitle: string,
-    options: SelectOption[],
-    onSelect: (value: string) => void,
-    iconDelay: number = 0,
-  ) {
-    Column({ space: 10 }) {
-      Row({ space: 12 }) {
-        SymbolGlyph(symbol)
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay))
-
-        Column({ space: PANEL_ROW_TEXT_SPACING }) {
-          Text(title)
-            .fontSize(PANEL_TITLE_SIZE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-
-          Text(subtitle)
-            .fontSize(PANEL_SUBTITLE_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
-
-      Column({ space: 6 }) {
-        ForEach(options, (option: SelectOption, index: number) => {
-          Column({ space: 0 }) {
-            Row({ space: 8 }) {
-              Text(option.label)
-                .layoutWeight(1)
-                .fontSize(15)
-                .fontWeight(this.isOptionSelected(kind, option.value) ? FontWeight.Medium : FontWeight.Regular)
-                .fontColor(this.isOptionSelected(kind, option.value) ? this.theme.accent : this.theme.textPrimary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-              if (this.isOptionSelected(kind, option.value)) {
-                SymbolGlyph($r('sys.symbol.checkmark'))
-                  .fontSize(15)
-                  .fontColor([this.theme.accent])
-              }
-            }
-            .width('100%')
-            .height(44)
-            .padding({ left: 2, right: 2 })
-            .clickEffect({ level: ClickEffectLevel.MIDDLE })
-            .onClick(() => onSelect(option.value))
-
-            if (index < options.length - 1) {
-              Row()
-                .width('100%')
-                .height(0.5)
-                .backgroundColor(this.theme.divider)
-            }
-          }
-          .width('100%')
-        }, (option: SelectOption) => option.value)
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  private isOptionSelected(kind: 'provider' | 'model', value: string): boolean {
-    return kind === 'provider'
-      ? this.providerSelection === value
-      : this.modelSelection === value
   }
 
   @Builder
@@ -1668,7 +822,7 @@ export struct AIAssistantSettingsPanel {
         .showPasswordIcon(true)
         .onChange((nextValue: string) => {
           this.apiKeyDraft = nextValue
-          const nextApiKeys: Record<string, string> = this.copyApiKeys(this.aiConfig.apiKeys)
+          const nextApiKeys: Record<string, string> = copyApiKeys(this.aiConfig.apiKeys)
           nextApiKeys[this.providerSelection] = nextValue
           this.aiConfig = {
             provider: this.aiConfig.provider,

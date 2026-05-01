@@ -18,14 +18,12 @@ import { BottomTabs } from './BottomTabs'
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel'
 import { AccountsSettingsPanel } from './AccountsSettingsPanel'
 import { AIAssistantSettingsPanel } from './AIAssistantSettingsPanel'
-import {
-  AboutSettingsPanel,
-  RefreshLogSettingsPanel,
-  GeneralSettingsPanel,
-  PrivacySettingsPanel,
-  FavoritesPanel,
-  SubscriptionsSettingsPanel,
-} from './SettingsSecondaryPanels'
+import { AboutSettingsPanel } from './AboutSettingsPanel'
+import { FavoritesPanel } from './FavoritesPanel'
+import { GeneralSettingsPanel } from './GeneralSettingsPanel'
+import { PrivacySettingsPanel } from './PrivacySettingsPanel'
+import { RefreshLogSettingsPanel } from './RefreshLogSettingsPanel'
+import { SubscriptionsSettingsPanel } from './SubscriptionsSettingsPanel'
 import { SettingListRow } from './SettingListRow'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'

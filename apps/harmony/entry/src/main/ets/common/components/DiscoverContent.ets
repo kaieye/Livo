@@ -4,6 +4,7 @@ import { openArticleDetail } from '../navigation/AppRouter'
 import { AvatarTile } from './AvatarTile'
 import { BottomTabs } from './BottomTabs'
 import { DiscoverBrowseDestination } from './DiscoverBrowseDestination'
+import { categoryCardSymbol, discoverCategoryCards, resolveDirectUrlResult } from './DiscoverCatalog'
 import { DiscoverPreviewDestination, DiscoverSubscribeConfigDestination } from './DiscoverDestinations'
 import {
   DirectUrlResult,
@@ -36,7 +37,6 @@ import {
   discoverPlatformLabel,
   discoverViewLabel,
   DiscoverSearchPlatform,
-  normalizeDiscoverInput,
   preferredViewForPlatform,
   RecommendedFeed,
   resolveKeywordCandidatesByPlatform,
@@ -52,7 +52,19 @@ import { livoMotion } from '../ui/Motion'
 import {
   resolveDiscoverOverlayReturnLevel,
 } from '../utils/DiscoverNavigationPolicy'
-import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import {
+  candidateAvatarCacheKey,
+  candidateAvatarFallbackUrls,
+  isInstagramPlaceholderAvatar,
+  platformColor,
+  resolvedCandidateAvatarUrl,
+  resolvedPlatformLabel,
+  shouldHydrateCandidateAvatar,
+} from '../utils/DiscoverCandidatePresentation'
+import {
+  isSubscribedCandidate,
+  isSubscribedRecommendedFeed,
+} from '../utils/DiscoverFeedIdentity'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
 import {
   CARD_RADIUS_LG,
@@ -296,67 +308,6 @@ export struct DiscoverContent {
       .slice(0, 7)
   }
 
-  private discoverCategoryCards(): DiscoverCategoryCard[] {
-    return [
-      {
-        id: 'articles',
-        view: FeedViewType.Articles,
-        label: '文章',
-        accent: '#2563EB',
-      },
-      {
-        id: 'social',
-        view: FeedViewType.SocialMedia,
-        label: '社交',
-        accent: '#0F766E',
-      },
-      {
-        id: 'pictures',
-        view: FeedViewType.Pictures,
-        label: '图片',
-        accent: '#DB2777',
-      },
-      {
-        id: 'videos',
-        view: FeedViewType.Videos,
-        label: '视频',
-        accent: '#F97316',
-      },
-      {
-        id: 'ai',
-        view: FeedViewType.Articles,
-        label: 'AI',
-        accent: '#6C63FF',
-        sourceKey: 'ai',
-        icon: $r('app.media.HugeiconsAiCloud01'),
-      },
-      {
-        id: 'ins-2',
-        view: FeedViewType.Pictures,
-        label: 'Ins',
-        accent: '#C13584',
-        sourceKey: 'ins',
-        icon: $r('app.media.account_instagram'),
-      },
-      {
-        id: 'ins-3',
-        view: FeedViewType.Pictures,
-        label: 'Ins',
-        accent: '#C13584',
-        sourceKey: 'ins',
-        icon: $r('app.media.account_instagram'),
-      },
-      {
-        id: 'ins-4',
-        view: FeedViewType.Pictures,
-        label: 'Ins',
-        accent: '#C13584',
-        sourceKey: 'ins',
-        icon: $r('app.media.account_instagram'),
-      },
-    ]
-  }
-
   private openBrowsePage(view: FeedViewType, title: string, sourceKey: string = ''): void {
     this.scheduleOverlayNavigation(() => {
       const params = new DiscoverBrowseRouteParams()
@@ -372,41 +323,8 @@ export struct DiscoverContent {
     })
   }
 
-  private categoryCardSymbol(view: FeedViewType): Resource {
-    if (view === FeedViewType.SocialMedia) {
-      return $r('sys.symbol.ellipsis_bubble')
-    }
-    if (view === FeedViewType.Pictures) {
-      return $r('sys.symbol.picture_2')
-    }
-    if (view === FeedViewType.Videos) {
-      return $r('sys.symbol.media_center')
-    }
-    return $r('sys.symbol.doc_text')
-  }
-
-  private validateInputUrl(targetUrl: string): boolean {
-    return /^https?:\/\/\S+$/i.test(targetUrl)
-  }
-
-  private hostOf(url: string): string {
-    const matched = url.match(/^https?:\/\/([^/]+)/i)
-    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
-  }
-
   private directUrlResult(): DirectUrlResult | undefined {
-    const normalized = normalizeDiscoverInput(this.query)
-    if (!this.validateInputUrl(normalized)) {
-      return undefined
-    }
-
-    const host = this.hostOf(normalized)
-    return {
-      targetUrl: normalized,
-      siteUrl: host ? `https://${host}` : normalized,
-      title: host || normalized,
-      description: '直接使用这个地址进入订阅预览，并在下一页校验内容。',
-    }
+    return resolveDirectUrlResult(this.query)
   }
 
   private resolvedCandidates(): ResolvedDiscoverCandidate[] {
@@ -541,136 +459,12 @@ export struct DiscoverContent {
     return this.localRecommendedResults().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed))
   }
 
-  private normalizeFeedIdentity(value: string): string {
-    const normalized = value.trim().toLowerCase()
-    if (!normalized) {
-      return ''
-    }
-
-    return normalized
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/[?#].*$/, '')
-      .replace(/\/+$/, '')
-  }
-
-  private pushIdentityKey(keys: string[], value: string): void {
-    const trimmed = value.trim()
-    if (!trimmed || keys.includes(trimmed)) {
-      return
-    }
-    keys.push(trimmed)
-  }
-
-  private extractBilibiliIdentity(value: string): string {
-    const matched = value.match(/\/(?:bilibili\/user\/(?:video|dynamic|article)|space\.bilibili\.com)\/(\d+)/i)
-    return matched?.[1]?.trim() ? `bilibili:${matched[1].trim()}` : ''
-  }
-
-  private extractYouTubeIdentity(value: string): string {
-    const channelId = value.match(/[?&]channel_id=([^&]+)/i)?.[1]
-      || value.match(/\/youtube\/channel\/([^/?#]+)/i)?.[1]
-      || value.match(/\/channel\/([^/?#]+)/i)?.[1]
-    if (channelId?.trim()) {
-      return `youtube:channel:${decodeURIComponent(channelId).trim().toLowerCase()}`
-    }
-
-    const handle = value.match(/\/youtube\/user\/(@[^/?#]+)/i)?.[1]
-      || value.match(/\/(@[^/?#]+)/i)?.[1]
-    if (handle?.trim()) {
-      return `youtube:handle:${decodeURIComponent(handle).trim().replace(/^@/, '').toLowerCase()}`
-    }
-
-    const user = value.match(/\/youtube\/user\/([^/?#]+)/i)?.[1]
-      || value.match(/\/(?:user|c)\/([^/?#]+)/i)?.[1]
-    if (user?.trim()) {
-      return `youtube:user:${decodeURIComponent(user).trim().toLowerCase()}`
-    }
-
-    return ''
-  }
-
-  private extractCanonicalFeedIdentity(primaryUrl: string, secondaryUrl: string): string {
-    const xUsername = extractXUsername(primaryUrl) || extractXUsername(secondaryUrl)
-    if (xUsername) {
-      return `x:${xUsername}`
-    }
-
-    const instagramUsername = extractInstagramUsername(primaryUrl) || extractInstagramUsername(secondaryUrl)
-    if (instagramUsername) {
-      return `instagram:${instagramUsername}`
-    }
-
-    const bilibiliIdentity = this.extractBilibiliIdentity(primaryUrl) || this.extractBilibiliIdentity(secondaryUrl)
-    if (bilibiliIdentity) {
-      return bilibiliIdentity
-    }
-
-    const youTubeIdentity = this.extractYouTubeIdentity(primaryUrl) || this.extractYouTubeIdentity(secondaryUrl)
-    if (youTubeIdentity) {
-      return youTubeIdentity
-    }
-
-    return ''
-  }
-
-  private collectFeedIdentityKeys(url: string, siteUrl: string, title: string): string[] {
-    const keys: string[] = []
-    const normalizedUrl = this.normalizeFeedIdentity(url)
-    const normalizedSiteUrl = this.normalizeFeedIdentity(siteUrl)
-    const normalizedTitle = title.trim().toLowerCase()
-    const canonicalIdentity = this.extractCanonicalFeedIdentity(url, siteUrl)
-
-    this.pushIdentityKey(keys, normalizedUrl)
-    this.pushIdentityKey(keys, normalizedSiteUrl)
-    this.pushIdentityKey(keys, canonicalIdentity)
-    this.pushIdentityKey(keys, normalizedTitle)
-
-    return keys
-  }
-
-  private identityKeysOverlap(left: string[], right: string[]): boolean {
-    for (const leftKey of left) {
-      if (leftKey && right.includes(leftKey)) {
-        return true
-      }
-    }
-    return false
-  }
-
-  private isSubscribedFeedIdentity(url: string, siteUrl: string, title: string): boolean {
-    const candidateKeys = this.collectFeedIdentityKeys(url, siteUrl, title)
-
-    for (const subscribedFeed of this.subscribedFeeds) {
-      const subscribedKeys = this.collectFeedIdentityKeys(
-        subscribedFeed.url,
-        subscribedFeed.siteUrl ?? '',
-        subscribedFeed.title,
-      )
-
-      if (this.identityKeysOverlap(candidateKeys, subscribedKeys)) {
-        return true
-      }
-
-      const subscribedUrl = this.normalizeFeedIdentity(subscribedFeed.url)
-      const subscribedSiteUrl = this.normalizeFeedIdentity(subscribedFeed.siteUrl ?? '')
-      if (
-        (candidateKeys.includes(subscribedUrl) && !!subscribedUrl)
-        || (candidateKeys.includes(subscribedSiteUrl) && !!subscribedSiteUrl)
-      ) {
-        return true
-      }
-    }
-
-    return false
-  }
-
   private isSubscribedRecommendedFeed(feed: RecommendedFeed): boolean {
-    return this.isSubscribedFeedIdentity(feed.url, feed.siteUrl, feed.title)
+    return isSubscribedRecommendedFeed(this.subscribedFeeds, feed)
   }
 
   private isSubscribedCandidate(candidate: ResolvedDiscoverCandidate): boolean {
-    return this.isSubscribedFeedIdentity(candidate.targetUrl, candidate.siteUrl, candidate.targetTitle)
+    return isSubscribedCandidate(this.subscribedFeeds, candidate)
   }
 
   private candidateActionLabel(candidate: ResolvedDiscoverCandidate): string {
@@ -851,151 +645,16 @@ export struct DiscoverContent {
   }
 
   private platformColor(label: string): string {
-    if (label === 'YouTube') {
-      return '#FF3B30'
-    }
-    if (label === 'Instagram') {
-      return '#E1306C'
-    }
-    if (label === 'Bilibili') {
-      return '#00A1D6'
-    }
-    if (label === 'GitHub') {
-      return '#111827'
-    }
-    if (label === 'X') {
-      return '#111111'
-    }
-    if (label === '官方 RSS') {
-      return '#16A34A'
-    }
-    if (label === 'RSSHub') {
-      return '#2563EB'
-    }
-    if (label === 'Nitter') {
-      return '#475569'
-    }
-    if (label === '关键词') {
-      return '#7C3AED'
-    }
-    if (label === '推荐') {
-      return '#F97316'
-    }
-    if (label === '精选') {
-      return '#0EA5E9'
-    }
-    if (label === '博客') {
-      return '#8B5CF6'
-    }
-    if (label === '科技') {
-      return '#2563EB'
-    }
-    if (label === '开发') {
-      return '#0F766E'
-    }
-    if (label === '社区') {
-      return '#D97706'
-    }
-    if (label === '图文') {
-      return '#F59E0B'
-    }
-    if (label === '摄影') {
-      return '#14B8A6'
-    }
-    if (label === '演讲') {
-      return '#7C3AED'
-    }
-    if (label === '资讯') {
-      return '#14A44D'
-    }
-    return this.theme.accent
-  }
-
-  private faviconUrl(siteUrl: string): string {
-    const host = this.hostOf(siteUrl)
-    return host ? `https://${host}/favicon.ico` : ''
-  }
-
-  private isInstagramPlaceholderAvatar(url: string): boolean {
-    const normalized = (url || '').trim().toLowerCase()
-    if (!normalized) {
-      return true
-    }
-
-    return normalized.includes('unavatar.io/instagram/')
-      || normalized.includes('instagram.com/static/images/ico')
-      || normalized.includes('instagram_static/images/ico')
-      || normalized.includes('instagram_logo')
-      || normalized.includes('instagram-logo')
-      || normalized.includes('favicon')
-      || normalized.includes('/logo')
+    return platformColor(label, this.theme.accent)
   }
 
   private resolvedPlatformLabel(candidate: ResolvedDiscoverCandidate): string {
-    if (candidate.targetUrl.includes('/youtube/') || candidate.targetUrl.includes('youtube.com/feeds/videos.xml')) {
-      return 'YouTube'
-    }
-    if (candidate.targetUrl.includes('/instagram/')) {
-      return 'Instagram'
-    }
-    if (candidate.targetUrl.includes('/bilibili/')) {
-      return 'Bilibili'
-    }
-    if (candidate.targetUrl.includes('/github/')) {
-      return 'GitHub'
-    }
-    if (candidate.targetUrl.includes('/x/user/') || candidate.targetUrl.includes('/twitter/user/') || candidate.targetUrl.includes('nitter.')) {
-      return 'X'
-    }
-    return this.viewLabel(candidate.targetView)
+    return resolvedPlatformLabel(candidate, (view: FeedViewType) => this.viewLabel(view))
   }
 
   private resolvedCandidateAvatarUrl(candidate: ResolvedDiscoverCandidate): string {
     const override = this.avatarOverrideMap.get(this.candidateAvatarCacheKey(candidate)) || ''
-    if (override.trim()) {
-      return override.trim()
-    }
-
-    const resolvedImageUrl = resolveSocialFeedDisplayImageUrl(
-      candidate.imageUrl ?? '',
-      candidate.targetUrl,
-      candidate.siteUrl,
-      candidate.targetTitle,
-    )
-    if (resolvedImageUrl) {
-      if (this.resolvedPlatformLabel(candidate) === 'Instagram' && this.isInstagramPlaceholderAvatar(resolvedImageUrl)) {
-        return ''
-      }
-      return resolvedImageUrl
-    }
-
-    const platform = this.resolvedPlatformLabel(candidate)
-    if (platform === 'GitHub') {
-      return 'https://github.githubassets.com/favicons/favicon.svg'
-    }
-    return this.faviconUrl(candidate.siteUrl)
-  }
-
-  private normalizeSiteUrl(value: string): string {
-    const trimmed = (value || '').trim()
-    if (!trimmed) {
-      return ''
-    }
-    if (/^https?:\/\//i.test(trimmed)) {
-      return trimmed
-    }
-    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(trimmed)) {
-      return `https://${trimmed.replace(/^\/\/+/, '')}`
-    }
-    return trimmed
-  }
-
-  private hostOfAny(primaryUrl: string, secondaryUrl: string): string {
-    const primaryHost = this.hostOf(this.normalizeSiteUrl(primaryUrl))
-    if (primaryHost) {
-      return primaryHost
-    }
-    return this.hostOf(this.normalizeSiteUrl(secondaryUrl))
+    return resolvedCandidateAvatarUrl(candidate, override, (view: FeedViewType) => this.viewLabel(view))
   }
 
   private candidateAvatarFallbackUrls(
@@ -1004,78 +663,19 @@ export struct DiscoverContent {
     siteUrl: string,
     title: string,
   ): string[] {
-    const candidates: string[] = []
-    const pushCandidate = (value: string): void => {
-      const trimmed = (value || '').trim()
-      if (!trimmed || candidates.includes(trimmed)) {
-        return
-      }
-      candidates.push(trimmed)
-    }
-
-    pushCandidate(imageUrl)
-
-    const normalizedTargetUrl = this.normalizeSiteUrl(targetUrl)
-    const normalizedSiteUrl = this.normalizeSiteUrl(siteUrl)
-    const host = this.hostOfAny(normalizedSiteUrl, normalizedTargetUrl)
-
-    const xUsername = extractXUsername(normalizedTargetUrl) || extractXUsername(normalizedSiteUrl) || extractXUsername(title || '')
-    if (xUsername) {
-      pushCandidate(`https://unavatar.io/x/${encodeURIComponent(xUsername)}`)
-    }
-
-    const instagramUsername = extractInstagramUsername(normalizedTargetUrl)
-      || extractInstagramUsername(normalizedSiteUrl)
-      || extractInstagramUsername(title || '')
-    if (instagramUsername) {
-      pushCandidate(`https://unavatar.io/instagram/${encodeURIComponent(instagramUsername)}?fallback=false`)
-    }
-
-    const bilibiliIdentity = this.extractBilibiliIdentity(normalizedTargetUrl) || this.extractBilibiliIdentity(normalizedSiteUrl)
-    if (bilibiliIdentity.startsWith('bilibili:')) {
-      pushCandidate(`https://unavatar.io/bilibili/${encodeURIComponent(bilibiliIdentity.replace(/^bilibili:/, ''))}?fallback=false`)
-    }
-
-    const youtubeIdentity = this.extractYouTubeIdentity(normalizedTargetUrl) || this.extractYouTubeIdentity(normalizedSiteUrl)
-    if (youtubeIdentity.startsWith('youtube:channel:')) {
-      pushCandidate(`https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:channel:/, ''))}?fallback=false`)
-    } else if (youtubeIdentity.startsWith('youtube:handle:')) {
-      pushCandidate(`https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:handle:/, ''))}?fallback=false`)
-    } else if (youtubeIdentity.startsWith('youtube:user:')) {
-      pushCandidate(`https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:user:/, ''))}?fallback=false`)
-    }
-
-    if (host) {
-      pushCandidate(`https://icons.duckduckgo.com/ip3/${host}.ico`)
-      pushCandidate(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`)
-      pushCandidate(`https://${host}/favicon.ico`)
-      pushCandidate(`https://www.${host}/favicon.ico`)
-    }
-
-    return candidates
+    return candidateAvatarFallbackUrls(imageUrl, targetUrl, siteUrl, title)
   }
 
   private candidateAvatarCacheKey(candidate: ResolvedDiscoverCandidate): string {
-    return `${candidate.targetUrl.trim()}|${candidate.siteUrl.trim()}`
+    return candidateAvatarCacheKey(candidate)
   }
 
   private shouldHydrateCandidateAvatar(candidate: ResolvedDiscoverCandidate): boolean {
-    const platform = this.resolvedPlatformLabel(candidate)
-    if (platform !== 'Instagram' && platform !== 'YouTube' && platform !== 'Bilibili') {
-      return false
-    }
-
-    const currentUrl = this.resolvedCandidateAvatarUrl(candidate).toLowerCase()
-    if (!currentUrl) {
-      return true
-    }
-
-    return currentUrl.includes('unavatar.io/instagram/')
-      || currentUrl.includes('unavatar.io/youtube/')
-      || currentUrl.includes('unavatar.io/bilibili/')
-      || currentUrl.includes('favicon')
-      || currentUrl.includes('apple-touch-icon')
-      || currentUrl.includes('/logo')
+    return shouldHydrateCandidateAvatar(
+      candidate,
+      this.resolvedCandidateAvatarUrl(candidate),
+      (view: FeedViewType) => this.viewLabel(view),
+    )
   }
 
   private async hydrateAvatarsForCandidates(candidates: ResolvedDiscoverCandidate[]): Promise<void> {
@@ -1103,7 +703,7 @@ export struct DiscoverContent {
 
         const platform = this.resolvedPlatformLabel(candidate)
         const finalResolved = trimmedResolved
-        if (platform === 'Instagram' && this.isInstagramPlaceholderAvatar(finalResolved)) {
+        if (platform === 'Instagram' && isInstagramPlaceholderAvatar(finalResolved)) {
           continue
         }
 
@@ -1556,12 +1156,12 @@ export struct DiscoverContent {
 
   @Builder
   private CategoryBrowserSection() {
-    if (this.discoverCategoryCards().length > 0) {
+    if (discoverCategoryCards().length > 0) {
       Column({ space: 12 }) {
         this.SectionHeader('分类精选', '', false, $r('app.media.MingcuteClassify2Line'))
 
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Start }) {
-          ForEach(this.discoverCategoryCards(), (card: DiscoverCategoryCard) => {
+          ForEach(discoverCategoryCards(), (card: DiscoverCategoryCard) => {
             Row({ space: 8 }) {
               if (card.icon) {
                 Image(card.icon)
@@ -1569,7 +1169,7 @@ export struct DiscoverContent {
                   .height(18)
                   .objectFit(ImageFit.Contain)
               } else {
-                SymbolGlyph(this.categoryCardSymbol(card.view))
+                SymbolGlyph(categoryCardSymbol(card.view))
                   .fontSize(19)
                   .fontColor([card.accent])
               }
