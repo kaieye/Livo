@@ -1,0 +1,107 @@
+import { Entry, EntryCardModel, HarmonySettings } from '../models/LivoModels'
+import { RootTabId } from '../navigation/AppRouter'
+import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { DiscoverContent } from './DiscoverContent'
+import { IndexHomeRootContent, IndexHomeRootContentCallbacks } from './IndexHomeRootContent'
+import { SettingsContent } from './SettingsContent'
+import { SubscriptionMode } from './HomeRootConfig'
+import { SubscriptionsContent } from './SubscriptionsContent'
+import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+
+@Component
+export struct IndexRootTabBody {
+  @Prop tabId: RootTabId = 'home'
+  @Prop theme: ThemePalette = ThemeService.currentPalette()
+  @Prop rootSettings: HarmonySettings = {} as HarmonySettings
+  @Prop showUnreadDot: boolean = true
+  @Prop mode: SubscriptionMode = 'articles'
+  @Prop renderedMode: SubscriptionMode = 'articles'
+  @Prop previousMode: SubscriptionMode = 'articles'
+  @Prop isModeTransitioning: boolean = false
+  @Prop modeTransitionDirection: number = 1
+  @Prop homeInitialLoadPending: boolean = false
+  @Prop isHomeStartupRefreshing: boolean = false
+  @Prop homeListSwapAnimating: boolean = false
+  @Prop homeListSwapMode: SubscriptionMode = 'articles'
+  @Prop homeListSwapOpacity: number = 1
+
+  homeCallbacks: IndexHomeRootContentCallbacks = {
+    onModeSwipe: () => {},
+    getEntries: (): EntryCardModel[] => [],
+    getTotalCount: () => 0,
+    isModeLoading: () => false,
+    getEmptyStateTitle: () => '',
+    getSceneOpacity: () => 1,
+    getSceneOffsetX: () => 0,
+    getSceneZIndex: () => 0,
+    getSceneVisible: () => Visibility.Visible,
+    getListSwapTranslateY: () => 0,
+    getScroller: () => new Scroller(),
+    onWillScroll: () => undefined,
+    onDidScroll: () => {},
+    onStopDragging: () => {},
+    onEntryOpen: () => {},
+    onItemAppear: () => {},
+    getTweetPresentation: () => ({} as TweetEntryPresentation),
+    getPictureEntry: () => ({} as Entry),
+    getPictureCaption: () => '',
+    getPictureGalleryUrls: () => [],
+  }
+  onTabAppear: (tabId: RootTabId) => void = () => {}
+  onSettingsContentScrollerReady: (scroller: Scroller) => void = () => {}
+  onSettingsChange: (settings: HarmonySettings) => void = () => {}
+  onThemeChange: (theme: ThemePalette) => void = () => {}
+
+  build() {
+    Stack() {
+      if (this.tabId === 'home') {
+        IndexHomeRootContent({
+          mode: this.mode,
+          renderedMode: this.renderedMode,
+          previousMode: this.previousMode,
+          isModeTransitioning: this.isModeTransitioning,
+          modeTransitionDirection: this.modeTransitionDirection,
+          theme: this.theme,
+          showUnreadDot: this.showUnreadDot,
+          homeInitialLoadPending: this.homeInitialLoadPending,
+          isHomeStartupRefreshing: this.isHomeStartupRefreshing,
+          homeListSwapAnimating: this.homeListSwapAnimating,
+          homeListSwapMode: this.homeListSwapMode,
+          homeListSwapOpacity: this.homeListSwapOpacity,
+          callbacks: this.homeCallbacks,
+        })
+      } else if (this.tabId === 'subscriptions') {
+        SubscriptionsContent({
+          showBottomTabs: false,
+          inheritedTheme: this.theme,
+        })
+      } else if (this.tabId === 'discover') {
+        DiscoverContent({
+          showBottomTabs: false,
+          reserveBottomTabInset: true,
+          inheritedTheme: this.theme,
+        })
+      } else {
+        SettingsContent({
+          showBottomTabs: false,
+          inheritedTheme: this.theme,
+          inheritedSettings: this.rootSettings,
+          onContentScrollerReady: (scroller: Scroller) => {
+            this.onSettingsContentScrollerReady(scroller)
+          },
+          onSettingsChange: (settings: HarmonySettings) => {
+            this.onSettingsChange(settings)
+          },
+          onThemeChange: (theme: ThemePalette) => {
+            this.onThemeChange(theme)
+          },
+        })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .onAppear(() => {
+      this.onTabAppear(this.tabId)
+    })
+  }
+}

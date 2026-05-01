@@ -13,6 +13,8 @@ export struct ContentModeRail {
   @Prop collapsed: boolean = false
   @Prop collapseProgress: number = 0
   @State pressedMode: ContentMode | '' = ''
+  private lastCommittedMode: ContentMode | '' = ''
+  private lastCommittedAt: number = 0
   @State railWidth: number = 0
   onExpandRequest: () => void = () => {}
   onChange: (mode: ContentMode) => void = () => {}
@@ -182,6 +184,12 @@ export struct ContentModeRail {
       return
     }
 
+    const now = Date.now()
+    if (this.lastCommittedMode === mode && now - this.lastCommittedAt < 260) {
+      return
+    }
+    this.lastCommittedMode = mode
+    this.lastCommittedAt = now
     this.onChange(mode)
   }
 
@@ -224,6 +232,9 @@ export struct ContentModeRail {
     .scale({ x: this.itemScale(mode), y: this.itemScale(mode) })
     .opacity(this.transitionalItemOpacity(mode))
     .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .onClick(() => {
+      this.commitModeSwitch(mode)
+    })
     .onTouch((event: TouchEvent) => {
       if (this.interactionLocked) {
         this.pressedMode = ''
@@ -238,9 +249,6 @@ export struct ContentModeRail {
       if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
         if (this.pressedMode === mode) {
           this.pressedMode = ''
-          if (event.type === TouchType.Up) {
-            this.commitModeSwitch(mode)
-          }
         }
       }
     })

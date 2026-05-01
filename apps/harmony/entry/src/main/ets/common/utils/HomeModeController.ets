@@ -62,7 +62,13 @@ export class HomeModeController {
     this.delegate.setHomeModeRailDismissedByScroll(false)
     this.delegate.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
-    this.delegate.ensureModeEntriesLoaded(nextMode)
+    // 模式切换的视觉状态先落地，补数据延后一帧，避免本地查询/分组阻塞按钮反馈。
+    this.delegate.runManagedTimeout(() => {
+      if (this.delegate.getMode() !== nextMode) {
+        return
+      }
+      this.delegate.ensureModeEntriesLoaded(nextMode)
+    }, 16)
   }
 
   startModeTransition(nextMode: SubscriptionMode): void {

@@ -2,9 +2,6 @@ import { AppRepository } from '../common/data/AppRepository'
 import { ArrayLazyDataSource } from '../common/data/ArrayLazyDataSource'
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
-  HdsNavigation,
-  HdsNavigationTitleMode,
-  HdsTabs,
   HdsTabsController,
   ScrollEffectType,
   SystemMaterialParams,
@@ -15,10 +12,6 @@ import window from '@ohos.window'
 import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
 import {
   ROOT_MODE_RAIL_TOP_GAP,
-  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
-  ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE,
-  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from '../common/components/FloatingRootPageLayout'
 import {
   DEFAULT_HARMONY_SETTINGS,
@@ -44,33 +37,30 @@ import {
   homeEntryRenderBaseKey,
   resolveEntryMode,
 } from '../common/utils/HomeEntryUtils'
-import { HomeEntryDataDelegate, HomeEntryDataManager } from '../common/utils/HomeEntryDataManager'
-import { HomeInlineSearchController, HomeInlineSearchDelegate } from '../common/utils/HomeInlineSearchController'
-import { HomeModeController, HomeModeDelegate } from '../common/utils/HomeModeController'
+import { HomeEntryDataManager } from '../common/utils/HomeEntryDataManager'
+import { HomeInlineSearchController } from '../common/utils/HomeInlineSearchController'
+import { HomeModeController } from '../common/utils/HomeModeController'
 import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
 import {
-  BOTTOM_TAB_BAR_HEIGHT,
-  BOTTOM_TAB_FLOAT_GAP,
   PAGE_HORIZONTAL_PADDING,
 } from '../common/ui/UiTokens'
-import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
-import { DiscoverContent } from '../common/components/DiscoverContent'
-import { SettingsContent } from '../common/components/SettingsContent'
-import { HomeInlineSearchOverlay } from '../common/components/HomeInlineSearchOverlay'
-import { HomeModeEntriesPage } from '../common/components/HomeModeEntriesPage'
-import { HomeRootOverlayControls } from '../common/components/HomeRootOverlayControls'
+import { IndexHomeOverlayLayer } from '../common/components/IndexHomeOverlayLayer'
+import { IndexHomeRootContentCallbacks } from '../common/components/IndexHomeRootContent'
+import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
 import {
   HdsBottomTabId,
-  HdsBottomTabItem,
-  resolveHdsBottomTabBarBottomMargin,
   resolveHdsBottomTabItems,
 } from '../common/utils/HdsBottomTabConfig'
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 import { RefreshStateManager } from '../common/utils/RefreshStateManager'
 import { shouldHideRootBottomBar, shouldHideRootTitleBar } from '../common/utils/RootTabVisibilityPolicy'
-import { resolveHomeModeTitle } from '../common/utils/HomeModeMeta'
 import { resolveModeSceneRenderState } from '../common/utils/ModeSceneTransition'
+import {
+  IndexHomeEntryDataDelegate,
+  IndexHomeInlineSearchDelegate,
+  IndexHomeModeDelegate,
+} from '../common/utils/IndexHomeDelegates'
 import {
   AUTO_REFRESH_MIN_INTERVAL_MINUTES,
   HEADER_BLUR_SCROLL_RANGE,
@@ -90,7 +80,6 @@ import {
   HOME_INITIAL_CANDIDATE_LIMIT,
   HOME_INLINE_SEARCH_ACTION_GAP,
   HOME_INLINE_SEARCH_ACTION_SIZE,
-  HOME_INLINE_SEARCH_RESULT_LIMIT,
   HOME_INLINE_SEARCH_VERTICAL_TRAVEL,
   HOME_LIST_SWAP_ANIMATION_ENABLED,
   HOME_LIST_SWAP_ENTER_DURATION,
@@ -130,11 +119,8 @@ import {
   HOME_REFRESH_FIRST_SWAP_DELAY_MS,
   HOME_REFRESH_PERCENT_COALESCE_MS,
   HOME_REFRESH_PROGRESS_UI_THROTTLE_MS,
-  HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT,
   HOME_STARTUP_REFRESH_COOLDOWN_MS,
   MODE_SWIPE_TRIGGER_OFFSET,
-  ROOT_BOTTOM_TITLE_HEIGHT,
-  ROOT_TITLE_BAR_MINI_HEIGHT,
   SUBSCRIPTION_MODES,
   HomeEntryDataSourceMap,
   HomeModeCandidateLimitMap,
@@ -149,93 +135,6 @@ import {
   RootTabSymbolPair,
   SubscriptionMode,
 } from '../common/components/HomeRootConfig'
-
-class IndexHomeModeDelegate implements HomeModeDelegate {
-  private readonly owner: Index
-
-  constructor(owner: Index) {
-    this.owner = owner
-  }
-
-  getMode(): SubscriptionMode { return this.owner.mode }
-  getRenderedMode(): SubscriptionMode { return this.owner.renderedMode }
-  getPreviousMode(): SubscriptionMode { return this.owner.previousMode }
-  getVisitedModes(): SubscriptionMode[] { return this.owner.visitedModes }
-  isModeTransitioning(): boolean { return this.owner.isModeTransitioning }
-  getModeTransitionDirection(): number { return this.owner.modeTransitionDirection }
-  getScrollOffsetForMode(mode: SubscriptionMode): number { return this.owner.readHomeModeScrollOffset(mode) }
-  getEntryCountForMode(mode: SubscriptionMode): number { return this.owner.totalEntryCountFor(mode) }
-  getFirstEntryIdForMode(mode: SubscriptionMode): string { return (this.owner.filteredEntriesFor(mode)[0]?.id || '').trim() }
-  getLastEntryIdForMode(mode: SubscriptionMode): string {
-    const entries = this.owner.filteredEntriesFor(mode)
-    return (entries[entries.length - 1]?.id || '').trim()
-  }
-  setMode(mode: SubscriptionMode): void { this.owner.mode = mode }
-  setRenderedMode(mode: SubscriptionMode): void { this.owner.renderedMode = mode }
-  setPreviousMode(mode: SubscriptionMode): void { this.owner.previousMode = mode }
-  setVisitedModes(modes: SubscriptionMode[]): void { this.owner.visitedModes = modes }
-  setModeTransitioning(v: boolean): void { this.owner.isModeTransitioning = v }
-  setModeTransitionDirection(v: number): void { this.owner.modeTransitionDirection = v }
-  setScrollInteracting(interacting: boolean, mode: SubscriptionMode): void { this.owner.setHomeScrollInteracting(interacting, mode) }
-  setHomeModeRailExpandedLockOffset(v: number): void { this.owner.homeModeRailExpandedLockOffset = v }
-  setHomeModeRailExpandedOverride(v: boolean): void { this.owner.homeModeRailExpandedOverride = v }
-  setCurrentHomeModeScrollOffset(v: number): void { this.owner.currentHomeModeScrollOffset = v }
-  setHomeModeRailDismissedByScroll(v: boolean): void { this.owner.homeModeRailDismissedByScroll = v }
-  updateHeaderBlurProgress(offset: number): void { this.owner.updateHeaderBlurProgress(offset) }
-  resetScrollIntent(mode: SubscriptionMode): void { this.owner.resetModeScrollIntent(mode) }
-  ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.owner.ensureModeEntriesLoaded(mode) }
-  runManagedTimeout(cb: () => void, delayMs: number): void { this.owner.runManagedTimeout(cb, delayMs) }
-}
-
-class IndexHomeEntryDataDelegate implements HomeEntryDataDelegate {
-  private readonly owner: Index
-
-  constructor(owner: Index) {
-    this.owner = owner
-  }
-
-  getFeaturedEntries(): EntryCardModel[] { return this.owner.featuredEntries }
-  getEntryGroups(): HomeEntryGroups<EntryCardModel> { return this.owner.entryGroups }
-  getMode(): SubscriptionMode { return this.owner.mode }
-  getDataSources(): HomeEntryDataSourceMap { return this.owner.homeEntryDataSources }
-  isComponentActive(): boolean { return this.owner.isComponentActive }
-  setFeaturedEntries(entries: EntryCardModel[]): void { this.owner.featuredEntries = entries }
-  setEntryGroups(groups: HomeEntryGroups<EntryCardModel>): void { this.owner.entryGroups = groups }
-  onEntriesSettled(mode?: SubscriptionMode): void {
-    this.owner.markModeLoaded(mode ?? this.owner.mode, true)
-    this.owner.settleInitialHomeLoadState()
-  }
-  resetTweetPresentationCache(): void { this.owner.resetTweetPresentationCache() }
-  setListSwapAnimating(v: boolean): void { this.owner.homeListSwapAnimating = v }
-  setListSwapOpacity(v: number): void { this.owner.homeListSwapOpacity = v }
-  setListSwapTranslateY(v: number): void { this.owner.homeListSwapTranslateY = v }
-  getListSwapToken(): number { return this.owner.homeListSwapToken }
-  getListSwapAnimating(): boolean { return this.owner.homeListSwapAnimating }
-  animateWithUiContext(options: AnimateParam, event: () => void): void { this.owner.animateWithUiContext(options, event) }
-  runManagedTimeout(cb: () => void, delayMs: number): void { this.owner.runManagedTimeout(cb, delayMs) }
-}
-
-class IndexHomeInlineSearchDelegate implements HomeInlineSearchDelegate {
-  private readonly owner: Index
-
-  constructor(owner: Index) {
-    this.owner = owner
-  }
-
-  getCurrentRootTabId(): RootTabId { return this.owner.currentRootTabId() }
-  getSearchQuery(): string { return this.owner.searchQuery }
-  setSearchQuery(query: string): void { this.owner.searchQuery = query }
-  getShowSearch(): boolean { return this.owner.showSearch }
-  setShowSearch(visible: boolean): void { this.owner.showSearch = visible }
-  getSearchOverlayVisible(): boolean { return this.owner.searchOverlayVisible }
-  setSearchOverlayVisible(visible: boolean): void { this.owner.searchOverlayVisible = visible }
-  getSearchFocusRequestToken(): number { return this.owner.getHomeInlineSearchFocusRequestToken() }
-  setSearchFocusRequestToken(token: number): void { this.owner.setHomeInlineSearchFocusRequestToken(token) }
-  getSearchEntries(): EntryCardModel[] { return this.owner.currentSearchEntries() }
-  getSearchResultLimit(): number { return HOME_INLINE_SEARCH_RESULT_LIMIT }
-  getSearchInputController(): TextInputController { return this.owner.getSearchInputController() }
-  runManagedTimeout(cb: () => void, delayMs: number): void { this.owner.runManagedTimeout(cb, delayMs) }
-}
 
 @Entry
 @Component
@@ -409,15 +308,15 @@ struct Index {
   )
   private lastHandledRequestedRootTabId: RootTabId | '' = ''
 
-  private createHomeModeDelegate(): HomeModeDelegate {
+  private createHomeModeDelegate(): IndexHomeModeDelegate {
     return new IndexHomeModeDelegate(this)
   }
 
-  private createHomeEntryDataDelegate(): HomeEntryDataDelegate {
+  private createHomeEntryDataDelegate(): IndexHomeEntryDataDelegate {
     return new IndexHomeEntryDataDelegate(this)
   }
 
-  private createHomeInlineSearchDelegate(): HomeInlineSearchDelegate {
+  private createHomeInlineSearchDelegate(): IndexHomeInlineSearchDelegate {
     return new IndexHomeInlineSearchDelegate(this)
   }
 
@@ -988,66 +887,6 @@ struct Index {
 
   getSearchInputController(): TextInputController {
     return this.searchInputController
-  }
-
-  @Builder
-  private SettingsRootLowerTitleBuilder() {
-    Row() {
-      Text(this.currentRootTitle())
-        .fontSize(ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(ROOT_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-    })
-  }
-
-  @Builder
-  private HomeRootLowerTitleBuilder() {
-    Row() {
-      Text('首页')
-        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-    })
-  }
-
-  @Builder
-  private HomeRootTitleOverlayLayer() {
-    Row() {
-      Text('首页')
-        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({
-      top: ROOT_TITLE_BAR_MINI_HEIGHT,
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-    })
-    .opacity(Math.max(0, 1 - this.homeModeRailCollapseProgress()))
-    .zIndex(121)
   }
 
   private homeInlineSearchVerticalOffset(): number {
@@ -2950,71 +2789,44 @@ struct Index {
     return 1 - (progress * 0.12)
   }
 
-  @Builder
-  private ModeEntriesScene(mode: SubscriptionMode) {
-    HomeModeEntriesPage({
-      mode,
-      entries: this.visibleEntriesFor(mode),
-      totalCount: this.totalEntryCountFor(mode),
-      isLoading: this.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
-      emptyStateTitle: this.homeEmptyStateTitle(),
-      theme: this.theme,
-      showUnreadDot: this.showUnreadDot,
-      sceneOpacity: this.modeSceneOpacity(mode),
-      sceneOffsetX: this.modeSceneOffset(mode),
-      sceneZIndex: this.modeSceneZIndex(mode),
-      sceneVisible: this.modeSceneVisible(mode),
-      listSwapOpacity: this.homeListSwapAnimating && mode === this.homeListSwapMode ? this.homeListSwapOpacity : 1,
-      listSwapTranslateY: this.modeListSwapTranslateY(mode),
-      scroller: this.homeScrollerForMode(mode),
-      callbacks: {
-        onWillScroll: (_scrollOffset: number, scrollSource: ScrollSource): ScrollResult | void => {
-          this.markHomeUserScrollIntent(mode, scrollSource)
-          return undefined
-        },
-        onDidScroll: (): void => {
-          this.syncHomeModeRailState(mode)
-          this.flushPendingLoadMoreForMode(mode)
-        },
-        onStopDragging: (): void => {
-          this.setHomeScrollInteracting(false, mode)
-          this.flushPendingLoadMoreForMode(mode)
-        },
-        onEntryOpen: (entry: EntryCardModel): void => {
-          this.openEntry(entry)
-        },
-        onItemAppear: (index: number, totalCount: number): void => {
-          this.handleHomeEntryAppear(mode, index, totalCount)
-        },
-        getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
-        getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
-        getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
-        getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
+  private createHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
+    return {
+      onModeSwipe: (event: GestureEvent): void => {
+        this.handleModeSwipe(event)
       },
-    })
-  }
-
-  @Builder
-  private HomeRootPage() {
-    // Build all mode scenes up front so first-time switches stay warm.
-    Stack({ alignContent: Alignment.TopStart }) {
-      this.ModeEntriesScene('articles')
-      this.ModeEntriesScene('social')
-      this.ModeEntriesScene('pictures')
-      this.ModeEntriesScene('videos')
+      getEntries: (mode: SubscriptionMode): EntryCardModel[] => this.visibleEntriesFor(mode),
+      getTotalCount: (mode: SubscriptionMode): number => this.totalEntryCountFor(mode),
+      isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
+      getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
+      getSceneOpacity: (mode: SubscriptionMode): number => this.modeSceneOpacity(mode),
+      getSceneOffsetX: (mode: SubscriptionMode): number => this.modeSceneOffset(mode),
+      getSceneZIndex: (mode: SubscriptionMode): number => this.modeSceneZIndex(mode),
+      getSceneVisible: (mode: SubscriptionMode): Visibility => this.modeSceneVisible(mode),
+      getListSwapTranslateY: (mode: SubscriptionMode): number => this.modeListSwapTranslateY(mode),
+      getScroller: (mode: SubscriptionMode): Scroller => this.homeScrollerForMode(mode),
+      onWillScroll: (mode: SubscriptionMode, _scrollOffset: number, scrollSource: ScrollSource): ScrollResult | void => {
+        this.markHomeUserScrollIntent(mode, scrollSource)
+        return undefined
+      },
+      onDidScroll: (mode: SubscriptionMode): void => {
+        this.syncHomeModeRailState(mode)
+        this.flushPendingLoadMoreForMode(mode)
+      },
+      onStopDragging: (mode: SubscriptionMode): void => {
+        this.setHomeScrollInteracting(false, mode)
+        this.flushPendingLoadMoreForMode(mode)
+      },
+      onEntryOpen: (entry: EntryCardModel): void => {
+        this.openEntry(entry)
+      },
+      onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {
+        this.handleHomeEntryAppear(mode, index, totalCount)
+      },
+      getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
+      getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
+      getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
+      getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
-    .onAppear(() => {
-      console.info('首页显示')
-    })
-    .gesture(
-      PanGesture({ direction: PanDirection.Horizontal })
-        .onActionEnd((event: GestureEvent) => {
-          this.handleModeSwipe(event)
-        })
-    )
   }
 
   onPageShow(): void {
@@ -3043,224 +2855,121 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      HdsNavigation() {
-        HdsTabs({ controller: this.rootTabsController }) {
-          ForEach(resolveHdsBottomTabItems(), (item: HdsBottomTabItem) => {
-            TabContent() {
-              Stack() {
-                if (item.id === 'home') {
-                  this.HomeRootPage()
-                } else if (item.id === 'subscriptions') {
-                  SubscriptionsContent({
-                    showBottomTabs: false,
-                    inheritedTheme: this.theme,
-                  })
-                } else if (item.id === 'discover') {
-                  DiscoverContent({
-                    showBottomTabs: false,
-                    reserveBottomTabInset: true,
-                    inheritedTheme: this.theme,
-                  })
-                } else {
-                  SettingsContent({
-                    showBottomTabs: false,
-                    inheritedTheme: this.theme,
-                    inheritedSettings: this.rootSettings,
-                    onContentScrollerReady: (scroller: Scroller) => {
-                      this.handleSettingsContentScrollerReady(scroller)
-                    },
-                    onSettingsChange: (settings: HarmonySettings) => {
-                      const previousSettings = this.rootSettings
-                      this.rootSettings = settings
-                      this.configureAutoRefreshTimer()
-                      if (
-                        settings.autoRefresh
-                        && (!previousSettings.autoRefresh
-                          || previousSettings.refreshIntervalMinutes !== settings.refreshIntervalMinutes)
-                      ) {
-                        void this.refreshFeaturedEntries(false)
-                      }
-                    },
-                    onThemeChange: (theme: ThemePalette) => {
-                      this.theme = theme
-                      void this.applySystemBarStyle(theme)
-                    },
-                  })
-                }
-              }
-              .width('100%')
-              .height('100%')
-              .onAppear(() => {
-                this.confirmRootTabSelection(item.id as RootTabId)
-              })
-            }
-            .tabBar(BottomTabBarStyle.of({
-              normal: this.rootTabSymbolPair(item.id).normal,
-              selected: this.rootTabSymbolPair(item.id).selected,
-            }, item.label))
-          }, (item: HdsBottomTabItem) => item.id)
-        }
-        .vertical(false)
-        .scrollable(false)
-        .cachedMaxCount(4, TabsCacheMode.CACHE_BOTH_SIDE)
-        .animationDuration(0)
-        .barPosition(BarPosition.End)
-        .barOverlap(true)
-        .barHeight(this.shouldHideBottomTabs() ? 0 : BOTTOM_TAB_BAR_HEIGHT)
-        .barFloatingStyle({
-          barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP),
-          systemMaterialEffect: {
-            materialType: hdsMaterial.MaterialType.ADAPTIVE,
-            materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
-          },
-        })
-        .onChange((index: number) => {
+      IndexRootNavigationShell({
+        controller: this.rootTabsController,
+        theme: this.theme,
+        rootSettings: this.rootSettings,
+        showUnreadDot: this.showUnreadDot,
+        mode: this.mode,
+        renderedMode: this.renderedMode,
+        previousMode: this.previousMode,
+        isModeTransitioning: this.isModeTransitioning,
+        modeTransitionDirection: this.modeTransitionDirection,
+        homeInitialLoadPending: this.homeInitialLoadPending,
+        isHomeStartupRefreshing: this.isHomeStartupRefreshing,
+        homeListSwapAnimating: this.homeListSwapAnimating,
+        homeListSwapMode: this.homeListSwapMode,
+        homeListSwapOpacity: this.homeListSwapOpacity,
+        hideBottomTabs: this.shouldHideBottomTabs(),
+        hideTitleBar: this.shouldHideRootTitleBar(),
+        isHomeRootTab: this.isHomeRootTab(),
+        isSettingsRootTab: this.isSettingsRootTab(),
+        currentRootTitle: this.currentRootTitle(),
+        scrollEffectType: this.currentRootScrollEffectType(),
+        blurEffectiveEndOffset: this.currentRootBlurEffectiveEndOffset(),
+        originalTitleBarBackgroundColor: this.currentRootOriginalTitleBarBackgroundColor(),
+        scrollEffectBackgroundColor: this.currentRootScrollEffectBackgroundColor(),
+        originalTitleBarBlurRadius: this.currentRootOriginalTitleBarBlurRadius(),
+        scrollEffectTitleBarBlurRadius: this.currentRootScrollEffectTitleBarBlurRadius(),
+        originalTitleBarMaskExtraHeight: this.currentRootOriginalTitleBarMaskExtraHeight(),
+        scrollEffectTitleBarMaskExtraHeight: this.currentRootScrollEffectTitleBarMaskExtraHeight(),
+        blurStrategy: this.currentRootBlurStrategy(),
+        systemMaterialEffect: this.currentRootSystemMaterialEffect(),
+        bindScrollers: this.currentRootBindScrollers(),
+        homeCallbacks: this.createHomeRootContentCallbacks(),
+        rootTabSymbolPair: (tabId: HdsBottomTabId): RootTabSymbolPair => this.rootTabSymbolPair(tabId),
+        onRootTabChange: (index: number) => {
           this.handleRootTabChange(index)
-        })
-      }
-      .mode(NavigationMode.Stack)
-      .titleBar({
-        content: {
-          title: {
-            mainTitle: this.isHomeRootTab() || this.isSettingsRootTab() ? '' : this.currentRootTitle(),
-          },
-          bottomBuilder: this.isHomeRootTab()
-            ? {
-                builder: (): void => this.HomeRootLowerTitleBuilder(),
-              }
-            : this.isSettingsRootTab()
-            ? {
-                builder: (): void => this.SettingsRootLowerTitleBuilder(),
-              }
-            : undefined,
         },
-        style: {
-          scrollEffectOpts: {
-            enableScrollEffect: true,
-            scrollEffectType: this.currentRootScrollEffectType(),
-            blurEffectiveStartOffset: LengthMetrics.vp(0),
-            blurEffectiveEndOffset: this.currentRootBlurEffectiveEndOffset(),
-          },
-          blurStrategy: this.currentRootBlurStrategy(),
-          originalStyle: {
-            backgroundStyle: {
-              backgroundColor: this.currentRootOriginalTitleBarBackgroundColor(),
-              maskExtraHeight: this.currentRootOriginalTitleBarMaskExtraHeight(),
-              blurRadius: this.currentRootOriginalTitleBarBlurRadius(),
-            },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-              menuStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-              backIconStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-            },
-          },
-          scrollEffectStyle: {
-            backgroundStyle: {
-              backgroundColor: this.currentRootScrollEffectBackgroundColor(),
-              maskExtraHeight: this.currentRootScrollEffectTitleBarMaskExtraHeight(),
-              blurRadius: this.currentRootScrollEffectTitleBarBlurRadius(),
-            },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-              menuStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-              backIconStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-            },
-          },
-          systemMaterialEffect: this.currentRootSystemMaterialEffect(),
+        onTabAppear: (tabId: RootTabId) => {
+          this.confirmRootTabSelection(tabId)
+        },
+        onSettingsContentScrollerReady: (scroller: Scroller) => {
+          this.handleSettingsContentScrollerReady(scroller)
+        },
+        onSettingsChange: (settings: HarmonySettings) => {
+          const previousSettings = this.rootSettings
+          this.rootSettings = settings
+          this.configureAutoRefreshTimer()
+          if (
+            settings.autoRefresh
+            && (!previousSettings.autoRefresh
+              || previousSettings.refreshIntervalMinutes !== settings.refreshIntervalMinutes)
+          ) {
+            void this.refreshFeaturedEntries(false)
+          }
+        },
+        onThemeChange: (theme: ThemePalette) => {
+          this.theme = theme
+          void this.applySystemBarStyle(theme)
         },
       })
-      .titleMode(HdsNavigationTitleMode.MINI)
-      .hideTitleBar(this.shouldHideRootTitleBar())
-      .hideBackButton(true)
-      .bindToScrollable(this.currentRootBindScrollers())
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
-      .width('100%')
-      .height('100%')
 
-      if (this.isHomeRootTab()) {
-        HomeRootOverlayControls({
-          theme: this.theme,
-          mode: this.mode,
-          interactionLocked: this.isModeTransitioning,
-          isRefreshing: this.isRefreshing,
-          refreshTotalCount: this.refreshTotalCount,
-          displayRefreshPercent: this.displayRefreshPercent,
-          showSearch: this.showSearch,
-          collapsedModeRailTopPadding: this.homeCollapsedModeRailTopPadding(),
-          collapseProgress: this.homeModeRailCollapseProgress(),
-          modeRailTopPadding: this.homeModeRailTopPadding(),
-          modeRailLeftPadding: this.homeModeRailLeftPadding(),
-          modeRailRightInset: this.homeModeRailRightInset(),
-          modeRailDismissTranslateY: this.homeModeRailDismissTranslateY(),
-          modeRailDismissOpacity: this.homeModeRailDismissOpacity(),
-          modeRailDismissScale: this.homeModeRailDismissScale(),
-          modeRailCollapsed: this.isHomeModeRailCollapsed(),
-          horizontalPadding: PAGE_HORIZONTAL_PADDING,
-          onRefresh: () => {
-            void this.refreshFeaturedEntries()
-          },
-          onSearchOpen: () => {
-            this.homeInlineSearchController.open()
-          },
-          onExpandRequest: () => {
-            this.requestExpandedModeRail()
-          },
-          onModeChange: (mode: SubscriptionMode) => {
-            this.requestModeSwitch(mode)
-          },
-        })
-      }
-
-      if (this.isHomeRootTab() && this.searchOverlayVisible) {
-        HomeInlineSearchOverlay({
-          visible: this.searchOverlayVisible,
-          showSearch: this.showSearch,
-          query: this.searchQuery,
-          placeholder: this.rootSettings.searchAllHomeCategories ? '搜索全部内容' : `搜索「${resolveHomeModeTitle(this.mode)}」`,
-          topPadding: this.homeCollapsedModeRailTopPadding(),
-          horizontalPadding: PAGE_HORIZONTAL_PADDING,
-          searchFieldOffsetY: this.homeInlineSearchVerticalOffset(),
-          isRefreshing: this.isRefreshing,
-          refreshTotalCount: this.refreshTotalCount,
-          displayRefreshPercent: this.displayRefreshPercent,
-          theme: this.theme,
-          resultEntries: this.homeInlineSearchController.searchResultEntries(),
-          showEmptyState: this.homeInlineSearchController.hasSearchResultEmptyState(),
-          inputController: this.searchInputController,
-          onQueryChange: (value: string) => {
-            this.searchQuery = value
-          },
-          onClose: (clearQuery: boolean) => {
-            this.homeInlineSearchController.close(clearQuery)
-          },
-          onEntryClick: (entry: EntryCardModel) => {
-            this.openEntry(entry)
-            this.homeInlineSearchController.close(true)
-          },
-          onInputAppear: () => {
-            this.homeInlineSearchController.focus()
-          },
-          summaryTextForEntry: (entry: EntryCardModel) => this.homeInlineSearchController.searchResultSummaryText(entry),
-        })
-      }
+      IndexHomeOverlayLayer({
+        isHomeRootTab: this.isHomeRootTab(),
+        theme: this.theme,
+        mode: this.mode,
+        interactionLocked: this.isModeTransitioning,
+        isRefreshing: this.isRefreshing,
+        refreshTotalCount: this.refreshTotalCount,
+        displayRefreshPercent: this.displayRefreshPercent,
+        showSearch: this.showSearch,
+        searchOverlayVisible: this.searchOverlayVisible,
+        searchQuery: this.searchQuery,
+        searchAllHomeCategories: this.rootSettings.searchAllHomeCategories,
+        collapsedModeRailTopPadding: this.homeCollapsedModeRailTopPadding(),
+        collapseProgress: this.homeModeRailCollapseProgress(),
+        modeRailTopPadding: this.homeModeRailTopPadding(),
+        modeRailLeftPadding: this.homeModeRailLeftPadding(),
+        modeRailRightInset: this.homeModeRailRightInset(),
+        modeRailDismissTranslateY: this.homeModeRailDismissTranslateY(),
+        modeRailDismissOpacity: this.homeModeRailDismissOpacity(),
+        modeRailDismissScale: this.homeModeRailDismissScale(),
+        modeRailCollapsed: this.isHomeModeRailCollapsed(),
+        horizontalPadding: PAGE_HORIZONTAL_PADDING,
+        searchFieldOffsetY: this.homeInlineSearchVerticalOffset(),
+        searchResultEntries: this.homeInlineSearchController.searchResultEntries(),
+        searchShowEmptyState: this.homeInlineSearchController.hasSearchResultEmptyState(),
+        inputController: this.searchInputController,
+        onRefresh: () => {
+          void this.refreshFeaturedEntries()
+        },
+        onSearchOpen: () => {
+          this.homeInlineSearchController.open()
+        },
+        onExpandRequest: () => {
+          this.requestExpandedModeRail()
+        },
+        onModeChange: (mode: SubscriptionMode) => {
+          this.requestModeSwitch(mode)
+        },
+        onQueryChange: (value: string) => {
+          this.searchQuery = value
+        },
+        onSearchClose: (clearQuery: boolean) => {
+          this.homeInlineSearchController.close(clearQuery)
+        },
+        onEntryClick: (entry: EntryCardModel) => {
+          this.openEntry(entry)
+          this.homeInlineSearchController.close(true)
+        },
+        onSearchInputAppear: () => {
+          this.homeInlineSearchController.focus()
+        },
+        summaryTextForEntry: (entry: EntryCardModel): string => {
+          return this.homeInlineSearchController.searchResultSummaryText(entry)
+        },
+      })
 
     }
     .width('100%')
