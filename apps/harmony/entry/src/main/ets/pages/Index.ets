@@ -63,9 +63,10 @@ import {
 } from '../common/utils/IndexRootChrome'
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
-import { RefreshStateManager } from '../common/utils/RefreshStateManager'
 import { shouldHideRootBottomBar, shouldHideRootTitleBar } from '../common/utils/RootTabVisibilityPolicy'
 import { resolveModeSceneRenderState } from '../common/utils/ModeSceneTransition'
+import { IndexHomeRefreshCoordinator } from '../common/utils/IndexHomeRefreshCoordinator'
+import { IndexHomePaginationCoordinator } from '../common/utils/IndexHomePaginationCoordinator'
 import {
   IndexHomeEntryDataDelegate,
   IndexHomeInlineSearchDelegate,
@@ -81,27 +82,15 @@ import {
   createHomePendingLoadMoreMap,
   createHomeScrollOffsetMap,
   createHomeVisibleEntryLimitMap,
-  homeCandidateLimitValue,
   homeLoadMoreTimestampValue,
-  homeModeBooleanValue,
-  homeModeLoadedValue,
-  homeModeLoadingValue,
   homeModeNumberValue,
   homeModePendingLoadMoreValue,
-  homeNoProgressCountValue,
-  homeVisibleEntryLimitValue,
   pictureCaption,
   pictureCardEntry,
   pictureGalleryUrls,
-  withHomeCandidateLimitValue,
-  withHomeLoadedValue,
-  withHomeLoadingValue,
   withHomeLoadMoreTimestampValue,
-  withHomeModeBooleanValue,
   withHomeModeNumberValue,
-  withHomeNoProgressCountValue,
   withHomePendingLoadMoreValue,
-  withHomeVisibleEntryLimitValue,
 } from '../common/utils/IndexHomeStateFactory'
 import { createIndexHomeRootContentCallbacks } from '../common/utils/IndexHomeRootContentCallbacksFactory'
 import {
@@ -114,9 +103,6 @@ import {
   HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET,
   HOME_COLLAPSED_MODE_RAIL_TOP_PADDING,
   HOME_ENTRY_GROUP_DEFER_DELAY_MS,
-  HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS,
-  HOME_FINAL_RELOAD_IDLE_MAX_RETRIES,
-  HOME_FINAL_RELOAD_IDLE_RETRY_MS,
   HOME_FULL_MODE_CANDIDATE_LIMIT,
   HOME_GROUP_DEBUG_ENABLED,
   HOME_GROUP_DEBUG_PREFIX,
@@ -129,19 +115,13 @@ import {
   HOME_LIST_SWAP_ENTRY_MIN_OPACITY,
   HOME_LIST_SWAP_ENTRY_OFFSET_Y,
   HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
-  HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED,
   HOME_LOAD_MORE_DEBUG_ENABLED,
   HOME_LOAD_MORE_DEBUG_PREFIX,
-  HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
   HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS,
   HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS,
   HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED,
-  HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
   HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR,
   HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
-  HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS,
-  HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS,
-  HOME_LOAD_MORE_MIN_INTERVAL_MS,
   HOME_LOAD_STATE_DIAG_ENABLED,
   HOME_LOAD_STATE_DIAG_PREFIX,
   HOME_MAX_CANDIDATE_LIMIT,
@@ -154,15 +134,8 @@ import {
   HOME_MODE_RAIL_COLLAPSE_OFFSET,
   HOME_MODE_SCENE_TOP_INSET,
   HOME_MODE_SCENE_TRANSITION_DURATION,
-  HOME_MODE_SWITCH_CANDIDATE_LIMIT,
   HOME_PERF_DIAG_ENABLED,
   HOME_PERF_DIAG_PREFIX,
-  HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS,
-  HOME_REFRESH_FINAL_RELOAD_DELAY_MS,
-  HOME_REFRESH_FIRST_SWAP_DELAY_MS,
-  HOME_REFRESH_PERCENT_COALESCE_MS,
-  HOME_REFRESH_PROGRESS_UI_THROTTLE_MS,
-  HOME_STARTUP_REFRESH_COOLDOWN_MS,
   MODE_SWIPE_TRIGGER_OFFSET,
   SUBSCRIPTION_MODES,
   HomeEntryDataSourceMap,
@@ -247,40 +220,40 @@ struct Index {
   }
   private settingsRootScroller?: Scroller
   private headerBlurOffset: number = 0
-  private refreshPercentAnimationTimer: number = -1
-  private pendingRefreshPercentTarget: number = 0
+  refreshPercentAnimationTimer: number = -1
+  pendingRefreshPercentTarget: number = 0
   private autoRefreshTimer: number = -1
-  private postRefreshReloadVersion: number = 0
-  private homePostRefreshReloadPending: boolean = false
-  private feedsChangedReloadVersion: number = 0
-  private hasDeferredFeedsChangedReload: boolean = false
-  private deferredFeedsChangedRetryToken: number = 0
-  private suppressFeedsChangedUntilMs: number = 0
+  postRefreshReloadVersion: number = 0
+  homePostRefreshReloadPending: boolean = false
+  feedsChangedReloadVersion: number = 0
+  hasDeferredFeedsChangedReload: boolean = false
+  deferredFeedsChangedRetryToken: number = 0
+  suppressFeedsChangedUntilMs: number = 0
   homeListSwapToken: number = 0
-  private lastRefreshProgressUiUpdateAt: number = 0
+  lastRefreshProgressUiUpdateAt: number = 0
   isComponentActive: boolean = false
   private hasLoadedInitialData: boolean = false
   private initialFeedCount: number = 0
   private managedTimeoutIds: number[] = []
   private homeInlineSearchFocusRequestToken: number = 0
-  private homeLoadMoreRequestToken: number = 0
-  private lastHomeLoadMoreRequestedAt: number = 0
-  private homeLoadMorePrefetchToken: number = 0
-  private homeLoadMorePrefetchLimit: number = 0
-  private homeLoadMorePrefetchEntries: EntryCardModel[] = []
-  private homeLoadMorePrefetchMode: SubscriptionMode = 'articles'
-  private homeLoadMorePrefetchInProgress: boolean = false
-  private lastHomeUserScrollAt: number = 0
+  homeLoadMoreRequestToken: number = 0
+  lastHomeLoadMoreRequestedAt: number = 0
+  homeLoadMorePrefetchToken: number = 0
+  homeLoadMorePrefetchLimit: number = 0
+  homeLoadMorePrefetchEntries: EntryCardModel[] = []
+  homeLoadMorePrefetchMode: SubscriptionMode = 'articles'
+  homeLoadMorePrefetchInProgress: boolean = false
+  lastHomeUserScrollAt: number = 0
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
   private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = createHomeLoadMoreTimestampMap()
   private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   private homeModeScrollIntentVersions: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   private homeModeConsumedScrollIntentVersions: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
-  private homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = createHomeNoProgressCountMap()
-  private homeModeLoaded: HomeModeLoadedMap = createHomeLoadedMap()
-  private homeModeLoading: HomeModeLoadingMap = createHomeLoadingMap()
-  private lastHomeLoadMoreCompletedAt: number = 0
-  private lastHomeRefreshFinishedAt: number = 0
+  homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = createHomeNoProgressCountMap()
+  homeModeLoaded: HomeModeLoadedMap = createHomeLoadedMap()
+  homeModeLoading: HomeModeLoadingMap = createHomeLoadingMap()
+  lastHomeLoadMoreCompletedAt: number = 0
+  lastHomeRefreshFinishedAt: number = 0
   private homePerfSessionId: number = 0
   private homePerfSessionStartedAt: number = 0
   private readonly tweetPresentationCache: Map<string, TweetEntryPresentation> = new Map()
@@ -289,6 +262,9 @@ struct Index {
   private readonly homeInlineSearchController: HomeInlineSearchController = new HomeInlineSearchController(
     this.createHomeInlineSearchDelegate(),
   )
+  private readonly homeRefreshCoordinator: IndexHomeRefreshCoordinator = new IndexHomeRefreshCoordinator(this)
+  private readonly homePaginationCoordinator: IndexHomePaginationCoordinator =
+    new IndexHomePaginationCoordinator(this)
   private lastHandledRequestedRootTabId: RootTabId | '' = ''
 
   private createHomeModeDelegate(): IndexHomeModeDelegate {
@@ -366,11 +342,11 @@ struct Index {
     this.managedTimeoutIds = []
   }
 
-  private describeError(error: Error | string | Object): string {
+  describeError(error: Error | string | Object): string {
     return describeError(error)
   }
 
-  private logHomeAsyncError(stage: string, error: Error | string | Object): void {
+  logHomeAsyncError(stage: string, error: Error | string | Object): void {
     if (!HOME_ASYNC_ERROR_DEBUG_ENABLED) {
       return
     }
@@ -454,165 +430,27 @@ struct Index {
     this.logHomePerf(`loadInitialData done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
   }
 
-  private async shouldRunStartupRefresh(snapshotRestored: boolean): Promise<boolean> {
-    if (!snapshotRestored) {
-      return true
-    }
-
-    try {
-      const logs = await AppRepository.refreshLogs()
-      if (logs.length <= 0) {
-        return true
-      }
-
-      const latestSuccessfulLog = logs.find((log) => {
-        return Math.max(0, Number(log.successFeedCount) || 0) > 0
-      })
-      if (!latestSuccessfulLog) {
-        return true
-      }
-
-      const latestRefreshAt = Math.max(0, Number(latestSuccessfulLog.refreshedAt) || 0)
-      if (latestRefreshAt <= 0) {
-        return true
-      }
-
-      const elapsedMs = Date.now() - latestRefreshAt
-      if (elapsedMs < HOME_STARTUP_REFRESH_COOLDOWN_MS) {
-        this.logHomePerf(
-          `startup-refresh skip reason=cooldown elapsedMs=${elapsedMs} cooldownMs=${HOME_STARTUP_REFRESH_COOLDOWN_MS}`,
-        )
-        return false
-      }
-    } catch (error) {
-      this.logHomeAsyncError('startup-refresh-check', error)
-      return true
-    }
-
-    return true
-  }
-
   private async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> {
-    if (this.isHomeStartupRefreshing) {
-      return
-    }
-
-    const shouldRun = await this.shouldRunStartupRefresh(snapshotRestored)
-    if (!shouldRun) {
-      return
-    }
-
-    this.isHomeStartupRefreshing = true
-    void this.refreshFeaturedEntries(false).finally(() => {
-      this.isHomeStartupRefreshing = false
-      this.tryFlushDeferredFeedsChangedReload('startup-refresh-finally')
-      this.settleInitialHomeLoadState()
-      this.runManagedTimeout(() => {
-        this.settleInitialHomeLoadState(true)
-      }, 1200)
-    })
+    await this.homeRefreshCoordinator.startStartupRefreshIfNeeded(snapshotRestored)
   }
 
   async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
-    if (this.isRefreshing || !this.isComponentActive) {
-      return
-    }
-
-    const startedAt = Date.now()
-    this.logHomePerf(`refresh start showToast=${showResultToast}`)
-    this.invalidateHomeLoadMorePrefetch()
-    this.resetModeLoadMoreStates('refresh-start')
-    this.isRefreshing = true
-    this.refreshCompletedCount = 0
-    this.refreshTotalCount = 0
-    this.lastRefreshProgressUiUpdateAt = 0
-    this.clearRefreshPercentAnimation()
-    this.displayRefreshPercent = 0
-
-    try {
-      const result = await AppRepository.refreshAllFeeds((completedCount: number, totalCount: number) => {
-        if (!this.isComponentActive) {
-          return
-        }
-        if (this.isHomeScrollInteracting && completedCount < totalCount) {
-          return
-        }
-
-        const now = Date.now()
-        const shouldFlushNow = completedCount >= totalCount
-          || this.lastRefreshProgressUiUpdateAt === 0
-          || now - this.lastRefreshProgressUiUpdateAt >= HOME_REFRESH_PROGRESS_UI_THROTTLE_MS
-        if (!shouldFlushNow) {
-          return
-        }
-        this.lastRefreshProgressUiUpdateAt = now
-
-        this.refreshCompletedCount = completedCount
-        this.refreshTotalCount = totalCount
-        this.animateRefreshPercentTo(this.resolveRefreshPercent(completedCount, totalCount))
-      })
-      if (!this.isComponentActive) {
-        return
-      }
-      this.feedSourceLabel = result.sourceLabel
-      if (!result.allSkippedByCooldown) {
-        this.scheduleHomeReloadAfterRefresh()
-      }
-      if (showResultToast) {
-        this.showToast(result.sourceLabel)
-      }
-    } catch (error) {
-      this.logHomeAsyncError('refresh-featured-entries', error)
-      const errorMessage = this.describeError(error)
-      this.feedSourceLabel = `刷新失败：${errorMessage}`
-      if (showResultToast) {
-        this.showToast('刷新失败，请查看日志')
-      }
-    } finally {
-      this.isRefreshing = false
-      this.refreshCompletedCount = 0
-      this.refreshTotalCount = 0
-      this.lastRefreshProgressUiUpdateAt = 0
-      this.lastHomeRefreshFinishedAt = Date.now()
-      this.clearRefreshPercentAnimation()
-      this.displayRefreshPercent = 0
-      this.scheduleHomeLoadMorePrefetch()
-      this.logHomePerf(`refresh done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
-    }
+    await this.homeRefreshCoordinator.refreshFeaturedEntries(showResultToast)
   }
 
   private resolveRefreshPercent(completedCount: number, totalCount: number): number {
-    return RefreshStateManager.resolveRefreshPercent(completedCount, totalCount)
+    return this.homeRefreshCoordinator.resolveRefreshPercent(completedCount, totalCount)
   }
 
   private clearRefreshPercentAnimation(): void {
-    if (this.refreshPercentAnimationTimer < 0) {
-      return
-    }
-
-    clearTimeout(this.refreshPercentAnimationTimer)
-    this.refreshPercentAnimationTimer = -1
+    this.homeRefreshCoordinator.clearRefreshPercentAnimation()
   }
 
   private animateRefreshPercentTo(targetPercent: number): void {
-    const animationPlan = RefreshStateManager.createPercentAnimationPlan(this.displayRefreshPercent, targetPercent)
-    const nextTarget = animationPlan.targetPercent
-    if (nextTarget === this.displayRefreshPercent && this.refreshPercentAnimationTimer < 0) {
-      return
-    }
-
-    this.pendingRefreshPercentTarget = nextTarget
-    if (this.refreshPercentAnimationTimer >= 0) {
-      return
-    }
-
-    this.refreshPercentAnimationTimer = setTimeout(() => {
-      this.refreshPercentAnimationTimer = -1
-      this.displayRefreshPercent = this.pendingRefreshPercentTarget
-    }, HOME_REFRESH_PERCENT_COALESCE_MS)
+    this.homeRefreshCoordinator.animateRefreshPercentTo(targetPercent)
   }
 
-  private showToast(message: string, duration: number = 2000): void {
+  showToast(message: string, duration: number = 2000): void {
     if (!this.isComponentActive) {
       return
     }
@@ -813,6 +651,10 @@ struct Index {
     }
 
     return this.filteredEntriesFor(this.mode)
+  }
+
+  hasHomeInlineSearchQuery(): boolean {
+    return !!this.homeInlineSearchController.normalizedQuery()
   }
 
   getHomeInlineSearchFocusRequestToken(): number {
@@ -1158,262 +1000,103 @@ struct Index {
   }
 
   private markDeferredFeedsChangedReload(reason: string): void {
-    this.hasDeferredFeedsChangedReload = true
-    this.logHomePerf(`feedsChanged deferred reason=${reason}`)
+    this.homeRefreshCoordinator.markDeferredFeedsChangedReload(reason)
   }
 
   private scheduleDeferredFeedsChangedRetry(delayMs: number): void {
-    const safeDelayMs = Math.max(16, delayMs)
-    const retryToken = this.deferredFeedsChangedRetryToken + 1
-    this.deferredFeedsChangedRetryToken = retryToken
-    this.runManagedTimeout(() => {
-      if (this.deferredFeedsChangedRetryToken !== retryToken) {
-        return
-      }
-      this.tryFlushDeferredFeedsChangedReload('retry')
-    }, safeDelayMs)
+    this.homeRefreshCoordinator.scheduleDeferredFeedsChangedRetry(delayMs)
   }
 
   private scheduleFeedsChangedReload(reason: string): void {
-    const currentVersion = this.feedsChangedReloadVersion + 1
-    this.feedsChangedReloadVersion = currentVersion
-    this.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
-    this.invalidateHomeLoadMorePrefetch()
-    this.runManagedTimeout(() => {
-      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, false, false)
-    }, 0)
+    this.homeRefreshCoordinator.scheduleFeedsChangedReload(reason)
   }
 
   private tryFlushDeferredFeedsChangedReload(source: string): boolean {
-    if (!this.hasDeferredFeedsChangedReload) {
-      return false
-    }
-    if (!this.isComponentActive || !this.isHomeRootTab()) {
-      return false
-    }
-    if (this.homePostRefreshReloadPending) {
-      return false
-    }
-
-    const now = Date.now()
-    if (this.isRefreshing || this.isHomeStartupRefreshing || this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
-      return false
-    }
-    if (now < this.suppressFeedsChangedUntilMs) {
-      this.scheduleDeferredFeedsChangedRetry(this.suppressFeedsChangedUntilMs - now + 16)
-      return true
-    }
-
-    this.hasDeferredFeedsChangedReload = false
-    this.scheduleFeedsChangedReload(`deferred-${source}`)
-    return true
+    return this.homeRefreshCoordinator.tryFlushDeferredFeedsChangedReload(source)
   }
 
   private handleFeedsChanged(): void {
-    if (!this.isComponentActive) {
-      return
-    }
-
-    const now = Date.now()
-    if (!this.isHomeRootTab()) {
-      this.markDeferredFeedsChangedReload('not-home-tab')
-      return
-    }
-
-    if (this.isRefreshing || this.isHomeStartupRefreshing || this.homeLoadMoreInProgress || this.isHomeScrollInteracting) {
-      this.markDeferredFeedsChangedReload('busy')
-      return
-    }
-    if (this.homePostRefreshReloadPending) {
-      this.markDeferredFeedsChangedReload('post-refresh-pending')
-      return
-    }
-
-    if (now < this.suppressFeedsChangedUntilMs) {
-      this.markDeferredFeedsChangedReload('suppressed-until')
-      this.scheduleDeferredFeedsChangedRetry(this.suppressFeedsChangedUntilMs - now + 16)
-      return
-    }
-
-    if (now - this.lastHomeRefreshFinishedAt < HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS) {
-      this.markDeferredFeedsChangedReload('post-refresh-suppress')
-      const remainingSuppressMs = HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS - (now - this.lastHomeRefreshFinishedAt)
-      this.scheduleDeferredFeedsChangedRetry(remainingSuppressMs + 16)
-      return
-    }
-
-    this.scheduleFeedsChangedReload('watch-event')
+    this.homeRefreshCoordinator.handleFeedsChanged()
   }
 
   private shouldRunFinalHomeReloadNow(): boolean {
-    const currentOffset = this.readHomeModeScrollOffset(this.mode)
-    const shouldApplyLengthGuard = !this.shouldRenderAllEntriesForMode(this.mode)
-    return this.isComponentActive
-      && this.isHomeRootTab()
-      && !this.isRefreshing
-      && !this.isHomeStartupRefreshing
-      && !this.isModeTransitioning
-      && !this.homeListSwapAnimating
-      && !this.searchOverlayVisible
-      && !this.isHomeScrollInteracting
-      && !this.homeLoadMoreInProgress
-      && !this.pendingLoadMoreForMode(this.mode)
-      && !this.hasRecentHomeScrollIntent()
-      && currentOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET
-      && (!shouldApplyLengthGuard || this.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT)
+    return this.homeRefreshCoordinator.shouldRunFinalHomeReloadNow()
   }
 
   private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void {
-    this.runManagedTimeout(() => {
-      if (this.postRefreshReloadVersion !== currentVersion) {
-        return
-      }
-
-      if (!this.shouldRunFinalHomeReloadNow()) {
-        if (attempt >= HOME_FINAL_RELOAD_IDLE_MAX_RETRIES) {
-          void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
-          return
-        }
-        this.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt + 1)
-        return
-      }
-
-      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
-    }, attempt === 0 ? HOME_REFRESH_FINAL_RELOAD_DELAY_MS : HOME_FINAL_RELOAD_IDLE_RETRY_MS)
+    this.homeRefreshCoordinator.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt)
   }
 
   private scheduleHomeReloadAfterRefresh(): void {
-    const currentVersion = this.postRefreshReloadVersion + 1
-    this.postRefreshReloadVersion = currentVersion
-    this.homePostRefreshReloadPending = true
-    this.suppressFeedsChangedUntilMs = Date.now()
-      + HOME_REFRESH_FINAL_RELOAD_DELAY_MS
-      + HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS
-
-    this.runManagedTimeout(() => {
-      if (this.postRefreshReloadVersion !== currentVersion) {
-        return
-      }
-      if (!this.shouldRunFinalHomeReloadNow()) {
-        this.homePostRefreshReloadPending = false
-        return
-      }
-      this.hasDeferredFeedsChangedReload = false
-      void this.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true, true).finally(() => {
-        if (this.postRefreshReloadVersion === currentVersion) {
-          this.homePostRefreshReloadPending = false
-        }
-      })
-    }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)
+    this.homeRefreshCoordinator.scheduleHomeReloadAfterRefresh()
   }
 
   private resolveHomeCandidateLimit(minimumLimit: number): number {
-    if (this.shouldRenderAllEntriesForMode(this.mode)) {
-      return this.resolveHomeCandidateLimitForMode(this.mode, minimumLimit)
-    }
-    return Math.max(minimumLimit, this.homeCandidateLimit)
+    return this.homePaginationCoordinator.resolveHomeCandidateLimit(minimumLimit)
   }
 
-  private shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    return false
+  shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
+    return this.homePaginationCoordinator.shouldRenderAllEntriesForMode(_mode)
   }
 
   private candidateLimitForMode(mode: SubscriptionMode): number {
-    return homeCandidateLimitValue(mode, this.homeCandidateLimitsByMode)
+    return this.homePaginationCoordinator.candidateLimitForMode(mode)
   }
 
   private setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
-    const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
-    const safeLimit = Math.max(minimumLimit, limit)
-    this.homeCandidateLimitsByMode = withHomeCandidateLimitValue(mode, safeLimit, this.homeCandidateLimitsByMode)
-    if (mode === this.mode) {
-      this.homeCandidateLimit = safeLimit
-    }
+    this.homePaginationCoordinator.setCandidateLimitForMode(mode, limit)
   }
 
   private resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number {
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return Math.max(HOME_FULL_MODE_CANDIDATE_LIMIT, minimumLimit)
-    }
-    return Math.max(minimumLimit, this.candidateLimitForMode(mode))
+    return this.homePaginationCoordinator.resolveHomeCandidateLimitForMode(mode, minimumLimit)
   }
 
   markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
-    this.homeModeLoaded = withHomeLoadedValue(mode, loaded, this.homeModeLoaded)
+    this.homePaginationCoordinator.markModeLoaded(mode, loaded)
   }
 
   private isModeLoaded(mode: SubscriptionMode): boolean {
-    return homeModeLoadedValue(mode, this.homeModeLoaded)
+    return this.homePaginationCoordinator.isModeLoaded(mode)
   }
 
   isModeLoading(mode: SubscriptionMode): boolean {
-    return homeModeLoadingValue(mode, this.homeModeLoading)
+    return this.homePaginationCoordinator.isModeLoading(mode)
   }
 
   private setModeLoading(mode: SubscriptionMode, loading: boolean): void {
-    this.homeModeLoading = withHomeLoadingValue(mode, loading, this.homeModeLoading)
+    this.homePaginationCoordinator.setModeLoading(mode, loading)
   }
 
   private visibleEntryLimitFor(mode: SubscriptionMode): number {
-    return homeVisibleEntryLimitValue(mode, this.homeVisibleEntryLimits)
+    return this.homePaginationCoordinator.visibleEntryLimitFor(mode)
   }
 
   private setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
-    const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    this.homeVisibleEntryLimits = withHomeVisibleEntryLimitValue(mode, safeLimit, this.homeVisibleEntryLimits)
+    this.homePaginationCoordinator.setVisibleEntryLimitFor(mode, limit)
   }
 
   totalEntryCountFor(mode: SubscriptionMode): number {
-    return this.filteredEntriesFor(mode).length
+    return this.homePaginationCoordinator.totalEntryCountFor(mode)
   }
 
   private hasBufferedEntriesForMode(mode: SubscriptionMode): boolean {
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return false
-    }
-    return this.visibleEntryLimitFor(mode) < this.totalEntryCountFor(mode)
+    return this.homePaginationCoordinator.hasBufferedEntriesForMode(mode)
   }
 
   visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
-    const entries = this.filteredEntriesFor(mode)
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return entries
-    }
-    const limit = this.visibleEntryLimitFor(mode)
-    const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    return entries.slice(0, Math.min(entries.length, safeLimit))
+    return this.homePaginationCoordinator.visibleEntriesFor(mode)
   }
 
   private visibleEntryCountFor(mode: SubscriptionMode): number {
-    const totalCount = this.totalEntryCountFor(mode)
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return totalCount
-    }
-    const limit = this.visibleEntryLimitFor(mode)
-    const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    return Math.min(totalCount, safeLimit)
+    return this.homePaginationCoordinator.visibleEntryCountFor(mode)
   }
 
   private expandVisibleEntriesForMode(mode: SubscriptionMode): boolean {
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return false
-    }
-    const total = this.totalEntryCountFor(mode)
-    const currentLimit = this.visibleEntryLimitFor(mode)
-    if (currentLimit >= total) {
-      return false
-    }
-
-    const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode))
-    this.setVisibleEntryLimitFor(mode, nextLimit)
-    this.logHomeLoadMore(
-      `expand-visible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total}`,
-    )
-    return true
+    return this.homePaginationCoordinator.expandVisibleEntriesForMode(mode)
   }
 
   private syncHomePaginationFromReloadResult(entries: EntryCardModel[], candidateLimit: number): void {
-    this.syncModePaginationFromReloadResult(this.mode, entries, candidateLimit)
+    this.homePaginationCoordinator.syncHomePaginationFromReloadResult(entries, candidateLimit)
   }
 
   private syncModePaginationFromReloadResult(
@@ -1421,65 +1104,21 @@ struct Index {
     entries: EntryCardModel[],
     candidateLimit: number,
   ): void {
-    const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
-    const safeLimit = Math.max(minimumLimit, candidateLimit)
-    const currentEntries = this.filteredEntriesFor(mode)
-    const currentCount = currentEntries.length
-    this.setCandidateLimitForMode(mode, safeLimit)
-    if (entries.length >= safeLimit) {
-      this.setModeHasMoreEntries(mode, true, `sync-pagination-full entries=${entries.length} limit=${safeLimit}`)
-      return
-    }
-
-    if (entries.length > currentCount) {
-      this.setModeHasMoreEntries(mode, true, `sync-pagination-growth entries=${entries.length} current=${currentCount} limit=${safeLimit}`)
-      return
-    }
-
-    const visibleCount = this.visibleEntryCountFor(mode)
-    const currentCandidateLimit = this.candidateLimitForMode(mode)
-    const reachedCurrentBoundary = visibleCount >= currentCount && safeLimit > currentCandidateLimit
-    if (currentCount > 0 && reachedCurrentBoundary) {
-      this.setModeHasMoreEntries(mode, true, `sync-pagination-boundary visible=${visibleCount} current=${currentCount} limit=${safeLimit}`)
-      return
-    }
-
-    this.setModeHasMoreEntries(mode, false, `sync-pagination-short entries=${entries.length} limit=${safeLimit}`)
-    this.logHomeLoadMore(
-      `stop-hasMore mode=${mode} entries=${entries.length} limit=${safeLimit} candidateLimit=${this.candidateLimitForMode(mode)}`,
-    )
-    if (!this.modeHasMoreEntries('articles')
-      && !this.modeHasMoreEntries('social')
-      && !this.modeHasMoreEntries('pictures')
-      && !this.modeHasMoreEntries('videos')
-    ) {
-      this.setHomeHasMoreEntries(false, `all-modes-exhausted mode=${mode}`)
-    }
+    this.homePaginationCoordinator.syncModePaginationFromReloadResult(mode, entries, candidateLimit)
   }
 
   private canLoadMoreForMode(mode: SubscriptionMode): boolean {
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return false
-    }
-    const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
-    return this.isHomeRootTab()
-      && mode === this.mode
-      && (hasBufferedEntries || this.modeHasMoreEntries(mode))
-      && !this.searchOverlayVisible
-      && !this.homeInlineSearchController.normalizedQuery()
-      && !this.homeInitialLoadPending
-      && !this.homeLoadMoreInProgress
-      && (hasBufferedEntries || this.homeHasMoreEntries)
+    return this.homePaginationCoordinator.canLoadMoreForMode(mode)
   }
 
-  private logHomeLoadMore(message: string): void {
+  logHomeLoadMore(message: string): void {
     if (!HOME_LOAD_MORE_DEBUG_ENABLED) {
       return
     }
     console.info(`${HOME_LOAD_MORE_DEBUG_PREFIX} ${message}`)
   }
 
-  private logHomePerf(message: string): void {
+  logHomePerf(message: string): void {
     if (!HOME_PERF_DIAG_ENABLED) {
       return
     }
@@ -1487,7 +1126,7 @@ struct Index {
     console.info(`${HOME_PERF_DIAG_PREFIX} sid=${this.homePerfSessionId} t=${elapsed}ms ${message}`)
   }
 
-  private logHomeLoadState(message: string): void {
+  logHomeLoadState(message: string): void {
     if (!HOME_LOAD_STATE_DIAG_ENABLED) {
       return
     }
@@ -1496,392 +1135,74 @@ struct Index {
   }
 
   private setHomeHasMoreEntries(next: boolean, reason: string): void {
-    if (this.homeHasMoreEntries === next) {
-      return
-    }
-
-    const mode = this.mode
-    const total = this.totalEntryCountFor(mode)
-    const visible = this.visibleEntryCountFor(mode)
-    this.homeHasMoreEntries = next
-    if (!next) {
-      this.homeHasMoreEntriesByMode = createHomeModeBooleanMap(false)
-    }
-    this.logHomeLoadState(
-      `hasMore=${next ? 'true' : 'false'} reason=${reason} mode=${mode} `
-      + `candidateLimit=${this.homeCandidateLimit} featured=${this.featuredEntries.length} `
-      + `visible=${visible}/${total} inProgress=${this.homeLoadMoreInProgress}`,
-    )
+    this.homePaginationCoordinator.setHomeHasMoreEntries(next, reason)
   }
 
   private modeHasMoreEntries(mode: SubscriptionMode): boolean {
-    return homeModeBooleanValue(mode, this.homeHasMoreEntriesByMode)
+    return this.homePaginationCoordinator.modeHasMoreEntries(mode)
   }
 
   private setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
-    const previous = this.modeHasMoreEntries(mode)
-    if (previous === next) {
-      return
-    }
-    this.homeHasMoreEntriesByMode = withHomeModeBooleanValue(mode, next, this.homeHasMoreEntriesByMode)
-    this.logHomeLoadState(
-      `modeHasMore mode=${mode} next=${next ? 'true' : 'false'} reason=${reason} `
-      + `globalHasMore=${this.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
-    )
-    if (next) {
-      this.setHomeHasMoreEntries(true, `mode-has-more mode=${mode}`)
-    }
+    this.homePaginationCoordinator.setModeHasMoreEntries(mode, next, reason)
   }
 
   private modeNoProgressCount(mode: SubscriptionMode): number {
-    return homeNoProgressCountValue(mode, this.homeModeNoProgressLoadMoreCount)
+    return this.homePaginationCoordinator.modeNoProgressCount(mode)
   }
 
   private setModeNoProgressCount(mode: SubscriptionMode, count: number): void {
-    const safeCount = Math.max(0, count)
-    this.homeModeNoProgressLoadMoreCount =
-      withHomeNoProgressCountValue(mode, safeCount, this.homeModeNoProgressLoadMoreCount)
+    this.homePaginationCoordinator.setModeNoProgressCount(mode, count)
   }
 
-  private resetModeLoadMoreStates(reason: string): void {
-    this.homeHasMoreEntriesByMode = createHomeModeBooleanMap(true)
-    this.homeModeNoProgressLoadMoreCount = createHomeNoProgressCountMap()
-    this.logHomeLoadState(`mode loadMore state reset reason=${reason}`)
+  resetModeLoadMoreStates(reason: string): void {
+    this.homePaginationCoordinator.resetModeLoadMoreStates(reason)
   }
 
   private loadMoreBlockedReason(mode: SubscriptionMode): string {
-    const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
-    if (!this.isHomeRootTab()) {
-      return 'not-home-tab'
-    }
-    if (mode !== this.mode) {
-      return 'inactive-mode'
-    }
-    if (this.searchOverlayVisible) {
-      return 'search-overlay'
-    }
-    if (!!this.homeInlineSearchController.normalizedQuery()) {
-      return 'search-query-active'
-    }
-    if (this.homeInitialLoadPending) {
-      return 'initial-load-pending'
-    }
-    if (this.homeLoadMoreInProgress) {
-      return 'load-more-in-progress'
-    }
-    if (!hasBufferedEntries && !this.modeHasMoreEntries(mode)) {
-      return 'mode-no-more'
-    }
-    if (!hasBufferedEntries && !this.homeHasMoreEntries) {
-      return 'no-buffer-and-no-more'
-    }
-    if (!this.hasRecentHomeScrollIntent()) {
-      return 'no-recent-scroll-intent'
-    }
-    return ''
+    return this.homePaginationCoordinator.loadMoreBlockedReason(mode)
   }
 
-  private hasRecentHomeScrollIntent(): boolean {
-    return Date.now() - this.lastHomeUserScrollAt <= HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS
+  hasRecentHomeScrollIntent(): boolean {
+    return this.homePaginationCoordinator.hasRecentHomeScrollIntent()
   }
 
-  private invalidateHomeLoadMorePrefetch(): void {
-    this.homeLoadMorePrefetchToken += 1
-    this.homeLoadMorePrefetchInProgress = false
-    this.homeLoadMorePrefetchLimit = 0
-    this.homeLoadMorePrefetchEntries = []
-    this.homeLoadMorePrefetchMode = this.mode
+  invalidateHomeLoadMorePrefetch(): void {
+    this.homePaginationCoordinator.invalidateHomeLoadMorePrefetch()
   }
 
   private canPrefetchHomeLoadMore(): boolean {
-    if (!HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED) {
-      return false
-    }
-    return this.isComponentActive
-      && this.isHomeRootTab()
-      && !this.shouldRenderAllEntriesForMode(this.mode)
-      && !this.searchOverlayVisible
-      && !this.homeInlineSearchController.normalizedQuery()
-      && !this.isRefreshing
-      && !this.isHomeStartupRefreshing
-      && !this.homeInitialLoadPending
-      && !this.homeLoadMoreInProgress
-      && this.homeHasMoreEntries
-      && this.modeHasMoreEntries(this.mode)
+    return this.homePaginationCoordinator.canPrefetchHomeLoadMore()
   }
 
-  private scheduleHomeLoadMorePrefetch(delayMs: number = 220): void {
-    this.runManagedTimeout(() => {
-      void this.prefetchHomeLoadMore()
-    }, delayMs)
+  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void {
+    this.homePaginationCoordinator.scheduleHomeLoadMorePrefetch(delayMs)
   }
 
   private async prefetchHomeLoadMore(): Promise<void> {
-    if (!this.canPrefetchHomeLoadMore()) {
-      return
-    }
-
-    const mode = this.mode
-    const currentLimit = this.candidateLimitForMode(mode)
-    const targetLimit = Math.min(
-      HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
-      currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
-    )
-    if (targetLimit <= currentLimit) {
-      return
-    }
-
-    if (this.homeLoadMorePrefetchLimit >= targetLimit && this.homeLoadMorePrefetchEntries.length > 0) {
-      return
-    }
-
-    if (this.homeLoadMorePrefetchInProgress) {
-      return
-    }
-
-    this.homeLoadMorePrefetchInProgress = true
-    const token = this.homeLoadMorePrefetchToken + 1
-    this.homeLoadMorePrefetchToken = token
-    this.logHomeLoadMore(
-      `prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`,
-    )
-
-    try {
-      const entries = await AppRepository.featuredEntriesByMode(mode, targetLimit)
-      if (!this.isComponentActive || this.homeLoadMorePrefetchToken !== token) {
-        return
-      }
-
-      this.homeLoadMorePrefetchLimit = targetLimit
-      this.homeLoadMorePrefetchEntries = entries
-      this.homeLoadMorePrefetchMode = mode
-      this.logHomeLoadMore(
-      `prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`,
-      )
-    } catch (_error) {
-      this.logHomeLoadMore(`prefetch failed targetLimit=${targetLimit}`)
-    } finally {
-      if (this.homeLoadMorePrefetchToken === token) {
-        this.homeLoadMorePrefetchInProgress = false
-      }
-    }
+    await this.homePaginationCoordinator.prefetchHomeLoadMore()
   }
 
   private consumePrefetchedHomeEntries(mode: SubscriptionMode, nextLimit: number): EntryCardModel[] | undefined {
-    if (this.homeLoadMorePrefetchMode !== mode) {
-      return undefined
-    }
-    if (this.homeLoadMorePrefetchLimit < nextLimit || this.homeLoadMorePrefetchEntries.length === 0) {
-      return undefined
-    }
-
-    const entries = this.homeLoadMorePrefetchEntries
-    this.homeLoadMorePrefetchLimit = 0
-    this.homeLoadMorePrefetchEntries = []
-    this.homeLoadMorePrefetchInProgress = false
-    this.logHomeLoadMore(`consume-prefetch nextLimit=${nextLimit} entries=${entries.length}`)
-    return entries
+    return this.homePaginationCoordinator.consumePrefetchedHomeEntries(mode, nextLimit)
   }
 
   private shouldRetryLoadMoreBlockedReason(reason: string): boolean {
-    return reason === 'load-more-in-progress' || reason === 'initial-load-pending'
+    return this.homePaginationCoordinator.shouldRetryLoadMoreBlockedReason(reason)
   }
 
   private requestLoadMoreForMode(mode: SubscriptionMode): boolean {
-    const blockedReason = this.loadMoreBlockedReason(mode)
-    if (!!blockedReason || !this.canLoadMoreForMode(mode)) {
-      this.logHomePerf(`loadMore skip mode=${mode} reason=${blockedReason || 'canLoadMore=false'}`)
-      return !!blockedReason ? !this.shouldRetryLoadMoreBlockedReason(blockedReason) : true
-    }
-
-    const now = Date.now()
-    if (this.lastHomeLoadMoreCompletedAt > 0 && now - this.lastHomeLoadMoreCompletedAt < HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS) {
-      this.logHomePerf(`loadMore skip mode=${mode} reason=post-complete-cooldown`)
-      return false
-    }
-    if (now - this.lastHomeLoadMoreRequestedAt < HOME_LOAD_MORE_MIN_INTERVAL_MS) {
-      this.logHomePerf(`loadMore skip mode=${mode} reason=min-interval`)
-      return false
-    }
-    this.lastHomeLoadMoreRequestedAt = now
-
-    const expandedVisible = this.expandVisibleEntriesForMode(mode)
-    const totalCount = this.totalEntryCountFor(mode)
-    const visibleLimit = this.visibleEntryLimitFor(mode)
-    const remainingBufferedCount = Math.max(0, totalCount - visibleLimit)
-    const fetchAheadBufferThreshold = resolveHomeVisibleEntryLoadMoreStep(mode) * HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
-    if (expandedVisible && remainingBufferedCount > fetchAheadBufferThreshold) {
-      return true
-    }
-
-    if (!this.homeHasMoreEntries) {
-      return true
-    }
-
-    const previousTotal = this.featuredEntries.length
-    const previousModeTotal = this.totalEntryCountFor(mode)
-    const currentModeLimit = this.candidateLimitForMode(mode)
-    const nextLimit = Math.min(
-      HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
-      currentModeLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
-    )
-    if (nextLimit <= currentModeLimit) {
-      this.setModeHasMoreEntries(mode, false, `next-limit-clamped nextLimit=${nextLimit} currentLimit=${currentModeLimit}`)
-      return true
-    }
-
-    this.homeLoadMoreInProgress = true
-    const requestToken = this.homeLoadMoreRequestToken + 1
-    this.homeLoadMoreRequestToken = requestToken
-    const prefetchedEntries = this.consumePrefetchedHomeEntries(mode, nextLimit)
-    const requestStartedAt = Date.now()
-    this.logHomePerf(
-      `loadMore start mode=${mode} nextLimit=${nextLimit} hasPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
-    )
-    this.logHomeLoadMore(
-      `request start mode=${mode} prevTotal=${previousTotal} currentLimit=${currentModeLimit} nextLimit=${nextLimit}`,
-    )
-
-    const loadPromise = prefetchedEntries
-      ? (async () => {
-          this.syncModePaginationFromReloadResult(mode, prefetchedEntries, nextLimit)
-          this.applyEntriesForMode(mode, prefetchedEntries, true)
-        })()
-      : this.appendFeaturedEntriesFromLocalFast(mode, nextLimit)
-
-    void loadPromise
-      .then(() => {
-        if (this.homeLoadMoreRequestToken !== requestToken) {
-          return
-        }
-
-        const currentTotal = this.featuredEntries.length
-        const currentModeTotal = this.totalEntryCountFor(mode)
-        const modeHasGrowth = currentModeTotal > previousModeTotal
-        if (modeHasGrowth) {
-          this.setModeNoProgressCount(mode, 0)
-        } else if (!this.hasBufferedEntriesForMode(mode)) {
-          const nextNoProgressCount = this.modeNoProgressCount(mode) + 1
-          this.setModeNoProgressCount(mode, nextNoProgressCount)
-        }
-        if (this.candidateLimitForMode(mode) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT) {
-          this.setModeHasMoreEntries(mode, false, `candidate-limit-max mode=${mode} limit=${this.candidateLimitForMode(mode)}`)
-        }
-
-        if (expandedVisible && !this.hasBufferedEntriesForMode(mode)) {
-          this.expandVisibleEntriesForMode(mode)
-        }
-        this.logHomeLoadMore(
-          `request done mode=${mode} prevTotal=${previousTotal} currentTotal=${currentTotal} `
-          + `prevModeTotal=${previousModeTotal} currentModeTotal=${currentModeTotal} `
-          + `candidateLimit=${this.candidateLimitForMode(mode)} hasMore=${this.homeHasMoreEntries} `
-          + `modeHasMore=${this.modeHasMoreEntries(mode)} noProgress=${this.modeNoProgressCount(mode)} `
-          + `usedPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
-        )
-      })
-      .catch((error: Error | string | Object) => {
-        this.logHomeLoadMore(`request failed mode=${mode} error=${this.describeError(error)}`)
-        this.logHomeAsyncError(`load-more-request mode=${mode}`, error)
-      })
-      .finally(() => {
-        if (this.homeLoadMoreRequestToken !== requestToken) {
-          return
-        }
-        this.homeLoadMoreInProgress = false
-        this.lastHomeLoadMoreCompletedAt = Date.now()
-        this.scheduleHomeLoadMorePrefetch()
-        this.logHomePerf(
-          `loadMore done mode=${mode} elapsedMs=${Date.now() - requestStartedAt} total=${this.featuredEntries.length}`,
-        )
-        if (this.pendingLoadMoreForMode(mode)) {
-          this.flushPendingLoadMoreForMode(mode)
-        }
-      })
-    return true
+    return this.homePaginationCoordinator.requestLoadMoreForMode(mode)
   }
 
   private async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
-    const previousEntries = this.filteredEntriesFor(mode)
-    const previousTotal = previousEntries.length
-    const currentLimit = this.candidateLimitForMode(mode)
-    const appendCount = Math.max(1, nextLimit - currentLimit)
-    const nextPage = await AppRepository.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
-
-    if (nextPage.length === 0) {
-      this.setCandidateLimitForMode(mode, nextLimit)
-      this.logHomeLoadMore(
-        `append-fast-empty mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextLimit=${nextLimit}`,
-      )
-      const fallbackEntries = await AppRepository.featuredEntriesByMode(mode, nextLimit)
-      this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
-      if (fallbackEntries.length <= previousTotal) {
-        this.setModeHasMoreEntries(
-          mode,
-          false,
-          `append-empty-fallback prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
-        )
-      }
-      this.applyEntriesForMode(mode, fallbackEntries, true)
-      return
-    }
-
-    const seen = new Set<string>()
-    const merged: EntryCardModel[] = []
-    previousEntries.forEach((entry: EntryCardModel) => {
-      seen.add(`${entry.id}|${entry.feedId}|${entry.articleUrl}`)
-      merged.push(entry)
-    })
-    nextPage.forEach((entry: EntryCardModel) => {
-      const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
-      if (seen.has(key)) {
-        return
-      }
-      seen.add(key)
-      merged.push(entry)
-    })
-
-    const appendedUniqueCount = Math.max(0, merged.length - previousTotal)
-    if (appendedUniqueCount === 0) {
-      this.logHomeLoadMore(
-        `append-no-unique prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} nextLimit=${nextLimit}`,
-      )
-
-      const fallbackEntries = await AppRepository.featuredEntriesByMode(mode, nextLimit)
-      this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
-      if (fallbackEntries.length <= previousTotal) {
-        this.setModeHasMoreEntries(
-          mode,
-          false,
-          `append-no-progress prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
-        )
-      }
-      this.applyEntriesForMode(mode, fallbackEntries, true)
-      return
-    }
-
-    this.setCandidateLimitForMode(mode, nextLimit)
-    if (mode === 'articles') {
-      this.entryGroups = {
-        articles: merged,
-        social: this.entryGroups.social,
-        pictures: this.entryGroups.pictures,
-        videos: this.entryGroups.videos,
-      }
-      this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
-      this.markModeLoaded(mode, true)
-      this.settleInitialHomeLoadState()
-      this.schedulePersistHomeSnapshot(this.featuredEntries)
-      this.notifyHomeEntryDataReloadedForMode(mode)
-      return
-    }
-    this.applyEntriesForMode(mode, merged, true)
+    await this.homePaginationCoordinator.appendFeaturedEntriesFromLocalFast(mode, nextLimit)
   }
 
   private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
     this.homePendingLoadMoreModes = withHomePendingLoadMoreValue(mode, pending, this.homePendingLoadMoreModes)
   }
 
-  private pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
+  pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
     return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
   }
 
@@ -2052,33 +1373,16 @@ struct Index {
     this.enqueueLoadMoreForMode(mode, 'item-appear')
   }
 
-  private mergeFeaturedEntriesFromGroups(): EntryCardModel[] {
+  mergeFeaturedEntriesFromGroups(): EntryCardModel[] {
     return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups()
   }
 
-  private applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void {
+  applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void {
     this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge)
   }
 
   ensureModeEntriesLoaded(mode: SubscriptionMode): void {
-    const hasModeEntries = this.totalEntryCountFor(mode) > 0
-    const fullModeReady = !this.shouldRenderAllEntriesForMode(mode)
-      || this.candidateLimitForMode(mode) >= HOME_FULL_MODE_CANDIDATE_LIMIT
-    if (this.isModeLoaded(mode) && hasModeEntries && fullModeReady) {
-      return
-    }
-    if (this.isModeLoading(mode) || this.homeLoadMoreInProgress) {
-      return
-    }
-    this.setModeLoading(mode, true)
-    const limit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
-    void this.reloadFeaturedEntriesFromLocal(limit, false, true, true, mode)
-      .catch((error: Error | string | Object) => {
-        this.logHomeAsyncError(`ensure-mode-loaded mode=${mode}`, error)
-      })
-      .finally(() => {
-        this.setModeLoading(mode, false)
-      })
+    this.homePaginationCoordinator.ensureModeEntriesLoaded(mode)
   }
 
   private precacheNonActiveModes(): void {
@@ -2108,7 +1412,7 @@ struct Index {
     }
   }
 
-  private async reloadFeaturedEntriesFromLocal(
+  async reloadFeaturedEntriesFromLocal(
     candidateLimit: number = HOME_INITIAL_CANDIDATE_LIMIT,
     animated: boolean = false,
     deferredGrouping: boolean = true,
@@ -2142,7 +1446,7 @@ struct Index {
     )
   }
 
-  private async reloadHomeEntriesFromLocal(
+  async reloadHomeEntriesFromLocal(
     candidateLimit: number = HOME_MAX_CANDIDATE_LIMIT,
     animated: boolean = false,
     deferredGrouping: boolean = true,
@@ -2185,7 +1489,7 @@ struct Index {
     return cloneHomeSnapshotEntry(entry)
   }
 
-  private schedulePersistHomeSnapshot(entries: EntryCardModel[]): void {
+  schedulePersistHomeSnapshot(entries: EntryCardModel[]): void {
     this.homeEntryDataManager.schedulePersistSnapshot(entries)
   }
 
@@ -2313,7 +1617,7 @@ struct Index {
     this.homeEntryDataManager.notifyAllReloaded()
   }
 
-  private notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void {
+  notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void {
     this.homeEntryDataManager.notifyModeReloaded(mode)
   }
 
