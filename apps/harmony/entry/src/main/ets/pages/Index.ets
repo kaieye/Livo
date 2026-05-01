@@ -8,10 +8,7 @@ import {
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import window from '@ohos.window'
-import { getRequestedRootTabId, openArticleDetail, RootTabId, rootTabIndexForId } from '../common/navigation/AppRouter'
-import {
-  ROOT_MODE_RAIL_TOP_GAP,
-} from '../common/components/FloatingRootPageLayout'
+import { openArticleDetail, RootTabId } from '../common/navigation/AppRouter'
 import {
   DEFAULT_HARMONY_SETTINGS,
   Entry,
@@ -20,11 +17,10 @@ import {
   articleDetailModelFromCard,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
-import { createEmptyHomeEntryGroups, groupHomeEntriesByMode, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
+import { createEmptyHomeEntryGroups, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
 import {
   resolveHomeVisibleEntryInitialLimit,
   resolveHomeVisibleEntryLoadMoreStep,
-  shouldPreloadHomeVisibleEntries,
 } from '../common/utils/HomeVisibleEntryPolicy'
 import {
   cloneHomeSnapshotEntry,
@@ -47,7 +43,6 @@ import { IndexHomeRootContentCallbacks } from '../common/components/IndexHomeRoo
 import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
 import {
   HdsBottomTabId,
-  resolveHdsBottomTabItems,
 } from '../common/utils/HdsBottomTabConfig'
 import {
   rootBlurEffectiveEndOffset,
@@ -56,17 +51,18 @@ import {
   rootScrollEffectTitleBarBlurRadius,
   rootScrollEffectType,
   rootSystemMaterialEffect,
-  rootTabSymbolPair,
   rootTitleBarMaskExtraHeight,
-  rootTitleFor,
   rootTransparentBackgroundColor,
 } from '../common/utils/IndexRootChrome'
 import { shouldRefreshThemeOnSystemColorModeChange } from '../common/utils/ThemeRefresh'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
-import { shouldHideRootBottomBar, shouldHideRootTitleBar } from '../common/utils/RootTabVisibilityPolicy'
 import { resolveModeSceneRenderState } from '../common/utils/ModeSceneTransition'
+import { IndexHomeBootstrapCoordinator } from '../common/utils/IndexHomeBootstrapCoordinator'
 import { IndexHomeRefreshCoordinator } from '../common/utils/IndexHomeRefreshCoordinator'
 import { IndexHomePaginationCoordinator } from '../common/utils/IndexHomePaginationCoordinator'
+import { IndexHomeRailCoordinator } from '../common/utils/IndexHomeRailCoordinator'
+import { IndexHomeRuntimeCoordinator } from '../common/utils/IndexHomeRuntimeCoordinator'
+import { IndexRootTabCoordinator } from '../common/utils/IndexRootTabCoordinator'
 import {
   IndexHomeEntryDataDelegate,
   IndexHomeInlineSearchDelegate,
@@ -76,21 +72,15 @@ import {
   createHomeCandidateLimitMap,
   createHomeLoadedMap,
   createHomeLoadingMap,
-  createHomeLoadMoreTimestampMap,
   createHomeModeBooleanMap,
   createHomeNoProgressCountMap,
-  createHomePendingLoadMoreMap,
   createHomeScrollOffsetMap,
   createHomeVisibleEntryLimitMap,
-  homeLoadMoreTimestampValue,
   homeModeNumberValue,
-  homeModePendingLoadMoreValue,
   pictureCaption,
   pictureCardEntry,
   pictureGalleryUrls,
-  withHomeLoadMoreTimestampValue,
   withHomeModeNumberValue,
-  withHomePendingLoadMoreValue,
 } from '../common/utils/IndexHomeStateFactory'
 import { createIndexHomeRootContentCallbacks } from '../common/utils/IndexHomeRootContentCallbacksFactory'
 import {
@@ -98,41 +88,24 @@ import {
   HEADER_BLUR_SCROLL_RANGE,
   HOME_ASYNC_ERROR_DEBUG_ENABLED,
   HOME_ASYNC_ERROR_PREFIX,
-  HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT,
-  HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA,
-  HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET,
-  HOME_COLLAPSED_MODE_RAIL_TOP_PADDING,
   HOME_ENTRY_GROUP_DEFER_DELAY_MS,
-  HOME_FULL_MODE_CANDIDATE_LIMIT,
   HOME_GROUP_DEBUG_ENABLED,
   HOME_GROUP_DEBUG_PREFIX,
   HOME_INITIAL_CANDIDATE_LIMIT,
-  HOME_INLINE_SEARCH_ACTION_GAP,
-  HOME_INLINE_SEARCH_ACTION_SIZE,
   HOME_INLINE_SEARCH_VERTICAL_TRAVEL,
   HOME_LIST_SWAP_ANIMATION_ENABLED,
   HOME_LIST_SWAP_ENTER_DURATION,
   HOME_LIST_SWAP_ENTRY_MIN_OPACITY,
   HOME_LIST_SWAP_ENTRY_OFFSET_Y,
-  HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
   HOME_LOAD_MORE_DEBUG_ENABLED,
   HOME_LOAD_MORE_DEBUG_PREFIX,
-  HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS,
-  HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS,
-  HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED,
-  HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR,
-  HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
   HOME_LOAD_STATE_DIAG_ENABLED,
   HOME_LOAD_STATE_DIAG_PREFIX,
   HOME_MAX_CANDIDATE_LIMIT,
   HOME_MODE_CONTENT_GAP,
-  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT,
   HOME_MODE_DEBUG_ENABLED,
   HOME_MODE_DEBUG_PREFIX,
   HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-  HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL,
-  HOME_MODE_RAIL_COLLAPSE_OFFSET,
-  HOME_MODE_SCENE_TOP_INSET,
   HOME_MODE_SCENE_TRANSITION_DURATION,
   HOME_PERF_DIAG_ENABLED,
   HOME_PERF_DIAG_PREFIX,
@@ -143,9 +116,7 @@ import {
   HomeModeHasMoreMap,
   HomeModeLoadedMap,
   HomeModeLoadingMap,
-  HomeModeLoadMoreTimestampMap,
   HomeModeNoProgressCountMap,
-  HomeModePendingLoadMoreMap,
   HomeModeScrollOffsetMap,
   HomeModeVisibleEntryLimitMap,
   RootTabSymbolPair,
@@ -211,7 +182,6 @@ struct Index {
   private readonly picturesScroller: Scroller = new Scroller()
   private readonly videosScroller: Scroller = new Scroller()
   private searchInputController: TextInputController = new TextInputController()
-  private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   readonly homeEntryDataSources: HomeEntryDataSourceMap = {
     articles: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.articles),
     social: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.social),
@@ -232,9 +202,8 @@ struct Index {
   homeListSwapToken: number = 0
   lastRefreshProgressUiUpdateAt: number = 0
   isComponentActive: boolean = false
-  private hasLoadedInitialData: boolean = false
-  private initialFeedCount: number = 0
-  private managedTimeoutIds: number[] = []
+  hasLoadedInitialData: boolean = false
+  initialFeedCount: number = 0
   private homeInlineSearchFocusRequestToken: number = 0
   homeLoadMoreRequestToken: number = 0
   lastHomeLoadMoreRequestedAt: number = 0
@@ -244,9 +213,6 @@ struct Index {
   homeLoadMorePrefetchMode: SubscriptionMode = 'articles'
   homeLoadMorePrefetchInProgress: boolean = false
   lastHomeUserScrollAt: number = 0
-  private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
-  private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = createHomeLoadMoreTimestampMap()
-  private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   private homeModeScrollIntentVersions: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   private homeModeConsumedScrollIntentVersions: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = createHomeNoProgressCountMap()
@@ -254,9 +220,13 @@ struct Index {
   homeModeLoading: HomeModeLoadingMap = createHomeLoadingMap()
   lastHomeLoadMoreCompletedAt: number = 0
   lastHomeRefreshFinishedAt: number = 0
-  private homePerfSessionId: number = 0
-  private homePerfSessionStartedAt: number = 0
+  homePerfSessionId: number = 0
+  homePerfSessionStartedAt: number = 0
   private readonly tweetPresentationCache: Map<string, TweetEntryPresentation> = new Map()
+  private readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator =
+    new IndexHomeRuntimeCoordinator(this)
+  private readonly homeBootstrapCoordinator: IndexHomeBootstrapCoordinator =
+    new IndexHomeBootstrapCoordinator(this)
   private readonly homeModeController: HomeModeController = new HomeModeController(this.createHomeModeDelegate())
   private readonly homeEntryDataManager: HomeEntryDataManager = new HomeEntryDataManager(this.createHomeEntryDataDelegate())
   private readonly homeInlineSearchController: HomeInlineSearchController = new HomeInlineSearchController(
@@ -265,7 +235,8 @@ struct Index {
   private readonly homeRefreshCoordinator: IndexHomeRefreshCoordinator = new IndexHomeRefreshCoordinator(this)
   private readonly homePaginationCoordinator: IndexHomePaginationCoordinator =
     new IndexHomePaginationCoordinator(this)
-  private lastHandledRequestedRootTabId: RootTabId | '' = ''
+  private readonly homeRailCoordinator: IndexHomeRailCoordinator = new IndexHomeRailCoordinator(this)
+  private readonly rootTabCoordinator: IndexRootTabCoordinator = new IndexRootTabCoordinator(this)
 
   private createHomeModeDelegate(): IndexHomeModeDelegate {
     return new IndexHomeModeDelegate(this)
@@ -280,66 +251,15 @@ struct Index {
   }
 
   aboutToAppear(): void {
-    this.isComponentActive = true
-    this.homePerfSessionId += 1
-    this.homePerfSessionStartedAt = Date.now()
-    console.info('Livo Harmony Index aboutToAppear')
-    this.logHomePerf(`aboutToAppear mode=${this.mode} featured=${this.featuredEntries.length}`)
-    this.syncRequestedRootTab()
-    if (this.hasLoadedInitialData) {
-      this.configureAutoRefreshTimer()
-      this.tryFlushDeferredFeedsChangedReload('about-to-appear')
-      if (this.featuredEntries.length === 0) {
-        void this.reloadFeaturedEntriesFromLocal(
-          this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
-          false,
-          true,
-          true,
-        )
-      }
-      return
-    }
-    void this.loadInitialData()
+    this.homeRuntimeCoordinator.aboutToAppear()
   }
 
   aboutToDisappear(): void {
-    this.isComponentActive = false
-    this.invalidateHomeLoadMorePrefetch()
-    this.persistHomeSnapshotNow()
-    this.clearRefreshPercentAnimation()
-    this.clearAutoRefreshTimer()
-    this.clearManagedTimeouts()
-    this.homePostRefreshReloadPending = false
-    this.homeListSwapToken += 1
-    this.homeListSwapAnimating = false
-    this.homeListSwapOpacity = 1
-    this.homeListSwapTranslateY = 0
-    this.homeListSwapScale = 1
+    this.homeRuntimeCoordinator.aboutToDisappear()
   }
 
   runManagedTimeout(callback: () => void, delayMs: number): void {
-    const timeoutId = setTimeout(() => {
-      const pendingIndex = this.managedTimeoutIds.indexOf(timeoutId)
-      if (pendingIndex >= 0) {
-        this.managedTimeoutIds.splice(pendingIndex, 1)
-      }
-      if (!this.isComponentActive) {
-        return
-      }
-      try {
-        callback()
-      } catch (error) {
-        this.logHomeAsyncError(`managed-timeout delayMs=${delayMs}`, error)
-      }
-    }, delayMs)
-    this.managedTimeoutIds.push(timeoutId)
-  }
-
-  private clearManagedTimeouts(): void {
-    this.managedTimeoutIds.forEach((timeoutId: number) => {
-      clearTimeout(timeoutId)
-    })
-    this.managedTimeoutIds = []
+    this.homeRuntimeCoordinator.runManagedTimeout(callback, delayMs)
   }
 
   describeError(error: Error | string | Object): string {
@@ -353,84 +273,15 @@ struct Index {
     console.error(`${HOME_ASYNC_ERROR_PREFIX} stage=${stage} error=${this.describeError(error)}`)
   }
 
-  private async loadInitialData(): Promise<void> {
-    const startedAt = Date.now()
-    this.logHomePerf('loadInitialData start')
-    this.resetModeLoadMoreStates('load-initial')
-    this.homeInitialLoadPending = true
-    this.theme = ThemeService.currentPalette()
-    void this.applySystemBarStyle(this.theme)
-    const settingsPromise = AppRepository.settings()
-    const feedsPromise = AppRepository.feedEntities()
-
-    const currentMode = this.mode
-    let restoredFromSnapshot: boolean = false
-    const snapshotEntries = await AppRepository.homeEntrySnapshot()
-    if (snapshotEntries.length > 0) {
-      restoredFromSnapshot = true
-      const groupedSnapshot = groupHomeEntriesByMode(snapshotEntries)
-      const restoredArticles = groupedSnapshot.articles.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
-      const restoredSocial = groupedSnapshot.social.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
-      const restoredPictures = groupedSnapshot.pictures.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
-      const restoredVideos = groupedSnapshot.videos.slice(0, HOME_FULL_MODE_CANDIDATE_LIMIT)
-      this.entryGroups = {
-        articles: [...restoredArticles],
-        social: [...restoredSocial],
-        pictures: [...restoredPictures],
-        videos: [...restoredVideos],
-      }
-      this.featuredEntries = this.mergeFeaturedEntriesFromGroups()
-
-      this.setCandidateLimitForMode('articles', restoredArticles.length)
-      this.setCandidateLimitForMode('social', restoredSocial.length)
-      this.setCandidateLimitForMode('pictures', restoredPictures.length)
-      this.setCandidateLimitForMode('videos', restoredVideos.length)
-
-      this.markModeLoaded('articles', restoredArticles.length > 0)
-      this.markModeLoaded('social', restoredSocial.length > 0)
-      this.markModeLoaded('pictures', restoredPictures.length > 0)
-      this.markModeLoaded('videos', restoredVideos.length > 0)
-
-      this.setModeHasMoreEntries('articles', true, 'snapshot-restore')
-      this.setModeHasMoreEntries('social', true, 'snapshot-restore')
-      this.setModeHasMoreEntries('pictures', true, 'snapshot-restore')
-      this.setModeHasMoreEntries('videos', true, 'snapshot-restore')
-      this.notifyHomeEntryDataReloaded()
-      this.schedulePersistHomeSnapshot(this.featuredEntries)
-      this.feedSourceLabel = '已恢复本地内容'
-      // Snapshot already covers all modes; no precache needed.
-    } else {
-      // Use the faster recent-entry path first so first launch can paint sooner.
-      this.featuredEntries = await AppRepository.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
-      if (this.featuredEntries.length === 0) {
-        this.featuredEntries = await AppRepository.featuredEntries()
-      }
-      this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
-      this.feedSourceLabel = '本地内容已加载'
-      // Start precaching other modes immediately so they are ready before the user switches.
-      this.precacheNonActiveModes()
-    }
-    this.settleInitialHomeLoadState()
-
-    const settings = await settingsPromise
-    const feeds = await feedsPromise
-    this.initialFeedCount = feeds.length
-    this.rootSettings = settings
-    AppStorage.setOrCreate('showUnreadDot', settings.showUnreadDot)
-    this.theme = await ThemeService.resolvePalette(settings)
-    void this.applySystemBarStyle(this.theme)
-
-    void this.startStartupRefreshIfNeeded(restoredFromSnapshot)
-    this.configureAutoRefreshTimer()
-    this.hasLoadedInitialData = true
-    this.ensureModeEntriesLoaded(currentMode)
-    this.precacheNonActiveModes()
-
-    this.scheduleHomeLoadMorePrefetch(800)
-    this.logHomePerf(`loadInitialData done elapsedMs=${Date.now() - startedAt} featured=${this.featuredEntries.length}`)
+  async loadInitialData(): Promise<void> {
+    await this.homeBootstrapCoordinator.loadInitialData()
   }
 
-  private async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> {
+  resumeLoadedHome(): void {
+    this.homeBootstrapCoordinator.resumeLoadedHome()
+  }
+
+  async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> {
     await this.homeRefreshCoordinator.startStartupRefreshIfNeeded(snapshotRestored)
   }
 
@@ -442,7 +293,7 @@ struct Index {
     return this.homeRefreshCoordinator.resolveRefreshPercent(completedCount, totalCount)
   }
 
-  private clearRefreshPercentAnimation(): void {
+  clearRefreshPercentAnimation(): void {
     this.homeRefreshCoordinator.clearRefreshPercentAnimation()
   }
 
@@ -517,67 +368,16 @@ struct Index {
     this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
   }
 
-  private homeModeScrollOffsetFor(mode: SubscriptionMode): number {
-    return homeModeNumberValue(mode, this.homeModeScrollOffsets)
-  }
-
-  private updateHomeModeScrollOffset(mode: SubscriptionMode, offset: number): void {
-    switch (mode) {
-      case 'social':
-        this.homeModeScrollOffsets.social = offset
-        break
-      case 'pictures':
-        this.homeModeScrollOffsets.pictures = offset
-        break
-      case 'videos':
-        this.homeModeScrollOffsets.videos = offset
-        break
-      default:
-        this.homeModeScrollOffsets.articles = offset
-        break
-    }
-  }
-
   readHomeModeScrollOffset(mode: SubscriptionMode): number {
-    try {
-      return Math.max(0, this.homeScrollerForMode(mode).currentOffset().yOffset)
-    } catch (_) {
-      return this.homeModeScrollOffsetFor(mode)
-    }
+    return this.homeRailCoordinator.readHomeModeScrollOffset(mode)
   }
 
   syncHomeModeRailState(mode: SubscriptionMode = this.mode): void {
-    const previousOffset = this.currentHomeModeScrollOffset
-    const nextOffset = this.readHomeModeScrollOffset(mode)
-    this.updateHomeModeScrollOffset(mode, nextOffset)
-    if (mode !== this.mode) {
-      return
-    }
+    this.homeRailCoordinator.syncHomeModeRailState(mode)
+  }
 
-    const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
-    const isScrollingDeeper = nextOffset > previousOffset + 0.5
-
-    if (this.homeModeRailExpandedOverride) {
-      if (!isScrollingDeeper) {
-        this.currentHomeModeScrollOffset = nextOffset
-        this.updateHeaderBlurProgress(nextOffset)
-        this.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
-        return
-      }
-
-      this.homeModeRailExpandedOverride = false
-      this.homeModeRailExpandedLockOffset = -1
-    }
-
-    if (isReturningTowardsTop) {
-      this.homeModeRailDismissedByScroll = false
-    } else if (isScrollingDeeper && nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
-      this.homeModeRailDismissedByScroll = true
-    }
-
-    this.currentHomeModeScrollOffset = nextOffset
-    this.updateHeaderBlurProgress(nextOffset)
-    this.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
+  primeHomeModeRailForRootActivation(): void {
+    this.homeRailCoordinator.primeHomeModeRailForRootActivation()
   }
 
   private isUserDrivenHomeScrollSource(scrollSource: ScrollSource): boolean {
@@ -605,11 +405,11 @@ struct Index {
     }
   }
 
-  private modeScrollIntentVersion(mode: SubscriptionMode): number {
+  modeScrollIntentVersion(mode: SubscriptionMode): number {
     return homeModeNumberValue(mode, this.homeModeScrollIntentVersions)
   }
 
-  private consumedModeScrollIntentVersion(mode: SubscriptionMode): number {
+  consumedModeScrollIntentVersion(mode: SubscriptionMode): number {
     return homeModeNumberValue(mode, this.homeModeConsumedScrollIntentVersions)
   }
 
@@ -617,7 +417,7 @@ struct Index {
     this.homeModeScrollIntentVersions = withHomeModeNumberValue(mode, value, this.homeModeScrollIntentVersions)
   }
 
-  private setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void {
+  setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void {
     this.homeModeConsumedScrollIntentVersions =
       withHomeModeNumberValue(mode, value, this.homeModeConsumedScrollIntentVersions)
   }
@@ -630,7 +430,7 @@ struct Index {
     this.lastHomeUserScrollAt = 0
     this.setModeScrollIntentVersion(mode, 0)
     this.setConsumedModeScrollIntentVersion(mode, 0)
-    this.setModeScrollProgressLoadMoreValue(mode, 0)
+    this.homePaginationCoordinator.resetModeScrollProgressLoadMoreValue(mode)
   }
 
   setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode = this.mode): void {
@@ -642,7 +442,7 @@ struct Index {
   }
 
   private currentRootTitle(): string {
-    return rootTitleFor(this.currentRootTabId())
+    return this.rootTabCoordinator.currentRootTitle()
   }
 
   currentSearchEntries(): EntryCardModel[] {
@@ -669,16 +469,24 @@ struct Index {
     return this.searchInputController
   }
 
+  logHomeInlineSearchFocusDebug(stage: string, message: string): void {
+    this.homeInlineSearchController.logFocusDebug(stage, message)
+  }
+
+  closeHomeInlineSearch(clearQuery: boolean): void {
+    this.homeInlineSearchController.close(clearQuery)
+  }
+
   private homeInlineSearchVerticalOffset(): number {
     return this.showSearch ? 0 : -1 * HOME_INLINE_SEARCH_VERTICAL_TRAVEL
   }
 
   isHomeRootTab(): boolean {
-    return this.currentRootTabId() === 'home'
+    return this.rootTabCoordinator.isHomeRootTab()
   }
 
   private shouldHideRootTitleBar(): boolean {
-    return shouldHideRootTitleBar(this.currentRootTabId())
+    return this.rootTabCoordinator.shouldHideRootTitleBar()
   }
 
   private currentRootScrollEffectType(): ScrollEffectType {
@@ -686,7 +494,7 @@ struct Index {
   }
 
   private isSettingsRootTab(): boolean {
-    return this.currentRootTabId() === 'settings'
+    return this.rootTabCoordinator.isSettingsRootTab()
   }
 
   private currentRootBlurEffectiveEndOffset(): LengthMetrics {
@@ -776,7 +584,7 @@ struct Index {
     void this.applySystemBarStyle(this.theme)
   }
 
-  private async applySystemBarStyle(theme: ThemePalette): Promise<void> {
+  async applySystemBarStyle(theme: ThemePalette): Promise<void> {
     const mainWindow = AppStorage.get<window.Window>('WindowClass')
     if (!mainWindow) {
       return
@@ -794,24 +602,15 @@ struct Index {
     }
   }
 
-  private syncRequestedRootTab(): void {
-    const requestedTab = getRequestedRootTabId()
-    if (!requestedTab) {
-      return
-    }
-
-    if (requestedTab === this.lastHandledRequestedRootTabId) {
-      return
-    }
-
-    this.highlightedRootTabId = requestedTab
-    this.activeRootTabId = requestedTab
-    this.rootTabIndex = rootTabIndexForId(requestedTab)
-    this.lastHandledRequestedRootTabId = requestedTab
-    this.syncRootTabsController()
+  syncRequestedRootTab(): void {
+    this.rootTabCoordinator.syncRequestedRootTab()
   }
 
-  private syncRootTabsController(): void {
+  isRootTabChangeSuppressed(): boolean {
+    return this.suppressRootTabChange
+  }
+
+  syncRootTabsController(): void {
     try {
       this.suppressRootTabChange = true
       this.rootTabsController.changeIndex(this.rootTabIndex)
@@ -839,74 +638,19 @@ struct Index {
   }
 
   private rootTabSymbolPair(tabId: HdsBottomTabId): RootTabSymbolPair {
-    return rootTabSymbolPair(tabId)
+    return this.rootTabCoordinator.rootTabSymbolPair(tabId)
   }
 
   private handleRootTabChange(index: number): void {
-    if (this.suppressRootTabChange) {
-      return
-    }
-
-    const previousTabId = this.currentRootTabId()
-    const item = resolveHdsBottomTabItems()[index]
-    if (!item) {
-      return
-    }
-
-    const tabId = item.id as RootTabId
-    this.rootTabIndex = index
-    this.highlightedRootTabId = tabId
-    this.activeRootTabId = tabId
-    this.homeInlineSearchController.logFocusDebug('root-tab-change', `nextTab=${tabId}`)
-    if (previousTabId === 'discover' && tabId !== 'discover') {
-      AppStorage.setOrCreate('discoverHasForegroundOverlay', false)
-      AppStorage.setOrCreate('discoverOverlayLevel', 0)
-      AppStorage.setOrCreate('discoverNavigationResetAt', Date.now())
-    }
-    if (tabId !== 'home') {
-      this.homeInlineSearchController.close(true)
-      return
-    }
-
-    this.syncHomeModeRailState(this.mode)
-    this.primeHomeModeRailForRootActivation()
-    const flushedDeferredReload = this.tryFlushDeferredFeedsChangedReload('tab-change')
-    if (!flushedDeferredReload
-      && this.hasLoadedInitialData
-      && this.featuredEntries.length === 0
-      && !this.isRefreshing
-      && !this.isHomeStartupRefreshing
-    ) {
-      this.runManagedTimeout(() => {
-        void this.reloadFeaturedEntriesFromLocal(
-          this.resolveHomeCandidateLimit(HOME_MAX_CANDIDATE_LIMIT),
-          false,
-          true,
-          true,
-        )
-      }, 0)
-    }
+    this.rootTabCoordinator.handleRootTabChange(index)
   }
 
   private confirmRootTabSelection(tabId: RootTabId): void {
-    if (tabId !== this.highlightedRootTabId) {
-      return
-    }
-
-    if (this.activeRootTabId === tabId) {
-      return
-    }
-
-    this.activeRootTabId = tabId
-    if (tabId === 'home') {
-      this.syncHomeModeRailState(this.mode)
-      this.primeHomeModeRailForRootActivation()
-      this.tryFlushDeferredFeedsChangedReload('tab-home')
-    }
+    this.rootTabCoordinator.confirmRootTabSelection(tabId)
   }
 
   currentRootTabId(): RootTabId {
-    return this.activeRootTabId
+    return this.rootTabCoordinator.currentRootTabId()
   }
 
   private modeIndex(mode: SubscriptionMode): number {
@@ -1011,7 +755,7 @@ struct Index {
     this.homeRefreshCoordinator.scheduleFeedsChangedReload(reason)
   }
 
-  private tryFlushDeferredFeedsChangedReload(source: string): boolean {
+  tryFlushDeferredFeedsChangedReload(source: string): boolean {
     return this.homeRefreshCoordinator.tryFlushDeferredFeedsChangedReload(source)
   }
 
@@ -1031,7 +775,7 @@ struct Index {
     this.homeRefreshCoordinator.scheduleHomeReloadAfterRefresh()
   }
 
-  private resolveHomeCandidateLimit(minimumLimit: number): number {
+  resolveHomeCandidateLimit(minimumLimit: number): number {
     return this.homePaginationCoordinator.resolveHomeCandidateLimit(minimumLimit)
   }
 
@@ -1043,7 +787,7 @@ struct Index {
     return this.homePaginationCoordinator.candidateLimitForMode(mode)
   }
 
-  private setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
+  setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
     this.homePaginationCoordinator.setCandidateLimitForMode(mode, limit)
   }
 
@@ -1142,7 +886,7 @@ struct Index {
     return this.homePaginationCoordinator.modeHasMoreEntries(mode)
   }
 
-  private setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
+  setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
     this.homePaginationCoordinator.setModeHasMoreEntries(mode, next, reason)
   }
 
@@ -1198,179 +942,20 @@ struct Index {
     await this.homePaginationCoordinator.appendFeaturedEntriesFromLocalFast(mode, nextLimit)
   }
 
-  private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
-    this.homePendingLoadMoreModes = withHomePendingLoadMoreValue(mode, pending, this.homePendingLoadMoreModes)
-  }
-
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
-    return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
+    return this.homePaginationCoordinator.pendingLoadMoreForMode(mode)
   }
 
-  private modeLoadMoreTimestampValue(mode: SubscriptionMode): number {
-    return homeLoadMoreTimestampValue(mode, this.homeLastItemAppearLoadMoreAt)
-  }
-
-  private setModeLoadMoreTimestamp(mode: SubscriptionMode, value: number): void {
-    this.homeLastItemAppearLoadMoreAt = withHomeLoadMoreTimestampValue(mode, value, this.homeLastItemAppearLoadMoreAt)
-  }
-
-  private modeScrollProgressLoadMoreValue(mode: SubscriptionMode): number {
-    return homeModeNumberValue(mode, this.homeLastScrollProgressLoadMoreAt)
-  }
-
-  private setModeScrollProgressLoadMoreValue(mode: SubscriptionMode, value: number): void {
-    this.homeLastScrollProgressLoadMoreAt =
-      withHomeModeNumberValue(mode, value, this.homeLastScrollProgressLoadMoreAt)
-  }
-
-  private maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
-    if (
-      mode !== this.mode
-      || !this.isHomeRootTab()
-      || this.searchOverlayVisible
-      || !!this.homeInlineSearchController.normalizedQuery()
-    ) {
-      return
-    }
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return
-    }
-    if (this.homeInitialLoadPending || this.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
-      return
-    }
-    const totalCount = this.totalEntryCountFor(mode)
-    const visibleCount = this.visibleEntryCountFor(mode)
-    const hasBufferedEntries = visibleCount < totalCount
-    if (!hasBufferedEntries && (!this.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) {
-      return
-    }
-    if (!shouldPreloadHomeVisibleEntries(mode, currentOffset, totalCount, visibleCount)) {
-      return
-    }
-    if (this.isHomeScrollInteracting && !this.hasRecentHomeScrollIntent()) {
-      return
-    }
-    const scrollIntentVersion = this.modeScrollIntentVersion(mode)
-    if (this.isHomeScrollInteracting && scrollIntentVersion <= this.consumedModeScrollIntentVersion(mode)) {
-      return
-    }
-
-    const previousOffset = this.modeScrollProgressLoadMoreValue(mode)
-    if (currentOffset <= previousOffset && visibleCount >= resolveHomeVisibleEntryLoadMoreStep(mode)) {
-      return
-    }
-
-    this.setModeScrollProgressLoadMoreValue(mode, currentOffset)
-    this.setConsumedModeScrollIntentVersion(mode, scrollIntentVersion)
-    this.enqueueLoadMoreForMode(mode, 'scroll-progress')
-  }
-
-  private shouldAcceptItemAppearLoadMore(mode: SubscriptionMode): boolean {
-    const now = Date.now()
-    const previousAt = this.modeLoadMoreTimestampValue(mode)
-    if (now - previousAt < HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS) {
-      return false
-    }
-    this.setModeLoadMoreTimestamp(mode, now)
-    return true
-  }
-
-  private enqueueLoadMoreForMode(mode: SubscriptionMode, source: string): void {
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return
-    }
-    if (source === 'item-appear' && !this.shouldAcceptItemAppearLoadMore(mode)) {
-      return
-    }
-
-    if (source === 'item-appear' && this.homeLoadMoreInProgress) {
-      return
-    }
-
-    const alreadyPending = this.pendingLoadMoreForMode(mode)
-    if (!alreadyPending) {
-      this.setPendingLoadMoreForMode(mode, true)
-      this.logHomePerf(`loadMore enqueue mode=${mode} source=${source} interacting=${this.isHomeScrollInteracting}`)
-    }
-
-    if (source === 'item-appear') {
-      if (alreadyPending || this.homeLoadMoreInProgress) {
-        return
-      }
-      this.runManagedTimeout(() => {
-        this.flushPendingLoadMoreForMode(mode)
-      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
-      return
-    }
-    if (source === 'scroll-progress') {
-      if (alreadyPending || this.homeLoadMoreInProgress) {
-        return
-      }
-      this.runManagedTimeout(() => {
-        this.flushPendingLoadMoreForMode(mode)
-      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
-      return
-    }
-    if (!this.isHomeScrollInteracting) {
-      this.flushPendingLoadMoreForMode(mode)
-      return
-    }
-    if (source === 'footer-visible') {
-      return
-    }
+  maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
+    this.homePaginationCoordinator.maybeTriggerLoadMoreByScrollProgress(mode, currentOffset)
   }
 
   flushPendingLoadMoreForMode(mode: SubscriptionMode): void {
-    if (!this.pendingLoadMoreForMode(mode)) {
-      return
-    }
-    // Avoid scheduling list growth while finger is dragging to reduce scroll hitching.
-    if (this.isHomeScrollInteracting) {
-      return
-    }
-    this.runManagedTimeout(() => {
-      if (!this.pendingLoadMoreForMode(mode)) {
-        return
-      }
-      const handled = this.requestLoadMoreForMode(mode)
-      if (handled) {
-        this.setPendingLoadMoreForMode(mode, false)
-        return
-      }
-      this.runManagedTimeout(() => {
-        this.flushPendingLoadMoreForMode(mode)
-      }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
-    }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
-  }
-
-  private shouldPrefetchLoadMoreAtIndex(visibleCount: number, index: number): boolean {
-    if (visibleCount <= 0) {
-      return false
-    }
-    const remainingVisibleCount = visibleCount - index - 1
-    const dynamicThreshold = Math.max(
-      HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
-      Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
-    )
-    return remainingVisibleCount <= dynamicThreshold
-  }
-
-  private shouldEnableLoadMorePrefetchForMode(mode: SubscriptionMode): boolean {
-    // Only arm prefetch after user initiates a real scroll gesture.
-    return !this.shouldRenderAllEntriesForMode(mode) && this.hasRecentHomeScrollIntent()
+    this.homePaginationCoordinator.flushPendingLoadMoreForMode(mode)
   }
 
   handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
-    if (!HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED) {
-      return
-    }
-    if (!this.shouldEnableLoadMorePrefetchForMode(mode)) {
-      return
-    }
-    if (!this.shouldPrefetchLoadMoreAtIndex(totalCount, index)) {
-      return
-    }
-    this.enqueueLoadMoreForMode(mode, 'item-appear')
+    this.homePaginationCoordinator.handleHomeEntryAppear(mode, index, totalCount)
   }
 
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] {
@@ -1385,7 +970,7 @@ struct Index {
     this.homePaginationCoordinator.ensureModeEntriesLoaded(mode)
   }
 
-  private precacheNonActiveModes(): void {
+  precacheNonActiveModes(): void {
     const currentMode = this.mode
     const modes: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
     // Use smaller limit for precaching to reduce initial load overhead
@@ -1493,7 +1078,7 @@ struct Index {
     this.homeEntryDataManager.schedulePersistSnapshot(entries)
   }
 
-  private persistHomeSnapshotNow(): void {
+  persistHomeSnapshotNow(): void {
     this.homeEntryDataManager.persistSnapshotNow()
   }
 
@@ -1613,7 +1198,7 @@ struct Index {
     return duplicateKeyCount(counter)
   }
 
-  private notifyHomeEntryDataReloaded(): void {
+  notifyHomeEntryDataReloaded(): void {
     this.homeEntryDataManager.notifyAllReloaded()
   }
 
@@ -1709,7 +1294,7 @@ struct Index {
     }).zIndex
   }
 
-  private clearAutoRefreshTimer(): void {
+  clearAutoRefreshTimer(): void {
     if (this.autoRefreshTimer < 0) {
       return
     }
@@ -1726,7 +1311,7 @@ struct Index {
     return safeMinutes * 60 * 1000
   }
 
-  private configureAutoRefreshTimer(): void {
+  configureAutoRefreshTimer(): void {
     this.clearAutoRefreshTimer()
     if (!this.rootSettings.autoRefresh) {
       return
@@ -1737,97 +1322,9 @@ struct Index {
     }, intervalMs)
   }
 
-  private currentHomeModeScroller(): Scroller {
-    return this.homeScrollerForMode(this.mode)
-  }
-
   private requestExpandedModeRail(): void {
     this.homeInlineSearchController.close()
-    this.homeModeRailExpandedLockOffset = this.readHomeModeScrollOffset(this.mode)
-    this.homeModeRailExpandedOverride = true
-    this.homeModeRailDismissedByScroll = false
-    this.currentHomeModeScrollOffset = this.homeModeRailExpandedLockOffset
-    this.updateHeaderBlurProgress(this.homeModeRailExpandedLockOffset)
-  }
-
-  private primeHomeModeRailForRootActivation(): void {
-    this.homeModeRailExpandedOverride = false
-    this.homeModeRailExpandedLockOffset = -1
-    this.homeModeRailDismissedByScroll = false
-    this.currentHomeModeScrollOffset = 0
-    this.updateHeaderBlurProgress(0)
-  }
-
-  private homeFirstCardTopBoundary(): number {
-    return HOME_MODE_SCENE_TOP_INSET - this.currentHomeModeScrollOffset
-  }
-
-  private homeModeRailTopBoundary(): number {
-    return HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
-  }
-
-  private homeModeRailCollapseReady(): boolean {
-    return this.homeFirstCardTopBoundary() <= this.homeModeRailTopBoundary()
-  }
-
-  private homeModeRailCollapseProgress(): number {
-    if (this.homeModeRailExpandedOverride) {
-      return 0
-    }
-
-    if (!this.homeModeRailCollapseReady()) {
-      return 0
-    }
-
-    return this.homeModeRailDismissedByScroll ? 1 : 0
-  }
-
-  private isHomeModeRailCollapsed(): boolean {
-    return this.homeModeRailCollapseProgress() >= 1
-  }
-
-  private resolvedHomeCollapsedModeRailTopAvoidArea(): number {
-    return HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA
-  }
-
-  private homeCollapsedModeRailTopPadding(): number {
-    return this.resolvedHomeCollapsedModeRailTopAvoidArea()
-      + HOME_COLLAPSED_MODE_RAIL_TOP_PADDING
-      + HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT
-      - ROOT_MODE_RAIL_TOP_GAP
-      + HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET
-  }
-
-  private homeModeRailRightInset(): number {
-    return PAGE_HORIZONTAL_PADDING
-      + HOME_INLINE_SEARCH_ACTION_SIZE * 2
-      + HOME_INLINE_SEARCH_ACTION_GAP * 2
-  }
-
-  private homeModeRailLeftPadding(): number {
-    return PAGE_HORIZONTAL_PADDING
-  }
-
-  private homeModeRailTopPadding(): number {
-    const progress = this.homeModeRailCollapseProgress()
-    const interpolatedTopPadding = HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
-      + (this.homeCollapsedModeRailTopPadding() - HOME_MODE_CONTENT_TOP_SPACER_HEIGHT) * progress
-    // Keep the collapsing rail below the "今日推荐" title area to avoid visual overlap while scrolling.
-    return Math.max(HOME_MODE_CONTENT_TOP_SPACER_HEIGHT, interpolatedTopPadding)
-  }
-
-  private homeModeRailDismissTranslateY(): number {
-    return -1 * HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL * this.homeModeRailCollapseProgress()
-  }
-
-  private homeModeRailDismissOpacity(): number {
-    const progress = this.homeModeRailCollapseProgress()
-    return Math.max(0, 1 - progress)
-  }
-
-  private homeModeRailDismissScale(): number {
-    const progress = this.homeModeRailCollapseProgress()
-    return 1 - (progress * 0.12)
+    this.homeRailCoordinator.requestExpandedModeRail()
   }
 
   private createHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
@@ -1851,11 +1348,7 @@ struct Index {
   }
 
   private shouldHideBottomTabs(): boolean {
-    return shouldHideRootBottomBar(this.currentRootTabId(), {
-      discoverHasForegroundOverlay: this.discoverHasForegroundOverlay,
-      subscriptionsOverlayLevel: this.subscriptionsOverlayLevel,
-      settingsOverlayLevel: this.settingsOverlayLevel,
-    })
+    return this.rootTabCoordinator.shouldHideBottomTabs()
   }
 
   build() {
@@ -1932,15 +1425,15 @@ struct Index {
         searchOverlayVisible: this.searchOverlayVisible,
         searchQuery: this.searchQuery,
         searchAllHomeCategories: this.rootSettings.searchAllHomeCategories,
-        collapsedModeRailTopPadding: this.homeCollapsedModeRailTopPadding(),
-        collapseProgress: this.homeModeRailCollapseProgress(),
-        modeRailTopPadding: this.homeModeRailTopPadding(),
-        modeRailLeftPadding: this.homeModeRailLeftPadding(),
-        modeRailRightInset: this.homeModeRailRightInset(),
-        modeRailDismissTranslateY: this.homeModeRailDismissTranslateY(),
-        modeRailDismissOpacity: this.homeModeRailDismissOpacity(),
-        modeRailDismissScale: this.homeModeRailDismissScale(),
-        modeRailCollapsed: this.isHomeModeRailCollapsed(),
+        collapsedModeRailTopPadding: this.homeRailCoordinator.homeCollapsedModeRailTopPadding(),
+        collapseProgress: this.homeRailCoordinator.homeModeRailCollapseProgress(),
+        modeRailTopPadding: this.homeRailCoordinator.homeModeRailTopPadding(),
+        modeRailLeftPadding: this.homeRailCoordinator.homeModeRailLeftPadding(),
+        modeRailRightInset: this.homeRailCoordinator.homeModeRailRightInset(),
+        modeRailDismissTranslateY: this.homeRailCoordinator.homeModeRailDismissTranslateY(),
+        modeRailDismissOpacity: this.homeRailCoordinator.homeModeRailDismissOpacity(),
+        modeRailDismissScale: this.homeRailCoordinator.homeModeRailDismissScale(),
+        modeRailCollapsed: this.homeRailCoordinator.isHomeModeRailCollapsed(),
         horizontalPadding: PAGE_HORIZONTAL_PADDING,
         searchFieldOffsetY: this.homeInlineSearchVerticalOffset(),
         searchResultEntries: this.homeInlineSearchController.searchResultEntries(),

@@ -2,38 +2,57 @@ import { AppRepository } from '../data/AppRepository'
 import { EntryCardModel } from '../models/LivoModels'
 import {
   HOME_FULL_MODE_CANDIDATE_LIMIT,
+  HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
   HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED,
   HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
+  HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS,
+  HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS,
+  HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED,
   HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
   HOME_LOAD_MORE_MIN_INTERVAL_MS,
+  HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR,
+  HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
   HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS,
   HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS,
   HOME_MODE_SWITCH_CANDIDATE_LIMIT,
   HomeModeCandidateLimitMap,
   HomeModeHasMoreMap,
   HomeModeLoadedMap,
+  HomeModeLoadMoreTimestampMap,
   HomeModeLoadingMap,
   HomeModeNoProgressCountMap,
+  HomeModePendingLoadMoreMap,
+  HomeModeScrollOffsetMap,
   HomeModeVisibleEntryLimitMap,
   SubscriptionMode,
 } from '../components/HomeRootConfig'
 import {
+  createHomeLoadMoreTimestampMap,
+  createHomePendingLoadMoreMap,
+  createHomeScrollOffsetMap,
   homeCandidateLimitValue,
+  homeLoadMoreTimestampValue,
   homeModeBooleanValue,
   homeModeLoadedValue,
   homeModeLoadingValue,
+  homeModeNumberValue,
+  homeModePendingLoadMoreValue,
   homeNoProgressCountValue,
   homeVisibleEntryLimitValue,
   withHomeCandidateLimitValue,
+  withHomeLoadMoreTimestampValue,
   withHomeLoadedValue,
   withHomeLoadingValue,
   withHomeModeBooleanValue,
+  withHomeModeNumberValue,
   withHomeNoProgressCountValue,
+  withHomePendingLoadMoreValue,
   withHomeVisibleEntryLimitValue,
 } from './IndexHomeStateFactory'
 import {
   resolveHomeVisibleEntryInitialLimit,
   resolveHomeVisibleEntryLoadMoreStep,
+  shouldPreloadHomeVisibleEntries,
 } from './HomeVisibleEntryPolicy'
 import { HomeEntryGroups } from './HomeEntryGroups'
 
@@ -62,6 +81,7 @@ export interface IndexHomePaginationOwner {
   isComponentActive: boolean
   isRefreshing: boolean
   isHomeStartupRefreshing: boolean
+  isHomeScrollInteracting: boolean
   featuredEntries: EntryCardModel[]
   entryGroups: HomeEntryGroups<EntryCardModel>
 
@@ -85,8 +105,9 @@ export interface IndexHomePaginationOwner {
   settleInitialHomeLoadState(force?: boolean): void
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void
-  flushPendingLoadMoreForMode(mode: SubscriptionMode): void
-  pendingLoadMoreForMode(mode: SubscriptionMode): boolean
+  modeScrollIntentVersion(mode: SubscriptionMode): number
+  consumedModeScrollIntentVersion(mode: SubscriptionMode): number
+  setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void
   reloadFeaturedEntriesFromLocal(
     candidateLimit?: number,
     animated?: boolean,
@@ -98,6 +119,9 @@ export interface IndexHomePaginationOwner {
 
 export class IndexHomePaginationCoordinator {
   private readonly owner: IndexHomePaginationOwner
+  private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
+  private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = createHomeLoadMoreTimestampMap()
+  private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
 
   constructor(owner: IndexHomePaginationOwner) {
     this.owner = owner
@@ -341,6 +365,9 @@ export class IndexHomePaginationCoordinator {
       pictures: 0,
       videos: 0,
     }
+    this.homePendingLoadMoreModes = createHomePendingLoadMoreMap()
+    this.homeLastItemAppearLoadMoreAt = createHomeLoadMoreTimestampMap()
+    this.homeLastScrollProgressLoadMoreAt = createHomeScrollOffsetMap()
     this.owner.logHomeLoadState(`mode loadMore state reset reason=${reason}`)
   }
 
@@ -600,11 +627,195 @@ export class IndexHomePaginationCoordinator {
         this.owner.logHomePerf(
           `loadMore done mode=${mode} elapsedMs=${Date.now() - requestStartedAt} total=${this.owner.featuredEntries.length}`,
         )
-        if (this.owner.pendingLoadMoreForMode(mode)) {
-          this.owner.flushPendingLoadMoreForMode(mode)
+        if (this.pendingLoadMoreForMode(mode)) {
+          this.flushPendingLoadMoreForMode(mode)
         }
       })
     return true
+  }
+
+  private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
+    this.homePendingLoadMoreModes =
+      withHomePendingLoadMoreValue(mode, pending, this.homePendingLoadMoreModes)
+  }
+
+  pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
+    return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
+  }
+
+  private modeLoadMoreTimestampValue(mode: SubscriptionMode): number {
+    return homeLoadMoreTimestampValue(mode, this.homeLastItemAppearLoadMoreAt)
+  }
+
+  private setModeLoadMoreTimestamp(mode: SubscriptionMode, value: number): void {
+    this.homeLastItemAppearLoadMoreAt =
+      withHomeLoadMoreTimestampValue(mode, value, this.homeLastItemAppearLoadMoreAt)
+  }
+
+  private modeScrollProgressLoadMoreValue(mode: SubscriptionMode): number {
+    return homeModeNumberValue(mode, this.homeLastScrollProgressLoadMoreAt)
+  }
+
+  private setModeScrollProgressLoadMoreValue(mode: SubscriptionMode, value: number): void {
+    this.homeLastScrollProgressLoadMoreAt =
+      withHomeModeNumberValue(mode, value, this.homeLastScrollProgressLoadMoreAt)
+  }
+
+  resetModeScrollProgressLoadMoreValue(mode: SubscriptionMode): void {
+    this.setModeScrollProgressLoadMoreValue(mode, 0)
+  }
+
+  maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
+    if (
+      mode !== this.owner.mode
+      || !this.owner.isHomeRootTab()
+      || this.owner.searchOverlayVisible
+      || this.owner.hasHomeInlineSearchQuery()
+    ) {
+      return
+    }
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return
+    }
+    if (this.owner.homeInitialLoadPending || this.owner.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
+      return
+    }
+    const totalCount = this.totalEntryCountFor(mode)
+    const visibleCount = this.visibleEntryCountFor(mode)
+    const hasBufferedEntries = visibleCount < totalCount
+    if (!hasBufferedEntries && (!this.owner.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) {
+      return
+    }
+    if (!shouldPreloadHomeVisibleEntries(mode, currentOffset, totalCount, visibleCount)) {
+      return
+    }
+    if (this.owner.isHomeScrollInteracting && !this.hasRecentHomeScrollIntent()) {
+      return
+    }
+    const scrollIntentVersion = this.owner.modeScrollIntentVersion(mode)
+    if (
+      this.owner.isHomeScrollInteracting
+      && scrollIntentVersion <= this.owner.consumedModeScrollIntentVersion(mode)
+    ) {
+      return
+    }
+
+    const previousOffset = this.modeScrollProgressLoadMoreValue(mode)
+    if (currentOffset <= previousOffset && visibleCount >= resolveHomeVisibleEntryLoadMoreStep(mode)) {
+      return
+    }
+
+    this.setModeScrollProgressLoadMoreValue(mode, currentOffset)
+    this.owner.setConsumedModeScrollIntentVersion(mode, scrollIntentVersion)
+    this.enqueueLoadMoreForMode(mode, 'scroll-progress')
+  }
+
+  private shouldAcceptItemAppearLoadMore(mode: SubscriptionMode): boolean {
+    const now = Date.now()
+    const previousAt = this.modeLoadMoreTimestampValue(mode)
+    if (now - previousAt < HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS) {
+      return false
+    }
+    this.setModeLoadMoreTimestamp(mode, now)
+    return true
+  }
+
+  private enqueueLoadMoreForMode(mode: SubscriptionMode, source: string): void {
+    if (this.shouldRenderAllEntriesForMode(mode)) {
+      return
+    }
+    if (source === 'item-appear' && !this.shouldAcceptItemAppearLoadMore(mode)) {
+      return
+    }
+
+    if (source === 'item-appear' && this.owner.homeLoadMoreInProgress) {
+      return
+    }
+
+    const alreadyPending = this.pendingLoadMoreForMode(mode)
+    if (!alreadyPending) {
+      this.setPendingLoadMoreForMode(mode, true)
+      this.owner.logHomePerf(`loadMore enqueue mode=${mode} source=${source} interacting=${this.owner.isHomeScrollInteracting}`)
+    }
+
+    if (source === 'item-appear') {
+      if (alreadyPending || this.owner.homeLoadMoreInProgress) {
+        return
+      }
+      this.owner.runManagedTimeout(() => {
+        this.flushPendingLoadMoreForMode(mode)
+      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
+      return
+    }
+    if (source === 'scroll-progress') {
+      if (alreadyPending || this.owner.homeLoadMoreInProgress) {
+        return
+      }
+      this.owner.runManagedTimeout(() => {
+        this.flushPendingLoadMoreForMode(mode)
+      }, HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS)
+      return
+    }
+    if (!this.owner.isHomeScrollInteracting) {
+      this.flushPendingLoadMoreForMode(mode)
+      return
+    }
+    if (source === 'footer-visible') {
+      return
+    }
+  }
+
+  flushPendingLoadMoreForMode(mode: SubscriptionMode): void {
+    if (!this.pendingLoadMoreForMode(mode)) {
+      return
+    }
+    // 拖拽中不扩展列表，减少滚动卡顿。
+    if (this.owner.isHomeScrollInteracting) {
+      return
+    }
+    this.owner.runManagedTimeout(() => {
+      if (!this.pendingLoadMoreForMode(mode)) {
+        return
+      }
+      const handled = this.requestLoadMoreForMode(mode)
+      if (handled) {
+        this.setPendingLoadMoreForMode(mode, false)
+        return
+      }
+      this.owner.runManagedTimeout(() => {
+        this.flushPendingLoadMoreForMode(mode)
+      }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
+    }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
+  }
+
+  private shouldPrefetchLoadMoreAtIndex(visibleCount: number, index: number): boolean {
+    if (visibleCount <= 0) {
+      return false
+    }
+    const remainingVisibleCount = visibleCount - index - 1
+    const dynamicThreshold = Math.max(
+      HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
+      Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
+    )
+    return remainingVisibleCount <= dynamicThreshold
+  }
+
+  private shouldEnableLoadMorePrefetchForMode(mode: SubscriptionMode): boolean {
+    // 只在用户真实滚动后启用预取，避免首屏装载阶段触发额外查询。
+    return !this.shouldRenderAllEntriesForMode(mode) && this.hasRecentHomeScrollIntent()
+  }
+
+  handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
+    if (!HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED) {
+      return
+    }
+    if (!this.shouldEnableLoadMorePrefetchForMode(mode)) {
+      return
+    }
+    if (!this.shouldPrefetchLoadMoreAtIndex(totalCount, index)) {
+      return
+    }
+    this.enqueueLoadMoreForMode(mode, 'item-appear')
   }
 
   async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
