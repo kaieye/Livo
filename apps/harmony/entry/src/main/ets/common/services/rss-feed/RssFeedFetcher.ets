@@ -14,6 +14,8 @@ export interface FeedRequestResult {
   finalUrl: string
 }
 
+const LOG_TAG = '[RssFeedFetcher]'
+
 function preferredRssHubInstances(route: string): string[] {
   const r = route.toLowerCase()
   if (r.includes('/x/') || r.includes('/twitter/')) {
@@ -36,13 +38,14 @@ function rssHubTimeoutMs(route: string): number {
     : RSSHUB_REQUEST_TIMEOUT_MS
 }
 
-function stripAcceptEncoding(headers: Record<string, string>): Record<string, string> {
+function withReferer(headers: Record<string, string>, referer: string): Record<string, string> {
   const result: Record<string, string> = {}
   Object.keys(headers).forEach((key: string) => {
     if (key !== 'Accept-Encoding') {
       result[key] = headers[key]
     }
   })
+  result['Referer'] = referer
   return result
 }
 
@@ -62,7 +65,7 @@ export async function fetchUrl(
     return { response, request, finalUrl: url }
   } catch (error) {
     request.destroy()
-    throw new Error(error instanceof Error ? error.message : 'RSS request failed')
+    throw new Error(`RSS request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
   }
 }
 
@@ -73,14 +76,12 @@ export async function tryRssHubInstances(
   const routes = expandRssHubFallbackRoutes(route)
   const instances = preferredRssHubInstances(route)
   const timeoutMs = rssHubTimeoutMs(route)
-  const baseHeaders = stripAcceptEncoding(headers)
+  const errors: string[] = []
 
   for (const instance of instances) {
     for (const candidateRoute of routes) {
       const url = `${instance}${candidateRoute}`
-      const instanceHeaders: Record<string, string> = {}
-      Object.keys(baseHeaders).forEach((k: string) => { instanceHeaders[k] = baseHeaders[k] })
-      instanceHeaders['Referer'] = instance
+      const instanceHeaders = withReferer(headers, instance)
       const request = http.createHttp()
       try {
         const response = await request.request(url, {
@@ -90,14 +91,18 @@ export async function tryRssHubInstances(
           header: instanceHeaders,
         })
         if (response.responseCode === 200) {
+          console.info(`${LOG_TAG} Success: ${url}`)
           return { response, request, finalUrl: url }
         }
+        errors.push(`${url} -> ${response.responseCode}`)
         request.destroy()
-      } catch (_) {
+      } catch (error) {
+        errors.push(`${url} failed: ${error instanceof Error ? error.message : String(error)}`)
         request.destroy()
       }
     }
   }
+  console.warn(`${LOG_TAG} All RSSHub instances failed: ${errors.join('; ')}`)
   return null
 }
 
@@ -109,13 +114,11 @@ export async function tryNitterInstances(
   if (!normalized) {
     return null
   }
-  const baseHeaders = stripAcceptEncoding(headers)
+  const errors: string[] = []
 
   for (const instance of FALLBACK_NITTER_INSTANCES) {
     const url = `${instance.replace(/\/+$/g, '')}/${encodeURIComponent(normalized)}/rss`
-    const instanceHeaders: Record<string, string> = {}
-    Object.keys(baseHeaders).forEach((k: string) => { instanceHeaders[k] = baseHeaders[k] })
-    instanceHeaders['Referer'] = instance
+    const instanceHeaders = withReferer(headers, instance)
     const request = http.createHttp()
     try {
       const response = await request.request(url, {
@@ -125,13 +128,17 @@ export async function tryNitterInstances(
         header: instanceHeaders,
       })
       if (response.responseCode === 200) {
+        console.info(`${LOG_TAG} Nitter success: ${url}`)
         return { response, request, finalUrl: url }
       }
+      errors.push(`${url} -> ${response.responseCode}`)
       request.destroy()
-    } catch (_) {
+    } catch (error) {
+      errors.push(`${url} failed: ${error instanceof Error ? error.message : String(error)}`)
       request.destroy()
     }
   }
+  console.warn(`${LOG_TAG} All Nitter instances failed: ${errors.join('; ')}`)
   return null
 }
 

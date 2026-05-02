@@ -25,7 +25,6 @@ import {
   buildEntriesFromItems,
   parseBilibiliDynamic,
   discoverFeedUrlFromHtml,
-  resolveAbsoluteUrl,
 } from './RssFeedParser'
 import {
   FeedRequestResult,
@@ -40,6 +39,8 @@ import {
 } from './RssFeedFetcher'
 
 export { FeedRefreshPayload }
+
+const LOG_TAG = '[RssFeedService]'
 
 function extractBilibiliDynamicUid(url: string): string {
   return (url || '').match(/\/bilibili\/user\/dynamic\/(\d+)/i)?.[1] ?? ''
@@ -101,20 +102,25 @@ function buildRequestHeaders(feed: Feed): Record<string, string> {
 async function fetchBilibiliDynamicFeed(feed: Feed, uid: string): Promise<FeedRefreshPayload> {
   const request = http.createHttp()
   try {
-    const response = await request.request(
-      `https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space?host_mid=${encodeURIComponent(uid)}`,
-      {
-        method: http.RequestMethod.GET,
-        connectTimeout: LONG_REQUEST_TIMEOUT_MS,
-        readTimeout: LONG_REQUEST_TIMEOUT_MS,
-        header: {
-          'User-Agent': DESKTOP_BROWSER_USER_AGENT,
-          'Accept': ACCEPT_JSON,
-          'Referer': bilibiliSpaceReferer(uid),
-          'Origin': BILIBILI_ORIGIN,
+    let response: http.HttpResponse
+    try {
+      response = await request.request(
+        `https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space?host_mid=${encodeURIComponent(uid)}`,
+        {
+          method: http.RequestMethod.GET,
+          connectTimeout: LONG_REQUEST_TIMEOUT_MS,
+          readTimeout: LONG_REQUEST_TIMEOUT_MS,
+          header: {
+            'User-Agent': DESKTOP_BROWSER_USER_AGENT,
+            'Accept': ACCEPT_JSON,
+            'Referer': bilibiliSpaceReferer(uid),
+            'Origin': BILIBILI_ORIGIN,
+          },
         },
-      },
-    )
+      )
+    } catch (error) {
+      throw new Error(`Bilibili dynamic request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+    }
     if (response.responseCode !== 200) {
       throw new Error(`Bilibili dynamic request failed with status ${response.responseCode}`)
     }
@@ -141,42 +147,116 @@ async function fetchBilibiliDynamicFeed(feed: Feed, uid: string): Promise<FeedRe
   }
 }
 
-interface RssHubResolution {
-  result: FeedRequestResult
-  activeRequest: http.HttpRequest
-  finalUrl: string
-}
-
-async function resolveRssHubResult(
+/**
+ * Resolve a feed URL to a successful FeedRequestResult by trying:
+ *   1) Direct fetch when the URL is not a known RSSHub route
+ *   2) Each preferred RSSHub instance × fallback route combination
+ *   3) Each Nitter fallback for X/Twitter routes when RSSHub fails
+ *
+ * The returned result owns the http.HttpRequest handle and the caller
+ * is responsible for destroying it.
+ */
+async function resolveRssHubFetch(
   actualUrl: string,
   headers: Record<string, string>,
-  mainRequest: http.HttpRequest,
-): Promise<RssHubResolution> {
+): Promise<FeedRequestResult> {
   const route = extractRssHubRoute(actualUrl)
   if (!route) {
-    const r = await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
-    const res: RssHubResolution = { result: r, activeRequest: mainRequest, finalUrl: actualUrl }
-    return res
+    return await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
   }
-
+  console.info(`${LOG_TAG} Detected RSSHub route: ${route}`)
   const rssResult = await tryRssHubInstances(route, headers)
   if (rssResult) {
-    mainRequest.destroy()
-    const res: RssHubResolution = { result: rssResult, activeRequest: rssResult.request, finalUrl: rssResult.finalUrl }
-    return res
+    return rssResult
   }
-
   if (isXRoute(route)) {
     const username = extractXRouteUsername(route)
     const nitterResult = await tryNitterInstances(username, headers)
     if (nitterResult) {
-      mainRequest.destroy()
-      const res: RssHubResolution = { result: nitterResult, activeRequest: nitterResult.request, finalUrl: nitterResult.finalUrl }
-      return res
+      return nitterResult
+    }
+    throw new Error('All RSSHub and Nitter instances failed')
+  }
+  throw new Error('All RSSHub instances failed')
+}
+
+/**
+ * Follow an HTML response: look for an <link rel="alternate"> RSS hint,
+ * fetch the discovered URL, and return the resolved (xml, finalUrl).
+ *
+ * Returns null when the response is already RSS or no hint is found.
+ */
+async function followHtmlFeedDiscovery(
+  xml: string,
+  requestUrl: string,
+  contentType: string,
+  headers: Record<string, string>,
+): Promise<FeedRequestResult | null> {
+  if (!contentType.includes('text/html') && !looksLikeHtmlDocument(xml)) {
+    return null
+  }
+  console.info(`${LOG_TAG} Detected HTML, attempting RSS discovery`)
+  const discoveredUrl = discoverFeedUrlFromHtml(xml, requestUrl)
+  if (!discoveredUrl || discoveredUrl === requestUrl) {
+    console.warn(`${LOG_TAG} No RSS feed discovered in HTML`)
+    return null
+  }
+  console.info(`${LOG_TAG} Discovered RSS feed: ${discoveredUrl}`)
+  const discovered = await fetchUrl(discoveredUrl, headers, RSS_REQUEST_TIMEOUT_MS)
+  if (discovered.response.responseCode !== 200) {
+    discovered.request.destroy()
+    throw new Error(`RSS request failed with status ${discovered.response.responseCode}`)
+  }
+  return discovered
+}
+
+function notModifiedPayload(feed: Feed): FeedRefreshPayload {
+  return {
+    etag: feed.etag ?? '',
+    lastModified: feed.lastModified ?? '',
+    feedTitle: feed.title,
+    siteUrl: feed.siteUrl ?? '',
+    imageUrl: feed.imageUrl ?? '',
+    description: feed.description ?? '',
+    resolvedFeedUrl: feed.url,
+    entries: [],
+  }
+}
+
+function buildSuccessPayload(
+  feed: Feed,
+  xml: string,
+  requestUrl: string,
+  etag: string,
+  lastModified: string,
+): FeedRefreshPayload {
+  const rssItems = parseRssItems(feed.id, xml, requestUrl)
+  const items = rssItems.length > 0 ? rssItems : parseAtomItems(feed.id, xml, requestUrl)
+  console.info(`${LOG_TAG} Parsed ${items.length} items (RSS: ${rssItems.length})`)
+  if (items.length === 0) {
+    throw new Error('RSS parsed without entries')
+  }
+  const resolvedSiteUrl = parseFeedSiteUrl(xml, requestUrl) || feed.siteUrl || ''
+  return {
+    etag,
+    lastModified,
+    feedTitle: parseFeedTitle(xml) || feed.title,
+    siteUrl: resolvedSiteUrl,
+    imageUrl: parseFeedImageUrl(xml, resolvedSiteUrl || requestUrl) || feed.imageUrl || '',
+    description: parseFeedDescription(xml) || feed.description || '',
+    resolvedFeedUrl: requestUrl,
+    entries: buildEntriesFromItems(items, feed),
+  }
+}
+
+function readHeader(response: http.HttpResponse, names: string[]): string {
+  for (const name of names) {
+    const raw = String(response.header[name] ?? '')
+    if (raw) {
+      return raw
     }
   }
-
-  throw new Error('All RSSHub instances failed')
+  return ''
 }
 
 export class RssFeedService {
@@ -208,87 +288,62 @@ export class RssFeedService {
     if (bilibiliDynamicUid) {
       try {
         return await fetchBilibiliDynamicFeed(feed, bilibiliDynamicUid)
-      } catch (_) {
-        // fall through to RSS
+      } catch (error) {
+        console.warn(`${LOG_TAG} Bilibili dynamic fallback failed: ${error instanceof Error ? error.message : error}`)
       }
     }
 
     const rsshubConverted = convertYouTubeToRssHub(feed.url)
-    let actualUrl = rsshubConverted || canonicalFeedUrl(feed.url, feed.siteUrl || '') || feed.url
+    if (rsshubConverted) {
+      console.info(`${LOG_TAG} Converting YouTube RSS to RSSHub: ${rsshubConverted}`)
+    }
+    const actualUrl = rsshubConverted || canonicalFeedUrl(feed.url, feed.siteUrl || '') || feed.url
     const headers = buildRequestHeaders(feed)
-    const mainRequest = http.createHttp()
-    let activeRequest = mainRequest
 
+    console.info(`${LOG_TAG} Fetching feed: ${actualUrl}`)
+
+    let fetchResult: FeedRequestResult
+    if (isNitterFeedUrl(actualUrl)) {
+      fetchResult = await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
+    } else if (isRssHubUrl(actualUrl)) {
+      fetchResult = await resolveRssHubFetch(actualUrl, headers)
+    } else {
+      fetchResult = await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
+    }
+
+    let activeRequest = fetchResult.request
     try {
-      let fetchResult: FeedRequestResult
-
-      if (isNitterFeedUrl(actualUrl)) {
-        fetchResult = await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
-      } else if (isRssHubUrl(actualUrl)) {
-        const resolved = await resolveRssHubResult(actualUrl, headers, mainRequest)
-        fetchResult = resolved.result
-        activeRequest = resolved.activeRequest
-        actualUrl = resolved.finalUrl
-      } else {
-        fetchResult = await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
-      }
-
       const response = fetchResult.response
 
       if (response.responseCode === 304) {
-        return {
-          etag: feed.etag ?? '',
-          lastModified: feed.lastModified ?? '',
-          feedTitle: feed.title,
-          siteUrl: feed.siteUrl ?? '',
-          imageUrl: feed.imageUrl ?? '',
-          description: feed.description ?? '',
-          resolvedFeedUrl: feed.url,
-          entries: [],
-        }
+        console.info(`${LOG_TAG} Feed not modified (304): ${feed.url}`)
+        return notModifiedPayload(feed)
       }
 
       if (response.responseCode !== 200) {
+        console.error(`${LOG_TAG} HTTP error ${response.responseCode} for ${fetchResult.finalUrl}`)
         throw new Error(`RSS request failed with status ${response.responseCode}`)
       }
 
-      let requestUrl = actualUrl
+      let requestUrl = fetchResult.finalUrl
       let xml = String(response.result)
       const contentType = String(
         response.header['Content-Type'] ?? response.header['content-type'] ?? '',
       ).toLowerCase()
 
-      if (contentType.includes('text/html') || looksLikeHtmlDocument(xml)) {
-        const discoveredUrl = discoverFeedUrlFromHtml(xml, requestUrl)
-        if (discoveredUrl && discoveredUrl !== requestUrl) {
-          const discoveryResult = await fetchUrl(discoveredUrl, headers, RSS_REQUEST_TIMEOUT_MS)
-          if (discoveryResult.response.responseCode !== 200) {
-            discoveryResult.request.destroy()
-            throw new Error(`RSS request failed with status ${discoveryResult.response.responseCode}`)
-          }
-          requestUrl = discoveredUrl
-          xml = String(discoveryResult.response.result)
-          discoveryResult.request.destroy()
-        }
+      const discovered = await followHtmlFeedDiscovery(xml, requestUrl, contentType, headers)
+      let etag = readHeader(response, ['ETag', 'etag'])
+      let lastModified = readHeader(response, ['Last-Modified', 'last-modified'])
+      if (discovered) {
+        activeRequest.destroy()
+        activeRequest = discovered.request
+        requestUrl = discovered.finalUrl
+        xml = String(discovered.response.result)
+        etag = readHeader(discovered.response, ['ETag', 'etag'])
+        lastModified = readHeader(discovered.response, ['Last-Modified', 'last-modified'])
       }
 
-      const rssItems = parseRssItems(feed.id, xml, requestUrl)
-      const items = rssItems.length > 0 ? rssItems : parseAtomItems(feed.id, xml, requestUrl)
-
-      if (items.length === 0) {
-        throw new Error('RSS parsed without entries')
-      }
-
-      return {
-        etag: String(response.header['ETag'] ?? response.header['etag'] ?? ''),
-        lastModified: String(response.header['Last-Modified'] ?? response.header['last-modified'] ?? ''),
-        feedTitle: parseFeedTitle(xml) || feed.title,
-        siteUrl: parseFeedSiteUrl(xml, requestUrl) || feed.siteUrl || '',
-        imageUrl: parseFeedImageUrl(xml, parseFeedSiteUrl(xml, requestUrl) || requestUrl) || feed.imageUrl || '',
-        description: parseFeedDescription(xml) || feed.description || '',
-        resolvedFeedUrl: requestUrl,
-        entries: buildEntriesFromItems(items, feed),
-      }
+      return buildSuccessPayload(feed, xml, requestUrl, etag, lastModified)
     } finally {
       activeRequest.destroy()
     }

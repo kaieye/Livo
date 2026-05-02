@@ -2,7 +2,6 @@ import { Entry, Feed } from '../../models/LivoModels'
 import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../../utils/FeedMediaUrl'
 import { parseBilibiliDynamicEntries } from '../../utils/BilibiliDynamicFeed'
 import {
-  decodeHtml,
   stripHtml,
   normalizeRichContent,
   stripCdata,
@@ -79,7 +78,7 @@ function parseAtomLink(entryBlock: string): string {
 }
 
 function parseAtomTags(entryBlock: string): string[] {
-  const matches = entryBlock.match(/<category(?:\s[^]*)?\/?>/gi) ?? []
+  const matches = entryBlock.match(/<category(?:\s[^>]*)?\/?>/gi) ?? []
   const tags: string[] = []
   matches.forEach((tagBlock: string) => {
     const term = tagBlock.match(/term="([^"]+)"/i)?.[1] ?? tagBlock.match(/term='([^']+)'/i)?.[1] ?? ''
