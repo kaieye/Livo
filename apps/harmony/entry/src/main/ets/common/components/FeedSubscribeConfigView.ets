@@ -1,24 +1,26 @@
 import { AppRepository } from '../data/AppRepository'
 import { Feed, FeedViewType } from '../models/LivoModels'
-import { FeedDraft } from '../repositories/FeedRepository'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { FeedRefreshPayload } from '../services/RssFeedService'
-import { canonicalInstagramFeedUrl } from '../utils/SocialFeedTitles'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
-import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
+import {
+  feedFaviconUrl,
+  isBilibiliFeedSource,
+  mapBilibiliTargetUrl,
+} from '../utils/FeedSubscribeTargetUrl'
+import { feedMatchesTarget } from '../utils/FeedSubscribeTargetMatcher'
+import { FeedSubscribeAction, FeedSubscribeRequest } from '../utils/FeedSubscribeAction'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
-import {
-  CARD_RADIUS_SM,
-  CHIP_RADIUS,
-} from '../ui/UiTokens'
+import { FeedSubscribeInfoCard } from './feed-subscribe-config/FeedSubscribeInfoCard'
+import { FeedSubscribeViewTypeRail } from './feed-subscribe-config/FeedSubscribeViewTypeRail'
+import { FeedSubscribeBottomActions } from './feed-subscribe-config/FeedSubscribeBottomActions'
 
-interface ConfigOption {
-  view: FeedViewType
-  label: string
-  description: string
-}
+const TOAST_DURATION_OK: number = 2000
+const TOAST_DURATION_ERROR: number = 3000
+const EDIT_MODE_BOTTOM_SPACER: number = 80
+const SUBSCRIBE_MODE_BOTTOM_SPACER: number = 20
 
 @Component
 export struct FeedSubscribeConfigView {
@@ -44,7 +46,6 @@ export struct FeedSubscribeConfigView {
   @State isEditMode: boolean = false
   @State hasChanges: boolean = false
   @State existingFeed: Feed | undefined = undefined
-  @State railWidth: number = 0
   @State isSubmitting: boolean = false
 
   aboutToAppear(): void {
@@ -57,7 +58,12 @@ export struct FeedSubscribeConfigView {
 
   private async loadExistingFeed(): Promise<void> {
     const feeds = await AppRepository.feedEntities()
-    this.existingFeed = feeds.find((feed: Feed) => this.feedMatchesTarget(feed))
+    const mappedTargetUrl = this.mappedTargetUrl()
+    this.existingFeed = feeds.find((feed: Feed) => feedMatchesTarget(feed, {
+      targetUrl: this.targetUrl,
+      mappedTargetUrl,
+      targetSiteUrl: this.targetSiteUrl,
+    }))
 
     if (this.existingFeed) {
       this.customTitle = this.existingFeed.title
@@ -67,130 +73,14 @@ export struct FeedSubscribeConfigView {
     }
   }
 
-  private normalizeUrl(url: string): string {
-    return url.trim().replace(/\/+$/, '').toLowerCase()
-  }
-
-  private feedMatchesTarget(feed: Feed): boolean {
-    const normalizedFeedUrl = this.normalizeUrl(feed.url)
-    const normalizedFeedSiteUrl = this.normalizeUrl(feed.siteUrl || '')
-    const normalizedTargetUrl = this.normalizeUrl(this.targetUrl)
-    const normalizedMappedUrl = this.normalizeUrl(this.mappedTargetUrl())
-    const normalizedTargetSiteUrl = this.normalizeUrl(this.targetSiteUrl)
-
-    return normalizedFeedUrl === normalizedMappedUrl
-      || (!!normalizedTargetUrl && normalizedFeedUrl === normalizedTargetUrl)
-      || (!!normalizedFeedSiteUrl && normalizedFeedSiteUrl === normalizedMappedUrl)
-      || (!!normalizedTargetUrl && !!normalizedFeedSiteUrl && normalizedFeedSiteUrl === normalizedTargetUrl)
-      || (!!normalizedTargetSiteUrl && normalizedFeedUrl === normalizedTargetSiteUrl)
-      || (!!normalizedTargetSiteUrl && !!normalizedFeedSiteUrl && normalizedFeedSiteUrl === normalizedTargetSiteUrl)
-  }
-
-  private checkForChanges(): void {
-    if (!this.existingFeed) {
-      this.hasChanges = false
-      return
-    }
-
-    this.hasChanges =
-      this.customTitle !== this.existingFeed.title ||
-      this.customCategory !== this.existingFeed.category ||
-      this.selectedView !== this.existingFeed.view ||
-      this.hideInTimeline !== !this.existingFeed.showInAll
-  }
-
-  private viewOptions(): ConfigOption[] {
-    return [
-      { view: FeedViewType.Articles, label: '文章', description: '' },
-      { view: FeedViewType.SocialMedia, label: '社交', description: '' },
-      { view: FeedViewType.Pictures, label: '图片', description: '' },
-      { view: FeedViewType.Videos, label: '视频', description: '' },
-    ]
-  }
-
-  private getViewLabel(view: FeedViewType): string {
-    switch (view) {
-      case FeedViewType.Articles:
-        return '文章'
-      case FeedViewType.SocialMedia:
-        return '社交'
-      case FeedViewType.Pictures:
-        return '图片'
-      case FeedViewType.Videos:
-        return '视频'
-      default:
-        return '文章'
-    }
-  }
-
-  private getViewSymbol(view: FeedViewType): Resource {
-    switch (view) {
-      case FeedViewType.Articles:
-        return $r('sys.symbol.doc_text')
-      case FeedViewType.SocialMedia:
-        return $r('sys.symbol.ellipsis_bubble')
-      case FeedViewType.Pictures:
-        return $r('sys.symbol.picture_2')
-      case FeedViewType.Videos:
-        return $r('sys.symbol.media_center')
-      default:
-        return $r('sys.symbol.doc_text')
-    }
-  }
-
-  private activeTextColor(): string {
-    return this.theme.accent
-  }
-
-  private isBilibiliSource(): boolean {
-    const site = this.targetSiteUrl.toLowerCase()
-    const target = this.targetUrl.toLowerCase()
-    return site.includes('space.bilibili.com')
-      || site.includes('bilibili.com')
-      || target.includes('/bilibili/user/video/')
-      || target.includes('/bilibili/user/dynamic/')
-  }
-
   private mappedTargetUrl(): string {
-    if (!this.isBilibiliSource()) {
+    if (!isBilibiliFeedSource(this.targetUrl, this.targetSiteUrl)) {
       return this.targetUrl
     }
-
-    const matched = this.targetUrl.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
-    const uid = matched?.[1] ?? ''
-    if (!uid) {
-      return this.targetUrl
-    }
-
-    const instanceMatch = this.targetUrl.match(/^(https?:\/\/[^/]+)/i)
-    const instance = instanceMatch?.[1] ?? 'https://rsshub.pseudoyu.com'
-
-    if (this.selectedView === FeedViewType.SocialMedia) {
-      return `${instance}/bilibili/user/dynamic/${uid}`
-    }
-
-    if (this.selectedView === FeedViewType.Videos) {
-      return `${instance}/bilibili/user/video/${uid}`
-    }
-
-    return this.targetUrl
+    return mapBilibiliTargetUrl(this.targetUrl, this.targetSiteUrl, this.selectedView)
   }
 
-  private effectiveSubscribedUrl(targetUrl: string, siteUrl: string): string {
-    return canonicalInstagramFeedUrl(targetUrl, siteUrl) || targetUrl
-  }
-
-  private hostOf(url: string): string {
-    const matched = url.match(/^https?:\/\/([^/]+)/i)
-    return matched?.[1] ? matched[1].replace(/^www\./i, '') : ''
-  }
-
-  private faviconUrl(): string {
-    const host = this.hostOf(this.targetSiteUrl || this.targetUrl)
-    return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128` : ''
-  }
-
-  private cachedPreviewPayload() {
+  private cachedPreviewPayload(): FeedRefreshPayload | undefined {
     return DiscoverRemoteSearchService.cachedPreviewPayload(this.targetUrl)
       ?? DiscoverRemoteSearchService.cachedPreviewPayload(this.mappedTargetUrl())
   }
@@ -203,163 +93,90 @@ export struct FeedSubscribeConfigView {
       cachedPreview?.siteUrl || this.targetSiteUrl,
       this.customTitle || cachedPreview?.feedTitle || this.targetTitle,
     )
-    if (resolvedImageUrl) {
-      return resolvedImageUrl
+    return resolvedImageUrl || feedFaviconUrl(this.targetSiteUrl, this.targetUrl)
+  }
+
+  private buildSubscribeRequest(): FeedSubscribeRequest {
+    return {
+      targetUrl: this.targetUrl,
+      targetTitle: this.targetTitle,
+      targetSiteUrl: this.targetSiteUrl,
+      targetDescription: this.targetDescription,
+      customTitle: this.customTitle,
+      customCategory: this.customCategory,
+      selectedView: this.selectedView,
+      hideInTimeline: this.hideInTimeline,
+      mappedTargetUrl: this.mappedTargetUrl(),
+      resolvedImageUrl: this.resolvedFeedImageUrl(),
+      cachedPreview: this.cachedPreviewPayload(),
     }
-
-    return this.faviconUrl()
   }
 
-  private async runCompletion(action: () => void | Promise<void>, label: string): Promise<void> {
-    try {
-      await action()
-    } catch (error) {
-      console.error(`${label} completion failed: ${error instanceof Error ? error.message : error}`)
-    }
-  }
-
-  private signalFeedsChanged(): void {
-    bumpFeedsChangedSignal()
-  }
-
-  private async handleUnsubscribe(): Promise<void> {
+  private checkForChanges(): void {
     if (!this.existingFeed) {
+      this.hasChanges = false
       return
     }
-
-    try {
-      await AppRepository.removeFeed(this.existingFeed.id)
-      this.showToast('已取消订阅', 2000)
-    } catch (e) {
-      this.showToast(`取消订阅失败: ${e}`, 3000)
-      return
-    }
-
-    await this.runCompletion(this.onUnsubscribed, 'unsubscribe')
-  }
-
-  private async handleSave(): Promise<void> {
-    if (!this.existingFeed || this.isSubmitting) {
-      return
-    }
-
-    this.isSubmitting = true
-    try {
-      const draft: FeedDraft = {
-        url: this.mappedTargetUrl(),
-        title: this.customTitle || this.targetTitle,
-        siteUrl: this.targetSiteUrl,
-        imageUrl: this.resolvedFeedImageUrl() || this.existingFeed?.imageUrl || '',
-        description: this.targetDescription,
-        category: this.customCategory,
-        view: this.selectedView,
-        showInAll: !this.hideInTimeline,
-      }
-
-      const updatedFeed = await AppRepository.updateFeed(this.existingFeed.id, draft)
-      const cachedPreview = this.cachedPreviewPayload()
-      if (cachedPreview) {
-        const saveSeedPayload: FeedRefreshPayload = {
-          etag: cachedPreview.etag,
-          lastModified: cachedPreview.lastModified,
-          feedTitle: draft.title || cachedPreview.feedTitle,
-          siteUrl: cachedPreview.siteUrl,
-          imageUrl: cachedPreview.imageUrl,
-          description: cachedPreview.description,
-          resolvedFeedUrl: cachedPreview.resolvedFeedUrl,
-          entries: cachedPreview.entries,
-        }
-        void this.seedPreviewAfterSave(updatedFeed.id, saveSeedPayload)
-      }
-      this.signalFeedsChanged()
-      this.showToast('保存成功', 2000)
-      await this.runCompletion(this.onSaved, 'save')
-    } catch (e) {
-      this.showToast(`保存失败: ${e}`, 3000)
-    } finally {
-      this.isSubmitting = false
-    }
-  }
-
-  private async seedPreviewAfterSave(feedId: string, payload: FeedRefreshPayload): Promise<void> {
-    try {
-      await AppRepository.seedFeedFromPreview(feedId, payload)
-    } catch (error) {
-      console.error(`seed preview after save failed: ${error instanceof Error ? error.message : error}`)
-    }
+    this.hasChanges =
+      this.customTitle !== this.existingFeed.title
+      || this.customCategory !== this.existingFeed.category
+      || this.selectedView !== this.existingFeed.view
+      || this.hideInTimeline !== !this.existingFeed.showInAll
   }
 
   private async handleSubscribe(): Promise<void> {
     if (this.isSubmitting) {
       return
     }
-
     this.isSubmitting = true
     try {
-      const cachedPreview = this.cachedPreviewPayload()
-      const effectiveTargetUrl = this.effectiveSubscribedUrl(
-        cachedPreview?.resolvedFeedUrl?.trim() || this.mappedTargetUrl(),
-        cachedPreview?.siteUrl?.trim() || this.targetSiteUrl.trim(),
+      const outcome = await FeedSubscribeAction.subscribe(
+        this.buildSubscribeRequest(),
+        this.existingFeed,
       )
-      const effectiveSiteUrl = cachedPreview?.siteUrl?.trim() || this.targetSiteUrl.trim()
-      const latestExistingFeed = this.existingFeed
-        ?? await AppRepository.feedEntityByUrl(this.mappedTargetUrl())
-        ?? await AppRepository.feedEntityByUrl(effectiveTargetUrl)
-        ?? await AppRepository.feedEntityBySiteUrl(effectiveSiteUrl)
-      const draft: FeedDraft = {
-        url: effectiveTargetUrl,
-        title: this.customTitle || cachedPreview?.feedTitle || this.targetTitle,
-        siteUrl: effectiveSiteUrl,
-        imageUrl: this.resolvedFeedImageUrl() || latestExistingFeed?.imageUrl || '',
-        description: cachedPreview?.description || this.targetDescription,
-        category: this.customCategory,
-        view: this.selectedView,
-        showInAll: !this.hideInTimeline,
+      this.showToast(outcome.message, TOAST_DURATION_OK)
+      await fireCallback(this.onSubscribed, 'subscribe')
+      if (!outcome.hasSeededPreview && outcome.feedId) {
+        void FeedSubscribeAction.refreshAfterSubscribe(outcome.feedId)
       }
-      const hasSeededPreview = !!cachedPreview && (cachedPreview.entries?.length ?? 0) > 0
-      let subscribedFeedId: string = ''
-      let successMessage: string = ''
-
-      if (latestExistingFeed) {
-        const updatedFeed = await AppRepository.updateFeed(latestExistingFeed.id, draft)
-        subscribedFeedId = updatedFeed.id
-        successMessage = '订阅已更新'
-        if (cachedPreview) {
-          await AppRepository.seedFeedFromPreview(updatedFeed.id, cachedPreview)
-        }
-      } else {
-        const createdFeed = await AppRepository.createFeed(draft)
-        subscribedFeedId = createdFeed.id
-        successMessage = '订阅成功'
-        if (cachedPreview) {
-          await AppRepository.seedFeedFromPreview(createdFeed.id, cachedPreview)
-        }
-      }
-
-      this.signalFeedsChanged()
-      this.showToast(successMessage, 2000)
-      this.isSubmitting = false
-      await this.runCompletion(this.onSubscribed, 'subscribe')
-      if (!hasSeededPreview && subscribedFeedId) {
-        void this.refreshFeedAfterSubscribe(subscribedFeedId)
-      }
-      return
-    } catch (e) {
-      this.showToast(`订阅失败: ${e}`, 3000)
-      this.isSubmitting = false
-      return
-    }
-  }
-
-  private async refreshFeedAfterSubscribe(feedId: string): Promise<void> {
-    try {
-      await AppRepository.refreshFeed(feedId)
     } catch (error) {
-      console.error(`subscribe refresh failed: ${error instanceof Error ? error.message : error}`)
+      this.showToast(`订阅失败: ${error}`, TOAST_DURATION_ERROR)
+    } finally {
+      this.isSubmitting = false
     }
   }
 
-  private showToast(message: string, duration: number = 2000): void {
+  private async handleSave(): Promise<void> {
+    if (!this.existingFeed || this.isSubmitting) {
+      return
+    }
+    this.isSubmitting = true
+    try {
+      const outcome = await FeedSubscribeAction.save(this.buildSubscribeRequest(), this.existingFeed)
+      this.showToast(outcome.message, TOAST_DURATION_OK)
+      await fireCallback(this.onSaved, 'save')
+    } catch (error) {
+      this.showToast(`保存失败: ${error}`, TOAST_DURATION_ERROR)
+    } finally {
+      this.isSubmitting = false
+    }
+  }
+
+  private async handleUnsubscribe(): Promise<void> {
+    if (!this.existingFeed) {
+      return
+    }
+    try {
+      await FeedSubscribeAction.unsubscribe(this.existingFeed.id)
+      this.showToast('已取消订阅', TOAST_DURATION_OK)
+    } catch (error) {
+      this.showToast(`取消订阅失败: ${error}`, TOAST_DURATION_ERROR)
+      return
+    }
+    await fireCallback(this.onUnsubscribed, 'unsubscribe')
+  }
+
+  private showToast(message: string, duration: number = TOAST_DURATION_OK): void {
     try {
       this.getUIContext().getPromptAction().showToast({
         message,
@@ -370,37 +187,17 @@ export struct FeedSubscribeConfigView {
     }
   }
 
-  private indicatorColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.92)'
-  }
-
-  private indicatorBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)'
-  }
-
-  private indicatorShadowColor(): string {
-    return this.theme.isDark ? 'rgba(0,0,0,0.12)' : 'rgba(15,23,42,0.08)'
-  }
-
-  private viewOptionIndex(view: FeedViewType): number {
-    const options = this.viewOptions()
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].view === view) {
-        return i
-      }
-    }
-    return 0
-  }
-
-  private indicatorSlotWidth(): number {
-    if (this.railWidth <= 0) {
-      return 0
-    }
-    return (this.railWidth - 8) / this.viewOptions().length
-  }
-
-  private indicatorOffsetX(): number {
-    return this.indicatorSlotWidth() * this.viewOptionIndex(this.selectedView)
+  private showUnsubscribeConfirm(): void {
+    this.getUIContext().showAlertDialog({
+      title: '取消订阅',
+      message: '确定要取消订阅这个订阅源吗？',
+      primaryButton: { value: '取消', action: () => {} },
+      secondaryButton: {
+        value: '确定',
+        fontColor: '#EF4444',
+        action: () => { void this.handleUnsubscribe() },
+      },
+    })
   }
 
   @Builder
@@ -414,9 +211,7 @@ export struct FeedSubscribeConfigView {
         titleSize: 18,
         topPadding: 0,
         bottomPadding: 0,
-        onBack: () => {
-          this.onBack()
-        },
+        onBack: () => { this.onBack() },
         onTrailingClick: () => {
           if (this.isEditMode) {
             void this.handleSave()
@@ -425,64 +220,6 @@ export struct FeedSubscribeConfigView {
       })
         .width('100%')
     }
-  }
-
-  @Builder
-  private FeedInfoCard() {
-    Column({ space: 12 }) {
-      Row({ space: 12 }) {
-        Stack({ alignContent: Alignment.Center }) {
-          if (this.resolvedFeedImageUrl()) {
-            Image(this.resolvedFeedImageUrl())
-              .width(56)
-              .height(56)
-              .borderRadius(14)
-              .backgroundColor(this.theme.elevated)
-          } else {
-            Row()
-              .width(56)
-              .height(56)
-              .borderRadius(14)
-              .backgroundColor(this.theme.accent)
-
-            Text(this.targetTitle.substring(0, 1).toUpperCase())
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-          }
-        }
-
-        Column({ space: 4 }) {
-          Text(this.targetTitle)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          Text(this.targetUrl)
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-      }
-      .width('100%')
-
-      if (this.targetDescription) {
-        Text(this.targetDescription)
-          .fontSize(14)
-          .lineHeight(20)
-          .fontColor(this.theme.textSecondary)
-          .width('100%')
-      }
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(this.theme.surface)
-    .borderRadius(16)
   }
 
   @Builder
@@ -506,7 +243,7 @@ export struct FeedSubscribeConfigView {
 
   @Builder
   private TextInputField(placeholder: string, value: string, onChange: (value: string) => void) {
-    TextInput({ text: value, placeholder: placeholder })
+    TextInput({ text: value, placeholder })
       .backgroundColor(this.theme.elevated)
       .fontColor(this.theme.textPrimary)
       .placeholderColor(this.theme.textMuted)
@@ -547,112 +284,6 @@ export struct FeedSubscribeConfigView {
     .padding({ top: 8, bottom: 8 })
   }
 
-  @Builder
-  private ViewTypeButton(option: ConfigOption) {
-    Row({ space: 6 }) {
-      SymbolGlyph(this.getViewSymbol(option.view))
-        .fontSize(16)
-        .fontColor([this.selectedView === option.view ? this.activeTextColor() : this.theme.textSecondary])
-
-      Text(this.getViewLabel(option.view))
-        .fontSize(14)
-        .fontWeight(FontWeight.Regular)
-        .fontColor(this.theme.textSecondary)
-    }
-    .layoutWeight(1)
-    .height(38)
-    .justifyContent(FlexAlign.Center)
-    .borderRadius(CHIP_RADIUS)
-    .animation({ duration: 160, curve: Curve.EaseInOut })
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
-      .onClick(() => {
-        this.selectedView = option.view
-        this.checkForChanges()
-      })
-  }
-
-  @Builder
-  private BottomActions() {
-    if (!this.isEditMode) {
-      Button(this.isSubmitting ? '订阅中...' : '订阅')
-        .type(ButtonType.Capsule)
-        .width('80%')
-        .height(50)
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .backgroundColor(this.theme.accent)
-        .fontColor('#FFFFFF')
-        .margin({ bottom: 24 })
-        .opacity(0.92)
-        .enabled(!this.isSubmitting)
-        .onClick(() => {
-          void this.handleSubscribe()
-        })
-    } else if (this.isEditMode && this.hasChanges) {
-      Row({ space: 12 }) {
-        Button('取消订阅')
-          .type(ButtonType.Capsule)
-          .layoutWeight(1)
-          .height(50)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .backgroundColor(this.theme.elevated)
-          .fontColor('#EF4444')
-          .onClick(() => {
-            this.showUnsubscribeConfirm()
-          })
-
-        Button(this.isSubmitting ? '保存中...' : '保存')
-          .type(ButtonType.Capsule)
-          .layoutWeight(1)
-          .height(50)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .backgroundColor(this.theme.accent)
-          .fontColor('#FFFFFF')
-          .enabled(!this.isSubmitting)
-          .onClick(() => {
-            void this.handleSave()
-          })
-      }
-      .width('90%')
-      .margin({ bottom: 24 })
-      .opacity(0.92)
-    } else if (this.isEditMode) {
-      Button('取消订阅')
-        .type(ButtonType.Capsule)
-        .width('80%')
-        .height(50)
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .backgroundColor(this.theme.elevated)
-        .fontColor('#EF4444')
-        .margin({ bottom: 24 })
-        .opacity(0.92)
-        .onClick(() => {
-          this.showUnsubscribeConfirm()
-        })
-    }
-  }
-
-  private showUnsubscribeConfirm(): void {
-    this.getUIContext().showAlertDialog({
-      title: '取消订阅',
-      message: '确定要取消订阅这个订阅源吗？',
-      primaryButton: {
-        value: '取消',
-        action: () => {}
-      },
-      secondaryButton: {
-        value: '确定',
-        fontColor: '#EF4444',
-        action: () => {
-          void this.handleUnsubscribe()
-        }
-      }
-    })
-  }
-
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
@@ -660,7 +291,13 @@ export struct FeedSubscribeConfigView {
 
         Scroll() {
           Column({ space: 20 }) {
-            this.FeedInfoCard()
+            FeedSubscribeInfoCard({
+              theme: this.theme,
+              title: this.targetTitle,
+              url: this.targetUrl,
+              description: this.targetDescription,
+              imageUrl: this.resolvedFeedImageUrl(),
+            })
 
             Column({ space: 12 }) {
               this.ConfigSection('名称', '')
@@ -676,57 +313,23 @@ export struct FeedSubscribeConfigView {
               this.hideInTimeline,
               (value: boolean) => {
                 this.hideInTimeline = value
-              }
+              },
             )
 
             Column({ space: 12 }) {
               this.ConfigSection('栏目', '')
-
-              Stack({ alignContent: Alignment.Center }) {
-                Row() {
-                Row()
-                  .width(this.indicatorSlotWidth())
-                  .height(38)
-                  .translate({ x: this.indicatorOffsetX() })
-                  .backgroundColor(this.indicatorColor())
-                    .borderRadius(CHIP_RADIUS)
-                    .border({ width: 0.6, color: this.indicatorBorderColor() })
-                    .shadow({
-                      radius: 8,
-                      color: this.indicatorShadowColor(),
-                      offsetX: 0,
-                      offsetY: 2,
-                    })
-                    .animation({ duration: 100, curve: Curve.EaseOut })
-                    .hitTestBehavior(HitTestMode.None)
-                }
-                .width('100%')
-                .height('100%')
-                .justifyContent(FlexAlign.Start)
-
-                Row({ space: 0 }) {
-                  ForEach(this.viewOptions(), (option: ConfigOption) => {
-                    this.ViewTypeButton(option)
-                  }, (option: ConfigOption) => `view-${option.view}`)
-                }
-                .width('100%')
-                .height('100%')
-              }
-              .width('100%')
-              .height(46)
-              .padding(4)
-              .backgroundColor(this.theme.elevated)
-              .borderRadius(CARD_RADIUS_SM)
-              .border({ width: 0.8, color: this.theme.divider })
-              .onSizeChange((_, newValue) => {
-                if (typeof newValue.width === 'number') {
-                  this.railWidth = newValue.width
-                }
+              FeedSubscribeViewTypeRail({
+                theme: this.theme,
+                selectedView: this.selectedView,
+                onSelect: (view: FeedViewType) => {
+                  this.selectedView = view
+                  this.checkForChanges()
+                },
               })
             }
             .width('100%')
 
-            Row().height(this.isEditMode ? 80 : 20)
+            Row().height(this.isEditMode ? EDIT_MODE_BOTTOM_SPACER : SUBSCRIBE_MODE_BOTTOM_SPACER)
           }
           .width('100%')
           .padding({ left: 16, right: 16, top: 8, bottom: 16 })
@@ -739,10 +342,26 @@ export struct FeedSubscribeConfigView {
       .height('100%')
       .backgroundColor(this.theme.background)
 
-      this.BottomActions()
+      FeedSubscribeBottomActions({
+        theme: this.theme,
+        isEditMode: this.isEditMode,
+        hasChanges: this.hasChanges,
+        isSubmitting: this.isSubmitting,
+        onSubscribe: () => { void this.handleSubscribe() },
+        onSave: () => { void this.handleSave() },
+        onUnsubscribe: () => { this.showUnsubscribeConfirm() },
+      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+  }
+}
+
+async function fireCallback(callback: () => void | Promise<void>, label: string): Promise<void> {
+  try {
+    await callback()
+  } catch (error) {
+    console.error(`${label} completion failed: ${error instanceof Error ? error.message : error}`)
   }
 }
