@@ -1,9 +1,8 @@
-# Long Files (Over 500 Lines)
-
 | 文件名                                                                  | 代码行数 |
 | ----------------------------------------------------------------------- | -------- |
-| entry/src/main/ets/common/components/FeedDetailView.ets                 | 1227     |
-| entry/src/main/ets/common/utils/TweetEntryPresentation.ts               | 1135     |
+| entry/src/main/ets/pages/ArticleDetail.ets                              | 1294     |
+| entry/src/main/ets/common/components/AIAssistantSettingsPanel.ets       | 1085     |
+| entry/src/main/ets/common/components/SubscriptionsContent.ets           | 947      |
 | entry/src/main/ets/common/services/DiscoverRemoteSearchService.ets      | 946      |
 | entry/src/main/ets/common/services/RssFeedService.ets                   | 943      |
 | entry/src/main/ets/common/models/LivoModels.ets                         | 934      |
@@ -18,7 +17,6 @@
 | entry/src/main/ets/common/utils/DiscoverInteractionCoordinator.ets      | 638      |
 | entry/src/main/ets/common/components/SettingsContent.ets                | 638      |
 | entry/src/main/ets/common/components/DiscoverBrowseDestination.ets      | 635      |
-| entry/src/main/ets/pages/ArticleDetail.ets                              | 610      |
 | entry/src/main/ets/common/services/SubscriptionOpmlService.ets          | 540      |
 | entry/src/main/ets/common/services/AIAssistantConnectionTestService.ets | 537      |
 | entry/src/main/ets/common/components/ArticlePictureDetailMedia.ets      | 535      |

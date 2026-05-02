@@ -115,3 +115,41 @@ export function resolveFeedDetailVideoSourceLabel(videoUrl: string): string {
   }
   return ''
 }
+
+export function findFeedDetailVideoPreviewCacheItem(
+  cache: FeedDetailVideoPreviewCacheItem[],
+  videoUrl: string,
+): FeedDetailVideoPreviewCacheItem | undefined {
+  return cache.find(
+    (item: FeedDetailVideoPreviewCacheItem) => item.videoUrl === videoUrl,
+  )
+}
+
+export function resolveFeedDetailEntryVideoPreviewUrl(
+  entry: FeedDetailVideoEntryLike,
+  cache: FeedDetailVideoPreviewCacheItem[],
+): string {
+  const videoUrl = resolveFeedDetailEntryVideoUrl(entry)
+  const cached = findFeedDetailVideoPreviewCacheItem(cache, videoUrl)
+  if (cached?.previewUrl) {
+    return cached.previewUrl
+  }
+  return resolveStaticFeedDetailVideoPreviewUrl(videoUrl)
+}
+
+export function mergeFeedDetailVideoPreviewCacheItem(
+  cache: FeedDetailVideoPreviewCacheItem[],
+  item: FeedDetailVideoPreviewCacheItem,
+): FeedDetailVideoPreviewCacheItem[] {
+  const existingIndex = cache.findIndex(
+    (cached: FeedDetailVideoPreviewCacheItem) =>
+      cached.videoUrl === item.videoUrl,
+  )
+  const nextCache = [...cache]
+  if (existingIndex >= 0) {
+    nextCache[existingIndex] = item
+  } else {
+    nextCache.push(item)
+  }
+  return nextCache
+}
