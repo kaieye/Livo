@@ -4,13 +4,17 @@ import {
   buildInstagramProfileSeedFromProfile,
   dedupeAndLimitDiscoverCandidates,
   DiscoverRemoteProfileSeed,
-  DiscoverRemoteViewMapping,
   extractXFollowersFromText,
   parseInstagramProfilesFromSearchHtml,
   parseInstagramProfilesFromTopsearchPayload,
 } from '../../utils/DiscoverRemoteSearchParsing'
 import { formatInstagramFeedTitle } from '../../utils/SocialFeedTitles'
-import { decodeBasicEntities, extractMetaContent, extractMetaNameContent, escapeHtml } from '../../utils/HtmlParser'
+import {
+  decodeBasicEntities,
+  extractMetaContent,
+  extractMetaNameContent,
+  stripHtml,
+} from '../../utils/HtmlParser'
 import {
   INSTAGRAM_SEARCH_TIMEOUT_MS,
   BASIC_BROWSER_USER_AGENT,
@@ -21,97 +25,53 @@ import {
   INSTAGRAM_APP_ID,
 } from '../../AppConfig'
 import { ResolvedDiscoverCandidate } from '../DiscoverService'
-import { FeedViewType } from '../../models/LivoModels'
-
-const SOCIAL_VIEW_MAPPING: DiscoverRemoteViewMapping = {
-  x: FeedViewType.SocialMedia,
-  instagram: FeedViewType.Pictures,
-}
-
-function buildQueryVariants(query: string, maxLength: number): string[] {
-  const variants: string[] = []
-  const push = (value: string): void => {
-    const trimmed = value.trim().replace(/^@+/, '')
-    if (!trimmed || trimmed.length > maxLength || variants.includes(trimmed)) return
-    variants.push(trimmed)
-  }
-  push(query)
-  push(query.toLowerCase())
-  push(query.replace(/\s+/g, ''))
-  push(query.replace(/\s+/g, '').toLowerCase())
-  return variants
-}
-
-function buildProfileAnchorSnippet(profileUrl: string, username: string, title: string, imageUrl: string, followers: string): string {
-  const safeUrl = escapeHtml(profileUrl)
-  const safeImageUrl = imageUrl ? ` <img src="${escapeHtml(imageUrl)}" />` : ''
-  const safeUsername = username ? ` <span>@${escapeHtml(username)}</span>` : ''
-  const safeTitle = title ? ` <span>${escapeHtml(title)}</span>` : ''
-  const safeFollowers = followers ? ` <span>${escapeHtml(followers)}</span>` : ''
-  return `<a href="${safeUrl}">${safeImageUrl}${safeUsername}${safeTitle}${safeFollowers}</a>`
-}
+import {
+  SOCIAL_VIEW_MAPPING,
+  buildProfileAnchorSnippet,
+  buildSocialQueryVariants,
+  dedupeCandidates,
+  withConfiguredRssHubCandidate,
+} from './SharedSearchHelpers'
 
 function isGenericInstagramHtml(html: string, ogTitle: string): boolean {
-  const normalizedTitle = ogTitle.trim().toLowerCase()
-  if (!normalizedTitle || normalizedTitle === 'instagram') return true
-  return /log into instagram/i.test(html) || /create an account or log in to instagram/i.test(html)
-}
-
-function dedupeCandidates(items: ResolvedDiscoverCandidate[]): ResolvedDiscoverCandidate[] {
-  const result: ResolvedDiscoverCandidate[] = []
-  items.forEach((item) => {
-    const idx = result.findIndex((c) => c.targetUrl === item.targetUrl)
-    if (idx < 0) {
-      result.push(item)
-    } else if (scoreCandidateRichness(item) > scoreCandidateRichness(result[idx])) {
-      result[idx] = item
-    }
-  })
-  return result
-}
-
-function scoreCandidateRichness(candidate: ResolvedDiscoverCandidate): number {
-  let score = 0
-  if (candidate.imageUrl) score += 4
-  if (candidate.description && !/^(?:X|Instagram|YouTube)\s+(?:用户|频道)$/.test(candidate.description)) score += 2
-  return score
-}
-
-function withConfiguredRssHubCandidate(candidate: ResolvedDiscoverCandidate, rsshubBase: string): ResolvedDiscoverCandidate {
-  if (!candidate.targetUrl.includes('/instagram/user/')) return candidate
-  const updated: ResolvedDiscoverCandidate = {
-    targetUrl: candidate.targetUrl.replace(/^https?:\/\/[^/]+/i, rsshubBase),
-    targetTitle: candidate.targetTitle,
-    targetView: candidate.targetView,
-    description: candidate.description,
-    siteUrl: candidate.siteUrl,
-    sourceKind: candidate.sourceKind,
-    imageUrl: candidate.imageUrl,
+  const normalizedTitle = stripHtml(ogTitle).trim().toLowerCase()
+  if (!normalizedTitle || normalizedTitle === 'instagram') {
+    return true
   }
-  return updated
+  return /log into instagram/i.test(html) || /create an account or log in to instagram/i.test(html)
 }
 
 export async function searchInstagramUsers(query: string, rsshubBase: string): Promise<ResolvedDiscoverCandidate[]> {
   const clean = query.trim().replace(/^@+/, '')
   const searchSeeds = await searchInstagramUsersByTopsearch(clean)
-  const variants = buildQueryVariants(query, 30)
+  const variants = buildSocialQueryVariants(query, 30)
   const seedResults = await Promise.allSettled(
-    variants.map((username) => fetchInstagramProfileSeed(username)),
+    variants.map((username: string) => fetchInstagramProfileSeed(username)),
   )
+
   const fallbackSeeds: DiscoverRemoteProfileSeed[] = []
-  seedResults.forEach((result) => {
-    if (result.status === 'fulfilled' && result.value) fallbackSeeds.push(result.value)
+  seedResults.forEach((result: PromiseSettledResult<DiscoverRemoteProfileSeed | undefined>) => {
+    if (result.status === 'fulfilled' && result.value) {
+      fallbackSeeds.push(result.value)
+    }
   })
 
-  const dedupedSeeds = dedupeAndLimitDiscoverCandidates([...searchSeeds, ...fallbackSeeds], 12)
-  return dedupeCandidates(dedupedSeeds.map((seed) => withConfiguredRssHubCandidate(
+  const dedupedSeeds = dedupeAndLimitDiscoverCandidates(
+    [...searchSeeds, ...fallbackSeeds],
+    12,
+  )
+
+  return dedupeCandidates(dedupedSeeds.map((seed: DiscoverRemoteProfileSeed) => withConfiguredRssHubCandidate(
     buildInstagramCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
     rsshubBase,
   )))
 }
 
 async function searchInstagramUsersByTopsearch(query: string): Promise<DiscoverRemoteProfileSeed[]> {
-  if (!query) return []
+  if (!query) {
+    return []
+  }
+
   const request = http.createHttp()
   try {
     const response = await request.request(
@@ -129,9 +89,16 @@ async function searchInstagramUsersByTopsearch(query: string): Promise<DiscoverR
         },
       },
     )
-    if (response.responseCode !== 200) return []
+
+    if (response.responseCode !== 200) {
+      return []
+    }
+
     const profiles = parseInstagramProfilesFromTopsearchPayload(JSON.parse(String(response.result)), query)
-    return dedupeAndLimitDiscoverCandidates(profiles.map((p) => buildInstagramProfileSeedFromProfile(p)), 12)
+    return dedupeAndLimitDiscoverCandidates(
+      profiles.map((profile) => buildInstagramProfileSeedFromProfile(profile)),
+      12,
+    )
   } catch (_) {
     return []
   } finally {
@@ -155,18 +122,32 @@ async function fetchInstagramProfileSeed(username: string): Promise<DiscoverRemo
         },
       },
     )
-    if (response.responseCode !== 200) return undefined
+
+    if (response.responseCode !== 200) {
+      return undefined
+    }
+
     const html = String(response.result)
     const ogTitle = extractMetaContent(html, 'og:title')
     if (isGenericInstagramHtml(html, ogTitle)) {
       return await fetchInstagramMirrorProfileSeed(username)
     }
+
     const rawTitle = (decodeBasicEntities(ogTitle).match(/^(.*?)\s*\(@[^)]+\)/i)?.[1] ?? decodeBasicEntities(ogTitle)).trim()
     const title = formatInstagramFeedTitle(rawTitle, username)
-    if (!title) return undefined
+    if (!title) {
+      return undefined
+    }
+
     const imageUrl = extractMetaContent(html, 'og:image').trim()
     const followers = extractXFollowersFromText(extractMetaContent(html, 'og:description'))
-    const snippet = buildProfileAnchorSnippet(`https://www.instagram.com/${username}/`, username, title, imageUrl, followers)
+    const snippet = buildProfileAnchorSnippet(
+      `https://www.instagram.com/${username}/`,
+      username,
+      title,
+      imageUrl,
+      followers,
+    )
     const profile = parseInstagramProfilesFromSearchHtml(snippet, username)[0]
     return profile ? buildInstagramProfileSeedFromProfile(profile) : undefined
   } catch (_) {
@@ -192,13 +173,23 @@ async function fetchInstagramMirrorProfileSeed(username: string): Promise<Discov
         },
       },
     )
-    if (response.responseCode !== 200) return undefined
+
+    if (response.responseCode !== 200) {
+      return undefined
+    }
+
     const html = String(response.result)
     const ogTitle = extractMetaContent(html, 'og:title')
     const metaDescription = extractMetaContent(html, 'og:description') || extractMetaNameContent(html, 'description')
     const title = formatInstagramFeedTitle(ogTitle, username)
     const followers = extractXFollowersFromText(metaDescription)
-    const snippet = buildProfileAnchorSnippet(`https://www.instagram.com/${username}/`, username, title, '', followers)
+    const snippet = buildProfileAnchorSnippet(
+      `https://www.instagram.com/${username}/`,
+      username,
+      title,
+      '',
+      followers,
+    )
     const profile = parseInstagramProfilesFromSearchHtml(snippet, username)[0]
     return profile ? buildInstagramProfileSeedFromProfile(profile) : undefined
   } catch (_) {

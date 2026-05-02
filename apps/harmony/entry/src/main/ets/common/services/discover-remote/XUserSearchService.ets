@@ -1,15 +1,12 @@
 import http from '@ohos.net.http'
-import { FeedViewType } from '../../models/LivoModels'
 import {
   buildXCandidateFromProfile,
   buildXProfileSeedFromProfile,
   dedupeAndLimitDiscoverCandidates,
   DiscoverRemoteProfileSeed,
-  DiscoverRemoteViewMapping,
   extractXFollowersFromText,
   parseXProfilesFromSearchHtml,
 } from '../../utils/DiscoverRemoteSearchParsing'
-import { escapeHtml } from '../../utils/HtmlParser'
 import {
   FALLBACK_NITTER_INSTANCES,
   BASIC_BROWSER_USER_AGENT,
@@ -20,49 +17,19 @@ import {
   MEDIUM_REQUEST_TIMEOUT_MS,
 } from '../../AppConfig'
 import { ResolvedDiscoverCandidate } from '../DiscoverService'
-
-const SOCIAL_VIEW_MAPPING: DiscoverRemoteViewMapping = {
-  x: FeedViewType.SocialMedia,
-  instagram: FeedViewType.Pictures,
-}
-
-function buildQueryVariants(query: string, maxLength: number): string[] {
-  const variants: string[] = []
-  const pushVariant = (value: string): void => {
-    const trimmed = value.trim().replace(/^@+/, '')
-    if (!trimmed || trimmed.length > maxLength || variants.includes(trimmed)) {
-      return
-    }
-    variants.push(trimmed)
-  }
-
-  pushVariant(query)
-  pushVariant(query.toLowerCase())
-  pushVariant(query.replace(/\s+/g, ''))
-  pushVariant(query.replace(/\s+/g, '').toLowerCase())
-  return variants
-}
-
-function buildProfileAnchorSnippet(
-  profileUrl: string,
-  username: string,
-  title: string,
-  imageUrl: string,
-  followers: string,
-): string {
-  const safeUrl = escapeHtml(profileUrl)
-  const safeImageUrl = imageUrl ? ` <img src="${escapeHtml(imageUrl)}" />` : ''
-  const safeUsername = username ? ` <span>@${escapeHtml(username)}</span>` : ''
-  const safeTitle = title ? ` <span>${escapeHtml(title)}</span>` : ''
-  const safeFollowers = followers ? ` <span>${escapeHtml(followers)}</span>` : ''
-  return `<a href="${safeUrl}">${safeImageUrl}${safeUsername}${safeTitle}${safeFollowers}</a>`
-}
+import {
+  SOCIAL_VIEW_MAPPING,
+  buildProfileAnchorSnippet,
+  buildSocialQueryVariants,
+  withConfiguredRssHubCandidate,
+} from './SharedSearchHelpers'
 
 export async function searchXUsers(query: string, rsshubBase: string): Promise<ResolvedDiscoverCandidate[]> {
   const clean = query.trim().replace(/^@+/, '')
   const searchSeeds = await searchXUsersByNitter(clean)
+
   const fallbackSeeds: DiscoverRemoteProfileSeed[] = []
-  for (const username of buildQueryVariants(query, 15)) {
+  for (const username of buildSocialQueryVariants(query, 15)) {
     const seed = await fetchXProfileSeed(username)
     if (seed) {
       fallbackSeeds.push(seed)
@@ -119,6 +86,7 @@ async function searchXUsersByNitter(query: string): Promise<DiscoverRemoteProfil
         break
       }
     } catch (_) {
+      // Try the next Nitter instance.
     } finally {
       request.destroy()
     }
@@ -149,7 +117,7 @@ async function fetchXProfileSeed(username: string): Promise<DiscoverRemoteProfil
     }
 
     const text = String(response.result)
-    if (/Page not found\s*\/\s*X/i.test(text) || /Hmm\.\.\.this page doesn['']t exist/i.test(text)) {
+    if (/Page not found\s*\/\s*X/i.test(text) || /Hmm\.\.\.this page doesn[’']t exist/i.test(text)) {
       return undefined
     }
 
@@ -169,21 +137,5 @@ async function fetchXProfileSeed(username: string): Promise<DiscoverRemoteProfil
     return undefined
   } finally {
     request.destroy()
-  }
-}
-
-function withConfiguredRssHubCandidate(candidate: ResolvedDiscoverCandidate, rsshubBase: string): ResolvedDiscoverCandidate {
-  if (!candidate.targetUrl.includes('/x/user/') && !candidate.targetUrl.includes('/instagram/user/')) {
-    return candidate
-  }
-
-  return {
-    targetUrl: candidate.targetUrl.replace(/^https?:\/\/[^/]+/i, rsshubBase),
-    targetTitle: candidate.targetTitle,
-    targetView: candidate.targetView,
-    description: candidate.description,
-    siteUrl: candidate.siteUrl,
-    sourceKind: candidate.sourceKind,
-    imageUrl: candidate.imageUrl,
   }
 }
