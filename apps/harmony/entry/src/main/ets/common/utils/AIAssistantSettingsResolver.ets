@@ -29,6 +29,16 @@ export interface HarmonyAISettingsPatch {
   aiTranslationAutoTrigger?: boolean
 }
 
+export interface AIAssistantSettingsPatch {
+  provider?: AIProvider
+  apiKeys?: Record<string, string>
+  baseUrl?: string
+  model?: string
+  enableSystemPrompt?: boolean
+  systemPromptTemplate?: string
+  chatPersonaPrompt?: string
+}
+
 export const AI_PROVIDER_ORDER: AIProvider[] = [
   'minimax',
   'deepseek',
@@ -162,4 +172,16 @@ export function patchHarmonyAISettings(settings: HarmonySettings, patch: Harmony
 
 export function translationLanguageLabel(value: AITargetLanguage): string {
   return TRANSLATION_LANGUAGE_OPTIONS.find((option: SelectOption) => option.value === value)?.label ?? value
+}
+
+export function patchAIAssistantSettings(settings: AIAssistantSettings, patch: AIAssistantSettingsPatch): AIAssistantSettings {
+  return {
+    provider: patch.provider ?? settings.provider,
+    apiKeys: patch.apiKeys ?? settings.apiKeys,
+    baseUrl: patch.baseUrl ?? settings.baseUrl,
+    model: patch.model ?? settings.model,
+    enableSystemPrompt: patch.enableSystemPrompt ?? settings.enableSystemPrompt,
+    systemPromptTemplate: patch.systemPromptTemplate ?? settings.systemPromptTemplate,
+    chatPersonaPrompt: patch.chatPersonaPrompt ?? settings.chatPersonaPrompt,
+  }
 }

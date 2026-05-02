@@ -1,0 +1,12 @@
+export const AI_PANEL_ROW_MIN_HEIGHT: number = 56
+export const AI_PANEL_ICON_SIZE: number = 22
+export const AI_PANEL_TITLE_SIZE: number = 15
+export const AI_PANEL_SUBTITLE_SIZE: number = 12
+export const AI_PANEL_HINT_SIZE: number = 12
+export const AI_PANEL_ROW_TEXT_SPACING: number = 2
+export const AI_PANEL_ROW_PADDING_HORIZONTAL: number = 12
+export const AI_PANEL_ROW_PADDING_VERTICAL: number = 8
+export const AI_PANEL_INPUT_HEIGHT: number = 36
+export const AI_PANEL_HANDLE_TOP_PADDING: number = 10
+export const AI_PANEL_HANDLE_BOTTOM_PADDING: number = 8
+export const AI_PANEL_SECTION_SPACING: number = 14

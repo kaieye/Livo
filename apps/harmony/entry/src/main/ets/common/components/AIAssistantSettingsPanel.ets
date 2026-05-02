@@ -1,4 +1,3 @@
-import { SymbolGlyphModifier } from '@kit.ArkUI'
 import { AppRepository } from '../data/AppRepository'
 import {
   AIAssistantSettings,
@@ -17,41 +16,27 @@ import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import {
-  aiModelOptions,
+  AI_PANEL_HANDLE_BOTTOM_PADDING,
+  AI_PANEL_HANDLE_TOP_PADDING,
+  AI_PANEL_ICON_SIZE,
+  AI_PANEL_ROW_MIN_HEIGHT,
+  AI_PANEL_ROW_PADDING_HORIZONTAL,
+  AI_PANEL_ROW_PADDING_VERTICAL,
+  AI_PANEL_SECTION_SPACING,
+  AI_PANEL_TITLE_SIZE,
+} from '../ui/AIPanelTokens'
+import {
   aiProviderDefinition,
-  aiProviderOptions,
   copyApiKeys,
+  patchAIAssistantSettings,
   patchHarmonyAISettings,
   resolveAIAssistantState,
   resolveNextAIModel,
-  SelectOption,
-  TRANSLATION_LANGUAGE_OPTIONS,
-  translationLanguageLabel,
 } from '../utils/AIAssistantSettingsResolver'
-
-const PANEL_ROW_MIN_HEIGHT: number = 56
-const PANEL_ICON_SIZE: number = 22
-const PANEL_TITLE_SIZE: number = 15
-const PANEL_SUBTITLE_SIZE: number = 12
-const PANEL_HINT_SIZE: number = 12
-const PANEL_HANDLE_TOP_PADDING: number = 10
-const PANEL_HANDLE_BOTTOM_PADDING: number = 8
-const PANEL_ROW_TEXT_SPACING: number = 2
-const PANEL_SECTION_SPACING: number = 14
-const PANEL_ROW_PADDING_HORIZONTAL: number = 12
-const PANEL_ROW_PADDING_VERTICAL: number = 8
-const INPUT_HEIGHT: number = 36
-
-@Builder
-function AIPanelHeader(title: string, theme: ThemePalette) {
-  PageHeader({
-    title,
-    theme,
-    titleSize: 20,
-    topPadding: 0,
-    bottomPadding: 0,
-  })
-}
+import { TranslationFeatureCard } from './TranslationFeatureCard'
+import { SummaryFeatureCard } from './SummaryFeatureCard'
+import { AIConfigInputCard } from './AIConfigInputCard'
+import { SystemPromptCard } from './SystemPromptCard'
 
 @Component
 export struct AIAssistantSettingsPanel {
@@ -125,42 +110,21 @@ export struct AIAssistantSettingsPanel {
     })
   }
 
-  private modelOptions(): SelectOption[] {
-    return aiModelOptions(this.providerSelection as AIProvider, this.modelSelection, this.aiConfig.model)
-  }
-
-  private resolveNextModel(provider: AIProvider): string {
-    return resolveNextAIModel(provider, this.modelSelection, this.aiConfig.model)
-  }
-
   private applyModel(value: string): void {
     this.modelSelection = value
-    this.syncAISettings({
-      provider: this.aiConfig.provider,
-      apiKeys: this.aiConfig.apiKeys,
-      baseUrl: this.aiConfig.baseUrl,
-      model: value,
-      enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-      systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-      chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-    })
+    this.syncAISettings(patchAIAssistantSettings(this.aiConfig, { model: value }))
   }
 
   private applyProvider(value: string): void {
     const provider = value as AIProvider
-    const nextModel = this.resolveNextModel(provider)
+    const nextModel = resolveNextAIModel(provider, this.modelSelection, this.aiConfig.model)
     this.providerSelection = provider
     this.modelSelection = nextModel
-    const nextSettings: AIAssistantSettings = {
+    this.syncAISettings(patchAIAssistantSettings(this.aiConfig, {
       provider,
-      apiKeys: this.aiConfig.apiKeys,
       baseUrl: '',
       model: nextModel,
-      enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-      systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-      chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-    }
-    this.syncAISettings(nextSettings)
+    }))
   }
 
   private applyAISummarySwitch(enabled: boolean): void {
@@ -183,22 +147,46 @@ export struct AIAssistantSettingsPanel {
     this.syncGeneralSettings(patchHarmonyAISettings(this.config, { aiSummaryAutoTrigger: value }))
   }
 
+  private updateBaseUrlDraft(nextValue: string): void {
+    this.baseUrlDraft = nextValue
+    this.aiConfig = patchAIAssistantSettings(this.aiConfig, { baseUrl: nextValue })
+  }
+
+  private updateApiKeyDraft(nextValue: string): void {
+    this.apiKeyDraft = nextValue
+    const nextApiKeys: Record<string, string> = copyApiKeys(this.aiConfig.apiKeys)
+    nextApiKeys[this.providerSelection] = nextValue
+    this.aiConfig = patchAIAssistantSettings(this.aiConfig, { apiKeys: nextApiKeys })
+  }
+
+  private updateModelDraft(nextValue: string): void {
+    this.modelSelection = nextValue
+    this.aiConfig = patchAIAssistantSettings(this.aiConfig, { model: nextValue })
+  }
+
+  private updateEnableSystemPrompt(enabled: boolean): void {
+    this.aiConfig = patchAIAssistantSettings(this.aiConfig, { enableSystemPrompt: enabled })
+  }
+
+  private updateSystemPromptTemplate(nextValue: string): void {
+    this.aiConfig = patchAIAssistantSettings(this.aiConfig, { systemPromptTemplate: nextValue })
+  }
+
+  private updateChatPersonaPrompt(nextValue: string): void {
+    this.aiConfig = patchAIAssistantSettings(this.aiConfig, { chatPersonaPrompt: nextValue })
+  }
+
   private persistCurrentDraft(): void {
     const trimmedApiKey = this.apiKeyDraft.trim()
     const trimmedBaseUrl = (this.aiConfig.baseUrl || '').trim()
     const trimmedModel = (this.aiConfig.model || '').trim()
     const nextApiKeys: Record<string, string> = copyApiKeys(this.aiConfig.apiKeys)
     nextApiKeys[this.providerSelection] = trimmedApiKey
-    const nextSettings: AIAssistantSettings = {
-      provider: this.aiConfig.provider,
+    this.syncAISettings(patchAIAssistantSettings(this.aiConfig, {
       apiKeys: nextApiKeys,
       baseUrl: trimmedBaseUrl,
       model: trimmedModel,
-      enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-      systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-      chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-    }
-    this.syncAISettings(nextSettings)
+    }))
   }
 
   private showToast(message: string, duration: number = 3000): void {
@@ -248,290 +236,18 @@ export struct AIAssistantSettingsPanel {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Center)
-    .padding({ top: PANEL_HANDLE_TOP_PADDING, bottom: PANEL_HANDLE_BOTTOM_PADDING })
+    .padding({ top: AI_PANEL_HANDLE_TOP_PADDING, bottom: AI_PANEL_HANDLE_BOTTOM_PADDING })
   }
 
   @Builder
   private PanelHeader() {
-    AIPanelHeader('AI助手', this.theme)
-  }
-
-  @Builder
-  private DividerLine() {
-    Row()
-      .width('92%')
-      .height(0.5)
-      .backgroundColor(this.theme.divider)
-  }
-
-  @Builder
-  private TranslationLanguageMenu() {
-    Menu() {
-      ForEach(TRANSLATION_LANGUAGE_OPTIONS, (option: SelectOption) => {
-        MenuItem({
-          content: option.label,
-          symbolEndIcon: this.config.aiTranslationLanguage === option.value
-            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
-            : undefined,
-        })
-          .selected(this.config.aiTranslationLanguage === option.value)
-          .onChange((selected: boolean) => {
-            if (selected && option.value !== this.config.aiTranslationLanguage) {
-              this.patchTranslationLanguage(option.value as AITargetLanguage)
-            }
-          })
-      }, (option: SelectOption) => option.value)
-    }
-  }
-
-  @Builder
-  private SummaryLanguageMenu() {
-    Menu() {
-      ForEach(TRANSLATION_LANGUAGE_OPTIONS, (option: SelectOption) => {
-        MenuItem({
-          content: option.label,
-          symbolEndIcon: this.config.aiTranslationLanguage === option.value
-            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
-            : undefined,
-        })
-          .selected(this.config.aiTranslationLanguage === option.value)
-          .onChange((selected: boolean) => {
-            if (selected && option.value !== this.config.aiTranslationLanguage) {
-              this.patchTranslationLanguage(option.value as AITargetLanguage)
-            }
-          })
-      }, (option: SelectOption) => option.value)
-    }
-  }
-
-  @Builder
-  private TranslationFeatureCard(iconDelay: number) {
-    Column() {
-      // 语言选择行（带菜单）
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.translate'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay))
-
-        Text('目标语言')
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-          .layoutWeight(1)
-
-        Row({ space: 4 }) {
-          Text(translationLanguageLabel(this.config.aiTranslationLanguage))
-            .fontSize(PANEL_HINT_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(1)
-
-          SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
-            .fontSize(11)
-            .fontColor([this.theme.textMuted])
-        }
-        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-        .bindMenu(this.TranslationLanguageMenu())
-      }
-      .width('100%')
-      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-      .padding({
-        left: PANEL_ROW_PADDING_HORIZONTAL,
-        right: PANEL_ROW_PADDING_HORIZONTAL,
-        top: PANEL_ROW_PADDING_VERTICAL,
-        bottom: PANEL_ROW_PADDING_VERTICAL,
-      })
-
-      this.DividerLine()
-
-      // 自动触发行
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.bolt_fill'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay + 1))
-
-        Column({ space: PANEL_ROW_TEXT_SPACING }) {
-          Text('打开文章自动执行')
-            .fontSize(PANEL_TITLE_SIZE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-
-          Text('进入文章页时自动触发，无需手动点击')
-            .fontSize(PANEL_SUBTITLE_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        Toggle({ type: ToggleType.Switch, isOn: this.config.aiTranslationAutoTrigger })
-          .selectedColor(this.theme.accent)
-          .switchPointColor('#FFFFFF')
-          .onChange((isOn: boolean) => this.patchTranslationAutoTrigger(isOn))
-      }
-      .width('100%')
-      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-      .padding({
-        left: PANEL_ROW_PADDING_HORIZONTAL,
-        right: PANEL_ROW_PADDING_HORIZONTAL,
-        top: PANEL_ROW_PADDING_VERTICAL,
-        bottom: PANEL_ROW_PADDING_VERTICAL,
-      })
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
-      .onClick(() => this.patchTranslationAutoTrigger(!this.config.aiTranslationAutoTrigger))
-
-      this.DividerLine()
-
-      // 功能开关行
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.doc_text_fill'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay + 2))
-
-        Text('开启 AI 翻译')
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-          .layoutWeight(1)
-
-        Toggle({ type: ToggleType.Switch, isOn: this.config.aiTranslationEnabled })
-          .selectedColor(this.theme.accent)
-          .switchPointColor('#FFFFFF')
-          .onChange((isOn: boolean) => this.patchTranslationEnabled(isOn))
-      }
-      .width('100%')
-      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-      .padding({
-        left: PANEL_ROW_PADDING_HORIZONTAL,
-        right: PANEL_ROW_PADDING_HORIZONTAL,
-        top: PANEL_ROW_PADDING_VERTICAL,
-        bottom: PANEL_ROW_PADDING_VERTICAL,
-      })
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
-      .onClick(() => this.patchTranslationEnabled(!this.config.aiTranslationEnabled))
-    }
-    .width('100%')
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
-  }
-
-  @Builder
-  private SummaryFeatureCard(iconDelay: number) {
-    Column() {
-      // 语言选择行（摘要输出语言，复用翻译语言设置）
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.translate'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay))
-
-        Text('输出语言')
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-          .layoutWeight(1)
-
-        Row({ space: 4 }) {
-          Text(translationLanguageLabel(this.config.aiTranslationLanguage))
-            .fontSize(PANEL_HINT_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(1)
-
-          SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
-            .fontSize(11)
-            .fontColor([this.theme.textMuted])
-        }
-        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-        .bindMenu(this.SummaryLanguageMenu())
-      }
-      .width('100%')
-      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-      .padding({
-        left: PANEL_ROW_PADDING_HORIZONTAL,
-        right: PANEL_ROW_PADDING_HORIZONTAL,
-        top: PANEL_ROW_PADDING_VERTICAL,
-        bottom: PANEL_ROW_PADDING_VERTICAL,
-      })
-
-      this.DividerLine()
-
-      // 自动触发行
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.bolt_fill'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay + 1))
-
-        Column({ space: PANEL_ROW_TEXT_SPACING }) {
-          Text('打开文章自动执行')
-            .fontSize(PANEL_TITLE_SIZE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-
-          Text('进入文章页时自动触发，无需手动点击')
-            .fontSize(PANEL_SUBTITLE_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        Toggle({ type: ToggleType.Switch, isOn: this.config.aiSummaryAutoTrigger })
-          .selectedColor(this.theme.accent)
-          .switchPointColor('#FFFFFF')
-          .onChange((isOn: boolean) => this.patchSummaryAutoTrigger(isOn))
-      }
-      .width('100%')
-      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-      .padding({
-        left: PANEL_ROW_PADDING_HORIZONTAL,
-        right: PANEL_ROW_PADDING_HORIZONTAL,
-        top: PANEL_ROW_PADDING_VERTICAL,
-        bottom: PANEL_ROW_PADDING_VERTICAL,
-      })
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
-      .onClick(() => this.patchSummaryAutoTrigger(!this.config.aiSummaryAutoTrigger))
-
-      this.DividerLine()
-
-      // 功能开关行
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.ellipsis_message_fill'))
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay + 2))
-
-        Text('开启 AI 摘要')
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-          .layoutWeight(1)
-
-        Toggle({ type: ToggleType.Switch, isOn: this.config.aiSummaryEnabled })
-          .selectedColor(this.theme.accent)
-          .switchPointColor('#FFFFFF')
-          .onChange((isOn: boolean) => this.applyAISummarySwitch(isOn))
-      }
-      .width('100%')
-      .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-      .padding({
-        left: PANEL_ROW_PADDING_HORIZONTAL,
-        right: PANEL_ROW_PADDING_HORIZONTAL,
-        top: PANEL_ROW_PADDING_VERTICAL,
-        bottom: PANEL_ROW_PADDING_VERTICAL,
-      })
-      .clickEffect({ level: ClickEffectLevel.MIDDLE })
-      .onClick(() => this.applyAISummarySwitch(!this.config.aiSummaryEnabled))
-    }
-    .width('100%')
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_LG)
-    .border({ width: 0.8, color: this.theme.divider })
+    PageHeader({
+      title: 'AI助手',
+      theme: this.theme,
+      titleSize: 20,
+      topPadding: 0,
+      bottomPadding: 0,
+    })
   }
 
   @Builder
@@ -546,317 +262,15 @@ export struct AIAssistantSettingsPanel {
   }
 
   @Builder
-  private ProviderOptionMenu() {
-    Menu() {
-      ForEach(aiProviderOptions(), (option: SelectOption) => {
-        MenuItem({
-          content: option.label,
-          symbolEndIcon: this.providerSelection === option.value
-            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
-            : undefined,
-        })
-          .selected(this.providerSelection === option.value)
-          .onChange((selected: boolean) => {
-            if (selected && option.value !== this.providerSelection) {
-              this.applyProvider(option.value)
-            }
-          })
-      }, (option: SelectOption) => option.value)
-    }
-  }
-
-  @Builder
-  private ModelOptionMenu() {
-    Menu() {
-      ForEach(this.modelOptions(), (option: SelectOption) => {
-        MenuItem({
-          content: option.label,
-          symbolEndIcon: this.modelSelection === option.value
-            ? new SymbolGlyphModifier($r('sys.symbol.checkmark'))
-            : undefined,
-        })
-          .selected(this.modelSelection === option.value)
-          .onChange((selected: boolean) => {
-            if (selected && option.value !== this.modelSelection) {
-              this.applyModel(option.value)
-            }
-          })
-      }, (option: SelectOption) => option.value)
-    }
-  }
-
-  @Builder
-  private ProviderActionRow(iconDelay: number = 0) {
-    Row({ space: 12 }) {
-      SymbolGlyph($r('sys.symbol.gearshape'))
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Text('模型提供商')
-        .fontSize(PANEL_TITLE_SIZE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .layoutWeight(1)
-
-      Row() {
-        Text(aiProviderDefinition(this.providerSelection as AIProvider).label)
-          .fontSize(PANEL_HINT_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
-          .fontSize(11)
-          .fontColor([this.theme.textMuted])
-          .margin({ left: 7, right: 2, top: 1 })
-      }
-      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-      .bindMenu(this.ProviderOptionMenu())
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  @Builder
-  private ModelActionRow(iconDelay: number = 0) {
-    Row({ space: 12 }) {
-      SymbolGlyph($r('sys.symbol.doc_text'))
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Text('模型')
-        .fontSize(PANEL_TITLE_SIZE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .layoutWeight(1)
-
-      if (this.providerSelection === 'custom') {
-        TextInput({ text: this.modelSelection, placeholder: '如 gpt-4o' })
-          .height(36)
-          .layoutWeight(1)
-          .backgroundColor(this.theme.elevated)
-          .fontColor(this.theme.textPrimary)
-          .placeholderColor(this.theme.textMuted)
-          .fontSize(PANEL_HINT_SIZE)
-          .borderRadius(10)
-          .padding({ left: 10, right: 10 })
-          .textAlign(TextAlign.Center)
-          .onChange((nextValue: string) => {
-            this.modelSelection = nextValue
-            this.aiConfig = {
-              provider: this.aiConfig.provider,
-              apiKeys: this.aiConfig.apiKeys,
-              baseUrl: this.aiConfig.baseUrl,
-              model: nextValue,
-              enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-              systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-              chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-            }
-          })
-      } else {
-        Row() {
-          Text(this.modelSelection)
-            .fontSize(PANEL_HINT_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-          SymbolGlyph($r('sys.symbol.arrowtriangle_down_fill'))
-            .fontSize(11)
-            .fontColor([this.theme.textMuted])
-            .margin({ left: 7, right: 2, top: 1 })
-        }
-        .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-        .bindMenu(this.ModelOptionMenu())
-      }
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  @Builder
-  private ToggleRow(
-    symbol: Resource,
-    title: string,
-    subtitle: string,
-    checked: boolean,
-    onToggle: (nextChecked: boolean) => void,
-    iconDelay: number = 0,
-  ) {
-    Row({ space: 12 }) {
-      SymbolGlyph(symbol)
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text(title)
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        if (subtitle) {
-          Text(subtitle)
-            .fontSize(PANEL_SUBTITLE_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-
-      Toggle({ type: ToggleType.Switch, isOn: checked })
-        .selectedColor(this.theme.accent)
-        .switchPointColor('#FFFFFF')
-        .onChange((isOn: boolean) => onToggle(isOn))
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
-    .onClick(() => onToggle(!checked))
-  }
-
-  @Builder
-  private BaseUrlRow(iconDelay: number = 0) {
-    Row({ space: 12 }) {
-      SymbolGlyph($r('sys.symbol.link'))
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Text('Base URL')
-        .fontSize(PANEL_TITLE_SIZE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .width(80)
-        .flexShrink(0)
-
-      TextInput({ text: this.baseUrlDraft, placeholder: '请输入 Base URL' })
-        .height(INPUT_HEIGHT)
-        .layoutWeight(1)
-        .backgroundColor(this.theme.elevated)
-        .fontColor(this.theme.textPrimary)
-        .placeholderColor(this.theme.textMuted)
-        .fontSize(10)
-        .borderRadius(12)
-        .padding({ left: 14, right: 14 })
-        .textAlign(TextAlign.Start)
-        .onChange((nextValue: string) => {
-          this.baseUrlDraft = nextValue
-          this.aiConfig = {
-            provider: this.aiConfig.provider,
-            apiKeys: this.aiConfig.apiKeys,
-            baseUrl: nextValue,
-            model: this.aiConfig.model,
-            enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-            systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-            chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-          }
-        })
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  @Builder
-  private ApiKeyRow(iconDelay: number = 0) {
-    Row({ space: 12 }) {
-      SymbolGlyph($r('sys.symbol.key_horizontal'))
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Text('API Key')
-        .fontSize(PANEL_TITLE_SIZE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.theme.textPrimary)
-        .width(80)
-        .flexShrink(0)
-
-      TextInput({ text: this.apiKeyDraft, placeholder: '请输入 API Key' })
-        .height(36)
-        .layoutWeight(1)
-        .backgroundColor(this.theme.elevated)
-        .fontColor(this.theme.textPrimary)
-        .placeholderColor(this.theme.textMuted)
-        .fontSize(10)
-        .borderRadius(10)
-        .padding({ left: 10, right: 10 })
-        .textAlign(TextAlign.Start)
-        .type(InputType.Password)
-        .showPasswordIcon(true)
-        .onChange((nextValue: string) => {
-          this.apiKeyDraft = nextValue
-          const nextApiKeys: Record<string, string> = copyApiKeys(this.aiConfig.apiKeys)
-          nextApiKeys[this.providerSelection] = nextValue
-          this.aiConfig = {
-            provider: this.aiConfig.provider,
-            apiKeys: nextApiKeys,
-            baseUrl: this.aiConfig.baseUrl,
-            model: this.aiConfig.model,
-            enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-            systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-            chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-          }
-        })
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  @Builder
   private ConnectionTestRow(iconDelay: number = 0) {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.wifi'))
-        .fontSize(PANEL_ICON_SIZE)
+        .fontSize(AI_PANEL_ICON_SIZE)
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
       Text('在线连接测试')
-        .fontSize(PANEL_TITLE_SIZE)
+        .fontSize(AI_PANEL_TITLE_SIZE)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
         .layoutWeight(1)
@@ -874,189 +288,101 @@ export struct AIAssistantSettingsPanel {
         })
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .constraintSize({ minHeight: AI_PANEL_ROW_MIN_HEIGHT })
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
   }
 
   @Builder
-  private InputRow(symbol: Resource, title: string, subtitle: string, value: string, placeholder: string,
-    onChange: (nextValue: string) => void, iconDelay: number = 0, rebuildKey: string = '') {
-    Column({ space: 10 }) {
-      Row({ space: 12 }) {
-        SymbolGlyph(symbol)
-          .fontSize(PANEL_ICON_SIZE)
-          .fontColor([this.theme.accent])
-          .transition(livoMotion.enterIconSpin(iconDelay))
-
-        Column({ space: PANEL_ROW_TEXT_SPACING }) {
-          Text(title)
-            .fontSize(PANEL_TITLE_SIZE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-
-          Text(subtitle)
-            .fontSize(PANEL_SUBTITLE_SIZE)
-            .fontColor(this.theme.textSecondary)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
+  private ActionButtons() {
+    Row({ space: 10 }) {
+      Button('保存 AI 配置')
+        .height(42)
         .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
+        .backgroundColor(this.theme.accent)
+        .fontColor(this.theme.accentText)
+        .fontSize(14)
+        .borderRadius(12)
+        .onClick(() => {
+          this.persistCurrentDraft()
+        })
 
-      TextInput({ text: value, placeholder })
-        .height(INPUT_HEIGHT)
-        .width('100%')
+      Button('重置默认')
+        .height(42)
+        .layoutWeight(1)
         .backgroundColor(this.theme.elevated)
         .fontColor(this.theme.textPrimary)
-        .placeholderColor(this.theme.textMuted)
+        .fontSize(14)
         .borderRadius(12)
-        .padding({ left: 14, right: 14 })
-        .onChange((nextValue: string) => {
-          onChange(nextValue)
+        .onClick(() => {
+          this.syncAISettings(DEFAULT_AI_ASSISTANT_SETTINGS)
         })
     }
     .width('100%')
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
   }
 
   build() {
     Scroll() {
-      Column({ space: PANEL_SECTION_SPACING }) {
+      Column({ space: AI_PANEL_SECTION_SPACING }) {
         this.SheetHandle()
         this.PanelHeader()
 
-        // AI 翻译卡片
         this.FeatureSectionLabel('AI 翻译', 20)
-        this.TranslationFeatureCard(20)
+        TranslationFeatureCard({
+          config: this.config,
+          theme: this.theme,
+          iconDelay: 20,
+          onTranslationEnabledChange: (enabled: boolean) => this.patchTranslationEnabled(enabled),
+          onTranslationAutoTriggerChange: (enabled: boolean) => this.patchTranslationAutoTrigger(enabled),
+          onTranslationLanguageChange: (language: AITargetLanguage) => this.patchTranslationLanguage(language),
+        })
 
-        // AI 摘要卡片
         this.FeatureSectionLabel('AI 摘要', 35)
-        this.SummaryFeatureCard(35)
+        SummaryFeatureCard({
+          config: this.config,
+          theme: this.theme,
+          iconDelay: 35,
+          onSummaryEnabledChange: (enabled: boolean) => this.applyAISummarySwitch(enabled),
+          onSummaryAutoTriggerChange: (enabled: boolean) => this.patchSummaryAutoTrigger(enabled),
+          onSummaryLanguageChange: (language: AITargetLanguage) => this.patchTranslationLanguage(language),
+        })
 
-        // 模型配置卡片
-        Column() {
-          this.ProviderActionRow(50)
-          this.DividerLine()
-          this.ModelActionRow(51)
-          this.DividerLine()
-          this.BaseUrlRow(52)
-          this.DividerLine()
-          this.ApiKeyRow(53)
-        }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(55))
+        AIConfigInputCard({
+          theme: this.theme,
+          providerSelection: this.providerSelection,
+          modelSelection: this.modelSelection,
+          baseUrlDraft: this.baseUrlDraft,
+          apiKeyDraft: this.apiKeyDraft,
+          aiConfig: this.aiConfig,
+          onProviderChange: (provider: string) => this.applyProvider(provider),
+          onModelChange: (model: string) => {
+            if (this.providerSelection === 'custom') {
+              this.updateModelDraft(model)
+            } else {
+              this.applyModel(model)
+            }
+          },
+          onBaseUrlChange: (baseUrl: string) => this.updateBaseUrlDraft(baseUrl),
+          onApiKeyChange: (apiKey: string) => this.updateApiKeyDraft(apiKey),
+        })
 
         this.ConnectionTestRow(60)
 
-        Column() {
-          this.ToggleRow(
-            $r('sys.symbol.ellipsis_message_fill'),
-            '启用系统提示词',
-            '为 AI 摘要/对话注入系统身份与上下文',
-            this.aiConfig.enableSystemPrompt,
-            (enabled: boolean) => {
-              this.aiConfig = {
-                provider: this.aiConfig.provider,
-                apiKeys: this.aiConfig.apiKeys,
-                baseUrl: this.aiConfig.baseUrl,
-                model: this.aiConfig.model,
-                enableSystemPrompt: enabled,
-                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-              }
-            },
-            65,
-          )
-          this.DividerLine()
-          this.InputRow(
-            $r('sys.symbol.list_bullet_square_fill'),
-            '系统提示词模板',
-            '支持占位符 {{context}} / {{persona}}',
-            this.aiConfig.systemPromptTemplate,
-            '请输入系统提示词模板',
-            (nextValue: string) => {
-              this.aiConfig = {
-                provider: this.aiConfig.provider,
-                apiKeys: this.aiConfig.apiKeys,
-                baseUrl: this.aiConfig.baseUrl,
-                model: this.aiConfig.model,
-                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-                systemPromptTemplate: nextValue,
-                chatPersonaPrompt: this.aiConfig.chatPersonaPrompt,
-              }
-            },
-            66,
-          )
-          this.DividerLine()
-          this.InputRow(
-            $r('sys.symbol.person'),
-            'AI 个性化 Prompt',
-            '作为固定提示词附加到每次请求',
-            this.aiConfig.chatPersonaPrompt,
-            '请输入个性化 Prompt',
-            (nextValue: string) => {
-              this.aiConfig = {
-                provider: this.aiConfig.provider,
-                apiKeys: this.aiConfig.apiKeys,
-                baseUrl: this.aiConfig.baseUrl,
-                model: this.aiConfig.model,
-                enableSystemPrompt: this.aiConfig.enableSystemPrompt,
-                systemPromptTemplate: this.aiConfig.systemPromptTemplate,
-                chatPersonaPrompt: nextValue,
-              }
-            },
-            67,
-          )
-        }
-        .width('100%')
-        .backgroundColor(this.theme.surface)
-        .borderRadius(CARD_RADIUS_LG)
-        .border({ width: 0.8, color: this.theme.divider })
-        .transition(livoMotion.enterSoft(70))
+        SystemPromptCard({
+          theme: this.theme,
+          aiConfig: this.aiConfig,
+          onEnableSystemPromptChange: (enabled: boolean) => this.updateEnableSystemPrompt(enabled),
+          onSystemPromptTemplateChange: (template: string) => this.updateSystemPromptTemplate(template),
+          onChatPersonaPromptChange: (persona: string) => this.updateChatPersonaPrompt(persona),
+        })
 
-        Row({ space: 10 }) {
-          Button('保存 AI 配置')
-            .height(42)
-            .layoutWeight(1)
-            .backgroundColor(this.theme.accent)
-            .fontColor(this.theme.accentText)
-            .fontSize(14)
-            .borderRadius(12)
-            .onClick(() => {
-              this.persistCurrentDraft()
-            })
-
-          Button('重置默认')
-            .height(42)
-            .layoutWeight(1)
-            .backgroundColor(this.theme.elevated)
-            .fontColor(this.theme.textPrimary)
-            .fontSize(14)
-            .borderRadius(12)
-            .onClick(() => {
-              this.syncAISettings(DEFAULT_AI_ASSISTANT_SETTINGS)
-            })
-        }
-        .width('100%')
+        this.ActionButtons()
 
         Text(this.saveHint)
           .fontSize(12)

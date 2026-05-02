@@ -2,19 +2,20 @@ import { AIAssistantSettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG } from '../ui/UiTokens'
-
-const PANEL_ROW_MIN_HEIGHT: number = 56
-const PANEL_ICON_SIZE: number = 22
-const PANEL_TITLE_SIZE: number = 15
-const PANEL_SUBTITLE_SIZE: number = 12
-const PANEL_ROW_TEXT_SPACING: number = 2
-const PANEL_ROW_PADDING_HORIZONTAL: number = 12
-const PANEL_ROW_PADDING_VERTICAL: number = 8
-const INPUT_HEIGHT: number = 36
+import {
+  AI_PANEL_ICON_SIZE,
+  AI_PANEL_INPUT_HEIGHT,
+  AI_PANEL_ROW_MIN_HEIGHT,
+  AI_PANEL_ROW_PADDING_HORIZONTAL,
+  AI_PANEL_ROW_PADDING_VERTICAL,
+  AI_PANEL_ROW_TEXT_SPACING,
+  AI_PANEL_SUBTITLE_SIZE,
+  AI_PANEL_TITLE_SIZE,
+} from '../ui/AIPanelTokens'
 
 @Component
 export struct SystemPromptCard {
-  @LocalStorageLink('theme') theme: ThemePalette = ThemeService.currentPalette()
+  @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop aiConfig: AIAssistantSettings = {} as AIAssistantSettings
   onEnableSystemPromptChange: (enabled: boolean) => void = () => {}
   onSystemPromptTemplateChange: (template: string) => void = () => {}
@@ -31,19 +32,19 @@ export struct SystemPromptCard {
   ) {
     Row({ space: 12 }) {
       SymbolGlyph(symbol)
-        .fontSize(PANEL_ICON_SIZE)
+        .fontSize(AI_PANEL_ICON_SIZE)
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
+      Column({ space: AI_PANEL_ROW_TEXT_SPACING }) {
         Text(title)
-          .fontSize(PANEL_TITLE_SIZE)
+          .fontSize(AI_PANEL_TITLE_SIZE)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.theme.textPrimary)
 
         if (subtitle) {
           Text(subtitle)
-            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontSize(AI_PANEL_SUBTITLE_SIZE)
             .fontColor(this.theme.textSecondary)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -58,12 +59,12 @@ export struct SystemPromptCard {
         .onChange((isOn: boolean) => onToggle(isOn))
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .constraintSize({ minHeight: AI_PANEL_ROW_MIN_HEIGHT })
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
@@ -77,18 +78,18 @@ export struct SystemPromptCard {
     Column({ space: 10 }) {
       Row({ space: 12 }) {
         SymbolGlyph(symbol)
-          .fontSize(PANEL_ICON_SIZE)
+          .fontSize(AI_PANEL_ICON_SIZE)
           .fontColor([this.theme.accent])
           .transition(livoMotion.enterIconSpin(iconDelay))
 
-        Column({ space: PANEL_ROW_TEXT_SPACING }) {
+        Column({ space: AI_PANEL_ROW_TEXT_SPACING }) {
           Text(title)
-            .fontSize(PANEL_TITLE_SIZE)
+            .fontSize(AI_PANEL_TITLE_SIZE)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.theme.textPrimary)
 
           Text(subtitle)
-            .fontSize(PANEL_SUBTITLE_SIZE)
+            .fontSize(AI_PANEL_SUBTITLE_SIZE)
             .fontColor(this.theme.textSecondary)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -99,7 +100,7 @@ export struct SystemPromptCard {
       .width('100%')
 
       TextInput({ text: value, placeholder })
-        .height(INPUT_HEIGHT)
+        .height(AI_PANEL_INPUT_HEIGHT)
         .width('100%')
         .backgroundColor(this.theme.elevated)
         .fontColor(this.theme.textPrimary)
@@ -112,10 +113,10 @@ export struct SystemPromptCard {
     }
     .width('100%')
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)

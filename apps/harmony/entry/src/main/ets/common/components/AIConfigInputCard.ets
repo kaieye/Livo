@@ -4,26 +4,24 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG } from '../ui/UiTokens'
 import {
+  AI_PANEL_ICON_SIZE,
+  AI_PANEL_HINT_SIZE,
+  AI_PANEL_INPUT_HEIGHT,
+  AI_PANEL_ROW_MIN_HEIGHT,
+  AI_PANEL_ROW_PADDING_HORIZONTAL,
+  AI_PANEL_ROW_PADDING_VERTICAL,
+  AI_PANEL_TITLE_SIZE,
+} from '../ui/AIPanelTokens'
+import {
   aiModelOptions,
   aiProviderDefinition,
   aiProviderOptions,
-  resolveNextAIModel,
   SelectOption,
 } from '../utils/AIAssistantSettingsResolver'
 
-const PANEL_ROW_MIN_HEIGHT: number = 56
-const PANEL_ICON_SIZE: number = 22
-const PANEL_TITLE_SIZE: number = 15
-const PANEL_SUBTITLE_SIZE: number = 12
-const PANEL_HINT_SIZE: number = 12
-const PANEL_ROW_TEXT_SPACING: number = 2
-const PANEL_ROW_PADDING_HORIZONTAL: number = 12
-const PANEL_ROW_PADDING_VERTICAL: number = 8
-const INPUT_HEIGHT: number = 36
-
 @Component
 export struct AIConfigInputCard {
-  @LocalStorageLink('theme') theme: ThemePalette = ThemeService.currentPalette()
+  @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop providerSelection: string = 'deepseek'
   @Prop modelSelection: string = 'deepseek-chat'
   @Prop baseUrlDraft: string = ''
@@ -86,19 +84,19 @@ export struct AIConfigInputCard {
   private ProviderRow(iconDelay: number = 0) {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.gearshape'))
-        .fontSize(PANEL_ICON_SIZE)
+        .fontSize(AI_PANEL_ICON_SIZE)
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
       Text('模型提供商')
-        .fontSize(PANEL_TITLE_SIZE)
+        .fontSize(AI_PANEL_TITLE_SIZE)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
         .layoutWeight(1)
 
       Row() {
         Text(aiProviderDefinition(this.providerSelection as AIProvider).label)
-          .fontSize(PANEL_HINT_SIZE)
+          .fontSize(AI_PANEL_HINT_SIZE)
           .fontColor(this.theme.textSecondary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -112,12 +110,12 @@ export struct AIConfigInputCard {
       .bindMenu(this.ProviderOptionMenu())
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .constraintSize({ minHeight: AI_PANEL_ROW_MIN_HEIGHT })
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
@@ -127,12 +125,12 @@ export struct AIConfigInputCard {
   private ModelRow(iconDelay: number = 0) {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.doc_text'))
-        .fontSize(PANEL_ICON_SIZE)
+        .fontSize(AI_PANEL_ICON_SIZE)
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
       Text('模型')
-        .fontSize(PANEL_TITLE_SIZE)
+        .fontSize(AI_PANEL_TITLE_SIZE)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
         .layoutWeight(1)
@@ -144,7 +142,7 @@ export struct AIConfigInputCard {
           .backgroundColor(this.theme.elevated)
           .fontColor(this.theme.textPrimary)
           .placeholderColor(this.theme.textMuted)
-          .fontSize(PANEL_HINT_SIZE)
+          .fontSize(AI_PANEL_HINT_SIZE)
           .borderRadius(10)
           .padding({ left: 10, right: 10 })
           .textAlign(TextAlign.Center)
@@ -154,7 +152,7 @@ export struct AIConfigInputCard {
       } else {
         Row() {
           Text(this.modelSelection)
-            .fontSize(PANEL_HINT_SIZE)
+            .fontSize(AI_PANEL_HINT_SIZE)
             .fontColor(this.theme.textSecondary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -169,12 +167,12 @@ export struct AIConfigInputCard {
       }
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .constraintSize({ minHeight: AI_PANEL_ROW_MIN_HEIGHT })
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
@@ -184,19 +182,19 @@ export struct AIConfigInputCard {
   private BaseUrlRow(iconDelay: number = 0) {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.link'))
-        .fontSize(PANEL_ICON_SIZE)
+        .fontSize(AI_PANEL_ICON_SIZE)
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
       Text('Base URL')
-        .fontSize(PANEL_TITLE_SIZE)
+        .fontSize(AI_PANEL_TITLE_SIZE)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
         .width(80)
         .flexShrink(0)
 
       TextInput({ text: this.baseUrlDraft, placeholder: '请输入 Base URL' })
-        .height(INPUT_HEIGHT)
+        .height(AI_PANEL_INPUT_HEIGHT)
         .layoutWeight(1)
         .backgroundColor(this.theme.elevated)
         .fontColor(this.theme.textPrimary)
@@ -211,12 +209,12 @@ export struct AIConfigInputCard {
         })
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .constraintSize({ minHeight: AI_PANEL_ROW_MIN_HEIGHT })
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
@@ -226,12 +224,12 @@ export struct AIConfigInputCard {
   private ApiKeyRow(iconDelay: number = 0) {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.key_horizontal'))
-        .fontSize(PANEL_ICON_SIZE)
+        .fontSize(AI_PANEL_ICON_SIZE)
         .fontColor([this.theme.accent])
         .transition(livoMotion.enterIconSpin(iconDelay))
 
       Text('API Key')
-        .fontSize(PANEL_TITLE_SIZE)
+        .fontSize(AI_PANEL_TITLE_SIZE)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.theme.textPrimary)
         .width(80)
@@ -255,12 +253,12 @@ export struct AIConfigInputCard {
         })
     }
     .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
+    .constraintSize({ minHeight: AI_PANEL_ROW_MIN_HEIGHT })
     .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
+      left: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      right: AI_PANEL_ROW_PADDING_HORIZONTAL,
+      top: AI_PANEL_ROW_PADDING_VERTICAL,
+      bottom: AI_PANEL_ROW_PADDING_VERTICAL,
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
