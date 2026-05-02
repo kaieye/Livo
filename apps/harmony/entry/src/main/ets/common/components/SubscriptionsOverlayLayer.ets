@@ -25,51 +25,58 @@ export struct SubscriptionsOverlayLayer {
   onConfigUnsubscribed: () => Promise<void> = async () => {}
 
   build() {
-    Stack() {
-      if (this.activeFeedDetailParams) {
-        Stack() {
-          FeedDetailView({
-            feedId: this.activeFeedDetailParams.feedId,
-            theme: this.theme,
-            onBack: () => { this.onCloseDetail() },
-            onEdit: (feed: Feed) => { this.onEditFeed(feed) },
-            onSubscribe: (payload: FeedRefreshPayload) => { this.onSubscribeFromDetail(payload) },
-            onOpenArticle: (entry: Entry, feed: Feed) => { this.onOpenArticle(entry, feed) },
-          })
+    if (this.activeFeedDetailParams || this.activeFeedConfigParams) {
+      Stack() {
+        if (this.activeFeedDetailParams) {
+          Stack() {
+            FeedDetailView({
+              feedId: this.activeFeedDetailParams.feedId,
+              theme: this.theme,
+              onBack: () => { this.onCloseDetail() },
+              onEdit: (feed: Feed) => { this.onEditFeed(feed) },
+              onSubscribe: (payload: FeedRefreshPayload) => { this.onSubscribeFromDetail(payload) },
+              onOpenArticle: (entry: Entry, feed: Feed) => { this.onOpenArticle(entry, feed) },
+            })
+          }
+          .width('100%')
+          .height('100%')
+          .backgroundColor(this.theme.background)
+          .transition(livoMotion.enterSoft())
+          .zIndex(this.activeFeedConfigParams ? 1 : 2)
         }
-        .width('100%')
-        .height('100%')
-        .backgroundColor(this.theme.background)
-        .transition(livoMotion.enterSoft())
-        .zIndex(this.activeFeedConfigParams ? 1 : 2)
-      }
 
-      if (this.activeFeedConfigParams) {
-        Stack() {
-          FeedSubscribeConfigView({
-            targetUrl: this.activeFeedConfigParams.targetUrl,
-            targetTitle: this.activeFeedConfigParams.targetTitle,
-            targetSiteUrl: this.activeFeedConfigParams.targetSiteUrl,
-            targetImageUrl: this.activeFeedConfigParams.targetImageUrl,
-            targetDescription: this.activeFeedConfigParams.targetDescription,
-            targetCategory: this.activeFeedConfigParams.targetCategory,
-            sourceKind: this.activeFeedConfigParams.sourceKind,
-            initialSelectedView: this.activeFeedConfigParams.initialSelectedView ?? FeedViewType.Articles,
-            theme: this.theme,
-            onBack: () => { this.onConfigBack() },
-            onSubscribed: async () => { await this.onConfigSubscribed() },
-            onSaved: async () => { await this.onConfigSaved() },
-            onUnsubscribed: async () => { await this.onConfigUnsubscribed() },
-          })
+        if (this.activeFeedConfigParams) {
+          Stack() {
+            FeedSubscribeConfigView({
+              targetUrl: this.activeFeedConfigParams.targetUrl,
+              targetTitle: this.activeFeedConfigParams.targetTitle,
+              targetSiteUrl: this.activeFeedConfigParams.targetSiteUrl,
+              targetImageUrl: this.activeFeedConfigParams.targetImageUrl,
+              targetDescription: this.activeFeedConfigParams.targetDescription,
+              targetCategory: this.activeFeedConfigParams.targetCategory,
+              sourceKind: this.activeFeedConfigParams.sourceKind,
+              initialSelectedView: this.activeFeedConfigParams.initialSelectedView ?? FeedViewType.Articles,
+              theme: this.theme,
+              onBack: () => { this.onConfigBack() },
+              onSubscribed: async () => { await this.onConfigSubscribed() },
+              onSaved: async () => { await this.onConfigSaved() },
+              onUnsubscribed: async () => { await this.onConfigUnsubscribed() },
+            })
+          }
+          .width('100%')
+          .height('100%')
+          .backgroundColor(this.theme.background)
+          .transition(livoMotion.enterSoft())
+          .zIndex(3)
         }
-        .width('100%')
-        .height('100%')
-        .backgroundColor(this.theme.background)
-        .transition(livoMotion.enterSoft())
-        .zIndex(3)
       }
+      .width('100%')
+      .height('100%')
+    } else {
+      Row()
+        .width(0)
+        .height(0)
+        .hitTestBehavior(HitTestMode.None)
     }
-    .width('100%')
-    .height('100%')
   }
 }

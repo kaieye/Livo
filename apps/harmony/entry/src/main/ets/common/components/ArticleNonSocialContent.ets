@@ -1,9 +1,18 @@
+import webview from '@ohos.web.webview'
+import { MovingPhotoViewController, photoAccessHelper } from '@kit.MediaLibraryKit'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { ArticleDetailModel, ArticleContentBlock } from '../models/LivoModels'
 import { PictureCarouselMediaItem } from '../utils/PictureGallery'
 import { ContentBlockItemBuilder } from './ContentBlockItemBuilder'
 import { ArticlePictureDetailMedia } from './ArticlePictureDetailMedia'
 
+/**
+ * Renders the non-social article body: optional picture-detail title,
+ * picture media carousel, summary, and the structured content blocks.
+ *
+ * Inline video state lives on the page (because @State must) and is
+ * forwarded into each ContentBlockItemBuilder instance.
+ */
 @Component
 export struct ArticleNonSocialContent {
   @Prop entry: ArticleDetailModel = {} as ArticleDetailModel
@@ -14,9 +23,25 @@ export struct ArticleNonSocialContent {
   @Prop pictureDetailMediaItems: PictureCarouselMediaItem[] = []
   @Prop textBlocks: ArticleContentBlock[] = []
 
-  onMediaAspectRatioChange: (index: number, width: number, height: number) => void = () => {}
-  onActionHintChange: (hint: string) => void = () => {}
+  @Prop activeVideoBlockId: string = ''
+  @Prop activeVideoPlayableUrl: string = ''
+  @Prop activeVideoFallbackUrl: string = ''
+  @Prop isResolvingActiveVideo: boolean = false
+  @Prop inlineVideoPreparingBlockId: string = ''
+  @Prop activeMovingPhoto: photoAccessHelper.MovingPhoto | undefined = undefined
+
+  nativeVideoController: VideoController = new VideoController()
+  movingPhotoController: MovingPhotoViewController = new MovingPhotoViewController()
+  videoWebController: webview.WebviewController = new webview.WebviewController()
+
+  shouldUseInlineMovingPhotoFor: (block: ArticleContentBlock) => boolean = () => false
   renderBlockCheck: (block: ArticleContentBlock, index: number) => boolean = () => false
+  onMediaAspectRatio: (index: number, width: number, height: number) => void = () => {}
+  onActionHint: (hint: string) => void = () => {}
+  onClearMovingPhoto: () => void = () => {}
+  onClearInlineVideoPreparing: (blockId: string) => void = () => {}
+  onOpenImage: (block: ArticleContentBlock) => void = () => {}
+  onOpenVideo: (block: ArticleContentBlock) => void = () => {}
 
   @Builder
   private ContentBlocksList() {
@@ -27,11 +52,24 @@ export struct ArticleNonSocialContent {
             block: block,
             index: index,
             theme: this.theme,
-            mediaAspectRatio: 4 / 5,
-            mediaAspectRatios: this.mediaAspectRatios,
             contentBlocks: this.entry.contentBlocks,
-            onMediaAspectRatioChange: (idx, w, h) => this.onMediaAspectRatioChange(idx, w, h),
-            onActionHintChange: (hint) => this.onActionHintChange(hint),
+            mediaAspectRatios: this.mediaAspectRatios,
+            activeVideoBlockId: this.activeVideoBlockId,
+            activeVideoPlayableUrl: this.activeVideoPlayableUrl,
+            activeVideoFallbackUrl: this.activeVideoFallbackUrl,
+            isResolvingActiveVideo: this.isResolvingActiveVideo,
+            inlineVideoPreparingBlockId: this.inlineVideoPreparingBlockId,
+            activeMovingPhoto: this.activeMovingPhoto,
+            shouldUseInlineMovingPhoto: this.shouldUseInlineMovingPhotoFor(block),
+            nativeVideoController: this.nativeVideoController,
+            movingPhotoController: this.movingPhotoController,
+            videoWebController: this.videoWebController,
+            onMediaAspectRatio: (idx: number, w: number, h: number) => this.onMediaAspectRatio(idx, w, h),
+            onActionHint: (hint: string) => this.onActionHint(hint),
+            onClearMovingPhoto: () => this.onClearMovingPhoto(),
+            onClearInlineVideoPreparing: (blockId: string) => this.onClearInlineVideoPreparing(blockId),
+            onOpenImage: (b: ArticleContentBlock) => this.onOpenImage(b),
+            onOpenVideo: (b: ArticleContentBlock) => this.onOpenVideo(b),
           })
         }
       }, (block: ArticleContentBlock) => block.id)
@@ -48,7 +86,7 @@ export struct ArticleNonSocialContent {
   }
 
   build() {
-    Column() {
+    Column({ space: 20 }) {
       if (this.isPictureDetail && (this.entry.title || '').trim()) {
         Text(this.entry.title)
           .fontSize(16)
@@ -78,5 +116,6 @@ export struct ArticleNonSocialContent {
       this.ContentBlocksList()
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
   }
 }
