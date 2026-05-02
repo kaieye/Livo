@@ -1,8 +1,6 @@
 | 文件名                                                                  | 代码行数 |
 | ----------------------------------------------------------------------- | -------- |
 | entry/src/main/ets/pages/ArticleDetail.ets                              | 1294     |
-| entry/src/main/ets/common/components/AIAssistantSettingsPanel.ets       | 1085     |
-| entry/src/main/ets/common/components/SubscriptionsContent.ets           | 947      |
 | entry/src/main/ets/common/services/DiscoverRemoteSearchService.ets      | 946      |
 | entry/src/main/ets/common/services/RssFeedService.ets                   | 943      |
 | entry/src/main/ets/common/models/LivoModels.ets                         | 934      |
