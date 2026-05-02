@@ -1,12 +1,14 @@
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
+import { resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import {
-  extractEntryGalleryImageUrls,
-  extractPictureCarouselMediaUrls,
-  resolvePictureCarouselMediaItems,
-} from '../utils/PictureGallery'
-import { buildArticleContentBlocks, buildPictureDetailContentBlocks, extractSupportedVideoUrls } from './ArticleContentBuilder'
-import { formatPublishedAt, viewDefinitionOf } from './FeedViewUtils'
-import { selectPictureCarouselMediaUrls, selectPictureMediaUrls } from './MediaUrlUtils'
+  buildArticleContentBlocks,
+  buildMediaContentBlocks,
+  buildPictureDetailContentBlocks,
+  extractSupportedVideoUrls,
+  resolveEntryMediaContext,
+} from './ArticleContentBuilder'
+import { feedSiteUrl, formatPublishedAt, viewDefinitionOf } from './FeedViewUtils'
+import { selectPictureMediaUrls } from './MediaUrlUtils'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
@@ -19,6 +21,7 @@ import {
 } from './LivoTypes'
 
 export * from './LivoTypes'
+export * from './LivoDefaults'
 export * from './FeedViewUtils'
 export * from './MediaUrlUtils'
 export { isLegacyPlainArticleContent, extractSupportedVideoUrls } from './ArticleContentBuilder'
@@ -31,7 +34,7 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
     description: feed.description ?? '等待补充订阅描述',
     category: feed.category ?? '未分类',
     url: feed.url,
-    siteUrl: feed.siteUrl ?? feed.url,
+    siteUrl: feedSiteUrl(feed),
     imageUrl: feed.imageUrl ?? '',
     unreadLabel: `${feed.unreadCount} 未读`,
     unreadCount: feed.unreadCount,
@@ -43,16 +46,10 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
 
 export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
-  const pictureMediaUrls = extractEntryGalleryImageUrls({
-    summary: entry.summary,
-    content: entry.content,
-    articleUrl: entry.url,
-    siteUrl: feed.siteUrl ?? feed.url,
-    mediaUrls: entry.mediaUrls ?? [],
-  })
+  const mediaCtx = resolveEntryMediaContext(entry, feed)
   const hasVideoMedia = extractSupportedVideoUrls(
     [entry.title, entry.summary, entry.content, entry.url, ...(entry.mediaUrls ?? [])].join('\n'),
-    entry.url || feed.siteUrl || feed.url,
+    entry.url || feedSiteUrl(feed),
     entry.url,
   ).length > 0
 
@@ -67,7 +64,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
       summary: entry.summary,
       content: entry.content,
       articleUrl: entry.url,
-      siteUrl: feed.siteUrl ?? feed.url,
+      siteUrl: feedSiteUrl(feed),
       mediaUrls: entry.mediaUrls ?? [],
     }),
     feedImageUrl: feed.imageUrl ?? '',
@@ -77,14 +74,8 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     publishedLabel: formatPublishedAt(entry.publishedAt),
     readingLabel: `${entry.readingTimeMinutes} 分钟`,
     tags: entry.tags,
-    mediaUrls: selectPictureMediaUrls(pictureMediaUrls),
-    rawMediaUrls: extractPictureCarouselMediaUrls({
-      summary: entry.summary,
-      content: entry.content,
-      articleUrl: entry.url,
-      siteUrl: feed.siteUrl ?? feed.url,
-      mediaUrls: selectPictureCarouselMediaUrls(entry.mediaUrls ?? [], pictureMediaUrls),
-    }),
+    mediaUrls: selectPictureMediaUrls(mediaCtx.pictureUrls),
+    rawMediaUrls: mediaCtx.rawUrls,
     feedTitle: feed.title,
     feedCategory: feed.category ?? '未分类',
     viewLabel: definition.label,
@@ -98,12 +89,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
 export function articleDetailModelFromCard(card: EntryCardModel): ArticleDetailModel {
   const rawUrls = card.rawMediaUrls ?? []
   const mediaItems = resolvePictureCarouselMediaItems(rawUrls, card.imageUrl)
-  const blocks: ArticleContentBlock[] = mediaItems.map((item, index): ArticleContentBlock => {
-    if (item.kind === 'livePhoto' && item.videoUrl) {
-      return { id: `video-${index}`, type: 'video', text: '', imageUrl: item.imageUrl || card.imageUrl, videoUrl: item.videoUrl }
-    }
-    return { id: `image-${index}`, type: 'image', text: '', imageUrl: item.imageUrl, videoUrl: '' }
-  })
+  const blocks = buildMediaContentBlocks(mediaItems, card.imageUrl)
 
   return {
     id: card.id,
@@ -138,7 +124,7 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
   const card = toEntryCardModel(entry, feed)
   const blocks = feed.view === FeedViewType.Pictures
     ? buildPictureDetailContentBlocks(entry, feed, card.imageUrl)
-    : buildArticleContentBlocks(entry.content, entry.url || feed.siteUrl || feed.url, entry.url, entry.mediaUrls ?? [])
+    : buildArticleContentBlocks(entry.content, entry.url || feedSiteUrl(feed), entry.url, entry.mediaUrls ?? [])
   const paragraphs = blocks
     .filter((block: ArticleContentBlock) => block.type === 'paragraph')
     .map((block: ArticleContentBlock) => block.text)
@@ -168,6 +154,6 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     isStarred: card.isStarred,
     contentParagraphs: paragraphs,
     contentBlocks: blocks,
-    siteUrl: feed.siteUrl ?? feed.url,
+    siteUrl: feedSiteUrl(feed),
   }
 }

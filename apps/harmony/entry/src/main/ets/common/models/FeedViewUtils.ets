@@ -1,4 +1,8 @@
-import { FeedViewType, ViewDefinition } from './LivoTypes'
+import { Feed, FeedViewType, ViewDefinition } from './LivoTypes'
+
+export function feedSiteUrl(feed: Feed): string {
+  return feed.siteUrl ?? feed.url
+}
 
 export function viewDefinitionOf(view: FeedViewType): ViewDefinition {
   switch (view) {

@@ -1,12 +1,28 @@
 import { selectArticleVideoUrls } from '../utils/ArticleVideoSource'
-import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import {
   extractEntryGalleryImageUrls,
   extractPictureCarouselMediaUrls,
+  PictureCarouselMediaItem,
   resolvePictureCarouselMediaItems,
 } from '../utils/PictureGallery'
 import { ArticleContentBlock, Entry, Feed } from './LivoTypes'
+import { feedSiteUrl } from './FeedViewUtils'
 import { selectPictureCarouselMediaUrls } from './MediaUrlUtils'
+import {
+  buildVideoPreviewUrl,
+  decodeBasicHtml,
+  extractSupportedVideoUrls,
+  isSupportedVideoUrl,
+  normalizeSupportedVideoUrl,
+  resolveAbsoluteUrl,
+} from './VideoUrlExtractor'
+
+export { extractSupportedVideoUrls } from './VideoUrlExtractor'
+
+export interface EntryMediaContext {
+  pictureUrls: string[]
+  rawUrls: string[]
+}
 
 export function isLegacyPlainArticleContent(content: string): boolean {
   const normalized = (content || '').trim()
@@ -16,132 +32,55 @@ export function isLegacyPlainArticleContent(content: string): boolean {
   return !/<[a-z][\s\S]*>/i.test(normalized) && !/\[\[IMG_\d+\]\]/.test(normalized)
 }
 
-function decodeBasicHtml(value: string): string {
-  return value
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, '\'')
-    .replace(/&nbsp;/g, ' ')
+export function resolveEntryMediaContext(entry: Entry, feed: Feed): EntryMediaContext {
+  const pictureUrls = extractEntryGalleryImageUrls({
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feedSiteUrl(feed),
+    mediaUrls: entry.mediaUrls ?? [],
+  })
+  const rawUrls = extractPictureCarouselMediaUrls({
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feedSiteUrl(feed),
+    mediaUrls: selectPictureCarouselMediaUrls(entry.mediaUrls ?? [], pictureUrls),
+  })
+  const result: EntryMediaContext = { pictureUrls: pictureUrls, rawUrls: rawUrls }
+  return result
 }
 
-function resolveAbsoluteUrl(baseUrl: string, value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return ''
-  }
-  if (trimmed.startsWith('//')) {
-    return `https:${trimmed}`
-  }
-  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) {
-    return trimmed
-  }
-  const base = (baseUrl || '').trim()
-  if (!base) {
-    return trimmed
-  }
-  const originMatch = base.match(/^(https?:\/\/[^/]+)(\/.*)?$/i)
-  const origin = originMatch?.[1] ?? ''
-  const basePath = originMatch?.[2] ?? '/'
-  if (!origin) {
-    return trimmed
-  }
-  if (trimmed.startsWith('/')) {
-    return `${origin}${trimmed}`
-  }
-  const normalizedBaseDir = basePath.includes('/')
-    ? basePath.replace(/\/[^/]*$/, '/')
-    : '/'
-  return `${origin}${normalizedBaseDir}${trimmed}`.replace(/([^:]\/)\/+/g, '$1')
+export function buildMediaContentBlocks(
+  mediaItems: PictureCarouselMediaItem[],
+  fallbackImageUrl: string,
+  startIndex: number = 0,
+): ArticleContentBlock[] {
+  const blocks: ArticleContentBlock[] = []
+  let index = startIndex
+  mediaItems.forEach((item) => {
+    if (item.kind === 'livePhoto' && item.videoUrl) {
+      blocks.push({
+        id: `video-${index}`,
+        type: 'video',
+        text: '',
+        imageUrl: item.imageUrl || fallbackImageUrl,
+        videoUrl: item.videoUrl,
+      })
+      index += 1
+      return
+    }
+    if (item.imageUrl) {
+      blocks.push({ id: `image-${index}`, type: 'image', text: '', imageUrl: item.imageUrl, videoUrl: '' })
+      index += 1
+    }
+  })
+  return blocks
 }
 
 function extractImageUrl(tag: string, baseUrl: string): string {
   const srcMatch = tag.match(/\b(?:data-src|data-original|src)=["']([^"']+)["']/i)
   return srcMatch?.[1] ? resolveAbsoluteUrl(baseUrl, decodeBasicHtml(srcMatch[1])) : ''
-}
-
-function extractYouTubeVideoId(value: string): string {
-  const matched = (value || '').match(
-    /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i,
-  )
-  return matched?.[1] ?? ''
-}
-
-function extractBilibiliVideoToken(value: string): string {
-  const bvid = (value || '').match(/(?:\/video\/|[?&]bvid=)(BV[a-zA-Z0-9]+)/i)?.[1]
-  if (bvid) {
-    return `BV:${bvid}`
-  }
-  const aid = (value || '').match(/(?:\/video\/av|[?&]aid=)(\d+)/i)?.[1]
-  if (aid) {
-    return `AV:${aid}`
-  }
-  return ''
-}
-
-function isSupportedVideoUrl(value: string): boolean {
-  return isDirectVideoUrl(value) || !!extractYouTubeVideoId(value) || !!extractBilibiliVideoToken(value)
-}
-
-function normalizeSupportedVideoUrl(value: string): string {
-  const trimmed = (value || '').trim()
-  if (!trimmed) {
-    return ''
-  }
-  if (isDirectVideoUrl(trimmed)) {
-    return trimmed
-  }
-  const youTubeId = extractYouTubeVideoId(trimmed)
-  if (youTubeId) {
-    return `https://www.youtube.com/watch?v=${youTubeId}`
-  }
-  const bilibiliToken = extractBilibiliVideoToken(trimmed)
-  if (bilibiliToken.startsWith('BV:')) {
-    return `https://www.bilibili.com/video/${bilibiliToken.substring(3)}`
-  }
-  if (bilibiliToken.startsWith('AV:')) {
-    return `https://www.bilibili.com/video/av${bilibiliToken.substring(3)}`
-  }
-  return trimmed
-}
-
-function buildVideoPreviewUrl(videoUrl: string): string {
-  const youTubeId = extractYouTubeVideoId(videoUrl)
-  return youTubeId ? `https://img.youtube.com/vi/${youTubeId}/hqdefault.jpg` : ''
-}
-
-export function extractSupportedVideoUrls(content: string, baseUrl: string, articleUrl: string): string[] {
-  const results: string[] = []
-  const pushUrl = (value: string): void => {
-    const resolved = normalizeSupportedVideoUrl(resolveAbsoluteUrl(baseUrl, decodeBasicHtml(value)))
-    if (!resolved || !isSupportedVideoUrl(resolved) || results.includes(resolved)) {
-      return
-    }
-    results.push(resolved)
-  }
-
-  const normalizedArticleUrl = normalizeSupportedVideoUrl(articleUrl)
-  if (normalizedArticleUrl && isSupportedVideoUrl(normalizedArticleUrl)) {
-    results.push(normalizedArticleUrl)
-  }
-
-  const raw = decodeBasicHtml(content || '')
-  for (const matched of raw.matchAll(/\b(?:href|src|data-src)=["']([^"']+)["']/gi)) {
-    if (matched[1]) {
-      pushUrl(matched[1])
-    }
-  }
-  for (const matched of raw.matchAll(
-    /https?:\/\/[^\s"'<>]+|(?:www\.)?(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/)[^\s"'<>]+/gi,
-  )) {
-    if (!matched[0]) {
-      continue
-    }
-    pushUrl(matched[0].startsWith('http') ? matched[0] : `https://${matched[0]}`)
-  }
-
-  return results
 }
 
 function createVideoContentBlock(id: string, videoUrl: string): ArticleContentBlock {
@@ -280,41 +219,9 @@ export function buildPictureDetailContentBlocks(
   feed: Feed,
   fallbackImageUrl: string,
 ): ArticleContentBlock[] {
-  const galleryImageUrls = extractEntryGalleryImageUrls({
-    summary: entry.summary,
-    content: entry.content,
-    articleUrl: entry.url,
-    siteUrl: feed.siteUrl ?? feed.url,
-    mediaUrls: entry.mediaUrls ?? [],
-  })
-  const orderedMediaUrls = extractPictureCarouselMediaUrls({
-    summary: entry.summary,
-    content: entry.content,
-    articleUrl: entry.url,
-    siteUrl: feed.siteUrl ?? feed.url,
-    mediaUrls: selectPictureCarouselMediaUrls(entry.mediaUrls ?? [], galleryImageUrls),
-  })
-  const mediaItems = resolvePictureCarouselMediaItems(orderedMediaUrls, fallbackImageUrl)
-  const blocks: ArticleContentBlock[] = []
-  let blockIndex = 0
-
-  mediaItems.forEach((item) => {
-    if (item.kind === 'livePhoto' && item.videoUrl) {
-      blocks.push({
-        id: `video-${blockIndex}`,
-        type: 'video',
-        text: '',
-        imageUrl: item.imageUrl || fallbackImageUrl,
-        videoUrl: item.videoUrl,
-      })
-      blockIndex += 1
-      return
-    }
-    if (item.imageUrl) {
-      blocks.push({ id: `image-${blockIndex}`, type: 'image', text: '', imageUrl: item.imageUrl, videoUrl: '' })
-      blockIndex += 1
-    }
-  })
+  const mediaCtx = resolveEntryMediaContext(entry, feed)
+  const mediaItems = resolvePictureCarouselMediaItems(mediaCtx.rawUrls, fallbackImageUrl)
+  const blocks = buildMediaContentBlocks(mediaItems, fallbackImageUrl)
 
   const mediaStrippedContent = decodeBasicHtml(entry.content || '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -324,6 +231,6 @@ export function buildPictureDetailContentBlocks(
     .filter((value: string) => !!(value || '').trim())
     .join('\n\n')
 
-  pushParagraphBlocks(pictureTextSource, blocks, blockIndex)
+  pushParagraphBlocks(pictureTextSource, blocks, blocks.length)
   return blocks
 }
