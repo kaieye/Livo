@@ -3,7 +3,7 @@ import { AppRepository } from '../data/AppRepository'
 import { AppContextService } from './AppContextService'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { generateOpml, parseOpml } from '../utils/OpmlParser'
-import { canonicalFeedUrl, extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import { FeedIdentityResolver } from './FeedIdentityResolver'
 import { bumpFeedsChangedSignal, shouldBumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 
 const OPML_IMPORT_REFRESH_START_DELAY_MS: number = 0
@@ -117,15 +117,15 @@ export class SubscriptionOpmlService {
         SubscriptionOpmlService.logImport(`import yielded index=${index} imported=${imported} skipped=${skipped} failed=${failed}`)
       }
 
-      const url = SubscriptionOpmlService.normalizeImportedUrl(opmlFeed.xmlUrl || '')
-      const siteUrl = SubscriptionOpmlService.normalizeImportedUrl(opmlFeed.htmlUrl || '')
+      const url = FeedIdentityResolver.normalizeImportedUrl(opmlFeed.xmlUrl || '')
+      const siteUrl = FeedIdentityResolver.normalizeImportedUrl(opmlFeed.htmlUrl || '')
       if (!url) {
         skipped += 1
         continue
       }
 
-      const importedView = SubscriptionOpmlService.inferFeedViewByUrl(url)
-      const identityKeys = SubscriptionOpmlService.feedIdentityKeys(url, siteUrl)
+      const importedView = FeedIdentityResolver.inferFeedViewByUrl(url)
+      const identityKeys = FeedIdentityResolver.feedIdentityKeys(url, siteUrl)
       if (identityKeys.length === 0 || SubscriptionOpmlService.hasSeenIdentityKey(identityKeys, seenInOpml)) {
         skipped += 1
         continue
@@ -247,7 +247,7 @@ export class SubscriptionOpmlService {
   private static createExistingFeedIdentityMap(feeds: Feed[]): Map<string, Feed> {
     const existingFeedByIdentityKey: Map<string, Feed> = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => {
-      SubscriptionOpmlService.feedIdentityKeys(feed.url, feed.siteUrl || '').forEach((identityKey: string) => {
+      FeedIdentityResolver.feedIdentityKeys(feed.url, feed.siteUrl || '').forEach((identityKey: string) => {
         if (!existingFeedByIdentityKey.has(identityKey)) {
           existingFeedByIdentityKey.set(identityKey, feed)
         }
@@ -390,123 +390,6 @@ export class SubscriptionOpmlService {
       })
       return fallback
     }
-  }
-
-  private static feedIdentityKeys(rawUrl: string, rawSiteUrl: string = ''): string[] {
-    const normalizedUrl = SubscriptionOpmlService.normalizeImportedUrl(rawUrl)
-    const normalizedSiteUrl = SubscriptionOpmlService.normalizeImportedUrl(rawSiteUrl)
-    const canonicalUrl = canonicalFeedUrl(normalizedUrl, normalizedSiteUrl)
-    const keys: string[] = []
-
-    const urlKey = SubscriptionOpmlService.normalizeComparableUrl(normalizedUrl)
-    if (urlKey) {
-      keys.push(`url:${urlKey}`)
-    }
-
-    const canonicalKey = SubscriptionOpmlService.normalizeComparableUrl(canonicalUrl)
-    if (canonicalKey) {
-      keys.push(`canonical:${canonicalKey}`)
-    }
-
-    const siteKey = SubscriptionOpmlService.normalizeComparableUrl(normalizedSiteUrl)
-    if (siteKey) {
-      keys.push(`site:${siteKey}`)
-    }
-
-    const instagramUsername = extractInstagramUsername(canonicalUrl || normalizedUrl)
-      || extractInstagramUsername(normalizedSiteUrl)
-    if (instagramUsername) {
-      keys.push(`instagram:${instagramUsername}`)
-    }
-
-    const xUsername = extractXUsername(canonicalUrl || normalizedUrl)
-      || extractXUsername(normalizedSiteUrl)
-    if (xUsername) {
-      keys.push(`x:${xUsername}`)
-    }
-
-    const bilibiliUid = SubscriptionOpmlService.extractBilibiliUid(canonicalUrl || normalizedUrl)
-      || SubscriptionOpmlService.extractBilibiliUid(normalizedSiteUrl)
-    if (bilibiliUid) {
-      keys.push(`bilibili:${bilibiliUid}`)
-    }
-
-    const dedupedKeys: string[] = []
-    const seenKeySet: Set<string> = new Set<string>()
-    keys.forEach((key: string) => {
-      const normalizedKey = (key || '').trim()
-      if (!normalizedKey || seenKeySet.has(normalizedKey)) {
-        return
-      }
-
-      seenKeySet.add(normalizedKey)
-      dedupedKeys.push(normalizedKey)
-    })
-    return dedupedKeys
-  }
-
-  private static inferFeedViewByUrl(url: string): FeedViewType {
-    const normalized = SubscriptionOpmlService.normalizeFeedUrl(url)
-    if (!!extractInstagramUsername(normalized)) {
-      return FeedViewType.Pictures
-    }
-    if (
-      normalized.includes('/twitter/')
-      || normalized.includes('/x.com/')
-      || normalized.includes('/nitter.')
-      || normalized.includes('/bilibili/user/dynamic/')
-    ) {
-      return FeedViewType.SocialMedia
-    }
-    if (
-      normalized.includes('/youtube/')
-      || normalized.includes('/bilibili/user/video/')
-      || normalized.includes('tedtalks')
-    ) {
-      return FeedViewType.Videos
-    }
-    return FeedViewType.Articles
-  }
-
-  private static normalizeFeedUrl(url: string): string {
-    return (url || '').trim().toLowerCase().replace(/\/+$/g, '')
-  }
-
-  private static normalizeImportedUrl(raw: string): string {
-    const trimmed = (raw || '').trim()
-    if (!trimmed) {
-      return ''
-    }
-    if (/^https?:\/\//i.test(trimmed)) {
-      return trimmed
-    }
-    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(trimmed)) {
-      return `https://${trimmed.replace(/^\/\/+/, '')}`
-    }
-    return trimmed
-  }
-
-  private static normalizeComparableUrl(raw: string): string {
-    const normalized = (raw || '').trim().toLowerCase()
-    if (!normalized) {
-      return ''
-    }
-
-    return normalized
-      .replace(/^https?:\/\//i, '')
-      .replace(/^www\./, '')
-      .replace(/[?#].*$/g, '')
-      .replace(/\/+$/g, '')
-  }
-
-  private static extractBilibiliUid(raw: string): string {
-    const normalized = SubscriptionOpmlService.normalizeComparableUrl(raw)
-    if (!normalized) {
-      return ''
-    }
-
-    const matched = normalized.match(/(?:space\.bilibili\.com\/|\/bilibili\/user\/(?:video|dynamic|article)\/)(\d+)/i)
-    return matched?.[1]?.trim() || ''
   }
 
   private static dedupeFeedIds(feedIds: string[]): string[] {
