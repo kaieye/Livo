@@ -22,6 +22,12 @@ import {
 
 const REFRESH_INTERVAL_OPTIONS: string[] = ['15', '30', '60', '120']
 
+interface SettingsChanges {
+  language?: string
+  refreshIntervalMinutes?: number
+  searchAllHomeCategories?: boolean
+}
+
 const LANGUAGE_OPTIONS: SelectOption[] = [
   { label: '简体中文', value: 'zh-CN' },
   { label: 'English', value: 'en' },
@@ -82,6 +88,25 @@ export struct GeneralSettingsPanel {
     }))
   }
 
+  private copyWith(changes: SettingsChanges): HarmonySettings {
+    return {
+      autoRefresh: this.config.autoRefresh,
+      aiSummaryEnabled: this.config.aiSummaryEnabled,
+      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
+      aiTranslationEnabled: this.config.aiTranslationEnabled,
+      aiTranslationLanguage: this.config.aiTranslationLanguage,
+      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
+      imageProxyEnabled: this.config.imageProxyEnabled,
+      searchAllHomeCategories: changes.searchAllHomeCategories ?? this.config.searchAllHomeCategories,
+      refreshIntervalMinutes: changes.refreshIntervalMinutes ?? this.config.refreshIntervalMinutes,
+      themeMode: this.config.themeMode,
+      themeAccent: this.config.themeAccent,
+      language: changes.language ?? this.config.language,
+      remoteFeedUrl: this.config.remoteFeedUrl,
+      showUnreadDot: this.config.showUnreadDot,
+    }
+  }
+
   private applyRefreshInterval(value: string): void {
     const minutes = Number(value)
     const normalizedMinutes = Number.isFinite(minutes) && minutes > 0
@@ -89,79 +114,15 @@ export struct GeneralSettingsPanel {
       : this.config.refreshIntervalMinutes
     console.info(`[GeneralSettings] applyRefreshInterval input=${value}, normalized=${normalizedMinutes}`)
     this.refreshIntervalSelection = `${normalizedMinutes}`
-    this.config = {
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: normalizedMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-      showUnreadDot: this.config.showUnreadDot,
-    }
-    const nextSettings: HarmonySettings = {
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: normalizedMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-      showUnreadDot: this.config.showUnreadDot,
-    }
-    this.syncSettings(nextSettings)
+    this.syncSettings(this.copyWith({ refreshIntervalMinutes: normalizedMinutes }))
   }
 
   private applyLanguage(value: string): void {
-    const nextSettings: HarmonySettings = {
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: this.config.searchAllHomeCategories,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: value,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-      showUnreadDot: this.config.showUnreadDot,
-    }
-    this.syncSettings(nextSettings)
+    this.syncSettings(this.copyWith({ language: value }))
   }
 
   private applySearchAllHomeCategories(enabled: boolean): void {
-    const nextSettings: HarmonySettings = {
-      autoRefresh: this.config.autoRefresh,
-      aiSummaryEnabled: this.config.aiSummaryEnabled,
-      aiSummaryAutoTrigger: this.config.aiSummaryAutoTrigger,
-      aiTranslationEnabled: this.config.aiTranslationEnabled,
-      aiTranslationLanguage: this.config.aiTranslationLanguage,
-      aiTranslationAutoTrigger: this.config.aiTranslationAutoTrigger,
-      imageProxyEnabled: this.config.imageProxyEnabled,
-      searchAllHomeCategories: enabled,
-      refreshIntervalMinutes: this.config.refreshIntervalMinutes,
-      themeMode: this.config.themeMode,
-      themeAccent: this.config.themeAccent,
-      language: this.config.language,
-      remoteFeedUrl: this.config.remoteFeedUrl,
-      showUnreadDot: this.config.showUnreadDot,
-    }
-    this.syncSettings(nextSettings)
+    this.syncSettings(this.copyWith({ searchAllHomeCategories: enabled }))
   }
 
   private toggleSearchAllHomeCategories(): void {
@@ -176,52 +137,6 @@ export struct GeneralSettingsPanel {
   @Builder
   private PanelHeader() {
     SettingsPanelTitle({ title: '通用', theme: this.theme })
-  }
-
-  @Builder
-  private InfoRow(symbol: Resource, title: string, subtitle: string, hint: string, iconDelay: number = 0) {
-    Row({ space: 12 }) {
-      SymbolGlyph(symbol)
-        .fontSize(PANEL_ICON_SIZE)
-        .fontColor([this.theme.accent])
-        .transition(livoMotion.enterIconSpin(iconDelay))
-
-      Column({ space: PANEL_ROW_TEXT_SPACING }) {
-        Text(title)
-          .fontSize(PANEL_TITLE_SIZE)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.theme.textPrimary)
-
-        Text(subtitle)
-          .fontSize(PANEL_SUBTITLE_SIZE)
-          .fontColor(this.theme.textSecondary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-
-      Text(hint)
-        .fontSize(PANEL_HINT_SIZE)
-        .fontColor(this.theme.textSecondary)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-    .width('100%')
-    .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-    .padding({
-      left: PANEL_ROW_PADDING_HORIZONTAL,
-      right: PANEL_ROW_PADDING_HORIZONTAL,
-      top: PANEL_ROW_PADDING_VERTICAL,
-      bottom: PANEL_ROW_PADDING_VERTICAL,
-    })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(20)
-  }
-
-  @Builder
-  private DividerLine() {
-    SettingsPanelDividerLine({ theme: this.theme })
   }
 
   @Builder
@@ -308,6 +223,11 @@ export struct GeneralSettingsPanel {
     })
     .backgroundColor(this.theme.surface)
     .borderRadius(20)
+  }
+
+  @Builder
+  private DividerLine() {
+    SettingsPanelDividerLine({ theme: this.theme })
   }
 
   @Builder
@@ -436,46 +356,14 @@ export struct GeneralSettingsPanel {
           this.DividerLine()
           this.RefreshIntervalMenuRow(1)
           this.DividerLine()
-          Row({ space: 12 }) {
-            SymbolGlyph($r('sys.symbol.magnifyingglass_circle'))
-              .fontSize(PANEL_ICON_SIZE)
-              .fontColor([this.theme.accent])
-              .transition(livoMotion.enterIconSpin(2))
-
-            Column({ space: PANEL_ROW_TEXT_SPACING }) {
-              Text('跨栏目搜索')
-                .fontSize(PANEL_TITLE_SIZE)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.theme.textPrimary)
-
-              Text('开启后，搜索范围包含所有栏目')
-                .fontSize(PANEL_SUBTITLE_SIZE)
-                .fontColor(this.theme.textSecondary)
-                .maxLines(2)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-
-            Toggle({ type: ToggleType.Switch, isOn: this.config.searchAllHomeCategories })
-              .selectedColor(this.theme.accent)
-              .switchPointColor('#FFFFFF')
-              .onChange((isOn: boolean) => {
-                this.applySearchAllHomeCategories(isOn)
-              })
-          }
-          .width('100%')
-          .constraintSize({ minHeight: PANEL_ROW_MIN_HEIGHT })
-          .padding({
-            left: PANEL_ROW_PADDING_HORIZONTAL,
-            right: PANEL_ROW_PADDING_HORIZONTAL,
-            top: PANEL_ROW_PADDING_VERTICAL,
-            bottom: PANEL_ROW_PADDING_VERTICAL,
-          })
-          .backgroundColor(this.theme.surface)
-          .borderRadius(20)
-          .clickEffect({ level: ClickEffectLevel.MIDDLE })
-          .onClick(() => this.toggleSearchAllHomeCategories())
+          this.ToggleRow(
+            $r('sys.symbol.magnifyingglass_circle'),
+            '跨栏目搜索',
+            '开启后，搜索范围包含所有栏目',
+            this.config.searchAllHomeCategories,
+            (isOn: boolean) => this.applySearchAllHomeCategories(isOn),
+            2,
+          )
         }
         .width('100%')
         .backgroundColor(this.theme.surface)

@@ -4,7 +4,8 @@ import { livoMotion } from '../ui/Motion'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
 import { QuotedTweetRenderer } from './QuotedTweetRenderer'
-import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
+import { PictureCarouselMediaItem } from '../utils/PictureGallery'
+import { inlineMediaItemsCacheKey, inlineMediaItemsFromUrls, isVideoLikeUrl, MAIN_TILE_SIZE, inlineMediaTileWidth, inlineMediaTileHeight, inlineMediaTileBottomMargin } from '../utils/InlineMediaLayout'
 
 interface TweetEntryCardPadding {
   left: number
@@ -42,18 +43,11 @@ export struct TweetEntryCard {
   }
 
   private mediaItemsFromUrls(urls: string[]): PictureCarouselMediaItem[] {
-    const normalizedUrls = (urls || [])
-      .map((url: string) => url.trim())
-      .filter((url: string) => !!url)
-    const fallbackImageUrl = normalizedUrls.find((url: string) => !this.isVideoLikeUrl(url)) || ''
-    return resolvePictureCarouselMediaItems(normalizedUrls, fallbackImageUrl).slice(0, 4)
+    return inlineMediaItemsFromUrls(urls)
   }
 
   private mediaItemsCacheKey(urls: string[]): string {
-    return (urls || [])
-      .map((url: string) => url.trim())
-      .filter((url: string) => !!url)
-      .join('|')
+    return inlineMediaItemsCacheKey(urls)
   }
 
   private normalizedMediaItems(): PictureCarouselMediaItem[] {
@@ -160,29 +154,6 @@ export struct TweetEntryCard {
     return { kind: 'image', imageUrl: '', videoUrl: '' }
   }
 
-  private isVideoLikeUrl(url: string): boolean {
-    const normalized = (url || '').trim().toLowerCase()
-    if (!normalized) {
-      return false
-    }
-
-    if (/\.(mp4|m4v|mov|webm|m3u8|mpd|avi|mkv)(\?|#|$)/i.test(normalized)) {
-      return true
-    }
-
-    if (
-      normalized.includes('youtube.com/watch') ||
-      normalized.includes('youtu.be/') ||
-      normalized.includes('bilibili.com/video/') ||
-      normalized.includes('x.com/i/status/') ||
-      normalized.includes('twitter.com/i/status/')
-    ) {
-      return true
-    }
-
-    return false
-  }
-
   private mediaRenderKey(section: string, item: PictureCarouselMediaItem, index: number): string {
     return `${section}_${index}_${item.imageUrl}_${item.videoUrl}`
   }
@@ -207,42 +178,6 @@ export struct TweetEntryCard {
       return
     }
     this.activeInlineVideoKey = this.mediaRenderKey(section, item, index)
-  }
-
-  private mediaTileWidth(index: number, count: number): string {
-    if (count <= 1) {
-      return '100%'
-    }
-
-    if (count === 3 && index === 0) {
-      return '100%'
-    }
-
-    return '49.75%'
-  }
-
-  private mediaTileHeight(index: number, count: number): number {
-    if (count <= 1) {
-      return 232
-    }
-
-    if (count === 3 && index === 0) {
-      return 156
-    }
-
-    return 124
-  }
-
-  private mediaTileBottomMargin(index: number, count: number): number {
-    if (count <= 2) {
-      return 0
-    }
-
-    if (count === 3) {
-      return index === 0 ? 2 : 0
-    }
-
-    return index < 2 ? 2 : 0
   }
 
   private cardPadding(): TweetEntryCardPadding {
@@ -281,8 +216,8 @@ export struct TweetEntryCard {
                   controller: this.inlineVideoControllerFor('main', item, index),
                   previewUri: item.imageUrl,
                 })
-                  .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
-                  .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                  .width(inlineMediaTileWidth(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
+                  .height(inlineMediaTileHeight(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
                   .borderRadius(0)
                   .controls(true)
                   .autoPlay(true)
@@ -290,15 +225,15 @@ export struct TweetEntryCard {
               } else {
                 if ((item.imageUrl || '').trim()) {
                   Image(item.imageUrl)
-                    .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
-                    .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                    .width(inlineMediaTileWidth(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
+                    .height(inlineMediaTileHeight(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
                     .borderRadius(0)
                     .objectFit(ImageFit.Cover)
                     .backgroundColor(this.theme.elevated)
                 } else {
                   Column()
-                    .width(this.mediaTileWidth(index, this.normalizedMediaItems().length))
-                    .height(this.mediaTileHeight(index, this.normalizedMediaItems().length))
+                    .width(inlineMediaTileWidth(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
+                    .height(inlineMediaTileHeight(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
                     .borderRadius(0)
                     .backgroundColor(this.theme.elevated)
                 }
@@ -318,7 +253,7 @@ export struct TweetEntryCard {
                 }
               }
             }
-              .margin({ bottom: this.mediaTileBottomMargin(index, this.normalizedMediaItems().length) })
+              .margin({ bottom: inlineMediaTileBottomMargin(index, this.normalizedMediaItems().length) })
               .onClick(() => {
                 this.playInlineVideo('main', item, index)
               })
@@ -345,14 +280,14 @@ export struct TweetEntryCard {
         onExpandText: () => {
           this.isQuotedTextExpanded = true
         },
-        isInlineVideoActive: (item: PictureCarouselMediaItem, index: number): boolean => {
-          return this.isInlineVideoActive('quoted', item, index)
+        isInlineVideoActive: (sectionTag: string, item: PictureCarouselMediaItem, index: number): boolean => {
+          return this.isInlineVideoActive(sectionTag, item, index)
         },
-        inlineVideoControllerFor: (item: PictureCarouselMediaItem, index: number): VideoController => {
-          return this.inlineVideoControllerFor('quoted', item, index)
+        inlineVideoControllerFor: (sectionTag: string, item: PictureCarouselMediaItem, index: number): VideoController => {
+          return this.inlineVideoControllerFor(sectionTag, item, index)
         },
-        onPlayInlineVideo: (item: PictureCarouselMediaItem, index: number): void => {
-          this.playInlineVideo('quoted', item, index)
+        onPlayInlineVideo: (sectionTag: string, item: PictureCarouselMediaItem, index: number): void => {
+          this.playInlineVideo(sectionTag, item, index)
         },
       })
     }
