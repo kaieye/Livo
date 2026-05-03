@@ -12,35 +12,18 @@ import {
 } from '../common/utils/AccountLoginWebPolicy'
 import { detectBilibiliLogin } from '../common/utils/BilibiliLoginDetection'
 import { detectYouTubeLoginState } from '../common/utils/YouTubeLoginDetection'
+import { BilibiliPageState, BilibiliWebNavResponse } from '../common/utils/BilibiliWebState'
+import { YouTubePageState } from '../common/utils/YouTubeWebState'
+import { buildBilibiliCookieGroups, buildYouTubeCookieGroups } from '../common/utils/CookieGroupBuilder'
+import {
+  buildBilibiliNavScript,
+  buildBilibiliPageStateScript,
+  buildYouTubePageStateScript,
+  buildYouTubeProfileFetchScript,
+} from '../common/utils/WebScriptBuilder'
+import { PollingController } from '../common/utils/PollingController'
 import { normalizeYouTubeProfileSources, resolveYouTubeProfileName } from '../common/utils/YouTubeProfileResolver'
-
-const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
-
-interface BilibiliWebNavResponse {
-  code?: number
-  message?: string
-  data?: BilibiliWebNavData
-}
-
-interface BilibiliWebNavData {
-  isLogin?: boolean
-  uname?: string
-}
-
-interface BilibiliPageState {
-  currentUrl: string
-  title: string
-  displayName: string
-  loggedIn: boolean
-  cookies: string
-}
-
-interface YouTubePageState {
-  currentUrl: string
-  title: string
-  cookies: string
-  pageHtml: string
-}
+import { writeAccountLinkResult } from '../common/utils/AccountLinkResultWriter'
 
 @Entry
 @Component
@@ -55,47 +38,33 @@ struct AccountLogin {
   @State handlingSuccess: boolean = false
   @State initialBilibiliSessData: string = ''
   @State initialBilibiliLinked: boolean = false
+
   private webController: webview.WebviewController = new webview.WebviewController()
-  private bilibiliCookiePollId: number = -1
-  private youTubeCookiePollId: number = -1
+  private bilibiliPolling: PollingController = new PollingController(1200)
+  private youTubePolling: PollingController = new PollingController(1500)
   private readonly mobileUserAgent: string =
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
-  private readonly bilibiliCookieProbeUrls: string[] = [
-    'https://www.bilibili.com/',
-    'https://passport.bilibili.com/',
-    'https://m.bilibili.com/',
-    'https://account.bilibili.com/',
-  ]
-  private readonly youTubeCookieProbeUrls: string[] = [
-    'https://m.youtube.com/',
-    'https://www.youtube.com/',
-    'https://studio.youtube.com/',
-    'https://myaccount.google.com/',
-    'https://accounts.google.com/',
-  ]
+
   aboutToAppear(): void {
     this.theme = ThemeService.currentPalette()
     const params = getStringParams()
     this.pageTitle = params.title || '账号关联'
     this.loginUrl = params.loginUrl || ''
-    const provider = params.provider
-    if (provider === 'youtube' || provider === 'x' || provider === 'instagram' || provider === 'bilibili') {
-      this.provider = provider
+    if (params.provider === 'youtube' || params.provider === 'x' || params.provider === 'instagram' || params.provider === 'bilibili') {
+      this.provider = params.provider
     }
-
     if (this.provider === 'bilibili') {
       void this.loadInitialBilibiliSessData()
-      this.startBilibiliCookiePolling()
+      this.bilibiliPolling.start(() => { this.provider === 'bilibili' && void this.persistBilibiliSessionIfAvailable(true) })
     }
-
     if (this.provider === 'youtube') {
-      this.startYouTubeCookiePolling()
+      this.youTubePolling.start(() => { this.provider === 'youtube' && void this.persistYouTubeSessionIfAvailable(true) })
     }
   }
 
   aboutToDisappear(): void {
-    this.stopBilibiliCookiePolling()
-    this.stopYouTubeCookiePolling()
+    this.bilibiliPolling.stop()
+    this.youTubePolling.stop()
     void webview.WebCookieManager.saveCookieAsync()
     if (this.provider === 'bilibili' && !this.handledSuccess) {
       void this.persistBilibiliSessionIfAvailable(false)
@@ -110,9 +79,6 @@ struct AccountLogin {
       this.initialBilibiliSessData = await AppRepository.bilibiliSessData()
       const status = await AppRepository.accountStatus('bilibili')
       this.initialBilibiliLinked = status.linked && !status.error
-      console.info(
-        `AccountLogin initial bilibili linked=${status.linked} displayName=${status.displayName} error=${status.error} hasSessdata=${this.initialBilibiliSessData ? 'true' : 'false'}`,
-      )
     } catch (_error) {
       this.initialBilibiliSessData = ''
       this.initialBilibiliLinked = false
@@ -127,226 +93,56 @@ struct AccountLogin {
     return trimmed
   }
 
-  private fetchCookieSafe(url: string): string {
+  private async runScript<T>(script: string): Promise<T | null> {
     try {
-      return webview.WebCookieManager.fetchCookieSync(url)
+      const result = await this.webController.runJavaScript(script)
+      const normalized = this.normalizeScriptResult(result)
+      return normalized ? JSON.parse(normalized) as T : null
     } catch (_error) {
-      return ''
+      return null
     }
+  }
+
+  private fetchCookieSafe(url: string): string {
+    try { return webview.WebCookieManager.fetchCookieSync(url) } catch (_error) { return '' }
+  }
+
+  private isYouTubeAuthFlowUrl(value: string): boolean {
+    const normalized = (value || '').trim().toLowerCase()
+    return !!normalized && (normalized.includes('accounts.google.com') || normalized.includes('accounts.youtube.com'))
   }
 
   private async currentBilibiliNavState(): Promise<BilibiliWebNavResponse | null> {
-    try {
-      const script = `
-        (async () => {
-          try {
-            const response = await fetch('https://api.bilibili.com/x/web-interface/nav', {
-              method: 'GET',
-              credentials: 'include',
-              headers: {
-                'Accept': 'application/json, text/plain, */*'
-              }
-            });
-            return await response.text();
-          } catch (error) {
-            return JSON.stringify({ __livo_error: String(error) });
-          }
-        })()
-      `
-      const result = await this.webController.runJavaScript(script)
-      const normalized = this.normalizeScriptResult(result)
-      if (!normalized) {
-        return null
-      }
-      return JSON.parse(normalized) as BilibiliWebNavResponse
-    } catch (_error) {
-      return null
-    }
+    return this.runScript<BilibiliWebNavResponse>(buildBilibiliNavScript())
   }
 
   private async currentBilibiliPageState(): Promise<BilibiliPageState | null> {
-    try {
-      const script = `
-        (() => {
-          try {
-            const html = document.documentElement?.innerHTML || '';
-            const initialState = globalThis.__INITIAL_STATE__ || globalThis.__INITIAL_DATA__ || {};
-            const stateText = JSON.stringify(initialState || {});
-            const find = (patterns) => {
-              for (const pattern of patterns) {
-                const matched = html.match(pattern) || stateText.match(pattern);
-                if (matched && matched[1]) {
-                  return String(matched[1]).trim();
-                }
-              }
-              return '';
-            };
-            const displayName =
-              find([
-                /"uname":"([^"]+)"/,
-                /"username":"([^"]+)"/,
-                /"nickName":"([^"]+)"/
-              ]) ||
-              String(document.querySelector('[class*="name"],[class*="uname"],[data-user-name]')?.textContent || '').trim();
-            const loggedIn =
-              /"isLogin"\\s*:\\s*true/.test(html) ||
-              /"isLogin"\\s*:\\s*true/.test(stateText) ||
-              !!displayName;
-            return JSON.stringify({
-              currentUrl: location.href || '',
-              title: document.title || '',
-              displayName,
-              loggedIn,
-              cookies: document.cookie || ''
-            });
-          } catch (error) {
-            return JSON.stringify({
-              currentUrl: location.href || '',
-              title: document.title || '',
-              displayName: '',
-              loggedIn: false,
-              cookies: ''
-            });
-          }
-        })()
-      `
-      const result = await this.webController.runJavaScript(script)
-      const normalized = this.normalizeScriptResult(result)
-      if (!normalized) {
-        return null
-      }
-      return JSON.parse(normalized) as BilibiliPageState
-    } catch (_error) {
-      return null
-    }
+    return this.runScript<BilibiliPageState>(buildBilibiliPageStateScript())
   }
 
   private async currentDocumentCookies(): Promise<string> {
-    try {
-      const result = await this.webController.runJavaScript('document.cookie')
-      return this.normalizeScriptResult(result)
-    } catch (_error) {
-      return ''
-    }
+    const result = await this.runScript<string>('document.cookie')
+    return result || ''
   }
 
-  private bilibiliCookieGroups(currentUrl: string, documentCookies: string): string[] {
-    const cookieGroups: string[] = []
-    if (documentCookies.trim()) {
-      cookieGroups.push(documentCookies)
-    }
-    if (currentUrl.trim()) {
-      cookieGroups.push(this.fetchCookieSafe(currentUrl))
-    }
-    this.bilibiliCookieProbeUrls.forEach((url: string) => {
-      cookieGroups.push(this.fetchCookieSafe(url))
-    })
-    return cookieGroups
-  }
-
-  private youTubeCookieGroups(currentUrl: string, documentCookies: string): string[] {
-    const cookieGroups: string[] = []
-    if (documentCookies.trim()) {
-      cookieGroups.push(documentCookies)
-    }
-    if (currentUrl.trim()) {
-      cookieGroups.push(this.fetchCookieSafe(currentUrl))
-    }
-    this.youTubeCookieProbeUrls.forEach((url: string) => {
-      cookieGroups.push(this.fetchCookieSafe(url))
-    })
-    return cookieGroups
-  }
-
-  private startBilibiliCookiePolling(): void {
-    this.stopBilibiliCookiePolling()
-    this.bilibiliCookiePollId = setInterval(() => {
-      if (this.provider === 'bilibili') {
-        void this.persistBilibiliSessionIfAvailable(true)
-      }
-    }, 1200)
-  }
-
-  private stopBilibiliCookiePolling(): void {
-    if (this.bilibiliCookiePollId >= 0) {
-      clearInterval(this.bilibiliCookiePollId)
-      this.bilibiliCookiePollId = -1
-    }
-  }
-
-  private startYouTubeCookiePolling(): void {
-    this.stopYouTubeCookiePolling()
-    this.youTubeCookiePollId = setInterval(() => {
-      if (this.provider === 'youtube') {
-        void this.persistYouTubeSessionIfAvailable(true)
-      }
-    }, 1500)
-  }
-
-  private stopYouTubeCookiePolling(): void {
-    if (this.youTubeCookiePollId >= 0) {
-      clearInterval(this.youTubeCookiePollId)
-      this.youTubeCookiePollId = -1
-    }
+  private async currentYouTubePageState(): Promise<YouTubePageState | null> {
+    return this.runScript<YouTubePageState>(buildYouTubePageStateScript())
   }
 
   private async fetchYouTubeProfileSources(): Promise<string[]> {
-    try {
-      const script = `
-        (async () => {
-          const urls = [
-            'https://www.youtube.com/account',
-            'https://www.youtube.com/',
-            'https://myaccount.google.com/',
-            'https://myaccount.google.com/personal-info'
-          ];
-          const outputs = [];
-          for (const target of urls) {
-            try {
-              const response = await fetch(target, {
-                method: 'GET',
-                credentials: 'include',
-                headers: {
-                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                }
-              });
-              outputs.push(response.ok ? await response.text() : '');
-            } catch (error) {
-              outputs.push('');
-            }
-          }
-          return JSON.stringify(outputs);
-        })()
-      `
-      const result = await this.webController.runJavaScript(script)
-      const normalized = this.normalizeScriptResult(result)
-      if (!normalized) {
-        return []
-      }
-      return normalizeYouTubeProfileSources(JSON.parse(normalized) as Object | string[] | null | undefined)
-    } catch (_error) {
-      return []
-    }
+    const result = await this.runScript<string[]>(buildYouTubeProfileFetchScript())
+    return normalizeYouTubeProfileSources(result)
   }
 
   private async resolveYouTubeDisplayName(currentPageHtml: string): Promise<string> {
-    const sources: string[] = []
-    if (currentPageHtml.trim()) {
-      sources.push(currentPageHtml)
-    }
-    const fetchedSources = normalizeYouTubeProfileSources(await this.fetchYouTubeProfileSources())
-    fetchedSources.forEach((html: string) => {
-      if (html.trim()) {
-        sources.push(html)
-      }
-    })
+    const sources: string[] = currentPageHtml.trim() ? [currentPageHtml] : []
+    const fetchedSources = await this.fetchYouTubeProfileSources()
+    fetchedSources.forEach((html: string) => { html.trim() && sources.push(html) })
     return resolveYouTubeProfileName(sources)
   }
 
   private async persistBilibiliSessionIfAvailable(shouldAutoBack: boolean): Promise<void> {
-    if (this.provider !== 'bilibili' || this.handledSuccess || this.handlingSuccess) {
-      return
-    }
+    if (this.provider !== 'bilibili' || this.handledSuccess || this.handlingSuccess) { return }
 
     try {
       await webview.WebCookieManager.saveCookieAsync()
@@ -354,364 +150,120 @@ struct AccountLogin {
       const pageState = await this.currentBilibiliPageState()
       const currentUrl = this.webController.getUrl()
       const documentCookies = (pageState?.cookies || '').trim() || await this.currentDocumentCookies()
-      const detection = detectBilibiliLogin({
-        nav,
-        pageState,
-        currentUrl,
-        cookieGroups: this.bilibiliCookieGroups(currentUrl, documentCookies),
-      })
+      const cookieGroups = buildBilibiliCookieGroups({ documentCookies, currentUrl, fetchCookie: this.fetchCookieSafe })
+      const detection = detectBilibiliLogin({ nav, pageState, currentUrl, cookieGroups })
       const fallbackDisplayName = detection.displayName || 'Bilibili 已关联'
-      console.info(
-        `AccountLogin bilibili detect currentUrl=${detection.effectiveUrl} navLoggedIn=${detection.navLoggedIn} pageLoggedIn=${detection.pageLoggedIn} hasSessionCookie=${detection.hasSessionCookie} displayName=${fallbackDisplayName} hasSessdata=${detection.sessdata ? 'true' : 'false'}`,
-      )
-      if (!detection.loggedIn) {
-        return
-      }
 
+      if (!detection.loggedIn) { return }
       this.handlingSuccess = true
       const status = await AppRepository.setBilibiliVerifiedLink(fallbackDisplayName, detection.sessdata)
-      console.info(
-        `AccountLogin bilibili persist linked=${status.linked} displayName=${status.displayName} error=${status.error}`,
-      )
-      if (!status.linked || !!status.error) {
-        console.error(
-          `AccountLogin bilibili persist rejected linked=${status.linked} displayName=${status.displayName} error=${status.error}`,
-        )
-        this.handlingSuccess = false
-        return
-      }
+      if (!status.linked || !!status.error) { this.handlingSuccess = false; return }
 
       this.handledSuccess = true
       this.initialBilibiliSessData = detection.sessdata
       this.initialBilibiliLinked = true
-      this.stopBilibiliCookiePolling()
-      AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, 'accounts')
-      AppStorage.setOrCreate('settingsOverlayLevel', 1)
-      AppStorage.setOrCreate('accountLinkResultProvider', 'bilibili')
-      AppStorage.setOrCreate('accountLinkResultDisplayName', fallbackDisplayName)
-      AppStorage.setOrCreate('accountLinkResultLinked', true)
-      AppStorage.setOrCreate('accountLinkResultAt', Date.now())
-      AppStorage.setOrCreate('accountsStatusRefreshAt', Date.now())
-      if (shouldAutoBack) {
-        setTimeout(() => {
-          void goBack()
-        }, 120)
-      }
+      this.bilibiliPolling.stop()
+      writeAccountLinkResult({ provider: 'bilibili', displayName: fallbackDisplayName, linked: true })
+      shouldAutoBack && setTimeout(() => { void goBack() }, 120)
     } catch (error) {
-      console.error(
-        `AccountLogin bilibili persist exception: ${error instanceof Error ? error.message : `${error}`}`,
-      )
+      console.error(`AccountLogin bilibili persist exception: ${error instanceof Error ? error.message : `${error}`}`)
       this.handlingSuccess = false
     }
   }
 
-  private async tryHandleBilibiliLogin(): Promise<void> {
-    if (this.provider !== 'bilibili' || this.handledSuccess || this.handlingSuccess) {
-      return
-    }
-
-    try {
-      await this.persistBilibiliSessionIfAvailable(true)
-    } catch (_error) {
-    }
-  }
-
-  private async currentYouTubePageState(): Promise<YouTubePageState | null> {
-    try {
-      const script = `
-        (() => {
-          const read = (value) => typeof value === 'string' ? value.trim() : '';
-          try {
-            const html = document.documentElement?.innerHTML || '';
-            const byPattern = (patterns) => {
-              for (const pattern of patterns) {
-                const matched = html.match(pattern);
-                if (matched && matched[1]) {
-                  return String(matched[1]).trim();
-                }
-              }
-              return '';
-            };
-            const channelHandle =
-              read(document.querySelector('a[href^="/@"]')?.textContent) ||
-              byPattern([
-                /"channelHandle":"(@[^"]+)"/,
-                /\\"channelHandle\\":"(@[^\\"]+)\\"/
-              ]);
-            const accountName =
-              read(document.querySelector('yt-formatted-string#account-name')?.textContent) ||
-              read(document.querySelector('button#avatar-btn')?.getAttribute('aria-label')).replace(/^Google Account[:\\s]*/i, '') ||
-              read(document.querySelector('img#img')?.getAttribute('alt')).replace(/^Google Account[:\\s]*/i, '') ||
-              byPattern([
-                /"accountName":"([^"]+)"/,
-                /\\"accountName\\":"([^\\"]+)\\"/
-              ]);
-            const channelName = byPattern([
-              /"channelName":"([^"]+)"/,
-              /\\"channelName\\":"([^\\"]+)\\"/
-            ]);
-            const displayName = byPattern([
-              /"displayName":"([^"]+)"/,
-              /\\"displayName\\":"([^\\"]+)\\"/,
-              /"fullName":"([^"]+)"/,
-              /\\"fullName\\":"([^\\"]+)\\"/,
-              /"givenName":"([^"]+)"/,
-              /\\"givenName\\":"([^\\"]+)\\"/
-            ]);
-            return JSON.stringify({
-              currentUrl: location.href || '',
-              title: document.title || '',
-              cookies: document.cookie || '',
-              pageHtml: JSON.stringify({
-                channelHandle,
-                accountName,
-                channelName,
-                displayName
-              })
-            });
-          } catch (error) {
-            return JSON.stringify({
-              currentUrl: location.href || '',
-              title: document.title || '',
-              cookies: document.cookie || '',
-              pageHtml: ''
-            });
-          }
-        })()
-      `
-      const result = await this.webController.runJavaScript(script)
-      const normalized = this.normalizeScriptResult(result)
-      if (!normalized) {
-        return null
-      }
-      return JSON.parse(normalized) as YouTubePageState
-    } catch (_error) {
-      return null
-    }
+  private tryHandleBilibiliLogin(): void {
+    if (this.provider !== 'bilibili' || this.handledSuccess || this.handlingSuccess) { return }
+    void this.persistBilibiliSessionIfAvailable(true)
   }
 
   private async persistYouTubeSessionIfAvailable(shouldAutoBack: boolean): Promise<void> {
-    if (this.provider !== 'youtube' || this.handledSuccess || this.handlingSuccess) {
-      return
-    }
+    if (this.provider !== 'youtube' || this.handledSuccess || this.handlingSuccess) { return }
 
     try {
       const controllerUrl = (this.webController.getUrl() || '').trim()
-      if (this.isYouTubeAuthFlowUrl(controllerUrl)) {
-        return
-      }
+      if (this.isYouTubeAuthFlowUrl(controllerUrl)) { return }
 
       await webview.WebCookieManager.saveCookieAsync()
       const pageState = await this.currentYouTubePageState()
       const currentUrl = (pageState?.currentUrl || this.webController.getUrl() || '').trim()
-      if (this.isYouTubeAuthFlowUrl(currentUrl)) {
-        return
-      }
+      if (this.isYouTubeAuthFlowUrl(currentUrl)) { return }
+
       const documentCookies = (pageState?.cookies || '').trim() || await this.currentDocumentCookies()
-      const detection = detectYouTubeLoginState({
-        currentUrl,
-        title: pageState?.title || '',
-        documentCookies: this.youTubeCookieGroups(currentUrl, documentCookies).join('; '),
-        pageHtml: pageState?.pageHtml || '',
-      })
-      if (!detection.loggedIn) {
-        return
-      }
+      const cookieGroups = buildYouTubeCookieGroups({ documentCookies, currentUrl, fetchCookie: this.fetchCookieSafe })
+      const detection = detectYouTubeLoginState({ currentUrl, title: pageState?.title || '', documentCookies: cookieGroups.join('; '), pageHtml: pageState?.pageHtml || '' })
+      if (!detection.loggedIn) { return }
 
       this.handlingSuccess = true
-      this.stopYouTubeCookiePolling()
+      this.youTubePolling.stop()
       const resolvedDisplayName = await this.resolveYouTubeDisplayName(pageState?.pageHtml || '')
       const fallbackDisplayName = resolvedDisplayName || detection.displayName || 'YouTube 已关联'
-      console.info(
-        `AccountLogin youtube detect currentUrl=${currentUrl} loggedIn=${detection.loggedIn} inLoginFlow=${detection.inLoginFlow} hasSessionCookie=${detection.hasSessionCookie} detectedDisplayName=${detection.displayName || ''} resolvedDisplayName=${resolvedDisplayName || ''} fallbackDisplayName=${fallbackDisplayName}`,
-      )
       const status = await AppRepository.setVerifiedAccountLink('youtube', fallbackDisplayName)
-      console.info(
-        `AccountLogin youtube persist linked=${status.linked} displayName=${status.displayName} error=${status.error}`,
-      )
-      if (!status.linked || !!status.error) {
-        console.error(
-          `AccountLogin youtube persist rejected linked=${status.linked} displayName=${status.displayName} error=${status.error}`,
-        )
-        this.handlingSuccess = false
-        return
-      }
+      if (!status.linked || !!status.error) { this.handlingSuccess = false; return }
 
       this.handledSuccess = true
-      AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, 'accounts')
-      AppStorage.setOrCreate('settingsOverlayLevel', 1)
-      AppStorage.setOrCreate('accountLinkResultProvider', 'youtube')
-      AppStorage.setOrCreate('accountLinkResultDisplayName', fallbackDisplayName)
-      AppStorage.setOrCreate('accountLinkResultLinked', true)
-      AppStorage.setOrCreate('accountLinkResultAt', Date.now())
-      AppStorage.setOrCreate('accountsStatusRefreshAt', Date.now())
-      if (shouldAutoBack) {
-        setTimeout(() => {
-          void goBack()
-        }, 120)
-      }
+      writeAccountLinkResult({ provider: 'youtube', displayName: fallbackDisplayName, linked: true })
+      shouldAutoBack && setTimeout(() => { void goBack() }, 120)
     } catch (error) {
-      console.error(
-        `AccountLogin youtube persist exception: ${error instanceof Error ? error.message : `${error}`}`,
-      )
+      console.error(`AccountLogin youtube persist exception: ${error instanceof Error ? error.message : `${error}`}`)
       this.handlingSuccess = false
-      if (this.provider === 'youtube' && !this.handledSuccess) {
-        this.startYouTubeCookiePolling()
-      }
+      this.provider === 'youtube' && !this.handledSuccess && this.youTubePolling.start(() => { this.provider === 'youtube' && void this.persistYouTubeSessionIfAvailable(true) })
     }
   }
 
-  private isYouTubeAuthFlowUrl(value: string): boolean {
-    const normalized = (value || '').trim().toLowerCase()
-    if (!normalized) {
-      return false
-    }
-    return normalized.includes('accounts.google.com') || normalized.includes('accounts.youtube.com')
-  }
-
-  private async tryHandleYouTubeLogin(): Promise<void> {
-    if (this.provider !== 'youtube' || this.handledSuccess || this.handlingSuccess) {
-      return
-    }
-
-    try {
-      await this.persistYouTubeSessionIfAvailable(true)
-    } catch (_error) {
-    }
-  }
-
-  private allowWindowOpenMethod(): boolean {
-    return resolveAccountLoginWebPolicy(this.provider).allowWindowOpenMethod
+  private tryHandleYouTubeLogin(): void {
+    if (this.provider !== 'youtube' || this.handledSuccess || this.handlingSuccess) { return }
+    void this.persistYouTubeSessionIfAvailable(true)
   }
 
   build() {
     Column({ space: 0 }) {
       SecondaryPageHeaderShell() {
-        PageHeader({
-          title: this.pageTitle,
-          theme: this.theme,
-          showBackButton: true,
-          titleSize: 20,
-          topPadding: 0,
-          bottomPadding: 0,
-          onBack: () => { void goBack() },
-        })
-          .width('100%')
+        PageHeader({ title: this.pageTitle, theme: this.theme, showBackButton: true, titleSize: 20, topPadding: 0, bottomPadding: 0, onBack: () => { void goBack() } }).width('100%')
       }
-
       if (this.loginUrl) {
         Stack({ alignContent: Alignment.Center }) {
-          Web({
-            src: this.loginUrl,
-            controller: this.webController,
-          })
-            .width('100%')
-            .height('100%')
-            .javaScriptAccess(true)
-            .domStorageAccess(true)
-            .mixedMode(MixedMode.All)
-            .allowWindowOpenMethod(this.allowWindowOpenMethod())
+          Web({ src: this.loginUrl, controller: this.webController })
+            .width('100%').height('100%').javaScriptAccess(true).domStorageAccess(true).mixedMode(MixedMode.All).allowWindowOpenMethod(resolveAccountLoginWebPolicy(this.provider).allowWindowOpenMethod)
             .onControllerAttached(() => {
-              try {
-                webview.WebCookieManager.putAcceptCookieEnabled(true)
-                webview.WebCookieManager.putAcceptThirdPartyCookieEnabled(true)
-                this.webController.setCustomUserAgent(this.mobileUserAgent)
-              } catch (_error) {
-              }
+              try { webview.WebCookieManager.putAcceptCookieEnabled(true); webview.WebCookieManager.putAcceptThirdPartyCookieEnabled(true); this.webController.setCustomUserAgent(this.mobileUserAgent) } catch (_error) {}
             })
-            .onPageBegin((_event: OnPageBeginEvent) => {
-              this.loading = true
-              this.loadError = ''
-            })
-            .onPageEnd((_event: OnPageEndEvent) => {
+            .onPageBegin(() => { this.loading = true; this.loadError = '' })
+            .onPageEnd(() => {
               this.loading = false
-              if (this.provider === 'bilibili') {
-                void this.tryHandleBilibiliLogin()
-              }
-              if (this.provider === 'youtube') {
-                void this.tryHandleYouTubeLogin()
-              }
+              this.provider === 'bilibili' && this.tryHandleBilibiliLogin()
+              this.provider === 'youtube' && this.tryHandleYouTubeLogin()
             })
             .onErrorReceive((event: OnErrorReceiveEvent) => {
-              if (event.request?.isMainFrame()) {
-                this.loading = false
-                this.loadError = '登录页加载失败，请稍后重试'
-              }
+              if (event.request?.isMainFrame()) { this.loading = false; this.loadError = '登录页加载失败，请稍后重试' }
             })
-            .onRenderExited((event: OnRenderExitedEvent) => {
-              this.loading = false
-              this.loadError = buildAccountLoginRenderExitMessage(this.provider, event?.renderExitReason ?? -1)
-              console.error(
-                `AccountLogin render exited provider=${this.provider} reason=${event?.renderExitReason ?? -1}`,
-              )
-            })
+            .onRenderExited((event: OnRenderExitedEvent) => { this.loading = false; this.loadError = buildAccountLoginRenderExitMessage(this.provider, event?.renderExitReason ?? -1) })
 
           if (this.loading && !this.loadError) {
             Column({ space: 10 }) {
-              LoadingProgress()
-                .width(26)
-                .height(26)
-                .color(this.theme.accent)
-
-              Text('正在打开登录页...')
-                .fontSize(13)
-                .fontColor(this.theme.textSecondary)
-            }
-            .padding({ left: 18, right: 18, top: 14, bottom: 14 })
-            .backgroundColor('rgba(255,255,255,0.88)')
-            .borderRadius(18)
+              LoadingProgress().width(26).height(26).color(this.theme.accent)
+              Text('正在打开登录页...').fontSize(13).fontColor(this.theme.textSecondary)
+            }.padding({ left: 18, right: 18, top: 14, bottom: 14 }).backgroundColor('rgba(255,255,255,0.88)').borderRadius(18)
           }
-
           if (this.loadError) {
             Column({ space: 8 }) {
-              Text('打开失败')
-                .fontSize(16)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.theme.textPrimary)
-
-              Text(this.loadError)
-                .fontSize(13)
-                .lineHeight(20)
-                .fontColor(this.theme.textSecondary)
-                .textAlign(TextAlign.Center)
-            }
-            .padding({ left: 18, right: 18, top: 16, bottom: 16 })
-            .backgroundColor(this.theme.surface)
-            .borderRadius(18)
-            .margin({ left: 24, right: 24 })
+              Text('打开失败').fontSize(16).fontWeight(FontWeight.Bold).fontColor(this.theme.textPrimary)
+              Text(this.loadError).fontSize(13).lineHeight(20).fontColor(this.theme.textSecondary).textAlign(TextAlign.Center)
+            }.padding({ left: 18, right: 18, top: 16, bottom: 16 }).backgroundColor(this.theme.surface).borderRadius(18).margin({ left: 24, right: 24 })
           }
-        }
-        .width('100%')
-        .layoutWeight(1)
+        }.width('100%').layoutWeight(1)
       } else {
         Column({ space: 10 }) {
-          Text('未找到登录地址')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.theme.textPrimary)
-
-          Text('请返回上一页后重试。')
-            .fontSize(13)
-            .fontColor(this.theme.textSecondary)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
+          Text('未找到登录地址').fontSize(18).fontWeight(FontWeight.Bold).fontColor(this.theme.textPrimary)
+          Text('请返回上一页后重试。').fontSize(13).fontColor(this.theme.textSecondary)
+        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
       }
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.theme.background)
+    }.width('100%').height('100%').backgroundColor(this.theme.background)
   }
 
   pageTransition() {
-    PageTransitionEnter({ type: RouteType.Push, duration: 260, curve: curves.springMotion(0.82, 0.94) })
-      .opacity(0)
-    PageTransitionExit({ type: RouteType.Push, duration: 220, curve: Curve.EaseInOut })
-      .opacity(1)
-    PageTransitionEnter({ type: RouteType.Pop, duration: 220, curve: Curve.EaseOut })
-      .opacity(1)
-    PageTransitionExit({ type: RouteType.Pop, duration: 220, curve: Curve.EaseInOut })
-      .opacity(0)
+    PageTransitionEnter({ type: RouteType.Push, duration: 260, curve: curves.springMotion(0.82, 0.94) }).opacity(0)
+    PageTransitionExit({ type: RouteType.Push, duration: 220, curve: Curve.EaseInOut }).opacity(1)
+    PageTransitionEnter({ type: RouteType.Pop, duration: 220, curve: Curve.EaseOut }).opacity(1)
+    PageTransitionExit({ type: RouteType.Pop, duration: 220, curve: Curve.EaseInOut }).opacity(0)
   }
 }
