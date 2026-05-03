@@ -11,8 +11,10 @@
  * Plus per-provider "soft" errors (output filtered by policy, non-zero base_resp.status_code)
  * that arrive with HTTP 200 and a normal-looking body — those need to be surfaced.
  *
- * NOTE: A leaner version of this parser also lives in
- * `services/AIAssistantConnectionTestService.ets`. Future refactor: converge.
+ * The connection-test flow consumes the same primitives plus
+ * `parseProviderResponseLoose` (handles SSE `data:` chunks and JSON arrays) and
+ * `stripThinkBlocks` (drops `<think>...</think>` reasoning markers some providers
+ * emit even from non-streaming endpoints).
  */
 
 interface ChatContentPart {
@@ -44,6 +46,10 @@ export interface ChatCompletionResponse {
   output_sensitive?: boolean
   output_sensitive_type?: number
   base_resp?: ProviderBaseResponse
+  error?: ProviderErrorObject
+  id?: string
+  model?: string
+  object?: string
 }
 
 interface AnthropicTextContentBlock {
@@ -65,10 +71,8 @@ interface ProviderErrorObject {
   message?: string
 }
 
-interface ProviderErrorResponse {
-  base_resp?: ProviderBaseResponse
-  message?: string
-  error?: ProviderErrorObject
+interface ProviderDeltaChunk {
+  choices?: ChatChoiceResponse[]
 }
 
 export function extractResponseContent(
@@ -112,7 +116,10 @@ export function extractResponseContent(
   return parseTextFromContentArray(content)
 }
 
-export function extractAnthropicResponseContent(parsed: AnthropicResponse): string {
+export function extractAnthropicResponseContent(
+  parsed: AnthropicResponse,
+  includeThinking: boolean = false,
+): string {
   const blocks = parsed.content || []
   const fragments: string[] = []
   blocks.forEach((block: AnthropicTextContentBlock) => {
@@ -121,6 +128,8 @@ export function extractAnthropicResponseContent(parsed: AnthropicResponse): stri
     }
     if (block.type === 'text' && (block.text || '').trim()) {
       fragments.push((block.text || '').trim())
+    } else if (includeThinking && block.type === 'thinking' && (block.thinking || '').trim()) {
+      fragments.push((block.thinking || '').trim())
     }
   })
   return fragments.join('\n').trim()
@@ -141,19 +150,67 @@ export function extractSoftProviderError(parsed: ChatCompletionResponse): string
 
 export function extractErrorDetail(raw: string): string {
   try {
-    const parsed = JSON.parse(raw) as ProviderErrorResponse
-    const statusMessage = (parsed.base_resp?.status_msg || '').trim()
-    if (statusMessage) {
-      return statusMessage
-    }
-    const message = (parsed.message || '').trim()
-    if (message) {
-      return message
-    }
-    return (parsed.error?.message || '').trim()
+    return extractErrorDetailFromParsed(JSON.parse(raw) as ChatCompletionResponse)
   } catch (_error) {
     return ''
   }
+}
+
+export function extractErrorDetailFromParsed(parsed: ChatCompletionResponse | undefined): string {
+  if (!parsed) {
+    return ''
+  }
+  const statusMessage = (parsed.base_resp?.status_msg || '').trim()
+  if (statusMessage) {
+    return statusMessage
+  }
+  const message = (parsed.message || '').trim()
+  if (message) {
+    return message
+  }
+  return (parsed.error?.message || '').trim()
+}
+
+export function stripThinkBlocks(text: string): string {
+  return (text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+}
+
+export function parseProviderResponseLoose(raw: string): ChatCompletionResponse | undefined {
+  const normalized = (raw || '').trim()
+  if (!normalized) {
+    return undefined
+  }
+  try {
+    const parsedObject = JSON.parse(normalized) as ChatCompletionResponse
+    if (parsedObject) {
+      return parsedObject
+    }
+  } catch (_error) {
+  }
+
+  try {
+    const parsedArray = JSON.parse(normalized) as ProviderDeltaChunk[]
+    if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+      return parsedArray[parsedArray.length - 1] as ChatCompletionResponse
+    }
+  } catch (_error) {
+  }
+
+  const dataLines = normalized
+    .split(/\r?\n/)
+    .map((line: string) => line.trim())
+    .filter((line: string) => line.startsWith('data:'))
+  for (let index = dataLines.length - 1; index >= 0; index -= 1) {
+    const payload = dataLines[index].slice(5).trim()
+    if (!payload || payload === '[DONE]') {
+      continue
+    }
+    try {
+      return JSON.parse(payload) as ChatCompletionResponse
+    } catch (_error) {
+    }
+  }
+  return undefined
 }
 
 function extractFromChoice(choice: ChatChoiceResponse, allowReasoningFallback: boolean): string {

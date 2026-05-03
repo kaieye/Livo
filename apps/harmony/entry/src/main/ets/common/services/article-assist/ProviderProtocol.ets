@@ -9,9 +9,10 @@
  *      text/chatcompletion_v2; each has a slightly different schema.
  *   3. System-prompt resolution — substitute {{context}} / {{persona}} placeholders.
  *
- * NOTE: Endpoint resolution + format detection logic is currently duplicated
- * in `services/AIAssistantConnectionTestService.ets`. Future refactor: lift
- * this into a shared module both services consume.
+ * The connection-test flow consumes the lower-level entry points
+ * (`resolveCompletionEndpointFor`, `detectProviderFormat`, `miniMaxTextEndpoint`,
+ * `buildRequestHeaders`) directly, since it works from raw provider/baseUrl
+ * fields rather than a full `AIAssistantSettings` snapshot.
  */
 
 import {
@@ -73,22 +74,27 @@ export function resolveCompletionEndpoint(aiSettings: AIAssistantSettings): stri
   if (!baseUrl) {
     throw new Error('请先在 设置 > AI助手 中配置 Base URL')
   }
-  const normalizedBase = baseUrl.toLowerCase()
+  return resolveCompletionEndpointFor(aiSettings.provider, baseUrl)
+}
+
+export function resolveCompletionEndpointFor(provider: AIProvider, baseUrl: string): string {
+  const trimmed = (baseUrl || '').trim()
+  const normalized = trimmed.toLowerCase()
   if (
-    normalizedBase.includes('/chat/completions')
-    || normalizedBase.includes('/text/chatcompletion_v2')
-    || normalizedBase.includes('/v1/messages')
-    || normalizedBase.includes('/anthropic/')
+    normalized.includes('/chat/completions')
+    || normalized.includes('/text/chatcompletion_v2')
+    || normalized.includes('/v1/messages')
+    || normalized.includes('/anthropic/')
   ) {
-    return baseUrl
+    return trimmed
   }
-  if (aiSettings.provider === 'anthropic') {
-    return joinBaseUrl(baseUrl, '/messages')
+  if (provider === 'anthropic') {
+    return joinBaseUrl(trimmed, '/messages')
   }
-  if (aiSettings.provider === 'minimax') {
-    return joinBaseUrl(baseUrl, '/text/chatcompletion_v2')
+  if (provider === 'minimax') {
+    return joinBaseUrl(trimmed, '/text/chatcompletion_v2')
   }
-  return joinBaseUrl(baseUrl, '/chat/completions')
+  return joinBaseUrl(trimmed, '/chat/completions')
 }
 
 export function resolveProviderApiKey(aiSettings: AIAssistantSettings): string {

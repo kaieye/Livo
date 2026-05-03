@@ -4,10 +4,6 @@
  * `@kit.NetworkKit` returns `result` as one of `string | ArrayBuffer | Uint8Array`
  * depending on the server / runtime — these helpers turn whatever shows up into
  * a plain string so callers can JSON.parse without branching.
- *
- * NOTE: The same helpers also live (duplicated) inside
- * `services/AIAssistantConnectionTestService.ets`. When that service is moved
- * onto the same provider-protocol seam, both copies should converge here.
  */
 
 export function decodeByteArray(bytes: Uint8Array): string {
