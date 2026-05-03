@@ -2,7 +2,7 @@ import { fileIo, picker } from '@kit.CoreFileKit'
 import { AppContextService } from './AppContextService'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { FeedRepository } from '../repositories/FeedRepository'
-import { AppPreferenceService } from './AppPreferenceService'
+import { HomeEntrySnapshotStore } from './HomeEntrySnapshotStore'
 import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { generateOpml, parseOpml } from '../utils/OpmlParser'
 import { FeedIdentityResolver } from './FeedIdentityResolver'
@@ -97,7 +97,7 @@ export class SubscriptionOpmlService {
       const overwriteStartedAt = Date.now()
       for (const feed of existingFeeds) {
         await FeedRepository.remove(feed.id)
-        await AppPreferenceService.removeHomeEntrySnapshotEntriesByFeedId(feed.id)
+        await HomeEntrySnapshotStore.removeByFeedId(feed.id)
       }
       SubscriptionOpmlService.logImport(`import overwrite removed feeds count=${existingFeeds.length} elapsedMs=${Date.now() - overwriteStartedAt}`)
       existingFeedByIdentityKey.clear()

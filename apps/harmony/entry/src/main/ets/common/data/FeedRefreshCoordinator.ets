@@ -4,7 +4,7 @@ import {
 } from '../models/LivoModels'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { RefreshLogStore } from '../services/RefreshLogStore'
 import { RssFeedService, FeedRefreshPayload } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { canonicalFeedUrl, normalizeSocialFeedDescription } from '../utils/SocialFeedTitles'
@@ -27,7 +27,7 @@ function debugLog(message: string): void {
 
 async function appendRefreshLog(successFeedCount: number, failedFeedCount: number, failedFeedTitles: string[]): Promise<void> {
   const normalizedTitles = failedFeedTitles.filter((title: string) => !!title)
-  await AppPreferenceService.appendRefreshLog({
+  await RefreshLogStore.append({
     id: `${Date.now()}-${Math.floor(Math.random() * 100000)}`,
     refreshedAt: Date.now(),
     successFeedCount: Math.max(0, successFeedCount),

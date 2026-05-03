@@ -1,4 +1,4 @@
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { DiscoverAvatarCacheStore } from '../services/DiscoverAvatarCacheStore'
 import { isDiscoverAvatarCacheableImageUrl } from './DiscoverAvatarPresentation'
 import { feedDetailHostOf } from './FeedDetailPreviewPolicy'
 import { extractInstagramUsername } from './SocialFeedTitles'
@@ -99,7 +99,7 @@ export function persistFeedDetailDiscoverAvatar(
     const siteKey = `${targetUrl}|${context.siteUrl || ''}`
     if (!seen.has(siteKey)) {
       seen.add(siteKey)
-      void AppPreferenceService.rememberDiscoverAvatar(
+      void DiscoverAvatarCacheStore.remember(
         targetUrl,
         context.siteUrl || '',
         normalized,
@@ -108,7 +108,7 @@ export function persistFeedDetailDiscoverAvatar(
     const fallbackKey = `${targetUrl}|`
     if (!seen.has(fallbackKey)) {
       seen.add(fallbackKey)
-      void AppPreferenceService.rememberDiscoverAvatar(targetUrl, '', normalized)
+      void DiscoverAvatarCacheStore.remember(targetUrl, '', normalized)
     }
   })
 }

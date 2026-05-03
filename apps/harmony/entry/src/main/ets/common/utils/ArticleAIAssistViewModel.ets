@@ -1,5 +1,5 @@
 import { ArticleAssistService, TranslationFormattingHint } from '../services/ArticleAssistService'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { AIAssistantSettingsStore } from '../services/AIAssistantSettingsStore'
 import {
   AIAssistantSettings,
   AITargetLanguage,
@@ -107,7 +107,7 @@ export class ArticleAIAssistViewModel {
     let translationReady = false
 
     try {
-      const aiSettings: AIAssistantSettings = await AppPreferenceService.loadAISettings()
+      const aiSettings: AIAssistantSettings = await AIAssistantSettingsStore.load()
       this.owner.aiResultEntryId = args.entry.id
 
       const tasks: Promise<void>[] = []

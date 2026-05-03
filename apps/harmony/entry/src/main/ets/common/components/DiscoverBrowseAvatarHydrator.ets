@@ -1,5 +1,5 @@
 import { DiscoverBuiltinFeedSeed } from '../data/DiscoverBuiltinFeeds'
-import { AppPreferenceService, DiscoverAvatarCacheEntry } from '../services/AppPreferenceService'
+import { DiscoverAvatarCacheStore, DiscoverAvatarCacheEntry } from '../services/DiscoverAvatarCacheStore'
 import { RecommendedFeed } from '../services/discover/DiscoverTypes'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { RssFeedService } from '../services/RssFeedService'
@@ -62,7 +62,7 @@ export class DiscoverBrowseAvatarHydrator {
     }
 
     try {
-      const entries = await AppPreferenceService.loadDiscoverAvatarCache()
+      const entries = await DiscoverAvatarCacheStore.load()
       entries.forEach((entry: DiscoverAvatarCacheEntry) => {
         discoverAvatarCacheKeys(entry.targetUrl, entry.siteUrl).forEach((key: string) => {
           this.overrideMap.set(key, entry.imageUrl)
@@ -121,9 +121,9 @@ export class DiscoverBrowseAvatarHydrator {
     discoverAvatarCacheKeys(targetUrl, siteUrl).forEach((key: string) => {
       this.overrideMap.set(key, normalizedImageUrl)
     })
-    void AppPreferenceService.rememberDiscoverAvatar(targetUrl, siteUrl, normalizedImageUrl)
+    void DiscoverAvatarCacheStore.remember(targetUrl, siteUrl, normalizedImageUrl)
     if (siteUrl) {
-      void AppPreferenceService.rememberDiscoverAvatar(targetUrl, '', normalizedImageUrl)
+      void DiscoverAvatarCacheStore.remember(targetUrl, '', normalizedImageUrl)
     }
   }
 
@@ -224,9 +224,9 @@ export class DiscoverBrowseAvatarHydrator {
         resolvedFeedUrl: payload.resolvedFeedUrl,
         entries: payload.entries,
       })
-      void AppPreferenceService.rememberDiscoverAvatar(task.targetUrl, task.siteUrl, hydratedImageUrl)
+      void DiscoverAvatarCacheStore.remember(task.targetUrl, task.siteUrl, hydratedImageUrl)
       if (task.siteUrl) {
-        void AppPreferenceService.rememberDiscoverAvatar(task.targetUrl, '', hydratedImageUrl)
+        void DiscoverAvatarCacheStore.remember(task.targetUrl, '', hydratedImageUrl)
       }
 
       const nextImageUrl = resolveDiscoverAvatarImageUrl({

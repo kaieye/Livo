@@ -7,7 +7,7 @@ import {
 } from '../models/LivoModels'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { FeedRepository } from '../repositories/FeedRepository'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { SettingsStore } from '../services/SettingsStore'
 import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { ThemeService, ThemePalette } from '../services/ThemeService'
 import { ArticleAIAssistViewModel } from './ArticleAIAssistViewModel'
@@ -55,7 +55,7 @@ export class ArticleEntryLoader {
 
     this.owner.entry = await this.loadEntryById(entryId)
     const upgraded = await this.upgradeLegacyEntryIfNeeded()
-    const settings = await AppPreferenceService.loadSettings()
+    const settings = await SettingsStore.load()
     this.owner.theme = await ThemeService.resolvePalette(settings)
     this.owner.applyAISettings(settings)
     this.owner.resetAIResultsIfEntryChanged()

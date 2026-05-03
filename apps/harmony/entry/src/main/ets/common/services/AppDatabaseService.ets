@@ -104,6 +104,31 @@ export class AppDatabaseService {
     }
   }
 
+  static async withRdb<T>(operationLabel: string, fn: (store: relationalStore.RdbStore) => Promise<T>): Promise<T> {
+    try {
+      const store = await AppDatabaseService.getStore()
+      return await fn(store)
+    } catch (error) {
+      throw new Error(`${operationLabel}失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    }
+  }
+
+  static async withRdbResult<T>(
+    operationLabel: string,
+    fn: (store: relationalStore.RdbStore) => Promise<relationalStore.ResultSet>,
+    mapRow: (result: relationalStore.ResultSet) => T,
+  ): Promise<T[]> {
+    return AppDatabaseService.withRdb(operationLabel, async (store) => {
+      const result = await fn(store)
+      const rows: T[] = []
+      while (result.goToNextRow()) {
+        rows.push(mapRow(result))
+      }
+      result.close()
+      return rows
+    })
+  }
+
   private static async tryAddColumn(
     store: relationalStore.RdbStore,
     sql: string,

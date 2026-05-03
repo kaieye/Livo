@@ -1,4 +1,4 @@
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { RefreshLogStore } from '../services/RefreshLogStore'
 import { HarmonySettings, RefreshLogEntry } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { loadThemeForComponent } from '../utils/PageThemeHelper'
@@ -35,7 +35,7 @@ export struct RefreshLogSettingsPanel {
       if (!this.useInheritedTheme) {
         this.theme = await loadThemeForComponent()
       }
-      this.logs = await AppPreferenceService.loadRefreshLogs()
+      this.logs = await RefreshLogStore.load()
     } finally {
       this.isLoading = false
     }
@@ -61,7 +61,7 @@ export struct RefreshLogSettingsPanel {
   }
 
   private async clearLogs(): Promise<void> {
-    await AppPreferenceService.clearRefreshLogs()
+    await RefreshLogStore.clear()
     this.logs = []
   }
 

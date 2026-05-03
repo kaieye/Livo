@@ -1,4 +1,4 @@
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { SettingsStore } from '../services/SettingsStore'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings, ThemeAccent, ThemeMode } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
@@ -36,7 +36,7 @@ export struct AppearanceSettingsPanel {
 
   private async loadSettings(): Promise<void> {
     const loadVersion = this.settingsMutationVersion
-    const saved = await AppPreferenceService.loadSettings()
+    const saved = await SettingsStore.load()
     const palette = await ThemeService.resolvePalette(saved)
     if (loadVersion !== this.settingsMutationVersion) {
       return
@@ -62,7 +62,7 @@ export struct AppearanceSettingsPanel {
       }
       this.applyResolvedState(next, resolved)
     })
-    void AppPreferenceService.saveSettings(next).then((saved: HarmonySettings) => {
+    void SettingsStore.save(next).then((saved: HarmonySettings) => {
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
         if (mutationVersion !== this.settingsMutationVersion) {
           return

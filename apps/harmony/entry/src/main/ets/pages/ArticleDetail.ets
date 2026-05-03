@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
-import { AppPreferenceService } from '../common/services/AppPreferenceService'
+import { SettingsStore } from '../common/services/SettingsStore'
 import { EntryRepository } from '../common/repositories/EntryRepository'
 import { goBack, openImageViewer } from '../common/navigation/AppRouter'
 import { TranslationFormattingHint } from '../common/services/ArticleAssistService'
@@ -119,7 +119,7 @@ struct ArticleDetail {
 
   private async handleArticleAIAssist(): Promise<void> {
     try {
-      const settings = await AppPreferenceService.loadSettings()
+      const settings = await SettingsStore.load()
       this.applyAISettings(settings)
       await this.runArticleAIAssist()
     } catch (error) {

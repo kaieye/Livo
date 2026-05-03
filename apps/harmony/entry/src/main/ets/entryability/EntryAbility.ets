@@ -5,7 +5,7 @@ import Want from '@ohos.app.ability.Want'
 import UIAbility from '@ohos.app.ability.UIAbility'
 import window from '@ohos.window'
 import { AppContextService } from '../common/services/AppContextService'
-import { AppPreferenceService } from '../common/services/AppPreferenceService'
+import { SettingsStore } from '../common/services/SettingsStore'
 import { FeedRepository } from '../common/repositories/FeedRepository'
 import { EntryRepository } from '../common/repositories/EntryRepository'
 import { FeedRefreshCoordinator } from '../common/data/FeedRefreshCoordinator'
@@ -66,7 +66,7 @@ export default class EntryAbility extends UIAbility {
           this.syncAvoidArea(mainWindow)
         })
 
-        const settings = await AppPreferenceService.loadSettings()
+        const settings = await SettingsStore.load()
         await ThemeService.resolvePalette(settings)
         const existingCount = await FeedRepository.count()
         if (existingCount === 0) {
@@ -74,7 +74,7 @@ export default class EntryAbility extends UIAbility {
             await FeedRepository.insert(feed)
           }
           await EntryRepository.upsertMany(SEED_ENTRIES)
-          await AppPreferenceService.saveSettings(seedSettings())
+          await SettingsStore.save(seedSettings())
           void FeedRefreshCoordinator.hydrateSeedFeeds(SEED_FEEDS)
         }
         await FeedRefreshCoordinator.bootstrap()

@@ -1,5 +1,6 @@
 import window from '@ohos.window'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { SettingsStore } from '../services/SettingsStore'
+import { HomeEntrySnapshotStore } from '../services/HomeEntrySnapshotStore'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { FeaturedEntriesQuery } from '../data/FeaturedEntriesQuery'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../models/LivoModels'
@@ -219,11 +220,11 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
     this.owner.homeInitialLoadPending = true
     this.owner.theme = ThemeService.currentPalette()
     void this.applySystemBarStyle(this.owner.theme)
-    const settingsPromise = AppPreferenceService.loadSettings()
+    const settingsPromise = SettingsStore.load()
     const feedsPromise = FeedRepository.list()
     const currentMode = this.owner.mode
     let restoredFromSnapshot: boolean = false
-    const snapshotEntries = await AppPreferenceService.loadHomeEntrySnapshot()
+    const snapshotEntries = await HomeEntrySnapshotStore.load()
     if (snapshotEntries.length > 0) {
       restoredFromSnapshot = true
       this.restoreSnapshot(snapshotEntries)

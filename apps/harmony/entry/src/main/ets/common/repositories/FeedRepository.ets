@@ -2,7 +2,8 @@ import relationalStore from '@ohos.data.relationalStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { AppDatabaseService } from '../services/AppDatabaseService'
 import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
-import { resultColumnIndex, resultLong, resultString } from '../utils/ResultSetHelper'
+import { resultLong, resultString } from '../utils/ResultSetHelper'
+import { RdbTable } from './RdbTable'
 
 const FEED_FETCH_STATE_DEBUG_ENABLED: boolean = true
 const FEED_FETCH_STATE_DEBUG_PREFIX: string = '[FeedFetchStateDebug]'
@@ -64,133 +65,65 @@ function createFeedId(url: string): string {
   return `feed-${compact || Date.now()}`
 }
 
+const table = new RdbTable<Feed>('feeds', mapFeed)
+
 export class FeedRepository {
   static async getByUrl(url: string): Promise<Feed | undefined> {
-    try {
-      const store = await AppDatabaseService.getStore()
-      const predicates = new relationalStore.RdbPredicates('feeds')
-      predicates.equalTo('url', url.trim())
-      predicates.limitAs(1)
-      const result = await store.query(predicates)
-
-      if (!result.goToNextRow()) {
-        result.close()
-        return undefined
-      }
-
-      const feed = mapFeed(result)
-      result.close()
-      return feed
-    } catch (error) {
-      throw new Error(`按 URL 读取订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    const predicates = new relationalStore.RdbPredicates('feeds')
+    predicates.equalTo('url', url.trim())
+    predicates.limitAs(1)
+    return table.getOne(predicates)
   }
 
   static async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
-    try {
-      const trimmed = siteUrl.trim()
-      if (!trimmed) {
-        return undefined
-      }
-
-      const store = await AppDatabaseService.getStore()
-      const predicates = new relationalStore.RdbPredicates('feeds')
-      predicates.equalTo('site_url', trimmed)
-      predicates.orderByDesc('updated_at')
-      predicates.limitAs(1)
-      const result = await store.query(predicates)
-
-      if (!result.goToNextRow()) {
-        result.close()
-        return undefined
-      }
-
-      const feed = mapFeed(result)
-      result.close()
-      return feed
-    } catch (error) {
-      throw new Error(`按站点读取订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
+    const trimmed = siteUrl.trim()
+    if (!trimmed) {
+      return undefined
     }
+    const predicates = new relationalStore.RdbPredicates('feeds')
+    predicates.equalTo('site_url', trimmed)
+    predicates.orderByDesc('updated_at')
+    predicates.limitAs(1)
+    return table.getOne(predicates)
   }
 
   static async list(): Promise<Feed[]> {
-    try {
-      const store = await AppDatabaseService.getStore()
-      const predicates = new relationalStore.RdbPredicates('feeds')
-      // Keep the subscription list stable so refreshes do not reshuffle cards.
-      predicates.orderByAsc('created_at')
-      predicates.orderByAsc('id')
-      const result = await store.query(predicates)
-      const feeds: Feed[] = []
-
-      while (result.goToNextRow()) {
-        feeds.push(mapFeed(result))
-      }
-
-      result.close()
-      return feeds
-    } catch (error) {
-      throw new Error(`读取订阅源列表失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    const predicates = new relationalStore.RdbPredicates('feeds')
+    predicates.orderByAsc('created_at')
+    predicates.orderByAsc('id')
+    return table.list(predicates)
   }
 
   static async getById(feedId: string): Promise<Feed | undefined> {
-    try {
-      const store = await AppDatabaseService.getStore()
-      const predicates = new relationalStore.RdbPredicates('feeds')
-      predicates.equalTo('id', feedId)
-      predicates.limitAs(1)
-      const result = await store.query(predicates)
-
-      if (!result.goToNextRow()) {
-        result.close()
-        return undefined
-      }
-
-      const feed = mapFeed(result)
-      result.close()
-      return feed
-    } catch (error) {
-      throw new Error(`读取订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    const predicates = new relationalStore.RdbPredicates('feeds')
+    predicates.equalTo('id', feedId)
+    predicates.limitAs(1)
+    return table.getOne(predicates)
   }
 
   static async count(): Promise<number> {
-    try {
-      const store = await AppDatabaseService.getStore()
-      const predicates = new relationalStore.RdbPredicates('feeds')
-      const result = await store.query(predicates, ['id'])
-      const count = result.rowCount
-      result.close()
-      return count
-    } catch (error) {
-      throw new Error(`统计订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    const predicates = new relationalStore.RdbPredicates('feeds')
+    return table.count(predicates)
   }
 
   static async insert(feed: Feed): Promise<void> {
-    try {
-      const store = await AppDatabaseService.getStore()
-      await store.insert('feeds', {
-        id: feed.id,
-        title: feed.title,
-        url: feed.url,
-        site_url: feed.siteUrl ?? '',
-        image_url: feed.imageUrl ?? '',
-        description: feed.description ?? '',
-        category: feed.category ?? '',
-        view: feed.view,
-        show_in_all: boolToNumber(feed.showInAll),
-        last_fetched: feed.lastFetched ?? 0,
-        etag: feed.etag ?? '',
-        last_modified: feed.lastModified ?? '',
-        error_count: feed.errorCount,
-        created_at: feed.createdAt,
-        updated_at: feed.updatedAt,
-      })
-    } catch (error) {
-      throw new Error(`新增订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    await table.insert({
+      id: feed.id,
+      title: feed.title,
+      url: feed.url,
+      site_url: feed.siteUrl ?? '',
+      image_url: feed.imageUrl ?? '',
+      description: feed.description ?? '',
+      category: feed.category ?? '',
+      view: feed.view,
+      show_in_all: boolToNumber(feed.showInAll),
+      last_fetched: feed.lastFetched ?? 0,
+      etag: feed.etag ?? '',
+      last_modified: feed.lastModified ?? '',
+      error_count: feed.errorCount,
+      created_at: feed.createdAt,
+      updated_at: feed.updatedAt,
+    })
   }
 
   static async create(draft: FeedDraft): Promise<Feed> {
@@ -232,32 +165,26 @@ export class FeedRepository {
 
   static async update(feedId: string, draft: FeedDraft): Promise<Feed> {
     const current = await FeedRepository.getById(feedId)
-
     if (!current) {
       throw new Error('订阅源不存在')
     }
 
-    try {
-      const store = await AppDatabaseService.getStore()
-      const predicates = new relationalStore.RdbPredicates('feeds')
-      predicates.equalTo('id', feedId)
-      const nextUrl = draft.url.trim()
-      const nextSiteUrl = draft.siteUrl.trim()
+    const predicates = new relationalStore.RdbPredicates('feeds')
+    predicates.equalTo('id', feedId)
+    const nextUrl = draft.url.trim()
+    const nextSiteUrl = draft.siteUrl.trim()
 
-      await store.update({
-        title: normalizeSocialFeedTitle(draft.title.trim(), nextUrl, nextSiteUrl),
-        url: nextUrl,
-        site_url: nextSiteUrl,
-        image_url: draft.imageUrl.trim() || current.imageUrl || '',
-        description: normalizeSocialFeedDescription(draft.description.trim(), nextUrl, nextSiteUrl),
-        category: draft.category.trim(),
-        view: draft.view,
-        show_in_all: boolToNumber(draft.showInAll),
-        updated_at: Date.now(),
-      }, predicates)
-    } catch (error) {
-      throw new Error(`更新订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    await table.update(predicates, {
+      title: normalizeSocialFeedTitle(draft.title.trim(), nextUrl, nextSiteUrl),
+      url: nextUrl,
+      site_url: nextSiteUrl,
+      image_url: draft.imageUrl.trim() || current.imageUrl || '',
+      description: normalizeSocialFeedDescription(draft.description.trim(), nextUrl, nextSiteUrl),
+      category: draft.category.trim(),
+      view: draft.view,
+      show_in_all: boolToNumber(draft.showInAll),
+      updated_at: Date.now(),
+    })
 
     return (await FeedRepository.getById(feedId))!
   }
@@ -266,12 +193,11 @@ export class FeedRepository {
     feedId: string,
     next: UpdateFetchStateParams,
   ): Promise<void> {
-    try {
+    await AppDatabaseService.withRdb('更新抓取状态', async (store) => {
       const current = await FeedRepository.getById(feedId)
       if (!current) {
         throw new Error('订阅源不存在')
       }
-      const store = await AppDatabaseService.getStore()
       const predicates = new relationalStore.RdbPredicates('feeds')
       predicates.equalTo('id', feedId)
       const normalizedUrl = (next.url !== undefined ? next.url : current.url).trim()
@@ -314,23 +240,18 @@ export class FeedRepository {
         error_count: next.errorCount ?? 0,
         updated_at: Date.now(),
       }, predicates)
-    } catch (error) {
-      throw new Error(`更新抓取状态失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    })
   }
 
   static async remove(feedId: string): Promise<void> {
-    const store = await AppDatabaseService.getStore()
-    const feedPredicates = new relationalStore.RdbPredicates('feeds')
-    feedPredicates.equalTo('id', feedId)
-    const entryPredicates = new relationalStore.RdbPredicates('entries')
-    entryPredicates.equalTo('feed_id', feedId)
-
-    try {
+    await AppDatabaseService.withRdb('删除订阅源', async (store) => {
+      const entryPredicates = new relationalStore.RdbPredicates('entries')
+      entryPredicates.equalTo('feed_id', feedId)
       await store.delete(entryPredicates)
+
+      const feedPredicates = new relationalStore.RdbPredicates('feeds')
+      feedPredicates.equalTo('id', feedId)
       await store.delete(feedPredicates)
-    } catch (error) {
-      throw new Error(`删除订阅源失败：${error instanceof Error ? error.message : 'unknown error'}`)
-    }
+    })
   }
 }

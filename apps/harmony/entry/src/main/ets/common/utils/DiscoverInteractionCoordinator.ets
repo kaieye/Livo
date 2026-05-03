@@ -1,5 +1,5 @@
 import { FeedRepository } from '../repositories/FeedRepository'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { SettingsStore } from '../services/SettingsStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { trendingDiscoverFeedsFromJsonNow } from '../services/discover/DiscoverFeedCatalog'
@@ -45,7 +45,7 @@ export class DiscoverInteractionCoordinator {
     this.owner.isLoadingPage = true
     try {
       if (this.owner.showBottomTabs) {
-        const settings = await AppPreferenceService.loadSettings()
+        const settings = await SettingsStore.load()
         this.owner.theme = await ThemeService.resolvePalette(settings)
       } else {
         this.owner.theme = this.owner.inheritedTheme

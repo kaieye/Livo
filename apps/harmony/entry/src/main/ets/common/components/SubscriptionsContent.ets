@@ -2,7 +2,7 @@ import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '
 import { openArticleDetail } from '../navigation/AppRouter'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { feedCardFromFeed } from '../data/AppRepositoryEntryHelpers'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { SettingsStore } from '../services/SettingsStore'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { BottomTabs } from './BottomTabs'
@@ -112,7 +112,7 @@ export struct SubscriptionsContent {
     try {
       this.avatarCoordinator.bumpToken()
       if (this.showBottomTabs) {
-        const settings = await AppPreferenceService.loadSettings()
+        const settings = await SettingsStore.load()
         this.theme = await ThemeService.resolvePalette(settings)
       } else {
         this.theme = this.inheritedTheme

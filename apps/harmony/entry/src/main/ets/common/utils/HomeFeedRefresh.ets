@@ -1,4 +1,4 @@
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { RefreshLogStore } from '../services/RefreshLogStore'
 import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import {
   HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS,
@@ -30,7 +30,7 @@ export class HomeFeedRefresh {
     }
 
     try {
-      const logs = await AppPreferenceService.loadRefreshLogs()
+      const logs = await RefreshLogStore.load()
       if (logs.length <= 0) {
         return true
       }

@@ -15,7 +15,7 @@
 
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { FeedRepository } from '../repositories/FeedRepository'
-import { AppPreferenceService } from '../services/AppPreferenceService'
+import { HomeEntrySnapshotStore } from '../services/HomeEntrySnapshotStore'
 import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { FeedDraft } from '../repositories/FeedRepository'
 import { FeedRefreshPayload } from '../services/RssFeedService'
@@ -136,7 +136,7 @@ export class FeedSubscribeAction {
 
   static async unsubscribe(feedId: string): Promise<void> {
     await FeedRepository.remove(feedId)
-    await AppPreferenceService.removeHomeEntrySnapshotEntriesByFeedId(feedId)
+    await HomeEntrySnapshotStore.removeByFeedId(feedId)
     bumpFeedsChangedSignal()
   }
 

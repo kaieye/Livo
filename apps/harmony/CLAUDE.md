@@ -56,7 +56,7 @@ entry/src/main/ets/
 ├── stage/              # LivoAbilityStage — app-level lifecycle
 ├── pages/              # Top-level @Entry pages (Index, Subscriptions, Discover, etc.)
 ├── common/
-│   ├── data/           # AppRepository (facade), ArrayLazyDataSource, FeedRefreshCoordinator, SeedData
+│   ├── data/           # FeaturedEntriesQuery, AppRepositoryEntryHelpers, FeedRefreshCoordinator, SeedData
 │   ├── repositories/   # FeedRepository, EntryRepository — RDB persistence layer
 │   ├── services/       # Business logic — RSS, discover, AI assist, accounts, theme, etc.
 │   ├── models/         # Domain types (LivoTypes.ets), mapper functions (LivoModels.ets)
@@ -68,15 +68,18 @@ entry/src/main/ets/
 
 ### Key Architectural Patterns
 
-**AppRepository singleton** (`common/data/AppRepository.ets`) is the centralized data facade. All pages and coordinators read/write through it — it coordinates FeedRepository, EntryRepository, FeedRefreshCoordinator, and various services.
+**Data access** — pages and coordinators import repositories and services directly. There is no centralized data facade. The main access paths are:
 
-**RDB persistence** via `@ohos.data.relationalStore` (`AppDatabaseService.ets`). Two tables: `feeds` and `entries`. Repositories (`FeedRepository.ets`, `EntryRepository.ets`) handle SQL and row mapping.
+- `FeedRepository` / `EntryRepository` (`common/repositories/`) — RDB persistence via `@ohos.data.relationalStore` (`AppDatabaseService.ets`). Two tables: `feeds` and `entries`. A generic `RdbTable<T>` helper (`common/repositories/RdbTable.ets`) reduces boilerplate.
+- `FeaturedEntriesQuery` (`common/data/`) — builds balanced, mode-aware home feed entry lists by combining FeedRepository + EntryRepository results.
+- `AppRepositoryEntryHelpers` (`common/data/`) — pure helper functions (card mapping, feed sorting, mode grouping) shared across the home feed and subscriptions.
+- `FeedRefreshCoordinator` (`common/data/`) — orchestrates background feed fetching and notifies the UI via `AppStorage` change signals.
 
-**Preferences storage** via `@ohos.data.preferences` (`AppPreferenceService.ets`) for app settings, AI config, refresh logs, and home entry snapshots.
+**Preferences storage** — `AppPreferenceService.ets` wraps `@ohos.data.preferences` for low-level key-value persistence. Focused store classes provide typed access to specific domains: `SettingsStore` (app settings), `AIAssistantSettingsStore` (AI config), `HomeEntrySnapshotStore` (home entry snapshots), `RefreshLogStore` (refresh history), `DiscoverAvatarCacheStore` (avatar cache), `PreferenceStoreAccessor` (shared preferences helper).
 
-**Coordinator pattern** — the `Index` page is complex and delegates to focused coordinator classes: `IndexHomeBootstrapCoordinator`, `IndexHomeRefreshCoordinator`, `IndexHomePaginationCoordinator`, `IndexHomeRailCoordinator`, `IndexHomeRuntimeCoordinator`, `IndexRootTabCoordinator`, etc. Each receives the page component instance and manages a specific concern.
+**HomeFeedSession** (`common/utils/HomeFeedSession.ets`) is the central orchestrator for the `Index` home tab. It owns the home feed lifecycle: startup data loading, refresh, pagination, mode switching, search, and scroll state. It delegates to focused collaborators: `HomeFeedRefresh`, `HomeFeedPagination`, `HomeEntryDataManager`, `HomeInlineSearchController`, `HomeScrollIntentTracker`, `IndexHomeRailCoordinator`, `IndexHomeRuntimeCoordinator`, `IndexRootTabCoordinator`.
 
-**Delegate pattern** — pages implement delegate interfaces (`IndexHomeEntryDataDelegate`, `IndexHomeModeDelegate`, `IndexHomeInlineSearchDelegate`) so coordinators can call back into the page without tight coupling.
+**Delegate pattern** — `HomeFeedSession` implements `HomeFeedSessionOwner` so collaborators can read/write shared session state without back-references to the page component.
 
 **Reactive state** — `@State`, `@Prop`, `@StorageProp`/`@StorageLink`, `@Watch` drive ArkUI reactivity. `AppStorage` holds global keys like `WindowClass`, `topAvoidArea`, `feedsChangedAt`.
 
