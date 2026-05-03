@@ -4,13 +4,9 @@ import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import { HighlightedInlineText } from './HighlightedInlineText'
+import { LivePhotoState } from './LivePhotoState'
 
-interface MediaNaturalSize {
-  width: number
-  height: number
-}
-
-interface PictureEntryCardPadding {
+interface CardPadding {
   left: number
   right: number
   top: number
@@ -34,88 +30,48 @@ export struct PictureEntryCard {
   @Prop showBottomDivider: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @State private activeMediaIndex: number = 0
-  @State private playingLivePhotoIndex: number = -1
-  @State private pausedLivePhotoIndex: number = -1
-  @State private preparedLivePhotoIndices: number[] = []
-  @State private livePhotoInstanceSeeds: number[] = []
-  @State private livePhotoAspectRatios: number[] = []
-  @State private mediaNaturalSizes: MediaNaturalSize[] = []
   @State private livePhotoMuted: boolean = true
   @State private isFullyVisible: boolean = false
   @State private isNearlyVisible: boolean = false
   @State private cachedCarouselItems: PictureCarouselMediaItem[] = []
-  private readonly livePhotoControllers: VideoController[] = []
 
   onOpen: () => void = () => {}
 
+  private livePhoto: LivePhotoState = new LivePhotoState({
+    onPrepared: (_: number) => {},
+    onStart: (_: number) => {},
+    onPause: (_: number) => {},
+    onStop: (_: number) => {},
+    onError: (_: number) => {},
+  })
+
   aboutToAppear(): void {
+    this.livePhoto = new LivePhotoState({
+      onPrepared: (i: number) => this.handleLivePhotoPrepared(i),
+      onStart: (i: number) => this.handleLivePhotoStart(i),
+      onPause: (i: number) => this.handleLivePhotoPause(i),
+      onStop: (i: number) => this.handleLivePhotoStop(i),
+      onError: (i: number) => this.handleLivePhotoError(i),
+    })
     this.cachedCarouselItems = this.computeCarouselMediaItems()
   }
 
   private computeCarouselMediaItems(): PictureCarouselMediaItem[] {
     const rawMediaUrls = this.entry.mediaUrls ?? []
-    const resolvedItems = resolvePictureCarouselMediaItems(rawMediaUrls, this.pictureUrl)
-    if (resolvedItems.length > 0) {
-      return resolvedItems
-    }
-
-    const galleryMediaUrls = this.normalizedGalleryUrls()
-    if (galleryMediaUrls.length > 0) {
-      return galleryMediaUrls.map((url: string): PictureCarouselMediaItem => ({
-        kind: 'image',
-        imageUrl: url,
-        videoUrl: '',
+    const resolved = resolvePictureCarouselMediaItems(rawMediaUrls, this.pictureUrl)
+    if (resolved.length > 0) return resolved
+    const galleryUrls = this.normalizedGalleryUrls()
+    if (galleryUrls.length > 0) {
+      return galleryUrls.map((url: string): PictureCarouselMediaItem => ({
+        kind: 'image', imageUrl: url, videoUrl: '',
       }))
     }
-
-    const singleMediaUrl = (this.pictureUrl || '').trim()
-    return singleMediaUrl
-      ? [{
-          kind: 'image',
-          imageUrl: singleMediaUrl,
-          videoUrl: '',
-        }]
-      : []
+    const singleUrl = (this.pictureUrl || '').trim()
+    return singleUrl ? [{ kind: 'image', imageUrl: singleUrl, videoUrl: '' }] : []
   }
 
   private displayAuthor(): string {
     return (this.authorLabel || this.entry.author || '').trim() || '未知来源'
-  }
-
-  @Builder
-  private UnreadDot() {
-    if (this.isUnread && this.showUnreadDot) {
-      Row()
-        .width(8)
-        .height(8)
-        .borderRadius(999)
-        .backgroundColor(this.theme.accent)
-        .margin({ right: 8, top: 8 })
-    }
-  }
-
-  @Builder
-  private FeedAvatar() {
-    if (this.feedImageUrl.trim()) {
-      Image(this.feedImageUrl.trim())
-        .width(28)
-        .height(28)
-        .borderRadius(14)
-        .backgroundColor(this.theme.elevated)
-    } else {
-      Stack({ alignContent: Alignment.Center }) {
-        Row()
-          .width(28)
-          .height(28)
-          .borderRadius(14)
-          .backgroundColor(this.theme.accent)
-
-        Text(this.displayAuthor().substring(0, 1).toUpperCase())
-          .fontSize(12)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FFFFFF')
-      }
-    }
   }
 
   private normalizedGalleryUrls(): string[] {
@@ -126,323 +82,48 @@ export struct PictureEntryCard {
     return this.cachedCarouselItems
   }
 
-  private controllerFor(index: number): VideoController {
-    if (!this.livePhotoControllers[index]) {
-      this.livePhotoControllers[index] = new VideoController()
-    }
-    return this.livePhotoControllers[index]
-  }
-
-  private currentLivePhotoItem(index: number): PictureCarouselMediaItem | undefined {
-    const item = this.carouselMediaItems()[index]
-    return item?.kind === 'livePhoto' && item.videoUrl ? item : undefined
-  }
-
-  private logLivePhotoState(event: string, index: number, extra: string = ''): void {
-    const item = this.currentLivePhotoItem(index)
-    const parts: string[] = [
-      `[Picture Live] ${event}`,
-      `index=${index}`,
-      `active=${this.activeMediaIndex}`,
-      `prepared=${this.isLivePhotoPrepared(index)}`,
-      `playing=${this.playingLivePhotoIndex}`,
-      `paused=${this.pausedLivePhotoIndex}`,
-      `nearly=${this.isNearlyVisible}`,
-      `fully=${this.isFullyVisible}`,
-      `mounted=${this.mountedLivePhotoIndices().join(',')}`,
-      `seed=${this.livePhotoInstanceSeed(index)}`,
-      `hasVideo=${!!item?.videoUrl}`,
-    ]
-
-    if (extra) {
-      parts.push(extra)
-    }
-
-    console.info(parts.join(' | '))
-  }
-
-  private mountedLivePhotoIndices(): number[] {
-    const mounted = new Set<number>()
-    const currentItem = this.currentLivePhotoItem(this.activeMediaIndex)
-    if (currentItem) {
-      mounted.add(this.activeMediaIndex)
-    }
-
-    this.preparedLivePhotoIndices.forEach((index: number) => {
-      mounted.add(index)
-    })
-
-    if (this.playingLivePhotoIndex >= 0) {
-      mounted.add(this.playingLivePhotoIndex)
-    }
-    if (this.pausedLivePhotoIndex >= 0) {
-      mounted.add(this.pausedLivePhotoIndex)
-    }
-
-    return Array.from(mounted.values())
-  }
-
-  private syncVisibleLivePhotoPlayback(index: number): void {
-    const item = this.currentLivePhotoItem(index)
-    if (!item) {
-      this.playingLivePhotoIndex = -1
-      this.pausedLivePhotoIndex = -1
-      return
-    }
-
-    if (!this.isNearlyVisible) {
-      this.logLivePhotoState('sync-pause-not-visible', index)
-      this.pauseLivePhotoPlayback(index)
-      return
-    }
-
-    if (this.isLivePhotoPrepared(index)) {
-      this.pausedLivePhotoIndex = -1
-      this.playingLivePhotoIndex = index
-      try {
-        this.controllerFor(index).start()
-        this.logLivePhotoState('sync-start-prepared', index)
-      } catch (_) {
-        this.logLivePhotoState('sync-start-prepared-failed', index)
-      }
-      return
-    }
-
-    this.pausedLivePhotoIndex = -1
-    this.playingLivePhotoIndex = -1
-    this.logLivePhotoState('sync-wait-prepared', index)
-  }
-
-  private pauseLivePhotoPlayback(index: number): void {
-    const item = this.currentLivePhotoItem(index)
-    if (!item) {
-      this.pausedLivePhotoIndex = -1
-      this.playingLivePhotoIndex = -1
-      return
-    }
-
-    this.stopAllLivePhotoPlayback(index)
-    try {
-      this.controllerFor(index).pause()
-      this.pausedLivePhotoIndex = index
-      this.logLivePhotoState('pause', index)
-    } catch (_) {
-      this.pausedLivePhotoIndex = -1
-      this.logLivePhotoState('pause-failed', index)
-    }
-    this.playingLivePhotoIndex = -1
-  }
-
-  private stopAllLivePhotoPlayback(exceptIndex: number = -1): void {
-    this.livePhotoControllers.forEach((controller: VideoController, index: number) => {
-      if (index === exceptIndex || !controller) {
-        return
-      }
-      try {
-        controller.pause()
-      } catch (_) {
-      }
-    })
-  }
-
-  private clearPreparedLivePhoto(index: number): void {
-    if (!this.preparedLivePhotoIndices.includes(index)) {
-      return
-    }
-
-    this.preparedLivePhotoIndices = this.preparedLivePhotoIndices.filter((value: number) => value !== index)
-  }
-
-  private markPreparedLivePhoto(index: number): void {
-    if (this.preparedLivePhotoIndices.includes(index)) {
-      return
-    }
-
-    this.preparedLivePhotoIndices = [...this.preparedLivePhotoIndices, index]
-  }
-
-  private livePhotoInstanceSeed(index: number): number {
-    return this.livePhotoInstanceSeeds[index] ?? 0
-  }
-
-  private refreshLivePhotoInstance(index: number): void {
-    this.clearPreparedLivePhoto(index)
-    const nextSeeds = [...this.livePhotoInstanceSeeds]
-    nextSeeds[index] = (nextSeeds[index] ?? 0) + 1
-    this.livePhotoInstanceSeeds = nextSeeds
-    this.logLivePhotoState('refresh-instance', index)
-  }
-
-  private stopLivePhotoPlayback(): void {
-    this.playingLivePhotoIndex = -1
-    this.pausedLivePhotoIndex = -1
-    this.preparedLivePhotoIndices = []
-    this.stopAllLivePhotoPlayback()
-  }
-
-  private isLivePhotoPrepared(index: number): boolean {
-    return this.preparedLivePhotoIndices.includes(index)
-  }
-
-  private shouldShowPlayingLivePhoto(index: number): boolean {
-    return this.playingLivePhotoIndex === index && this.isLivePhotoPrepared(index)
-  }
-
-  private shouldShowPausedLivePhoto(index: number): boolean {
-    return this.pausedLivePhotoIndex === index && this.isLivePhotoPrepared(index)
-  }
-
-  private shouldWarmLivePhoto(index: number): boolean {
-    return this.isNearlyVisible
-      && this.activeMediaIndex === index
-      && this.mountedLivePhotoIndices().includes(index)
-  }
-
-  private shouldShowLivePhotoLoading(index: number): boolean {
-    return this.currentLivePhotoItem(index) !== undefined
-      && this.activeMediaIndex === index
-      && this.isNearlyVisible
-      && !this.isLivePhotoPrepared(index)
-  }
-
   private handleLivePhotoPrepared(index: number): void {
-    this.markPreparedLivePhoto(index)
-    this.logLivePhotoState('prepared', index)
     if (this.isNearlyVisible && this.activeMediaIndex === index) {
-      this.pausedLivePhotoIndex = -1
-      this.playingLivePhotoIndex = index
-      try {
-        this.controllerFor(index).start()
-        this.logLivePhotoState('prepared-start', index)
-      } catch (_) {
-        this.logLivePhotoState('prepared-start-failed', index)
-      }
+      this.livePhoto.handlePrepared(this.cachedCarouselItems, index)
     }
   }
 
   private handleLivePhotoStart(index: number): void {
-    this.markPreparedLivePhoto(index)
-    if (this.pausedLivePhotoIndex === index) {
-      this.pausedLivePhotoIndex = -1
-    }
-    if (this.isNearlyVisible && this.activeMediaIndex === index) {
-      this.playingLivePhotoIndex = index
-    }
-    this.logLivePhotoState('start', index)
+    this.livePhoto.handleStart(index)
   }
 
   private handleLivePhotoPause(index: number): void {
-    if (this.activeMediaIndex === index && this.isLivePhotoPrepared(index)) {
-      this.pausedLivePhotoIndex = index
-    }
-    if (this.playingLivePhotoIndex === index) {
-      this.playingLivePhotoIndex = -1
-    }
-    this.logLivePhotoState('on-pause', index)
+    this.livePhoto.handlePause(index)
   }
 
   private handleLivePhotoStop(index: number): void {
-    if (this.playingLivePhotoIndex === index) {
-      this.playingLivePhotoIndex = -1
-    }
-    if (this.pausedLivePhotoIndex === index) {
-      this.pausedLivePhotoIndex = -1
-    }
-    this.logLivePhotoState('on-stop', index)
+    this.livePhoto.handleStop(index)
   }
 
   private handleLivePhotoError(index: number): void {
-    this.clearPreparedLivePhoto(index)
-    if (this.playingLivePhotoIndex === index) {
-      this.playingLivePhotoIndex = -1
-    }
-    if (this.pausedLivePhotoIndex === index) {
-      this.pausedLivePhotoIndex = -1
-    }
-    this.logLivePhotoState('error', index)
-    this.refreshLivePhotoInstance(index)
+    this.livePhoto.handleError(index)
   }
 
-  private livePhotoAspectRatio(index: number): number {
-    const ratio = this.livePhotoAspectRatios[index]
-    return ratio && ratio > 0 ? ratio : 4 / 5
+  private handleVisibleAreaChange(isVisible: boolean, currentRatio: number): void {
+    const nearlyVisible = isVisible && currentRatio >= 0.35
+    const fullyVisible = isVisible && currentRatio >= 0.6
+    this.isNearlyVisible = nearlyVisible
+    this.isFullyVisible = fullyVisible
+    this.livePhoto.isNearlyVisible = nearlyVisible
+    this.livePhoto.syncPlayback(this.cachedCarouselItems, this.activeMediaIndex)
   }
 
-  private rememberLivePhotoAspectRatio(index: number, width: number, height: number): void {
-    if (width <= 0 || height <= 0) {
-      return
-    }
-
-    this.rememberMediaNaturalSize(index, width, height)
-    const nextRatio = width / height
-    const currentRatio = this.livePhotoAspectRatios[index]
-    if (currentRatio && Math.abs(currentRatio - nextRatio) < 0.001) {
-      return
-    }
-
-    const nextAspectRatios = [...this.livePhotoAspectRatios]
-    nextAspectRatios[index] = nextRatio
-    this.livePhotoAspectRatios = nextAspectRatios
-  }
-
-  private rememberMediaNaturalSize(index: number, width: number, height: number): void {
-    if (width <= 0 || height <= 0) {
-      return
-    }
-
-    const nextSizes = [...this.mediaNaturalSizes]
-    nextSizes[index] = { width, height }
-    this.mediaNaturalSizes = nextSizes
-  }
-
-  private resolvedMediaFrameAspectRatio(): number {
-    const fallbackRatio = 4 / 5
-    const items = this.carouselMediaItems()
-    if (items.length === 0) {
-      return fallbackRatio
-    }
-
-    let maxArea: number = -1
-    let maxAreaIndex: number = 0
-    for (let index = 0; index < items.length; index++) {
-      const size = this.mediaNaturalSizes[index]
-      const area = size ? size.width * size.height : -1
-      if (area > maxArea) {
-        maxArea = area
-        maxAreaIndex = index
-      }
-    }
-
-    if (items[maxAreaIndex]?.kind === 'livePhoto') {
-      return this.livePhotoAspectRatio(maxAreaIndex)
-    }
-
-    const defaultItem = items[maxAreaIndex] || items[0]
-    if (!defaultItem) {
-      return fallbackRatio
-    }
-
-    if (defaultItem.kind === 'livePhoto') {
-      return this.livePhotoAspectRatio(maxAreaIndex)
-    }
-
-    const measuredSize = this.mediaNaturalSizes[maxAreaIndex]
-    if (!measuredSize || measuredSize.width <= 0 || measuredSize.height <= 0) {
-      return fallbackRatio
-    }
-
-    return measuredSize.width / measuredSize.height
+  private toggleMute(): void {
+    this.livePhotoMuted = !this.livePhotoMuted
+    this.livePhoto.setMuted(this.livePhotoMuted)
   }
 
   private frameShadowColor(): string {
     return this.theme.isDark ? 'rgba(0,0,0,0.34)' : 'rgba(15,23,42,0.16)'
   }
 
-  private cardPadding(): PictureEntryCardPadding {
-    if (this.flatMode) {
-      return { left: 0, right: 0, top: 4, bottom: 6 }
-    }
-    return { left: 14, right: 14, top: 10, bottom: 10 }
+  private cardPadding(): CardPadding {
+    return this.flatMode ? { left: 0, right: 0, top: 4, bottom: 6 } : { left: 14, right: 14, top: 10, bottom: 10 }
   }
 
   private cardBackgroundColor(): string {
@@ -458,63 +139,65 @@ export struct PictureEntryCard {
   }
 
   @Builder
+  private UnreadDot() {
+    if (this.isUnread && this.showUnreadDot) {
+      Row()
+        .width(8).height(8).borderRadius(999)
+        .backgroundColor(this.theme.accent)
+        .margin({ right: 8, top: 8 })
+    }
+  }
+
+  @Builder
+  private FeedAvatar() {
+    if (this.feedImageUrl.trim()) {
+      Image(this.feedImageUrl.trim())
+        .width(28).height(28).borderRadius(14)
+        .backgroundColor(this.theme.elevated)
+    } else {
+      Stack({ alignContent: Alignment.Center }) {
+        Row().width(28).height(28).borderRadius(14)
+          .backgroundColor(this.theme.accent)
+        Text(this.displayAuthor().substring(0, 1).toUpperCase())
+          .fontSize(12).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+      }
+    }
+  }
+
+  @Builder
   private FramedImageSlide(item: PictureCarouselMediaItem, index: number) {
     Stack({ alignContent: Alignment.Center }) {
       Image(item.imageUrl || this.pictureUrl)
-        .width('100%')
-        .height('100%')
-        .objectFit(ImageFit.Cover)
-        .opacity(0.26)
-        .blur(14)
-        .borderRadius(14)
-
+        .width('100%').height('100%').objectFit(ImageFit.Cover)
+        .opacity(0.26).blur(14).borderRadius(14)
       Image(item.imageUrl || this.pictureUrl)
-        .width('100%')
-        .height('100%')
-        .objectFit(ImageFit.Contain)
-        .borderRadius(14)
-        .backgroundColor(this.theme.elevated)
+        .width('100%').height('100%').objectFit(ImageFit.Contain)
+        .borderRadius(14).backgroundColor(this.theme.elevated)
         .shadow({
           radius: this.theme.isDark ? 14 : 16,
-          color: this.frameShadowColor(),
-          offsetX: 0,
-          offsetY: 3,
+          color: this.frameShadowColor(), offsetX: 0, offsetY: 3,
         })
         .onComplete((event) => {
-          if (event) {
-            this.rememberMediaNaturalSize(index, event.width, event.height)
-          }
+          if (event) this.livePhoto.rememberAspectRatio(index, event.width, event.height)
         })
     }
     .width('100%')
-    .aspectRatio(this.resolvedMediaFrameAspectRatio())
-  }
-
-  private toggleLivePhotoMuted(): void {
-    this.livePhotoMuted = !this.livePhotoMuted
+    .aspectRatio(this.livePhoto.frameAspectRatio(this.carouselMediaItems()))
   }
 
   @Builder
   private LoadingIndicator() {
     Stack({ alignContent: Alignment.Center }) {
-      LoadingProgress()
-        .color(Color.White)
-        .layoutWeight(1)
-        .width(40)
-        .height(40)
+      LoadingProgress().color(Color.White).layoutWeight(1).width(40).height(40)
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor('rgba(0,0,0,0.3)')
+    .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.3)')
   }
 
   @Builder
   private LiveBadge() {
     Row({ space: 4 }) {
       Image($r('app.media.ic_gallery_frame_overlay_camera_livephoto'))
-        .width(16)
-        .height(16)
-        .fillColor('#FFFFFF')
+        .width(16).height(16).fillColor('#FFFFFF')
     }
     .padding({ left: 2, right: 2, top: 2, bottom: 2 })
     .margin({ top: 10, right: 10 })
@@ -524,17 +207,17 @@ export struct PictureEntryCard {
   private LiveSoundToggle() {
     Row() {
       SymbolGlyph($r(this.livePhotoMuted ? 'sys.symbol.speaker_slash_fill' : 'sys.symbol.speaker_wave_2_fill'))
-        .fontSize(13)
-        .fontColor(['rgba(255,255,255,0.92)'])
+        .fontSize(13).fontColor(['rgba(255,255,255,0.92)'])
     }
     .padding({ left: 7, right: 7, top: 6, bottom: 6 })
     .margin({ right: 10, bottom: 10 })
-    .backgroundColor('rgba(0,0,0,0.28)')
-    .borderRadius(999)
+    .backgroundColor('rgba(0,0,0,0.28)').borderRadius(999)
     .clickEffect({ level: ClickEffectLevel.LIGHT })
-    .onClick(() => {
-      this.toggleLivePhotoMuted()
-    })
+    .onClick(() => this.toggleMute())
+  }
+
+  private isLivePhotoMounted(index: number): boolean {
+    return this.livePhoto.mountedIndices(this.carouselMediaItems(), this.activeMediaIndex).includes(index)
   }
 
   @Builder
@@ -542,75 +225,44 @@ export struct PictureEntryCard {
     Stack({ alignContent: Alignment.Center }) {
       Stack({ alignContent: Alignment.Center }) {
         Image(item.imageUrl || this.pictureUrl)
-          .width('100%')
-          .height('100%')
-          .objectFit(ImageFit.Contain)
-          .borderRadius(14)
-          .backgroundColor(this.theme.elevated)
+          .width('100%').height('100%').objectFit(ImageFit.Contain)
+          .borderRadius(14).backgroundColor(this.theme.elevated)
           .onComplete((event) => {
-            if (event) {
-              this.rememberLivePhotoAspectRatio(index, event.width, event.height)
-            }
+            if (event) this.livePhoto.rememberAspectRatio(index, event.width, event.height)
           })
-          .visibility((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index))
-            ? Visibility.Hidden
-            : Visibility.Visible)
+          .visibility((this.livePhoto.shouldShowPlaying(index) || this.livePhoto.shouldShowPaused(index))
+            ? Visibility.Hidden : Visibility.Visible)
 
-        if (item.kind === 'livePhoto' && item.videoUrl && this.mountedLivePhotoIndices().includes(index)) {
+        if (item.kind === 'livePhoto' && item.videoUrl && this.isLivePhotoMounted(index)) {
           Video({
             src: item.videoUrl,
-            controller: this.controllerFor(index),
+            controller: this.livePhoto.controllerFor(index),
             previewUri: item.imageUrl || this.pictureUrl,
           })
-            .width('100%')
-            .height('100%')
-            .borderRadius(14)
+            .width('100%').height('100%').borderRadius(14)
             .controls(false)
-            .autoPlay(this.shouldWarmLivePhoto(index))
+            .autoPlay(this.livePhoto.shouldWarm(index, index, this.carouselMediaItems()))
             .loop(true)
-            .muted(this.livePhotoMuted || !this.shouldShowPlayingLivePhoto(index))
+            .muted(this.livePhotoMuted || !this.livePhoto.shouldShowPlaying(index))
             .objectFit(ImageFit.Cover)
-            .opacity((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index)) ? 1 : 0)
-            .onPrepared(() => {
-              this.handleLivePhotoPrepared(index)
-            })
-            .onStart(() => {
-              this.handleLivePhotoStart(index)
-            })
-            .onPause(() => {
-              this.handleLivePhotoPause(index)
-            })
-            .onStop(() => {
-              this.handleLivePhotoStop(index)
-            })
-            .onError(() => {
-              this.handleLivePhotoError(index)
-            })
+            .opacity((this.livePhoto.shouldShowPlaying(index) || this.livePhoto.shouldShowPaused(index)) ? 1 : 0)
+            .onPrepared(() => this.livePhoto.handlePrepared(this.carouselMediaItems(), index))
+            .onStart(() => this.livePhoto.handleStart(index))
+            .onPause(() => this.livePhoto.handlePause(index))
+            .onStop(() => this.livePhoto.handleStop(index))
+            .onError(() => this.livePhoto.handleError(index))
         }
       }
-      .width('100%')
-      .height('100%')
+      .width('100%').height('100%')
 
-      if (this.shouldShowLivePhotoLoading(index)) {
+      if (this.livePhoto.shouldShowLoading(this.carouselMediaItems(), index, this.activeMediaIndex)) {
         this.LoadingIndicator()
       }
 
-      Stack() {
-        this.LiveBadge()
-      }
-      .width('100%')
-      .height('100%')
-      .align(Alignment.TopEnd)
-
-      Stack() {
-        this.LiveSoundToggle()
-      }
-      .width('100%')
-      .height('100%')
-      .align(Alignment.BottomEnd)
+      Stack() { this.LiveBadge() }.width('100%').height('100%').align(Alignment.TopEnd)
+      Stack() { this.LiveSoundToggle() }.width('100%').height('100%').align(Alignment.BottomEnd)
     }
-    .width('100%')
-    .aspectRatio(this.resolvedMediaFrameAspectRatio())
+    .width('100%').aspectRatio(this.livePhoto.frameAspectRatio(this.carouselMediaItems()))
   }
 
   @Builder
@@ -618,40 +270,31 @@ export struct PictureEntryCard {
     if (this.carouselMediaItems().length > 0) {
       Stack({ alignContent: Alignment.Center }) {
         Swiper() {
-          ForEach(this.carouselMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
+          ForEach(this.carouselMediaItems(), (item: PictureCarouselMediaItem, idx: number) => {
             if (item.kind === 'livePhoto') {
-              this.LivePhotoSlide(item, index)
+              this.LivePhotoSlide(item, idx)
             } else {
-              this.FramedImageSlide(item, index)
+              this.FramedImageSlide(item, idx)
             }
-          }, (item: PictureCarouselMediaItem, index: number) => `${item.kind}-${item.imageUrl}-${item.videoUrl}-${index}-${this.livePhotoInstanceSeed(index)}`)
+          }, (item: PictureCarouselMediaItem, idx: number) =>
+            `${item.kind}-${item.imageUrl}-${item.videoUrl}-${idx}-${this.livePhoto.instanceSeed(idx)}`
+          )
         }
-        .width('100%')
-        .vertical(false)
-        .autoPlay(false)
-        .displayArrow(false)
-        .effectMode(EdgeEffect.None)
-        .cachedCount(4)
+        .width('100%').vertical(false).autoPlay(false).displayArrow(false)
+        .effectMode(EdgeEffect.None).cachedCount(4)
         .indicator(new DotIndicator()
-          .itemWidth(6)
-          .itemHeight(6)
-          .selectedItemWidth(12)
-          .selectedItemHeight(6)
+          .itemWidth(6).itemHeight(6)
+          .selectedItemWidth(12).selectedItemHeight(6)
           .color($r('sys.color.comp_background_secondary'))
           .selectedColor(this.theme.accent))
-        .loop(this.carouselMediaItems().length > 1)
-        .duration(260)
-        .onChange((index: number) => {
-          this.activeMediaIndex = index
-          this.logLivePhotoState('swiper-change', index)
-          this.syncVisibleLivePhotoPlayback(index)
+        .loop(this.carouselMediaItems().length > 1).duration(260)
+        .onChange((idx: number) => {
+          this.activeMediaIndex = idx
+          this.livePhoto.syncPlayback(this.carouselMediaItems(), idx)
         })
       }
-      .width('100%')
-      .constraintSize({ maxHeight: 640 })
-      .clip(true)
-      .borderRadius(14)
-      .backgroundColor(this.theme.elevated)
+      .width('100%').constraintSize({ maxHeight: 640 }).clip(true)
+      .borderRadius(14).backgroundColor(this.theme.elevated)
     }
   }
 
@@ -660,72 +303,38 @@ export struct PictureEntryCard {
       Column({ space: 10 }) {
         Row({ space: 8 }) {
           this.FeedAvatar()
-
           HighlightedInlineText({
-            text: this.displayAuthor(),
-            query: this.highlightQuery,
-            theme: this.theme,
-            fontSize: 15,
-            lineHeight: 20,
-            fontWeight: FontWeight.Medium,
-            defaultColor: this.theme.textPrimary,
-            maxLines: 1,
+            text: this.displayAuthor(), query: this.highlightQuery, theme: this.theme,
+            fontSize: 15, lineHeight: 20, fontWeight: FontWeight.Medium,
+            defaultColor: this.theme.textPrimary, maxLines: 1,
           })
-
-          Text('·')
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
-
-          Text(formatPublishedAt(this.entry.publishedAt))
-            .fontSize(12)
-            .fontColor(this.theme.textMuted)
+          Text('·').fontSize(12).fontColor(this.theme.textMuted)
+          Text(formatPublishedAt(this.entry.publishedAt)).fontSize(12).fontColor(this.theme.textMuted)
         }
         .width('100%')
 
         if (this.caption) {
           HighlightedInlineText({
-            text: this.caption,
-            query: this.highlightQuery,
-            theme: this.theme,
-            fontSize: 13,
-            lineHeight: 20,
-            defaultColor: this.theme.textSecondary,
-            maxLines: 2,
+            text: this.caption, query: this.highlightQuery, theme: this.theme,
+            fontSize: 13, lineHeight: 20,
+            defaultColor: this.theme.textSecondary, maxLines: 2,
           })
         }
 
-        if (this.carouselMediaItems().length > 0) {
-          this.MediaCarousel()
-        }
+        this.MediaCarousel()
 
         if (this.flatMode && this.showBottomDivider) {
-          Row()
-            .width('100%')
-            .height(0.8)
-            .backgroundColor(this.theme.divider)
-            .margin({ top: 6 })
+          Row().width('100%').height(0.8).backgroundColor(this.theme.divider).margin({ top: 6 })
         }
       }
-      .width('100%')
-      .padding({ top: 8, bottom: 10 })
+      .width('100%').padding({ top: 8, bottom: 10 })
       .alignItems(HorizontalAlign.Start)
       .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
       .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
-        this.isNearlyVisible = isVisible && currentRatio >= 0.35
-        this.isFullyVisible = isVisible && currentRatio >= 0.6
-        this.logLivePhotoState(
-          'visible-area-change',
-          this.activeMediaIndex,
-          `isVisible=${isVisible} ratio=${currentRatio.toFixed(2)}`,
-        )
-        this.syncVisibleLivePhotoPlayback(this.activeMediaIndex)
+        this.handleVisibleAreaChange(isVisible, currentRatio)
       })
-      .onDisAppear(() => {
-        this.stopLivePhotoPlayback()
-      })
-      .onClick(() => {
-        this.onOpen()
-      })
+      .onDisAppear(() => this.livePhoto.stopAll())
+      .onClick(() => this.onOpen())
 
       this.UnreadDot()
     }
@@ -736,11 +345,7 @@ export struct PictureEntryCard {
     .border({ width: this.cardBorderWidth(), color: this.theme.divider })
     .shadow(this.flatMode
       ? { radius: 0, color: '#00000000', offsetX: 0, offsetY: 0 }
-      : {
-          radius: this.theme.isDark ? 10 : 14,
-          color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
-          offsetX: 0,
-          offsetY: 4,
-        })
+      : { radius: this.theme.isDark ? 10 : 14, color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)', offsetX: 0, offsetY: 4 }
+    )
   }
 }
