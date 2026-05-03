@@ -2,8 +2,6 @@
 
 | Lines | File                                                                    |
 | ----- | ----------------------------------------------------------------------- |
-| 638   | entry/src/main/ets/common/utils/DiscoverInteractionCoordinator.ets      |
-| 638   | entry/src/main/ets/common/components/SettingsContent.ets                |
 | 635   | entry/src/main/ets/common/components/DiscoverBrowseDestination.ets      |
 | 540   | entry/src/main/ets/common/services/SubscriptionOpmlService.ets          |
 | 537   | entry/src/main/ets/common/services/AIAssistantConnectionTestService.ets |

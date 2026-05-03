@@ -83,7 +83,6 @@ export struct IndexRootTabBody {
         })
       } else {
         SettingsContent({
-          showBottomTabs: false,
           inheritedTheme: this.theme,
           inheritedSettings: this.rootSettings,
           onContentScrollerReady: (scroller: Scroller) => {
