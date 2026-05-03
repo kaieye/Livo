@@ -1,12 +1,8 @@
 import { FeedRepository } from '../repositories/FeedRepository'
 import { AppPreferenceService } from '../services/AppPreferenceService'
 import { Feed, FeedViewType } from '../models/LivoModels'
-import {
-  DiscoverSearchPlatform,
-  RecommendedFeed,
-  ResolvedDiscoverCandidate,
-  trendingDiscoverFeedsFromJsonNow,
-} from '../services/DiscoverService'
+import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
+import { trendingDiscoverFeedsFromJsonNow } from '../services/discover/DiscoverFeedCatalog'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { DiscoverFocusController, DiscoverFocusOwner } from './DiscoverFocusController'

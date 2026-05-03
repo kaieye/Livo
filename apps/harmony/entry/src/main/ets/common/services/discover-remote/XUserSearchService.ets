@@ -16,7 +16,7 @@ import {
   SHORT_REQUEST_TIMEOUT_MS,
   MEDIUM_REQUEST_TIMEOUT_MS,
 } from '../../AppConfig'
-import { ResolvedDiscoverCandidate } from '../DiscoverService'
+import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 import {
   SOCIAL_VIEW_MAPPING,
   buildProfileAnchorSnippet,

@@ -1,10 +1,10 @@
-import { openRootTab } from '../common/navigation/AppRouter'
+import { handleRootTabShellAppear } from '../common/utils/RootTabShellHelper'
 
 @Entry
 @Component
 struct Settings {
   aboutToAppear(): void {
-    void openRootTab('settings', true)
+    handleRootTabShellAppear('settings')
   }
 
   build() {

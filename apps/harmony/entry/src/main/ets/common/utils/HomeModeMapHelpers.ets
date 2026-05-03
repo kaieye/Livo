@@ -1,4 +1,3 @@
-import { EntryCardModel, Entry, selectPictureCarouselMediaUrls } from '../models/LivoModels'
 import {
   HOME_MODE_INITIAL_CANDIDATE_LIMIT,
   HomeModeCandidateLimitMap,
@@ -15,21 +14,11 @@ import {
 import { resolveHomeVisibleEntryInitialLimit } from './HomeVisibleEntryPolicy'
 
 export function createHomeModeNumberMap(value: number): HomeModeScrollOffsetMap {
-  return {
-    articles: value,
-    social: value,
-    pictures: value,
-    videos: value,
-  }
+  return { articles: value, social: value, pictures: value, videos: value }
 }
 
 export function createHomeModeBooleanMap(value: boolean): HomeModeHasMoreMap {
-  return {
-    articles: value,
-    social: value,
-    pictures: value,
-    videos: value,
-  }
+  return { articles: value, social: value, pictures: value, videos: value }
 }
 
 export function createHomeCandidateLimitMap(): HomeModeCandidateLimitMap {
@@ -76,125 +65,87 @@ export function createHomeScrollOffsetMap(): HomeModeScrollOffsetMap {
 
 export function homeModeNumberValue(mode: SubscriptionMode, values: HomeModeScrollOffsetMap): number {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeCandidateLimitValue(mode: SubscriptionMode, values: HomeModeCandidateLimitMap): number {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeVisibleEntryLimitValue(mode: SubscriptionMode, values: HomeModeVisibleEntryLimitMap): number {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeNoProgressCountValue(mode: SubscriptionMode, values: HomeModeNoProgressCountMap): number {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeLoadMoreTimestampValue(mode: SubscriptionMode, values: HomeModeLoadMoreTimestampMap): number {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeModeBooleanValue(mode: SubscriptionMode, values: HomeModeHasMoreMap): boolean {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeModeLoadedValue(mode: SubscriptionMode, values: HomeModeLoadedMap): boolean {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeModeLoadingValue(mode: SubscriptionMode, values: HomeModeLoadingMap): boolean {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function homeModePendingLoadMoreValue(mode: SubscriptionMode, values: HomeModePendingLoadMoreMap): boolean {
   switch (mode) {
-    case 'social':
-      return values.social
-    case 'pictures':
-      return values.pictures
-    case 'videos':
-      return values.videos
-    default:
-      return values.articles
+    case 'social': return values.social
+    case 'pictures': return values.pictures
+    case 'videos': return values.videos
+    default: return values.articles
   }
 }
 
 export function withHomeModeNumberValue(
-  mode: SubscriptionMode,
-  value: number,
-  values: HomeModeScrollOffsetMap,
+  mode: SubscriptionMode, value: number, values: HomeModeScrollOffsetMap,
 ): HomeModeScrollOffsetMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -205,9 +156,7 @@ export function withHomeModeNumberValue(
 }
 
 export function withHomeModeBooleanValue(
-  mode: SubscriptionMode,
-  value: boolean,
-  values: HomeModeHasMoreMap,
+  mode: SubscriptionMode, value: boolean, values: HomeModeHasMoreMap,
 ): HomeModeHasMoreMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -218,9 +167,7 @@ export function withHomeModeBooleanValue(
 }
 
 export function withHomeCandidateLimitValue(
-  mode: SubscriptionMode,
-  value: number,
-  values: HomeModeCandidateLimitMap,
+  mode: SubscriptionMode, value: number, values: HomeModeCandidateLimitMap,
 ): HomeModeCandidateLimitMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -231,9 +178,7 @@ export function withHomeCandidateLimitValue(
 }
 
 export function withHomeLoadedValue(
-  mode: SubscriptionMode,
-  value: boolean,
-  values: HomeModeLoadedMap,
+  mode: SubscriptionMode, value: boolean, values: HomeModeLoadedMap,
 ): HomeModeLoadedMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -244,9 +189,7 @@ export function withHomeLoadedValue(
 }
 
 export function withHomeLoadingValue(
-  mode: SubscriptionMode,
-  value: boolean,
-  values: HomeModeLoadingMap,
+  mode: SubscriptionMode, value: boolean, values: HomeModeLoadingMap,
 ): HomeModeLoadingMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -257,9 +200,7 @@ export function withHomeLoadingValue(
 }
 
 export function withHomeVisibleEntryLimitValue(
-  mode: SubscriptionMode,
-  value: number,
-  values: HomeModeVisibleEntryLimitMap,
+  mode: SubscriptionMode, value: number, values: HomeModeVisibleEntryLimitMap,
 ): HomeModeVisibleEntryLimitMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -270,9 +211,7 @@ export function withHomeVisibleEntryLimitValue(
 }
 
 export function withHomeNoProgressCountValue(
-  mode: SubscriptionMode,
-  value: number,
-  values: HomeModeNoProgressCountMap,
+  mode: SubscriptionMode, value: number, values: HomeModeNoProgressCountMap,
 ): HomeModeNoProgressCountMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -283,9 +222,7 @@ export function withHomeNoProgressCountValue(
 }
 
 export function withHomePendingLoadMoreValue(
-  mode: SubscriptionMode,
-  value: boolean,
-  values: HomeModePendingLoadMoreMap,
+  mode: SubscriptionMode, value: boolean, values: HomeModePendingLoadMoreMap,
 ): HomeModePendingLoadMoreMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
@@ -296,46 +233,12 @@ export function withHomePendingLoadMoreValue(
 }
 
 export function withHomeLoadMoreTimestampValue(
-  mode: SubscriptionMode,
-  value: number,
-  values: HomeModeLoadMoreTimestampMap,
+  mode: SubscriptionMode, value: number, values: HomeModeLoadMoreTimestampMap,
 ): HomeModeLoadMoreTimestampMap {
   return {
     articles: mode === 'articles' ? value : values.articles,
     social: mode === 'social' ? value : values.social,
     pictures: mode === 'pictures' ? value : values.pictures,
     videos: mode === 'videos' ? value : values.videos,
-  }
-}
-
-export function pictureGalleryUrls(entry: EntryCardModel): string[] {
-  return entry.mediaUrls ?? []
-}
-
-export function pictureCaption(entry: EntryCardModel): string {
-  const title = (entry.title || '').trim()
-  if (title && title !== '远程条目') {
-    return title
-  }
-  return (entry.summary || '').trim()
-}
-
-export function pictureCardEntry(entry: EntryCardModel): Entry {
-  return {
-    id: entry.id,
-    feedId: entry.feedId,
-    title: entry.title,
-    url: entry.articleUrl,
-    summary: entry.summary,
-    content: '',
-    author: entry.author,
-    publishedAt: entry.publishedAt,
-    readingTimeMinutes: 0,
-    tags: entry.tags,
-    mediaUrls: entry.rawMediaUrls ?? selectPictureCarouselMediaUrls(entry.mediaUrls ?? []),
-    isRead: entry.isRead,
-    isStarred: entry.isStarred,
-    createdAt: entry.publishedAt,
-    updatedAt: entry.publishedAt,
   }
 }

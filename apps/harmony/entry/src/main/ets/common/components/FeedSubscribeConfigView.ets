@@ -1,6 +1,7 @@
 import { FeedRepository } from '../repositories/FeedRepository'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { showToast, TOAST_DURATION_ERROR, TOAST_DURATION_OK } from '../utils/PageToastHelper'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
@@ -17,8 +18,6 @@ import { FeedSubscribeInfoCard } from './feed-subscribe-config/FeedSubscribeInfo
 import { FeedSubscribeViewTypeRail } from './feed-subscribe-config/FeedSubscribeViewTypeRail'
 import { FeedSubscribeBottomActions } from './feed-subscribe-config/FeedSubscribeBottomActions'
 
-const TOAST_DURATION_OK: number = 2000
-const TOAST_DURATION_ERROR: number = 3000
 const EDIT_MODE_BOTTOM_SPACER: number = 80
 const SUBSCRIBE_MODE_BOTTOM_SPACER: number = 20
 
@@ -177,14 +176,7 @@ export struct FeedSubscribeConfigView {
   }
 
   private showToast(message: string, duration: number = TOAST_DURATION_OK): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({
-        message,
-        duration,
-      })
-    } catch (error) {
-      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
-    }
+    showToast(this.getUIContext(), message, duration)
   }
 
   private showUnsubscribeConfirm(): void {

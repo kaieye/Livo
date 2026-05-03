@@ -12,7 +12,7 @@ import {
   BILIBILI_REFERER,
   MEDIUM_REQUEST_TIMEOUT_MS,
 } from '../AppConfig'
-import { DEFAULT_RSSHUB_INSTANCE } from './DiscoverService'
+import { DEFAULT_RSSHUB_INSTANCE } from '../AppConfig'
 
 const BILIBILI_PAGE_SIZE = 50
 const BILIBILI_MAX_COUNT = 300

@@ -19,7 +19,7 @@ import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import {
   createHomeScrollOffsetMap,
   homeModeNumberValue,
-} from './IndexHomeStateFactory'
+} from './HomeModeMapHelpers'
 
 export interface IndexHomeRailOwner {
   mode: SubscriptionMode

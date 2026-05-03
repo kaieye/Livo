@@ -1,6 +1,6 @@
 import { Entry, EntryCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { resolveModeSceneRenderState } from '../utils/ModeSceneTransition'
+import { ModeSceneRenderState, resolveModeSceneRenderState } from '../utils/ModeSceneTransition'
 import { HomeModeEntriesPage } from './HomeModeEntriesPage'
 import { SubscriptionMode } from './HomeRootConfig'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
@@ -66,45 +66,14 @@ export struct IndexHomeRootContent {
     getPictureGalleryUrls: () => [],
   }
 
-  private sceneVisible(mode: SubscriptionMode): Visibility {
-    const state = resolveModeSceneRenderState({
+  private getSceneProps(mode: SubscriptionMode): ModeSceneRenderState {
+    return resolveModeSceneRenderState({
       mode,
       renderedMode: this.renderedMode,
       previousMode: this.previousMode,
       isTransitioning: this.isModeTransitioning,
       direction: this.modeTransitionDirection,
     })
-    return state.visibility === 'visible' ? Visibility.Visible : Visibility.Hidden
-  }
-
-  private sceneOpacity(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    }).opacity
-  }
-
-  private sceneOffset(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    }).offset
-  }
-
-  private sceneZIndex(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.renderedMode,
-      previousMode: this.previousMode,
-      isTransitioning: this.isModeTransitioning,
-      direction: this.modeTransitionDirection,
-    }).zIndex
   }
 
   @Builder
@@ -117,10 +86,10 @@ export struct IndexHomeRootContent {
       emptyStateTitle: this.callbacks.getEmptyStateTitle(),
       theme: this.theme,
       showUnreadDot: this.showUnreadDot,
-      sceneOpacity: this.sceneOpacity(mode),
-      sceneOffsetX: this.sceneOffset(mode),
-      sceneZIndex: this.sceneZIndex(mode),
-      sceneVisible: this.sceneVisible(mode),
+      sceneOpacity: this.getSceneProps(mode).opacity,
+      sceneOffsetX: this.getSceneProps(mode).offset,
+      sceneZIndex: this.getSceneProps(mode).zIndex,
+      sceneVisible: this.getSceneProps(mode).visibility === 'visible' ? Visibility.Visible : Visibility.Hidden,
       listSwapOpacity: this.homeListSwapAnimating && mode === this.homeListSwapMode ? this.homeListSwapOpacity : 1,
       listSwapTranslateY: this.callbacks.getListSwapTranslateY(mode),
       scroller: this.callbacks.getScroller(mode),

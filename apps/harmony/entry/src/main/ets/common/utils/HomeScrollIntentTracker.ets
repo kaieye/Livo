@@ -7,7 +7,7 @@ import {
   createHomeScrollOffsetMap,
   homeModeNumberValue,
   withHomeModeNumberValue,
-} from './IndexHomeStateFactory'
+} from './HomeModeMapHelpers'
 
 export class HomeScrollIntentTracker {
   isInteracting: boolean = false

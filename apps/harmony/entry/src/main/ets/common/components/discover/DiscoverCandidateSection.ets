@@ -1,5 +1,5 @@
 import { ThemePalette } from '../../services/ThemeService'
-import { ResolvedDiscoverCandidate } from '../../services/DiscoverService'
+import { ResolvedDiscoverCandidate } from '../../services/discover/DiscoverTypes'
 import { DiscoverCandidateRow } from './DiscoverCandidateRow'
 import { DiscoverSectionHeader } from './DiscoverSectionHeader'
 import { CARD_RADIUS_XL } from '../../ui/UiTokens'

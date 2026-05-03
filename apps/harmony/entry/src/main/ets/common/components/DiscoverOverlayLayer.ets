@@ -8,7 +8,7 @@ import {
   createDiscoverResultFromFeed,
 } from './DiscoverTypes'
 import { Entry, Feed, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
-import { RecommendedFeed } from '../services/DiscoverService'
+import { RecommendedFeed } from '../services/discover/DiscoverTypes'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'

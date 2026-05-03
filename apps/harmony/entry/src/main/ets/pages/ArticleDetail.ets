@@ -30,6 +30,7 @@ import {
   HarmonySettings,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { showToast, TOAST_DURATION_SHORT } from '../common/utils/PageToastHelper'
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
 import { getStringParams } from '../common/navigation/AppRouter'
@@ -76,11 +77,7 @@ struct ArticleDetail {
   }
 
   showToast(message: string, duration?: number): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration: duration ?? 1800 })
-    } catch (error) {
-      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
-    }
+    showToast(this.getUIContext(), message, duration ?? TOAST_DURATION_SHORT)
   }
 
   getHostContext(): common.UIAbilityContext {

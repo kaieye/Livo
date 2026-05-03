@@ -9,13 +9,8 @@ import {
 } from '../components/DiscoverTypes'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
-import {
-  DiscoverSearchPlatform,
-  RecommendedFeed,
-  ResolvedDiscoverCandidate,
-  discoverPlatformLabel,
-  preferredViewForPlatform,
-} from '../services/DiscoverService'
+import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
+import { discoverPlatformLabel, preferredViewForPlatform } from '../services/discover/DiscoverLabels'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { resolveDiscoverOverlayReturnLevel } from '../utils/DiscoverNavigationPolicy'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'

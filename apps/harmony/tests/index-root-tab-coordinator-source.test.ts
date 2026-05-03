@@ -27,16 +27,10 @@ test('root tab request and change flow lives in a dedicated coordinator', () => 
 test('index page delegates root tab flow and visibility decisions', () => {
   assert.match(
     indexSource,
-    /private readonly rootTabCoordinator: IndexRootTabCoordinator = new IndexRootTabCoordinator\(this\)/,
+    /readonly rootTabCoordinator: IndexRootTabCoordinator = new IndexRootTabCoordinator\(this\)/,
   )
-  assert.match(
-    indexSource,
-    /private handleRootTabChange\(index: number\): void \{\s*this\.rootTabCoordinator\.handleRootTabChange\(index\)\s*\}/s,
-  )
-  assert.match(
-    indexSource,
-    /private shouldHideBottomTabs\(\): boolean \{\s*return this\.rootTabCoordinator\.shouldHideBottomTabs\(\)\s*\}/s,
-  )
+  assert.match(indexSource, /rootTabCoordinator\.handleRootTabChange\(index\)/)
+  assert.match(indexSource, /rootTabCoordinator\.shouldHideBottomTabs\(\)/)
   assert.doesNotMatch(indexSource, /resolveHdsBottomTabItems\(\)\[index\]/)
   assert.doesNotMatch(indexSource, /getRequestedRootTabId\(\)/)
 })

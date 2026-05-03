@@ -1,93 +1,168 @@
 Architectural Deepening Opportunities
 
-1. AppRepository pass-through bloat — 72% delegation, zero added logic  
+7. The IndexHome\*Coordinator family is one module split across 12 files
 
+Files: pages/Index.ets (459 lines), plus common/utils/IndexHomeBootstrapCoordinator.ets,
+IndexHomeRefreshCoordinator.ets (399), IndexHomePaginationCoordinator.ets (336) +
+HomePaginationState.ets, IndexHomeReloadCoordinator.ets, IndexHomeRailCoordinator.ets,
+IndexHomeRuntimeCoordinator.ets, IndexRootTabCoordinator.ets, IndexPageLifecycleController.ets,
+IndexHomeModeScenePresenter.ets, IndexHomeLoadStateGate.ets, IndexHomeScrollerRegistry.ets,
+IndexHomeDiagnosticsLogger.ets, plus the related HomeEntryDataManager.ets,
+HomeInlineSearchController.ets, HomeModeController.ets. ~1928 lines of coordinator code
+orchestrating one page.
 
-Files: common/data/AppRepository.ets, 14 imported modules
+Problem: Each coordinator declares an IndexHomeXxxOwner interface listing the Index @State
+fields it reads and writes (e.g. IndexHomeRefreshOwner declares 28 fields + 13 callbacks;
+IndexHomePaginationOwner declares 25 fields + 14 callbacks). Coordinators don't own state — they
+reach back through this.owner.featuredEntries = …, this.owner.homeLoadMoreInProgress = false,
+etc. The Index struct is the single adapter for every Owner interface. By the deletion test,
+deleting any one coordinator and inlining its body back into Index would change file count but
+not concentrate complexity any worse — the coupling is already total. The Owner interfaces are
+hypothetical seams (one adapter), not real ones; the overall interface to the world is bigger
+than the implementation behind it. The lifecycle quartet (Bootstrap / Refresh / Reload /
+Pagination) is the tightest cluster — they call into each other constantly through Owner
+methods (reloadHomeEntriesFromLocal, applyEntriesForMode, setModeHasMoreEntries,
+scheduleHomeLoadMorePrefetch, …).
 
-Problem: Of 47 public methods, 34 are pure pass-throughs — await bootstrap() then delegate with identical arguments and return. There's a dead RssFeedService import. The real depth lives in
-FeedRefreshCoordinator and FeaturedEntriesQuery, not here. AppRepository is a shallow namespace-on-statics, yet every page and coordinator couples to it directly. The deletion test confirms value in
-only 13 of 47 methods — the rest are indirection that could vanish.
+Solution: Introduce a real HomeFeedSession module that owns the home-feed state (mode,
+entryGroups, featuredEntries, candidate limits, has-more flags, load-more in-progress,
+post-refresh deferral) and exposes a small set of operations: bootstrap(), resume(), refresh(),
+loadMoreFor(mode), reload(reason), switchMode(mode). The lifecycle coordinators collapse into
+the session. Index becomes a thin reactive presenter that observes the session and forwards UI
+gestures. Pure-presentation helpers (IndexHomeModeScenePresenter, IndexHomeLoadStateGate,
+IndexHomeRailCoordinator, IndexHomeScrollerRegistry, IndexHomeDiagnosticsLogger) — which
+already have small Owner interfaces and own their own data — stay separate.
 
-Solution: Keep the 13 orchestration methods that earn their keep (bootstrap, feed-card enrichment, multi-step create/update/remove, etc.). Let callers import deep modules (FeedRefreshCoordinator,
-FeaturedEntriesQuery, AppPreferenceService) directly for the rest. This turns AppRepository from a 437-line facade into a ~200-line orchestration module with real locality.
-
-Benefits: Callers see what they actually depend on instead of one opaque class. The deep modules (FeedRefreshCoordinator, FeaturedEntriesQuery) become independently testable. Dead imports vanish.
-The interface shrinks from 47 methods to ~13, each with real leverage.
-
----
-
-2. Index page coordinator tight-coupling — 7 coordinators, 0 independently testable
-
-Files: pages/Index.ets, 10 coordinator/delegate files in common/utils/
-
-Problem: Every coordinator accepts the full Index component as a constructor parameter via an owner interface that mirrors Index's entire surface (~25 properties + 15 methods each). Coordinators use
-only ~30% of what they receive. This prevents unit testing, ties all coordinators to Index's evolution, and means the interface is not the test surface — you can't test coordinator logic without a
-real Index instance or a sprawling mock.
-
-Three files are pure wiring with zero branching logic and fail the deletion test: IndexHomeStateFactory.ets, IndexHomeDelegates.ets, IndexHomeRootContentCallbacksFactory.ets — combined ~190 lines of
-typed-object constructors and pass-through arrow functions.
-
-Solution: Narrow each coordinator's owner interface to the subset it actually uses. Extract state into a shared struct that coordinators read/write rather than bouncing through the Index component.
-This creates a real seam: the coordinator's interface becomes its public methods + the struct, and both are testable without ArkUI.
-
-Benefits: Coordinators become independently testable (real locality). The 3 wiring files can be deleted — their content inlines into component builders. Index.ets shrinks as coordinators own their
-state directly.
-
----
-
-3. Duplicated cross-cutting concerns across pages — showToast, theme loading, error handling
-
-Files: pages/ArticleDetail.ets, pages/DiscoverPreview.ets, pages/FeedDetail.ets, pages/DiscoverSubscribeConfig.ets, pages/AccountLogin.ets
-
-Problem: showToast is defined identically in ArticleDetail, DiscoverPreview, and Index — same try/catch wrapping getUIContext().getPromptAction().showToast(). Theme loading is a repeated two-line
-pattern across FeedDetail and DiscoverSubscribeConfig. Error handling follows no shared convention. These are shallow duplications that spread maintenance cost across pages.
-
-Solution: A single page-level utility module with showToast(context, message, duration?) and resolveCurrentTheme(settings) functions. These have a tiny interface (one argument each) and concentrate
-a cross-cutting concern at one locality.
-
-Benefits: Fix once, fixed everywhere. Pages lose 4-6 lines each of duplicated boilerplate. Future pages don't need to rediscover the toast pattern.
+Benefits: Depth — a single small interface (HomeFeedSession) carries the entire feed lifecycle
+behind it; the 4 lifecycle Owner interfaces (~80 fields + ~50 methods total) disappear.
+Locality — a bug in "did the deferred reload fire after refresh?" lives in one place instead of
+spanning 4 files. The interface becomes the test surface — tests/home-feed-session.test.ts
+calls session.refresh() and asserts on observable session state, instead of today's status quo
+(almost no test coverage of the lifecycle, because the coupling to @State makes it hard to
+test).
 
 ---
 
-4. IndexHomeModeScenePresenter — 4 near-identical methods, one function's worth of logic
+8. AppPreferenceService is a junk drawer for 5 unrelated Preferences-backed concerns
 
-Files: common/utils/IndexHomeModeScenePresenter.ets
+Files: common/services/AppPreferenceService.ets (462 lines).
 
-Problem: 4 of 5 public methods construct identical argument objects, call the same private resolver, and extract different fields from the result. This is a single function returning a record, split
-across 4 methods for call-site convenience at the cost of shallowness — the interface is 4 methods when 1 would suffice.
+Problem: A single static class holds five distinct concerns sharing only a
+preferences.Preferences handle:
 
-Solution: Collapse into getSceneProps(mode): ModeSceneRenderState returning a record. Let callers destructure what they need. The interface shrinks from 5 methods to 1, and the implementation is the
-same resolver called once.
+1. HarmonySettings (load/save 14 keys)
+2. AIAssistantSettings (load/save with per-provider apiKey migration)
+3. RefreshLogEntry[] (append, load, prune to 60)
+4. Home-entry snapshot (clone+normalize+filter+save)
+5. Discover avatar cache (normalize+save+evict)
 
-Benefits: 4 methods become 1. Callers add one destructure line but lose 3 method references. Real depth: one call produces all scene state.
+Each concern owns its own cloneX/normalizeX/filterX helpers. Concerns never interact; they
+happen to share storage. The interface is "every key any concern touches" — callers reach for
+AppPreferenceService.loadAISettings() and AppPreferenceService.appendRefreshLog() from
+completely unrelated parts of the app. By the deletion test, deleting AppPreferenceService and
+replacing it with five sibling modules would not concentrate any complexity — each call site
+already imports only the methods for its concern.
+
+Solution: Split into five modules — one per concern — each behind its own seam, sharing a small
+internal preferences accessor. Names should match the domain language: SettingsStore,
+AIAssistantSettingsStore, RefreshLogStore, HomeEntrySnapshotStore, DiscoverAvatarCacheStore.
+The shared accessor is an internal seam, not exposed externally.
+
+Benefits: Depth — each store has a small focused interface (~3–4 methods), and each store's
+normalization rules become local to it instead of being mixed into a 462-line file. Locality —
+refresh-log pruning logic and AI-key migration stop sharing a file with home-entry snapshot
+normalization. Existing Node tests can target each store individually instead of the catch-all
+service.
+
+---
+
+9. HomeReloadPolicy is a single pure function extracted only for testing — production callers
+   were rewritten without it
+
+Files: common/utils/HomeReloadPolicy.ets (13 lines, one exported function
+shouldRunImmediateHomeTabReload), entry/src/test/HomeReloadPolicy.test.ets.
+
+Problem: Grep shows zero production imports of shouldRunImmediateHomeTabReload. The only
+importer is its own test (entry/src/test/HomeReloadPolicy.test.ets). At some point it was
+extracted to make a tab-reload condition testable; the production call site has since been
+refactored (the equivalent logic now lives in
+IndexHomeRefreshCoordinator.shouldRunFinalHomeReloadNow / tryFlushDeferredFeedsChangedReload
+with much richer conditions). This is the textbook "extracted for testability, then real bugs
+hide in how it's called" failure: the test passes but exercises code no caller runs. By the
+deletion test, deleting both the function and its test removes nothing real.
+
+Solution: Delete HomeReloadPolicy.ets and HomeReloadPolicy.test.ets. When HomeFeedSession lands
+(candidate 7), test the equivalent condition through the session's interface, not through an
+extracted helper.
+
+Benefits: Removes a misleading test (passing tests on dead code is worse than no tests).
+Locality — eliminates the temptation to "fix" the unused helper instead of the live conditions
+in IndexHomeRefreshCoordinator.
 
 ---
 
-5. Three identical shell pages — same 15-line file, different tab ID
+10. FeedRepository and EntryRepository static methods each wrap RDB primitives in identical
+    try/catch/store/predicates boilerplate
 
-Files: pages/Subscriptions.ets, pages/Discover.ets, pages/Settings.ets
+Files: common/repositories/FeedRepository.ets (336 lines, 9 static methods),
+common/repositories/EntryRepository.ets (337 lines, ~13 static methods),
+common/services/AppDatabaseService.ets (116 lines).
 
-Problem: Three structurally identical files — each is a 15-line @Entry @Component struct whose aboutToAppear calls openRootTab('subscriptions' | 'discover' | 'settings'). These exist because ArkUI
-requires @Entry pages in the page registry, but they contain zero unique logic. A deletion test says each could be a single configuration entry with a generic shell.
+Problem: Every public method follows the same shape:
+try { const store = await AppDatabaseService.getStore();
+const predicates = new RdbPredicates(table); …
+return mapRow(result) }
+catch (error) { throw new Error(`X 失败：${error.message}`) }
 
-Solution: A single parameterized RootTabShell page that reads the target tab from route params. Or, if ArkUI's page registration requires discrete files, extract the shared struct and let each file
-be a one-line subclass.
+The Chinese error-message rephrase is duplicated 8 times in FeedRepository alone. The repos are
+shallow — the implementation is mostly the same wrapper around different predicates and column
+lists; the row-mapping (mapFeed, mapEntry) is the only real value the module adds, and it's a
+private helper. A new method = ~15 lines of boilerplate around 2–3 lines of unique logic.
 
-Benefits: 45 lines across 3 files collapse into 1 generic page + 3 config entries. Change the shell behavior once instead of 3 times.
+Solution: Two small deepenings:
+
+- A withRdb<T>(operationLabel, fn): Promise<T> helper inside (or alongside) AppDatabaseService
+  that opens the store and rephrases errors. Repo methods shrink to the unique part.
+- A small Table<Row> helper that pairs a row mapper (mapFeed / mapEntry) with a predicate
+  builder, so list-by-X and get-by-X collapse onto one call.
+
+Benefits: Leverage — one helper learned, all 22 repo methods improved. Locality —
+error-message format and store-acquisition handling live in one place; today there are ~22
+copies of the same try/catch shape. Future repo methods (e.g. starred entries, tag queries)
+become 2–3 lines each.
 
 ---
 
-6. DiscoverService is a pure re-export barrel — zero logic
+11. CLAUDE.md describes architecture that no longer exists; no CONTEXT.md exists for the domain
 
-Files: common/services/DiscoverService.ets
+Files: CLAUDE.md, plus the absence of CONTEXT.md and docs/adr/.
 
-Problem: This module contains zero implementation — it re-exports types and functions from 7 discover/ submodules. It's a pass-through by definition. The deletion test says deleting it changes
-import paths but removes no complexity.
+Problem: This isn't a code-shape problem but a navigation problem the deepening review cares
+about. CLAUDE.md says "AppRepository singleton is the centralized data facade … coordinates
+FeedRepository, EntryRepository, FeedRefreshCoordinator and various services." The file no
+longer exists; the facade was deleted (probably in earlier deepening rounds — only
+AppRepositoryEntryHelpers.ets remains). Pages and coordinators import FeedRepository /
+EntryRepository / AppPreferenceService / FeaturedEntriesQuery directly. CLAUDE.md also
+describes the coordinator pattern as if it's a deep-module strategy, which candidate 7
+disputes. Future architecture reviews — including future runs of this skill — will be misled.
+There is also no shared domain glossary (CONTEXT.md) defining terms like Feed, Entry,
+Subscription Mode, Home Feed Session, Discover Candidate, AI Assist, Refresh Log, so each new
+module invents its own naming (subscriptionMode, FeedViewType, and RootTabId all cover
+overlapping ideas).
 
-Solution: Delete it. Let callers import from the discover/ submodules directly. The import paths get slightly longer (../services/discover/DiscoverTypes instead of ../services/DiscoverService) but
-no logic changes.
+Solution: Reconcile CLAUDE.md with current code (drop the AppRepository facade description;
+describe the actual current data layer: page → FeaturedEntriesQuery / FeedRepository /
+EntryRepository / AppPreferenceService / FeedRefreshCoordinator). Create a CONTEXT.md that
+names the load-bearing domain concepts so subsequent deepening conversations have shared
+vocabulary.
 
-Benefits: One less file. No re-export maintenance. Callers see exactly which discover submodule they depend on.
+Benefits: Locality — future explorers (humans and agents) read the docs and the code agreeing
+instead of having to do a half-hour audit just to find out AppRepository is gone. Leverage —
+once the domain glossary exists, every later candidate can say "the Home Feed Session" or "a
+Discover Candidate" and have it mean a precise thing.
 
 ---
+
+Highest-leverage pick: 7 (HomeFeedSession) — most changes how the home page is written and
+tested going forward. 11 (docs reconciliation) is fast and unblocks every other discussion. 9
+is essentially a one-PR delete.

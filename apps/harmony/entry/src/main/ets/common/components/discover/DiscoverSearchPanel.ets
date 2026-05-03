@@ -1,5 +1,6 @@
 import { ThemePalette } from '../../services/ThemeService'
-import { DiscoverSearchPlatform, discoverPlatformLabel } from '../../services/DiscoverService'
+import { DiscoverSearchPlatform } from '../../services/discover/DiscoverTypes'
+import { discoverPlatformLabel } from '../../services/discover/DiscoverLabels'
 import { CARD_RADIUS_XL, CHIP_FONT_SIZE, CHIP_RADIUS } from '../../ui/UiTokens'
 import { livoMotion } from '../../ui/Motion'
 

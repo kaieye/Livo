@@ -1,5 +1,5 @@
-import { AppPreferenceService } from '../services/AppPreferenceService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { loadThemeForComponent } from '../utils/PageThemeHelper'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import {
@@ -31,8 +31,7 @@ export struct AboutSettingsPanel {
   }
 
   private async loadTheme(): Promise<void> {
-    const settings = await AppPreferenceService.loadSettings()
-    this.theme = await ThemeService.resolvePalette(settings)
+    this.theme = await loadThemeForComponent()
   }
 
   @Builder

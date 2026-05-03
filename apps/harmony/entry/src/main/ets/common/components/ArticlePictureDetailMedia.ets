@@ -1,5 +1,6 @@
 import { PictureCarouselMediaItem } from '../utils/PictureGallery'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { showToast, TOAST_DURATION_SHORT } from '../utils/PageToastHelper'
 import {
   findFirstLivePhotoIndex,
   findLivePhotoMediaItem,
@@ -26,12 +27,8 @@ export struct ArticlePictureDetailMedia {
   @State private livePhotoMuted: boolean = true
   private readonly livePhotoControllers: VideoController[] = []
 
-  private showToast(message: string, duration: number = 1800): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration })
-    } catch (error) {
-      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
-    }
+  private showToast(message: string, duration: number = TOAST_DURATION_SHORT): void {
+    showToast(this.getUIContext(), message, duration)
   }
 
   private controllerFor(index: number): VideoController {

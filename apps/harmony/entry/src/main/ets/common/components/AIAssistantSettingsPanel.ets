@@ -12,6 +12,7 @@ import {
   AIAssistantConnectionTestService,
 } from '../services/AIAssistantConnectionTestService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { showToast, TOAST_DURATION_ERROR } from '../utils/PageToastHelper'
 import { livoMotion } from '../ui/Motion'
 import { PageHeader } from './PageHeader'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -189,12 +190,8 @@ export struct AIAssistantSettingsPanel {
     }))
   }
 
-  private showToast(message: string, duration: number = 3000): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration })
-    } catch (error) {
-      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
-    }
+  private showToast(message: string, duration: number = TOAST_DURATION_ERROR): void {
+    showToast(this.getUIContext(), message, duration)
   }
 
   private async runConnectionTest(): Promise<void> {

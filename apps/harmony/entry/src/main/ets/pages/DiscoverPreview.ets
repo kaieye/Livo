@@ -1,5 +1,4 @@
 import { FeedRepository } from '../common/repositories/FeedRepository'
-import { AppPreferenceService } from '../common/services/AppPreferenceService'
 import { FeedRefreshCoordinator } from '../common/data/FeedRefreshCoordinator'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/LivoModels'
@@ -7,6 +6,8 @@ import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/L
 import { FeedDraft } from '../common/repositories/FeedRepository'
 import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { showToast } from '../common/utils/PageToastHelper'
+import { loadThemeForComponent } from '../common/utils/PageThemeHelper'
 import { resolveSocialFeedDisplayImageUrl } from '../common/utils/SocialFeedPresentation'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
@@ -251,8 +252,7 @@ struct DiscoverPreview {
     this.existingFeed = undefined
 
     try {
-      const settings = await AppPreferenceService.loadSettings()
-      this.theme = await ThemeService.resolvePalette(settings)
+      this.theme = await loadThemeForComponent()
 
       const params = this.params()
       this.targetUrl = params.targetUrl ?? ''
@@ -326,11 +326,7 @@ struct DiscoverPreview {
   }
 
   private showToast(message: string, duration: number = 2000): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration })
-    } catch (error) {
-      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
-    }
+    showToast(this.getUIContext(), message, duration)
   }
 
   build() {

@@ -1,10 +1,10 @@
-import { openRootTab } from '../common/navigation/AppRouter'
+import { handleRootTabShellAppear } from '../common/utils/RootTabShellHelper'
 
 @Entry
 @Component
 struct Discover {
   aboutToAppear(): void {
-    void openRootTab('discover', true)
+    handleRootTabShellAppear('discover')
   }
 
   build() {

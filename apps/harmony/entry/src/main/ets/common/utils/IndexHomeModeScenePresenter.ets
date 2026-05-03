@@ -1,4 +1,4 @@
-import { resolveModeSceneRenderState } from './ModeSceneTransition'
+import { ModeSceneRenderState, resolveModeSceneRenderState } from './ModeSceneTransition'
 import { SubscriptionMode } from '../components/HomeRootConfig'
 
 export interface IndexHomeModeSceneOwner {
@@ -18,45 +18,14 @@ export class IndexHomeModeScenePresenter {
     this.owner = owner
   }
 
-  modeSceneVisible(mode: SubscriptionMode): Visibility {
-    const state = resolveModeSceneRenderState({
+  getSceneProps(mode: SubscriptionMode): ModeSceneRenderState {
+    return resolveModeSceneRenderState({
       mode,
       renderedMode: this.owner.renderedMode,
       previousMode: this.owner.previousMode,
       isTransitioning: this.owner.isModeTransitioning,
       direction: this.owner.modeTransitionDirection,
     })
-    return state.visibility === 'visible' ? Visibility.Visible : Visibility.Hidden
-  }
-
-  modeSceneOpacity(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.owner.renderedMode,
-      previousMode: this.owner.previousMode,
-      isTransitioning: this.owner.isModeTransitioning,
-      direction: this.owner.modeTransitionDirection,
-    }).opacity
-  }
-
-  modeSceneOffset(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.owner.renderedMode,
-      previousMode: this.owner.previousMode,
-      isTransitioning: this.owner.isModeTransitioning,
-      direction: this.owner.modeTransitionDirection,
-    }).offset
-  }
-
-  modeSceneZIndex(mode: SubscriptionMode): number {
-    return resolveModeSceneRenderState({
-      mode,
-      renderedMode: this.owner.renderedMode,
-      previousMode: this.owner.previousMode,
-      isTransitioning: this.owner.isModeTransitioning,
-      direction: this.owner.modeTransitionDirection,
-    }).zIndex
   }
 
   modeListSwapTranslateY(mode: SubscriptionMode): number {

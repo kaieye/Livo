@@ -26,7 +26,7 @@ test('home rail state and layout logic lives in a dedicated coordinator', () => 
 test('index page delegates home rail orchestration instead of owning the implementation', () => {
   assert.match(
     indexSource,
-    /private readonly homeRailCoordinator: IndexHomeRailCoordinator = new IndexHomeRailCoordinator\(this\)/,
+    /readonly homeRailCoordinator: IndexHomeRailCoordinator = new IndexHomeRailCoordinator\(this\)/,
   )
   assert.match(
     indexSource,

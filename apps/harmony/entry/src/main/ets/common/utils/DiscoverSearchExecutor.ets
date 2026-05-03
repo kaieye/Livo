@@ -1,10 +1,6 @@
 import { DirectUrlResult, createDiscoverResultFromFeed } from '../components/DiscoverTypes'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
-import {
-  DiscoverSearchPlatform,
-  RecommendedFeed,
-  ResolvedDiscoverCandidate,
-} from '../services/DiscoverService'
+import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { isInstagramPlaceholderAvatar } from '../utils/DiscoverCandidatePresentation'
 

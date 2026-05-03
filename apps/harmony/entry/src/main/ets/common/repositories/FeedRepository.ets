@@ -2,6 +2,7 @@ import relationalStore from '@ohos.data.relationalStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { AppDatabaseService } from '../services/AppDatabaseService'
 import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
+import { resultColumnIndex, resultLong, resultString } from '../utils/ResultSetHelper'
 
 const FEED_FETCH_STATE_DEBUG_ENABLED: boolean = true
 const FEED_FETCH_STATE_DEBUG_PREFIX: string = '[FeedFetchStateDebug]'
@@ -35,32 +36,6 @@ function boolToNumber(value: boolean): number {
 
 function numberToBool(value: number): boolean {
   return value === 1
-}
-
-function resultColumnIndex(result: relationalStore.ResultSet, columnName: string): number {
-  try {
-    return result.getColumnIndex(columnName)
-  } catch (_error) {
-    return -1
-  }
-}
-
-function resultString(result: relationalStore.ResultSet, columnName: string): string {
-  try {
-    const columnIndex = resultColumnIndex(result, columnName)
-    return columnIndex >= 0 ? result.getString(columnIndex) : ''
-  } catch (_error) {
-    return ''
-  }
-}
-
-function resultLong(result: relationalStore.ResultSet, columnName: string): number {
-  try {
-    const columnIndex = resultColumnIndex(result, columnName)
-    return columnIndex >= 0 ? result.getLong(columnIndex) : 0
-  } catch (_error) {
-    return 0
-  }
 }
 
 function mapFeed(result: relationalStore.ResultSet): Feed {

@@ -1,41 +1,39 @@
-import { SubscriptionMode, SUBSCRIPTION_MODES, HomeModeScrollOffsetMap, MODE_SWIPE_TRIGGER_OFFSET, HOME_MODE_SCENE_TRANSITION_DURATION, HOME_MODE_DEBUG_ENABLED, HOME_MODE_DEBUG_PREFIX } from '../components/HomeRootConfig'
+import { SubscriptionMode, SUBSCRIPTION_MODES, MODE_SWIPE_TRIGGER_OFFSET, HOME_MODE_SCENE_TRANSITION_DURATION, HOME_MODE_DEBUG_ENABLED, HOME_MODE_DEBUG_PREFIX } from '../components/HomeRootConfig'
 import { shouldAcceptModeSwitch } from './ModeSwitchGuard'
 import { rememberVisitedMode } from './HomeModeVisitedCache'
+import { EntryCardModel } from '../models/LivoModels'
 
-export interface HomeModeDelegate {
-  getMode(): SubscriptionMode
-  getRenderedMode(): SubscriptionMode
-  getPreviousMode(): SubscriptionMode
-  getVisitedModes(): SubscriptionMode[]
-  isModeTransitioning(): boolean
-  getModeTransitionDirection(): number
-  getScrollOffsetForMode(mode: SubscriptionMode): number
-  getEntryCountForMode(mode: SubscriptionMode): number
-  getFirstEntryIdForMode(mode: SubscriptionMode): string
-  getLastEntryIdForMode(mode: SubscriptionMode): string
+export interface HomeModeState {
+  mode: SubscriptionMode
+  renderedMode: SubscriptionMode
+  previousMode: SubscriptionMode
+  visitedModes: SubscriptionMode[]
+  isModeTransitioning: boolean
+  modeTransitionDirection: number
+  homeModeRailExpandedLockOffset: number
+  homeModeRailExpandedOverride: boolean
+  currentHomeModeScrollOffset: number
+  homeModeRailDismissedByScroll: boolean
+}
 
-  setMode(mode: SubscriptionMode): void
-  setRenderedMode(mode: SubscriptionMode): void
-  setPreviousMode(mode: SubscriptionMode): void
-  setVisitedModes(modes: SubscriptionMode[]): void
-  setModeTransitioning(v: boolean): void
-  setModeTransitionDirection(v: number): void
-  setScrollInteracting(interacting: boolean, mode: SubscriptionMode): void
-  setHomeModeRailExpandedLockOffset(v: number): void
-  setHomeModeRailExpandedOverride(v: boolean): void
-  setCurrentHomeModeScrollOffset(v: number): void
-  setHomeModeRailDismissedByScroll(v: boolean): void
+export interface HomeModeActions {
+  readHomeModeScrollOffset(mode: SubscriptionMode): number
+  totalEntryCountFor(mode: SubscriptionMode): number
+  filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[]
+  setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode): void
   updateHeaderBlurProgress(offset: number): void
-  resetScrollIntent(mode: SubscriptionMode): void
+  resetModeScrollIntent(mode: SubscriptionMode): void
   ensureModeEntriesLoaded(mode: SubscriptionMode): void
-  runManagedTimeout(cb: () => void, delayMs: number): void
+  runManagedTimeout(callback: () => void, delayMs: number): void
 }
 
 export class HomeModeController {
-  private readonly delegate: HomeModeDelegate
+  private readonly state: HomeModeState
+  private readonly actions: HomeModeActions
 
-  constructor(delegate: HomeModeDelegate) {
-    this.delegate = delegate
+  constructor(state: HomeModeState, actions: HomeModeActions) {
+    this.state = state
+    this.actions = actions
   }
 
   modeIndex(mode: SubscriptionMode): number {
@@ -44,51 +42,49 @@ export class HomeModeController {
 
   requestModeSwitch(nextMode: SubscriptionMode): void {
     if (!shouldAcceptModeSwitch({
-      currentMode: this.delegate.getMode(),
+      currentMode: this.state.mode,
       nextMode,
-      isTransitioning: this.delegate.isModeTransitioning(),
+      isTransitioning: this.state.isModeTransitioning,
     })) {
       return
     }
 
-    const nextModeOffset = this.delegate.getScrollOffsetForMode(nextMode)
-    this.delegate.setMode(nextMode)
-    this.delegate.setVisitedModes(rememberVisitedMode(this.delegate.getVisitedModes(), nextMode))
-    this.delegate.setScrollInteracting(false, nextMode)
-    this.delegate.resetScrollIntent(nextMode)
-    this.delegate.setHomeModeRailExpandedLockOffset(nextModeOffset)
-    this.delegate.setHomeModeRailExpandedOverride(true)
-    this.delegate.setCurrentHomeModeScrollOffset(nextModeOffset)
-    this.delegate.setHomeModeRailDismissedByScroll(false)
-    this.delegate.updateHeaderBlurProgress(nextModeOffset)
+    const nextModeOffset = this.actions.readHomeModeScrollOffset(nextMode)
+    this.state.mode = nextMode
+    this.state.visitedModes = rememberVisitedMode(this.state.visitedModes, nextMode)
+    this.actions.setHomeScrollInteracting(false, nextMode)
+    this.actions.resetModeScrollIntent(nextMode)
+    this.state.homeModeRailExpandedLockOffset = nextModeOffset
+    this.state.homeModeRailExpandedOverride = true
+    this.state.currentHomeModeScrollOffset = nextModeOffset
+    this.state.homeModeRailDismissedByScroll = false
+    this.actions.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
-    // 模式切换的视觉状态先落地，补数据延后一帧，避免本地查询/分组阻塞按钮反馈。
-    this.delegate.runManagedTimeout(() => {
-      if (this.delegate.getMode() !== nextMode) {
+    this.actions.runManagedTimeout(() => {
+      if (this.state.mode !== nextMode) {
         return
       }
-      this.delegate.ensureModeEntriesLoaded(nextMode)
+      this.actions.ensureModeEntriesLoaded(nextMode)
     }, 16)
   }
 
   startModeTransition(nextMode: SubscriptionMode): void {
-    const previousRenderedMode = this.delegate.getRenderedMode()
-    this.delegate.setModeTransitionDirection(
-      this.modeIndex(nextMode) > this.modeIndex(previousRenderedMode) ? 1 : -1,
-    )
-    this.delegate.setPreviousMode(previousRenderedMode)
-    this.delegate.setRenderedMode(nextMode)
-    this.delegate.setModeTransitioning(true)
-    this.delegate.runManagedTimeout(() => {
-      if (this.delegate.getRenderedMode() !== nextMode || this.delegate.getPreviousMode() !== previousRenderedMode) {
+    const previousRenderedMode = this.state.renderedMode
+    this.state.modeTransitionDirection =
+      this.modeIndex(nextMode) > this.modeIndex(previousRenderedMode) ? 1 : -1
+    this.state.previousMode = previousRenderedMode
+    this.state.renderedMode = nextMode
+    this.state.isModeTransitioning = true
+    this.actions.runManagedTimeout(() => {
+      if (this.state.renderedMode !== nextMode || this.state.previousMode !== previousRenderedMode) {
         return
       }
-      this.delegate.setModeTransitioning(false)
+      this.state.isModeTransitioning = false
     }, HOME_MODE_SCENE_TRANSITION_DURATION)
   }
 
   adjacentMode(offsetX: number): SubscriptionMode | undefined {
-    const currentIndex = this.modeIndex(this.delegate.getMode())
+    const currentIndex = this.modeIndex(this.state.mode)
     if (currentIndex < 0) {
       return undefined
     }
@@ -100,7 +96,7 @@ export class HomeModeController {
   }
 
   handleModeSwipe(event: GestureEvent): void {
-    if (this.delegate.isModeTransitioning()) {
+    if (this.state.isModeTransitioning) {
       return
     }
     const offsetX = event.offsetX
@@ -118,12 +114,15 @@ export class HomeModeController {
     if (!HOME_MODE_DEBUG_ENABLED) {
       return
     }
-    const count = this.delegate.getEntryCountForMode(mode)
-    const currentOffset = this.delegate.getScrollOffsetForMode(mode)
+    const entries = this.actions.filteredEntriesFor(mode)
+    const count = this.actions.totalEntryCountFor(mode)
+    const currentOffset = this.actions.readHomeModeScrollOffset(mode)
+    const firstId = (entries[0]?.id || '').trim()
+    const lastId = (entries[entries.length - 1]?.id || '').trim()
     console.info(
       `${HOME_MODE_DEBUG_PREFIX} stage=${stage} target=${mode} count=${count} `
-      + `activeMode=${this.delegate.getMode()} renderedMode=${this.delegate.getRenderedMode()} offset=${currentOffset.toFixed(1)} `
-      + `firstId=${this.delegate.getFirstEntryIdForMode(mode)} lastId=${this.delegate.getLastEntryIdForMode(mode)}`,
+      + `activeMode=${this.state.mode} renderedMode=${this.state.renderedMode} offset=${currentOffset.toFixed(1)} `
+      + `firstId=${firstId} lastId=${lastId}`,
     )
   }
 }

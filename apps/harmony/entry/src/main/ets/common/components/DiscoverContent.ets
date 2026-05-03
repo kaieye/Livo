@@ -28,16 +28,11 @@ import {
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from './FloatingRootPageLayout'
 import { Feed, FeedViewType } from '../models/LivoModels'
-import {
-  DiscoverSearchPlatform,
-  RecommendedFeed,
-  ResolvedDiscoverCandidate,
-  discoverViewLabel,
-  resolveKeywordCandidatesByPlatform,
-  resolveProfileCandidatesByPlatform,
-  searchedRecommendedFeedsByPlatform,
-  trendingDiscoverFeedsFromJsonNow,
-} from '../services/DiscoverService'
+import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
+import { discoverViewLabel } from '../services/discover/DiscoverLabels'
+import { resolveProfileCandidatesByPlatform } from '../services/discover/DiscoverProfileResolver'
+import { resolveKeywordCandidatesByPlatform } from '../services/discover/DiscoverKeywordResolver'
+import { searchedRecommendedFeedsByPlatform, trendingDiscoverFeedsFromJsonNow } from '../services/discover/DiscoverFeedCatalog'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { resolveDiscoverOverlayReturnLevel } from '../utils/DiscoverNavigationPolicy'

@@ -1,6 +1,7 @@
 import { AppPreferenceService } from '../services/AppPreferenceService'
 import { HarmonySettings, RefreshLogEntry } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { loadThemeForComponent } from '../utils/PageThemeHelper'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import {
@@ -32,8 +33,7 @@ export struct RefreshLogSettingsPanel {
     this.isLoading = true
     try {
       if (!this.useInheritedTheme) {
-        const settings = await AppPreferenceService.loadSettings()
-        this.theme = await ThemeService.resolvePalette(settings)
+        this.theme = await loadThemeForComponent()
       }
       this.logs = await AppPreferenceService.loadRefreshLogs()
     } finally {

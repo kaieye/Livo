@@ -1,5 +1,5 @@
 import { Feed } from '../models/LivoModels'
-import { RecommendedFeed, ResolvedDiscoverCandidate } from '../services/DiscoverService'
+import { RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { extractInstagramUsername, extractXUsername } from './SocialFeedTitles'
 
 export function normalizeFeedIdentity(value: string): string {

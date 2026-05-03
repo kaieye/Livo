@@ -1,5 +1,5 @@
 import { FeedViewType } from '../models/LivoModels'
-import { ResolvedDiscoverCandidate } from '../services/DiscoverService'
+import { ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { extractBilibiliIdentity, extractYouTubeIdentity } from './DiscoverFeedIdentity'
 import { extractInstagramUsername, extractXUsername } from './SocialFeedTitles'
 import { resolveSocialFeedDisplayImageUrl } from './SocialFeedPresentation'

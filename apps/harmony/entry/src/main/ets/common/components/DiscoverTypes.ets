@@ -1,5 +1,5 @@
 import { FeedViewType } from '../models/LivoModels'
-import { RecommendedFeed, ResolvedDiscoverCandidate } from '../services/DiscoverService'
+import { RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 
 export interface DirectUrlResult {
   targetUrl: string

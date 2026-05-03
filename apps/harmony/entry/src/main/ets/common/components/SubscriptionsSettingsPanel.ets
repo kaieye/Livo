@@ -1,5 +1,6 @@
-import { AppPreferenceService } from '../services/AppPreferenceService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { loadThemeForComponent } from '../utils/PageThemeHelper'
+import { showToast, TOAST_DURATION_DEFAULT } from '../utils/PageToastHelper'
 import {
   OPML_IMPORT_AUTO_REFRESH_LIMIT,
   OPML_IMPORT_LARGE_BATCH_HINT,
@@ -33,15 +34,11 @@ export struct SubscriptionsSettingsPanel {
   }
 
   private async loadTheme(): Promise<void> {
-    const settings = await AppPreferenceService.loadSettings()
-    this.theme = await ThemeService.resolvePalette(settings)
+    this.theme = await loadThemeForComponent()
   }
 
-  private showToast(message: string, duration: number = 2200): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration })
-    } catch (_error) {
-    }
+  private showToast(message: string, duration: number = TOAST_DURATION_DEFAULT): void {
+    showToast(this.getUIContext(), message, duration)
   }
 
   private async exportOpmlToFile(): Promise<void> {

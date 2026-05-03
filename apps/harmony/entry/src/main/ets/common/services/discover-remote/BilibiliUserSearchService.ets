@@ -13,7 +13,7 @@ import {
   MEDIUM_REQUEST_TIMEOUT_MS,
   bilibiliSpaceReferer,
 } from '../../AppConfig'
-import { ResolvedDiscoverCandidate } from '../DiscoverService'
+import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 
 interface BilibiliSearchResult {
   mid?: number

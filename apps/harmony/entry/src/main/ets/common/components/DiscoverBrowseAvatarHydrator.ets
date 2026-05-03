@@ -1,6 +1,6 @@
 import { DiscoverBuiltinFeedSeed } from '../data/DiscoverBuiltinFeeds'
 import { AppPreferenceService, DiscoverAvatarCacheEntry } from '../services/AppPreferenceService'
-import { RecommendedFeed } from '../services/DiscoverService'
+import { RecommendedFeed } from '../services/discover/DiscoverTypes'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { RssFeedService } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'

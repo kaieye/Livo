@@ -7,36 +7,30 @@ const indexSource = readFileSync(
   'utf8',
 )
 
-const bootstrapSource = readFileSync(
+const sessionSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/IndexHomeBootstrapCoordinator.ets',
+    '../entry/src/main/ets/common/utils/HomeFeedSession.ets',
     import.meta.url,
   ),
   'utf8',
 )
 
-test('home startup data flow lives in a dedicated bootstrap coordinator', () => {
-  assert.match(bootstrapSource, /export class IndexHomeBootstrapCoordinator/)
-  assert.match(bootstrapSource, /loadInitialData/)
-  assert.match(bootstrapSource, /restoreSnapshot/)
-  assert.match(bootstrapSource, /loadFastLocalEntries/)
-  assert.match(bootstrapSource, /resumeLoadedHome/)
-  assert.match(bootstrapSource, /AppPreferenceService\.loadHomeEntrySnapshot/)
+test('home startup data flow lives in HomeFeedSession', () => {
+  assert.match(sessionSource, /export class HomeFeedSession/)
+  assert.match(sessionSource, /bootstrap\(\)/)
+  assert.match(sessionSource, /restoreSnapshot/)
+  assert.match(sessionSource, /loadFastLocalEntries/)
+  assert.match(sessionSource, /resume/)
+  assert.match(sessionSource, /AppPreferenceService\.loadHomeEntrySnapshot/)
 })
 
-test('index page delegates initial data loading instead of owning the flow', () => {
+test('index page delegates initial data loading to HomeFeedSession', () => {
+  assert.match(indexSource, /readonly homeFeedSession: HomeFeedSession/)
   assert.match(
     indexSource,
-    /private readonly homeBootstrapCoordinator: IndexHomeBootstrapCoordinator =\s*new IndexHomeBootstrapCoordinator\(this\)/s,
+    /async loadInitialData\(\): Promise<void> \{\s*await this\.homeFeedSession\.bootstrap\(\)\s*\}/s,
   )
-  assert.match(
-    indexSource,
-    /async loadInitialData\(\): Promise<void> \{\s*await this\.homeBootstrapCoordinator\.loadInitialData\(\)\s*\}/s,
-  )
-  assert.match(
-    indexSource,
-    /this\.homeBootstrapCoordinator\.resumeLoadedHome\(\)/,
-  )
+  assert.match(indexSource, /this\.homeFeedSession\.resume/)
   assert.doesNotMatch(
     indexSource,
     /AppPreferenceService\.loadHomeEntrySnapshot/,

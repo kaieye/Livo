@@ -24,7 +24,7 @@ import {
   INSTAGRAM_REFERER,
   INSTAGRAM_APP_ID,
 } from '../../AppConfig'
-import { ResolvedDiscoverCandidate } from '../DiscoverService'
+import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 import {
   SOCIAL_VIEW_MAPPING,
   buildProfileAnchorSnippet,

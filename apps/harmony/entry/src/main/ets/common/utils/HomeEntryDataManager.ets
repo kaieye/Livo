@@ -5,52 +5,56 @@ import { SubscriptionMode, HomeEntryDataSourceMap, HOME_ENTRY_GROUP_DEFER_DELAY_
 import { HomeEntryGroups, groupHomeEntriesByMode } from './HomeEntryGroups'
 import { cloneHomeSnapshotEntry, filterEntriesByMode, resolveEntryMode } from './HomeEntryUtils'
 
-export interface HomeEntryDataDelegate {
-  getFeaturedEntries(): EntryCardModel[]
-  getEntryGroups(): HomeEntryGroups<EntryCardModel>
-  getMode(): SubscriptionMode
-  getDataSources(): HomeEntryDataSourceMap
-  isComponentActive(): boolean
-  setFeaturedEntries(entries: EntryCardModel[]): void
-  setEntryGroups(groups: HomeEntryGroups<EntryCardModel>): void
-  onEntriesSettled(mode?: SubscriptionMode): void
+export interface HomeEntryDataState {
+  featuredEntries: EntryCardModel[]
+  entryGroups: HomeEntryGroups<EntryCardModel>
+  mode: SubscriptionMode
+  homeEntryDataSources: HomeEntryDataSourceMap
+  isComponentActive: boolean
+  homeListSwapOpacity: number
+  homeListSwapTranslateY: number
+  homeListSwapAnimating: boolean
+  homeListSwapToken: number
+}
+
+export interface HomeEntryDataActions {
+  markModeLoaded(mode: SubscriptionMode, loaded: boolean): void
+  settleInitialHomeLoadState(force?: boolean): void
   resetTweetPresentationCache(): void
-  setListSwapAnimating(v: boolean): void
-  setListSwapOpacity(v: number): void
-  setListSwapTranslateY(v: number): void
-  getListSwapToken(): number
-  getListSwapAnimating(): boolean
   animateWithUiContext(options: AnimateParam, event: () => void): void
-  runManagedTimeout(cb: () => void, delayMs: number): void
+  runManagedTimeout(callback: () => void, delayMs: number): void
 }
 
 export class HomeEntryDataManager {
-  private readonly delegate: HomeEntryDataDelegate
+  private readonly state: HomeEntryDataState
+  private readonly actions: HomeEntryDataActions
   private entryGroupVersion: number = 0
   private snapshotPersistVersion: number = 0
 
-  constructor(delegate: HomeEntryDataDelegate) {
-    this.delegate = delegate
+  constructor(state: HomeEntryDataState, actions: HomeEntryDataActions) {
+    this.state = state
+    this.actions = actions
   }
 
   applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
-    this.resetTweetPresentationCache()
-    this.delegate.setFeaturedEntries(nextEntries)
+    this.actions.resetTweetPresentationCache()
+    this.state.featuredEntries = nextEntries
     this.schedulePersistSnapshot(nextEntries)
-    this.delegate.onEntriesSettled()
+    this.actions.markModeLoaded(this.state.mode, true)
+    this.actions.settleInitialHomeLoadState()
 
     if (!deferredGrouping) {
-      this.delegate.setEntryGroups(groupHomeEntriesByMode(nextEntries))
+      this.state.entryGroups = groupHomeEntriesByMode(nextEntries)
       this.notifyAllReloaded()
       return
     }
 
     const version = ++this.entryGroupVersion
-    this.delegate.runManagedTimeout(() => {
+    this.actions.runManagedTimeout(() => {
       if (this.entryGroupVersion !== version) {
         return
       }
-      this.delegate.setEntryGroups(groupHomeEntriesByMode(nextEntries))
+      this.state.entryGroups = groupHomeEntriesByMode(nextEntries)
       this.notifyAllReloaded()
     }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
   }
@@ -63,19 +67,20 @@ export class HomeEntryDataManager {
     skipMerge: boolean = false,
   ): void {
     const scopedEntries = filterEntriesByMode(mode, entries)
-    const groups = this.delegate.getEntryGroups()
-    this.delegate.setEntryGroups({
+    const groups = this.state.entryGroups
+    this.state.entryGroups = {
       articles: mode === 'articles' ? scopedEntries : groups.articles,
       social: mode === 'social' ? scopedEntries : groups.social,
       pictures: mode === 'pictures' ? scopedEntries : groups.pictures,
       videos: mode === 'videos' ? scopedEntries : groups.videos,
-    })
-    if (!skipMerge) {
-      this.delegate.setFeaturedEntries(this.mergeFeaturedEntriesFromGroups())
     }
-    this.delegate.onEntriesSettled(mode)
+    if (!skipMerge) {
+      this.state.featuredEntries = this.mergeFeaturedEntriesFromGroups()
+    }
+    this.actions.markModeLoaded(mode, true)
+    this.actions.settleInitialHomeLoadState()
     if (deferredPersist) {
-      this.schedulePersistSnapshot(this.delegate.getFeaturedEntries())
+      this.schedulePersistSnapshot(this.state.featuredEntries)
     } else {
       this.persistSnapshotNow()
     }
@@ -89,37 +94,37 @@ export class HomeEntryDataManager {
     mode: SubscriptionMode,
     token: number,
   ): void {
-    this.resetTweetPresentationCache()
-    this.delegate.setFeaturedEntries(nextEntries)
+    this.actions.resetTweetPresentationCache()
+    this.state.featuredEntries = nextEntries
     this.schedulePersistSnapshot(nextEntries)
     const currentModeEntries = nextEntries.filter((e: EntryCardModel) => resolveEntryMode(e) === mode)
-    const groups = this.delegate.getEntryGroups()
-    this.delegate.setEntryGroups({
+    const groups = this.state.entryGroups
+    this.state.entryGroups = {
       articles: mode === 'articles' ? currentModeEntries : groups.articles,
       social: mode === 'social' ? currentModeEntries : groups.social,
       pictures: mode === 'pictures' ? currentModeEntries : groups.pictures,
       videos: mode === 'videos' ? currentModeEntries : groups.videos,
-    })
+    }
     this.notifyModeReloaded(mode)
 
     const version = ++this.entryGroupVersion
-    this.delegate.runManagedTimeout(() => {
-      if (this.entryGroupVersion !== version || this.delegate.getListSwapToken() !== token) {
+    this.actions.runManagedTimeout(() => {
+      if (this.entryGroupVersion !== version || this.state.homeListSwapToken !== token) {
         return
       }
       const regrouped = groupHomeEntriesByMode(nextEntries)
-      this.delegate.setEntryGroups({
+      this.state.entryGroups = {
         articles: [...regrouped.articles],
         social: [...regrouped.social],
         pictures: [...regrouped.pictures],
         videos: [...regrouped.videos],
-      })
+      }
       this.notifyAllReloadedExcept(mode)
     }, HOME_ENTRY_GROUP_DEFER_DELAY_MS)
   }
 
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] {
-    const groups = this.delegate.getEntryGroups()
+    const groups = this.state.entryGroups
     const merged = [
       ...groups.articles,
       ...groups.social,
@@ -136,7 +141,7 @@ export class HomeEntryDataManager {
     }
     const snapshotEntries = entries.map((e: EntryCardModel) => cloneHomeSnapshotEntry(e))
     const version = ++this.snapshotPersistVersion
-    this.delegate.runManagedTimeout(() => {
+    this.actions.runManagedTimeout(() => {
       if (this.snapshotPersistVersion !== version) {
         return
       }
@@ -145,7 +150,7 @@ export class HomeEntryDataManager {
   }
 
   persistSnapshotNow(): void {
-    const entries = this.delegate.getFeaturedEntries()
+    const entries = this.state.featuredEntries
     if (entries.length === 0) {
       return
     }
@@ -160,7 +165,7 @@ export class HomeEntryDataManager {
     const targetTitle = (target.title || '').trim()
 
     let updated = false
-    const updatedEntries = this.delegate.getFeaturedEntries().map((item: EntryCardModel) => {
+    const updatedEntries = this.state.featuredEntries.map((item: EntryCardModel) => {
       if (item.isRead) {
         return item
       }
@@ -185,15 +190,15 @@ export class HomeEntryDataManager {
       return
     }
 
-    this.delegate.setFeaturedEntries(updatedEntries)
+    this.state.featuredEntries = updatedEntries
     this.schedulePersistSnapshot(updatedEntries)
     const regrouped = groupHomeEntriesByMode(updatedEntries)
-    this.delegate.setEntryGroups({
+    this.state.entryGroups = {
       articles: [...regrouped.articles],
       social: [...regrouped.social],
       pictures: [...regrouped.pictures],
       videos: [...regrouped.videos],
-    })
+    }
   }
 
   playListSwapTransition(
@@ -205,54 +210,50 @@ export class HomeEntryDataManager {
     listSwapEnterDuration: number,
     animationEnabled: boolean,
   ): void {
-    if (!this.delegate.isComponentActive()) {
+    if (!this.state.isComponentActive) {
       this.applyHomeEntries(nextEntries)
       return
     }
 
-    if (this.delegate.getListSwapAnimating() || this.delegate.getFeaturedEntries().length === 0) {
+    if (this.state.homeListSwapAnimating || this.state.featuredEntries.length === 0) {
       this.applyHomeEntries(nextEntries)
-      this.delegate.setListSwapOpacity(1)
-      this.delegate.setListSwapTranslateY(0)
+      this.state.homeListSwapOpacity = 1
+      this.state.homeListSwapTranslateY = 0
       return
     }
 
-    this.delegate.setListSwapAnimating(true)
+    this.state.homeListSwapAnimating = true
     this.applyHomeEntries(nextEntries, false)
 
     if (!animationEnabled) {
-      this.delegate.setListSwapOpacity(1)
-      this.delegate.setListSwapTranslateY(0)
-      this.delegate.setListSwapAnimating(false)
+      this.state.homeListSwapOpacity = 1
+      this.state.homeListSwapTranslateY = 0
+      this.state.homeListSwapAnimating = false
       return
     }
 
-    this.delegate.setListSwapOpacity(listSwapEntryMinOpacity)
-    this.delegate.setListSwapTranslateY(listSwapEntryOffsetY)
+    this.state.homeListSwapOpacity = listSwapEntryMinOpacity
+    this.state.homeListSwapTranslateY = listSwapEntryOffsetY
 
-    this.delegate.animateWithUiContext({
+    this.actions.animateWithUiContext({
       duration: listSwapEnterDuration,
       curve: Curve.EaseOut,
       onFinish: () => {
-        if (this.delegate.getListSwapToken() !== swapToken) {
+        if (this.state.homeListSwapToken !== swapToken) {
           return
         }
-        this.delegate.setListSwapOpacity(1)
-        this.delegate.setListSwapTranslateY(0)
-        this.delegate.setListSwapAnimating(false)
+        this.state.homeListSwapOpacity = 1
+        this.state.homeListSwapTranslateY = 0
+        this.state.homeListSwapAnimating = false
       },
     }, () => {
-      this.delegate.setListSwapOpacity(1)
-      this.delegate.setListSwapTranslateY(0)
+      this.state.homeListSwapOpacity = 1
+      this.state.homeListSwapTranslateY = 0
     })
   }
 
-  resetTweetPresentationCache(): void {
-    this.delegate.resetTweetPresentationCache()
-  }
-
   notifyAllReloaded(): void {
-    const sources = this.delegate.getDataSources()
+    const sources = this.state.homeEntryDataSources
     sources.articles.notifyDataReloaded()
     sources.social.notifyDataReloaded()
     sources.pictures.notifyDataReloaded()
@@ -264,7 +265,7 @@ export class HomeEntryDataManager {
   }
 
   notifyAllReloadedExcept(mode: SubscriptionMode): void {
-    const sources = this.delegate.getDataSources()
+    const sources = this.state.homeEntryDataSources
     if (mode !== 'articles') { sources.articles.notifyDataReloaded() }
     if (mode !== 'social') { sources.social.notifyDataReloaded() }
     if (mode !== 'pictures') { sources.pictures.notifyDataReloaded() }
@@ -272,7 +273,7 @@ export class HomeEntryDataManager {
   }
 
   private dataSourceFor(mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> {
-    const sources = this.delegate.getDataSources()
+    const sources = this.state.homeEntryDataSources
     switch (mode) {
       case 'social': return sources.social
       case 'pictures': return sources.pictures

@@ -29,7 +29,7 @@ test('home runtime lifecycle flow lives in a dedicated coordinator', () => {
 test('index page delegates lifecycle hooks to the runtime coordinator', () => {
   assert.match(
     indexSource,
-    /private readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator =\s*new IndexHomeRuntimeCoordinator\(this\)/s,
+    /readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator =\s*new IndexHomeRuntimeCoordinator\(this\)/s,
   )
   assert.match(
     indexSource,

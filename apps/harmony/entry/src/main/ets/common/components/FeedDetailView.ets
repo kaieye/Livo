@@ -1,6 +1,7 @@
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 import { Entry, Feed, FeedViewType } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { showToast } from '../utils/PageToastHelper'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { FeedDetailVideoPreviewService } from '../services/FeedDetailVideoPreviewService'
 import {
@@ -170,9 +171,7 @@ export struct FeedDetailView {
   }
 
   showToast(message: string, duration: number = 1800): void {
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration })
-    } catch (_error) {}
+    showToast(this.getUIContext(), message, duration)
   }
 
   private reconcileEntryCaches(): void {

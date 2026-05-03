@@ -1,5 +1,5 @@
 import { ThemePalette } from '../../services/ThemeService'
-import { ResolvedDiscoverCandidate } from '../../services/DiscoverService'
+import { ResolvedDiscoverCandidate } from '../../services/discover/DiscoverTypes'
 import { AvatarTile } from '../AvatarTile'
 import {
   CARD_RADIUS_LG,

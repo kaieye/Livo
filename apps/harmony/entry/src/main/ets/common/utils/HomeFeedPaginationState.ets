@@ -1,5 +1,4 @@
 import { EntryCardModel } from '../models/LivoModels'
-import { HomeScrollIntentTracker } from './HomeScrollIntentTracker'
 import {
   HOME_FULL_MODE_CANDIDATE_LIMIT,
   HomeModeHasMoreMap,
@@ -23,75 +22,18 @@ import {
   withHomeModeBooleanValue,
   withHomeNoProgressCountValue,
   withHomeVisibleEntryLimitValue,
-} from './IndexHomeStateFactory'
+} from './HomeModeMapHelpers'
 import {
   resolveHomeVisibleEntryInitialLimit,
   resolveHomeVisibleEntryLoadMoreStep,
 } from './HomeVisibleEntryPolicy'
-import { HomeEntryGroups } from './HomeEntryGroups'
+import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
 
-export interface IndexHomePaginationOwner {
-  mode: SubscriptionMode
-  homeCandidateLimit: number
-  homeCandidateLimitsByMode: HomeModeCandidateLimitMap
-  homeModeLoaded: HomeModeLoadedMap
-  homeModeLoading: HomeModeLoadingMap
-  homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap
-  homeHasMoreEntries: boolean
-  homeHasMoreEntriesByMode: HomeModeHasMoreMap
-  homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap
-  homeLoadMorePrefetchToken: number
-  homeLoadMorePrefetchLimit: number
-  homeLoadMorePrefetchEntries: EntryCardModel[]
-  homeLoadMorePrefetchMode: SubscriptionMode
-  homeLoadMorePrefetchInProgress: boolean
-  lastHomeLoadMoreRequestedAt: number
-  homeLoadMoreInProgress: boolean
-  homeLoadMoreRequestToken: number
-  lastHomeLoadMoreCompletedAt: number
-  searchOverlayVisible: boolean
-  homeInitialLoadPending: boolean
-  isComponentActive: boolean
-  isRefreshing: boolean
-  isHomeStartupRefreshing: boolean
-  homeScrollIntent: HomeScrollIntentTracker
-  featuredEntries: EntryCardModel[]
-  entryGroups: HomeEntryGroups<EntryCardModel>
+export class HomeFeedPaginationState {
+  protected readonly session: HomeFeedSessionOwner
 
-  isHomeRootTab(): boolean
-  hasHomeInlineSearchQuery(): boolean
-  runManagedTimeout(callback: () => void, delayMs: number): void
-  logHomeLoadMore(message: string): void
-  logHomePerf(message: string): void
-  logHomeLoadState(message: string): void
-  logHomeAsyncError(stage: string, error: Error | string | Object): void
-  describeError(error: Error | string | Object): string
-  filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[]
-  mergeFeaturedEntriesFromGroups(): EntryCardModel[]
-  applyEntriesForMode(
-    mode: SubscriptionMode,
-    entries: EntryCardModel[],
-    deferredPersist: boolean,
-    skipNotify?: boolean,
-    skipMerge?: boolean,
-  ): void
-  settleInitialHomeLoadState(force?: boolean): void
-  schedulePersistHomeSnapshot(entries: EntryCardModel[]): void
-  notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void
-  reloadFeaturedEntriesFromLocal(
-    candidateLimit?: number,
-    animated?: boolean,
-    deferredGrouping?: boolean,
-    preferFastPath?: boolean,
-    targetMode?: SubscriptionMode,
-  ): Promise<void>
-}
-
-export class HomePaginationState {
-  protected readonly owner: IndexHomePaginationOwner
-
-  constructor(owner: IndexHomePaginationOwner) {
-    this.owner = owner
+  constructor(session: HomeFeedSessionOwner) {
+    this.session = session
   }
 
   shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
@@ -99,16 +41,16 @@ export class HomePaginationState {
   }
 
   candidateLimitForMode(mode: SubscriptionMode): number {
-    return homeCandidateLimitValue(mode, this.owner.homeCandidateLimitsByMode)
+    return homeCandidateLimitValue(mode, this.session.homeCandidateLimitsByMode)
   }
 
   setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
     const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
     const safeLimit = Math.max(minimumLimit, limit)
-    this.owner.homeCandidateLimitsByMode =
-      withHomeCandidateLimitValue(mode, safeLimit, this.owner.homeCandidateLimitsByMode)
-    if (mode === this.owner.mode) {
-      this.owner.homeCandidateLimit = safeLimit
+    this.session.homeCandidateLimitsByMode =
+      withHomeCandidateLimitValue(mode, safeLimit, this.session.homeCandidateLimitsByMode)
+    if (mode === this.session.mode) {
+      this.session.homeCandidateLimit = safeLimit
     }
   }
 
@@ -120,40 +62,40 @@ export class HomePaginationState {
   }
 
   resolveHomeCandidateLimit(minimumLimit: number): number {
-    if (this.shouldRenderAllEntriesForMode(this.owner.mode)) {
-      return this.resolveHomeCandidateLimitForMode(this.owner.mode, minimumLimit)
+    if (this.shouldRenderAllEntriesForMode(this.session.mode)) {
+      return this.resolveHomeCandidateLimitForMode(this.session.mode, minimumLimit)
     }
-    return Math.max(minimumLimit, this.owner.homeCandidateLimit)
+    return Math.max(minimumLimit, this.session.homeCandidateLimit)
   }
 
   markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
-    this.owner.homeModeLoaded = withHomeLoadedValue(mode, loaded, this.owner.homeModeLoaded)
+    this.session.homeModeLoaded = withHomeLoadedValue(mode, loaded, this.session.homeModeLoaded)
   }
 
   isModeLoaded(mode: SubscriptionMode): boolean {
-    return homeModeLoadedValue(mode, this.owner.homeModeLoaded)
+    return homeModeLoadedValue(mode, this.session.homeModeLoaded)
   }
 
   isModeLoading(mode: SubscriptionMode): boolean {
-    return homeModeLoadingValue(mode, this.owner.homeModeLoading)
+    return homeModeLoadingValue(mode, this.session.homeModeLoading)
   }
 
   setModeLoading(mode: SubscriptionMode, loading: boolean): void {
-    this.owner.homeModeLoading = withHomeLoadingValue(mode, loading, this.owner.homeModeLoading)
+    this.session.homeModeLoading = withHomeLoadingValue(mode, loading, this.session.homeModeLoading)
   }
 
   visibleEntryLimitFor(mode: SubscriptionMode): number {
-    return homeVisibleEntryLimitValue(mode, this.owner.homeVisibleEntryLimits)
+    return homeVisibleEntryLimitValue(mode, this.session.homeVisibleEntryLimits)
   }
 
   setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
     const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    this.owner.homeVisibleEntryLimits =
-      withHomeVisibleEntryLimitValue(mode, safeLimit, this.owner.homeVisibleEntryLimits)
+    this.session.homeVisibleEntryLimits =
+      withHomeVisibleEntryLimitValue(mode, safeLimit, this.session.homeVisibleEntryLimits)
   }
 
   totalEntryCountFor(mode: SubscriptionMode): number {
-    return this.owner.filteredEntriesFor(mode).length
+    return this.session.filteredEntriesFor(mode).length
   }
 
   hasBufferedEntriesForMode(mode: SubscriptionMode): boolean {
@@ -164,7 +106,7 @@ export class HomePaginationState {
   }
 
   visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
-    const entries = this.owner.filteredEntriesFor(mode)
+    const entries = this.session.filteredEntriesFor(mode)
     if (this.shouldRenderAllEntriesForMode(mode)) {
       return entries
     }
@@ -194,14 +136,14 @@ export class HomePaginationState {
     }
     const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode))
     this.setVisibleEntryLimitFor(mode, nextLimit)
-    this.owner.logHomeLoadMore(
+    this.session.logHomeLoadMore(
       `expand-visible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total}`,
     )
     return true
   }
 
   modeHasMoreEntries(mode: SubscriptionMode): boolean {
-    return homeModeBooleanValue(mode, this.owner.homeHasMoreEntriesByMode)
+    return homeModeBooleanValue(mode, this.session.homeHasMoreEntriesByMode)
   }
 
   setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
@@ -209,11 +151,11 @@ export class HomePaginationState {
     if (previous === next) {
       return
     }
-    this.owner.homeHasMoreEntriesByMode =
-      withHomeModeBooleanValue(mode, next, this.owner.homeHasMoreEntriesByMode)
-    this.owner.logHomeLoadState(
+    this.session.homeHasMoreEntriesByMode =
+      withHomeModeBooleanValue(mode, next, this.session.homeHasMoreEntriesByMode)
+    this.session.logHomeLoadState(
       `modeHasMore mode=${mode} next=${next ? 'true' : 'false'} reason=${reason} `
-      + `globalHasMore=${this.owner.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
+      + `globalHasMore=${this.session.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
     )
     if (next) {
       this.setHomeHasMoreEntries(true, `mode-has-more mode=${mode}`)
@@ -221,36 +163,36 @@ export class HomePaginationState {
   }
 
   setHomeHasMoreEntries(next: boolean, reason: string): void {
-    if (this.owner.homeHasMoreEntries === next) {
+    if (this.session.homeHasMoreEntries === next) {
       return
     }
-    const mode = this.owner.mode
+    const mode = this.session.mode
     const total = this.totalEntryCountFor(mode)
     const visible = this.visibleEntryCountFor(mode)
-    this.owner.homeHasMoreEntries = next
+    this.session.homeHasMoreEntries = next
     if (!next) {
-      this.owner.homeHasMoreEntriesByMode = {
+      this.session.homeHasMoreEntriesByMode = {
         articles: false,
         social: false,
         pictures: false,
         videos: false,
       }
     }
-    this.owner.logHomeLoadState(
+    this.session.logHomeLoadState(
       `hasMore=${next ? 'true' : 'false'} reason=${reason} mode=${mode} `
-      + `candidateLimit=${this.owner.homeCandidateLimit} featured=${this.owner.featuredEntries.length} `
-      + `visible=${visible}/${total} inProgress=${this.owner.homeLoadMoreInProgress}`,
+      + `candidateLimit=${this.session.homeCandidateLimit} featured=${this.session.featuredEntries.length} `
+      + `visible=${visible}/${total} inProgress=${this.session.homeLoadMoreInProgress}`,
     )
   }
 
   modeNoProgressCount(mode: SubscriptionMode): number {
-    return homeNoProgressCountValue(mode, this.owner.homeModeNoProgressLoadMoreCount)
+    return homeNoProgressCountValue(mode, this.session.homeModeNoProgressLoadMoreCount)
   }
 
   setModeNoProgressCount(mode: SubscriptionMode, count: number): void {
     const safeCount = Math.max(0, count)
-    this.owner.homeModeNoProgressLoadMoreCount =
-      withHomeNoProgressCountValue(mode, safeCount, this.owner.homeModeNoProgressLoadMoreCount)
+    this.session.homeModeNoProgressLoadMoreCount =
+      withHomeNoProgressCountValue(mode, safeCount, this.session.homeModeNoProgressLoadMoreCount)
   }
 
   syncModePaginationFromReloadResult(
@@ -260,7 +202,7 @@ export class HomePaginationState {
   ): void {
     const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
     const safeLimit = Math.max(minimumLimit, candidateLimit)
-    const currentEntries = this.owner.filteredEntriesFor(mode)
+    const currentEntries = this.session.filteredEntriesFor(mode)
     const currentCount = currentEntries.length
     this.setCandidateLimitForMode(mode, safeLimit)
     if (entries.length >= safeLimit) {
@@ -283,7 +225,7 @@ export class HomePaginationState {
       return
     }
     this.setModeHasMoreEntries(mode, false, `sync-pagination-short entries=${entries.length} limit=${safeLimit}`)
-    this.owner.logHomeLoadMore(
+    this.session.logHomeLoadMore(
       `stop-hasMore mode=${mode} entries=${entries.length} limit=${safeLimit} candidateLimit=${this.candidateLimitForMode(mode)}`,
     )
     if (!this.modeHasMoreEntries('articles')
@@ -296,6 +238,6 @@ export class HomePaginationState {
   }
 
   syncHomePaginationFromReloadResult(entries: EntryCardModel[], candidateLimit: number): void {
-    this.syncModePaginationFromReloadResult(this.owner.mode, entries, candidateLimit)
+    this.syncModePaginationFromReloadResult(this.session.mode, entries, candidateLimit)
   }
 }

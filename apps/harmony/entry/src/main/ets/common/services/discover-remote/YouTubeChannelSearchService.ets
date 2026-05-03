@@ -7,7 +7,7 @@ import {
   ACCEPT_HTML,
   MEDIUM_REQUEST_TIMEOUT_MS,
 } from '../../AppConfig'
-import { ResolvedDiscoverCandidate } from '../DiscoverService'
+import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 
 interface ParsedYouTubeChannel {
   channelId: string

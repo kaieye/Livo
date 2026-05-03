@@ -8,6 +8,7 @@ import {
   HarmonySettings,
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
+import { showToast } from '../common/utils/PageToastHelper'
 import { createEmptyHomeEntryGroups, HomeEntryGroups } from '../common/utils/HomeEntryGroups'
 import { HomeEntryDataManager } from '../common/utils/HomeEntryDataManager'
 import { HomeInlineSearchController } from '../common/utils/HomeInlineSearchController'
@@ -28,23 +29,15 @@ import {
   rootTitleBarMaskExtraHeight,
   rootTransparentBackgroundColor,
 } from '../common/utils/IndexRootChrome'
-import { IndexHomeBootstrapCoordinator } from '../common/utils/IndexHomeBootstrapCoordinator'
-import { IndexHomeRefreshCoordinator } from '../common/utils/IndexHomeRefreshCoordinator'
-import { IndexHomePaginationCoordinator } from '../common/utils/IndexHomePaginationCoordinator'
+import { HomeFeedSession } from '../common/utils/HomeFeedSession'
 import { IndexHomeRailCoordinator } from '../common/utils/IndexHomeRailCoordinator'
 import { IndexHomeRuntimeCoordinator } from '../common/utils/IndexHomeRuntimeCoordinator'
-import { IndexHomeReloadCoordinator } from '../common/utils/IndexHomeReloadCoordinator'
 import { IndexHomeDiagnosticsLogger } from '../common/utils/IndexHomeDiagnosticsLogger'
 import { IndexHomeModeScenePresenter } from '../common/utils/IndexHomeModeScenePresenter'
 import { IndexHomeScrollerRegistry } from '../common/utils/IndexHomeScrollerRegistry'
 import { IndexHomeLoadStateGate } from '../common/utils/IndexHomeLoadStateGate'
 import { IndexPageLifecycleController } from '../common/utils/IndexPageLifecycleController'
 import { IndexRootTabCoordinator } from '../common/utils/IndexRootTabCoordinator'
-import {
-  IndexHomeEntryDataDelegate,
-  IndexHomeInlineSearchDelegate,
-  IndexHomeModeDelegate,
-} from '../common/utils/IndexHomeDelegates'
 import { HomeScrollIntentTracker } from '../common/utils/HomeScrollIntentTracker'
 import {
   createHomeCandidateLimitMap,
@@ -53,11 +46,9 @@ import {
   createHomeModeBooleanMap,
   createHomeNoProgressCountMap,
   createHomeVisibleEntryLimitMap,
-  pictureCaption,
-  pictureCardEntry,
-  pictureGalleryUrls,
-} from '../common/utils/IndexHomeStateFactory'
-import { createIndexHomeRootContentCallbacks } from '../common/utils/IndexHomeRootContentCallbacksFactory'
+} from '../common/utils/HomeModeMapHelpers'
+import { pictureCaption, pictureCardEntry, pictureGalleryUrls } from '../common/utils/HomePictureHelpers'
+import { IndexHomeRootContentCallbacks } from '../common/components/IndexHomeRootContent'
 import {
   HOME_INLINE_SEARCH_VERTICAL_TRAVEL,
   HOME_MODE_INITIAL_CANDIDATE_LIMIT,
@@ -146,7 +137,7 @@ struct Index {
   isComponentActive: boolean = false
   hasLoadedInitialData: boolean = false
   initialFeedCount: number = 0
-  private homeInlineSearchFocusRequestToken: number = 0
+  homeInlineSearchFocusRequestToken: number = 0
   homeLoadMoreRequestToken: number = 0
   lastHomeLoadMoreRequestedAt: number = 0
   homeLoadMorePrefetchToken: number = 0
@@ -166,21 +157,22 @@ struct Index {
   readonly diagnosticsLogger: IndexHomeDiagnosticsLogger = new IndexHomeDiagnosticsLogger(this)
   readonly loadStateGate: IndexHomeLoadStateGate = new IndexHomeLoadStateGate(this)
   readonly modeScenePresenter: IndexHomeModeScenePresenter = new IndexHomeModeScenePresenter(this)
-  readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator = new IndexHomeRuntimeCoordinator(this)
-  readonly homeBootstrapCoordinator: IndexHomeBootstrapCoordinator = new IndexHomeBootstrapCoordinator(this)
-  readonly homeModeController: HomeModeController = new HomeModeController(this.createHomeModeDelegate())
-  readonly homeEntryDataManager: HomeEntryDataManager = new HomeEntryDataManager(this.createHomeEntryDataDelegate())
-  readonly homeInlineSearchController: HomeInlineSearchController = new HomeInlineSearchController(this.createHomeInlineSearchDelegate())
-  readonly homeRefreshCoordinator: IndexHomeRefreshCoordinator = new IndexHomeRefreshCoordinator(this)
-  readonly homePaginationCoordinator: IndexHomePaginationCoordinator = new IndexHomePaginationCoordinator(this)
   readonly homeRailCoordinator: IndexHomeRailCoordinator = new IndexHomeRailCoordinator(this)
-  readonly homeReloadCoordinator: IndexHomeReloadCoordinator = new IndexHomeReloadCoordinator(this)
   readonly rootTabCoordinator: IndexRootTabCoordinator = new IndexRootTabCoordinator(this)
+  readonly homeModeController: HomeModeController = new HomeModeController(this, this)
+  readonly homeEntryDataManager: HomeEntryDataManager = new HomeEntryDataManager(this, this)
+  readonly homeInlineSearchController: HomeInlineSearchController = new HomeInlineSearchController(this, this)
+  readonly homeFeedSession: HomeFeedSession = new HomeFeedSession(this, {
+    homeEntryDataManager: this.homeEntryDataManager,
+    loadStateGate: this.loadStateGate,
+    railCoordinator: this.homeRailCoordinator,
+    rootTabCoordinator: this.rootTabCoordinator,
+    inlineSearchController: this.homeInlineSearchController,
+    diagnosticsLogger: this.diagnosticsLogger,
+    homeScrollIntent: this.homeScrollIntent,
+  })
+  readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator = new IndexHomeRuntimeCoordinator(this)
   readonly pageLifecycle: IndexPageLifecycleController = new IndexPageLifecycleController(this)
-
-  private createHomeModeDelegate(): IndexHomeModeDelegate { return new IndexHomeModeDelegate(this) }
-  private createHomeEntryDataDelegate(): IndexHomeEntryDataDelegate { return new IndexHomeEntryDataDelegate(this) }
-  private createHomeInlineSearchDelegate(): IndexHomeInlineSearchDelegate { return new IndexHomeInlineSearchDelegate(this) }
 
   aboutToAppear(): void { this.homeRuntimeCoordinator.aboutToAppear() }
   aboutToDisappear(): void { this.homeRuntimeCoordinator.aboutToDisappear() }
@@ -195,21 +187,17 @@ struct Index {
   logHomeLoadState(message: string): void { this.diagnosticsLogger.logHomeLoadState(message) }
   logHomeGroupStats(stage: string, entries: EntryCardModel[]): void { this.diagnosticsLogger.logHomeGroupStats(stage, entries) }
 
-  async loadInitialData(): Promise<void> { await this.homeBootstrapCoordinator.loadInitialData() }
-  resumeLoadedHome(): void { this.homeBootstrapCoordinator.resumeLoadedHome() }
-  async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> { await this.homeRefreshCoordinator.startStartupRefreshIfNeeded(snapshotRestored) }
-  async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> { await this.homeRefreshCoordinator.refreshFeaturedEntries(showResultToast) }
-  clearRefreshPercentAnimation(): void { this.homeRefreshCoordinator.clearRefreshPercentAnimation() }
+  async loadInitialData(): Promise<void> { await this.homeFeedSession.bootstrap() }
+  resumeLoadedHome(): void { this.homeFeedSession.resume() }
+  async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> { await this.homeFeedSession.refresh.startStartupRefreshIfNeeded(snapshotRestored) }
+  async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> { await this.homeFeedSession.refresh.refreshFeaturedEntries(showResultToast) }
+  clearRefreshPercentAnimation(): void { this.homeFeedSession.refresh.clearRefreshPercentAnimation() }
 
   showToast(message: string, duration: number = 2000): void {
     if (!this.isComponentActive) {
       return
     }
-    try {
-      this.getUIContext().getPromptAction().showToast({ message, duration })
-    } catch (error) {
-      console.error(`showToast failed: ${error instanceof Error ? error.message : error}`)
-    }
+    showToast(this.getUIContext(), message, duration)
   }
 
   animateWithUiContext(options: AnimateParam, event: () => void): void {
@@ -234,7 +222,7 @@ struct Index {
   setConsumedModeScrollIntentVersion(mode: SubscriptionMode, value: number): void { this.homeScrollIntent.setConsumedVersion(mode, value) }
   resetModeScrollIntent(mode: SubscriptionMode): void {
     this.homeScrollIntent.reset(mode)
-    this.homePaginationCoordinator.resetModeScrollProgressLoadMoreValue(mode)
+    this.homeFeedSession.pagination.resetModeScrollProgressLoadMoreValue(mode)
   }
   setHomeScrollInteracting(interacting: boolean, _mode: SubscriptionMode = this.mode): void { this.homeScrollIntent.setInteracting(interacting) }
 
@@ -245,8 +233,6 @@ struct Index {
     return this.filteredEntriesFor(this.mode)
   }
   hasHomeInlineSearchQuery(): boolean { return !!this.homeInlineSearchController.normalizedQuery() }
-  getHomeInlineSearchFocusRequestToken(): number { return this.homeInlineSearchFocusRequestToken }
-  setHomeInlineSearchFocusRequestToken(token: number): void { this.homeInlineSearchFocusRequestToken = token }
   getSearchInputController(): TextInputController { return this.searchInputController }
   logHomeInlineSearchFocusDebug(stage: string, message: string): void { this.homeInlineSearchController.logFocusDebug(stage, message) }
   closeHomeInlineSearch(clearQuery: boolean): void { this.homeInlineSearchController.close(clearQuery) }
@@ -284,44 +270,44 @@ struct Index {
   presentTweetEntry(entry: EntryCardModel): TweetEntryPresentation { return this.tweetPresentationCache.get(entry) }
   resetTweetPresentationCache(): void { this.tweetPresentationCache.clear() }
 
-  private markDeferredFeedsChangedReload(reason: string): void { this.homeRefreshCoordinator.markDeferredFeedsChangedReload(reason) }
-  private scheduleDeferredFeedsChangedRetry(delayMs: number): void { this.homeRefreshCoordinator.scheduleDeferredFeedsChangedRetry(delayMs) }
-  private scheduleFeedsChangedReload(reason: string): void { this.homeRefreshCoordinator.scheduleFeedsChangedReload(reason) }
-  tryFlushDeferredFeedsChangedReload(source: string): boolean { return this.homeRefreshCoordinator.tryFlushDeferredFeedsChangedReload(source) }
-  private handleFeedsChanged(): void { this.homeRefreshCoordinator.handleFeedsChanged() }
-  private shouldRunFinalHomeReloadNow(): boolean { return this.homeRefreshCoordinator.shouldRunFinalHomeReloadNow() }
-  private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void { this.homeRefreshCoordinator.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt) }
-  private scheduleHomeReloadAfterRefresh(): void { this.homeRefreshCoordinator.scheduleHomeReloadAfterRefresh() }
+  private markDeferredFeedsChangedReload(reason: string): void { this.homeFeedSession.refresh.markDeferredFeedsChangedReload(reason) }
+  private scheduleDeferredFeedsChangedRetry(delayMs: number): void { this.homeFeedSession.refresh.scheduleDeferredFeedsChangedRetry(delayMs) }
+  private scheduleFeedsChangedReload(reason: string): void { this.homeFeedSession.refresh.scheduleFeedsChangedReload(reason) }
+  tryFlushDeferredFeedsChangedReload(source: string): boolean { return this.homeFeedSession.tryFlushDeferredFeedsChangedReload(source) }
+  private handleFeedsChanged(): void { this.homeFeedSession.handleFeedsChanged() }
+  private shouldRunFinalHomeReloadNow(): boolean { return this.homeFeedSession.refresh.shouldRunFinalHomeReloadNow() }
+  private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void { this.homeFeedSession.refresh.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt) }
+  private scheduleHomeReloadAfterRefresh(): void { this.homeFeedSession.refresh.scheduleHomeReloadAfterRefresh() }
 
-  resolveHomeCandidateLimit(minimumLimit: number): number { return this.homePaginationCoordinator.resolveHomeCandidateLimit(minimumLimit) }
-  shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean { return this.homePaginationCoordinator.shouldRenderAllEntriesForMode(_mode) }
-  setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void { this.homePaginationCoordinator.setCandidateLimitForMode(mode, limit) }
-  resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number { return this.homePaginationCoordinator.resolveHomeCandidateLimitForMode(mode, minimumLimit) }
-  markModeLoaded(mode: SubscriptionMode, loaded: boolean): void { this.homePaginationCoordinator.markModeLoaded(mode, loaded) }
-  isModeLoaded(mode: SubscriptionMode): boolean { return this.homePaginationCoordinator.isModeLoaded(mode) }
-  isModeLoading(mode: SubscriptionMode): boolean { return this.homePaginationCoordinator.isModeLoading(mode) }
-  setModeLoading(mode: SubscriptionMode, loading: boolean): void { this.homePaginationCoordinator.setModeLoading(mode, loading) }
-  totalEntryCountFor(mode: SubscriptionMode): number { return this.homePaginationCoordinator.totalEntryCountFor(mode) }
-  private hasBufferedEntriesForMode(mode: SubscriptionMode): boolean { return this.homePaginationCoordinator.hasBufferedEntriesForMode(mode) }
-  visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] { return this.homePaginationCoordinator.visibleEntriesFor(mode) }
-  private visibleEntryCountFor(mode: SubscriptionMode): number { return this.homePaginationCoordinator.visibleEntryCountFor(mode) }
-  syncModePaginationFromReloadResult(mode: SubscriptionMode, entries: EntryCardModel[], candidateLimit: number): void { this.homePaginationCoordinator.syncModePaginationFromReloadResult(mode, entries, candidateLimit) }
-  setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void { this.homePaginationCoordinator.setModeHasMoreEntries(mode, next, reason) }
-  resetModeLoadMoreStates(reason: string): void { this.homePaginationCoordinator.resetModeLoadMoreStates(reason) }
-  hasRecentHomeScrollIntent(): boolean { return this.homePaginationCoordinator.hasRecentHomeScrollIntent() }
-  invalidateHomeLoadMorePrefetch(): void { this.homePaginationCoordinator.invalidateHomeLoadMorePrefetch() }
-  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void { this.homePaginationCoordinator.scheduleHomeLoadMorePrefetch(delayMs) }
-  pendingLoadMoreForMode(mode: SubscriptionMode): boolean { return this.homePaginationCoordinator.pendingLoadMoreForMode(mode) }
-  maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void { this.homePaginationCoordinator.maybeTriggerLoadMoreByScrollProgress(mode, currentOffset) }
-  flushPendingLoadMoreForMode(mode: SubscriptionMode): void { this.homePaginationCoordinator.flushPendingLoadMoreForMode(mode) }
-  handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void { this.homePaginationCoordinator.handleHomeEntryAppear(mode, index, totalCount) }
+  resolveHomeCandidateLimit(minimumLimit: number): number { return this.homeFeedSession.pagination.resolveHomeCandidateLimit(minimumLimit) }
+  shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean { return this.homeFeedSession.pagination.shouldRenderAllEntriesForMode(_mode) }
+  setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void { this.homeFeedSession.pagination.setCandidateLimitForMode(mode, limit) }
+  resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number { return this.homeFeedSession.pagination.resolveHomeCandidateLimitForMode(mode, minimumLimit) }
+  markModeLoaded(mode: SubscriptionMode, loaded: boolean): void { this.homeFeedSession.pagination.markModeLoaded(mode, loaded) }
+  isModeLoaded(mode: SubscriptionMode): boolean { return this.homeFeedSession.pagination.isModeLoaded(mode) }
+  isModeLoading(mode: SubscriptionMode): boolean { return this.homeFeedSession.pagination.isModeLoading(mode) }
+  setModeLoading(mode: SubscriptionMode, loading: boolean): void { this.homeFeedSession.pagination.setModeLoading(mode, loading) }
+  totalEntryCountFor(mode: SubscriptionMode): number { return this.homeFeedSession.pagination.totalEntryCountFor(mode) }
+  private hasBufferedEntriesForMode(mode: SubscriptionMode): boolean { return this.homeFeedSession.pagination.hasBufferedEntriesForMode(mode) }
+  visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] { return this.homeFeedSession.pagination.visibleEntriesFor(mode) }
+  private visibleEntryCountFor(mode: SubscriptionMode): number { return this.homeFeedSession.pagination.visibleEntryCountFor(mode) }
+  syncModePaginationFromReloadResult(mode: SubscriptionMode, entries: EntryCardModel[], candidateLimit: number): void { this.homeFeedSession.pagination.syncModePaginationFromReloadResult(mode, entries, candidateLimit) }
+  setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void { this.homeFeedSession.pagination.setModeHasMoreEntries(mode, next, reason) }
+  resetModeLoadMoreStates(reason: string): void { this.homeFeedSession.pagination.resetModeLoadMoreStates(reason) }
+  hasRecentHomeScrollIntent(): boolean { return this.homeFeedSession.pagination.hasRecentHomeScrollIntent() }
+  invalidateHomeLoadMorePrefetch(): void { this.homeFeedSession.pagination.invalidateHomeLoadMorePrefetch() }
+  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void { this.homeFeedSession.pagination.scheduleHomeLoadMorePrefetch(delayMs) }
+  pendingLoadMoreForMode(mode: SubscriptionMode): boolean { return this.homeFeedSession.pagination.pendingLoadMoreForMode(mode) }
+  maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void { this.homeFeedSession.pagination.maybeTriggerLoadMoreByScrollProgress(mode, currentOffset) }
+  flushPendingLoadMoreForMode(mode: SubscriptionMode): void { this.homeFeedSession.pagination.flushPendingLoadMoreForMode(mode) }
+  handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void { this.homeFeedSession.pagination.handleHomeEntryAppear(mode, index, totalCount) }
 
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
   applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void { this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge) }
-  ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.homePaginationCoordinator.ensureModeEntriesLoaded(mode) }
-  precacheNonActiveModes(): void { this.homeReloadCoordinator.precacheNonActiveModes() }
-  async reloadFeaturedEntriesFromLocal(candidateLimit?: number, animated?: boolean, deferredGrouping?: boolean, preferFastPath?: boolean, targetMode?: SubscriptionMode): Promise<void> { await this.homeReloadCoordinator.reloadFeaturedEntriesFromLocal(candidateLimit, animated, deferredGrouping, preferFastPath, targetMode) }
-  async reloadHomeEntriesFromLocal(candidateLimit?: number, animated?: boolean, deferredGrouping?: boolean, preferFastPath?: boolean): Promise<void> { await this.homeReloadCoordinator.reloadHomeEntriesFromLocal(candidateLimit, animated, deferredGrouping, preferFastPath) }
+  ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.homeFeedSession.pagination.ensureModeEntriesLoaded(mode) }
+  precacheNonActiveModes(): void { this.homeFeedSession.precacheNonActiveModes() }
+  async reloadFeaturedEntriesFromLocal(candidateLimit?: number, animated?: boolean, deferredGrouping?: boolean, preferFastPath?: boolean, targetMode?: SubscriptionMode): Promise<void> { await this.homeFeedSession.reloadFeaturedEntriesFromLocal(candidateLimit, animated, deferredGrouping, preferFastPath, targetMode) }
+  async reloadHomeEntriesFromLocal(candidateLimit?: number, animated?: boolean, deferredGrouping?: boolean, preferFastPath?: boolean): Promise<void> { await this.homeFeedSession.reloadHomeEntriesFromLocal(candidateLimit, animated, deferredGrouping, preferFastPath) }
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.homeEntryDataManager.schedulePersistSnapshot(entries) }
   persistHomeSnapshotNow(): void { this.homeEntryDataManager.persistSnapshotNow() }
   applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void { this.homeEntryDataManager.applyHomeEntries(nextEntries, deferredGrouping) }
@@ -331,12 +317,48 @@ struct Index {
   pictureGalleryUrls(entry: EntryCardModel): string[] { return pictureGalleryUrls(entry) }
   pictureCaption(entry: EntryCardModel): string { return pictureCaption(entry) }
   pictureCardEntry(entry: EntryCardModel): Entry { return pictureCardEntry(entry) }
-  modeSceneVisible(mode: SubscriptionMode): Visibility { return this.modeScenePresenter.modeSceneVisible(mode) }
-  modeSceneOpacity(mode: SubscriptionMode): number { return this.modeScenePresenter.modeSceneOpacity(mode) }
-  modeSceneOffset(mode: SubscriptionMode): number { return this.modeScenePresenter.modeSceneOffset(mode) }
-  modeSceneZIndex(mode: SubscriptionMode): number { return this.modeScenePresenter.modeSceneZIndex(mode) }
+  modeSceneVisible(mode: SubscriptionMode): Visibility { return this.modeScenePresenter.getSceneProps(mode).visibility === 'visible' ? Visibility.Visible : Visibility.Hidden }
+  modeSceneOpacity(mode: SubscriptionMode): number { return this.modeScenePresenter.getSceneProps(mode).opacity }
+  modeSceneOffset(mode: SubscriptionMode): number { return this.modeScenePresenter.getSceneProps(mode).offset }
+  modeSceneZIndex(mode: SubscriptionMode): number { return this.modeScenePresenter.getSceneProps(mode).zIndex }
   clearAutoRefreshTimer(): void { this.homeRuntimeCoordinator.clearAutoRefreshTimer() }
   configureAutoRefreshTimer(): void { this.homeRuntimeCoordinator.configureAutoRefreshTimer() }
+
+  private indexHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
+    return {
+      onModeSwipe: (event: GestureEvent): void => { this.handleModeSwipe(event) },
+      getEntries: (mode: SubscriptionMode): EntryCardModel[] => this.visibleEntriesFor(mode),
+      getTotalCount: (mode: SubscriptionMode): number => this.totalEntryCountFor(mode),
+      isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
+      getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
+      getSceneOpacity: (mode: SubscriptionMode): number => this.modeSceneOpacity(mode),
+      getSceneOffsetX: (mode: SubscriptionMode): number => this.modeSceneOffset(mode),
+      getSceneZIndex: (mode: SubscriptionMode): number => this.modeSceneZIndex(mode),
+      getSceneVisible: (mode: SubscriptionMode): Visibility => this.modeSceneVisible(mode),
+      getListSwapTranslateY: (mode: SubscriptionMode): number => this.modeListSwapTranslateY(mode),
+      getScroller: (mode: SubscriptionMode): Scroller => this.homeScrollerForMode(mode),
+      onWillScroll: (mode: SubscriptionMode, _scrollOffset: number, scrollSource: ScrollSource): ScrollResult | void => {
+        this.markHomeUserScrollIntent(mode, scrollSource)
+        return undefined
+      },
+      onDidScroll: (mode: SubscriptionMode): void => {
+        this.syncHomeModeRailState(mode)
+        this.flushPendingLoadMoreForMode(mode)
+      },
+      onStopDragging: (mode: SubscriptionMode): void => {
+        this.setHomeScrollInteracting(false, mode)
+        this.flushPendingLoadMoreForMode(mode)
+      },
+      onEntryOpen: (entry: EntryCardModel): void => { this.openEntry(entry) },
+      onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {
+        this.handleHomeEntryAppear(mode, index, totalCount)
+      },
+      getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
+      getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
+      getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
+      getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
+    }
+  }
 
   private requestExpandedModeRail(): void {
     this.homeInlineSearchController.close()
@@ -376,7 +398,7 @@ struct Index {
         blurStrategy: rootBlurStrategy(),
         systemMaterialEffect: rootSystemMaterialEffect(),
         bindScrollers: this.scrollerRegistry.currentRootBindScrollers(),
-        homeCallbacks: createIndexHomeRootContentCallbacks(this),
+        homeCallbacks: this.indexHomeRootContentCallbacks(),
         rootTabSymbolPair: (tabId: HdsBottomTabId): RootTabSymbolPair => this.rootTabCoordinator.rootTabSymbolPair(tabId),
         onRootTabChange: (index: number) => this.rootTabCoordinator.handleRootTabChange(index),
         onTabAppear: (tabId: RootTabId) => this.rootTabCoordinator.confirmRootTabSelection(tabId),

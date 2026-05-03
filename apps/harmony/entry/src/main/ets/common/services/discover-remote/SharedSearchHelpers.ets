@@ -1,7 +1,7 @@
 import { FeedViewType } from '../../models/LivoModels'
 import { escapeHtml } from '../../utils/HtmlParser'
 import { DiscoverRemoteViewMapping } from '../../utils/DiscoverRemoteSearchParsing'
-import { ResolvedDiscoverCandidate } from '../DiscoverService'
+import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 
 /**
  * Shared helpers for the social discover-remote search adapters (X / Instagram).
