@@ -4,8 +4,12 @@ import { Configuration } from '@ohos.app.ability.Configuration'
 import Want from '@ohos.app.ability.Want'
 import UIAbility from '@ohos.app.ability.UIAbility'
 import window from '@ohos.window'
-import { AppRepository } from '../common/data/AppRepository'
 import { AppContextService } from '../common/services/AppContextService'
+import { AppPreferenceService } from '../common/services/AppPreferenceService'
+import { FeedRepository } from '../common/repositories/FeedRepository'
+import { EntryRepository } from '../common/repositories/EntryRepository'
+import { FeedRefreshCoordinator } from '../common/data/FeedRefreshCoordinator'
+import { SEED_FEEDS, SEED_ENTRIES, seedSettings } from '../common/data/SeedData'
 import { ThemeService } from '../common/services/ThemeService'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
 
@@ -62,7 +66,18 @@ export default class EntryAbility extends UIAbility {
           this.syncAvoidArea(mainWindow)
         })
 
-        await AppRepository.bootstrap()
+        const settings = await AppPreferenceService.loadSettings()
+        await ThemeService.resolvePalette(settings)
+        const existingCount = await FeedRepository.count()
+        if (existingCount === 0) {
+          for (const feed of SEED_FEEDS) {
+            await FeedRepository.insert(feed)
+          }
+          await EntryRepository.upsertMany(SEED_ENTRIES)
+          await AppPreferenceService.saveSettings(seedSettings())
+          void FeedRefreshCoordinator.hydrateSeedFeeds(SEED_FEEDS)
+        }
+        await FeedRefreshCoordinator.bootstrap()
         console.info('Livo Harmony repositories initialized')
         const theme = ThemeService.currentPalette()
         await this.applySystemBarStyle(mainWindow, theme.isDark)

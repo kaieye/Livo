@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
 import { Feed } from '../models/LivoModels'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
@@ -107,7 +107,7 @@ export class FeedDetailHeroAvatarCoordinator {
       this.owner.setTargetImageUrl(nextStoredImageUrl)
     }
     if (shouldPersist) {
-      await AppRepository.updateFeed(feed.id, {
+      await FeedRepository.update(feed.id, {
         title: feed.title,
         url: feed.url,
         siteUrl: feed.siteUrl || '',

@@ -1,6 +1,8 @@
-import { AppRepository } from '../data/AppRepository'
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
 import { openArticleDetail } from '../navigation/AppRouter'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { feedCardFromFeed } from '../data/AppRepositoryEntryHelpers'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { BottomTabs } from './BottomTabs'
@@ -110,13 +112,14 @@ export struct SubscriptionsContent {
     try {
       this.avatarCoordinator.bumpToken()
       if (this.showBottomTabs) {
-        const settings = await AppRepository.settings()
+        const settings = await AppPreferenceService.loadSettings()
         this.theme = await ThemeService.resolvePalette(settings)
       } else {
         this.theme = this.inheritedTheme
       }
 
-      this.feeds = await AppRepository.feedsFast()
+      const feedList = await FeedRepository.list()
+      this.feeds = feedList.map((f: Feed) => feedCardFromFeed(f))
       this.sourceHint = '已加载本地订阅内容'
       this.hasLoaded = true
       this.onReady()
@@ -130,7 +133,8 @@ export struct SubscriptionsContent {
   private async refreshFeeds(): Promise<void> {
     const startedAt = Date.now()
     this.avatarCoordinator.bumpToken()
-    this.feeds = await AppRepository.feedsFast()
+    const feedList = await FeedRepository.list()
+    this.feeds = feedList.map((f: Feed) => feedCardFromFeed(f))
     this.sourceHint = '已加载本地订阅内容'
     this.hasLoaded = true
     this.logSubscriptionsDiag(`refresh done elapsedMs=${Date.now() - startedAt} count=${this.feeds.length}`)

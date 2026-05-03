@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { FeaturedEntriesQuery } from '../data/FeaturedEntriesQuery'
 import { EntryCardModel } from '../models/LivoModels'
 import {
   HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED,
@@ -70,7 +70,7 @@ export class HomePrefetchCoordinator extends HomePaginationState {
     this.owner.logHomeLoadMore(`prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`)
 
     try {
-      const entries = await AppRepository.featuredEntriesByMode(mode, targetLimit)
+      const entries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, targetLimit)
       if (!this.owner.isComponentActive || this.owner.homeLoadMorePrefetchToken !== token) {
         return
       }
@@ -107,14 +107,14 @@ export class HomePrefetchCoordinator extends HomePaginationState {
     const previousTotal = previousEntries.length
     const currentLimit = this.candidateLimitForMode(mode)
     const appendCount = Math.max(1, nextLimit - currentLimit)
-    const nextPage = await AppRepository.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
+    const nextPage = await FeaturedEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
 
     if (nextPage.length === 0) {
       this.setCandidateLimitForMode(mode, nextLimit)
       this.owner.logHomeLoadMore(
         `append-fast-empty mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextLimit=${nextLimit}`,
       )
-      const fallbackEntries = await AppRepository.featuredEntriesByMode(mode, nextLimit)
+      const fallbackEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
       this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
       if (fallbackEntries.length <= previousTotal) {
         this.setModeHasMoreEntries(
@@ -146,7 +146,7 @@ export class HomePrefetchCoordinator extends HomePaginationState {
       this.owner.logHomeLoadMore(
         `append-no-unique prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} nextLimit=${nextLimit}`,
       )
-      const fallbackEntries = await AppRepository.featuredEntriesByMode(mode, nextLimit)
+      const fallbackEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
       this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
       if (fallbackEntries.length <= previousTotal) {
         this.setModeHasMoreEntries(

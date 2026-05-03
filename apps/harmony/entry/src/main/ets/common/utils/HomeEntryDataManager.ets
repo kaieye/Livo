@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 import { EntryCardModel } from '../models/LivoModels'
 import { SubscriptionMode, HomeEntryDataSourceMap, HOME_ENTRY_GROUP_DEFER_DELAY_MS, HOME_FULL_MODE_CANDIDATE_LIMIT } from '../components/HomeRootConfig'
@@ -140,7 +140,7 @@ export class HomeEntryDataManager {
       if (this.snapshotPersistVersion !== version) {
         return
       }
-      void AppRepository.persistHomeEntrySnapshot(snapshotEntries)
+      void AppPreferenceService.saveHomeEntrySnapshot(snapshotEntries)
     }, 180)
   }
 
@@ -150,7 +150,7 @@ export class HomeEntryDataManager {
       return
     }
     const snapshotEntries = entries.map((e: EntryCardModel) => cloneHomeSnapshotEntry(e))
-    void AppRepository.persistHomeEntrySnapshot(snapshotEntries)
+    void AppPreferenceService.saveHomeEntrySnapshot(snapshotEntries)
   }
 
   markEntryReadLocally(target: EntryCardModel): void {

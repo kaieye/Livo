@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { FeaturedEntriesQuery } from '../data/FeaturedEntriesQuery'
 import { EntryCardModel } from '../models/LivoModels'
 import { HomeEntryDataManager } from './HomeEntryDataManager'
 import { resolveHomeVisibleEntryInitialLimit } from './HomeVisibleEntryPolicy'
@@ -65,8 +65,8 @@ export class IndexHomeReloadCoordinator {
       `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${shouldUseFastPath}`,
     )
     const nextEntries = shouldUseFastPath
-      ? await AppRepository.featuredEntriesFastByMode(targetMode, safeCandidateLimit)
-      : await AppRepository.featuredEntriesByMode(targetMode, safeCandidateLimit)
+      ? await FeaturedEntriesQuery.featuredEntriesFastByMode(targetMode, safeCandidateLimit)
+      : await FeaturedEntriesQuery.featuredEntriesByMode(targetMode, safeCandidateLimit)
     this.owner.syncModePaginationFromReloadResult(targetMode, nextEntries, safeCandidateLimit)
     this.owner.logHomeGroupStats(
       `reloadFeaturedEntriesFromLocal mode=${targetMode} limit=${safeCandidateLimit} animated=${animated}`,
@@ -105,8 +105,8 @@ export class IndexHomeReloadCoordinator {
       `reload-home start limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${preferFastPath}`,
     )
     const nextEntries = preferFastPath
-      ? await AppRepository.featuredEntriesFast(safeCandidateLimit)
-      : await AppRepository.featuredEntries(safeCandidateLimit)
+      ? await FeaturedEntriesQuery.featuredEntriesFast(safeCandidateLimit)
+      : await FeaturedEntriesQuery.featuredEntries(safeCandidateLimit)
     this.owner.logHomeGroupStats(
       `reloadHomeEntriesFromLocal limit=${safeCandidateLimit} animated=${animated}`,
       nextEntries,
@@ -134,7 +134,7 @@ export class IndexHomeReloadCoordinator {
         continue
       }
       this.owner.setModeLoading(mode, true)
-      void AppRepository.featuredEntriesFastByMode(mode, precacheLimit)
+      void FeaturedEntriesQuery.featuredEntriesFastByMode(mode, precacheLimit)
         .then((entries: EntryCardModel[]) => {
           this.owner.applyEntriesForMode(mode, entries, true, true, true)
         })

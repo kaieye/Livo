@@ -1,10 +1,14 @@
-import { AppRepository } from '../data/AppRepository'
 import { getStringParams } from '../navigation/AppRouter'
 import {
   ArticleDetailModel,
   HarmonySettings,
   isLegacyPlainArticleContent,
+  toArticleDetailModel,
 } from '../models/LivoModels'
+import { EntryRepository } from '../repositories/EntryRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
+import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { ThemeService, ThemePalette } from '../services/ThemeService'
 import { ArticleAIAssistViewModel } from './ArticleAIAssistViewModel'
 
@@ -41,7 +45,7 @@ export class ArticleEntryLoader {
     }
 
     if (markRead) {
-      await AppRepository.markRead(entryId, true)
+      await EntryRepository.markRead(entryId, true)
       console.info(`已标记条目为已读: ${entryId}`)
     }
 
@@ -49,9 +53,9 @@ export class ArticleEntryLoader {
       return
     }
 
-    this.owner.entry = await AppRepository.entryById(entryId)
+    this.owner.entry = await this.loadEntryById(entryId)
     const upgraded = await this.upgradeLegacyEntryIfNeeded()
-    const settings = await AppRepository.settings()
+    const settings = await AppPreferenceService.loadSettings()
     this.owner.theme = await ThemeService.resolvePalette(settings)
     this.owner.applyAISettings(settings)
     this.owner.resetAIResultsIfEntryChanged()
@@ -99,8 +103,8 @@ export class ArticleEntryLoader {
     this.owner.actionHint = '正在刷新旧版正文格式...'
 
     try {
-      await AppRepository.refreshFeed(current.feedId)
-      const refreshed = await AppRepository.entryById(current.id)
+      await FeedRefreshCoordinator.refreshFeed(current.feedId)
+      const refreshed = await this.loadEntryById(current.id)
       if (refreshed) {
         this.owner.entry = refreshed
       }
@@ -112,6 +116,18 @@ export class ArticleEntryLoader {
     } finally {
       this.owner.isUpgradingLegacyContent = false
     }
+  }
+
+  private async loadEntryById(entryId: string): Promise<ArticleDetailModel | undefined> {
+    const entry = await EntryRepository.getById(entryId)
+    if (!entry) {
+      return undefined
+    }
+    const feed = await FeedRepository.getById(entry.feedId)
+    if (!feed) {
+      return undefined
+    }
+    return toArticleDetailModel(entry, feed)
   }
 }
 

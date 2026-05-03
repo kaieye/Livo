@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import {
   AIAssistantSettings,
   AIProvider,
@@ -59,10 +59,10 @@ export struct AIAssistantSettingsPanel {
   private async loadSettings(): Promise<void> {
     try {
       const loadVersion = this.settingsMutationVersion
-      const settings = await AppRepository.settings()
+      const settings = await AppPreferenceService.loadSettings()
       this.config = settings
       this.theme = await ThemeService.resolvePalette(settings)
-      const aiSettings = await AppRepository.aiSettings()
+      const aiSettings = await AppPreferenceService.loadAISettings()
       if (loadVersion !== this.settingsMutationVersion) {
         return
       }
@@ -84,7 +84,7 @@ export struct AIAssistantSettingsPanel {
 
   private syncGeneralSettings(next: HarmonySettings): void {
     this.config = next
-    void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
+    void AppPreferenceService.saveSettings(next).then((saved: HarmonySettings) => {
       this.config = saved
       this.onSettingsChange(saved)
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
@@ -100,7 +100,7 @@ export struct AIAssistantSettingsPanel {
     const mutationVersion = this.settingsMutationVersion + 1
     this.settingsMutationVersion = mutationVersion
     this.applyResolvedAIState(next)
-    void AppRepository.persistAISettings(next).then((_saved: AIAssistantSettings) => {
+    void AppPreferenceService.saveAISettings(next).then((_saved: AIAssistantSettings) => {
       if (mutationVersion !== this.settingsMutationVersion) {
         return
       }

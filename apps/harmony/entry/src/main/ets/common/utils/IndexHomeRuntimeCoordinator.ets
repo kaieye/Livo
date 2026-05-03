@@ -1,5 +1,5 @@
 import window from '@ohos.window'
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import {
   AUTO_REFRESH_MIN_INTERVAL_MINUTES,
   SubscriptionMode,
@@ -120,7 +120,7 @@ export class IndexHomeRuntimeCoordinator {
   }
 
   async handleSystemThemeChanged(): Promise<void> {
-    const settings = await AppRepository.settings()
+    const settings = await AppPreferenceService.loadSettings()
     if (!shouldRefreshThemeOnSystemColorModeChange(settings.themeMode)) {
       return
     }

@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   OPML_IMPORT_AUTO_REFRESH_LIMIT,
@@ -33,7 +33,7 @@ export struct SubscriptionsSettingsPanel {
   }
 
   private async loadTheme(): Promise<void> {
-    const settings = await AppRepository.settings()
+    const settings = await AppPreferenceService.loadSettings()
     this.theme = await ThemeService.resolvePalette(settings)
   }
 

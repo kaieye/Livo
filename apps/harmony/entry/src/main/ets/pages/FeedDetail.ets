@@ -1,5 +1,5 @@
 import { curves } from '@kit.ArkUI'
-import { AppRepository } from '../common/data/AppRepository'
+import { AppPreferenceService } from '../common/services/AppPreferenceService'
 import { getStringParams, goBack, openArticleDetail, openDiscoverSubscribeConfig } from '../common/navigation/AppRouter'
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
@@ -38,7 +38,7 @@ struct FeedDetail {
   }
 
   private async loadSettings(): Promise<void> {
-    const settings = await AppRepository.settings()
+    const settings = await AppPreferenceService.loadSettings()
     this.theme = await ThemeService.resolvePalette(settings)
   }
 

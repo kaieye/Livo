@@ -1,4 +1,5 @@
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
+import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { EntryCardModel } from '../models/LivoModels'
 import { HomeScrollIntentTracker } from './HomeScrollIntentTracker'
 import {
@@ -78,7 +79,7 @@ export class IndexHomeRefreshCoordinator {
     }
 
     try {
-      const logs = await AppRepository.refreshLogs()
+      const logs = await AppPreferenceService.loadRefreshLogs()
       if (logs.length <= 0) {
         return true
       }
@@ -148,7 +149,7 @@ export class IndexHomeRefreshCoordinator {
     this.owner.displayRefreshPercent = 0
 
     try {
-      const result = await AppRepository.refreshAllFeeds((completedCount: number, totalCount: number) => {
+      const result = await FeedRefreshCoordinator.refreshAllFeeds((completedCount: number, totalCount: number) => {
         if (!this.owner.isComponentActive) {
           return
         }

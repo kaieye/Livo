@@ -1,5 +1,5 @@
 import { SymbolGlyphModifier } from '@kit.ArkUI'
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
@@ -56,7 +56,7 @@ export struct GeneralSettingsPanel {
   }
 
   private async loadSettings(): Promise<void> {
-    this.config = await AppRepository.settings()
+    this.config = await AppPreferenceService.loadSettings()
     this.refreshIntervalSelection = `${this.config.refreshIntervalMinutes}`
     this.theme = await ThemeService.resolvePalette(this.config)
     this.saveHint = '已加载通用配置'
@@ -66,7 +66,7 @@ export struct GeneralSettingsPanel {
     this.config = next
     this.refreshIntervalSelection = `${next.refreshIntervalMinutes}`
     console.info(`[GeneralSettings] syncSettings -> refreshIntervalMinutes=${next.refreshIntervalMinutes}`)
-    void AppRepository.persistSettings(next).then((saved: HarmonySettings) => {
+    void AppPreferenceService.saveSettings(next).then((saved: HarmonySettings) => {
       this.config = saved
       this.refreshIntervalSelection = `${saved.refreshIntervalMinutes}`
       this.onSettingsChange(saved)

@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -31,7 +31,7 @@ export struct AboutSettingsPanel {
   }
 
   private async loadTheme(): Promise<void> {
-    const settings = await AppRepository.settings()
+    const settings = await AppPreferenceService.loadSettings()
     this.theme = await ThemeService.resolvePalette(settings)
   }
 

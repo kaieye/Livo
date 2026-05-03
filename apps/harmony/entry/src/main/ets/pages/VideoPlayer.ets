@@ -2,7 +2,7 @@ import { curves } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
 import window from '@ohos.window'
 import webview from '@ohos.web.webview'
-import { AppRepository } from '../common/data/AppRepository'
+import { AppPreferenceService } from '../common/services/AppPreferenceService'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { MediaSaveService } from '../common/services/MediaSaveService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
@@ -46,7 +46,7 @@ struct VideoPlayer {
 
   private async loadTheme(): Promise<void> {
     try {
-      const settings = await AppRepository.settings()
+      const settings = await AppPreferenceService.loadSettings()
       this.theme = await ThemeService.resolvePalette(settings)
     } catch (error) {
       console.error(`Failed to load video player theme: ${error instanceof Error ? error.message : error}`)

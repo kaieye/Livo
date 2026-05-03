@@ -14,7 +14,9 @@
  */
 
 import { Feed, FeedViewType } from '../models/LivoModels'
-import { AppRepository } from '../data/AppRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
+import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { FeedDraft } from '../repositories/FeedRepository'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { bumpFeedsChangedSignal } from './FeedChangeSignal'
@@ -53,9 +55,9 @@ export class FeedSubscribeAction {
     )
     const resolvedSiteUrl = cachedPreview?.siteUrl?.trim() || request.targetSiteUrl.trim()
     const existingFeed = knownExistingFeed
-      ?? await AppRepository.feedEntityByUrl(request.mappedTargetUrl)
-      ?? await AppRepository.feedEntityByUrl(resolvedTargetUrl)
-      ?? await AppRepository.feedEntityBySiteUrl(resolvedSiteUrl)
+      ?? await FeedRepository.getByUrl(request.mappedTargetUrl)
+      ?? await FeedRepository.getByUrl(resolvedTargetUrl)
+      ?? await FeedRepository.getBySiteUrl(resolvedSiteUrl)
 
     const draft: FeedDraft = {
       url: resolvedTargetUrl,
@@ -73,18 +75,18 @@ export class FeedSubscribeAction {
     let wasUpdate = false
 
     if (existingFeed) {
-      const updatedFeed = await AppRepository.updateFeed(existingFeed.id, draft)
+      const updatedFeed = await FeedRepository.update(existingFeed.id, draft)
       feedId = updatedFeed.id
       message = '订阅已更新'
       wasUpdate = true
     } else {
-      const createdFeed = await AppRepository.createFeed(draft)
+      const createdFeed = await FeedRepository.create(draft)
       feedId = createdFeed.id
       message = '订阅成功'
     }
 
     if (cachedPreview) {
-      await AppRepository.seedFeedFromPreview(feedId, cachedPreview)
+      await FeedRefreshCoordinator.seedFeedFromPreview(feedId, cachedPreview)
     }
     bumpFeedsChangedSignal()
 
@@ -106,7 +108,7 @@ export class FeedSubscribeAction {
       view: request.selectedView,
       showInAll: !request.hideInTimeline,
     }
-    const updatedFeed = await AppRepository.updateFeed(existingFeed.id, draft)
+    const updatedFeed = await FeedRepository.update(existingFeed.id, draft)
 
     const cachedPreview = request.cachedPreview
     if (cachedPreview) {
@@ -133,12 +135,14 @@ export class FeedSubscribeAction {
   }
 
   static async unsubscribe(feedId: string): Promise<void> {
-    await AppRepository.removeFeed(feedId)
+    await FeedRepository.remove(feedId)
+    await AppPreferenceService.removeHomeEntrySnapshotEntriesByFeedId(feedId)
+    bumpFeedsChangedSignal()
   }
 
   static async refreshAfterSubscribe(feedId: string): Promise<void> {
     try {
-      await AppRepository.refreshFeed(feedId)
+      await FeedRefreshCoordinator.refreshFeed(feedId)
     } catch (error) {
       console.error(`subscribe refresh failed: ${error instanceof Error ? error.message : error}`)
     }
@@ -147,7 +151,7 @@ export class FeedSubscribeAction {
 
 async function seedPreviewSafely(feedId: string, payload: FeedRefreshPayload): Promise<void> {
   try {
-    await AppRepository.seedFeedFromPreview(feedId, payload)
+    await FeedRefreshCoordinator.seedFeedFromPreview(feedId, payload)
   } catch (error) {
     console.error(`seed preview after save failed: ${error instanceof Error ? error.message : error}`)
   }

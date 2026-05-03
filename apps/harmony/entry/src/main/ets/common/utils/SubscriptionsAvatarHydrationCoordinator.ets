@@ -1,5 +1,6 @@
-import { AppRepository } from '../data/AppRepository'
 import { FeedCardModel } from '../models/LivoModels'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { bumpFeedsChangedSignal } from './FeedChangeSignal'
 import {
   isSubscriptionFeedAvatarHydratable,
@@ -81,7 +82,7 @@ export class SubscriptionsAvatarHydrationCoordinator {
 
         let didHydrate = false
         try {
-          const changed = await AppRepository.resolveFeedAvatarOnly(feed.id)
+          const changed = await this.resolveFeedAvatarOnly(feed.id)
           if (changed) {
             changedCount += 1
           }
@@ -110,5 +111,33 @@ export class SubscriptionsAvatarHydrationCoordinator {
     if (this.pending && !this.running) {
       void this.run()
     }
+  }
+
+  private async resolveFeedAvatarOnly(feedId: string): Promise<boolean> {
+    const feed = await FeedRepository.getById(feedId)
+    if (!feed) {
+      return false
+    }
+    const resolvedUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+      feed.url,
+      feed.siteUrl || '',
+      '',
+      feed.imageUrl || '',
+    )
+    if (!resolvedUrl || resolvedUrl === (feed.imageUrl || '').trim()) {
+      return false
+    }
+    await FeedRepository.update(feedId, {
+      title: feed.title,
+      url: feed.url,
+      siteUrl: feed.siteUrl || '',
+      imageUrl: resolvedUrl,
+      description: feed.description || '',
+      category: feed.category || '',
+      view: feed.view,
+      showInAll: feed.showInAll,
+    })
+    bumpFeedsChangedSignal()
+    return true
   }
 }

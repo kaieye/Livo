@@ -1,6 +1,8 @@
 import { openArticleDetail } from '../navigation/AppRouter'
-import { AppRepository } from '../data/AppRepository'
 import { EntryCardModel } from '../models/LivoModels'
+import { EntryRepository } from '../repositories/EntryRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { buildEntryCardsChunked } from '../data/AppRepositoryEntryHelpers'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { CARD_RADIUS_LG, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
@@ -31,14 +33,18 @@ export struct FavoritesPanel {
   private async loadStarredEntries(): Promise<void> {
     this.isLoading = true
     try {
-      this.starredEntries = await AppRepository.starredEntries()
+      const entries = await EntryRepository.listStarred(100)
+      const feeds = await FeedRepository.list()
+      const feedMap = new Map<string, import('../models/LivoModels').Feed>()
+      feeds.forEach((feed: import('../models/LivoModels').Feed) => feedMap.set(feed.id, feed))
+      this.starredEntries = await buildEntryCardsChunked(entries, (entry) => feedMap.get(entry.feedId))
     } finally {
       this.isLoading = false
     }
   }
 
   private async toggleStar(entryId: string): Promise<void> {
-    await AppRepository.toggleStar(entryId)
+    await EntryRepository.toggleStar(entryId)
     this.starredEntries = this.starredEntries.filter((entry: EntryCardModel) => entry.id !== entryId)
   }
 

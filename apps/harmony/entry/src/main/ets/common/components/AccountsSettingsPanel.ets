@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { AccountSessionService } from '../services/AccountSessionService'
 import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { openAccountLogin } from '../navigation/AppRouter'
@@ -206,7 +206,7 @@ export struct AccountsSettingsPanel {
     const linkResult = this.currentAccountLinkResult()
     for (const definition of ACCOUNT_PROVIDER_DEFINITIONS) {
       try {
-        let status = await AppRepository.accountStatus(definition.provider)
+        let status = await AccountSessionService.status(definition.provider)
         const merged = mergeStatusWithAccountLinkResult(
           definition.provider,
           {
@@ -247,7 +247,7 @@ export struct AccountsSettingsPanel {
 
   private async beginLink(provider: AccountProvider): Promise<void> {
     const card = this.providerCards.find((item: AccountProviderState) => item.provider === provider)
-    const loginUrl = AppRepository.accountLoginUrl(provider)
+    const loginUrl = AccountSessionService.loginUrl(provider)
     if (!loginUrl) {
       this.replaceCard(provider, (current: AccountStatusResult): AccountStatusResult => {
         return {
@@ -292,8 +292,8 @@ export struct AccountsSettingsPanel {
 
     try {
       const nextStatus = action === 'unlink'
-        ? await AppRepository.unlinkAccount(provider)
-        : await AppRepository.accountStatus(provider)
+        ? await AccountSessionService.unlink(provider)
+        : await AccountSessionService.status(provider)
 
       if (provider === 'youtube' && action === 'refresh') {
         if (!nextStatus.linked) {
@@ -342,7 +342,7 @@ export struct AccountsSettingsPanel {
   private async handleSaveDisplayName(provider: AccountProvider): Promise<void> {
     this.activeProvider = provider
     try {
-      const nextStatus = await AppRepository.setAccountDisplayName(provider, this.providerDraftValue(provider))
+      const nextStatus = await AccountSessionService.setDisplayName(provider, this.providerDraftValue(provider))
       this.updateProviderMessage(provider, '')
       this.setCardStatus(provider, nextStatus)
       this.updateProviderDraft(provider, nextStatus.displayName)

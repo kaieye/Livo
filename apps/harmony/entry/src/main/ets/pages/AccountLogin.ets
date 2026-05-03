@@ -1,6 +1,6 @@
 import { curves } from '@kit.ArkUI'
 import webview from '@ohos.web.webview'
-import { AppRepository } from '../common/data/AppRepository'
+import { AccountSessionService } from '../common/services/AccountSessionService'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
@@ -76,8 +76,8 @@ struct AccountLogin {
 
   private async loadInitialBilibiliSessData(): Promise<void> {
     try {
-      this.initialBilibiliSessData = await AppRepository.bilibiliSessData()
-      const status = await AppRepository.accountStatus('bilibili')
+      this.initialBilibiliSessData = await AccountSessionService.bilibiliSessData()
+      const status = await AccountSessionService.status('bilibili')
       this.initialBilibiliLinked = status.linked && !status.error
     } catch (_error) {
       this.initialBilibiliSessData = ''
@@ -156,7 +156,7 @@ struct AccountLogin {
 
       if (!detection.loggedIn) { return }
       this.handlingSuccess = true
-      const status = await AppRepository.setBilibiliVerifiedLink(fallbackDisplayName, detection.sessdata)
+      const status = await AccountSessionService.setBilibiliVerifiedLink(fallbackDisplayName, detection.sessdata)
       if (!status.linked || !!status.error) { this.handlingSuccess = false; return }
 
       this.handledSuccess = true
@@ -197,7 +197,7 @@ struct AccountLogin {
       this.youTubePolling.stop()
       const resolvedDisplayName = await this.resolveYouTubeDisplayName(pageState?.pageHtml || '')
       const fallbackDisplayName = resolvedDisplayName || detection.displayName || 'YouTube 已关联'
-      const status = await AppRepository.setVerifiedAccountLink('youtube', fallbackDisplayName)
+      const status = await AccountSessionService.setVerifiedLink('youtube', fallbackDisplayName)
       if (!status.linked || !!status.error) { this.handlingSuccess = false; return }
 
       this.handledSuccess = true

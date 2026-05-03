@@ -240,7 +240,18 @@ export class FeedRepository {
       updatedAt: now,
     }
 
-    await FeedRepository.insert(feed)
+    try {
+      await FeedRepository.insert(feed)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('constraint violation')) {
+        const existing = await FeedRepository.getByUrl(normalizedUrl)
+        if (existing) {
+          return existing
+        }
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
     return feed
   }
 

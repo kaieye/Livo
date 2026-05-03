@@ -21,7 +21,7 @@ test('home startup data flow lives in a dedicated bootstrap coordinator', () => 
   assert.match(bootstrapSource, /restoreSnapshot/)
   assert.match(bootstrapSource, /loadFastLocalEntries/)
   assert.match(bootstrapSource, /resumeLoadedHome/)
-  assert.match(bootstrapSource, /AppRepository\.homeEntrySnapshot/)
+  assert.match(bootstrapSource, /AppPreferenceService\.loadHomeEntrySnapshot/)
 })
 
 test('index page delegates initial data loading instead of owning the flow', () => {
@@ -37,7 +37,10 @@ test('index page delegates initial data loading instead of owning the flow', () 
     indexSource,
     /this\.homeBootstrapCoordinator\.resumeLoadedHome\(\)/,
   )
-  assert.doesNotMatch(indexSource, /AppRepository\.homeEntrySnapshot/)
+  assert.doesNotMatch(
+    indexSource,
+    /AppPreferenceService\.loadHomeEntrySnapshot/,
+  )
   assert.doesNotMatch(
     indexSource,
     /groupHomeEntriesByMode\(this\.featuredEntries\)/,

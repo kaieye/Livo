@@ -1,4 +1,6 @@
-import { AppRepository } from '../common/data/AppRepository'
+import { FeedRepository } from '../common/repositories/FeedRepository'
+import { AppPreferenceService } from '../common/services/AppPreferenceService'
+import { FeedRefreshCoordinator } from '../common/data/FeedRefreshCoordinator'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/LivoModels'
 
@@ -238,7 +240,7 @@ struct DiscoverPreview {
   }
 
   private async findExistingFeed(targetUrl: string, siteUrl: string): Promise<Feed | undefined> {
-    const feeds = await AppRepository.feedEntities()
+    const feeds = await FeedRepository.list()
     return feeds.find((feed: Feed) => this.feedMatchesTarget(feed, targetUrl, siteUrl))
   }
 
@@ -249,7 +251,7 @@ struct DiscoverPreview {
     this.existingFeed = undefined
 
     try {
-      const settings = await AppRepository.settings()
+      const settings = await AppPreferenceService.loadSettings()
       this.theme = await ThemeService.resolvePalette(settings)
 
       const params = this.params()
@@ -306,12 +308,12 @@ struct DiscoverPreview {
       }
 
       if (this.existingFeed) {
-        await AppRepository.updateFeed(this.existingFeed.id, draft)
-        await AppRepository.refreshFeed(this.existingFeed.id)
+        await FeedRepository.update(this.existingFeed.id, draft)
+        await FeedRefreshCoordinator.refreshFeed(this.existingFeed.id)
         this.showToast('订阅已更新')
       } else {
-        const created = await AppRepository.createFeed(draft)
-        await AppRepository.refreshFeed(created.id)
+        const created = await FeedRepository.create(draft)
+        await FeedRefreshCoordinator.refreshFeed(created.id)
         this.showToast('订阅已添加')
       }
 

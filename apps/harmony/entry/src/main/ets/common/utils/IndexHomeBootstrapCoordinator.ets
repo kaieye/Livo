@@ -1,4 +1,6 @@
-import { AppRepository } from '../data/AppRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
+import { FeaturedEntriesQuery } from '../data/FeaturedEntriesQuery'
 import { EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { groupHomeEntriesByMode, HomeEntryGroups } from './HomeEntryGroups'
@@ -60,12 +62,12 @@ export class IndexHomeBootstrapCoordinator {
     this.owner.homeInitialLoadPending = true
     this.owner.theme = ThemeService.currentPalette()
     void this.owner.applySystemBarStyle(this.owner.theme)
-    const settingsPromise = AppRepository.settings()
-    const feedsPromise = AppRepository.feedEntities()
+    const settingsPromise = AppPreferenceService.loadSettings()
+    const feedsPromise = FeedRepository.list()
 
     const currentMode = this.owner.mode
     let restoredFromSnapshot: boolean = false
-    const snapshotEntries = await AppRepository.homeEntrySnapshot()
+    const snapshotEntries = await AppPreferenceService.loadHomeEntrySnapshot()
     if (snapshotEntries.length > 0) {
       restoredFromSnapshot = true
       this.restoreSnapshot(snapshotEntries)
@@ -141,9 +143,9 @@ export class IndexHomeBootstrapCoordinator {
   }
 
   private async loadFastLocalEntries(): Promise<void> {
-    this.owner.featuredEntries = await AppRepository.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
+    this.owner.featuredEntries = await FeaturedEntriesQuery.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
     if (this.owner.featuredEntries.length === 0) {
-      this.owner.featuredEntries = await AppRepository.featuredEntries()
+      this.owner.featuredEntries = await FeaturedEntriesQuery.featuredEntries()
     }
     this.owner.entryGroups = groupHomeEntriesByMode(this.owner.featuredEntries)
     this.owner.feedSourceLabel = '本地内容已加载'

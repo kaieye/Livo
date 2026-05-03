@@ -1,4 +1,4 @@
-import { AppRepository } from '../data/AppRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
@@ -57,7 +57,7 @@ export struct FeedSubscribeConfigView {
   }
 
   private async loadExistingFeed(): Promise<void> {
-    const feeds = await AppRepository.feedEntities()
+    const feeds = await FeedRepository.list()
     const mappedTargetUrl = this.mappedTargetUrl()
     this.existingFeed = feeds.find((feed: Feed) => feedMatchesTarget(feed, {
       targetUrl: this.targetUrl,

@@ -1,4 +1,5 @@
-import { AppRepository } from '../data/AppRepository'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { AppPreferenceService } from '../services/AppPreferenceService'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import {
   DiscoverSearchPlatform,
@@ -48,12 +49,12 @@ export class DiscoverInteractionCoordinator {
     this.owner.isLoadingPage = true
     try {
       if (this.owner.showBottomTabs) {
-        const settings = await AppRepository.settings()
+        const settings = await AppPreferenceService.loadSettings()
         this.owner.theme = await ThemeService.resolvePalette(settings)
       } else {
         this.owner.theme = this.owner.inheritedTheme
       }
-      this.owner.subscribedFeeds = await AppRepository.feedEntities()
+      this.owner.subscribedFeeds = await FeedRepository.list()
       this.owner.featuredTrendingFeeds = trendingDiscoverFeedsFromJsonNow()
 
       this.owner.hasLoaded = true
@@ -65,7 +66,7 @@ export class DiscoverInteractionCoordinator {
   }
 
   async refreshSubscribedFeeds(): Promise<void> {
-    this.owner.subscribedFeeds = await AppRepository.feedEntities()
+    this.owner.subscribedFeeds = await FeedRepository.list()
   }
 
   // ── Cross-cutting signals ──

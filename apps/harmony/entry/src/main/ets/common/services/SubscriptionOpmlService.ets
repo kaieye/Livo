@@ -1,7 +1,9 @@
 import { fileIo, picker } from '@kit.CoreFileKit'
-import { AppRepository } from '../data/AppRepository'
 import { AppContextService } from './AppContextService'
 import { Feed, FeedViewType } from '../models/LivoModels'
+import { FeedRepository } from '../repositories/FeedRepository'
+import { AppPreferenceService } from './AppPreferenceService'
+import { FeedRefreshCoordinator } from '../data/FeedRefreshCoordinator'
 import { generateOpml, parseOpml } from '../utils/OpmlParser'
 import { FeedIdentityResolver } from './FeedIdentityResolver'
 import { bumpFeedsChangedSignal, shouldBumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
@@ -46,7 +48,7 @@ export class SubscriptionOpmlService {
       return { status: 'cancelled', feedCount: 0 }
     }
 
-    const feeds = await AppRepository.feedEntities()
+    const feeds = await FeedRepository.list()
     const opml = generateOpml(feeds)
     try {
       const file = fileIo.openSync(
@@ -87,14 +89,15 @@ export class SubscriptionOpmlService {
     }
 
     const existingStartedAt = Date.now()
-    const existingFeeds = await AppRepository.feedEntities()
+    const existingFeeds = await FeedRepository.list()
     SubscriptionOpmlService.logImport(`import loaded existing feeds elapsedMs=${Date.now() - existingStartedAt} count=${existingFeeds.length}`)
     const existingFeedByIdentityKey = SubscriptionOpmlService.createExistingFeedIdentityMap(existingFeeds)
 
     if (mode === 'overwrite') {
       const overwriteStartedAt = Date.now()
       for (const feed of existingFeeds) {
-        await AppRepository.removeFeed(feed.id)
+        await FeedRepository.remove(feed.id)
+        await AppPreferenceService.removeHomeEntrySnapshotEntriesByFeedId(feed.id)
       }
       SubscriptionOpmlService.logImport(`import overwrite removed feeds count=${existingFeeds.length} elapsedMs=${Date.now() - overwriteStartedAt}`)
       existingFeedByIdentityKey.clear()
@@ -159,7 +162,7 @@ export class SubscriptionOpmlService {
       }
 
       try {
-        const createdFeed = await AppRepository.createFeed({
+        const createdFeed = await FeedRepository.create({
           title: (opmlFeed.title || url).trim(),
           url,
           siteUrl,
@@ -220,7 +223,7 @@ export class SubscriptionOpmlService {
       }
 
       try {
-        await AppRepository.refreshFeed(feedId, true, false, false, false)
+        await FeedRefreshCoordinator.refreshFeed(feedId, true, false, false, false)
         success += 1
       } catch (_error) {
         failed += 1
@@ -272,7 +275,7 @@ export class SubscriptionOpmlService {
     }
 
     try {
-      await AppRepository.updateFeed(existingFeed.id, {
+      await FeedRepository.update(existingFeed.id, {
         title: (title || url).trim(),
         url,
         siteUrl,

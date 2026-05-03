@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
-import { AppRepository } from '../common/data/AppRepository'
+import { AppPreferenceService } from '../common/services/AppPreferenceService'
+import { EntryRepository } from '../common/repositories/EntryRepository'
 import { goBack, openImageViewer } from '../common/navigation/AppRouter'
 import { TranslationFormattingHint } from '../common/services/ArticleAssistService'
 import { ExternalUrlService } from '../common/services/ExternalUrlService'
@@ -121,7 +122,7 @@ struct ArticleDetail {
 
   private async handleArticleAIAssist(): Promise<void> {
     try {
-      const settings = await AppRepository.settings()
+      const settings = await AppPreferenceService.loadSettings()
       this.applyAISettings(settings)
       await this.runArticleAIAssist()
     } catch (error) {
@@ -174,7 +175,7 @@ struct ArticleDetail {
     }, 100)
 
     try {
-      await AppRepository.toggleStar(entryId)
+      await EntryRepository.toggleStar(entryId)
       await this.entryLoader.load(entryId, false, false)
       const message = this.entry?.isStarred ? '已收藏' : '已取消收藏'
       this.actionHint = message

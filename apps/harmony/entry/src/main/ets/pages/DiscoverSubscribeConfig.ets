@@ -1,5 +1,5 @@
 import { curves } from '@kit.ArkUI'
-import { AppRepository } from '../common/data/AppRepository'
+import { AppPreferenceService } from '../common/services/AppPreferenceService'
 import { FeedSubscribeConfigView } from '../common/components/FeedSubscribeConfigView'
 import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { FeedViewType } from '../common/models/LivoModels'
@@ -23,7 +23,7 @@ struct DiscoverSubscribeConfig {
   }
 
   private async loadPage(): Promise<void> {
-    const settings = await AppRepository.settings()
+    const settings = await AppPreferenceService.loadSettings()
     this.theme = await ThemeService.resolvePalette(settings)
 
     const params = getStringParams()
