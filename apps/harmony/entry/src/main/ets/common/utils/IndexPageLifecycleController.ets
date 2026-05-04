@@ -49,6 +49,13 @@ export class IndexPageLifecycleController {
       AppStorage.setOrCreate('discoverOverlayBackAt', Date.now())
       return true
     }
+    if (this.owner.currentRootTabId() === 'subscriptions') {
+      const subscriptionsOverlayLevel = AppStorage.get<number>('subscriptionsOverlayLevel') ?? 0
+      if (subscriptionsOverlayLevel > 0) {
+        AppStorage.setOrCreate('subscriptionsOverlayBackAt', Date.now())
+        return true
+      }
+    }
     if (this.owner.isHomeRootTab() && this.owner.searchOverlayVisible) {
       this.owner.homeInlineSearchController.close(true)
       return true

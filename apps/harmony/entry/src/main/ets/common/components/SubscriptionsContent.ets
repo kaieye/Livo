@@ -49,6 +49,7 @@ export struct SubscriptionsContent {
   @State activeFeedDetailParams: SubscriptionFeedDetailParams | undefined = undefined
   @State activeFeedConfigParams: SubscriptionFeedConfigParams | undefined = undefined
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
+  @StorageProp('subscriptionsOverlayBackAt') @Watch('handleOverlayBackSignal') subscriptionsOverlayBackAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
@@ -155,6 +156,15 @@ export struct SubscriptionsContent {
 
   private handleHeaderBlurScrollDelta(delta: number): void {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+  }
+
+  private handleOverlayBackSignal(): void {
+    if (this.overlayLevel >= 2 && this.activeFeedConfigParams) {
+      this.activeFeedConfigParams = undefined
+      this.syncOverlayState(1)
+    } else {
+      this.closeFeedDetailPage()
+    }
   }
 
   private handleFeedsChanged(): void {
