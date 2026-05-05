@@ -30,3 +30,19 @@ test('article and social load-more avoids global merge and snapshot work on the 
   assert.match(dataManagerSource, /skipPersist: boolean = false/)
   assert.match(dataManagerSource, /if \(!skipPersist && !skipMerge\) \{/)
 })
+
+test('article tweet-tail load-more uses a smaller page step to reduce render spikes', () => {
+  assert.match(
+    paginationSource,
+    /private resolveLoadMoreStepForMode\(mode: SubscriptionMode\): number \{/,
+  )
+  assert.match(
+    paginationSource,
+    /return Math\.max\(6, Math\.floor\(defaultStep \/ 2\)\)/,
+  )
+  assert.match(
+    paginationSource,
+    /const loadMoreStep = this\.resolveLoadMoreStepForMode\(mode\)/,
+  )
+  assert.match(paginationSource, /currentModeLimit \+ loadMoreStep/)
+})

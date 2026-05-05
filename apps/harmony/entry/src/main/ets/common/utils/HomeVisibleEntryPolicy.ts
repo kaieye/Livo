@@ -11,13 +11,16 @@ interface HomeVisibleEntryPreloadPolicy {
   estimatedVisibleItemCount: number
 }
 
+// 文章流混入推文后单卡高度在 200-420px 之间，使用 200 会让阈值严重偏低
+// （~56% 内容位置即触发），导致 load-more 在用户滑到 2/3 处就提前执行，
+// notifyDataAdded 在滚动惯性期间重建列表，造成明显卡顿。
+// 这里参考社交栏目做法：提高 estimatedItemHeight（取 200/420 中间值 310），
+// 并收紧 estimatedVisibleItemCount 到 2，使得触发位置后移至接近列表末端。
 const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    // 文章流此前会在距离尾部较远时就开始触发，体感像“滑到一半就加载”。
-    // 这里按更接近真实卡片高度和视口容量估算，只在接近底部时再预取下一页。
-    preloadRemainingCount: 2,
-    estimatedItemHeight: 180,
-    estimatedVisibleItemCount: 4,
+    preloadRemainingCount: 1,
+    estimatedItemHeight: 310,
+    estimatedVisibleItemCount: 2,
   }
 
 // 推文卡片实际高度通常在 320-420px (含头像/正文/媒体预览)；

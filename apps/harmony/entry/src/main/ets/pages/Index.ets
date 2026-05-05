@@ -407,8 +407,17 @@ struct Index {
   notifyHomeEntryDataReloaded(): void { this.homeEntryDataManager.notifyAllReloaded() }
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.homeEntryDataManager.notifyModeReloaded(mode) }
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void {
-    this.homeEntryDataManager.notifyModeAppended(mode, startIndex)
+    this.homeEntryDataSourceFor(mode).notifyDataAdded(startIndex)
   }
+
+  getItemRectForMode(mode: SubscriptionMode, index: number): RectResult {
+    try {
+      return this.homeScrollerForMode(mode).getItemRect(index)
+    } catch (_) {
+      return { x: 0, y: 0, width: 0, height: 0 }
+    }
+  }
+
   pictureGalleryUrls(entry: EntryCardModel): string[] { return pictureGalleryUrls(entry) }
   pictureCaption(entry: EntryCardModel): string { return pictureCaption(entry) }
   pictureCardEntry(entry: EntryCardModel): Entry { return pictureCardEntry(entry) }

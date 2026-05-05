@@ -105,14 +105,25 @@ export function extractSupportedVideoUrls(content: string, baseUrl: string, arti
     results.push(normalizedArticleUrl)
   }
 
+  // 快速跳过：内容中不含任何视频平台关键词或 HTML 属性，直接返回
+  const lowerContent = (content || '').toLowerCase()
+  if (
+    !lowerContent.includes('youtube') &&
+    !lowerContent.includes('youtu.be') &&
+    !lowerContent.includes('bilibili') &&
+    !lowerContent.includes('href=')
+  ) {
+    return results
+  }
+
   const raw = decodeBasicHtml(content || '')
-  for (const matched of raw.matchAll(/\b(?:href|src|data-src)=["']([^"']+)["']/gi)) {
+  for (const matched of raw.matchAll(/\b(?:href|src|data-src)=[\"']([^\"']+)[\"']/gi)) {
     if (matched[1]) {
       pushUrl(matched[1])
     }
   }
   for (const matched of raw.matchAll(
-    /https?:\/\/[^\s"'<>]+|(?:www\.)?(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/)[^\s"'<>]+/gi,
+    /https?:\/\/[^\s\"'<>]+|(?:www\.)?(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/)[^\s\"'<>]+/gi,
   )) {
     if (!matched[0]) {
       continue

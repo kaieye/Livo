@@ -17,7 +17,7 @@ import {
   resolveAbsoluteUrl,
 } from './VideoUrlExtractor'
 
-export { extractSupportedVideoUrls } from './VideoUrlExtractor'
+export { extractSupportedVideoUrls, isSupportedVideoUrl } from './VideoUrlExtractor'
 
 export interface EntryMediaContext {
   pictureUrls: string[]

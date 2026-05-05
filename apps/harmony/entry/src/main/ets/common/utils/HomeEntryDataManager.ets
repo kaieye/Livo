@@ -289,8 +289,12 @@ export class HomeEntryDataManager {
   notifyModeAppended(mode: SubscriptionMode, startIndex: number): void {
     const startedAt = Date.now()
     this.dataSourceFor(mode).notifyDataAdded(startIndex)
+    const elapsedMs = Date.now() - startedAt
+    console.info(
+      `[LIVO-PERF] notifyDataAdded mode=${mode} startIndex=${startIndex} elapsedMs=${elapsedMs}`,
+    )
     this.actions.logHomeLoadMore(
-      `notifyModeAppended mode=${mode} startIndex=${startIndex} elapsedMs=${Date.now() - startedAt}`,
+      `notifyModeAppended mode=${mode} startIndex=${startIndex} elapsedMs=${elapsedMs}`,
     )
   }
 

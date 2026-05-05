@@ -28,6 +28,7 @@ import {
   HOME_ENTRY_MODE_ORDER,
   modeMatchesFeedView,
 } from './AppRepositoryEntryHelpers'
+import { HOME_FAST_PAGE_CACHE_BUFFER } from '../components/HomeRootConfig'
 
 interface FeaturedModeEntriesCacheItem {
   signature: string
@@ -104,6 +105,7 @@ async function balancedModeEntries(
   targetCount: number,
   chunked: boolean = true,
 ): Promise<EntryCardModel[]> {
+  const fnStartedAt = Date.now()
   const allowedFeeds = allowedFeedsForMode(feeds, mode)
   if (allowedFeeds.length === 0 || targetCount <= 0) {
     return []
@@ -113,18 +115,31 @@ async function balancedModeEntries(
   const pooledCards: EntryCardModel[] = []
   const seen = new Set<string>()
   let repositoryOffset = 0
+  let pageIndex = 0
+  let totalFilterMs = 0
+  let totalBuildCardsMs = 0
 
   while (pooledCards.length < targetCount * 2) {
+    const dbFetchStartedAt = Date.now()
     const page = await EntryRepository.listRecentPage(pageSize, repositoryOffset)
+    const dbFetchMs = Date.now() - dbFetchStartedAt
     if (page.length === 0) {
       break
     }
 
     const allowedFeedIds = new Set<string>(allowedFeeds.map((feed: Feed) => feed.id))
+    const filterStartedAt = Date.now()
     const scopedEntries = page.filter((entry: Entry) => allowedFeedIds.has(entry.feedId))
+    const filterMs = Date.now() - filterStartedAt
+    totalFilterMs += filterMs
+
+    const buildStartedAt = Date.now()
     const cards = chunked
       ? await buildEntryCardsChunked(scopedEntries, (entry: Entry) => feedMap.get(entry.feedId))
       : buildEntryCards(scopedEntries, (entry: Entry) => feedMap.get(entry.feedId))
+    const buildMs = Date.now() - buildStartedAt
+    totalBuildCardsMs += buildMs
+
     cards.forEach((card: EntryCardModel) => {
       const key = uniqueEntryCardKey(card)
       if (seen.has(key)) {
@@ -134,14 +149,30 @@ async function balancedModeEntries(
       pooledCards.push(card)
     })
 
+    console.info(
+      `[LIVO-PERF] balancedModeEntries page=${pageIndex} mode=${mode} pageSize=${pageSize} ` +
+      `pageLen=${page.length} scopedLen=${scopedEntries.length} cardsLen=${cards.length} ` +
+      `pooledLen=${pooledCards.length}/${targetCount * 2} dbFetchMs=${dbFetchMs} filterMs=${filterMs} buildMs=${buildMs}`,
+    )
+
     if (page.length < pageSize) {
       break
     }
     repositoryOffset += pageSize
+    pageIndex += 1
   }
 
+  const roundRobinStartedAt = Date.now()
   const buckets = groupModeCardsByFeed(pooledCards, allowedFeeds)
-  return roundRobinFeedCards(buckets, allowedFeeds, targetCount)
+  const result = roundRobinFeedCards(buckets, allowedFeeds, targetCount)
+  const roundRobinMs = Date.now() - roundRobinStartedAt
+
+  console.info(
+    `[LIVO-PERF] balancedModeEntries done mode=${mode} target=${targetCount} result=${result.length} ` +
+    `pooled=${pooledCards.length} pageCount=${pageIndex + 1} chunked=${String(chunked)} ` +
+    `totalFilterMs=${totalFilterMs} totalBuildMs=${totalBuildCardsMs} roundRobinMs=${roundRobinMs} totalMs=${Date.now() - fnStartedAt}`,
+  )
+  return result
 }
 
 async function recentModeEntries(
@@ -151,6 +182,7 @@ async function recentModeEntries(
   targetCount: number,
   chunked: boolean = false,
 ): Promise<EntryCardModel[]> {
+  const fnStartedAt = Date.now()
   const allowedFeeds = allowedFeedsForMode(feeds, mode)
   if (allowedFeeds.length === 0 || targetCount <= 0) {
     return []
@@ -161,17 +193,30 @@ async function recentModeEntries(
   const seen = new Set<string>()
   const pageSize = Math.max(120, Math.min(720, targetCount * 3))
   let repositoryOffset = 0
+  let pageIndex = 0
+  let totalFilterMs = 0
+  let totalBuildCardsMs = 0
 
   while (result.length < targetCount) {
+    const dbFetchStartedAt = Date.now()
     const page = await EntryRepository.listRecentPage(pageSize, repositoryOffset)
+    const dbFetchMs = Date.now() - dbFetchStartedAt
     if (page.length === 0) {
       break
     }
 
+    const filterStartedAt = Date.now()
     const scopedEntries = page.filter((entry: Entry) => allowedFeedIds.has(entry.feedId))
+    const filterMs = Date.now() - filterStartedAt
+    totalFilterMs += filterMs
+
+    const buildStartedAt = Date.now()
     const cards = chunked
       ? await buildEntryCardsChunked(scopedEntries, (entry: Entry) => feedMap.get(entry.feedId))
       : buildEntryCards(scopedEntries, (entry: Entry) => feedMap.get(entry.feedId))
+    const buildMs = Date.now() - buildStartedAt
+    totalBuildCardsMs += buildMs
+
     cards.forEach((card: EntryCardModel) => {
       if (result.length >= targetCount) {
         return
@@ -184,12 +229,23 @@ async function recentModeEntries(
       result.push(card)
     })
 
+    console.info(
+      `[LIVO-PERF] recentModeEntries page=${pageIndex} mode=${mode} pageSize=${pageSize} ` +
+      `pageLen=${page.length} scopedLen=${scopedEntries.length} cardsLen=${cards.length} ` +
+      `resultLen=${result.length}/${targetCount} dbFetchMs=${dbFetchMs} filterMs=${filterMs} buildMs=${buildMs}`,
+    )
+
     if (page.length < pageSize) {
       break
     }
     repositoryOffset += pageSize
+    pageIndex += 1
   }
 
+  console.info(
+    `[LIVO-PERF] recentModeEntries done mode=${mode} target=${targetCount} result=${result.length} ` +
+    `pageCount=${pageIndex + 1} chunked=${String(chunked)} totalFilterMs=${totalFilterMs} totalBuildMs=${totalBuildCardsMs} totalMs=${Date.now() - fnStartedAt}`,
+  )
   return result
 }
 
@@ -384,25 +440,35 @@ class FeaturedEntriesQuery {
     const safeOffset = Math.max(0, offset)
     const feeds = sortFeedsStable(await FeedRepository.list())
     const targetVisibleCount = safeOffset + safeLimit
+    const cacheLookupStartedAt = Date.now()
     const cached = FeaturedEntriesQuery.cachedModeEntries(mode, feeds, targetVisibleCount)
+    const cacheLookupMs = Date.now() - cacheLookupStartedAt
     if (cached) {
       const cachedPage = cached.slice(safeOffset, safeOffset + safeLimit)
+      const totalElapsed = Date.now() - startedAt
+      console.info(`[LIVO-PERF] fastPage cache-hit mode=${mode} limit=${safeLimit} offset=${safeOffset} result=${cachedPage.length} cacheLookupMs=${cacheLookupMs} totalMs=${totalElapsed}`)
       logHomeFeedDebug(
-        `featuredEntriesFastPageByMode cache-hit mode=${mode} limit=${safeLimit} offset=${safeOffset} result=${cachedPage.length} elapsedMs=${Date.now() - startedAt}`,
+        `featuredEntriesFastPageByMode cache-hit mode=${mode} limit=${safeLimit} offset=${safeOffset} result=${cachedPage.length} elapsedMs=${totalElapsed}`,
       )
       return cachedPage
     }
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
+    // 查询比当前需求多 HOME_FAST_PAGE_CACHE_BUFFER 条，存入缓存避免后续翻页重复全量扫库
+    const queryTarget = targetVisibleCount + HOME_FAST_PAGE_CACHE_BUFFER
+    const dbQueryStartedAt = Date.now()
     const expandedEntries = mode === 'articles'
-      ? await recentModeEntries(mode, feeds, feedMap, targetVisibleCount, false)
-      : await balancedModeEntries(mode, feeds, feedMap, targetVisibleCount, false)
+      ? await recentModeEntries(mode, feeds, feedMap, queryTarget, true)
+      : await balancedModeEntries(mode, feeds, feedMap, queryTarget, true)
+    const dbQueryMs = Date.now() - dbQueryStartedAt
     FeaturedEntriesQuery.storeModeEntriesCache(mode, feeds, expandedEntries)
     const result = expandedEntries
       .slice(safeOffset, safeOffset + safeLimit)
+    const totalElapsed = Date.now() - startedAt
 
+    console.info(`[LIVO-PERF] fastPage cache-miss mode=${mode} limit=${safeLimit} offset=${safeOffset} result=${result.length} expanded=${expandedEntries.length} queryTarget=${queryTarget} cacheLookupMs=${cacheLookupMs} dbQueryMs=${dbQueryMs} totalMs=${totalElapsed}`)
     logHomeFeedDebug(
-      `featuredEntriesFastPageByMode mode=${mode} limit=${safeLimit} offset=${safeOffset} result=${result.length} elapsedMs=${Date.now() - startedAt}`,
+      `featuredEntriesFastPageByMode mode=${mode} limit=${safeLimit} offset=${safeOffset} result=${result.length} elapsedMs=${totalElapsed}`,
     )
     return result
   }

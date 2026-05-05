@@ -220,7 +220,16 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.homeEntryDataManager.schedulePersistSnapshot(entries) }
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.homeEntryDataManager.notifyModeReloaded(mode) }
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void {
-    this.homeEntryDataManager.notifyModeAppended(mode, startIndex)
+    // 将 notifyDataAdded 推迟到下一个 macrotask，避免在同一个微任务中
+    // 的同步 build/apply 链末尾直接触发 LazyForEach 全局重建。
+    // 这确保当前滚动帧（包括惯性滚动）能先完成布局提交，
+    // LazyForEach 的重建在下一帧执行，消除加载时刻的可见卡顿。
+    this.runManagedTimeout(() => {
+      this.homeEntryDataManager.notifyModeAppended(mode, startIndex)
+    }, 0)
+  }
+  getItemRectForMode(mode: SubscriptionMode, index: number): RectResult {
+    return this.owner.getItemRectForMode(mode, index)
   }
   bumpHomeContentVersion(): void { this.owner.bumpHomeContentVersion() }
   invalidateHomeLoadMorePrefetch(): void { this.pagination.invalidateHomeLoadMorePrefetch() }

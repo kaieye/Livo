@@ -102,6 +102,7 @@ export interface HomeFeedSessionOwner {
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void
+  getItemRectForMode(mode: SubscriptionMode, index: number): RectResult
 
   // Notify descendant components that visible entries (data or visible-limit) changed
   // so they re-evaluate @Builder children and pull fresh entries through callbacks.

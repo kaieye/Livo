@@ -11,6 +11,7 @@ export struct HomeArticleEntryCard {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop showUnreadDot: boolean = true
   @Prop highlightQuery: string = ''
+  @Prop flatMode: boolean = false
   private previewImageCacheKey: string = ''
   private previewImageCacheValue: string = ''
 
@@ -93,6 +94,29 @@ export struct HomeArticleEntryCard {
       || normalized.includes('scontent.')
   }
 
+  private cardPadding(): Padding {
+    if (this.flatMode) {
+      return { left: 0, right: 0, top: 12, bottom: 12 }
+    }
+    return { left: 14, right: 14, top: 10, bottom: 10 }
+  }
+
+  private cardBackgroundColor(): string {
+    return this.flatMode ? '#00000000' : this.theme.surface
+  }
+
+  private cardBorderWidth(): number {
+    return this.flatMode ? 0 : 0.8
+  }
+
+  private cardBorderRadius(): number {
+    return this.flatMode ? 0 : CARD_RADIUS_MD
+  }
+
+  private cardShadowRadius(): number {
+    return this.flatMode ? 0 : (this.theme.isDark ? 10 : 14)
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
       Row({ space: this.articlePreviewImage() ? 10 : 0 }) {
@@ -170,15 +194,15 @@ export struct HomeArticleEntryCard {
       }
     }
     .width('100%')
-    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-    .backgroundColor(this.theme.surface)
-    .borderRadius(CARD_RADIUS_MD)
-    .border({ width: 0.8, color: this.theme.divider })
+    .padding(this.cardPadding())
+    .backgroundColor(this.cardBackgroundColor())
+    .borderRadius(this.cardBorderRadius())
+    .border({ width: this.cardBorderWidth(), color: this.theme.divider })
     .shadow({
-      radius: this.theme.isDark ? 10 : 14,
+      radius: this.cardShadowRadius(),
       color: this.theme.isDark ? 'rgba(0,0,0,0.18)' : 'rgba(15,23,42,0.04)',
       offsetX: 0,
-      offsetY: 4,
+      offsetY: this.flatMode ? 0 : 4,
     })
     .onClick(() => this.onOpen())
   }

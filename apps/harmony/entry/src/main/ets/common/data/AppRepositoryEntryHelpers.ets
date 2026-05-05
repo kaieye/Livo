@@ -6,6 +6,7 @@ import {
   FeedWithCount,
   EntryCardModel,
   toEntryCardModel,
+  toEntryCardModelWithTiming,
   toFeedCardModel,
 } from '../models/LivoModels'
 import { EntryRepository } from '../repositories/EntryRepository'
@@ -36,7 +37,7 @@ const HOME_ENTRY_CANDIDATE_LIMIT: number = 480
 const HOME_ENTRY_BALANCED_POOL_MULTIPLIER: number = 6
 const HOME_ENTRY_BALANCED_POOL_MAX: number = 6000
 const HOME_ENTRY_BALANCED_MAX_ATTEMPTS: number = 4
-const ENTRY_CARD_YIELD_BATCH_SIZE: number = 12
+const ENTRY_CARD_YIELD_BATCH_SIZE: number = 6
 const HOME_FEED_DEBUG_ENABLED: boolean = false
 const HOME_FEED_DEBUG_PREFIX: string = '[FeedFetchStateDebug][HomeFeed]'
 
@@ -52,21 +53,61 @@ export async function buildEntryCardsChunked(
 ): Promise<EntryCardModel[]> {
   const cards: EntryCardModel[] = []
 
+  let maxCardMs = 0
+  let maxCardIndex = -1
+  let totalCardMs = 0
+  let skippedCards = 0
+  let totalFeedDisplayMs = 0
+  let totalToCardModelMs = 0
+  let totalMediaCtxMs = 0
+  let totalVideoUrlsMs = 0
+  let totalImageUrlMs = 0
+
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
     if (!entry) {
       continue
     }
 
-    const card = entryCardFromEntry(entry, resolveFeed(entry))
-    if (card) {
-      cards.push(card)
+    const measured = measureEntryCardBuild(entry, resolveFeed(entry))
+    totalCardMs += measured.timing.totalMs
+    totalFeedDisplayMs += measured.timing.feedDisplayMs
+    totalToCardModelMs += measured.timing.toCardModelMs
+    totalMediaCtxMs += measured.timing.mediaCtxMs
+    totalVideoUrlsMs += measured.timing.videoUrlsMs
+    totalImageUrlMs += measured.timing.imageUrlMs
+
+    if (measured.card) {
+      cards.push(measured.card)
+      if (measured.timing.totalMs > maxCardMs) {
+        maxCardMs = measured.timing.totalMs
+        maxCardIndex = index
+      }
+    } else {
+      skippedCards += 1
     }
 
     if ((index + 1) % ENTRY_CARD_YIELD_BATCH_SIZE === 0) {
       await yieldToUiLoop()
     }
   }
+
+  const validCards = cards.length
+  const avgMs = validCards > 0 ? Math.round(totalCardMs / validCards) : 0
+  const avgFeedDisplayMs = validCards > 0 ? Math.round(totalFeedDisplayMs / validCards) : 0
+  const avgMediaCtxMs = validCards > 0 ? Math.round(totalMediaCtxMs / validCards) : 0
+  const avgVideoUrlsMs = validCards > 0 ? Math.round(totalVideoUrlsMs / validCards) : 0
+  const avgImageUrlMs = validCards > 0 ? Math.round(totalImageUrlMs / validCards) : 0
+  const avgOtherMs = Math.max(0, avgMs - avgFeedDisplayMs - avgMediaCtxMs - avgVideoUrlsMs - avgImageUrlMs)
+  console.info(
+    `[LIVO-PERF] buildEntryCardsChunked done input=${entries.length} output=${validCards} skipped=${skippedCards} ` +
+    `totalCardMs=${totalCardMs} avgCardMs=${avgMs} maxCardMs=${maxCardMs} maxCardIdx=${maxCardIndex} ` +
+    `feedDisplay[avg=${avgFeedDisplayMs}/total=${totalFeedDisplayMs}] ` +
+    `mediaCtx[avg=${avgMediaCtxMs}/total=${totalMediaCtxMs}] ` +
+    `videoUrls[avg=${avgVideoUrlsMs}/total=${totalVideoUrlsMs}] ` +
+    `imageUrl[avg=${avgImageUrlMs}/total=${totalImageUrlMs}] ` +
+    `other[avg=${avgOtherMs}]`,
+  )
 
   return cards
 }
@@ -168,6 +209,91 @@ export function entryCardFromEntry(entry: Entry, feed: Feed | undefined): EntryC
     createdAt: feed.createdAt,
     updatedAt: feed.updatedAt,
   })
+}
+
+export interface EntryCardBuildTiming {
+  totalCards: number
+  skippedCards: number
+  totalMs: number
+  maxMs: number
+  maxIndex: number
+  // sub-step totals (populated only when PERF_COLLECT_SUBSTEPS === true)
+  feedDisplayMs: number
+  toCardModelMs: number
+  videoUrlsMs: number
+  imageUrlMs: number
+}
+
+export interface EntryCardBuildSubTiming {
+  feedDisplayMs: number
+  toCardModelMs: number
+  mediaCtxMs: number
+  videoUrlsMs: number
+  imageUrlMs: number
+  totalMs: number
+}
+
+export interface MeasureEntryCardBuildResult {
+  card: EntryCardModel | undefined
+  timing: EntryCardBuildSubTiming
+}
+
+export function measureEntryCardBuild(
+  entry: Entry,
+  feed: Feed | undefined,
+): MeasureEntryCardBuildResult {
+  const t0 = Date.now()
+  if (!feed) {
+    return {
+      card: undefined,
+      timing: {
+        feedDisplayMs: 0,
+        toCardModelMs: 0,
+        mediaCtxMs: 0,
+        videoUrlsMs: 0,
+        imageUrlMs: 0,
+        totalMs: Date.now() - t0,
+      } as EntryCardBuildSubTiming,
+    } as MeasureEntryCardBuildResult
+  }
+
+  const t1 = Date.now()
+  const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+  const displayDescription = resolveSocialFeedDisplayDescription(feed.description || '', feed.url, feed.siteUrl || '')
+  const displayImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', displayTitle)
+  const feedDisplayMs = Date.now() - t1
+
+  const t2 = Date.now()
+  const result = toEntryCardModelWithTiming(entry, {
+    id: feed.id,
+    title: displayTitle,
+    url: feed.url,
+    siteUrl: feed.siteUrl,
+    imageUrl: displayImageUrl,
+    description: displayDescription,
+    category: feed.category,
+    view: feed.view,
+    showInAll: feed.showInAll,
+    lastFetched: feed.lastFetched,
+    etag: feed.etag,
+    lastModified: feed.lastModified,
+    errorCount: feed.errorCount,
+    createdAt: feed.createdAt,
+    updatedAt: feed.updatedAt,
+  })
+  const toCardModelMs = Date.now() - t2
+
+  return {
+    card: result.card,
+    timing: {
+      feedDisplayMs,
+      toCardModelMs,
+      mediaCtxMs: result.timing.mediaCtxMs,
+      videoUrlsMs: result.timing.videoUrlsMs,
+      imageUrlMs: result.timing.imageUrlMs,
+      totalMs: Date.now() - t0,
+    },
+  }
 }
 
 function createHomeEntryModeStats(): HomeEntryModeStats {

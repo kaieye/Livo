@@ -10,6 +10,8 @@ export interface HomeFeedLoadMoreDrainPaginationOwner {
 
 const HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS: number = 90
 const HOME_LOAD_MORE_DRAIN_NEXT_STEP_DELAY_MS: number = 32
+const HOME_LOAD_MORE_DRAIN_STUCK_BOTTOM_RECHECK_MS: number = 500
+const HOME_LOAD_MORE_DRAIN_STUCK_EXPAND_ONLY_RECHECK_MS: number = 0
 
 // 用户抵达底部后，持续拉取并展开当前栏目剩余内容，直到该栏目彻底耗尽。
 export class HomeFeedLoadMoreDrain {
@@ -17,6 +19,7 @@ export class HomeFeedLoadMoreDrain {
   private readonly owner: HomeFeedLoadMoreDrainPaginationOwner
   private drainToken: number = 0
   private drainingMode: SubscriptionMode | '' = ''
+  private stuckRetryCount: number = 0
 
   constructor(session: HomeFeedSessionOwner, owner: HomeFeedLoadMoreDrainPaginationOwner) {
     this.session = session
@@ -29,6 +32,7 @@ export class HomeFeedLoadMoreDrain {
     }
     this.drainToken += 1
     this.drainingMode = mode
+    this.stuckRetryCount = 0
     const token = this.drainToken
     this.session.logHomeLoadMore(`drain start mode=${mode} total=${totalCount}`)
     this.scheduleStep(mode, token, 0)
@@ -86,6 +90,15 @@ export class HomeFeedLoadMoreDrain {
 
     const handled = this.owner.requestLoadMoreForMode(mode, true)
     if (!handled) {
+      if (this.stuckRetryCount >= 3) {
+        if (this.drainingMode === mode) {
+          this.drainingMode = ''
+        }
+        this.session.logHomeLoadMore(
+          `drain stuck-bottom-exhausted mode=${mode} attempts=${attempt + 1}`,
+        )
+        return
+      }
       this.session.runManagedTimeout(() => {
         this.step(mode, token, attempt + 1)
       }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
@@ -93,10 +106,30 @@ export class HomeFeedLoadMoreDrain {
     }
 
     if (this.shouldStopAfterHandledStep(mode)) {
-      if (this.drainingMode === mode) {
-        this.drainingMode = ''
+      const hasBuffered = this.owner.hasBufferedEntriesForMode(mode)
+      const hasMore = this.owner.modeHasMoreEntries(mode)
+      if (hasMore && this.stuckRetryCount < 3) {
+        this.stuckRetryCount += 1
+        const delayMs = hasBuffered
+          ? HOME_LOAD_MORE_DRAIN_STUCK_EXPAND_ONLY_RECHECK_MS
+          : HOME_LOAD_MORE_DRAIN_STUCK_BOTTOM_RECHECK_MS
+        this.session.logHomeLoadMore(
+          `drain stuck-bottom-retry mode=${mode} stuckRetry=${this.stuckRetryCount} hasBuffered=${String(hasBuffered)} delayMs=${delayMs}`,
+        )
+        this.session.runManagedTimeout(() => {
+          if (token !== this.drainToken) {
+            return
+          }
+          this.step(mode, token, attempt + 1)
+        }, delayMs)
+      } else {
+        if (this.drainingMode === mode) {
+          this.drainingMode = ''
+        }
+        this.session.logHomeLoadMore(
+          `drain page-done mode=${mode} attempts=${attempt + 1} stuckRetries=${this.stuckRetryCount}`,
+        )
       }
-      this.session.logHomeLoadMore(`drain page-done mode=${mode} attempts=${attempt + 1}`)
       return
     }
 

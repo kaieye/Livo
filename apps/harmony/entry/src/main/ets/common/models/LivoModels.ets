@@ -5,6 +5,7 @@ import {
   buildMediaContentBlocks,
   buildPictureDetailContentBlocks,
   extractSupportedVideoUrls,
+  isSupportedVideoUrl,
   resolveEntryMediaContext,
 } from './ArticleContentBuilder'
 import { feedSiteUrl, formatPublishedAt, viewDefinitionOf } from './FeedViewUtils'
@@ -46,12 +47,41 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
 
 export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
+  const t0 = Date.now()
   const mediaCtx = resolveEntryMediaContext(entry, feed)
-  const hasVideoMedia = extractSupportedVideoUrls(
-    [entry.title, entry.summary, entry.content, entry.url, ...(entry.mediaUrls ?? [])].join('\n'),
-    entry.url || feedSiteUrl(feed),
-    entry.url,
-  ).length > 0
+  const mediaCtxMs = Date.now() - t0
+  // 快速路径：先检查 mediaUrls 和 articleUrl，无需 join 5 字段
+  let hasVideoMedia = false
+  const mediaUrls = entry.mediaUrls ?? []
+  for (let vi = 0; vi < mediaUrls.length; vi += 1) {
+    if (isSupportedVideoUrl(mediaUrls[vi])) {
+      hasVideoMedia = true
+      break
+    }
+  }
+  if (!hasVideoMedia && entry.url && isSupportedVideoUrl(entry.url)) {
+    hasVideoMedia = true
+  }
+  if (!hasVideoMedia) {
+    const joined = [entry.summary, entry.content, entry.title, entry.url, ...mediaUrls].join('\n')
+    hasVideoMedia = extractSupportedVideoUrls(
+      joined,
+      entry.url || feedSiteUrl(feed),
+      entry.url,
+    ).length > 0
+  }
+  const videoUrlsMs = Date.now() - t0 - mediaCtxMs
+
+  const tImg = Date.now()
+  const imageUrl = resolveEntryCardImageUrl({
+    title: entry.title,
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feedSiteUrl(feed),
+    mediaUrls: entry.mediaUrls ?? [],
+  })
+  const imageUrlMs = Date.now() - tImg
 
   return {
     id: entry.id,
@@ -59,14 +89,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     title: entry.title,
     summary: entry.summary,
     content: entry.content,
-    imageUrl: resolveEntryCardImageUrl({
-      title: entry.title,
-      summary: entry.summary,
-      content: entry.content,
-      articleUrl: entry.url,
-      siteUrl: feedSiteUrl(feed),
-      mediaUrls: entry.mediaUrls ?? [],
-    }),
+    imageUrl,
     feedImageUrl: feed.imageUrl ?? '',
     author: entry.author,
     articleUrl: entry.url,
@@ -83,6 +106,73 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     hasVideoMedia,
     isRead: entry.isRead,
     isStarred: entry.isStarred,
+  }
+}
+
+export interface ToEntryCardModelTiming {
+  mediaCtxMs: number
+  videoUrlsMs: number
+  imageUrlMs: number
+}
+
+export interface ToEntryCardModelWithTimingResult {
+  card: EntryCardModel
+  timing: ToEntryCardModelTiming
+}
+
+export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCardModelWithTimingResult {
+  const definition = viewDefinitionOf(feed.view)
+  const t0 = Date.now()
+  const mediaCtx = resolveEntryMediaContext(entry, feed)
+  const mediaCtxMs = Date.now() - t0
+  const hasVideoMedia = extractSupportedVideoUrls(
+    [entry.title, entry.summary, entry.content, entry.url, ...(entry.mediaUrls ?? [])].join('\n'),
+    entry.url || feedSiteUrl(feed),
+    entry.url,
+  ).length > 0
+  const videoUrlsMs = Date.now() - t0 - mediaCtxMs
+
+  const tImg = Date.now()
+  const imageUrl = resolveEntryCardImageUrl({
+    title: entry.title,
+    summary: entry.summary,
+    content: entry.content,
+    articleUrl: entry.url,
+    siteUrl: feedSiteUrl(feed),
+    mediaUrls: entry.mediaUrls ?? [],
+  })
+  const imageUrlMs = Date.now() - tImg
+
+  return {
+    card: {
+      id: entry.id,
+      feedId: entry.feedId,
+      title: entry.title,
+      summary: entry.summary,
+      content: entry.content,
+      imageUrl,
+      feedImageUrl: feed.imageUrl ?? '',
+      author: entry.author,
+      articleUrl: entry.url,
+      publishedAt: entry.publishedAt,
+      publishedLabel: formatPublishedAt(entry.publishedAt),
+      readingLabel: `${entry.readingTimeMinutes} 分钟`,
+      tags: entry.tags,
+      mediaUrls: selectPictureMediaUrls(mediaCtx.pictureUrls),
+      rawMediaUrls: mediaCtx.rawUrls,
+      feedTitle: feed.title,
+      feedCategory: feed.category ?? '未分类',
+      viewLabel: definition.label,
+      viewBadgeColor: definition.badgeColor,
+      hasVideoMedia,
+      isRead: entry.isRead,
+      isStarred: entry.isStarred,
+    },
+    timing: {
+      mediaCtxMs,
+      videoUrlsMs,
+      imageUrlMs,
+    },
   }
 }
 

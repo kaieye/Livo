@@ -64,6 +64,13 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     return mode === 'articles' || mode === 'social'
   }
 
+  private resolveLoadMoreStepForMode(mode: SubscriptionMode): number {
+    // 文章与社交流对齐相同的步进策略。
+    // 此前文章流检测到推文尾部时会尝试减半步进以求平滑，但实际体感反而因为触发频率变高而更卡。
+    // 现在统一参考“社交”栏目的做法，使用完整步进。
+    return resolveHomeVisibleEntryLoadMoreStep(mode)
+  }
+
   private applyEntriesForLoadMore(
     mode: SubscriptionMode,
     entries: EntryCardModel[],
@@ -265,20 +272,27 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const visibleLimit = this.visibleEntryLimitFor(mode)
     const remainingBufferedCount = Math.max(0, totalCount - visibleLimit)
     const fetchAheadBufferThreshold =
-      resolveHomeVisibleEntryLoadMoreStep(mode) * HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
+      Math.max(1, Math.floor(resolveHomeVisibleEntryLoadMoreStep(mode) / HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER))
     if (expandedVisible && remainingBufferedCount > fetchAheadBufferThreshold) {
+      console.info(
+        `[LIVO-PERF] loadMore expand-only mode=${mode} visibleLimit=${visibleLimit} totalCount=${totalCount} remainingBuffered=${remainingBufferedCount}`,
+      )
       return true
     }
     if (!this.session.homeHasMoreEntries) {
       return true
     }
 
+    console.info(
+      `[LIVO-PERF] loadMore full-fetch mode=${mode} expandedVisible=${String(expandedVisible)} remainingBuffered=${remainingBufferedCount} totalCount=${totalCount}`,
+    )
     const previousTotal = this.session.featuredEntries.length
     const previousModeTotal = this.totalEntryCountFor(mode)
     const currentModeLimit = this.candidateLimitForMode(mode)
+    const loadMoreStep = this.resolveLoadMoreStepForMode(mode)
     const nextLimit = Math.min(
       HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
-      currentModeLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
+      currentModeLimit + loadMoreStep,
     )
     if (nextLimit <= currentModeLimit) {
       this.setModeHasMoreEntries(mode, false, `next-limit-clamped nextLimit=${nextLimit} currentLimit=${currentModeLimit}`)
@@ -388,8 +402,24 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       return false
     }
     const visibleEntries = this.visibleEntriesFor('articles')
-    const tailEntry = visibleEntries[Math.min(visibleEntries.length, visibleCount) - 1]
-    return !!tailEntry && isTweetLikeEntry(tailEntry)
+    const count = Math.min(visibleEntries.length, visibleCount)
+    // 将探测窗口从最后 3 个扩大到 10 个可见条目，确保推文卡即使
+    // 尚未完全滑入最末端也能尽早被检测到，从而切换到社交流的高估算
+    // 高度（380px），避免文章流默认的矮估算（310px）让触发位置仍
+    // 偏前，进而导致 load-more 在滚动惯性期间执行重建——这是卡顿的
+    // 主要根因。
+    const probeWindow = Math.min(10, count)
+    for (let i = 1; i <= probeWindow; i++) {
+      const index = count - i
+      if (index < 0) {
+        break
+      }
+      const entry = visibleEntries[index]
+      if (entry && isTweetLikeEntry(entry)) {
+        return true
+      }
+    }
+    return false
   }
 
   private effectiveLoadMorePolicyMode(mode: SubscriptionMode, visibleCount: number): SubscriptionMode {
@@ -414,10 +444,17 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     }
     const totalCount = this.totalEntryCountFor(mode)
     const visibleCount = this.visibleEntryCountFor(mode)
-    const hasBufferedEntries = visibleCount < totalCount
-    if (!hasBufferedEntries && (!this.session.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) { return }
+
+    // 文章与社交流统一使用基于滚动偏移量的高度估算触发策略。
+    // 此前文章栏目在滚动中逐帧调用 getItemRect 判断是否触底，该 API 会同步遍历
+    // 布局树，在高频滚动期间造成明显的 UI 卡顿。effectiveLoadMorePolicyMode
+    // 已经对混入推文的文章流尾部自动切换到社交流的高度估算参数，
+    // 因此无需继续依赖 getItemRect 探底。
     const policyMode = this.effectiveLoadMorePolicyMode(mode, visibleCount)
     if (!shouldPreloadHomeVisibleEntries(policyMode, currentOffset, totalCount, visibleCount)) { return }
+
+    const hasBufferedEntries = visibleCount < totalCount
+    if (!hasBufferedEntries && (!this.session.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) { return }
     if (this.session.homeScrollIntent.isInteracting && !this.hasRecentHomeScrollIntent()) { return }
     const scrollIntentVersion = this.session.homeScrollIntent.intentVersion(mode)
     if (
@@ -488,18 +525,24 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   ): boolean {
     if (visibleCount <= 0) { return false }
     const remainingVisibleCount = visibleCount - index - 1
-    const policyMode = this.effectiveLoadMorePolicyMode(mode, visibleCount)
+    // item-appear 回调在滚动期间高频触发（每张卡片进入可见区即执行一次），
+    // 必须保持极轻量。effectiveLoadMorePolicyMode 内部会调用
+    // visibleEntriesFor + 遍历 isTweetLikeEntry，在文章流 / 社交流
+    // 这样的高密度列表上该开销不可忽略，会直接拖慢滚动帧率。
+    // 此处仅根据 mode 字面量选择固定阈值；高度估算精确性由
+    // maybeTriggerLoadMoreByScrollProgress 的 scroll-progress
+    // 分支负责（该分支通过 effectiveLoadMorePolicyMode 获取准确策略）。
     let dynamicThreshold = Math.max(
       HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
       Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
     )
-    if (policyMode === 'articles') {
+    if (mode === 'articles') {
       dynamicThreshold = Math.max(2, Math.min(3, Math.floor(visibleCount / 10)))
-    } else if (policyMode === 'social') {
+    } else if (mode === 'social') {
       dynamicThreshold = Math.max(1, Math.min(2, Math.floor(visibleCount / 12)))
-    } else if (policyMode === 'pictures') {
+    } else if (mode === 'pictures') {
       dynamicThreshold = 1
-    } else if (policyMode === 'videos') {
+    } else if (mode === 'videos') {
       dynamicThreshold = Math.max(2, Math.min(4, Math.floor(visibleCount / 8)))
     }
     return remainingVisibleCount <= dynamicThreshold

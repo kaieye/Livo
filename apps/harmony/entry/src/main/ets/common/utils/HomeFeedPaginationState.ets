@@ -134,11 +134,15 @@ export class HomeFeedPaginationState {
     if (currentLimit >= total) {
       return false
     }
+    const expandStartedAt = Date.now()
     const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode))
     this.setVisibleEntryLimitFor(mode, nextLimit)
-    // 仅是把已缓冲的尾部条目显露出来时，按“追加”通知列表，避免整列 reload。
+    // 仅是把已缓冲的尾部条目显露出来时，按"追加"通知列表，避免整列 reload。
     // 这样会更接近社交流的增量渲染路径，减少当前可见区的重排抖动。
     this.session.notifyHomeEntryDataAppendedForMode(mode, currentLimit)
+    console.info(
+      `[LIVO-PERF] expandVisible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total} step=${nextLimit - currentLimit} expandMs=${Date.now() - expandStartedAt}`,
+    )
     this.session.logHomeLoadMore(
       `expand-visible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total}`,
     )
