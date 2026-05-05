@@ -13,9 +13,11 @@ interface HomeVisibleEntryPreloadPolicy {
 
 const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 12,
-    estimatedItemHeight: 112,
-    estimatedVisibleItemCount: 6,
+    // 文章流此前会在距离尾部较远时就开始触发，体感像“滑到一半就加载”。
+    // 这里按更接近真实卡片高度和视口容量估算，只在接近底部时再预取下一页。
+    preloadRemainingCount: 2,
+    estimatedItemHeight: 180,
+    estimatedVisibleItemCount: 4,
   }
 
 // 推文卡片实际高度通常在 320-420px (含头像/正文/媒体预览)；
@@ -86,7 +88,7 @@ export function shouldPreloadHomeVisibleEntries(
   totalCount: number,
   visibleCount: number,
 ): boolean {
-  if (visibleCount >= totalCount) {
+  if (visibleCount <= 0 || totalCount <= 0) {
     return false
   }
   const policy = resolveHomeVisibleEntryPreloadPolicy(mode)

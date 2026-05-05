@@ -71,6 +71,20 @@ export async function buildEntryCardsChunked(
   return cards
 }
 
+export function buildEntryCards(
+  entries: Entry[],
+  resolveFeed: (entry: Entry) => Feed | undefined,
+): EntryCardModel[] {
+  const cards: EntryCardModel[] = []
+  entries.forEach((entry: Entry) => {
+    const card = entryCardFromEntry(entry, resolveFeed(entry))
+    if (card) {
+      cards.push(card)
+    }
+  })
+  return cards
+}
+
 export async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
   const unreadCount = await EntryRepository.countUnreadByFeed(feed.id)
   const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')

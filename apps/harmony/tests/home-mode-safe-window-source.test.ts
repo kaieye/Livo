@@ -47,6 +47,14 @@ test('home visible entry policy keeps startup window bounded', () => {
     visibleEntryPolicySource,
     /const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24/,
   )
+  assert.match(
+    visibleEntryPolicySource,
+    /const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 2,\s*estimatedItemHeight: 180,\s*estimatedVisibleItemCount: 4,/,
+  )
+  assert.match(
+    visibleEntryPolicySource,
+    /if \(visibleCount <= 0 \|\| totalCount <= 0\) \{\s*return false\s*\}/,
+  )
 })
 
 test('mode switch candidate limit follows initial bounded window', () => {
@@ -90,5 +98,32 @@ test('mode ensure flow hydrates full entries after a fast first paint', () => {
   assert.match(
     homeFeedPaginationSource,
     /this\.session\.reloadFeaturedEntriesFromLocal\([\s\S]*?\)\.then\(\(\) => \{\s*return this\.session\.hydrateCompleteEntriesForMode\(mode\)\s*\}\)/s,
+  )
+})
+
+test('article load more follows append-style update path near the end of the list', () => {
+  assert.match(
+    homeFeedPaginationSource,
+    /private effectiveLoadMorePolicyMode\(mode: SubscriptionMode, visibleCount: number\): SubscriptionMode \{/,
+  )
+  assert.match(
+    homeFeedPaginationSource,
+    /mode === 'articles' && this\.shouldUseSocialLoadMorePolicyForArticleTail\(mode, visibleCount\)/,
+  )
+  assert.match(
+    homeFeedPaginationSource,
+    /if \(policyMode === 'articles'\) \{\s*dynamicThreshold = Math\.max\(2, Math\.min\(3, Math\.floor\(visibleCount \/ 10\)\)\)\s*\} else if \(policyMode === 'social'\)/,
+  )
+  assert.match(
+    homeFeedPaginationSource,
+    /private applyResolvedLoadMoreEntries\([\s\S]*?this\.session\.notifyHomeEntryDataAppendedForMode\(mode, previousTotal\)/,
+  )
+  assert.doesNotMatch(
+    homeFeedPaginationSource,
+    /if \(mode === 'articles'\) \{\s*this\.session\.entryGroups = \{/,
+  )
+  assert.match(
+    homeFeedPaginationStateSource,
+    /this\.session\.notifyHomeEntryDataAppendedForMode\(mode, currentLimit\)/,
   )
 })

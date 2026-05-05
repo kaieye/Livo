@@ -56,6 +56,7 @@ export interface HomeFeedSessionDeps {
 }
 
 export class HomeFeedSession implements HomeFeedSessionOwner {
+  private static readonly ACTIVE_MODE_PREFETCH_DELAY_MS: number = 80
   private readonly owner: HomeFeedSessionOwner
   private readonly homeEntryDataManager: HomeEntryDataManager
   private readonly loadStateGate: IndexHomeLoadStateGate
@@ -186,6 +187,12 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
   logHomeLoadMore(message: string): void { this.diagnosticsLogger.logHomeLoadMore(message) }
   logHomeLoadState(message: string): void { this.diagnosticsLogger.logHomeLoadState(message) }
   describeError(error: Error | string | Object): string { return this.diagnosticsLogger.describeError(error) }
+  beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void {
+    this.owner.beginTweetPresentationDiagSession(mode, reason, expectedStartIndex)
+  }
+  flushTweetPresentationDiagSession(reason: string): void {
+    this.owner.flushTweetPresentationDiagSession(reason)
+  }
   showToast(message: string, duration: number = 2000): void { this.owner.showToast(message, duration) }
   isHomeRootTab(): boolean { return this.rootTabCoordinator.isHomeRootTab() }
   hasHomeInlineSearchQuery(): boolean { return !!this.inlineSearchController.normalizedQuery() }
@@ -199,8 +206,15 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
     }
   }
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
-  applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void {
-    this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge)
+  applyEntriesForMode(
+    mode: SubscriptionMode,
+    entries: EntryCardModel[],
+    deferredPersist: boolean,
+    skipNotify: boolean = false,
+    skipMerge: boolean = false,
+    skipPersist: boolean = false,
+  ): void {
+    this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge, skipPersist)
   }
   settleInitialHomeLoadState(force: boolean = false): void { this.loadStateGate.settleInitialHomeLoadState(force) }
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.homeEntryDataManager.schedulePersistSnapshot(entries) }
@@ -217,6 +231,14 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
   shouldRenderAllEntriesForMode(mode: SubscriptionMode): boolean { return this.pagination.shouldRenderAllEntriesForMode(mode) }
   handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void {
     this.pagination.handleHomeListEndReach(mode, totalCount)
+  }
+
+  private primeActiveModeLoadMorePrefetch(
+    reason: string,
+    delayMs: number = HomeFeedSession.ACTIVE_MODE_PREFETCH_DELAY_MS,
+  ): void {
+    this.logHomeLoadMore(`prefetch-prime mode=${this.owner.mode} reason=${reason} delayMs=${delayMs}`)
+    this.pagination.scheduleHomeLoadMorePrefetch(delayMs)
   }
 
   // === Bootstrap ===
@@ -251,7 +273,7 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
     this.owner.hasLoadedInitialData = true
     this.pagination.ensureModeEntriesLoaded(currentMode)
     this.precacheNonActiveModes()
-    this.pagination.scheduleHomeLoadMorePrefetch(800)
+    this.primeActiveModeLoadMorePrefetch('bootstrap')
     this.logHomePerf(`loadInitialData done elapsedMs=${Date.now() - startedAt} featured=${this.owner.featuredEntries.length}`)
   }
 
@@ -296,6 +318,9 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
     this.homeEntryDataManager.notifyAllReloaded()
     this.schedulePersistHomeSnapshot(this.owner.featuredEntries)
     this.owner.feedSourceLabel = '已恢复本地内容'
+    if (this.owner.mode === 'articles') {
+      this.primeActiveModeLoadMorePrefetch('restore-snapshot')
+    }
   }
 
   private async loadFastLocalEntries(): Promise<void> {
@@ -307,6 +332,9 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
     this.owner.feedSourceLabel = '本地内容已加载'
     this.owner.bumpHomeContentVersion()
     this.precacheNonActiveModes()
+    if (this.owner.mode === 'articles') {
+      this.primeActiveModeLoadMorePrefetch('fast-local-load')
+    }
   }
 
   // === Reload ===
@@ -334,6 +362,9 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
       return
     }
     this.applyEntriesForMode(targetMode, nextEntries, deferredGrouping)
+    if (targetMode === this.owner.mode) {
+      this.primeActiveModeLoadMorePrefetch(`reload-featured mode=${targetMode}`)
+    }
     this.logHomePerf(`reload done mode=${targetMode} limit=${safeCandidateLimit} elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`)
   }
 
@@ -365,6 +396,7 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
       return
     }
     this.homeEntryDataManager.applyHomeEntries(nextEntries, deferredGrouping)
+    this.primeActiveModeLoadMorePrefetch('reload-home')
     this.logHomePerf(`reload-home done limit=${safeCandidateLimit} elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`)
   }
 

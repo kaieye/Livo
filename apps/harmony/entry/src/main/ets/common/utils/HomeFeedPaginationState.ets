@@ -136,10 +136,9 @@ export class HomeFeedPaginationState {
     }
     const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode))
     this.setVisibleEntryLimitFor(mode, nextLimit)
-    // Visible-limit changes don't pass through applyEntriesForMode/notifyModeReloaded,
-    // so notify the LazyForEach data source for this mode directly. The notify
-    // implementation also bumps homeContentVersion as a @Prop chain fallback.
-    this.session.notifyHomeEntryDataReloadedForMode(mode)
+    // 仅是把已缓冲的尾部条目显露出来时，按“追加”通知列表，避免整列 reload。
+    // 这样会更接近社交流的增量渲染路径，减少当前可见区的重排抖动。
+    this.session.notifyHomeEntryDataAppendedForMode(mode, currentLimit)
     this.session.logHomeLoadMore(
       `expand-visible mode=${mode} currentLimit=${currentLimit} nextLimit=${nextLimit} total=${total}`,
     )

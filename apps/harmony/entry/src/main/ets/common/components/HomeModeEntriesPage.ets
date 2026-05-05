@@ -66,6 +66,17 @@ export struct HomeModeEntriesPage {
   }
   private dataChangeListener: DataChangeListener | undefined = undefined
 
+  private shouldRenderTweetCard(entry: EntryCardModel): boolean {
+    return isTweetLikeEntry(entry) && (this.mode === 'social' || this.mode === 'articles')
+  }
+
+  private articleListItemBottomGap(entry: EntryCardModel, index: number): number {
+    if (this.mode !== 'articles' || index >= this.totalCount - 1 || this.shouldRenderTweetCard(entry)) {
+      return 0
+    }
+    return HOME_MODE_CONTENT_GAP
+  }
+
   aboutToAppear(): void {
     const bump = (): void => {
       this.dataChangeTrigger = (this.dataChangeTrigger + 1) | 0
@@ -139,7 +150,9 @@ export struct HomeModeEntriesPage {
 
   @Builder
   private ArticleOrSocialList() {
-    List({ space: this.mode === 'social' ? 0 : HOME_MODE_CONTENT_GAP, scroller: this.scroller }) {
+    // 统一把列表容器间距收回到 0。社交流本来就是扁平流；
+    // 文章流里的推文也对齐这套布局，只给普通文章卡单独补间距。
+    List({ space: 0, scroller: this.scroller }) {
       ListItem() {
         Column() {
           Blank().height(HOME_MODE_SCENE_TOP_INSET)
@@ -156,11 +169,13 @@ export struct HomeModeEntriesPage {
       } else {
         LazyForEach(this.dataSource, (entry: EntryCardModel, index: number) => {
           ListItem() {
-            if (this.mode === 'social' && isTweetLikeEntry(entry)) {
+            if (this.shouldRenderTweetCard(entry)) {
               TweetEntryCard({
                 presentation: this.callbacks.getTweetPresentation(entry),
                 theme: this.theme,
                 isUnread: !entry.isRead,
+                // 推文在文章栏目里也完全对齐社交流的扁平列表样式，
+                // 避免额外卡片装饰带来的重绘与布局开销。
                 flatMode: true,
                 showBottomDivider: index < this.totalCount - 1,
                 highlightQuery: '',
@@ -179,6 +194,7 @@ export struct HomeModeEntriesPage {
             }
           }
           .width('100%')
+          .margin({ bottom: this.articleListItemBottomGap(entry, index) })
           .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }

@@ -1,13 +1,24 @@
 import { EntryCardModel } from '../models/LivoModels'
 import { presentTweetEntryFromCard, TweetEntryPresentation } from './TweetEntryPresentation'
 
+export interface TweetEntryPresentationCacheDiagnostics {
+  onAccess(hit: boolean, elapsedMs: number): void
+}
+
 export class TweetEntryPresentationCache {
   private readonly entries: Map<string, TweetEntryPresentation> = new Map()
+  private readonly diagnostics: TweetEntryPresentationCacheDiagnostics | undefined
+
+  constructor(diagnostics?: TweetEntryPresentationCacheDiagnostics) {
+    this.diagnostics = diagnostics
+  }
 
   get(entry: EntryCardModel): TweetEntryPresentation {
+    const startedAt = Date.now()
     const cacheKey = this.cacheKey(entry)
     const cached = this.entries.get(cacheKey)
     if (cached) {
+      this.diagnostics?.onAccess(true, Date.now() - startedAt)
       return cached
     }
 
@@ -30,6 +41,7 @@ export class TweetEntryPresentationCache {
       quotedTweet: base.quotedTweet,
     }
     this.entries.set(cacheKey, presentation)
+    this.diagnostics?.onAccess(false, Date.now() - startedAt)
     return presentation
   }
 

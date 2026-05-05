@@ -5,7 +5,7 @@ export interface HomeFeedLoadMoreDrainPaginationOwner {
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean
   hasBufferedEntriesForMode(mode: SubscriptionMode): boolean
   modeHasMoreEntries(mode: SubscriptionMode): boolean
-  requestLoadMoreForMode(mode: SubscriptionMode): boolean
+  requestLoadMoreForMode(mode: SubscriptionMode, allowStaleScrollIntent?: boolean): boolean
 }
 
 const HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS: number = 90
@@ -50,7 +50,13 @@ export class HomeFeedLoadMoreDrain {
     if (!this.owner.hasBufferedEntriesForMode(mode) && !this.owner.modeHasMoreEntries(mode)) {
       return false
     }
-    return this.drainingMode === mode || this.session.hasRecentHomeScrollIntent()
+    return true
+  }
+
+  private shouldStopAfterHandledStep(mode: SubscriptionMode): boolean {
+    // 文章/社交流里的推文卡片构建成本明显高于普通卡片，触底时只拉一页；
+    // 后续由新的尾部 onAppear 再触发下一页，避免一次 drain 把大量推文全量刷出。
+    return mode === 'articles' || mode === 'social'
   }
 
   private scheduleStep(mode: SubscriptionMode, token: number, attempt: number): void {
@@ -78,11 +84,19 @@ export class HomeFeedLoadMoreDrain {
       return
     }
 
-    const handled = this.owner.requestLoadMoreForMode(mode)
+    const handled = this.owner.requestLoadMoreForMode(mode, true)
     if (!handled) {
       this.session.runManagedTimeout(() => {
         this.step(mode, token, attempt + 1)
       }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
+      return
+    }
+
+    if (this.shouldStopAfterHandledStep(mode)) {
+      if (this.drainingMode === mode) {
+        this.drainingMode = ''
+      }
+      this.session.logHomeLoadMore(`drain page-done mode=${mode} attempts=${attempt + 1}`)
       return
     }
 

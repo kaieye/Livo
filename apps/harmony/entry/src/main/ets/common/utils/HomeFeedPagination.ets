@@ -29,6 +29,7 @@ import {
   withHomePendingLoadMoreValue,
 } from './HomeModeMapHelpers'
 import { resolveHomeVisibleEntryLoadMoreStep, shouldPreloadHomeVisibleEntries } from './HomeVisibleEntryPolicy'
+import { isTweetLikeEntry } from './HomeEntryUtils'
 import { HomeFeedPaginationState } from './HomeFeedPaginationState'
 import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
 import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
@@ -59,12 +60,29 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     return this.prefetcher.consume(mode, nextLimit)
   }
 
+  private shouldUseLeanLoadMoreApply(mode: SubscriptionMode): boolean {
+    return mode === 'articles' || mode === 'social'
+  }
+
+  private applyEntriesForLoadMore(
+    mode: SubscriptionMode,
+    entries: EntryCardModel[],
+    skipNotify: boolean,
+  ): void {
+    const leanApply = this.shouldUseLeanLoadMoreApply(mode)
+    this.session.applyEntriesForMode(mode, entries, true, skipNotify, leanApply, leanApply)
+  }
+
   async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
     if (mode === 'pictures' || mode === 'videos') {
       const previousTotal = this.totalEntryCountFor(mode)
+      const queryStartedAt = Date.now()
       const nextEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
+      this.session.logHomeLoadMore(
+        `append-resolve mode=${mode} path=full-query prevTotal=${previousTotal} nextEntries=${nextEntries.length} queryMs=${Date.now() - queryStartedAt}`,
+      )
       this.syncModePaginationFromReloadResult(mode, nextEntries, nextLimit)
-      this.session.applyEntriesForMode(mode, nextEntries, true, true)
+      this.applyEntriesForLoadMore(mode, nextEntries, true)
       if (nextEntries.length > previousTotal) {
         this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
         return
@@ -77,7 +95,11 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const previousTotal = previousEntries.length
     const currentLimit = this.candidateLimitForMode(mode)
     const appendCount = Math.max(1, nextLimit - currentLimit)
+    const pageQueryStartedAt = Date.now()
     const nextPage = await FeaturedEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
+    this.session.logHomeLoadMore(
+      `append-page mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} queryMs=${Date.now() - pageQueryStartedAt}`,
+    )
 
     if (nextPage.length === 0) {
       this.setCandidateLimitForMode(mode, nextLimit)
@@ -93,7 +115,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
           `append-empty-fallback prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
         )
       }
-      this.session.applyEntriesForMode(mode, fallbackEntries, true)
+      this.applyEntriesForLoadMore(mode, fallbackEntries, false)
       return
     }
 
@@ -125,27 +147,45 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
           `append-no-progress prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
         )
       }
-      this.session.applyEntriesForMode(mode, fallbackEntries, true)
+      this.applyEntriesForLoadMore(mode, fallbackEntries, false)
       return
     }
 
     this.setCandidateLimitForMode(mode, nextLimit)
-    if (mode === 'articles') {
-      this.session.entryGroups = {
-        articles: merged,
-        social: this.session.entryGroups.social,
-        pictures: this.session.entryGroups.pictures,
-        videos: this.session.entryGroups.videos,
+    this.applyEntriesForLoadMore(mode, merged, true)
+    this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
+  }
+
+  private applyResolvedLoadMoreEntries(
+    mode: SubscriptionMode,
+    nextEntries: EntryCardModel[],
+    previousTotal: number,
+    nextLimit: number,
+  ): void {
+    const startedAt = Date.now()
+    this.syncModePaginationFromReloadResult(mode, nextEntries, nextLimit)
+    const syncedAt = Date.now()
+    this.applyEntriesForLoadMore(mode, nextEntries, true)
+    const appliedAt = Date.now()
+    if (nextEntries.length > previousTotal) {
+      if (mode === 'articles' || mode === 'social') {
+        this.session.beginTweetPresentationDiagSession(mode, 'prefetch-resolve', previousTotal)
       }
-      this.session.featuredEntries = this.session.mergeFeaturedEntriesFromGroups()
-      this.markModeLoaded(mode, true)
-      this.session.settleInitialHomeLoadState()
-      this.session.schedulePersistHomeSnapshot(this.session.featuredEntries)
-      this.session.notifyHomeEntryDataReloadedForMode(mode)
+      this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
+      this.session.runManagedTimeout(() => {
+        this.session.flushTweetPresentationDiagSession('prefetch-resolve-post-append')
+      }, 600)
+      this.session.logHomeLoadMore(
+        `applyResolvedLoadMoreEntries mode=${mode} growth=true prevTotal=${previousTotal} nextEntries=${nextEntries.length} `
+        + `syncMs=${syncedAt - startedAt} applyMs=${appliedAt - syncedAt} totalMs=${Date.now() - startedAt}`,
+      )
       return
     }
-    this.session.applyEntriesForMode(mode, merged, true, true)
-    this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
+    this.session.notifyHomeEntryDataReloadedForMode(mode)
+    this.session.logHomeLoadMore(
+      `applyResolvedLoadMoreEntries mode=${mode} growth=false prevTotal=${previousTotal} nextEntries=${nextEntries.length} `
+      + `syncMs=${syncedAt - startedAt} applyMs=${appliedAt - syncedAt} totalMs=${Date.now() - startedAt}`,
+    )
   }
 
   // === Load-more triggers ===
@@ -177,7 +217,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       && (hasBufferedEntries || this.session.homeHasMoreEntries)
   }
 
-  loadMoreBlockedReason(mode: SubscriptionMode): string {
+  loadMoreBlockedReason(mode: SubscriptionMode, allowStaleScrollIntent: boolean = false): string {
     const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
     if (!this.session.isHomeRootTab()) { return 'not-home-tab' }
     if (mode !== this.session.mode) { return 'inactive-mode' }
@@ -187,7 +227,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     if (this.session.homeLoadMoreInProgress) { return 'load-more-in-progress' }
     if (!hasBufferedEntries && !this.modeHasMoreEntries(mode)) { return 'mode-no-more' }
     if (!hasBufferedEntries && !this.session.homeHasMoreEntries) { return 'no-buffer-and-no-more' }
-    if (!this.hasRecentHomeScrollIntent()) { return 'no-recent-scroll-intent' }
+    if (!allowStaleScrollIntent && !this.hasRecentHomeScrollIntent()) { return 'no-recent-scroll-intent' }
     return ''
   }
 
@@ -199,8 +239,8 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       || reason === 'no-recent-scroll-intent'
   }
 
-  requestLoadMoreForMode(mode: SubscriptionMode): boolean {
-    const blockedReason = this.loadMoreBlockedReason(mode)
+  requestLoadMoreForMode(mode: SubscriptionMode, allowStaleScrollIntent: boolean = false): boolean {
+    const blockedReason = this.loadMoreBlockedReason(mode, allowStaleScrollIntent)
     if (!!blockedReason || !this.canLoadMoreForMode(mode)) {
       this.session.logHomePerf(`loadMore skip mode=${mode} reason=${blockedReason || 'canLoadMore=false'}`)
       return !!blockedReason ? !this.shouldRetryLoadMoreBlockedReason(blockedReason) : true
@@ -256,11 +296,13 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     this.session.logHomeLoadMore(
       `request start mode=${mode} prevTotal=${previousTotal} currentLimit=${currentModeLimit} nextLimit=${nextLimit}`,
     )
+    if (mode === 'articles' || mode === 'social') {
+      this.session.beginTweetPresentationDiagSession(mode, 'request-start', previousModeTotal)
+    }
 
     const loadPromise = prefetchedEntries
       ? (async () => {
-          this.syncModePaginationFromReloadResult(mode, prefetchedEntries, nextLimit)
-          this.session.applyEntriesForMode(mode, prefetchedEntries, true)
+          this.applyResolvedLoadMoreEntries(mode, prefetchedEntries, previousModeTotal, nextLimit)
         })()
       : this.appendFeaturedEntriesFromLocalFast(mode, nextLimit)
 
@@ -300,6 +342,11 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
         this.session.logHomePerf(
           `loadMore done mode=${mode} elapsedMs=${Date.now() - requestStartedAt} total=${this.session.featuredEntries.length}`,
         )
+        if (mode === 'articles' || mode === 'social') {
+          this.session.runManagedTimeout(() => {
+            this.session.flushTweetPresentationDiagSession('request-finally')
+          }, 900)
+        }
         if (this.pendingLoadMoreForMode(mode)) {
           this.flushPendingLoadMoreForMode(mode)
         }
@@ -336,6 +383,24 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     this.setModeScrollProgressLoadMoreValue(mode, 0)
   }
 
+  private shouldUseSocialLoadMorePolicyForArticleTail(mode: SubscriptionMode, visibleCount: number): boolean {
+    if (mode !== 'articles' || visibleCount <= 0) {
+      return false
+    }
+    const visibleEntries = this.visibleEntriesFor('articles')
+    const tailEntry = visibleEntries[Math.min(visibleEntries.length, visibleCount) - 1]
+    return !!tailEntry && isTweetLikeEntry(tailEntry)
+  }
+
+  private effectiveLoadMorePolicyMode(mode: SubscriptionMode, visibleCount: number): SubscriptionMode {
+    // 文章栏可能混入 X/Twitter RSS 项。尾部是推文时按社交流高度与节奏判断，
+    // 避免普通文章卡的较矮估算让加载更多过早触发。
+    if (mode === 'articles' && this.shouldUseSocialLoadMorePolicyForArticleTail(mode, visibleCount)) {
+      return 'social'
+    }
+    return mode
+  }
+
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
     if (
       mode !== this.session.mode
@@ -351,7 +416,8 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const visibleCount = this.visibleEntryCountFor(mode)
     const hasBufferedEntries = visibleCount < totalCount
     if (!hasBufferedEntries && (!this.session.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) { return }
-    if (!shouldPreloadHomeVisibleEntries(mode, currentOffset, totalCount, visibleCount)) { return }
+    const policyMode = this.effectiveLoadMorePolicyMode(mode, visibleCount)
+    if (!shouldPreloadHomeVisibleEntries(policyMode, currentOffset, totalCount, visibleCount)) { return }
     if (this.session.homeScrollIntent.isInteracting && !this.hasRecentHomeScrollIntent()) { return }
     const scrollIntentVersion = this.session.homeScrollIntent.intentVersion(mode)
     if (
@@ -422,15 +488,18 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   ): boolean {
     if (visibleCount <= 0) { return false }
     const remainingVisibleCount = visibleCount - index - 1
+    const policyMode = this.effectiveLoadMorePolicyMode(mode, visibleCount)
     let dynamicThreshold = Math.max(
       HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
       Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
     )
-    if (mode === 'social') {
+    if (policyMode === 'articles') {
+      dynamicThreshold = Math.max(2, Math.min(3, Math.floor(visibleCount / 10)))
+    } else if (policyMode === 'social') {
       dynamicThreshold = Math.max(1, Math.min(2, Math.floor(visibleCount / 12)))
-    } else if (mode === 'pictures') {
+    } else if (policyMode === 'pictures') {
       dynamicThreshold = 1
-    } else if (mode === 'videos') {
+    } else if (policyMode === 'videos') {
       dynamicThreshold = Math.max(2, Math.min(4, Math.floor(visibleCount / 8)))
     }
     return remainingVisibleCount <= dynamicThreshold

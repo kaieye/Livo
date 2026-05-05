@@ -24,6 +24,7 @@ export interface HomeEntryDataActions {
   animateWithUiContext(options: AnimateParam, event: () => void): void
   runManagedTimeout(callback: () => void, delayMs: number): void
   bumpHomeContentVersion(): void
+  logHomeLoadMore(message: string): void
 }
 
 export class HomeEntryDataManager {
@@ -66,8 +67,11 @@ export class HomeEntryDataManager {
     deferredPersist: boolean,
     skipNotify: boolean = false,
     skipMerge: boolean = false,
+    skipPersist: boolean = false,
   ): void {
+    const startedAt = Date.now()
     const scopedEntries = filterEntriesByMode(mode, entries)
+    const filteredAt = Date.now()
     const groups = this.state.entryGroups
     this.state.entryGroups = {
       articles: mode === 'articles' ? scopedEntries : groups.articles,
@@ -78,16 +82,26 @@ export class HomeEntryDataManager {
     if (!skipMerge) {
       this.state.featuredEntries = this.mergeFeaturedEntriesFromGroups()
     }
+    const mergedAt = Date.now()
     this.actions.markModeLoaded(mode, true)
     this.actions.settleInitialHomeLoadState()
-    if (deferredPersist) {
-      this.schedulePersistSnapshot(this.state.featuredEntries)
-    } else {
-      this.persistSnapshotNow()
+    if (!skipPersist && !skipMerge) {
+      if (deferredPersist) {
+        this.schedulePersistSnapshot(this.state.featuredEntries)
+      } else {
+        this.persistSnapshotNow()
+      }
     }
+    const persistedAt = Date.now()
     if (!skipNotify) {
       this.notifyModeReloaded(mode)
     }
+    this.actions.logHomeLoadMore(
+      `applyEntriesForMode mode=${mode} total=${entries.length} scoped=${scopedEntries.length} `
+      + `skipNotify=${skipNotify} skipMerge=${skipMerge} skipPersist=${skipPersist} `
+      + `filterMs=${filteredAt - startedAt} mergeMs=${mergedAt - filteredAt} `
+      + `persistMs=${persistedAt - mergedAt} totalMs=${Date.now() - startedAt}`,
+    )
   }
 
   applyHomeEntriesForAnimatedMode(
@@ -273,7 +287,11 @@ export class HomeEntryDataManager {
   }
 
   notifyModeAppended(mode: SubscriptionMode, startIndex: number): void {
+    const startedAt = Date.now()
     this.dataSourceFor(mode).notifyDataAdded(startIndex)
+    this.actions.logHomeLoadMore(
+      `notifyModeAppended mode=${mode} startIndex=${startIndex} elapsedMs=${Date.now() - startedAt}`,
+    )
   }
 
   notifyAllReloadedExcept(mode: SubscriptionMode, shouldBumpContentVersion: boolean = true): void {

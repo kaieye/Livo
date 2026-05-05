@@ -14,7 +14,10 @@ import { HomeEntryDataManager } from '../common/utils/HomeEntryDataManager'
 import { HomeInlineSearchController } from '../common/utils/HomeInlineSearchController'
 import { HomeModeController } from '../common/utils/HomeModeController'
 import { TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
-import { TweetEntryPresentationCache } from '../common/utils/TweetEntryPresentationCache'
+import {
+  TweetEntryPresentationCache,
+  TweetEntryPresentationCacheDiagnostics,
+} from '../common/utils/TweetEntryPresentationCache'
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 import { IndexHomeOverlayLayer } from '../common/components/IndexHomeOverlayLayer'
 import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
@@ -62,6 +65,26 @@ import {
   RootTabSymbolPair,
   SubscriptionMode,
 } from '../common/components/HomeRootConfig'
+
+class IndexTweetPresentationCacheDiagnostics implements TweetEntryPresentationCacheDiagnostics {
+  private readonly owner: Index
+
+  constructor(owner: Index) {
+    this.owner = owner
+  }
+
+  onAccess(hit: boolean, elapsedMs: number): void {
+    if (!this.owner.tweetPresentationDiagStartedAt) {
+      return
+    }
+    if (hit) {
+      this.owner.tweetPresentationDiagHits += 1
+      return
+    }
+    this.owner.tweetPresentationDiagMisses += 1
+    this.owner.tweetPresentationDiagMissCostMs += elapsedMs
+  }
+}
 
 @Entry
 @Component
@@ -157,7 +180,18 @@ struct Index {
   lastHomeRefreshFinishedAt: number = 0
   homePerfSessionId: number = 0
   homePerfSessionStartedAt: number = 0
-  private readonly tweetPresentationCache: TweetEntryPresentationCache = new TweetEntryPresentationCache()
+  tweetPresentationDiagToken: number = 0
+  tweetPresentationDiagMode: SubscriptionMode = 'articles'
+  tweetPresentationDiagReason: string = ''
+  tweetPresentationDiagExpectedStartIndex: number = 0
+  tweetPresentationDiagStartedAt: number = 0
+  tweetPresentationDiagHits: number = 0
+  tweetPresentationDiagMisses: number = 0
+  tweetPresentationDiagMissCostMs: number = 0
+  private readonly tweetPresentationCacheDiagnostics: TweetEntryPresentationCacheDiagnostics =
+    new IndexTweetPresentationCacheDiagnostics(this)
+  private readonly tweetPresentationCache: TweetEntryPresentationCache =
+    new TweetEntryPresentationCache(this.tweetPresentationCacheDiagnostics)
   readonly diagnosticsLogger: IndexHomeDiagnosticsLogger = new IndexHomeDiagnosticsLogger(this)
   readonly loadStateGate: IndexHomeLoadStateGate = new IndexHomeLoadStateGate(this)
   readonly modeScenePresenter: IndexHomeModeScenePresenter = new IndexHomeModeScenePresenter(this)
@@ -190,6 +224,34 @@ struct Index {
   logHomePerf(message: string): void { this.diagnosticsLogger.logHomePerf(message) }
   logHomeLoadState(message: string): void { this.diagnosticsLogger.logHomeLoadState(message) }
   logHomeGroupStats(stage: string, entries: EntryCardModel[]): void { this.diagnosticsLogger.logHomeGroupStats(stage, entries) }
+  beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void {
+    this.tweetPresentationDiagToken += 1
+    this.tweetPresentationDiagMode = mode
+    this.tweetPresentationDiagReason = reason
+    this.tweetPresentationDiagExpectedStartIndex = expectedStartIndex
+    this.tweetPresentationDiagStartedAt = Date.now()
+    this.tweetPresentationDiagHits = 0
+    this.tweetPresentationDiagMisses = 0
+    this.tweetPresentationDiagMissCostMs = 0
+    this.logHomeLoadMore(
+      `tweet-presentation-diag-start token=${this.tweetPresentationDiagToken} mode=${mode} reason=${reason} startIndex=${expectedStartIndex}`,
+    )
+  }
+  flushTweetPresentationDiagSession(reason: string): void {
+    if (!this.tweetPresentationDiagStartedAt) {
+      return
+    }
+    this.logHomeLoadMore(
+      `tweet-presentation-diag-done token=${this.tweetPresentationDiagToken} mode=${this.tweetPresentationDiagMode} `
+      + `reason=${reason} source=${this.tweetPresentationDiagReason} startIndex=${this.tweetPresentationDiagExpectedStartIndex} `
+      + `elapsedMs=${Date.now() - this.tweetPresentationDiagStartedAt} hits=${this.tweetPresentationDiagHits} `
+      + `misses=${this.tweetPresentationDiagMisses} missCostMs=${this.tweetPresentationDiagMissCostMs}`,
+    )
+    this.tweetPresentationDiagStartedAt = 0
+    this.tweetPresentationDiagHits = 0
+    this.tweetPresentationDiagMisses = 0
+    this.tweetPresentationDiagMissCostMs = 0
+  }
 
   async loadInitialData(): Promise<void> { await this.homeFeedSession.bootstrap() }
   resumeLoadedHome(): void { this.homeFeedSession.resume() }
@@ -324,7 +386,16 @@ struct Index {
   }
 
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
-  applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void { this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge) }
+  applyEntriesForMode(
+    mode: SubscriptionMode,
+    entries: EntryCardModel[],
+    deferredPersist: boolean,
+    skipNotify: boolean = false,
+    skipMerge: boolean = false,
+    skipPersist: boolean = false,
+  ): void {
+    this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge, skipPersist)
+  }
   ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.homeFeedSession.pagination.ensureModeEntriesLoaded(mode) }
   precacheNonActiveModes(): void { this.homeFeedSession.precacheNonActiveModes() }
   async reloadFeaturedEntriesFromLocal(candidateLimit?: number, animated?: boolean, deferredGrouping?: boolean, preferFastPath?: boolean, targetMode?: SubscriptionMode): Promise<void> { await this.homeFeedSession.reloadFeaturedEntriesFromLocal(candidateLimit, animated, deferredGrouping, preferFastPath, targetMode) }
@@ -373,6 +444,7 @@ struct Index {
       onStopDragging: (mode: SubscriptionMode): void => {
         this.setHomeScrollInteracting(false, mode)
         this.flushPendingLoadMoreForMode(mode)
+        this.scheduleHomeLoadMorePrefetch(160)
       },
       onEntryOpen: (entry: EntryCardModel): void => { this.openEntry(entry) },
       onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {

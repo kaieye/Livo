@@ -2,6 +2,7 @@ import { FeaturedEntriesQuery } from '../data/FeaturedEntriesQuery'
 import { EntryCardModel } from '../models/LivoModels'
 import {
   HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED,
+  HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
   HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
   SubscriptionMode,
 } from '../components/HomeRootConfig'
@@ -33,6 +34,7 @@ export class HomeFeedLoadMorePrefetch {
     }
     return this.session.isComponentActive
       && this.session.isHomeRootTab()
+      && !this.session.homeScrollIntent.isInteracting
       && !this.owner.shouldRenderAllEntriesForMode(this.session.mode)
       && !this.session.searchOverlayVisible
       && !this.session.hasHomeInlineSearchQuery()
@@ -58,15 +60,23 @@ export class HomeFeedLoadMorePrefetch {
     }, delayMs)
   }
 
+  private prefetchPageMultiplier(mode: SubscriptionMode): number {
+    if (mode === 'articles') {
+      return Math.max(2, HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER)
+    }
+    return HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
+  }
+
   async run(): Promise<void> {
     if (!this.canPrefetch()) {
       return
     }
     const mode = this.session.mode
     const currentLimit = this.owner.candidateLimitForMode(mode)
+    const step = resolveHomeVisibleEntryLoadMoreStep(mode)
     const targetLimit = Math.min(
       HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
-      currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
+      currentLimit + step * this.prefetchPageMultiplier(mode),
     )
     if (targetLimit <= currentLimit) {
       return
@@ -108,11 +118,17 @@ export class HomeFeedLoadMorePrefetch {
     if (this.session.homeLoadMorePrefetchLimit < nextLimit || this.session.homeLoadMorePrefetchEntries.length === 0) {
       return undefined
     }
-    const entries = this.session.homeLoadMorePrefetchEntries
-    this.session.homeLoadMorePrefetchLimit = 0
-    this.session.homeLoadMorePrefetchEntries = []
+    const entries = this.session.homeLoadMorePrefetchEntries.slice(0, nextLimit)
+    const remainingPrefetchedLimit = this.session.homeLoadMorePrefetchLimit
+    this.session.homeLoadMorePrefetchEntries = this.session.homeLoadMorePrefetchEntries
     this.session.homeLoadMorePrefetchInProgress = false
-    this.session.logHomeLoadMore(`consume-prefetch nextLimit=${nextLimit} entries=${entries.length}`)
+    this.session.logHomeLoadMore(
+      `consume-prefetch nextLimit=${nextLimit} entries=${entries.length} prefetchedLimit=${remainingPrefetchedLimit}`,
+    )
+    if (remainingPrefetchedLimit === nextLimit) {
+      this.session.homeLoadMorePrefetchLimit = 0
+      this.session.homeLoadMorePrefetchEntries = []
+    }
     return entries
   }
 }

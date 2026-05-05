@@ -3,6 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
+import { isTweetLikeEntry } from '../utils/HomeEntryUtils'
 
 @Component
 export struct HomeArticleEntryCard {
@@ -10,25 +11,55 @@ export struct HomeArticleEntryCard {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop showUnreadDot: boolean = true
   @Prop highlightQuery: string = ''
+  private previewImageCacheKey: string = ''
+  private previewImageCacheValue: string = ''
 
   onOpen: () => void = () => {}
 
   private articlePreviewImage(): string {
-    const candidateUrls = [
+    const cacheKey = [
+      this.entry.id || '',
+      this.entry.feedId || '',
+      this.entry.articleUrl || '',
+      this.entry.imageUrl || '',
+      this.entry.feedImageUrl || '',
+      this.entry.mediaUrls ? this.entry.mediaUrls.join('|') : '',
+      this.entry.summary || '',
+      this.entry.title || '',
+    ].join('||')
+    if (cacheKey === this.previewImageCacheKey) {
+      return this.previewImageCacheValue
+    }
+
+    const lightweightCandidates = [
       ...(this.entry.mediaUrls ?? []),
       this.entry.imageUrl || '',
       this.entry.feedImageUrl || '',
+    ].filter((url: string) => !!url.trim())
+    if (isTweetLikeEntry(this.entry)) {
+      const pictureMediaCandidates = selectPictureMediaUrls(lightweightCandidates)
+      this.previewImageCacheKey = cacheKey
+      this.previewImageCacheValue = pictureMediaCandidates[0] || lightweightCandidates[0] || ''
+      return this.previewImageCacheValue
+    }
+
+    const candidateUrls = [
+      ...lightweightCandidates,
       this.extractFirstImageUrlFromText(this.entry.summary || ''),
       this.extractFirstImageUrlFromText(this.entry.title || ''),
     ].filter((url: string) => !!url.trim())
 
     const pictureMediaCandidates = selectPictureMediaUrls(candidateUrls)
     if (pictureMediaCandidates.length > 0) {
-      return pictureMediaCandidates[0]
+      this.previewImageCacheKey = cacheKey
+      this.previewImageCacheValue = pictureMediaCandidates[0]
+      return this.previewImageCacheValue
     }
 
     const firstLikelyImage = candidateUrls.find((url: string) => this.isLikelyImageUrl(url))
-    return firstLikelyImage || ''
+    this.previewImageCacheKey = cacheKey
+    this.previewImageCacheValue = firstLikelyImage || ''
+    return this.previewImageCacheValue
   }
 
   private extractFirstImageUrlFromText(text: string): string {

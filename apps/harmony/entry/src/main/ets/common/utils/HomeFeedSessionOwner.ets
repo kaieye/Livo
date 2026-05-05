@@ -77,6 +77,8 @@ export interface HomeFeedSessionOwner {
   logHomeLoadMore(message: string): void
   logHomeLoadState(message: string): void
   describeError(error: Error | string | Object): string
+  beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void
+  flushTweetPresentationDiagSession(reason: string): void
 
   // Runtime infra
   runManagedTimeout(callback: () => void, delayMs: number): void
@@ -94,6 +96,7 @@ export interface HomeFeedSessionOwner {
     deferredPersist: boolean,
     skipNotify?: boolean,
     skipMerge?: boolean,
+    skipPersist?: boolean,
   ): void
   settleInitialHomeLoadState(force?: boolean): void
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void
