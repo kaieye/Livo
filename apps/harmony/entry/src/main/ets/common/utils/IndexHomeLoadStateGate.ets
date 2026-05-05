@@ -52,6 +52,13 @@ export class IndexHomeLoadStateGate {
 
   updateHeaderBlurProgress(offset: number): void {
     const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
-    this.owner.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+    const nextProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+    // Avoid per-frame @State writes when the rounded progress hasn't moved.
+    // Two decimals is finer than the eye can track but coarse enough to coalesce
+    // a continuous fling into a handful of state changes instead of dozens.
+    if (Math.abs(nextProgress - this.owner.headerBlurProgress) < 0.005) {
+      return
+    }
+    this.owner.headerBlurProgress = nextProgress
   }
 }

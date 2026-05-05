@@ -36,4 +36,18 @@ export class ArrayLazyDataSource<T> implements IDataSource {
       }
     })
   }
+
+  notifyDataAdded(index: number): void {
+    this.listeners.forEach((listener: DataChangeListener) => {
+      try {
+        if (listener.onDataAdd) {
+          listener.onDataAdd(index)
+          return
+        }
+        listener.onDataReloaded()
+      } catch (error) {
+        console.error(`ArrayLazyDataSource notifyDataAdded failed: ${error instanceof Error ? error.message : error}`)
+      }
+    })
+  }
 }

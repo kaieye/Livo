@@ -205,12 +205,19 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
   settleInitialHomeLoadState(force: boolean = false): void { this.loadStateGate.settleInitialHomeLoadState(force) }
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.homeEntryDataManager.schedulePersistSnapshot(entries) }
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.homeEntryDataManager.notifyModeReloaded(mode) }
+  notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void {
+    this.homeEntryDataManager.notifyModeAppended(mode, startIndex)
+  }
+  bumpHomeContentVersion(): void { this.owner.bumpHomeContentVersion() }
   invalidateHomeLoadMorePrefetch(): void { this.pagination.invalidateHomeLoadMorePrefetch() }
   resetModeLoadMoreStates(reason: string): void { this.pagination.resetModeLoadMoreStates(reason) }
   scheduleHomeLoadMorePrefetch(delayMs: number = 220): void { this.pagination.scheduleHomeLoadMorePrefetch(delayMs) }
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean { return this.pagination.pendingLoadMoreForMode(mode) }
   hasRecentHomeScrollIntent(): boolean { return this.pagination.hasRecentHomeScrollIntent() }
   shouldRenderAllEntriesForMode(mode: SubscriptionMode): boolean { return this.pagination.shouldRenderAllEntriesForMode(mode) }
+  handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void {
+    this.pagination.handleHomeListEndReach(mode, totalCount)
+  }
 
   // === Bootstrap ===
   async bootstrap(): Promise<void> {
@@ -298,6 +305,7 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
     }
     this.owner.entryGroups = groupHomeEntriesByMode(this.owner.featuredEntries)
     this.owner.feedSourceLabel = '本地内容已加载'
+    this.owner.bumpHomeContentVersion()
     this.precacheNonActiveModes()
   }
 

@@ -19,6 +19,7 @@ export struct HomeVideoGrid {
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
   @Prop isLoading: boolean = false
   onOpenEntry: (entry: EntryCardModel) => void = () => {}
+  onTailAppear: (totalCount: number) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
 
@@ -80,6 +81,10 @@ export struct HomeVideoGrid {
   }
 
   private cardPublishedLabel(entry: EntryCardModel): string {
+    const publishedLabel = (entry.publishedLabel || '').trim()
+    if (publishedLabel) {
+      return publishedLabel
+    }
     return this.relativePublishedMeta(entry)
   }
 
@@ -326,7 +331,7 @@ export struct HomeVideoGrid {
           theme: this.theme,
         })
       } else {
-        ForEach(this.rows(), (rowEntries: EntryCardModel[]) => {
+        ForEach(this.rows(), (rowEntries: EntryCardModel[], rowIndex: number) => {
           Row({ space: 12 }) {
             ForEach(rowEntries, (entry: EntryCardModel) => {
               Column() {
@@ -341,6 +346,11 @@ export struct HomeVideoGrid {
             }
           }
           .width('100%')
+          .onAppear(() => {
+            if (rowIndex >= this.rows().length - 1) {
+              this.onTailAppear(this.entries.length)
+            }
+          })
         }, (_rowEntries: EntryCardModel[], rowIndex: number) => {
           return `video-row-${rowIndex}`
         })

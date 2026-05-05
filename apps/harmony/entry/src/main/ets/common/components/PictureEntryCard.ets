@@ -292,7 +292,7 @@ export struct PictureEntryCard {
             else this.FramedImageSlide(item, idx)
           }, (item: PictureCarouselMediaItem, idx: number) => `${item.kind}-${item.imageUrl}-${item.videoUrl}-${idx}-${this.livePhotoInstanceSeed(idx)}`)
         }
-        .width('100%').vertical(false).autoPlay(false).displayArrow(false).effectMode(EdgeEffect.None).cachedCount(4)
+        .width('100%').vertical(false).autoPlay(false).displayArrow(false).effectMode(EdgeEffect.None).cachedCount(1)
         .indicator(new DotIndicator().itemWidth(6).itemHeight(6).selectedItemWidth(12).selectedItemHeight(6)
           .color($r('sys.color.comp_background_secondary')).selectedColor(this.theme.accent))
         .loop(this.carouselMediaItems().length > 1).duration(260)

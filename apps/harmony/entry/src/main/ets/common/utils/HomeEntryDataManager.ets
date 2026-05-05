@@ -23,6 +23,7 @@ export interface HomeEntryDataActions {
   resetTweetPresentationCache(): void
   animateWithUiContext(options: AnimateParam, event: () => void): void
   runManagedTimeout(callback: () => void, delayMs: number): void
+  bumpHomeContentVersion(): void
 }
 
 export class HomeEntryDataManager {
@@ -199,6 +200,7 @@ export class HomeEntryDataManager {
       pictures: [...regrouped.pictures],
       videos: [...regrouped.videos],
     }
+    this.actions.bumpHomeContentVersion()
   }
 
   playListSwapTransition(
@@ -252,24 +254,37 @@ export class HomeEntryDataManager {
     })
   }
 
-  notifyAllReloaded(): void {
+  notifyAllReloaded(shouldBumpContentVersion: boolean = true): void {
     const sources = this.state.homeEntryDataSources
     sources.articles.notifyDataReloaded()
     sources.social.notifyDataReloaded()
     sources.pictures.notifyDataReloaded()
     sources.videos.notifyDataReloaded()
+    if (shouldBumpContentVersion) {
+      this.actions.bumpHomeContentVersion()
+    }
   }
 
-  notifyModeReloaded(mode: SubscriptionMode): void {
+  notifyModeReloaded(mode: SubscriptionMode, shouldBumpContentVersion: boolean = false): void {
     this.dataSourceFor(mode).notifyDataReloaded()
+    if (shouldBumpContentVersion) {
+      this.actions.bumpHomeContentVersion()
+    }
   }
 
-  notifyAllReloadedExcept(mode: SubscriptionMode): void {
+  notifyModeAppended(mode: SubscriptionMode, startIndex: number): void {
+    this.dataSourceFor(mode).notifyDataAdded(startIndex)
+  }
+
+  notifyAllReloadedExcept(mode: SubscriptionMode, shouldBumpContentVersion: boolean = true): void {
     const sources = this.state.homeEntryDataSources
     if (mode !== 'articles') { sources.articles.notifyDataReloaded() }
     if (mode !== 'social') { sources.social.notifyDataReloaded() }
     if (mode !== 'pictures') { sources.pictures.notifyDataReloaded() }
     if (mode !== 'videos') { sources.videos.notifyDataReloaded() }
+    if (shouldBumpContentVersion) {
+      this.actions.bumpHomeContentVersion()
+    }
   }
 
   private dataSourceFor(mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> {

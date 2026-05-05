@@ -2,7 +2,6 @@ import { FeaturedEntriesQuery } from '../data/FeaturedEntriesQuery'
 import { EntryCardModel } from '../models/LivoModels'
 import {
   HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
-  HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED,
   HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
   HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS,
   HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS,
@@ -32,107 +31,48 @@ import {
 import { resolveHomeVisibleEntryLoadMoreStep, shouldPreloadHomeVisibleEntries } from './HomeVisibleEntryPolicy'
 import { HomeFeedPaginationState } from './HomeFeedPaginationState'
 import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
+import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
+import { HomeFeedLoadMoreDrain } from './HomeFeedLoadMoreDrain'
 
 export class HomeFeedPagination extends HomeFeedPaginationState {
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
   private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = createHomeLoadMoreTimestampMap()
   private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
+  private readonly prefetcher: HomeFeedLoadMorePrefetch
+  private readonly drainController: HomeFeedLoadMoreDrain
 
   constructor(session: HomeFeedSessionOwner) {
     super(session)
+    // HomeFeedPagination(State) already exposes the trio of methods the prefetch
+    // owner interface needs, so we pass `this` directly instead of an inline
+    // object literal (ArkTS forbids untyped object literals).
+    this.prefetcher = new HomeFeedLoadMorePrefetch(session, this)
+    this.drainController = new HomeFeedLoadMoreDrain(session, this)
   }
 
-  // === Prefetch ===
-  canPrefetchHomeLoadMore(): boolean {
-    if (!HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED) {
-      return false
-    }
-    return this.session.isComponentActive
-      && this.session.isHomeRootTab()
-      && !this.shouldRenderAllEntriesForMode(this.session.mode)
-      && !this.session.searchOverlayVisible
-      && !this.session.hasHomeInlineSearchQuery()
-      && !this.session.isRefreshing
-      && !this.session.isHomeStartupRefreshing
-      && !this.session.homeInitialLoadPending
-      && !this.session.homeLoadMoreInProgress
-      && this.session.homeHasMoreEntries
-      && this.modeHasMoreEntries(this.session.mode)
-  }
-
-  invalidateHomeLoadMorePrefetch(): void {
-    this.session.homeLoadMorePrefetchToken += 1
-    this.session.homeLoadMorePrefetchInProgress = false
-    this.session.homeLoadMorePrefetchLimit = 0
-    this.session.homeLoadMorePrefetchEntries = []
-    this.session.homeLoadMorePrefetchMode = this.session.mode
-  }
-
-  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void {
-    this.session.runManagedTimeout(() => {
-      void this.prefetchHomeLoadMore()
-    }, delayMs)
-  }
-
-  async prefetchHomeLoadMore(): Promise<void> {
-    if (!this.canPrefetchHomeLoadMore()) {
-      return
-    }
-    const mode = this.session.mode
-    const currentLimit = this.candidateLimitForMode(mode)
-    const targetLimit = Math.min(
-      HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
-      currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode),
-    )
-    if (targetLimit <= currentLimit) {
-      return
-    }
-    if (this.session.homeLoadMorePrefetchLimit >= targetLimit && this.session.homeLoadMorePrefetchEntries.length > 0) {
-      return
-    }
-    if (this.session.homeLoadMorePrefetchInProgress) {
-      return
-    }
-
-    this.session.homeLoadMorePrefetchInProgress = true
-    const token = this.session.homeLoadMorePrefetchToken + 1
-    this.session.homeLoadMorePrefetchToken = token
-    this.session.logHomeLoadMore(`prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`)
-
-    try {
-      const entries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, targetLimit)
-      if (!this.session.isComponentActive || this.session.homeLoadMorePrefetchToken !== token) {
-        return
-      }
-      this.session.homeLoadMorePrefetchLimit = targetLimit
-      this.session.homeLoadMorePrefetchEntries = entries
-      this.session.homeLoadMorePrefetchMode = mode
-      this.session.logHomeLoadMore(`prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`)
-    } catch (_error) {
-      this.session.logHomeLoadMore(`prefetch failed targetLimit=${targetLimit}`)
-    } finally {
-      if (this.session.homeLoadMorePrefetchToken === token) {
-        this.session.homeLoadMorePrefetchInProgress = false
-      }
-    }
-  }
-
+  // === Prefetch (delegated to HomeFeedLoadMorePrefetch) ===
+  canPrefetchHomeLoadMore(): boolean { return this.prefetcher.canPrefetch() }
+  invalidateHomeLoadMorePrefetch(): void { this.prefetcher.invalidate() }
+  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void { this.prefetcher.schedule(delayMs) }
+  async prefetchHomeLoadMore(): Promise<void> { await this.prefetcher.run() }
   consumePrefetchedHomeEntries(mode: SubscriptionMode, nextLimit: number): EntryCardModel[] | undefined {
-    if (this.session.homeLoadMorePrefetchMode !== mode) {
-      return undefined
-    }
-    if (this.session.homeLoadMorePrefetchLimit < nextLimit || this.session.homeLoadMorePrefetchEntries.length === 0) {
-      return undefined
-    }
-    const entries = this.session.homeLoadMorePrefetchEntries
-    this.session.homeLoadMorePrefetchLimit = 0
-    this.session.homeLoadMorePrefetchEntries = []
-    this.session.homeLoadMorePrefetchInProgress = false
-    this.session.logHomeLoadMore(`consume-prefetch nextLimit=${nextLimit} entries=${entries.length}`)
-    return entries
+    return this.prefetcher.consume(mode, nextLimit)
   }
 
   async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
+    if (mode === 'pictures' || mode === 'videos') {
+      const previousTotal = this.totalEntryCountFor(mode)
+      const nextEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
+      this.syncModePaginationFromReloadResult(mode, nextEntries, nextLimit)
+      this.session.applyEntriesForMode(mode, nextEntries, true, true)
+      if (nextEntries.length > previousTotal) {
+        this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
+        return
+      }
+      this.session.notifyHomeEntryDataReloadedForMode(mode)
+      return
+    }
+
     const previousEntries = this.session.filteredEntriesFor(mode)
     const previousTotal = previousEntries.length
     const currentLimit = this.candidateLimitForMode(mode)
@@ -204,7 +144,8 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       this.session.notifyHomeEntryDataReloadedForMode(mode)
       return
     }
-    this.session.applyEntriesForMode(mode, merged, true)
+    this.session.applyEntriesForMode(mode, merged, true, true)
+    this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
   }
 
   // === Load-more triggers ===
@@ -251,7 +192,11 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   private shouldRetryLoadMoreBlockedReason(reason: string): boolean {
-    return reason === 'load-more-in-progress' || reason === 'initial-load-pending'
+    // 'no-recent-scroll-intent' is transient: once another scroll arrives the
+    // pending request can succeed, so keep it queued instead of dropping it.
+    return reason === 'load-more-in-progress'
+      || reason === 'initial-load-pending'
+      || reason === 'no-recent-scroll-intent'
   }
 
   requestLoadMoreForMode(mode: SubscriptionMode): boolean {
@@ -362,6 +307,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     return true
   }
 
+  handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void {
+    this.drainController.handleListEndReach(mode, totalCount)
+  }
+
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
     return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
   }
@@ -463,12 +412,27 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     }, HOME_LOAD_MORE_AFTER_STOP_DELAY_MS)
   }
   private shouldPrefetchLoadMoreAtIndex(visibleCount: number, index: number): boolean {
+    return this.shouldPrefetchLoadMoreAtIndexForMode(this.session.mode, visibleCount, index)
+  }
+
+  private shouldPrefetchLoadMoreAtIndexForMode(
+    mode: SubscriptionMode,
+    visibleCount: number,
+    index: number,
+  ): boolean {
     if (visibleCount <= 0) { return false }
     const remainingVisibleCount = visibleCount - index - 1
-    const dynamicThreshold = Math.max(
+    let dynamicThreshold = Math.max(
       HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
       Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
     )
+    if (mode === 'social') {
+      dynamicThreshold = Math.max(1, Math.min(2, Math.floor(visibleCount / 12)))
+    } else if (mode === 'pictures') {
+      dynamicThreshold = 1
+    } else if (mode === 'videos') {
+      dynamicThreshold = Math.max(2, Math.min(4, Math.floor(visibleCount / 8)))
+    }
     return remainingVisibleCount <= dynamicThreshold
   }
   private shouldEnableLoadMorePrefetchForMode(mode: SubscriptionMode): boolean {
@@ -477,7 +441,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void {
     if (!HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED) { return }
     if (!this.shouldEnableLoadMorePrefetchForMode(mode)) { return }
-    if (!this.shouldPrefetchLoadMoreAtIndex(totalCount, index)) { return }
+    if (!this.shouldPrefetchLoadMoreAtIndexForMode(mode, totalCount, index)) { return }
     this.enqueueLoadMoreForMode(mode, 'item-appear')
   }
   ensureModeEntriesLoaded(mode: SubscriptionMode): void {

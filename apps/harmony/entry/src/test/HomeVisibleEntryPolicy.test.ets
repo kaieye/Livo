@@ -29,13 +29,25 @@ export default function homeVisibleEntryPolicyTest() {
     })
 
     it('uses a near-end picture preload threshold for tall cards', 0, () => {
-      expect(shouldPreloadHomeVisibleEntries('pictures', 5719, 324, 24)).assertEqual(false)
-      expect(shouldPreloadHomeVisibleEntries('pictures', 5720, 324, 24)).assertEqual(true)
+      // visible=24, preloadRemaining=4, visibleItem=3 → preloadStartIndex=17
+      // estimatedItemHeight=820 → threshold = 17 * 820 = 13940
+      expect(shouldPreloadHomeVisibleEntries('pictures', 13939, 324, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('pictures', 13940, 324, 24)).assertEqual(true)
+    })
+
+    it('uses a near-end social preload threshold for tweet-like cards', 0, () => {
+      // visible=24, preloadRemaining=2, visibleItem=3 → preloadStartIndex=19
+      // estimatedItemHeight=360 → threshold = 19 * 360 = 6840
+      expect(shouldPreloadHomeVisibleEntries('social', 6839, 324, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('social', 6840, 324, 24)).assertEqual(true)
     })
 
     it('uses grid-aware video preloading', 0, () => {
-      expect(shouldPreloadHomeVisibleEntries('videos', 1119, 324, 24)).assertEqual(false)
-      expect(shouldPreloadHomeVisibleEntries('videos', 1120, 324, 24)).assertEqual(true)
+      // visible=24, preloadRemaining=14, visibleItem=6 → preloadStartIndex=4
+      // estimatedItemHeight=140 (per-item row equivalent for 2-col grid)
+      // → threshold = 4 * 140 = 560
+      expect(shouldPreloadHomeVisibleEntries('videos', 559, 324, 24)).assertEqual(false)
+      expect(shouldPreloadHomeVisibleEntries('videos', 560, 324, 24)).assertEqual(true)
     })
   })
 }

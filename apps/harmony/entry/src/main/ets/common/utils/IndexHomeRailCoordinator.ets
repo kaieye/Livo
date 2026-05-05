@@ -79,11 +79,17 @@ export class IndexHomeRailCoordinator {
 
     const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
     const isScrollingDeeper = nextOffset > previousOffset + 0.5
+    // 当滚动距离在 0.5px 抖动以内时，跳过 @State 写入：避免 fling 期间每帧都触发
+    // Index 重建。仍然让 maybeTriggerLoadMoreByScrollProgress 收到 nextOffset，
+    // 因为它内部会按 offset 增量去重。
+    const offsetEffectivelyUnchanged = !isReturningTowardsTop && !isScrollingDeeper
 
     if (this.owner.homeModeRailExpandedOverride) {
       if (!isScrollingDeeper) {
-        this.owner.currentHomeModeScrollOffset = nextOffset
-        this.owner.updateHeaderBlurProgress(nextOffset)
+        if (!offsetEffectivelyUnchanged) {
+          this.owner.currentHomeModeScrollOffset = nextOffset
+          this.owner.updateHeaderBlurProgress(nextOffset)
+        }
         this.owner.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
         return
       }
@@ -98,8 +104,10 @@ export class IndexHomeRailCoordinator {
       this.owner.homeModeRailDismissedByScroll = true
     }
 
-    this.owner.currentHomeModeScrollOffset = nextOffset
-    this.owner.updateHeaderBlurProgress(nextOffset)
+    if (!offsetEffectivelyUnchanged) {
+      this.owner.currentHomeModeScrollOffset = nextOffset
+      this.owner.updateHeaderBlurProgress(nextOffset)
+    }
     this.owner.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
   }
 

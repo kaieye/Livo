@@ -10,7 +10,7 @@ import {
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import { RootTabId } from '../navigation/AppRouter'
-import { Entry, HarmonySettings } from '../models/LivoModels'
+import { Entry, EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
@@ -38,6 +38,7 @@ import {
 import { IndexHomeRootContentCallbacks } from './IndexHomeRootContent'
 import { IndexRootTabBody } from './IndexRootTabBody'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 @Component
 export struct IndexRootNavigationShell {
@@ -54,6 +55,7 @@ export struct IndexRootNavigationShell {
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
+  @Prop homeContentVersion: number = 0
   @Prop hideBottomTabs: boolean = false
   @Prop hideTitleBar: boolean = false
   @Prop isHomeRootTab: boolean = false
@@ -75,6 +77,7 @@ export struct IndexRootNavigationShell {
   homeCallbacks: IndexHomeRootContentCallbacks = {
     onModeSwipe: () => {},
     getEntries: () => [],
+    getDataSource: () => new ArrayLazyDataSource<EntryCardModel>(() => []),
     getTotalCount: () => 0,
     isModeLoading: () => false,
     getEmptyStateTitle: () => '',
@@ -89,6 +92,7 @@ export struct IndexRootNavigationShell {
     onStopDragging: () => {},
     onEntryOpen: () => {},
     onItemAppear: () => {},
+    onListEndReach: () => {},
     getTweetPresentation: () => ({} as TweetEntryPresentation),
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
@@ -162,6 +166,7 @@ export struct IndexRootNavigationShell {
               homeListSwapAnimating: this.homeListSwapAnimating,
               homeListSwapMode: this.homeListSwapMode,
               homeListSwapOpacity: this.homeListSwapOpacity,
+              homeContentVersion: this.homeContentVersion,
               homeCallbacks: this.homeCallbacks,
               onTabAppear: (tabId: RootTabId) => {
                 this.onTabAppear(tabId)

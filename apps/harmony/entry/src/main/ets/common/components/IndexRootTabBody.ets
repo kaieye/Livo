@@ -7,6 +7,7 @@ import { SettingsContent } from './SettingsContent'
 import { SubscriptionMode } from './HomeRootConfig'
 import { SubscriptionsContent } from './SubscriptionsContent'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 @Component
 export struct IndexRootTabBody {
@@ -24,10 +25,12 @@ export struct IndexRootTabBody {
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
+  @Prop homeContentVersion: number = 0
 
   homeCallbacks: IndexHomeRootContentCallbacks = {
     onModeSwipe: () => {},
     getEntries: (): EntryCardModel[] => [],
+    getDataSource: () => new ArrayLazyDataSource<EntryCardModel>(() => []),
     getTotalCount: () => 0,
     isModeLoading: () => false,
     getEmptyStateTitle: () => '',
@@ -42,6 +45,7 @@ export struct IndexRootTabBody {
     onStopDragging: () => {},
     onEntryOpen: () => {},
     onItemAppear: () => {},
+    onListEndReach: () => {},
     getTweetPresentation: () => ({} as TweetEntryPresentation),
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
@@ -68,6 +72,7 @@ export struct IndexRootTabBody {
           homeListSwapAnimating: this.homeListSwapAnimating,
           homeListSwapMode: this.homeListSwapMode,
           homeListSwapOpacity: this.homeListSwapOpacity,
+          homeContentVersion: this.homeContentVersion,
           callbacks: this.homeCallbacks,
         })
       } else if (this.tabId === 'subscriptions') {

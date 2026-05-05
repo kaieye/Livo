@@ -98,6 +98,11 @@ export interface HomeFeedSessionOwner {
   settleInitialHomeLoadState(force?: boolean): void
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void
+  notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void
+
+  // Notify descendant components that visible entries (data or visible-limit) changed
+  // so they re-evaluate @Builder children and pull fresh entries through callbacks.
+  bumpHomeContentVersion(): void
 
   // Pagination delegation (called by HomeFeedRefresh)
   invalidateHomeLoadMorePrefetch(): void
@@ -106,6 +111,7 @@ export interface HomeFeedSessionOwner {
   shouldRenderAllEntriesForMode(mode: SubscriptionMode): boolean
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean
   hasRecentHomeScrollIntent(): boolean
+  handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void
 
   // Cross-module lifecycle methods
   reloadFeaturedEntriesFromLocal(

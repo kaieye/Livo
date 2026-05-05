@@ -5,9 +5,9 @@ import { DiscoverSearchPanel } from './DiscoverSearchPanel'
 import {
   DiscoverCandidateSection,
   DiscoverSearchResultSection,
-  DiscoverNoResultState,
   DiscoverCategoryBrowserSection,
 } from './DiscoverResultSections'
+import { DiscoverNoResultState } from './DiscoverNoResultState'
 import {
   DirectUrlResult,
   DiscoverBrowseRouteParams,

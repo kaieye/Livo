@@ -1,3 +1,4 @@
+import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 import { EntryCardModel, selectPictureCarouselMediaUrls, Entry } from '../models/LivoModels'
 import { ThemePalette } from '../services/ThemeService'
 import { SubscriptionMode, HOME_MODE_CONTENT_GAP, HOME_MODE_SCENE_TOP_INSET } from '../components/HomeRootConfig'
@@ -17,6 +18,7 @@ export interface HomeModeEntriesPageCallbacks {
   onStopDragging: () => void
   onEntryOpen: (entry: EntryCardModel) => void
   onItemAppear: (index: number, total: number) => void
+  onListEndReach: (total: number) => void
   getTweetPresentation: (entry: EntryCardModel) => TweetEntryPresentation
   getPictureEntry: (entry: EntryCardModel) => Entry
   getPictureCaption: (entry: EntryCardModel) => string
@@ -27,6 +29,12 @@ export interface HomeModeEntriesPageCallbacks {
 export struct HomeModeEntriesPage {
   @Prop mode: SubscriptionMode = 'articles'
   @Prop entries: EntryCardModel[] = []
+  // dataSource is a class instance (with closures + listener registry) and is
+  // therefore passed as a plain field rather than @Prop. ArkUI @Prop deep-copy
+  // would otherwise strip its prototype methods. The parent always supplies a
+  // mode-specific instance at construction; the listener registered in
+  // aboutToAppear keeps this component in sync with notifyDataReloaded.
+  dataSource: ArrayLazyDataSource<EntryCardModel> = new ArrayLazyDataSource<EntryCardModel>(() => [])
   @Prop totalCount: number = 0
   @Prop isLoading: boolean = false
   @Prop emptyStateTitle: string = ''
@@ -38,6 +46,11 @@ export struct HomeModeEntriesPage {
   @Prop sceneVisible: Visibility = Visibility.Visible
   @Prop listSwapOpacity: number = 1
   @Prop listSwapTranslateY: number = 0
+  // Bumped whenever the bound dataSource emits a change notification. Forces
+  // ArkUI to re-evaluate build() so the video branch (which derives its
+  // entries from dataSource on each render) picks up new items even though
+  // the entries @Prop chain may not propagate through cached TabContent.
+  @State private dataChangeTrigger: number = 0
   scroller: Scroller = new Scroller()
   callbacks: HomeModeEntriesPageCallbacks = {
     onWillScroll: () => {},
@@ -45,10 +58,58 @@ export struct HomeModeEntriesPage {
     onStopDragging: () => {},
     onEntryOpen: () => {},
     onItemAppear: () => {},
+    onListEndReach: () => {},
     getTweetPresentation: () => ({} as TweetEntryPresentation),
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
+  }
+  private dataChangeListener: DataChangeListener | undefined = undefined
+
+  aboutToAppear(): void {
+    const bump = (): void => {
+      this.dataChangeTrigger = (this.dataChangeTrigger + 1) | 0
+    }
+    const bumpOnlyForVideo = (): void => {
+      if (resolveHomeVideoSceneKind(this.mode) === 'grid') {
+        bump()
+      }
+    }
+    this.dataChangeListener = {
+      onDataReloaded: bump,
+      onDataAdd: (_index: number) => bumpOnlyForVideo(),
+      onDataAdded: (_index: number) => bumpOnlyForVideo(),
+      onDataMove: (_from: number, _to: number) => bump(),
+      onDataMoved: (_from: number, _to: number) => bump(),
+      onDataDelete: (_index: number) => bump(),
+      onDataDeleted: (_index: number) => bump(),
+      onDataChange: (_index: number) => bump(),
+      onDataChanged: (_index: number) => bump(),
+      onDatasetChange: (_operations: Object[]) => bump(),
+    } as DataChangeListener
+    this.dataSource.registerDataChangeListener(this.dataChangeListener)
+  }
+
+  aboutToDisappear(): void {
+    const listener = this.dataChangeListener
+    if (listener) {
+      this.dataSource.unregisterDataChangeListener(listener)
+      this.dataChangeListener = undefined
+    }
+  }
+
+  // Read every item from the data source. Used by the video branch which
+  // can't consume LazyForEach directly (its grid layout needs all entries
+  // up-front). Reading dataChangeTrigger here registers an ArkUI dependency
+  // so this method's callers re-run whenever the underlying data changes.
+  private currentEntries(): EntryCardModel[] {
+    const _trigger = this.dataChangeTrigger
+    const total = this.dataSource.totalCount()
+    const items: EntryCardModel[] = []
+    for (let index = 0; index < total; index++) {
+      items.push(this.dataSource.getData(index))
+    }
+    return items
   }
 
   @Builder
@@ -93,7 +154,7 @@ export struct HomeModeEntriesPage {
         }
         .width('100%')
       } else {
-        ForEach(this.entries, (entry: EntryCardModel, index: number) => {
+        LazyForEach(this.dataSource, (entry: EntryCardModel, index: number) => {
           ListItem() {
             if (this.mode === 'social' && isTweetLikeEntry(entry)) {
               TweetEntryCard({
@@ -101,7 +162,7 @@ export struct HomeModeEntriesPage {
                 theme: this.theme,
                 isUnread: !entry.isRead,
                 flatMode: true,
-                showBottomDivider: index < this.entries.length - 1,
+                showBottomDivider: index < this.totalCount - 1,
                 highlightQuery: '',
                 collapsedTextLines: 7,
                 enableEnterTransition: false,
@@ -118,13 +179,14 @@ export struct HomeModeEntriesPage {
             }
           }
           .width('100%')
-          .onAppear(() => this.callbacks.onItemAppear(index, this.entries.length))
+          .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
 
       ListItem() {
         Row().height(100).width('100%')
       }
+      .onAppear(() => this.callbacks.onListEndReach(this.dataSource.totalCount()))
     }
     .width('100%')
     .height('100%')
@@ -160,7 +222,7 @@ export struct HomeModeEntriesPage {
         }
         .width('100%')
       } else {
-        ForEach(this.entries, (entry: EntryCardModel, index: number) => {
+        LazyForEach(this.dataSource, (entry: EntryCardModel, index: number) => {
           ListItem() {
             PictureEntryCard({
               entry: this.callbacks.getPictureEntry(entry),
@@ -174,18 +236,19 @@ export struct HomeModeEntriesPage {
               highlightQuery: '',
               enableEnterTransition: false,
               flatMode: true,
-              showBottomDivider: index < this.entries.length - 1,
+              showBottomDivider: index < this.totalCount - 1,
               onOpen: () => this.callbacks.onEntryOpen(entry),
             })
           }
           .width('100%')
-          .onAppear(() => this.callbacks.onItemAppear(index, this.entries.length))
-        }, (entry: EntryCardModel) => entry.id)
+          .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
+        }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
 
       ListItem() {
         Row().height(100).width('100%')
       }
+      .onAppear(() => this.callbacks.onListEndReach(this.dataSource.totalCount()))
     }
     .width('100%')
     .height('100%')
@@ -211,16 +274,23 @@ export struct HomeModeEntriesPage {
         Blank().height(HOME_MODE_SCENE_TOP_INSET)
 
         HomeVideoGrid({
-          entries: this.entries,
+          entries: this.currentEntries(),
           highlightQuery: '',
           inheritedTheme: this.theme,
           isLoading: this.isLoading,
+          onTailAppear: (totalCount: number) => {
+            if (totalCount > 0) {
+              this.callbacks.onItemAppear(totalCount - 1, totalCount)
+            }
+            this.callbacks.onListEndReach(totalCount)
+          },
           onOpenEntry: (entry: EntryCardModel) => {
             this.callbacks.onEntryOpen(entry)
           },
         })
 
         Row().width('100%').height(100)
+          .onAppear(() => this.callbacks.onListEndReach(this.dataSource.totalCount()))
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })

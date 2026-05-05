@@ -4,10 +4,12 @@ import { ModeSceneRenderState, resolveModeSceneRenderState } from '../utils/Mode
 import { HomeModeEntriesPage } from './HomeModeEntriesPage'
 import { SubscriptionMode } from './HomeRootConfig'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 export interface IndexHomeRootContentCallbacks {
   onModeSwipe: (event: GestureEvent) => void
   getEntries: (mode: SubscriptionMode) => EntryCardModel[]
+  getDataSource: (mode: SubscriptionMode) => ArrayLazyDataSource<EntryCardModel>
   getTotalCount: (mode: SubscriptionMode) => number
   isModeLoading: (mode: SubscriptionMode) => boolean
   getEmptyStateTitle: () => string
@@ -22,6 +24,7 @@ export interface IndexHomeRootContentCallbacks {
   onStopDragging: (mode: SubscriptionMode) => void
   onEntryOpen: (entry: EntryCardModel) => void
   onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number) => void
+  onListEndReach: (mode: SubscriptionMode, totalCount: number) => void
   getTweetPresentation: (entry: EntryCardModel) => TweetEntryPresentation
   getPictureEntry: (entry: EntryCardModel) => Entry
   getPictureCaption: (entry: EntryCardModel) => string
@@ -42,10 +45,14 @@ export struct IndexHomeRootContent {
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
+  // 仅在整页数据重组时作为备用刷新信号传入，分页增量刷新主要依赖
+  // ArrayLazyDataSource 的数据变更通知，避免 load-more 时整层重建。
+  @Prop homeContentVersion: number = 0
 
   callbacks: IndexHomeRootContentCallbacks = {
     onModeSwipe: () => {},
     getEntries: () => [],
+    getDataSource: () => new ArrayLazyDataSource<EntryCardModel>(() => []),
     getTotalCount: () => 0,
     isModeLoading: () => false,
     getEmptyStateTitle: () => '',
@@ -60,6 +67,7 @@ export struct IndexHomeRootContent {
     onStopDragging: () => {},
     onEntryOpen: () => {},
     onItemAppear: () => {},
+    onListEndReach: () => {},
     getTweetPresentation: () => ({} as TweetEntryPresentation),
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
@@ -81,6 +89,7 @@ export struct IndexHomeRootContent {
     HomeModeEntriesPage({
       mode,
       entries: this.callbacks.getEntries(mode),
+      dataSource: this.callbacks.getDataSource(mode),
       totalCount: this.callbacks.getTotalCount(mode),
       isLoading: this.callbacks.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
       emptyStateTitle: this.callbacks.getEmptyStateTitle(),
@@ -108,6 +117,9 @@ export struct IndexHomeRootContent {
         },
         onItemAppear: (index: number, totalCount: number): void => {
           this.callbacks.onItemAppear(mode, index, totalCount)
+        },
+        onListEndReach: (totalCount: number): void => {
+          this.callbacks.onListEndReach(mode, totalCount)
         },
         getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.callbacks.getTweetPresentation(entry),
         getPictureEntry: (entry: EntryCardModel): Entry => this.callbacks.getPictureEntry(entry),

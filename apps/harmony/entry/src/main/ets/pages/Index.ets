@@ -115,14 +115,18 @@ struct Index {
   @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = createHomeModeBooleanMap(true)
   @State homeLoadMoreInProgress: boolean = false
   @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = createHomeVisibleEntryLimitMap()
+  // Bumped whenever entry groups or visible-entry limits change so that
+  // descendant components (Shell → TabBody → IndexHomeRootContent → HomeModeEntriesPage)
+  // re-evaluate their @Builder children and pull fresh entries through callbacks.
+  @State homeContentVersion: number = 0
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
   private readonly scrollerRegistry: IndexHomeScrollerRegistry = new IndexHomeScrollerRegistry(this)
   private searchInputController: TextInputController = new TextInputController()
   readonly homeEntryDataSources: HomeEntryDataSourceMap = {
-    articles: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.articles),
-    social: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.social),
-    pictures: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.pictures),
-    videos: new ArrayLazyDataSource<EntryCardModel>(() => this.entryGroups.videos),
+    articles: new ArrayLazyDataSource<EntryCardModel>(() => this.visibleEntriesFor('articles')),
+    social: new ArrayLazyDataSource<EntryCardModel>(() => this.visibleEntriesFor('social')),
+    pictures: new ArrayLazyDataSource<EntryCardModel>(() => this.visibleEntriesFor('pictures')),
+    videos: new ArrayLazyDataSource<EntryCardModel>(() => this.visibleEntriesFor('videos')),
   }
   refreshPercentAnimationTimer: number = -1
   pendingRefreshPercentTarget: number = 0
@@ -226,6 +230,11 @@ struct Index {
   }
   setHomeScrollInteracting(interacting: boolean, _mode: SubscriptionMode = this.mode): void { this.homeScrollIntent.setInteracting(interacting) }
 
+  bumpHomeContentVersion(): void {
+    // Wraparound is safe; only the change matters for @Prop diffing.
+    this.homeContentVersion = (this.homeContentVersion + 1) | 0
+  }
+
   currentSearchEntries(): EntryCardModel[] {
     if (this.rootSettings.searchAllHomeCategories) {
       return this.featuredEntries
@@ -267,6 +276,15 @@ struct Index {
     }
   }
 
+  private homeEntryDataSourceFor(mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> {
+    switch (mode) {
+      case 'social': return this.homeEntryDataSources.social
+      case 'pictures': return this.homeEntryDataSources.pictures
+      case 'videos': return this.homeEntryDataSources.videos
+      default: return this.homeEntryDataSources.articles
+    }
+  }
+
   presentTweetEntry(entry: EntryCardModel): TweetEntryPresentation { return this.tweetPresentationCache.get(entry) }
   resetTweetPresentationCache(): void { this.tweetPresentationCache.clear() }
 
@@ -301,6 +319,9 @@ struct Index {
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void { this.homeFeedSession.pagination.maybeTriggerLoadMoreByScrollProgress(mode, currentOffset) }
   flushPendingLoadMoreForMode(mode: SubscriptionMode): void { this.homeFeedSession.pagination.flushPendingLoadMoreForMode(mode) }
   handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void { this.homeFeedSession.pagination.handleHomeEntryAppear(mode, index, totalCount) }
+  handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void {
+    this.homeFeedSession.pagination.handleHomeListEndReach(mode, totalCount)
+  }
 
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
   applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify: boolean = false, skipMerge: boolean = false): void { this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge) }
@@ -314,6 +335,9 @@ struct Index {
   modeListSwapTranslateY(mode: SubscriptionMode): number { return this.modeScenePresenter.modeListSwapTranslateY(mode) }
   notifyHomeEntryDataReloaded(): void { this.homeEntryDataManager.notifyAllReloaded() }
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.homeEntryDataManager.notifyModeReloaded(mode) }
+  notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void {
+    this.homeEntryDataManager.notifyModeAppended(mode, startIndex)
+  }
   pictureGalleryUrls(entry: EntryCardModel): string[] { return pictureGalleryUrls(entry) }
   pictureCaption(entry: EntryCardModel): string { return pictureCaption(entry) }
   pictureCardEntry(entry: EntryCardModel): Entry { return pictureCardEntry(entry) }
@@ -327,7 +351,8 @@ struct Index {
   private indexHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
     return {
       onModeSwipe: (event: GestureEvent): void => { this.handleModeSwipe(event) },
-      getEntries: (mode: SubscriptionMode): EntryCardModel[] => this.visibleEntriesFor(mode),
+      getEntries: (mode: SubscriptionMode): EntryCardModel[] => this.filteredEntriesFor(mode),
+      getDataSource: (mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> => this.homeEntryDataSourceFor(mode),
       getTotalCount: (mode: SubscriptionMode): number => this.totalEntryCountFor(mode),
       isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
       getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
@@ -352,6 +377,9 @@ struct Index {
       onEntryOpen: (entry: EntryCardModel): void => { this.openEntry(entry) },
       onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {
         this.handleHomeEntryAppear(mode, index, totalCount)
+      },
+      onListEndReach: (mode: SubscriptionMode, totalCount: number): void => {
+        this.handleHomeListEndReach(mode, totalCount)
       },
       getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
       getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
@@ -382,6 +410,7 @@ struct Index {
         homeListSwapAnimating: this.homeListSwapAnimating,
         homeListSwapMode: this.homeListSwapMode,
         homeListSwapOpacity: this.homeListSwapOpacity,
+        homeContentVersion: this.homeContentVersion,
         hideBottomTabs: this.rootTabCoordinator.shouldHideBottomTabs(),
         hideTitleBar: this.rootTabCoordinator.shouldHideRootTitleBar(),
         isHomeRootTab: this.rootTabCoordinator.isHomeRootTab(),
