@@ -31,6 +31,11 @@ import {
   SubscriptionMode,
 } from './SubscriptionsConstants'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+import {
+  ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
+  ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
+  scrollScrollerToTop,
+} from '../utils/RootTabScrollToTopSignal'
 
 @Component
 export struct SubscriptionsContent {
@@ -49,6 +54,8 @@ export struct SubscriptionsContent {
   @State activeFeedDetailParams: SubscriptionFeedDetailParams | undefined = undefined
   @State activeFeedConfigParams: SubscriptionFeedConfigParams | undefined = undefined
   @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
+  @StorageProp(ROOT_TAB_SCROLL_TO_TOP_AT_KEY) @Watch('handleRootTabScrollToTopSignal') rootTabScrollToTopAt: number = 0
+  @StorageProp(ROOT_TAB_SCROLL_TO_TOP_TAB_KEY) rootTabScrollToTopTab: string = ''
   @StorageProp('subscriptionsOverlayBackAt') @Watch('handleOverlayBackSignal') subscriptionsOverlayBackAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @Prop showBottomTabs: boolean = true
@@ -170,6 +177,28 @@ export struct SubscriptionsContent {
   private handleFeedsChanged(): void {
     this.logSubscriptionsDiag(`feedsChanged received count=${this.feeds.length} loading=${this.isLoading} mode=${this.mode}`)
     void this.refreshFeeds()
+  }
+
+  private activeModeScroller(): Scroller {
+    switch (this.mode) {
+      case 'social':
+        return this.socialScroller
+      case 'pictures':
+        return this.picturesScroller
+      case 'videos':
+        return this.videosScroller
+      default:
+        return this.articlesScroller
+    }
+  }
+
+  private handleRootTabScrollToTopSignal(): void {
+    if (this.rootTabScrollToTopTab !== 'subscriptions' || this.overlayLevel > 0) {
+      return
+    }
+
+    this.updateHeaderBlurProgress(0)
+    scrollScrollerToTop(this.activeModeScroller(), '订阅')
   }
 
   private syncOverlayState(level: number): void {

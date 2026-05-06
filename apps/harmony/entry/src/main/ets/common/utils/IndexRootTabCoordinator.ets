@@ -3,6 +3,7 @@ import { EntryCardModel } from '../models/LivoModels'
 import { HdsBottomTabId, resolveHdsBottomTabItems } from './HdsBottomTabConfig'
 import { rootTabSymbolPair, rootTitleFor } from './IndexRootChrome'
 import { shouldHideRootBottomBar, shouldHideRootTitleBar } from './RootTabVisibilityPolicy'
+import { ROOT_TAB_DOUBLE_TAP_WINDOW_MS } from './RootTabScrollToTopSignal'
 import {
   HOME_MAX_CANDIDATE_LIMIT,
   RootTabSymbolPair,
@@ -28,6 +29,7 @@ export interface IndexRootTabOwner {
   syncHomeModeRailState(mode?: SubscriptionMode): void
   primeHomeModeRailForRootActivation(): void
   tryFlushDeferredFeedsChangedReload(source: string): boolean
+  scrollRootTabToTop(tabId: RootTabId): void
   runManagedTimeout(callback: () => void, delayMs: number): void
   resolveHomeCandidateLimit(minimumLimit: number): number
   reloadFeaturedEntriesFromLocal(
@@ -42,6 +44,8 @@ export interface IndexRootTabOwner {
 export class IndexRootTabCoordinator {
   private readonly owner: IndexRootTabOwner
   private lastHandledRequestedRootTabId: RootTabId | '' = ''
+  private lastTabBarClickId: RootTabId | '' = ''
+  private lastTabBarClickAt: number = 0
 
   constructor(owner: IndexRootTabOwner) {
     this.owner = owner
@@ -123,6 +127,30 @@ export class IndexRootTabCoordinator {
     }
 
     this.activateHomeRootTab('tab-change', true)
+  }
+
+  handleRootTabBarClick(index: number): void {
+    const item = resolveHdsBottomTabItems()[index]
+    if (!item) {
+      return
+    }
+
+    const tabId = item.id as RootTabId
+    const now = Date.now()
+    const isDoubleTap =
+      this.lastTabBarClickId === tabId
+      && now - this.lastTabBarClickAt <= ROOT_TAB_DOUBLE_TAP_WINDOW_MS
+
+    this.lastTabBarClickId = tabId
+    this.lastTabBarClickAt = now
+
+    if (!isDoubleTap) {
+      return
+    }
+
+    this.owner.scrollRootTabToTop(tabId)
+    this.lastTabBarClickId = ''
+    this.lastTabBarClickAt = 0
   }
 
   confirmRootTabSelection(tabId: RootTabId): void {

@@ -27,6 +27,11 @@ import {
   SettingsSheetKey,
   resolveInitialSheetHeight,
 } from '../utils/SettingsCatalog'
+import {
+  ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
+  ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
+  scrollScrollerToTop,
+} from '../utils/RootTabScrollToTopSignal'
 
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
@@ -41,6 +46,8 @@ export struct SettingsContent {
   @State activeSheet: SettingsSheetKey = ''
   @State showSettingsSheet: boolean = false
   @StorageProp(SETTINGS_ACTIVE_SHEET_KEY) @Watch('handleStoredActiveSheetChange') storedActiveSheet: SettingsSheetKey = ''
+  @StorageProp(ROOT_TAB_SCROLL_TO_TOP_AT_KEY) @Watch('handleRootTabScrollToTopSignal') rootTabScrollToTopAt: number = 0
+  @StorageProp(ROOT_TAB_SCROLL_TO_TOP_TAB_KEY) rootTabScrollToTopTab: string = ''
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedSettings') inheritedSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   private readonly contentScroller: Scroller = new Scroller()
@@ -83,6 +90,14 @@ export struct SettingsContent {
 
   private syncInheritedSettings(): void {
     this.config = this.inheritedSettings
+  }
+
+  private handleRootTabScrollToTopSignal(): void {
+    if (this.rootTabScrollToTopTab !== 'settings' || this.showSettingsSheet) {
+      return
+    }
+
+    scrollScrollerToTop(this.contentScroller, '设置')
   }
 
   private propagateSettings(settings: HarmonySettings): void {

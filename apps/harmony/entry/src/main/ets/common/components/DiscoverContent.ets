@@ -43,6 +43,11 @@ import {
 import { isSubscribedCandidate, isSubscribedRecommendedFeed } from '../utils/DiscoverFeedIdentity'
 import { PAGE_BOTTOM_GAP, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import { DiscoverInteractionCoordinator } from '../utils/DiscoverInteractionCoordinator'
+import {
+  ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
+  ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
+  scrollScrollerToTop,
+} from '../utils/RootTabScrollToTopSignal'
 
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56
@@ -76,6 +81,8 @@ export struct DiscoverContent {
   @Prop reserveBottomTabInset: boolean = false
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
+  @StorageProp(ROOT_TAB_SCROLL_TO_TOP_AT_KEY) @Watch('handleRootTabScrollToTopSignal') rootTabScrollToTopAt: number = 0
+  @StorageProp(ROOT_TAB_SCROLL_TO_TOP_TAB_KEY) rootTabScrollToTopTab: string = ''
   @StorageProp('discoverOverlayLevel') @Watch('handleDiscoverOverlayLevelChanged') discoverOverlayLevel: number = 0
   @StorageProp('discoverNavigationResetAt') @Watch('handleNavigationResetSignal') discoverNavigationResetAt: number = 0
   @StorageProp('discoverOverlayBackAt') @Watch('handleOverlayBackSignal') discoverOverlayBackAt: number = 0
@@ -163,6 +170,14 @@ export struct DiscoverContent {
   private handleOverlayBackSignal(): void { this.coordinator.handleOverlayBackSignal() }
   private handleFeedsChanged(): void { this.coordinator.handleFeedsChanged() }
   private handleSearchDismissSignal(): void { this.coordinator.handleSearchDismissSignal() }
+  private handleRootTabScrollToTopSignal(): void {
+    if (this.rootTabScrollToTopTab !== 'discover' || this.overlayLevel > 0) {
+      return
+    }
+
+    this.updateHeaderBlurProgress(0)
+    scrollScrollerToTop(this.contentScroller, '发现')
+  }
 
   // ── Owner interface (called by coordinator) ──
 

@@ -103,6 +103,7 @@ export struct IndexRootNavigationShell {
     selected: new SymbolGlyphModifier($r('sys.symbol.house_fill')),
   } as RootTabSymbolPair)
   onRootTabChange: (index: number) => void = () => {}
+  onRootTabBarClick: (index: number) => void = () => {}
   onTabAppear: (tabId: RootTabId) => void = () => {}
   onSettingsContentScrollerReady: (scroller: Scroller) => void = () => {}
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
@@ -204,6 +205,9 @@ export struct IndexRootNavigationShell {
       })
       .onChange((index: number) => {
         this.onRootTabChange(index)
+      })
+      .onTabBarClick((index: number) => {
+        this.onRootTabBarClick(index)
       })
     }
     .mode(NavigationMode.Stack)

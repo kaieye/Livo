@@ -41,6 +41,7 @@ import { IndexHomeScrollerRegistry } from '../common/utils/IndexHomeScrollerRegi
 import { IndexHomeLoadStateGate } from '../common/utils/IndexHomeLoadStateGate'
 import { IndexPageLifecycleController } from '../common/utils/IndexPageLifecycleController'
 import { IndexRootTabCoordinator } from '../common/utils/IndexRootTabCoordinator'
+import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/utils/RootTabScrollToTopSignal'
 import { HomeScrollIntentTracker } from '../common/utils/HomeScrollIntentTracker'
 import {
   createHomeCandidateLimitMap,
@@ -327,6 +328,16 @@ struct Index {
 
   openEntry(entry: EntryCardModel): void { this.pageLifecycle.openEntry(entry) }
   currentRootTabId(): RootTabId { return this.rootTabCoordinator.currentRootTabId() }
+  scrollRootTabToTop(tabId: RootTabId): void {
+    if (tabId === 'home') {
+      scrollScrollerToTop(this.homeScrollerForMode(this.mode), '首页')
+      this.updateHeaderBlurProgress(0)
+      this.syncHomeModeRailState(this.mode)
+      return
+    }
+
+    emitRootTabScrollToTop(tabId)
+  }
   handleModeSwipe(event: GestureEvent): void { this.homeModeController.handleModeSwipe(event) }
 
   filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] {
@@ -511,6 +522,7 @@ struct Index {
         homeCallbacks: this.indexHomeRootContentCallbacks(),
         rootTabSymbolPair: (tabId: HdsBottomTabId): RootTabSymbolPair => this.rootTabCoordinator.rootTabSymbolPair(tabId),
         onRootTabChange: (index: number) => this.rootTabCoordinator.handleRootTabChange(index),
+        onRootTabBarClick: (index: number) => this.rootTabCoordinator.handleRootTabBarClick(index),
         onTabAppear: (tabId: RootTabId) => this.rootTabCoordinator.confirmRootTabSelection(tabId),
         onSettingsContentScrollerReady: (scroller: Scroller) => this.scrollerRegistry.handleSettingsContentScrollerReady(scroller),
         onSettingsChange: (settings: HarmonySettings) => this.pageLifecycle.handleRootSettingsChange(settings),
