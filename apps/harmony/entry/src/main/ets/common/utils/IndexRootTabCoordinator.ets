@@ -112,6 +112,8 @@ export class IndexRootTabCoordinator {
     }
 
     const tabId = item.id as RootTabId
+    this.lastTabBarClickId = ''
+    this.lastTabBarClickAt = 0
     this.owner.rootTabIndex = index
     this.owner.highlightedRootTabId = tabId
     this.owner.activeRootTabId = tabId
@@ -136,6 +138,10 @@ export class IndexRootTabCoordinator {
     }
 
     const tabId = item.id as RootTabId
+    if (tabId !== this.owner.activeRootTabId) {
+      return
+    }
+
     const now = Date.now()
     const isDoubleTap =
       this.lastTabBarClickId === tabId
