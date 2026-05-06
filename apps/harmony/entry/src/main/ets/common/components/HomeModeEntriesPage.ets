@@ -1,7 +1,12 @@
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 import { EntryCardModel, selectPictureCarouselMediaUrls, Entry } from '../models/LivoModels'
 import { ThemePalette } from '../services/ThemeService'
-import { SubscriptionMode, HOME_MODE_CONTENT_GAP, HOME_MODE_SCENE_TOP_INSET } from '../components/HomeRootConfig'
+import {
+  SubscriptionMode,
+  HOME_MODE_BOTTOM_TAB_SPACER,
+  HOME_MODE_CONTENT_GAP,
+  HOME_MODE_SCENE_TOP_INSET,
+} from '../components/HomeRootConfig'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import { homeEntryListRenderKey, isTweetLikeEntry } from '../utils/HomeEntryUtils'
 import { HomeArticleEntryCard } from './HomeArticleEntryCard'
@@ -124,6 +129,11 @@ export struct HomeModeEntriesPage {
   }
 
   @Builder
+  private BottomTabSpacer() {
+    Blank().height(HOME_MODE_BOTTOM_TAB_SPACER)
+  }
+
+  @Builder
   private EmptyOrLoadingState() {
     Column({ space: 0 }) {
       if (this.mode !== 'articles') {
@@ -198,6 +208,11 @@ export struct HomeModeEntriesPage {
           .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
+
+      ListItem() {
+        this.BottomTabSpacer()
+      }
+      .width('100%')
     }
     .width('100%')
     .height('100%')
@@ -258,6 +273,11 @@ export struct HomeModeEntriesPage {
           .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
+
+      ListItem() {
+        this.BottomTabSpacer()
+      }
+      .width('100%')
     }
     .width('100%')
     .height('100%')
@@ -299,6 +319,8 @@ export struct HomeModeEntriesPage {
             this.callbacks.onEntryOpen(entry)
           },
         })
+
+        this.BottomTabSpacer()
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })

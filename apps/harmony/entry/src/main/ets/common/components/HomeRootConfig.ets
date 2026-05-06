@@ -6,6 +6,8 @@ import {
   ROOT_PAGE_MODE_TOP_OFFSET,
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
 } from './FloatingRootPageLayout'
+import { BOTTOM_TAB_BAR_HEIGHT, BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
+import { resolveHdsBottomTabBarBottomMargin } from '../utils/HdsBottomTabConfig'
 import { HOME_MODES, HomeMode } from '../utils/HomeModeMeta'
 import { resolveHomeVisibleEntryInitialLimit } from '../utils/HomeVisibleEntryPolicy'
 
@@ -16,6 +18,9 @@ export const SUBSCRIPTION_MODES: SubscriptionMode[] = HOME_MODES
 // 首页根页面的布局和分页调参集中放置，避免页面文件继续膨胀。
 export const MODE_SWIPE_TRIGGER_OFFSET: number = 56
 export const HOME_MODE_CONTENT_GAP: number = 6
+// 底部导航栏以悬浮重叠方式渲染，首页列表尾部需要留出可滚出的遮挡区。
+export const HOME_MODE_BOTTOM_TAB_SPACER: number =
+  BOTTOM_TAB_BAR_HEIGHT + resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + HOME_MODE_CONTENT_GAP
 
 export const HOME_LIST_SWAP_ENTER_DURATION: number = 180
 export const HOME_LIST_SWAP_ENTRY_OFFSET_Y: number = 8
