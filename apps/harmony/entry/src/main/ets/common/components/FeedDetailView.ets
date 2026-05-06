@@ -78,6 +78,7 @@ export struct FeedDetailView {
   @State isLoading: boolean = true
   @State isRefreshing: boolean = false
   @State existingFeed: Feed | undefined = undefined
+  @State resolvedDisplayTitle: string = ''
   @State videoPreviewCache: FeedDetailVideoPreviewCacheItem[] = []
   @State heroAvatarCandidates: string[] = []
   @State heroAvatarIndex: number = 0
@@ -111,6 +112,7 @@ export struct FeedDetailView {
     this.targetSiteUrl = this.initialTargetSiteUrl
     this.targetImageUrl = this.initialTargetImageUrl
     this.targetDescription = this.initialTargetDescription
+    this.refreshDisplayTitle()
     this.resetHeroAvatarCandidates()
     void this.dataCoordinator.load()
   }
@@ -127,9 +129,18 @@ export struct FeedDetailView {
   setIsRefreshBusy(value: boolean): void { this.isRefreshBusy = value }
   setPreviewError(value: string): void { this.previewError = value }
   setPreviewNotice(value: string): void { this.previewNotice = value }
-  setExistingFeed(feed: Feed | undefined): void { this.existingFeed = feed }
-  setTargetTitle(value: string): void { this.targetTitle = value }
-  setTargetSiteUrl(value: string): void { this.targetSiteUrl = value }
+  setExistingFeed(feed: Feed | undefined): void {
+    this.existingFeed = feed
+    this.refreshDisplayTitle()
+  }
+  setTargetTitle(value: string): void {
+    this.targetTitle = value
+    this.refreshDisplayTitle()
+  }
+  setTargetSiteUrl(value: string): void {
+    this.targetSiteUrl = value
+    this.refreshDisplayTitle()
+  }
   setTargetImageUrl(value: string): void { this.targetImageUrl = value }
   setTargetDescription(value: string): void { this.targetDescription = value }
   setHeroAvatarCandidates(candidates: string[]): void { this.heroAvatarCandidates = candidates }
@@ -137,6 +148,7 @@ export struct FeedDetailView {
 
   applyPreviewPayload(payload: FeedRefreshPayload | undefined): void {
     this.previewPayload = payload
+    this.refreshDisplayTitle()
     this.avatarCoordinator.rememberFromPayload(payload)
     this.resolvedPreviewEntries = payload?.entries ?? []
     this.reconcileEntryCaches()
@@ -205,6 +217,10 @@ export struct FeedDetailView {
 
   private heroDescription(): string { return resolveFeedDetailHeroDescription(this.displaySnapshot()) }
 
+  private refreshDisplayTitle(): void {
+    this.resolvedDisplayTitle = resolveFeedDetailDisplayTitle(this.displaySnapshot())
+  }
+
   private previewEntryCount(): number { return this.resolvedPreviewEntries.length }
 
   private isPicturesPreview(): boolean { return isFeedDetailPicturesPreview(this.displaySnapshot()) }
@@ -225,7 +241,9 @@ export struct FeedDetailView {
 
   private resolvedAvatarUrl(): string { return this.avatarCoordinator.currentUrl() }
 
-  private heroTitle(): string { return resolveFeedDetailDisplayTitle(this.displaySnapshot()) }
+  private heroTitle(): string {
+    return this.resolvedDisplayTitle || resolveFeedDetailDisplayTitle(this.displaySnapshot())
+  }
 
   @Builder
   private HeaderSection() {

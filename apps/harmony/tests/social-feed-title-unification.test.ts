@@ -18,6 +18,7 @@ test('x feed titles normalize to one account display name', () => {
     formatXFeedTitle('The Verge (@verge) / X', 'verge'),
     'The Verge - X',
   )
+  assert.equal(formatXFeedTitle('Elon Musk /', 'elonmusk'), 'Elon Musk - X')
   assert.equal(formatXFeedTitle('The Verge @ verge', 'verge'), 'The Verge - X')
   assert.equal(formatXFeedTitle('@sama', 'sama'), 'sama - X')
   assert.equal(formatXFeedTitle('X @sama', 'sama'), 'sama - X')
@@ -75,6 +76,11 @@ test('feed detail x preview passes the hero title into tweet presentation', () =
     'utf8',
   )
 
+  assert.match(source, /@State resolvedDisplayTitle: string = ''/)
+  assert.match(
+    source,
+    /this\.resolvedDisplayTitle = resolveFeedDetailDisplayTitle\(this\.displaySnapshot\(\)\)/,
+  )
   assert.match(
     source,
     /this\.tweetPresentationCache\.get\(entry, this\.resolvedAvatarUrl\(\), this\.heroTitle\(\)\)/,

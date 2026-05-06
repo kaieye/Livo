@@ -361,6 +361,7 @@ export function formatXFeedTitle(
       .replace(/^@/, '')
       .replace(/\s*\/\s*x\s*$/i, '')
       .replace(/\s*-\s*x\s*$/i, '')
+      .replace(/\s*[/-]\s*$/, '')
       .trim()
     return base ? `${base} - X` : ''
   }
