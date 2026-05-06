@@ -49,11 +49,27 @@ test('home visible entry policy keeps startup window bounded', () => {
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 2,\s*estimatedItemHeight: 180,\s*estimatedVisibleItemCount: 4,/,
+    /const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 3,\s*estimatedItemHeight: 280,\s*estimatedVisibleItemCount: 3,/,
   )
   assert.match(
     visibleEntryPolicySource,
-    /if \(visibleCount <= 0 \|\| totalCount <= 0\) \{\s*return false\s*\}/,
+    /const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 8,\s*estimatedItemHeight: 680,\s*estimatedVisibleItemCount: 2,/,
+  )
+  assert.match(
+    visibleEntryPolicySource,
+    /const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = \{\s*preloadRemainingCount: 16,\s*estimatedItemHeight: 80,\s*estimatedVisibleItemCount: 4,/,
+  )
+  assert.match(
+    visibleEntryPolicySource,
+    /if \(visibleCount <= 0 \|\| totalCount <= 0 \|\| currentScrollOffset <= 0\) \{\s*return false\s*\}/,
+  )
+  assert.doesNotMatch(
+    visibleEntryPolicySource,
+    /if \(visibleCount >= totalCount\) \{/,
+  )
+  assert.match(
+    visibleEntryPolicySource,
+    /const preloadStartIndex = Math\.max\([\s\S]*?visibleCount -[\s\S]*?policy\.preloadRemainingCount -[\s\S]*?policy\.estimatedVisibleItemCount,/,
   )
 })
 
@@ -78,41 +94,37 @@ test('home feed session uses bounded by-mode queries for mode reloads', () => {
   )
   assert.match(
     homeFeedSessionSource,
-    /async hydrateCompleteEntriesForMode\(mode: SubscriptionMode\): Promise<void> \{/,
+    /FeaturedEntriesQuery\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
     homeFeedSessionSource,
-    /FeaturedEntriesQuery\.featuredEntriesAllByMode\(mode\)/,
-  )
-  assert.match(
-    homeFeedSessionSource,
-    /this\.runManagedTimeout\(\(\) => \{\s*this\.pagination\.ensureModeEntriesLoaded\(currentMode\)\s*\}, 180\)/s,
+    /this\.pagination\.ensureModeEntriesLoaded\(currentMode\)/,
   )
 })
 
-test('mode ensure flow hydrates full entries after a fast first paint', () => {
+test('mode ensure flow reloads a bounded active-mode window after a fast first paint', () => {
   assert.match(
     homeFeedPaginationSource,
-    /const fullyHydrated = hasModeEntries && !this\.modeHasMoreEntries\(mode\)/,
+    /const fullModeReady = !this\.shouldRenderAllEntriesForMode\(mode\)\s*\|\| this\.candidateLimitForMode\(mode\) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT/,
   )
   assert.match(
     homeFeedPaginationSource,
-    /this\.session\.reloadFeaturedEntriesFromLocal\([\s\S]*?\)\.then\(\(\) => \{\s*return this\.session\.hydrateCompleteEntriesForMode\(mode\)\s*\}\)/s,
+    /this\.session\.reloadFeaturedEntriesFromLocal\(limit, false, true, true, mode\)/,
+  )
+  assert.match(
+    homeFeedPaginationSource,
+    /this\.scheduleHomeLoadMorePrefetch\(120\)/,
   )
 })
 
 test('article load more follows append-style update path near the end of the list', () => {
   assert.match(
     homeFeedPaginationSource,
-    /private effectiveLoadMorePolicyMode\(mode: SubscriptionMode, visibleCount: number\): SubscriptionMode \{/,
+    /if \(mode === 'articles'\) \{\s*dynamicThreshold = Math\.max\(3, Math\.min\(5, Math\.floor\(visibleCount \/ 8\)\)\)\s*\} else if \(mode === 'social'\)/,
   )
   assert.match(
     homeFeedPaginationSource,
-    /mode === 'articles' && this\.shouldUseSocialLoadMorePolicyForArticleTail\(mode, visibleCount\)/,
-  )
-  assert.match(
-    homeFeedPaginationSource,
-    /if \(policyMode === 'articles'\) \{\s*dynamicThreshold = Math\.max\(2, Math\.min\(3, Math\.floor\(visibleCount \/ 10\)\)\)\s*\} else if \(policyMode === 'social'\)/,
+    /else if \(mode === 'pictures'\) \{\s*dynamicThreshold = Math\.max\(6, Math\.min\(8, Math\.floor\(visibleCount \/ 3\)\)\)\s*\} else if \(mode === 'videos'\) \{\s*dynamicThreshold = Math\.max\(14, Math\.min\(16, Math\.floor\(visibleCount \/ 2\)\)\)/,
   )
   assert.match(
     homeFeedPaginationSource,
@@ -125,5 +137,9 @@ test('article load more follows append-style update path near the end of the lis
   assert.match(
     homeFeedPaginationStateSource,
     /this\.session\.notifyHomeEntryDataAppendedForMode\(mode, currentLimit\)/,
+  )
+  assert.match(
+    homeFeedPaginationStateSource,
+    /currentLimit \+ resolveHomeVisibleEntryRevealStep\(mode\)/,
   )
 })

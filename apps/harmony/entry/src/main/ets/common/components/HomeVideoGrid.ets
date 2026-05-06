@@ -22,6 +22,7 @@ export struct HomeVideoGrid {
   onTailAppear: (totalCount: number) => void = () => {}
   @State theme: ThemePalette = ThemeService.currentPalette()
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  private durationLabelCache: Map<string, string> = new Map()
 
   aboutToAppear(): void {
     this.theme = this.inheritedTheme
@@ -160,6 +161,18 @@ export struct HomeVideoGrid {
   }
 
   private videoDurationLabel(entry: EntryCardModel): string {
+    const cacheKey = [
+      entry.id || '',
+      entry.title || '',
+      entry.summary || '',
+      (entry.mediaUrls ?? []).join('|'),
+      entry.articleUrl || '',
+    ].join('::')
+    const cached = this.durationLabelCache.get(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
+
     const source = [
       entry.title || '',
       entry.summary || '',
@@ -169,25 +182,34 @@ export struct HomeVideoGrid {
 
     const isoSeconds = this.parseIsoDurationToSeconds(source)
     if (isoSeconds > 0) {
-      return this.formatDuration(isoSeconds)
+      const label = this.formatDuration(isoSeconds)
+      this.durationLabelCache.set(cacheKey, label)
+      return label
     }
 
     const chineseExplicit = (source.match(/(?:时长|duration|length)[^，。；;|]*?(?:(?:\d+小时)?(?:\d+分(?:钟)?)?(?:\d+秒)?)/i)?.[0]) || ''
     const chineseSeconds = this.parseChineseDurationToSeconds(chineseExplicit || source)
     if (chineseSeconds > 0) {
-      return this.formatDuration(chineseSeconds)
+      const label = this.formatDuration(chineseSeconds)
+      this.durationLabelCache.set(cacheKey, label)
+      return label
     }
 
     const clockSeconds = this.parseClockDurationToSeconds(source)
     if (clockSeconds > 0) {
-      return this.formatDuration(clockSeconds)
+      const label = this.formatDuration(clockSeconds)
+      this.durationLabelCache.set(cacheKey, label)
+      return label
     }
 
     const numericSeconds = this.parseNumericDurationToSeconds(source)
     if (numericSeconds > 0) {
-      return this.formatDuration(numericSeconds)
+      const label = this.formatDuration(numericSeconds)
+      this.durationLabelCache.set(cacheKey, label)
+      return label
     }
 
+    this.durationLabelCache.set(cacheKey, '')
     return ''
   }
 

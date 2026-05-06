@@ -25,7 +25,7 @@ import {
 } from './HomeModeMapHelpers'
 import {
   resolveHomeVisibleEntryInitialLimit,
-  resolveHomeVisibleEntryLoadMoreStep,
+  resolveHomeVisibleEntryRevealStep,
 } from './HomeVisibleEntryPolicy'
 import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
 
@@ -135,7 +135,7 @@ export class HomeFeedPaginationState {
       return false
     }
     const expandStartedAt = Date.now()
-    const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryLoadMoreStep(mode))
+    const nextLimit = Math.min(total, currentLimit + resolveHomeVisibleEntryRevealStep(mode))
     this.setVisibleEntryLimitFor(mode, nextLimit)
     // 仅是把已缓冲的尾部条目显露出来时，按"追加"通知列表，避免整列 reload。
     // 这样会更接近社交流的增量渲染路径，减少当前可见区的重排抖动。

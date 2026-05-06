@@ -71,7 +71,7 @@ export struct HomeModeEntriesPage {
   }
 
   private articleListItemBottomGap(entry: EntryCardModel, index: number): number {
-    if (this.mode !== 'articles' || index >= this.totalCount - 1 || this.shouldRenderTweetCard(entry)) {
+    if (this.mode !== 'articles' || index >= this.dataSource.totalCount() - 1 || this.shouldRenderTweetCard(entry)) {
       return 0
     }
     return HOME_MODE_CONTENT_GAP
@@ -198,17 +198,15 @@ export struct HomeModeEntriesPage {
           .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
-
-      ListItem() {
-        Row().height(100).width('100%')
-      }
-      .onAppear(() => this.callbacks.onListEndReach(this.dataSource.totalCount()))
     }
     .width('100%')
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+    .onReachEnd(() => {
+      this.callbacks.onListEndReach(this.dataSource.totalCount())
+    })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
@@ -260,17 +258,15 @@ export struct HomeModeEntriesPage {
           .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
-
-      ListItem() {
-        Row().height(100).width('100%')
-      }
-      .onAppear(() => this.callbacks.onListEndReach(this.dataSource.totalCount()))
     }
     .width('100%')
     .height('100%')
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
+    .onReachEnd(() => {
+      this.callbacks.onListEndReach(this.dataSource.totalCount())
+    })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
@@ -298,15 +294,11 @@ export struct HomeModeEntriesPage {
             if (totalCount > 0) {
               this.callbacks.onItemAppear(totalCount - 1, totalCount)
             }
-            this.callbacks.onListEndReach(totalCount)
           },
           onOpenEntry: (entry: EntryCardModel) => {
             this.callbacks.onEntryOpen(entry)
           },
         })
-
-        Row().width('100%').height(100)
-          .onAppear(() => this.callbacks.onListEndReach(this.dataSource.totalCount()))
       }
       .width('100%')
       .constraintSize({ minHeight: '100%' })
@@ -318,6 +310,9 @@ export struct HomeModeEntriesPage {
     .height('100%')
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
+    .onReachEnd(() => {
+      this.callbacks.onListEndReach(this.dataSource.totalCount())
+    })
     .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(yOffset, scrollSource)
       return undefined

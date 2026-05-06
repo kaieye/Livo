@@ -9,17 +9,16 @@ export interface HomeFeedLoadMoreDrainPaginationOwner {
 }
 
 const HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS: number = 90
-const HOME_LOAD_MORE_DRAIN_NEXT_STEP_DELAY_MS: number = 32
-const HOME_LOAD_MORE_DRAIN_STUCK_BOTTOM_RECHECK_MS: number = 500
-const HOME_LOAD_MORE_DRAIN_STUCK_EXPAND_ONLY_RECHECK_MS: number = 0
+const HOME_LOAD_MORE_DRAIN_START_COOLDOWN_MS: number = 400
 
-// 用户抵达底部后，持续拉取并展开当前栏目剩余内容，直到该栏目彻底耗尽。
+// 触底只是兜底信号：每次只请求一个栏目页，并等拖拽结束后再执行。
 export class HomeFeedLoadMoreDrain {
   private readonly session: HomeFeedSessionOwner
   private readonly owner: HomeFeedLoadMoreDrainPaginationOwner
   private drainToken: number = 0
   private drainingMode: SubscriptionMode | '' = ''
   private stuckRetryCount: number = 0
+  private lastDrainStartedAt: number = 0
 
   constructor(session: HomeFeedSessionOwner, owner: HomeFeedLoadMoreDrainPaginationOwner) {
     this.session = session
@@ -30,15 +29,27 @@ export class HomeFeedLoadMoreDrain {
     if (!this.shouldStart(mode, totalCount)) {
       return
     }
+    const now = Date.now()
+    if (now - this.lastDrainStartedAt < HOME_LOAD_MORE_DRAIN_START_COOLDOWN_MS) {
+      return
+    }
+    this.lastDrainStartedAt = now
     this.drainToken += 1
     this.drainingMode = mode
     this.stuckRetryCount = 0
     const token = this.drainToken
     this.session.logHomeLoadMore(`drain start mode=${mode} total=${totalCount}`)
-    this.scheduleStep(mode, token, 0)
+    this.scheduleStep(mode, token)
   }
 
   private shouldStart(mode: SubscriptionMode, totalCount: number): boolean {
+    if (this.drainingMode === mode || this.session.homeLoadMoreInProgress || this.owner.pendingLoadMoreForMode(mode)) {
+      return false
+    }
+    return this.canRun(mode, totalCount)
+  }
+
+  private canRun(mode: SubscriptionMode, totalCount: number): boolean {
     if (totalCount <= 0) {
       return false
     }
@@ -57,31 +68,25 @@ export class HomeFeedLoadMoreDrain {
     return true
   }
 
-  private shouldStopAfterHandledStep(mode: SubscriptionMode): boolean {
-    // 文章/社交流里的推文卡片构建成本明显高于普通卡片，触底时只拉一页；
-    // 后续由新的尾部 onAppear 再触发下一页，避免一次 drain 把大量推文全量刷出。
-    return mode === 'articles' || mode === 'social'
-  }
-
-  private scheduleStep(mode: SubscriptionMode, token: number, attempt: number): void {
-    const delayMs = attempt <= 0 ? 0 : HOME_LOAD_MORE_DRAIN_NEXT_STEP_DELAY_MS
+  private scheduleStep(mode: SubscriptionMode, token: number): void {
     this.session.runManagedTimeout(() => {
-      this.step(mode, token, attempt)
-    }, delayMs)
+      this.step(mode, token, 0)
+    }, 0)
   }
 
   private step(mode: SubscriptionMode, token: number, attempt: number): void {
     if (token !== this.drainToken) {
       return
     }
-    if (!this.shouldStart(mode, 1)) {
-      if (this.drainingMode === mode) {
-        this.drainingMode = ''
-      }
-      this.session.logHomeLoadMore(`drain stop mode=${mode} reason=inactive-or-exhausted`)
+    if (!this.canRun(mode, 1)) {
+      this.finish(mode, `drain stop mode=${mode} reason=inactive-or-exhausted`)
       return
     }
-    if (this.session.homeLoadMoreInProgress || this.owner.pendingLoadMoreForMode(mode)) {
+    if (
+      this.session.homeScrollIntent.isInteracting
+      || this.session.homeLoadMoreInProgress
+      || this.owner.pendingLoadMoreForMode(mode)
+    ) {
       this.session.runManagedTimeout(() => {
         this.step(mode, token, attempt + 1)
       }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
@@ -91,55 +96,23 @@ export class HomeFeedLoadMoreDrain {
     const handled = this.owner.requestLoadMoreForMode(mode, true)
     if (!handled) {
       if (this.stuckRetryCount >= 3) {
-        if (this.drainingMode === mode) {
-          this.drainingMode = ''
-        }
-        this.session.logHomeLoadMore(
-          `drain stuck-bottom-exhausted mode=${mode} attempts=${attempt + 1}`,
-        )
+        this.finish(mode, `drain stuck-bottom-exhausted mode=${mode} attempts=${attempt + 1}`)
         return
       }
+      this.stuckRetryCount += 1
       this.session.runManagedTimeout(() => {
         this.step(mode, token, attempt + 1)
       }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
       return
     }
 
-    if (this.shouldStopAfterHandledStep(mode)) {
-      const hasBuffered = this.owner.hasBufferedEntriesForMode(mode)
-      const hasMore = this.owner.modeHasMoreEntries(mode)
-      if (hasMore && this.stuckRetryCount < 3) {
-        this.stuckRetryCount += 1
-        const delayMs = hasBuffered
-          ? HOME_LOAD_MORE_DRAIN_STUCK_EXPAND_ONLY_RECHECK_MS
-          : HOME_LOAD_MORE_DRAIN_STUCK_BOTTOM_RECHECK_MS
-        this.session.logHomeLoadMore(
-          `drain stuck-bottom-retry mode=${mode} stuckRetry=${this.stuckRetryCount} hasBuffered=${String(hasBuffered)} delayMs=${delayMs}`,
-        )
-        this.session.runManagedTimeout(() => {
-          if (token !== this.drainToken) {
-            return
-          }
-          this.step(mode, token, attempt + 1)
-        }, delayMs)
-      } else {
-        if (this.drainingMode === mode) {
-          this.drainingMode = ''
-        }
-        this.session.logHomeLoadMore(
-          `drain page-done mode=${mode} attempts=${attempt + 1} stuckRetries=${this.stuckRetryCount}`,
-        )
-      }
-      return
-    }
+    this.finish(mode, `drain page-done mode=${mode} attempts=${attempt + 1} stuckRetries=${this.stuckRetryCount}`)
+  }
 
-    if (!this.owner.hasBufferedEntriesForMode(mode) && !this.owner.modeHasMoreEntries(mode)) {
-      if (this.drainingMode === mode) {
-        this.drainingMode = ''
-      }
-      this.session.logHomeLoadMore(`drain done mode=${mode} attempts=${attempt + 1}`)
-      return
+  private finish(mode: SubscriptionMode, message: string): void {
+    if (this.drainingMode === mode) {
+      this.drainingMode = ''
     }
-    this.scheduleStep(mode, token, attempt + 1)
+    this.session.logHomeLoadMore(message)
   }
 }

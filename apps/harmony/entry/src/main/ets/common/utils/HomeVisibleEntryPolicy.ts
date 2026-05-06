@@ -2,8 +2,11 @@ export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
 const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 20
-const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 3
-const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 10
+const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 8
+const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 10
+const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 6
+const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 6
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -11,21 +14,18 @@ interface HomeVisibleEntryPreloadPolicy {
   estimatedVisibleItemCount: number
 }
 
-// 文章流混入推文后单卡高度在 200-420px 之间，使用 200 会让阈值严重偏低
-// （~56% 内容位置即触发），导致 load-more 在用户滑到 2/3 处就提前执行，
-// notifyDataAdded 在滚动惯性期间重建列表，造成明显卡顿。
-// 这里参考社交栏目做法：提高 estimatedItemHeight（取 200/420 中间值 310），
-// 并收紧 estimatedVisibleItemCount 到 2，使得触发位置后移至接近列表末端。
+// 首页加载更多沿用“分类精选”列表的窗口预加载规则：
+// 当滚动越过「当前可见窗口 - 预留尾部 - 估算视口」时，仅排队加载下一页。
+// totalCount 是当前已取回的候选条数，不代表数据库总量，所以不能用
+// visibleCount >= totalCount 阻断预取，否则首屏候选耗尽前只能等真正触底。
 const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 1,
-    estimatedItemHeight: 310,
-    estimatedVisibleItemCount: 2,
+    preloadRemainingCount: 3,
+    estimatedItemHeight: 280,
+    estimatedVisibleItemCount: 3,
   }
 
-// 推文卡片实际高度通常在 320-420px (含头像/正文/媒体预览)；
-// 旧值 220 会让触发阈值偏小，用户在仅滑过约 46% 内容时就被触发。
-// 把估算高度抬到接近实测均值，让触发位置后移到接近列表末端。
+// 社交流已有体感较稳：保留更靠后的触发点和 20 条步进。
 const HOME_VISIBLE_ENTRY_SOCIAL_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
     preloadRemainingCount: 1,
@@ -33,22 +33,18 @@ const HOME_VISIBLE_ENTRY_SOCIAL_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
     estimatedVisibleItemCount: 2,
   }
 
-// 图片卡片含轮播图，单卡常达 700-900px；旧组合 (520, remaining=10) 会让
-// 触发位置过早 (~32%)。提高估算高度并降低剩余阈值，让触发更靠近底部。
+// 图片是单列大卡，单页数量提高到 8 条，但触发仍提前保留数张卡的缓冲。
 const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 1,
-    estimatedItemHeight: 860,
+    preloadRemainingCount: 8,
+    estimatedItemHeight: 680,
     estimatedVisibleItemCount: 2,
   }
 
-// 视频是双列网格，1 行容纳 2 个 item，行实际高度约 150-180px。旧值 280
-// 把单 item 当成 1D 列来算，触发阈值过大，用户要滑过 55% 才触发；按
-// 列除以 2 得到的 "每 item 等效行进度" 约 75-90px，这里取 140 兼顾
-// 视觉余量，让触发提前到接近 30% 滚动进度。
+// 视频是双列网格，估算高度按“每个 item 对应半行滚动距离”计算。
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 6,
-  estimatedItemHeight: 150,
+  preloadRemainingCount: 16,
+  estimatedItemHeight: 80,
   estimatedVisibleItemCount: 4,
 }
 
@@ -66,6 +62,21 @@ export function resolveHomeVisibleEntryLoadMoreStep(
   }
   if (mode === 'videos') {
     return HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP
+  }
+  return HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP
+}
+
+export function resolveHomeVisibleEntryRevealStep(
+  mode?: HomeVisibleEntryMode,
+): number {
+  if (mode === 'articles') {
+    return HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP
+  }
+  if (mode === 'pictures') {
+    return HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP
+  }
+  if (mode === 'videos') {
+    return HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP
   }
   return HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP
 }
@@ -91,7 +102,7 @@ export function shouldPreloadHomeVisibleEntries(
   totalCount: number,
   visibleCount: number,
 ): boolean {
-  if (visibleCount <= 0 || totalCount <= 0) {
+  if (visibleCount <= 0 || totalCount <= 0 || currentScrollOffset <= 0) {
     return false
   }
   const policy = resolveHomeVisibleEntryPreloadPolicy(mode)

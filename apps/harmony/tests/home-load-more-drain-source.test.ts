@@ -37,14 +37,14 @@ test('home list-end drain treats reaching the tail as an explicit load-more inte
   )
 })
 
-test('article and social list-end drain loads one page instead of draining to exhaustion', () => {
-  assert.match(
-    drainSource,
-    /private shouldStopAfterHandledStep\(mode: SubscriptionMode\): boolean \{/,
-  )
-  assert.match(drainSource, /return mode === 'articles' \|\| mode === 'social'/)
+test('list-end drain waits for interaction to settle and loads one page', () => {
+  assert.match(drainSource, /this\.session\.homeScrollIntent\.isInteracting/)
   assert.match(
     drainSource,
     /drain page-done mode=\$\{mode\} attempts=\$\{attempt \+ 1\}/,
+  )
+  assert.doesNotMatch(
+    drainSource,
+    /this\.scheduleStep\(mode, token, attempt \+ 1\)/,
   )
 })

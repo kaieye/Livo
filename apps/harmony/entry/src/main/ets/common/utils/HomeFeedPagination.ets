@@ -29,7 +29,6 @@ import {
   withHomePendingLoadMoreValue,
 } from './HomeModeMapHelpers'
 import { resolveHomeVisibleEntryLoadMoreStep, shouldPreloadHomeVisibleEntries } from './HomeVisibleEntryPolicy'
-import { isTweetLikeEntry } from './HomeEntryUtils'
 import { HomeFeedPaginationState } from './HomeFeedPaginationState'
 import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
 import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
@@ -61,13 +60,11 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   private shouldUseLeanLoadMoreApply(mode: SubscriptionMode): boolean {
-    return mode === 'articles' || mode === 'social'
+    return mode === 'articles' || mode === 'social' || mode === 'pictures' || mode === 'videos'
   }
 
   private resolveLoadMoreStepForMode(mode: SubscriptionMode): number {
-    // 文章与社交流对齐相同的步进策略。
-    // 此前文章流检测到推文尾部时会尝试减半步进以求平滑，但实际体感反而因为触发频率变高而更卡。
-    // 现在统一参考“社交”栏目的做法，使用完整步进。
+    // 每个栏目的一页数量集中在 HomeVisibleEntryPolicy 中维护。
     return resolveHomeVisibleEntryLoadMoreStep(mode)
   }
 
@@ -81,23 +78,6 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
-    if (mode === 'pictures' || mode === 'videos') {
-      const previousTotal = this.totalEntryCountFor(mode)
-      const queryStartedAt = Date.now()
-      const nextEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
-      this.session.logHomeLoadMore(
-        `append-resolve mode=${mode} path=full-query prevTotal=${previousTotal} nextEntries=${nextEntries.length} queryMs=${Date.now() - queryStartedAt}`,
-      )
-      this.syncModePaginationFromReloadResult(mode, nextEntries, nextLimit)
-      this.applyEntriesForLoadMore(mode, nextEntries, true)
-      if (nextEntries.length > previousTotal) {
-        this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
-        return
-      }
-      this.session.notifyHomeEntryDataReloadedForMode(mode)
-      return
-    }
-
     const previousEntries = this.session.filteredEntriesFor(mode)
     const previousTotal = previousEntries.length
     const currentLimit = this.candidateLimitForMode(mode)
@@ -397,40 +377,6 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     this.setModeScrollProgressLoadMoreValue(mode, 0)
   }
 
-  private shouldUseSocialLoadMorePolicyForArticleTail(mode: SubscriptionMode, visibleCount: number): boolean {
-    if (mode !== 'articles' || visibleCount <= 0) {
-      return false
-    }
-    const visibleEntries = this.visibleEntriesFor('articles')
-    const count = Math.min(visibleEntries.length, visibleCount)
-    // 将探测窗口从最后 3 个扩大到 10 个可见条目，确保推文卡即使
-    // 尚未完全滑入最末端也能尽早被检测到，从而切换到社交流的高估算
-    // 高度（380px），避免文章流默认的矮估算（310px）让触发位置仍
-    // 偏前，进而导致 load-more 在滚动惯性期间执行重建——这是卡顿的
-    // 主要根因。
-    const probeWindow = Math.min(10, count)
-    for (let i = 1; i <= probeWindow; i++) {
-      const index = count - i
-      if (index < 0) {
-        break
-      }
-      const entry = visibleEntries[index]
-      if (entry && isTweetLikeEntry(entry)) {
-        return true
-      }
-    }
-    return false
-  }
-
-  private effectiveLoadMorePolicyMode(mode: SubscriptionMode, visibleCount: number): SubscriptionMode {
-    // 文章栏可能混入 X/Twitter RSS 项。尾部是推文时按社交流高度与节奏判断，
-    // 避免普通文章卡的较矮估算让加载更多过早触发。
-    if (mode === 'articles' && this.shouldUseSocialLoadMorePolicyForArticleTail(mode, visibleCount)) {
-      return 'social'
-    }
-    return mode
-  }
-
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
     if (
       mode !== this.session.mode
@@ -445,13 +391,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const totalCount = this.totalEntryCountFor(mode)
     const visibleCount = this.visibleEntryCountFor(mode)
 
-    // 文章与社交流统一使用基于滚动偏移量的高度估算触发策略。
-    // 此前文章栏目在滚动中逐帧调用 getItemRect 判断是否触底，该 API 会同步遍历
-    // 布局树，在高频滚动期间造成明显的 UI 卡顿。effectiveLoadMorePolicyMode
-    // 已经对混入推文的文章流尾部自动切换到社交流的高度估算参数，
-    // 因此无需继续依赖 getItemRect 探底。
-    const policyMode = this.effectiveLoadMorePolicyMode(mode, visibleCount)
-    if (!shouldPreloadHomeVisibleEntries(policyMode, currentOffset, totalCount, visibleCount)) { return }
+    if (!shouldPreloadHomeVisibleEntries(mode, currentOffset, totalCount, visibleCount)) { return }
 
     const hasBufferedEntries = visibleCount < totalCount
     if (!hasBufferedEntries && (!this.session.homeHasMoreEntries || !this.modeHasMoreEntries(mode))) { return }
@@ -526,24 +466,20 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     if (visibleCount <= 0) { return false }
     const remainingVisibleCount = visibleCount - index - 1
     // item-appear 回调在滚动期间高频触发（每张卡片进入可见区即执行一次），
-    // 必须保持极轻量。effectiveLoadMorePolicyMode 内部会调用
-    // visibleEntriesFor + 遍历 isTweetLikeEntry，在文章流 / 社交流
-    // 这样的高密度列表上该开销不可忽略，会直接拖慢滚动帧率。
-    // 此处仅根据 mode 字面量选择固定阈值；高度估算精确性由
-    // maybeTriggerLoadMoreByScrollProgress 的 scroll-progress
-    // 分支负责（该分支通过 effectiveLoadMorePolicyMode 获取准确策略）。
+    // 必须保持极轻量。此处仅根据 mode 字面量选择固定阈值；高度估算精确性由
+    // maybeTriggerLoadMoreByScrollProgress 的 scroll-progress 分支负责。
     let dynamicThreshold = Math.max(
       HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
       Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
     )
     if (mode === 'articles') {
-      dynamicThreshold = Math.max(2, Math.min(3, Math.floor(visibleCount / 10)))
+      dynamicThreshold = Math.max(3, Math.min(5, Math.floor(visibleCount / 8)))
     } else if (mode === 'social') {
       dynamicThreshold = Math.max(1, Math.min(2, Math.floor(visibleCount / 12)))
     } else if (mode === 'pictures') {
-      dynamicThreshold = 1
+      dynamicThreshold = Math.max(6, Math.min(8, Math.floor(visibleCount / 3)))
     } else if (mode === 'videos') {
-      dynamicThreshold = Math.max(2, Math.min(4, Math.floor(visibleCount / 8)))
+      dynamicThreshold = Math.max(14, Math.min(16, Math.floor(visibleCount / 2)))
     }
     return remainingVisibleCount <= dynamicThreshold
   }
@@ -560,7 +496,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const hasModeEntries = this.totalEntryCountFor(mode) > 0
     const fullModeReady = !this.shouldRenderAllEntriesForMode(mode)
       || this.candidateLimitForMode(mode) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT
-    if (this.isModeLoaded(mode) && hasModeEntries && fullModeReady) { return }
+    if (this.isModeLoaded(mode) && hasModeEntries && fullModeReady) {
+      this.scheduleHomeLoadMorePrefetch(120)
+      return
+    }
     if (this.isModeLoading(mode) || this.session.homeLoadMoreInProgress) { return }
     this.setModeLoading(mode, true)
     const limit = this.resolveHomeCandidateLimitForMode(mode, HOME_MODE_SWITCH_CANDIDATE_LIMIT)
@@ -570,6 +509,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       })
       .finally(() => {
         this.setModeLoading(mode, false)
+        this.scheduleHomeLoadMorePrefetch(120)
       })
   }
 }
