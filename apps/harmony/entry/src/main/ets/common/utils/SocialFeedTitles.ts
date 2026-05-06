@@ -355,7 +355,15 @@ export function formatXFeedTitle(
   const fallbackUsername =
     extractedUsername || trimTitle(usernameOrUrl).replace(/^@/, '')
   const normalizedHandle = fallbackUsername.toLowerCase()
-  const fallback = `${normalizedHandle || fallbackUsername} - X`.trim()
+  const fallback = fallbackUsername
+  const withXSuffix = (value: string): string => {
+    const base = trimTitle(value)
+      .replace(/^@/, '')
+      .replace(/\s*\/\s*x\s*$/i, '')
+      .replace(/\s*-\s*x\s*$/i, '')
+      .trim()
+    return base ? `${base} - X` : ''
+  }
   const cleaned = trimTitle(candidateTitle || '')
   if (
     !cleaned ||
@@ -363,13 +371,18 @@ export function formatXFeedTitle(
     cleaned === 'X' ||
     cleaned.includes('Page not found')
   ) {
-    return fallback
+    return withXSuffix(fallback)
+  }
+
+  const fromRssHubTitle = cleaned.match(/^(?:twitter|x)\s*@(.+)$/i)
+  if (fromRssHubTitle?.[1]) {
+    return withXSuffix(fromRssHubTitle[1]) || withXSuffix(fallback)
   }
 
   const fromParenAt = cleaned.match(/^(.*?)\s*\(@([a-zA-Z0-9_]+)\)\s*\/\s*X$/i)
   if (fromParenAt?.[1]) {
     const normalizedName = trimTitle(fromParenAt[1])
-    return `${normalizedName || normalizedHandle} - X`
+    return withXSuffix(normalizedName) || withXSuffix(fallback)
   }
 
   const normalizedLower = cleaned.toLowerCase()
@@ -378,7 +391,7 @@ export function formatXFeedTitle(
       normalizedLower === normalizedHandle ||
       normalizedLower === `@${normalizedHandle}`
     ) {
-      return fallback
+      return withXSuffix(cleaned) || withXSuffix(fallback)
     }
 
     const trailingHandle = new RegExp(
@@ -388,7 +401,10 @@ export function formatXFeedTitle(
     if (trailingHandle.test(cleaned)) {
       const withoutHandle = trimTitle(cleaned.replace(trailingHandle, ''))
       if (withoutHandle) {
-        return `${withoutHandle} - X`
+        if (/^(?:x|twitter)$/i.test(withoutHandle)) {
+          return withXSuffix(fallback)
+        }
+        return withXSuffix(withoutHandle) || withXSuffix(fallback)
       }
     }
   }
@@ -406,14 +422,17 @@ export function formatXFeedTitle(
       strippedLower === normalizedHandle ||
       strippedLower === `@${normalizedHandle}`
     ) {
-      return fallback
+      return withXSuffix(strippedPrefix) || withXSuffix(fallback)
     }
   }
 
   const displayName = (strippedPrefix || cleaned)
+    .replace(/^@/, '')
     .replace(/\s+@\s*[a-z0-9_]{1,15}\s*$/i, '')
     .trim()
-  return `${displayName || normalizedHandle || cleaned} - X`.trim()
+  return (
+    withXSuffix(displayName) || withXSuffix(fallback) || withXSuffix(cleaned)
+  )
 }
 
 export function formatBilibiliFeedTitle(

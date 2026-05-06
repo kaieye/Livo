@@ -3,6 +3,7 @@ import { FeedRefreshPayload } from '../services/RssFeedService'
 import { extractEntryGalleryImageUrls } from './PictureGallery'
 import { resolveEntryCardImageUrl } from './EntryCardPreview'
 import { feedDetailHostOf } from './FeedDetailPreviewPolicy'
+import { resolveSocialFeedDisplayTitle } from './SocialFeedPresentation'
 
 export interface FeedDetailDisplaySnapshot {
   previewPayload: FeedRefreshPayload | undefined
@@ -19,17 +20,13 @@ export interface FeedDetailDisplaySnapshot {
 export function resolveFeedDetailDisplayTitle(
   snapshot: FeedDetailDisplaySnapshot,
 ): string {
-  const previewTitle = (snapshot.previewPayload?.feedTitle || '').trim()
-  if (previewTitle) {
-    return previewTitle
-  }
-  const targetTitle = (snapshot.targetTitle || '').trim()
-  if (targetTitle) {
-    return targetTitle
-  }
-  const existingTitle = (snapshot.existingFeed?.title || '').trim()
-  if (existingTitle) {
-    return existingTitle
+  const displayTitle = resolveSocialFeedDisplayTitle(
+    snapshot.previewPayload?.feedTitle || snapshot.targetTitle || snapshot.existingFeed?.title || '',
+    snapshot.targetUrl || snapshot.existingFeed?.url || '',
+    snapshot.previewPayload?.siteUrl || snapshot.targetSiteUrl || snapshot.existingFeed?.siteUrl || '',
+  ).trim()
+  if (displayTitle) {
+    return displayTitle
   }
   const siteOrTarget = (
     snapshot.previewPayload?.siteUrl ||
@@ -65,6 +62,7 @@ function isXUrl(value: string): boolean {
   return (
     normalized.includes('x.com/') ||
     normalized.includes('twitter.com/') ||
+    normalized.includes('nitter.') ||
     normalized.includes('/x/user/') ||
     normalized.includes('/twitter/user/')
   )

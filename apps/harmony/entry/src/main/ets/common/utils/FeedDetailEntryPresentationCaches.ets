@@ -33,8 +33,8 @@ export class FeedDetailTweetPresentationCache {
   private readonly storage: FeedDetailEntryScopedCache<TweetEntryPresentation> =
     new FeedDetailEntryScopedCache<TweetEntryPresentation>()
 
-  get(entry: Entry, currentAvatarUrl: string): TweetEntryPresentation {
-    const cacheKey = feedDetailEntryVersionCacheKey(entry)
+  get(entry: Entry, currentAvatarUrl: string, displayNameOverride: string = ''): TweetEntryPresentation {
+    const cacheKey = `${feedDetailEntryVersionCacheKey(entry)}|${displayNameOverride.trim()}`
     const cached = this.storage.get(cacheKey)
     if (cached) {
       if (cached.avatarUrl === currentAvatarUrl) {
@@ -45,7 +45,7 @@ export class FeedDetailTweetPresentationCache {
       return withAvatar
     }
 
-    const generated = presentTweetEntryFromEntry(entry, currentAvatarUrl)
+    const generated = presentTweetEntryFromEntry(entry, currentAvatarUrl, displayNameOverride)
     this.storage.set(cacheKey, generated)
     return generated
   }

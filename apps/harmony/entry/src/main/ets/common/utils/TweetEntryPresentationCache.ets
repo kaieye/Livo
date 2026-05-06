@@ -63,6 +63,7 @@ export class TweetEntryPresentationCache {
       entry.articleUrl,
       entry.imageUrl,
       entry.feedImageUrl,
+      entry.feedTitle,
       entry.publishedAt,
       entry.publishedLabel,
       mediaUrls,

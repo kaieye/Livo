@@ -1,5 +1,6 @@
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
 import { resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
+import { resolveSocialFeedDisplayTitle } from '../utils/SocialFeedPresentation'
 import {
   buildArticleContentBlocks,
   buildMediaContentBlocks,
@@ -29,9 +30,10 @@ export { isLegacyPlainArticleContent, extractSupportedVideoUrls } from './Articl
 
 export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
   const definition = viewDefinitionOf(feed.view)
+  const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
   return {
     id: feed.id,
-    title: feed.title,
+    title: displayFeedTitle,
     description: feed.description ?? '等待补充订阅描述',
     category: feed.category ?? '未分类',
     url: feed.url,
@@ -47,6 +49,7 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
 
 export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
+  const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
   const t0 = Date.now()
   const mediaCtx = resolveEntryMediaContext(entry, feed)
   const mediaCtxMs = Date.now() - t0
@@ -99,7 +102,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     tags: entry.tags,
     mediaUrls: selectPictureMediaUrls(mediaCtx.pictureUrls),
     rawMediaUrls: mediaCtx.rawUrls,
-    feedTitle: feed.title,
+    feedTitle: displayFeedTitle,
     feedCategory: feed.category ?? '未分类',
     viewLabel: definition.label,
     viewBadgeColor: definition.badgeColor,
@@ -122,6 +125,7 @@ export interface ToEntryCardModelWithTimingResult {
 
 export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCardModelWithTimingResult {
   const definition = viewDefinitionOf(feed.view)
+  const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
   const t0 = Date.now()
   const mediaCtx = resolveEntryMediaContext(entry, feed)
   const mediaCtxMs = Date.now() - t0
@@ -160,7 +164,7 @@ export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCar
       tags: entry.tags,
       mediaUrls: selectPictureMediaUrls(mediaCtx.pictureUrls),
       rawMediaUrls: mediaCtx.rawUrls,
-      feedTitle: feed.title,
+      feedTitle: displayFeedTitle,
       feedCategory: feed.category ?? '未分类',
       viewLabel: definition.label,
       viewBadgeColor: definition.badgeColor,

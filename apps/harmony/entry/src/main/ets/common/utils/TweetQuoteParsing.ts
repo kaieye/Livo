@@ -8,7 +8,8 @@ import {
   uniqueUrls,
 } from './TweetTextNormalization.ts'
 import { xAvatarUrl } from './TweetSourceExtraction.ts'
-import { parseRetweet, ParsedRetweet } from './TweetRetweetParsing.ts'
+import { parseRetweet } from './TweetRetweetParsing.ts'
+import type { ParsedRetweet } from './TweetRetweetParsing.ts'
 
 export interface TweetQuotedPresentation {
   displayName: string

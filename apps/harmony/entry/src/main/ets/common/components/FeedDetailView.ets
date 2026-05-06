@@ -212,7 +212,7 @@ export struct FeedDetailView {
   private isXPreview(): boolean { return isFeedDetailXPreview(this.displaySnapshot()) }
 
   private cachedTweetPresentation(entry: Entry): TweetEntryPresentation {
-    return this.tweetPresentationCache.get(entry, this.resolvedAvatarUrl())
+    return this.tweetPresentationCache.get(entry, this.resolvedAvatarUrl(), this.heroTitle())
   }
 
   private picturePreviewLeadUrl(entry: Entry): string {

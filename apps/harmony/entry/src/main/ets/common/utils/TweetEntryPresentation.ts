@@ -14,9 +14,9 @@ import {
   extractUsername,
   normalizeUsernameLabel,
   preferredSourceAvatarUrl,
-  TweetPresentationSource,
   xAvatarUrl,
 } from './TweetSourceExtraction.ts'
+import type { TweetPresentationSource } from './TweetSourceExtraction.ts'
 import {
   parseRetweet,
   parseRetweetAuthorFromTitle,
@@ -25,10 +25,10 @@ import {
 import {
   findFirstParsedQuote,
   parseRetweetWithNestedQuote,
-  TweetQuotedPresentation,
 } from './TweetQuoteParsing.ts'
+import type { TweetQuotedPresentation } from './TweetQuoteParsing.ts'
 
-export { TweetQuotedPresentation } from './TweetQuoteParsing.ts'
+export type { TweetQuotedPresentation } from './TweetQuoteParsing.ts'
 
 export interface TweetEntryPresentation {
   kind: 'tweet' | 'retweet' | 'quote'
@@ -250,11 +250,13 @@ export function presentTweetEntryFromEntry(
     mediaUrls?: string[]
   },
   avatarUrl: string,
+  feedDisplayName: string = '',
 ): TweetEntryPresentation {
-  return presentTweetEntryFromSource({
+  const presentation = presentTweetEntryFromSource({
     ...entry,
     avatarUrl,
   })
+  return applyResolvedDisplayName(presentation, feedDisplayName)
 }
 
 export function presentTweetEntryFromCard(card: {
@@ -283,13 +285,31 @@ export function presentTweetEntryFromCard(card: {
   )
 
   return {
-    ...presentation,
-    displayName: normalizeFinalDisplayName(
+    ...applyResolvedDisplayName(
+      presentation,
       feedDisplayName || presentation.displayName,
     ),
     username:
       presentation.username || normalizeUsernameLabel(extractUsername(source)),
     avatarUrl: sourceAvatarUrl || presentation.avatarUrl,
+  }
+}
+
+function applyResolvedDisplayName(
+  presentation: TweetEntryPresentation,
+  displayName: string,
+): TweetEntryPresentation {
+  const normalizedDisplayName = normalizeFinalDisplayName(displayName)
+  if (!normalizedDisplayName) {
+    return presentation
+  }
+
+  return {
+    ...presentation,
+    displayName: normalizedDisplayName,
+    retweetByLabel: presentation.retweetByLabel
+      ? normalizedDisplayName
+      : presentation.retweetByLabel,
   }
 }
 
@@ -302,7 +322,7 @@ function normalizeFinalDisplayName(value: string): string {
   return trimmed
     .replace(/\s*[/-]\s*@\s*[a-z0-9_]{1,15}\s*$/i, '')
     .replace(/\s+@\s*[a-z0-9_]{1,15}\s*$/i, '')
-    .replace(/\s*-\s*(?:x|ins)\s*$/i, '')
+    .replace(/\s*-\s*ins\s*$/i, '')
     .trim()
 }
 
@@ -313,7 +333,7 @@ function resolveFeedDisplayName(feedTitle: string, articleUrl: string): string {
   }
   const normalized = normalizeSocialFeedTitle(trimmed, articleUrl, '')
   return normalized
-    .replace(/\s*-\s*(?:x|ins)\s*$/i, '')
+    .replace(/\s*-\s*ins\s*$/i, '')
     .replace(/\s+@[a-z0-9_]{1,15}\s*$/i, '')
     .trim()
 }
