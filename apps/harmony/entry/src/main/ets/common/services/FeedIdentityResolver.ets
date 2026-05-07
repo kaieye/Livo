@@ -56,6 +56,10 @@ export class FeedIdentityResolver {
 
   static inferFeedViewByUrl(url: string): FeedViewType {
     const normalized = FeedIdentityResolver.normalizeFeedUrl(url)
+    if (normalized.includes('/xiaoyuzhou/') || normalized.includes('xiaoyuzhoufm.com')) {
+      // 小宇宙 RSSHub 路由默认归入文章栏目，与发现页播客精选保持一致。
+      return FeedViewType.Articles
+    }
     if (!!extractInstagramUsername(normalized)) {
       return FeedViewType.Pictures
     }

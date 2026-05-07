@@ -46,12 +46,11 @@ export function discoverCategoryCards(): DiscoverCategoryCard[] {
       icon: $r('app.media.account_instagram'),
     },
     {
-      id: 'ins-3',
-      view: FeedViewType.Pictures,
-      label: 'Ins',
-      accent: '#C13584',
-      sourceKey: 'ins',
-      icon: $r('app.media.account_instagram'),
+      id: 'podcast',
+      view: FeedViewType.Articles,
+      label: '播客',
+      accent: '#7C3AED',
+      sourceKey: 'podcast',
     },
     {
       id: 'ins-4',

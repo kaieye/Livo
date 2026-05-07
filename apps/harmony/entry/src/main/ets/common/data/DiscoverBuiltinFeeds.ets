@@ -6,8 +6,9 @@ import picturesFeedData from './discover-builtin-feeds/pictures.json'
 import videosFeedData from './discover-builtin-feeds/videos.json'
 import insFeedData from './discover-builtin-feeds/ins.json'
 import aiFeedData from './discover-builtin-feeds/ai.json'
+import podcastFeedData from './discover-builtin-feeds/podcast.json'
 
-export type DiscoverBuiltinFeedSourceKey = '' | 'ins' | 'ai'
+export type DiscoverBuiltinFeedSourceKey = '' | 'ins' | 'ai' | 'podcast'
 
 export interface DiscoverBuiltinFeedSeed {
   title: string
@@ -50,6 +51,7 @@ export interface DiscoverBuiltinFeedViewMap {
   videos: DiscoverBuiltinFeed[]
   ins: DiscoverBuiltinFeed[]
   ai: DiscoverBuiltinFeed[]
+  podcast: DiscoverBuiltinFeed[]
 }
 
 function normalizeBuiltinFeedUrl(url: string): string {
@@ -132,6 +134,14 @@ function resolveBuiltinFeedSiteUrl(normalizedUrl: string): string {
     return `https://space.bilibili.com/${uid}`
   }
 
+  const xiaoyuzhouPodcastPrefix = '/xiaoyuzhou/podcast/'
+  const xiaoyuzhouPodcastIndex = lower.indexOf(xiaoyuzhouPodcastPrefix)
+  if (xiaoyuzhouPodcastIndex >= 0) {
+    // 小宇宙 RSSHub 路由保留播客主页，方便预览页和头像兜底使用。
+    const podcastId = normalizedUrl.slice(xiaoyuzhouPodcastIndex + xiaoyuzhouPodcastPrefix.length).split('/')[0]
+    return `https://www.xiaoyuzhoufm.com/podcast/${podcastId}`
+  }
+
   if (lower.includes('/github/trending/')) {
     return 'https://github.com/trending'
   }
@@ -147,6 +157,19 @@ function resolveBuiltinFeedSiteUrl(normalizedUrl: string): string {
   return origin || normalizedUrl
 }
 
+function resolveBuiltinSourceCategory(sourceKey: DiscoverBuiltinFeedSourceKey): string {
+  switch (sourceKey) {
+    case 'ins':
+      return '内置-Ins'
+    case 'ai':
+      return '内置-AI'
+    case 'podcast':
+      return '内置-播客'
+    default:
+      return '内置'
+  }
+}
+
 function buildBuiltinFeeds(
   view: FeedViewType,
   seeds: DiscoverBuiltinFeedSeed[],
@@ -160,7 +183,7 @@ function buildBuiltinFeeds(
       siteUrl: resolveBuiltinFeedSiteUrl(normalizedUrl),
       description: resolveDescription(seed),
       view,
-      category: sourceKey ? '内置-Ins' : '内置',
+      category: resolveBuiltinSourceCategory(sourceKey),
       sourceKey,
     }
   })
@@ -187,6 +210,7 @@ export const BUILTIN_DISCOVER_FEEDS_BY_VIEW: DiscoverBuiltinFeedViewMap = {
   videos: buildBuiltinFeeds(FeedViewType.Videos, (videosFeedData as FeedFileShape).feeds ?? []),
   ins: buildBuiltinFeeds(FeedViewType.Pictures, (insFeedData as InsFeedFileShape).feeds ?? [], 'ins'),
   ai: buildBuiltinFeeds(FeedViewType.Articles, (aiFeedData as FeedFileShape).feeds ?? [], 'ai'),
+  podcast: buildBuiltinFeeds(FeedViewType.Articles, (podcastFeedData as FeedFileShape).feeds ?? [], 'podcast'),
 }
 
 export const BUILTIN_INS_GROUPS: InsGroupFeed[] = ((insFeedData as InsFeedFileShape).groups ?? []).map(
@@ -213,6 +237,9 @@ export function builtinDiscoverFeedsBySourceKey(sourceKey: DiscoverBuiltinFeedSo
   if (sourceKey === 'ai') {
     return BUILTIN_DISCOVER_FEEDS_BY_VIEW.ai
   }
+  if (sourceKey === 'podcast') {
+    return BUILTIN_DISCOVER_FEEDS_BY_VIEW.podcast
+  }
   return []
 }
 
@@ -228,5 +255,6 @@ export function builtinDiscoverFeedsAll(): DiscoverBuiltinFeed[] {
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.videos,
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.ins,
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.ai,
+    ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.podcast,
   ]
 }

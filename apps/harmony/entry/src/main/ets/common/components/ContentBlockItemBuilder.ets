@@ -8,6 +8,7 @@ import {
 } from '../utils/ArticleDetailContent'
 import { isArticleDirectVideo, isArticleYouTubeVideo, resolveInAppEmbedUrl } from '../utils/ArticleVideoUrlClassifier'
 import { shouldUseYouTubeWebFallback } from '../utils/YouTubePlaybackMode'
+import { AudioPlaybackService } from '../services/AudioPlaybackService'
 
 const WEB_VIDEO_USER_AGENT: string =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
@@ -35,10 +36,16 @@ export struct ContentBlockItemBuilder {
   @Prop inlineVideoPreparingBlockId: string = ''
   @Prop activeMovingPhoto: photoAccessHelper.MovingPhoto | undefined = undefined
   @Prop shouldUseInlineMovingPhoto: boolean = false
+  @StorageProp('audioServicePlaying') private audioPlaying: boolean = false
+  @StorageProp('audioServicePreparing') private audioPreparing: boolean = false
+  @StorageProp('audioServicePositionMs') private audioPositionMs: number = 0
+  @StorageProp('audioServiceDurationMs') private audioDurationMs: number = 0
+  @StorageProp('audioServiceError') private audioError: string = ''
 
   nativeVideoController: VideoController = new VideoController()
   movingPhotoController: MovingPhotoViewController = new MovingPhotoViewController()
   videoWebController: webview.WebviewController = new webview.WebviewController()
+  private audioService: AudioPlaybackService = AudioPlaybackService.getInstance()
 
   onMediaAspectRatio: (index: number, width: number, height: number) => void = () => {}
   onActionHint: (hint: string) => void = () => {}
@@ -46,6 +53,10 @@ export struct ContentBlockItemBuilder {
   onClearInlineVideoPreparing: (blockId: string) => void = () => {}
   onOpenImage: (block: ArticleContentBlock) => void = () => {}
   onOpenVideo: (block: ArticleContentBlock) => void = () => {}
+
+  aboutToDisappear(): void {
+    // Audio player is now owned by AudioPlaybackService — no release needed here.
+  }
 
   private mediaAspectRatio(): number {
     const ratio = this.mediaAspectRatios[this.index]
@@ -62,6 +73,33 @@ export struct ContentBlockItemBuilder {
 
   private isInlineVideoPreparing(): boolean {
     return this.inlineVideoPreparingBlockId === this.block.id
+  }
+
+  private audioSourceUrl(): string {
+    return (this.block.audioUrl || '').trim()
+  }
+
+  private audioProgressWidth(): string {
+    if (this.audioDurationMs <= 0) {
+      return '0%'
+    }
+    const percent = Math.max(0, Math.min(100, (this.audioPositionMs / this.audioDurationMs) * 100))
+    return `${percent}%`
+  }
+
+  private formatAudioTime(valueMs: number): string {
+    const seconds = Math.max(0, Math.floor((valueMs || 0) / 1000))
+    const minutes = Math.floor(seconds / 60)
+    const restSeconds = seconds % 60
+    return `${minutes}:${restSeconds < 10 ? '0' : ''}${restSeconds}`
+  }
+
+  private toggleAudioPlayback(): void {
+    const url = this.audioSourceUrl()
+    if (!url) {
+      return
+    }
+    this.audioService.togglePlayback(url, this.block.text || '音频')
   }
 
   private rememberAspectRatio(width: number, height: number): void {
@@ -403,12 +441,85 @@ export struct ContentBlockItemBuilder {
     .padding({ left: 2, right: 2 })
   }
 
+  @Builder
+  private AudioBlock() {
+    Column({ space: 10 }) {
+      Row({ space: 12 }) {
+        Row() {
+          if (this.audioPreparing) {
+            LoadingProgress()
+              .width(22)
+              .height(22)
+              .color(this.theme.accent)
+          } else {
+            SymbolGlyph($r(this.audioPlaying ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+              .fontSize(24)
+              .fontColor([this.theme.accent])
+          }
+        }
+        .width(46)
+        .height(46)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor(this.theme.elevated)
+        .borderRadius(999)
+        .onClick(() => {
+          this.toggleAudioPlayback()
+        })
+
+        Column({ space: 6 }) {
+          Text(this.block.text || '音频')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.theme.textPrimary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(`${this.formatAudioTime(this.audioPositionMs)} / ${this.formatAudioTime(this.audioDurationMs)}`)
+            .fontSize(11)
+            .fontColor(this.theme.textSecondary)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+
+      Row() {
+        Blank()
+          .width(this.audioProgressWidth())
+          .height(4)
+          .backgroundColor(this.theme.accent)
+          .borderRadius(999)
+      }
+      .width('100%')
+      .height(4)
+      .backgroundColor(this.theme.divider)
+      .borderRadius(999)
+      .clip(true)
+
+      if (this.audioError) {
+        Text(this.audioError)
+          .fontSize(11)
+          .fontColor(this.theme.textMuted)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+    }
+    .width('100%')
+    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+    .backgroundColor(this.theme.surface)
+    .border({ width: 0.8, color: this.theme.divider })
+    .borderRadius(18)
+  }
+
   build() {
     if (this.block.type === 'image' && this.block.imageUrl
       && !articleImageBlockServesAsVideoCover(this.contentBlocks, this.index)) {
       this.ImageBlock()
     } else if (this.block.type === 'video' && this.block.videoUrl) {
       this.VideoBlock()
+    } else if (this.block.type === 'audio' && this.block.audioUrl) {
+      this.AudioBlock()
     } else if (this.block.text) {
       this.TextBlock()
     }

@@ -1,0 +1,321 @@
+{
+  "description": "Podcast and audio-first feeds - Chinese shows, tech conversations and culture programs",
+  "view": "articles",
+  "feeds": [
+    {
+      "title": "硬地骇客",
+      "url": "rsshub://xiaoyuzhou/podcast/640ee2438be5d40013fe4a87",
+      "language": "Chinese",
+      "descriptionZh": "关注前沿科技、创业故事、产品构建与小生意实践的深度对话",
+      "descriptionEn": "In-depth conversations on frontier technology, startups, product building and small businesses"
+    },
+    {
+      "title": "Agili 的 Hacker Podcast",
+      "url": "https://hacker-podcast.agi.li/rss.xml",
+      "language": "Chinese",
+      "descriptionZh": "基于 Hacker News 热门文章自动生成的中文 AI 播客",
+      "descriptionEn": "Chinese AI-generated podcast based on trending Hacker News stories"
+    },
+    {
+      "title": "代码之外 Beyond Code",
+      "url": "rsshub://xiaoyuzhou/podcast/6194d973c14c9a0db82de1ea",
+      "language": "Chinese",
+      "descriptionZh": "程序员闲聊播客，讨论技术、职业、产品与生活",
+      "descriptionEn": "A casual developer podcast on technology, careers, products and life"
+    },
+    {
+      "title": "Web Worker-AI程序员都爱听",
+      "url": "rsshub://xiaoyuzhou/podcast/613753ef23c82a9a1ccfdf35",
+      "language": "Chinese",
+      "descriptionZh": "围绕 Web 开发、AI 程序员、资讯与职场的中文音频节目",
+      "descriptionEn": "Chinese audio show about web development, AI programmers, news and work"
+    },
+    {
+      "title": "WebView Tech",
+      "url": "https://webview.tech/feed/podcast",
+      "language": "Chinese",
+      "descriptionZh": "WebView Tech 的播客订阅源，关注技术与互联网话题",
+      "descriptionEn": "WebView Tech podcast feed covering technology and internet topics"
+    },
+    {
+      "title": "Python潮流周刊",
+      "url": "https://pythoncat.substack.com/feed",
+      "language": "Chinese",
+      "descriptionZh": "精选 Python 技术文章、教程、开源项目、播客与视频",
+      "descriptionEn": "Curated Python articles, tutorials, open-source projects, podcasts and videos"
+    },
+    {
+      "title": "BibiGPT 每日热门视频总结",
+      "url": "https://bibigpt.co/popular/rss.xml",
+      "language": "Chinese",
+      "descriptionZh": "BibiGPT 每日热门视频与音频内容的 AI 自动总结",
+      "descriptionEn": "Daily AI summaries of popular video and audio content from BibiGPT"
+    },
+    {
+      "title": "人民公园说AI",
+      "url": "rsshub://xiaoyuzhou/podcast/65257ff6e8ce9deaf70a65e9",
+      "language": "Chinese",
+      "descriptionZh": "JustSayAI 出品的陪伴型科技播客，用轻松方式聊 AI 热点",
+      "descriptionEn": "A companion-style tech podcast from JustSayAI covering AI trends"
+    },
+    {
+      "title": "奇想驿 by 产品沉思录",
+      "url": "rsshub://xiaoyuzhou/podcast/6034daea97755b8fc9c66480",
+      "language": "Chinese",
+      "descriptionZh": "产品沉思录的播客节目，讨论产品、哲学与有趣的人",
+      "descriptionEn": "Product Thinking podcast on products, philosophy and interesting people"
+    },
+    {
+      "title": "知行小酒馆",
+      "url": "rsshub://xiaoyuzhou/podcast/6013f9f58e2f7ee375cf4216",
+      "language": "Chinese",
+      "descriptionZh": "有知有行出品，分享投资理财、认知成长与更好生活",
+      "descriptionEn": "Youzhiyouxing podcast on investing, personal growth and living better"
+    },
+    {
+      "title": "42章经",
+      "url": "rsshub://xiaoyuzhou/podcast/648b0b641c48983391a63f98",
+      "language": "Chinese",
+      "descriptionZh": "与创业者、投资人和有独到认知的人聊天",
+      "descriptionEn": "Conversations with founders, investors and thoughtful builders"
+    },
+    {
+      "title": "屠龙之术",
+      "url": "rsshub://xiaoyuzhou/podcast/6507bc165c88d2412626b401",
+      "language": "Chinese",
+      "descriptionZh": "庄明浩的个人播客，记录互联网、风险投资与行业方法论",
+      "descriptionEn": "Zhuang Minghao's personal podcast on internet, venture capital and industry playbooks"
+    },
+    {
+      "title": "此话当真",
+      "url": "rsshub://xiaoyuzhou/podcast/646f194853a5e5ea1408d97c",
+      "language": "Chinese",
+      "descriptionZh": "真格基金出品的泛商业播客，分享热点与行业洞察",
+      "descriptionEn": "ZhenFund business podcast sharing trends and industry insights"
+    },
+    {
+      "title": "罗永浩的十字路口",
+      "url": "rsshub://xiaoyuzhou/podcast/68981df29e7bcd326eb91d88",
+      "language": "Chinese",
+      "descriptionZh": "罗永浩主持的长篇深度对谈，关注科技、人文与时代人物",
+      "descriptionEn": "Long-form interviews hosted by Luo Yonghao on technology, humanities and people"
+    },
+    {
+      "title": "不明白播客",
+      "url": "https://rss.buzzsprout.com/1982525.rss",
+      "language": "Chinese",
+      "descriptionZh": "由专业新闻记者发起的中文谈话节目，讨论公共议题与时代经验",
+      "descriptionEn": "Chinese conversation podcast by journalists on public issues and lived experience"
+    },
+    {
+      "title": "硅谷101",
+      "url": "rsshub://xiaoyuzhou/podcast/5e5c52c9418a84a04625e6cc",
+      "language": "Chinese",
+      "descriptionZh": "媒体人泓君发起的科技深度访谈节目",
+      "descriptionEn": "Technology interview podcast hosted by media professional Hongjun"
+    },
+    {
+      "title": "三五环",
+      "url": "rsshub://xiaoyuzhou/podcast/5e280fab418a84a0461faa3c",
+      "language": "Chinese",
+      "descriptionZh": "刘飞的独立播客，围绕城市生活、产品与个人好奇心展开对谈",
+      "descriptionEn": "Liu Fei's independent podcast on urban life, products and personal curiosity"
+    },
+    {
+      "title": "Anyway.FM",
+      "url": "https://anyway.fm/rss.xml",
+      "language": "Chinese",
+      "descriptionZh": "设计、产品、效率与数字生活相关的中文播客",
+      "descriptionEn": "Chinese podcast about design, products, productivity and digital life"
+    },
+    {
+      "title": "Someone Gao",
+      "url": "https://someonegao.com/rss.xml",
+      "language": "Chinese",
+      "descriptionZh": "Someone Gao 的个人订阅源，包含技术、产品和播客相关内容",
+      "descriptionEn": "Personal feed by Someone Gao covering technology, products and podcast-related topics"
+    },
+    {
+      "title": "少数派播客 SSPAI Podcast",
+      "url": "https://sspai.typlog.io/feed/audio.xml",
+      "language": "Chinese",
+      "descriptionZh": "少数派旗下播客节目，关注高效工作与品质生活",
+      "descriptionEn": "SSPAI podcast about productive work and quality living"
+    },
+    {
+      "title": "跨国串门儿计划",
+      "url": "rsshub://xiaoyuzhou/podcast/670f3da40d2f24f28978736f",
+      "language": "Chinese",
+      "descriptionZh": "用 AI 技术将英文播客翻译为中文播客的实验节目",
+      "descriptionEn": "An experimental show translating English podcasts into Chinese with AI"
+    },
+    {
+      "title": "声动早咖啡",
+      "url": "rsshub://xiaoyuzhou/podcast/60de7c003dd577b40d5a40f3",
+      "language": "Chinese",
+      "descriptionZh": "工作日早晨更新的商业科技轻解读播客",
+      "descriptionEn": "Weekday morning podcast with light business and technology analysis"
+    },
+    {
+      "title": "随机波动StochasticVolatility",
+      "url": "https://feeds.fireside.fm/stovol/rss",
+      "language": "Chinese",
+      "descriptionZh": "三位女性媒体人发起的泛文化播客，讨论公共议题与生活方式",
+      "descriptionEn": "A cultural podcast by three women media professionals on public issues and lifestyles"
+    },
+    {
+      "title": "不合时宜",
+      "url": "https://feed.xyzfm.space/ww7cqnybekty",
+      "language": "Chinese",
+      "descriptionZh": "以跨文化视野和女性视角讨论公共议题、文化现象与生活方式",
+      "descriptionEn": "Cross-cultural and women-led conversations on public issues, culture and lifestyles"
+    },
+    {
+      "title": "忽左忽右",
+      "url": "rsshub://xiaoyuzhou/podcast/5e4ee557418a84a0466737b7",
+      "language": "Chinese",
+      "descriptionZh": "JustPod 出品的文化沙龙类播客",
+      "descriptionEn": "A cultural salon podcast produced by JustPod"
+    },
+    {
+      "title": "文化有限",
+      "url": "rsshub://xiaoyuzhou/podcast/5e4515bd418a84a046e2b11a",
+      "language": "Chinese",
+      "descriptionZh": "泛文化播客，每周分享打动主播的作品",
+      "descriptionEn": "A culture podcast sharing works that moved the hosts"
+    },
+    {
+      "title": "东腔西调",
+      "url": "rsshub://xiaoyuzhou/podcast/5f72b66083c34e85dd14fde9",
+      "language": "Chinese",
+      "descriptionZh": "大观天下志制作的文化类对谈播客，讨论社会文化观念",
+      "descriptionEn": "Cultural conversations by Daguantianxia on social and cultural ideas"
+    },
+    {
+      "title": "曝光补偿",
+      "url": "https://feed.xyzfm.space/h74vttaea8qp",
+      "language": "Chinese",
+      "descriptionZh": "从摄影出发的泛文化播客，讨论社会、艺术与互联网现象",
+      "descriptionEn": "A culture podcast starting from photography and expanding to society, art and internet culture"
+    },
+    {
+      "title": "于无声处InSilence",
+      "url": "rsshub://xiaoyuzhou/podcast/63ff691c1b1faf8a0b79b847",
+      "language": "Chinese",
+      "descriptionZh": "基于读书笔记和旅行日记的播客节目",
+      "descriptionEn": "A podcast based on reading notes and travel journals"
+    },
+    {
+      "title": "史蒂夫说",
+      "url": "https://feed.xyzfm.space/lkyt7bnmxc9k",
+      "language": "Chinese",
+      "descriptionZh": "泛心理学播客，通过深度交流理解人与世界的复杂性",
+      "descriptionEn": "A psychology-oriented podcast exploring people, the world and personal growth"
+    },
+    {
+      "title": "自习室 STUDY ROOM",
+      "url": "rsshub://xiaoyuzhou/podcast/65a5fb7540d4ef949c0140ac",
+      "language": "Chinese",
+      "descriptionZh": "围绕运动、阅读、人物与自我成长的能量型播客",
+      "descriptionEn": "A growth-focused podcast about sports, reading, people and self-improvement"
+    },
+    {
+      "title": "天真不天真",
+      "url": "rsshub://xiaoyuzhou/podcast/65cef9e3cace72dff8d98de3",
+      "language": "Chinese",
+      "descriptionZh": "杨天真的播客，分享人物故事与人生观察",
+      "descriptionEn": "Yang Tianzhen's podcast sharing stories and life observations"
+    },
+    {
+      "title": "思文，败类",
+      "url": "rsshub://xiaoyuzhou/podcast/64228877179eec53318a7182",
+      "language": "Chinese",
+      "descriptionZh": "思文的个人播客",
+      "descriptionEn": "Siwen's personal podcast"
+    },
+    {
+      "title": "基本无害 Mostly Harmless",
+      "url": "rsshub://xiaoyuzhou/podcast/5eae66d1418a84a046472b4d",
+      "language": "Chinese",
+      "descriptionZh": "没有固定主题的人间观察播客，关注创作、观点与感受如何发生",
+      "descriptionEn": "A free-form observation podcast on how creations, views and feelings happen"
+    },
+    {
+      "title": "不开玩笑 Jokes Aside",
+      "url": "rsshub://xiaoyuzhou/podcast/61791d921989541784257779",
+      "language": "Chinese",
+      "descriptionZh": "时而开玩笑、时而不开玩笑的中文播客",
+      "descriptionEn": "A Chinese podcast that jokes around, except when it does not"
+    },
+    {
+      "title": "肥话连篇",
+      "url": "rsshub://xiaoyuzhou/podcast/61d50d72ee197a3aac3dac42",
+      "language": "Chinese",
+      "descriptionZh": "肥杰与惠子的欢乐聊天播客",
+      "descriptionEn": "A cheerful conversation podcast by FatJay and Huizi"
+    },
+    {
+      "title": "凹凸电波",
+      "url": "rsshub://xiaoyuzhou/podcast/5e2839ca418a84a0462431b7",
+      "language": "Chinese",
+      "descriptionZh": "两性杂谈类脱口秀，分享情感话题与成长经历",
+      "descriptionEn": "A talk show about relationships, emotions and growing up"
+    },
+    {
+      "title": "哎哟嚯Radio",
+      "url": "rsshub://xiaoyuzhou/podcast/5fceeaa0dee9c1e16d8cc295",
+      "language": "Chinese",
+      "descriptionZh": "轻松幽默地聊职业、爱好、美食、旅行与人生经历",
+      "descriptionEn": "Light and humorous conversations on jobs, hobbies, food, travel and life"
+    },
+    {
+      "title": "霓达播客",
+      "url": "rsshub://xiaoyuzhou/podcast/620e4b8f52d497504647ce24",
+      "language": "Chinese",
+      "descriptionZh": "漫聊案件、社会、文化和娱乐的声音节目",
+      "descriptionEn": "A conversational audio show about cases, society, culture and entertainment"
+    },
+    {
+      "title": "机核电台",
+      "url": "rsshub://gcores/radios",
+      "language": "Chinese",
+      "descriptionZh": "机核出品的游戏文化电台节目",
+      "descriptionEn": "Game culture radio programs from GCORES"
+    },
+    {
+      "title": "机核游戏频道",
+      "url": "rsshub://xiaoyuzhou/podcast/5e280fb0418a84a0461fc251",
+      "language": "Chinese",
+      "descriptionZh": "机核出品的游戏专门播客，分享游戏相关内容",
+      "descriptionEn": "GCORES game podcast sharing stories and topics about games"
+    },
+    {
+      "title": "机核资讯",
+      "url": "rsshub://gcores/news",
+      "language": "Chinese",
+      "descriptionZh": "机核游戏与文化资讯订阅源",
+      "descriptionEn": "GCORES game and culture news feed"
+    },
+    {
+      "title": "网易云音乐 DJ 电台",
+      "url": "rsshub://163/music/djradio/794193438",
+      "language": "Chinese",
+      "descriptionZh": "网易云音乐 DJ 电台订阅源",
+      "descriptionEn": "NetEase Cloud Music DJ radio feed"
+    },
+    {
+      "title": "XYZRank",
+      "url": "rsshub://xyzrank",
+      "language": "Chinese",
+      "descriptionZh": "XYZRank 热门播客与内容榜单订阅源",
+      "descriptionEn": "XYZRank feed for trending podcasts and content lists"
+    },
+    {
+      "title": "V2EX 主题 1084456",
+      "url": "rsshub://v2ex/post/1084456",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 指定主题的 RSSHub 订阅源",
+      "descriptionEn": "RSSHub feed for a specific V2EX topic"
+    }
+  ]
+}

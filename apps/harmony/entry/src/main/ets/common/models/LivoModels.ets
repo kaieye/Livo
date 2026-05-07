@@ -218,7 +218,7 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
   const card = toEntryCardModel(entry, feed)
   const blocks = feed.view === FeedViewType.Pictures
     ? buildPictureDetailContentBlocks(entry, feed, card.imageUrl)
-    : buildArticleContentBlocks(entry.content, entry.url || feedSiteUrl(feed), entry.url, entry.mediaUrls ?? [])
+    : buildArticleContentBlocks(entry.content, entry.url || feedSiteUrl(feed), entry.url, entry.mediaUrls ?? [], entry.title)
   const paragraphs = blocks
     .filter((block: ArticleContentBlock) => block.type === 'paragraph')
     .map((block: ArticleContentBlock) => block.text)

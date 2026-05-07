@@ -23,6 +23,7 @@ import { ArticleSocialDetail } from '../common/components/ArticleSocialDetail'
 import { ArticleDetailHeaderActions } from '../common/components/ArticleDetailHeaderActions'
 import { ArticleAIAssistResultPanel } from '../common/components/ArticleAIAssistResultPanel'
 import { ArticleNonSocialContent } from '../common/components/ArticleNonSocialContent'
+import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
@@ -411,35 +412,41 @@ struct ArticleDetail {
   }
 
   build() {
-    Column() {
-      this.DetailHeader()
+    Stack() {
+      Column() {
+        this.DetailHeader()
 
-      if (this.entry) {
-        Scroll() {
-          Column({ space: 18 }) {
-            this.MetadataRow()
-            this.TagsRow()
-            this.DetailBody()
+        if (this.entry) {
+          Scroll() {
+            Column({ space: 18 }) {
+              this.MetadataRow()
+              this.TagsRow()
+              this.DetailBody()
+            }
+            .width('100%')
+            .padding({ bottom: this.bottomAvoidArea + 28 })
+            .alignItems(HorizontalAlign.Start)
+            .justifyContent(FlexAlign.Start)
+            .constraintSize({ minHeight: '100%' })
           }
-          .width('100%')
-          .padding({ bottom: this.bottomAvoidArea + 28 })
-          .alignItems(HorizontalAlign.Start)
-          .justifyContent(FlexAlign.Start)
-          .constraintSize({ minHeight: '100%' })
-        }
-        .width('100%').layoutWeight(1).scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
-      } else {
-        Column({ space: 12 }) {
-          Text('未找到内容')
-            .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.theme.textPrimary)
+          .width('100%').layoutWeight(1).scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
+        } else {
+          Column({ space: 12 }) {
+            Text('未找到内容')
+              .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.theme.textPrimary)
 
-          Text('请从订阅页重新进入一个条目。')
-            .fontSize(15).fontColor(this.theme.textSecondary)
+            Text('请从订阅页重新进入一个条目。')
+              .fontSize(15).fontColor(this.theme.textSecondary)
+          }
+          .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
         }
-        .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
       }
+      .width('100%').height('100%').backgroundColor(this.theme.background)
+
+      MiniAudioPlayer({ theme: this.theme })
+        .align(Alignment.BottomEnd)
     }
-    .width('100%').height('100%').backgroundColor(this.theme.background)
+    .width('100%').height('100%')
   }
 
   pageTransition() {

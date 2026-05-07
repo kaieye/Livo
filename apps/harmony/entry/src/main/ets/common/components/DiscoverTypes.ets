@@ -69,7 +69,18 @@ function isBilibiliDiscoverTarget(targetUrl: string, siteUrl: string): boolean {
     || normalizedSiteUrl.includes('bilibili.com')
 }
 
+function isXiaoyuzhouDiscoverTarget(targetUrl: string, siteUrl: string): boolean {
+  const normalizedTargetUrl = targetUrl.toLowerCase()
+  const normalizedSiteUrl = siteUrl.toLowerCase()
+  return normalizedTargetUrl.includes('/xiaoyuzhou/')
+    || normalizedSiteUrl.includes('xiaoyuzhoufm.com')
+}
+
 function resolveDiscoverDefaultTargetView(targetUrl: string, siteUrl: string, targetView: FeedViewType): FeedViewType {
+  if (isXiaoyuzhouDiscoverTarget(targetUrl, siteUrl)) {
+    // 小宇宙播客当前按文章流承载，避免直接订阅时被当前搜索平台带到视频等栏目。
+    return FeedViewType.Articles
+  }
   if (isBilibiliDiscoverTarget(targetUrl, siteUrl)) {
     return FeedViewType.Videos
   }

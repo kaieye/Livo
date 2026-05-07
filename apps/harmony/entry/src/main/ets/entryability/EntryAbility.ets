@@ -12,6 +12,7 @@ import { FeedRefreshCoordinator } from '../common/data/FeedRefreshCoordinator'
 import { SEED_FEEDS, SEED_ENTRIES, seedSettings } from '../common/data/SeedData'
 import { ThemeService } from '../common/services/ThemeService'
 import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
+import { AudioPlaybackService } from '../common/services/AudioPlaybackService'
 
 export default class EntryAbility extends UIAbility {
   private static readonly SYSTEM_THEME_CHANGED_AT_KEY: string = 'systemThemeChangedAt'
@@ -81,6 +82,8 @@ export default class EntryAbility extends UIAbility {
         console.info('Livo Harmony repositories initialized')
         const theme = ThemeService.currentPalette()
         await this.applySystemBarStyle(mainWindow, theme.isDark)
+
+        AudioPlaybackService.getInstance()
 
         windowStage.loadContent('pages/Index', (err) => {
           if (err.code) {

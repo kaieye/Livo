@@ -1,5 +1,5 @@
 export interface ArticleSourceBlock {
-  type: 'paragraph' | 'image' | 'video'
+  type: 'paragraph' | 'image' | 'video' | 'audio'
   videoUrl: string
 }
 

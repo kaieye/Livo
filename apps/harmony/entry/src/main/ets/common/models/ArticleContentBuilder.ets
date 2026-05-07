@@ -1,4 +1,5 @@
 import { selectArticleVideoUrls } from '../utils/ArticleVideoSource'
+import { isDirectAudioUrl } from '../utils/FeedMediaUrl'
 import {
   extractEntryGalleryImageUrls,
   extractPictureCarouselMediaUrls,
@@ -87,14 +88,68 @@ function createVideoContentBlock(id: string, videoUrl: string): ArticleContentBl
   return { id, type: 'video', text: '', imageUrl: buildVideoPreviewUrl(videoUrl), videoUrl }
 }
 
-function isStandaloneVideoParagraph(text: string): boolean {
+function createAudioContentBlock(id: string, audioUrl: string, title: string = ''): ArticleContentBlock {
+  return { id, type: 'audio', text: title.trim() || '音频', imageUrl: '', videoUrl: '', audioUrl }
+}
+
+function normalizeSupportedAudioUrl(value: string): string {
+  const trimmed = (value || '').trim()
+  return isDirectAudioUrl(trimmed) ? trimmed : ''
+}
+
+function extractSupportedAudioUrls(content: string, baseUrl: string, articleUrl: string): string[] {
+  const results: string[] = []
+  const pushUrl = (value: string): void => {
+    const resolved = normalizeSupportedAudioUrl(resolveAbsoluteUrl(baseUrl, decodeBasicHtml(value)))
+    if (resolved && !results.includes(resolved)) {
+      results.push(resolved)
+    }
+  }
+
+  const normalizedArticleUrl = normalizeSupportedAudioUrl(articleUrl)
+  if (normalizedArticleUrl) {
+    results.push(normalizedArticleUrl)
+  }
+
+  const raw = decodeBasicHtml(content || '')
+  for (const matched of raw.matchAll(/\b(?:href|src|data-src)=["']([^"']+)["']/gi)) {
+    if (matched[1]) {
+      pushUrl(matched[1])
+    }
+  }
+  for (const matched of raw.matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
+    if (matched[0]) {
+      pushUrl(matched[0])
+    }
+  }
+  return results
+}
+
+function selectArticleAudioUrls(
+  articleUrl: string,
+  feedMediaUrls: string[],
+  extractedAudioUrls: string[],
+): string[] {
+  const result: string[] = []
+  ;[...feedMediaUrls, articleUrl, ...extractedAudioUrls].forEach((url: string) => {
+    const normalized = normalizeSupportedAudioUrl(url)
+    if (normalized && !result.includes(normalized)) {
+      result.push(normalized)
+    }
+  })
+  return result
+}
+
+function isStandaloneMediaParagraph(text: string): boolean {
   const normalized = (text || '')
     .trim()
     .replace(/^[("'\[{<\s]+|[)"'\]}>、，,。.!！？\s]+$/g, '')
   if (!normalized) {
     return false
   }
-  return isSupportedVideoUrl(normalized) || isSupportedVideoUrl(normalizeSupportedVideoUrl(normalized))
+  return isDirectAudioUrl(normalized)
+    || isSupportedVideoUrl(normalized)
+    || isSupportedVideoUrl(normalizeSupportedVideoUrl(normalized))
 }
 
 function splitDenseParagraph(text: string): string[] {
@@ -142,7 +197,7 @@ function pushParagraphBlocks(source: string, blocks: ArticleContentBlock[], star
   let index = startIndex
   segments.forEach((text: string) => {
     splitDenseParagraph(text).forEach((paragraph: string) => {
-      if (isStandaloneVideoParagraph(paragraph)) {
+      if (isStandaloneMediaParagraph(paragraph)) {
         return
       }
       blocks.push({ id: `paragraph-${index}`, type: 'paragraph', text: paragraph, imageUrl: '', videoUrl: '' })
@@ -157,6 +212,7 @@ export function buildArticleContentBlocks(
   baseUrl: string,
   articleUrl: string,
   mediaUrls: string[] = [],
+  audioTitle: string = '',
 ): ArticleContentBlock[] {
   const raw = (content || '').trim()
   const videoUrls = selectArticleVideoUrls(
@@ -164,9 +220,17 @@ export function buildArticleContentBlocks(
     mediaUrls,
     extractSupportedVideoUrls(raw, baseUrl, articleUrl),
   )
+  const audioUrls = selectArticleAudioUrls(
+    articleUrl,
+    mediaUrls,
+    extractSupportedAudioUrls(raw, baseUrl, articleUrl),
+  )
 
   if (!raw) {
-    return videoUrls.map((videoUrl: string, index: number) => createVideoContentBlock(`video-${index}`, videoUrl))
+    return [
+      ...audioUrls.map((audioUrl: string, index: number) => createAudioContentBlock(`audio-${index}`, audioUrl, audioTitle)),
+      ...videoUrls.map((videoUrl: string, index: number) => createVideoContentBlock(`video-${audioUrls.length + index}`, videoUrl)),
+    ]
   }
 
   const imageUrls: string[] = []
@@ -192,6 +256,11 @@ export function buildArticleContentBlocks(
   const parts = normalized.split(/(\[\[IMG_\d+\]\])/g)
   const blocks: ArticleContentBlock[] = []
   let blockIndex = 0
+
+  audioUrls.forEach((audioUrl: string) => {
+    blocks.push(createAudioContentBlock(`audio-${blockIndex}`, audioUrl, audioTitle))
+    blockIndex += 1
+  })
 
   videoUrls.forEach((videoUrl: string) => {
     blocks.push(createVideoContentBlock(`video-${blockIndex}`, videoUrl))

@@ -21,6 +21,7 @@ import {
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 import { IndexHomeOverlayLayer } from '../common/components/IndexHomeOverlayLayer'
 import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
+import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
 import { HdsBottomTabId } from '../common/utils/HdsBottomTabConfig'
 import {
   rootBlurEffectiveEndOffset,
@@ -568,6 +569,9 @@ struct Index {
         onSearchInputAppear: () => this.homeInlineSearchController.focus(),
         summaryTextForEntry: (entry: EntryCardModel): string => this.homeInlineSearchController.searchResultSummaryText(entry),
       })
+
+      MiniAudioPlayer({ theme: this.theme })
+        .align(Alignment.BottomEnd)
     }
     .width('100%')
     .height('100%')

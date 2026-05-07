@@ -110,11 +110,15 @@ export function isDirectVideoMimeType(mimeType: string): boolean {
   const normalized = (mimeType || '').trim().toLowerCase()
   return (
     normalized.startsWith('video/') ||
-    normalized.startsWith('audio/') ||
     normalized === 'application/x-mpegurl' ||
     normalized === 'application/vnd.apple.mpegurl' ||
     normalized === 'application/dash+xml'
   )
+}
+
+export function isDirectAudioMimeType(mimeType: string): boolean {
+  const normalized = (mimeType || '').trim().toLowerCase()
+  return normalized.startsWith('audio/')
 }
 
 export function isDirectVideoUrl(url: string): boolean {
@@ -123,9 +127,16 @@ export function isDirectVideoUrl(url: string): boolean {
     return false
   }
 
-  return /\.(mp4|m4v|mov|webm|m3u8|mpd|avi|mkv|mp3|m4a|aac|flac|wav)(\?|#|$)/i.test(
-    normalized,
-  )
+  return /\.(mp4|m4v|mov|webm|m3u8|mpd|avi|mkv)(\?|#|$)/i.test(normalized)
+}
+
+export function isDirectAudioUrl(url: string): boolean {
+  const normalized = (url || '').trim().toLowerCase()
+  if (!normalized) {
+    return false
+  }
+
+  return /\.(mp3|m4a|aac|flac|wav|ogg|opus)(\?|#|$)/i.test(normalized)
 }
 
 export function extractFeedMediaUrls(
@@ -143,6 +154,8 @@ export function extractFeedMediaUrls(
       !isDirectImageUrl(resolved) &&
       !isDirectVideoMimeType(mimeType) &&
       !isDirectVideoUrl(resolved) &&
+      !isDirectAudioMimeType(mimeType) &&
+      !isDirectAudioUrl(resolved) &&
       !isSupportedVideoPageUrl(resolved)
     ) {
       return

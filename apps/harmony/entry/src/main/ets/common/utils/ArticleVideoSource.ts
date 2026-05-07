@@ -23,8 +23,8 @@ export function selectArticleVideoUrls(
   extractedVideoUrls: string[],
 ): string[] {
   const dedupedFeedMediaUrls = dedupeUrls(feedMediaUrls)
-  const normalizedFeedMediaUrls = dedupedFeedMediaUrls.filter((url: string) =>
-    isDirectVideoUrl(url),
+  const normalizedFeedMediaUrls = dedupedFeedMediaUrls.filter(
+    (url: string) => isDirectVideoUrl(url) || isSupportedVideoPageUrl(url),
   )
   if (normalizedFeedMediaUrls.length > 0) {
     return normalizedFeedMediaUrls
@@ -37,10 +37,6 @@ export function selectArticleVideoUrls(
       isSupportedVideoPageUrl(normalizedArticleUrl))
   ) {
     return dedupeUrls([normalizedArticleUrl, ...extractedVideoUrls])
-  }
-
-  if (dedupedFeedMediaUrls.length > 0) {
-    return dedupedFeedMediaUrls
   }
 
   return dedupeUrls(extractedVideoUrls)

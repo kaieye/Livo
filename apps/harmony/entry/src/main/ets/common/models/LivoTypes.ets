@@ -107,10 +107,11 @@ export interface ArticleDetailModel extends EntryCardModel {
 
 export interface ArticleContentBlock {
   id: string
-  type: 'paragraph' | 'image' | 'video'
+  type: 'paragraph' | 'image' | 'video' | 'audio'
   text: string
   imageUrl: string
   videoUrl: string
+  audioUrl?: string
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -213,4 +214,3 @@ export interface BilibiliImportProgress {
   skipped: number
   failed: number
 }
-
