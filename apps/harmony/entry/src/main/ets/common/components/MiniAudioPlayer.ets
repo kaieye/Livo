@@ -1,32 +1,37 @@
 import { ThemePalette } from '../services/ThemeService'
 import { AudioPlaybackService } from '../services/AudioPlaybackService'
+import {
+  BOTTOM_TAB_FLOAT_GAP,
+  BOTTOM_TAB_BAR_HEIGHT,
+  BOTTOM_TAB_TOTAL_HEIGHT,
+  BOTTOM_TAB_BAR_WIDTH,
+} from '../ui/UiTokens'
 
 @Component
 export struct MiniAudioPlayer {
   @Prop theme: ThemePalette = {} as ThemePalette
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @StorageProp('audioServiceShouldShow') private shouldShow: boolean = false
-  @StorageProp('audioServicePlaying') @Watch('onPlayingChanged') private playing: boolean = false
+  @StorageProp('audioServicePlaying') private playing: boolean = false
   @StorageProp('audioServiceTrackTitle') private trackTitle: string = ''
   @StorageProp('audioServicePositionMs') private positionMs: number = 0
   @StorageProp('audioServiceDurationMs') private durationMs: number = 0
-  @State private collapsed: boolean = false
+  @StorageLink('audioPlayerCollapsed') private collapsed: boolean = false
   private audioService: AudioPlaybackService = AudioPlaybackService.getInstance()
 
-  private readonly EXPANDED_WIDTH: number = 328
-  private readonly PLAYER_HEIGHT: number = 52
-  private readonly COLLAPSED_WIDTH: number = 72
-  private readonly COLLAPSED_HEIGHT: number = 44
-  private readonly BOTTOM_OFFSET: number = 96
+  private readonly PANEL_HEIGHT: number = 44
+  private readonly PANEL_RADIUS: number = 24
+  private readonly PANEL_HORIZONTAL_PADDING: number = 16
+  private readonly PANEL_VERTICAL_PADDING: number = 3
+  private readonly CONTROL_BUTTON_SIZE: number = 26
+  private readonly PANEL_CONTENT_HEIGHT: number = 26
 
-  aboutToAppear(): void {
-    this.collapsed = false
+  private floatingPlayerBottomPadding(): number {
+    return BOTTOM_TAB_FLOAT_GAP + BOTTOM_TAB_BAR_HEIGHT + this.bottomAvoidArea + 16
   }
 
-  onPlayingChanged(): void {
-    if (this.playing) {
-      this.collapsed = true
-    }
+  aboutToAppear(): void {
+    // We use StorageLink to persist the collapsed state, so we don't force it here
   }
 
   private progressWidth(): string {
@@ -44,12 +49,172 @@ export struct MiniAudioPlayer {
     return `${minutes}:${restSeconds < 10 ? '0' : ''}${restSeconds}`
   }
 
+  private dockBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.94)'
+  }
+
+  private dockShadowColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.25)'
+  }
+
+  private dockBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.85)' : 'rgba(255,255,255,0.85)'
+  }
+
+  private activeColor(): string {
+    return this.theme.isDark ? '#76A2FF' : '#2F6BFF'
+  }
+
+  private currentProgressLabel(): string {
+    return `${this.formatTime(this.positionMs)} / ${this.formatTime(this.durationMs)}`
+  }
+
   private togglePlayPause(): void {
     if (this.playing) {
       void this.audioService.pause()
     } else {
       void this.audioService.resume()
     }
+  }
+
+  @Builder
+  private DockPanel(expanded: boolean) {
+    Row({ space: 8 }) {
+      Column({ space: 2 }) {
+        Marquee({ src: this.trackTitle || '音频', start: true, step: 6, loop: -1, fromStart: true })
+          .fontSize(11)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .height(12)
+
+        Row({ space: 6 }) {
+          Slider({
+            value: this.positionMs,
+            min: 0,
+            max: Math.max(1, this.durationMs),
+            step: 1000,
+          })
+            .layoutWeight(1)
+            .blockSize({ width: 8, height: 8 })
+            .onChange((nextValue: number) => {
+              this.audioService.seekTo(Math.floor(nextValue))
+            })
+
+          Text(this.currentProgressLabel())
+            .fontSize(9)
+            .fontColor(this.theme.textMuted)
+            .flexShrink(0)
+        }
+        .height(12)
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+      }
+      .height(this.PANEL_CONTENT_HEIGHT)
+      .justifyContent(FlexAlign.SpaceBetween)
+      .layoutWeight(1)
+      .margin({ right: 6 })
+      .alignItems(HorizontalAlign.Start)
+
+      Row({ space: 3 }) {
+        Row() {
+          SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+            .fontSize(16)
+            .fontColor([this.theme.textSecondary])
+        }
+        .width(this.CONTROL_BUTTON_SIZE)
+        .height(this.CONTROL_BUTTON_SIZE)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor(this.theme.surface)
+        .borderRadius(999)
+        .border({ width: 0.6, color: this.theme.divider })
+        .onClick(() => {
+          this.togglePlayPause()
+        })
+
+        Row() {
+          SymbolGlyph($r(expanded ? 'sys.symbol.chevron_right' : 'sys.symbol.chevron_left'))
+            .fontSize(16)
+            .fontColor([this.theme.textSecondary])
+        }
+        .width(this.CONTROL_BUTTON_SIZE)
+        .height(this.CONTROL_BUTTON_SIZE)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor(this.theme.surface)
+        .borderRadius(999)
+        .border({ width: 0.6, color: this.theme.divider })
+        .onClick(() => {
+          this.collapsed = true
+        })
+
+        if (expanded) {
+          Row() {
+            SymbolGlyph($r('sys.symbol.xmark'))
+              .fontSize(13)
+              .fontColor([this.theme.textSecondary])
+          }
+          .width(this.CONTROL_BUTTON_SIZE)
+          .height(this.CONTROL_BUTTON_SIZE)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(this.theme.surface)
+          .borderRadius(999)
+          .border({ width: 0.6, color: this.theme.divider })
+          .onClick(() => {
+            this.audioService.stop()
+            this.collapsed = false
+          })
+        }
+      }
+      .height(this.PANEL_CONTENT_HEIGHT)
+      .alignItems(VerticalAlign.Top)
+    }
+    .width(BOTTOM_TAB_BAR_WIDTH)
+    .height(this.PANEL_HEIGHT)
+    .backgroundColor(this.dockBackgroundColor())
+    .backdropBlur(this.theme.isDark ? 16 : 22)
+    .borderRadius(this.PANEL_RADIUS)
+    .clip(true)
+    .border({ width: 0.6, color: this.dockBorderColor() })
+    .shadow({
+      radius: 14,
+      color: this.dockShadowColor(),
+      offsetX: 0,
+      offsetY: 4,
+    })
+    .padding({ left: this.PANEL_HORIZONTAL_PADDING, right: this.PANEL_HORIZONTAL_PADDING, top: this.PANEL_VERTICAL_PADDING, bottom: this.PANEL_VERTICAL_PADDING })
+  }
+
+  @Builder
+  private CollapsedBubble() {
+    Row() {
+      SymbolGlyph($r('sys.symbol.chevron_left'))
+        .fontSize(18)
+        .fontColor([this.theme.textSecondary])
+    }
+    .width(this.CONTROL_BUTTON_SIZE + this.PANEL_HORIZONTAL_PADDING)
+    .height(this.PANEL_HEIGHT)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(this.dockBackgroundColor())
+    .backdropBlur(this.theme.isDark ? 16 : 22)
+    .borderRadius({
+      topLeft: this.PANEL_RADIUS,
+      bottomLeft: this.PANEL_RADIUS,
+      topRight: 0,
+      bottomRight: 0,
+    })
+    .border({ width: 0.6, color: this.dockBorderColor() })
+    .shadow({
+      radius: 12,
+      color: this.dockShadowColor(),
+      offsetX: 0,
+      offsetY: 4,
+    })
+    .onClick(() => {
+      this.collapsed = false
+    })
   }
 
   build() {
@@ -59,154 +224,22 @@ export struct MiniAudioPlayer {
         .height(0)
     } else if (this.collapsed) {
       Stack({ alignContent: Alignment.BottomEnd }) {
-        Row({ space: 0 }) {
-          Row() {
-            SymbolGlyph($r('sys.symbol.chevron_left'))
-              .fontSize(18)
-              .fontColor([this.theme.textSecondary])
-          }
-          .width(28)
-          .height(28)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .borderRadius(14)
-          .onClick(() => {
-            this.collapsed = false
-          })
-
-          Row() {
-            SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
-              .fontSize(16)
-              .fontColor([this.theme.accent])
-          }
-          .width(34)
-          .height(34)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .backgroundColor(this.theme.elevated)
-          .borderRadius(999)
-          .onClick(() => {
-            this.togglePlayPause()
-          })
-        }
-        .width(this.COLLAPSED_WIDTH)
-        .height(this.COLLAPSED_HEIGHT)
-        .justifyContent(FlexAlign.Start)
-        .alignItems(VerticalAlign.Center)
-        .backgroundColor(this.theme.surface)
-        .border({ width: 0.8, color: this.theme.divider })
-        .borderRadius(22)
-        .shadow({
-          radius: 12,
-          color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.10)',
-          offsetY: 2,
-        })
-        .padding({ left: 2, right: 6 })
-        .margin({ right: -18, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
+        this.CollapsedBubble()
       }
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
       .hitTestBehavior(HitTestMode.Transparent)
+      .padding({ bottom: this.floatingPlayerBottomPadding() })
     } else {
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        Row({ space: 0 }) {
-          Row() {
-            SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
-              .fontSize(22)
-              .fontColor([this.theme.accent])
-          }
-          .width(38)
-          .height(38)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .backgroundColor(this.theme.elevated)
-          .borderRadius(999)
-          .onClick(() => {
-            this.togglePlayPause()
-          })
-
-          Column({ space: 2 }) {
-            Text(this.trackTitle || '音频')
-              .fontSize(13)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.theme.textPrimary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .width(140)
-
-            Row({ space: 0 }) {
-              Row() {
-                Blank()
-                  .width(this.progressWidth())
-                  .height(3)
-                  .backgroundColor(this.theme.accent)
-                  .borderRadius(999)
-              }
-              .width(96)
-              .height(3)
-              .backgroundColor(this.theme.divider)
-              .borderRadius(999)
-              .clip(true)
-
-              Text(`${this.formatTime(this.positionMs)} / ${this.formatTime(this.durationMs)}`)
-                .fontSize(10)
-                .fontColor(this.theme.textMuted)
-                .margin({ left: 6 })
-            }
-          }
-          .layoutWeight(1)
-          .alignItems(HorizontalAlign.Start)
-          .margin({ left: 10 })
-
-          Row({ space: 2 }) {
-            Row() {
-              SymbolGlyph($r('sys.symbol.chevron_right'))
-                .fontSize(18)
-                .fontColor([this.theme.textSecondary])
-            }
-            .width(30)
-            .height(30)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .borderRadius(8)
-            .onClick(() => {
-              this.collapsed = true
-            })
-
-            Row() {
-              SymbolGlyph($r('sys.symbol.xmark'))
-                .fontSize(16)
-                .fontColor([this.theme.textSecondary])
-            }
-            .width(30)
-            .height(30)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .borderRadius(8)
-            .onClick(() => {
-              this.audioService.stop()
-              this.collapsed = false
-            })
-          }
-        }
-        .width(this.EXPANDED_WIDTH)
-        .height(this.PLAYER_HEIGHT)
-        .padding({ left: 12, right: 8 })
-        .backgroundColor(this.theme.surface)
-        .border({ width: 0.8, color: this.theme.divider })
-        .borderRadius(14)
-        .margin({ right: 12, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
-        .shadow({
-          radius: 16,
-          color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.12)',
-          offsetY: 4,
-        })
+      Stack({ alignContent: Alignment.Bottom }) {
+        this.DockPanel(true)
       }
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
       .hitTestBehavior(HitTestMode.Transparent)
+      .padding({ bottom: this.floatingPlayerBottomPadding() })
     }
   }
 }

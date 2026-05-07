@@ -15,6 +15,7 @@ const AUDIO_SERVICE_DURATION_MS = 'audioServiceDurationMs'
 const AUDIO_SERVICE_ERROR = 'audioServiceError'
 const AUDIO_SERVICE_ACTIVE = 'audioServiceActive'
 const AUDIO_SERVICE_SHOULD_SHOW = 'audioServiceShouldShow'
+const AUDIO_PLAYER_COLLAPSED = 'audioPlayerCollapsed'
 
 function initAppStorageDefaults(): void {
   if (!AppStorage.get<boolean>(AUDIO_SERVICE_PLAYING)) {
@@ -43,6 +44,9 @@ function initAppStorageDefaults(): void {
   }
   if (!AppStorage.get<boolean>(AUDIO_SERVICE_SHOULD_SHOW)) {
     AppStorage.setOrCreate(AUDIO_SERVICE_SHOULD_SHOW, false)
+  }
+  if (AppStorage.get<boolean>(AUDIO_PLAYER_COLLAPSED) === undefined) {
+    AppStorage.setOrCreate(AUDIO_PLAYER_COLLAPSED, false)
   }
 }
 
@@ -349,6 +353,7 @@ export class AudioPlaybackService {
     this.setAppStorage(AUDIO_SERVICE_TRACK_URL, url)
     this.setAppStorage(AUDIO_SERVICE_ACTIVE, true)
     this.setAppStorage(AUDIO_SERVICE_SHOULD_SHOW, true)
+    this.setAppStorage(AUDIO_PLAYER_COLLAPSED, false)
     this.setAppStorage(AUDIO_SERVICE_POSITION_MS, 0)
     this.setAppStorage(AUDIO_SERVICE_DURATION_MS, 0)
 
@@ -400,6 +405,23 @@ export class AudioPlaybackService {
       this.setAppStorage(AUDIO_SERVICE_ERROR, '音频播放失败')
       this.setAppStorage(AUDIO_SERVICE_PLAYING, false)
       console.warn(`[AudioService] resume failed: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+
+  seekTo(positionMs: number): void {
+    if (!this.player) {
+      return
+    }
+    const durationMs = AppStorage.get<number>(AUDIO_SERVICE_DURATION_MS) ?? 0
+    const clamped = durationMs > 0
+      ? Math.max(0, Math.min(durationMs, positionMs))
+      : Math.max(0, positionMs)
+    try {
+      this.player.seek(clamped)
+      this.setAppStorage(AUDIO_SERVICE_POSITION_MS, clamped)
+      this.updateAvSessionPlaybackState()
+    } catch (err) {
+      console.warn(`[AudioService] seek failed: ${err instanceof Error ? err.message : err}`)
     }
   }
 
