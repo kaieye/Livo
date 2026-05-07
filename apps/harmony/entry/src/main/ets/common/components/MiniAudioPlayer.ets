@@ -54,121 +54,135 @@ export struct MiniAudioPlayer {
   build() {
     if (!this.shouldShow) {
       Stack() {}
+        .width(0)
+        .height(0)
     } else if (this.collapsed) {
-      Row() {
-        SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
-          .fontSize(20)
-          .fontColor([this.theme.accent])
-      }
-      .width(this.COLLAPSED_SIZE)
-      .height(this.COLLAPSED_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.theme.surface)
-      .border({ width: 0.8, color: this.theme.divider })
-      .borderRadius(999)
-      .shadow({
-        radius: 12,
-        color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.10)',
-        offsetY: 2,
-      })
-      .margin({ right: 12, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
-      .onClick(() => {
-        this.collapsed = false
-      })
-    } else {
-      Row({ space: 0 }) {
+      Stack({ alignContent: Alignment.BottomEnd }) {
         Row() {
           SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
-            .fontSize(22)
+            .fontSize(20)
             .fontColor([this.theme.accent])
         }
-        .width(38)
-        .height(38)
+        .width(this.COLLAPSED_SIZE)
+        .height(this.COLLAPSED_SIZE)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
-        .backgroundColor(this.theme.elevated)
+        .backgroundColor(this.theme.surface)
+        .border({ width: 0.8, color: this.theme.divider })
         .borderRadius(999)
-        .onClick(() => {
-          this.togglePlayPause()
+        .shadow({
+          radius: 12,
+          color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.10)',
+          offsetY: 2,
         })
-
-        Column({ space: 2 }) {
-          Text(this.trackTitle || '音频')
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width(140)
-
-          Row({ space: 0 }) {
-            Row() {
-              Blank()
-                .width(this.progressWidth())
-                .height(3)
-                .backgroundColor(this.theme.accent)
-                .borderRadius(999)
-            }
-            .width(96)
-            .height(3)
-            .backgroundColor(this.theme.divider)
-            .borderRadius(999)
-            .clip(true)
-
-            Text(`${this.formatTime(this.positionMs)} / ${this.formatTime(this.durationMs)}`)
-              .fontSize(10)
-              .fontColor(this.theme.textMuted)
-              .margin({ left: 6 })
-          }
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-        .margin({ left: 10 })
-
-        Row({ space: 2 }) {
-          Row() {
-            SymbolGlyph($r('sys.symbol.chevron_right'))
-              .fontSize(18)
-              .fontColor([this.theme.textSecondary])
-          }
-          .width(30)
-          .height(30)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .borderRadius(8)
-          .onClick(() => {
-            this.collapsed = true
-          })
-
-          Row() {
-            SymbolGlyph($r('sys.symbol.xmark'))
-              .fontSize(16)
-              .fontColor([this.theme.textSecondary])
-          }
-          .width(30)
-          .height(30)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .borderRadius(8)
-          .onClick(() => {
-            this.audioService.stop()
-            this.collapsed = false
-          })
-        }
+        .margin({ right: 12, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
+        .onClick(() => {
+          this.collapsed = false
+        })
       }
-      .width(this.EXPANDED_WIDTH)
-      .height(this.PLAYER_HEIGHT)
-      .padding({ left: 12, right: 8 })
-      .backgroundColor(this.theme.surface)
-      .border({ width: 0.8, color: this.theme.divider })
-      .borderRadius(14)
-      .margin({ right: 12, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
-      .shadow({
-        radius: 16,
-        color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.12)',
-        offsetY: 4,
-      })
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.Transparent)
+    } else {
+      Stack({ alignContent: Alignment.BottomEnd }) {
+        Row({ space: 0 }) {
+          Row() {
+            SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+              .fontSize(22)
+              .fontColor([this.theme.accent])
+          }
+          .width(38)
+          .height(38)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(this.theme.elevated)
+          .borderRadius(999)
+          .onClick(() => {
+            this.togglePlayPause()
+          })
+
+          Column({ space: 2 }) {
+            Text(this.trackTitle || '音频')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.theme.textPrimary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width(140)
+
+            Row({ space: 0 }) {
+              Row() {
+                Blank()
+                  .width(this.progressWidth())
+                  .height(3)
+                  .backgroundColor(this.theme.accent)
+                  .borderRadius(999)
+              }
+              .width(96)
+              .height(3)
+              .backgroundColor(this.theme.divider)
+              .borderRadius(999)
+              .clip(true)
+
+              Text(`${this.formatTime(this.positionMs)} / ${this.formatTime(this.durationMs)}`)
+                .fontSize(10)
+                .fontColor(this.theme.textMuted)
+                .margin({ left: 6 })
+            }
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+          .margin({ left: 10 })
+
+          Row({ space: 2 }) {
+            Row() {
+              SymbolGlyph($r('sys.symbol.chevron_right'))
+                .fontSize(18)
+                .fontColor([this.theme.textSecondary])
+            }
+            .width(30)
+            .height(30)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .borderRadius(8)
+            .onClick(() => {
+              this.collapsed = true
+            })
+
+            Row() {
+              SymbolGlyph($r('sys.symbol.xmark'))
+                .fontSize(16)
+                .fontColor([this.theme.textSecondary])
+            }
+            .width(30)
+            .height(30)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .borderRadius(8)
+            .onClick(() => {
+              this.audioService.stop()
+              this.collapsed = false
+            })
+          }
+        }
+        .width(this.EXPANDED_WIDTH)
+        .height(this.PLAYER_HEIGHT)
+        .padding({ left: 12, right: 8 })
+        .backgroundColor(this.theme.surface)
+        .border({ width: 0.8, color: this.theme.divider })
+        .borderRadius(14)
+        .margin({ right: 12, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
+        .shadow({
+          radius: 16,
+          color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.12)',
+          offsetY: 4,
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
   }
 }

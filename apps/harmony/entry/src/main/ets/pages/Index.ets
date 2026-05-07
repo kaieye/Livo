@@ -571,7 +571,6 @@ struct Index {
       })
 
       MiniAudioPlayer({ theme: this.theme })
-        .align(Alignment.BottomEnd)
     }
     .width('100%')
     .height('100%')

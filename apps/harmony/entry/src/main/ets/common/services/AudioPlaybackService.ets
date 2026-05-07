@@ -361,6 +361,7 @@ export class AudioPlaybackService {
     }
     try {
       await player.play()
+      this.setAppStorage(AUDIO_SERVICE_PLAYING, true)
     } catch (err) {
       this.setAppStorage(AUDIO_SERVICE_ERROR, '音频播放失败')
       this.setAppStorage(AUDIO_SERVICE_PLAYING, false)
@@ -374,6 +375,7 @@ export class AudioPlaybackService {
     }
     try {
       await this.player.pause()
+      this.setAppStorage(AUDIO_SERVICE_PLAYING, false)
       this.updateAvSessionPlaybackState()
     } catch (err) {
       console.warn(`[AudioService] pause failed: ${err instanceof Error ? err.message : err}`)
@@ -392,6 +394,7 @@ export class AudioPlaybackService {
         this.setAppStorage(AUDIO_SERVICE_POSITION_MS, 0)
       }
       await this.player.play()
+      this.setAppStorage(AUDIO_SERVICE_PLAYING, true)
       this.updateAvSessionPlaybackState()
     } catch (err) {
       this.setAppStorage(AUDIO_SERVICE_ERROR, '音频播放失败')
