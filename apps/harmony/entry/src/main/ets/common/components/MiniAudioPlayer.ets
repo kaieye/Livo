@@ -15,8 +15,9 @@ export struct MiniAudioPlayer {
 
   private readonly EXPANDED_WIDTH: number = 328
   private readonly PLAYER_HEIGHT: number = 52
-  private readonly COLLAPSED_SIZE: number = 42
-  private readonly BOTTOM_OFFSET: number = 72
+  private readonly COLLAPSED_WIDTH: number = 72
+  private readonly COLLAPSED_HEIGHT: number = 44
+  private readonly BOTTOM_OFFSET: number = 96
 
   aboutToAppear(): void {
     this.collapsed = false
@@ -58,27 +59,50 @@ export struct MiniAudioPlayer {
         .height(0)
     } else if (this.collapsed) {
       Stack({ alignContent: Alignment.BottomEnd }) {
-        Row() {
-          SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
-            .fontSize(20)
-            .fontColor([this.theme.accent])
+        Row({ space: 0 }) {
+          Row() {
+            SymbolGlyph($r('sys.symbol.chevron_left'))
+              .fontSize(18)
+              .fontColor([this.theme.textSecondary])
+          }
+          .width(28)
+          .height(28)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .borderRadius(14)
+          .onClick(() => {
+            this.collapsed = false
+          })
+
+          Row() {
+            SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+              .fontSize(16)
+              .fontColor([this.theme.accent])
+          }
+          .width(34)
+          .height(34)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor(this.theme.elevated)
+          .borderRadius(999)
+          .onClick(() => {
+            this.togglePlayPause()
+          })
         }
-        .width(this.COLLAPSED_SIZE)
-        .height(this.COLLAPSED_SIZE)
-        .justifyContent(FlexAlign.Center)
+        .width(this.COLLAPSED_WIDTH)
+        .height(this.COLLAPSED_HEIGHT)
+        .justifyContent(FlexAlign.Start)
         .alignItems(VerticalAlign.Center)
         .backgroundColor(this.theme.surface)
         .border({ width: 0.8, color: this.theme.divider })
-        .borderRadius(999)
+        .borderRadius(22)
         .shadow({
           radius: 12,
           color: this.theme.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.10)',
           offsetY: 2,
         })
-        .margin({ right: 12, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
-        .onClick(() => {
-          this.collapsed = false
-        })
+        .padding({ left: 2, right: 6 })
+        .margin({ right: -18, bottom: this.bottomAvoidArea + this.BOTTOM_OFFSET })
       }
       .width('100%')
       .height('100%')
