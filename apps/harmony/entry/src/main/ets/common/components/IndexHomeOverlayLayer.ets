@@ -33,8 +33,6 @@ export struct IndexHomeOverlayLayer {
   @Prop searchShowEmptyState: boolean = false
 
   inputController: TextInputController = new TextInputController()
-  onRefresh: () => void = () => {}
-  onSearchOpen: () => void = () => {}
   onExpandRequest: () => void = () => {}
   onModeChange: (mode: SubscriptionMode) => void = () => {}
   onQueryChange: (value: string) => void = () => {}
@@ -49,9 +47,6 @@ export struct IndexHomeOverlayLayer {
       theme: this.theme,
       mode: this.mode,
       interactionLocked: this.interactionLocked,
-      isRefreshing: this.isRefreshing,
-      refreshTotalCount: this.refreshTotalCount,
-      displayRefreshPercent: this.displayRefreshPercent,
       showSearch: this.showSearch,
       collapsedModeRailTopPadding: this.collapsedModeRailTopPadding,
       collapseProgress: this.collapseProgress,
@@ -63,12 +58,6 @@ export struct IndexHomeOverlayLayer {
       modeRailDismissScale: this.modeRailDismissScale,
       modeRailCollapsed: this.modeRailCollapsed,
       horizontalPadding: this.horizontalPadding,
-      onRefresh: () => {
-        this.onRefresh()
-      },
-      onSearchOpen: () => {
-        this.onSearchOpen()
-      },
       onExpandRequest: () => {
         this.onExpandRequest()
       },

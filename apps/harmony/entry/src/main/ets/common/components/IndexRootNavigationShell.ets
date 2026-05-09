@@ -1,6 +1,7 @@
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
   HdsNavigation,
+  HdsNavigationMenuContentOptions,
   HdsNavigationTitleMode,
   HdsTabs,
   HdsTabsController,
@@ -18,7 +19,6 @@ import {
   PAGE_HORIZONTAL_PADDING,
 } from '../ui/UiTokens'
 import {
-  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
   ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
@@ -30,7 +30,6 @@ import {
   resolveHdsBottomTabItems,
 } from '../utils/HdsBottomTabConfig'
 import {
-  HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT,
   ROOT_BOTTOM_TITLE_HEIGHT,
   RootTabSymbolPair,
   SubscriptionMode,
@@ -58,6 +57,7 @@ export struct IndexRootNavigationShell {
   @Prop homeContentVersion: number = 0
   @Prop hideBottomTabs: boolean = false
   @Prop hideTitleBar: boolean = false
+  @Prop showHomeTitleActions: boolean = false
   @Prop isHomeRootTab: boolean = false
   @Prop isSettingsRootTab: boolean = false
   @Prop currentRootTitle: string = ''
@@ -108,6 +108,33 @@ export struct IndexRootNavigationShell {
   onSettingsContentScrollerReady: (scroller: Scroller) => void = () => {}
   onSettingsChange: (settings: HarmonySettings) => void = () => {}
   onThemeChange: (theme: ThemePalette) => void = () => {}
+  onHomeRefresh: () => void = () => {}
+  onHomeSearchOpen: () => void = () => {}
+
+  // 首页顶部改用 HDS 原生 titleBar menu，和 buttom 示例保持同一套按钮材质与对齐方式。
+  private HomeTitleMenuOptions(): HdsNavigationMenuContentOptions {
+    return {
+      value: [{
+        content: {
+          label: '刷新',
+          icon: $r('sys.symbol.arrow_clockwise'),
+          isEnabled: true,
+          action: () => {
+            this.onHomeRefresh()
+          },
+        },
+      }, {
+        content: {
+          label: '搜索',
+          icon: $r('sys.symbol.magnifyingglass'),
+          isEnabled: true,
+          action: () => {
+            this.onHomeSearchOpen()
+          },
+        },
+      }],
+    }
+  }
 
   @Builder
   private SettingsLowerTitleBuilder() {
@@ -120,25 +147,6 @@ export struct IndexRootNavigationShell {
     }
     .width('100%')
     .height(ROOT_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-    })
-  }
-
-  @Builder
-  private HomeLowerTitleBuilder() {
-    Row() {
-      Text('首页')
-        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
     .alignItems(VerticalAlign.Bottom)
     .padding({
       left: PAGE_HORIZONTAL_PADDING,
@@ -214,13 +222,12 @@ export struct IndexRootNavigationShell {
     .titleBar({
       content: {
         title: {
-          mainTitle: this.isHomeRootTab || this.isSettingsRootTab ? '' : this.currentRootTitle,
+          mainTitle: this.isHomeRootTab ? '首页' : (this.isSettingsRootTab ? '' : this.currentRootTitle),
         },
-        bottomBuilder: this.isHomeRootTab
-          ? {
-              builder: (): void => this.HomeLowerTitleBuilder(),
-            }
-          : this.isSettingsRootTab
+        menu: this.isHomeRootTab && this.showHomeTitleActions && !this.hideTitleBar
+          ? this.HomeTitleMenuOptions()
+          : undefined,
+        bottomBuilder: this.isSettingsRootTab
           ? {
               builder: (): void => this.SettingsLowerTitleBuilder(),
             }
@@ -228,13 +235,13 @@ export struct IndexRootNavigationShell {
       },
       style: {
         scrollEffectOpts: {
-          enableScrollEffect: true,
-          scrollEffectType: this.scrollEffectType,
+          enableScrollEffect: !this.isHomeRootTab,
+          scrollEffectType: this.isHomeRootTab ? ScrollEffectType.GRADIENT_BLUR : this.scrollEffectType,
           blurEffectiveStartOffset: LengthMetrics.vp(0),
           blurEffectiveEndOffset: this.blurEffectiveEndOffset,
         },
-        blurStrategy: this.blurStrategy,
-        originalStyle: {
+        blurStrategy: this.isHomeRootTab ? undefined : this.blurStrategy,
+        originalStyle: this.isHomeRootTab ? undefined : {
           backgroundStyle: {
             backgroundColor: this.originalTitleBarBackgroundColor,
             maskExtraHeight: this.originalTitleBarMaskExtraHeight,
@@ -255,7 +262,7 @@ export struct IndexRootNavigationShell {
             },
           },
         },
-        scrollEffectStyle: {
+        scrollEffectStyle: this.isHomeRootTab ? undefined : {
           backgroundStyle: {
             backgroundColor: this.scrollEffectBackgroundColor,
             maskExtraHeight: this.scrollEffectTitleBarMaskExtraHeight,
@@ -276,13 +283,22 @@ export struct IndexRootNavigationShell {
             },
           },
         },
-        systemMaterialEffect: this.systemMaterialEffect,
+        systemMaterialEffect: this.isHomeRootTab
+          ? {
+              materialType: hdsMaterial.MaterialType.ADAPTIVE,
+              materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+            }
+          : this.systemMaterialEffect,
       },
+      // 全屏窗口下标题栏必须主动避让系统安全区，否则标题和菜单会压到状态栏。
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
     })
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideTitleBar(this.hideTitleBar)
     .hideBackButton(true)
     .bindToScrollable(this.bindScrollers)
+    // 根页运行在全屏窗口中，顶部安全区需要留给 HDS 页头，底部仍交给浮动页签沉浸显示。
     .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')

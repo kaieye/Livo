@@ -506,6 +506,7 @@ struct Index {
         homeContentVersion: this.homeContentVersion,
         hideBottomTabs: this.rootTabCoordinator.shouldHideBottomTabs(),
         hideTitleBar: this.rootTabCoordinator.shouldHideRootTitleBar(),
+        showHomeTitleActions: this.rootTabCoordinator.isHomeRootTab() && !this.showSearch,
         isHomeRootTab: this.rootTabCoordinator.isHomeRootTab(),
         isSettingsRootTab: this.rootTabCoordinator.isSettingsRootTab(),
         currentRootTitle: this.rootTabCoordinator.currentRootTitle(),
@@ -528,6 +529,8 @@ struct Index {
         onSettingsContentScrollerReady: (scroller: Scroller) => this.scrollerRegistry.handleSettingsContentScrollerReady(scroller),
         onSettingsChange: (settings: HarmonySettings) => this.pageLifecycle.handleRootSettingsChange(settings),
         onThemeChange: (theme: ThemePalette) => this.pageLifecycle.handleRootThemeChange(theme),
+        onHomeRefresh: () => { void this.refreshFeaturedEntries() },
+        onHomeSearchOpen: () => this.homeInlineSearchController.open(),
       })
 
       IndexHomeOverlayLayer({
@@ -556,8 +559,6 @@ struct Index {
         searchResultEntries: this.homeInlineSearchController.searchResultEntries(),
         searchShowEmptyState: this.homeInlineSearchController.hasSearchResultEmptyState(),
         inputController: this.searchInputController,
-        onRefresh: () => { void this.refreshFeaturedEntries() },
-        onSearchOpen: () => this.homeInlineSearchController.open(),
         onExpandRequest: () => this.requestExpandedModeRail(),
         onModeChange: (mode: SubscriptionMode) => this.homeModeController.requestModeSwitch(mode),
         onQueryChange: (value: string) => { this.searchQuery = value },

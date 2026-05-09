@@ -1,8 +1,6 @@
 import { ContentModeRail } from './ContentModeRail'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
-  HOME_INLINE_SEARCH_ACTION_GAP,
-  HOME_INLINE_SEARCH_ACTION_SIZE,
   SubscriptionMode,
 } from './HomeRootConfig'
 import { ROOT_MODE_RAIL_TOP_GAP } from './FloatingRootPageLayout'
@@ -13,9 +11,6 @@ export struct HomeRootOverlayControls {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
-  @Prop isRefreshing: boolean = false
-  @Prop refreshTotalCount: number = 0
-  @Prop displayRefreshPercent: number = 0
   @Prop showSearch: boolean = false
   @Prop collapsedModeRailTopPadding: number = 0
   @Prop collapseProgress: number = 0
@@ -28,31 +23,8 @@ export struct HomeRootOverlayControls {
   @Prop modeRailCollapsed: boolean = false
   @Prop horizontalPadding: number = 0
 
-  onRefresh: () => void = () => {}
-  onSearchOpen: () => void = () => {}
   onExpandRequest: () => void = () => {}
   onModeChange: (mode: SubscriptionMode) => void = () => {}
-
-  private actionBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.74)' : 'rgba(255,255,255,0.84)'
-  }
-
-  private actionBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.08)'
-  }
-
-  private actionBackdropBlur(): number {
-    return this.theme.isDark ? 10 : 18
-  }
-
-  private actionShadow(): ShadowOptions {
-    return {
-      radius: 10,
-      color: this.theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(15,23,42,0.12)',
-      offsetX: 0,
-      offsetY: 2,
-    }
-  }
 
   @Builder
   private HomeModeRail(collapsed: boolean) {
@@ -70,69 +42,6 @@ export struct HomeRootOverlayControls {
         this.onModeChange(mode)
       },
     })
-  }
-
-  @Builder
-  private QuickActionsLayer() {
-    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
-      Row() {
-        if (this.isRefreshing && this.refreshTotalCount > 0) {
-          Text(`${this.displayRefreshPercent}%`)
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.theme.textPrimary)
-        } else {
-          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
-            .fontSize(18)
-            .fontColor([this.theme.textPrimary])
-        }
-      }
-      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.actionBackgroundColor())
-      .backdropBlur(this.isRefreshing ? this.actionBackdropBlur() + 2 : this.actionBackdropBlur())
-      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
-      .border({ width: 0.8, color: this.actionBorderColor() })
-      .shadow(this.actionShadow())
-      .enabled(!this.showSearch)
-      .onClick(() => {
-        this.onRefresh()
-      })
-
-      Row() {
-        SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontSize(18)
-          .fontColor([this.theme.textPrimary])
-      }
-      .width(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .height(HOME_INLINE_SEARCH_ACTION_SIZE)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(this.actionBackgroundColor())
-      .backdropBlur(this.actionBackdropBlur())
-      .borderRadius(HOME_INLINE_SEARCH_ACTION_SIZE / 2)
-      .border({ width: 0.8, color: this.actionBorderColor() })
-      .shadow(this.actionShadow())
-      .enabled(!this.showSearch)
-      .onClick(() => {
-        this.onSearchOpen()
-      })
-    }
-    .padding({
-      top: this.collapsedModeRailTopPadding,
-      left: this.horizontalPadding,
-      right: this.horizontalPadding,
-    })
-    .width('100%')
-    .justifyContent(FlexAlign.End)
-    .alignItems(VerticalAlign.Top)
-    .opacity(this.showSearch ? 0 : 1)
-    .translate({ x: this.showSearch ? 10 : 0 })
-    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-    .enabled(!this.showSearch)
-    .zIndex(130)
   }
 
   @Builder
@@ -169,7 +78,7 @@ export struct HomeRootOverlayControls {
 
   @Builder
   private CollapsedModeRailLayer() {
-    Row({ space: HOME_INLINE_SEARCH_ACTION_GAP }) {
+    Row() {
       this.HomeModeRail(true)
     }
     .width('100%')
@@ -195,7 +104,6 @@ export struct HomeRootOverlayControls {
     Stack({ alignContent: Alignment.TopStart }) {
       this.CollapsingModeRailLayer()
       this.CollapsedModeRailLayer()
-      this.QuickActionsLayer()
     }
     .width('100%')
   }
