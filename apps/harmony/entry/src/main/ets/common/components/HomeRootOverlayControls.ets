@@ -145,7 +145,7 @@ export struct HomeRootOverlayControls {
         this.ModeRail()
       }
       .width('100%')
-      .justifyContent(FlexAlign.Start)
+      .justifyContent(FlexAlign.Center)
       .padding({
         top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
         left: PAGE_HORIZONTAL_PADDING,
