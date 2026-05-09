@@ -72,6 +72,7 @@ export struct IndexRootNavigationShell {
   @Prop blurStrategy: BlurStrategy | undefined = BlurStrategy.ENABLE
   @Prop systemMaterialEffect: SystemMaterialParams | undefined = undefined
   @Prop bindScrollers: Scroller[] = []
+  @State private homeTitleBarMaterialLevel: hdsMaterial.MaterialLevel = hdsMaterial.MaterialLevel.EXQUISITE
 
   controller: HdsTabsController = new HdsTabsController()
   homeCallbacks: IndexHomeRootContentCallbacks = {
@@ -110,6 +111,20 @@ export struct IndexRootNavigationShell {
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onHomeRefresh: () => void = () => {}
   onHomeSearchOpen: () => void = () => {}
+
+  aboutToAppear(): void {
+    const materialTypes: Array<hdsMaterial.MaterialType> = hdsMaterial.getSystemMaterialTypes()
+    if (materialTypes.indexOf(hdsMaterial.MaterialType.IMMERSIVE) < 0) {
+      this.homeTitleBarMaterialLevel = hdsMaterial.MaterialLevel.SMOOTH
+    }
+  }
+
+  private HomeTitleBarMaterialEffect(): SystemMaterialParams {
+    return {
+      materialType: hdsMaterial.MaterialType.ADAPTIVE,
+      materialLevel: this.homeTitleBarMaterialLevel,
+    }
+  }
 
   // 首页顶部改用 HDS 原生 titleBar menu，和 buttom 示例保持同一套按钮材质与对齐方式。
   private HomeTitleMenuOptions(): HdsNavigationMenuContentOptions {
@@ -283,23 +298,19 @@ export struct IndexRootNavigationShell {
             },
           },
         },
-        systemMaterialEffect: this.isHomeRootTab
-          ? {
-              materialType: hdsMaterial.MaterialType.ADAPTIVE,
-              materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
-            }
-          : this.systemMaterialEffect,
+        systemMaterialEffect: this.isHomeRootTab ? this.HomeTitleBarMaterialEffect() : this.systemMaterialEffect,
       },
-      // 全屏窗口下标题栏必须主动避让系统安全区，否则标题和菜单会压到状态栏。
+      // 当前应用是全屏窗口：标题栏内容需要避让状态栏；
+      // 但不启用组件级安全区，避免重新把滚动内容隔在页头下方。
       avoidLayoutSafeArea: true,
-      enableComponentSafeArea: true,
+      enableComponentSafeArea: false,
     })
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideTitleBar(this.hideTitleBar)
     .hideBackButton(true)
     .bindToScrollable(this.bindScrollers)
-    // 根页运行在全屏窗口中，顶部安全区需要留给 HDS 页头，底部仍交给浮动页签沉浸显示。
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊。
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
   }

@@ -216,6 +216,7 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
+    .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
@@ -281,6 +282,7 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
+    .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
@@ -330,6 +332,7 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
+    .clipContent(ContentClipMode.SAFE_AREA)
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
     .onReachEnd(() => {
