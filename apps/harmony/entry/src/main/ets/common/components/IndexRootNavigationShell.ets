@@ -111,6 +111,27 @@ export struct IndexRootNavigationShell {
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onHomeRefresh: () => void = () => {}
   onHomeSearchOpen: () => void = () => {}
+  private homeTitleMenus: HdsNavigationMenuContentOptions = {
+    value: [{
+      content: {
+        label: '刷新',
+        icon: $r('sys.symbol.arrow_clockwise'),
+        isEnabled: true,
+        action: () => {
+          this.onHomeRefresh()
+        },
+      },
+    }, {
+      content: {
+        label: '搜索',
+        icon: $r('sys.symbol.magnifyingglass'),
+        isEnabled: true,
+        action: () => {
+          this.onHomeSearchOpen()
+        },
+      },
+    }],
+  }
 
   aboutToAppear(): void {
     const materialTypes: Array<hdsMaterial.MaterialType> = hdsMaterial.getSystemMaterialTypes()
@@ -123,31 +144,6 @@ export struct IndexRootNavigationShell {
     return {
       materialType: hdsMaterial.MaterialType.ADAPTIVE,
       materialLevel: this.homeTitleBarMaterialLevel,
-    }
-  }
-
-  // 首页顶部改用 HDS 原生 titleBar menu，和 buttom 示例保持同一套按钮材质与对齐方式。
-  private HomeTitleMenuOptions(): HdsNavigationMenuContentOptions {
-    return {
-      value: [{
-        content: {
-          label: '刷新',
-          icon: $r('sys.symbol.arrow_clockwise'),
-          isEnabled: true,
-          action: () => {
-            this.onHomeRefresh()
-          },
-        },
-      }, {
-        content: {
-          label: '搜索',
-          icon: $r('sys.symbol.magnifyingglass'),
-          isEnabled: true,
-          action: () => {
-            this.onHomeSearchOpen()
-          },
-        },
-      }],
     }
   }
 
@@ -240,7 +236,7 @@ export struct IndexRootNavigationShell {
           mainTitle: this.isHomeRootTab ? '首页' : (this.isSettingsRootTab ? '' : this.currentRootTitle),
         },
         menu: this.isHomeRootTab && this.showHomeTitleActions && !this.hideTitleBar
-          ? this.HomeTitleMenuOptions()
+          ? this.homeTitleMenus
           : undefined,
         bottomBuilder: this.isSettingsRootTab
           ? {
@@ -300,8 +296,7 @@ export struct IndexRootNavigationShell {
         },
         systemMaterialEffect: this.isHomeRootTab ? this.HomeTitleBarMaterialEffect() : this.systemMaterialEffect,
       },
-      // 当前应用是全屏窗口：标题栏内容需要避让状态栏；
-      // 但不启用组件级安全区，避免重新把滚动内容隔在页头下方。
+      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏。
       avoidLayoutSafeArea: true,
       enableComponentSafeArea: false,
     })

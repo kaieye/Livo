@@ -48,6 +48,13 @@ const homeModeEntriesSource = readFileSync(
   ),
   'utf8',
 )
+const homeOverlayControlsSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/components/HomeRootOverlayControls.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
 
 test('root hds tab bar reports clicks for double-tap detection', () => {
   assert.match(
@@ -136,5 +143,26 @@ test('root home title bar keeps gradient blur over top content', () => {
   assert.match(
     homeModeEntriesSource,
     /\.clipContent\(ContentClipMode\.SAFE_AREA\)/,
+  )
+})
+
+test('home title actions keep stable menu config and are not blocked by overlay chrome', () => {
+  assert.match(
+    rootShellSource,
+    /private homeTitleMenus: HdsNavigationMenuContentOptions = \{/,
+  )
+  assert.match(
+    rootShellSource,
+    /menu:\s*this\.isHomeRootTab[\s\S]*\?\s*this\.homeTitleMenus/,
+  )
+  assert.match(rootShellSource, /this\.onHomeRefresh\(\)/)
+  assert.match(rootShellSource, /this\.onHomeSearchOpen\(\)/)
+  assert.match(
+    homeOverlayControlsSource,
+    /\.hitTestBehavior\(HitTestMode\.Transparent\)/,
+  )
+  assert.match(
+    homeOverlayControlsSource,
+    /\.hitTestBehavior\(HitTestMode\.Block\)/,
   )
 })

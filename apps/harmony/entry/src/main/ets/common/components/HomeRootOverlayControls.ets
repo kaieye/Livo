@@ -42,6 +42,7 @@ export struct HomeRootOverlayControls {
         this.onModeChange(mode)
       },
     })
+    .hitTestBehavior(HitTestMode.Block)
   }
 
   @Builder
@@ -57,6 +58,7 @@ export struct HomeRootOverlayControls {
         }
         .width('100%')
         .justifyContent(FlexAlign.Start)
+        .hitTestBehavior(HitTestMode.Block)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -73,6 +75,8 @@ export struct HomeRootOverlayControls {
     .scale({ x: this.modeRailDismissScale, y: this.modeRailDismissScale })
     .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
     .enabled(!this.modeRailCollapsed)
+    // 空白悬浮层不能拦截 HDS titleBar 菜单，真正的 rail 控件仍由内部 Row 阻断穿透。
+    .hitTestBehavior(HitTestMode.Transparent)
     .zIndex(100)
   }
 
@@ -106,5 +110,6 @@ export struct HomeRootOverlayControls {
       this.CollapsedModeRailLayer()
     }
     .width('100%')
+    .hitTestBehavior(HitTestMode.Transparent)
   }
 }
