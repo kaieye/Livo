@@ -12,7 +12,6 @@ import {
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
-  BOTTOM_TAB_LABEL_SIZE,
   PAGE_HORIZONTAL_PADDING,
 } from '../ui/UiTokens'
 
@@ -37,7 +36,7 @@ export struct HomeRootOverlayControls {
     HdsTabs({ controller: this.tabsController, index: this.modeIndex(this.mode) }) {
       ForEach(HOME_MODES, (m: HomeMode) => {
         TabContent() {
-          Row().width(0).height(0)
+          Text('').visibility(Visibility.None)
         }
         .tabBar(BottomTabBarStyle.of({
           normal: new SymbolGlyphModifier(resolveHomeModeSymbol(m)),
@@ -65,21 +64,18 @@ export struct HomeRootOverlayControls {
     })
     .width('100%')
     .height(BOTTOM_TAB_BAR_HEIGHT)
-    .hitTestBehavior(HitTestMode.Block)
   }
 
   build() {
-    Row() {
+    Column() {
       this.ModeTabs()
     }
     .width('100%')
-    .justifyContent(FlexAlign.Center)
     .padding({
       top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
       left: PAGE_HORIZONTAL_PADDING,
       right: PAGE_HORIZONTAL_PADDING,
     })
-    .hitTestBehavior(HitTestMode.Default)
     .zIndex(100)
   }
 }
