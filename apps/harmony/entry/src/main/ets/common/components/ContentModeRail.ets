@@ -1,6 +1,11 @@
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { CARD_RADIUS_SM, CHIP_RADIUS } from '../ui/UiTokens'
+import {
+  BOTTOM_TAB_BAR_HEIGHT,
+  BOTTOM_TAB_ITEM_HEIGHT,
+  BOTTOM_TAB_LABEL_SIZE,
+  CHIP_RADIUS,
+} from '../ui/UiTokens'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
 export type ContentMode = HomeMode
 
@@ -15,46 +20,35 @@ export struct ContentModeRail {
   @State pressedMode: ContentMode | '' = ''
   private lastCommittedMode: ContentMode | '' = ''
   private lastCommittedAt: number = 0
-  @State railWidth: number = 0
   onExpandRequest: () => void = () => {}
   onChange: (mode: ContentMode) => void = () => {}
 
-  private modeIndex(mode: ContentMode): number {
-    return HOME_MODES.indexOf(mode)
-  }
-
   private isPressed(mode: ContentMode): boolean {
     return this.pressedMode === mode
-  }
-
-  private indicatorSlotWidth(): number {
-    if (this.railWidth <= 0) {
-      return 0
-    }
-
-    return (this.railWidth - 8) / HOME_MODES.length
-  }
-
-  private indicatorOffsetX(): number {
-    return this.indicatorSlotWidth() * this.modeIndex(this.mode)
   }
 
   private clampedCollapseProgress(): number {
     return Math.max(0, Math.min(this.collapseProgress, 1))
   }
 
-  private updateRailWidth(width: Length | undefined): void {
-    if (width === undefined) {
-      this.railWidth = 0
-      return
-    }
+  private isActive(mode: ContentMode): boolean {
+    return this.mode === mode
+  }
 
-    if (typeof width === 'number') {
-      this.railWidth = width
-      return
-    }
+  private activeColor(): string {
+    return this.theme.isDark ? '#76A2FF' : '#2F6BFF'
+  }
 
-    this.railWidth = 0
+  private inactiveColor(): string {
+    return this.theme.isDark ? '#A3A8B3' : '#9B9BA1'
+  }
+
+  private labelWeight(mode: ContentMode): number {
+    return this.isActive(mode) ? FontWeight.Medium : FontWeight.Regular
+  }
+
+  private itemOffsetY(mode: ContentMode): number {
+    return this.isActive(mode) ? -2 : 0
   }
 
   private itemScale(mode: ContentMode): number {
@@ -62,108 +56,39 @@ export struct ContentModeRail {
       return 1
     }
 
-    if (this.mode === mode) {
-      return this.isPressed(mode) ? 0.98 : 1
+    if (this.pressedMode === mode) {
+      return 0.985
     }
 
-    return this.isPressed(mode) ? 0.96 : 1
+    return 1
   }
 
   private itemOpacity(mode: ContentMode): number {
-    if (this.interactionLocked) {
-      return this.mode === mode ? 1 : 0.94
-    }
-
-    if (this.mode === mode) {
-      return 1
-    }
-
-    return this.isPressed(mode) ? 0.9 : 0.94
+    return this.isActive(mode) ? 1 : 0.94
   }
 
-  private transitionalItemOpacity(mode: ContentMode): number {
-    if (this.mode === mode) {
-      return 1
-    }
-
-    const restOpacity = this.itemOpacity(mode)
-    return restOpacity * (1 - this.clampedCollapseProgress())
+  private dockBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.85)' : 'rgba(255,255,255,0.85)'
   }
 
-  private activeTextColor(): string {
-    return this.theme.accent
+  private dockBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.94)'
   }
 
-  private railBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.72)' : 'rgba(255,255,255,0.72)'
+  private dockShadowColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.25)'
   }
 
-  private railBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)'
-  }
-
-  private railBackdropBlur(): number {
-    return this.theme.isDark ? 10 : 18
-  }
-
-  private indicatorColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.92)'
-  }
-
-  private indicatorBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)'
-  }
-
-  private indicatorShadowColor(): string {
-    return this.theme.isDark ? 'rgba(0,0,0,0.12)' : 'rgba(15,23,42,0.08)'
-  }
-
-  private indicatorShadowRadius(): number {
-    return 8
-  }
-
-  private railShellWidth(): Length {
-    if (this.collapsed) {
-      return this.collapsedCircleSize()
-    }
-
-    return '100%'
+  private collapsibleScale(): number {
+    return 1 - this.clampedCollapseProgress() * 0.14
   }
 
   private collapsedCircleSize(): number {
     return 40
   }
 
-  private modeIconSize(collapsed: boolean = false): number {
-    return collapsed ? 24 : 16
-  }
-
-  private expandedRailScale(): number {
-    return 1 - this.clampedCollapseProgress() * 0.14
-  }
-
-  private railShellPadding(): Padding {
-    if (this.collapsed) {
-      return { left: 0, right: 0, top: 0, bottom: 0 }
-    }
-
-    return { left: 4, right: 4, top: 4, bottom: 4 }
-  }
-
-  private railShellBackgroundColor(): string {
-    return this.railBackgroundColor()
-  }
-
-  private railShellBorderWidth(): number {
-    return 0.8
-  }
-
-  private railShellBackdropBlur(): number {
-    return this.railBackdropBlur()
-  }
-
-  private railShellBorderRadius(): number {
-    return this.collapsed ? CHIP_RADIUS : CARD_RADIUS_SM
+  private modeIconSize(): number {
+    return 24
   }
 
   private handleCollapsedTap(): void {
@@ -204,34 +129,49 @@ export struct ContentModeRail {
   @Builder
   private collapsedIcon(mode: ContentMode) {
     SymbolGlyph(this.modeSymbol(mode))
-      .fontSize(this.modeIconSize(true))
-      .fontColor([this.activeTextColor()])
+      .fontSize(this.modeIconSize())
+      .fontColor([this.activeColor()])
   }
 
   @Builder
-  private ModeIcon(mode: ContentMode) {
-    SymbolGlyph(this.modeSymbol(mode))
-      .fontSize(this.modeIconSize())
-      .fontColor([this.mode === mode ? this.activeTextColor() : this.theme.textSecondary])
+  private ModeTabIcon(mode: ContentMode) {
+    Stack({ alignContent: Alignment.Center }) {
+      Row()
+        .width(36)
+        .height(26)
+        .borderRadius(CHIP_RADIUS)
+        .backgroundColor('rgba(0,0,0,0)')
+        .animation({ duration: 140, curve: Curve.EaseOut })
+
+      SymbolGlyph(this.modeSymbol(mode))
+        .fontSize(this.modeIconSize())
+        .fontColor([this.isActive(mode) ? this.activeColor() : this.inactiveColor()])
+    }
+    .width(36)
+    .height(26)
   }
 
   @Builder
   private ModeTab(mode: ContentMode) {
-    Row({ space: 6 }) {
-      this.ModeIcon(mode)
+    Column({ space: 3 }) {
+      this.ModeTabIcon(mode)
 
       Text(this.labelFor(mode))
-        .fontSize(14)
-        .fontWeight(FontWeight.Regular)
-        .fontColor(this.theme.textSecondary)
+        .fontSize(BOTTOM_TAB_LABEL_SIZE)
+        .fontWeight(this.labelWeight(mode))
+        .fontColor(this.isActive(mode) ? this.activeColor() : this.inactiveColor())
+        .animation({ duration: 140, curve: Curve.EaseOut })
     }
-    .layoutWeight(1)
-    .height(38)
-    .justifyContent(FlexAlign.Center)
-    .borderRadius(CHIP_RADIUS)
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(FlexAlign.Start)
+    .width(`${100 / HOME_MODES.length}%`)
+    .height(BOTTOM_TAB_ITEM_HEIGHT)
+    .padding({ top: 9, bottom: 2 })
     .scale({ x: this.itemScale(mode), y: this.itemScale(mode) })
-    .opacity(this.transitionalItemOpacity(mode))
-    .clickEffect({ level: ClickEffectLevel.MIDDLE })
+    .translate({ y: this.itemOffsetY(mode) })
+    .opacity(this.itemOpacity(mode))
+    .animation({ duration: 140, curve: Curve.EaseOut })
+    .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
       this.commitModeSwitch(mode)
     })
@@ -285,34 +225,14 @@ export struct ContentModeRail {
 
   @Builder
   private ExpandedRail() {
-    Stack({ alignContent: Alignment.Center }) {
-      Row() {
-        Row()
-          .width(this.indicatorSlotWidth())
-          .height(38)
-          .translate({ x: this.indicatorOffsetX() })
-          .backgroundColor(this.indicatorColor())
-          .borderRadius(CHIP_RADIUS)
-          .border({ width: 0.6, color: this.indicatorBorderColor() })
-          .shadow({
-            radius: this.indicatorShadowRadius(),
-            color: this.indicatorShadowColor(),
-            offsetX: 0,
-            offsetY: 2,
-          })
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Start)
-
-      Row({ space: 0 }) {
-        ForEach(HOME_MODES, (mode: ContentMode) => {
-          this.ModeTab(mode)
-        }, (mode: ContentMode) => mode)
-      }
-      .width('100%')
-      .height('100%')
+    Row({ space: 0 }) {
+      ForEach(HOME_MODES, (mode: ContentMode) => {
+        this.ModeTab(mode)
+      }, (mode: ContentMode) => mode)
     }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 2, right: 2 })
   }
 
   build() {
@@ -323,19 +243,26 @@ export struct ContentModeRail {
         this.ExpandedRail()
       }
     }
-    .width(this.railShellWidth())
-    .height(this.collapsed ? this.collapsedCircleSize() : 46)
-    .padding(this.railShellPadding())
-    .backgroundColor(this.railShellBackgroundColor())
-    .backdropBlur(this.railShellBackdropBlur())
-    .borderRadius(this.railShellBorderRadius())
-    .border({ width: this.railShellBorderWidth(), color: this.railBorderColor() })
-    .scale({
-      x: this.collapsed ? 1 : this.expandedRailScale(),
-      y: this.collapsed ? 1 : this.expandedRailScale(),
+    .width('100%')
+    .height(this.collapsed ? this.collapsedCircleSize() : BOTTOM_TAB_BAR_HEIGHT)
+    .backgroundColor(this.collapsed ? Color.Transparent : this.dockBackgroundColor())
+    .backdropBlur(this.collapsed ? 0 : (this.theme.isDark ? 10 : 18))
+    .borderRadius(this.collapsed ? this.collapsedCircleSize() : CHIP_RADIUS)
+    .border(this.collapsed ? { width: 0 } : { width: 0.6, color: this.dockBorderColor() })
+    .shadow(this.collapsed ? {
+      radius: 0,
+      color: 'rgba(0,0,0,0)',
+      offsetX: 0,
+      offsetY: 0,
+    } : {
+      radius: 10,
+      color: this.dockShadowColor(),
+      offsetX: 0,
+      offsetY: 2,
     })
-    .onSizeChange((_, newValue) => {
-      this.updateRailWidth(newValue.width)
+    .scale({
+      x: this.collapsed ? 1 : this.collapsibleScale(),
+      y: this.collapsed ? 1 : this.collapsibleScale(),
     })
     .transition(this.enableEnterTransition ? livoMotion.enterScale(30) : TransitionEffect.IDENTITY)
   }

@@ -481,11 +481,6 @@ struct Index {
     }
   }
 
-  private requestExpandedModeRail(): void {
-    this.homeInlineSearchController.close()
-    this.homeRailCoordinator.requestExpandedModeRail()
-  }
-
   private handleHomeRefreshAction(): void {
     if (this.isRefreshing || this.isHomeStartupRefreshing) {
       this.showToast('正在刷新，请稍候', 1200)
@@ -556,20 +551,11 @@ struct Index {
         searchQuery: this.searchQuery,
         searchAllHomeCategories: this.rootSettings.searchAllHomeCategories,
         collapsedModeRailTopPadding: this.homeRailCoordinator.homeCollapsedModeRailTopPadding(),
-        collapseProgress: this.homeRailCoordinator.homeModeRailCollapseProgress(),
-        modeRailTopPadding: this.homeRailCoordinator.homeModeRailTopPadding(),
-        modeRailLeftPadding: this.homeRailCoordinator.homeModeRailLeftPadding(),
-        modeRailRightInset: this.homeRailCoordinator.homeModeRailRightInset(),
-        modeRailDismissTranslateY: this.homeRailCoordinator.homeModeRailDismissTranslateY(),
-        modeRailDismissOpacity: this.homeRailCoordinator.homeModeRailDismissOpacity(),
-        modeRailDismissScale: this.homeRailCoordinator.homeModeRailDismissScale(),
-        modeRailCollapsed: this.homeRailCoordinator.isHomeModeRailCollapsed(),
         horizontalPadding: PAGE_HORIZONTAL_PADDING,
         searchFieldOffsetY: this.showSearch ? 0 : -1 * HOME_INLINE_SEARCH_VERTICAL_TRAVEL,
         searchResultEntries: this.homeInlineSearchController.searchResultEntries(),
         searchShowEmptyState: this.homeInlineSearchController.hasSearchResultEmptyState(),
         inputController: this.searchInputController,
-        onExpandRequest: () => this.requestExpandedModeRail(),
         onModeChange: (mode: SubscriptionMode) => this.homeModeController.requestModeSwitch(mode),
         onQueryChange: (value: string) => { this.searchQuery = value },
         onSearchClose: (clearQuery: boolean) => this.homeInlineSearchController.close(clearQuery),

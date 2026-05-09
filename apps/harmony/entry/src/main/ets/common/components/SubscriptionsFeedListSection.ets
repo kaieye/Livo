@@ -1,8 +1,14 @@
+import { SymbolGlyphModifier } from '@kit.ArkUI'
+import {
+  HdsTabs,
+  HdsTabsController,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
 import { AvatarTile } from './AvatarTile'
-import { ContentModeRail } from './ContentModeRail'
 import { FeedCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
 import { resolveSocialFeedDisplayTitle } from '../utils/SocialFeedPresentation'
 import {
   buildSubscriptionFeedIconCandidates,
@@ -15,6 +21,7 @@ import {
 } from '../utils/SubscriptionsModePresentation'
 import {
   CARD_RADIUS_LG,
+  BOTTOM_TAB_BAR_HEIGHT,
   CARD_RADIUS_MD,
   LIST_ROW_DIVIDER_INSET,
   LIST_ROW_HORIZONTAL_PADDING,
@@ -37,6 +44,7 @@ export struct SubscriptionsFeedListSection {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop interactionLocked: boolean = false
   @Prop emptyTitle: string = ''
+  private modeTabsController: HdsTabsController = new HdsTabsController()
   @Prop enableRootEnterTransition: boolean = true
   scroller: Scroller = new Scroller()
   onModeChange: (mode: SubscriptionMode) => void = () => {}
@@ -49,6 +57,47 @@ export struct SubscriptionsFeedListSection {
 
   private feedDisplayTitle(feed: FeedCardModel): string {
     return resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+  }
+
+  private modeIndex(mode: SubscriptionMode): number {
+    const i = HOME_MODES.indexOf(mode as HomeMode)
+    return i >= 0 ? i : 0
+  }
+
+  @Builder
+  private ModeTabs() {
+    HdsTabs({ controller: this.modeTabsController, index: this.modeIndex(this.activeMode) }) {
+      ForEach(HOME_MODES, (mode: HomeMode) => {
+        TabContent() {
+          Row().width(0).height(0)
+        }
+        .tabBar(BottomTabBarStyle.of({
+          normal: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
+          selected: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
+        }, resolveHomeModeTitle(mode)))
+      }, (mode: HomeMode) => mode)
+    }
+    .vertical(false)
+    .scrollable(false)
+    .animationDuration(0)
+    .barPosition(BarPosition.End)
+    .barOverlap(true)
+    .barHeight(BOTTOM_TAB_BAR_HEIGHT)
+    .barFloatingStyle({
+      barBottomMargin: 0,
+      systemMaterialEffect: {
+        materialType: hdsMaterial.MaterialType.ADAPTIVE,
+        materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+      },
+    })
+    .enabled(!this.interactionLocked)
+    .onChange((index: number) => {
+      const mode = HOME_MODES[index]
+      if (mode) { this.onModeChange(mode) }
+    })
+    .width('100%')
+    .height(BOTTOM_TAB_BAR_HEIGHT)
+    .hitTestBehavior(HitTestMode.Block)
   }
 
   @Builder
@@ -122,18 +171,8 @@ export struct SubscriptionsFeedListSection {
         Row().width('100%').height(0)
 
         Column() {
-          ContentModeRail({
-            mode: this.activeMode,
-            theme: this.theme,
-            interactionLocked: this.interactionLocked,
-            enableEnterTransition: false,
-            onChange: (mode: SubscriptionMode) => {
-              this.onModeChange(mode)
-            },
-          })
+          this.ModeTabs()
         }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)

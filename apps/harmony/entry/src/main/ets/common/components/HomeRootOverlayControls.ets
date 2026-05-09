@@ -1,113 +1,157 @@
-import { ContentModeRail } from './ContentModeRail'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   SubscriptionMode,
+  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT,
 } from './HomeRootConfig'
-import { ROOT_MODE_RAIL_TOP_GAP } from './FloatingRootPageLayout'
-import { HOME_INLINE_SEARCH_MOTION_DURATION } from './HomeInlineSearchOverlay'
+import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
+import {
+  BOTTOM_TAB_LABEL_SIZE,
+  CHIP_RADIUS,
+  PAGE_HORIZONTAL_PADDING,
+} from '../ui/UiTokens'
+
+const HOME_MODE_TABS_TOP_OFFSET: number = -8
+const MODE_ICON_SIZE: number = 24
 
 @Component
 export struct HomeRootOverlayControls {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
-  @Prop showSearch: boolean = false
-  @Prop collapsedModeRailTopPadding: number = 0
-  @Prop collapseProgress: number = 0
-  @Prop modeRailTopPadding: number = 0
-  @Prop modeRailLeftPadding: number = 0
-  @Prop modeRailRightInset: number = 0
-  @Prop modeRailDismissTranslateY: number = 0
-  @Prop modeRailDismissOpacity: number = 1
-  @Prop modeRailDismissScale: number = 1
-  @Prop modeRailCollapsed: boolean = false
-  @Prop horizontalPadding: number = 0
+  @State pressedMode: SubscriptionMode | '' = ''
+  private lastCommittedMode: SubscriptionMode | '' = ''
+  private lastCommittedAt: number = 0
 
-  onExpandRequest: () => void = () => {}
   onModeChange: (mode: SubscriptionMode) => void = () => {}
 
+  private isActive(m: SubscriptionMode): boolean {
+    return this.mode === m
+  }
+
+  private activeColor(): string {
+    return this.theme.isDark ? '#76A2FF' : '#2F6BFF'
+  }
+
+  private inactiveColor(): string {
+    return this.theme.isDark ? '#A3A8B3' : '#9B9BA1'
+  }
+
+  private labelWeight(m: SubscriptionMode): number {
+    return this.isActive(m) ? FontWeight.Medium : FontWeight.Regular
+  }
+
+  private itemScale(m: SubscriptionMode): number {
+    if (this.interactionLocked) {
+      return 1
+    }
+    if (this.pressedMode === m) {
+      return 0.985
+    }
+    return 1
+  }
+
+  private itemOpacity(m: SubscriptionMode): number {
+    return this.isActive(m) ? 1 : 0.94
+  }
+
+  private dockBackgroundColor(): string {
+    return this.theme.isDark ? 'rgba(20,22,28,0.85)' : 'rgba(255,255,255,0.85)'
+  }
+
+  private dockBorderColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.94)'
+  }
+
+  private dockShadowColor(): string {
+    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.25)'
+  }
+
+  private commitModeSwitch(m: SubscriptionMode): void {
+    if (this.interactionLocked || m === this.mode) {
+      return
+    }
+    const now = Date.now()
+    if (this.lastCommittedMode === m && now - this.lastCommittedAt < 260) {
+      return
+    }
+    this.lastCommittedMode = m
+    this.lastCommittedAt = now
+    this.onModeChange(m)
+  }
+
   @Builder
-  private HomeModeRail(collapsed: boolean) {
-    ContentModeRail({
-      mode: this.mode,
-      theme: this.theme,
-      interactionLocked: this.interactionLocked,
-      enableEnterTransition: false,
-      collapsed,
-      collapseProgress: this.collapseProgress,
-      onExpandRequest: () => {
-        this.onExpandRequest()
-      },
-      onChange: (mode: SubscriptionMode) => {
-        this.onModeChange(mode)
-      },
+  private ModeTabItem(m: HomeMode) {
+    Column({ space: 3 }) {
+      SymbolGlyph(resolveHomeModeSymbol(m))
+        .fontSize(MODE_ICON_SIZE)
+        .fontColor([this.isActive(m) ? this.activeColor() : this.inactiveColor()])
+
+      Text(resolveHomeModeTitle(m))
+        .fontSize(BOTTOM_TAB_LABEL_SIZE)
+        .fontWeight(this.labelWeight(m))
+        .fontColor(this.isActive(m) ? this.activeColor() : this.inactiveColor())
+    }
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(FlexAlign.Start)
+    .padding({ top: 9, bottom: 2, left: 16, right: 16 })
+    .scale({ x: this.itemScale(m), y: this.itemScale(m) })
+    .opacity(this.itemOpacity(m))
+    .animation({ duration: 140, curve: Curve.EaseOut })
+    .clickEffect({ level: ClickEffectLevel.LIGHT })
+    .onClick(() => {
+      this.commitModeSwitch(m)
+    })
+    .onTouch((event: TouchEvent) => {
+      if (this.interactionLocked) {
+        this.pressedMode = ''
+        return
+      }
+      if (event.type === TouchType.Down) {
+        this.pressedMode = m
+        return
+      }
+      if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        if (this.pressedMode === m) {
+          this.pressedMode = ''
+        }
+      }
+    })
+  }
+
+  @Builder
+  private ModeRail() {
+    Row({ space: 0 }) {
+      ForEach(HOME_MODES, (m: HomeMode) => {
+        this.ModeTabItem(m)
+      }, (m: HomeMode) => m)
+    }
+    .padding({ left: 2, right: 2 })
+    .backgroundColor(this.dockBackgroundColor())
+    .backdropBlur(this.theme.isDark ? 10 : 18)
+    .borderRadius(CHIP_RADIUS)
+    .border({ width: 0.6, color: this.dockBorderColor() })
+    .shadow({
+      radius: 10,
+      color: this.dockShadowColor(),
+      offsetX: 0,
+      offsetY: 2,
     })
     .hitTestBehavior(HitTestMode.Block)
   }
 
-  @Builder
-  private CollapsingModeRailLayer() {
-    Stack({ alignContent: Alignment.Top }) {
-      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-        Row()
-          .width('100%')
-          .height(0)
-
-        Row() {
-          this.HomeModeRail(false)
-        }
-        .width('100%')
-        .justifyContent(FlexAlign.Start)
-        .hitTestBehavior(HitTestMode.Block)
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .padding({
-      top: this.modeRailTopPadding,
-      left: this.modeRailLeftPadding,
-      right: this.horizontalPadding,
-    })
-    .translate({ y: this.modeRailDismissTranslateY })
-    .opacity(this.modeRailDismissOpacity)
-    .scale({ x: this.modeRailDismissScale, y: this.modeRailDismissScale })
-    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-    .enabled(!this.modeRailCollapsed)
-    // 空白悬浮层不能拦截 HDS titleBar 菜单，真正的 rail 控件仍由内部 Row 阻断穿透。
-    .hitTestBehavior(HitTestMode.Transparent)
-    .zIndex(100)
-  }
-
-  @Builder
-  private CollapsedModeRailLayer() {
-    Row() {
-      this.HomeModeRail(true)
-    }
-    .width('100%')
-    .justifyContent(FlexAlign.End)
-    .alignItems(VerticalAlign.Top)
-    .padding({
-      top: this.collapsedModeRailTopPadding,
-      left: this.horizontalPadding,
-      right: this.modeRailRightInset,
-    })
-    .opacity(this.showSearch ? 0 : this.collapseProgress)
-    .translate({
-      x: this.showSearch ? 10 : 0,
-      y: (1 - this.collapseProgress) * 14,
-    })
-    .animation({ duration: HOME_INLINE_SEARCH_MOTION_DURATION, curve: Curve.FastOutSlowIn })
-    .enabled(this.modeRailCollapsed && !this.showSearch)
-    .hitTestBehavior(HitTestMode.Transparent)
-    .zIndex(132)
-  }
-
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      this.CollapsingModeRailLayer()
-      this.CollapsedModeRailLayer()
+      Row() {
+        this.ModeRail()
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Start)
+      .padding({
+        top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
+        left: PAGE_HORIZONTAL_PADDING,
+        right: PAGE_HORIZONTAL_PADDING,
+      })
+      .zIndex(100)
     }
     .width('100%')
     .hitTestBehavior(HitTestMode.Transparent)
