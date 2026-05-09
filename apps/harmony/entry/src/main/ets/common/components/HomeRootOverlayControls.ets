@@ -22,7 +22,6 @@ export struct HomeRootOverlayControls {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
-  private tabsController: HdsTabsController = new HdsTabsController()
 
   onModeChange: (mode: SubscriptionMode) => void = () => {}
 
@@ -33,10 +32,10 @@ export struct HomeRootOverlayControls {
 
   @Builder
   private ModeTabs() {
-    HdsTabs({ controller: this.tabsController, index: this.modeIndex(this.mode) }) {
+    HdsTabs({ index: this.modeIndex(this.mode) }) {
       ForEach(HOME_MODES, (m: HomeMode) => {
         TabContent() {
-          Text('').visibility(Visibility.None)
+          Text('').width(0).height(0)
         }
         .tabBar(BottomTabBarStyle.of({
           normal: new SymbolGlyphModifier(resolveHomeModeSymbol(m)),
@@ -76,6 +75,8 @@ export struct HomeRootOverlayControls {
       left: PAGE_HORIZONTAL_PADDING,
       right: PAGE_HORIZONTAL_PADDING,
     })
+    .backgroundColor(Color.Transparent)
+    .clip(true)
     .zIndex(100)
   }
 }
