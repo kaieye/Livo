@@ -67,6 +67,52 @@ export struct IndexHomeOverlayLayer {
     })
   }
 
+  private refreshStatusText(): string {
+    if (this.refreshTotalCount > 0) {
+      return `刷新中 ${this.displayRefreshPercent}%`
+    }
+
+    return '正在刷新'
+  }
+
+  @Builder
+  private RefreshStatusPill() {
+    Row() {
+      Row({ space: 6 }) {
+        SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+          .fontSize(14)
+          .fontColor([this.theme.accent])
+
+        Text(this.refreshStatusText())
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .maxLines(1)
+      }
+      .height(30)
+      .padding({ left: 12, right: 12 })
+      .borderRadius(15)
+      .backgroundColor(this.theme.isDark ? 'rgba(20,22,28,0.78)' : 'rgba(255,255,255,0.86)')
+      .backdropBlur(this.theme.isDark ? 10 : 16)
+      .border({ width: 0.8, color: this.theme.divider })
+      .shadow({
+        radius: this.theme.isDark ? 8 : 12,
+        color: this.theme.isDark ? 'rgba(0,0,0,0.2)' : 'rgba(15,23,42,0.1)',
+        offsetX: 0,
+        offsetY: 2,
+      })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .padding({
+      top: this.collapsedModeRailTopPadding,
+      left: this.horizontalPadding,
+      right: this.horizontalPadding,
+    })
+    .hitTestBehavior(HitTestMode.None)
+    .zIndex(150)
+  }
+
   @Builder
   private SearchOverlay() {
     HomeInlineSearchOverlay({
@@ -105,12 +151,22 @@ export struct IndexHomeOverlayLayer {
       if (this.searchOverlayVisible) {
         Stack({ alignContent: Alignment.TopStart }) {
           this.OverlayControls()
+          if (this.isRefreshing) {
+            this.RefreshStatusPill()
+          }
           this.SearchOverlay()
         }
         .width('100%')
         .height('100%')
       } else {
-        this.OverlayControls()
+        Stack({ alignContent: Alignment.TopStart }) {
+          this.OverlayControls()
+          if (this.isRefreshing) {
+            this.RefreshStatusPill()
+          }
+        }
+        .width('100%')
+        .hitTestBehavior(HitTestMode.Transparent)
       }
     } else {
       Row()

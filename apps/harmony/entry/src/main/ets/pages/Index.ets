@@ -486,6 +486,16 @@ struct Index {
     this.homeRailCoordinator.requestExpandedModeRail()
   }
 
+  private handleHomeRefreshAction(): void {
+    if (this.isRefreshing || this.isHomeStartupRefreshing) {
+      this.showToast('正在刷新，请稍候', 1200)
+      return
+    }
+
+    this.showToast('正在刷新订阅...', 1200)
+    void this.refreshFeaturedEntries()
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       IndexRootNavigationShell({
@@ -529,7 +539,7 @@ struct Index {
         onSettingsContentScrollerReady: (scroller: Scroller) => this.scrollerRegistry.handleSettingsContentScrollerReady(scroller),
         onSettingsChange: (settings: HarmonySettings) => this.pageLifecycle.handleRootSettingsChange(settings),
         onThemeChange: (theme: ThemePalette) => this.pageLifecycle.handleRootThemeChange(theme),
-        onHomeRefresh: () => { void this.refreshFeaturedEntries() },
+        onHomeRefresh: () => this.handleHomeRefreshAction(),
         onHomeSearchOpen: () => this.homeInlineSearchController.open(),
       })
 

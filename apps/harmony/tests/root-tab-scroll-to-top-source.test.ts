@@ -20,6 +20,13 @@ const indexSource = readFileSync(
   new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
   'utf8',
 )
+const homeOverlayLayerSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/components/IndexHomeOverlayLayer.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
 const subscriptionsSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/components/SubscriptionsContent.ets',
@@ -164,5 +171,19 @@ test('home title actions keep stable menu config and are not blocked by overlay 
   assert.match(
     homeOverlayControlsSource,
     /\.hitTestBehavior\(HitTestMode\.Block\)/,
+  )
+})
+
+test('home refresh title action gives immediate visible feedback', () => {
+  assert.match(indexSource, /private handleHomeRefreshAction\(\): void \{/)
+  assert.match(indexSource, /this\.showToast\('正在刷新订阅\.\.\.', 1200\)/)
+  assert.match(
+    indexSource,
+    /onHomeRefresh: \(\) => this\.handleHomeRefreshAction\(\)/,
+  )
+  assert.match(homeOverlayLayerSource, /private RefreshStatusPill\(\)/)
+  assert.match(
+    homeOverlayLayerSource,
+    /if \(this\.isRefreshing\) \{\s*this\.RefreshStatusPill\(\)\s*\}/s,
   )
 })
