@@ -69,21 +69,17 @@ export struct HomeRootOverlayControls {
   }
 
   build() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      Row() {
-        this.ModeTabs()
-      }
-      .width('100%')
-      .clip(true)
-      .justifyContent(FlexAlign.Center)
-      .padding({
-        top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
-        left: PAGE_HORIZONTAL_PADDING,
-        right: PAGE_HORIZONTAL_PADDING,
-      })
-      .zIndex(100)
+    Row() {
+      this.ModeTabs()
     }
     .width('100%')
-    .hitTestBehavior(HitTestMode.Transparent)
+    .justifyContent(FlexAlign.Center)
+    .padding({
+      top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
+      left: PAGE_HORIZONTAL_PADDING,
+      right: PAGE_HORIZONTAL_PADDING,
+    })
+    .hitTestBehavior(HitTestMode.Default)
+    .zIndex(100)
   }
 }
