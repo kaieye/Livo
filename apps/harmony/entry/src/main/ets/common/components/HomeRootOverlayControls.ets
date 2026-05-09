@@ -74,6 +74,7 @@ export struct HomeRootOverlayControls {
         this.ModeTabs()
       }
       .width('100%')
+      .clip(true)
       .justifyContent(FlexAlign.Center)
       .padding({
         top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
