@@ -33,8 +33,8 @@ export struct HomeRootOverlayControls {
       Row().width(0).height(0)
     }
     .tabBar(BottomTabBarStyle.of({
-      normal: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)).fontSize(12),
-      selected: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)).fontSize(12),
+      normal: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
+      selected: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
     }, resolveHomeModeTitle(mode)))
   }
 
@@ -56,7 +56,7 @@ export struct HomeRootOverlayControls {
     .barOverlap(true)
     .barHeight(HOME_MODE_RAIL_HEIGHT)
     .barFloatingStyle({
-      barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 650,
+      barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 640,
       systemMaterialEffect: {
         materialType: hdsMaterial.MaterialType.ADAPTIVE,
         materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
