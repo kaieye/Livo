@@ -5,9 +5,9 @@ import {
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { BOTTOM_TAB_BAR_HEIGHT, BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
+import { BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
 import { resolveHdsBottomTabBarBottomMargin } from '../utils/HdsBottomTabConfig'
-import { SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
 
 @Component
@@ -33,8 +33,8 @@ export struct HomeRootOverlayControls {
       Row().width(0).height(0)
     }
     .tabBar(BottomTabBarStyle.of({
-      normal: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
-      selected: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
+      normal: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)).fontSize(12),
+      selected: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)).fontSize(12),
     }, resolveHomeModeTitle(mode)))
   }
 
@@ -54,9 +54,9 @@ export struct HomeRootOverlayControls {
     .animationDuration(0)
     .barPosition(BarPosition.End)
     .barOverlap(true)
-    .barHeight(BOTTOM_TAB_BAR_HEIGHT)
+    .barHeight(HOME_MODE_RAIL_HEIGHT)
     .barFloatingStyle({
-      barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 620,
+      barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 650,
       systemMaterialEffect: {
         materialType: hdsMaterial.MaterialType.ADAPTIVE,
         materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
