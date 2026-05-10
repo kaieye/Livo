@@ -1,144 +1,75 @@
+import { SymbolGlyphModifier } from '@kit.ArkUI'
+import {
+  HdsTabs,
+  HdsTabsController,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import {
-  SubscriptionMode,
-  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT,
-} from './HomeRootConfig'
+import { BOTTOM_TAB_BAR_HEIGHT, BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
+import { resolveHdsBottomTabBarBottomMargin } from '../utils/HdsBottomTabConfig'
+import { SubscriptionMode } from './HomeRootConfig'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
-import {
-  BOTTOM_TAB_LABEL_SIZE,
-  CHIP_RADIUS,
-  PAGE_HORIZONTAL_PADDING,
-} from '../ui/UiTokens'
-
-const HOME_MODE_TABS_TOP_OFFSET: number = -8
-const MODE_ICON_SIZE: number = 24
 
 @Component
 export struct HomeRootOverlayControls {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
-  @State pressedMode: SubscriptionMode | '' = ''
-  private lastCommittedMode: SubscriptionMode | '' = ''
-  private lastCommittedAt: number = 0
-
+  private modeTabsController: HdsTabsController = new HdsTabsController()
   onModeChange: (mode: SubscriptionMode) => void = () => {}
 
-  private isActive(m: SubscriptionMode): boolean {
-    return this.mode === m
+  private modeIndex(mode: SubscriptionMode): number {
+    const i = HOME_MODES.indexOf(mode as HomeMode)
+    return i >= 0 ? i : 0
   }
 
   private activeColor(): string {
     return this.theme.isDark ? '#76A2FF' : '#2F6BFF'
   }
 
-  private inactiveColor(): string {
-    return this.theme.isDark ? '#A3A8B3' : '#9B9BA1'
-  }
-
-  private labelWeight(m: SubscriptionMode): number {
-    return this.isActive(m) ? FontWeight.Medium : FontWeight.Regular
-  }
-
-  private itemScale(m: SubscriptionMode): number {
-    if (this.interactionLocked) {
-      return 1
-    }
-    if (this.pressedMode === m) {
-      return 0.985
-    }
-    return 1
-  }
-
-  private itemOpacity(m: SubscriptionMode): number {
-    return this.isActive(m) ? 1 : 0.94
-  }
-
-  private dockBackgroundColor(): string {
-    return this.theme.isDark ? 'rgba(20,22,28,0.85)' : 'rgba(255,255,255,0.85)'
-  }
-
-  private dockBorderColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.94)'
-  }
-
-  private dockShadowColor(): string {
-    return this.theme.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.25)'
-  }
-
-  private commitModeSwitch(m: SubscriptionMode): void {
-    if (this.interactionLocked || m === this.mode) {
-      return
-    }
-    const now = Date.now()
-    if (this.lastCommittedMode === m && now - this.lastCommittedAt < 260) {
-      return
-    }
-    this.lastCommittedMode = m
-    this.lastCommittedAt = now
-    this.onModeChange(m)
-  }
-
   @Builder
-  private ModeTabItem(m: HomeMode) {
-    Column({ space: 3 }) {
-      SymbolGlyph(resolveHomeModeSymbol(m))
-        .fontSize(MODE_ICON_SIZE)
-        .fontColor([this.isActive(m) ? this.activeColor() : this.inactiveColor()])
-
-      Text(resolveHomeModeTitle(m))
-        .fontSize(BOTTOM_TAB_LABEL_SIZE)
-        .fontWeight(this.labelWeight(m))
-        .fontColor(this.isActive(m) ? this.activeColor() : this.inactiveColor())
+  private ModeTabBuilder(mode: HomeMode) {
+    TabContent() {
+      Row().width(0).height(0)
     }
-    .alignItems(HorizontalAlign.Center)
-    .justifyContent(FlexAlign.Start)
-    .padding({ top: 9, bottom: 2, left: 16, right: 16 })
-    .scale({ x: this.itemScale(m), y: this.itemScale(m) })
-    .opacity(this.itemOpacity(m))
-    .animation({ duration: 140, curve: Curve.EaseOut })
-    .clickEffect({ level: ClickEffectLevel.LIGHT })
-    .onClick(() => {
-      this.commitModeSwitch(m)
-    })
-    .onTouch((event: TouchEvent) => {
-      if (this.interactionLocked) {
-        this.pressedMode = ''
-        return
-      }
-      if (event.type === TouchType.Down) {
-        this.pressedMode = m
-        return
-      }
-      if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-        if (this.pressedMode === m) {
-          this.pressedMode = ''
-        }
-      }
-    })
-  }
-
-  @Builder
-  private ModeRail() {
-    Row({ space: 0 }) {
-      ForEach(HOME_MODES, (m: HomeMode) => {
-        this.ModeTabItem(m)
-      }, (m: HomeMode) => m)
-    }
-    .hitTestBehavior(HitTestMode.Block)
+    .tabBar(BottomTabBarStyle.of({
+      normal: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
+      selected: new SymbolGlyphModifier(resolveHomeModeSymbol(mode)),
+    }, resolveHomeModeTitle(mode)))
   }
 
   build() {
-    Row() {
-      this.ModeRail()
+    HdsTabs({
+      controller: this.modeTabsController,
+      index: this.modeIndex(this.mode)
+    }) {
+      ForEach(HOME_MODES, (m: HomeMode) => {
+        this.ModeTabBuilder(m)
+      }, (m: HomeMode) => m)
     }
     .width('100%')
-    .justifyContent(FlexAlign.Center)
-    .padding({
-      top: HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + HOME_MODE_TABS_TOP_OFFSET,
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
+    .height('100%')
+    .vertical(false)
+    .scrollable(false)
+    .animationDuration(0)
+    .barPosition(BarPosition.End)
+    .barOverlap(true)
+    .barHeight(BOTTOM_TAB_BAR_HEIGHT)
+    .barFloatingStyle({
+      barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 620,
+      systemMaterialEffect: {
+        materialType: hdsMaterial.MaterialType.ADAPTIVE,
+        materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+      },
     })
+    .enabled(!this.interactionLocked)
+    .onChange((index: number) => {
+      const mode = HOME_MODES[index]
+      if (mode) {
+        this.onModeChange(mode)
+      }
+    })
+    .clip(false)
     .zIndex(100)
   }
 }
