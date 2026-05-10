@@ -125,17 +125,6 @@ export struct HomeRootOverlayControls {
         this.ModeTabItem(m)
       }, (m: HomeMode) => m)
     }
-    .padding({ left: 2, right: 2 })
-    .backgroundColor(this.dockBackgroundColor())
-    .backdropBlur(this.theme.isDark ? 10 : 18)
-    .borderRadius(CHIP_RADIUS)
-    .border({ width: 0.6, color: this.dockBorderColor() })
-    .shadow({
-      radius: 10,
-      color: this.dockShadowColor(),
-      offsetX: 0,
-      offsetY: 2,
-    })
     .hitTestBehavior(HitTestMode.Block)
   }
 
