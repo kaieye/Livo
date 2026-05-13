@@ -13,7 +13,7 @@ export struct ArticleSocialDetail {
   isInlineVideoActive: (section: string, item: PictureCarouselMediaItem, index: number) => boolean = () => false
   inlineVideoControllerFor: (section: string, item: PictureCarouselMediaItem, index: number) => VideoController = () => new VideoController()
   onPlayInlineVideo: (section: string, item: PictureCarouselMediaItem, index: number) => void = () => {}
-  onOpenImage: (item: PictureCarouselMediaItem) => void = () => {}
+  onOpenGallery: (url: string) => void = () => {}
 
   private usernameLabel(): string {
     return (this.presentation.username || '').trim()
@@ -113,7 +113,7 @@ export struct ArticleSocialDetail {
       this.onPlayInlineVideo(section, item, index)
       return
     }
-    this.onOpenImage(item)
+    this.onOpenGallery(item.imageUrl)
   }
 
   @Builder

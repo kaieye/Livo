@@ -1,14 +1,13 @@
 import { PictureCarouselMediaItem } from '../../utils/PictureGallery'
-import { openImageViewer } from '../../navigation/AppRouter'
 import { ThemePalette, ThemeService } from '../../services/ThemeService'
 
 @Component
 export struct ArticleStaticImageSlide {
   @Prop item: PictureCarouselMediaItem
   @Prop theme: ThemePalette = ThemeService.darkPalette()
-  @Prop title: string = '图片预览'
   @Prop slideAspectRatio: number = 4 / 5
   onAspectChange: (width: number, height: number) => void = (_w: number, _h: number) => {}
+  onOpenGallery: (url: string) => void = () => {}
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
@@ -30,7 +29,7 @@ export struct ArticleStaticImageSlide {
     .borderRadius(18)
     .backgroundColor(this.theme.elevated)
     .onClick(() => {
-      void openImageViewer(this.item.imageUrl, this.title || '图片预览')
+      this.onOpenGallery(this.item.imageUrl)
     })
   }
 }

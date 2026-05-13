@@ -2,10 +2,11 @@ import { common } from '@kit.AbilityKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { SettingsStore } from '../common/services/SettingsStore'
 import { EntryRepository } from '../common/repositories/EntryRepository'
-import { goBack, openImageViewer } from '../common/navigation/AppRouter'
+import { goBack } from '../common/navigation/AppRouter'
 import { TranslationFormattingHint } from '../common/services/ArticleAssistService'
 import { ExternalUrlService } from '../common/services/ExternalUrlService'
 import { resolveArticleSourceUrl } from '../common/utils/ArticleSourceUrl'
+import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
 import { PictureCarouselMediaItem } from '../common/utils/PictureGallery'
 import {
   resolvePictureDetailMediaItems,
@@ -24,6 +25,7 @@ import { ArticleDetailHeaderActions } from '../common/components/ArticleDetailHe
 import { ArticleAIAssistResultPanel } from '../common/components/ArticleAIAssistResultPanel'
 import { ArticleNonSocialContent } from '../common/components/ArticleNonSocialContent'
 import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
+import { EntryImageGallery } from '../common/components/EntryImageGallery'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
@@ -64,6 +66,9 @@ struct ArticleDetail {
   @State mediaAspectRatios: number[] = []
   @State activeMovingPhoto: photoAccessHelper.MovingPhoto | undefined = undefined
   @State private activeSocialInlineVideoKey: string = ''
+  @State private galleryUrls: string[] = []
+  @State private showGallery: boolean = false
+  @State private galleryIndex: number = 0
 
   private readonly socialVideoRegistry: SocialInlineVideoRegistry = new SocialInlineVideoRegistry()
   private readonly aiAssistViewModel: ArticleAIAssistViewModel = new ArticleAIAssistViewModel(this)
@@ -289,10 +294,45 @@ struct ArticleDetail {
     this.activeSocialInlineVideoKey = SocialInlineVideoRegistry.keyFor(section, item, index)
   }
 
-  private openSocialImage(item: PictureCarouselMediaItem): void {
-    if ((item.imageUrl || '').trim()) {
-      void openImageViewer(item.imageUrl, this.entry?.title || '图片预览')
+  private collectImageUrls(): string[] {
+    const urls: string[] = []
+    const pushUrl = (url: string): void => {
+      const t = url.trim()
+      if (t && !urls.includes(t)) { urls.push(t) }
     }
+    if (!this.entry) { return urls }
+
+    if (this.isPictureDetail()) {
+      const items = resolvePictureDetailMediaItems(this.entry.contentBlocks ?? [])
+      items.forEach((item: PictureCarouselMediaItem) => { if (item.imageUrl) pushUrl(item.imageUrl) })
+    }
+    (this.entry.contentBlocks ?? []).forEach((block: ArticleContentBlock) => {
+      if (block.type === 'image' && block.imageUrl) { pushUrl(block.imageUrl) }
+    })
+    if (this.isSocialDetail()) {
+      const collect = (mediaUrls: string[]): void => {
+        (mediaUrls ?? []).forEach((url: string) => {
+          if ((url || '').trim() && !isDirectVideoUrl(url)) { pushUrl(url) }
+        })
+      }
+      const p = this.tweetPresentation()
+      collect(p.mediaUrls ?? [])
+      if (p.quotedTweet) {
+        collect(p.quotedTweet.mediaUrls ?? [])
+        if (p.quotedTweet.nestedQuotedTweet) {
+          collect(p.quotedTweet.nestedQuotedTweet.mediaUrls ?? [])
+        }
+      }
+    }
+    return urls
+  }
+
+  private openGallery(imageUrl: string): void {
+    const urls = this.collectImageUrls()
+    this.galleryUrls = urls
+    this.galleryIndex = urls.indexOf(imageUrl)
+    if (this.galleryIndex < 0) { this.galleryIndex = 0 }
+    this.showGallery = true
   }
 
   @Builder
@@ -385,14 +425,12 @@ struct ArticleDetail {
       onClearInlineVideoPreparing: (blockId: string) => {
         if (this.inlineVideoPreparingBlockId === blockId) { this.inlineVideoPreparingBlockId = '' }
       },
-      onOpenImage: (block: ArticleContentBlock) => {
-        if (block.imageUrl) { void openImageViewer(block.imageUrl, this.entry?.title || '图片预览') }
-      },
       onOpenVideo: (block: ArticleContentBlock) => {
         this.videoController.open(block, () => {
           ArticleInlineVideoPlaybackController.openVideoFullscreen(this.entry?.title || '', block)
         })
       },
+      onOpenGallery: (url: string) => this.openGallery(url),
     })
   }
 
@@ -421,7 +459,7 @@ struct ArticleDetail {
             this.socialVideoRegistry.controllerFor(section, item, index),
           onPlayInlineVideo: (section: string, item: PictureCarouselMediaItem, index: number) =>
             this.playSocialInlineVideo(section, item, index),
-          onOpenImage: (item: PictureCarouselMediaItem) => this.openSocialImage(item),
+          onOpenGallery: (url: string) => this.openGallery(url),
         })
       } else {
         this.NonSocialBody()
@@ -475,6 +513,14 @@ struct ArticleDetail {
       .width('100%').height('100%').backgroundColor(this.theme.background)
 
       MiniAudioPlayer({ theme: this.theme })
+
+      if (this.showGallery) {
+        EntryImageGallery({
+          imageUrls: this.galleryUrls,
+          initialIndex: this.galleryIndex,
+          onClose: () => { this.showGallery = false },
+        })
+      }
     }
     .width('100%').height('100%')
   }

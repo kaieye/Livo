@@ -51,8 +51,8 @@ export struct ContentBlockItemBuilder {
   onActionHint: (hint: string) => void = () => {}
   onClearMovingPhoto: () => void = () => {}
   onClearInlineVideoPreparing: (blockId: string) => void = () => {}
-  onOpenImage: (block: ArticleContentBlock) => void = () => {}
   onOpenVideo: (block: ArticleContentBlock) => void = () => {}
+  onOpenGallery: (url: string) => void = () => {}
 
   aboutToDisappear(): void {
     // Audio player is now owned by AudioPlaybackService — no release needed here.
@@ -146,7 +146,7 @@ export struct ContentBlockItemBuilder {
       .borderRadius(18)
       .backgroundColor(this.theme.elevated)
       .onClick(() => {
-        this.onOpenImage(this.block)
+        this.onOpenGallery(this.block.imageUrl)
       })
     }
     .width('100%')

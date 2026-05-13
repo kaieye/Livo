@@ -40,8 +40,8 @@ export struct ArticleNonSocialContent {
   onActionHint: (hint: string) => void = () => {}
   onClearMovingPhoto: () => void = () => {}
   onClearInlineVideoPreparing: (blockId: string) => void = () => {}
-  onOpenImage: (block: ArticleContentBlock) => void = () => {}
   onOpenVideo: (block: ArticleContentBlock) => void = () => {}
+  onOpenGallery: (url: string) => void = () => {}
 
   @Builder
   private ContentBlocksList() {
@@ -68,8 +68,8 @@ export struct ArticleNonSocialContent {
             onActionHint: (hint: string) => this.onActionHint(hint),
             onClearMovingPhoto: () => this.onClearMovingPhoto(),
             onClearInlineVideoPreparing: (blockId: string) => this.onClearInlineVideoPreparing(blockId),
-            onOpenImage: (b: ArticleContentBlock) => this.onOpenImage(b),
             onOpenVideo: (b: ArticleContentBlock) => this.onOpenVideo(b),
+            onOpenGallery: (url: string) => this.onOpenGallery(url),
           })
         }
       }, (block: ArticleContentBlock) => block.id)
@@ -99,8 +99,8 @@ export struct ArticleNonSocialContent {
       if (this.isPictureDetail) {
         ArticlePictureDetailMedia({
           mediaItems: this.pictureDetailMediaItems,
-          title: this.entry.title || '图片预览',
           theme: this.theme,
+          onOpenGallery: (url: string) => this.onOpenGallery(url),
         })
       }
 

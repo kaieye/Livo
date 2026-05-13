@@ -15,7 +15,6 @@ import { ArticleStaticImageSlide } from './article-picture-detail/ArticleStaticI
 @Component
 export struct ArticlePictureDetailMedia {
   @Prop mediaItems: PictureCarouselMediaItem[] = []
-  @Prop title: string = '图片预览'
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @State private activeMediaIndex: number = 0
   @State private playingLivePhotoIndex: number = -1
@@ -26,6 +25,7 @@ export struct ArticlePictureDetailMedia {
   @State private livePhotoVisibilityRatios: number[] = []
   @State private livePhotoMuted: boolean = true
   private readonly livePhotoControllers: VideoController[] = []
+  onOpenGallery: (url: string) => void = () => {}
 
   private showToast(message: string, duration: number = TOAST_DURATION_SHORT): void {
     showToast(this.getUIContext(), message, duration)
@@ -315,10 +315,10 @@ export struct ArticlePictureDetailMedia {
               ArticleStaticImageSlide({
                 item,
                 theme: this.theme,
-                title: this.title,
                 slideAspectRatio: this.livePhotoAspectRatio(index),
                 onAspectChange: (width: number, height: number) =>
                   this.rememberLivePhotoAspectRatio(index, width, height),
+                onOpenGallery: (url: string) => this.onOpenGallery(url),
               })
             }
           }
