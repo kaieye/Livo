@@ -133,12 +133,19 @@ export struct ArticleSocialDetail {
           .muted(false)
       } else {
         if ((item.imageUrl || '').trim()) {
-          Image(item.imageUrl)
-            .width(this.tweetMediaTileWidth(index, count))
-            .height(this.tweetMediaTileHeight(index, count))
-            .borderRadius(radius)
-            .objectFit(ImageFit.Cover)
-            .backgroundColor(this.theme.elevated)
+          if (count <= 1) {
+            Image(item.imageUrl)
+              .width('100%')
+              .borderRadius(radius)
+              .backgroundColor(this.theme.elevated)
+          } else {
+            Image(item.imageUrl)
+              .width(this.tweetMediaTileWidth(index, count))
+              .height(this.tweetMediaTileHeight(index, count))
+              .borderRadius(radius)
+              .objectFit(ImageFit.Cover)
+              .backgroundColor(this.theme.elevated)
+          }
         } else {
           Column()
             .width(this.tweetMediaTileWidth(index, count))
@@ -162,6 +169,7 @@ export struct ArticleSocialDetail {
         }
       }
     }
+    .width(count <= 1 ? '100%' : this.tweetMediaTileWidth(index, count))
     .margin({ bottom: count > 1 ? 6 : 0 })
     .onClick(() => {
       this.openMediaItem(section, item, index)

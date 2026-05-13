@@ -23,11 +23,14 @@ export interface IndexHomeRailOwner {
   mode: SubscriptionMode
   currentHomeModeScrollOffset: number
   homeModeRailDismissedByScroll: boolean
+  homeModeRailDismissProgress: number
   homeModeRailExpandedOverride: boolean
   homeModeRailExpandedLockOffset: number
   homeScrollerForMode(mode: SubscriptionMode): Scroller
   updateHeaderBlurProgress(offset: number): void
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void
+  animateModeRailDismiss(show: boolean): void
+  resetModeRailProgress(): void
 }
 
 export class IndexHomeRailCoordinator {
@@ -97,9 +100,13 @@ export class IndexHomeRailCoordinator {
     }
 
     if (isReturningTowardsTop) {
-      this.owner.homeModeRailDismissedByScroll = false
+      if (this.owner.homeModeRailDismissedByScroll) {
+        this.owner.animateModeRailDismiss(true)
+      }
     } else if (isScrollingDeeper && nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
-      this.owner.homeModeRailDismissedByScroll = true
+      if (!this.owner.homeModeRailDismissedByScroll) {
+        this.owner.animateModeRailDismiss(false)
+      }
     }
 
     if (!offsetEffectivelyUnchanged) {
@@ -112,7 +119,7 @@ export class IndexHomeRailCoordinator {
   requestExpandedModeRail(): void {
     this.owner.homeModeRailExpandedLockOffset = this.readHomeModeScrollOffset(this.owner.mode)
     this.owner.homeModeRailExpandedOverride = true
-    this.owner.homeModeRailDismissedByScroll = false
+    this.owner.resetModeRailProgress()
     this.owner.currentHomeModeScrollOffset = this.owner.homeModeRailExpandedLockOffset
     this.owner.updateHeaderBlurProgress(this.owner.homeModeRailExpandedLockOffset)
   }
@@ -120,7 +127,7 @@ export class IndexHomeRailCoordinator {
   primeHomeModeRailForRootActivation(): void {
     this.owner.homeModeRailExpandedOverride = false
     this.owner.homeModeRailExpandedLockOffset = -1
-    this.owner.homeModeRailDismissedByScroll = false
+    this.owner.resetModeRailProgress()
     this.owner.currentHomeModeScrollOffset = 0
     this.owner.updateHeaderBlurProgress(0)
   }
@@ -146,7 +153,7 @@ export class IndexHomeRailCoordinator {
       return 0
     }
 
-    return this.owner.homeModeRailDismissedByScroll ? 1 : 0
+    return this.owner.homeModeRailDismissProgress
   }
 
   isHomeModeRailCollapsed(): boolean {

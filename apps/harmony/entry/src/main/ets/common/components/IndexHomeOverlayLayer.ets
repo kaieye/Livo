@@ -21,6 +21,8 @@ export struct IndexHomeOverlayLayer {
   @Prop collapsedModeRailTopPadding: number = 0
   @Prop horizontalPadding: number = 0
   @Prop searchFieldOffsetY: number = 0
+  @Prop modeRailDismissOffset: number = 0
+  @Prop modeRailDismissOpacity: number = 1
   @Prop searchResultEntries: EntryCardModel[] = []
   @Prop searchShowEmptyState: boolean = false
 
@@ -34,14 +36,19 @@ export struct IndexHomeOverlayLayer {
 
   @Builder
   private OverlayControls() {
-    HomeRootOverlayControls({
-      theme: this.theme,
-      mode: this.mode,
-      interactionLocked: this.interactionLocked,
-      onModeChange: (mode: SubscriptionMode) => {
-        this.onModeChange(mode)
-      },
-    })
+    Stack() {
+      HomeRootOverlayControls({
+        theme: this.theme,
+        mode: this.mode,
+        interactionLocked: this.interactionLocked,
+        onModeChange: (mode: SubscriptionMode) => {
+          this.onModeChange(mode)
+        },
+      })
+    }
+    .width('100%')
+    .translate({ y: this.modeRailDismissOffset })
+    .opacity(this.modeRailDismissOpacity)
   }
 
   private refreshStatusText(): string {

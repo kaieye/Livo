@@ -115,6 +115,7 @@ struct Index {
   @State headerBlurProgress: number = 0
   @State currentHomeModeScrollOffset: number = 0
   @State homeModeRailDismissedByScroll: boolean = false
+  @State homeModeRailDismissProgress: number = 0
   @State homeModeRailExpandedOverride: boolean = false
   @State homeModeRailExpandedLockOffset: number = -1
   @State homeListSwapOpacity: number = 1
@@ -283,6 +284,19 @@ struct Index {
   readHomeModeScrollOffset(mode: SubscriptionMode): number { return this.homeRailCoordinator.readHomeModeScrollOffset(mode) }
   syncHomeModeRailState(mode: SubscriptionMode = this.mode): void { this.homeRailCoordinator.syncHomeModeRailState(mode) }
   primeHomeModeRailForRootActivation(): void { this.homeRailCoordinator.primeHomeModeRailForRootActivation() }
+
+  animateModeRailDismiss(show: boolean): void {
+    this.homeModeRailDismissedByScroll = !show
+    const target = show ? 0 : 1
+    this.animateWithUiContext({ duration: 80, curve: Curve.EaseInOut }, () => {
+      this.homeModeRailDismissProgress = target
+    })
+  }
+
+  resetModeRailProgress(): void {
+    this.homeModeRailDismissedByScroll = false
+    this.homeModeRailDismissProgress = 0
+  }
 
   markHomeUserScrollIntent(mode: SubscriptionMode, scrollSource: ScrollSource): void { this.homeScrollIntent.markUserScroll(this.mode, mode, scrollSource) }
   modeScrollIntentVersion(mode: SubscriptionMode): number { return this.homeScrollIntent.intentVersion(mode) }
@@ -556,6 +570,8 @@ struct Index {
         searchResultEntries: this.homeInlineSearchController.searchResultEntries(),
         searchShowEmptyState: this.homeInlineSearchController.hasSearchResultEmptyState(),
         inputController: this.searchInputController,
+        modeRailDismissOffset: this.homeRailCoordinator.homeModeRailDismissTranslateY(),
+        modeRailDismissOpacity: Math.max(0, 1 - this.homeModeRailDismissProgress),
         onModeChange: (mode: SubscriptionMode) => this.homeModeController.requestModeSwitch(mode),
         onQueryChange: (value: string) => { this.searchQuery = value },
         onSearchClose: (clearQuery: boolean) => this.homeInlineSearchController.close(clearQuery),

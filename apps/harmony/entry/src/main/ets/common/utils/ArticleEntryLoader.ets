@@ -1,10 +1,16 @@
 import { getStringParams } from '../navigation/AppRouter'
 import {
+  ArticleContentBlock,
   ArticleDetailModel,
   HarmonySettings,
   isLegacyPlainArticleContent,
   toArticleDetailModel,
 } from '../models/LivoModels'
+import {
+  buildArticleContentBlocks,
+  buildMediaContentBlocks,
+} from '../models/ArticleContentBuilder'
+import { resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { SettingsStore } from '../services/SettingsStore'
@@ -17,6 +23,7 @@ export interface ArticleEntryLoaderOwner {
   actionHint: string
   theme: ThemePalette
   isUpgradingLegacyContent: boolean
+  isLoading: boolean
   applyAISettings(settings: HarmonySettings): void
   resetAIResultsIfEntryChanged(): void
   triggerAutoAIAssist(): void
@@ -41,18 +48,35 @@ export class ArticleEntryLoader {
   async load(entryId: string, markRead: boolean, allowRouteSnapshot: boolean): Promise<void> {
     if (!entryId) {
       this.owner.entry = undefined
+      this.owner.isLoading = false
       return
     }
+
+    // Snapshot rehydration runs synchronously so entry is available before build()
+    const snapshotRehydrated = allowRouteSnapshot && this.tryRehydrateFromRouteSnapshot()
 
     if (markRead) {
       await EntryRepository.markRead(entryId, true)
       console.info(`已标记条目为已读: ${entryId}`)
     }
 
-    if (allowRouteSnapshot && this.tryRehydrateFromRouteSnapshot()) {
+    if (snapshotRehydrated) {
+      // Build content blocks asynchronously from the snapshot card data
+      await this.buildContentBlocksFromEntry()
+      this.owner.isLoading = false
+
+      // Settings/theme/AI assist
+      const settings = await SettingsStore.load()
+      this.owner.theme = await ThemeService.resolvePalette(settings)
+      this.owner.applyAISettings(settings)
+      this.owner.resetAIResultsIfEntryChanged()
+      if (this.owner.entry && ArticleAIAssistViewModel.shouldAutoTrigger(settings)) {
+        this.owner.triggerAutoAIAssist()
+      }
       return
     }
 
+    // No snapshot — full DB load
     this.owner.entry = await this.loadEntryById(entryId)
     const upgraded = await this.upgradeLegacyEntryIfNeeded()
     const settings = await SettingsStore.load()
@@ -65,6 +89,53 @@ export class ArticleEntryLoader {
     }
     if (!upgraded) {
       this.owner.actionHint = markRead ? '已标记为已读' : '内容已刷新'
+    }
+    this.owner.isLoading = false
+  }
+
+  private async buildContentBlocksFromEntry(): Promise<void> {
+    const current = this.owner.entry
+    if (!current) {
+      return
+    }
+
+    const isPicture = (current.viewLabel || '').trim() === '图片'
+    const rawUrls = current.rawMediaUrls ?? []
+
+    const blocks: ArticleContentBlock[] = isPicture
+      ? buildMediaContentBlocks(resolvePictureCarouselMediaItems(rawUrls, current.imageUrl), current.imageUrl)
+      : buildArticleContentBlocks(current.content, current.articleUrl, current.articleUrl, current.mediaUrls ?? [], current.title)
+
+    const paragraphs = blocks
+      .filter((block: ArticleContentBlock) => block.type === 'paragraph')
+      .map((block: ArticleContentBlock) => block.text)
+
+    this.owner.entry = {
+      id: current.id,
+      feedId: current.feedId,
+      title: current.title,
+      summary: current.summary,
+      content: current.content,
+      imageUrl: current.imageUrl,
+      feedImageUrl: current.feedImageUrl,
+      author: current.author,
+      articleUrl: current.articleUrl,
+      publishedAt: current.publishedAt,
+      publishedLabel: current.publishedLabel,
+      readingLabel: current.readingLabel,
+      tags: current.tags,
+      mediaUrls: current.mediaUrls,
+      rawMediaUrls: current.rawMediaUrls,
+      feedTitle: current.feedTitle,
+      feedCategory: current.feedCategory,
+      viewLabel: current.viewLabel,
+      viewBadgeColor: current.viewBadgeColor,
+      hasVideoMedia: current.hasVideoMedia,
+      isRead: current.isRead,
+      isStarred: current.isStarred,
+      contentParagraphs: paragraphs,
+      contentBlocks: blocks,
+      siteUrl: current.siteUrl,
     }
   }
 

@@ -159,7 +159,7 @@ export function parseRssItems(feedId: string, xml: string, baseUrl: string): Par
     const link = stripHtml(pickTag(itemBlock, 'link'))
     const guid = stripHtml(pickTag(itemBlock, 'guid'))
     const description = pickFirst(itemBlock, ['content:encoded', 'description'])
-    const summary = stripHtml(description) || '这条内容暂时没有摘要。'
+    const summary = stripHtml(description) || ''
     const author = stripHtml(pickFirst(itemBlock, ['author', 'dc:creator'])) || '未知作者'
     const pubDate = stripHtml(pickFirst(itemBlock, ['pubDate', 'published', 'updated']))
     const mediaUrls = extractFeedMediaUrls(itemBlock, baseUrl)
@@ -182,7 +182,7 @@ export function parseAtomItems(feedId: string, xml: string, baseUrl: string): Pa
     const link = parseAtomLink(entryBlock)
     const entryId = stripHtml(pickTag(entryBlock, 'id'))
     const contentBlock = pickFirst(entryBlock, ['content', 'summary'])
-    const summary = stripHtml(contentBlock) || '这条内容暂时没有摘要。'
+    const summary = stripHtml(contentBlock) || ''
     const authorBlock = pickTag(entryBlock, 'author')
     const author = stripHtml(pickTag(authorBlock, 'name') || pickTag(entryBlock, 'name') || pickTag(entryBlock, 'dc:creator')) || '未知作者'
     const pubDate = stripHtml(pickFirst(entryBlock, ['published', 'updated']))

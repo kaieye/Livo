@@ -30,8 +30,8 @@ export struct InlineMediaGrid {
           InlineMediaTile({
             item: item,
             theme: this.theme,
-            tileWidth: inlineMediaTileWidth(this.tileSize, index, this.items.length),
-            tileHeight: inlineMediaTileHeight(this.tileSize, index, this.items.length),
+            tileWidth: this.items.length <= 1 ? '100%' : inlineMediaTileWidth(this.tileSize, index, this.items.length),
+            tileHeight: this.items.length <= 1 ? 0 : inlineMediaTileHeight(this.tileSize, index, this.items.length),
             tileBorderRadius: this.tileBorderRadius,
             isVideoActive: this.isVideoActive(item, index),
             videoController: this.controllerFor(item, index),

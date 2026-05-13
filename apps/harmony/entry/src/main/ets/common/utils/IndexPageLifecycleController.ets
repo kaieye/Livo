@@ -86,11 +86,7 @@ export class IndexPageLifecycleController {
       this.owner.homeEntryDataManager.markEntryReadLocally(entry)
     }, 120)
 
-    if (entry.viewLabel === '图片' && (entry.rawMediaUrls ?? []).length > 0) {
-      const model = articleDetailModelFromCard(entry)
-      void openArticleDetail(entry.id, JSON.stringify(model))
-      return
-    }
-    void openArticleDetail(entry.id)
+    const model = articleDetailModelFromCard(entry)
+    void openArticleDetail(entry.id, JSON.stringify(model))
   }
 }

@@ -1,5 +1,5 @@
 import { openArticleDetail } from '../navigation/AppRouter'
-import { EntryCardModel } from '../models/LivoModels'
+import { articleDetailModelFromCard, EntryCardModel } from '../models/LivoModels'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { buildEntryCardsChunked } from '../data/AppRepositoryEntryHelpers'
@@ -186,7 +186,8 @@ export struct FavoritesPanel {
     .transition(livoMotion.enterSoft(index * 20 + 40))
     .clickEffect({ level: ClickEffectLevel.LIGHT })
     .onClick(() => {
-      void openArticleDetail(entry.id)
+      const model = articleDetailModelFromCard(entry)
+      void openArticleDetail(entry.id, JSON.stringify(model))
     })
   }
 

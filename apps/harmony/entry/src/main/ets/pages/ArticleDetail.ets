@@ -41,6 +41,8 @@ import { getStringParams } from '../common/navigation/AppRouter'
 struct ArticleDetail {
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @State entry?: ArticleDetailModel = undefined
+  @State @Watch('onLoadingDone') isLoading: boolean = true
+  @State visibleBlockCount: number = 12
   @State actionHint: string = ''
   @State aiSummary: string = ''
   @State aiTranslation: string = ''
@@ -71,6 +73,26 @@ struct ArticleDetail {
   aboutToAppear(): void {
     this.theme = ThemeService.currentPalette()
     void this.entryLoader.load(this.entryId(), true, true)
+  }
+
+  private onLoadingDone(): void {
+    if (!this.isLoading && this.entry) {
+      void this.revealRemainingBlocks()
+    }
+  }
+
+  private async revealRemainingBlocks(): Promise<void> {
+    const total = this.entry?.contentBlocks.length ?? 0
+    if (total <= this.visibleBlockCount) {
+      return
+    }
+
+    const BATCH: number = 10
+    while (this.visibleBlockCount < total) {
+      await new Promise<void>((resolve: (value: void) => void) => { setTimeout(() => resolve(), 0) })
+      const next = Math.min(this.visibleBlockCount + BATCH, total)
+      this.visibleBlockCount = next
+    }
   }
 
   private entryId(): string {
@@ -346,7 +368,7 @@ struct ArticleDetail {
       pictureDetailMediaItems: this.isPictureDetail() ? resolvePictureDetailMediaItems(this.entry?.contentBlocks ?? []) : [],
       textBlocks: this.isPictureDetail()
         ? resolvePictureDetailTextBlocks(this.entry?.contentBlocks ?? [])
-        : (this.entry?.contentBlocks ?? []),
+        : (this.entry?.contentBlocks ?? []).slice(0, this.visibleBlockCount),
       activeVideoBlockId: this.activeVideoBlockId,
       activeVideoPlayableUrl: this.activeVideoPlayableUrl,
       activeVideoFallbackUrl: this.activeVideoFallbackUrl,
@@ -416,7 +438,7 @@ struct ArticleDetail {
       Column() {
         this.DetailHeader()
 
-        if (this.entry) {
+        if (this.entry && !this.isLoading) {
           Scroll() {
             Column({ space: 18 }) {
               this.MetadataRow()
@@ -430,6 +452,15 @@ struct ArticleDetail {
             .constraintSize({ minHeight: '100%' })
           }
           .width('100%').layoutWeight(1).scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
+        } else if (this.isLoading) {
+          Column({ space: 12 }) {
+            LoadingProgress()
+              .width(32).height(32).color(this.theme.accent)
+
+            Text('正在加载...')
+              .fontSize(15).fontColor(this.theme.textSecondary)
+          }
+          .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
         } else {
           Column({ space: 12 }) {
             Text('未找到内容')

@@ -1,9 +1,7 @@
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
-import { resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import { resolveSocialFeedDisplayTitle } from '../utils/SocialFeedPresentation'
 import {
   buildArticleContentBlocks,
-  buildMediaContentBlocks,
   buildPictureDetailContentBlocks,
   extractSupportedVideoUrls,
   isSupportedVideoUrl,
@@ -181,10 +179,6 @@ export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCar
 }
 
 export function articleDetailModelFromCard(card: EntryCardModel): ArticleDetailModel {
-  const rawUrls = card.rawMediaUrls ?? []
-  const mediaItems = resolvePictureCarouselMediaItems(rawUrls, card.imageUrl)
-  const blocks = buildMediaContentBlocks(mediaItems, card.imageUrl)
-
   return {
     id: card.id,
     feedId: card.feedId,
@@ -209,7 +203,7 @@ export function articleDetailModelFromCard(card: EntryCardModel): ArticleDetailM
     isRead: card.isRead,
     isStarred: card.isStarred,
     contentParagraphs: [],
-    contentBlocks: blocks,
+    contentBlocks: [],
     siteUrl: card.articleUrl,
   }
 }
