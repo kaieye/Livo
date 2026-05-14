@@ -15,7 +15,7 @@ export struct DiscoverCandidateSection {
   @Prop theme: ThemePalette
   @Prop feedsChangedAt: number = 0
   @Prop overlayLevel: number = 0
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
   leadingIcon?: Resource
   getCandidateAvatarUrl: (candidate: ResolvedDiscoverCandidate) => string = () => ''
   getCandidatePlatformColor: (candidate: ResolvedDiscoverCandidate) => string = () => ''

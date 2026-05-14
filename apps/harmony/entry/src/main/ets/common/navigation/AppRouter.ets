@@ -47,10 +47,6 @@ export interface RootTabDefinition {
   route: string
 }
 
-export interface RootTabRouteParams {
-  rootTab: RootTabId
-}
-
 export interface DiscoverPreviewRouteParams {
   targetUrl: string
   targetTitle: string
@@ -228,18 +224,18 @@ function getAppRouter() {
   }
 }
 
-function createRootTabRouteParams(tabId: RootTabId): RootTabRouteParams {
-  const params = {} as RootTabRouteParams
-  params.rootTab = tabId
-  return params
-}
-
 export async function goBack(): Promise<void> {
   try {
     getAppRouter().back()
   } catch (error) {
     throw new Error(`路由返回失败：${error instanceof Error ? error.message : 'unknown error'}`)
   }
+}
+
+function createRootTabRouteParams(tabId: RootTabId): Record<string, string> {
+  const params: Record<string, string> = {}
+  params['rootTab'] = tabId
+  return params
 }
 
 export async function openRootTab(tabId: RootTabId, replace: boolean = true): Promise<void> {

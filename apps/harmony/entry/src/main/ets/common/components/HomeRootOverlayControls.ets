@@ -15,16 +15,13 @@ export struct HomeRootOverlayControls {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
+  @Prop barBottomMargin: number = resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 640
   private modeTabsController: HdsTabsController = new HdsTabsController()
   onModeChange: (mode: SubscriptionMode) => void = () => {}
 
   private modeIndex(mode: SubscriptionMode): number {
     const i = HOME_MODES.indexOf(mode as HomeMode)
     return i >= 0 ? i : 0
-  }
-
-  private activeColor(): string {
-    return this.theme.isDark ? '#76A2FF' : '#2F6BFF'
   }
 
   @Builder
@@ -56,7 +53,7 @@ export struct HomeRootOverlayControls {
     .barOverlap(true)
     .barHeight(HOME_MODE_RAIL_HEIGHT)
     .barFloatingStyle({
-      barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 640,
+      barBottomMargin: this.barBottomMargin,
       systemMaterialEffect: {
         materialType: hdsMaterial.MaterialType.ADAPTIVE,
         materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,

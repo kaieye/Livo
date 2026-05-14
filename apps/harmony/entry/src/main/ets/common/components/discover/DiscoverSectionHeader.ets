@@ -8,7 +8,7 @@ export struct DiscoverSectionHeader {
   @Prop trailingText: string = ''
   @Prop showMoreButton: boolean = false
   @Prop theme: ThemePalette
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
   leadingIcon?: Resource
   onMoreClick: () => void = () => {}
 

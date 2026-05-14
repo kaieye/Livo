@@ -1,4 +1,3 @@
-import { BottomTabs } from './BottomTabs'
 import { resolveDirectUrlResult } from './DiscoverCatalog'
 import { DiscoverOverlayLayer } from './DiscoverOverlayLayer'
 import { DiscoverSearchPanel } from './DiscoverSearchPanel'
@@ -15,17 +14,9 @@ import {
   DiscoverOverlayRoute,
   createDiscoverResultFromFeed,
 } from './DiscoverTypes'
-import { LengthMetrics } from '@kit.ArkUI'
 import {
-  HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial,
-} from '@kit.UIDesignKit'
-import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
-import {
-  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
-  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_MODE_TOP_OFFSET,
-  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from './FloatingRootPageLayout'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
@@ -34,7 +25,6 @@ import { resolveProfileCandidatesByPlatform } from '../services/discover/Discove
 import { resolveKeywordCandidatesByPlatform } from '../services/discover/DiscoverKeywordResolver'
 import { searchedRecommendedFeedsByPlatform, trendingDiscoverFeedsFromJsonNow } from '../services/discover/DiscoverFeedCatalog'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { livoMotion } from '../ui/Motion'
 import { resolveDiscoverOverlayReturnLevel } from '../utils/DiscoverNavigationPolicy'
 import {
   candidateAvatarCacheKey, candidateAvatarFallbackUrls, platformColor,
@@ -77,8 +67,6 @@ export struct DiscoverContent {
   @State activePreviewParams?: DiscoverFlowRouteParams = undefined
   @State activeSubscribeConfigParams?: DiscoverFlowRouteParams = undefined
   @State subscribeConfigReturnTarget: import('./DiscoverTypes').DiscoverConfigReturnTarget = 'root'
-  @Prop showBottomTabs: boolean = true
-  @Prop reserveBottomTabInset: boolean = false
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
   @StorageProp('bottomAvoidArea') bottomAvoidArea: number = 0
   @StorageProp(ROOT_TAB_SCROLL_TO_TOP_AT_KEY) @Watch('handleRootTabScrollToTopSignal') rootTabScrollToTopAt: number = 0
@@ -122,9 +110,7 @@ export struct DiscoverContent {
 
   aboutToAppear(): void {
     this.coordinator.preventAutoKeyboardPopup('discover-about-to-appear')
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-    }
+    this.theme = this.inheritedTheme
     if (this.hasLoaded || this.isLoadingPage) {
       this.onReady()
       return
@@ -140,29 +126,8 @@ export struct DiscoverContent {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
   }
 
-  private rootEnterTransition(delay: number) {
-    return this.showBottomTabs ? livoMotion.enterScale(delay) : undefined
-  }
-
-  @Builder
-  private DiscoverLowerTitleBuilder() {
-    Row() {
-      Text('发现')
-        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(DISCOVER_TITLE_BAR_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING, bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING })
-  }
-
   private syncInheritedTheme(): void {
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-    }
+    this.theme = this.inheritedTheme
   }
 
   private handleDiscoverOverlayLevelChanged(): void { this.coordinator.handleDiscoverOverlayLevelChanged(this.discoverOverlayLevel) }
@@ -292,7 +257,6 @@ export struct DiscoverContent {
       DiscoverSearchPanel({
         query: this.query, searchPlatform: this.searchPlatform,
         showPlatformChips: this.showPlatformChips, theme: this.theme,
-        showBottomTabs: this.showBottomTabs,
         searchInputController: this.searchInputController,
         searchInputFocusable: this.searchInputFocusable,
         onQueryChange: (value: string) => { this.coordinator.onQueryChange(value) },
@@ -329,7 +293,6 @@ export struct DiscoverContent {
           title: '热门推荐', items: this.featuredCandidates(),
           compact: true, separateCards: true, showActionButton: false, showMoreButton: true,
           leadingIcon: $r('app.media.Flame'), theme: this.theme,
-          showBottomTabs: this.showBottomTabs,
           refreshToken: this.feedsChangedAt + this.overlayLevel,
           onOpen: this.onCandidateOpen, onSubscribe: this.onCandidateSubscribe,
           getActionLabel: this.rowActionLabel, getActionBackground: this.rowActionBg,
@@ -340,7 +303,7 @@ export struct DiscoverContent {
         })
 
         DiscoverCategoryBrowserSection({
-          theme: this.theme, showBottomTabs: this.showBottomTabs,
+          theme: this.theme,
           onOpenBrowse: (view: number, label: string, sourceKey: string) => {
             this.coordinator.openBrowsePage(view as FeedViewType, label, sourceKey)
           },
@@ -355,22 +318,15 @@ export struct DiscoverContent {
     .constraintSize({ minHeight: '100%' })
     .alignItems(HorizontalAlign.Start)
     .justifyContent(FlexAlign.Start)
-    .transition(this.rootEnterTransition(30))
-  }
-
-  private shouldReserveBottomDock(): boolean {
-    if (this.overlayLevel > 0) {
-      return false
-    }
-    return this.showBottomTabs || this.reserveBottomTabInset
+    .transition(undefined)
   }
 
   private discoverListBottomPadding(): number {
-    return this.shouldReserveBottomDock() ? 24 : PAGE_BOTTOM_GAP
+    return PAGE_BOTTOM_GAP
   }
 
   private discoverBottomSpacerHeight(): number {
-    return this.shouldReserveBottomDock() ? 108 + this.bottomAvoidArea : 24
+    return 24
   }
 
   @Builder
@@ -415,9 +371,6 @@ export struct DiscoverContent {
         onSubscribeConfigUnsubscribed: () => { this.coordinator.onSubscribeConfigUnsubscribed() },
       })
 
-      if (this.showBottomTabs && this.overlayLevel === 0) {
-        BottomTabs({ activeTab: 'discover', theme: this.theme }).align(Alignment.Bottom)
-      }
     }
     .width('100%').height('100%')
     .backgroundColor(this.theme.background)
@@ -428,73 +381,6 @@ export struct DiscoverContent {
   }
 
   build() {
-    if (this.showBottomTabs) {
-      this.DiscoverRoot()
-    } else {
-      HdsNavigation() {
-        this.DiscoverRoot()
-      }
-      .titleBar({
-        padding: { start: LengthMetrics.vp(2), end: LengthMetrics.vp(2) },
-        style: {
-          scrollEffectOpts: {
-            enableScrollEffect: true,
-            scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
-            blurEffectiveStartOffset: LengthMetrics.vp(0),
-            blurEffectiveEndOffset: LengthMetrics.vp(30),
-          },
-          blurStrategy: BlurStrategy.ENABLE,
-          systemMaterialEffect: {
-            materialType: hdsMaterial.MaterialType.IMMERSIVE,
-            materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-          },
-          originalStyle: {
-            backgroundStyle: { backgroundColor: '#00000000', maskExtraHeight: 0, blurRadius: 28 },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-              menuStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-              backIconStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-            },
-          },
-          scrollEffectStyle: {
-            backgroundStyle: { backgroundColor: '#00000000', maskExtraHeight: 0, blurRadius: 48 },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-              menuStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-              backIconStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-            },
-          },
-        },
-        content: {
-          title: { mainTitle: '' },
-          bottomBuilder: { builder: (): void => this.DiscoverLowerTitleBuilder() },
-        },
-      })
-      .titleMode(HdsNavigationTitleMode.MINI)
-      .hideBackButton(true)
-      .hideTitleBar(this.overlayLevel > 0)
-      .bindToScrollable([this.contentScroller])
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
-      .width('100%').height('100%')
-      .backgroundColor(this.theme.background)
-    }
+    this.DiscoverRoot()
   }
 }

@@ -527,7 +527,6 @@ struct Index {
         hideTitleBar: this.rootTabCoordinator.shouldHideRootTitleBar(),
         showHomeTitleActions: this.rootTabCoordinator.isHomeRootTab() && !this.showSearch,
         isHomeRootTab: this.rootTabCoordinator.isHomeRootTab(),
-        isSettingsRootTab: this.rootTabCoordinator.isSettingsRootTab(),
         currentRootTitle: this.rootTabCoordinator.currentRootTitle(),
         scrollEffectType: rootScrollEffectType(),
         blurEffectiveEndOffset: rootBlurEffectiveEndOffset(),

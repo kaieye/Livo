@@ -6,7 +6,7 @@ import { DiscoverSectionHeader } from './DiscoverSectionHeader'
 @Component
 export struct DiscoverCategoryBrowser {
   @Prop theme: ThemePalette
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
   onCategoryClick: (view: FeedViewType, label: string, sourceKey: string) => void = () => {}
 
   build() {

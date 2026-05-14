@@ -1,13 +1,5 @@
-import { LengthMetrics } from '@kit.ArkUI'
 import {
-  HdsNavigation,
-  HdsNavigationTitleMode,
-  ScrollEffectType,
-  hdsMaterial,
-} from '@kit.UIDesignKit'
-import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
-import {
-  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
+  ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE,
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
   ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
   ROOT_PAGE_MODE_TOP_OFFSET,
@@ -141,7 +133,7 @@ export struct SettingsContent {
   private SettingsLowerTitleBuilder() {
     Row() {
       Text('设置')
-        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
+        .fontSize(ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
         .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
@@ -239,82 +231,9 @@ export struct SettingsContent {
   }
 
   build() {
-    HdsNavigation() {
+    Stack() {
       this.SettingsRootContent()
     }
-    .titleBar({
-      padding: {
-        start: LengthMetrics.vp(2),
-        end: LengthMetrics.vp(2),
-      },
-      style: {
-        scrollEffectOpts: {
-          enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
-          blurEffectiveStartOffset: LengthMetrics.vp(0),
-          blurEffectiveEndOffset: LengthMetrics.vp(30),
-        },
-        blurStrategy: BlurStrategy.ENABLE,
-        systemMaterialEffect: {
-          materialType: hdsMaterial.MaterialType.IMMERSIVE,
-          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-        },
-        originalStyle: {
-          backgroundStyle: {
-            backgroundColor: '#00000000',
-            maskExtraHeight: 0,
-            blurRadius: 28,
-          },
-          contentStyle: {
-            titleStyle: {
-              mainTitleColor: $r('sys.color.font_primary'),
-              subTitleColor: $r('sys.color.font_secondary'),
-            },
-            menuStyle: {
-              backgroundColor: $r('sys.color.comp_background_tertiary'),
-              iconColor: $r('sys.color.icon_primary'),
-            },
-            backIconStyle: {
-              backgroundColor: $r('sys.color.comp_background_tertiary'),
-              iconColor: $r('sys.color.icon_primary'),
-            },
-          },
-        },
-        scrollEffectStyle: {
-          backgroundStyle: {
-            backgroundColor: '#00000000',
-            maskExtraHeight: 0,
-            blurRadius: 48,
-          },
-          contentStyle: {
-            titleStyle: {
-              mainTitleColor: $r('sys.color.font_primary'),
-              subTitleColor: $r('sys.color.font_secondary'),
-            },
-            menuStyle: {
-              backgroundColor: $r('sys.color.comp_background_tertiary'),
-              iconColor: $r('sys.color.icon_primary'),
-            },
-            backIconStyle: {
-              backgroundColor: $r('sys.color.comp_background_tertiary'),
-              iconColor: $r('sys.color.icon_primary'),
-            },
-          },
-        },
-      },
-      content: {
-        title: {
-          mainTitle: '',
-        },
-        bottomBuilder: {
-          builder: (): void => this.SettingsLowerTitleBuilder(),
-        },
-      },
-    })
-    .titleMode(HdsNavigationTitleMode.MINI)
-    .hideBackButton(true)
-    .bindToScrollable([this.contentScroller])
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
     .bindSheet($$this.showSettingsSheet, this.SettingsSheetOverlay(), {
       detents: [resolveInitialSheetHeight(this.activeSheet), SheetSize.LARGE],
       dragBar: false,

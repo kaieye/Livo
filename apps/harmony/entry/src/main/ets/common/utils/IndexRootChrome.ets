@@ -12,13 +12,13 @@ import { RootTabSymbolPair } from '../components/HomeRootConfig'
 export function rootTitleFor(tabId: RootTabId): string {
   switch (tabId) {
     case 'discover':
-      return '添加订阅'
+      return '发现'
     case 'subscriptions':
-      return '订阅库'
+      return '订阅'
     case 'settings':
       return '设置'
     default:
-      return '今日推荐'
+      return '首页'
   }
 }
 

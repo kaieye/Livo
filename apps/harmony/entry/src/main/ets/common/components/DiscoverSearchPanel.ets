@@ -13,7 +13,7 @@ export struct DiscoverSearchPanel {
   @Prop searchPlatform: DiscoverSearchPlatform = 'all'
   @Prop showPlatformChips: boolean = false
   @Prop theme: ThemePalette
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
   onQueryChange: (value: string) => void = () => {}
   onClearQuery: () => void = () => {}
   onPlatformSwitch: (platform: DiscoverSearchPlatform) => void = () => {}

@@ -2,16 +2,10 @@ import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '
 import { openArticleDetail } from '../navigation/AppRouter'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { feedCardFromFeed } from '../data/AppRepositoryEntryHelpers'
-import { SettingsStore } from '../services/SettingsStore'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { BottomTabs } from './BottomTabs'
-import {
-  ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE,
-  ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
-  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
-} from './FloatingRootPageLayout'
+
+
 import {
   SubscriptionsAvatarHydrationCoordinator,
 } from '../utils/SubscriptionsAvatarHydrationCoordinator'
@@ -21,7 +15,6 @@ import {
   subscriptionModeIndex,
 } from '../utils/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
-import { SubscriptionsHdsNavigationShell } from './SubscriptionsHdsNavigationShell'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
   HEADER_BLUR_SCROLL_RANGE,
@@ -58,12 +51,11 @@ export struct SubscriptionsContent {
   @StorageProp(ROOT_TAB_SCROLL_TO_TOP_TAB_KEY) rootTabScrollToTopTab: string = ''
   @StorageProp('subscriptionsOverlayBackAt') @Watch('handleOverlayBackSignal') subscriptionsOverlayBackAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
-  @Prop showBottomTabs: boolean = true
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
-  private readonly articlesScroller: Scroller = new Scroller()
-  private readonly socialScroller: Scroller = new Scroller()
-  private readonly picturesScroller: Scroller = new Scroller()
-  private readonly videosScroller: Scroller = new Scroller()
+  articlesScroller: Scroller = new Scroller()
+  socialScroller: Scroller = new Scroller()
+  picturesScroller: Scroller = new Scroller()
+  videosScroller: Scroller = new Scroller()
   private readonly hydratedFeedIds: Set<string> = new Set()
   private headerBlurOffset: number = 0
   private avatarCoordinator: SubscriptionsAvatarHydrationCoordinator =
@@ -97,9 +89,7 @@ export struct SubscriptionsContent {
 
   aboutToAppear(): void {
     this.overlayLevel = this.subscriptionsOverlayLevel
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-    }
+    this.theme = this.inheritedTheme
 
     if (this.hasLoaded || this.isLoading) {
       this.onReady()
@@ -116,15 +106,10 @@ export struct SubscriptionsContent {
 
     this.isLoading = true
     const startedAt = Date.now()
-    this.logSubscriptionsDiag(`load start showBottomTabs=${this.showBottomTabs} mode=${this.mode}`)
+    this.logSubscriptionsDiag(`load start mode=${this.mode}`)
     try {
       this.avatarCoordinator.bumpToken()
-      if (this.showBottomTabs) {
-        const settings = await SettingsStore.load()
-        this.theme = await ThemeService.resolvePalette(settings)
-      } else {
-        this.theme = this.inheritedTheme
-      }
+      this.theme = this.inheritedTheme
 
       const feedList = await FeedRepository.list()
       this.feeds = feedList.map((f: Feed) => feedCardFromFeed(f))
@@ -150,9 +135,7 @@ export struct SubscriptionsContent {
   }
 
   private syncInheritedTheme(): void {
-    if (!this.showBottomTabs) {
-      this.theme = this.inheritedTheme
-    }
+    this.theme = this.inheritedTheme
   }
 
   private updateHeaderBlurProgress(offset: number): void {
@@ -203,25 +186,6 @@ export struct SubscriptionsContent {
 
   private syncOverlayState(level: number): void {
     this.syncOverlayLevel(level)
-  }
-
-  @Builder
-  private SubscriptionsLowerTitleBuilder() {
-    Row() {
-      Text('订阅')
-        .fontSize(ROOT_PAGE_PRIMARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-    })
   }
 
   private filteredFeedsFor(mode: SubscriptionMode): FeedCardModel[] {
@@ -338,7 +302,7 @@ export struct SubscriptionsContent {
       theme: this.theme,
       interactionLocked: this.isModeTransitioning,
       emptyTitle: resolveSubscriptionModeLabel(sceneMode),
-      enableRootEnterTransition: this.showBottomTabs,
+      enableRootEnterTransition: false,
       scroller,
       onModeChange: (mode: SubscriptionMode) => { this.requestModeSwitch(mode) },
       onFeedClick: (feedId: string) => { this.openFeedDetailPage(feedId) },
@@ -364,11 +328,6 @@ export struct SubscriptionsContent {
       )
 
       this.OverlayHost()
-
-      if (this.showBottomTabs && this.overlayLevel === 0) {
-        BottomTabs({ activeTab: 'subscriptions', theme: this.theme })
-          .align(Alignment.Bottom)
-      }
     }
     .width('100%')
     .height('100%')
@@ -383,21 +342,6 @@ export struct SubscriptionsContent {
   }
 
   build() {
-    if (this.showBottomTabs) {
-      this.SubscriptionsRoot()
-    } else {
-      SubscriptionsHdsNavigationShell({
-        hideTitleBar: this.overlayLevel > 0,
-        theme: this.theme,
-        bindScrollers: [
-          this.articlesScroller,
-          this.socialScroller,
-          this.picturesScroller,
-          this.videosScroller,
-        ],
-        content: () => { this.SubscriptionsRoot() },
-        lowerTitle: () => { this.SubscriptionsLowerTitleBuilder() },
-      })
-    }
+    this.SubscriptionsRoot()
   }
 }

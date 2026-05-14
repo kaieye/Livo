@@ -16,6 +16,20 @@ const rootCoordinatorSource = readFileSync(
   ),
   'utf8',
 )
+const rootChromeSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/IndexRootChrome.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+const rootVisibilityPolicySource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/RootTabVisibilityPolicy.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
 const indexSource = readFileSync(
   new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
   'utf8',
@@ -30,6 +44,13 @@ const homeOverlayLayerSource = readFileSync(
 const subscriptionsSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/components/SubscriptionsContent.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+const subscriptionsFeedListSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/components/SubscriptionsFeedListSection.ets',
     import.meta.url,
   ),
   'utf8',
@@ -76,6 +97,49 @@ test('root hds tab bar reports clicks for double-tap detection', () => {
     indexSource,
     /onRootTabBarClick: \(index: number\) => this\.rootTabCoordinator\.handleRootTabBarClick\(index\)/,
   )
+})
+
+test('root tab title bar stays visible for top-level non-home tabs', () => {
+  assert.match(rootChromeSource, /case 'subscriptions':\s*return '订阅'/)
+  assert.match(rootChromeSource, /case 'discover':\s*return '发现'/)
+  assert.match(rootChromeSource, /case 'settings':\s*return '设置'/)
+  assert.match(
+    rootVisibilityPolicySource,
+    /shouldHideRootTitleBar\(tabId: RootTabId, context: RootTabBottomBarContext\): boolean/,
+  )
+  assert.match(
+    rootVisibilityPolicySource,
+    /if \(tabId === 'subscriptions'\) \{\s*return context\.subscriptionsOverlayLevel > 0\s*\}/s,
+  )
+  assert.match(
+    rootVisibilityPolicySource,
+    /if \(tabId === 'discover'\) \{\s*return context\.discoverHasForegroundOverlay\s*\}/s,
+  )
+  assert.match(
+    rootVisibilityPolicySource,
+    /if \(tabId === 'settings'\) \{\s*return context\.settingsOverlayLevel > 0\s*\}/s,
+  )
+  assert.match(
+    rootShellSource,
+    /mainTitle:\s*this\.isHomeRootTab\s*\?\s*'首页'\s*:\s*this\.currentRootTitle/,
+  )
+  assert.doesNotMatch(
+    rootShellSource,
+    /bottomBuilder:\s*this\.isSettingsRootTab/,
+  )
+})
+
+test('subscriptions root uses the same mode rail component as home', () => {
+  assert.match(
+    subscriptionsFeedListSource,
+    /import \{ HomeRootOverlayControls \} from '\.\/HomeRootOverlayControls'/,
+  )
+  assert.match(
+    subscriptionsFeedListSource,
+    /HomeRootOverlayControls\(\{\s*theme:\s*this\.theme,\s*mode:\s*this\.activeMode,/s,
+  )
+  assert.match(subscriptionsFeedListSource, /barBottomMargin:\s*0/)
+  assert.match(subscriptionsFeedListSource, /\.height\(HOME_MODE_RAIL_HEIGHT\)/)
 })
 
 test('root tab coordinator emits scroll-to-top only after a repeated tab click', () => {
@@ -165,13 +229,10 @@ test('home title actions keep stable menu config and are not blocked by overlay 
   assert.match(rootShellSource, /this\.onHomeRefresh\(\)/)
   assert.match(rootShellSource, /this\.onHomeSearchOpen\(\)/)
   assert.match(
-    homeOverlayControlsSource,
+    homeOverlayLayerSource,
     /\.hitTestBehavior\(HitTestMode\.Transparent\)/,
   )
-  assert.match(
-    homeOverlayControlsSource,
-    /\.hitTestBehavior\(HitTestMode\.Block\)/,
-  )
+  assert.match(homeOverlayLayerSource, /\.hitTestBehavior\(HitTestMode\.None\)/)
 })
 
 test('home refresh title action gives immediate visible feedback', () => {

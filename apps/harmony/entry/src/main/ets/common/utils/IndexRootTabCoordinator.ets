@@ -68,7 +68,11 @@ export class IndexRootTabCoordinator {
   }
 
   shouldHideRootTitleBar(): boolean {
-    return shouldHideRootTitleBar(this.currentRootTabId())
+    return shouldHideRootTitleBar(this.currentRootTabId(), {
+      discoverHasForegroundOverlay: this.owner.discoverHasForegroundOverlay,
+      subscriptionsOverlayLevel: this.owner.subscriptionsOverlayLevel,
+      settingsOverlayLevel: this.owner.settingsOverlayLevel,
+    })
   }
 
   shouldHideBottomTabs(): boolean {

@@ -16,13 +16,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   BOTTOM_TAB_BAR_HEIGHT,
   BOTTOM_TAB_FLOAT_GAP,
-  PAGE_HORIZONTAL_PADDING,
 } from '../ui/UiTokens'
-import {
-  ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE,
-  ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-  ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
-} from './FloatingRootPageLayout'
 import {
   HdsBottomTabId,
   HdsBottomTabItem,
@@ -30,7 +24,6 @@ import {
   resolveHdsBottomTabItems,
 } from '../utils/HdsBottomTabConfig'
 import {
-  ROOT_BOTTOM_TITLE_HEIGHT,
   RootTabSymbolPair,
   SubscriptionMode,
 } from './HomeRootConfig'
@@ -59,7 +52,6 @@ export struct IndexRootNavigationShell {
   @Prop hideTitleBar: boolean = false
   @Prop showHomeTitleActions: boolean = false
   @Prop isHomeRootTab: boolean = false
-  @Prop isSettingsRootTab: boolean = false
   @Prop currentRootTitle: string = ''
   @Prop scrollEffectType: ScrollEffectType = ScrollEffectType.IMMERSIVE_GRADIENT_BLUR
   @Prop blurEffectiveEndOffset: LengthMetrics = LengthMetrics.vp(30)
@@ -147,25 +139,6 @@ export struct IndexRootNavigationShell {
     }
   }
 
-  @Builder
-  private SettingsLowerTitleBuilder() {
-    Row() {
-      Text(this.currentRootTitle)
-        .fontSize(ROOT_PAGE_SECONDARY_TITLE_FONT_SIZE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.font_primary'))
-        .margin({ bottom: ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET })
-    }
-    .width('100%')
-    .height(ROOT_BOTTOM_TITLE_HEIGHT)
-    .alignItems(VerticalAlign.Bottom)
-    .padding({
-      left: PAGE_HORIZONTAL_PADDING,
-      right: PAGE_HORIZONTAL_PADDING,
-      bottom: ROOT_PAGE_TITLE_CONTENT_BOTTOM_PADDING,
-    })
-  }
-
   build() {
     HdsNavigation() {
       HdsTabs({ controller: this.controller }) {
@@ -233,15 +206,10 @@ export struct IndexRootNavigationShell {
     .titleBar({
       content: {
         title: {
-          mainTitle: this.isHomeRootTab ? '首页' : (this.isSettingsRootTab ? '' : this.currentRootTitle),
+          mainTitle: this.isHomeRootTab ? '首页' : this.currentRootTitle,
         },
         menu: this.isHomeRootTab && this.showHomeTitleActions && !this.hideTitleBar
           ? this.homeTitleMenus
-          : undefined,
-        bottomBuilder: this.isSettingsRootTab
-          ? {
-              builder: (): void => this.SettingsLowerTitleBuilder(),
-            }
           : undefined,
       },
       style: {

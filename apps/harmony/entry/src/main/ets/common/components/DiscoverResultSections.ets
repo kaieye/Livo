@@ -25,7 +25,7 @@ export struct DiscoverSectionHeader {
   @Prop showMoreButton: boolean = false
   @Prop leadingIcon: Resource | undefined = undefined
   @Prop theme: ThemePalette
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
 
   build() {
     Row() {
@@ -267,7 +267,7 @@ export struct DiscoverCandidateRow {
 @Component
 export struct DiscoverCategoryBrowserSection {
   @Prop theme: ThemePalette
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
   onOpenBrowse: (view: number, label: string, sourceKey: string) => void = () => {}
 
   build() {
@@ -333,7 +333,7 @@ export struct DiscoverCandidateSection {
   @Prop showMoreButton: boolean = false
   @Prop leadingIcon: Resource | undefined = undefined
   @Prop theme: ThemePalette
-  @Prop showBottomTabs: boolean = true
+  @Prop showBottomTabs: boolean = false
   @Prop refreshToken: number = 0
   onOpen: (c: ResolvedDiscoverCandidate) => void = () => {}
   onSubscribe: (c: ResolvedDiscoverCandidate) => void = () => {}

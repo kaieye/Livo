@@ -77,13 +77,10 @@ export struct IndexRootTabBody {
         })
       } else if (this.tabId === 'subscriptions') {
         SubscriptionsContent({
-          showBottomTabs: false,
           inheritedTheme: this.theme,
         })
       } else if (this.tabId === 'discover') {
         DiscoverContent({
-          showBottomTabs: false,
-          reserveBottomTabInset: true,
           inheritedTheme: this.theme,
         })
       } else {

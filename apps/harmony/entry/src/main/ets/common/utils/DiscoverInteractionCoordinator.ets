@@ -1,10 +1,9 @@
 import { FeedRepository } from '../repositories/FeedRepository'
-import { SettingsStore } from '../services/SettingsStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { trendingDiscoverFeedsFromJsonNow } from '../services/discover/DiscoverFeedCatalog'
 import { FeedRefreshPayload } from '../services/RssFeedService'
-import { ThemePalette, ThemeService } from '../services/ThemeService'
+import { ThemePalette } from '../services/ThemeService'
 import { DiscoverFocusController, DiscoverFocusOwner } from './DiscoverFocusController'
 import { DiscoverOverlayController, DiscoverOverlayOwner } from './DiscoverOverlayController'
 import { DiscoverSearchExecutor, DiscoverSearchOwner } from './DiscoverSearchExecutor'
@@ -14,7 +13,6 @@ export interface DiscoverDataOwner {
   isLoadingPage: boolean
   subscribedFeeds: Feed[]
   featuredTrendingFeeds: RecommendedFeed[]
-  showBottomTabs: boolean
   inheritedTheme: ThemePalette
   theme: ThemePalette
   onReady: () => void
@@ -44,12 +42,7 @@ export class DiscoverInteractionCoordinator {
     }
     this.owner.isLoadingPage = true
     try {
-      if (this.owner.showBottomTabs) {
-        const settings = await SettingsStore.load()
-        this.owner.theme = await ThemeService.resolvePalette(settings)
-      } else {
-        this.owner.theme = this.owner.inheritedTheme
-      }
+      this.owner.theme = this.owner.inheritedTheme
       this.owner.subscribedFeeds = await FeedRepository.list()
       this.owner.featuredTrendingFeeds = trendingDiscoverFeedsFromJsonNow()
 
