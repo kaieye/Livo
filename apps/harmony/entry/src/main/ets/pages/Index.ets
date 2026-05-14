@@ -23,16 +23,6 @@ import { IndexHomeOverlayLayer } from '../common/components/IndexHomeOverlayLaye
 import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
 import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
 import { HdsBottomTabId } from '../common/utils/HdsBottomTabConfig'
-import {
-  rootBlurEffectiveEndOffset,
-  rootBlurStrategy,
-  rootOriginalTitleBarBlurRadius,
-  rootScrollEffectTitleBarBlurRadius,
-  rootScrollEffectType,
-  rootSystemMaterialEffect,
-  rootTitleBarMaskExtraHeight,
-  rootTransparentBackgroundColor,
-} from '../common/utils/IndexRootChrome'
 import { HomeFeedSession } from '../common/utils/HomeFeedSession'
 import { IndexHomeRailCoordinator } from '../common/utils/IndexHomeRailCoordinator'
 import { IndexHomeRuntimeCoordinator } from '../common/utils/IndexHomeRuntimeCoordinator'
@@ -528,16 +518,6 @@ struct Index {
         showHomeTitleActions: this.rootTabCoordinator.isHomeRootTab() && !this.showSearch,
         isHomeRootTab: this.rootTabCoordinator.isHomeRootTab(),
         currentRootTitle: this.rootTabCoordinator.currentRootTitle(),
-        scrollEffectType: rootScrollEffectType(),
-        blurEffectiveEndOffset: rootBlurEffectiveEndOffset(),
-        originalTitleBarBackgroundColor: rootTransparentBackgroundColor(),
-        scrollEffectBackgroundColor: rootTransparentBackgroundColor(),
-        originalTitleBarBlurRadius: rootOriginalTitleBarBlurRadius(),
-        scrollEffectTitleBarBlurRadius: rootScrollEffectTitleBarBlurRadius(),
-        originalTitleBarMaskExtraHeight: rootTitleBarMaskExtraHeight(),
-        scrollEffectTitleBarMaskExtraHeight: rootTitleBarMaskExtraHeight(),
-        blurStrategy: rootBlurStrategy(),
-        systemMaterialEffect: rootSystemMaterialEffect(),
         bindScrollers: this.scrollerRegistry.currentRootBindScrollers(),
         homeCallbacks: this.indexHomeRootContentCallbacks(),
         rootTabSymbolPair: (tabId: HdsBottomTabId): RootTabSymbolPair => this.rootTabCoordinator.rootTabSymbolPair(tabId),

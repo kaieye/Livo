@@ -5,11 +5,11 @@ import {
   HdsNavigationTitleMode,
   HdsTabs,
   HdsTabsController,
+  BlurStrategy,
   ScrollEffectType,
-  SystemMaterialParams,
   hdsMaterial,
 } from '@kit.UIDesignKit'
-import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
+import { rootTabTitleBarStyle } from '../utils/IndexRootChrome'
 import { RootTabId } from '../navigation/AppRouter'
 import { Entry, EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -53,18 +53,7 @@ export struct IndexRootNavigationShell {
   @Prop showHomeTitleActions: boolean = false
   @Prop isHomeRootTab: boolean = false
   @Prop currentRootTitle: string = ''
-  @Prop scrollEffectType: ScrollEffectType = ScrollEffectType.IMMERSIVE_GRADIENT_BLUR
-  @Prop blurEffectiveEndOffset: LengthMetrics = LengthMetrics.vp(30)
-  @Prop originalTitleBarBackgroundColor: ResourceColor = '#00000000'
-  @Prop scrollEffectBackgroundColor: ResourceColor = '#00000000'
-  @Prop originalTitleBarBlurRadius: number = 28
-  @Prop scrollEffectTitleBarBlurRadius: number = 48
-  @Prop originalTitleBarMaskExtraHeight: number = 0
-  @Prop scrollEffectTitleBarMaskExtraHeight: number = 0
-  @Prop blurStrategy: BlurStrategy | undefined = BlurStrategy.ENABLE
-  @Prop systemMaterialEffect: SystemMaterialParams | undefined = undefined
   @Prop bindScrollers: Scroller[] = []
-  @State private homeTitleBarMaterialLevel: hdsMaterial.MaterialLevel = hdsMaterial.MaterialLevel.EXQUISITE
 
   controller: HdsTabsController = new HdsTabsController()
   homeCallbacks: IndexHomeRootContentCallbacks = {
@@ -123,20 +112,6 @@ export struct IndexRootNavigationShell {
         },
       },
     }],
-  }
-
-  aboutToAppear(): void {
-    const materialTypes: Array<hdsMaterial.MaterialType> = hdsMaterial.getSystemMaterialTypes()
-    if (materialTypes.indexOf(hdsMaterial.MaterialType.IMMERSIVE) < 0) {
-      this.homeTitleBarMaterialLevel = hdsMaterial.MaterialLevel.SMOOTH
-    }
-  }
-
-  private HomeTitleBarMaterialEffect(): SystemMaterialParams {
-    return {
-      materialType: hdsMaterial.MaterialType.ADAPTIVE,
-      materialLevel: this.homeTitleBarMaterialLevel,
-    }
   }
 
   build() {
@@ -212,19 +187,23 @@ export struct IndexRootNavigationShell {
           ? this.homeTitleMenus
           : undefined,
       },
-      style: {
+      style: this.isHomeRootTab ? {
         scrollEffectOpts: {
-          enableScrollEffect: !this.isHomeRootTab,
-          scrollEffectType: this.isHomeRootTab ? ScrollEffectType.GRADIENT_BLUR : this.scrollEffectType,
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
           blurEffectiveStartOffset: LengthMetrics.vp(0),
-          blurEffectiveEndOffset: this.blurEffectiveEndOffset,
+          blurEffectiveEndOffset: LengthMetrics.vp(30),
         },
-        blurStrategy: this.isHomeRootTab ? undefined : this.blurStrategy,
-        originalStyle: this.isHomeRootTab ? undefined : {
+        blurStrategy: BlurStrategy.ENABLE,
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+        },
+        originalStyle: {
           backgroundStyle: {
-            backgroundColor: this.originalTitleBarBackgroundColor,
-            maskExtraHeight: this.originalTitleBarMaskExtraHeight,
-            blurRadius: this.originalTitleBarBlurRadius,
+            backgroundColor: '#00000000',
+            maskExtraHeight: 0,
+            blurRadius: 28,
           },
           contentStyle: {
             titleStyle: {
@@ -241,29 +220,8 @@ export struct IndexRootNavigationShell {
             },
           },
         },
-        scrollEffectStyle: this.isHomeRootTab ? undefined : {
-          backgroundStyle: {
-            backgroundColor: this.scrollEffectBackgroundColor,
-            maskExtraHeight: this.scrollEffectTitleBarMaskExtraHeight,
-            blurRadius: this.scrollEffectTitleBarBlurRadius,
-          },
-          contentStyle: {
-            titleStyle: {
-              mainTitleColor: $r('sys.color.font_primary'),
-              subTitleColor: $r('sys.color.font_secondary'),
-            },
-            menuStyle: {
-              backgroundColor: $r('sys.color.comp_background_tertiary'),
-              iconColor: $r('sys.color.icon_primary'),
-            },
-            backIconStyle: {
-              backgroundColor: $r('sys.color.comp_background_tertiary'),
-              iconColor: $r('sys.color.icon_primary'),
-            },
-          },
-        },
-        systemMaterialEffect: this.isHomeRootTab ? this.HomeTitleBarMaterialEffect() : this.systemMaterialEffect,
-      },
+        scrollEffectStyle: undefined,
+      } : rootTabTitleBarStyle(),
       // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏。
       avoidLayoutSafeArea: true,
       enableComponentSafeArea: false,

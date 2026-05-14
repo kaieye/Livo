@@ -2,10 +2,7 @@ import { LengthMetrics } from '@kit.ArkUI'
 import {
   HdsNavigation,
   HdsNavigationTitleMode,
-  ScrollEffectType,
-  hdsMaterial,
 } from '@kit.UIDesignKit'
-import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import { SettingsContent } from '../common/components/SettingsContent'
 import { DEFAULT_HARMONY_SETTINGS, HarmonySettings } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
@@ -16,6 +13,7 @@ import {
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from '../common/components/FloatingRootPageLayout'
 import { ROOT_BOTTOM_TITLE_HEIGHT } from '../common/components/HomeRootConfig'
+import { rootTabTitleBarStyle } from '../common/utils/IndexRootChrome'
 
 @Entry
 @Component
@@ -62,61 +60,7 @@ struct Settings {
           start: LengthMetrics.vp(2),
           end: LengthMetrics.vp(2),
         },
-        style: {
-          scrollEffectOpts: {
-            enableScrollEffect: true,
-            scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
-            blurEffectiveStartOffset: LengthMetrics.vp(0),
-            blurEffectiveEndOffset: LengthMetrics.vp(30),
-          },
-          blurStrategy: BlurStrategy.ENABLE,
-          systemMaterialEffect: {
-            materialType: hdsMaterial.MaterialType.IMMERSIVE,
-            materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-          },
-          originalStyle: {
-            backgroundStyle: {
-              backgroundColor: '#00000000',
-              maskExtraHeight: 0,
-              blurRadius: 28,
-            },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-              menuStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-              backIconStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-            },
-          },
-          scrollEffectStyle: {
-            backgroundStyle: {
-              backgroundColor: '#00000000',
-              maskExtraHeight: 0,
-              blurRadius: 48,
-            },
-            contentStyle: {
-              titleStyle: {
-                mainTitleColor: $r('sys.color.font_primary'),
-                subTitleColor: $r('sys.color.font_secondary'),
-              },
-              menuStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-              backIconStyle: {
-                backgroundColor: $r('sys.color.comp_background_tertiary'),
-                iconColor: $r('sys.color.icon_primary'),
-              },
-            },
-          },
-        },
+        style: rootTabTitleBarStyle(),
         content: {
           title: {
             mainTitle: '',

@@ -1,7 +1,7 @@
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
   ScrollEffectType,
-  SystemMaterialParams,
+  TitleBarStyleOptions,
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
@@ -22,38 +22,66 @@ export function rootTitleFor(tabId: RootTabId): string {
   }
 }
 
-export function rootScrollEffectType(): ScrollEffectType {
-  return ScrollEffectType.IMMERSIVE_GRADIENT_BLUR
-}
-
-export function rootBlurEffectiveEndOffset(): LengthMetrics {
-  return LengthMetrics.vp(30)
-}
-
-export function rootTransparentBackgroundColor(): ResourceColor {
-  return '#00000000'
-}
-
-export function rootOriginalTitleBarBlurRadius(): number {
-  return 28
-}
-
-export function rootScrollEffectTitleBarBlurRadius(): number {
-  return 48
-}
-
-export function rootTitleBarMaskExtraHeight(): number {
-  return 0
-}
-
-export function rootBlurStrategy(): BlurStrategy | undefined {
-  return BlurStrategy.ENABLE
-}
-
-export function rootSystemMaterialEffect(): SystemMaterialParams | undefined {
+/**
+ * Shared titleBar style for root tab pages (subscriptions, discover, settings).
+ * Provides immersive gradient blur, system material, and scroll-aware transition
+ * from transparent (blurRadius=28) to fully blurred (blurRadius=48).
+ */
+export function rootTabTitleBarStyle(): TitleBarStyleOptions {
   return {
-    materialType: hdsMaterial.MaterialType.IMMERSIVE,
-    materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+    scrollEffectOpts: {
+      enableScrollEffect: true,
+      scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+      blurEffectiveStartOffset: LengthMetrics.vp(0),
+      blurEffectiveEndOffset: LengthMetrics.vp(30),
+    },
+    blurStrategy: BlurStrategy.ENABLE,
+    systemMaterialEffect: {
+      materialType: hdsMaterial.MaterialType.ADAPTIVE,
+      materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+    },
+    originalStyle: {
+      backgroundStyle: {
+        backgroundColor: '#00000000',
+        maskExtraHeight: 0,
+        blurRadius: 28,
+      },
+      contentStyle: {
+        titleStyle: {
+          mainTitleColor: $r('sys.color.font_primary'),
+          subTitleColor: $r('sys.color.font_secondary'),
+        },
+        menuStyle: {
+          backgroundColor: $r('sys.color.comp_background_tertiary'),
+          iconColor: $r('sys.color.icon_primary'),
+        },
+        backIconStyle: {
+          backgroundColor: $r('sys.color.comp_background_tertiary'),
+          iconColor: $r('sys.color.icon_primary'),
+        },
+      },
+    },
+    scrollEffectStyle: {
+      backgroundStyle: {
+        backgroundColor: '#00000000',
+        maskExtraHeight: 0,
+        blurRadius: 48,
+      },
+      contentStyle: {
+        titleStyle: {
+          mainTitleColor: $r('sys.color.font_primary'),
+          subTitleColor: $r('sys.color.font_secondary'),
+        },
+        menuStyle: {
+          backgroundColor: $r('sys.color.comp_background_tertiary'),
+          iconColor: $r('sys.color.icon_primary'),
+        },
+        backIconStyle: {
+          backgroundColor: $r('sys.color.comp_background_tertiary'),
+          iconColor: $r('sys.color.icon_primary'),
+        },
+      },
+    },
   }
 }
 
