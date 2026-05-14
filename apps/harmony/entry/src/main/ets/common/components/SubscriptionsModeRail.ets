@@ -4,12 +4,18 @@ import {
   HdsTabsController,
   hdsMaterial,
 } from '@kit.UIDesignKit'
-import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_HEIGHT, HOME_TITLE_BAR_OVERLAY_SPACER, SubscriptionMode } from './HomeRootConfig'
+import { SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER } from './SubscriptionsConstants'
+import { BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
+
+const SUBS_RAIL_EXTRA_MARGIN: number = HOME_TITLE_BAR_OVERLAY_SPACER - SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER
 
 @Component
 export struct SubscriptionsModeRail {
   @Prop mode: SubscriptionMode = 'articles'
+  @Prop interactionLocked: boolean = false
+  @Prop barBottomMargin: number = BOTTOM_TAB_FLOAT_GAP + 10 + 640 + SUBS_RAIL_EXTRA_MARGIN
   private modeTabsController: HdsTabsController = new HdsTabsController()
   onModeChange: (mode: SubscriptionMode) => void = () => {}
 
@@ -39,7 +45,7 @@ export struct SubscriptionsModeRail {
       }, (m: HomeMode) => m)
     }
     .width('100%')
-    .height(HOME_MODE_RAIL_HEIGHT)
+    .height('100%')
     .vertical(false)
     .scrollable(false)
     .animationDuration(0)
@@ -47,12 +53,13 @@ export struct SubscriptionsModeRail {
     .barOverlap(true)
     .barHeight(HOME_MODE_RAIL_HEIGHT)
     .barFloatingStyle({
-      barBottomMargin: 0,
+      barBottomMargin: this.barBottomMargin,
       systemMaterialEffect: {
         materialType: hdsMaterial.MaterialType.ADAPTIVE,
         materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
       },
     })
+    .enabled(!this.interactionLocked)
     .onChange((index: number) => {
       const mode = HOME_MODES[index]
       if (mode) {

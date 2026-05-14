@@ -6,6 +6,7 @@ import { IndexHomeRootContent, IndexHomeRootContentCallbacks } from './IndexHome
 import { SettingsContent } from './SettingsContent'
 import { SubscriptionMode } from './HomeRootConfig'
 import { SubscriptionsContent } from './SubscriptionsContent'
+import { SubscriptionsModeRail } from './SubscriptionsModeRail'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
@@ -16,6 +17,7 @@ export struct IndexRootTabBody {
   @Prop rootSettings: HarmonySettings = {} as HarmonySettings
   @Prop showUnreadDot: boolean = true
   @Prop mode: SubscriptionMode = 'articles'
+  @State subscriptionsMode: SubscriptionMode = 'articles'
   @Prop renderedMode: SubscriptionMode = 'articles'
   @Prop previousMode: SubscriptionMode = 'articles'
   @Prop isModeTransitioning: boolean = false
@@ -78,6 +80,7 @@ export struct IndexRootTabBody {
       } else if (this.tabId === 'subscriptions') {
         SubscriptionsContent({
           inheritedTheme: this.theme,
+          mode: this.subscriptionsMode,
         })
       } else if (this.tabId === 'discover') {
         DiscoverContent({
@@ -97,6 +100,17 @@ export struct IndexRootTabBody {
             this.onThemeChange(theme)
           },
         })
+      }
+
+      if (this.tabId === 'subscriptions') {
+        SubscriptionsModeRail({
+          mode: this.subscriptionsMode,
+          onModeChange: (mode: SubscriptionMode) => {
+            this.subscriptionsMode = mode
+          },
+        })
+        .width('100%')
+        .hitTestBehavior(HitTestMode.Transparent)
       }
     }
     .width('100%')

@@ -6,7 +6,6 @@ import {
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { SubscriptionsModeRail } from '../common/components/SubscriptionsModeRail'
 import { SubscriptionMode } from '../common/components/HomeRootConfig'
-import { SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER } from '../common/components/SubscriptionsConstants'
 import { rootTabTitleBarStyle } from '../common/utils/IndexRootChrome'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 
@@ -53,7 +52,6 @@ struct Subscriptions {
         mode: this.mode,
         onModeChange: (mode: SubscriptionMode) => { this.handleModeChange(mode) },
       })
-      .position({ y: SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER })
       .width('100%')
       .hitTestBehavior(HitTestMode.Transparent)
     }

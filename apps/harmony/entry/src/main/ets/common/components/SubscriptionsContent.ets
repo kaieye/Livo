@@ -12,16 +12,13 @@ import {
 import { SubscriptionMode, HOME_MODE_RAIL_HEIGHT } from './HomeRootConfig'
 import { resolveSubscriptionModeLabel } from '../utils/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
-import { SubscriptionsModeRail } from './SubscriptionsModeRail'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
   HEADER_BLUR_SCROLL_RANGE,
   SUBSCRIPTIONS_REFRESH_DIAG_PREFIX,
-  SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER,
   SubscriptionFeedConfigParams,
   SubscriptionFeedDetailParams,
 } from './SubscriptionsConstants'
-import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
@@ -31,7 +28,7 @@ import {
 @Component
 export struct SubscriptionsContent {
   @State feeds: FeedCardModel[] = []
-  @State mode: SubscriptionMode = 'articles'
+  @Prop @Watch('onModeChanged') mode: SubscriptionMode = 'articles'
   @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State sourceHint: string = '正在加载订阅内容...'
@@ -96,11 +93,13 @@ export struct SubscriptionsContent {
     return resolveSubscriptionModeLabel(this.mode)
   }
 
-  private handleModeChange(mode: SubscriptionMode): void {
-    if (mode === this.mode) {
+  private prevMode: SubscriptionMode = 'articles'
+
+  private onModeChanged(): void {
+    if (this.mode === this.prevMode) {
       return
     }
-    this.mode = mode
+    this.prevMode = this.mode
     scrollScrollerToTop(this.scroller, '订阅')
   }
 
@@ -278,16 +277,6 @@ export struct SubscriptionsContent {
         onFeedClick: (feedId: string) => { this.openFeedDetailPage(feedId) },
         onScrollDelta: (yOffset: number) => { this.handleHeaderBlurScrollDelta(yOffset) },
       })
-
-      Column() {
-        Blank().height(SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER)
-        SubscriptionsModeRail({
-          mode: this.mode,
-          onModeChange: (mode: SubscriptionMode) => { this.handleModeChange(mode) },
-        })
-      }
-      .width('100%')
-      .hitTestBehavior(HitTestMode.Transparent)
 
       this.OverlayHost()
     }
