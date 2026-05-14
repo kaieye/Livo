@@ -68,6 +68,7 @@ export interface FeedCardModel {
   imageUrl: string
   unreadLabel: string
   unreadCount: number
+  view: FeedViewType
   viewLabel: string
   viewBadgeColor: string
   accentColor: string

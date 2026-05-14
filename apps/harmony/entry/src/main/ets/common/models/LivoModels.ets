@@ -39,6 +39,7 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
     imageUrl: feed.imageUrl ?? '',
     unreadLabel: `${feed.unreadCount} 未读`,
     unreadCount: feed.unreadCount,
+    view: feed.view,
     viewLabel: definition.label,
     viewBadgeColor: definition.badgeColor,
     accentColor: definition.accentColor,

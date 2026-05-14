@@ -3,7 +3,7 @@ import {
   SUBSCRIPTION_MODES,
   SubscriptionMode,
   MODE_SWIPE_TRIGGER_OFFSET,
-} from '../components/SubscriptionsConstants'
+} from '../components/HomeRootConfig'
 
 export function resolveSubscriptionModeLabel(mode: SubscriptionMode): string {
   switch (mode) {
@@ -60,7 +60,7 @@ export function resolveSubscriptionSwipeTarget(
     return undefined
   }
 
-  const candidate = adjacentSubscriptionMode(input.currentMode, input.offsetX)
+  const candidate: SubscriptionMode | undefined = adjacentSubscriptionMode(input.currentMode, input.offsetX)
   if (!candidate) {
     return undefined
   }

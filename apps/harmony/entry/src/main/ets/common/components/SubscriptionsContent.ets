@@ -9,19 +9,17 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   SubscriptionsAvatarHydrationCoordinator,
 } from '../utils/SubscriptionsAvatarHydrationCoordinator'
-import {
-  resolveSubscriptionModeLabel,
-  resolveSubscriptionSwipeTarget,
-  subscriptionModeIndex,
-} from '../utils/SubscriptionsModePresentation'
+import { SubscriptionMode, HOME_MODE_RAIL_HEIGHT } from './HomeRootConfig'
+import { resolveSubscriptionModeLabel } from '../utils/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
+import { SubscriptionsModeRail } from './SubscriptionsModeRail'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
   HEADER_BLUR_SCROLL_RANGE,
   SUBSCRIPTIONS_REFRESH_DIAG_PREFIX,
+  SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER,
   SubscriptionFeedConfigParams,
   SubscriptionFeedDetailParams,
-  SubscriptionMode,
 } from './SubscriptionsConstants'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import {
@@ -34,10 +32,6 @@ import {
 export struct SubscriptionsContent {
   @State feeds: FeedCardModel[] = []
   @State mode: SubscriptionMode = 'articles'
-  @State renderedMode: SubscriptionMode = 'articles'
-  @State previousMode: SubscriptionMode = 'articles'
-  @State isModeTransitioning: boolean = false
-  @State modeTransitionDirection: number = 1
   @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State sourceHint: string = '正在加载订阅内容...'
@@ -52,10 +46,7 @@ export struct SubscriptionsContent {
   @StorageProp('subscriptionsOverlayBackAt') @Watch('handleOverlayBackSignal') subscriptionsOverlayBackAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
-  articlesScroller: Scroller = new Scroller()
-  socialScroller: Scroller = new Scroller()
-  picturesScroller: Scroller = new Scroller()
-  videosScroller: Scroller = new Scroller()
+  scroller: Scroller = new Scroller()
   private readonly hydratedFeedIds: Set<string> = new Set()
   private headerBlurOffset: number = 0
   private avatarCoordinator: SubscriptionsAvatarHydrationCoordinator =
@@ -87,6 +78,32 @@ export struct SubscriptionsContent {
     this.syncOverlayLevel(0)
   }
 
+  private filteredFeeds(): FeedCardModel[] {
+    const targetView = this.modeToFeedViewType(this.mode)
+    return this.feeds.filter((f: FeedCardModel) => f.view === targetView)
+  }
+
+  private modeToFeedViewType(mode: SubscriptionMode): FeedViewType {
+    switch (mode) {
+      case 'social': return FeedViewType.SocialMedia
+      case 'pictures': return FeedViewType.Pictures
+      case 'videos': return FeedViewType.Videos
+      default: return FeedViewType.Articles
+    }
+  }
+
+  private modeEmptyTitle(): string {
+    return resolveSubscriptionModeLabel(this.mode)
+  }
+
+  private handleModeChange(mode: SubscriptionMode): void {
+    if (mode === this.mode) {
+      return
+    }
+    this.mode = mode
+    scrollScrollerToTop(this.scroller, '订阅')
+  }
+
   aboutToAppear(): void {
     this.overlayLevel = this.subscriptionsOverlayLevel
     this.theme = this.inheritedTheme
@@ -106,7 +123,7 @@ export struct SubscriptionsContent {
 
     this.isLoading = true
     const startedAt = Date.now()
-    this.logSubscriptionsDiag(`load start mode=${this.mode}`)
+    this.logSubscriptionsDiag(`load start`)
     try {
       this.avatarCoordinator.bumpToken()
       this.theme = this.inheritedTheme
@@ -158,21 +175,8 @@ export struct SubscriptionsContent {
   }
 
   private handleFeedsChanged(): void {
-    this.logSubscriptionsDiag(`feedsChanged received count=${this.feeds.length} loading=${this.isLoading} mode=${this.mode}`)
+    this.logSubscriptionsDiag(`feedsChanged received count=${this.feeds.length} loading=${this.isLoading}`)
     void this.refreshFeeds()
-  }
-
-  private activeModeScroller(): Scroller {
-    switch (this.mode) {
-      case 'social':
-        return this.socialScroller
-      case 'pictures':
-        return this.picturesScroller
-      case 'videos':
-        return this.videosScroller
-      default:
-        return this.articlesScroller
-    }
   }
 
   private handleRootTabScrollToTopSignal(): void {
@@ -181,43 +185,11 @@ export struct SubscriptionsContent {
     }
 
     this.updateHeaderBlurProgress(0)
-    scrollScrollerToTop(this.activeModeScroller(), '订阅')
+    scrollScrollerToTop(this.scroller, '订阅')
   }
 
   private syncOverlayState(level: number): void {
     this.syncOverlayLevel(level)
-  }
-
-  private filteredFeedsFor(mode: SubscriptionMode): FeedCardModel[] {
-    const label = resolveSubscriptionModeLabel(mode)
-    return this.feeds.filter((feed: FeedCardModel) => feed.viewLabel === label)
-  }
-
-  private requestModeSwitch(nextMode: SubscriptionMode): void {
-    this.mode = nextMode
-    this.startModeTransition(nextMode)
-    this.avatarCoordinator.markPending()
-    void this.avatarCoordinator.run()
-  }
-
-  private startModeTransition(nextMode: SubscriptionMode): void {
-    this.modeTransitionDirection =
-      subscriptionModeIndex(nextMode) > subscriptionModeIndex(this.renderedMode) ? 1 : -1
-    this.previousMode = this.renderedMode
-    this.renderedMode = nextMode
-    this.isModeTransitioning = false
-  }
-
-  private handleModeSwipe(event: GestureEvent): void {
-    const target = resolveSubscriptionSwipeTarget({
-      currentMode: this.mode,
-      isTransitioning: this.isModeTransitioning,
-      offsetX: event.offsetX,
-      offsetY: event.offsetY,
-    })
-    if (target) {
-      this.requestModeSwitch(target)
-    }
   }
 
   private openFeedDetailPage(feedId: string): void {
@@ -294,38 +266,28 @@ export struct SubscriptionsContent {
   }
 
   @Builder
-  private ModeScene(sceneMode: SubscriptionMode, scroller: Scroller) {
-    SubscriptionsFeedListSection({
-      sceneMode,
-      activeMode: this.mode,
-      feeds: this.filteredFeedsFor(sceneMode),
-      theme: this.theme,
-      interactionLocked: this.isModeTransitioning,
-      emptyTitle: resolveSubscriptionModeLabel(sceneMode),
-      enableRootEnterTransition: false,
-      scroller,
-      onModeChange: (mode: SubscriptionMode) => { this.requestModeSwitch(mode) },
-      onFeedClick: (feedId: string) => { this.openFeedDetailPage(feedId) },
-      onScrollDelta: (yOffset: number) => { this.handleHeaderBlurScrollDelta(yOffset) },
-    })
-  }
-
-  @Builder
   private SubscriptionsRoot() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Stack() {
-        this.ModeScene('articles', this.articlesScroller)
-        this.ModeScene('social', this.socialScroller)
-        this.ModeScene('pictures', this.picturesScroller)
-        this.ModeScene('videos', this.videosScroller)
+      SubscriptionsFeedListSection({
+        feeds: this.filteredFeeds(),
+        theme: this.theme,
+        emptyTitle: this.modeEmptyTitle(),
+        additionalTopSpacer: HOME_MODE_RAIL_HEIGHT,
+        enableRootEnterTransition: false,
+        scroller: this.scroller,
+        onFeedClick: (feedId: string) => { this.openFeedDetailPage(feedId) },
+        onScrollDelta: (yOffset: number) => { this.handleHeaderBlurScrollDelta(yOffset) },
+      })
+
+      Column() {
+        Blank().height(SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER)
+        SubscriptionsModeRail({
+          mode: this.mode,
+          onModeChange: (mode: SubscriptionMode) => { this.handleModeChange(mode) },
+        })
       }
       .width('100%')
-      .height('100%')
-      .backgroundColor(this.theme.background)
-      .gesture(
-        PanGesture({ direction: PanDirection.Horizontal })
-          .onActionEnd((event: GestureEvent) => { this.handleModeSwipe(event) })
-      )
+      .hitTestBehavior(HitTestMode.Transparent)
 
       this.OverlayHost()
     }

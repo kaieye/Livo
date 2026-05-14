@@ -48,13 +48,6 @@ const subscriptionsSource = readFileSync(
   ),
   'utf8',
 )
-const subscriptionsFeedListSource = readFileSync(
-  new URL(
-    '../entry/src/main/ets/common/components/SubscriptionsFeedListSection.ets',
-    import.meta.url,
-  ),
-  'utf8',
-)
 const discoverSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/components/DiscoverContent.ets',
@@ -72,13 +65,6 @@ const settingsSource = readFileSync(
 const homeModeEntriesSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/components/HomeModeEntriesPage.ets',
-    import.meta.url,
-  ),
-  'utf8',
-)
-const homeOverlayControlsSource = readFileSync(
-  new URL(
-    '../entry/src/main/ets/common/components/HomeRootOverlayControls.ets',
     import.meta.url,
   ),
   'utf8',
@@ -129,19 +115,6 @@ test('root tab title bar stays visible for top-level non-home tabs', () => {
   )
 })
 
-test('subscriptions root uses the same mode rail component as home', () => {
-  assert.match(
-    subscriptionsFeedListSource,
-    /import \{ HomeRootOverlayControls \} from '\.\/HomeRootOverlayControls'/,
-  )
-  assert.match(
-    subscriptionsFeedListSource,
-    /HomeRootOverlayControls\(\{\s*theme:\s*this\.theme,\s*mode:\s*this\.activeMode,/s,
-  )
-  assert.match(subscriptionsFeedListSource, /barBottomMargin:\s*0/)
-  assert.match(subscriptionsFeedListSource, /\.height\(HOME_MODE_RAIL_HEIGHT\)/)
-})
-
 test('root tab coordinator emits scroll-to-top only after a repeated tab click', () => {
   assert.match(rootCoordinatorSource, /ROOT_TAB_DOUBLE_TAP_WINDOW_MS/)
   assert.match(
@@ -171,7 +144,7 @@ test('each root tab owns its own top scroll target', () => {
   )
   assert.match(
     subscriptionsSource,
-    /scrollScrollerToTop\(this\.activeModeScroller\(\), '订阅'\)/,
+    /scrollScrollerToTop\(this\.scroller, '订阅'\)/,
   )
   assert.match(
     discoverSource,

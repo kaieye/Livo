@@ -7,13 +7,10 @@ import {
 } from './SubscriptionsAvatarPolicy'
 import {
   SUBSCRIPTIONS_AVATAR_HYDRATION_LIMIT,
-  SubscriptionMode,
 } from '../components/SubscriptionsConstants'
-import { resolveSubscriptionModeLabel } from './SubscriptionsModePresentation'
 
 export interface SubscriptionAvatarHydrationOwner {
   feeds: FeedCardModel[]
-  mode: SubscriptionMode
   isFeedHydrated(feedId: string): boolean
   markFeedHydrated(feedId: string): void
   logHydrationDiag(message: string): void
@@ -53,14 +50,12 @@ export class SubscriptionsAvatarHydrationCoordinator {
       return
     }
 
-    const activeLabel = resolveSubscriptionModeLabel(this.owner.mode)
     const candidates = this.owner.feeds
       .filter((feed: FeedCardModel) => this.shouldHydrateFeed(feed))
-      .filter((feed: FeedCardModel) => feed.viewLabel === activeLabel)
       .slice(0, SUBSCRIPTIONS_AVATAR_HYDRATION_LIMIT)
     if (candidates.length === 0) {
       this.pending = false
-      this.owner.logHydrationDiag(`avatar hydrate skipped no candidates mode=${this.owner.mode}`)
+      this.owner.logHydrationDiag(`avatar hydrate skipped no candidates`)
       return
     }
 
@@ -70,7 +65,7 @@ export class SubscriptionsAvatarHydrationCoordinator {
     this.running = true
     const startedAt = Date.now()
     this.owner.logHydrationDiag(
-      `avatar hydrate start mode=${this.owner.mode} count=${candidates.length}`,
+      `avatar hydrate start count=${candidates.length}`,
     )
 
     let changedCount = 0
@@ -105,7 +100,7 @@ export class SubscriptionsAvatarHydrationCoordinator {
     }
 
     this.owner.logHydrationDiag(
-      `avatar hydrate finished elapsedMs=${Date.now() - startedAt} changed=${changedCount} mode=${this.owner.mode}`,
+      `avatar hydrate finished elapsedMs=${Date.now() - startedAt} changed=${changedCount}`,
     )
 
     if (this.pending && !this.running) {

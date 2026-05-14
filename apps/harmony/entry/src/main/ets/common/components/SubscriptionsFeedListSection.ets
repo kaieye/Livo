@@ -8,11 +8,6 @@ import {
   resolveSubscriptionFeedIconSource,
 } from '../utils/SubscriptionsAvatarPolicy'
 import {
-  subscriptionSceneOpacity,
-  subscriptionSceneVisibility,
-  subscriptionSceneZIndex,
-} from '../utils/SubscriptionsModePresentation'
-import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,
   LIST_ROW_DIVIDER_INSET,
@@ -22,25 +17,16 @@ import {
   PAGE_BOTTOM_GAP,
   PAGE_HORIZONTAL_PADDING,
 } from '../ui/UiTokens'
-import { ROOT_MODE_RAIL_TOP_GAP } from './FloatingRootPageLayout'
-import { HOME_MODE_RAIL_HEIGHT } from './HomeRootConfig'
-import { HomeRootOverlayControls } from './HomeRootOverlayControls'
-import {
-  SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER,
-  SubscriptionMode,
-} from './SubscriptionsConstants'
+import { SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER } from './SubscriptionsConstants'
 
 @Component
 export struct SubscriptionsFeedListSection {
-  @Prop sceneMode: SubscriptionMode = 'articles'
-  @Prop activeMode: SubscriptionMode = 'articles'
   @Prop feeds: FeedCardModel[] = []
   @Prop theme: ThemePalette = ThemeService.darkPalette()
-  @Prop interactionLocked: boolean = false
   @Prop emptyTitle: string = ''
+  @Prop additionalTopSpacer: number = 0
   @Prop enableRootEnterTransition: boolean = true
   scroller: Scroller = new Scroller()
-  onModeChange: (mode: SubscriptionMode) => void = () => {}
   onFeedClick: (feedId: string) => void = () => {}
   onScrollDelta: (yOffset: number) => void = () => {}
 
@@ -50,22 +36,6 @@ export struct SubscriptionsFeedListSection {
 
   private feedDisplayTitle(feed: FeedCardModel): string {
     return resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
-  }
-
-  @Builder
-  private ModeTabs() {
-    HomeRootOverlayControls({
-      theme: this.theme,
-      mode: this.activeMode,
-      interactionLocked: this.interactionLocked,
-      barBottomMargin: 0,
-      onModeChange: (mode: SubscriptionMode) => {
-        this.onModeChange(mode)
-      },
-    })
-    .width('100%')
-    .height(HOME_MODE_RAIL_HEIGHT)
-    .hitTestBehavior(HitTestMode.Block)
   }
 
   @Builder
@@ -133,17 +103,7 @@ export struct SubscriptionsFeedListSection {
   @Builder
   private FeedSectionContent() {
     Column({ space: 0 }) {
-      Blank().height(SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER)
-
-      Column({ space: ROOT_MODE_RAIL_TOP_GAP }) {
-        Row().width('100%').height(0)
-
-        Column() {
-          this.ModeTabs()
-        }
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
+      Blank().height(SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER + this.additionalTopSpacer)
 
       Column({ space: 20 }) {
         if (this.feeds.length === 0) {
@@ -211,8 +171,5 @@ export struct SubscriptionsFeedListSection {
     .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, _scrollSource: ScrollSource) => {
       this.onScrollDelta(yOffset)
     })
-    .visibility(subscriptionSceneVisibility(this.sceneMode, this.activeMode))
-    .opacity(subscriptionSceneOpacity(this.sceneMode, this.activeMode))
-    .zIndex(subscriptionSceneZIndex(this.sceneMode, this.activeMode))
   }
 }
