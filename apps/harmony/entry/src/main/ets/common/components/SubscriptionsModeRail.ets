@@ -4,18 +4,16 @@ import {
   HdsTabsController,
   hdsMaterial,
 } from '@kit.UIDesignKit'
-import { HOME_MODE_RAIL_HEIGHT, HOME_TITLE_BAR_OVERLAY_SPACER, SubscriptionMode } from './HomeRootConfig'
-import { SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER } from './SubscriptionsConstants'
+import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
 import { BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
+import { resolveHdsBottomTabBarBottomMargin } from '../utils/HdsBottomTabConfig'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
-
-const SUBS_RAIL_EXTRA_MARGIN: number = HOME_TITLE_BAR_OVERLAY_SPACER - SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER
 
 @Component
 export struct SubscriptionsModeRail {
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
-  @Prop barBottomMargin: number = BOTTOM_TAB_FLOAT_GAP + 10 + 640 + SUBS_RAIL_EXTRA_MARGIN
+  @Prop barBottomMargin: number = resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 640
   private modeTabsController: HdsTabsController = new HdsTabsController()
   onModeChange: (mode: SubscriptionMode) => void = () => {}
 
