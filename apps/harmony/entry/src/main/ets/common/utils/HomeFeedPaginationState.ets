@@ -37,7 +37,7 @@ export class HomeFeedPaginationState {
   }
 
   shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    return false
+    return true
   }
 
   candidateLimitForMode(mode: SubscriptionMode): number {

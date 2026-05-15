@@ -220,9 +220,6 @@ export struct HomeModeEntriesPage {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-    .onReachEnd(() => {
-      this.callbacks.onListEndReach(this.dataSource.totalCount())
-    })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
@@ -286,9 +283,6 @@ export struct HomeModeEntriesPage {
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
-    .onReachEnd(() => {
-      this.callbacks.onListEndReach(this.dataSource.totalCount())
-    })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
@@ -335,9 +329,6 @@ export struct HomeModeEntriesPage {
     .clipContent(ContentClipMode.SAFE_AREA)
     .scrollBar(BarState.On)
     .edgeEffect(EdgeEffect.Spring)
-    .onReachEnd(() => {
-      this.callbacks.onListEndReach(this.dataSource.totalCount())
-    })
     .onWillScroll((_xOffset: number, yOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(yOffset, scrollSource)
       return undefined
