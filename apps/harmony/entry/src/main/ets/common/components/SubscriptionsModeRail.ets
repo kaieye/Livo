@@ -1,21 +1,29 @@
-import { SymbolGlyphModifier } from '@kit.ArkUI'
+import { SymbolGlyphModifier, display } from '@kit.ArkUI'
 import {
   HdsTabs,
   HdsTabsController,
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
-import { BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
-import { resolveHdsBottomTabBarBottomMargin } from '../utils/HdsBottomTabConfig'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
 
 @Component
 export struct SubscriptionsModeRail {
   @Prop mode: SubscriptionMode = 'articles'
   @Prop interactionLocked: boolean = false
-  @Prop barBottomMargin: number = resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 640
+  @State private railBottomMargin: number = 0
   private modeTabsController: HdsTabsController = new HdsTabsController()
   onModeChange: (mode: SubscriptionMode) => void = () => {}
+
+  aboutToAppear(): void {
+    try {
+      const info = display.getDefaultDisplaySync()
+      const windowHeightVp = this.getUIContext().px2vp(info.height)
+      this.railBottomMargin = windowHeightVp - 90 - HOME_MODE_RAIL_HEIGHT
+    } catch (_) {
+      this.railBottomMargin = 668
+    }
+  }
 
   private modeIndex(mode: SubscriptionMode): number {
     const i = HOME_MODES.indexOf(mode as HomeMode)
@@ -51,7 +59,7 @@ export struct SubscriptionsModeRail {
     .barOverlap(true)
     .barHeight(HOME_MODE_RAIL_HEIGHT)
     .barFloatingStyle({
-      barBottomMargin: this.barBottomMargin,
+      barBottomMargin: this.railBottomMargin,
       systemMaterialEffect: {
         materialType: hdsMaterial.MaterialType.ADAPTIVE,
         materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
