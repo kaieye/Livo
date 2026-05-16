@@ -48,12 +48,14 @@ struct Subscriptions {
       .height('100%')
       .backgroundColor(this.theme.background)
 
-      SubscriptionsModeRail({
-        mode: this.mode,
-        onModeChange: (mode: SubscriptionMode) => { this.handleModeChange(mode) },
-      })
-      .width('100%')
-      .hitTestBehavior(HitTestMode.Transparent)
+      if (this.subscriptionsOverlayLevel === 0) {
+        SubscriptionsModeRail({
+          mode: this.mode,
+          onModeChange: (mode: SubscriptionMode) => { this.handleModeChange(mode) },
+        })
+        .width('100%')
+        .hitTestBehavior(HitTestMode.Transparent)
+      }
     }
     .width('100%')
     .height('100%')

@@ -9,13 +9,14 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   SubscriptionsAvatarHydrationCoordinator,
 } from '../utils/SubscriptionsAvatarHydrationCoordinator'
-import { SubscriptionMode, HOME_MODE_RAIL_HEIGHT } from './HomeRootConfig'
+import { SubscriptionMode, HOME_MODE_SCENE_TOP_INSET } from './HomeRootConfig'
 import { resolveSubscriptionModeLabel } from '../utils/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
   HEADER_BLUR_SCROLL_RANGE,
   SUBSCRIPTIONS_REFRESH_DIAG_PREFIX,
+  SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER,
   SubscriptionFeedConfigParams,
   SubscriptionFeedDetailParams,
 } from './SubscriptionsConstants'
@@ -271,7 +272,7 @@ export struct SubscriptionsContent {
         feeds: this.filteredFeeds(),
         theme: this.theme,
         emptyTitle: this.modeEmptyTitle(),
-        additionalTopSpacer: HOME_MODE_RAIL_HEIGHT,
+        additionalTopSpacer: HOME_MODE_SCENE_TOP_INSET - SUBSCRIPTIONS_TITLE_BAR_OVERLAY_SPACER,
         enableRootEnterTransition: false,
         scroller: this.scroller,
         onFeedClick: (feedId: string) => { this.openFeedDetailPage(feedId) },

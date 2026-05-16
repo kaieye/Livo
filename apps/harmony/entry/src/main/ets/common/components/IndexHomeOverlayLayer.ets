@@ -89,7 +89,7 @@ export struct IndexHomeOverlayLayer {
     .width('100%')
     .justifyContent(FlexAlign.Center)
     .padding({
-      top: 0,
+      top: 50,
       left: this.horizontalPadding,
       right: this.horizontalPadding,
     })

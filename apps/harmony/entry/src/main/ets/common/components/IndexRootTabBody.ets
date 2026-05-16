@@ -18,6 +18,7 @@ export struct IndexRootTabBody {
   @Prop showUnreadDot: boolean = true
   @Prop mode: SubscriptionMode = 'articles'
   @State subscriptionsMode: SubscriptionMode = 'articles'
+  @StorageProp('subscriptionsOverlayLevel') subscriptionsOverlayLevel: number = 0
   @Prop renderedMode: SubscriptionMode = 'articles'
   @Prop previousMode: SubscriptionMode = 'articles'
   @Prop isModeTransitioning: boolean = false
@@ -102,7 +103,7 @@ export struct IndexRootTabBody {
         })
       }
 
-      if (this.tabId === 'subscriptions') {
+      if (this.tabId === 'subscriptions' && this.subscriptionsOverlayLevel === 0) {
         SubscriptionsModeRail({
           mode: this.subscriptionsMode,
           onModeChange: (mode: SubscriptionMode) => {
