@@ -14,6 +14,7 @@ export interface HomeModeState {
   homeModeRailExpandedOverride: boolean
   currentHomeModeScrollOffset: number
   homeModeRailDismissedByScroll: boolean
+  homeModeRailDismissProgress: number
 }
 
 export interface HomeModeActions {
@@ -58,6 +59,7 @@ export class HomeModeController {
     this.state.homeModeRailExpandedOverride = true
     this.state.currentHomeModeScrollOffset = nextModeOffset
     this.state.homeModeRailDismissedByScroll = false
+    this.state.homeModeRailDismissProgress = 0
     this.actions.updateHeaderBlurProgress(nextModeOffset)
     this.startModeTransition(nextMode)
     this.actions.runManagedTimeout(() => {
