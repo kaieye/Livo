@@ -6,6 +6,7 @@ import { IndexHomeRootContent, IndexHomeRootContentCallbacks } from './IndexHome
 import { SettingsContent } from './SettingsContent'
 import { SubscriptionMode } from './HomeRootConfig'
 import { SubscriptionsContent } from './SubscriptionsContent'
+import { SubscriptionsAnimatedModeRail } from './SubscriptionsAnimatedModeRail'
 import { SubscriptionsModeRail } from './SubscriptionsModeRail'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
@@ -105,7 +106,7 @@ export struct IndexRootTabBody {
       }
 
       if (this.tabId === 'subscriptions' && this.subscriptionsOverlayLevel === 0) {
-        SubscriptionsModeRail({
+        SubscriptionsAnimatedModeRail({
           mode: this.subscriptionsMode,
           onModeChange: (mode: SubscriptionMode) => {
             this.subscriptionsMode = mode

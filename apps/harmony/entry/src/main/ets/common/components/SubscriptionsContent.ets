@@ -50,6 +50,7 @@ export struct SubscriptionsContent {
   private avatarCoordinator: SubscriptionsAvatarHydrationCoordinator =
     new SubscriptionsAvatarHydrationCoordinator(this)
   onReady: () => void = () => {}
+  private subscriptionsScrollOffset: number = 0
 
   isFeedHydrated(feedId: string): boolean {
     return this.hydratedFeedIds.has(feedId)
@@ -163,7 +164,37 @@ export struct SubscriptionsContent {
 
   private handleHeaderBlurScrollDelta(delta: number): void {
     this.updateHeaderBlurProgress(this.headerBlurOffset + delta)
+    const nextOffset = this.readSubscriptionsScrollOffset()
+    const previousOffset = this.subscriptionsScrollOffset
+    this.subscriptionsScrollOffset = nextOffset
+
+    const isReturningTowardsTop = nextOffset + 0.5 < previousOffset
+    const isScrollingDeeper = nextOffset > previousOffset + 0.5
+
+    if (isReturningTowardsTop) {
+      if (this.subscriptionsRailDismissedByScroll) {
+        this.subscriptionsRailDismissedByScroll = false
+        AppStorage.setOrCreate<number>('subscriptionsRailDismissProgress', 0)
+        this.lastRailShownAt = Date.now()
+      }
+    } else if (isScrollingDeeper && nextOffset >= 48) {
+      if (!this.subscriptionsRailDismissedByScroll && Date.now() - this.lastRailShownAt >= 200) {
+        this.subscriptionsRailDismissedByScroll = true
+        AppStorage.setOrCreate<number>('subscriptionsRailDismissProgress', 1)
+      }
+    }
   }
+
+  private readSubscriptionsScrollOffset(): number {
+    try {
+      return Math.max(0, this.scroller.currentOffset().yOffset)
+    } catch (_) {
+      return this.subscriptionsScrollOffset
+    }
+  }
+
+  private subscriptionsRailDismissedByScroll: boolean = false
+  private lastRailShownAt: number = 0
 
   private handleOverlayBackSignal(): void {
     if (this.overlayLevel >= 2 && this.activeFeedConfigParams) {
