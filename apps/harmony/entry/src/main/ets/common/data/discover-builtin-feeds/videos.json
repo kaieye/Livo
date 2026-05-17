@@ -211,6 +211,13 @@
       "language": "Chinese",
       "descriptionZh": "豆瓣电影即将上映",
       "descriptionEn": "Douban movies coming soon to theaters"
+    },
+    {
+      "title": "豆瓣电影本周口碑榜",
+      "url": "https://feedx.net/rss/doubanmvweek.xml",
+      "language": "Chinese",
+      "descriptionZh": "豆瓣电影本周口碑榜全文 RSS，发现高分好片",
+      "descriptionEn": "Douban movie weekly reputation list full-text RSS"
     }
   ]
 }

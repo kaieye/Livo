@@ -5,6 +5,7 @@ import {
   HOME_FINAL_RELOAD_IDLE_MAX_RETRIES,
   HOME_FINAL_RELOAD_IDLE_RETRY_MS,
   HOME_MAX_CANDIDATE_LIMIT,
+  HOME_MODE_INITIAL_CANDIDATE_LIMIT,
   HOME_MODE_RAIL_COLLAPSE_OFFSET,
   HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS,
   HOME_REFRESH_FINAL_RELOAD_DELAY_MS,
@@ -210,7 +211,16 @@ export class HomeFeedRefresh {
     this.session.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
     this.session.invalidateHomeLoadMorePrefetch()
     this.session.runManagedTimeout(() => {
-      void this.session.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, false, false)
+      // 如果 timeout 触发时用户已切到其他 tab，跳过重载。
+      if (!this.session.isHomeRootTab()) {
+        return
+      }
+      // 用当前栏目的初始可见数代替 HOME_MAX_CANDIDATE_LIMIT(480)，
+      // 避免切回首页时一次性加载大量条目造成内存峰值。
+      // 多余条目后续由滚动加载补齐。
+      void this.session.reloadFeaturedEntriesFromLocal(
+        HOME_MODE_INITIAL_CANDIDATE_LIMIT, false, true, true,
+      )
     }, 0)
   }
 

@@ -3,13 +3,6 @@
   "view": "articles",
   "feeds": [
     {
-      "title": "a16z Podcast",
-      "url": "https://feeds.simplecast.com/JGE3yC0V",
-      "language": "English",
-      "descriptionZh": "顶级风投 a16z 出品，探讨科技、创业与未来趋势的播客",
-      "descriptionEn": "a16z podcast on tech, startups and future trends"
-    },
-    {
       "title": "Cal Newport",
       "url": "https://calnewport.com/feed/",
       "language": "English",
@@ -213,20 +206,6 @@
       "descriptionEn": "Jianshu homepage featuring articles and stories from creators"
     },
     {
-      "title": "张小珺Jùn｜商业访谈录",
-      "url": "https://feed.xyzfm.space/dk4yh3pkpjp3",
-      "language": "Chinese",
-      "descriptionZh": "张小珺商业访谈录，深度对话科技与商业领袖",
-      "descriptionEn": "Zhang Xiaojun's business interview podcast with tech and business leaders"
-    },
-    {
-      "title": "迷因电波",
-      "url": "rsshub://xiaoyuzhou/podcast/61d52b3bee197a3aac3dac44",
-      "language": "Chinese",
-      "descriptionZh": "迷因电波播客，聚焦互联网文化与迷因现象",
-      "descriptionEn": "Meme Radio podcast on internet culture and meme phenomena"
-    },
-    {
       "title": "金十数据",
       "url": "rsshub://jin10",
       "language": "Chinese",
@@ -247,7 +226,6 @@
       "descriptionZh": "异次元软件世界，软件改变生活",
       "descriptionEn": "iPlaySoft software world where software changes life"
     },
-
     {
       "title": "爱范儿",
       "url": "https://www.ifanr.com/feed",
@@ -704,13 +682,6 @@
       "descriptionEn": "Not a pigeon blog with VPS tinkering records"
     },
     {
-      "title": "知行小酒馆",
-      "url": "rsshub://xiaoyuzhou/podcast/6013f9f58e2f7ee375cf4216",
-      "language": "Chinese",
-      "descriptionZh": "知行小酒馆播客，探讨知识、认知与个人成长",
-      "descriptionEn": "Zhixing Xiaojuguan podcast on knowledge, cognition and growth"
-    },
-    {
       "title": "大破进击",
       "url": "https://jesor.me/feed.xml",
       "language": "Chinese",
@@ -823,13 +794,6 @@
       "descriptionEn": "Zaobao real-time China/HK/Taiwan news in Chinese"
     },
     {
-      "title": "纵横四海",
-      "url": "rsshub://xiaoyuzhou/podcast/62694abdb221dd5908417d1e",
-      "language": "Chinese",
-      "descriptionZh": "纵横四海播客，分享旅行见闻与世界各地文化故事",
-      "descriptionEn": "Zongheng Sihai podcast sharing travel stories and world cultures"
-    },
-    {
       "title": "Elmagnifico's Blog",
       "url": "https://elmagnifico.tech/feed.xml",
       "language": "English",
@@ -842,13 +806,6 @@
       "language": "Chinese",
       "descriptionZh": "游研社，无论你是游戏死忠还是轻度玩家都能找到感兴趣的",
       "descriptionEn": "Yystv game culture media for both hardcore and casual gamers"
-    },
-    {
-      "title": "声动早咖啡",
-      "url": "rsshub://xiaoyuzhou/podcast/60de7c003dd577b40d5a40f3",
-      "language": "Chinese",
-      "descriptionZh": "声动早咖啡，用 10 分钟了解当日科技资讯的早间播客",
-      "descriptionEn": "Shengdong Morning Coffee podcast for 10-min daily tech news"
     },
     {
       "title": "小球飞鱼",
@@ -947,13 +904,6 @@
       "language": "Chinese",
       "descriptionZh": "laike9m 博客，技术与生活的随笔记录",
       "descriptionEn": "laike9m blog with tech and life notes"
-    },
-    {
-      "title": "豆瓣电影本周口碑榜",
-      "url": "https://feedx.net/rss/doubanmvweek.xml",
-      "language": "Chinese",
-      "descriptionZh": "豆瓣电影本周口碑榜全文 RSS，发现高分好片",
-      "descriptionEn": "Douban movie weekly reputation list full-text RSS"
     },
     {
       "title": "t9t.io",
@@ -1059,13 +1009,6 @@
       "language": "",
       "descriptionZh": "GitHub Changelog，追踪 GitHub 平台功能更新与改进",
       "descriptionEn": "GitHub Changelog tracking platform feature updates and improvements"
-    },
-    {
-      "title": "V2EX 技术",
-      "url": "https://www.v2ex.com/feed/tab/tech.xml",
-      "language": "",
-      "descriptionZh": "V2EX 技术标签，创意工作者的技术讨论社区",
-      "descriptionEn": "V2EX tech tab for creative workers' technical discussions"
     },
     {
       "title": "simonwillison.net",
@@ -1836,27 +1779,6 @@
       "language": "English",
       "descriptionZh": "Hacker News Show HN 项目展示",
       "descriptionEn": "Hacker News Show HN project showcases"
-    },
-    {
-      "title": "V2EX 最热主题",
-      "url": "https://www.v2ex.com/feed/tab/hot.xml",
-      "language": "Chinese",
-      "descriptionZh": "V2EX 今日热门主题",
-      "descriptionEn": "V2EX today hot topics"
-    },
-    {
-      "title": "V2EX 最新主题",
-      "url": "https://www.v2ex.com/feed/tab/all.xml",
-      "language": "Chinese",
-      "descriptionZh": "V2EX 全站最新主题",
-      "descriptionEn": "V2EX all latest topics"
-    },
-    {
-      "title": "V2EX 好玩节点",
-      "url": "https://www.v2ex.com/feed/tab/play.xml",
-      "language": "Chinese",
-      "descriptionZh": "V2EX 好玩内容节点",
-      "descriptionEn": "V2EX play tab content"
     },
     {
       "title": "LinuxDo 热门话题",

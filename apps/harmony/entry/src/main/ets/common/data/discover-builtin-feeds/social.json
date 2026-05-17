@@ -477,6 +477,62 @@
       "language": "Chinese",
       "descriptionZh": "CSDN 热门博客文章",
       "descriptionEn": "CSDN hot blog articles"
+    },
+    {
+      "title": "V2EX 技术",
+      "url": "https://www.v2ex.com/feed/tab/tech.xml",
+      "language": "",
+      "descriptionZh": "V2EX 技术标签，创意工作者的技术讨论社区",
+      "descriptionEn": "V2EX tech tab for creative workers' technical discussions"
+    },
+    {
+      "title": "V2EX 最热主题",
+      "url": "https://www.v2ex.com/feed/tab/hot.xml",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 今日热门主题",
+      "descriptionEn": "V2EX today hot topics"
+    },
+    {
+      "title": "V2EX 最新主题",
+      "url": "https://www.v2ex.com/feed/tab/all.xml",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 全站最新主题",
+      "descriptionEn": "V2EX all latest topics"
+    },
+    {
+      "title": "V2EX 好玩节点",
+      "url": "https://www.v2ex.com/feed/tab/play.xml",
+      "language": "Chinese",
+      "descriptionZh": "V2EX 好玩内容节点",
+      "descriptionEn": "V2EX play tab content"
+    },
+    {
+      "title": "NASA - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/nasa",
+      "language": "",
+      "descriptionZh": "NASA 官方 Instagram，分享太空探索精彩瞬间",
+      "descriptionEn": "NASA's official Instagram sharing stunning space exploration moments"
+    },
+    {
+      "title": "National Geographic - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/natgeo",
+      "language": "",
+      "descriptionZh": "国家地理官方 Instagram，汇聚全球顶级摄影作品",
+      "descriptionEn": "National Geographic's Instagram featuring world-class photography"
+    },
+    {
+      "title": "Figma - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/figma",
+      "language": "",
+      "descriptionZh": "Figma 官方 Instagram，展示设计工具与创意作品",
+      "descriptionEn": "Figma's official Instagram showcasing design tools and creative work"
+    },
+    {
+      "title": "Google - Instagram",
+      "url": "https://rsshub.pseudoyu.com/instagram/user/google",
+      "language": "",
+      "descriptionZh": "Google 官方 Instagram，分享产品与公司文化",
+      "descriptionEn": "Google's official Instagram sharing products and company culture"
     }
   ]
 }

@@ -133,6 +133,12 @@ export class IndexRootTabCoordinator {
     }
 
     this.activateHomeRootTab('tab-change', true)
+
+    // 显式同步 HdsTabs 控制器，确保 tab bar 高亮在 @State 级联重渲染后仍正确。
+    // 不调用此方法时，HdsTabs 依赖框架内部对 tap 事件的处理来更新高亮，
+    // 但 handleRootTabChange 中的多 @State 写入可能干扰框架的渲染管线，
+    // 导致 tab bar 高亮延迟一帧才更新。
+    this.owner.syncRootTabsController()
   }
 
   handleRootTabBarClick(index: number): void {
@@ -179,7 +185,10 @@ export class IndexRootTabCoordinator {
   }
 
   private activateHomeRootTab(source: string, allowEmptyReload: boolean): void {
-    this.owner.syncHomeModeRailState(this.owner.mode)
+    // primeHomeModeRailForRootActivation 会将所有 rail 状态重置为默认值（scroll=0、
+    // expanded=false、blur=0），因此在它之前调用 syncHomeModeRailState 是冗余的。
+    // 去掉 syncHomeModeRailState 避免在 tab 刚切换时读取 cached scroller offset，
+    // 减少同步 @State 写入量。
     this.owner.primeHomeModeRailForRootActivation()
     const flushedDeferredReload = this.owner.tryFlushDeferredFeedsChangedReload(source)
     if (!allowEmptyReload || flushedDeferredReload) {

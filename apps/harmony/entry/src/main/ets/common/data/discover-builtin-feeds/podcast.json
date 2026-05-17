@@ -316,6 +316,48 @@
       "language": "Chinese",
       "descriptionZh": "V2EX 指定主题的 RSSHub 订阅源",
       "descriptionEn": "RSSHub feed for a specific V2EX topic"
+    },
+    {
+      "title": "a16z Podcast",
+      "url": "https://feeds.simplecast.com/JGE3yC0V",
+      "language": "English",
+      "descriptionZh": "顶级风投 a16z 出品，探讨科技、创业与未来趋势的播客",
+      "descriptionEn": "a16z podcast on tech, startups and future trends"
+    },
+    {
+      "title": "张小珺Jùn｜商业访谈录",
+      "url": "https://feed.xyzfm.space/dk4yh3pkpjp3",
+      "language": "Chinese",
+      "descriptionZh": "张小珺商业访谈录，深度对话科技与商业领袖",
+      "descriptionEn": "Zhang Xiaojun's business interview podcast with tech and business leaders"
+    },
+    {
+      "title": "迷因电波",
+      "url": "rsshub://xiaoyuzhou/podcast/61d52b3bee197a3aac3dac44",
+      "language": "Chinese",
+      "descriptionZh": "迷因电波播客，聚焦互联网文化与迷因现象",
+      "descriptionEn": "Meme Radio podcast on internet culture and meme phenomena"
+    },
+    {
+      "title": "知行小酒馆",
+      "url": "rsshub://xiaoyuzhou/podcast/6013f9f58e2f7ee375cf4216",
+      "language": "Chinese",
+      "descriptionZh": "知行小酒馆播客，探讨知识、认知与个人成长",
+      "descriptionEn": "Zhixing Xiaojuguan podcast on knowledge, cognition and growth"
+    },
+    {
+      "title": "纵横四海",
+      "url": "rsshub://xiaoyuzhou/podcast/62694abdb221dd5908417d1e",
+      "language": "Chinese",
+      "descriptionZh": "纵横四海播客，分享旅行见闻与世界各地文化故事",
+      "descriptionEn": "Zongheng Sihai podcast sharing travel stories and world cultures"
+    },
+    {
+      "title": "声动早咖啡",
+      "url": "rsshub://xiaoyuzhou/podcast/60de7c003dd577b40d5a40f3",
+      "language": "Chinese",
+      "descriptionZh": "声动早咖啡，用 10 分钟了解当日科技资讯的早间播客",
+      "descriptionEn": "Shengdong Morning Coffee podcast for 10-min daily tech news"
     }
   ]
 }
