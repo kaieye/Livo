@@ -36,6 +36,7 @@ export interface IndexHomeRailOwner {
 export class IndexHomeRailCoordinator {
   private readonly owner: IndexHomeRailOwner
   private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
+  private lastRailShownAt: number = 0
 
   constructor(owner: IndexHomeRailOwner) {
     this.owner = owner
@@ -102,10 +103,17 @@ export class IndexHomeRailCoordinator {
     if (isReturningTowardsTop) {
       if (this.owner.homeModeRailDismissedByScroll) {
         this.owner.animateModeRailDismiss(true)
+        this.lastRailShownAt = Date.now()
       }
     } else if (isScrollingDeeper && nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
       if (!this.owner.homeModeRailDismissedByScroll) {
-        this.owner.animateModeRailDismiss(false)
+        const hysteresisElapsed = Date.now() - this.lastRailShownAt
+        // 迟滞保护：rail 刚显示后 200ms 内，不允许因微小抖动立即重新隐藏
+        if (hysteresisElapsed < 200) {
+          // 仍然更新偏移量，仅跳过隐藏动画
+        } else {
+          this.owner.animateModeRailDismiss(false)
+        }
       }
     }
 
