@@ -15,6 +15,14 @@ const paginationSource = readFileSync(
   'utf8',
 )
 
+const entriesPageSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/components/HomeModeEntriesPage.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 test('home pagination module owns load-more trigger queues', () => {
   assert.match(paginationSource, /private homePendingLoadMoreModes/)
   assert.match(paginationSource, /private homeLastItemAppearLoadMoreAt/)
@@ -36,4 +44,24 @@ test('index page delegates load-more trigger behavior to session pagination', ()
   assert.doesNotMatch(indexSource, /private homePendingLoadMoreModes/)
   assert.doesNotMatch(indexSource, /private shouldAcceptItemAppearLoadMore/)
   assert.doesNotMatch(indexSource, /private enqueueLoadMoreForMode/)
+})
+
+test('home list shows a bottom loading footer only while load-more is actually fetching', () => {
+  assert.match(entriesPageSource, /@Prop isLoadingMore: boolean = false/)
+  assert.match(entriesPageSource, /private LoadMoreFooter\(\)/)
+  assert.match(entriesPageSource, /LoadingProgress\(\)/)
+  assert.match(entriesPageSource, /Text\('正在加载更多'\)/)
+  assert.match(entriesPageSource, /\.onReachEnd\(\(\) => \{\s*this\.callbacks\.onListEndReach\(this\.dataSource\.totalCount\(\)\)\s*\}\)/)
+  assert.match(
+    indexSource,
+    /isModeLoadingMore: \(_mode: SubscriptionMode\): boolean => false/,
+  )
+  assert.match(
+    paginationSource,
+    /const shouldShowLoadMoreFooter = !prefetchedEntries/,
+  )
+  assert.doesNotMatch(
+    paginationSource,
+    /this\.homePendingLoadMoreModes = withHomePendingLoadMoreValue\(mode, pending, this\.homePendingLoadMoreModes\)[\s\S]{0,160}this\.session\.bumpHomeContentVersion\(\)/,
+  )
 })

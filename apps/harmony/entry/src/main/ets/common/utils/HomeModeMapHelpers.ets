@@ -1,5 +1,4 @@
 import {
-  HOME_MODE_INITIAL_CANDIDATE_LIMIT,
   HomeModeCandidateLimitMap,
   HomeModeHasMoreMap,
   HomeModeLoadedMap,
@@ -23,10 +22,10 @@ export function createHomeModeBooleanMap(value: boolean): HomeModeHasMoreMap {
 
 export function createHomeCandidateLimitMap(): HomeModeCandidateLimitMap {
   return {
-    articles: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-    social: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-    pictures: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
-    videos: HOME_MODE_INITIAL_CANDIDATE_LIMIT,
+    articles: resolveHomeVisibleEntryInitialLimit('articles'),
+    social: resolveHomeVisibleEntryInitialLimit('social'),
+    pictures: resolveHomeVisibleEntryInitialLimit('pictures'),
+    videos: resolveHomeVisibleEntryInitialLimit('videos'),
   }
 }
 

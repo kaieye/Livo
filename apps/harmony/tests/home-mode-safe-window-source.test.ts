@@ -42,10 +42,26 @@ const homeFeedPaginationSource = readFileSync(
   'utf8',
 )
 
+const homeModeMapHelpersSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/HomeModeMapHelpers.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 test('home visible entry policy keeps startup window bounded', () => {
   assert.match(
     visibleEntryPolicySource,
     /const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24/,
+  )
+  assert.match(
+    visibleEntryPolicySource,
+    /const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 40/,
+  )
+  assert.match(
+    visibleEntryPolicySource,
+    /if \(mode === 'videos'\) \{\s*return HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT\s*\}/,
   )
   assert.match(
     visibleEntryPolicySource,
@@ -78,6 +94,10 @@ test('mode switch candidate limit follows initial bounded window', () => {
     homeRootConfigSource,
     /export const HOME_MODE_SWITCH_CANDIDATE_LIMIT: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT/,
   )
+  assert.match(
+    homeModeMapHelpersSource,
+    /videos: resolveHomeVisibleEntryInitialLimit\('videos'\)/,
+  )
 })
 
 test('home pagination state does not force full render mode at startup', () => {
@@ -105,7 +125,11 @@ test('home feed session uses bounded by-mode queries for mode reloads', () => {
 test('mode ensure flow reloads a bounded active-mode window after a fast first paint', () => {
   assert.match(
     homeFeedPaginationSource,
-    /const fullModeReady = !this\.shouldRenderAllEntriesForMode\(mode\)\s*\|\| this\.candidateLimitForMode\(mode\) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT/,
+    /const initialModeReady = this\.shouldRenderAllEntriesForMode\(mode\)\s*\?\s*this\.candidateLimitForMode\(mode\) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT\s*: this\.totalEntryCountFor\(mode\) >= resolveHomeVisibleEntryInitialLimit\(mode\)/,
+  )
+  assert.match(
+    homeFeedPaginationStateSource,
+    /return Math\.max\(minimumLimit, this\.candidateLimitForMode\(mode\), resolveHomeVisibleEntryInitialLimit\(mode\)\)/,
   )
   assert.match(
     homeFeedPaginationSource,

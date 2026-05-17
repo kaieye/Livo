@@ -8,10 +8,9 @@ import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 export interface IndexHomeRootContentCallbacks {
   onModeSwipe: (event: GestureEvent) => void
-  getEntries: (mode: SubscriptionMode) => EntryCardModel[]
   getDataSource: (mode: SubscriptionMode) => ArrayLazyDataSource<EntryCardModel>
-  getTotalCount: (mode: SubscriptionMode) => number
   isModeLoading: (mode: SubscriptionMode) => boolean
+  isModeLoadingMore: (mode: SubscriptionMode) => boolean
   getEmptyStateTitle: () => string
   getSceneOpacity: (mode: SubscriptionMode) => number
   getSceneOffsetX: (mode: SubscriptionMode) => number
@@ -42,6 +41,7 @@ export struct IndexHomeRootContent {
   @Prop modeTransitionDirection: number = 1
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
+  @Prop homeLoadMoreInProgress: boolean = false
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
@@ -51,10 +51,9 @@ export struct IndexHomeRootContent {
 
   callbacks: IndexHomeRootContentCallbacks = {
     onModeSwipe: () => {},
-    getEntries: () => [],
     getDataSource: () => new ArrayLazyDataSource<EntryCardModel>(() => []),
-    getTotalCount: () => 0,
     isModeLoading: () => false,
+    isModeLoadingMore: () => false,
     getEmptyStateTitle: () => '',
     getSceneOpacity: () => 1,
     getSceneOffsetX: () => 0,
@@ -88,10 +87,9 @@ export struct IndexHomeRootContent {
   private ModeEntriesScene(mode: SubscriptionMode) {
     HomeModeEntriesPage({
       mode,
-      entries: this.callbacks.getEntries(mode),
       dataSource: this.callbacks.getDataSource(mode),
-      totalCount: this.callbacks.getTotalCount(mode),
       isLoading: this.callbacks.isModeLoading(mode) || this.homeInitialLoadPending || this.isHomeStartupRefreshing,
+      isLoadingMore: this.callbacks.isModeLoadingMore(mode) || (mode === this.mode && this.homeLoadMoreInProgress),
       emptyStateTitle: this.callbacks.getEmptyStateTitle(),
       theme: this.theme,
       showUnreadDot: this.showUnreadDot,

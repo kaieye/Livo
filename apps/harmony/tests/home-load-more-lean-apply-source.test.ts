@@ -26,6 +26,14 @@ const visibleEntryPolicySource = readFileSync(
   'utf8',
 )
 
+const paginationStateSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/HomeFeedPaginationState.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 test('mode load-more avoids global merge and snapshot work on the scroll path', () => {
   assert.match(
     paginationSource,
@@ -35,8 +43,36 @@ test('mode load-more avoids global merge and snapshot work on the scroll path', 
     paginationSource,
     /this\.session\.applyEntriesForMode\(mode, entries, true, skipNotify, leanApply, leanApply\)/,
   )
+  assert.match(
+    paginationSource,
+    /private revealLoadedEntriesForLoadMore\([\s\S]*?this\.setVisibleEntryLimitFor\(mode, nextVisibleLimit\)/,
+  )
+  assert.match(
+    paginationStateSource,
+    /this\.session\.homeCandidateLimitsByMode\.videos = safeLimit/,
+  )
+  assert.match(
+    paginationStateSource,
+    /this\.session\.homeVisibleEntryLimits\.videos = safeLimit/,
+  )
+  assert.doesNotMatch(
+    paginationStateSource,
+    /this\.session\.homeCandidateLimit = safeLimit/,
+  )
   assert.match(dataManagerSource, /skipPersist: boolean = false/)
   assert.match(dataManagerSource, /if \(!skipPersist && !skipMerge\) \{/)
+  assert.match(
+    dataManagerSource,
+    /const usedInPlaceModeUpdate = skipNotify && skipMerge && skipPersist/,
+  )
+  assert.match(
+    dataManagerSource,
+    /if \(usedInPlaceModeUpdate\) \{[\s\S]*?this\.replaceModeEntriesInPlace\(mode, scopedEntries\)/,
+  )
+  assert.match(
+    dataManagerSource,
+    /groups\.videos\.splice\(0, groups\.videos\.length, \.\.\.entries\)/,
+  )
 })
 
 test('load-more page sizes are configured per layout in the visible entry policy', () => {
@@ -58,7 +94,7 @@ test('load-more page sizes are configured per layout in the visible entry policy
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 12/,
+    /const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 20/,
   )
   assert.match(
     visibleEntryPolicySource,
@@ -70,7 +106,7 @@ test('load-more page sizes are configured per layout in the visible entry policy
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 6/,
+    /const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 20/,
   )
   assert.match(paginationSource, /currentModeLimit \+ loadMoreStep/)
 })

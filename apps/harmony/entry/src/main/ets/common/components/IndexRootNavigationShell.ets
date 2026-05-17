@@ -40,6 +40,7 @@ export struct IndexRootNavigationShell {
   @Prop mode: SubscriptionMode = 'articles'
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
+  @Prop homeLoadMoreInProgress: boolean = false
   @Prop renderedMode: SubscriptionMode = 'articles'
   @Prop previousMode: SubscriptionMode = 'articles'
   @Prop isModeTransitioning: boolean = false
@@ -58,10 +59,9 @@ export struct IndexRootNavigationShell {
   controller: HdsTabsController = new HdsTabsController()
   homeCallbacks: IndexHomeRootContentCallbacks = {
     onModeSwipe: () => {},
-    getEntries: () => [],
     getDataSource: () => new ArrayLazyDataSource<EntryCardModel>(() => []),
-    getTotalCount: () => 0,
     isModeLoading: () => false,
+    isModeLoadingMore: () => false,
     getEmptyStateTitle: () => '',
     getSceneOpacity: () => 1,
     getSceneOffsetX: () => 0,
@@ -131,6 +131,7 @@ export struct IndexRootNavigationShell {
               modeTransitionDirection: this.modeTransitionDirection,
               homeInitialLoadPending: this.homeInitialLoadPending,
               isHomeStartupRefreshing: this.isHomeStartupRefreshing,
+              homeLoadMoreInProgress: this.homeLoadMoreInProgress,
               homeListSwapAnimating: this.homeListSwapAnimating,
               homeListSwapMode: this.homeListSwapMode,
               homeListSwapOpacity: this.homeListSwapOpacity,

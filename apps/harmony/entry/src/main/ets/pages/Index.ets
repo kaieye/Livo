@@ -447,10 +447,9 @@ struct Index {
   private indexHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
     return {
       onModeSwipe: (event: GestureEvent): void => { this.handleModeSwipe(event) },
-      getEntries: (mode: SubscriptionMode): EntryCardModel[] => this.filteredEntriesFor(mode),
       getDataSource: (mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> => this.homeEntryDataSourceFor(mode),
-      getTotalCount: (mode: SubscriptionMode): number => this.totalEntryCountFor(mode),
       isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
+      isModeLoadingMore: (_mode: SubscriptionMode): boolean => false,
       getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
       getSceneOpacity: (mode: SubscriptionMode): number => this.modeSceneOpacity(mode),
       getSceneOffsetX: (mode: SubscriptionMode): number => this.modeSceneOffset(mode),
@@ -463,10 +462,18 @@ struct Index {
         return undefined
       },
       onDidScroll: (mode: SubscriptionMode): void => {
+        if (mode === 'videos') {
+          this.maybeTriggerLoadMoreByScrollProgress(mode, this.readHomeModeScrollOffset(mode))
+          this.flushPendingLoadMoreForMode(mode)
+          return
+        }
         this.syncHomeModeRailState(mode)
         this.flushPendingLoadMoreForMode(mode)
       },
       onStopDragging: (mode: SubscriptionMode): void => {
+        if (mode === 'videos') {
+          this.syncHomeModeRailState(mode)
+        }
         this.setHomeScrollInteracting(false, mode)
         this.flushPendingLoadMoreForMode(mode)
         this.scheduleHomeLoadMorePrefetch(160)
@@ -509,6 +516,7 @@ struct Index {
         modeTransitionDirection: this.modeTransitionDirection,
         homeInitialLoadPending: this.homeInitialLoadPending,
         isHomeStartupRefreshing: this.isHomeStartupRefreshing,
+        homeLoadMoreInProgress: this.homeLoadMoreInProgress,
         homeListSwapAnimating: this.homeListSwapAnimating,
         homeListSwapMode: this.homeListSwapMode,
         homeListSwapOpacity: this.homeListSwapOpacity,

@@ -1,12 +1,13 @@
 export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
+const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 40
 const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 20
 const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 8
-const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 20
 const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 10
 const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 6
-const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 6
+const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 20
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -49,8 +50,11 @@ const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
 }
 
 export function resolveHomeVisibleEntryInitialLimit(
-  _mode: HomeVisibleEntryMode,
+  mode: HomeVisibleEntryMode,
 ): number {
+  if (mode === 'videos') {
+    return HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT
+  }
   return HOME_VISIBLE_ENTRY_INITIAL_LIMIT
 }
 

@@ -8,6 +8,7 @@ import {
   resolveHomeVideoCardTokens,
   resolveHomeVideoGridColumns,
 } from '../utils/HomeVideoGrid'
+import { homeEntryListRenderKey } from '../utils/HomeEntryUtils'
 
 const HOME_VIDEO_CARD_TITLE_HEIGHT: number = 36
 const HOME_VIDEO_CARD_META_HEIGHT: number = 16
@@ -360,7 +361,7 @@ export struct HomeVideoGrid {
                 this.VideoCard(entry)
               }
               .layoutWeight(1)
-            }, (entry: EntryCardModel) => entry.id)
+            }, (entry: EntryCardModel, entryIndex: number) => homeEntryListRenderKey(entry, entryIndex))
 
             if (rowEntries.length < resolveHomeVideoGridColumns()) {
               Blank()

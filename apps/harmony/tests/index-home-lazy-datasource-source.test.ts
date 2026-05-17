@@ -26,7 +26,7 @@ const indexSource = readFileSync(
 test('home mode entries page binds article and picture lists to lazy data source', () => {
   assert.match(
     homeModeEntriesPageSource,
-    /@Prop dataSource: ArrayLazyDataSource<EntryCardModel>/,
+    /dataSource: ArrayLazyDataSource<EntryCardModel> = new ArrayLazyDataSource<EntryCardModel>\(\(\) => \[\]\)/,
   )
   assert.match(
     homeModeEntriesPageSource,
@@ -51,6 +51,8 @@ test('index home root content passes mode data source into each scene', () => {
     indexHomeRootContentSource,
     /dataSource: this\.callbacks\.getDataSource\(mode\)/,
   )
+  assert.doesNotMatch(indexHomeRootContentSource, /entries: this\.callbacks\.getEntries\(mode\)/)
+  assert.doesNotMatch(indexHomeRootContentSource, /totalCount: this\.callbacks\.getTotalCount\(mode\)/)
 })
 
 test('index page wires home mode lazy data sources from session state', () => {
@@ -60,10 +62,8 @@ test('index page wires home mode lazy data sources from session state', () => {
   )
   assert.match(
     indexSource,
-    /getEntries: \(mode: SubscriptionMode\): EntryCardModel\[] => this\.filteredEntriesFor\(mode\)/,
-  )
-  assert.match(
-    indexSource,
     /getDataSource: \(mode: SubscriptionMode\): ArrayLazyDataSource<EntryCardModel> => this\.homeEntryDataSourceFor\(mode\)/,
   )
+  assert.doesNotMatch(indexSource, /getEntries: \(mode: SubscriptionMode\)/)
+  assert.doesNotMatch(indexSource, /getTotalCount: \(mode: SubscriptionMode\)/)
 })

@@ -28,7 +28,11 @@ import {
   withHomeModeNumberValue,
   withHomePendingLoadMoreValue,
 } from './HomeModeMapHelpers'
-import { resolveHomeVisibleEntryLoadMoreStep, shouldPreloadHomeVisibleEntries } from './HomeVisibleEntryPolicy'
+import {
+  resolveHomeVisibleEntryInitialLimit,
+  resolveHomeVisibleEntryLoadMoreStep,
+  shouldPreloadHomeVisibleEntries,
+} from './HomeVisibleEntryPolicy'
 import { HomeFeedPaginationState } from './HomeFeedPaginationState'
 import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
 import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
@@ -75,6 +79,21 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   ): void {
     const leanApply = this.shouldUseLeanLoadMoreApply(mode)
     this.session.applyEntriesForMode(mode, entries, true, skipNotify, leanApply, leanApply)
+  }
+
+  private revealLoadedEntriesForLoadMore(
+    mode: SubscriptionMode,
+    previousVisibleTotal: number,
+    nextTotal: number,
+  ): void {
+    if (nextTotal <= previousVisibleTotal) {
+      return
+    }
+    const nextVisibleLimit = Math.min(
+      nextTotal,
+      Math.max(this.visibleEntryLimitFor(mode), previousVisibleTotal + resolveHomeVisibleEntryLoadMoreStep(mode)),
+    )
+    this.setVisibleEntryLimitFor(mode, nextVisibleLimit)
   }
 
   async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
@@ -139,6 +158,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     }
 
     this.setCandidateLimitForMode(mode, nextLimit)
+    this.revealLoadedEntriesForLoadMore(mode, previousTotal, merged.length)
     this.applyEntriesForLoadMore(mode, merged, true)
     this.session.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
   }
@@ -152,6 +172,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const startedAt = Date.now()
     this.syncModePaginationFromReloadResult(mode, nextEntries, nextLimit)
     const syncedAt = Date.now()
+    this.revealLoadedEntriesForLoadMore(mode, previousTotal, nextEntries.length)
     this.applyEntriesForLoadMore(mode, nextEntries, true)
     const appliedAt = Date.now()
     if (nextEntries.length > previousTotal) {
@@ -279,10 +300,13 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       return true
     }
 
-    this.session.homeLoadMoreInProgress = true
     const requestToken = this.session.homeLoadMoreRequestToken + 1
     this.session.homeLoadMoreRequestToken = requestToken
     const prefetchedEntries = this.consumePrefetchedHomeEntries(mode, nextLimit)
+    const shouldShowLoadMoreFooter = !prefetchedEntries
+    if (shouldShowLoadMoreFooter) {
+      this.session.homeLoadMoreInProgress = true
+    }
     const requestStartedAt = Date.now()
     this.session.logHomePerf(
       `loadMore start mode=${mode} nextLimit=${nextLimit} hasPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
@@ -330,7 +354,9 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       })
       .finally(() => {
         if (this.session.homeLoadMoreRequestToken !== requestToken) { return }
-        this.session.homeLoadMoreInProgress = false
+        if (shouldShowLoadMoreFooter) {
+          this.session.homeLoadMoreInProgress = false
+        }
         this.session.lastHomeLoadMoreCompletedAt = Date.now()
         this.scheduleHomeLoadMorePrefetch()
         this.session.logHomePerf(
@@ -356,6 +382,9 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
   }
   private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
+    if (this.pendingLoadMoreForMode(mode) === pending) {
+      return
+    }
     this.homePendingLoadMoreModes = withHomePendingLoadMoreValue(mode, pending, this.homePendingLoadMoreModes)
   }
   private modeLoadMoreTimestampValue(mode: SubscriptionMode): number {
@@ -494,9 +523,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
   ensureModeEntriesLoaded(mode: SubscriptionMode): void {
     const hasModeEntries = this.totalEntryCountFor(mode) > 0
-    const fullModeReady = !this.shouldRenderAllEntriesForMode(mode)
-      || this.candidateLimitForMode(mode) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT
-    if (this.isModeLoaded(mode) && hasModeEntries && fullModeReady) {
+    const initialModeReady = this.shouldRenderAllEntriesForMode(mode)
+      ? this.candidateLimitForMode(mode) >= HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT
+      : this.totalEntryCountFor(mode) >= resolveHomeVisibleEntryInitialLimit(mode)
+    if (this.isModeLoaded(mode) && hasModeEntries && initialModeReady) {
       this.scheduleHomeLoadMorePrefetch(120)
       return
     }

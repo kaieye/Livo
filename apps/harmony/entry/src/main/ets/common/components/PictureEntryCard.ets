@@ -317,8 +317,15 @@ export struct PictureEntryCard {
       .width('100%').padding({ top: 8, bottom: 10 }).alignItems(HorizontalAlign.Start)
       .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
       .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
-        this.isNearlyVisible = isVisible && currentRatio >= 0.35
-        this.isFullyVisible = isVisible && currentRatio >= 0.6
+        const nextNearlyVisible = isVisible && currentRatio >= 0.35
+        const nextFullyVisible = isVisible && currentRatio >= 0.6
+        // 图片流滚动时可见性回调很密集；状态未变化时不再同步 live photo，
+        // 避免加载更多和惯性滚动叠加时反复触发播放器控制。
+        if (nextNearlyVisible === this.isNearlyVisible && nextFullyVisible === this.isFullyVisible) {
+          return
+        }
+        this.isNearlyVisible = nextNearlyVisible
+        this.isFullyVisible = nextFullyVisible
         this.syncVisibleLivePhotoPlayback(this.activeMediaIndex)
       })
       .onDisAppear(() => this.stopLivePhotoPlayback())

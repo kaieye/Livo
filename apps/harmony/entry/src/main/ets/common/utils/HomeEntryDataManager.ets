@@ -38,6 +38,26 @@ export class HomeEntryDataManager {
     this.actions = actions
   }
 
+  private replaceModeEntriesInPlace(mode: SubscriptionMode, entries: EntryCardModel[]): boolean {
+    const groups = this.state.entryGroups
+    switch (mode) {
+      case 'social':
+        groups.social.splice(0, groups.social.length, ...entries)
+        return true
+      case 'pictures':
+        groups.pictures.splice(0, groups.pictures.length, ...entries)
+        return true
+      case 'videos':
+        groups.videos.splice(0, groups.videos.length, ...entries)
+        return true
+      case 'articles':
+        groups.articles.splice(0, groups.articles.length, ...entries)
+        return true
+      default:
+        return false
+    }
+  }
+
   applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void {
     this.actions.resetTweetPresentationCache()
     this.state.featuredEntries = nextEntries
@@ -72,12 +92,20 @@ export class HomeEntryDataManager {
     const startedAt = Date.now()
     const scopedEntries = filterEntriesByMode(mode, entries)
     const filteredAt = Date.now()
-    const groups = this.state.entryGroups
-    this.state.entryGroups = {
-      articles: mode === 'articles' ? scopedEntries : groups.articles,
-      social: mode === 'social' ? scopedEntries : groups.social,
-      pictures: mode === 'pictures' ? scopedEntries : groups.pictures,
-      videos: mode === 'videos' ? scopedEntries : groups.videos,
+    const usedInPlaceModeUpdate = skipNotify && skipMerge && skipPersist
+    if (usedInPlaceModeUpdate) {
+      // 加载更多只依赖 ArrayLazyDataSource 的增量通知刷新列表。
+      // 这里原地替换当前栏目数组，避免替换 entryGroups 这个 @State 对象，
+      // 否则父级 Index 会重建整棵首页内容树，视频网格追加时会明显卡顿。
+      this.replaceModeEntriesInPlace(mode, scopedEntries)
+    } else {
+      const groups = this.state.entryGroups
+      this.state.entryGroups = {
+        articles: mode === 'articles' ? scopedEntries : groups.articles,
+        social: mode === 'social' ? scopedEntries : groups.social,
+        pictures: mode === 'pictures' ? scopedEntries : groups.pictures,
+        videos: mode === 'videos' ? scopedEntries : groups.videos,
+      }
     }
     if (!skipMerge) {
       this.state.featuredEntries = this.mergeFeaturedEntriesFromGroups()
@@ -99,6 +127,7 @@ export class HomeEntryDataManager {
     this.actions.logHomeLoadMore(
       `applyEntriesForMode mode=${mode} total=${entries.length} scoped=${scopedEntries.length} `
       + `skipNotify=${skipNotify} skipMerge=${skipMerge} skipPersist=${skipPersist} `
+      + `inPlace=${usedInPlaceModeUpdate} `
       + `filterMs=${filteredAt - startedAt} mergeMs=${mergedAt - filteredAt} `
       + `persistMs=${persistedAt - mergedAt} totalMs=${Date.now() - startedAt}`,
     )

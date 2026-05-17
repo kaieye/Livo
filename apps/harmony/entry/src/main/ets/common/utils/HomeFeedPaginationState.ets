@@ -16,12 +16,10 @@ import {
   homeModeLoadingValue,
   homeNoProgressCountValue,
   homeVisibleEntryLimitValue,
-  withHomeCandidateLimitValue,
   withHomeLoadedValue,
   withHomeLoadingValue,
   withHomeModeBooleanValue,
   withHomeNoProgressCountValue,
-  withHomeVisibleEntryLimitValue,
 } from './HomeModeMapHelpers'
 import {
   resolveHomeVisibleEntryInitialLimit,
@@ -37,7 +35,7 @@ export class HomeFeedPaginationState {
   }
 
   shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean {
-    return true
+    return false
   }
 
   candidateLimitForMode(mode: SubscriptionMode): number {
@@ -47,10 +45,19 @@ export class HomeFeedPaginationState {
   setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
     const minimumLimit = resolveHomeVisibleEntryInitialLimit(mode)
     const safeLimit = Math.max(minimumLimit, limit)
-    this.session.homeCandidateLimitsByMode =
-      withHomeCandidateLimitValue(mode, safeLimit, this.session.homeCandidateLimitsByMode)
-    if (mode === this.session.mode) {
-      this.session.homeCandidateLimit = safeLimit
+    switch (mode) {
+      case 'social':
+        this.session.homeCandidateLimitsByMode.social = safeLimit
+        break
+      case 'pictures':
+        this.session.homeCandidateLimitsByMode.pictures = safeLimit
+        break
+      case 'videos':
+        this.session.homeCandidateLimitsByMode.videos = safeLimit
+        break
+      default:
+        this.session.homeCandidateLimitsByMode.articles = safeLimit
+        break
     }
   }
 
@@ -58,14 +65,14 @@ export class HomeFeedPaginationState {
     if (this.shouldRenderAllEntriesForMode(mode)) {
       return Math.max(HOME_FULL_MODE_CANDIDATE_LIMIT, minimumLimit)
     }
-    return Math.max(minimumLimit, this.candidateLimitForMode(mode))
+    return Math.max(minimumLimit, this.candidateLimitForMode(mode), resolveHomeVisibleEntryInitialLimit(mode))
   }
 
   resolveHomeCandidateLimit(minimumLimit: number): number {
     if (this.shouldRenderAllEntriesForMode(this.session.mode)) {
       return this.resolveHomeCandidateLimitForMode(this.session.mode, minimumLimit)
     }
-    return Math.max(minimumLimit, this.session.homeCandidateLimit)
+    return Math.max(minimumLimit, this.candidateLimitForMode(this.session.mode))
   }
 
   markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
@@ -90,8 +97,20 @@ export class HomeFeedPaginationState {
 
   setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
     const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    this.session.homeVisibleEntryLimits =
-      withHomeVisibleEntryLimitValue(mode, safeLimit, this.session.homeVisibleEntryLimits)
+    switch (mode) {
+      case 'social':
+        this.session.homeVisibleEntryLimits.social = safeLimit
+        break
+      case 'pictures':
+        this.session.homeVisibleEntryLimits.pictures = safeLimit
+        break
+      case 'videos':
+        this.session.homeVisibleEntryLimits.videos = safeLimit
+        break
+      default:
+        this.session.homeVisibleEntryLimits.articles = safeLimit
+        break
+    }
   }
 
   totalEntryCountFor(mode: SubscriptionMode): number {
@@ -187,7 +206,7 @@ export class HomeFeedPaginationState {
     }
     this.session.logHomeLoadState(
       `hasMore=${next ? 'true' : 'false'} reason=${reason} mode=${mode} `
-      + `candidateLimit=${this.session.homeCandidateLimit} featured=${this.session.featuredEntries.length} `
+      + `candidateLimit=${this.candidateLimitForMode(mode)} featured=${this.session.featuredEntries.length} `
       + `visible=${visible}/${total} inProgress=${this.session.homeLoadMoreInProgress}`,
     )
   }

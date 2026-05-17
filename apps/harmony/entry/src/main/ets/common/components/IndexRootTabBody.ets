@@ -25,6 +25,7 @@ export struct IndexRootTabBody {
   @Prop modeTransitionDirection: number = 1
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
+  @Prop homeLoadMoreInProgress: boolean = false
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
@@ -32,10 +33,9 @@ export struct IndexRootTabBody {
 
   homeCallbacks: IndexHomeRootContentCallbacks = {
     onModeSwipe: () => {},
-    getEntries: (): EntryCardModel[] => [],
     getDataSource: () => new ArrayLazyDataSource<EntryCardModel>(() => []),
-    getTotalCount: () => 0,
     isModeLoading: () => false,
+    isModeLoadingMore: () => false,
     getEmptyStateTitle: () => '',
     getSceneOpacity: () => 1,
     getSceneOffsetX: () => 0,
@@ -72,6 +72,7 @@ export struct IndexRootTabBody {
           showUnreadDot: this.showUnreadDot,
           homeInitialLoadPending: this.homeInitialLoadPending,
           isHomeStartupRefreshing: this.isHomeStartupRefreshing,
+          homeLoadMoreInProgress: this.homeLoadMoreInProgress,
           homeListSwapAnimating: this.homeListSwapAnimating,
           homeListSwapMode: this.homeListSwapMode,
           homeListSwapOpacity: this.homeListSwapOpacity,
