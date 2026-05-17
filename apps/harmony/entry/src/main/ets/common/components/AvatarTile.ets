@@ -78,6 +78,7 @@ export struct AvatarTile {
           .borderRadius(this.radius)
           .backgroundColor(this.theme.elevated)
           .objectFit(ImageFit.Cover)
+          .draggable(false)
           .onComplete(() => {
             this.onImageLoaded(this.currentCandidateImageUrl())
           })

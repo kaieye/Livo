@@ -67,6 +67,10 @@ export struct ContentBlockItemBuilder {
     return resolveArticleVideoPreviewImage(this.contentBlocks, this.block, this.index)
   }
 
+  private activeDirectVideoSource(): string {
+    return (this.activeVideoPlayableUrl || this.block.videoUrl || '').trim()
+  }
+
   private isVideoPlaying(): boolean {
     return this.activeVideoBlockId === this.block.id
   }
@@ -133,6 +137,7 @@ export struct ContentBlockItemBuilder {
           .objectFit(ImageFit.Contain)
           .borderRadius(18)
           .backgroundColor(this.theme.elevated)
+          .draggable(false)
           .onComplete((event) => {
             if (event) {
               this.rememberAspectRatio(event.width, event.height)
@@ -161,6 +166,7 @@ export struct ContentBlockItemBuilder {
           .height('100%')
           .objectFit(ImageFit.Contain)
           .opacity(0)
+          .draggable(false)
           .onComplete((event) => {
             if (event) {
               this.rememberAspectRatio(event.width, event.height)
@@ -188,23 +194,25 @@ export struct ContentBlockItemBuilder {
             this.onActionHint('动态照片播放失败，请稍后重试')
           })
       } else {
-        Video({
-          src: this.activeVideoPlayableUrl || this.block.videoUrl,
-          controller: this.nativeVideoController,
-          previewUri: this.resolvePreviewImage(),
-        })
-          .width('100%')
-          .height('100%')
-          .borderRadius(18)
-          .controls(true)
-          .autoPlay(true)
-          .objectFit(ImageFit.Contain)
-          .onPrepared(() => { this.onClearInlineVideoPreparing(this.block.id) })
-          .onStart(() => { this.onClearInlineVideoPreparing(this.block.id) })
-          .onError(() => {
-            this.onClearInlineVideoPreparing(this.block.id)
-            this.onActionHint('应用内播放失败，请稍后重试')
+        if (this.activeDirectVideoSource()) {
+          Video({
+            src: this.activeDirectVideoSource(),
+            controller: this.nativeVideoController,
+            previewUri: this.resolvePreviewImage(),
           })
+            .width('100%')
+            .height('100%')
+            .borderRadius(18)
+            .controls(true)
+            .autoPlay(true)
+            .objectFit(ImageFit.Contain)
+            .onPrepared(() => { this.onClearInlineVideoPreparing(this.block.id) })
+            .onStart(() => { this.onClearInlineVideoPreparing(this.block.id) })
+            .onError(() => {
+              this.onClearInlineVideoPreparing(this.block.id)
+              this.onActionHint('应用内播放失败，请稍后重试')
+            })
+        }
       }
 
       if (this.isInlineVideoPreparing()) {
@@ -231,6 +239,7 @@ export struct ContentBlockItemBuilder {
           .height('100%')
           .objectFit(ImageFit.Contain)
           .opacity(0)
+          .draggable(false)
           .onComplete((event) => {
             if (event) {
               this.rememberAspectRatio(event.width, event.height)
@@ -391,6 +400,7 @@ export struct ContentBlockItemBuilder {
           .objectFit(ImageFit.Contain)
           .borderRadius(18)
           .backgroundColor(this.theme.elevated)
+          .draggable(false)
           .onComplete((event) => {
             if (event) {
               this.rememberAspectRatio(event.width, event.height)

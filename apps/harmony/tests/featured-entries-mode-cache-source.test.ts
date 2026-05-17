@@ -19,11 +19,11 @@ test('featured entries mode queries share a per-mode cache across fast and paged
   assert.match(source, /async function recentModeEntries\(/)
   assert.match(
     source,
-    /mode === 'articles'\s*\?\s*await recentModeEntries\(mode, feeds, feedMap, safeCandidateLimit, true\)/,
+    /function shouldUseRecentModeQuery\(mode: HomeEntryMode\): boolean \{\s*return mode === 'articles' \|\| mode === 'social'\s*\}/,
   )
   assert.match(
     source,
-    /mode === 'articles'\s*\?\s*await recentModeEntries\(mode, feeds, feedMap, safeCandidateLimit, false\)/,
+    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(mode, feeds, feedMap, safeCandidateLimit, true\)/,
   )
   assert.match(
     source,

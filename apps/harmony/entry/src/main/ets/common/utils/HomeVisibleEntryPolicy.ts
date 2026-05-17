@@ -1,13 +1,13 @@
 export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
-const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24
-const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 40
-const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 20
-const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 8
-const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 20
-const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 10
-const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 6
-const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 20
+const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 18
+const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 24
+const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 4
+const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 8
+const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 4
+const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 12
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -37,14 +37,14 @@ const HOME_VISIBLE_ENTRY_SOCIAL_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
 // 图片是单列大卡，单页数量提高到 8 条，但触发仍提前保留数张卡的缓冲。
 const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 8,
+    preloadRemainingCount: 4,
     estimatedItemHeight: 680,
     estimatedVisibleItemCount: 2,
   }
 
 // 视频是双列网格，估算高度按“每个 item 对应半行滚动距离”计算。
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 16,
+  preloadRemainingCount: 10,
   estimatedItemHeight: 80,
   estimatedVisibleItemCount: 4,
 }

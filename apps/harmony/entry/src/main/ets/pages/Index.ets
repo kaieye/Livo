@@ -462,12 +462,10 @@ struct Index {
         return undefined
       },
       onDidScroll: (mode: SubscriptionMode): void => {
-        if (mode === 'videos') {
-          this.maybeTriggerLoadMoreByScrollProgress(mode, this.readHomeModeScrollOffset(mode))
-          this.flushPendingLoadMoreForMode(mode)
-          return
+        if (mode !== 'videos') {
+          this.syncHomeModeRailState(mode)
         }
-        this.syncHomeModeRailState(mode)
+        this.maybeTriggerLoadMoreByScrollProgress(mode, this.readHomeModeScrollOffset(mode))
         this.flushPendingLoadMoreForMode(mode)
       },
       onStopDragging: (mode: SubscriptionMode): void => {

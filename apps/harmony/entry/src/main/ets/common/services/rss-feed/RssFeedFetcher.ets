@@ -15,6 +15,57 @@ export interface FeedRequestResult {
 }
 
 const LOG_TAG = '[RssFeedFetcher]'
+const REQUEST_RETRY_ATTEMPTS: number = 2
+const REQUEST_RETRY_DELAY_MS: number = 240
+
+interface RequestAttemptResult {
+  response: http.HttpResponse
+  request: http.HttpRequest
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve: (value: void) => void) => {
+    setTimeout(() => resolve(), ms)
+  })
+}
+
+function errorMessage(error: Error | string | Object): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isRetryableNetworkError(error: Error | string | Object): boolean {
+  const message = errorMessage(error)
+  return message.includes('CURLcode result 28')
+    || message.includes('CURLcode result 35')
+    || message.includes('CURLcode result 42')
+    || message.includes('timeout')
+    || message.includes('timed out')
+}
+
+async function requestWithRetry(
+  url: string,
+  options: http.HttpRequestOptions,
+  maxAttempts: number = REQUEST_RETRY_ATTEMPTS,
+): Promise<RequestAttemptResult> {
+  let lastError: Error | string | Object = 'unknown error'
+  const attempts = Math.max(1, maxAttempts)
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const request = http.createHttp()
+    try {
+      const response = await request.request(url, options)
+      return { response, request }
+    } catch (error) {
+      lastError = error
+      request.destroy()
+      if (attempt >= attempts || !isRetryableNetworkError(error)) {
+        break
+      }
+      console.warn(`${LOG_TAG} Retry ${attempt}/${attempts - 1}: ${url} failed: ${errorMessage(error)}`)
+      await sleep(REQUEST_RETRY_DELAY_MS * attempt)
+    }
+  }
+  throw new Error(errorMessage(lastError))
+}
 
 function preferredRssHubInstances(route: string): string[] {
   const r = route.toLowerCase()
@@ -54,18 +105,16 @@ export async function fetchUrl(
   headers: Record<string, string>,
   timeoutMs: number,
 ): Promise<FeedRequestResult> {
-  const request = http.createHttp()
   try {
-    const response = await request.request(url, {
+    const result = await requestWithRetry(url, {
       method: http.RequestMethod.GET,
       connectTimeout: timeoutMs,
       readTimeout: timeoutMs,
       header: headers,
     })
-    return { response, request, finalUrl: url }
+    return { response: result.response, request: result.request, finalUrl: url }
   } catch (error) {
-    request.destroy()
-    throw new Error(`RSS request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+    throw new Error(`RSS request failed: ${errorMessage(error)}`)
   }
 }
 
@@ -82,23 +131,22 @@ export async function tryRssHubInstances(
     for (const candidateRoute of routes) {
       const url = `${instance}${candidateRoute}`
       const instanceHeaders = withReferer(headers, instance)
-      const request = http.createHttp()
       try {
-        const response = await request.request(url, {
+        const result = await requestWithRetry(url, {
           method: http.RequestMethod.GET,
           connectTimeout: timeoutMs,
           readTimeout: timeoutMs,
           header: instanceHeaders,
         })
+        const response = result.response
         if (response.responseCode === 200) {
           console.info(`${LOG_TAG} Success: ${url}`)
-          return { response, request, finalUrl: url }
+          return { response, request: result.request, finalUrl: url }
         }
         errors.push(`${url} -> ${response.responseCode}`)
-        request.destroy()
+        result.request.destroy()
       } catch (error) {
-        errors.push(`${url} failed: ${error instanceof Error ? error.message : String(error)}`)
-        request.destroy()
+        errors.push(`${url} failed: ${errorMessage(error)}`)
       }
     }
   }
@@ -119,23 +167,22 @@ export async function tryNitterInstances(
   for (const instance of FALLBACK_NITTER_INSTANCES) {
     const url = `${instance.replace(/\/+$/g, '')}/${encodeURIComponent(normalized)}/rss`
     const instanceHeaders = withReferer(headers, instance)
-    const request = http.createHttp()
     try {
-      const response = await request.request(url, {
+      const result = await requestWithRetry(url, {
         method: http.RequestMethod.GET,
         connectTimeout: RSS_REQUEST_TIMEOUT_MS,
         readTimeout: RSS_REQUEST_TIMEOUT_MS,
         header: instanceHeaders,
       })
+      const response = result.response
       if (response.responseCode === 200) {
         console.info(`${LOG_TAG} Nitter success: ${url}`)
-        return { response, request, finalUrl: url }
+        return { response, request: result.request, finalUrl: url }
       }
       errors.push(`${url} -> ${response.responseCode}`)
-      request.destroy()
+      result.request.destroy()
     } catch (error) {
-      errors.push(`${url} failed: ${error instanceof Error ? error.message : String(error)}`)
-      request.destroy()
+      errors.push(`${url} failed: ${errorMessage(error)}`)
     }
   }
   console.warn(`${LOG_TAG} All Nitter instances failed: ${errors.join('; ')}`)

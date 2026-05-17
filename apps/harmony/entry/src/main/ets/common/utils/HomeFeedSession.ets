@@ -66,6 +66,7 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
   private readonly diagnosticsLogger: IndexHomeDiagnosticsLogger
   private managedTimeoutIds: number[] = []
   private autoRefreshTimer: number = -1
+  private precacheModeToken: number = 0
 
   readonly refresh: HomeFeedRefresh
   readonly pagination: HomeFeedPagination
@@ -412,21 +413,29 @@ export class HomeFeedSession implements HomeFeedSessionOwner {
   precacheNonActiveModes(): void {
     const currentMode = this.owner.mode
     const modes: SubscriptionMode[] = ['articles', 'social', 'pictures', 'videos']
-    const precacheLimit = 20
-    for (const mode of modes) {
+    const token = this.precacheModeToken + 1
+    this.precacheModeToken = token
+    for (let index = 0; index < modes.length; index += 1) {
+      const mode = modes[index]
       if (mode === currentMode) { continue }
       if (this.pagination.isModeLoaded(mode) || this.pagination.isModeLoading(mode)) { continue }
-      this.pagination.setModeLoading(mode, true)
-      void FeaturedEntriesQuery.featuredEntriesFastByMode(mode, precacheLimit)
-        .then((entries: EntryCardModel[]) => {
-          this.applyEntriesForMode(mode, entries, true, true, true)
-        })
-        .catch((error: Error | string | Object) => {
-          this.logHomeAsyncError(`precache-mode mode=${mode}`, error)
-        })
-        .finally(() => {
-          this.pagination.setModeLoading(mode, false)
-        })
+      this.runManagedTimeout(() => {
+        if (this.precacheModeToken !== token || mode === this.owner.mode) { return }
+        if (this.pagination.isModeLoaded(mode) || this.pagination.isModeLoading(mode)) { return }
+        this.pagination.setModeLoading(mode, true)
+        const precacheLimit = resolveHomeVisibleEntryInitialLimit(mode)
+        void FeaturedEntriesQuery.featuredEntriesFastByMode(mode, precacheLimit)
+          .then((entries: EntryCardModel[]) => {
+            if (this.precacheModeToken !== token || mode === this.owner.mode) { return }
+            this.applyEntriesForMode(mode, entries, true, true, true)
+          })
+          .catch((error: Error | string | Object) => {
+            this.logHomeAsyncError(`precache-mode mode=${mode}`, error)
+          })
+          .finally(() => {
+            this.pagination.setModeLoading(mode, false)
+          })
+      }, 180 * (index + 1))
     }
   }
 

@@ -83,6 +83,10 @@ export struct IndexHomeRootContent {
     })
   }
 
+  private shouldMountScene(mode: SubscriptionMode): boolean {
+    return this.getSceneProps(mode).shouldMount
+  }
+
   @Builder
   private ModeEntriesScene(mode: SubscriptionMode) {
     HomeModeEntriesPage({
@@ -128,12 +132,21 @@ export struct IndexHomeRootContent {
   }
 
   build() {
-    // 预先挂载四个分段场景，避免首次切换时重新建树。
+    // 只挂载当前栏目和切换动画中的上一栏目。隐藏栏目如果常驻挂载，
+    // 图片/视频/社交卡片会在后台建树和注册列表监听，切换与加载更多时容易叠加卡顿。
     Stack({ alignContent: Alignment.TopStart }) {
-      this.ModeEntriesScene('articles')
-      this.ModeEntriesScene('social')
-      this.ModeEntriesScene('pictures')
-      this.ModeEntriesScene('videos')
+      if (this.shouldMountScene('articles')) {
+        this.ModeEntriesScene('articles')
+      }
+      if (this.shouldMountScene('social')) {
+        this.ModeEntriesScene('social')
+      }
+      if (this.shouldMountScene('pictures')) {
+        this.ModeEntriesScene('pictures')
+      }
+      if (this.shouldMountScene('videos')) {
+        this.ModeEntriesScene('videos')
+      }
     }
     .width('100%')
     .height('100%')

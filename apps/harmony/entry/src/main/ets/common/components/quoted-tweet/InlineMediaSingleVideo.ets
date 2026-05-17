@@ -10,7 +10,7 @@ export struct InlineMediaSingleVideo {
   @Prop containerBorderRadius: number = 0
   @Prop containerPadding: number = 0
   @Prop isVideoActive: boolean = false
-  videoController: VideoController = new VideoController()
+  videoController?: VideoController = undefined
   onTap: () => void = () => {}
 
   build() {

@@ -145,7 +145,9 @@ export struct QuotedTweetRenderer {
         containerBorderRadius: 0,
         containerPadding: 0,
         isVideoActive: this.isInlineVideoActive(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0),
-        videoController: this.inlineVideoControllerFor(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0),
+        videoController: this.isInlineVideoActive(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
+          ? this.inlineVideoControllerFor(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
+          : undefined,
         onTap: (): void => {
           this.onPlayInlineVideo(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
         },
@@ -208,7 +210,9 @@ export struct QuotedTweetRenderer {
         containerBorderRadius: 0,
         containerPadding: 1,
         isVideoActive: this.isInlineVideoActive(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0),
-        videoController: this.inlineVideoControllerFor(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0),
+        videoController: this.isInlineVideoActive(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
+          ? this.inlineVideoControllerFor(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
+          : undefined,
         onTap: (): void => {
           this.onPlayInlineVideo(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
         },

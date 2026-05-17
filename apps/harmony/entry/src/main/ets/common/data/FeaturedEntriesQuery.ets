@@ -255,6 +255,20 @@ function modeFeedSignature(mode: HomeEntryMode, feeds: Feed[]): string {
   return `${mode}|${allowedFeedIds.join('|')}`
 }
 
+function fastPageCacheBufferForMode(mode: HomeEntryMode): number {
+  if (mode === 'pictures') {
+    return 12
+  }
+  if (mode === 'social' || mode === 'videos') {
+    return 24
+  }
+  return HOME_FAST_PAGE_CACHE_BUFFER
+}
+
+function shouldUseRecentModeQuery(mode: HomeEntryMode): boolean {
+  return mode === 'articles' || mode === 'social'
+}
+
 class FeaturedEntriesQuery {
   private static readonly modeEntriesCache: Map<string, FeaturedModeEntriesCacheItem> = new Map()
 
@@ -353,7 +367,7 @@ class FeaturedEntriesQuery {
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
     const entries = await EntryRepository.listRecent(safeCandidateLimit)
-    const cards = buildEntryCards(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
     logHomeFeedDebug(
       `featuredEntriesFast limit=${safeCandidateLimit} recent=${entries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
     )
@@ -369,7 +383,7 @@ class FeaturedEntriesQuery {
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
 
     const entries = await EntryRepository.listRecentPage(safeLimit, safeOffset)
-    const cards = buildEntryCards(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
     logHomeFeedDebug(
       `featuredEntriesFastPage limit=${safeLimit} offset=${safeOffset} recent=${entries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
     )
@@ -392,7 +406,7 @@ class FeaturedEntriesQuery {
     }
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
-    const result = mode === 'articles'
+    const result = shouldUseRecentModeQuery(mode)
       ? await recentModeEntries(mode, feeds, feedMap, safeCandidateLimit, true)
       : await balancedModeEntries(mode, feeds, feedMap, safeCandidateLimit)
     FeaturedEntriesQuery.storeModeEntriesCache(mode, feeds, result)
@@ -419,9 +433,9 @@ class FeaturedEntriesQuery {
     }
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
-    const cards = mode === 'articles'
-      ? await recentModeEntries(mode, feeds, feedMap, safeCandidateLimit, false)
-      : await balancedModeEntries(mode, feeds, feedMap, safeCandidateLimit, false)
+    const cards = shouldUseRecentModeQuery(mode)
+      ? await recentModeEntries(mode, feeds, feedMap, safeCandidateLimit, true)
+      : await balancedModeEntries(mode, feeds, feedMap, safeCandidateLimit, true)
     FeaturedEntriesQuery.storeModeEntriesCache(mode, feeds, cards)
 
     logHomeFeedDebug(
@@ -454,10 +468,10 @@ class FeaturedEntriesQuery {
     }
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
-    // 查询比当前需求多 HOME_FAST_PAGE_CACHE_BUFFER 条，存入缓存避免后续翻页重复全量扫库
-    const queryTarget = targetVisibleCount + HOME_FAST_PAGE_CACHE_BUFFER
+    // 图片卡片解码和布局成本高，加载更多时只预取小缓冲，避免触底瞬间全量扫库和建卡。
+    const queryTarget = targetVisibleCount + fastPageCacheBufferForMode(mode)
     const dbQueryStartedAt = Date.now()
-    const expandedEntries = mode === 'articles'
+    const expandedEntries = shouldUseRecentModeQuery(mode)
       ? await recentModeEntries(mode, feeds, feedMap, queryTarget, true)
       : await balancedModeEntries(mode, feeds, feedMap, queryTarget, true)
     const dbQueryMs = Date.now() - dbQueryStartedAt

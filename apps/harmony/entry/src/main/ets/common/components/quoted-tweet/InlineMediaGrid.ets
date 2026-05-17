@@ -23,6 +23,10 @@ export struct InlineMediaGrid {
   keyOf: (item: PictureCarouselMediaItem, index: number) => string =
     (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`
 
+  private activeVideoControllerFor(item: PictureCarouselMediaItem, index: number): VideoController | undefined {
+    return this.isVideoActive(item, index) ? this.controllerFor(item, index) : undefined
+  }
+
   build() {
     Column() {
       Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
@@ -34,7 +38,7 @@ export struct InlineMediaGrid {
             tileHeight: this.items.length <= 1 ? 0 : inlineMediaTileHeight(this.tileSize, index, this.items.length),
             tileBorderRadius: this.tileBorderRadius,
             isVideoActive: this.isVideoActive(item, index),
-            videoController: this.controllerFor(item, index),
+            videoController: this.activeVideoControllerFor(item, index),
           })
             .margin({ bottom: inlineMediaTileBottomMargin(index, this.items.length) })
             .onClick(() => {

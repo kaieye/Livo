@@ -233,7 +233,7 @@ export struct PictureEntryCard {
 
   @Builder private FeedAvatar() {
     if (this.feedImageUrl.trim()) {
-      Image(this.feedImageUrl.trim()).width(28).height(28).borderRadius(14).backgroundColor(this.theme.elevated)
+      Image(this.feedImageUrl.trim()).width(28).height(28).borderRadius(14).backgroundColor(this.theme.elevated).draggable(false)
     } else {
       Stack({ alignContent: Alignment.Center }) {
         Row().width(28).height(28).borderRadius(14).backgroundColor(this.theme.accent)
@@ -244,8 +244,9 @@ export struct PictureEntryCard {
 
   @Builder private FramedImageSlide(item: PictureCarouselMediaItem, index: number) {
     Stack({ alignContent: Alignment.Center }) {
-      Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Cover).opacity(0.26).blur(14).borderRadius(14)
+      Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Cover).opacity(0.26).blur(14).borderRadius(14).draggable(false)
       Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Contain).borderRadius(14).backgroundColor(this.theme.elevated)
+        .draggable(false)
         .shadow({ radius: this.theme.isDark ? 14 : 16, color: this.theme.isDark ? 'rgba(0,0,0,0.34)' : 'rgba(15,23,42,0.16)', offsetX: 0, offsetY: 3 })
         .onComplete((event) => { if (event) this.rememberMediaNaturalSize(index, event.width, event.height) })
     }.width('100%').aspectRatio(this.resolvedMediaFrameAspectRatio())
@@ -264,7 +265,7 @@ export struct PictureEntryCard {
   @Builder private LivePhotoSlide(item: PictureCarouselMediaItem, index: number) {
     Stack({ alignContent: Alignment.Center }) {
       Stack({ alignContent: Alignment.Center }) {
-        Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Contain).borderRadius(14).backgroundColor(this.theme.elevated)
+        Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Contain).borderRadius(14).backgroundColor(this.theme.elevated).draggable(false)
           .onComplete((event) => { if (event) this.rememberLivePhotoAspectRatio(index, event.width, event.height) })
           .visibility((this.shouldShowPlayingLivePhoto(index) || this.shouldShowPausedLivePhoto(index)) ? Visibility.Hidden : Visibility.Visible)
         if (item.kind === 'livePhoto' && item.videoUrl && this.mountedLivePhotoIndices().includes(index)) {
@@ -319,9 +320,12 @@ export struct PictureEntryCard {
       .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
         const nextNearlyVisible = isVisible && currentRatio >= 0.35
         const nextFullyVisible = isVisible && currentRatio >= 0.6
-        // 图片流滚动时可见性回调很密集；状态未变化时不再同步 live photo，
-        // 避免加载更多和惯性滚动叠加时反复触发播放器控制。
-        if (nextNearlyVisible === this.isNearlyVisible && nextFullyVisible === this.isFullyVisible) {
+        // 可见性只控制 live photo 播放，不再销毁静态 Image 节点；
+        // Swiper/List 复用时反复重建 Image 会造成半露出图片变白。
+        if (
+          nextNearlyVisible === this.isNearlyVisible
+          && nextFullyVisible === this.isFullyVisible
+        ) {
           return
         }
         this.isNearlyVisible = nextNearlyVisible

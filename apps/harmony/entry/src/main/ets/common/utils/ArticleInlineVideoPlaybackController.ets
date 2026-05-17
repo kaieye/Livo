@@ -77,6 +77,14 @@ export class ArticleInlineVideoPlaybackController {
   }
 
   play(block: ArticleContentBlock): void {
+    const normalizedVideoUrl = (block.videoUrl || '').trim()
+    if (
+      this.owner.activeVideoBlockId === block.id
+      && (this.owner.activeVideoPlayableUrl === normalizedVideoUrl || this.owner.isResolvingActiveVideo || !!this.owner.activeVideoFallbackUrl)
+    ) {
+      return
+    }
+
     this.owner.activeVideoBlockId = block.id
     this.owner.activeVideoPlayableUrl = ''
     this.owner.activeVideoFallbackUrl = ''
@@ -85,15 +93,15 @@ export class ArticleInlineVideoPlaybackController {
     this.owner.inlineVideoPreparingBlockId = this.shouldInlineVideoPlayback(block) ? block.id : ''
     this.owner.actionHint = ''
 
-    if (isArticleDirectVideo(block.videoUrl)) {
+    if (isArticleDirectVideo(normalizedVideoUrl)) {
       this.loadMovingPhotoForBlock(block)
-      this.owner.activeVideoPlayableUrl = block.videoUrl
+      this.owner.activeVideoPlayableUrl = normalizedVideoUrl
       return
     }
-    if (isArticleYouTubeVideo(block.videoUrl)) {
+    if (isArticleYouTubeVideo(normalizedVideoUrl)) {
       this.owner.isResolvingActiveVideo = true
       this.owner.actionHint = '正在解析视频地址...'
-      void this.resolveAndPlayYouTube(block.videoUrl)
+      void this.resolveAndPlayYouTube(normalizedVideoUrl)
     }
   }
 

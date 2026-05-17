@@ -53,11 +53,11 @@ const homeModeMapHelpersSource = readFileSync(
 test('home visible entry policy keeps startup window bounded', () => {
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 24/,
+    /const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 18/,
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 40/,
+    /const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 24/,
   )
   assert.match(
     visibleEntryPolicySource,
@@ -69,11 +69,11 @@ test('home visible entry policy keeps startup window bounded', () => {
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 8,\s*estimatedItemHeight: 680,\s*estimatedVisibleItemCount: 2,/,
+    /const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 4,\s*estimatedItemHeight: 680,\s*estimatedVisibleItemCount: 2,/,
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = \{\s*preloadRemainingCount: 16,\s*estimatedItemHeight: 80,\s*estimatedVisibleItemCount: 4,/,
+    /const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = \{\s*preloadRemainingCount: 10,\s*estimatedItemHeight: 80,\s*estimatedVisibleItemCount: 4,/,
   )
   assert.match(
     visibleEntryPolicySource,
@@ -148,7 +148,7 @@ test('article load more follows append-style update path near the end of the lis
   )
   assert.match(
     homeFeedPaginationSource,
-    /else if \(mode === 'pictures'\) \{\s*dynamicThreshold = Math\.max\(6, Math\.min\(8, Math\.floor\(visibleCount \/ 3\)\)\)\s*\} else if \(mode === 'videos'\) \{\s*dynamicThreshold = Math\.max\(14, Math\.min\(16, Math\.floor\(visibleCount \/ 2\)\)\)/,
+    /else if \(mode === 'pictures'\) \{\s*dynamicThreshold = Math\.max\(3, Math\.min\(4, Math\.floor\(visibleCount \/ 3\)\)\)\s*\} else if \(mode === 'videos'\) \{\s*dynamicThreshold = Math\.max\(8, Math\.min\(10, Math\.floor\(visibleCount \/ 2\)\)\)/,
   )
   assert.match(
     homeFeedPaginationSource,

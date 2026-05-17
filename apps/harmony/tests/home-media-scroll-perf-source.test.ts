@@ -69,7 +69,7 @@ test('video home mode uses social-style early load-more triggers at row granular
 test('video home mode avoids overlay state writes during ordinary scroll frames', () => {
   assert.match(
     indexSource,
-    /onDidScroll: \(mode: SubscriptionMode\): void => \{\s*if \(mode === 'videos'\) \{\s*this\.maybeTriggerLoadMoreByScrollProgress\(mode, this\.readHomeModeScrollOffset\(mode\)\)\s*this\.flushPendingLoadMoreForMode\(mode\)\s*return\s*\}\s*this\.syncHomeModeRailState\(mode\)/,
+    /onDidScroll: \(mode: SubscriptionMode\): void => \{\s*if \(mode !== 'videos'\) \{\s*this\.syncHomeModeRailState\(mode\)\s*\}\s*this\.maybeTriggerLoadMoreByScrollProgress\(mode, this\.readHomeModeScrollOffset\(mode\)\)\s*this\.flushPendingLoadMoreForMode\(mode\)/,
   )
   assert.match(
     indexSource,
@@ -79,10 +79,13 @@ test('video home mode avoids overlay state writes during ordinary scroll frames'
 
 
 test('picture cards ignore duplicate visible-area callbacks while scrolling', () => {
+  assert.doesNotMatch(pictureEntryCardSource, /private shouldDecodeMedia\(\): boolean/)
+  assert.doesNotMatch(pictureEntryCardSource, /if \(this\.shouldDecodeMedia\(\)\)/)
+  assert.match(pictureEntryCardSource, /Image\(item\.imageUrl \|\| this\.pictureUrl\)\.width\('100%'\)\.height\('100%'\)\.objectFit\(ImageFit\.Contain\)/)
   assert.match(pictureEntryCardSource, /const nextNearlyVisible = isVisible && currentRatio >= 0\.35/)
   assert.match(
     pictureEntryCardSource,
-    /if \(nextNearlyVisible === this\.isNearlyVisible && nextFullyVisible === this\.isFullyVisible\) \{\s*return\s*\}/,
+    /nextNearlyVisible === this\.isNearlyVisible[\s\S]*?nextFullyVisible === this\.isFullyVisible/,
   )
   assert.match(pictureEntryCardSource, /this\.syncVisibleLivePhotoPlayback\(this\.activeMediaIndex\)/)
 })

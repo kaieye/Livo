@@ -49,6 +49,7 @@ export struct HomeVideoEntryCard {
           .aspectRatio(16 / 9)
           .objectFit(ImageFit.Cover)
           .borderRadius(14)
+          .draggable(false)
       } else {
         Column()
           .width('100%')

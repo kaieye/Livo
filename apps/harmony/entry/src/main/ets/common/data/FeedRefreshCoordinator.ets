@@ -14,7 +14,7 @@ import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import { sortFeedsStable } from './AppRepositoryEntryHelpers'
 
 const SUCCESSFUL_REFRESH_COOLDOWN_MS: number = 3 * 60 * 1000
-const REFRESH_CONCURRENCY: number = 12
+const REFRESH_CONCURRENCY: number = 4
 
 const DEBUG_ENABLED: boolean = false
 const DEBUG_PREFIX: string = '[FeedRefreshCoordinator]'

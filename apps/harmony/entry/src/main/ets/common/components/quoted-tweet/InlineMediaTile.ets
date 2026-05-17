@@ -9,7 +9,7 @@ export struct InlineMediaTile {
   @Prop tileHeight: number = 0
   @Prop tileBorderRadius: number = 0
   @Prop isVideoActive: boolean = false
-  videoController: VideoController = new VideoController()
+  videoController?: VideoController = undefined
 
   private hasVideo(): boolean {
     return !!(this.item.videoUrl || '').trim()
@@ -51,7 +51,7 @@ export struct InlineMediaTile {
         if (this.hasVideo() && this.isVideoActive) {
           Video({
             src: this.item.videoUrl,
-            controller: this.videoController,
+            controller: this.videoController || new VideoController(),
             previewUri: this.item.imageUrl,
           })
             .width(this.tileWidth)

@@ -506,9 +506,9 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     } else if (mode === 'social') {
       dynamicThreshold = Math.max(1, Math.min(2, Math.floor(visibleCount / 12)))
     } else if (mode === 'pictures') {
-      dynamicThreshold = Math.max(6, Math.min(8, Math.floor(visibleCount / 3)))
+      dynamicThreshold = Math.max(3, Math.min(4, Math.floor(visibleCount / 3)))
     } else if (mode === 'videos') {
-      dynamicThreshold = Math.max(14, Math.min(16, Math.floor(visibleCount / 2)))
+      dynamicThreshold = Math.max(8, Math.min(10, Math.floor(visibleCount / 2)))
     }
     return remainingVisibleCount <= dynamicThreshold
   }

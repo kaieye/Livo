@@ -67,6 +67,28 @@ export class HomeFeedLoadMorePrefetch {
     return HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
   }
 
+  private entryKey(entry: EntryCardModel): string {
+    return `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+  }
+
+  private mergeUniqueEntries(previousEntries: EntryCardModel[], nextPage: EntryCardModel[]): EntryCardModel[] {
+    const seen = new Set<string>()
+    const merged: EntryCardModel[] = []
+    previousEntries.forEach((entry: EntryCardModel) => {
+      seen.add(this.entryKey(entry))
+      merged.push(entry)
+    })
+    nextPage.forEach((entry: EntryCardModel) => {
+      const key = this.entryKey(entry)
+      if (seen.has(key)) {
+        return
+      }
+      seen.add(key)
+      merged.push(entry)
+    })
+    return merged
+  }
+
   async run(): Promise<void> {
     if (!this.canPrefetch()) {
       return
@@ -94,8 +116,17 @@ export class HomeFeedLoadMorePrefetch {
     this.session.logHomeLoadMore(`prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`)
 
     try {
-      const entries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, targetLimit)
+      const previousEntries = this.session.filteredEntriesFor(mode)
+      const appendCount = Math.max(1, targetLimit - previousEntries.length)
+      const nextPage = await FeaturedEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
       if (!this.session.isComponentActive || this.session.homeLoadMorePrefetchToken !== token) {
+        return
+      }
+      const entries = this.mergeUniqueEntries(previousEntries, nextPage).slice(0, targetLimit)
+      if (entries.length <= previousEntries.length) {
+        this.session.logHomeLoadMore(
+          `prefetch skip-no-growth mode=${mode} targetLimit=${targetLimit} previous=${previousEntries.length} page=${nextPage.length}`,
+        )
         return
       }
       this.session.homeLoadMorePrefetchLimit = targetLimit

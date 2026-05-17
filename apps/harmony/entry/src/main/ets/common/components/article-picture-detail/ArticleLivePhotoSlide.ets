@@ -60,6 +60,7 @@ export struct ArticleLivePhotoSlide {
           .objectFit(ImageFit.Contain)
           .borderRadius(18)
           .backgroundColor(this.theme.elevated)
+          .draggable(false)
           .onComplete((event) => {
             if (event) {
               this.onAspectChange(event.width, event.height)

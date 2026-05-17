@@ -179,6 +179,7 @@ export struct HomeArticleEntryCard {
             .borderRadius(8)
             .objectFit(ImageFit.Cover)
             .backgroundColor(this.theme.elevated)
+            .draggable(false)
         }
       }
       .width('100%')
