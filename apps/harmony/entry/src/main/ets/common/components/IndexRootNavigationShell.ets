@@ -19,14 +19,10 @@ import {
 } from '../ui/UiTokens'
 import {
   HdsBottomTabId,
-  HdsBottomTabItem,
   resolveHdsBottomTabBarBottomMargin,
-  resolveHdsBottomTabItems,
 } from '../utils/HdsBottomTabConfig'
-import {
-  RootTabSymbolPair,
-  SubscriptionMode,
-} from './HomeRootConfig'
+import { RootTabSymbolPair, SubscriptionMode } from './HomeRootConfig'
+import { HomeRootTabBody } from './HomeRootTabBody'
 import { IndexHomeRootContentCallbacks } from './IndexHomeRootContent'
 import { IndexRootTabBody } from './IndexRootTabBody'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
@@ -117,45 +113,104 @@ export struct IndexRootNavigationShell {
   build() {
     HdsNavigation() {
       HdsTabs({ controller: this.controller }) {
-        ForEach(resolveHdsBottomTabItems(), (item: HdsBottomTabItem) => {
-          TabContent() {
-            IndexRootTabBody({
-              tabId: item.id as RootTabId,
-              theme: this.theme,
-              rootSettings: this.rootSettings,
-              showUnreadDot: this.showUnreadDot,
-              mode: this.mode,
-              renderedMode: this.renderedMode,
-              previousMode: this.previousMode,
-              isModeTransitioning: this.isModeTransitioning,
-              modeTransitionDirection: this.modeTransitionDirection,
-              homeInitialLoadPending: this.homeInitialLoadPending,
-              isHomeStartupRefreshing: this.isHomeStartupRefreshing,
-              homeLoadMoreInProgress: this.homeLoadMoreInProgress,
-              homeListSwapAnimating: this.homeListSwapAnimating,
-              homeListSwapMode: this.homeListSwapMode,
-              homeListSwapOpacity: this.homeListSwapOpacity,
-              homeContentVersion: this.homeContentVersion,
-              homeCallbacks: this.homeCallbacks,
-              onTabAppear: (tabId: RootTabId) => {
-                this.onTabAppear(tabId)
-              },
-              onSettingsContentScrollerReady: (scroller: Scroller) => {
-                this.onSettingsContentScrollerReady(scroller)
-              },
-              onSettingsChange: (settings: HarmonySettings) => {
-                this.onSettingsChange(settings)
-              },
-              onThemeChange: (theme: ThemePalette) => {
-                this.onThemeChange(theme)
-              },
-            })
-          }
-          .tabBar(BottomTabBarStyle.of({
-            normal: this.rootTabSymbolPair(item.id).normal,
-            selected: this.rootTabSymbolPair(item.id).selected,
-          }, item.label))
-        }, (item: HdsBottomTabItem) => item.id)
+        TabContent() {
+          HomeRootTabBody({
+            mode: this.mode,
+            renderedMode: this.renderedMode,
+            previousMode: this.previousMode,
+            isModeTransitioning: this.isModeTransitioning,
+            modeTransitionDirection: this.modeTransitionDirection,
+            theme: this.theme,
+            showUnreadDot: this.showUnreadDot,
+            homeInitialLoadPending: this.homeInitialLoadPending,
+            isHomeStartupRefreshing: this.isHomeStartupRefreshing,
+            homeLoadMoreInProgress: this.homeLoadMoreInProgress,
+            homeListSwapAnimating: this.homeListSwapAnimating,
+            homeListSwapMode: this.homeListSwapMode,
+            homeListSwapOpacity: this.homeListSwapOpacity,
+            homeContentVersion: this.homeContentVersion,
+            homeCallbacks: this.homeCallbacks,
+          })
+        }
+        .tabBar(BottomTabBarStyle.of({
+          normal: this.rootTabSymbolPair('home').normal,
+          selected: this.rootTabSymbolPair('home').selected,
+        }, '首页'))
+
+        TabContent() {
+          IndexRootTabBody({
+            tabId: 'subscriptions',
+            theme: this.theme,
+            rootSettings: this.rootSettings,
+            showUnreadDot: this.showUnreadDot,
+            onTabAppear: (tabId: RootTabId) => {
+              this.onTabAppear(tabId)
+            },
+            onSettingsContentScrollerReady: (scroller: Scroller) => {
+              this.onSettingsContentScrollerReady(scroller)
+            },
+            onSettingsChange: (settings: HarmonySettings) => {
+              this.onSettingsChange(settings)
+            },
+            onThemeChange: (theme: ThemePalette) => {
+              this.onThemeChange(theme)
+            },
+          })
+        }
+        .tabBar(BottomTabBarStyle.of({
+          normal: this.rootTabSymbolPair('subscriptions').normal,
+          selected: this.rootTabSymbolPair('subscriptions').selected,
+        }, '订阅'))
+
+        TabContent() {
+          IndexRootTabBody({
+            tabId: 'discover',
+            theme: this.theme,
+            rootSettings: this.rootSettings,
+            showUnreadDot: this.showUnreadDot,
+            onTabAppear: (tabId: RootTabId) => {
+              this.onTabAppear(tabId)
+            },
+            onSettingsContentScrollerReady: (scroller: Scroller) => {
+              this.onSettingsContentScrollerReady(scroller)
+            },
+            onSettingsChange: (settings: HarmonySettings) => {
+              this.onSettingsChange(settings)
+            },
+            onThemeChange: (theme: ThemePalette) => {
+              this.onThemeChange(theme)
+            },
+          })
+        }
+        .tabBar(BottomTabBarStyle.of({
+          normal: this.rootTabSymbolPair('discover').normal,
+          selected: this.rootTabSymbolPair('discover').selected,
+        }, '发现'))
+
+        TabContent() {
+          IndexRootTabBody({
+            tabId: 'settings',
+            theme: this.theme,
+            rootSettings: this.rootSettings,
+            showUnreadDot: this.showUnreadDot,
+            onTabAppear: (tabId: RootTabId) => {
+              this.onTabAppear(tabId)
+            },
+            onSettingsContentScrollerReady: (scroller: Scroller) => {
+              this.onSettingsContentScrollerReady(scroller)
+            },
+            onSettingsChange: (settings: HarmonySettings) => {
+              this.onSettingsChange(settings)
+            },
+            onThemeChange: (theme: ThemePalette) => {
+              this.onThemeChange(theme)
+            },
+          })
+        }
+        .tabBar(BottomTabBarStyle.of({
+          normal: this.rootTabSymbolPair('settings').normal,
+          selected: this.rootTabSymbolPair('settings').selected,
+        }, '设置'))
       }
       .vertical(false)
       .scrollable(false)
