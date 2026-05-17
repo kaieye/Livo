@@ -243,9 +243,41 @@ export function parseFeedImageUrl(xml: string, baseUrl: string): string {
   return ''
 }
 
+/**
+ * Extract a social-network status/post ID from a URL.
+ * Supports X/Twitter (/status/12345) and Nitter (/12345) patterns.
+ */
+function extractStatusId(url: string): string {
+  const trimmed = (url || '').trim()
+  const xMatch = trimmed.match(/\/status\/(\d+)/i)
+  if (xMatch?.[1]) {
+    return xMatch[1]
+  }
+  // Nitter sometimes uses a bare numeric path segment
+  const nitterMatch = trimmed.match(/nitter[^/]*\/([A-Za-z0-9]{8,})\//i)
+  if (nitterMatch?.[1]) {
+    return nitterMatch[1]
+  }
+  return ''
+}
+
 export function buildEntriesFromItems(items: ParsedItem[], feed: Feed): Entry[] {
   const now = Date.now()
-  return items.map((item: ParsedItem): Entry => ({
+  const seenStatusIds = new Set<string>()
+  const deduped: ParsedItem[] = []
+
+  for (const item of items) {
+    const statusId = extractStatusId(item.link)
+    if (statusId) {
+      if (seenStatusIds.has(statusId)) {
+        continue
+      }
+      seenStatusIds.add(statusId)
+    }
+    deduped.push(item)
+  }
+
+  return deduped.map((item: ParsedItem): Entry => ({
     id: item.id,
     feedId: feed.id,
     title: item.title,
