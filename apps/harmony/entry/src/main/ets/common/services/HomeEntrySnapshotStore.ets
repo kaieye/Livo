@@ -74,8 +74,16 @@ function filterHomeEntrySnapshotEntriesByFeedId(entries: EntryCardModel[], feedI
   }))
 }
 
-export class HomeEntrySnapshotStore {
-  static async load(): Promise<EntryCardModel[]> {
+export interface IHomeEntrySnapshotStore {
+  load(): Promise<EntryCardModel[]>
+  save(entries: EntryCardModel[]): Promise<EntryCardModel[]>
+  removeByFeedId(feedId: string): Promise<EntryCardModel[]>
+}
+
+export class HomeEntrySnapshotStore implements IHomeEntrySnapshotStore {
+  static readonly default: HomeEntrySnapshotStore = new HomeEntrySnapshotStore()
+
+  async load(): Promise<EntryCardModel[]> {
     try {
       const pref = await PreferenceStoreAccessor.getPreferences()
       const raw = await pref.get(HOME_ENTRY_SNAPSHOT_KEY, '[]')
@@ -102,7 +110,7 @@ export class HomeEntrySnapshotStore {
     }
   }
 
-  static async save(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
+  async save(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
     const normalizedEntries = normalizeHomeEntrySnapshotEntries(entries)
     const pref = await PreferenceStoreAccessor.getPreferences()
     try {
@@ -114,9 +122,9 @@ export class HomeEntrySnapshotStore {
     return normalizedEntries
   }
 
-  static async removeByFeedId(feedId: string): Promise<EntryCardModel[]> {
+  async removeByFeedId(feedId: string): Promise<EntryCardModel[]> {
     const pref = await PreferenceStoreAccessor.getPreferences()
-    const currentEntries = await HomeEntrySnapshotStore.load()
+    const currentEntries = await this.load()
     const nextEntries = filterHomeEntrySnapshotEntriesByFeedId(currentEntries, feedId)
     if (nextEntries.length === currentEntries.length) {
       return currentEntries
@@ -129,5 +137,19 @@ export class HomeEntrySnapshotStore {
       throw new Error(error instanceof Error ? error.message : '移除首页快照失败')
     }
     return nextEntries
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async load(): Promise<EntryCardModel[]> {
+    return HomeEntrySnapshotStore.default.load()
+  }
+
+  static async save(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
+    return HomeEntrySnapshotStore.default.save(entries)
+  }
+
+  static async removeByFeedId(feedId: string): Promise<EntryCardModel[]> {
+    return HomeEntrySnapshotStore.default.removeByFeedId(feedId)
   }
 }

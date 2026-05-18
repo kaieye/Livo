@@ -51,10 +51,20 @@ const LIGHT_PALETTE: ThemePalette = {
   dragHandle: 'rgba(15, 23, 42, 0.18)',
 }
 
-export class ThemeService {
-  private static cachedPalette: ThemePalette = LIGHT_PALETTE
+export interface IThemeService {
+  currentPalette(): ThemePalette
+  darkPalette(): ThemePalette
+  lightPalette(): ThemePalette
+  resolvePalette(settings: HarmonySettings): Promise<ThemePalette>
+  resolvePaletteForSystemChange(settings: HarmonySettings): Promise<ThemePalette>
+}
 
-  private static resolveAccentColor(accent: ThemeAccent): string {
+export class ThemeService implements IThemeService {
+  static readonly default: ThemeService = new ThemeService()
+
+  private cachedPalette: ThemePalette = LIGHT_PALETTE
+
+  private resolveAccentColor(accent: ThemeAccent): string {
     switch (accent) {
       case 'blue':
         return '#2563EB'
@@ -69,7 +79,7 @@ export class ThemeService {
     }
   }
 
-  private static clonePalette(source: ThemePalette): ThemePalette {
+  private clonePalette(source: ThemePalette): ThemePalette {
     return {
       isDark: source.isDark,
       background: source.background,
@@ -87,49 +97,49 @@ export class ThemeService {
     }
   }
 
-  static currentPalette(): ThemePalette {
-    return ThemeService.clonePalette(ThemeService.cachedPalette)
+  currentPalette(): ThemePalette {
+    return this.clonePalette(this.cachedPalette)
   }
 
-  static darkPalette(): ThemePalette {
-    return ThemeService.clonePalette(DARK_PALETTE)
+  darkPalette(): ThemePalette {
+    return this.clonePalette(DARK_PALETTE)
   }
 
-  static lightPalette(): ThemePalette {
-    return ThemeService.clonePalette(LIGHT_PALETTE)
+  lightPalette(): ThemePalette {
+    return this.clonePalette(LIGHT_PALETTE)
   }
 
-  static async resolvePalette(settings: HarmonySettings): Promise<ThemePalette> {
-    return ThemeService.resolvePaletteWithMode(settings, true)
+  async resolvePalette(settings: HarmonySettings): Promise<ThemePalette> {
+    return this.resolvePaletteWithMode(settings, true)
   }
 
-  static async resolvePaletteForSystemChange(settings: HarmonySettings): Promise<ThemePalette> {
-    return ThemeService.resolvePaletteWithMode(settings, false)
+  async resolvePaletteForSystemChange(settings: HarmonySettings): Promise<ThemePalette> {
+    return this.resolvePaletteWithMode(settings, false)
   }
 
-  private static async resolvePaletteWithMode(settings: HarmonySettings, shouldApplyColorMode: boolean): Promise<ThemePalette> {
+  private async resolvePaletteWithMode(settings: HarmonySettings, shouldApplyColorMode: boolean): Promise<ThemePalette> {
     let resolved: ThemePalette
     if (settings.themeMode === 'dark') {
-      resolved = ThemeService.darkPalette()
+      resolved = this.darkPalette()
     } else if (settings.themeMode === 'light') {
-      resolved = ThemeService.lightPalette()
+      resolved = this.lightPalette()
     } else {
-      resolved = (await ThemeService.isSystemDarkMode())
-        ? ThemeService.darkPalette()
-        : ThemeService.lightPalette()
+      resolved = (await this.isSystemDarkMode())
+        ? this.darkPalette()
+        : this.lightPalette()
     }
 
-    resolved.accent = ThemeService.resolveAccentColor(settings.themeAccent)
+    resolved.accent = this.resolveAccentColor(settings.themeAccent)
     resolved.accentText = '#FFFFFF'
     if (shouldApplyColorMode) {
-      ThemeService.applyColorMode(settings)
+      this.applyColorMode(settings)
     }
 
-    ThemeService.cachedPalette = ThemeService.clonePalette(resolved)
+    this.cachedPalette = this.clonePalette(resolved)
     return resolved
   }
 
-  private static applyColorMode(settings: HarmonySettings): void {
+  private applyColorMode(settings: HarmonySettings): void {
     try {
       const context = AppContextService.getContext()
       if (settings.themeMode === 'dark') {
@@ -142,7 +152,7 @@ export class ThemeService {
     } catch (_error) {}
   }
 
-  private static async isSystemDarkMode(): Promise<boolean> {
+  private async isSystemDarkMode(): Promise<boolean> {
     try {
       const context = AppContextService.getContext()
       const configuration = await context.resourceManager.getConfiguration()
@@ -150,5 +160,27 @@ export class ThemeService {
     } catch (error) {
       return false
     }
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static currentPalette(): ThemePalette {
+    return ThemeService.default.currentPalette()
+  }
+
+  static darkPalette(): ThemePalette {
+    return ThemeService.default.darkPalette()
+  }
+
+  static lightPalette(): ThemePalette {
+    return ThemeService.default.lightPalette()
+  }
+
+  static async resolvePalette(settings: HarmonySettings): Promise<ThemePalette> {
+    return ThemeService.default.resolvePalette(settings)
+  }
+
+  static async resolvePaletteForSystemChange(settings: HarmonySettings): Promise<ThemePalette> {
+    return ThemeService.default.resolvePaletteForSystemChange(settings)
   }
 }

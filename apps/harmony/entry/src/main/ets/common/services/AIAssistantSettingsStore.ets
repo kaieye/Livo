@@ -14,8 +14,15 @@ const AI_KEY_SYSTEM_PROMPT_TEMPLATE: string = 'aiSystemPromptTemplate'
 const AI_KEY_CHAT_PERSONA_PROMPT: string = 'aiChatPersonaPrompt'
 const AI_PROVIDERS: string[] = ['minimax', 'deepseek', 'openai', 'anthropic', 'glm', 'custom']
 
-export class AIAssistantSettingsStore {
-  static async load(): Promise<AIAssistantSettings> {
+export interface IAIAssistantSettingsStore {
+  load(): Promise<AIAssistantSettings>
+  save(next: AIAssistantSettings): Promise<AIAssistantSettings>
+}
+
+export class AIAssistantSettingsStore implements IAIAssistantSettingsStore {
+  static readonly default: AIAssistantSettingsStore = new AIAssistantSettingsStore()
+
+  async load(): Promise<AIAssistantSettings> {
     try {
       const pref = await PreferenceStoreAccessor.getPreferences()
       const provider = await pref.get(AI_KEY_PROVIDER, await pref.get('ai.provider', DEFAULT_AI_ASSISTANT_SETTINGS.provider))
@@ -64,7 +71,7 @@ export class AIAssistantSettingsStore {
     }
   }
 
-  static async save(next: AIAssistantSettings): Promise<AIAssistantSettings> {
+  async save(next: AIAssistantSettings): Promise<AIAssistantSettings> {
     try {
       const pref = await PreferenceStoreAccessor.getPreferences()
       await pref.put(AI_KEY_PROVIDER, next.provider)
@@ -77,9 +84,19 @@ export class AIAssistantSettingsStore {
         await pref.put(`aiApiKey_${p}`, next.apiKeys[p] ?? '')
       }
       await pref.flush()
-      return AIAssistantSettingsStore.load()
+      return this.load()
     } catch (error) {
       throw new Error(`保存 AI 设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
     }
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async load(): Promise<AIAssistantSettings> {
+    return AIAssistantSettingsStore.default.load()
+  }
+
+  static async save(next: AIAssistantSettings): Promise<AIAssistantSettings> {
+    return AIAssistantSettingsStore.default.save(next)
   }
 }

@@ -53,11 +53,11 @@ export function discoverCategoryCards(): DiscoverCategoryCard[] {
       sourceKey: 'podcast',
     },
     {
-      id: 'cctv',
+      id: 'news',
       view: FeedViewType.Articles,
-      label: '央视',
+      label: '新闻',
       accent: '#C41230',
-      sourceKey: 'cctv',
+      sourceKey: 'news',
     },
   ]
 }

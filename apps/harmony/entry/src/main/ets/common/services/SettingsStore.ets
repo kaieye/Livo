@@ -5,8 +5,15 @@ import {
 } from '../models/LivoModels'
 import { PreferenceStoreAccessor } from './PreferenceStoreAccessor'
 
-export class SettingsStore {
-  static async load(): Promise<HarmonySettings> {
+export interface ISettingsStore {
+  load(): Promise<HarmonySettings>
+  save(next: HarmonySettings): Promise<HarmonySettings>
+}
+
+export class SettingsStore implements ISettingsStore {
+  static readonly default: SettingsStore = new SettingsStore()
+
+  async load(): Promise<HarmonySettings> {
     try {
       const pref = await PreferenceStoreAccessor.getPreferences()
 
@@ -45,7 +52,7 @@ export class SettingsStore {
     }
   }
 
-  static async save(next: HarmonySettings): Promise<HarmonySettings> {
+  async save(next: HarmonySettings): Promise<HarmonySettings> {
     try {
       const pref = await PreferenceStoreAccessor.getPreferences()
 
@@ -65,9 +72,19 @@ export class SettingsStore {
       await pref.put('showUnreadDot', next.showUnreadDot)
       await pref.flush()
 
-      return SettingsStore.load()
+      return this.load()
     } catch (error) {
       throw new Error(`保存设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
     }
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async load(): Promise<HarmonySettings> {
+    return SettingsStore.default.load()
+  }
+
+  static async save(next: HarmonySettings): Promise<HarmonySettings> {
+    return SettingsStore.default.save(next)
   }
 }

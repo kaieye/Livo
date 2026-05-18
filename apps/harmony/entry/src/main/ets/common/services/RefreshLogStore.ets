@@ -17,8 +17,17 @@ function normalizeRefreshLogEntry(item: RefreshLogEntry): RefreshLogEntry {
   return normalized
 }
 
-export class RefreshLogStore {
-  static async load(): Promise<RefreshLogEntry[]> {
+export interface IRefreshLogStore {
+  load(): Promise<RefreshLogEntry[]>
+  save(entries: RefreshLogEntry[]): Promise<RefreshLogEntry[]>
+  append(entry: RefreshLogEntry): Promise<RefreshLogEntry[]>
+  clear(): Promise<void>
+}
+
+export class RefreshLogStore implements IRefreshLogStore {
+  static readonly default: RefreshLogStore = new RefreshLogStore()
+
+  async load(): Promise<RefreshLogEntry[]> {
     try {
       const pref = await PreferenceStoreAccessor.getPreferences()
       const raw = await pref.get(REFRESH_LOGS_KEY, '[]')
@@ -36,7 +45,7 @@ export class RefreshLogStore {
     }
   }
 
-  static async save(entries: RefreshLogEntry[]): Promise<RefreshLogEntry[]> {
+  async save(entries: RefreshLogEntry[]): Promise<RefreshLogEntry[]> {
     const normalizedEntries = entries
       .slice(0, MAX_REFRESH_LOGS)
       .map((entry: RefreshLogEntry) => normalizeRefreshLogEntry(entry))
@@ -51,13 +60,31 @@ export class RefreshLogStore {
     return normalizedEntries
   }
 
-  static async append(entry: RefreshLogEntry): Promise<RefreshLogEntry[]> {
-    const current = await RefreshLogStore.load()
+  async append(entry: RefreshLogEntry): Promise<RefreshLogEntry[]> {
+    const current = await this.load()
     const nextEntries = [entry, ...current].slice(0, MAX_REFRESH_LOGS)
-    return RefreshLogStore.save(nextEntries)
+    return this.save(nextEntries)
+  }
+
+  async clear(): Promise<void> {
+    await this.save([])
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async load(): Promise<RefreshLogEntry[]> {
+    return RefreshLogStore.default.load()
+  }
+
+  static async save(entries: RefreshLogEntry[]): Promise<RefreshLogEntry[]> {
+    return RefreshLogStore.default.save(entries)
+  }
+
+  static async append(entry: RefreshLogEntry): Promise<RefreshLogEntry[]> {
+    return RefreshLogStore.default.append(entry)
   }
 
   static async clear(): Promise<void> {
-    await RefreshLogStore.save([])
+    return RefreshLogStore.default.clear()
   }
 }

@@ -291,6 +291,14 @@ class FeaturedEntriesQuery {
     this.entryRepo = entryRepo
   }
 
+  /**
+   * Reset the per-mode entry cache so the next query always hits the database.
+   * Useful between test cases to prevent stale cache from leaking across tests.
+   */
+  clearModeEntriesCache(): void {
+    this.modeEntriesCache.clear()
+  }
+
   private cachedModeEntries(
     mode: HomeEntryMode,
     feeds: Feed[],

@@ -1,0 +1,48 @@
+{
+  "description": "Livo built-in RSS feeds — mainstream Chinese and international news media",
+  "view": "articles",
+  "feeds": [
+    {
+      "title": "人民日报",
+      "url": "https://feedx.net/rss/people.xml",
+      "language": "Chinese",
+      "descriptionZh": "人民日报全文 RSS，中共中央机关报，中国最具影响力的官方媒体",
+      "descriptionEn": "People's Daily full-text RSS, the official newspaper of the CPC Central Committee and China's most influential state media"
+    },
+    {
+      "title": "经济日报",
+      "url": "https://feedx.net/rss/jingjiribao.xml",
+      "language": "Chinese",
+      "descriptionZh": "经济日报全文 RSS，国务院主办的经济类日报，权威财经资讯与政策解读",
+      "descriptionEn": "Economic Daily full-text RSS, authoritative financial news and policy analysis sponsored by the State Council"
+    },
+    {
+      "title": "南方周末",
+      "url": "https://feedx.net/rss/infzm.xml",
+      "language": "Chinese",
+      "descriptionZh": "南方周末全文 RSS，中国最具影响力的深度新闻周报，以调查报道和评论见长",
+      "descriptionEn": "Southern Weekly full-text RSS, China's most influential in-depth news weekly known for investigative reporting and commentary"
+    },
+    {
+      "title": "China Daily Newspaper",
+      "url": "https://feedx.net/rss/chinadaily.xml",
+      "language": "English",
+      "descriptionZh": "China Daily 全文 RSS，中国国家英文日报，对外传播中国声音与视角",
+      "descriptionEn": "China Daily full-text RSS, China's national English-language newspaper providing Chinese perspectives to the world"
+    },
+    {
+      "title": "The New York Times",
+      "url": "https://feedx.net/rss/nytimes.xml",
+      "language": "English",
+      "descriptionZh": "纽约时报全文 RSS，美国最具影响力的国际新闻媒体，深度报道全球时事",
+      "descriptionEn": "The New York Times full-text RSS, America's most influential international news media with in-depth global coverage"
+    },
+    {
+      "title": "The New Yorker",
+      "url": "https://feedx.net/rss/newyorker.xml",
+      "language": "English",
+      "descriptionZh": "纽约客全文 RSS，美国经典周刊，以深度报道、评论、小说与幽默漫画著称",
+      "descriptionEn": "The New Yorker full-text RSS, iconic American weekly featuring long-form reporting, commentary, fiction and humor"
+    }
+  ]
+}
