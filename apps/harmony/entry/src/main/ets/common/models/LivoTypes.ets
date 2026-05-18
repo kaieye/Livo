@@ -92,6 +92,7 @@ export interface EntryCardModel {
   rawMediaUrls?: string[]
   feedTitle: string
   feedCategory: string
+  view: FeedViewType
   viewLabel: string
   viewBadgeColor: string
   hasVideoMedia: boolean

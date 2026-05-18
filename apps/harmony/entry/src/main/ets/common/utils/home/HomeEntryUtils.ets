@@ -1,24 +1,9 @@
 import { EntryCardModel } from '../../models/LivoModels'
 import { SubscriptionMode } from '../../components/HomeRootConfig'
-
-export function resolveEntryMode(entry: EntryCardModel): SubscriptionMode {
-  if (entry.viewLabel === '图片' && entry.hasVideoMedia && (!entry.mediaUrls || entry.mediaUrls.length === 0)) {
-    return 'videos'
-  }
-  switch (entry.viewLabel) {
-    case '社交':
-      return 'social'
-    case '图片':
-      return 'pictures'
-    case '视频':
-      return 'videos'
-    default:
-      return 'articles'
-  }
-}
+import { modeOfFeedView } from '../../data/AppRepositoryEntryHelpers'
 
 export function filterEntriesByMode(mode: SubscriptionMode, entries: EntryCardModel[]): EntryCardModel[] {
-  return entries.filter((entry: EntryCardModel) => resolveEntryMode(entry) === mode)
+  return entries.filter((entry: EntryCardModel) => modeOfFeedView(entry.view) === mode)
 }
 
 export function homeEntryRenderBaseKey(entry: EntryCardModel): string {
@@ -77,6 +62,7 @@ export function cloneHomeSnapshotEntry(entry: EntryCardModel): EntryCardModel {
     rawMediaUrls: entry.rawMediaUrls ? [...entry.rawMediaUrls] : undefined,
     feedTitle: entry.feedTitle,
     feedCategory: entry.feedCategory,
+    view: entry.view,
     viewLabel: entry.viewLabel,
     viewBadgeColor: entry.viewBadgeColor,
     hasVideoMedia: entry.hasVideoMedia,

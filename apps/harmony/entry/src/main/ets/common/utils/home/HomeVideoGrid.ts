@@ -1,4 +1,5 @@
-export type HomeSubscriptionMode = 'articles' | 'social' | 'pictures' | 'videos'
+type HomeMode = 'articles' | 'social' | 'pictures' | 'videos'
+
 export type HomeVideoSceneKind = 'list' | 'grid'
 
 export interface HomeVideoCardMetaTarget {
@@ -20,9 +21,7 @@ export interface HomeVideoCardTokens {
   metaColor: string
 }
 
-export function resolveHomeVideoSceneKind(
-  mode: HomeSubscriptionMode,
-): HomeVideoSceneKind {
+export function resolveHomeVideoSceneKind(mode: HomeMode): HomeVideoSceneKind {
   return mode === 'videos' ? 'grid' : 'list'
 }
 

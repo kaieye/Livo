@@ -3,7 +3,8 @@ import { ArrayLazyDataSource } from '../../data/ArrayLazyDataSource'
 import { EntryCardModel } from '../../models/LivoModels'
 import { SubscriptionMode, HomeEntryDataSourceMap, HOME_ENTRY_GROUP_DEFER_DELAY_MS, HOME_FULL_MODE_CANDIDATE_LIMIT } from '../../components/HomeRootConfig'
 import { HomeEntryGroups, groupHomeEntriesByMode } from './HomeEntryGroups'
-import { cloneHomeSnapshotEntry, filterEntriesByMode, resolveEntryMode } from './HomeEntryUtils'
+import { cloneHomeSnapshotEntry, filterEntriesByMode } from './HomeEntryUtils'
+import { modeOfFeedView } from '../../data/AppRepositoryEntryHelpers'
 
 export interface HomeEntryDataState {
   featuredEntries: EntryCardModel[]
@@ -141,7 +142,7 @@ export class HomeEntryDataManager {
     this.actions.resetTweetPresentationCache()
     this.state.featuredEntries = nextEntries
     this.schedulePersistSnapshot(nextEntries)
-    const currentModeEntries = nextEntries.filter((e: EntryCardModel) => resolveEntryMode(e) === mode)
+    const currentModeEntries = nextEntries.filter((e: EntryCardModel) => modeOfFeedView(e.view) === mode)
     const groups = this.state.entryGroups
     this.state.entryGroups = {
       articles: mode === 'articles' ? currentModeEntries : groups.articles,

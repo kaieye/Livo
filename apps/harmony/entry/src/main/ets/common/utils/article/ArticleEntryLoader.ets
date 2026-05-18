@@ -2,6 +2,7 @@ import { getStringParams } from '../../navigation/AppRouter'
 import {
   ArticleContentBlock,
   ArticleDetailModel,
+  FeedViewType,
   HarmonySettings,
   isLegacyPlainArticleContent,
   toArticleDetailModel,
@@ -99,7 +100,7 @@ export class ArticleEntryLoader {
       return
     }
 
-    const isPicture = (current.viewLabel || '').trim() === '图片'
+    const isPicture = current.view === FeedViewType.Pictures
     const rawUrls = current.rawMediaUrls ?? []
 
     const blocks: ArticleContentBlock[] = isPicture
@@ -128,6 +129,7 @@ export class ArticleEntryLoader {
       rawMediaUrls: current.rawMediaUrls,
       feedTitle: current.feedTitle,
       feedCategory: current.feedCategory,
+      view: current.view,
       viewLabel: current.viewLabel,
       viewBadgeColor: current.viewBadgeColor,
       hasVideoMedia: current.hasVideoMedia,
@@ -224,6 +226,7 @@ export function copyArticleEntryWithStarState(
     rawMediaUrls: entry.rawMediaUrls,
     feedTitle: entry.feedTitle,
     feedCategory: entry.feedCategory,
+    view: entry.view,
     viewLabel: entry.viewLabel,
     viewBadgeColor: entry.viewBadgeColor,
     hasVideoMedia: entry.hasVideoMedia,

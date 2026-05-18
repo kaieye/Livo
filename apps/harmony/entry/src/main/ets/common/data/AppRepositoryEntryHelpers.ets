@@ -334,19 +334,6 @@ export function modeMatchesFeedView(mode: HomeEntryMode, view: FeedViewType): bo
   return modeOfFeedView(view) === mode
 }
 
-export function modeOfEntryCard(card: EntryCardModel): HomeEntryMode {
-  switch (card.viewLabel) {
-    case '社交':
-      return 'social'
-    case '图片':
-      return 'pictures'
-    case '视频':
-      return 'videos'
-    default:
-      return 'articles'
-  }
-}
-
 export function countHomeEntryModes(entries: EntryCardModel[]): HomeEntryModeStats {
   let articles = 0
   let social = 0
@@ -354,7 +341,7 @@ export function countHomeEntryModes(entries: EntryCardModel[]): HomeEntryModeSta
   let videos = 0
 
   entries.forEach((entry: EntryCardModel) => {
-    switch (modeOfEntryCard(entry)) {
+    switch (modeOfFeedView(entry.view)) {
       case 'social':
         social += 1
         break
@@ -472,7 +459,7 @@ export function selectBalancedHomeEntries(
     videos: [],
   }
   entries.forEach((entry: EntryCardModel) => {
-    switch (modeOfEntryCard(entry)) {
+    switch (modeOfFeedView(entry.view)) {
       case 'social':
         grouped.social.push(entry)
         break

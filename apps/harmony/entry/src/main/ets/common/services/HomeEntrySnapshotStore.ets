@@ -1,4 +1,4 @@
-import { EntryCardModel } from '../models/LivoModels'
+import { EntryCardModel, FeedViewType } from '../models/LivoModels'
 import { PreferenceStoreAccessor } from './PreferenceStoreAccessor'
 
 const HOME_ENTRY_SNAPSHOT_KEY: string = 'homeEntrySnapshotV1'
@@ -39,6 +39,7 @@ function cloneHomeEntrySnapshotItem(item: EntryCardModel): EntryCardModel | unde
     rawMediaUrls: rawMediaUrls.length > 0 ? rawMediaUrls : undefined,
     feedTitle: item.feedTitle || '',
     feedCategory: item.feedCategory || '',
+    view: (item.view != null ? item.view : FeedViewType.Articles) as FeedViewType,
     viewLabel: item.viewLabel || '',
     viewBadgeColor: item.viewBadgeColor || '',
     hasVideoMedia: item.hasVideoMedia === true,
