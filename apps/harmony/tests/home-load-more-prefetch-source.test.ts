@@ -15,7 +15,7 @@ test('home load more prefetch keeps multi-page article buffers and consumes them
     source,
     /private prefetchPageMultiplier\(mode: SubscriptionMode\): number \{/,
   )
-  assert.match(source, /&& !this\.session\.homeScrollIntent\.isInteracting/)
+  assert.match(source, /&& !this\.state\.homeScrollIntent\.isInteracting/)
   assert.match(
     source,
     /if \(mode === 'articles'\) \{\s*return Math\.max\(2, HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER\)/s,
@@ -26,7 +26,7 @@ test('home load more prefetch keeps multi-page article buffers and consumes them
   )
   assert.match(
     source,
-    /const entries = this\.session\.homeLoadMorePrefetchEntries\.slice\(0, nextLimit\)/,
+    /const entries = this\.state\.homeLoadMorePrefetchEntries\.slice\(0, nextLimit\)/,
   )
   assert.match(source, /if \(remainingPrefetchedLimit === nextLimit\) \{/)
 })

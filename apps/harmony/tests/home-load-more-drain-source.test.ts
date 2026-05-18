@@ -38,7 +38,7 @@ test('home list-end drain treats reaching the tail as an explicit load-more inte
 })
 
 test('list-end drain waits for interaction to settle and loads one page', () => {
-  assert.match(drainSource, /this\.session\.homeScrollIntent\.isInteracting/)
+  assert.match(drainSource, /this\.state\.homeScrollIntent\.isInteracting/)
   assert.match(
     drainSource,
     /drain page-done mode=\$\{mode\} attempts=\$\{attempt \+ 1\}/,

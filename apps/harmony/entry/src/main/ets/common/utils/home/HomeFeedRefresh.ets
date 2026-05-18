@@ -16,13 +16,15 @@ import {
   SubscriptionMode,
 } from '../../components/HomeRootConfig'
 import { RefreshStateManager } from './RefreshStateManager'
-import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
+import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 
 export class HomeFeedRefresh {
-  private readonly session: HomeFeedSessionOwner
+  private readonly state: HomeFeedState
+  private readonly actions: HomeFeedActions
 
-  constructor(session: HomeFeedSessionOwner) {
-    this.session = session
+  constructor(state: HomeFeedState, actions: HomeFeedActions) {
+    this.state = state
+    this.actions = actions
   }
 
   async shouldRunStartupRefresh(snapshotRestored: boolean): Promise<boolean> {
@@ -50,13 +52,13 @@ export class HomeFeedRefresh {
 
       const elapsedMs = Date.now() - latestRefreshAt
       if (elapsedMs < HOME_STARTUP_REFRESH_COOLDOWN_MS) {
-        this.session.logHomePerf(
+        this.actions.logHomePerf(
           `startup-refresh skip reason=cooldown elapsedMs=${elapsedMs} cooldownMs=${HOME_STARTUP_REFRESH_COOLDOWN_MS}`,
         )
         return false
       }
     } catch (error) {
-      this.session.logHomeAsyncError('startup-refresh-check', error)
+      this.actions.logHomeAsyncError('startup-refresh-check', error)
       return true
     }
 
@@ -64,7 +66,7 @@ export class HomeFeedRefresh {
   }
 
   async startStartupRefreshIfNeeded(snapshotRestored: boolean): Promise<void> {
-    if (this.session.isHomeStartupRefreshing) {
+    if (this.state.isHomeStartupRefreshing) {
       return
     }
 
@@ -73,83 +75,83 @@ export class HomeFeedRefresh {
       return
     }
 
-    this.session.isHomeStartupRefreshing = true
+    this.state.isHomeStartupRefreshing = true
     void this.refreshFeaturedEntries(false).finally(() => {
-      this.session.isHomeStartupRefreshing = false
+      this.state.isHomeStartupRefreshing = false
       this.tryFlushDeferredFeedsChangedReload('startup-refresh-finally')
-      this.session.settleInitialHomeLoadState()
-      this.session.runManagedTimeout(() => {
-        this.session.settleInitialHomeLoadState(true)
+      this.actions.settleInitialHomeLoadState()
+      this.actions.runManagedTimeout(() => {
+        this.actions.settleInitialHomeLoadState(true)
       }, 1200)
     })
   }
 
   async refreshFeaturedEntries(showResultToast: boolean = true): Promise<void> {
-    if (this.session.isRefreshing || !this.session.isComponentActive) {
+    if (this.state.isRefreshing || !this.state.isComponentActive) {
       return
     }
 
     const startedAt = Date.now()
-    this.session.logHomePerf(`refresh start showToast=${showResultToast}`)
-    this.session.invalidateHomeLoadMorePrefetch()
-    this.session.resetModeLoadMoreStates('refresh-start')
-    this.session.isRefreshing = true
-    this.session.refreshCompletedCount = 0
-    this.session.refreshTotalCount = 0
-    this.session.lastRefreshProgressUiUpdateAt = 0
+    this.actions.logHomePerf(`refresh start showToast=${showResultToast}`)
+    this.actions.invalidateHomeLoadMorePrefetch()
+    this.actions.resetModeLoadMoreStates('refresh-start')
+    this.state.isRefreshing = true
+    this.state.refreshCompletedCount = 0
+    this.state.refreshTotalCount = 0
+    this.state.lastRefreshProgressUiUpdateAt = 0
     this.clearRefreshPercentAnimation()
-    this.session.displayRefreshPercent = 0
+    this.state.displayRefreshPercent = 0
 
     try {
       const result = await FeedRefreshCoordinator.default.refreshAllFeeds((completedCount: number, totalCount: number) => {
-        if (!this.session.isComponentActive) {
+        if (!this.state.isComponentActive) {
           return
         }
-        if (this.session.homeScrollIntent.isInteracting && completedCount < totalCount) {
+        if (this.state.homeScrollIntent.isInteracting && completedCount < totalCount) {
           return
         }
 
         const now = Date.now()
         const shouldFlushNow = completedCount >= totalCount
-          || this.session.lastRefreshProgressUiUpdateAt === 0
-          || now - this.session.lastRefreshProgressUiUpdateAt >= HOME_REFRESH_PROGRESS_UI_THROTTLE_MS
+          || this.state.lastRefreshProgressUiUpdateAt === 0
+          || now - this.state.lastRefreshProgressUiUpdateAt >= HOME_REFRESH_PROGRESS_UI_THROTTLE_MS
         if (!shouldFlushNow) {
           return
         }
-        this.session.lastRefreshProgressUiUpdateAt = now
+        this.state.lastRefreshProgressUiUpdateAt = now
 
-        this.session.refreshCompletedCount = completedCount
-        this.session.refreshTotalCount = totalCount
+        this.state.refreshCompletedCount = completedCount
+        this.state.refreshTotalCount = totalCount
         this.animateRefreshPercentTo(this.resolveRefreshPercent(completedCount, totalCount))
       })
-      if (!this.session.isComponentActive) {
+      if (!this.state.isComponentActive) {
         return
       }
-      this.session.feedSourceLabel = result.sourceLabel
+      this.state.feedSourceLabel = result.sourceLabel
       if (!result.allSkippedByCooldown) {
         this.scheduleHomeReloadAfterRefresh()
       }
       if (showResultToast) {
-        this.session.showToast(result.sourceLabel)
+        this.actions.showToast(result.sourceLabel)
       }
     } catch (error) {
-      this.session.logHomeAsyncError('refresh-featured-entries', error)
-      const errorMessage = this.session.describeError(error)
-      this.session.feedSourceLabel = `刷新失败：${errorMessage}`
+      this.actions.logHomeAsyncError('refresh-featured-entries', error)
+      const errorMessage = this.actions.describeError(error)
+      this.state.feedSourceLabel = `刷新失败：${errorMessage}`
       if (showResultToast) {
-        this.session.showToast('刷新失败，请查看日志')
+        this.actions.showToast('刷新失败，请查看日志')
       }
     } finally {
-      this.session.isRefreshing = false
-      this.session.refreshCompletedCount = 0
-      this.session.refreshTotalCount = 0
-      this.session.lastRefreshProgressUiUpdateAt = 0
-      this.session.lastHomeRefreshFinishedAt = Date.now()
+      this.state.isRefreshing = false
+      this.state.refreshCompletedCount = 0
+      this.state.refreshTotalCount = 0
+      this.state.lastRefreshProgressUiUpdateAt = 0
+      this.state.lastHomeRefreshFinishedAt = Date.now()
       this.clearRefreshPercentAnimation()
-      this.session.displayRefreshPercent = 0
-      this.session.scheduleHomeLoadMorePrefetch()
-      this.session.logHomePerf(
-        `refresh done elapsedMs=${Date.now() - startedAt} featured=${this.session.featuredEntries.length}`,
+      this.state.displayRefreshPercent = 0
+      this.actions.scheduleHomeLoadMorePrefetch()
+      this.actions.logHomePerf(
+        `refresh done elapsedMs=${Date.now() - startedAt} featured=${this.state.featuredEntries.length}`,
       )
     }
   }
@@ -159,46 +161,46 @@ export class HomeFeedRefresh {
   }
 
   clearRefreshPercentAnimation(): void {
-    if (this.session.refreshPercentAnimationTimer < 0) {
+    if (this.state.refreshPercentAnimationTimer < 0) {
       return
     }
 
-    clearTimeout(this.session.refreshPercentAnimationTimer)
-    this.session.refreshPercentAnimationTimer = -1
+    clearTimeout(this.state.refreshPercentAnimationTimer)
+    this.state.refreshPercentAnimationTimer = -1
   }
 
   animateRefreshPercentTo(targetPercent: number): void {
     const animationPlan = RefreshStateManager.createPercentAnimationPlan(
-      this.session.displayRefreshPercent,
+      this.state.displayRefreshPercent,
       targetPercent,
     )
     const nextTarget = animationPlan.targetPercent
-    if (nextTarget === this.session.displayRefreshPercent && this.session.refreshPercentAnimationTimer < 0) {
+    if (nextTarget === this.state.displayRefreshPercent && this.state.refreshPercentAnimationTimer < 0) {
       return
     }
 
-    this.session.pendingRefreshPercentTarget = nextTarget
-    if (this.session.refreshPercentAnimationTimer >= 0) {
+    this.state.pendingRefreshPercentTarget = nextTarget
+    if (this.state.refreshPercentAnimationTimer >= 0) {
       return
     }
 
-    this.session.refreshPercentAnimationTimer = setTimeout(() => {
-      this.session.refreshPercentAnimationTimer = -1
-      this.session.displayRefreshPercent = this.session.pendingRefreshPercentTarget
+    this.state.refreshPercentAnimationTimer = setTimeout(() => {
+      this.state.refreshPercentAnimationTimer = -1
+      this.state.displayRefreshPercent = this.state.pendingRefreshPercentTarget
     }, HOME_REFRESH_PERCENT_COALESCE_MS)
   }
 
   markDeferredFeedsChangedReload(reason: string): void {
-    this.session.hasDeferredFeedsChangedReload = true
-    this.session.logHomePerf(`feedsChanged deferred reason=${reason}`)
+    this.state.hasDeferredFeedsChangedReload = true
+    this.actions.logHomePerf(`feedsChanged deferred reason=${reason}`)
   }
 
   scheduleDeferredFeedsChangedRetry(delayMs: number): void {
     const safeDelayMs = Math.max(16, delayMs)
-    const retryToken = this.session.deferredFeedsChangedRetryToken + 1
-    this.session.deferredFeedsChangedRetryToken = retryToken
-    this.session.runManagedTimeout(() => {
-      if (this.session.deferredFeedsChangedRetryToken !== retryToken) {
+    const retryToken = this.state.deferredFeedsChangedRetryToken + 1
+    this.state.deferredFeedsChangedRetryToken = retryToken
+    this.actions.runManagedTimeout(() => {
+      if (this.state.deferredFeedsChangedRetryToken !== retryToken) {
         return
       }
       this.tryFlushDeferredFeedsChangedReload('retry')
@@ -206,89 +208,89 @@ export class HomeFeedRefresh {
   }
 
   scheduleFeedsChangedReload(reason: string): void {
-    const currentVersion = this.session.feedsChangedReloadVersion + 1
-    this.session.feedsChangedReloadVersion = currentVersion
-    this.session.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
-    this.session.invalidateHomeLoadMorePrefetch()
-    this.session.runManagedTimeout(() => {
+    const currentVersion = this.state.feedsChangedReloadVersion + 1
+    this.state.feedsChangedReloadVersion = currentVersion
+    this.actions.logHomePerf(`feedsChanged reload reason=${reason} version=${currentVersion}`)
+    this.actions.invalidateHomeLoadMorePrefetch()
+    this.actions.runManagedTimeout(() => {
       // 如果 timeout 触发时用户已切到其他 tab，跳过重载。
-      if (!this.session.isHomeRootTab()) {
+      if (!this.actions.isHomeRootTab()) {
         return
       }
       // 用当前栏目的初始可见数代替 HOME_MAX_CANDIDATE_LIMIT(480)，
       // 避免切回首页时一次性加载大量条目造成内存峰值。
       // 多余条目后续由滚动加载补齐。
-      void this.session.reloadFeaturedEntriesFromLocal(
+      void this.actions.reloadFeaturedEntriesFromLocal(
         HOME_MODE_INITIAL_CANDIDATE_LIMIT, false, true, true,
       )
     }, 0)
   }
 
   tryFlushDeferredFeedsChangedReload(source: string): boolean {
-    if (!this.session.hasDeferredFeedsChangedReload) {
+    if (!this.state.hasDeferredFeedsChangedReload) {
       return false
     }
-    if (!this.session.isComponentActive || !this.session.isHomeRootTab()) {
+    if (!this.state.isComponentActive || !this.actions.isHomeRootTab()) {
       return false
     }
-    if (this.session.homePostRefreshReloadPending) {
+    if (this.state.homePostRefreshReloadPending) {
       return false
     }
 
     const now = Date.now()
     if (
-      this.session.isRefreshing
-      || this.session.isHomeStartupRefreshing
-      || this.session.homeLoadMoreInProgress
-      || this.session.homeScrollIntent.isInteracting
+      this.state.isRefreshing
+      || this.state.isHomeStartupRefreshing
+      || this.state.homeLoadMoreInProgress
+      || this.state.homeScrollIntent.isInteracting
     ) {
       return false
     }
-    if (now < this.session.suppressFeedsChangedUntilMs) {
-      this.scheduleDeferredFeedsChangedRetry(this.session.suppressFeedsChangedUntilMs - now + 16)
+    if (now < this.state.suppressFeedsChangedUntilMs) {
+      this.scheduleDeferredFeedsChangedRetry(this.state.suppressFeedsChangedUntilMs - now + 16)
       return true
     }
 
-    this.session.hasDeferredFeedsChangedReload = false
+    this.state.hasDeferredFeedsChangedReload = false
     this.scheduleFeedsChangedReload(`deferred-${source}`)
     return true
   }
 
   handleFeedsChanged(): void {
-    if (!this.session.isComponentActive) {
+    if (!this.state.isComponentActive) {
       return
     }
 
     const now = Date.now()
-    if (!this.session.isHomeRootTab()) {
+    if (!this.actions.isHomeRootTab()) {
       this.markDeferredFeedsChangedReload('not-home-tab')
       return
     }
 
     if (
-      this.session.isRefreshing
-      || this.session.isHomeStartupRefreshing
-      || this.session.homeLoadMoreInProgress
-      || this.session.homeScrollIntent.isInteracting
+      this.state.isRefreshing
+      || this.state.isHomeStartupRefreshing
+      || this.state.homeLoadMoreInProgress
+      || this.state.homeScrollIntent.isInteracting
     ) {
       this.markDeferredFeedsChangedReload('busy')
       return
     }
-    if (this.session.homePostRefreshReloadPending) {
+    if (this.state.homePostRefreshReloadPending) {
       this.markDeferredFeedsChangedReload('post-refresh-pending')
       return
     }
 
-    if (now < this.session.suppressFeedsChangedUntilMs) {
+    if (now < this.state.suppressFeedsChangedUntilMs) {
       this.markDeferredFeedsChangedReload('suppressed-until')
-      this.scheduleDeferredFeedsChangedRetry(this.session.suppressFeedsChangedUntilMs - now + 16)
+      this.scheduleDeferredFeedsChangedRetry(this.state.suppressFeedsChangedUntilMs - now + 16)
       return
     }
 
-    if (now - this.session.lastHomeRefreshFinishedAt < HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS) {
+    if (now - this.state.lastHomeRefreshFinishedAt < HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS) {
       this.markDeferredFeedsChangedReload('post-refresh-suppress')
       const remainingSuppressMs = HOME_REFRESH_FEEDS_CHANGED_SUPPRESS_MS
-        - (now - this.session.lastHomeRefreshFinishedAt)
+        - (now - this.state.lastHomeRefreshFinishedAt)
       this.scheduleDeferredFeedsChangedRetry(remainingSuppressMs + 16)
       return
     }
@@ -297,62 +299,62 @@ export class HomeFeedRefresh {
   }
 
   shouldRunFinalHomeReloadNow(): boolean {
-    const currentOffset = this.session.readHomeModeScrollOffset(this.session.mode)
-    const shouldApplyLengthGuard = !this.session.shouldRenderAllEntriesForMode(this.session.mode)
-    return this.session.isComponentActive
-      && this.session.isHomeRootTab()
-      && !this.session.isRefreshing
-      && !this.session.isHomeStartupRefreshing
-      && !this.session.isModeTransitioning
-      && !this.session.homeListSwapAnimating
-      && !this.session.searchOverlayVisible
-      && !this.session.homeScrollIntent.isInteracting
-      && !this.session.homeLoadMoreInProgress
-      && !this.session.pendingLoadMoreForMode(this.session.mode)
-      && !this.session.hasRecentHomeScrollIntent()
+    const currentOffset = this.actions.readHomeModeScrollOffset(this.state.mode)
+    const shouldApplyLengthGuard = !this.actions.shouldRenderAllEntriesForMode(this.state.mode)
+    return this.state.isComponentActive
+      && this.actions.isHomeRootTab()
+      && !this.state.isRefreshing
+      && !this.state.isHomeStartupRefreshing
+      && !this.state.isModeTransitioning
+      && !this.state.homeListSwapAnimating
+      && !this.state.searchOverlayVisible
+      && !this.state.homeScrollIntent.isInteracting
+      && !this.state.homeLoadMoreInProgress
+      && !this.actions.pendingLoadMoreForMode(this.state.mode)
+      && !this.actions.hasRecentHomeScrollIntent()
       && currentOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET
-      && (!shouldApplyLengthGuard || this.session.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT)
+      && (!shouldApplyLengthGuard || this.state.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT)
   }
 
   scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void {
-    this.session.runManagedTimeout(() => {
-      if (this.session.postRefreshReloadVersion !== currentVersion) {
+    this.actions.runManagedTimeout(() => {
+      if (this.state.postRefreshReloadVersion !== currentVersion) {
         return
       }
 
       if (!this.shouldRunFinalHomeReloadNow()) {
         if (attempt >= HOME_FINAL_RELOAD_IDLE_MAX_RETRIES) {
-          void this.session.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+          void this.actions.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
           return
         }
         this.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt + 1)
         return
       }
 
-      void this.session.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
+      void this.actions.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT)
     }, attempt === 0 ? HOME_REFRESH_FINAL_RELOAD_DELAY_MS : HOME_FINAL_RELOAD_IDLE_RETRY_MS)
   }
 
   scheduleHomeReloadAfterRefresh(): void {
-    const currentVersion = this.session.postRefreshReloadVersion + 1
-    this.session.postRefreshReloadVersion = currentVersion
-    this.session.homePostRefreshReloadPending = true
-    this.session.suppressFeedsChangedUntilMs = Date.now()
+    const currentVersion = this.state.postRefreshReloadVersion + 1
+    this.state.postRefreshReloadVersion = currentVersion
+    this.state.homePostRefreshReloadPending = true
+    this.state.suppressFeedsChangedUntilMs = Date.now()
       + HOME_REFRESH_FINAL_RELOAD_DELAY_MS
       + HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS
 
-    this.session.runManagedTimeout(() => {
-      if (this.session.postRefreshReloadVersion !== currentVersion) {
+    this.actions.runManagedTimeout(() => {
+      if (this.state.postRefreshReloadVersion !== currentVersion) {
         return
       }
       if (!this.shouldRunFinalHomeReloadNow()) {
-        this.session.homePostRefreshReloadPending = false
+        this.state.homePostRefreshReloadPending = false
         return
       }
-      this.session.hasDeferredFeedsChangedReload = false
-      void this.session.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true, true).finally(() => {
-        if (this.session.postRefreshReloadVersion === currentVersion) {
-          this.session.homePostRefreshReloadPending = false
+      this.state.hasDeferredFeedsChangedReload = false
+      void this.actions.reloadHomeEntriesFromLocal(HOME_MAX_CANDIDATE_LIMIT, true, true).finally(() => {
+        if (this.state.postRefreshReloadVersion === currentVersion) {
+          this.state.homePostRefreshReloadPending = false
         }
       })
     }, HOME_REFRESH_FIRST_SWAP_DELAY_MS)

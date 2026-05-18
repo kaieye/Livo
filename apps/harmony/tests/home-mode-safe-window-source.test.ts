@@ -130,7 +130,7 @@ test('mode ensure flow reloads a bounded active-mode window after a fast first p
   )
   assert.match(
     homeFeedPaginationSource,
-    /this\.session\.reloadFeaturedEntriesFromLocal\(limit, false, true, true, mode\)/,
+    /this\.actions\.reloadFeaturedEntriesFromLocal\(limit, false, true, true, mode\)/,
   )
   assert.match(
     homeFeedPaginationSource,
@@ -149,15 +149,15 @@ test('article load more follows append-style update path near the end of the lis
   )
   assert.match(
     homeFeedPaginationSource,
-    /private applyResolvedLoadMoreEntries\([\s\S]*?this\.session\.notifyHomeEntryDataAppendedForMode\(mode, previousTotal\)/,
+    /private applyResolvedLoadMoreEntries\([\s\S]*?this\.actions\.notifyHomeEntryDataAppendedForMode\(mode, previousTotal\)/,
   )
   assert.doesNotMatch(
     homeFeedPaginationSource,
-    /if \(mode === 'articles'\) \{\s*this\.session\.entryGroups = \{/,
+    /if \(mode === 'articles'\) \{\s*this\.state\.entryGroups = \{/,
   )
   assert.match(
     homeFeedPaginationStateSource,
-    /this\.session\.notifyHomeEntryDataAppendedForMode\(mode, currentLimit\)/,
+    /this\.actions\.notifyHomeEntryDataAppendedForMode\(mode, currentLimit\)/,
   )
   assert.match(
     homeFeedPaginationStateSource,

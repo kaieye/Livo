@@ -1,5 +1,5 @@
 import { SubscriptionMode } from '../../components/HomeRootConfig'
-import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
+import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 
 export interface HomeFeedLoadMoreDrainPaginationOwner {
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean
@@ -13,15 +13,17 @@ const HOME_LOAD_MORE_DRAIN_START_COOLDOWN_MS: number = 400
 
 // 触底只是兜底信号：每次只请求一个栏目页，并等拖拽结束后再执行。
 export class HomeFeedLoadMoreDrain {
-  private readonly session: HomeFeedSessionOwner
+  private readonly state: HomeFeedState
+  private readonly actions: HomeFeedActions
   private readonly owner: HomeFeedLoadMoreDrainPaginationOwner
   private drainToken: number = 0
   private drainingMode: SubscriptionMode | '' = ''
   private stuckRetryCount: number = 0
   private lastDrainStartedAt: number = 0
 
-  constructor(session: HomeFeedSessionOwner, owner: HomeFeedLoadMoreDrainPaginationOwner) {
-    this.session = session
+  constructor(state: HomeFeedState, actions: HomeFeedActions, owner: HomeFeedLoadMoreDrainPaginationOwner) {
+    this.state = state
+    this.actions = actions
     this.owner = owner
   }
 
@@ -38,12 +40,12 @@ export class HomeFeedLoadMoreDrain {
     this.drainingMode = mode
     this.stuckRetryCount = 0
     const token = this.drainToken
-    this.session.logHomeLoadMore(`drain start mode=${mode} total=${totalCount}`)
+    this.actions.logHomeLoadMore(`drain start mode=${mode} total=${totalCount}`)
     this.scheduleStep(mode, token)
   }
 
   private shouldStart(mode: SubscriptionMode, totalCount: number): boolean {
-    if (this.drainingMode === mode || this.session.homeLoadMoreInProgress || this.owner.pendingLoadMoreForMode(mode)) {
+    if (this.drainingMode === mode || this.state.homeLoadMoreInProgress || this.owner.pendingLoadMoreForMode(mode)) {
       return false
     }
     return this.canRun(mode, totalCount)
@@ -53,13 +55,13 @@ export class HomeFeedLoadMoreDrain {
     if (totalCount <= 0) {
       return false
     }
-    if (!this.session.isComponentActive || !this.session.isHomeRootTab()) {
+    if (!this.state.isComponentActive || !this.actions.isHomeRootTab()) {
       return false
     }
-    if (mode !== this.session.mode) {
+    if (mode !== this.state.mode) {
       return false
     }
-    if (this.session.searchOverlayVisible || this.session.hasHomeInlineSearchQuery()) {
+    if (this.state.searchOverlayVisible || this.actions.hasHomeInlineSearchQuery()) {
       return false
     }
     if (!this.owner.hasBufferedEntriesForMode(mode) && !this.owner.modeHasMoreEntries(mode)) {
@@ -69,7 +71,7 @@ export class HomeFeedLoadMoreDrain {
   }
 
   private scheduleStep(mode: SubscriptionMode, token: number): void {
-    this.session.runManagedTimeout(() => {
+    this.actions.runManagedTimeout(() => {
       this.step(mode, token, 0)
     }, 0)
   }
@@ -83,11 +85,11 @@ export class HomeFeedLoadMoreDrain {
       return
     }
     if (
-      this.session.homeScrollIntent.isInteracting
-      || this.session.homeLoadMoreInProgress
+      this.state.homeScrollIntent.isInteracting
+      || this.state.homeLoadMoreInProgress
       || this.owner.pendingLoadMoreForMode(mode)
     ) {
-      this.session.runManagedTimeout(() => {
+      this.actions.runManagedTimeout(() => {
         this.step(mode, token, attempt + 1)
       }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
       return
@@ -100,7 +102,7 @@ export class HomeFeedLoadMoreDrain {
         return
       }
       this.stuckRetryCount += 1
-      this.session.runManagedTimeout(() => {
+      this.actions.runManagedTimeout(() => {
         this.step(mode, token, attempt + 1)
       }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
       return
@@ -113,6 +115,6 @@ export class HomeFeedLoadMoreDrain {
     if (this.drainingMode === mode) {
       this.drainingMode = ''
     }
-    this.session.logHomeLoadMore(message)
+    this.actions.logHomeLoadMore(message)
   }
 }

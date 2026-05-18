@@ -52,7 +52,10 @@ test('home list shows a bottom loading footer only while load-more is actually f
   assert.match(entriesPageSource, /private LoadMoreFooter\(\)/)
   assert.match(entriesPageSource, /LoadingProgress\(\)/)
   assert.match(entriesPageSource, /Text\('正在加载更多'\)/)
-  assert.match(entriesPageSource, /\.onReachEnd\(\(\) => \{\s*this\.callbacks\.onListEndReach\(this\.dataSource\.totalCount\(\)\)\s*\}\)/)
+  assert.match(
+    entriesPageSource,
+    /\.onReachEnd\(\(\) => \{\s*this\.callbacks\.onListEndReach\(this\.dataSource\.totalCount\(\)\)\s*\}\)/,
+  )
   assert.match(
     indexSource,
     /isModeLoadingMore: \(_mode: SubscriptionMode\): boolean => false/,
@@ -63,6 +66,6 @@ test('home list shows a bottom loading footer only while load-more is actually f
   )
   assert.doesNotMatch(
     paginationSource,
-    /this\.homePendingLoadMoreModes = withHomePendingLoadMoreValue\(mode, pending, this\.homePendingLoadMoreModes\)[\s\S]{0,160}this\.session\.bumpHomeContentVersion\(\)/,
+    /this\.homePendingLoadMoreModes = withHomePendingLoadMoreValue\(mode, pending, this\.homePendingLoadMoreModes\)[\s\S]{0,160}this\.actions\.bumpHomeContentVersion\(\)/,
   )
 })

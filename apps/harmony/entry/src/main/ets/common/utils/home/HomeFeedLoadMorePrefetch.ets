@@ -7,7 +7,7 @@ import {
   SubscriptionMode,
 } from '../../components/HomeRootConfig'
 import { resolveHomeVisibleEntryLoadMoreStep } from './HomeVisibleEntryPolicy'
-import { HomeFeedSessionOwner } from './HomeFeedSessionOwner'
+import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 
 // Owner-side hooks the prefetcher needs from HomeFeedPagination(State).
 // Kept narrow so we do not pull the whole pagination class in.
@@ -20,11 +20,13 @@ export interface HomeFeedLoadMorePrefetchOwner {
 // Background prefetch of next-page entries so requestLoadMoreForMode can
 // hand back results synchronously when the user crosses the trigger zone.
 export class HomeFeedLoadMorePrefetch {
-  private readonly session: HomeFeedSessionOwner
+  private readonly state: HomeFeedState
+  private readonly actions: HomeFeedActions
   private readonly owner: HomeFeedLoadMorePrefetchOwner
 
-  constructor(session: HomeFeedSessionOwner, owner: HomeFeedLoadMorePrefetchOwner) {
-    this.session = session
+  constructor(state: HomeFeedState, actions: HomeFeedActions, owner: HomeFeedLoadMorePrefetchOwner) {
+    this.state = state
+    this.actions = actions
     this.owner = owner
   }
 
@@ -32,30 +34,30 @@ export class HomeFeedLoadMorePrefetch {
     if (!HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED) {
       return false
     }
-    return this.session.isComponentActive
-      && this.session.isHomeRootTab()
-      && !this.session.homeScrollIntent.isInteracting
-      && !this.owner.shouldRenderAllEntriesForMode(this.session.mode)
-      && !this.session.searchOverlayVisible
-      && !this.session.hasHomeInlineSearchQuery()
-      && !this.session.isRefreshing
-      && !this.session.isHomeStartupRefreshing
-      && !this.session.homeInitialLoadPending
-      && !this.session.homeLoadMoreInProgress
-      && this.session.homeHasMoreEntries
-      && this.owner.modeHasMoreEntries(this.session.mode)
+    return this.state.isComponentActive
+      && this.actions.isHomeRootTab()
+      && !this.state.homeScrollIntent.isInteracting
+      && !this.owner.shouldRenderAllEntriesForMode(this.state.mode)
+      && !this.state.searchOverlayVisible
+      && !this.actions.hasHomeInlineSearchQuery()
+      && !this.state.isRefreshing
+      && !this.state.isHomeStartupRefreshing
+      && !this.state.homeInitialLoadPending
+      && !this.state.homeLoadMoreInProgress
+      && this.state.homeHasMoreEntries
+      && this.owner.modeHasMoreEntries(this.state.mode)
   }
 
   invalidate(): void {
-    this.session.homeLoadMorePrefetchToken += 1
-    this.session.homeLoadMorePrefetchInProgress = false
-    this.session.homeLoadMorePrefetchLimit = 0
-    this.session.homeLoadMorePrefetchEntries = []
-    this.session.homeLoadMorePrefetchMode = this.session.mode
+    this.state.homeLoadMorePrefetchToken += 1
+    this.state.homeLoadMorePrefetchInProgress = false
+    this.state.homeLoadMorePrefetchLimit = 0
+    this.state.homeLoadMorePrefetchEntries = []
+    this.state.homeLoadMorePrefetchMode = this.state.mode
   }
 
   schedule(delayMs: number = 220): void {
-    this.session.runManagedTimeout(() => {
+    this.actions.runManagedTimeout(() => {
       void this.run()
     }, delayMs)
   }
@@ -93,7 +95,7 @@ export class HomeFeedLoadMorePrefetch {
     if (!this.canPrefetch()) {
       return
     }
-    const mode = this.session.mode
+    const mode = this.state.mode
     const currentLimit = this.owner.candidateLimitForMode(mode)
     const step = resolveHomeVisibleEntryLoadMoreStep(mode)
     const targetLimit = Math.min(
@@ -103,62 +105,62 @@ export class HomeFeedLoadMorePrefetch {
     if (targetLimit <= currentLimit) {
       return
     }
-    if (this.session.homeLoadMorePrefetchLimit >= targetLimit && this.session.homeLoadMorePrefetchEntries.length > 0) {
+    if (this.state.homeLoadMorePrefetchLimit >= targetLimit && this.state.homeLoadMorePrefetchEntries.length > 0) {
       return
     }
-    if (this.session.homeLoadMorePrefetchInProgress) {
+    if (this.state.homeLoadMorePrefetchInProgress) {
       return
     }
 
-    this.session.homeLoadMorePrefetchInProgress = true
-    const token = this.session.homeLoadMorePrefetchToken + 1
-    this.session.homeLoadMorePrefetchToken = token
-    this.session.logHomeLoadMore(`prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`)
+    this.state.homeLoadMorePrefetchInProgress = true
+    const token = this.state.homeLoadMorePrefetchToken + 1
+    this.state.homeLoadMorePrefetchToken = token
+    this.actions.logHomeLoadMore(`prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`)
 
     try {
-      const previousEntries = this.session.filteredEntriesFor(mode)
+      const previousEntries = this.actions.filteredEntriesFor(mode)
       const appendCount = Math.max(1, targetLimit - previousEntries.length)
       const nextPage = await FeaturedEntriesQuery.default.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
-      if (!this.session.isComponentActive || this.session.homeLoadMorePrefetchToken !== token) {
+      if (!this.state.isComponentActive || this.state.homeLoadMorePrefetchToken !== token) {
         return
       }
       const entries = this.mergeUniqueEntries(previousEntries, nextPage).slice(0, targetLimit)
       if (entries.length <= previousEntries.length) {
-        this.session.logHomeLoadMore(
+        this.actions.logHomeLoadMore(
           `prefetch skip-no-growth mode=${mode} targetLimit=${targetLimit} previous=${previousEntries.length} page=${nextPage.length}`,
         )
         return
       }
-      this.session.homeLoadMorePrefetchLimit = targetLimit
-      this.session.homeLoadMorePrefetchEntries = entries
-      this.session.homeLoadMorePrefetchMode = mode
-      this.session.logHomeLoadMore(`prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`)
+      this.state.homeLoadMorePrefetchLimit = targetLimit
+      this.state.homeLoadMorePrefetchEntries = entries
+      this.state.homeLoadMorePrefetchMode = mode
+      this.actions.logHomeLoadMore(`prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`)
     } catch (_error) {
-      this.session.logHomeLoadMore(`prefetch failed targetLimit=${targetLimit}`)
+      this.actions.logHomeLoadMore(`prefetch failed targetLimit=${targetLimit}`)
     } finally {
-      if (this.session.homeLoadMorePrefetchToken === token) {
-        this.session.homeLoadMorePrefetchInProgress = false
+      if (this.state.homeLoadMorePrefetchToken === token) {
+        this.state.homeLoadMorePrefetchInProgress = false
       }
     }
   }
 
   consume(mode: SubscriptionMode, nextLimit: number): EntryCardModel[] | undefined {
-    if (this.session.homeLoadMorePrefetchMode !== mode) {
+    if (this.state.homeLoadMorePrefetchMode !== mode) {
       return undefined
     }
-    if (this.session.homeLoadMorePrefetchLimit < nextLimit || this.session.homeLoadMorePrefetchEntries.length === 0) {
+    if (this.state.homeLoadMorePrefetchLimit < nextLimit || this.state.homeLoadMorePrefetchEntries.length === 0) {
       return undefined
     }
-    const entries = this.session.homeLoadMorePrefetchEntries.slice(0, nextLimit)
-    const remainingPrefetchedLimit = this.session.homeLoadMorePrefetchLimit
-    this.session.homeLoadMorePrefetchEntries = this.session.homeLoadMorePrefetchEntries
-    this.session.homeLoadMorePrefetchInProgress = false
-    this.session.logHomeLoadMore(
+    const entries = this.state.homeLoadMorePrefetchEntries.slice(0, nextLimit)
+    const remainingPrefetchedLimit = this.state.homeLoadMorePrefetchLimit
+    this.state.homeLoadMorePrefetchEntries = this.state.homeLoadMorePrefetchEntries
+    this.state.homeLoadMorePrefetchInProgress = false
+    this.actions.logHomeLoadMore(
       `consume-prefetch nextLimit=${nextLimit} entries=${entries.length} prefetchedLimit=${remainingPrefetchedLimit}`,
     )
     if (remainingPrefetchedLimit === nextLimit) {
-      this.session.homeLoadMorePrefetchLimit = 0
-      this.session.homeLoadMorePrefetchEntries = []
+      this.state.homeLoadMorePrefetchLimit = 0
+      this.state.homeLoadMorePrefetchEntries = []
     }
     return entries
   }

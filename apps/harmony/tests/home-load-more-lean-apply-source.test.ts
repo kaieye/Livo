@@ -41,7 +41,7 @@ test('mode load-more avoids global merge and snapshot work on the scroll path', 
   )
   assert.match(
     paginationSource,
-    /this\.session\.applyEntriesForMode\(mode, entries, true, skipNotify, leanApply, leanApply\)/,
+    /this\.actions\.applyEntriesForMode\(mode, entries, true, skipNotify, leanApply, leanApply\)/,
   )
   assert.match(
     paginationSource,
@@ -49,15 +49,15 @@ test('mode load-more avoids global merge and snapshot work on the scroll path', 
   )
   assert.match(
     paginationStateSource,
-    /this\.session\.homeCandidateLimitsByMode\.videos = safeLimit/,
+    /this\.state\.homeCandidateLimitsByMode\.videos = safeLimit/,
   )
   assert.match(
     paginationStateSource,
-    /this\.session\.homeVisibleEntryLimits\.videos = safeLimit/,
+    /this\.state\.homeVisibleEntryLimits\.videos = safeLimit/,
   )
   assert.doesNotMatch(
     paginationStateSource,
-    /this\.session\.homeCandidateLimit = safeLimit/,
+    /this\.state\.homeCandidateLimit = safeLimit/,
   )
   assert.match(dataManagerSource, /skipPersist: boolean = false/)
   assert.match(dataManagerSource, /if \(!skipPersist && !skipMerge\) \{/)

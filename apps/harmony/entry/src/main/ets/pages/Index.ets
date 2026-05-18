@@ -213,8 +213,8 @@ struct Index {
   // HomeFeedRefresh / HomeFeedPagination are wired directly instead of through a
   // pass-through HomeFeedSession mediator. Index satisfies the HomeFeedSessionOwner
   // contract structurally — all state and methods the coordinators need live here.
-  readonly homeFeedRefresh: HomeFeedRefresh = new HomeFeedRefresh(this)
-  readonly homeFeedPagination: HomeFeedPagination = new HomeFeedPagination(this)
+  readonly homeFeedRefresh: HomeFeedRefresh = new HomeFeedRefresh(this, this)
+  readonly homeFeedPagination: HomeFeedPagination = new HomeFeedPagination(this, this)
 
   aboutToAppear(): void { this.homeRuntimeCoordinator.aboutToAppear() }
   aboutToDisappear(): void { this.homeRuntimeCoordinator.aboutToDisappear() }
