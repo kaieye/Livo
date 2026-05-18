@@ -270,45 +270,4 @@ export class FeedRepository implements IFeedRepository {
     })
   }
 
-  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
-
-  static async getByUrl(url: string): Promise<Feed | undefined> {
-    return FeedRepository.default.getByUrl(url)
-  }
-
-  static async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
-    return FeedRepository.default.getBySiteUrl(siteUrl)
-  }
-
-  static async list(): Promise<Feed[]> {
-    return FeedRepository.default.list()
-  }
-
-  static async getById(feedId: string): Promise<Feed | undefined> {
-    return FeedRepository.default.getById(feedId)
-  }
-
-  static async count(): Promise<number> {
-    return FeedRepository.default.count()
-  }
-
-  static async insert(feed: Feed): Promise<void> {
-    return FeedRepository.default.insert(feed)
-  }
-
-  static async create(draft: FeedDraft): Promise<Feed> {
-    return FeedRepository.default.create(draft)
-  }
-
-  static async update(feedId: string, draft: FeedDraft): Promise<Feed> {
-    return FeedRepository.default.update(feedId, draft)
-  }
-
-  static async updateFetchState(feedId: string, next: UpdateFetchStateParams): Promise<void> {
-    return FeedRepository.default.updateFetchState(feedId, next)
-  }
-
-  static async remove(feedId: string): Promise<void> {
-    return FeedRepository.default.remove(feedId)
-  }
 }

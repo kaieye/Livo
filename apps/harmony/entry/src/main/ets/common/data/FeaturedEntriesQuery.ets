@@ -514,41 +514,6 @@ class FeaturedEntriesQuery {
     return result
   }
 
-  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
-
-  static async featuredEntries(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
-    return FeaturedEntriesQuery.default.featuredEntries(candidateLimit)
-  }
-
-  static async featuredEntriesFast(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
-    return FeaturedEntriesQuery.default.featuredEntriesFast(candidateLimit)
-  }
-
-  static async featuredEntriesFastPage(limit: number, offset: number): Promise<EntryCardModel[]> {
-    return FeaturedEntriesQuery.default.featuredEntriesFastPage(limit, offset)
-  }
-
-  static async featuredEntriesByMode(
-    mode: HomeEntryMode,
-    candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT,
-  ): Promise<EntryCardModel[]> {
-    return FeaturedEntriesQuery.default.featuredEntriesByMode(mode, candidateLimit)
-  }
-
-  static async featuredEntriesFastByMode(
-    mode: HomeEntryMode,
-    candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT,
-  ): Promise<EntryCardModel[]> {
-    return FeaturedEntriesQuery.default.featuredEntriesFastByMode(mode, candidateLimit)
-  }
-
-  static async featuredEntriesFastPageByMode(
-    mode: HomeEntryMode,
-    limit: number,
-    offset: number,
-  ): Promise<EntryCardModel[]> {
-    return FeaturedEntriesQuery.default.featuredEntriesFastPageByMode(mode, limit, offset)
-  }
 }
 
 export { FeaturedEntriesQuery }

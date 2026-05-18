@@ -129,7 +129,7 @@ export struct SubscriptionsContent {
       this.avatarCoordinator.bumpToken()
       this.theme = this.inheritedTheme
 
-      const feedList = await FeedRepository.list()
+      const feedList = await FeedRepository.default.list()
       this.feeds = feedList.map((f: Feed) => feedCardFromFeed(f))
       this.sourceHint = '已加载本地订阅内容'
       this.hasLoaded = true
@@ -144,7 +144,7 @@ export struct SubscriptionsContent {
   private async refreshFeeds(): Promise<void> {
     const startedAt = Date.now()
     this.avatarCoordinator.bumpToken()
-    const feedList = await FeedRepository.list()
+    const feedList = await FeedRepository.default.list()
     this.feeds = feedList.map((f: Feed) => feedCardFromFeed(f))
     this.sourceHint = '已加载本地订阅内容'
     this.hasLoaded = true

@@ -56,7 +56,7 @@ export struct FeedSubscribeConfigView {
   }
 
   private async loadExistingFeed(): Promise<void> {
-    const feeds = await FeedRepository.list()
+    const feeds = await FeedRepository.default.list()
     const mappedTargetUrl = this.mappedTargetUrl()
     this.existingFeed = feeds.find((feed: Feed) => feedMatchesTarget(feed, {
       targetUrl: this.targetUrl,

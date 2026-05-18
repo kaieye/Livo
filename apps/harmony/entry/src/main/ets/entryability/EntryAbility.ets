@@ -69,16 +69,16 @@ export default class EntryAbility extends UIAbility {
 
         const settings = await SettingsStore.load()
         await ThemeService.resolvePalette(settings)
-        const existingCount = await FeedRepository.count()
+        const existingCount = await FeedRepository.default.count()
         if (existingCount === 0) {
           for (const feed of SEED_FEEDS) {
-            await FeedRepository.insert(feed)
+            await FeedRepository.default.insert(feed)
           }
-          await EntryRepository.upsertMany(SEED_ENTRIES)
+          await EntryRepository.default.upsertMany(SEED_ENTRIES)
           await SettingsStore.save(seedSettings())
-          void FeedRefreshCoordinator.hydrateSeedFeeds(SEED_FEEDS)
+          void FeedRefreshCoordinator.default.hydrateSeedFeeds(SEED_FEEDS)
         }
-        await FeedRefreshCoordinator.bootstrap()
+        await FeedRefreshCoordinator.default.bootstrap()
         console.info('Livo Harmony repositories initialized')
         const theme = ThemeService.currentPalette()
         await this.applySystemBarStyle(mainWindow, theme.isDark)

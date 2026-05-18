@@ -276,7 +276,7 @@ struct Index {
     this.theme = ThemeService.currentPalette()
     void this.homeRuntimeCoordinator.applySystemBarStyle(this.theme)
     const settingsPromise = SettingsStore.load()
-    const feedsPromise = FeedRepository.list()
+    const feedsPromise = FeedRepository.default.list()
     const currentMode = this.mode
     let restoredFromSnapshot: boolean = false
     const snapshotEntries = await HomeEntrySnapshotStore.load()
@@ -350,9 +350,9 @@ struct Index {
   }
 
   private async loadFastLocalEntries(): Promise<void> {
-    this.featuredEntries = await FeaturedEntriesQuery.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
+    this.featuredEntries = await FeaturedEntriesQuery.default.featuredEntriesFast(HOME_INITIAL_CANDIDATE_LIMIT)
     if (this.featuredEntries.length === 0) {
-      this.featuredEntries = await FeaturedEntriesQuery.featuredEntries()
+      this.featuredEntries = await FeaturedEntriesQuery.default.featuredEntries()
     }
     this.entryGroups = groupHomeEntriesByMode(this.featuredEntries)
     this.feedSourceLabel = '本地内容已加载'
@@ -379,8 +379,8 @@ struct Index {
       && (targetMode !== 'pictures' || safeCandidateLimit < initialVisibleLimit)
     this.logHomePerf(`reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${shouldUseFastPath}`)
     const nextEntries = shouldUseFastPath
-      ? await FeaturedEntriesQuery.featuredEntriesFastByMode(targetMode, safeCandidateLimit)
-      : await FeaturedEntriesQuery.featuredEntriesByMode(targetMode, safeCandidateLimit)
+      ? await FeaturedEntriesQuery.default.featuredEntriesFastByMode(targetMode, safeCandidateLimit)
+      : await FeaturedEntriesQuery.default.featuredEntriesByMode(targetMode, safeCandidateLimit)
     this.homeFeedPagination.syncModePaginationFromReloadResult(targetMode, nextEntries, safeCandidateLimit)
     this.logHomeGroupStats(`reloadFeaturedEntriesFromLocal mode=${targetMode} limit=${safeCandidateLimit} animated=${animated}`, nextEntries)
     if (animated) {
@@ -414,8 +414,8 @@ struct Index {
     const safeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
     this.logHomePerf(`reload-home start limit=${safeCandidateLimit} animated=${animated} deferredGrouping=${deferredGrouping} fast=${preferFastPath}`)
     const nextEntries = preferFastPath
-      ? await FeaturedEntriesQuery.featuredEntriesFast(safeCandidateLimit)
-      : await FeaturedEntriesQuery.featuredEntries(safeCandidateLimit)
+      ? await FeaturedEntriesQuery.default.featuredEntriesFast(safeCandidateLimit)
+      : await FeaturedEntriesQuery.default.featuredEntries(safeCandidateLimit)
     this.logHomeGroupStats(`reloadHomeEntriesFromLocal limit=${safeCandidateLimit} animated=${animated}`, nextEntries)
     if (animated) {
       this.playHomeListSwapTransition(nextEntries, this.mode)
@@ -440,7 +440,7 @@ struct Index {
         if (this.homeFeedPagination.isModeLoaded(mode) || this.homeFeedPagination.isModeLoading(mode)) { return }
         this.homeFeedPagination.setModeLoading(mode, true)
         const precacheLimit = resolveHomeVisibleEntryInitialLimit(mode)
-        void FeaturedEntriesQuery.featuredEntriesFastByMode(mode, precacheLimit)
+        void FeaturedEntriesQuery.default.featuredEntriesFastByMode(mode, precacheLimit)
           .then((entries: EntryCardModel[]) => {
             if (this.precacheModeToken !== token || mode === this.mode) { return }
             this.applyEntriesForMode(mode, entries, true, true, true)

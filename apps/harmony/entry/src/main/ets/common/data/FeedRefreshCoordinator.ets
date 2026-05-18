@@ -428,49 +428,6 @@ class FeedRefreshCoordinator {
     } as RemoteFeedResult
   }
 
-  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
-
-  static async bootstrap(): Promise<void> {
-    return FeedRefreshCoordinator.default.bootstrap()
-  }
-
-  static isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
-    return FeedRefreshCoordinator.default.isFeedRefreshInCooldown(feed, now)
-  }
-
-  static resolveRefreshConcurrency(totalFeeds: number): number {
-    return FeedRefreshCoordinator.default.resolveRefreshConcurrency(totalFeeds)
-  }
-
-  static async hydrateSeedFeeds(feeds: Feed[]): Promise<void> {
-    return FeedRefreshCoordinator.default.hydrateSeedFeeds(feeds)
-  }
-
-  static async refreshFeed(
-    feedId: string,
-    preferFastImageResolve: boolean = false,
-    includeEntries: boolean = true,
-    includeNewEntryCount: boolean = true,
-    notifyFeedsChanged: boolean = true,
-  ): Promise<RemoteFeedResult> {
-    return FeedRefreshCoordinator.default.refreshFeed(
-      feedId,
-      preferFastImageResolve,
-      includeEntries,
-      includeNewEntryCount,
-      notifyFeedsChanged,
-    )
-  }
-
-  static async seedFeedFromPreview(feedId: string, payload: FeedRefreshPayload): Promise<void> {
-    return FeedRefreshCoordinator.default.seedFeedFromPreview(feedId, payload)
-  }
-
-  static async refreshAllFeeds(
-    onProgress?: (completedCount: number, totalCount: number) => void,
-  ): Promise<RemoteFeedResult> {
-    return FeedRefreshCoordinator.default.refreshAllFeeds(onProgress)
-  }
 }
 
 export { FeedRefreshCoordinator }

@@ -107,7 +107,7 @@ export class FeedDetailHeroAvatarCoordinator {
       this.owner.setTargetImageUrl(nextStoredImageUrl)
     }
     if (shouldPersist) {
-      await FeedRepository.update(feed.id, {
+      await FeedRepository.default.update(feed.id, {
         title: feed.title,
         url: feed.url,
         siteUrl: feed.siteUrl || '',

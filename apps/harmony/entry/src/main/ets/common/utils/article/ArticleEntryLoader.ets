@@ -56,7 +56,7 @@ export class ArticleEntryLoader {
     const snapshotRehydrated = allowRouteSnapshot && this.tryRehydrateFromRouteSnapshot()
 
     if (markRead) {
-      await EntryRepository.markRead(entryId, true)
+      await EntryRepository.default.markRead(entryId, true)
       console.info(`已标记条目为已读: ${entryId}`)
     }
 
@@ -174,7 +174,7 @@ export class ArticleEntryLoader {
     this.owner.actionHint = '正在刷新旧版正文格式...'
 
     try {
-      await FeedRefreshCoordinator.refreshFeed(current.feedId)
+      await FeedRefreshCoordinator.default.refreshFeed(current.feedId)
       const refreshed = await this.loadEntryById(current.id)
       if (refreshed) {
         this.owner.entry = refreshed
@@ -190,11 +190,11 @@ export class ArticleEntryLoader {
   }
 
   private async loadEntryById(entryId: string): Promise<ArticleDetailModel | undefined> {
-    const entry = await EntryRepository.getById(entryId)
+    const entry = await EntryRepository.default.getById(entryId)
     if (!entry) {
       return undefined
     }
-    const feed = await FeedRepository.getById(entry.feedId)
+    const feed = await FeedRepository.default.getById(entry.feedId)
     if (!feed) {
       return undefined
     }

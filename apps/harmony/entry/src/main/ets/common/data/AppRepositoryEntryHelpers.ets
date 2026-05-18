@@ -127,7 +127,7 @@ export function buildEntryCards(
 }
 
 export async function feedWithCount(feed: Feed): Promise<FeedWithCount> {
-  const unreadCount = await EntryRepository.countUnreadByFeed(feed.id)
+  const unreadCount = await EntryRepository.default.countUnreadByFeed(feed.id)
   const displayTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
   const displayDescription = resolveSocialFeedDisplayDescription(feed.description || '', feed.url, feed.siteUrl || '')
   const displayImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl || '', feed.url, feed.siteUrl || '', displayTitle)

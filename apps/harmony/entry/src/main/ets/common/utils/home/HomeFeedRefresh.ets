@@ -101,7 +101,7 @@ export class HomeFeedRefresh {
     this.session.displayRefreshPercent = 0
 
     try {
-      const result = await FeedRefreshCoordinator.refreshAllFeeds((completedCount: number, totalCount: number) => {
+      const result = await FeedRefreshCoordinator.default.refreshAllFeeds((completedCount: number, totalCount: number) => {
         if (!this.session.isComponentActive) {
           return
         }

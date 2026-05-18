@@ -241,7 +241,7 @@ struct DiscoverPreview {
   }
 
   private async findExistingFeed(targetUrl: string, siteUrl: string): Promise<Feed | undefined> {
-    const feeds = await FeedRepository.list()
+    const feeds = await FeedRepository.default.list()
     return feeds.find((feed: Feed) => this.feedMatchesTarget(feed, targetUrl, siteUrl))
   }
 
@@ -308,12 +308,12 @@ struct DiscoverPreview {
       }
 
       if (this.existingFeed) {
-        await FeedRepository.update(this.existingFeed.id, draft)
-        await FeedRefreshCoordinator.refreshFeed(this.existingFeed.id)
+        await FeedRepository.default.update(this.existingFeed.id, draft)
+        await FeedRefreshCoordinator.default.refreshFeed(this.existingFeed.id)
         this.showToast('订阅已更新')
       } else {
-        const created = await FeedRepository.create(draft)
-        await FeedRefreshCoordinator.refreshFeed(created.id)
+        const created = await FeedRepository.default.create(draft)
+        await FeedRefreshCoordinator.default.refreshFeed(created.id)
         this.showToast('订阅已添加')
       }
 

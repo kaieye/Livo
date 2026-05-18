@@ -118,7 +118,7 @@ export class HomeFeedLoadMorePrefetch {
     try {
       const previousEntries = this.session.filteredEntriesFor(mode)
       const appendCount = Math.max(1, targetLimit - previousEntries.length)
-      const nextPage = await FeaturedEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
+      const nextPage = await FeaturedEntriesQuery.default.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
       if (!this.session.isComponentActive || this.session.homeLoadMorePrefetchToken !== token) {
         return
       }

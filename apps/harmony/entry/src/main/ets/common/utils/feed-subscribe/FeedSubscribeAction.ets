@@ -55,9 +55,9 @@ export class FeedSubscribeAction {
     )
     const resolvedSiteUrl = cachedPreview?.siteUrl?.trim() || request.targetSiteUrl.trim()
     const existingFeed = knownExistingFeed
-      ?? await FeedRepository.getByUrl(request.mappedTargetUrl)
-      ?? await FeedRepository.getByUrl(resolvedTargetUrl)
-      ?? await FeedRepository.getBySiteUrl(resolvedSiteUrl)
+      ?? await FeedRepository.default.getByUrl(request.mappedTargetUrl)
+      ?? await FeedRepository.default.getByUrl(resolvedTargetUrl)
+      ?? await FeedRepository.default.getBySiteUrl(resolvedSiteUrl)
 
     const draft: FeedDraft = {
       url: resolvedTargetUrl,
@@ -75,18 +75,18 @@ export class FeedSubscribeAction {
     let wasUpdate = false
 
     if (existingFeed) {
-      const updatedFeed = await FeedRepository.update(existingFeed.id, draft)
+      const updatedFeed = await FeedRepository.default.update(existingFeed.id, draft)
       feedId = updatedFeed.id
       message = '订阅已更新'
       wasUpdate = true
     } else {
-      const createdFeed = await FeedRepository.create(draft)
+      const createdFeed = await FeedRepository.default.create(draft)
       feedId = createdFeed.id
       message = '订阅成功'
     }
 
     if (cachedPreview) {
-      await FeedRefreshCoordinator.seedFeedFromPreview(feedId, cachedPreview)
+      await FeedRefreshCoordinator.default.seedFeedFromPreview(feedId, cachedPreview)
     }
     bumpFeedsChangedSignal()
 
@@ -108,7 +108,7 @@ export class FeedSubscribeAction {
       view: request.selectedView,
       showInAll: !request.hideInTimeline,
     }
-    const updatedFeed = await FeedRepository.update(existingFeed.id, draft)
+    const updatedFeed = await FeedRepository.default.update(existingFeed.id, draft)
 
     const cachedPreview = request.cachedPreview
     if (cachedPreview) {
@@ -135,14 +135,14 @@ export class FeedSubscribeAction {
   }
 
   static async unsubscribe(feedId: string): Promise<void> {
-    await FeedRepository.remove(feedId)
+    await FeedRepository.default.remove(feedId)
     await HomeEntrySnapshotStore.removeByFeedId(feedId)
     bumpFeedsChangedSignal()
   }
 
   static async refreshAfterSubscribe(feedId: string): Promise<void> {
     try {
-      await FeedRefreshCoordinator.refreshFeed(feedId)
+      await FeedRefreshCoordinator.default.refreshFeed(feedId)
     } catch (error) {
       console.error(`subscribe refresh failed: ${error instanceof Error ? error.message : error}`)
     }
@@ -151,7 +151,7 @@ export class FeedSubscribeAction {
 
 async function seedPreviewSafely(feedId: string, payload: FeedRefreshPayload): Promise<void> {
   try {
-    await FeedRefreshCoordinator.seedFeedFromPreview(feedId, payload)
+    await FeedRefreshCoordinator.default.seedFeedFromPreview(feedId, payload)
   } catch (error) {
     console.error(`seed preview after save failed: ${error instanceof Error ? error.message : error}`)
   }

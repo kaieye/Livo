@@ -73,7 +73,7 @@ export class BilibiliFollowingsService {
       throw new Error(nav.message || '当前 SESSDATA 无法读取 Bilibili 账号信息')
     }
 
-    const existingFeeds = await FeedRepository.list()
+    const existingFeeds = await FeedRepository.default.list()
     const existingUids = new Set<number>()
     existingFeeds.forEach((feed) => {
       const uid = extractBilibiliUidFromFeedUrl(feed.url)
@@ -130,7 +130,7 @@ export class BilibiliFollowingsService {
     views: FeedViewType[],
     onProgress: (progress: BilibiliImportProgress) => void,
   ): Promise<void> {
-    const existingFeeds = await FeedRepository.list()
+    const existingFeeds = await FeedRepository.default.list()
     const existingUrls = new Set<string>()
     existingFeeds.forEach((feed) => existingUrls.add(feed.url))
 
@@ -150,7 +150,7 @@ export class BilibiliFollowingsService {
           if (existingUrls.has(draft.url)) {
             skipped += 1
           } else {
-            await FeedRepository.create(draft)
+            await FeedRepository.default.create(draft)
             existingUrls.add(draft.url)
             imported += 1
           }

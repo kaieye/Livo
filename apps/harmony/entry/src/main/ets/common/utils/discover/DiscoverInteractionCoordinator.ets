@@ -43,7 +43,7 @@ export class DiscoverInteractionCoordinator {
     this.owner.isLoadingPage = true
     try {
       this.owner.theme = this.owner.inheritedTheme
-      this.owner.subscribedFeeds = await FeedRepository.list()
+      this.owner.subscribedFeeds = await FeedRepository.default.list()
       this.owner.featuredTrendingFeeds = trendingDiscoverFeedsFromJsonNow()
 
       this.owner.hasLoaded = true
@@ -55,7 +55,7 @@ export class DiscoverInteractionCoordinator {
   }
 
   async refreshSubscribedFeeds(): Promise<void> {
-    this.owner.subscribedFeeds = await FeedRepository.list()
+    this.owner.subscribedFeeds = await FeedRepository.default.list()
   }
 
   // ── Cross-cutting signals ──

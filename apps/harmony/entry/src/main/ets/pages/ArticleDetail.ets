@@ -200,7 +200,7 @@ struct ArticleDetail {
     }, 100)
 
     try {
-      await EntryRepository.toggleStar(entryId)
+      await EntryRepository.default.toggleStar(entryId)
       await this.entryLoader.load(entryId, false, false)
       const message = this.entry?.isStarred ? '已收藏' : '已取消收藏'
       this.actionHint = message

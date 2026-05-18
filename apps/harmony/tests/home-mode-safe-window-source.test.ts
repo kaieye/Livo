@@ -27,10 +27,7 @@ const homeFeedPaginationStateSource = readFileSync(
 )
 
 const indexSource = readFileSync(
-  new URL(
-    '../entry/src/main/ets/pages/Index.ets',
-    import.meta.url,
-  ),
+  new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
   'utf8',
 )
 
@@ -110,11 +107,11 @@ test('home pagination state does not force full render mode at startup', () => {
 test('index page uses bounded by-mode queries for mode reloads', () => {
   assert.match(
     indexSource,
-    /FeaturedEntriesQuery\.featuredEntriesByMode\(targetMode, safeCandidateLimit\)/,
+    /FeaturedEntriesQuery\.default\.featuredEntriesByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
     indexSource,
-    /FeaturedEntriesQuery\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
+    /FeaturedEntriesQuery\.default\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
     indexSource,

@@ -48,7 +48,7 @@ export class SubscriptionOpmlService {
       return { status: 'cancelled', feedCount: 0 }
     }
 
-    const feeds = await FeedRepository.list()
+    const feeds = await FeedRepository.default.list()
     const opml = generateOpml(feeds)
     try {
       const file = fileIo.openSync(
@@ -89,14 +89,14 @@ export class SubscriptionOpmlService {
     }
 
     const existingStartedAt = Date.now()
-    const existingFeeds = await FeedRepository.list()
+    const existingFeeds = await FeedRepository.default.list()
     SubscriptionOpmlService.logImport(`import loaded existing feeds elapsedMs=${Date.now() - existingStartedAt} count=${existingFeeds.length}`)
     const existingFeedByIdentityKey = SubscriptionOpmlService.createExistingFeedIdentityMap(existingFeeds)
 
     if (mode === 'overwrite') {
       const overwriteStartedAt = Date.now()
       for (const feed of existingFeeds) {
-        await FeedRepository.remove(feed.id)
+        await FeedRepository.default.remove(feed.id)
         await HomeEntrySnapshotStore.removeByFeedId(feed.id)
       }
       SubscriptionOpmlService.logImport(`import overwrite removed feeds count=${existingFeeds.length} elapsedMs=${Date.now() - overwriteStartedAt}`)
@@ -162,7 +162,7 @@ export class SubscriptionOpmlService {
       }
 
       try {
-        const createdFeed = await FeedRepository.create({
+        const createdFeed = await FeedRepository.default.create({
           title: (opmlFeed.title || url).trim(),
           url,
           siteUrl,
@@ -223,7 +223,7 @@ export class SubscriptionOpmlService {
       }
 
       try {
-        await FeedRefreshCoordinator.refreshFeed(feedId, true, false, false, false)
+        await FeedRefreshCoordinator.default.refreshFeed(feedId, true, false, false, false)
         success += 1
       } catch (_error) {
         failed += 1
@@ -275,7 +275,7 @@ export class SubscriptionOpmlService {
     }
 
     try {
-      await FeedRepository.update(existingFeed.id, {
+      await FeedRepository.default.update(existingFeed.id, {
         title: (title || url).trim(),
         url,
         siteUrl,

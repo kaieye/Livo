@@ -109,7 +109,7 @@ export class SubscriptionsAvatarHydrationCoordinator {
   }
 
   private async resolveFeedAvatarOnly(feedId: string): Promise<boolean> {
-    const feed = await FeedRepository.getById(feedId)
+    const feed = await FeedRepository.default.getById(feedId)
     if (!feed) {
       return false
     }
@@ -122,7 +122,7 @@ export class SubscriptionsAvatarHydrationCoordinator {
     if (!resolvedUrl || resolvedUrl === (feed.imageUrl || '').trim()) {
       return false
     }
-    await FeedRepository.update(feedId, {
+    await FeedRepository.default.update(feedId, {
       title: feed.title,
       url: feed.url,
       siteUrl: feed.siteUrl || '',

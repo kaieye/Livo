@@ -96,7 +96,7 @@ export class FeedDetailDataCoordinator {
     }
 
     try {
-      const feed = await FeedRepository.getById(this.owner.feedId)
+      const feed = await FeedRepository.default.getById(this.owner.feedId)
       if (!feed) {
         return
       }
@@ -114,7 +114,7 @@ export class FeedDetailDataCoordinator {
       this.owner.setTargetImageUrl(displayFeed.imageUrl)
       this.owner.setTargetDescription(displayFeed.description)
 
-      const entries = await EntryRepository.listByFeed(this.owner.feedId)
+      const entries = await EntryRepository.default.listByFeed(this.owner.feedId)
       const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(feed.url)
       const previewEntries = resolvePreferredFeedDetailPreviewEntries(entries, cachedPayload?.entries ?? [])
       const payloadImageUrl = this.preferredDisplayImageUrl(cachedPayload?.imageUrl || '', displayFeed.imageUrl)
@@ -135,7 +135,7 @@ export class FeedDetailDataCoordinator {
   }
 
   private async loadSubscribedFeed(): Promise<void> {
-    const feed = await FeedRepository.getById(this.owner.feedId)
+    const feed = await FeedRepository.default.getById(this.owner.feedId)
     if (!feed) {
       return
     }
@@ -152,7 +152,7 @@ export class FeedDetailDataCoordinator {
     this.owner.setTargetImageUrl(displayFeed.imageUrl)
     this.owner.setTargetDescription(displayFeed.description)
 
-    const entries = await EntryRepository.listByFeed(this.owner.feedId)
+    const entries = await EntryRepository.default.listByFeed(this.owner.feedId)
     const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(feed.url)
     const shouldReseed = shouldReseedFeedDetailFromCachedPreview(entries, cachedPayload)
     const persistedEntries = shouldReseed
@@ -266,9 +266,9 @@ export class FeedDetailDataCoordinator {
     const previousEntries = this.owner.previewPayload?.entries ?? []
     const previousCount = previousEntries.length
     const previousLatestPublishedAt = latestFeedDetailEntryPublishedAt(previousEntries)
-    await FeedRefreshCoordinator.refreshFeed(existingFeed.id, true, false, false, false)
-    const refreshedFeed = await FeedRepository.getById(existingFeed.id)
-    const entries = await EntryRepository.listByFeed(existingFeed.id)
+    await FeedRefreshCoordinator.default.refreshFeed(existingFeed.id, true, false, false, false)
+    const refreshedFeed = await FeedRepository.default.getById(existingFeed.id)
+    const entries = await EntryRepository.default.listByFeed(existingFeed.id)
     if (!refreshedFeed) {
       void this.owner.hydrateVideoPreviews(entries)
       return
@@ -362,7 +362,7 @@ export class FeedDetailDataCoordinator {
   }
 
   private async findExistingFeed(targetUrl: string, siteUrl: string): Promise<Feed | undefined> {
-    const feeds = await FeedRepository.list()
+    const feeds = await FeedRepository.default.list()
     return feeds.find((feed: Feed) => feedDetailMatchesTarget(feed, targetUrl, siteUrl))
   }
 
@@ -408,9 +408,9 @@ export class FeedDetailDataCoordinator {
     feedId: string,
     payload: FeedRefreshPayload,
   ): Promise<Entry[]> {
-    await FeedRefreshCoordinator.seedFeedFromPreview(feedId, payload)
+    await FeedRefreshCoordinator.default.seedFeedFromPreview(feedId, payload)
     bumpFeedsChangedSignal()
-    return EntryRepository.listByFeed(feedId)
+    return EntryRepository.default.listByFeed(feedId)
   }
 
   private isPicturesPreview(): boolean {

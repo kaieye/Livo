@@ -33,8 +33,8 @@ export struct FavoritesPanel {
   private async loadStarredEntries(): Promise<void> {
     this.isLoading = true
     try {
-      const entries = await EntryRepository.listStarred(100)
-      const feeds = await FeedRepository.list()
+      const entries = await EntryRepository.default.listStarred(100)
+      const feeds = await FeedRepository.default.list()
       const feedMap = new Map<string, import('../models/LivoModels').Feed>()
       feeds.forEach((feed: import('../models/LivoModels').Feed) => feedMap.set(feed.id, feed))
       this.starredEntries = await buildEntryCardsChunked(entries, (entry) => feedMap.get(entry.feedId))
@@ -44,7 +44,7 @@ export struct FavoritesPanel {
   }
 
   private async toggleStar(entryId: string): Promise<void> {
-    await EntryRepository.toggleStar(entryId)
+    await EntryRepository.default.toggleStar(entryId)
     this.starredEntries = this.starredEntries.filter((entry: EntryCardModel) => entry.id !== entryId)
   }
 

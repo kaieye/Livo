@@ -102,7 +102,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const currentLimit = this.candidateLimitForMode(mode)
     const appendCount = Math.max(1, nextLimit - currentLimit)
     const pageQueryStartedAt = Date.now()
-    const nextPage = await FeaturedEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
+    const nextPage = await FeaturedEntriesQuery.default.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
     this.session.logHomeLoadMore(
       `append-page mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} queryMs=${Date.now() - pageQueryStartedAt}`,
     )
@@ -112,7 +112,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       this.session.logHomeLoadMore(
         `append-fast-empty mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextLimit=${nextLimit}`,
       )
-      const fallbackEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
+      const fallbackEntries = await FeaturedEntriesQuery.default.featuredEntriesByMode(mode, nextLimit)
       this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
       if (fallbackEntries.length <= previousTotal) {
         this.setModeHasMoreEntries(
@@ -144,7 +144,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       this.session.logHomeLoadMore(
         `append-no-unique prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} nextLimit=${nextLimit}`,
       )
-      const fallbackEntries = await FeaturedEntriesQuery.featuredEntriesByMode(mode, nextLimit)
+      const fallbackEntries = await FeaturedEntriesQuery.default.featuredEntriesByMode(mode, nextLimit)
       this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
       if (fallbackEntries.length <= previousTotal) {
         this.setModeHasMoreEntries(
