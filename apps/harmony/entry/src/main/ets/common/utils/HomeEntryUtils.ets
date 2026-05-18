@@ -35,6 +35,19 @@ export function homeEntryListRenderKey(entry: EntryCardModel, index: number): st
   return `${homeEntryRenderBaseKey(entry)}|${readFlag}|${index}`
 }
 
+// 视频网格的 LazyForEach 行级 key 生成器：视频行只有 1-2 张卡片，
+// 用 id+isRead 作为稳定标识就足够唯一；不再像 homeEntryListRenderKey
+// 那样把 baseKey 的 5 个字段全部拼起来。
+// 滚动期间 LazyForEach 频繁调 keyGenerator，简化后单帧节省数百次
+// 字符串拼接与数组分配，是视频网格滚动顺滑度的关键路径。
+export function homeVideoRowRenderKey(rowEntries: EntryCardModel[], rowIndex: number): string {
+  const first = rowEntries.length > 0 ? rowEntries[0] : undefined
+  const second = rowEntries.length > 1 ? rowEntries[1] : undefined
+  const firstKey = first ? `${first.id}|${first.isRead ? '1' : '0'}` : ''
+  const secondKey = second ? `${second.id}|${second.isRead ? '1' : '0'}` : 'half'
+  return `vrow-${rowIndex}-${firstKey}-${secondKey}`
+}
+
 export function duplicateKeyCount(counter: Map<string, number>): number {
   let duplicateCount = 0
   counter.forEach((count: number) => {

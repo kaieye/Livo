@@ -53,12 +53,11 @@ export function discoverCategoryCards(): DiscoverCategoryCard[] {
       sourceKey: 'podcast',
     },
     {
-      id: 'ins-4',
-      view: FeedViewType.Pictures,
-      label: 'Ins',
-      accent: '#C13584',
-      sourceKey: 'ins',
-      icon: $r('app.media.account_instagram'),
+      id: 'cctv',
+      view: FeedViewType.Articles,
+      label: '央视',
+      accent: '#C41230',
+      sourceKey: 'cctv',
     },
   ]
 }

@@ -31,7 +31,7 @@ import {
   resolvedCandidateAvatarUrl, resolvedPlatformLabel, shouldHydrateCandidateAvatar,
 } from '../utils/DiscoverCandidatePresentation'
 import { isSubscribedCandidate, isSubscribedRecommendedFeed } from '../utils/DiscoverFeedIdentity'
-import { PAGE_BOTTOM_GAP, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
+import { BOTTOM_TAB_FLOAT_GAP, BOTTOM_TAB_TOTAL_HEIGHT, PAGE_BOTTOM_GAP, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import { DiscoverInteractionCoordinator } from '../utils/DiscoverInteractionCoordinator'
 import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
@@ -322,7 +322,7 @@ export struct DiscoverContent {
   }
 
   private discoverListBottomPadding(): number {
-    return PAGE_BOTTOM_GAP
+    return PAGE_BOTTOM_GAP + BOTTOM_TAB_TOTAL_HEIGHT + BOTTOM_TAB_FLOAT_GAP + this.bottomAvoidArea
   }
 
   private discoverBottomSpacerHeight(): number {

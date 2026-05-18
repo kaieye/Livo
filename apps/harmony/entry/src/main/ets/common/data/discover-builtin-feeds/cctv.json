@@ -1,0 +1,195 @@
+{
+  "description": "CCTV built-in RSS feeds — news channels and programs from China Central Television",
+  "view": "articles",
+  "feeds": [
+    {
+      "title": "国内新闻",
+      "url": "http://www.cctv.com/program/rss/02/01/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网国内新闻 RSS，涵盖时政要闻与国内大事",
+      "descriptionEn": "CCTV domestic news RSS covering politics and national affairs"
+    },
+    {
+      "title": "国际新闻",
+      "url": "http://www.cctv.com/program/rss/02/02/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网国际新闻 RSS，追踪全球热点与外交动态",
+      "descriptionEn": "CCTV international news RSS tracking global hotspots and diplomacy"
+    },
+    {
+      "title": "体育新闻",
+      "url": "http://www.cctv.com/program/rss/02/03/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网体育新闻 RSS，聚焦国内外赛事与体育资讯",
+      "descriptionEn": "CCTV sports news RSS covering domestic and international events"
+    },
+    {
+      "title": "财经新闻",
+      "url": "http://www.cctv.com/program/rss/02/04/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网财经新闻 RSS，关注经济动态与市场行情",
+      "descriptionEn": "CCTV financial news RSS on economy and market trends"
+    },
+    {
+      "title": "科教新闻",
+      "url": "http://www.cctv.com/program/rss/02/05/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网科教新闻 RSS，涵盖科技、教育与创新领域",
+      "descriptionEn": "CCTV science and education news RSS on tech and innovation"
+    },
+    {
+      "title": "社会新闻",
+      "url": "http://www.cctv.com/program/rss/02/06/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网社会新闻 RSS，报道民生万象与社会热点",
+      "descriptionEn": "CCTV society news RSS covering people's livelihood and social issues"
+    },
+    {
+      "title": "文娱新闻",
+      "url": "http://www.cctv.com/program/rss/02/07/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网文娱新闻 RSS，影视资讯与文化娱乐动态",
+      "descriptionEn": "CCTV entertainment news RSS on film, TV and cultural events"
+    },
+    {
+      "title": "省市台页",
+      "url": "http://www.cctv.com/program/rss/02/08/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网各省市台新闻汇总 RSS",
+      "descriptionEn": "CCTV provincial and city station news aggregate RSS"
+    },
+    {
+      "title": "新闻联播",
+      "url": "http://www.cctv.com/program/rss/02/09/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "《新闻联播》RSS 订阅源，每日权威新闻摘要",
+      "descriptionEn": "CCTV Xinwen Lianbo RSS — daily authoritative news briefing"
+    },
+    {
+      "title": "港澳台新闻",
+      "url": "http://www.cctv.com/program/rss/02/10/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网港澳台新闻 RSS，关注两岸三地动态",
+      "descriptionEn": "CCTV news RSS on Hong Kong, Macau and Taiwan affairs"
+    },
+    {
+      "title": "新闻网播",
+      "url": "http://www.cctv.com/program/rss/02/11/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "央视网新闻网播 RSS，汇总当日视频新闻要点",
+      "descriptionEn": "CCTV news video RSS — daily video news highlights"
+    },
+    {
+      "title": "CCTV-新闻",
+      "url": "http://www.cctv.com/program/rss/03/01/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-新闻 频道节目与报道 RSS 订阅源",
+      "descriptionEn": "CCTV-News channel programming and reports RSS"
+    },
+    {
+      "title": "CCTV-1",
+      "url": "http://www.cctv.com/program/rss/03/02/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-1 综合频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-1 general channel programming RSS"
+    },
+    {
+      "title": "CCTV-2",
+      "url": "http://www.cctv.com/program/rss/03/03/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-2 财经频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-2 finance channel programming RSS"
+    },
+    {
+      "title": "CCTV-3",
+      "url": "http://www.cctv.com/program/rss/03/04/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-3 综艺频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-3 variety channel programming RSS"
+    },
+    {
+      "title": "CCTV-4",
+      "url": "http://www.cctv.com/program/rss/03/05/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-4 中文国际频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-4 Chinese international channel programming RSS"
+    },
+    {
+      "title": "CCTV-5",
+      "url": "http://www.cctv.com/program/rss/03/06/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-5 体育频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-5 sports channel programming RSS"
+    },
+    {
+      "title": "CCTV-6",
+      "url": "http://www.cctv.com/program/rss/03/07/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-6 电影频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-6 movie channel programming RSS"
+    },
+    {
+      "title": "CCTV-7",
+      "url": "http://www.cctv.com/program/rss/03/08/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-7 国防军事频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-7 military and agriculture channel programming RSS"
+    },
+    {
+      "title": "CCTV-8",
+      "url": "http://www.cctv.com/program/rss/03/09/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-8 电视剧频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-8 TV drama channel programming RSS"
+    },
+    {
+      "title": "CCTV-9",
+      "url": "http://www.cctv.com/program/rss/03/10/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-9 纪录频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-9 documentary channel programming RSS"
+    },
+    {
+      "title": "CCTV-10",
+      "url": "http://www.cctv.com/program/rss/03/11/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-10 科教频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-10 science and education channel programming RSS"
+    },
+    {
+      "title": "CCTV-11",
+      "url": "http://www.cctv.com/program/rss/03/12/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-11 戏曲频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-11 Chinese opera channel programming RSS"
+    },
+    {
+      "title": "CCTV-12",
+      "url": "http://www.cctv.com/program/rss/03/13/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-12 社会与法频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-12 society and law channel programming RSS"
+    },
+    {
+      "title": "CCTV-少儿",
+      "url": "http://www.cctv.com/program/rss/03/14/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-少儿 频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-Children channel programming RSS"
+    },
+    {
+      "title": "CCTV-音乐",
+      "url": "http://www.cctv.com/program/rss/03/15/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-音乐 频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV-Music channel programming RSS"
+    },
+    {
+      "title": "CCTV-E&F",
+      "url": "http://www.cctv.com/program/rss/03/16/index.xml",
+      "language": "Chinese",
+      "descriptionZh": "CCTV-Español & Français 外语频道节目 RSS 订阅源",
+      "descriptionEn": "CCTV Spanish and French international channel programming RSS"
+    }
+  ]
+}

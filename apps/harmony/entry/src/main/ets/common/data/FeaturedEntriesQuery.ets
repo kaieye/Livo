@@ -259,8 +259,13 @@ function fastPageCacheBufferForMode(mode: HomeEntryMode): number {
   if (mode === 'pictures') {
     return 12
   }
-  if (mode === 'social' || mode === 'videos') {
+  if (mode === 'social') {
     return 24
+  }
+  if (mode === 'videos') {
+    // 视频每页加载 24 条，buffer 提到 36 让一次扫库覆盖 1.5 个分页步长，
+    // 触底再次加载时直接命中缓存，避免重复 round-robin。
+    return 36
   }
   return HOME_FAST_PAGE_CACHE_BUFFER
 }

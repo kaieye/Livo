@@ -7,8 +7,9 @@ import videosFeedData from './discover-builtin-feeds/videos.json'
 import insFeedData from './discover-builtin-feeds/ins.json'
 import aiFeedData from './discover-builtin-feeds/ai.json'
 import podcastFeedData from './discover-builtin-feeds/podcast.json'
+import cctvFeedData from './discover-builtin-feeds/cctv.json'
 
-export type DiscoverBuiltinFeedSourceKey = '' | 'ins' | 'ai' | 'podcast'
+export type DiscoverBuiltinFeedSourceKey = '' | 'ins' | 'ai' | 'podcast' | 'cctv'
 
 export interface DiscoverBuiltinFeedSeed {
   title: string
@@ -52,6 +53,7 @@ export interface DiscoverBuiltinFeedViewMap {
   ins: DiscoverBuiltinFeed[]
   ai: DiscoverBuiltinFeed[]
   podcast: DiscoverBuiltinFeed[]
+  cctv: DiscoverBuiltinFeed[]
 }
 
 function normalizeBuiltinFeedUrl(url: string): string {
@@ -165,6 +167,8 @@ function resolveBuiltinSourceCategory(sourceKey: DiscoverBuiltinFeedSourceKey): 
       return '内置-AI'
     case 'podcast':
       return '内置-播客'
+    case 'cctv':
+      return '内置-央视'
     default:
       return '内置'
   }
@@ -211,6 +215,7 @@ export const BUILTIN_DISCOVER_FEEDS_BY_VIEW: DiscoverBuiltinFeedViewMap = {
   ins: buildBuiltinFeeds(FeedViewType.Pictures, (insFeedData as InsFeedFileShape).feeds ?? [], 'ins'),
   ai: buildBuiltinFeeds(FeedViewType.Articles, (aiFeedData as FeedFileShape).feeds ?? [], 'ai'),
   podcast: buildBuiltinFeeds(FeedViewType.Articles, (podcastFeedData as FeedFileShape).feeds ?? [], 'podcast'),
+  cctv: buildBuiltinFeeds(FeedViewType.Articles, (cctvFeedData as FeedFileShape).feeds ?? [], 'cctv'),
 }
 
 export const BUILTIN_INS_GROUPS: InsGroupFeed[] = ((insFeedData as InsFeedFileShape).groups ?? []).map(
@@ -240,6 +245,9 @@ export function builtinDiscoverFeedsBySourceKey(sourceKey: DiscoverBuiltinFeedSo
   if (sourceKey === 'podcast') {
     return BUILTIN_DISCOVER_FEEDS_BY_VIEW.podcast
   }
+  if (sourceKey === 'cctv') {
+    return BUILTIN_DISCOVER_FEEDS_BY_VIEW.cctv
+  }
   return []
 }
 
@@ -256,5 +264,6 @@ export function builtinDiscoverFeedsAll(): DiscoverBuiltinFeed[] {
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.ins,
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.ai,
     ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.podcast,
+    ...BUILTIN_DISCOVER_FEEDS_BY_VIEW.cctv,
   ]
 }

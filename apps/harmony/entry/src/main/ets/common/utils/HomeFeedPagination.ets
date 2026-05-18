@@ -508,7 +508,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     } else if (mode === 'pictures') {
       dynamicThreshold = Math.max(3, Math.min(4, Math.floor(visibleCount / 3)))
     } else if (mode === 'videos') {
-      dynamicThreshold = Math.max(8, Math.min(10, Math.floor(visibleCount / 2)))
+      // 视频每页加载 24 条（12 行），初始 36 条（18 行）。阈值用 visibleCount/3
+      // 让触发点落在"剩 4-5 行"位置，避免在视频还充满视口时就预取下一页，
+      // 配合 scroll-progress 触发器形成"远端预读 + 近端兜底"两层。
+      dynamicThreshold = Math.max(8, Math.min(14, Math.floor(visibleCount / 3)))
     }
     return remainingVisibleCount <= dynamicThreshold
   }

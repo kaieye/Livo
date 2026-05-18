@@ -8,7 +8,7 @@ import {
   HOME_MODE_SCENE_TOP_INSET,
 } from '../components/HomeRootConfig'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
-import { homeEntryListRenderKey, isTweetLikeEntry } from '../utils/HomeEntryUtils'
+import { homeEntryListRenderKey, homeVideoRowRenderKey, isTweetLikeEntry } from '../utils/HomeEntryUtils'
 import { HomeArticleEntryCard } from './HomeArticleEntryCard'
 import { HomeVideoEntryCard } from './HomeVideoEntryCard'
 import { PictureEntryCard } from './PictureEntryCard'
@@ -16,6 +16,15 @@ import { TweetEntryCard } from './TweetEntryCard'
 import { HomeEmptyStateCard } from './HomeEmptyStateCard'
 import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
 import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../utils/HomeVideoGrid'
+
+// LazyForEach 默认 cachedCount=1 在双列视频网格里只缓存 2 张卡，快速滚动
+// 时几乎每帧都要重新 build HomeVideoEntryCard（包含远程封面图解码），
+// 这是视频模式滚动卡顿的核心原因。把缓存撑到 4 行（8 张卡）后，可视区
+// 上下各有 2 行已经构建好的复用项，刚露出来直接命中复用池而不是走 build。
+const HOME_VIDEO_LIST_CACHED_ROW_COUNT: number = 4
+// 文章/图片是单列大卡，每屏元素少，缓存 3 个 ListItem 足够覆盖弹性滚动
+// 区段，不至于在惯性滑动时频繁触发 ItemBuilder 重建。
+const HOME_LIST_CACHED_ITEM_COUNT: number = 3
 
 class VideoRowLazyDataSource implements IDataSource {
   private readonly getEntryDataSource: () => ArrayLazyDataSource<EntryCardModel>
@@ -333,6 +342,7 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
+    .cachedCount(HOME_LIST_CACHED_ITEM_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
@@ -406,6 +416,7 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
+    .cachedCount(HOME_LIST_CACHED_ITEM_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
@@ -473,7 +484,7 @@ export struct HomeModeEntriesPage {
               this.callbacks.onItemAppear(rowTailIndex, total)
             }
           })
-        }, (rowEntries: EntryCardModel[], rowIndex: number) => `video-row-${rowIndex}-${rowEntries.map((entry: EntryCardModel, entryIndex: number) => homeEntryListRenderKey(entry, (rowIndex * resolveHomeVideoGridColumns()) + entryIndex)).join('|')}`)
+        }, (rowEntries: EntryCardModel[], rowIndex: number) => homeVideoRowRenderKey(rowEntries, rowIndex))
       }
 
       if (this.isLoadingMore) {
@@ -490,6 +501,7 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
+    .cachedCount(HOME_VIDEO_LIST_CACHED_ROW_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)

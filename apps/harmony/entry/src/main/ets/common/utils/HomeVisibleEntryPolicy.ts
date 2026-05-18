@@ -1,13 +1,13 @@
 export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 18
-const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 24
+const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 36
 const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 12
 const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 4
-const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 24
 const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 8
 const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 4
-const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 12
+const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 24
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -42,11 +42,15 @@ const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
     estimatedVisibleItemCount: 2,
   }
 
-// 视频是双列网格，估算高度按“每个 item 对应半行滚动距离”计算。
+// 视频是双列网格：每行高度 ≈ 16:9 封面 (~95px) + 8 间距 + 36 标题 + 4 间距
+// + 16 元数据 + 12 行间距 ≈ 171px，按"每个 entry 对应半行滚动距离"换算
+// 单 entry 等效高度 ≈ 88。preloadRemainingCount 收紧到 8（约 4 行）以便在
+// 用户滚到末段时尽早触发，estimatedVisibleItemCount 提到 6（大屏可同时显示
+// 3 行 = 6 个 entry）以匹配真实视口。
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 10,
-  estimatedItemHeight: 80,
-  estimatedVisibleItemCount: 4,
+  preloadRemainingCount: 8,
+  estimatedItemHeight: 88,
+  estimatedVisibleItemCount: 6,
 }
 
 export function resolveHomeVisibleEntryInitialLimit(
