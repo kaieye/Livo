@@ -339,25 +339,11 @@
       "descriptionEn": "Meme Radio podcast on internet culture and meme phenomena"
     },
     {
-      "title": "知行小酒馆",
-      "url": "rsshub://xiaoyuzhou/podcast/6013f9f58e2f7ee375cf4216",
-      "language": "Chinese",
-      "descriptionZh": "知行小酒馆播客，探讨知识、认知与个人成长",
-      "descriptionEn": "Zhixing Xiaojuguan podcast on knowledge, cognition and growth"
-    },
-    {
       "title": "纵横四海",
       "url": "rsshub://xiaoyuzhou/podcast/62694abdb221dd5908417d1e",
       "language": "Chinese",
       "descriptionZh": "纵横四海播客，分享旅行见闻与世界各地文化故事",
       "descriptionEn": "Zongheng Sihai podcast sharing travel stories and world cultures"
-    },
-    {
-      "title": "声动早咖啡",
-      "url": "rsshub://xiaoyuzhou/podcast/60de7c003dd577b40d5a40f3",
-      "language": "Chinese",
-      "descriptionZh": "声动早咖啡，用 10 分钟了解当日科技资讯的早间播客",
-      "descriptionEn": "Shengdong Morning Coffee podcast for 10-min daily tech news"
     }
   ]
 }

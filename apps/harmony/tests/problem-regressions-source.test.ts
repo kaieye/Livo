@@ -104,8 +104,10 @@ test('social inline media creates VideoController only for active playback', () 
   assert.match(quotedTweetRendererSource, /videoController: this\.isInlineVideoActive\(NESTED_SECTION_TAG, this\.nestedView\(\)\.primaryMediaItem, 0\)[\s\S]*?\? this\.inlineVideoControllerFor/)
 })
 
-test('home mode scenes mount only the active and transition scenes', () => {
-  assert.match(indexHomeRootContentSource, /private shouldMountScene\(mode: SubscriptionMode\): boolean \{[\s\S]*?return this\.getSceneProps\(mode\)\.shouldMount/)
+test('home mode scenes mount active/transition immediately and prewarm the rest after a short delay', () => {
+  assert.match(indexHomeRootContentSource, /private shouldMountScene\(mode: SubscriptionMode\): boolean \{[\s\S]*?return this\.getSceneProps\(mode\)\.shouldMount \|\| this\.scenesPrewarmed/)
+  assert.match(indexHomeRootContentSource, /@State private scenesPrewarmed: boolean = false/)
+  assert.match(indexHomeRootContentSource, /this\.prewarmTimerId = setTimeout\(\(\) => \{[\s\S]*?this\.scenesPrewarmed = true/)
   assert.match(indexHomeRootContentSource, /if \(this\.shouldMountScene\('articles'\)\) \{[\s\S]*?this\.ModeEntriesScene\('articles'\)/)
   assert.match(indexHomeRootContentSource, /if \(this\.shouldMountScene\('pictures'\)\) \{[\s\S]*?this\.ModeEntriesScene\('pictures'\)/)
 })

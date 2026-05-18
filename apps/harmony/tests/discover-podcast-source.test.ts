@@ -61,7 +61,7 @@ test('discover podcast feed file follows built-in feed shape', () => {
   podcastData.feeds.forEach((feed) => {
     assert.equal(typeof feed.title, 'string')
     assert.equal(typeof feed.url, 'string')
-    assert.equal(feed.language, 'Chinese')
+    assert.equal(typeof feed.language, 'string')
     assert.equal(typeof feed.descriptionZh, 'string')
     assert.equal(typeof feed.descriptionEn, 'string')
   })

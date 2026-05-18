@@ -67,7 +67,6 @@ export struct HomeRootOverlayControls {
         materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
       },
     })
-    .enabled(!this.interactionLocked)
     .onChange((index: number) => {
       const mode = HOME_MODES[index]
       if (mode) {

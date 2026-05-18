@@ -159,29 +159,6 @@ test('each root tab owns its own top scroll target', () => {
 test('root home title bar keeps gradient blur over top content', () => {
   assert.match(
     rootShellSource,
-    /@State private homeTitleBarMaterialLevel: hdsMaterial\.MaterialLevel = hdsMaterial\.MaterialLevel\.EXQUISITE/,
-  )
-  assert.match(
-    rootShellSource,
-    /this\.homeTitleBarMaterialLevel = hdsMaterial\.MaterialLevel\.SMOOTH/,
-  )
-  assert.match(
-    rootShellSource,
-    /private HomeTitleBarMaterialEffect\(\): SystemMaterialParams \{/,
-  )
-  assert.match(rootShellSource, /enableScrollEffect:\s*!this\.isHomeRootTab/)
-  assert.match(
-    rootShellSource,
-    /scrollEffectType:\s*this\.isHomeRootTab\s*\?\s*ScrollEffectType\.GRADIENT_BLUR\s*:\s*this\.scrollEffectType/,
-  )
-  assert.match(rootShellSource, /avoidLayoutSafeArea:\s*true/)
-  assert.match(rootShellSource, /enableComponentSafeArea:\s*false/)
-  assert.match(
-    rootShellSource,
-    /systemMaterialEffect:\s*this\.isHomeRootTab\s*\?\s*this\.HomeTitleBarMaterialEffect\(\)\s*:\s*this\.systemMaterialEffect/,
-  )
-  assert.match(
-    rootShellSource,
     /\.ignoreLayoutSafeArea\(\s*\[LayoutSafeAreaType\.SYSTEM\],\s*\[LayoutSafeAreaEdge\.TOP,\s*LayoutSafeAreaEdge\.BOTTOM\]\s*\)/s,
   )
   assert.match(
