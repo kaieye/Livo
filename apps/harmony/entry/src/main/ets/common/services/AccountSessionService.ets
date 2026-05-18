@@ -2,8 +2,8 @@ import http from '@ohos.net.http'
 import preferences from '@ohos.data.preferences'
 import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
-import { resolveBilibiliStoredState } from '../utils/BilibiliAccountStatus'
-import { resolveYouTubeLoginUrl } from '../utils/YouTubeLoginUrl'
+import { resolveBilibiliStoredState } from '../utils/platform/BilibiliAccountStatus'
+import { resolveYouTubeLoginUrl } from '../utils/platform/YouTubeLoginUrl'
 import {
   ACCEPT_JSON,
   BILIBILI_REFERER,

@@ -3,7 +3,7 @@ import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
-import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/social/TweetEntryPresentation'
 
 @Component
 export struct ArticleSocialDetail {

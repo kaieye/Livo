@@ -1,7 +1,7 @@
 import { FeedViewType } from '../models/LivoModels'
 import { normalizeDiscoverInput } from '../services/discover/DiscoverUrlParsing'
 import { DirectUrlResult, DiscoverCategoryCard } from './DiscoverTypes'
-import { hostOf } from '../utils/DiscoverCandidatePresentation'
+import { hostOf } from '../utils/discover/DiscoverCandidatePresentation'
 
 export function discoverCategoryCards(): DiscoverCategoryCard[] {
   return [

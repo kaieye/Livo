@@ -9,7 +9,7 @@ const indexSource = readFileSync(
 
 const railCoordinatorSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/IndexHomeRailCoordinator.ets',
+    '../entry/src/main/ets/common/utils/index-home/IndexHomeRailCoordinator.ets',
     import.meta.url,
   ),
   'utf8',

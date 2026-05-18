@@ -1,5 +1,5 @@
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
+import { TweetQuotedPresentation } from '../utils/social/TweetEntryPresentation'
 import { PictureCarouselMediaItem } from '../utils/PictureGallery'
 import { QUOTED_TILE_SIZE } from '../utils/InlineMediaLayout'
 import {
@@ -8,7 +8,7 @@ import {
   quotedResolvedTextMaxLines,
   quotedShouldShowExpandAction,
   quotedTweetMediaView,
-} from '../utils/QuotedTweetMediaModel'
+} from '../utils/social/QuotedTweetMediaModel'
 import { InlineMediaGrid } from './quoted-tweet/InlineMediaGrid'
 import { InlineMediaSingleVideo } from './quoted-tweet/InlineMediaSingleVideo'
 

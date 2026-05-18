@@ -1,7 +1,7 @@
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/social/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
 import { QuotedTweetRenderer } from './QuotedTweetRenderer'
 import { PictureCarouselMediaItem } from '../utils/PictureGallery'

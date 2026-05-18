@@ -5,9 +5,9 @@ import { ArticleContentBlock } from '../models/LivoModels'
 import {
   articleImageBlockServesAsVideoCover,
   resolveArticleVideoPreviewImage,
-} from '../utils/ArticleDetailContent'
-import { isArticleDirectVideo, isArticleYouTubeVideo, resolveInAppEmbedUrl } from '../utils/ArticleVideoUrlClassifier'
-import { shouldUseYouTubeWebFallback } from '../utils/YouTubePlaybackMode'
+} from '../utils/article/ArticleDetailContent'
+import { isArticleDirectVideo, isArticleYouTubeVideo, resolveInAppEmbedUrl } from '../utils/article/ArticleVideoUrlClassifier'
+import { shouldUseYouTubeWebFallback } from '../utils/platform/YouTubePlaybackMode'
 import { AudioPlaybackService } from '../services/AudioPlaybackService'
 
 const WEB_VIDEO_USER_AGENT: string =

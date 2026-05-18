@@ -10,21 +10,21 @@ import {
   resolveFeedDetailEntryVideoPreviewUrl,
   resolveFeedDetailEntryVideoUrl,
   resolveFeedDetailVideoSourceLabel,
-} from '../utils/FeedDetailVideoPreview'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+} from '../utils/feed-detail/FeedDetailVideoPreview'
+import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import {
   FeedDetailDataCoordinator,
-} from '../utils/FeedDetailDataCoordinator'
+} from '../utils/feed-detail/FeedDetailDataCoordinator'
 import {
   FeedDetailHeroAvatarCoordinator,
-} from '../utils/FeedDetailHeroAvatarCoordinator'
+} from '../utils/feed-detail/FeedDetailHeroAvatarCoordinator'
 import {
   FeedDetailPicturePreviewLeadUrlCache,
   FeedDetailTweetPresentationCache,
-} from '../utils/FeedDetailEntryPresentationCaches'
+} from '../utils/feed-detail/FeedDetailEntryPresentationCaches'
 import {
   feedDetailEntryStableKey,
-} from '../utils/FeedDetailEntryCaches'
+} from '../utils/feed-detail/FeedDetailEntryCaches'
 import {
   FeedDetailDisplaySnapshot,
   isFeedDetailPicturesPreview,
@@ -34,7 +34,7 @@ import {
   resolveFeedDetailGalleryCaption,
   resolveFeedDetailHeroDescription,
   resolveFeedDetailPicturePreviewLeadUrl,
-} from '../utils/FeedDetailViewModel'
+} from '../utils/feed-detail/FeedDetailViewModel'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { TweetEntryCard } from './TweetEntryCard'

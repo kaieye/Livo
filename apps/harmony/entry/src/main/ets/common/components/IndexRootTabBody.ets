@@ -8,7 +8,7 @@ import { SubscriptionMode } from './HomeRootConfig'
 import { SubscriptionsContent } from './SubscriptionsContent'
 import { SubscriptionsAnimatedModeRail } from './SubscriptionsAnimatedModeRail'
 import { SubscriptionsModeRail } from './SubscriptionsModeRail'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 @Component

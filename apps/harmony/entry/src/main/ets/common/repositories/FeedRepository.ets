@@ -1,7 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { AppDatabaseService } from '../services/AppDatabaseService'
-import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/SocialFeedTitles'
+import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/social/SocialFeedTitles'
 import { resultLong, resultString } from '../utils/ResultSetHelper'
 import { RdbTable } from './RdbTable'
 

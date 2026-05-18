@@ -6,7 +6,7 @@ import {
   resolveFeedDetailEntryVideoUrl,
   resolveFeedDetailVideoSourceLabel,
   resolveStaticFeedDetailVideoPreviewUrl,
-} from '../entry/src/main/ets/common/utils/FeedDetailVideoPreview.ts'
+} from '../entry/src/main/ets/common/utils/feed-detail/FeedDetailVideoPreview.ts'
 
 function entry(overrides = {}) {
   return {

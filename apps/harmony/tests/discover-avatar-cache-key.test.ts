@@ -5,7 +5,7 @@ import {
   discoverAvatarCacheKeys,
   isDiscoverAvatarCacheableImageUrl,
   isDiscoverAvatarPlaceholderUrl,
-} from '../entry/src/main/ets/common/utils/DiscoverAvatarPresentation.ts'
+} from '../entry/src/main/ets/common/utils/discover/DiscoverAvatarPresentation.ts'
 
 test('discover avatar cache keys match the same RSSHub route across instances', () => {
   const keys = discoverAvatarCacheKeys(

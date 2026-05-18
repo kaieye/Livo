@@ -9,7 +9,7 @@ const indexSource = readFileSync(
 
 const runtimeSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/IndexHomeRuntimeCoordinator.ets',
+    '../entry/src/main/ets/common/utils/index-home/IndexHomeRuntimeCoordinator.ets',
     import.meta.url,
   ),
   'utf8',

@@ -6,7 +6,7 @@ import {
   DiscoverRemoteProfileSeed,
   extractXFollowersFromText,
   parseXProfilesFromSearchHtml,
-} from '../../utils/DiscoverRemoteSearchParsing'
+} from '../../utils/discover/DiscoverRemoteSearchParsing'
 import {
   FALLBACK_NITTER_INSTANCES,
   BASIC_BROWSER_USER_AGENT,

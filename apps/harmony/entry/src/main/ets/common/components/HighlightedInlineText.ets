@@ -1,5 +1,5 @@
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { buildInlineHighlightSegments, InlineHighlightSegment } from '../utils/HomeInlineSearch'
+import { buildInlineHighlightSegments, InlineHighlightSegment } from '../utils/home/HomeInlineSearch'
 
 @Component
 export struct HighlightedInlineText {

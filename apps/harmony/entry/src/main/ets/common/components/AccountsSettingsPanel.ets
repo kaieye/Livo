@@ -2,16 +2,16 @@ import { AccountSessionService } from '../services/AccountSessionService'
 import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { openAccountLogin } from '../navigation/AppRouter'
-import { accountCardRenderKey } from '../utils/AccountCardRenderKey'
-import { resolveExternalBrowserCheckMessage } from '../utils/AccountBrowserCheckMessage'
-import { resolveAccountLoginWebPolicy } from '../utils/AccountLoginWebPolicy'
-import { buildLinkNavigationFailureStatus } from '../utils/AccountNavigationError'
-import { AccountLinkResultState, mergeStatusWithAccountLinkResult } from '../utils/AccountLinkResult'
+import { accountCardRenderKey } from '../utils/account/AccountCardRenderKey'
+import { resolveExternalBrowserCheckMessage } from '../utils/account/AccountBrowserCheckMessage'
+import { resolveAccountLoginWebPolicy } from '../utils/account/AccountLoginWebPolicy'
+import { buildLinkNavigationFailureStatus } from '../utils/account/AccountNavigationError'
+import { AccountLinkResultState, mergeStatusWithAccountLinkResult } from '../utils/account/AccountLinkResult'
 import {
   AccountProviderDefinition,
   accountProviderTitle,
   listAccountProviderDefinitions,
-} from '../utils/AccountProviderCatalog'
+} from '../utils/account/AccountProviderCatalog'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import { AccountProviderRow } from './AccountProviderRow'
 import {

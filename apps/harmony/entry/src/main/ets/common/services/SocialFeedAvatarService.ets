@@ -1,5 +1,5 @@
 import http from '@ohos.net.http'
-import { extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import { extractInstagramUsername, extractXUsername } from '../utils/social/SocialFeedTitles'
 import { decodeBasicEntities, extractMetaContent } from '../utils/HtmlParser'
 import {
   BASIC_BROWSER_USER_AGENT,

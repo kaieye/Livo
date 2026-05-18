@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const drainSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedLoadMoreDrain.ets',
+    '../entry/src/main/ets/common/utils/home/HomeFeedLoadMoreDrain.ets',
     import.meta.url,
   ),
   'utf8',
@@ -12,7 +12,7 @@ const drainSource = readFileSync(
 
 const paginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',

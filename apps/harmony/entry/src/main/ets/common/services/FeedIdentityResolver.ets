@@ -1,4 +1,4 @@
-import { canonicalFeedUrl, extractInstagramUsername, extractXUsername } from '../utils/SocialFeedTitles'
+import { canonicalFeedUrl, extractInstagramUsername, extractXUsername } from '../utils/social/SocialFeedTitles'
 import { FeedViewType } from '../models/LivoModels'
 
 export class FeedIdentityResolver {

@@ -8,9 +8,9 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 
 import {
   SubscriptionsAvatarHydrationCoordinator,
-} from '../utils/SubscriptionsAvatarHydrationCoordinator'
+} from '../utils/subscriptions/SubscriptionsAvatarHydrationCoordinator'
 import { SubscriptionMode, HOME_MODE_SCENE_TOP_INSET } from './HomeRootConfig'
-import { resolveSubscriptionModeLabel } from '../utils/SubscriptionsModePresentation'
+import { resolveSubscriptionModeLabel } from '../utils/subscriptions/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
@@ -24,7 +24,7 @@ import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../utils/RootTabScrollToTopSignal'
+} from '../utils/index-home/RootTabScrollToTopSignal'
 
 @Component
 export struct SubscriptionsContent {

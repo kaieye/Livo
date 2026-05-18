@@ -9,7 +9,7 @@ import {
   ScrollEffectType,
   hdsMaterial,
 } from '@kit.UIDesignKit'
-import { rootTabTitleBarStyle } from '../utils/IndexRootChrome'
+import { rootTabTitleBarStyle } from '../utils/index-home/IndexRootChrome'
 import { RootTabId } from '../navigation/AppRouter'
 import { Entry, EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
@@ -20,12 +20,12 @@ import {
 import {
   HdsBottomTabId,
   resolveHdsBottomTabBarBottomMargin,
-} from '../utils/HdsBottomTabConfig'
+} from '../utils/index-home/HdsBottomTabConfig'
 import { RootTabSymbolPair, SubscriptionMode } from './HomeRootConfig'
 import { HomeRootTabBody } from './HomeRootTabBody'
 import { IndexHomeRootContentCallbacks } from './IndexHomeRootContent'
 import { IndexRootTabBody } from './IndexRootTabBody'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 @Component

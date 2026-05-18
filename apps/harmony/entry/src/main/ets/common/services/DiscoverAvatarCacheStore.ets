@@ -1,5 +1,5 @@
 import { PreferenceStoreAccessor } from './PreferenceStoreAccessor'
-import { discoverAvatarCacheKey, isDiscoverAvatarCacheableImageUrl } from '../utils/DiscoverAvatarPresentation'
+import { discoverAvatarCacheKey, isDiscoverAvatarCacheableImageUrl } from '../utils/discover/DiscoverAvatarPresentation'
 
 const DISCOVER_AVATAR_CACHE_KEY: string = 'discoverAvatarCacheV1'
 const MAX_DISCOVER_AVATAR_CACHE_ENTRIES: number = 600

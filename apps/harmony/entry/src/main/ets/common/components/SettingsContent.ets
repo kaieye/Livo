@@ -23,7 +23,7 @@ import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../utils/RootTabScrollToTopSignal'
+} from '../utils/index-home/RootTabScrollToTopSignal'
 
 const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56

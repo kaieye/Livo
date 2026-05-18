@@ -6,7 +6,7 @@ import {
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { SubscriptionsModeRail } from '../common/components/SubscriptionsModeRail'
 import { SubscriptionMode } from '../common/components/HomeRootConfig'
-import { rootTabTitleBarStyle } from '../common/utils/IndexRootChrome'
+import { rootTabTitleBarStyle } from '../common/utils/index-home/IndexRootChrome'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 
 @Entry

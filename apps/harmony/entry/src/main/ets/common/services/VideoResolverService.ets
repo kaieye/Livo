@@ -1,5 +1,5 @@
 import http from '@ohos.net.http'
-import { buildYouTubeWebFallbackUrl } from '../utils/YouTubePlaybackUrl'
+import { buildYouTubeWebFallbackUrl } from '../utils/platform/YouTubePlaybackUrl'
 import { resolveFirstNonEmpty } from '../utils/AsyncResolution'
 import {
   InvidiousFormatStream,

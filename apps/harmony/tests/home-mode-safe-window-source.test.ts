@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const visibleEntryPolicySource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeVisibleEntryPolicy.ts',
+    '../entry/src/main/ets/common/utils/home/HomeVisibleEntryPolicy.ts',
     import.meta.url,
   ),
   'utf8',
@@ -20,15 +20,15 @@ const homeRootConfigSource = readFileSync(
 
 const homeFeedPaginationStateSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedPaginationState.ets',
+    '../entry/src/main/ets/common/utils/home/HomeFeedPaginationState.ets',
     import.meta.url,
   ),
   'utf8',
 )
 
-const homeFeedSessionSource = readFileSync(
+const indexSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedSession.ets',
+    '../entry/src/main/ets/pages/Index.ets',
     import.meta.url,
   ),
   'utf8',
@@ -36,7 +36,7 @@ const homeFeedSessionSource = readFileSync(
 
 const homeFeedPaginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
@@ -44,7 +44,7 @@ const homeFeedPaginationSource = readFileSync(
 
 const homeModeMapHelpersSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeModeMapHelpers.ets',
+    '../entry/src/main/ets/common/utils/home/HomeModeMapHelpers.ets',
     import.meta.url,
   ),
   'utf8',
@@ -107,18 +107,18 @@ test('home pagination state does not force full render mode at startup', () => {
   )
 })
 
-test('home feed session uses bounded by-mode queries for mode reloads', () => {
+test('index page uses bounded by-mode queries for mode reloads', () => {
   assert.match(
-    homeFeedSessionSource,
+    indexSource,
     /FeaturedEntriesQuery\.featuredEntriesByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
-    homeFeedSessionSource,
+    indexSource,
     /FeaturedEntriesQuery\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
-    homeFeedSessionSource,
-    /this\.pagination\.ensureModeEntriesLoaded\(currentMode\)/,
+    indexSource,
+    /this\.homeFeedPagination\.ensureModeEntriesLoaded\(currentMode\)/,
   )
 })
 

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedLoadMorePrefetch.ets',
+    '../entry/src/main/ets/common/utils/home/HomeFeedLoadMorePrefetch.ets',
     import.meta.url,
   ),
   'utf8',

@@ -4,7 +4,7 @@ import {
   HdsNavigationTitleMode,
 } from '@kit.UIDesignKit'
 import { DiscoverContent } from '../common/components/DiscoverContent'
-import { rootTabTitleBarStyle } from '../common/utils/IndexRootChrome'
+import { rootTabTitleBarStyle } from '../common/utils/index-home/IndexRootChrome'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 
 @Entry

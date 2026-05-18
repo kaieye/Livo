@@ -1,5 +1,5 @@
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
-import { resolveSocialFeedDisplayTitle } from '../utils/SocialFeedPresentation'
+import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import {
   buildArticleContentBlocks,
   buildPictureDetailContentBlocks,

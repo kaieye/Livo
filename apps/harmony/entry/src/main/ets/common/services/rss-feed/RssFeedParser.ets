@@ -1,6 +1,6 @@
 import { Entry, Feed } from '../../models/LivoModels'
 import { appendFeedMediaUrlsToContent, extractFeedMediaUrls } from '../../utils/FeedMediaUrl'
-import { parseBilibiliDynamicEntries } from '../../utils/BilibiliDynamicFeed'
+import { parseBilibiliDynamicEntries } from '../../utils/platform/BilibiliDynamicFeed'
 import {
   stripHtml,
   normalizeRichContent,

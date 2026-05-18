@@ -1,6 +1,6 @@
 import { EntryCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { resolveHomeVideoCardTokens } from '../utils/HomeVideoGrid'
+import { resolveHomeVideoCardTokens } from '../utils/home/HomeVideoGrid'
 import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
 

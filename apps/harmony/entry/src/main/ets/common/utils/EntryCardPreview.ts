@@ -1,4 +1,4 @@
-import { selectArticleVideoUrls } from './ArticleVideoSource.ts'
+import { selectArticleVideoUrls } from './article/ArticleVideoSource.ts'
 
 export interface EntryCardPreviewTarget {
   title: string

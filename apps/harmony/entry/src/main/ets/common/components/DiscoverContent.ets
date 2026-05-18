@@ -25,19 +25,19 @@ import { resolveProfileCandidatesByPlatform } from '../services/discover/Discove
 import { resolveKeywordCandidatesByPlatform } from '../services/discover/DiscoverKeywordResolver'
 import { searchedRecommendedFeedsByPlatform, trendingDiscoverFeedsFromJsonNow } from '../services/discover/DiscoverFeedCatalog'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { resolveDiscoverOverlayReturnLevel } from '../utils/DiscoverNavigationPolicy'
+import { resolveDiscoverOverlayReturnLevel } from '../utils/discover/DiscoverNavigationPolicy'
 import {
   candidateAvatarCacheKey, candidateAvatarFallbackUrls, platformColor,
   resolvedCandidateAvatarUrl, resolvedPlatformLabel, shouldHydrateCandidateAvatar,
-} from '../utils/DiscoverCandidatePresentation'
-import { isSubscribedCandidate, isSubscribedRecommendedFeed } from '../utils/DiscoverFeedIdentity'
+} from '../utils/discover/DiscoverCandidatePresentation'
+import { isSubscribedCandidate, isSubscribedRecommendedFeed } from '../utils/discover/DiscoverFeedIdentity'
 import { BOTTOM_TAB_FLOAT_GAP, BOTTOM_TAB_TOTAL_HEIGHT, PAGE_BOTTOM_GAP, PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
-import { DiscoverInteractionCoordinator } from '../utils/DiscoverInteractionCoordinator'
+import { DiscoverInteractionCoordinator } from '../utils/discover/DiscoverInteractionCoordinator'
 import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../utils/RootTabScrollToTopSignal'
+} from '../utils/index-home/RootTabScrollToTopSignal'
 
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56

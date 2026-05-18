@@ -1,10 +1,10 @@
 import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { accountCardHeadlineStatus } from '../utils/AccountCardHeadline'
+import { accountCardHeadlineStatus } from '../utils/account/AccountCardHeadline'
 import {
   accountProviderBadgeBackground,
   accountProviderBadgeResource,
-} from '../utils/AccountProviderCatalog'
+} from '../utils/account/AccountProviderCatalog'
 import { CARD_RADIUS_MD, CHIP_RADIUS } from '../ui/UiTokens'
 
 const ACTION_BUTTON_HEIGHT: number = 32

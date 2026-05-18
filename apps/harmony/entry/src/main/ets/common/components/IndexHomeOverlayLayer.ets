@@ -1,6 +1,6 @@
 import { EntryCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { resolveHomeModeTitle } from '../utils/HomeModeMeta'
+import { resolveHomeModeTitle } from '../utils/home/HomeModeMeta'
 import { HomeInlineSearchOverlay } from './HomeInlineSearchOverlay'
 import { HomeRootOverlayControls } from './HomeRootOverlayControls'
 import { SubscriptionMode } from './HomeRootConfig'

@@ -2178,6 +2178,727 @@
       "language": "English",
       "descriptionZh": "arXiv 计算机视觉方向最新论文预印本",
       "descriptionEn": "Latest computer vision preprint papers from arXiv cs.CV"
+    },
+    {
+      "title": "NPR Topics: News",
+      "url": "https://feeds.npr.org/1001/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 新闻、音频和播客。涵盖突发新闻、美国和世界新闻、政治、商业、科学、技术。",
+      "descriptionEn": "NPR news, audio, and podcasts. Coverage of breaking stories, national and world news, politics, business, science, technology, and extended coverage of major national and world events."
+    },
+    {
+      "title": "NPR Topics: Science",
+      "url": "https://feeds.npr.org/1002/rss.xml",
+      "language": "English",
+      "descriptionZh": "最新健康与科学新闻，包括医学、健康生活、营养、药物、饮食及科技进展。",
+      "descriptionEn": "The latest health and science news, including updates on medicine, healthy living, nutrition, drugs, diet, and advances in science and technology."
+    },
+    {
+      "title": "NPR Topics: National",
+      "url": "https://feeds.npr.org/1003/rss.xml",
+      "language": "English",
+      "descriptionZh": "美国国内新闻、美国政治、选举、商业、艺术、文化、健康和科学报道。",
+      "descriptionEn": "NPR coverage of national news, U.S. politics, elections, business, arts, culture, health and science, and technology."
+    },
+    {
+      "title": "NPR Topics: World",
+      "url": "https://feeds.npr.org/1004/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 世界新闻、国际艺术与文化、世界商业与金融市场、健康科学与技术全球趋势。",
+      "descriptionEn": "NPR world news, international art and culture, world business and financial markets, world economy, and global trends in health, science and technology."
+    },
+    {
+      "title": "NPR Topics: Business",
+      "url": "https://feeds.npr.org/1006/rss.xml",
+      "language": "English",
+      "descriptionZh": "最新商业新闻，涵盖华尔街、利率、银行、公司及美国和全球金融市场的报道。",
+      "descriptionEn": "Find the latest business news with reports on Wall Street, interest rates, banking, companies, and U.S. and world financial markets."
+    },
+    {
+      "title": "NPR Topics: Science",
+      "url": "https://feeds.npr.org/1007/rss.xml",
+      "language": "English",
+      "descriptionZh": "最新健康与科学新闻，包括医学、healthy living、营养、药物、饮食及科技进展。",
+      "descriptionEn": "The latest health and science news, including updates on medicine, healthy living, nutrition, drugs, diet, and advances in science and technology."
+    },
+    {
+      "title": "NPR Topics: Culture",
+      "url": "https://feeds.npr.org/1008/rss.xml",
+      "language": "English",
+      "descriptionZh": "艺术与娱乐评论、访谈、书评、影评、乐评、喜剧及视觉艺术。",
+      "descriptionEn": "Art and entertainment commentary plus interviews, book reviews, movie reviews, music reviews, comedy, and visual art."
+    },
+    {
+      "title": "NPR Topics: Middle East",
+      "url": "https://feeds.npr.org/1009/rss.xml",
+      "language": "English",
+      "descriptionZh": "中东新闻、艺术、文化与政治。涵盖伊拉克、以色列、巴勒斯坦、伊朗、石油输出国组织及波斯湾国家动态。",
+      "descriptionEn": "Middle East news, arts, culture, and politics. Updates on Iraq, Israel, Palestine, Iran, OPEC, and the Persian Gulf states."
+    },
+    {
+      "title": "NPR: Archived Topic: Iraq",
+      "url": "https://feeds.npr.org/1010/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 伊拉克相关 archived 报道，涵盖库尔德议会选举、巴士拉美国领事馆关闭、难民学者项目、黑水审判、摩苏尔重建及巴格达黑色文学。",
+      "descriptionEn": "Archived NPR coverage related to Iraq, covering topics such as Kurdish parliamentary elections, U.S. consulate closures in Basra, refugee scholar programs, the Blackwater trial, Mosul reconstruction efforts, and Baghdad Noir literature."
+    },
+    {
+      "title": "NPR Topics: Education",
+      "url": "https://feeds.npr.org/1013/rss.xml",
+      "language": "English",
+      "descriptionZh": "探索学习如何在家庭、学校、工作场所及其他地方发生，以及我们对学习的理解如何快速演变。",
+      "descriptionEn": "We've been to school. We know how education works. Right? In fact, many aspects of learning — in homes, at schools, at work and elsewhere — are evolving rapidly, along with our understanding of learning. Join us as we explore how learning happens."
+    },
+    {
+      "title": "NPR Topics: Politics",
+      "url": "https://feeds.npr.org/1014/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 对美国和世界政治的扩展报道，国会和白宫最新消息及选举报道。",
+      "descriptionEn": "NPR's expanded coverage of U.S. and world politics, the latest news from Congress and the White House and elections."
+    },
+    {
+      "title": "NPR Topics: Race",
+      "url": "https://feeds.npr.org/1015/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 关于种族和民族的故事及其对政治、文化、社会的影响。",
+      "descriptionEn": "NPR stories on race and ethnicity and race's effects on politics, culture, society."
+    },
+    {
+      "title": "NPR Topics: Religion",
+      "url": "https://feeds.npr.org/1016/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 关于美国和世界宗教、精神、伦理及影响社会和文化的道德问题的报道。",
+      "descriptionEn": "NPR's stories on U.S. and world religion, spirituality, ethics, and moral issues affecting society and culture."
+    },
+    {
+      "title": "NPR Topics: Economy",
+      "url": "https://feeds.npr.org/1017/rss.xml",
+      "language": "English",
+      "descriptionZh": "美国和世界经济新闻、世界银行及美联储相关报道。评论经济趋势。",
+      "descriptionEn": "NPR news on the U.S. and world economy, the World Bank, and Federal Reserve. Commentary on economic trends."
+    },
+    {
+      "title": "NPR Topics: Your Money",
+      "url": "https://feeds.npr.org/1018/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 个人理财、金钱、投资、税收、退休、抵押贷款和房地产市场、财富管理及股票市场新闻报道。",
+      "descriptionEn": "NPR coverage of personal finance, money, investing, taxes, retirement, mortgages and housing markets, wealth management, and stock market news."
+    },
+    {
+      "title": "NPR Topics: Technology",
+      "url": "https://feeds.npr.org/1019/rss.xml",
+      "language": "English",
+      "descriptionZh": "最新科技新闻和突破，包括科技、科学和行业进展。",
+      "descriptionEn": "Latest technology news and breakthroughs in technology, science, and industry."
+    },
+    {
+      "title": "NPR Topics: Media",
+      "url": "https://feeds.npr.org/1020/rss.xml",
+      "language": "English",
+      "descriptionZh": "媒体状态新闻。广播和印刷媒体、电视和广播新闻趋势。",
+      "descriptionEn": "News about the state of the media. Trends in broadcast and print media, television, and radio journalism."
+    },
+    {
+      "title": "NPR Topics: Radio Expeditions",
+      "url": "https://feeds.npr.org/1023/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 与国家地理学会联合制作。通过访谈、叙事和声音探索环境、文化和野生动物。",
+      "descriptionEn": "A co-production of NPR and the National Geographic Society. Explore our world's environments, cultures, and wildlife through interviews, narrative, and sounds."
+    },
+    {
+      "title": "NPR Topics: Research News",
+      "url": "https://feeds.npr.org/1024/rss.xml",
+      "language": "English",
+      "descriptionZh": "科学、医学、健康和科技的新进展。干细胞研究、药物研究和疾病新疗法。",
+      "descriptionEn": "New advances in science, medicine, health, and technology. Stem cell research, drug research, and new treatments for disease."
+    },
+    {
+      "title": "NPR Topics: Environment",
+      "url": "https://feeds.npr.org/1025/rss.xml",
+      "language": "English",
+      "descriptionZh": "环境、气候变化、污染和濒危物种的最新消息。还包括 NPR 与国家地理合作的气候变化系列 Climate Connections。",
+      "descriptionEn": "Breaking news on the environment, climate change, pollution, and endangered species. Also featuring Climate Connections, a special series on climate change co-produced by NPR and National Geographic."
+    },
+    {
+      "title": "NPR Topics: Space",
+      "url": "https://feeds.npr.org/1026/rss.xml",
+      "language": "English",
+      "descriptionZh": "太空探索、航天飞机任务、NASA 新闻、私人太空探索、卫星技术和天文学新发现报道。",
+      "descriptionEn": "NPR coverage of space exploration, space shuttle missions, news from NASA, private space exploration, satellite technology, and new discoveries in astronomy and astrophysics."
+    },
+    {
+      "title": "NPR Topics: Healthcare",
+      "url": "https://feeds.npr.org/1027/rss.xml",
+      "language": "English",
+      "descriptionZh": "医疗保健状况、健康保险、医学研究新进展、疾病预防和药物治疗。",
+      "descriptionEn": "The state of healthcare, health insurance, new medical research, disease prevention, and drug treatments."
+    },
+    {
+      "title": "NPR Topics: On Aging",
+      "url": "https://feeds.npr.org/1028/rss.xml",
+      "language": "English",
+      "descriptionZh": "关于衰老、长寿、退休和老年人问题的 NPR 故事和音频。",
+      "descriptionEn": "NPR stories and audio on aging, longevity, retirement, and senior issues."
+    },
+    {
+      "title": "NPR Topics: Mental Health",
+      "url": "https://feeds.npr.org/1029/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 报道心理健康、快乐、抑郁及治疗方案。",
+      "descriptionEn": "NPR covers mental health, happiness, depression, and treatment options."
+    },
+    {
+      "title": "NPR Topics: Children's Health",
+      "url": "https://feeds.npr.org/1030/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 报道儿童健康和医学新闻，包括儿童保险、新疗法和儿童产品安全召回。",
+      "descriptionEn": "NPR reports on children's health and medical news including health insurance, new treatments for diseases, and child product safety recalls."
+    },
+    {
+      "title": "NPR Topics: Global Health",
+      "url": "https://feeds.npr.org/1031/rss.xml",
+      "language": "English",
+      "descriptionZh": "世界卫生问题、疾病控制、公共卫生和卫生教育 NPR 新闻。",
+      "descriptionEn": "NPR news on world health issues, disease control, public health and sanitation, and health education."
+    },
+    {
+      "title": "NPR Topics: Books",
+      "url": "https://feeds.npr.org/1032/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 书籍和作者新闻及我们的精选好书。访谈、评论等。",
+      "descriptionEn": "NPR's brings you news about books and authors along with our picks for great reads."
+    },
+    {
+      "title": "NPR Topics: Author Interviews",
+      "url": "https://feeds.npr.org/1033/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 对顶级作者的访谈及每周 NPR Book Tour 播客。",
+      "descriptionEn": "NPR interviews with top authors and the NPR Book Tour, a weekly feature and podcast where leading authors read and discuss their writing."
+    },
+    {
+      "title": "NPR Topics: Book Reviews",
+      "url": "https://feeds.npr.org/1034/rss.xml",
+      "language": "English",
+      "descriptionZh": "来自 NPR 人物、独立书店和公共广播评论家的书籍评判。",
+      "descriptionEn": "Summary judgment on books of note, from NPR personalities, independent booksellers and critics from across the public-radio spectrum."
+    },
+    {
+      "title": "NPR Topics: Music",
+      "url": "https://feeds.npr.org/1039/rss.xml",
+      "language": "English",
+      "descriptionZh": "Tiny Desks、All Songs Considered 及 NPR 深度专题。",
+      "descriptionEn": "Tiny Desks, All Songs Considered and in-depth features from NPR"
+    },
+    {
+      "title": "NPR Topics: In Performance",
+      "url": "https://feeds.npr.org/1040/rss.xml",
+      "language": "English",
+      "descriptionZh": "聆听新音乐、播客、现场音乐会和录音室会话。观看视频会话。阅读音乐家访谈和音乐评论。",
+      "descriptionEn": "Listen to new music, podcasts, live concerts and studio sessions. Watch video sessions. Read interviews with musicians and music reviews."
+    },
+    {
+      "title": "NPR Topics: Movies",
+      "url": "https://feeds.npr.org/1045/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 电影播客、影评及新旧电影评论。电影制作人、演员和女演员访谈。",
+      "descriptionEn": "NPR Movies podcast, movie reviews, and commentary on new and classic films."
+    },
+    {
+      "title": "NPR Topics: Performing Arts",
+      "url": "https://feeds.npr.org/1046/rss.xml",
+      "language": "English",
+      "descriptionZh": "戏剧、艺术、音乐和舞蹈的新闻、访谈和评论。",
+      "descriptionEn": "News, interviews, and commentary on theater, the arts, music, and dance."
+    },
+    {
+      "title": "NPR Topics: Art & Design",
+      "url": "https://feeds.npr.org/1047/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 探索视觉艺术，包括设计、摄影、雕塑和建筑。访谈、评论和音频。",
+      "descriptionEn": "NPR explores the visual arts including design, photography, sculpture, and architecture."
+    },
+    {
+      "title": "NPR Topics: Pop Culture",
+      "url": "https://feeds.npr.org/1048/rss.xml",
+      "language": "English",
+      "descriptionZh": "流行文化趋势新闻和评论。",
+      "descriptionEn": "News and commentary on popular culture trends."
+    },
+    {
+      "title": "NPR Topics: Diversions",
+      "url": "https://feeds.npr.org/1051/rss.xml",
+      "language": "English",
+      "descriptionZh": "来自新闻、文化、体育和文学的不可抗拒的奇异故事。",
+      "descriptionEn": "Irrestible and odd stories from news, culture, sports, and literature."
+    },
+    {
+      "title": "NPR Topics: Humor & Fun",
+      "url": "https://feeds.npr.org/1052/rss.xml",
+      "language": "English",
+      "descriptionZh": "游戏、谜题和竞赛，以及来自喜剧、艺术和社会的奇异故事。",
+      "descriptionEn": "Games, puzzles, and contests plus odd stories from comedy, art, and society."
+    },
+    {
+      "title": "NPR Topics: Food",
+      "url": "https://feeds.npr.org/1053/rss.xml",
+      "language": "English",
+      "descriptionZh": "关于食物、营养、食谱、烹饪、食谱书评和健康的报道。",
+      "descriptionEn": "Stories on food, nutrition, recipes, cooking, cookbook reviews, and health."
+    },
+    {
+      "title": "NPR Topics: Gardening",
+      "url": "https://feeds.npr.org/1054/rss.xml",
+      "language": "English",
+      "descriptionZh": "关于园艺、植物和粮食作物的 NPR 故事。",
+      "descriptionEn": "NPR stories about gardening, plants, and food crops."
+    },
+    {
+      "title": "NPR Topics: Sports",
+      "url": "https://feeds.npr.org/1055/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 体育新闻和访谈。",
+      "descriptionEn": "NPR sports news and interviews."
+    },
+    {
+      "title": "NPR: World Story of the Day",
+      "url": "https://feeds.npr.org/1056/rss.xml",
+      "language": "English",
+      "descriptionZh": "此播客不再发布新剧集，但您仍可以在 NPR 的 State of the World 播客中获取每日最具吸引力和影响力的故事。",
+      "descriptionEn": "We're no longer publishing new episodes of this podcast, but check out NPR's podcast State of the World, where you can still get today's most compelling and consequential stories from around the world every weekday afternoon."
+    },
+    {
+      "title": "NPR Topics: Opinion",
+      "url": "https://feeds.npr.org/1057/rss.xml",
+      "language": "English",
+      "descriptionZh": "新闻事件和世界事件的编辑意见和评论。",
+      "descriptionEn": "Editorial opinions and commentary on news events and world events."
+    },
+    {
+      "title": "NPR Topics: Analysis",
+      "url": "https://feeds.npr.org/1059/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 评论家的分析，包括 Ted Koppel。",
+      "descriptionEn": "Analysis by NPR commentators, including Ted Koppel."
+    },
+    {
+      "title": "NPR Series: From Our Listeners",
+      "url": "https://feeds.npr.org/1061/rss.xml",
+      "language": "English",
+      "descriptionZh": "听众通过电子邮件和电话回复 NPR 故事。",
+      "descriptionEn": "Listeners respond by email and phone to NPR stories."
+    },
+    {
+      "title": "NPR Topics: Obituaries",
+      "url": "https://feeds.npr.org/1062/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 对杰出人物的纪念。",
+      "descriptionEn": "NPR remembrances of remarkable individuals."
+    },
+    {
+      "title": "NPR Topics: Your Health",
+      "url": "https://feeds.npr.org/1066/rss.xml",
+      "language": "English",
+      "descriptionZh": "个人健康、医学、医疗保健、药物、饮食、食谱和营养的新闻和评论。",
+      "descriptionEn": "News and commentary about personal health, medicine, healthcare, drugs, diet, recipes, and nutrition."
+    },
+    {
+      "title": "NPR Topics: Law",
+      "url": "https://feeds.npr.org/1070/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 关于法律问题、法院裁决、最高法院听证会、新法律和政府调查的故事。",
+      "descriptionEn": "NPR stories on legal issues, court rulings, Supreme Court hearings, new laws and government investigations."
+    },
+    {
+      "title": "NPR Topics: Lost & Found Sound",
+      "url": "https://feeds.npr.org/1074/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 的 Lost & Found Sound 系列探索新发现的音频和音乐会话、家庭音频及听众提交的声音和访谈。",
+      "descriptionEn": "NPR's Lost & Found Sound series explores newly discovered audio and music sessions, home audio, and listener submitted sounds and interviews."
+    },
+    {
+      "title": "NPR Topics: Low-Wage America",
+      "url": "https://feeds.npr.org/1076/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 关于低收入美国的故事，富裕与贫穷之间的收入差距、负担得起的住房、福利、医疗补助、社会保障和工人穷人的医疗保健。",
+      "descriptionEn": "NPR stories about low-wage America, the income gap between rich and poor, affordable housing, welfare, medicaid, social security, and healthcare for the working poor."
+    },
+    {
+      "title": "NPR Topics: The Second Term",
+      "url": "https://feeds.npr.org/1077/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 关于乔治·W·布什作为美国第 43 任总统第二任期 stories.",
+      "descriptionEn": "NPR stories about George W. Bush's second term as 43rd President of the United States"
+    },
+    {
+      "title": "NPR Series: The Impact of War",
+      "url": "https://feeds.npr.org/1078/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 关于伊拉克和阿富汗战争的消息和故事。与士兵、世界领导人、退伍军人和后方家庭的访谈。",
+      "descriptionEn": "NPR news and stories about the wars in Iraq and Afghanistan. Interviews with soldiers, world leaders, veterans, and families on the home front."
+    },
+    {
+      "title": "NPR Topics: Social Security Debate",
+      "url": "https://feeds.npr.org/1083/rss.xml",
+      "language": "English",
+      "descriptionZh": "社会 Security 辩论的新闻和分析。待决立法、政治观点及退休新闻。",
+      "descriptionEn": "News and analysis on the Social Security debate. Pending legislation, political viewpoints, and news about retirement."
+    },
+    {
+      "title": "NPR Topics: Summer Reading: Fiction",
+      "url": "https://feeds.npr.org/1085/rss.xml",
+      "language": "English",
+      "descriptionZh": "夏季好小说精选。书评、摘录和作者访谈。",
+      "descriptionEn": "Selections for great summer fiction. Book reviews, excerpts, and author interviews."
+    },
+    {
+      "title": "NPR Topics: Summer Reading: Kids",
+      "url": "https://feeds.npr.org/1086/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 为儿童精选的夏季阅读。摘录、访谈和评论。",
+      "descriptionEn": "NPR's selections of summer reading for kids. Excerpts, interviews, and reviews."
+    },
+    {
+      "title": "NPR Topics: Summer Reading: Cooking",
+      "url": "https://feeds.npr.org/1087/rss.xml",
+      "language": "English",
+      "descriptionZh": "夏季阅读的新鲜食谱和食谱书。",
+      "descriptionEn": "Fresh recipes and cookbooks for summer reading."
+    },
+    {
+      "title": "NPR Topics: Summer",
+      "url": "https://feeds.npr.org/1088/rss.xml",
+      "language": "English",
+      "descriptionZh": "关于夏季的 NPR 故事。生活、饮食、消遣、健康和夏季传统。",
+      "descriptionEn": "NPR stories about summer. Living, eating, diversions, health, and summer traditions."
+    },
+    {
+      "title": "NPR Topics: Summer Reading: Nonfiction",
+      "url": "https://feeds.npr.org/1089/rss.xml",
+      "language": "English",
+      "descriptionZh": "夏季好非小说精选。书评、摘录和作者访谈。",
+      "descriptionEn": "Selections for great summer nonfiction. Book reviews, excerpts, and author interviews."
+    },
+    {
+      "title": "NPR: Story of the Day",
+      "url": "https://feeds.npr.org/1090/rss.xml",
+      "language": "English",
+      "descriptionZh": "此播客不再发布新剧集，但请查看 NPR 的 Consider This 播客，我们每周六天帮助您理解一个主要新闻故事及其对您的意义。",
+      "descriptionEn": "We're no longer publishing new episodes of this podcast, but check out our podcast Consider This, where we help you make sense of a major news story and what it means to you six days a week."
+    },
+    {
+      "title": "NPR Topics: Katrina & Beyond",
+      "url": "https://feeds.npr.org/1093/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 对卡特里娜飓风及后果的报道。采访飓风受害者和新奥尔良及密西西比州的重建努力。",
+      "descriptionEn": "NPR coverage of Hurricane Katrina and the aftermath. Interviews with hurricane victims and rebuilding efforts in New Orleans and Mississippi."
+    },
+    {
+      "title": "NPR: Business Story of the Day",
+      "url": "https://feeds.npr.org/1095/rss.xml",
+      "language": "English",
+      "descriptionZh": "此播客不再发布新剧集，但请查看 NPR 的 The Indicator from Planet Money 播客，您可以在每个工作日下午快速获取有关工作、商业和经济的洞察。",
+      "descriptionEn": "We're no longer publishing new episodes of this podcast, but check out NPR's podcast The Indicator from Planet Money, where you can get a quick hit of insight into work, business and the economy every weekday afternoon."
+    },
+    {
+      "title": "NPR: Holiday Story of the Day",
+      "url": "https://feeds.npr.org/1096/rss.xml",
+      "language": "English",
+      "descriptionZh": "您不能错过的假日故事。圣诞节、光明节、宽扎节和新年。",
+      "descriptionEn": "The holiday stories that you can't miss. Christmas, Hannukah, Kwanzaa, and New Year's."
+    },
+    {
+      "title": "NPR: Archived Topic: Israeli-Palestinian Coverage",
+      "url": "https://feeds.npr.org/1101/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 以色列-巴勒斯坦报道 archived 主题。",
+      "descriptionEn": "Archived Topic: Israeli-Palestinian Coverage"
+    },
+    {
+      "title": "NPR Topics: Studio Sessions",
+      "url": "https://feeds.npr.org/1103/rss.xml",
+      "language": "English",
+      "descriptionZh": "音乐家在 NPR 和 NPR Music 电台合作伙伴的录音室表演和讨论他们的作品。现场音乐会话、访谈及最佳新音乐。",
+      "descriptionEn": "Musicians perform and discuss their work in the studios of NPR and NPR Music station partners. Live music sessions, interviews, and the best new songs in rock, pop, folk, classical, jazz, blues, urban, and world music."
+    },
+    {
+      "title": "NPR Topics: Music Reviews",
+      "url": "https://feeds.npr.org/1104/rss.xml",
+      "language": "English",
+      "descriptionZh": "流行、摇滚、民谣、爵士、布鲁斯、古典、世界和嘻哈新专辑的音乐评论。",
+      "descriptionEn": "Music reviews of new albums in pop, rock, folk, jazz, blues, classical, world, and hip-hop."
+    },
+    {
+      "title": "NPR Topics: Music Interviews",
+      "url": "https://feeds.npr.org/1105/rss.xml",
+      "language": "English",
+      "descriptionZh": "对来自爵士、布鲁斯、摇滚、流行、民谣、古典、城市和世界音乐的顶级音乐家的访谈。",
+      "descriptionEn": "Interviews with top musicians from jazz, blues, rock, pop, folk, classical, urban, and world music."
+    },
+    {
+      "title": "NPR Topics: Music News",
+      "url": "https://feeds.npr.org/1106/rss.xml",
+      "language": "English",
+      "descriptionZh": "当前音乐新闻、艺术家访谈、专辑评论及 NPR Music 音乐产业新闻。",
+      "descriptionEn": "Current music news, artist interviews, album reviews, and music industry news from NPR Music."
+    },
+    {
+      "title": "NPR Topics: Music Lists",
+      "url": "https://feeds.npr.org/1107/rss.xml",
+      "language": "English",
+      "descriptionZh": "由音乐家、评论家和知名 NPR 主持人编制的顶级艺术家和顶级歌曲列表。",
+      "descriptionEn": "Lists of top artists and top songs compiled by musicians, critics, and noted NPR hosts."
+    },
+    {
+      "title": "NPR Topics: New Music",
+      "url": "https://feeds.npr.org/1108/rss.xml",
+      "language": "English",
+      "descriptionZh": "这是我们正在听的内容。",
+      "descriptionEn": "Here's what we're listening to."
+    },
+    {
+      "title": "NPR Topics: Concerts",
+      "url": "https://feeds.npr.org/1109/rss.xml",
+      "language": "English",
+      "descriptionZh": "来自全国顶级艺术家的表演，在各地点和节日拍摄。",
+      "descriptionEn": "Performances from today's top artists, filmed at venues and festivals across the country."
+    },
+    {
+      "title": "NPR Topics: Music Videos",
+      "url": "https://feeds.npr.org/1110/rss.xml",
+      "language": "English",
+      "descriptionZh": "观看新音乐视频和现场 NPR 录音室会话 featuring 顶级音乐家。发现歌曲并在线收听。",
+      "descriptionEn": "Watch new music videos and live NPR studio sessions featuring top musicians. Discover songs and listen online."
+    },
+    {
+      "title": "NPR Topics: Sen. Hillary Clinton (D-NY)",
+      "url": "https://feeds.npr.org/1116/rss.xml",
+      "language": "English",
+      "descriptionZh": "浏览民主党总统候选人纽约州参议员希拉里·克林顿的 NPR 报道。",
+      "descriptionEn": "Browse NPR coverage of Democratic presidential candidate New York Sen. Hillary Clinton."
+    },
+    {
+      "title": "NPR Topics: Sen. Barack Obama (D-IL)",
+      "url": "https://feeds.npr.org/1117/rss.xml",
+      "language": "English",
+      "descriptionZh": "浏览民主党总统候选人伊利诺伊州参议员巴拉克·奥巴马的 NPR 报道。",
+      "descriptionEn": "Browse NPR coverage of Democratic presidential candidate Illinois Sen. Barack Obama."
+    },
+    {
+      "title": "NPR Topics: Sen. John McCain (R-AZ)",
+      "url": "https://feeds.npr.org/1118/rss.xml",
+      "language": "English",
+      "descriptionZh": "浏览共和党总统候选人亚利桑那州参议员约翰·麦凯恩的 NPR 报道。",
+      "descriptionEn": "Browse NPR coverage of Republican presidential candidate Arizona Sen. John McCain."
+    },
+    {
+      "title": "NPR Topics: Sen. Joseph Biden (D-DE)",
+      "url": "https://feeds.npr.org/1119/rss.xml",
+      "language": "English",
+      "descriptionZh": "浏览民主党副总统候选人特拉华州参议员约瑟夫·拜登的 NPR 报道。",
+      "descriptionEn": "Browse NPR coverage of Democratic vice-presidential candidate Delaware Sen. Joseph Biden."
+    },
+    {
+      "title": "NPR Topics: National Security",
+      "url": "https://feeds.npr.org/1122/rss.xml",
+      "language": "English",
+      "descriptionZh": "国家安全。",
+      "descriptionEn": "National Security"
+    },
+    {
+      "title": "NPR Topics: Asia",
+      "url": "https://feeds.npr.org/1125/rss.xml",
+      "language": "English",
+      "descriptionZh": "亚洲。",
+      "descriptionEn": "Asia"
+    },
+    {
+      "title": "NPR Topics: Africa",
+      "url": "https://feeds.npr.org/1126/rss.xml",
+      "language": "English",
+      "descriptionZh": "非洲。",
+      "descriptionEn": "Africa"
+    },
+    {
+      "title": "NPR Topics: The Americas",
+      "url": "https://feeds.npr.org/1127/rss.xml",
+      "language": "English",
+      "descriptionZh": "拉丁美洲。",
+      "descriptionEn": "Latin America"
+    },
+    {
+      "title": "NPR Topics: Health",
+      "url": "https://feeds.npr.org/1128/rss.xml",
+      "language": "English",
+      "descriptionZh": "健康。",
+      "descriptionEn": "Health"
+    },
+    {
+      "title": "NPR Topics: Energy",
+      "url": "https://feeds.npr.org/1131/rss.xml",
+      "language": "English",
+      "descriptionZh": "能源。",
+      "descriptionEn": "Energy"
+    },
+    {
+      "title": "NPR Topics: Animals",
+      "url": "https://feeds.npr.org/1132/rss.xml",
+      "language": "English",
+      "descriptionZh": "动物。",
+      "descriptionEn": "Animals"
+    },
+    {
+      "title": "NPR Topics: On Disabilities",
+      "url": "https://feeds.npr.org/1133/rss.xml",
+      "language": "English",
+      "descriptionZh": "关于残疾。",
+      "descriptionEn": "On Disabilities"
+    },
+    {
+      "title": "NPR Topics: Fitness & Nutrition",
+      "url": "https://feeds.npr.org/1134/rss.xml",
+      "language": "English",
+      "descriptionZh": "健身与营养。",
+      "descriptionEn": "Fitness & Nutrition"
+    },
+    {
+      "title": "NPR Topics: Medical Treatments",
+      "url": "https://feeds.npr.org/1135/rss.xml",
+      "language": "English",
+      "descriptionZh": "医疗治疗。",
+      "descriptionEn": "Medical Treatments"
+    },
+    {
+      "title": "NPR Topics: History",
+      "url": "https://feeds.npr.org/1136/rss.xml",
+      "language": "English",
+      "descriptionZh": "历史。",
+      "descriptionEn": "History"
+    },
+    {
+      "title": "NPR Topics: Movie Interviews",
+      "url": "https://feeds.npr.org/1137/rss.xml",
+      "language": "English",
+      "descriptionZh": "电影访谈。",
+      "descriptionEn": "Movie Interviews"
+    },
+    {
+      "title": "NPR Topics: Television",
+      "url": "https://feeds.npr.org/1138/rss.xml",
+      "language": "English",
+      "descriptionZh": "电视。",
+      "descriptionEn": "Television"
+    },
+    {
+      "title": "NPR Topics: Recipes",
+      "url": "https://feeds.npr.org/1139/rss.xml",
+      "language": "English",
+      "descriptionZh": "食谱。",
+      "descriptionEn": "Recipes"
+    },
+    {
+      "title": "NPR Topics: Fine Art",
+      "url": "https://feeds.npr.org/1141/rss.xml",
+      "language": "English",
+      "descriptionZh": "美术。",
+      "descriptionEn": "Fine Art"
+    },
+    {
+      "title": "NPR Topics: Photography",
+      "url": "https://feeds.npr.org/1143/rss.xml",
+      "language": "English",
+      "descriptionZh": "摄影。",
+      "descriptionEn": "Photography"
+    },
+    {
+      "title": "NPR Topics: Theater",
+      "url": "https://feeds.npr.org/1144/rss.xml",
+      "language": "English",
+      "descriptionZh": "戏剧。",
+      "descriptionEn": "Theater"
+    },
+    {
+      "title": "NPR Topics: Dance",
+      "url": "https://feeds.npr.org/1145/rss.xml",
+      "language": "English",
+      "descriptionZh": "舞蹈。",
+      "descriptionEn": "Dance"
+    },
+    {
+      "title": "NPR Topics: Strange News",
+      "url": "https://feeds.npr.org/1146/rss.xml",
+      "language": "English",
+      "descriptionZh": "来自全国和世界的 unlikely 故事。",
+      "descriptionEn": "Unlikely stories from around the nation and the world."
+    },
+    {
+      "title": "NPR Topics: Investigations",
+      "url": "https://feeds.npr.org/1150/rss.xml",
+      "language": "English",
+      "descriptionZh": "阅读 NPR 调查团队的最新消息。如果您有关于我们应该深入探讨的故事的可靠提示或文件，请发送给我们。",
+      "descriptionEn": "Read the latest from NPR's investigative team. If you have solid tips or documents on stories we should probe, please send them to us."
+    },
+    {
+      "title": "NPR Topics: Music Quizzes",
+      "url": "https://feeds.npr.org/1151/rss.xml",
+      "language": "English",
+      "descriptionZh": "来自 NPR Music 团队的谜题。",
+      "descriptionEn": "Puzzlers from the NPR Music team."
+    },
+    {
+      "title": "NPR Topics: Book News & Features",
+      "url": "https://feeds.npr.org/1161/rss.xml",
+      "language": "English",
+      "descriptionZh": "来自出版世界的头条、趋势和人物专访。",
+      "descriptionEn": "Headlines, trends and profiles from the world of publishing."
+    },
+    {
+      "title": "NPR: Impact",
+      "url": "https://feeds.npr.org/1162/rss.xml",
+      "language": "English",
+      "descriptionZh": "更新 NPR 新闻调查的故事，展示报道如何影响我们周围的世界。",
+      "descriptionEn": "Stories that update NPR news investigations and show how the reporting may be influencing the world around us."
+    },
+    {
+      "title": "NPR Topics: TV Reviews",
+      "url": "https://feeds.npr.org/1163/rss.xml",
+      "language": "English",
+      "descriptionZh": "电视评论。",
+      "descriptionEn": "TV Reviews"
+    },
+    {
+      "title": "NPR Topics: Weather",
+      "url": "https://feeds.npr.org/1165/rss.xml",
+      "language": "English",
+      "descriptionZh": "天气。",
+      "descriptionEn": "Weather"
+    },
+    {
+      "title": "NPR Topics: Perspective",
+      "url": "https://feeds.npr.org/1166/rss.xml",
+      "language": "English",
+      "descriptionZh": "观点。",
+      "descriptionEn": "Perspective"
+    },
+    {
+      "title": "NPR Topics: Climate",
+      "url": "https://feeds.npr.org/1167/rss.xml",
+      "language": "English",
+      "descriptionZh": "NPR 对气候变化及相关问题的全面报道。",
+      "descriptionEn": "NPR's full coverage of climate change and related issues."
+    },
+    {
+      "title": "Apple: Business",
+      "url": "https://feeds.npr.org/2007/rss.xml",
+      "language": "English",
+      "descriptionZh": "商业。",
+      "descriptionEn": "Business"
+    },
+    {
+      "title": "Apple: News",
+      "url": "https://feeds.npr.org/2038/rss.xml",
+      "language": "English",
+      "descriptionZh": "新闻。",
+      "descriptionEn": "News"
     }
   ]
 }

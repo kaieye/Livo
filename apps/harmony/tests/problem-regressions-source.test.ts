@@ -13,7 +13,7 @@ const rssFeedFetcherSource = readFileSync(
 )
 
 const articleInlineVideoPlaybackControllerSource = readFileSync(
-  new URL('../entry/src/main/ets/common/utils/ArticleInlineVideoPlaybackController.ets', import.meta.url),
+  new URL('../entry/src/main/ets/common/utils/article/ArticleInlineVideoPlaybackController.ets', import.meta.url),
   'utf8',
 )
 
@@ -47,13 +47,13 @@ const indexHomeRootContentSource = readFileSync(
   'utf8',
 )
 
-const homeFeedSessionSource = readFileSync(
-  new URL('../entry/src/main/ets/common/utils/HomeFeedSession.ets', import.meta.url),
+const indexSource = readFileSync(
+  new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
   'utf8',
 )
 
 const homeFeedLoadMorePrefetchSource = readFileSync(
-  new URL('../entry/src/main/ets/common/utils/HomeFeedLoadMorePrefetch.ets', import.meta.url),
+  new URL('../entry/src/main/ets/common/utils/home/HomeFeedLoadMorePrefetch.ets', import.meta.url),
   'utf8',
 )
 
@@ -113,10 +113,10 @@ test('home mode scenes mount active/transition immediately and prewarm the rest 
 })
 
 test('inactive mode precache is staggered and does not compete with the active switch target', () => {
-  assert.match(homeFeedSessionSource, /private precacheModeToken: number = 0/)
-  assert.match(homeFeedSessionSource, /const precacheLimit = resolveHomeVisibleEntryInitialLimit\(mode\)/)
-  assert.match(homeFeedSessionSource, /180 \* \(index \+ 1\)/)
-  assert.match(homeFeedSessionSource, /if \(this\.precacheModeToken !== token \|\| mode === this\.owner\.mode\) \{ return \}/)
+  assert.match(indexSource, /private precacheModeToken: number = 0/)
+  assert.match(indexSource, /const precacheLimit = resolveHomeVisibleEntryInitialLimit\(mode\)/)
+  assert.match(indexSource, /180 \* \(index \+ 1\)/)
+  assert.match(indexSource, /if \(this\.precacheModeToken !== token \|\| mode === this\.mode\) \{ return \}/)
 })
 
 test('load-more prefetch appends a fast page instead of rebuilding the whole mode', () => {

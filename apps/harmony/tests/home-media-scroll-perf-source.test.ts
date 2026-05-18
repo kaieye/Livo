@@ -28,7 +28,7 @@ const homeVideoEntryCardSource = readFileSync(
 
 const paginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',

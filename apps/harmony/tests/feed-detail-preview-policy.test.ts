@@ -6,7 +6,7 @@ import {
   latestFeedDetailEntryPublishedAt,
   resolvePreferredFeedDetailPreviewEntries,
   shouldReseedFeedDetailFromCachedPreview,
-} from '../entry/src/main/ets/common/utils/FeedDetailPreviewPolicy.ts'
+} from '../entry/src/main/ets/common/utils/feed-detail/FeedDetailPreviewPolicy.ts'
 
 function entry(id: string, publishedAt: number) {
   return {

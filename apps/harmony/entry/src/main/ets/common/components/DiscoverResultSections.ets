@@ -5,7 +5,7 @@ import { discoverPlatformLabel } from '../services/discover/DiscoverLabels'
 import { DiscoverSearchPlatform, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { ThemePalette } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { platformColor } from '../utils/DiscoverCandidatePresentation'
+import { platformColor } from '../utils/discover/DiscoverCandidatePresentation'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_XL,

@@ -2,11 +2,11 @@ import { AvatarTile } from './AvatarTile'
 import { FeedCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
-import { resolveSocialFeedDisplayTitle } from '../utils/SocialFeedPresentation'
+import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import {
   buildSubscriptionFeedIconCandidates,
   resolveSubscriptionFeedIconSource,
-} from '../utils/SubscriptionsAvatarPolicy'
+} from '../utils/subscriptions/SubscriptionsAvatarPolicy'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,

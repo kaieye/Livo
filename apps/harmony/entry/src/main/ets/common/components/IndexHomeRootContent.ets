@@ -3,7 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { ModeSceneRenderState, resolveModeSceneRenderState } from '../utils/ModeSceneTransition'
 import { HomeModeEntriesPage } from './HomeModeEntriesPage'
 import { SubscriptionMode } from './HomeRootConfig'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 export interface IndexHomeRootContentCallbacks {

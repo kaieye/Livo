@@ -2,7 +2,7 @@ import { Entry, EntryCardModel, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { IndexHomeRootContent, IndexHomeRootContentCallbacks } from './IndexHomeRootContent'
 import { SubscriptionMode } from './HomeRootConfig'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
+import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
 @Component

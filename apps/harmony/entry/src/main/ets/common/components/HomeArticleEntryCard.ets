@@ -3,7 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
-import { isTweetLikeEntry } from '../utils/HomeEntryUtils'
+import { isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
 
 @Component
 export struct HomeArticleEntryCard {

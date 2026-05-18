@@ -1,5 +1,5 @@
 import http from '@ohos.net.http'
-import { expandRssHubFallbackRoutes } from '../../utils/RssHubFallbackRoute'
+import { expandRssHubFallbackRoutes } from '../../utils/platform/RssHubFallbackRoute'
 import {
   RSSHUB_INSTANCES,
   RSSHUB_REQUEST_TIMEOUT_MS,

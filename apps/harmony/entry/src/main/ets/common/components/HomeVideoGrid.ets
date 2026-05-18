@@ -7,8 +7,8 @@ import {
   chunkHomeVideoEntries,
   resolveHomeVideoCardTokens,
   resolveHomeVideoGridColumns,
-} from '../utils/HomeVideoGrid'
-import { homeEntryListRenderKey } from '../utils/HomeEntryUtils'
+} from '../utils/home/HomeVideoGrid'
+import { homeEntryListRenderKey } from '../utils/home/HomeEntryUtils'
 
 const HOME_VIDEO_CARD_TITLE_HEIGHT: number = 36
 const HOME_VIDEO_CARD_META_HEIGHT: number = 16

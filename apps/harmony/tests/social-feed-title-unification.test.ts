@@ -5,12 +5,12 @@ import { readFileSync } from 'node:fs'
 import {
   formatXFeedTitle,
   normalizeSocialFeedTitle,
-} from '../entry/src/main/ets/common/utils/SocialFeedTitles.ts'
-import { resolveSocialFeedDisplayTitle } from '../entry/src/main/ets/common/utils/SocialFeedPresentation.ts'
+} from '../entry/src/main/ets/common/utils/social/SocialFeedTitles.ts'
+import { resolveSocialFeedDisplayTitle } from '../entry/src/main/ets/common/utils/social/SocialFeedPresentation.ts'
 import {
   presentTweetEntryFromCard,
   presentTweetEntryFromEntry,
-} from '../entry/src/main/ets/common/utils/TweetEntryPresentation.ts'
+} from '../entry/src/main/ets/common/utils/social/TweetEntryPresentation.ts'
 
 test('x feed titles normalize to one account display name', () => {
   assert.equal(formatXFeedTitle('Twitter @宝玉', 'dotey'), '宝玉 - X')
@@ -106,7 +106,7 @@ test('model conversion normalizes feed titles before entry and detail rendering'
 
 test('feed detail title resolver normalizes raw x titles from every snapshot source', () => {
   const source = readFileSync(
-    'entry/src/main/ets/common/utils/FeedDetailViewModel.ets',
+    'entry/src/main/ets/common/utils/feed-detail/FeedDetailViewModel.ets',
     'utf8',
   )
 

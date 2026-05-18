@@ -8,7 +8,7 @@ import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedSe
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { showToast } from '../common/utils/PageToastHelper'
 import { loadThemeForComponent } from '../common/utils/PageThemeHelper'
-import { resolveSocialFeedDisplayImageUrl } from '../common/utils/SocialFeedPresentation'
+import { resolveSocialFeedDisplayImageUrl } from '../common/utils/social/SocialFeedPresentation'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'

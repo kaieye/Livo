@@ -5,12 +5,12 @@ import { filteredRecommendedFeeds } from '../services/discover/DiscoverFeedCatal
 import { RecommendedFeed } from '../services/discover/DiscoverTypes'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
-import { candidateAvatarFallbackUrls } from '../utils/DiscoverCandidatePresentation'
+import { candidateAvatarFallbackUrls } from '../utils/discover/DiscoverCandidatePresentation'
 import {
   initialDiscoverBrowseVisibleCount,
   nextDiscoverBrowseVisibleCount,
   shouldPreloadDiscoverBrowseMore,
-} from '../utils/DiscoverBrowsePagination'
+} from '../utils/discover/DiscoverBrowsePagination'
 import { AvatarTile } from './AvatarTile'
 import { DiscoverBrowseAvatarHydrator } from './DiscoverBrowseAvatarHydrator'
 import { PageHeader } from './PageHeader'

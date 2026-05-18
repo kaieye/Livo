@@ -9,7 +9,7 @@ const indexSource = readFileSync(
 
 const coordinatorSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/IndexRootTabCoordinator.ets',
+    '../entry/src/main/ets/common/utils/index-home/IndexRootTabCoordinator.ets',
     import.meta.url,
   ),
   'utf8',

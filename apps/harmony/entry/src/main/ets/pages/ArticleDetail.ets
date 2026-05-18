@@ -5,7 +5,7 @@ import { EntryRepository } from '../common/repositories/EntryRepository'
 import { goBack } from '../common/navigation/AppRouter'
 import { TranslationFormattingHint } from '../common/services/ArticleAssistService'
 import { ExternalUrlService } from '../common/services/ExternalUrlService'
-import { resolveArticleSourceUrl } from '../common/utils/ArticleSourceUrl'
+import { resolveArticleSourceUrl } from '../common/utils/article/ArticleSourceUrl'
 import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
 import { PictureCarouselMediaItem } from '../common/utils/PictureGallery'
 import {
@@ -13,11 +13,11 @@ import {
   resolvePictureDetailTextBlocks,
   shouldRenderArticleParagraphBlock,
   shouldRenderArticleSummary,
-} from '../common/utils/ArticleDetailContent'
-import { ArticleAIAssistViewModel } from '../common/utils/ArticleAIAssistViewModel'
-import { ArticleInlineVideoPlaybackController } from '../common/utils/ArticleInlineVideoPlaybackController'
-import { SocialInlineVideoRegistry } from '../common/utils/SocialInlineVideoRegistry'
-import { ArticleEntryLoader, copyArticleEntryWithStarState } from '../common/utils/ArticleEntryLoader'
+} from '../common/utils/article/ArticleDetailContent'
+import { ArticleAIAssistViewModel } from '../common/utils/article/ArticleAIAssistViewModel'
+import { ArticleInlineVideoPlaybackController } from '../common/utils/article/ArticleInlineVideoPlaybackController'
+import { SocialInlineVideoRegistry } from '../common/utils/social/SocialInlineVideoRegistry'
+import { ArticleEntryLoader, copyArticleEntryWithStarState } from '../common/utils/article/ArticleEntryLoader'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { ArticleSocialDetail } from '../common/components/ArticleSocialDetail'
@@ -35,7 +35,7 @@ import {
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { showToast, TOAST_DURATION_SHORT } from '../common/utils/PageToastHelper'
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
-import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/TweetEntryPresentation'
+import { presentTweetEntryFromCard, TweetEntryPresentation } from '../common/utils/social/TweetEntryPresentation'
 import { getStringParams } from '../common/navigation/AppRouter'
 
 @Entry

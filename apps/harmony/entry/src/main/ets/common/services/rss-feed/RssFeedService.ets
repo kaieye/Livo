@@ -1,6 +1,6 @@
 import http from '@ohos.net.http'
 import { Feed, FeedViewType } from '../../models/LivoModels'
-import { canonicalFeedUrl } from '../../utils/SocialFeedTitles'
+import { canonicalFeedUrl } from '../../utils/social/SocialFeedTitles'
 import { looksLikeHtmlDocument } from '../../utils/HtmlParser'
 import {
   RSSHUB_INSTANCES,

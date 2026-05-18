@@ -4,14 +4,14 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { showToast, TOAST_DURATION_ERROR, TOAST_DURATION_OK } from '../utils/PageToastHelper'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
 import { FeedRefreshPayload } from '../services/RssFeedService'
-import { resolveSocialFeedDisplayImageUrl } from '../utils/SocialFeedPresentation'
+import { resolveSocialFeedDisplayImageUrl } from '../utils/social/SocialFeedPresentation'
 import {
   feedFaviconUrl,
   isBilibiliFeedSource,
   mapBilibiliTargetUrl,
-} from '../utils/FeedSubscribeTargetUrl'
-import { feedMatchesTarget } from '../utils/FeedSubscribeTargetMatcher'
-import { FeedSubscribeAction, FeedSubscribeRequest } from '../utils/FeedSubscribeAction'
+} from '../utils/feed-subscribe/FeedSubscribeTargetUrl'
+import { feedMatchesTarget } from '../utils/feed-subscribe/FeedSubscribeTargetMatcher'
+import { FeedSubscribeAction, FeedSubscribeRequest } from '../utils/feed-subscribe/FeedSubscribeAction'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { FeedSubscribeInfoCard } from './feed-subscribe-config/FeedSubscribeInfoCard'

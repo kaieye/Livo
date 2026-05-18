@@ -7,7 +7,7 @@ import {
   feedSubscribeViewOptions,
   feedSubscribeViewSymbol,
   feedSubscribeViewLabel,
-} from '../../utils/FeedSubscribeViewOptions'
+} from '../../utils/feed-subscribe/FeedSubscribeViewOptions'
 
 const RAIL_HEIGHT: number = 46
 const RAIL_PADDING: number = 4

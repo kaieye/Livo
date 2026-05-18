@@ -7,19 +7,16 @@ const indexSource = readFileSync(
   'utf8',
 )
 
-test('index page delegates initial data loading to HomeFeedSession', () => {
-  assert.match(indexSource, /readonly homeFeedSession: HomeFeedSession/)
+test('index page owns home feed orchestration directly (HomeFeedSession eliminated)', () => {
+  assert.match(indexSource, /readonly homeFeedRefresh: HomeFeedRefresh/)
+  assert.match(indexSource, /readonly homeFeedPagination: HomeFeedPagination/)
   assert.match(
     indexSource,
-    /async loadInitialData\(\): Promise<void> \{\s*await this\.homeFeedSession\.bootstrap\(\)\s*\}/s,
+    /async loadInitialData\(\): Promise<void> \{\s*await this\.bootstrapHomeFeed\(\)\s*\}/s,
   )
-  assert.match(indexSource, /this\.homeFeedSession\.resume/)
-  assert.doesNotMatch(
-    indexSource,
-    /AppPreferenceService\.loadHomeEntrySnapshot/,
-  )
-  assert.doesNotMatch(
-    indexSource,
-    /groupHomeEntriesByMode\(this\.featuredEntries\)/,
-  )
+  assert.match(indexSource, /private async bootstrapHomeFeed/)
+  assert.match(indexSource, /private resumeHomeFeed/)
+  assert.match(indexSource, /private restoreSnapshot/)
+  assert.match(indexSource, /private async loadFastLocalEntries/)
+  assert.doesNotMatch(indexSource, /import \{ HomeFeedSession \} from/)
 })

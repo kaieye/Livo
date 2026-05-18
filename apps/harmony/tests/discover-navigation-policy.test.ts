@@ -10,7 +10,7 @@ import {
   shouldApplyDiscoverOverlayAfterDestinationAppear,
   shouldSkipDiscoverOverlayRestoreAfterRootVisible,
   shouldShowDiscoverForegroundOverlay,
-} from '../entry/src/main/ets/common/utils/DiscoverNavigationPolicy.ts'
+} from '../entry/src/main/ets/common/utils/discover/DiscoverNavigationPolicy.ts'
 
 test('discover overlay return levels match root, browse and preview depth', () => {
   assert.equal(

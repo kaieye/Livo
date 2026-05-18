@@ -6,7 +6,7 @@ import {
   BOTTOM_TAB_LABEL_SIZE,
   CHIP_RADIUS,
 } from '../ui/UiTokens'
-import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/HomeModeMeta'
+import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/home/HomeModeMeta'
 export type ContentMode = HomeMode
 
 @Component

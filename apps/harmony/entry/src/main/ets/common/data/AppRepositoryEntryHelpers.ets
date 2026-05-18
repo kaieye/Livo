@@ -14,7 +14,7 @@ import {
   resolveSocialFeedDisplayDescription,
   resolveSocialFeedDisplayImageUrl,
   resolveSocialFeedDisplayTitle,
-} from '../utils/SocialFeedPresentation'
+} from '../utils/social/SocialFeedPresentation'
 
 export type HomeEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 

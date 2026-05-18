@@ -8,14 +8,14 @@ import {
   HOME_MODE_SCENE_TOP_INSET,
 } from '../components/HomeRootConfig'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
-import { homeEntryListRenderKey, homeVideoRowRenderKey, isTweetLikeEntry } from '../utils/HomeEntryUtils'
+import { homeEntryListRenderKey, homeVideoRowRenderKey, isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
 import { HomeArticleEntryCard } from './HomeArticleEntryCard'
 import { HomeVideoEntryCard } from './HomeVideoEntryCard'
 import { PictureEntryCard } from './PictureEntryCard'
 import { TweetEntryCard } from './TweetEntryCard'
 import { HomeEmptyStateCard } from './HomeEmptyStateCard'
-import { TweetEntryPresentation } from '../utils/TweetEntryPresentation'
-import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../utils/HomeVideoGrid'
+import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
+import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../utils/home/HomeVideoGrid'
 
 // LazyForEach 默认 cachedCount=1 在双列视频网格里只缓存 2 张卡，快速滚动
 // 时几乎每帧都要重新 build HomeVideoEntryCard（包含远程封面图解码），
@@ -24,7 +24,8 @@ import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../utils
 const HOME_VIDEO_LIST_CACHED_ROW_COUNT: number = 4
 // 文章/图片是单列大卡，每屏元素少，缓存 3 个 ListItem 足够覆盖弹性滚动
 // 区段，不至于在惯性滑动时频繁触发 ItemBuilder 重建。
-const HOME_LIST_CACHED_ITEM_COUNT: number = 3
+const HOME_LIST_CACHED_ITEM_COUNT: number = 8
+const HOME_PICTURE_LIST_CACHED_ITEM_COUNT: number = 6
 
 class VideoRowLazyDataSource implements IDataSource {
   private readonly getEntryDataSource: () => ArrayLazyDataSource<EntryCardModel>
@@ -416,11 +417,11 @@ export struct HomeModeEntriesPage {
     }
     .width('100%')
     .height('100%')
-    .cachedCount(HOME_LIST_CACHED_ITEM_COUNT)
+    .cachedCount(HOME_PICTURE_LIST_CACHED_ITEM_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
-    .edgeEffect(EdgeEffect.Spring)
+    .edgeEffect(EdgeEffect.None)
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
