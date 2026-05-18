@@ -2,8 +2,8 @@ import {
   Feed,
   RemoteFeedResult,
 } from '../models/LivoModels'
-import { FeedRepository } from '../repositories/FeedRepository'
-import { EntryRepository } from '../repositories/EntryRepository'
+import { FeedRepository, IFeedRepository } from '../repositories/FeedRepository'
+import { EntryRepository, IEntryRepository } from '../repositories/EntryRepository'
 import { RefreshLogStore } from '../services/RefreshLogStore'
 import { RssFeedService, FeedRefreshPayload } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
@@ -37,32 +37,44 @@ async function appendRefreshLog(successFeedCount: number, failedFeedCount: numbe
 }
 
 class FeedRefreshCoordinator {
-  private static bootstrapped: boolean = false
-  private static seedFeedHydrationStarted: boolean = false
-  private static feedMetadataRepairStarted: boolean = false
+  static readonly default: FeedRefreshCoordinator = new FeedRefreshCoordinator(
+    FeedRepository.default,
+    EntryRepository.default,
+  )
 
-  static async bootstrap(): Promise<void> {
-    if (FeedRefreshCoordinator.bootstrapped) {
-      return
-    }
-    FeedRefreshCoordinator.bootstrapped = true
-    void FeedRefreshCoordinator.repairFeedMetadataInBackground()
+  private readonly feedRepo: IFeedRepository
+  private readonly entryRepo: IEntryRepository
+  private bootstrapped: boolean = false
+  private seedFeedHydrationStarted: boolean = false
+  private feedMetadataRepairStarted: boolean = false
+
+  constructor(feedRepo: IFeedRepository, entryRepo: IEntryRepository) {
+    this.feedRepo = feedRepo
+    this.entryRepo = entryRepo
   }
 
-  private static async repairFeedMetadataInBackground(): Promise<void> {
-    if (FeedRefreshCoordinator.feedMetadataRepairStarted) {
+  async bootstrap(): Promise<void> {
+    if (this.bootstrapped) {
       return
     }
-    FeedRefreshCoordinator.feedMetadataRepairStarted = true
+    this.bootstrapped = true
+    void this.repairFeedMetadataInBackground()
+  }
+
+  private async repairFeedMetadataInBackground(): Promise<void> {
+    if (this.feedMetadataRepairStarted) {
+      return
+    }
+    this.feedMetadataRepairStarted = true
 
     try {
-      const feeds = sortFeedsStable(await FeedRepository.list())
+      const feeds = sortFeedsStable(await this.feedRepo.list())
       let repaired = false
 
       for (const feed of feeds) {
         const fallbackTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
         if (!(feed.title || '').trim() && !!fallbackTitle) {
-          await FeedRepository.update(feed.id, {
+          await this.feedRepo.update(feed.id, {
             title: fallbackTitle,
             url: feed.url,
             siteUrl: feed.siteUrl || '',
@@ -84,20 +96,20 @@ class FeedRefreshCoordinator {
     }
   }
 
-  static isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
+  isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
     const lastFetched = feed.lastFetched ?? 0
     return lastFetched > 0 && (now - lastFetched < SUCCESSFUL_REFRESH_COOLDOWN_MS)
   }
 
-  static resolveRefreshConcurrency(totalFeeds: number): number {
+  resolveRefreshConcurrency(totalFeeds: number): number {
     return totalFeeds <= 0 ? 1 : REFRESH_CONCURRENCY
   }
 
-  static async hydrateSeedFeeds(feeds: Feed[]): Promise<void> {
-    if (FeedRefreshCoordinator.seedFeedHydrationStarted) {
+  async hydrateSeedFeeds(feeds: Feed[]): Promise<void> {
+    if (this.seedFeedHydrationStarted) {
       return
     }
-    FeedRefreshCoordinator.seedFeedHydrationStarted = true
+    this.seedFeedHydrationStarted = true
 
     for (const feed of feeds) {
       try {
@@ -109,8 +121,8 @@ class FeedRefreshCoordinator {
         const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '')
         const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
 
-        await EntryRepository.upsertMany(payload.entries)
-        await FeedRepository.updateFetchState(feed.id, {
+        await this.entryRepo.upsertMany(payload.entries)
+        await this.feedRepo.updateFetchState(feed.id, {
           url: nextUrl,
           title: nextTitle,
           siteUrl: nextSiteUrl,
@@ -128,19 +140,19 @@ class FeedRefreshCoordinator {
     }
   }
 
-  static async refreshFeed(
+  async refreshFeed(
     feedId: string,
     preferFastImageResolve: boolean = false,
     includeEntries: boolean = true,
     includeNewEntryCount: boolean = true,
     notifyFeedsChanged: boolean = true,
   ): Promise<RemoteFeedResult> {
-    const feed = await FeedRepository.getById(feedId)
+    const feed = await this.feedRepo.getById(feedId)
     if (!feed) {
       throw new Error('订阅源不存在')
     }
 
-    if (FeedRefreshCoordinator.isFeedRefreshInCooldown(feed)) {
+    if (this.isFeedRefreshInCooldown(feed)) {
       return {
         entries: [],
         sourceLabel: `${feed.title} · 3 分钟内已刷新，跳过`,
@@ -158,7 +170,7 @@ class FeedRefreshCoordinator {
       const payload = await RssFeedService.fetchFeedEntries(feed)
       let newEntriesCount = 0
       if (includeNewEntryCount) {
-        const existingEntries = await EntryRepository.listByFeed(feedId)
+        const existingEntries = await this.entryRepo.listByFeed(feedId)
         const existingEntryIds = new Set(existingEntries.map(e => e.id))
         newEntriesCount = payload.entries.filter(e => !existingEntryIds.has(e.id)).length
       }
@@ -171,8 +183,8 @@ class FeedRefreshCoordinator {
         : await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '')
       const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
 
-      await EntryRepository.upsertMany(payload.entries)
-      await FeedRepository.updateFetchState(feedId, {
+      await this.entryRepo.upsertMany(payload.entries)
+      await this.feedRepo.updateFetchState(feedId, {
         url: nextUrl,
         title: nextTitle,
         siteUrl: nextSiteUrl,
@@ -200,7 +212,7 @@ class FeedRefreshCoordinator {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      await FeedRepository.updateFetchState(feedId, {
+      await this.feedRepo.updateFetchState(feedId, {
         lastFetched: feed.lastFetched ?? 0,
         etag: feed.etag ?? '',
         lastModified: feed.lastModified ?? '',
@@ -225,8 +237,8 @@ class FeedRefreshCoordinator {
     }
   }
 
-  static async seedFeedFromPreview(feedId: string, payload: FeedRefreshPayload): Promise<void> {
-    const feed = await FeedRepository.getById(feedId)
+  async seedFeedFromPreview(feedId: string, payload: FeedRefreshPayload): Promise<void> {
+    const feed = await this.feedRepo.getById(feedId)
     if (!feed) {
       throw new Error('订阅源不存在')
     }
@@ -238,16 +250,16 @@ class FeedRefreshCoordinator {
     const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '')
     const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
     const normalizedPreviewEntries = rekeyPreviewEntries(feedId, payload.entries)
-    const existingEntries = await EntryRepository.listByFeed(feedId)
+    const existingEntries = await this.entryRepo.listByFeed(feedId)
     const shouldReplace = existingEntries.length === 0 || normalizedPreviewEntries.length >= existingEntries.length
 
     debugLog(`seedFeedFromPreview feedId=${feedId} previewEntries=${normalizedPreviewEntries.length} existingEntries=${existingEntries.length} replace=${shouldReplace}`)
 
     if (shouldReplace) {
-      await EntryRepository.removeByFeed(feedId)
+      await this.entryRepo.removeByFeed(feedId)
     }
-    await EntryRepository.upsertMany(normalizedPreviewEntries)
-    await FeedRepository.updateFetchState(feedId, {
+    await this.entryRepo.upsertMany(normalizedPreviewEntries)
+    await this.feedRepo.updateFetchState(feedId, {
       url: nextUrl,
       title: nextTitle,
       siteUrl: nextSiteUrl,
@@ -262,7 +274,7 @@ class FeedRefreshCoordinator {
     debugLog(`seedFeedFromPreview updated feedId=${feedId} nextTitleLen=${nextTitle.trim().length} nextUrl=${nextUrl} nextSiteUrl=${nextSiteUrl}`)
   }
 
-  private static async refreshFeedsWithPool(
+  private async refreshFeedsWithPool(
     feeds: Feed[],
     refreshConcurrency: number,
     onProgress?: (completedCount: number, totalCount: number) => void,
@@ -288,7 +300,7 @@ class FeedRefreshCoordinator {
         }
 
         try {
-          const value = await FeedRefreshCoordinator.refreshFeed(feed.id, true, false, false, false)
+          const value = await this.refreshFeed(feed.id, true, false, false, false)
           results[currentIndex] = { status: 'fulfilled', value }
         } catch (reason) {
           results[currentIndex] = { status: 'rejected', reason }
@@ -307,10 +319,10 @@ class FeedRefreshCoordinator {
     return results
   }
 
-  static async refreshAllFeeds(
+  async refreshAllFeeds(
     onProgress?: (completedCount: number, totalCount: number) => void,
   ): Promise<RemoteFeedResult> {
-    const feeds = sortFeedsStable(await FeedRepository.list())
+    const feeds = sortFeedsStable(await this.feedRepo.list())
     if (feeds.length === 0) {
       await appendRefreshLog(0, 0, [])
       return {
@@ -325,7 +337,7 @@ class FeedRefreshCoordinator {
     }
 
     const refreshStartedAt = Date.now()
-    const pendingFeeds = feeds.filter(f => !FeedRefreshCoordinator.isFeedRefreshInCooldown(f, refreshStartedAt))
+    const pendingFeeds = feeds.filter(f => !this.isFeedRefreshInCooldown(f, refreshStartedAt))
     const skippedByCooldownCount = feeds.length - pendingFeeds.length
 
     debugLog(`refreshAllFeeds totalFeeds=${feeds.length} pending=${pendingFeeds.length} skippedByCooldown=${skippedByCooldownCount}`)
@@ -352,9 +364,9 @@ class FeedRefreshCoordinator {
       onProgress?.(skippedByCooldownCount, feeds.length)
     }
 
-    const results = await FeedRefreshCoordinator.refreshFeedsWithPool(
+    const results = await this.refreshFeedsWithPool(
       pendingFeeds,
-      FeedRefreshCoordinator.resolveRefreshConcurrency(pendingFeeds.length),
+      this.resolveRefreshConcurrency(pendingFeeds.length),
       (completedCount, totalCount) => onProgress?.(skippedByCooldownCount + completedCount, skippedByCooldownCount + totalCount),
     )
 
@@ -414,6 +426,50 @@ class FeedRefreshCoordinator {
       failedFeedDetails,
       fallbackUsed: failedCount > 0,
     } as RemoteFeedResult
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async bootstrap(): Promise<void> {
+    return FeedRefreshCoordinator.default.bootstrap()
+  }
+
+  static isFeedRefreshInCooldown(feed: Feed, now: number = Date.now()): boolean {
+    return FeedRefreshCoordinator.default.isFeedRefreshInCooldown(feed, now)
+  }
+
+  static resolveRefreshConcurrency(totalFeeds: number): number {
+    return FeedRefreshCoordinator.default.resolveRefreshConcurrency(totalFeeds)
+  }
+
+  static async hydrateSeedFeeds(feeds: Feed[]): Promise<void> {
+    return FeedRefreshCoordinator.default.hydrateSeedFeeds(feeds)
+  }
+
+  static async refreshFeed(
+    feedId: string,
+    preferFastImageResolve: boolean = false,
+    includeEntries: boolean = true,
+    includeNewEntryCount: boolean = true,
+    notifyFeedsChanged: boolean = true,
+  ): Promise<RemoteFeedResult> {
+    return FeedRefreshCoordinator.default.refreshFeed(
+      feedId,
+      preferFastImageResolve,
+      includeEntries,
+      includeNewEntryCount,
+      notifyFeedsChanged,
+    )
+  }
+
+  static async seedFeedFromPreview(feedId: string, payload: FeedRefreshPayload): Promise<void> {
+    return FeedRefreshCoordinator.default.seedFeedFromPreview(feedId, payload)
+  }
+
+  static async refreshAllFeeds(
+    onProgress?: (completedCount: number, totalCount: number) => void,
+  ): Promise<RemoteFeedResult> {
+    return FeedRefreshCoordinator.default.refreshAllFeeds(onProgress)
   }
 }
 

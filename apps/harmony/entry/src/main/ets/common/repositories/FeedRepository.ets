@@ -31,6 +31,19 @@ export interface UpdateFetchStateParams {
   errorCount?: number
 }
 
+export interface IFeedRepository {
+  getByUrl(url: string): Promise<Feed | undefined>
+  getBySiteUrl(siteUrl: string): Promise<Feed | undefined>
+  list(): Promise<Feed[]>
+  getById(feedId: string): Promise<Feed | undefined>
+  count(): Promise<number>
+  insert(feed: Feed): Promise<void>
+  create(draft: FeedDraft): Promise<Feed>
+  update(feedId: string, draft: FeedDraft): Promise<Feed>
+  updateFetchState(feedId: string, next: UpdateFetchStateParams): Promise<void>
+  remove(feedId: string): Promise<void>
+}
+
 function boolToNumber(value: boolean): number {
   return value ? 1 : 0
 }
@@ -67,15 +80,17 @@ function createFeedId(url: string): string {
 
 const table = new RdbTable<Feed>('feeds', mapFeed)
 
-export class FeedRepository {
-  static async getByUrl(url: string): Promise<Feed | undefined> {
+export class FeedRepository implements IFeedRepository {
+  static readonly default: FeedRepository = new FeedRepository()
+
+  async getByUrl(url: string): Promise<Feed | undefined> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     predicates.equalTo('url', url.trim())
     predicates.limitAs(1)
     return table.getOne(predicates)
   }
 
-  static async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
+  async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
     const trimmed = siteUrl.trim()
     if (!trimmed) {
       return undefined
@@ -87,26 +102,26 @@ export class FeedRepository {
     return table.getOne(predicates)
   }
 
-  static async list(): Promise<Feed[]> {
+  async list(): Promise<Feed[]> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     predicates.orderByAsc('created_at')
     predicates.orderByAsc('id')
     return table.list(predicates)
   }
 
-  static async getById(feedId: string): Promise<Feed | undefined> {
+  async getById(feedId: string): Promise<Feed | undefined> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     predicates.equalTo('id', feedId)
     predicates.limitAs(1)
     return table.getOne(predicates)
   }
 
-  static async count(): Promise<number> {
+  async count(): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     return table.count(predicates)
   }
 
-  static async insert(feed: Feed): Promise<void> {
+  async insert(feed: Feed): Promise<void> {
     await table.insert({
       id: feed.id,
       title: feed.title,
@@ -126,7 +141,7 @@ export class FeedRepository {
     })
   }
 
-  static async create(draft: FeedDraft): Promise<Feed> {
+  async create(draft: FeedDraft): Promise<Feed> {
     const now = Date.now()
     const normalizedUrl = draft.url.trim()
     const normalizedSiteUrl = draft.siteUrl.trim()
@@ -149,11 +164,11 @@ export class FeedRepository {
     }
 
     try {
-      await FeedRepository.insert(feed)
+      await this.insert(feed)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message.includes('constraint violation')) {
-        const existing = await FeedRepository.getByUrl(normalizedUrl)
+        const existing = await this.getByUrl(normalizedUrl)
         if (existing) {
           return existing
         }
@@ -163,8 +178,8 @@ export class FeedRepository {
     return feed
   }
 
-  static async update(feedId: string, draft: FeedDraft): Promise<Feed> {
-    const current = await FeedRepository.getById(feedId)
+  async update(feedId: string, draft: FeedDraft): Promise<Feed> {
+    const current = await this.getById(feedId)
     if (!current) {
       throw new Error('订阅源不存在')
     }
@@ -186,15 +201,15 @@ export class FeedRepository {
       updated_at: Date.now(),
     })
 
-    return (await FeedRepository.getById(feedId))!
+    return (await this.getById(feedId))!
   }
 
-  static async updateFetchState(
+  async updateFetchState(
     feedId: string,
     next: UpdateFetchStateParams,
   ): Promise<void> {
     await AppDatabaseService.withRdb('更新抓取状态', async (store) => {
-      const current = await FeedRepository.getById(feedId)
+      const current = await FeedRepository.default.getById(feedId)
       if (!current) {
         throw new Error('订阅源不存在')
       }
@@ -243,7 +258,7 @@ export class FeedRepository {
     })
   }
 
-  static async remove(feedId: string): Promise<void> {
+  async remove(feedId: string): Promise<void> {
     await AppDatabaseService.withRdb('删除订阅源', async (store) => {
       const entryPredicates = new relationalStore.RdbPredicates('entries')
       entryPredicates.equalTo('feed_id', feedId)
@@ -253,5 +268,47 @@ export class FeedRepository {
       feedPredicates.equalTo('id', feedId)
       await store.delete(feedPredicates)
     })
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async getByUrl(url: string): Promise<Feed | undefined> {
+    return FeedRepository.default.getByUrl(url)
+  }
+
+  static async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
+    return FeedRepository.default.getBySiteUrl(siteUrl)
+  }
+
+  static async list(): Promise<Feed[]> {
+    return FeedRepository.default.list()
+  }
+
+  static async getById(feedId: string): Promise<Feed | undefined> {
+    return FeedRepository.default.getById(feedId)
+  }
+
+  static async count(): Promise<number> {
+    return FeedRepository.default.count()
+  }
+
+  static async insert(feed: Feed): Promise<void> {
+    return FeedRepository.default.insert(feed)
+  }
+
+  static async create(draft: FeedDraft): Promise<Feed> {
+    return FeedRepository.default.create(draft)
+  }
+
+  static async update(feedId: string, draft: FeedDraft): Promise<Feed> {
+    return FeedRepository.default.update(feedId, draft)
+  }
+
+  static async updateFetchState(feedId: string, next: UpdateFetchStateParams): Promise<void> {
+    return FeedRepository.default.updateFetchState(feedId, next)
+  }
+
+  static async remove(feedId: string): Promise<void> {
+    return FeedRepository.default.remove(feedId)
   }
 }

@@ -58,8 +58,25 @@ function mapEntry(result: relationalStore.ResultSet): Entry {
 
 const table = new RdbTable<Entry>('entries', mapEntry)
 
-export class EntryRepository {
-  static async listRecent(limit: number = 20): Promise<Entry[]> {
+export interface IEntryRepository {
+  listRecent(limit?: number): Promise<Entry[]>
+  listRecentPage(limit?: number, offset?: number): Promise<Entry[]>
+  listStarred(limit?: number): Promise<Entry[]>
+  listByFeed(feedId: string): Promise<Entry[]>
+  getById(entryId: string): Promise<Entry | undefined>
+  countUnread(): Promise<number>
+  countStarred(): Promise<number>
+  countUnreadByFeed(feedId: string): Promise<number>
+  removeByFeed(feedId: string): Promise<void>
+  upsertMany(entries: Entry[]): Promise<void>
+  markRead(entryId: string, isRead: boolean): Promise<void>
+  toggleStar(entryId: string): Promise<void>
+}
+
+export class EntryRepository implements IEntryRepository {
+  static readonly default: EntryRepository = new EntryRepository()
+
+  async listRecent(limit: number = 20): Promise<Entry[]> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.orderByDesc('published_at')
     predicates.orderByDesc('id')
@@ -67,7 +84,7 @@ export class EntryRepository {
     return table.list(predicates)
   }
 
-  static async listRecentPage(limit: number = 20, offset: number = 0): Promise<Entry[]> {
+  async listRecentPage(limit: number = 20, offset: number = 0): Promise<Entry[]> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.orderByDesc('published_at')
     predicates.orderByDesc('id')
@@ -76,7 +93,7 @@ export class EntryRepository {
     return table.list(predicates)
   }
 
-  static async listStarred(limit: number = 100): Promise<Entry[]> {
+  async listStarred(limit: number = 100): Promise<Entry[]> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('is_starred', 1)
     predicates.orderByDesc('published_at')
@@ -84,46 +101,46 @@ export class EntryRepository {
     return table.list(predicates)
   }
 
-  static async listByFeed(feedId: string): Promise<Entry[]> {
+  async listByFeed(feedId: string): Promise<Entry[]> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('feed_id', feedId)
     predicates.orderByDesc('published_at')
     return table.list(predicates)
   }
 
-  static async getById(entryId: string): Promise<Entry | undefined> {
+  async getById(entryId: string): Promise<Entry | undefined> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('id', entryId)
     predicates.limitAs(1)
     return table.getOne(predicates)
   }
 
-  static async countUnread(): Promise<number> {
+  async countUnread(): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('is_read', 0)
     return table.count(predicates)
   }
 
-  static async countStarred(): Promise<number> {
+  async countStarred(): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('is_starred', 1)
     return table.count(predicates)
   }
 
-  static async countUnreadByFeed(feedId: string): Promise<number> {
+  async countUnreadByFeed(feedId: string): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('feed_id', feedId)
     predicates.equalTo('is_read', 0)
     return table.count(predicates)
   }
 
-  static async removeByFeed(feedId: string): Promise<void> {
+  async removeByFeed(feedId: string): Promise<void> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('feed_id', feedId)
     await table.delete(predicates)
   }
 
-  static async upsertMany(entries: Entry[]): Promise<void> {
+  async upsertMany(entries: Entry[]): Promise<void> {
     if (entries.length === 0) {
       return
     }
@@ -171,7 +188,7 @@ export class EntryRepository {
     })
   }
 
-  static async markRead(entryId: string, isRead: boolean): Promise<void> {
+  async markRead(entryId: string, isRead: boolean): Promise<void> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('id', entryId)
     await table.update(predicates, {
@@ -180,8 +197,8 @@ export class EntryRepository {
     })
   }
 
-  static async toggleStar(entryId: string): Promise<void> {
-    const entry = await EntryRepository.getById(entryId)
+  async toggleStar(entryId: string): Promise<void> {
+    const entry = await this.getById(entryId)
     if (!entry) {
       throw new Error('条目不存在')
     }
@@ -191,5 +208,55 @@ export class EntryRepository {
       is_starred: boolToNumber(!entry.isStarred),
       updated_at: Date.now(),
     })
+  }
+
+  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
+
+  static async listRecent(limit: number = 20): Promise<Entry[]> {
+    return EntryRepository.default.listRecent(limit)
+  }
+
+  static async listRecentPage(limit: number = 20, offset: number = 0): Promise<Entry[]> {
+    return EntryRepository.default.listRecentPage(limit, offset)
+  }
+
+  static async listStarred(limit: number = 100): Promise<Entry[]> {
+    return EntryRepository.default.listStarred(limit)
+  }
+
+  static async listByFeed(feedId: string): Promise<Entry[]> {
+    return EntryRepository.default.listByFeed(feedId)
+  }
+
+  static async getById(entryId: string): Promise<Entry | undefined> {
+    return EntryRepository.default.getById(entryId)
+  }
+
+  static async countUnread(): Promise<number> {
+    return EntryRepository.default.countUnread()
+  }
+
+  static async countStarred(): Promise<number> {
+    return EntryRepository.default.countStarred()
+  }
+
+  static async countUnreadByFeed(feedId: string): Promise<number> {
+    return EntryRepository.default.countUnreadByFeed(feedId)
+  }
+
+  static async removeByFeed(feedId: string): Promise<void> {
+    return EntryRepository.default.removeByFeed(feedId)
+  }
+
+  static async upsertMany(entries: Entry[]): Promise<void> {
+    return EntryRepository.default.upsertMany(entries)
+  }
+
+  static async markRead(entryId: string, isRead: boolean): Promise<void> {
+    return EntryRepository.default.markRead(entryId, isRead)
+  }
+
+  static async toggleStar(entryId: string): Promise<void> {
+    return EntryRepository.default.toggleStar(entryId)
   }
 }

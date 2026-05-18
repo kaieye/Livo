@@ -12,7 +12,16 @@ import {
   SubscriptionMode,
 } from '../../components/HomeRootConfig'
 
-export interface HomeFeedSessionOwner {
+/**
+ * Readable and writable data properties consumed by home-feed coordinators
+ * (HomeFeedRefresh, HomeFeedPagination, etc.).
+ *
+ * Split from the monolithic HomeFeedSessionOwner for consistency with the
+ * existing HomeModeState / HomeModeActions and HomeInlineSearchState /
+ * HomeInlineSearchActions patterns — a coordinator that only needs to
+ * observe state can depend on HomeFeedState alone.
+ */
+export interface HomeFeedState {
   // Core feed state
   mode: SubscriptionMode
   featuredEntries: EntryCardModel[]
@@ -69,8 +78,18 @@ export interface HomeFeedSessionOwner {
   homeListSwapAnimating: boolean
   homeListSwapMode: SubscriptionMode
   homeListSwapToken: number
-  homeScrollIntent: HomeScrollIntentTracker
 
+  // Tracker (read-only reference — mutations go through its own API)
+  homeScrollIntent: HomeScrollIntentTracker
+}
+
+/**
+ * Actions / methods consumed by home-feed coordinators.
+ *
+ * Split from HomeFeedSessionOwner so that a test can provide a narrow fake
+ * implementing only the methods exercised by a single coordinator.
+ */
+export interface HomeFeedActions {
   // Diagnostics
   logHomePerf(message: string): void
   logHomeAsyncError(stage: string, error: Error | string | Object): void
@@ -104,11 +123,10 @@ export interface HomeFeedSessionOwner {
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void
   getItemRectForMode(mode: SubscriptionMode, index: number): RectResult
 
-  // Notify descendant components that visible entries (data or visible-limit) changed
-  // so they re-evaluate @Builder children and pull fresh entries through callbacks.
+  // Notify descendant components that visible entries changed
   bumpHomeContentVersion(): void
 
-  // Pagination delegation (called by HomeFeedRefresh)
+  // Pagination delegation
   invalidateHomeLoadMorePrefetch(): void
   resetModeLoadMoreStates(reason: string): void
   scheduleHomeLoadMorePrefetch(delayMs?: number): void
@@ -132,3 +150,11 @@ export interface HomeFeedSessionOwner {
     preferFastPath?: boolean,
   ): Promise<void>
 }
+
+/**
+ * Monolithic owner interface kept for backward compatibility.
+ *
+ * New coordinator code should depend on HomeFeedState + HomeFeedActions
+ * separately; existing code can continue to use this combined type.
+ */
+export interface HomeFeedSessionOwner extends HomeFeedState, HomeFeedActions {}

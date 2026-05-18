@@ -2,13 +2,6 @@
 
 
 
-## 2. Duplicated `managedTimeout` and `autoRefreshTimer` infrastructure (部分改善)
-
-**Files**: ~~`HomeFeedSession.ets`~~ (已删除), `IndexHomeRuntimeCoordinator.ets`
-
-**现状**: 问题 1 解决后，`HomeFeedSession` 中的重复实现已消除——`runManagedTimeout`、`configureAutoRefreshTimer`、`applySystemBarStyle` 现在统一通过 `IndexHomeRuntimeCoordinator` 执行。原来的两份独立实现缩减为一份。但如果将来有新模块需要同样的 timeout 管理（如 `IndexPageLifecycleController` 也用了 `runManagedTimeout`），仍然每处各自持有对 runtime coordinator 的引用。
-
-**Solution**: 如有需要，抽取独立的 `ManagedTimeoutRunner` 模块和 `AutoRefreshScheduler`，让所有消费者共享同一个实现。
 
 ## 3. Static-only service classes prevent test isolation
 
@@ -30,7 +23,7 @@ Every test uses `readFileSync` + `assert.match` to verify structural patterns in
 
 **Files**: `pages/Index.ets` (~560 lines after problem-1 refactor)
 
-**现状**: 问题 1 解决后，`homeFeedSession` 中间层已消除——原来 ~80 个透传方法减少到 ~50 个。但 `Index` 仍然有大量 thin wrappers 直接转发给协调器（如 `resolveHomeCandidateLimit()` → `this.homeFeedPagination.resolveHomeCandidateLimit()`）。`Index` 依然持有 ~60 个 `@State` 属性。
+**现状**: 但 `Index` 仍然有大量 thin wrappers 直接转发给协调器（如 `resolveHomeCandidateLimit()` → `this.homeFeedPagination.resolveHomeCandidateLimit()`）。`Index` 依然持有 ~60 个 `@State` 属性。
 
 **Solution**: 考虑用一个 `HomeContext` 对象打包协调器，通过 `@Provide`/`@Consume` 或单个 prop 传递，消除逐方法转发。
 

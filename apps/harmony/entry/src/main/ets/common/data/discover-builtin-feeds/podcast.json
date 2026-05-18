@@ -337,6 +337,272 @@
       "language": "Chinese",
       "descriptionZh": "迷因电波播客，聚焦互联网文化与迷因现象",
       "descriptionEn": "Meme Radio podcast on internet culture and meme phenomena"
+    },
+    {
+      "title": "World Cafe Words and Music Podcast",
+      "url": "https://feeds.npr.org/510008/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 音乐访谈节目，探索音乐、文化与创意",
+      "descriptionEn": "NPR music interview show exploring culture and creativity"
+    },
+    {
+      "title": "Latino USA",
+      "url": "https://feeds.simplecast.com/kwWc0lhf",
+      "language": "English",
+      "descriptionZh": "NPR 拉丁美洲文化播客，关注拉丁裔美国人故事",
+      "descriptionEn": "NPR podcast on Latino culture and stories"
+    },
+    {
+      "title": "From the Top",
+      "url": "https://feeds.npr.org/510026/podcast.xml",
+      "language": "English",
+      "descriptionZh": "展示美国年轻古典音乐家才华的节目",
+      "descriptionEn": "Showcasing young American classical musicians"
+    },
+    {
+      "title": "Here & Now Anytime",
+      "url": "https://feeds.npr.org/510051/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 时事新闻播客，涵盖政治、经济与文化",
+      "descriptionEn": "NPR current affairs podcast covering politics, economy and culture"
+    },
+    {
+      "title": "On Point",
+      "url": "https://feeds.npr.org/510053/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 深度新闻访谈节目，讨论当日热点议题",
+      "descriptionEn": "NPR in-depth news interview program on day's top stories"
+    },
+    {
+      "title": "StoryCorps",
+      "url": "https://feeds.npr.org/510200/podcast.xml",
+      "language": "English",
+      "descriptionZh": "普通人真实故事分享，记录美国生活百态",
+      "descriptionEn": "Real stories from ordinary Americans documenting life in the US"
+    },
+    {
+      "title": "The Best of Car Talk",
+      "url": "https://feeds.npr.org/510208/podcast.xml",
+      "language": "English",
+      "descriptionZh": "经典汽车脱口秀，讨论汽车与生活趣事",
+      "descriptionEn": "Classic car talk show on vehicles and life"
+    },
+    {
+      "title": "Pop Culture Happy Hour",
+      "url": "https://feeds.npr.org/510282/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 流行文化播客，评论电影、电视与娱乐",
+      "descriptionEn": "NPR pop culture podcast reviewing movies, TV and entertainment"
+    },
+    {
+      "title": "Planet Money",
+      "url": "https://feeds.npr.org/510289/podcast.xml",
+      "language": "English",
+      "descriptionZh": "用故事解读经济学的 NPR 播客",
+      "descriptionEn": "NPR podcast explaining economics through stories"
+    },
+    {
+      "title": "TED Radio Hour",
+      "url": "https://feeds.npr.org/510298/podcast.xml",
+      "language": "English",
+      "descriptionZh": "TED 演讲精华编译，探索创意与思想",
+      "descriptionEn": "Curated TED talks exploring ideas and creativity"
+    },
+    {
+      "title": "Alt.Latino",
+      "url": "https://feeds.npr.org/510305/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 拉丁音乐文化播客，探索拉丁音乐与艺术",
+      "descriptionEn": "NPR Latin music and culture podcast"
+    },
+    {
+      "title": "Hidden Brain",
+      "url": "https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/d2c4e775-99ce-4c17-b04c-ac380133d68c/2c6993d0-eac8-4252-8c4e-ac380133d69a/podcast.rss",
+      "language": "English",
+      "descriptionZh": "探索人类行为与心理的 NPR 科学播客",
+      "descriptionEn": "NPR science podcast exploring human behavior and psychology"
+    },
+    {
+      "title": "Bullseye with Jesse Thorn",
+      "url": "https://feeds.npr.org/510309/podcast.xml",
+      "language": "English",
+      "descriptionZh": "深度访谈文化创造者的播客，涵盖音乐、喜剧与电影",
+      "descriptionEn": "Interview podcast with cultural creators across music, comedy and film"
+    },
+    {
+      "title": "The NPR Politics Podcast",
+      "url": "https://feeds.npr.org/510310/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 政治新闻播客，分析美国政治动态",
+      "descriptionEn": "NPR political news podcast analyzing American politics"
+    },
+    {
+      "title": "Embedded",
+      "url": "https://feeds.npr.org/510311/podcast.xml",
+      "language": "English",
+      "descriptionZh": "深入挖掘单一故事或事件的 NPR 调查播客",
+      "descriptionEn": "NPR investigative podcast digging deep into one story or event"
+    },
+    {
+      "title": "Code Switch",
+      "url": "https://feeds.npr.org/510312/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 种族与身份话题播客，探讨美国多元文化",
+      "descriptionEn": "NPR podcast on race, identity and multicultural America"
+    },
+    {
+      "title": "How I Built This with Guy Raz",
+      "url": "https://rss.art19.com/how-i-built-this",
+      "language": "English",
+      "descriptionZh": "创业者访谈播客，讲述创新者背后的故事",
+      "descriptionEn": "Entrepreneur interview podcast sharing innovator stories"
+    },
+    {
+      "title": "Radio Ambulante",
+      "url": "https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/b3c9b6e7-72ba-45c4-aff9-b1e7012d213b/092b66a8-4329-4183-bb12-b1e7012d216f/podcast.rss",
+      "language": "Spanish",
+      "descriptionZh": "西班牙语叙事播客，讲述拉丁美洲故事",
+      "descriptionEn": "Spanish-language narrative podcast telling Latin American stories"
+    },
+    {
+      "title": "1A",
+      "url": "https://feeds.npr.org/510316/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 时事讨论播客，深入探讨美国社会议题",
+      "descriptionEn": "NPR current affairs discussion on American social issues"
+    },
+    {
+      "title": "It's Been a Minute",
+      "url": "https://feeds.npr.org/510317/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 文化与新闻播客，评论流行文化与时事",
+      "descriptionEn": "NPR culture and news podcast commenting on pop culture and current events"
+    },
+    {
+      "title": "Up First from NPR",
+      "url": "https://feeds.npr.org/510318/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 每日晨间新闻播客，快速了解今日要闻",
+      "descriptionEn": "NPR daily morning news podcast for today's top stories"
+    },
+    {
+      "title": "NPR News Now",
+      "url": "https://feeds.npr.org/510320/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 最新新闻即时更新播客",
+      "descriptionEn": "NPR latest news updates podcast"
+    },
+    {
+      "title": "Life Kit: Health",
+      "url": "https://feeds.npr.org/510325/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 健康生活指南，实用医学与保健建议",
+      "descriptionEn": "NPR health life guide with practical medical and wellness advice"
+    },
+    {
+      "title": "Throughline",
+      "url": "https://feeds.npr.org/510333/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 历史播客，揭示历史与现实的深层联系",
+      "descriptionEn": "NPR history podcast revealing deep connections between past and present"
+    },
+    {
+      "title": "Life Kit: Parenting",
+      "url": "https://feeds.npr.org/510334/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 育儿指南，分享家庭与儿童教育经验",
+      "descriptionEn": "NPR parenting guide sharing family and child education experience"
+    },
+    {
+      "title": "Life Kit",
+      "url": "https://feeds.npr.org/510338/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 生活技能播客，提供实用生活建议",
+      "descriptionEn": "NPR life skills podcast with practical advice"
+    },
+    {
+      "title": "Life Kit: Money",
+      "url": "https://feeds.npr.org/510341/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 理财指南，帮助掌控个人财务",
+      "descriptionEn": "NPR money guide helping manage personal finances"
+    },
+    {
+      "title": "The Indicator from Planet Money",
+      "url": "https://feeds.npr.org/510342/podcast.xml",
+      "language": "English",
+      "descriptionZh": "Planet Money 短音频版，每日经济趣闻解读",
+      "descriptionEn": "Planet Money short audio version with daily economic fun facts"
+    },
+    {
+      "title": "Short Wave",
+      "url": "https://feeds.npr.org/510351/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 每日科学播客，用短音频解释科学概念",
+      "descriptionEn": "NPR daily science podcast explaining scientific concepts in short audio"
+    },
+    {
+      "title": "NPR Explains...",
+      "url": "https://feeds.npr.org/510361/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 深度解释播客，分析复杂社会议题",
+      "descriptionEn": "NPR in-depth explanation podcast analyzing complex social issues"
+    },
+    {
+      "title": "State of the World from NPR",
+      "url": "https://feeds.npr.org/510366/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 国际新闻播客，报道全球重要事件",
+      "descriptionEn": "NPR international news podcast covering world events"
+    },
+    {
+      "title": "NPR's Book of the Day",
+      "url": "https://feeds.npr.org/510368/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 每日好书推荐，分享文学与知识",
+      "descriptionEn": "NPR daily book recommendation sharing literature and knowledge"
+    },
+    {
+      "title": "The Pulse",
+      "url": "https://publicfeeds.net/f/12369/thepulse.xml",
+      "language": "English",
+      "descriptionZh": "KQED 健康科学播客，探索人体与医学前沿",
+      "descriptionEn": "KQED health science podcast exploring the human body and medical frontier"
+    },
+    {
+      "title": "Wait Wait... Don't Tell Me!",
+      "url": "https://feeds.npr.org/344098539/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 新闻知识问答节目，测试你的新闻敏感度",
+      "descriptionEn": "NPR news quiz show testing your news awareness"
+    },
+    {
+      "title": "Fresh Air",
+      "url": "https://feeds.npr.org/381444908/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 经典访谈播客，对话名人、作家与思想家",
+      "descriptionEn": "NPR classic interview podcast with celebrities, writers and thinkers"
+    },
+    {
+      "title": "Consider This from NPR",
+      "url": "https://feeds.npr.org/510364/podcast.xml",
+      "language": "English",
+      "descriptionZh": "NPR 每日新闻简报，快速掌握今日要闻",
+      "descriptionEn": "NPR daily news briefing for today's top stories"
+    },
+    {
+      "title": "On Our Watch",
+      "url": "https://feeds.acast.com/public/shows/65280dac52b38a00118a0cb7",
+      "language": "English",
+      "descriptionZh": "NPR 深度调查播客，关注刑事司法系统",
+      "descriptionEn": "NPR investigative podcast focusing on criminal justice system"
+    },
+    {
+      "title": "Taking Cover",
+      "url": "https://rss.art19.com/taking-cover",
+      "language": "English",
+      "descriptionZh": "NPR 军事与退伍军人故事播客",
+      "descriptionEn": "NPR military and veteran stories podcast"
     }
   ]
 }
