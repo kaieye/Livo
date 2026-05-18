@@ -3,9 +3,10 @@ export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 18
 const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 36
 const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 12
+const HOME_VISIBLE_ENTRY_ARTICLE_LOAD_MORE_STEP: number = 20
 const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 4
 const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 24
-const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 8
+const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 16
 const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 4
 const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 24
 
@@ -21,7 +22,7 @@ interface HomeVisibleEntryPreloadPolicy {
 // visibleCount >= totalCount 阻断预取，否则首屏候选耗尽前只能等真正触底。
 const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
   {
-    preloadRemainingCount: 3,
+    preloadRemainingCount: 8,
     estimatedItemHeight: 280,
     estimatedVisibleItemCount: 3,
   }
@@ -65,6 +66,9 @@ export function resolveHomeVisibleEntryInitialLimit(
 export function resolveHomeVisibleEntryLoadMoreStep(
   mode?: HomeVisibleEntryMode,
 ): number {
+  if (mode === 'articles') {
+    return HOME_VISIBLE_ENTRY_ARTICLE_LOAD_MORE_STEP
+  }
   if (mode === 'pictures') {
     return HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP
   }

@@ -502,7 +502,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       Math.floor(visibleCount / HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR),
     )
     if (mode === 'articles') {
-      dynamicThreshold = Math.max(3, Math.min(5, Math.floor(visibleCount / 8)))
+      dynamicThreshold = Math.max(6, Math.min(12, Math.floor(visibleCount / 4)))
     } else if (mode === 'social') {
       dynamicThreshold = Math.max(1, Math.min(2, Math.floor(visibleCount / 12)))
     } else if (mode === 'pictures') {
