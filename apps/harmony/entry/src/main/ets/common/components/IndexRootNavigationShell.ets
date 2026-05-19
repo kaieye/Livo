@@ -28,6 +28,11 @@ import { IndexRootTabBody } from './IndexRootTabBody'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
+const ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH: number = 260
+const ROOT_BOTTOM_TAB_BAR_MEDIUM_WIDTH: number = 300
+const ROOT_BOTTOM_TAB_BAR_LARGE_WIDTH: number = 340
+const ROOT_BOTTOM_TAB_MINI_BAR_SIZE: number = 48
+
 @Component
 export struct IndexRootNavigationShell {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
@@ -108,6 +113,23 @@ export struct IndexRootNavigationShell {
         },
       },
     }],
+  }
+
+  @Builder
+  private RootBottomMiniBarBuilder() {
+    Row() {
+      Image($r('app.media.ri_ai'))
+        .width(20)
+        .height(20)
+        .objectFit(ImageFit.Contain)
+        .fillColor('#7A5AF8')
+    }
+    .width(ROOT_BOTTOM_TAB_MINI_BAR_SIZE)
+    .height(ROOT_BOTTOM_TAB_MINI_BAR_SIZE)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor($r('sys.color.comp_background_tertiary'))
+    .borderRadius(ROOT_BOTTOM_TAB_MINI_BAR_SIZE / 2)
   }
 
   build() {
@@ -220,7 +242,23 @@ export struct IndexRootNavigationShell {
       .barOverlap(true)
       .barHeight(this.hideBottomTabs ? 0 : BOTTOM_TAB_BAR_HEIGHT)
       .barFloatingStyle({
+        barWidth: {
+          smallWidth: ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH,
+          mediumWidth: ROOT_BOTTOM_TAB_BAR_MEDIUM_WIDTH,
+          largeWidth: ROOT_BOTTOM_TAB_BAR_LARGE_WIDTH,
+        },
         barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP),
+        miniBar: {
+          miniBarBuilder: (): void => this.RootBottomMiniBarBuilder(),
+          miniBarWidth: {
+            smallWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
+            mediumWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
+            largeWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
+          },
+          enableMiniBarBackground: false,
+          enableMiniBarClip: true,
+        },
+        adaptToHandedness: true,
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
@@ -278,16 +316,14 @@ export struct IndexRootNavigationShell {
         },
         scrollEffectStyle: undefined,
       } : rootTabTitleBarStyle(),
-      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏。
-      avoidLayoutSafeArea: true,
+      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏�?      avoidLayoutSafeArea: true,
       enableComponentSafeArea: false,
     })
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideTitleBar(this.hideTitleBar)
     .hideBackButton(true)
     .bindToScrollable(this.bindScrollers)
-    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊。
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊�?    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
   }
