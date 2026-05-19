@@ -45,16 +45,6 @@ export function createPerModeMap<T>(value: T): PerModeMap<T> {
   return { articles: value, social: value, pictures: value, videos: value }
 }
 
-/** @deprecated Use createPerModeMap<boolean>(value) instead. */
-export function createHomeModeBooleanMap(value: boolean): PerModeMap<boolean> {
-  return createPerModeMap(value)
-}
-
-/** @deprecated Use createPerModeMap<number>(value) instead. */
-export function createHomeModeNumberMap(value: number): PerModeMap<number> {
-  return createPerModeMap(value)
-}
-
 // ── Specialized factories that compute per-mode initial values ───────────
 
 export function createHomeCandidateLimitMap(): HomeModeCandidateLimitMap {
@@ -99,96 +89,4 @@ export function createHomeScrollOffsetMap(): HomeModeScrollOffsetMap {
   return createPerModeMap<number>(0)
 }
 
-// ── Backward-compatible getters (delegate to perModeGet) ─────────────────
 
-export function homeModeNumberValue(mode: SubscriptionMode, values: HomeModeScrollOffsetMap): number {
-  return perModeGet(mode, values)
-}
-
-export function homeCandidateLimitValue(mode: SubscriptionMode, values: HomeModeCandidateLimitMap): number {
-  return perModeGet(mode, values)
-}
-
-export function homeVisibleEntryLimitValue(mode: SubscriptionMode, values: HomeModeVisibleEntryLimitMap): number {
-  return perModeGet(mode, values)
-}
-
-export function homeNoProgressCountValue(mode: SubscriptionMode, values: HomeModeNoProgressCountMap): number {
-  return perModeGet(mode, values)
-}
-
-export function homeLoadMoreTimestampValue(mode: SubscriptionMode, values: HomeModeLoadMoreTimestampMap): number {
-  return perModeGet(mode, values)
-}
-
-export function homeModeBooleanValue(mode: SubscriptionMode, values: HomeModeHasMoreMap): boolean {
-  return perModeGet(mode, values)
-}
-
-export function homeModeLoadedValue(mode: SubscriptionMode, values: HomeModeLoadedMap): boolean {
-  return perModeGet(mode, values)
-}
-
-export function homeModeLoadingValue(mode: SubscriptionMode, values: HomeModeLoadingMap): boolean {
-  return perModeGet(mode, values)
-}
-
-export function homeModePendingLoadMoreValue(mode: SubscriptionMode, values: HomeModePendingLoadMoreMap): boolean {
-  return perModeGet(mode, values)
-}
-
-// ── Backward-compatible setters (delegate to perModeSet) ─────────────────
-
-export function withHomeModeNumberValue(
-  mode: SubscriptionMode, value: number, values: HomeModeScrollOffsetMap,
-): HomeModeScrollOffsetMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeModeBooleanValue(
-  mode: SubscriptionMode, value: boolean, values: HomeModeHasMoreMap,
-): HomeModeHasMoreMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeCandidateLimitValue(
-  mode: SubscriptionMode, value: number, values: HomeModeCandidateLimitMap,
-): HomeModeCandidateLimitMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeLoadedValue(
-  mode: SubscriptionMode, value: boolean, values: HomeModeLoadedMap,
-): HomeModeLoadedMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeLoadingValue(
-  mode: SubscriptionMode, value: boolean, values: HomeModeLoadingMap,
-): HomeModeLoadingMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeVisibleEntryLimitValue(
-  mode: SubscriptionMode, value: number, values: HomeModeVisibleEntryLimitMap,
-): HomeModeVisibleEntryLimitMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeNoProgressCountValue(
-  mode: SubscriptionMode, value: number, values: HomeModeNoProgressCountMap,
-): HomeModeNoProgressCountMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomePendingLoadMoreValue(
-  mode: SubscriptionMode, value: boolean, values: HomeModePendingLoadMoreMap,
-): HomeModePendingLoadMoreMap {
-  return perModeSet(mode, value, values)
-}
-
-export function withHomeLoadMoreTimestampValue(
-  mode: SubscriptionMode, value: number, values: HomeModeLoadMoreTimestampMap,
-): HomeModeLoadMoreTimestampMap {
-  return perModeSet(mode, value, values)
-}

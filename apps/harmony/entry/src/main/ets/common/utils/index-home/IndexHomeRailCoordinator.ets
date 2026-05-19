@@ -16,7 +16,7 @@ import {
 import { PAGE_HORIZONTAL_PADDING } from '../../ui/UiTokens'
 import {
   createHomeScrollOffsetMap,
-  homeModeNumberValue,
+  perModeGet,
 } from '../home/HomeModeMapHelpers'
 
 export interface IndexHomeRailOwner {
@@ -43,7 +43,7 @@ export class IndexHomeRailCoordinator {
   }
 
   private homeModeScrollOffsetFor(mode: SubscriptionMode): number {
-    return homeModeNumberValue(mode, this.homeModeScrollOffsets)
+    return perModeGet(mode, this.homeModeScrollOffsets)
   }
 
   private updateHomeModeScrollOffset(mode: SubscriptionMode, offset: number): void {

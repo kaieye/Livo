@@ -17,7 +17,7 @@ import {
   createHomeCandidateLimitMap,
   createHomeLoadedMap,
   createHomeLoadingMap,
-  createHomeModeBooleanMap,
+  createPerModeMap,
   createHomeNoProgressCountMap,
   createHomeVisibleEntryLimitMap,
 } from './HomeModeMapHelpers'
@@ -74,7 +74,7 @@ export class HomeFeedStateBag implements HomeFeedState {
   homeModeLoaded: HomeModeLoadedMap = createHomeLoadedMap()
   homeModeLoading: HomeModeLoadingMap = createHomeLoadingMap()
   homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = createHomeVisibleEntryLimitMap()
-  homeHasMoreEntriesByMode: HomeModeHasMoreMap = createHomeModeBooleanMap(true)
+  homeHasMoreEntriesByMode: HomeModeHasMoreMap = createPerModeMap<boolean>(true)
   homeModeNoProgressLoadMoreCount: HomeModeNoProgressCountMap = createHomeNoProgressCountMap()
   homeLoadMorePrefetchToken: number = 0
   homeLoadMorePrefetchLimit: number = 0

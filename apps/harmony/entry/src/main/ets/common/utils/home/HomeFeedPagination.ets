@@ -21,12 +21,8 @@ import {
   createHomeLoadMoreTimestampMap,
   createHomePendingLoadMoreMap,
   createHomeScrollOffsetMap,
-  homeLoadMoreTimestampValue,
-  homeModeNumberValue,
-  homeModePendingLoadMoreValue,
-  withHomeLoadMoreTimestampValue,
-  withHomeModeNumberValue,
-  withHomePendingLoadMoreValue,
+  perModeGet,
+  perModeSet,
 } from './HomeModeMapHelpers'
 import {
   resolveHomeVisibleEntryInitialLimit,
@@ -371,27 +367,27 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean {
-    return homeModePendingLoadMoreValue(mode, this.homePendingLoadMoreModes)
+    return perModeGet(mode, this.homePendingLoadMoreModes)
   }
   private setPendingLoadMoreForMode(mode: SubscriptionMode, pending: boolean): void {
     if (this.pendingLoadMoreForMode(mode) === pending) {
       return
     }
-    this.homePendingLoadMoreModes = withHomePendingLoadMoreValue(mode, pending, this.homePendingLoadMoreModes)
+    this.homePendingLoadMoreModes = perModeSet(mode, pending, this.homePendingLoadMoreModes)
   }
   private modeLoadMoreTimestampValue(mode: SubscriptionMode): number {
-    return homeLoadMoreTimestampValue(mode, this.homeLastItemAppearLoadMoreAt)
+    return perModeGet(mode, this.homeLastItemAppearLoadMoreAt)
   }
   private setModeLoadMoreTimestamp(mode: SubscriptionMode, value: number): void {
-    this.homeLastItemAppearLoadMoreAt = withHomeLoadMoreTimestampValue(mode, value, this.homeLastItemAppearLoadMoreAt)
+    this.homeLastItemAppearLoadMoreAt = perModeSet(mode, value, this.homeLastItemAppearLoadMoreAt)
   }
 
   private modeScrollProgressLoadMoreValue(mode: SubscriptionMode): number {
-    return homeModeNumberValue(mode, this.homeLastScrollProgressLoadMoreAt)
+    return perModeGet(mode, this.homeLastScrollProgressLoadMoreAt)
   }
 
   private setModeScrollProgressLoadMoreValue(mode: SubscriptionMode, value: number): void {
-    this.homeLastScrollProgressLoadMoreAt = withHomeModeNumberValue(mode, value, this.homeLastScrollProgressLoadMoreAt)
+    this.homeLastScrollProgressLoadMoreAt = perModeSet(mode, value, this.homeLastScrollProgressLoadMoreAt)
   }
 
   resetModeScrollProgressLoadMoreValue(mode: SubscriptionMode): void {

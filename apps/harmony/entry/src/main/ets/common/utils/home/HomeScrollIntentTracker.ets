@@ -5,8 +5,8 @@ import {
 } from '../../components/HomeRootConfig'
 import {
   createHomeScrollOffsetMap,
-  homeModeNumberValue,
-  withHomeModeNumberValue,
+  perModeGet,
+  perModeSet,
 } from './HomeModeMapHelpers'
 
 export class HomeScrollIntentTracker {
@@ -33,15 +33,15 @@ export class HomeScrollIntentTracker {
   }
 
   intentVersion(mode: SubscriptionMode): number {
-    return homeModeNumberValue(mode, this.intentVersions)
+    return perModeGet(mode, this.intentVersions)
   }
 
   consumedVersion(mode: SubscriptionMode): number {
-    return homeModeNumberValue(mode, this.consumedIntentVersions)
+    return perModeGet(mode, this.consumedIntentVersions)
   }
 
   setConsumedVersion(mode: SubscriptionMode, value: number): void {
-    this.consumedIntentVersions = withHomeModeNumberValue(mode, value, this.consumedIntentVersions)
+    this.consumedIntentVersions = perModeSet(mode, value, this.consumedIntentVersions)
   }
 
   setInteracting(interacting: boolean): void {
@@ -53,7 +53,7 @@ export class HomeScrollIntentTracker {
 
   reset(mode: SubscriptionMode): void {
     this.lastUserScrollAt = 0
-    this.intentVersions = withHomeModeNumberValue(mode, 0, this.intentVersions)
+    this.intentVersions = perModeSet(mode, 0, this.intentVersions)
     this.setConsumedVersion(mode, 0)
   }
 
@@ -62,7 +62,7 @@ export class HomeScrollIntentTracker {
   }
 
   private bumpVersion(mode: SubscriptionMode): void {
-    this.intentVersions = withHomeModeNumberValue(mode, this.intentVersion(mode) + 1, this.intentVersions)
+    this.intentVersions = perModeSet(mode, this.intentVersion(mode) + 1, this.intentVersions)
   }
 
   private isUserDrivenSource(source: ScrollSource): boolean {

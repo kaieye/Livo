@@ -31,7 +31,7 @@ import {
   createHomeCandidateLimitMap,
   createHomeLoadedMap,
   createHomeLoadingMap,
-  createHomeModeBooleanMap,
+  createPerModeMap,
   createHomeNoProgressCountMap,
   createHomeVisibleEntryLimitMap,
 } from '../common/utils/home/HomeModeMapHelpers'
@@ -129,7 +129,7 @@ struct Index {
   @State homeCandidateLimit: number = HOME_MODE_INITIAL_CANDIDATE_LIMIT
   @State homeCandidateLimitsByMode: HomeModeCandidateLimitMap = createHomeCandidateLimitMap()
   @State homeHasMoreEntries: boolean = true
-  @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = createHomeModeBooleanMap(true)
+  @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = createPerModeMap<boolean>(true)
   @State homeLoadMoreInProgress: boolean = false
   @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = createHomeVisibleEntryLimitMap()
   // Bumped whenever entry groups or visible-entry limits change so that
@@ -200,15 +200,10 @@ struct Index {
   onPageShow(): void { this.session.pageLifecycle.onPageShow() }
   onBackPress(): boolean { return this.session.pageLifecycle.onBackPress() }
 
-  // --- Infra (delegated to runtime coordinator — single source for managed timeouts & timers) ---
-  runManagedTimeout(callback: () => void, delayMs: number): void { this.session.homeRuntimeCoordinator.runManagedTimeout(callback, delayMs) }
-
-  describeError(error: Error | string | Object): string { return this.session.diagnosticsLogger.describeError(error) }
-  logHomeAsyncError(stage: string, error: Error | string | Object): void { this.session.diagnosticsLogger.logHomeAsyncError(stage, error) }
-  logHomeLoadMore(message: string): void { this.session.diagnosticsLogger.logHomeLoadMore(message) }
-  logHomePerf(message: string): void { this.session.diagnosticsLogger.logHomePerf(message) }
-  logHomeLoadState(message: string): void { this.session.diagnosticsLogger.logHomeLoadState(message) }
   logHomeGroupStats(stage: string, entries: EntryCardModel[]): void { this.session.diagnosticsLogger.logHomeGroupStats(stage, entries) }
+  logHomePerf(message: string): void { this.session.diagnosticsLogger.logHomePerf(message) }
+  logHomeAsyncError(stage: string, error: Error | string | Object): void { this.session.diagnosticsLogger.logHomeAsyncError(stage, error) }
+  runManagedTimeout(callback: () => void, delayMs: number): void { this.session.homeRuntimeCoordinator.runManagedTimeout(callback, delayMs) }
   beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void {
     this.tweetPresentationDiagToken += 1
     this.tweetPresentationDiagMode = mode
@@ -218,7 +213,7 @@ struct Index {
     this.tweetPresentationDiagHits = 0
     this.tweetPresentationDiagMisses = 0
     this.tweetPresentationDiagMissCostMs = 0
-    this.logHomeLoadMore(
+    this.session.diagnosticsLogger.logHomeLoadMore(
       `tweet-presentation-diag-start token=${this.tweetPresentationDiagToken} mode=${mode} reason=${reason} startIndex=${expectedStartIndex}`,
     )
   }
@@ -226,7 +221,7 @@ struct Index {
     if (!this.tweetPresentationDiagStartedAt) {
       return
     }
-    this.logHomeLoadMore(
+    this.session.diagnosticsLogger.logHomeLoadMore(
       `tweet-presentation-diag-done token=${this.tweetPresentationDiagToken} mode=${this.tweetPresentationDiagMode} `
       + `reason=${reason} source=${this.tweetPresentationDiagReason} startIndex=${this.tweetPresentationDiagExpectedStartIndex} `
       + `elapsedMs=${Date.now() - this.tweetPresentationDiagStartedAt} hits=${this.tweetPresentationDiagHits} `
@@ -282,7 +277,6 @@ struct Index {
     this.getUIContext().animateTo(options, event)
   }
 
-  settleInitialHomeLoadState(force: boolean = false): void { this.session.loadStateGate.settleInitialHomeLoadState(force) }
   homeEmptyStateTitle(): string { return this.session.loadStateGate.homeEmptyStateTitle() }
   updateHeaderBlurProgress(offset: number): void { this.session.loadStateGate.updateHeaderBlurProgress(offset) }
 
@@ -318,19 +312,13 @@ struct Index {
     this.homeContentVersion = (this.homeContentVersion + 1) | 0
   }
 
-  currentSearchEntries(): EntryCardModel[] {
-    if (this.rootSettings.searchAllHomeCategories) {
-      return this.featuredEntries
-    }
-    return this.filteredEntriesFor(this.mode)
-  }
-  hasHomeInlineSearchQuery(): boolean { return !!this.session.homeInlineSearchController.normalizedQuery() }
   getSearchInputController(): TextInputController { return this.searchInputController }
   logHomeInlineSearchFocusDebug(stage: string, message: string): void { this.session.homeInlineSearchController.logFocusDebug(stage, message) }
   closeHomeInlineSearch(clearQuery: boolean): void { this.session.homeInlineSearchController.close(clearQuery) }
 
-  isHomeRootTab(): boolean { return this.session.rootTabCoordinator.isHomeRootTab() }
   homeScrollerForMode(mode: SubscriptionMode): Scroller { return this.scrollerRegistry.homeScrollerForMode(mode) }
+  isHomeRootTab(): boolean { return this.session.rootTabCoordinator.isHomeRootTab() }
+  currentRootTabId(): RootTabId { return this.session.rootTabCoordinator.currentRootTabId() }
 
   private handleSystemThemeChanged(): void { void this.session.homeRuntimeCoordinator.handleSystemThemeChanged() }
   applySystemBarStyle(theme: ThemePalette): Promise<void> { return this.session.homeRuntimeCoordinator.applySystemBarStyle(theme) }
@@ -347,7 +335,6 @@ struct Index {
   }
 
   openEntry(entry: EntryCardModel): void { this.session.pageLifecycle.openEntry(entry) }
-  currentRootTabId(): RootTabId { return this.session.rootTabCoordinator.currentRootTabId() }
   scrollRootTabToTop(tabId: RootTabId): void {
     if (tabId === 'home') {
       scrollScrollerToTop(this.homeScrollerForMode(this.mode), '首页')
@@ -391,26 +378,20 @@ struct Index {
   private scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void { this.session.homeFeedRefresh.scheduleFinalHomeReloadWhenIdle(currentVersion, attempt) }
   private scheduleHomeReloadAfterRefresh(): void { this.session.homeFeedRefresh.scheduleHomeReloadAfterRefresh() }
 
-  // === Pagination delegation ===
+  // === Pagination delegation (UI callbacks use session.homeFeedPagination directly) ===
+  invalidateHomeLoadMorePrefetch(): void { this.session.homeFeedPagination.invalidateHomeLoadMorePrefetch() }
   resolveHomeCandidateLimit(minimumLimit: number): number { return this.session.homeFeedPagination.resolveHomeCandidateLimit(minimumLimit) }
-  shouldRenderAllEntriesForMode(_mode: SubscriptionMode): boolean { return this.session.homeFeedPagination.shouldRenderAllEntriesForMode(_mode) }
   setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void { this.session.homeFeedPagination.setCandidateLimitForMode(mode, limit) }
   resolveHomeCandidateLimitForMode(mode: SubscriptionMode, minimumLimit: number): number { return this.session.homeFeedPagination.resolveHomeCandidateLimitForMode(mode, minimumLimit) }
-  markModeLoaded(mode: SubscriptionMode, loaded: boolean): void { this.session.homeFeedPagination.markModeLoaded(mode, loaded) }
   isModeLoaded(mode: SubscriptionMode): boolean { return this.session.homeFeedPagination.isModeLoaded(mode) }
   isModeLoading(mode: SubscriptionMode): boolean { return this.session.homeFeedPagination.isModeLoading(mode) }
   setModeLoading(mode: SubscriptionMode, loading: boolean): void { this.session.homeFeedPagination.setModeLoading(mode, loading) }
-  totalEntryCountFor(mode: SubscriptionMode): number { return this.session.homeFeedPagination.totalEntryCountFor(mode) }
   private hasBufferedEntriesForMode(mode: SubscriptionMode): boolean { return this.session.homeFeedPagination.hasBufferedEntriesForMode(mode) }
   visibleEntriesFor(mode: SubscriptionMode): EntryCardModel[] { return this.session.homeFeedPagination.visibleEntriesFor(mode) }
   private visibleEntryCountFor(mode: SubscriptionMode): number { return this.session.homeFeedPagination.visibleEntryCountFor(mode) }
   syncModePaginationFromReloadResult(mode: SubscriptionMode, entries: EntryCardModel[], candidateLimit: number): void { this.session.homeFeedPagination.syncModePaginationFromReloadResult(mode, entries, candidateLimit) }
   setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void { this.session.homeFeedPagination.setModeHasMoreEntries(mode, next, reason) }
-  resetModeLoadMoreStates(reason: string): void { this.session.homeFeedPagination.resetModeLoadMoreStates(reason) }
-  hasRecentHomeScrollIntent(): boolean { return this.session.homeFeedPagination.hasRecentHomeScrollIntent() }
-  invalidateHomeLoadMorePrefetch(): void { this.session.homeFeedPagination.invalidateHomeLoadMorePrefetch() }
   scheduleHomeLoadMorePrefetch(delayMs: number = 220): void { this.session.homeFeedPagination.scheduleHomeLoadMorePrefetch(delayMs) }
-  pendingLoadMoreForMode(mode: SubscriptionMode): boolean { return this.session.homeFeedPagination.pendingLoadMoreForMode(mode) }
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void { this.session.homeFeedPagination.maybeTriggerLoadMoreByScrollProgress(mode, currentOffset) }
   flushPendingLoadMoreForMode(mode: SubscriptionMode): void { this.session.homeFeedPagination.flushPendingLoadMoreForMode(mode) }
   handleHomeEntryAppear(mode: SubscriptionMode, index: number, totalCount: number): void { this.session.homeFeedPagination.handleHomeEntryAppear(mode, index, totalCount) }
@@ -418,8 +399,7 @@ struct Index {
     this.session.homeFeedPagination.handleHomeListEndReach(mode, totalCount)
   }
 
-  // === Data management delegation ===
-  mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.session.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
+  // === Data management delegation (UI callbacks use session directly) ===
   applyEntriesForMode(
     mode: SubscriptionMode,
     entries: EntryCardModel[],
@@ -430,13 +410,10 @@ struct Index {
   ): void {
     this.session.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge, skipPersist)
   }
-  ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.session.homeFeedPagination.ensureModeEntriesLoaded(mode) }
-  schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.session.homeEntryDataManager.schedulePersistSnapshot(entries) }
   persistHomeSnapshotNow(): void { this.session.homeEntryDataManager.persistSnapshotNow() }
   applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void { this.session.homeEntryDataManager.applyHomeEntries(nextEntries, deferredGrouping) }
   modeListSwapTranslateY(mode: SubscriptionMode): number { return this.session.modeScenePresenter.modeListSwapTranslateY(mode) }
   notifyHomeEntryDataReloaded(): void { this.session.homeEntryDataManager.notifyAllReloaded() }
-  notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.session.homeEntryDataManager.notifyModeReloaded(mode) }
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void {
     this.homeEntryDataSourceFor(mode).notifyDataAdded(startIndex)
   }

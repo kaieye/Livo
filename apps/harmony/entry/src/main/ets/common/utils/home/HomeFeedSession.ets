@@ -41,13 +41,9 @@ import { RootTabId } from '../../navigation/AppRouter'
 export interface HomeFeedSessionOwner
   extends
     HomeFeedState,
-    HomeFeedActions,
     HomeModeState,
-    HomeModeActions,
     HomeInlineSearchState,
-    HomeInlineSearchActions,
     HomeEntryDataState,
-    HomeEntryDataActions,
     IndexHomeDiagnosticsOwner,
     IndexHomeLoadStateOwner,
     IndexHomeModeSceneOwner,
@@ -55,14 +51,26 @@ export interface HomeFeedSessionOwner
     IndexHomeRuntimeOwner,
     IndexRootTabOwner,
     IndexPageLifecycleOwner {
-  // Additional fields accessed directly by HomeFeedSession bootstrap methods
-  // that are not captured by the interfaces above.
-
   /** Bumped whenever entry groups change — descendant components observe it via @Prop. */
   homeContentVersion: number
+
+  // ── Methods session delegates to owner (inline logic on Index) ──
+
+  beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void
+  flushTweetPresentationDiagSession(reason: string): void
+  showToast(message: string, duration?: number): void
+  filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[]
+  notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void
+  getItemRectForMode(mode: SubscriptionMode, index: number): RectResult
+  bumpHomeContentVersion(): void
+  setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode): void
+  resetModeScrollIntent(mode: SubscriptionMode): void
+  getSearchInputController(): TextInputController
+  resetTweetPresentationCache(): void
+  animateWithUiContext(options: AnimateParam, event: () => void): void
 }
 
-export class HomeFeedSession {
+export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeInlineSearchActions, HomeEntryDataActions {
   readonly diagnosticsLogger: IndexHomeDiagnosticsLogger
   readonly loadStateGate: IndexHomeLoadStateGate
   readonly modeScenePresenter: IndexHomeModeScenePresenter
@@ -97,13 +105,13 @@ export class HomeFeedSession {
     this.modeScenePresenter = new IndexHomeModeScenePresenter(owner)
     this.homeRailCoordinator = new IndexHomeRailCoordinator(owner)
     this.rootTabCoordinator = new IndexRootTabCoordinator(owner)
-    this.homeModeController = new HomeModeController(owner, owner)
-    this.homeEntryDataManager = new HomeEntryDataManager(owner, owner)
-    this.homeInlineSearchController = new HomeInlineSearchController(owner, owner)
+    this.homeModeController = new HomeModeController(owner, this)
+    this.homeEntryDataManager = new HomeEntryDataManager(owner, this)
+    this.homeInlineSearchController = new HomeInlineSearchController(owner, this)
     this.homeRuntimeCoordinator = new IndexHomeRuntimeCoordinator(owner)
     this.pageLifecycle = new IndexPageLifecycleController(owner)
-    this.homeFeedRefresh = new HomeFeedRefresh(owner, owner, this.feedRefreshCoordinator)
-    this.homeFeedPagination = new HomeFeedPagination(owner, owner, this.featuredEntriesQuery)
+    this.homeFeedRefresh = new HomeFeedRefresh(owner, this, this.feedRefreshCoordinator)
+    this.homeFeedPagination = new HomeFeedPagination(owner, this, this.featuredEntriesQuery)
   }
 
   // ── Bootstrap ──
@@ -388,4 +396,69 @@ export class HomeFeedSession {
     )
     this.homeFeedPagination.scheduleHomeLoadMorePrefetch(delayMs)
   }
+
+  // ── HomeFeedActions ──
+
+  logHomePerf(message: string): void { this.diagnosticsLogger.logHomePerf(message) }
+  logHomeAsyncError(stage: string, error: Error | string | Object): void { this.diagnosticsLogger.logHomeAsyncError(stage, error) }
+  logHomeLoadMore(message: string): void { this.diagnosticsLogger.logHomeLoadMore(message) }
+  logHomeLoadState(message: string): void { this.diagnosticsLogger.logHomeLoadState(message) }
+  describeError(error: Error | string | Object): string { return this.diagnosticsLogger.describeError(error) }
+  beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void { this.owner.beginTweetPresentationDiagSession(mode, reason, expectedStartIndex) }
+  flushTweetPresentationDiagSession(reason: string): void { this.owner.flushTweetPresentationDiagSession(reason) }
+  runManagedTimeout(callback: () => void, delayMs: number): void { this.homeRuntimeCoordinator.runManagedTimeout(callback, delayMs) }
+  showToast(message: string, duration?: number): void { this.owner.showToast(message, duration) }
+  isHomeRootTab(): boolean { return this.rootTabCoordinator.isHomeRootTab() }
+  hasHomeInlineSearchQuery(): boolean { return !!this.homeInlineSearchController.normalizedQuery() }
+  readHomeModeScrollOffset(mode: SubscriptionMode): number { return this.homeRailCoordinator.readHomeModeScrollOffset(mode) }
+  filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] { return this.owner.filteredEntriesFor(mode) }
+  mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
+  applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify?: boolean, skipMerge?: boolean, skipPersist?: boolean): void { this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge, skipPersist) }
+  settleInitialHomeLoadState(force?: boolean): void { this.loadStateGate.settleInitialHomeLoadState(force) }
+  schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.homeEntryDataManager.schedulePersistSnapshot(entries) }
+  notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.homeEntryDataManager.notifyModeReloaded(mode) }
+  notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void { this.owner.notifyHomeEntryDataAppendedForMode(mode, startIndex) }
+  getItemRectForMode(mode: SubscriptionMode, index: number): RectResult { return this.owner.getItemRectForMode(mode, index) }
+  bumpHomeContentVersion(): void { this.owner.bumpHomeContentVersion() }
+  invalidateHomeLoadMorePrefetch(): void { this.homeFeedPagination.invalidateHomeLoadMorePrefetch() }
+  resetModeLoadMoreStates(reason: string): void { this.homeFeedPagination.resetModeLoadMoreStates(reason) }
+  scheduleHomeLoadMorePrefetch(delayMs?: number): void { this.homeFeedPagination.scheduleHomeLoadMorePrefetch(delayMs) }
+  shouldRenderAllEntriesForMode(mode: SubscriptionMode): boolean { return this.homeFeedPagination.shouldRenderAllEntriesForMode(mode) }
+  pendingLoadMoreForMode(mode: SubscriptionMode): boolean { return this.homeFeedPagination.pendingLoadMoreForMode(mode) }
+  hasRecentHomeScrollIntent(): boolean { return this.homeFeedPagination.hasRecentHomeScrollIntent() }
+  handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void { this.homeFeedPagination.handleHomeListEndReach(mode, totalCount) }
+  // reloadFeaturedEntriesFromLocal / reloadHomeEntriesFromLocal — implemented by existing methods above
+
+  // ── HomeModeActions ──
+
+  // readHomeModeScrollOffset — already declared above (shared with HomeFeedActions)
+  totalEntryCountFor(mode: SubscriptionMode): number { return this.homeFeedPagination.totalEntryCountFor(mode) }
+  // filteredEntriesFor — already declared above
+  setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode): void { this.owner.setHomeScrollInteracting(interacting, mode) }
+  updateHeaderBlurProgress(offset: number): void { this.loadStateGate.updateHeaderBlurProgress(offset) }
+  resetModeScrollIntent(mode: SubscriptionMode): void { this.owner.resetModeScrollIntent(mode) }
+  ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.homeFeedPagination.ensureModeEntriesLoaded(mode) }
+  // runManagedTimeout — already declared above
+
+  // ── HomeInlineSearchActions ──
+
+  currentRootTabId(): RootTabId { return this.rootTabCoordinator.currentRootTabId() }
+  currentSearchEntries(): EntryCardModel[] {
+    if (this.owner.rootSettings.searchAllHomeCategories) {
+      return this.owner.featuredEntries
+    }
+    return this.owner.filteredEntriesFor(this.owner.mode)
+  }
+  getSearchInputController(): TextInputController { return this.owner.getSearchInputController() }
+  // runManagedTimeout — already declared above
+
+  // ── HomeEntryDataActions ──
+
+  markModeLoaded(mode: SubscriptionMode, loaded: boolean): void { this.homeFeedPagination.markModeLoaded(mode, loaded) }
+  // settleInitialHomeLoadState — already declared above (shared with HomeFeedActions)
+  resetTweetPresentationCache(): void { this.owner.resetTweetPresentationCache() }
+  animateWithUiContext(options: AnimateParam, event: () => void): void { this.owner.animateWithUiContext(options, event) }
+  // runManagedTimeout — already declared above
+  // bumpHomeContentVersion — already declared above
+  // logHomeLoadMore — already declared above
 }

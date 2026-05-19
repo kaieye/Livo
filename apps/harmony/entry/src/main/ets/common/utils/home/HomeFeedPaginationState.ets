@@ -10,16 +10,8 @@ import {
   SubscriptionMode,
 } from '../../components/HomeRootConfig'
 import {
-  homeCandidateLimitValue,
-  homeModeBooleanValue,
-  homeModeLoadedValue,
-  homeModeLoadingValue,
-  homeNoProgressCountValue,
-  homeVisibleEntryLimitValue,
-  withHomeLoadedValue,
-  withHomeLoadingValue,
-  withHomeModeBooleanValue,
-  withHomeNoProgressCountValue,
+  perModeGet,
+  perModeSet,
 } from './HomeModeMapHelpers'
 import {
   resolveHomeVisibleEntryInitialLimit,
@@ -41,7 +33,7 @@ export class HomeFeedPaginationState {
   }
 
   candidateLimitForMode(mode: SubscriptionMode): number {
-    return homeCandidateLimitValue(mode, this.state.homeCandidateLimitsByMode)
+    return perModeGet(mode, this.state.homeCandidateLimitsByMode)
   }
 
   setCandidateLimitForMode(mode: SubscriptionMode, limit: number): void {
@@ -78,23 +70,23 @@ export class HomeFeedPaginationState {
   }
 
   markModeLoaded(mode: SubscriptionMode, loaded: boolean): void {
-    this.state.homeModeLoaded = withHomeLoadedValue(mode, loaded, this.state.homeModeLoaded)
+    this.state.homeModeLoaded = perModeSet(mode, loaded, this.state.homeModeLoaded)
   }
 
   isModeLoaded(mode: SubscriptionMode): boolean {
-    return homeModeLoadedValue(mode, this.state.homeModeLoaded)
+    return perModeGet(mode, this.state.homeModeLoaded)
   }
 
   isModeLoading(mode: SubscriptionMode): boolean {
-    return homeModeLoadingValue(mode, this.state.homeModeLoading)
+    return perModeGet(mode, this.state.homeModeLoading)
   }
 
   setModeLoading(mode: SubscriptionMode, loading: boolean): void {
-    this.state.homeModeLoading = withHomeLoadingValue(mode, loading, this.state.homeModeLoading)
+    this.state.homeModeLoading = perModeSet(mode, loading, this.state.homeModeLoading)
   }
 
   visibleEntryLimitFor(mode: SubscriptionMode): number {
-    return homeVisibleEntryLimitValue(mode, this.state.homeVisibleEntryLimits)
+    return perModeGet(mode, this.state.homeVisibleEntryLimits)
   }
 
   setVisibleEntryLimitFor(mode: SubscriptionMode, limit: number): void {
@@ -171,7 +163,7 @@ export class HomeFeedPaginationState {
   }
 
   modeHasMoreEntries(mode: SubscriptionMode): boolean {
-    return homeModeBooleanValue(mode, this.state.homeHasMoreEntriesByMode)
+    return perModeGet(mode, this.state.homeHasMoreEntriesByMode)
   }
 
   setModeHasMoreEntries(mode: SubscriptionMode, next: boolean, reason: string): void {
@@ -180,7 +172,7 @@ export class HomeFeedPaginationState {
       return
     }
     this.state.homeHasMoreEntriesByMode =
-      withHomeModeBooleanValue(mode, next, this.state.homeHasMoreEntriesByMode)
+      perModeSet(mode, next, this.state.homeHasMoreEntriesByMode)
     this.actions.logHomeLoadState(
       `modeHasMore mode=${mode} next=${next ? 'true' : 'false'} reason=${reason} `
       + `globalHasMore=${this.state.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,
@@ -214,13 +206,13 @@ export class HomeFeedPaginationState {
   }
 
   modeNoProgressCount(mode: SubscriptionMode): number {
-    return homeNoProgressCountValue(mode, this.state.homeModeNoProgressLoadMoreCount)
+    return perModeGet(mode, this.state.homeModeNoProgressLoadMoreCount)
   }
 
   setModeNoProgressCount(mode: SubscriptionMode, count: number): void {
     const safeCount = Math.max(0, count)
     this.state.homeModeNoProgressLoadMoreCount =
-      withHomeNoProgressCountValue(mode, safeCount, this.state.homeModeNoProgressLoadMoreCount)
+      perModeSet(mode, safeCount, this.state.homeModeNoProgressLoadMoreCount)
   }
 
   syncModePaginationFromReloadResult(
