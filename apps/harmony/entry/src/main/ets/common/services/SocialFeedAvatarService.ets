@@ -112,6 +112,10 @@ export class SocialFeedAvatarService {
 
     const xUsername = extractXUsername(feedUrl) || extractXUsername(siteUrl)
     if (xUsername) {
+      const existing = trimValue(existingImageUrl)
+      if (existing && !isPlaceholderAvatar(existing)) {
+        return existing
+      }
       return `https://unavatar.io/x/${encodeURIComponent(xUsername)}`
     }
 
