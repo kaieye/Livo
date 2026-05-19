@@ -7,6 +7,14 @@ const indexSource = readFileSync(
   'utf8',
 )
 
+const sessionSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 const runtimeSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/utils/index-home/IndexHomeRuntimeCoordinator.ets',
@@ -26,23 +34,26 @@ test('home runtime lifecycle flow lives in a dedicated coordinator', () => {
   assert.match(runtimeSource, /homeListSwapToken/)
 })
 
-test('index page delegates lifecycle hooks to the runtime coordinator', () => {
+test('HomeFeedSession owns the runtime coordinator and index delegates through session', () => {
+  // Coordinator instantiation lives in session.
+  assert.match(
+    sessionSource,
+    /readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator/,
+  )
+  // Index delegates lifecycle hooks through session.
   assert.match(
     indexSource,
-    /readonly homeRuntimeCoordinator: IndexHomeRuntimeCoordinator =\s*new IndexHomeRuntimeCoordinator\(this\)/s,
+    /aboutToAppear\(\): void \{\s*this\.session\.homeRuntimeCoordinator\.aboutToAppear\(\)\s*\}/s,
   )
   assert.match(
     indexSource,
-    /aboutToAppear\(\): void \{\s*this\.homeRuntimeCoordinator\.aboutToAppear\(\)\s*\}/s,
+    /aboutToDisappear\(\): void \{\s*this\.session\.homeRuntimeCoordinator\.aboutToDisappear\(\)\s*\}/s,
   )
   assert.match(
     indexSource,
-    /aboutToDisappear\(\): void \{\s*this\.homeRuntimeCoordinator\.aboutToDisappear\(\)\s*\}/s,
+    /runManagedTimeout\(callback: \(\) => void, delayMs: number\): void \{\s*this\.session\.homeRuntimeCoordinator\.runManagedTimeout\(callback, delayMs\)\s*\}/s,
   )
-  assert.match(
-    indexSource,
-    /runManagedTimeout\(callback: \(\) => void, delayMs: number\): void \{\s*this\.homeRuntimeCoordinator\.runManagedTimeout\(callback, delayMs\)\s*\}/s,
-  )
+  // Runtime implementation details do not leak into Index.
   assert.doesNotMatch(indexSource, /managedTimeoutIds/)
   assert.doesNotMatch(
     indexSource,

@@ -7,6 +7,14 @@ const indexSource = readFileSync(
   'utf8',
 )
 
+const sessionSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 const coordinatorSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/utils/index-home/IndexRootTabCoordinator.ets',
@@ -24,13 +32,22 @@ test('root tab request and change flow lives in a dedicated coordinator', () => 
   assert.match(coordinatorSource, /resolveHdsBottomTabItems/)
 })
 
-test('index page delegates root tab flow and visibility decisions', () => {
+test('HomeFeedSession owns the root tab coordinator and index delegates through session', () => {
+  // Coordinator instantiation lives in session.
+  assert.match(
+    sessionSource,
+    /readonly rootTabCoordinator: IndexRootTabCoordinator/,
+  )
+  // Index delegates through session in build().
   assert.match(
     indexSource,
-    /readonly rootTabCoordinator: IndexRootTabCoordinator = new IndexRootTabCoordinator\(this\)/,
+    /session\.rootTabCoordinator\.handleRootTabChange\(index\)/,
   )
-  assert.match(indexSource, /rootTabCoordinator\.handleRootTabChange\(index\)/)
-  assert.match(indexSource, /rootTabCoordinator\.shouldHideBottomTabs\(\)/)
+  assert.match(
+    indexSource,
+    /session\.rootTabCoordinator\.shouldHideBottomTabs\(\)/,
+  )
+  // Implementation details do not leak into Index.
   assert.doesNotMatch(indexSource, /resolveHdsBottomTabItems\(\)\[index\]/)
   assert.doesNotMatch(indexSource, /getRequestedRootTabId\(\)/)
 })

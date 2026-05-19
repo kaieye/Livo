@@ -1,5 +1,6 @@
 import { SubscriptionMode } from '../../components/HomeRootConfig'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
+import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 
 export interface HomeFeedLoadMoreDrainPaginationOwner {
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean
@@ -16,6 +17,7 @@ export class HomeFeedLoadMoreDrain {
   private readonly state: HomeFeedState
   private readonly actions: HomeFeedActions
   private readonly owner: HomeFeedLoadMoreDrainPaginationOwner
+  private readonly guard: HomeFeedGuard
   private drainToken: number = 0
   private drainingMode: SubscriptionMode | '' = ''
   private stuckRetryCount: number = 0
@@ -25,6 +27,17 @@ export class HomeFeedLoadMoreDrain {
     this.state = state
     this.actions = actions
     this.owner = owner
+    const provider = new HomeFeedGuardProvider(
+      () => actions.isHomeRootTab(),
+      () => actions.hasHomeInlineSearchQuery(),
+      () => false,
+      (_mode: SubscriptionMode) => false,
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => owner.hasBufferedEntriesForMode(mode),
+      (mode: SubscriptionMode) => owner.modeHasMoreEntries(mode),
+      (_mode: SubscriptionMode) => 0,
+    )
+    this.guard = new HomeFeedGuard(state, provider)
   }
 
   handleListEndReach(mode: SubscriptionMode, totalCount: number): void {
@@ -52,22 +65,7 @@ export class HomeFeedLoadMoreDrain {
   }
 
   private canRun(mode: SubscriptionMode, totalCount: number): boolean {
-    if (totalCount <= 0) {
-      return false
-    }
-    if (!this.state.isComponentActive || !this.actions.isHomeRootTab()) {
-      return false
-    }
-    if (mode !== this.state.mode) {
-      return false
-    }
-    if (this.state.searchOverlayVisible || this.actions.hasHomeInlineSearchQuery()) {
-      return false
-    }
-    if (!this.owner.hasBufferedEntriesForMode(mode) && !this.owner.modeHasMoreEntries(mode)) {
-      return false
-    }
-    return true
+    return this.guard.canDrain(mode, totalCount)
   }
 
   private scheduleStep(mode: SubscriptionMode, token: number): void {

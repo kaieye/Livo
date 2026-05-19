@@ -17,14 +17,33 @@ import {
 } from '../../components/HomeRootConfig'
 import { RefreshStateManager } from './RefreshStateManager'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
+import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 
 export class HomeFeedRefresh {
   private readonly state: HomeFeedState
   private readonly actions: HomeFeedActions
+  private readonly feedRefreshCoordinator: FeedRefreshCoordinator
+  private readonly guard: HomeFeedGuard
 
-  constructor(state: HomeFeedState, actions: HomeFeedActions) {
+  constructor(
+    state: HomeFeedState,
+    actions: HomeFeedActions,
+    feedRefreshCoordinator?: FeedRefreshCoordinator,
+  ) {
     this.state = state
     this.actions = actions
+    this.feedRefreshCoordinator = feedRefreshCoordinator ?? FeedRefreshCoordinator.default
+    const provider = new HomeFeedGuardProvider(
+      () => actions.isHomeRootTab(),
+      () => actions.hasHomeInlineSearchQuery(),
+      () => actions.hasRecentHomeScrollIntent(),
+      (mode: SubscriptionMode) => actions.pendingLoadMoreForMode(mode),
+      (mode: SubscriptionMode) => actions.shouldRenderAllEntriesForMode(mode),
+      (_mode: SubscriptionMode) => false,
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => actions.readHomeModeScrollOffset(mode),
+    )
+    this.guard = new HomeFeedGuard(state, provider)
   }
 
   async shouldRunStartupRefresh(snapshotRestored: boolean): Promise<boolean> {
@@ -103,7 +122,7 @@ export class HomeFeedRefresh {
     this.state.displayRefreshPercent = 0
 
     try {
-      const result = await FeedRefreshCoordinator.default.refreshAllFeeds((completedCount: number, totalCount: number) => {
+      const result = await this.feedRefreshCoordinator.refreshAllFeeds((completedCount: number, totalCount: number) => {
         if (!this.state.isComponentActive) {
           return
         }
@@ -301,19 +320,12 @@ export class HomeFeedRefresh {
   shouldRunFinalHomeReloadNow(): boolean {
     const currentOffset = this.actions.readHomeModeScrollOffset(this.state.mode)
     const shouldApplyLengthGuard = !this.actions.shouldRenderAllEntriesForMode(this.state.mode)
-    return this.state.isComponentActive
-      && this.actions.isHomeRootTab()
-      && !this.state.isRefreshing
-      && !this.state.isHomeStartupRefreshing
-      && !this.state.isModeTransitioning
-      && !this.state.homeListSwapAnimating
-      && !this.state.searchOverlayVisible
-      && !this.state.homeScrollIntent.isInteracting
-      && !this.state.homeLoadMoreInProgress
-      && !this.actions.pendingLoadMoreForMode(this.state.mode)
-      && !this.actions.hasRecentHomeScrollIntent()
-      && currentOffset < HOME_MODE_RAIL_COLLAPSE_OFFSET
-      && (!shouldApplyLengthGuard || this.state.featuredEntries.length <= HOME_MAX_CANDIDATE_LIMIT)
+    return this.guard.canReloadNow(
+      currentOffset,
+      shouldApplyLengthGuard,
+      HOME_MODE_RAIL_COLLAPSE_OFFSET,
+      HOME_MAX_CANDIDATE_LIMIT,
+    )
   }
 
   scheduleFinalHomeReloadWhenIdle(currentVersion: number, attempt: number = 0): void {

@@ -37,20 +37,39 @@ import { HomeFeedPaginationState } from './HomeFeedPaginationState'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
 import { HomeFeedLoadMoreDrain } from './HomeFeedLoadMoreDrain'
+import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 
 export class HomeFeedPagination extends HomeFeedPaginationState {
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
   private homeLastItemAppearLoadMoreAt: HomeModeLoadMoreTimestampMap = createHomeLoadMoreTimestampMap()
   private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
+  private readonly featuredEntriesQuery: FeaturedEntriesQuery
+  private readonly guard: HomeFeedGuard
   private readonly prefetcher: HomeFeedLoadMorePrefetch
   private readonly drainController: HomeFeedLoadMoreDrain
 
-  constructor(state: HomeFeedState, actions: HomeFeedActions) {
+  constructor(
+    state: HomeFeedState,
+    actions: HomeFeedActions,
+    featuredEntriesQuery?: FeaturedEntriesQuery,
+  ) {
     super(state, actions)
+    this.featuredEntriesQuery = featuredEntriesQuery ?? FeaturedEntriesQuery.default
+    const provider = new HomeFeedGuardProvider(
+      () => actions.isHomeRootTab(),
+      () => actions.hasHomeInlineSearchQuery(),
+      () => actions.hasRecentHomeScrollIntent(),
+      (mode: SubscriptionMode) => actions.pendingLoadMoreForMode(mode),
+      (mode: SubscriptionMode) => this.shouldRenderAllEntriesForMode(mode),
+      (mode: SubscriptionMode) => this.hasBufferedEntriesForMode(mode),
+      (mode: SubscriptionMode) => this.modeHasMoreEntries(mode),
+      (mode: SubscriptionMode) => actions.readHomeModeScrollOffset(mode),
+    )
+    this.guard = new HomeFeedGuard(state, provider)
     // HomeFeedPagination(State) already exposes the trio of methods the prefetch
     // owner interface needs, so we pass `this` directly instead of an inline
     // object literal (ArkTS forbids untyped object literals).
-    this.prefetcher = new HomeFeedLoadMorePrefetch(state, actions, this)
+    this.prefetcher = new HomeFeedLoadMorePrefetch(state, actions, this, this.featuredEntriesQuery)
     this.drainController = new HomeFeedLoadMoreDrain(state, actions, this)
   }
 
@@ -102,7 +121,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const currentLimit = this.candidateLimitForMode(mode)
     const appendCount = Math.max(1, nextLimit - currentLimit)
     const pageQueryStartedAt = Date.now()
-    const nextPage = await FeaturedEntriesQuery.default.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
+    const nextPage = await this.featuredEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousTotal)
     this.actions.logHomeLoadMore(
       `append-page mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} queryMs=${Date.now() - pageQueryStartedAt}`,
     )
@@ -112,7 +131,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       this.actions.logHomeLoadMore(
         `append-fast-empty mode=${mode} prevTotal=${previousTotal} appendCount=${appendCount} nextLimit=${nextLimit}`,
       )
-      const fallbackEntries = await FeaturedEntriesQuery.default.featuredEntriesByMode(mode, nextLimit)
+      const fallbackEntries = await this.featuredEntriesQuery.featuredEntriesByMode(mode, nextLimit)
       this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
       if (fallbackEntries.length <= previousTotal) {
         this.setModeHasMoreEntries(
@@ -144,7 +163,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       this.actions.logHomeLoadMore(
         `append-no-unique prevTotal=${previousTotal} appendCount=${appendCount} nextPage=${nextPage.length} nextLimit=${nextLimit}`,
       )
-      const fallbackEntries = await FeaturedEntriesQuery.default.featuredEntriesByMode(mode, nextLimit)
+      const fallbackEntries = await this.featuredEntriesQuery.featuredEntriesByMode(mode, nextLimit)
       this.syncModePaginationFromReloadResult(mode, fallbackEntries, nextLimit)
       if (fallbackEntries.length <= previousTotal) {
         this.setModeHasMoreEntries(
@@ -211,18 +230,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   canLoadMoreForMode(mode: SubscriptionMode): boolean {
-    if (this.shouldRenderAllEntriesForMode(mode)) {
-      return false
-    }
-    const hasBufferedEntries = this.hasBufferedEntriesForMode(mode)
-    return this.actions.isHomeRootTab()
-      && mode === this.state.mode
-      && (hasBufferedEntries || this.modeHasMoreEntries(mode))
-      && !this.state.searchOverlayVisible
-      && !this.actions.hasHomeInlineSearchQuery()
-      && !this.state.homeInitialLoadPending
-      && !this.state.homeLoadMoreInProgress
-      && (hasBufferedEntries || this.state.homeHasMoreEntries)
+    return this.guard.canLoadMore(mode)
   }
 
   loadMoreBlockedReason(mode: SubscriptionMode, allowStaleScrollIntent: boolean = false): string {

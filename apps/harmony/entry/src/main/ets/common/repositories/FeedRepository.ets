@@ -209,7 +209,7 @@ export class FeedRepository implements IFeedRepository {
     next: UpdateFetchStateParams,
   ): Promise<void> {
     await AppDatabaseService.withRdb('更新抓取状态', async (store) => {
-      const current = await FeedRepository.default.getById(feedId)
+      const current = await this.getById(feedId)
       if (!current) {
         throw new Error('订阅源不存在')
       }

@@ -32,19 +32,18 @@ test('home pagination module owns load-more trigger queues', () => {
   assert.match(paginationSource, /handleHomeEntryAppear/)
 })
 
-test('index page delegates load-more trigger behavior directly to HomeFeedPagination', () => {
+test('index page delegates load-more trigger behavior to session-owned HomeFeedPagination', () => {
   assert.match(
     indexSource,
-    /maybeTriggerLoadMoreByScrollProgress\(mode: SubscriptionMode, currentOffset: number\): void \{\s*this\.homeFeedPagination\.maybeTriggerLoadMoreByScrollProgress\(mode, currentOffset\)\s*\}/s,
+    /maybeTriggerLoadMoreByScrollProgress\(mode: SubscriptionMode, currentOffset: number\): void \{\s*this\.session\.homeFeedPagination\.maybeTriggerLoadMoreByScrollProgress\(mode, currentOffset\)\s*\}/s,
   )
   assert.match(
     indexSource,
-    /handleHomeEntryAppear\(mode: SubscriptionMode, index: number, totalCount: number\): void \{\s*this\.homeFeedPagination\.handleHomeEntryAppear\(mode, index, totalCount\)\s*\}/s,
+    /handleHomeEntryAppear\(mode: SubscriptionMode, index: number, totalCount: number\): void \{\s*this\.session\.homeFeedPagination\.handleHomeEntryAppear\(mode, index, totalCount\)\s*\}/s,
   )
   assert.doesNotMatch(indexSource, /private homePendingLoadMoreModes/)
   assert.doesNotMatch(indexSource, /private shouldAcceptItemAppearLoadMore/)
   assert.doesNotMatch(indexSource, /private enqueueLoadMoreForMode/)
-  assert.doesNotMatch(indexSource, /homeFeedSession/)
 })
 
 test('home list shows a bottom loading footer only while load-more is actually fetching', () => {

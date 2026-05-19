@@ -101,7 +101,7 @@ test('discover category second row replaces the third Ins entry with podcast', (
     catalogSource.indexOf("id: 'ai'"),
     catalogSource.indexOf("id: 'ins-2'"),
     catalogSource.indexOf("id: 'podcast'"),
-    catalogSource.indexOf("id: 'ins-4'"),
+    catalogSource.indexOf("id: 'news'"),
   ]
   assert.ok(secondRowOrder.every((index) => index >= 0))
   assert.deepEqual(

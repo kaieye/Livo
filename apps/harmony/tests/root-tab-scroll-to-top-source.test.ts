@@ -81,7 +81,7 @@ test('root hds tab bar reports clicks for double-tap detection', () => {
   )
   assert.match(
     indexSource,
-    /onRootTabBarClick: \(index: number\) => this\.rootTabCoordinator\.handleRootTabBarClick\(index\)/,
+    /onRootTabBarClick: \(index: number\) => this\.session\.rootTabCoordinator\.handleRootTabBarClick\(index\)/,
   )
 })
 

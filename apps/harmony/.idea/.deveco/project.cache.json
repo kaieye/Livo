@@ -9,7 +9,7 @@
     "SELECT_BUILD_PRODUCT": "default",
     "BUNDLE_NAME": "com.chos1nz.livo",
     "BUILD_PATH": {
-      "OUTPUT_PATH": "E:\\Livo\\apps\\harmony\\build\\outputs\\default"
+      "OUTPUT_PATH": "D:\\project\\Livo\\apps\\harmony\\build\\outputs\\default"
     },
     "SELECT_BUILD_MODE": ""
   }

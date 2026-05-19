@@ -4,6 +4,7 @@ import rootTabVisibilityPolicyTest from './RootTabVisibilityPolicy.test';
 import discoverAvatarPresentationTest from './DiscoverAvatarPresentation.test';
 import discoverBrowsePaginationTest from './DiscoverBrowsePagination.test';
 import rssFeedServiceSupportTest from './RssFeedServiceSupport.test';
+import homeFeedStateBagTest from './HomeFeedStateBag.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -12,4 +13,5 @@ export default function testsuite() {
   discoverAvatarPresentationTest();
   discoverBrowsePaginationTest();
   rssFeedServiceSupportTest();
+  homeFeedStateBagTest();
 }

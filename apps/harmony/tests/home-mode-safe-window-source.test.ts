@@ -26,8 +26,11 @@ const homeFeedPaginationStateSource = readFileSync(
   'utf8',
 )
 
-const indexSource = readFileSync(
-  new URL('../entry/src/main/ets/pages/Index.ets', import.meta.url),
+const sessionSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    import.meta.url,
+  ),
   'utf8',
 )
 
@@ -62,11 +65,11 @@ test('home visible entry policy keeps startup window bounded', () => {
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 3,\s*estimatedItemHeight: 280,\s*estimatedVisibleItemCount: 3,/,
+    /const HOME_VISIBLE_ENTRY_ARTICLE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 8,\s*estimatedItemHeight: 280,\s*estimatedVisibleItemCount: 3,/,
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 4,\s*estimatedItemHeight: 680,\s*estimatedVisibleItemCount: 2,/,
+    /const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =\s*\{\s*[\s\S]*?preloadRemainingCount: 6,\s*estimatedItemHeight: 680,\s*estimatedVisibleItemCount: 2,/,
   )
   assert.match(
     visibleEntryPolicySource,
@@ -104,17 +107,17 @@ test('home pagination state does not force full render mode at startup', () => {
   )
 })
 
-test('index page uses bounded by-mode queries for mode reloads', () => {
+test('HomeFeedSession uses bounded by-mode queries for mode reloads', () => {
   assert.match(
-    indexSource,
+    sessionSource,
     /FeaturedEntriesQuery\.default\.featuredEntriesByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
-    indexSource,
+    sessionSource,
     /FeaturedEntriesQuery\.default\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
-    indexSource,
+    sessionSource,
     /this\.homeFeedPagination\.ensureModeEntriesLoaded\(currentMode\)/,
   )
 })
@@ -141,11 +144,11 @@ test('mode ensure flow reloads a bounded active-mode window after a fast first p
 test('article load more follows append-style update path near the end of the list', () => {
   assert.match(
     homeFeedPaginationSource,
-    /if \(mode === 'articles'\) \{\s*dynamicThreshold = Math\.max\(3, Math\.min\(5, Math\.floor\(visibleCount \/ 8\)\)\)\s*\} else if \(mode === 'social'\)/,
+    /if \(mode === 'articles'\) \{\s*dynamicThreshold = Math\.max\(6, Math\.min\(12, Math\.floor\(visibleCount \/ 4\)\)\)\s*\} else if \(mode === 'social'\)/,
   )
   assert.match(
     homeFeedPaginationSource,
-    /else if \(mode === 'pictures'\) \{\s*dynamicThreshold = Math\.max\(3, Math\.min\(4, Math\.floor\(visibleCount \/ 3\)\)\)\s*\} else if \(mode === 'videos'\) \{[\s\S]*?dynamicThreshold = Math\.max\(8, Math\.min\(14, Math\.floor\(visibleCount \/ 3\)\)\)/,
+    /else if \(mode === 'pictures'\) \{\s*dynamicThreshold = Math\.max\(5, Math\.min\(10, Math\.floor\(visibleCount \/ 3\)\)\)\s*\} else if \(mode === 'videos'\) \{[\s\S]*?dynamicThreshold = Math\.max\(8, Math\.min\(14, Math\.floor\(visibleCount \/ 3\)\)\)/,
   )
   assert.match(
     homeFeedPaginationSource,

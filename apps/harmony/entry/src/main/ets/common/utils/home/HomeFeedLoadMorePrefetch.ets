@@ -8,6 +8,7 @@ import {
 } from '../../components/HomeRootConfig'
 import { resolveHomeVisibleEntryLoadMoreStep } from './HomeVisibleEntryPolicy'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
+import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 
 // Owner-side hooks the prefetcher needs from HomeFeedPagination(State).
 // Kept narrow so we do not pull the whole pagination class in.
@@ -23,29 +24,37 @@ export class HomeFeedLoadMorePrefetch {
   private readonly state: HomeFeedState
   private readonly actions: HomeFeedActions
   private readonly owner: HomeFeedLoadMorePrefetchOwner
+  private readonly featuredEntriesQuery: FeaturedEntriesQuery
+  private readonly guard: HomeFeedGuard
 
-  constructor(state: HomeFeedState, actions: HomeFeedActions, owner: HomeFeedLoadMorePrefetchOwner) {
+  constructor(
+    state: HomeFeedState,
+    actions: HomeFeedActions,
+    owner: HomeFeedLoadMorePrefetchOwner,
+    featuredEntriesQuery?: FeaturedEntriesQuery,
+  ) {
     this.state = state
     this.actions = actions
     this.owner = owner
+    this.featuredEntriesQuery = featuredEntriesQuery ?? FeaturedEntriesQuery.default
+    const provider = new HomeFeedGuardProvider(
+      () => actions.isHomeRootTab(),
+      () => actions.hasHomeInlineSearchQuery(),
+      () => false,
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => owner.shouldRenderAllEntriesForMode(mode),
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => owner.modeHasMoreEntries(mode),
+      (_mode: SubscriptionMode) => 0,
+    )
+    this.guard = new HomeFeedGuard(state, provider)
   }
 
   canPrefetch(): boolean {
     if (!HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED) {
       return false
     }
-    return this.state.isComponentActive
-      && this.actions.isHomeRootTab()
-      && !this.state.homeScrollIntent.isInteracting
-      && !this.owner.shouldRenderAllEntriesForMode(this.state.mode)
-      && !this.state.searchOverlayVisible
-      && !this.actions.hasHomeInlineSearchQuery()
-      && !this.state.isRefreshing
-      && !this.state.isHomeStartupRefreshing
-      && !this.state.homeInitialLoadPending
-      && !this.state.homeLoadMoreInProgress
-      && this.state.homeHasMoreEntries
-      && this.owner.modeHasMoreEntries(this.state.mode)
+    return this.guard.canPrefetch()
   }
 
   invalidate(): void {
@@ -120,7 +129,7 @@ export class HomeFeedLoadMorePrefetch {
     try {
       const previousEntries = this.actions.filteredEntriesFor(mode)
       const appendCount = Math.max(1, targetLimit - previousEntries.length)
-      const nextPage = await FeaturedEntriesQuery.default.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
+      const nextPage = await this.featuredEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
       if (!this.state.isComponentActive || this.state.homeLoadMorePrefetchToken !== token) {
         return
       }

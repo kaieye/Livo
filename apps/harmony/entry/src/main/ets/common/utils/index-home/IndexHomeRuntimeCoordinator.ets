@@ -32,7 +32,7 @@ export interface IndexHomeRuntimeOwner {
   invalidateHomeLoadMorePrefetch(): void
   persistHomeSnapshotNow(): void
   clearRefreshPercentAnimation(): void
-  refreshFeaturedEntries(showResultToast: boolean): Promise<void>
+  refreshFeaturedEntries(showResultToast?: boolean): Promise<void>
   logHomeAsyncError(stage: string, error: Error | string | Object): void
 }
 

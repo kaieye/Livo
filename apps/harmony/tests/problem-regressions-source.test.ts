@@ -79,6 +79,14 @@ const indexSource = readFileSync(
   'utf8',
 )
 
+const sessionSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 const homeFeedLoadMorePrefetchSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/utils/home/HomeFeedLoadMorePrefetch.ets',
@@ -158,11 +166,11 @@ test('social mode uses recent paged query instead of balanced scan on mode switc
   )
   assert.match(
     featuredEntriesQuerySource,
-    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(mode, feeds, feedMap, safeCandidateLimit, true\)/,
+    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(this\.entryRepo, mode, feeds, feedMap, safeCandidateLimit, true\)/,
   )
   assert.match(
     featuredEntriesQuerySource,
-    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(mode, feeds, feedMap, queryTarget, true\)/,
+    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(this\.entryRepo, mode, feeds, feedMap, queryTarget, true\)/,
   )
 })
 
@@ -221,15 +229,15 @@ test('home mode scenes mount active/transition immediately and prewarm the rest 
 })
 
 test('inactive mode precache is staggered and does not compete with the active switch target', () => {
-  assert.match(indexSource, /private precacheModeToken: number = 0/)
+  assert.match(sessionSource, /private precacheModeToken: number = 0/)
   assert.match(
-    indexSource,
+    sessionSource,
     /const precacheLimit = resolveHomeVisibleEntryInitialLimit\(mode\)/,
   )
-  assert.match(indexSource, /180 \* \(index \+ 1\)/)
+  assert.match(sessionSource, /180 \* \(index \+ 1\)/)
   assert.match(
-    indexSource,
-    /if \(this\.precacheModeToken !== token \|\| mode === this\.mode\) \{ return \}/,
+    sessionSource,
+    /if \(this\.precacheModeToken !== token \|\| mode === this\.owner\.mode\) \{\s*return\s*\}/s,
   )
 })
 
