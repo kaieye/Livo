@@ -26,8 +26,8 @@ export const SEED_FEEDS: Feed[] = [
   },
   {
     id: 'feed-elonmusk-x',
-    title: 'elonmusk',
-    url: 'https://rsshub.pseudoyu.com/twitter/user/elonmusk',
+    title: 'Elon Musk / @elonmusk',
+    url: 'https://nitter.poast.org/elonmusk/rss',
     siteUrl: 'https://x.com/elonmusk',
     imageUrl: 'https://unavatar.io/x/elonmusk?fallback=false',
     description: 'Elon Musk 在 X 上的公开动态。',

@@ -60,14 +60,6 @@ function resolveXProfile(parts: WebUrlParts): ResolvedDiscoverCandidate[] {
   }
   return [
     {
-      targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/${encodeURIComponent(username.toLowerCase())}`,
-      targetTitle: `@${username}`,
-      targetView: FeedViewType.SocialMedia,
-      description: '已从 X/Twitter 主页解析为 RSSHub 用户订阅地址。',
-      siteUrl: parts.normalizedUrl,
-      sourceKind: 'RSSHub',
-    },
-    {
       targetUrl: `${DEFAULT_NITTER_INSTANCE}/${encodeURIComponent(username.toLowerCase())}/rss`,
       targetTitle: `@${username}`,
       targetView: FeedViewType.SocialMedia,

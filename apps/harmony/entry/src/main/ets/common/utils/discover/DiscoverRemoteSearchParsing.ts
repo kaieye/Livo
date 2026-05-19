@@ -4,6 +4,8 @@ import {
   normalizeSocialFeedDescription,
 } from '../social/SocialFeedTitles.ts'
 
+const NITTER_INSTANCE = 'https://nitter.poast.org'
+
 export interface SocialRemoteProfile {
   username: string
   title: string
@@ -500,7 +502,7 @@ export function toDiscoverCandidateFromProfileSeed(
 
   if (seed.platform === 'x') {
     return {
-      targetUrl: `https://rsshub.pseudoyu.com/twitter/user/${encodeURIComponent(seed.username)}`,
+      targetUrl: `${NITTER_INSTANCE}/${encodeURIComponent(seed.username)}/rss`,
       targetTitle: formatXFeedTitle(displayTitle, seed.username),
       targetView: viewMapping.x,
       description: normalizeSocialFeedDescription(

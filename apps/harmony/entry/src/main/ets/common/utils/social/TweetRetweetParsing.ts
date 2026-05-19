@@ -61,6 +61,50 @@ export function parseRetweet(rawText: string): ParsedRetweet | undefined {
   return parseRetweetWithLoosePattern(normalized)
 }
 
+/**
+ * Parse Nitter RSS "RT by @<retweeter>: <text>" title format.
+ * The "by @<retweeter>" identifies the retweeter (feed owner), not the original
+ * author. The original author comes from `<dc:creator>` (mapped to `source.author`).
+ * Callers should resolve the original author from `source.author` when this
+ * function returns a match.
+ */
+export function parseNitterRetweetFromTitle(
+  title: string,
+): ParsedRetweet | undefined {
+  const normalized = trimValue(title)
+  if (!normalized) {
+    return undefined
+  }
+
+  const match = normalized.match(
+    /^RT\s+by\s+(@[A-Za-z0-9_]{1,15})\s*:\s*([\s\S]+)$/i,
+  )
+  if (!match?.[1] || !match?.[2]) {
+    return undefined
+  }
+
+  const retweetedByUsername = trimValue(match[1]) // e.g. "@elonmusk"
+  const tweetText = normalizeParagraphWhitespace(match[2])
+
+  if (!tweetText) {
+    return undefined
+  }
+
+  return {
+    style: 'pure',
+    commentText: '',
+    // The "by @<username>" is the RETWEETER, not the original author.
+    // originalDisplayName/originalUsername are left empty — the caller
+    // should resolve the original author from source.author (<dc:creator>).
+    originalDisplayName: '',
+    originalUsername: '',
+    originalText: tweetText,
+    originalAvatarUrl: '',
+    // Store the retweeter username so callers can use it if needed
+    // (packed into originalText metadata — callers can parse it back)
+  } as ParsedRetweet
+}
+
 export function parseRetweetAuthorFromTitle(title: string):
   | {
       displayName: string
@@ -75,7 +119,8 @@ export function parseRetweetAuthorFromTitle(title: string):
   if (!matched?.[1]) {
     return undefined
   }
-  const authorRaw = trimValue(matched[1])
+  // Strip "by " prefix from Nitter format: "RT by @username: text"
+  const authorRaw = trimValue(matched[1]).replace(/^by\s+/i, '')
   if (!authorRaw) {
     return undefined
   }

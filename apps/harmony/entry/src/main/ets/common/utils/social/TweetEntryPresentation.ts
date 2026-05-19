@@ -18,6 +18,7 @@ import {
 } from './TweetSourceExtraction.ts'
 import type { TweetPresentationSource } from './TweetSourceExtraction.ts'
 import {
+  parseNitterRetweetFromTitle,
   parseRetweet,
   parseRetweetAuthorFromTitle,
   stripDuplicatedRetweetLeadingBadge,
@@ -91,28 +92,53 @@ function applyRetweetSemantics(
   const rawText = normalizedPlainText(
     `${source.summary || ''}\n${source.content || ''}`,
   )
-  const parsedRetweet = parseRetweet(rawText)
+  let parsedRetweet = parseRetweet(rawText)
+
+  // Nitter RSS format: "RT by @<retweeter>: <text>" lives in the <title>
+  // field, not in <description>. Fall back to title-based detection.
+  if (!parsedRetweet) {
+    parsedRetweet = parseNitterRetweetFromTitle(source.title || '')
+  }
+
   if (!parsedRetweet) {
     return undefined
   }
 
+  const isNitterRetweet =
+    !trimValue(parsedRetweet.originalDisplayName) &&
+    !trimValue(parsedRetweet.originalUsername)
+
   const nestedQuoteRetweet = parseRetweetWithNestedQuote(source)
   const parsed = nestedQuoteRetweet?.retweet || parsedRetweet
+
+  // For Nitter retweets, the original author comes from <dc:creator>
+  // (source.author), not from the title.
+  const nitterAuthor = isNitterRetweet
+    ? trimValue(source.author || '').replace(/^@/, '')
+    : ''
+  const nitterUsername = isNitterRetweet ? trimValue(source.author || '') : ''
 
   const originalAuthorLabel =
     trimValue(parsed.originalDisplayName) ||
     trimValue(parsed.originalUsername).replace(/^@/, '') ||
+    nitterAuthor ||
     ''
   const normalizedOriginalText = normalizeParagraphWhitespace(
     parsed.originalText,
   )
   const originalAvatarUrl =
-    parsed.originalAvatarUrl || xAvatarUrl(parsed.originalUsername)
+    parsed.originalAvatarUrl ||
+    xAvatarUrl(parsed.originalUsername) ||
+    xAvatarUrl(nitterUsername)
   const titleAuthor = parseRetweetAuthorFromTitle(source.title || '')
-  const resolvedOriginalDisplayName =
-    trimValue(titleAuthor?.displayName) || originalAuthorLabel
-  const resolvedOriginalUsername =
-    trimValue(titleAuthor?.username) || trimValue(parsed.originalUsername)
+  // For Nitter retweets, the titleAuthor identifies the RETWEETER (e.g., "elonmusk"
+  // from "RT by @elonmusk:"), not the original author. Skip it for displayName.
+  const resolvedOriginalDisplayName = isNitterRetweet
+    ? originalAuthorLabel
+    : trimValue(titleAuthor?.displayName) || originalAuthorLabel
+  const resolvedOriginalUsername = isNitterRetweet
+    ? nitterUsername || trimValue(parsed.originalUsername)
+    : trimValue(titleAuthor?.username) || trimValue(parsed.originalUsername)
   const resolvedOriginalAvatarUrl =
     xAvatarUrl(resolvedOriginalUsername) || originalAvatarUrl
   const resolvedOriginalText = stripDuplicatedRetweetLeadingBadge(

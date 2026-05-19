@@ -15,14 +15,6 @@ function buildXKeywordCandidates(clean: string): ResolvedDiscoverCandidate[] {
   const siteUrl = `https://x.com/${encodeURIComponent(clean)}`
   return [
     {
-      targetUrl: `${DEFAULT_RSSHUB_INSTANCE}/twitter/user/${encodeURIComponent(lower)}`,
-      targetTitle: `@${clean}`,
-      targetView: FeedViewType.SocialMedia,
-      description: '根据关键词生成 X/Twitter 用户订阅地址。',
-      siteUrl,
-      sourceKind: '关键词',
-    },
-    {
       targetUrl: `${DEFAULT_NITTER_INSTANCE}/${encodeURIComponent(lower)}/rss`,
       targetTitle: `@${clean}`,
       targetView: FeedViewType.SocialMedia,

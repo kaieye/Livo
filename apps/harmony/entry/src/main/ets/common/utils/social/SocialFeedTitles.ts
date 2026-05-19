@@ -73,7 +73,10 @@ function isKnownXHost(host: string): boolean {
     host === 'www.twitter.com' ||
     host === 'mobile.twitter.com' ||
     host === 'nitter.net' ||
-    host.endsWith('.nitter.net')
+    host.endsWith('.nitter.net') ||
+    host === 'nitter.poast.org' ||
+    host === 'nitter.privacydev.net' ||
+    host === 'nitter.d420.de'
   )
 }
 
@@ -177,6 +180,16 @@ export function extractXUsername(value: string): string {
     return decodeURIComponent(rsshub[1]).replace(/^@/, '').trim().toLowerCase()
   }
 
+  // Nitter URL format: /<username>/rss
+  const nitterRss = pathLike.match(/^\/([^/?#]+)\/rss/i)
+  if (nitterRss?.[1]) {
+    const candidate = decodeURIComponent(nitterRss[1])
+      .replace(/^@/, '')
+      .trim()
+      .toLowerCase()
+    return isLikelyXHandle(candidate) ? candidate : ''
+  }
+
   const host = getHostLike(trimmed)
   if (looksLikeUrl(trimmed) && isKnownXHost(host)) {
     const knownPath = pathLike.match(/^\/([^/?#]+)(?:\/|$)/)
@@ -192,7 +205,8 @@ export function extractXUsername(value: string): string {
       firstSegment !== 'hashtag' &&
       firstSegment !== 'i' &&
       firstSegment !== 'intent' &&
-      firstSegment !== 'share'
+      firstSegment !== 'share' &&
+      firstSegment !== 'rss'
     ) {
       return isLikelyXHandle(firstSegment) ? firstSegment : ''
     }
@@ -250,6 +264,12 @@ export function canonicalXFeedUrl(
     return trimmed
   }
 
+  // Nitter instances use /<username>/rss format
+  if (/nitter\./i.test(instance)) {
+    return `${instance.replace(/\/+$/, '')}/${encodeURIComponent(username)}/rss`
+  }
+
+  // RSSHub instances normalize to /twitter/user/<username>
   return `${instance.replace(/\/+$/, '')}/twitter/user/${encodeURIComponent(username)}`
 }
 

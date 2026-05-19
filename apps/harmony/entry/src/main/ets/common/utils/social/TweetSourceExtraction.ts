@@ -116,7 +116,11 @@ export function extractDisplayName(source: TweetPresentationSource): string {
   if (author) {
     return author
   }
+  // Fall back to title, stripping Nitter prefixes ("RT by @", "R to @", "Pinned:")
   return trimValue(source.title)
+    .replace(/^RT\s+by\s+@[A-Za-z0-9_]{1,15}\s*:\s*/i, '')
+    .replace(/^R\s+to\s+@[A-Za-z0-9_]{1,15}\s*:\s*/i, '')
+    .replace(/^Pinned\s*:\s*/i, '')
 }
 
 export function extractUsername(source: TweetPresentationSource): string {

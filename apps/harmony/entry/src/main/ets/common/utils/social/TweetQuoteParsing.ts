@@ -130,6 +130,9 @@ export function parseQuotedTweetFromHtml(
 
   const quoteMediaUrls = extractMediaUrlsFromHtml(quoteRaw)
 
+  // Nitter blockquote format: <b>DisplayName (@handle)</b> followed by <p>content</p>
+  const nitterAuthor = parseNitterBlockquoteAuthor(quoteRaw)
+
   const paragraphMatches = Array.from(
     quoteRaw.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi),
     (item: RegExpMatchArray) => normalizeWhitespace(stripHtml(item[1] || '')),
@@ -143,19 +146,36 @@ export function parseQuotedTweetFromHtml(
           .map((line: string) => normalizeWhitespace(line))
           .filter((line: string) => !!line)
 
-  if (lines.length < 1) {
+  if (lines.length < 1 && !nitterAuthor) {
     return undefined
   }
 
-  const header = lines[0]
+  // When Nitter author is available, the first paragraph is the tweet body
+  // (not the author name). Use it directly.
+  let header = ''
+  let bodyLines: string[] = []
+  if (nitterAuthor && lines.length >= 1) {
+    // All paragraph lines are tweet body; no header-style author line to split
+    bodyLines = lines
+  } else if (lines.length >= 1) {
+    header = lines[0]
+    bodyLines = lines.slice(1)
+  }
+
   const headerParts = splitQuoteHeader(header)
-  const body = [headerParts.leadingText, ...lines.slice(1)]
+  const body = [headerParts.leadingText, ...bodyLines]
     .map((line: string) => trimValue(line))
     .filter((line: string) => !!line)
     .join('\n\n')
     .trim()
-  const username = parseQuoteUsername(header)
-  const displayName = headerParts.displayName || parseQuoteDisplayName(header)
+
+  const username = nitterAuthor?.username || parseQuoteUsername(header) || ''
+  const displayName =
+    nitterAuthor?.displayName ||
+    headerParts.displayName ||
+    parseQuoteDisplayName(header) ||
+    ''
+
   if ((!body && quoteMediaUrls.length === 0) || (!displayName && !username)) {
     return undefined
   }
@@ -169,6 +189,36 @@ export function parseQuotedTweetFromHtml(
       text: body,
       mediaUrls: quoteMediaUrls,
     },
+  }
+}
+
+/**
+ * Parse Nitter's blockquote author format: <b>DisplayName (@handle)</b>
+ * Returns undefined when no <b> tag with @handle is found.
+ */
+function parseNitterBlockquoteAuthor(
+  quoteRaw: string,
+): { displayName: string; username: string } | undefined {
+  const bMatch = quoteRaw.match(/<b\b[^>]*>([\s\S]*?)<\/b>/i)
+  if (!bMatch?.[1]) {
+    return undefined
+  }
+
+  const authorText = normalizeWhitespace(stripHtml(bMatch[1]))
+  const usernameMatch = authorText.match(/@([A-Za-z0-9_]{1,15})/)
+  if (!usernameMatch?.[1]) {
+    return undefined
+  }
+
+  const username = `@${usernameMatch[1]}`
+  // Strip the trailing " (@handle)" or "@handle" from the display name
+  const displayName = authorText
+    .replace(/\s*\(?\s*@[A-Za-z0-9_]{1,15}\s*\)?\s*$/, '')
+    .trim()
+
+  return {
+    displayName: displayName || username.replace(/^@/, ''),
+    username,
   }
 }
 
