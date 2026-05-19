@@ -5,6 +5,7 @@ import {
   BOTTOM_TAB_BAR_HEIGHT,
   BOTTOM_TAB_TOTAL_HEIGHT,
   BOTTOM_TAB_BAR_WIDTH,
+  CHIP_RADIUS,
 } from '../ui/UiTokens'
 
 @Component
@@ -20,11 +21,11 @@ export struct MiniAudioPlayer {
   private audioService: AudioPlaybackService = AudioPlaybackService.getInstance()
 
   private readonly PANEL_HEIGHT: number = 44
-  private readonly PANEL_RADIUS: number = 24
   private readonly PANEL_HORIZONTAL_PADDING: number = 16
   private readonly PANEL_VERTICAL_PADDING: number = 3
   private readonly CONTROL_BUTTON_SIZE: number = 26
   private readonly PANEL_CONTENT_HEIGHT: number = 26
+  private readonly COLLAPSED_CIRCLE_SIZE: number = 40
 
   private floatingPlayerBottomPadding(): number {
     return BOTTOM_TAB_FLOAT_GAP + BOTTOM_TAB_BAR_HEIGHT + this.bottomAvoidArea + 16
@@ -173,15 +174,15 @@ export struct MiniAudioPlayer {
     .width(BOTTOM_TAB_BAR_WIDTH)
     .height(this.PANEL_HEIGHT)
     .backgroundColor(this.dockBackgroundColor())
-    .backdropBlur(this.theme.isDark ? 16 : 22)
-    .borderRadius(this.PANEL_RADIUS)
+    .backdropBlur(this.theme.isDark ? 10 : 18)
+    .borderRadius(CHIP_RADIUS)
     .clip(true)
     .border({ width: 0.6, color: this.dockBorderColor() })
     .shadow({
-      radius: 14,
+      radius: 10,
       color: this.dockShadowColor(),
       offsetX: 0,
-      offsetY: 4,
+      offsetY: 2,
     })
     .padding({ left: this.PANEL_HORIZONTAL_PADDING, right: this.PANEL_HORIZONTAL_PADDING, top: this.PANEL_VERTICAL_PADDING, bottom: this.PANEL_VERTICAL_PADDING })
   }
@@ -193,24 +194,19 @@ export struct MiniAudioPlayer {
         .fontSize(18)
         .fontColor([this.theme.textSecondary])
     }
-    .width(this.CONTROL_BUTTON_SIZE + this.PANEL_HORIZONTAL_PADDING)
-    .height(this.PANEL_HEIGHT)
+    .width(this.COLLAPSED_CIRCLE_SIZE)
+    .height(this.COLLAPSED_CIRCLE_SIZE)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     .backgroundColor(this.dockBackgroundColor())
-    .backdropBlur(this.theme.isDark ? 16 : 22)
-    .borderRadius({
-      topLeft: this.PANEL_RADIUS,
-      bottomLeft: this.PANEL_RADIUS,
-      topRight: 0,
-      bottomRight: 0,
-    })
+    .backdropBlur(this.theme.isDark ? 10 : 18)
+    .borderRadius(this.COLLAPSED_CIRCLE_SIZE)
     .border({ width: 0.6, color: this.dockBorderColor() })
     .shadow({
-      radius: 12,
+      radius: 10,
       color: this.dockShadowColor(),
       offsetX: 0,
-      offsetY: 4,
+      offsetY: 2,
     })
     .onClick(() => {
       this.collapsed = false
