@@ -38,6 +38,7 @@ import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
 import { HomeFeedLoadMoreDrain } from './HomeFeedLoadMoreDrain'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
+import { mergeUniqueEntries } from './HomeEntryUtils'
 
 export class HomeFeedPagination extends HomeFeedPaginationState {
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
@@ -82,10 +83,6 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     return this.prefetcher.consume(mode, nextLimit)
   }
 
-  private shouldUseLeanLoadMoreApply(mode: SubscriptionMode): boolean {
-    return mode === 'articles' || mode === 'social' || mode === 'pictures' || mode === 'videos'
-  }
-
   private resolveLoadMoreStepForMode(mode: SubscriptionMode): number {
     // 每个栏目的一页数量集中在 HomeVisibleEntryPolicy 中维护。
     return resolveHomeVisibleEntryLoadMoreStep(mode)
@@ -96,8 +93,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     entries: EntryCardModel[],
     skipNotify: boolean,
   ): void {
-    const leanApply = this.shouldUseLeanLoadMoreApply(mode)
-    this.actions.applyEntriesForMode(mode, entries, true, skipNotify, leanApply, leanApply)
+    this.actions.applyEntriesForMode(mode, entries, true, skipNotify, true, true)
   }
 
   private revealLoadedEntriesForLoadMore(
@@ -144,19 +140,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       return
     }
 
-    const seen = new Set<string>()
-    const merged: EntryCardModel[] = []
-    previousEntries.forEach((entry: EntryCardModel) => {
-      seen.add(`${entry.id}|${entry.feedId}|${entry.articleUrl}`)
-      merged.push(entry)
-    })
-    nextPage.forEach((entry: EntryCardModel) => {
-      const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        merged.push(entry)
-      }
-    })
+    const merged = mergeUniqueEntries(previousEntries, nextPage)
 
     const appendedUniqueCount = Math.max(0, merged.length - previousTotal)
     if (appendedUniqueCount === 0) {

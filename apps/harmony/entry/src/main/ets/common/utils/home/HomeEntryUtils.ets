@@ -2,6 +2,40 @@ import { EntryCardModel } from '../../models/LivoModels'
 import { SubscriptionMode } from '../../components/HomeRootConfig'
 import { modeOfFeedView } from '../../data/AppRepositoryEntryHelpers'
 
+/**
+ * Merge `next` entries into `previous`, deduplicating by composite key
+ * (`${id}|${feedId}|${articleUrl}`), and optionally slice to `limit`.
+ *
+ * Extracted from HomeFeedPagination.appendFeaturedEntriesFromLocalFast()
+ * and HomeFeedLoadMorePrefetch.run() — both contained near-identical
+ * Set<string>-based dedup logic with drift.
+ */
+export function mergeUniqueEntries(
+  previous: EntryCardModel[],
+  next: EntryCardModel[],
+  limit?: number,
+): EntryCardModel[] {
+  const seen = new Set<string>()
+  const merged: EntryCardModel[] = []
+  previous.forEach((entry: EntryCardModel) => {
+    const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+    seen.add(key)
+    merged.push(entry)
+  })
+  next.forEach((entry: EntryCardModel) => {
+    const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    merged.push(entry)
+  })
+  if (limit !== undefined && merged.length > limit) {
+    return merged.slice(0, limit)
+  }
+  return merged
+}
+
 export function filterEntriesByMode(mode: SubscriptionMode, entries: EntryCardModel[]): EntryCardModel[] {
   return entries.filter((entry: EntryCardModel) => modeOfFeedView(entry.view) === mode)
 }

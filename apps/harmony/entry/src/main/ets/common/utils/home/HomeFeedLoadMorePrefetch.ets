@@ -9,6 +9,7 @@ import {
 import { resolveHomeVisibleEntryLoadMoreStep } from './HomeVisibleEntryPolicy'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
+import { mergeUniqueEntries } from './HomeEntryUtils'
 
 // Owner-side hooks the prefetcher needs from HomeFeedPagination(State).
 // Kept narrow so we do not pull the whole pagination class in.
@@ -78,28 +79,6 @@ export class HomeFeedLoadMorePrefetch {
     return HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
   }
 
-  private entryKey(entry: EntryCardModel): string {
-    return `${entry.id}|${entry.feedId}|${entry.articleUrl}`
-  }
-
-  private mergeUniqueEntries(previousEntries: EntryCardModel[], nextPage: EntryCardModel[]): EntryCardModel[] {
-    const seen = new Set<string>()
-    const merged: EntryCardModel[] = []
-    previousEntries.forEach((entry: EntryCardModel) => {
-      seen.add(this.entryKey(entry))
-      merged.push(entry)
-    })
-    nextPage.forEach((entry: EntryCardModel) => {
-      const key = this.entryKey(entry)
-      if (seen.has(key)) {
-        return
-      }
-      seen.add(key)
-      merged.push(entry)
-    })
-    return merged
-  }
-
   async run(): Promise<void> {
     if (!this.canPrefetch()) {
       return
@@ -133,7 +112,7 @@ export class HomeFeedLoadMorePrefetch {
       if (!this.state.isComponentActive || this.state.homeLoadMorePrefetchToken !== token) {
         return
       }
-      const entries = this.mergeUniqueEntries(previousEntries, nextPage).slice(0, targetLimit)
+      const entries = mergeUniqueEntries(previousEntries, nextPage, targetLimit)
       if (entries.length <= previousEntries.length) {
         this.actions.logHomeLoadMore(
           `prefetch skip-no-growth mode=${mode} targetLimit=${targetLimit} previous=${previousEntries.length} page=${nextPage.length}`,

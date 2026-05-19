@@ -108,19 +108,16 @@ export interface HomeModeRailOptions {
   collapseProgress?: number
 }
 
-export interface HomeModeScrollOffsetMap {
-  articles: number
-  social: number
-  pictures: number
-  videos: number
+/** Generic per-mode value container — collapses 9 type-identical map interfaces. */
+export interface PerModeMap<T> {
+  articles: T
+  social: T
+  pictures: T
+  videos: T
 }
 
-export interface HomeModeVisibleEntryLimitMap {
-  articles: number
-  social: number
-  pictures: number
-  videos: number
-}
+export type HomeModeScrollOffsetMap = PerModeMap<number>
+export type HomeModeVisibleEntryLimitMap = PerModeMap<number>
 
 export interface HomeEntryDataSourceMap {
   articles: ArrayLazyDataSource<EntryCardModel>
@@ -129,51 +126,10 @@ export interface HomeEntryDataSourceMap {
   videos: ArrayLazyDataSource<EntryCardModel>
 }
 
-export interface HomeModePendingLoadMoreMap {
-  articles: boolean
-  social: boolean
-  pictures: boolean
-  videos: boolean
-}
-
-export interface HomeModeLoadMoreTimestampMap {
-  articles: number
-  social: number
-  pictures: number
-  videos: number
-}
-
-export interface HomeModeHasMoreMap {
-  articles: boolean
-  social: boolean
-  pictures: boolean
-  videos: boolean
-}
-
-export interface HomeModeNoProgressCountMap {
-  articles: number
-  social: number
-  pictures: number
-  videos: number
-}
-
-export interface HomeModeCandidateLimitMap {
-  articles: number
-  social: number
-  pictures: number
-  videos: number
-}
-
-export interface HomeModeLoadedMap {
-  articles: boolean
-  social: boolean
-  pictures: boolean
-  videos: boolean
-}
-
-export interface HomeModeLoadingMap {
-  articles: boolean
-  social: boolean
-  pictures: boolean
-  videos: boolean
-}
+export type HomeModePendingLoadMoreMap = PerModeMap<boolean>
+export type HomeModeLoadMoreTimestampMap = PerModeMap<number>
+export type HomeModeHasMoreMap = PerModeMap<boolean>
+export type HomeModeNoProgressCountMap = PerModeMap<number>
+export type HomeModeCandidateLimitMap = PerModeMap<number>
+export type HomeModeLoadedMap = PerModeMap<boolean>
+export type HomeModeLoadingMap = PerModeMap<boolean>
