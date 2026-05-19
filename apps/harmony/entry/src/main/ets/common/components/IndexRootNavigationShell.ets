@@ -31,7 +31,7 @@ import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 const ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH: number = 260
 const ROOT_BOTTOM_TAB_BAR_MEDIUM_WIDTH: number = 300
 const ROOT_BOTTOM_TAB_BAR_LARGE_WIDTH: number = 340
-const ROOT_BOTTOM_TAB_MINI_BAR_SIZE: number = 48
+const ROOT_BOTTOM_TAB_MINI_BAR_SIZE: number = 57
 
 @Component
 export struct IndexRootNavigationShell {
@@ -119,8 +119,8 @@ export struct IndexRootNavigationShell {
   private RootBottomMiniBarBuilder() {
     Row() {
       Image($r('app.media.ri_ai'))
-        .width(20)
-        .height(20)
+        .width(24)
+        .height(24)
         .objectFit(ImageFit.Contain)
         .fillColor('#7A5AF8')
     }
@@ -128,7 +128,6 @@ export struct IndexRootNavigationShell {
     .height(ROOT_BOTTOM_TAB_MINI_BAR_SIZE)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('sys.color.comp_background_tertiary'))
     .borderRadius(ROOT_BOTTOM_TAB_MINI_BAR_SIZE / 2)
   }
 
@@ -255,7 +254,7 @@ export struct IndexRootNavigationShell {
             mediumWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
             largeWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
           },
-          enableMiniBarBackground: false,
+          enableMiniBarBackground: true,
           enableMiniBarClip: true,
         },
         adaptToHandedness: true,
@@ -316,14 +315,16 @@ export struct IndexRootNavigationShell {
         },
         scrollEffectStyle: undefined,
       } : rootTabTitleBarStyle(),
-      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏�?      avoidLayoutSafeArea: true,
+      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏�?
+      avoidLayoutSafeArea: true,
       enableComponentSafeArea: false,
     })
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideTitleBar(this.hideTitleBar)
     .hideBackButton(true)
     .bindToScrollable(this.bindScrollers)
-    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊�?    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊�?
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
   }
