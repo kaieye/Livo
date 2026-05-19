@@ -99,7 +99,7 @@ test('model conversion normalizes feed titles before entry and detail rendering'
 
   assert.match(
     source,
-    /import \{ resolveSocialFeedDisplayTitle \} from '..\/utils\/social\/SocialFeedPresentation'/,
+    /import \{ (?:resolveSocialFeedDisplayImageUrl,\s*)?resolveSocialFeedDisplayTitle(?:\s*,\s*resolveSocialFeedDisplayImageUrl)? \} from '..\/utils\/social\/SocialFeedPresentation'/,
   )
   assert.match(
     source,

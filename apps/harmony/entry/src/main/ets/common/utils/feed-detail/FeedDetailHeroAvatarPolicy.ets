@@ -1,7 +1,8 @@
 import { DiscoverAvatarCacheStore } from '../../services/DiscoverAvatarCacheStore'
 import { isDiscoverAvatarCacheableImageUrl } from '../discover/DiscoverAvatarPresentation'
 import { feedDetailHostOf } from './FeedDetailPreviewPolicy'
-import { extractInstagramUsername } from '../social/SocialFeedTitles'
+import { extractInstagramUsername, extractXUsername } from '../social/SocialFeedTitles'
+import { extractBilibiliIdentity, extractYouTubeIdentity } from '../discover/DiscoverFeedIdentity'
 
 export interface FeedDetailHeroAvatarSnapshot {
   targetImageUrl: string
@@ -60,6 +61,67 @@ export function buildFeedDetailHeroAvatarCandidates(
       `https://unavatar.io/${encodeURIComponent(`instagram.com/${instagramUsername}`)}?fallback=false`,
     )
   }
+
+  const xUsername =
+    extractXUsername(snapshot.previewResolvedFeedUrl) ||
+    extractXUsername(snapshot.existingFeedUrl) ||
+    extractXUsername(snapshot.previewSiteUrl) ||
+    extractXUsername(snapshot.existingFeedSiteUrl) ||
+    extractXUsername(snapshot.targetSiteUrl || snapshot.targetUrl) ||
+    extractXUsername(snapshot.previewFeedTitle || snapshot.targetTitle)
+  if (xUsername) {
+    pushCandidate(
+      candidates,
+      `https://unavatar.io/x/${encodeURIComponent(xUsername)}`,
+    )
+  }
+
+  const collectUrls = (urls: string[]): string[] => {
+    const result: string[] = []
+    urls.forEach((url: string) => {
+      if (url.trim() && !result.includes(url.trim())) {
+        result.push(url.trim())
+      }
+    })
+    return result
+  }
+
+  const candidateUrls = collectUrls([
+    snapshot.previewResolvedFeedUrl,
+    snapshot.existingFeedUrl,
+    snapshot.previewSiteUrl,
+    snapshot.existingFeedSiteUrl,
+    snapshot.targetSiteUrl,
+    snapshot.targetUrl,
+  ])
+
+  candidateUrls.forEach((candidateUrl: string) => {
+    const bilibiliIdentity = extractBilibiliIdentity(candidateUrl)
+    if (bilibiliIdentity.startsWith('bilibili:')) {
+      pushCandidate(
+        candidates,
+        `https://unavatar.io/bilibili/${encodeURIComponent(bilibiliIdentity.replace(/^bilibili:/, ''))}?fallback=false`,
+      )
+    }
+
+    const youtubeIdentity = extractYouTubeIdentity(candidateUrl)
+    if (youtubeIdentity.startsWith('youtube:channel:')) {
+      pushCandidate(
+        candidates,
+        `https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:channel:/, ''))}?fallback=false`,
+      )
+    } else if (youtubeIdentity.startsWith('youtube:handle:')) {
+      pushCandidate(
+        candidates,
+        `https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:handle:/, ''))}?fallback=false`,
+      )
+    } else if (youtubeIdentity.startsWith('youtube:user:')) {
+      pushCandidate(
+        candidates,
+        `https://unavatar.io/youtube/${encodeURIComponent(youtubeIdentity.replace(/^youtube:user:/, ''))}?fallback=false`,
+      )
+    }
+  })
 
   const host = feedDetailHostOf(
     snapshot.previewSiteUrl || snapshot.targetSiteUrl || snapshot.targetUrl,

@@ -1,5 +1,5 @@
 import { resolveEntryCardImageUrl } from '../utils/EntryCardPreview'
-import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
+import { resolveSocialFeedDisplayImageUrl, resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import {
   buildArticleContentBlocks,
   buildPictureDetailContentBlocks,
@@ -49,6 +49,7 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
 export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
   const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+  const displayFeedImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl ?? '', feed.url, feed.siteUrl || '', displayFeedTitle)
   const t0 = Date.now()
   const mediaCtx = resolveEntryMediaContext(entry, feed)
   const mediaCtxMs = Date.now() - t0
@@ -92,7 +93,7 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     summary: entry.summary,
     content: entry.content,
     imageUrl,
-    feedImageUrl: feed.imageUrl ?? '',
+    feedImageUrl: displayFeedImageUrl,
     author: entry.author,
     articleUrl: entry.url,
     publishedAt: entry.publishedAt,
@@ -126,6 +127,7 @@ export interface ToEntryCardModelWithTimingResult {
 export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCardModelWithTimingResult {
   const definition = viewDefinitionOf(feed.view)
   const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
+  const displayFeedImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl ?? '', feed.url, feed.siteUrl || '', displayFeedTitle)
   const t0 = Date.now()
   const mediaCtx = resolveEntryMediaContext(entry, feed)
   const mediaCtxMs = Date.now() - t0
@@ -155,7 +157,7 @@ export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCar
       summary: entry.summary,
       content: entry.content,
       imageUrl,
-      feedImageUrl: feed.imageUrl ?? '',
+      feedImageUrl: displayFeedImageUrl,
       author: entry.author,
       articleUrl: entry.url,
       publishedAt: entry.publishedAt,
