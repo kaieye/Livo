@@ -103,7 +103,7 @@ struct Index {
   @State visitedModes: SubscriptionMode[] = ['articles']
   @State isModeTransitioning: boolean = false
   @State modeTransitionDirection: number = 1
-  @State headerBlurProgress: number = 0
+  headerBlurProgress: number = 0
   @State currentHomeModeScrollOffset: number = 0
   @State homeModeRailDismissedByScroll: boolean = false
   @State homeModeRailDismissProgress: number = 0

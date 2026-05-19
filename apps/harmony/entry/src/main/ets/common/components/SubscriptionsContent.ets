@@ -30,7 +30,6 @@ import {
 export struct SubscriptionsContent {
   @State feeds: FeedCardModel[] = []
   @Prop @Watch('onModeChanged') mode: SubscriptionMode = 'articles'
-  @State headerBlurProgress: number = 0
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State sourceHint: string = '正在加载订阅内容...'
   @State hasLoaded: boolean = false
@@ -77,9 +76,19 @@ export struct SubscriptionsContent {
     this.syncOverlayLevel(0)
   }
 
+  private filteredFeedsCache: FeedCardModel[] = []
+  private filteredFeedsCacheMode: SubscriptionMode = 'articles'
+  private filteredFeedsCacheSource: FeedCardModel[] = []
+
   private filteredFeeds(): FeedCardModel[] {
+    if (this.mode === this.filteredFeedsCacheMode && this.feeds === this.filteredFeedsCacheSource) {
+      return this.filteredFeedsCache
+    }
     const targetView = this.modeToFeedViewType(this.mode)
-    return this.feeds.filter((f: FeedCardModel) => f.view === targetView)
+    this.filteredFeedsCache = this.feeds.filter((f: FeedCardModel) => f.view === targetView)
+    this.filteredFeedsCacheMode = this.mode
+    this.filteredFeedsCacheSource = this.feeds
+    return this.filteredFeedsCache
   }
 
   private modeToFeedViewType(mode: SubscriptionMode): FeedViewType {
@@ -157,9 +166,7 @@ export struct SubscriptionsContent {
   }
 
   private updateHeaderBlurProgress(offset: number): void {
-    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
-    this.headerBlurOffset = clampedOffset
-    this.headerBlurProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+    this.headerBlurOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
   }
 
   private handleHeaderBlurScrollDelta(delta: number): void {
