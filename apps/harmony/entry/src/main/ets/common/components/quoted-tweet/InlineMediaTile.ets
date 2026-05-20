@@ -54,8 +54,8 @@ export struct InlineMediaTile {
             controller: this.videoController || new VideoController(),
             previewUri: this.item.imageUrl,
           })
-            .width(this.tileWidth)
-            .height(this.tileHeight)
+            .width('100%')
+            .height('100%')
             .borderRadius(this.tileBorderRadius)
             .controls(true)
             .autoPlay(true)
@@ -63,15 +63,15 @@ export struct InlineMediaTile {
         } else {
           if (this.hasImage()) {
             Image(this.item.imageUrl)
-              .width(this.tileWidth)
-              .height(this.tileHeight)
+              .width('100%')
+              .height('100%')
               .borderRadius(this.tileBorderRadius)
               .objectFit(ImageFit.Cover)
               .backgroundColor(this.theme.elevated)
           } else {
             Column()
-              .width(this.tileWidth)
-              .height(this.tileHeight)
+              .width('100%')
+              .height('100%')
               .borderRadius(this.tileBorderRadius)
               .backgroundColor(this.theme.elevated)
           }
@@ -92,6 +92,7 @@ export struct InlineMediaTile {
         }
       }
       .width(this.tileWidth)
+      .height(this.tileHeight)
     }
   }
 }

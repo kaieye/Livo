@@ -196,6 +196,14 @@ test('social inline media creates VideoController only for active playback', () 
     /videoController: this\.activeVideoControllerFor\(item, index\)/,
   )
   assert.match(
+    inlineMediaTileSource,
+    /\.width\('100%'\)\s*\.height\('100%'\)\s*\.borderRadius\(this\.tileBorderRadius\)\s*\.objectFit\(ImageFit\.Cover\)/,
+  )
+  assert.match(
+    inlineMediaTileSource,
+    /\.width\(this\.tileWidth\)\s*\.height\(this\.tileHeight\)/,
+  )
+  assert.match(
     quotedTweetRendererSource,
     /videoController: this\.isInlineVideoActive\(OUTER_SECTION_TAG, this\.outerView\(\)\.primaryMediaItem, 0\)[\s\S]*?\? this\.inlineVideoControllerFor/,
   )

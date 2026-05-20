@@ -4,8 +4,9 @@ import { livoMotion } from '../ui/Motion'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/social/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
 import { QuotedTweetRenderer } from './QuotedTweetRenderer'
+import { InlineMediaGrid } from './quoted-tweet/InlineMediaGrid'
 import { PictureCarouselMediaItem } from '../utils/PictureGallery'
-import { inlineMediaItemsCacheKey, inlineMediaItemsFromUrls, isVideoLikeUrl, MAIN_TILE_SIZE, inlineMediaTileWidth, inlineMediaTileHeight, inlineMediaTileBottomMargin } from '../utils/InlineMediaLayout'
+import { inlineMediaItemsCacheKey, inlineMediaItemsFromUrls, MAIN_TILE_SIZE } from '../utils/InlineMediaLayout'
 
 interface TweetEntryCardPadding {
   left: number
@@ -206,81 +207,24 @@ export struct TweetEntryCard {
   @Builder
   private MediaGrid() {
     if (this.normalizedMediaItems().length > 0) {
-      Column() {
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.normalizedMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-            if (this.normalizedMediaItems().length <= 1 && !(item.videoUrl || '').trim()) {
-              // Single image: original aspect ratio
-              Stack({ alignContent: Alignment.Center }) {
-                if ((item.imageUrl || '').trim()) {
-                  Image(item.imageUrl)
-                    .width('100%')
-                    .borderRadius(0)
-                    .backgroundColor(this.theme.elevated)
-                }
-              }
-                .width('100%')
-                .onClick(() => { this.playInlineVideo('main', item, index) })
-            } else {
-              // Multi-image grid or video: fixed cell size
-              Stack({ alignContent: Alignment.Center }) {
-                if ((item.videoUrl || '').trim() && this.isInlineVideoActive('main', item, index)) {
-                  Video({
-                    src: item.videoUrl,
-                    controller: this.inlineVideoControllerFor('main', item, index),
-                    previewUri: item.imageUrl,
-                  })
-                    .width(inlineMediaTileWidth(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
-                    .height(inlineMediaTileHeight(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
-                    .borderRadius(0)
-                    .controls(true)
-                    .autoPlay(true)
-                    .muted(false)
-                } else {
-                  if ((item.imageUrl || '').trim()) {
-                    Image(item.imageUrl)
-                      .width(inlineMediaTileWidth(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
-                      .height(inlineMediaTileHeight(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
-                      .borderRadius(0)
-                      .objectFit(ImageFit.Cover)
-                      .backgroundColor(this.theme.elevated)
-                  } else {
-                    Column()
-                      .width(inlineMediaTileWidth(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
-                      .height(inlineMediaTileHeight(MAIN_TILE_SIZE, index, this.normalizedMediaItems().length))
-                      .borderRadius(0)
-                      .backgroundColor(this.theme.elevated)
-                  }
-
-                  if ((item.videoUrl || '').trim()) {
-                    Row() {
-                      SymbolGlyph($r('sys.symbol.play_fill'))
-                        .fontSize(28)
-                        .fontColor(['#F5F5F5'])
-                    }
-                    .width(56)
-                    .height(56)
-                    .justifyContent(FlexAlign.Center)
-                    .alignItems(VerticalAlign.Center)
-                    .borderRadius(999)
-                    .backgroundColor('rgba(168,168,168,0.58)')
-                  }
-                }
-              }
-                .margin({ bottom: inlineMediaTileBottomMargin(index, this.normalizedMediaItems().length) })
-                .onClick(() => {
-                  this.playInlineVideo('main', item, index)
-                })
-            }
-          }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
-        }
-        .width('100%')
-      }
-      .width('100%')
-      .padding(1)
-      .borderRadius(12)
-      .backgroundColor(this.theme.divider)
-      .clip(true)
+      InlineMediaGrid({
+        items: this.normalizedMediaItems(),
+        theme: this.theme,
+        tileSize: MAIN_TILE_SIZE,
+        tileBorderRadius: 0,
+        containerBorderRadius: 12,
+        isVideoActive: (item: PictureCarouselMediaItem, index: number): boolean => {
+          return this.isInlineVideoActive('main', item, index)
+        },
+        controllerFor: (item: PictureCarouselMediaItem, index: number): VideoController => {
+          return this.inlineVideoControllerFor('main', item, index)
+        },
+        onTap: (item: PictureCarouselMediaItem, index: number): void => {
+          if ((item.videoUrl || '').trim()) {
+            this.playInlineVideo('main', item, index)
+          }
+        },
+      })
     }
   }
 
