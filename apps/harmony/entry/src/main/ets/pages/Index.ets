@@ -553,7 +553,9 @@ struct Index {
         onHomeRefresh: () => this.handleHomeRefreshAction(),
         onHomeSearchOpen: () => this.session.homeInlineSearchController.open(),
         onMiniBarClick: () => {
-          this.showAIChat = true
+          this.animateWithUiContext({ duration: 160, curve: Curve.EaseOut }, () => {
+            this.showAIChat = true
+          })
         },
       })
 
@@ -595,9 +597,21 @@ struct Index {
           theme: this.theme,
           context: '',
           onClose: () => {
-            this.showAIChat = false
+            this.animateWithUiContext({ duration: 120, curve: Curve.EaseIn }, () => {
+              this.showAIChat = false
+            })
           }
         })
+          .transition(
+            TransitionEffect.asymmetric(
+              TransitionEffect.OPACITY
+                .combine(TransitionEffect.translate({ y: 200 }))
+                .animation({ duration: 160, curve: Curve.EaseOut }),
+              TransitionEffect.OPACITY
+                .combine(TransitionEffect.translate({ y: 200 }))
+                .animation({ duration: 120, curve: Curve.EaseIn })
+            )
+          )
       }
     }
     .width('100%')

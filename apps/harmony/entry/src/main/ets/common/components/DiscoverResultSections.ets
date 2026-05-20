@@ -1,7 +1,6 @@
 import { AvatarTile } from './AvatarTile'
 import { categoryCardSymbol, discoverCategoryCards } from './DiscoverCatalog'
 import { DirectUrlResult, DiscoverCategoryCard, DiscoverOverlayRoute } from './DiscoverTypes'
-import { discoverPlatformLabel } from '../services/discover/DiscoverLabels'
 import { DiscoverSearchPlatform, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { ThemePalette } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
@@ -121,7 +120,6 @@ export struct DiscoverResultMeta {
 export struct DiscoverDirectUrlRow {
   @Prop result: DirectUrlResult | undefined = undefined
   @Prop theme: ThemePalette
-  @Prop searchPlatform: DiscoverSearchPlatform = 'all'
   @Prop refreshToken: number = 0
   onOpen: (result: DirectUrlResult) => void = () => {}
   getCandidateAvatarFallbackUrls: (imageUrl: string, targetUrl: string, siteUrl: string, title: string) => string[] = () => []
@@ -145,13 +143,6 @@ export struct DiscoverDirectUrlRow {
             .fontColor(this.theme.textPrimary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-          DiscoverResultMeta({
-            primary: '地址',
-            secondary: discoverPlatformLabel(this.searchPlatform),
-            tertiary: '',
-            theme: this.theme,
-            accentColor: this.theme.accent,
-          })
           Text(this.result.targetUrl)
             .fontSize(LIST_ROW_META_SIZE)
             .fontColor(this.theme.textSecondary)
@@ -173,6 +164,33 @@ export struct DiscoverDirectUrlRow {
         }
       })
     }
+  }
+}
+
+@Component
+export struct DiscoverDirectUrlLoadingRow {
+  @Prop theme: ThemePalette
+
+  build() {
+    Row({ space: 10 }) {
+      LoadingProgress()
+        .width(20)
+        .height(20)
+        .color(this.theme.accent)
+      Text('正在解析订阅源...')
+        .fontSize(LIST_ROW_META_SIZE)
+        .fontColor(this.theme.textSecondary)
+    }
+    .width('100%')
+    .padding({
+      left: LIST_ROW_HORIZONTAL_PADDING,
+      right: LIST_ROW_HORIZONTAL_PADDING,
+      top: LIST_ROW_VERTICAL_PADDING,
+      bottom: LIST_ROW_VERTICAL_PADDING,
+    })
+    .backgroundColor(this.theme.surface)
+    .borderRadius(CARD_RADIUS_LG)
+    .border({ width: 0.8, color: this.theme.divider })
   }
 }
 

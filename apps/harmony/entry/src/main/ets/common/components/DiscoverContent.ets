@@ -3,6 +3,8 @@ import { DiscoverOverlayLayer } from './DiscoverOverlayLayer'
 import { DiscoverSearchPanel } from './DiscoverSearchPanel'
 import {
   DiscoverCandidateSection,
+  DiscoverDirectUrlLoadingRow,
+  DiscoverDirectUrlRow,
   DiscoverSearchResultSection,
   DiscoverCategoryBrowserSection,
 } from './DiscoverResultSections'
@@ -20,6 +22,8 @@ import {
 } from './FloatingRootPageLayout'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
+import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
+import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
 import { discoverViewLabel } from '../services/discover/DiscoverLabels'
 import { resolveProfileCandidatesByPlatform } from '../services/discover/DiscoverProfileResolver'
 import { resolveKeywordCandidatesByPlatform } from '../services/discover/DiscoverKeywordResolver'
@@ -56,6 +60,8 @@ export struct DiscoverContent {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State remoteResults: ResolvedDiscoverCandidate[] = []
   @State isSearchingRemote: boolean = false
+  @State directUrlPreviewPayload: FeedRefreshPayload | undefined = undefined
+  @State isDirectUrlPreviewLoading: boolean = false
   @State avatarOverrideVersion: number = 0
   @State hasLoaded: boolean = false
   @State isLoadingPage: boolean = false
@@ -78,6 +84,7 @@ export struct DiscoverContent {
   @StorageProp('discoverSearchDismissAt') @Watch('handleSearchDismissSignal') discoverSearchDismissAt: number = 0
   onReady: () => void = () => {}
   searchSession: number = 0
+  directUrlPreviewSession: number = 0
   platformSwitchSession: number = 0
   searchFocusGuardToken: number = 0
   searchInputFocusable: boolean = false
@@ -103,6 +110,9 @@ export struct DiscoverContent {
   private readonly rowPlatformColor = (label: string): string => platformColor(label, this.theme.accent)
   private readonly onCandidateOpen = (c: ResolvedDiscoverCandidate): void => {
     this.coordinator.openCandidate(c)
+  }
+  private readonly onDirectUrlOpen = (result: DirectUrlResult): void => {
+    this.coordinator.openDirectUrlResult(result)
   }
   private readonly onCandidateSubscribe = (c: ResolvedDiscoverCandidate): void => {
     this.coordinator.openSubscribeConfigPage(c, resolveDiscoverOverlayReturnLevel('root'))
@@ -149,6 +159,33 @@ export struct DiscoverContent {
   discoverFeaturedFeeds(): RecommendedFeed[] { return this.featuredTrendingFeeds.slice(0, 7) }
 
   directUrlResult(): DirectUrlResult | undefined { return resolveDirectUrlResult(this.query) }
+
+  private resolvedDirectUrlResult(): DirectUrlResult | undefined {
+    const result = this.directUrlResult()
+    if (!result) {
+      return undefined
+    }
+
+    const cachedPayload = this.directUrlPreviewPayload
+      ?? DiscoverRemoteSearchService.cachedPreviewPayload(result.targetUrl)
+      ?? DiscoverRemoteSearchService.cachedPreviewPayload(result.siteUrl)
+    if (!cachedPayload) {
+      return result
+    }
+
+    return {
+      targetUrl: result.targetUrl,
+      siteUrl: cachedPayload.siteUrl || result.siteUrl,
+      title: cachedPayload.feedTitle || result.title,
+      description: result.description,
+    }
+  }
+
+  private shouldShowDirectUrlLoadingRow(): boolean {
+    return !!this.directUrlResult()
+      && this.isDirectUrlPreviewLoading
+      && !this.resolvedDirectUrlResult()
+  }
 
   resolvedCandidates(): ResolvedDiscoverCandidate[] {
     return resolveProfileCandidatesByPlatform(this.query.trim(), this.searchPlatform)
@@ -247,6 +284,50 @@ export struct DiscoverContent {
     return this.discoverFeaturedFeeds().map((feed: RecommendedFeed) => createDiscoverResultFromFeed(feed))
   }
 
+  private handleDiscoverQueryChange(value: string): void {
+    this.coordinator.onQueryChange(value)
+    void this.preloadDirectUrlPreview(value)
+  }
+
+  private async preloadDirectUrlPreview(query: string): Promise<void> {
+    const result = resolveDirectUrlResult(query)
+    this.directUrlPreviewSession += 1
+    const session = this.directUrlPreviewSession
+
+    if (!result) {
+      this.directUrlPreviewPayload = undefined
+      this.isDirectUrlPreviewLoading = false
+      return
+    }
+
+    const cachedPayload = DiscoverRemoteSearchService.cachedPreviewPayload(result.targetUrl)
+      ?? DiscoverRemoteSearchService.cachedPreviewPayload(result.siteUrl)
+    if (cachedPayload) {
+      this.directUrlPreviewPayload = cachedPayload
+      this.isDirectUrlPreviewLoading = false
+      return
+    }
+
+    this.directUrlPreviewPayload = undefined
+    this.isDirectUrlPreviewLoading = true
+    try {
+      const payload = await RssFeedService.previewFeedUrl(result.targetUrl)
+      if (this.directUrlPreviewSession !== session) {
+        return
+      }
+      DiscoverRemoteSearchService.rememberPreviewPayload(result.targetUrl, payload)
+      this.directUrlPreviewPayload = payload
+    } catch (_) {
+      if (this.directUrlPreviewSession === session) {
+        this.directUrlPreviewPayload = undefined
+      }
+    } finally {
+      if (this.directUrlPreviewSession === session) {
+        this.isDirectUrlPreviewLoading = false
+      }
+    }
+  }
+
   // ── Builders ──
 
   @Builder
@@ -259,7 +340,7 @@ export struct DiscoverContent {
         showPlatformChips: this.showPlatformChips, theme: this.theme,
         searchInputController: this.searchInputController,
         searchInputFocusable: this.searchInputFocusable,
-        onQueryChange: (value: string) => { this.coordinator.onQueryChange(value) },
+        onQueryChange: (value: string) => { this.handleDiscoverQueryChange(value) },
         onClearQuery: () => { this.coordinator.onClearQuery() },
         onPlatformSwitch: (platform: DiscoverSearchPlatform) => { void this.coordinator.handlePlatformSwitch(platform) },
         onInputTouchDown: () => { this.coordinator.onInputTouchDown() },
@@ -270,6 +351,20 @@ export struct DiscoverContent {
       })
 
       if (this.isSearchModeActive()) {
+        if (this.shouldShowDirectUrlLoadingRow()) {
+          DiscoverDirectUrlLoadingRow({
+            theme: this.theme,
+          })
+        } else if (this.resolvedDirectUrlResult()) {
+          DiscoverDirectUrlRow({
+            result: this.resolvedDirectUrlResult(),
+            theme: this.theme,
+            refreshToken: this.feedsChangedAt + this.overlayLevel,
+            onOpen: this.onDirectUrlOpen,
+            getCandidateAvatarFallbackUrls: this.candidateAvatarFallbackUrls,
+          })
+        }
+
         if (this.hasSearchResults() || this.isSearchingRemote || this.isPlatformSwitchSearching) {
           DiscoverSearchResultSection({
             items: this.searchResults(), theme: this.theme,

@@ -85,6 +85,17 @@ test('root hds tab bar reports clicks for double-tap detection', () => {
   )
 })
 
+test('root bottom tab bar does not animate bar-height changes during overlay return', () => {
+  assert.match(
+    rootShellSource,
+    /\.barHeight\(this\.hideBottomTabs \? 0 : BOTTOM_TAB_BAR_HEIGHT\)/,
+  )
+  assert.doesNotMatch(
+    rootShellSource,
+    /\.animation\(\{ duration: 150, curve: Curve\.EaseInOut \}\)/,
+  )
+})
+
 test('root tab title bar stays visible for top-level non-home tabs', () => {
   assert.match(rootChromeSource, /case 'subscriptions':\s*return '订阅'/)
   assert.match(rootChromeSource, /case 'discover':\s*return '发现'/)

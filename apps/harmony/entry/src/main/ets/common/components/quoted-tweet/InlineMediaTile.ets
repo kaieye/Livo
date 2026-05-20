@@ -10,6 +10,7 @@ export struct InlineMediaTile {
   @Prop tileBorderRadius: number = 0
   @Prop isVideoActive: boolean = false
   videoController?: VideoController = undefined
+  onLongPress?: () => void
 
   private hasVideo(): boolean {
     return !!(this.item.videoUrl || '').trim()
@@ -17,6 +18,28 @@ export struct InlineMediaTile {
 
   private hasImage(): boolean {
     return !!(this.item.imageUrl || '').trim()
+  }
+
+  private resolvedVideoController(): VideoController {
+    return this.videoController || new VideoController()
+  }
+
+  private resolvedActiveVideoHeight(): number {
+    if (this.tileHeight > 0) {
+      return this.tileHeight
+    }
+    // 单视频模式原来依赖图片的自然高度；切到 Video 后若仍使用 0 高度，
+    // 组件会塌陷，导致首次点击后看起来没有开始播放。
+    return 208
+  }
+
+  private startVideoPlayback(): void {
+    try {
+      console.info(`[SOCIAL_VIDEO][InlineMediaTile] start playback videoUrl=${this.item.videoUrl}`)
+      this.resolvedVideoController().start()
+    } catch (error) {
+      console.error(`Failed to start inline social video: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   build() {
@@ -45,13 +68,24 @@ export struct InlineMediaTile {
         }
       }
       .width('100%')
+      .onTouch((event: TouchEvent) => {
+        event.stopPropagation()
+      })
+      .gesture(
+        LongPressGesture({ repeat: false, duration: 500 })
+          .onAction(() => {
+            if (this.onLongPress) {
+              this.onLongPress()
+            }
+          })
+      )
     } else {
       // Video or multi-image grid: fixed cell size
       Stack({ alignContent: Alignment.Center }) {
         if (this.hasVideo() && this.isVideoActive) {
           Video({
             src: this.item.videoUrl,
-            controller: this.videoController || new VideoController(),
+            controller: this.resolvedVideoController(),
             previewUri: this.item.imageUrl,
           })
             .width('100%')
@@ -60,6 +94,17 @@ export struct InlineMediaTile {
             .controls(true)
             .autoPlay(true)
             .muted(false)
+            .objectFit(ImageFit.Contain)
+            .onPrepared(() => {
+              console.info(`[SOCIAL_VIDEO][InlineMediaTile] prepared videoUrl=${this.item.videoUrl}`)
+              this.startVideoPlayback()
+            })
+            .onStart(() => {
+              console.info(`[SOCIAL_VIDEO][InlineMediaTile] started videoUrl=${this.item.videoUrl}`)
+            })
+            .onError(() => {
+              console.error(`[SOCIAL_VIDEO][InlineMediaTile] error videoUrl=${this.item.videoUrl}`)
+            })
         } else {
           if (this.hasImage()) {
             Image(this.item.imageUrl)
@@ -92,7 +137,18 @@ export struct InlineMediaTile {
         }
       }
       .width(this.tileWidth)
-      .height(this.tileHeight)
+      .height(this.hasVideo() && this.isVideoActive ? this.resolvedActiveVideoHeight() : this.tileHeight)
+      .onTouch((event: TouchEvent) => {
+        event.stopPropagation()
+      })
+      .gesture(
+        LongPressGesture({ repeat: false, duration: 500 })
+          .onAction(() => {
+            if (this.onLongPress) {
+              this.onLongPress()
+            }
+          })
+      )
     }
   }
 }

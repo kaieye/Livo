@@ -75,6 +75,13 @@ export function categoryCardSymbol(view: FeedViewType): Resource {
   return $r('sys.symbol.doc_text')
 }
 
+function looksLikeFeedSubscriptionUrl(url: string): boolean {
+  const normalized = url.toLowerCase()
+  return /\/(atom|rss|feed|feeds)(\.xml)?(?:[/?#]|$)/i.test(normalized)
+    || /\.(atom|rss|xml)(?:[?#]|$)/i.test(normalized)
+    || /[?&](feed|rss|format)=(rss|atom|xml|feed)\b/i.test(normalized)
+}
+
 export function resolveDirectUrlResult(query: string): DirectUrlResult | undefined {
   const normalized = normalizeDiscoverInput(query)
   if (!/^https?:\/\/\S+$/i.test(normalized)) {
@@ -82,10 +89,13 @@ export function resolveDirectUrlResult(query: string): DirectUrlResult | undefin
   }
 
   const host = hostOf(normalized)
+  const isFeedSubscriptionUrl = looksLikeFeedSubscriptionUrl(normalized)
   return {
     targetUrl: normalized,
     siteUrl: host ? `https://${host}` : normalized,
     title: host || normalized,
-    description: '直接使用这个地址进入订阅预览，并在下一页校验内容。',
+    description: isFeedSubscriptionUrl
+      ? '识别为订阅链接，点击后会校验内容并提供添加订阅选项。'
+      : '识别为网页地址，点击后会尝试发现订阅源并进入预览。',
   }
 }

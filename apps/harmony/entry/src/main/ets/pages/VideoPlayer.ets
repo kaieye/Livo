@@ -22,7 +22,6 @@ struct VideoPlayer {
   @State mode: VideoPlayerLaunchMode = 'error'
   @State actionHint: string = ''
   @State theme: ThemePalette = ThemeService.currentPalette()
-  @State videoAspectRatio: number = 16 / 9
 
   private previousOrientation?: window.Orientation = undefined
   private nativeVideoController: VideoController = new VideoController()
@@ -38,6 +37,11 @@ struct VideoPlayer {
     void this.loadTheme()
     this.initializePlayer()
     void this.applyPlayerOrientation()
+
+    // autoPlay may be suppressed during page transition; defer start() until transition completes
+    setTimeout(() => {
+      this.nativeVideoController.start()
+    }, 500)
   }
 
   aboutToDisappear(): void {
@@ -98,19 +102,6 @@ struct VideoPlayer {
     }
   }
 
-  private rememberVideoAspectRatio(width: number, height: number): void {
-    if (width <= 0 || height <= 0) {
-      return
-    }
-
-    const nextRatio = width / height
-    if (Math.abs(this.videoAspectRatio - nextRatio) < 0.001) {
-      return
-    }
-
-    this.videoAspectRatio = nextRatio
-  }
-
   private saveVideoToPhotos(): void {
     const mediaUrl = (this.playableUrl || this.videoUrl).trim()
     if (!mediaUrl) {
@@ -150,19 +141,6 @@ struct VideoPlayer {
     if (this.mode === 'direct' && this.playableUrl) {
       Column() {
         Stack({ alignContent: Alignment.Center }) {
-          if (this.previewUrl) {
-            Image(this.previewUrl)
-              .width('100%')
-              .height('100%')
-              .objectFit(ImageFit.Contain)
-              .opacity(0)
-              .onComplete((event) => {
-                if (event) {
-                  this.rememberVideoAspectRatio(event.width, event.height)
-                }
-              })
-          }
-
           Video({
             src: this.playableUrl,
             controller: this.nativeVideoController,
@@ -178,8 +156,8 @@ struct VideoPlayer {
             })
         }
         .width('100%')
-        .aspectRatio(this.videoAspectRatio)
-        .constraintSize({ maxHeight: '88%' })
+        .layoutWeight(1)
+        .clip(true)
       }
       .width('100%')
       .height('100%')

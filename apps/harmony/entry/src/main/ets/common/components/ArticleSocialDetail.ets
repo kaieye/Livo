@@ -15,6 +15,7 @@ export struct ArticleSocialDetail {
   inlineVideoControllerFor: (section: string, item: PictureCarouselMediaItem, index: number) => VideoController = () => new VideoController()
   onPlayInlineVideo: (section: string, item: PictureCarouselMediaItem, index: number) => void = () => {}
   onOpenGallery: (url: string) => void = () => {}
+  onOpenVideoFullscreen?: (item: PictureCarouselMediaItem, index: number) => void
 
   private usernameLabel(): string {
     return (this.presentation.username || '').trim()
@@ -75,6 +76,17 @@ export struct ArticleSocialDetail {
     return 136
   }
 
+  private startInlineVideo(section: string, item: PictureCarouselMediaItem, index: number): void {
+    try {
+      console.info(
+        `[SOCIAL_VIDEO][ArticleSocialDetail] start playback section=${section} index=${index} videoUrl=${item.videoUrl}`,
+      )
+      this.inlineVideoControllerFor(section, item, index).start()
+    } catch (error) {
+      console.error(`Failed to start article social video: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+
   private openMediaItem(section: string, item: PictureCarouselMediaItem, index: number): void {
     if (this.isTweetMediaVideo(item)) {
       this.onPlayInlineVideo(section, item, index)
@@ -98,6 +110,23 @@ export struct ArticleSocialDetail {
           .controls(true)
           .autoPlay(true)
           .muted(false)
+          .objectFit(ImageFit.Contain)
+          .onPrepared(() => {
+            console.info(
+              `[SOCIAL_VIDEO][ArticleSocialDetail] prepared section=${section} index=${index} videoUrl=${item.videoUrl}`,
+            )
+            this.startInlineVideo(section, item, index)
+          })
+          .onStart(() => {
+            console.info(
+              `[SOCIAL_VIDEO][ArticleSocialDetail] started section=${section} index=${index} videoUrl=${item.videoUrl}`,
+            )
+          })
+          .onError(() => {
+            console.error(
+              `[SOCIAL_VIDEO][ArticleSocialDetail] error section=${section} index=${index} videoUrl=${item.videoUrl}`,
+            )
+          })
       } else {
         if ((item.imageUrl || '').trim()) {
           if (count <= 1) {
@@ -138,9 +167,23 @@ export struct ArticleSocialDetail {
     }
     .width(count <= 1 ? '100%' : this.tweetMediaTileWidth(index, count))
     .margin({ bottom: count > 1 ? 6 : 0 })
+    .onTouch((event: TouchEvent) => {
+      event.stopPropagation()
+    })
     .onClick(() => {
+      console.info(
+        `[SOCIAL_VIDEO][ArticleSocialDetail] tap media section=${section} index=${index} isVideo=${this.isTweetMediaVideo(item)} videoUrl=${item.videoUrl}`,
+      )
       this.openMediaItem(section, item, index)
     })
+    .gesture(
+      LongPressGesture({ repeat: false, duration: 500 })
+        .onAction(() => {
+          if (this.isTweetMediaVideo(item) && this.onOpenVideoFullscreen) {
+            this.onOpenVideoFullscreen(item, index)
+          }
+        })
+    )
   }
 
 
@@ -230,6 +273,7 @@ export struct ArticleSocialDetail {
           onOpenGallery: (url: string): void => {
             this.onOpenGallery(url)
           },
+          onOpenVideoFullscreen: this.onOpenVideoFullscreen,
         })
       }
 

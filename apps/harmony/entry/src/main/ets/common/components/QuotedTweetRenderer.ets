@@ -29,12 +29,15 @@ export struct QuotedTweetRenderer {
   @Prop theme: ThemePalette = ThemeService.darkPalette()
   @Prop flatMode: boolean = false
   @Prop isTextExpanded: boolean = false
+  @Prop activeInlineVideoKey: string = ''
+  @Prop renderVersion: number = 0
 
   onExpandText: () => void = () => {}
   isInlineVideoActive: (sectionTag: string, item: PictureCarouselMediaItem, index: number) => boolean = () => false
   inlineVideoControllerFor: (sectionTag: string, item: PictureCarouselMediaItem, index: number) => VideoController = () => new VideoController()
   onPlayInlineVideo: (sectionTag: string, item: PictureCarouselMediaItem, index: number) => void = () => {}
   onOpenGallery: (url: string) => void = () => {}
+  onOpenVideoFullscreen?: (item: PictureCarouselMediaItem, index: number) => void
 
   private isVideoItem(item: PictureCarouselMediaItem): boolean {
     return !!(item.videoUrl || '').trim()
@@ -58,6 +61,14 @@ export struct QuotedTweetRenderer {
 
   private nestedText(): string {
     return ((this.quotedTweet.nestedQuotedTweet?.text) || '').trim()
+  }
+
+  private mediaKey(sectionTag: string, item: PictureCarouselMediaItem, index: number): string {
+    return `${sectionTag}_${index}_${item.imageUrl}_${item.videoUrl}`
+  }
+
+  private isActiveMedia(sectionTag: string, item: PictureCarouselMediaItem, index: number): boolean {
+    return this.activeInlineVideoKey === this.mediaKey(sectionTag, item, index)
   }
 
   private outerShouldShowExpand(): boolean {
@@ -119,6 +130,8 @@ export struct QuotedTweetRenderer {
           tileSize: QUOTED_TILE_SIZE,
           tileBorderRadius: 0,
           containerBorderRadius: 10,
+          activeMediaKey: this.activeInlineVideoKey,
+          renderVersion: this.renderVersion,
           isVideoActive: (item: PictureCarouselMediaItem, index: number): boolean => {
             return this.isInlineVideoActive(OUTER_SECTION_TAG, item, index)
           },
@@ -132,6 +145,13 @@ export struct QuotedTweetRenderer {
               this.onOpenGallery(item.imageUrl)
             }
           },
+          onItemLongPress: this.onOpenVideoFullscreen
+            ? (item: PictureCarouselMediaItem, index: number): void => {
+                if (this.isVideoItem(item)) {
+                  this.onOpenVideoFullscreen!(item, index)
+                }
+              }
+            : undefined,
         })
       }
     }
@@ -147,20 +167,45 @@ export struct QuotedTweetRenderer {
   @Builder
   private OuterSingleVideo() {
     if (this.outerView().hasSingleVideoMedia) {
-      InlineMediaSingleVideo({
-        item: this.outerView().primaryMediaItem,
-        theme: this.theme,
-        videoHeight: OUTER_SINGLE_VIDEO_HEIGHT,
-        containerBorderRadius: 0,
-        containerPadding: 0,
-        isVideoActive: this.isInlineVideoActive(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0),
-        videoController: this.isInlineVideoActive(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
-          ? this.inlineVideoControllerFor(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
-          : undefined,
-        onTap: (): void => {
-          this.onPlayInlineVideo(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
-        },
-      })
+      if (this.isActiveMedia(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)) {
+        InlineMediaSingleVideo({
+          item: this.outerView().primaryMediaItem,
+          theme: this.theme,
+          videoHeight: OUTER_SINGLE_VIDEO_HEIGHT,
+          containerBorderRadius: 0,
+          containerPadding: 0,
+          isVideoActive: true,
+          renderVersion: this.renderVersion,
+          videoController: this.inlineVideoControllerFor(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0),
+          onTap: (): void => {
+            this.onPlayInlineVideo(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
+          },
+          onLongPress: this.onOpenVideoFullscreen
+            ? (): void => {
+                this.onOpenVideoFullscreen!(this.outerView().primaryMediaItem, 0)
+              }
+            : undefined,
+        })
+      } else {
+        InlineMediaSingleVideo({
+          item: this.outerView().primaryMediaItem,
+          theme: this.theme,
+          videoHeight: OUTER_SINGLE_VIDEO_HEIGHT,
+          containerBorderRadius: 0,
+          containerPadding: 0,
+          isVideoActive: false,
+          renderVersion: this.renderVersion,
+          videoController: undefined,
+          onTap: (): void => {
+            this.onPlayInlineVideo(OUTER_SECTION_TAG, this.outerView().primaryMediaItem, 0)
+          },
+          onLongPress: this.onOpenVideoFullscreen
+            ? (): void => {
+                this.onOpenVideoFullscreen!(this.outerView().primaryMediaItem, 0)
+              }
+            : undefined,
+        })
+      }
     }
   }
 
@@ -196,6 +241,8 @@ export struct QuotedTweetRenderer {
         tileSize: QUOTED_TILE_SIZE,
         tileBorderRadius: 0,
         containerBorderRadius: 0,
+        activeMediaKey: this.activeInlineVideoKey,
+        renderVersion: this.renderVersion,
         isVideoActive: (item: PictureCarouselMediaItem, index: number): boolean => {
           return this.isInlineVideoActive(NESTED_SECTION_TAG, item, index)
         },
@@ -209,6 +256,13 @@ export struct QuotedTweetRenderer {
             this.onOpenGallery(item.imageUrl)
           }
         },
+        onItemLongPress: this.onOpenVideoFullscreen
+          ? (item: PictureCarouselMediaItem, index: number): void => {
+              if (this.isVideoItem(item)) {
+                this.onOpenVideoFullscreen!(item, index)
+              }
+            }
+          : undefined,
         keyOf: (item: PictureCarouselMediaItem, index: number): string => {
           return `nested_${item.imageUrl}_${item.videoUrl}_${index}`
         },
@@ -216,20 +270,45 @@ export struct QuotedTweetRenderer {
     }
 
     if (this.nestedView().hasSingleVideoMedia) {
-      InlineMediaSingleVideo({
-        item: this.nestedView().primaryMediaItem,
-        theme: this.theme,
-        videoHeight: NESTED_SINGLE_VIDEO_HEIGHT,
-        containerBorderRadius: 0,
-        containerPadding: 1,
-        isVideoActive: this.isInlineVideoActive(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0),
-        videoController: this.isInlineVideoActive(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
-          ? this.inlineVideoControllerFor(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
-          : undefined,
-        onTap: (): void => {
-          this.onPlayInlineVideo(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
-        },
-      })
+      if (this.isActiveMedia(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)) {
+        InlineMediaSingleVideo({
+          item: this.nestedView().primaryMediaItem,
+          theme: this.theme,
+          videoHeight: NESTED_SINGLE_VIDEO_HEIGHT,
+          containerBorderRadius: 0,
+          containerPadding: 1,
+          isVideoActive: true,
+          renderVersion: this.renderVersion,
+          videoController: this.inlineVideoControllerFor(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0),
+          onTap: (): void => {
+            this.onPlayInlineVideo(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
+          },
+          onLongPress: this.onOpenVideoFullscreen
+            ? (): void => {
+                this.onOpenVideoFullscreen!(this.nestedView().primaryMediaItem, 0)
+              }
+            : undefined,
+        })
+      } else {
+        InlineMediaSingleVideo({
+          item: this.nestedView().primaryMediaItem,
+          theme: this.theme,
+          videoHeight: NESTED_SINGLE_VIDEO_HEIGHT,
+          containerBorderRadius: 0,
+          containerPadding: 1,
+          isVideoActive: false,
+          renderVersion: this.renderVersion,
+          videoController: undefined,
+          onTap: (): void => {
+            this.onPlayInlineVideo(NESTED_SECTION_TAG, this.nestedView().primaryMediaItem, 0)
+          },
+          onLongPress: this.onOpenVideoFullscreen
+            ? (): void => {
+                this.onOpenVideoFullscreen!(this.nestedView().primaryMediaItem, 0)
+              }
+            : undefined,
+        })
+      }
     }
   }
 

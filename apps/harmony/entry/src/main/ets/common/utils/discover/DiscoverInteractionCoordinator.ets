@@ -7,6 +7,7 @@ import { ThemePalette } from '../../services/ThemeService'
 import { DiscoverFocusController, DiscoverFocusOwner } from './DiscoverFocusController'
 import { DiscoverOverlayController, DiscoverOverlayOwner } from './DiscoverOverlayController'
 import { DiscoverSearchExecutor, DiscoverSearchOwner } from './DiscoverSearchExecutor'
+import { DirectUrlResult } from '../../components/DiscoverTypes'
 
 export interface DiscoverDataOwner {
   hasLoaded: boolean
@@ -99,6 +100,7 @@ export class DiscoverInteractionCoordinator {
   openBrowsePage(view: FeedViewType, title: string, sourceKey: string = ''): void {
     this.overlay.openBrowsePage(view, title, sourceKey)
   }
+  openDirectUrlResult(result: DirectUrlResult): void { this.overlay.openDirectUrlResult(result) }
   openCandidate(candidate: ResolvedDiscoverCandidate): void { this.overlay.openCandidate(candidate) }
   openSubscribeConfigPage(candidate: ResolvedDiscoverCandidate, restoreOverlayLevel: number = 0): void {
     this.overlay.openSubscribeConfigPage(candidate, restoreOverlayLevel)

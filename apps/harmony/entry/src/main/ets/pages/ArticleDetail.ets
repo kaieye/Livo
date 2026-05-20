@@ -2,7 +2,7 @@ import { common } from '@kit.AbilityKit'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { SettingsStore } from '../common/services/SettingsStore'
 import { EntryRepository } from '../common/repositories/EntryRepository'
-import { goBack } from '../common/navigation/AppRouter'
+import { goBack, openVideoPlayer } from '../common/navigation/AppRouter'
 import { TranslationFormattingHint } from '../common/services/ArticleAssistService'
 import { ExternalUrlService } from '../common/services/ExternalUrlService'
 import { resolveArticleSourceUrl } from '../common/utils/article/ArticleSourceUrl'
@@ -287,11 +287,41 @@ struct ArticleDetail {
     return this.activeSocialInlineVideoKey === SocialInlineVideoRegistry.keyFor(section, item, index)
   }
 
+  private requestSocialInlineVideoStart(controller: VideoController): void {
+    // 详情页里首次点击社交视频时，播放器节点要先完成 mount；
+    // 这里延后一拍补发 start，避免只有切页返回后才开始播放。
+    setTimeout(() => {
+      try {
+        console.info(`[SOCIAL_VIDEO][ArticleDetail] request start key=${this.activeSocialInlineVideoKey}`)
+        controller.start()
+      } catch (error) {
+        console.error(`Failed to request article social video start: ${error instanceof Error ? error.message : error}`)
+      }
+    }, 80)
+  }
+
   private playSocialInlineVideo(section: string, item: PictureCarouselMediaItem, index: number): void {
     if (!(item.videoUrl || '').trim()) {
       return
     }
-    this.activeSocialInlineVideoKey = SocialInlineVideoRegistry.keyFor(section, item, index)
+    const controller = this.socialVideoRegistry.controllerFor(section, item, index)
+    const nextKey = SocialInlineVideoRegistry.keyFor(section, item, index)
+    console.info(
+      `[SOCIAL_VIDEO][ArticleDetail] tap play section=${section} index=${index} key=${nextKey} videoUrl=${item.videoUrl}`,
+    )
+    this.activeSocialInlineVideoKey = nextKey
+    console.info(`[SOCIAL_VIDEO][ArticleDetail] active key switched key=${this.activeSocialInlineVideoKey}`)
+    this.requestSocialInlineVideoStart(controller)
+  }
+
+  private openSocialVideoFullscreen(item: PictureCarouselMediaItem, index: number): void {
+    const videoUrl = (item.videoUrl || '').trim()
+    if (!videoUrl) {
+      return
+    }
+    const title = (this.entry?.title || '').trim() || '视频播放'
+    const previewUrl = (item.imageUrl || '').trim()
+    void openVideoPlayer(title, videoUrl, previewUrl)
   }
 
   private collectImageUrls(): string[] {
@@ -460,6 +490,8 @@ struct ArticleDetail {
           onPlayInlineVideo: (section: string, item: PictureCarouselMediaItem, index: number) =>
             this.playSocialInlineVideo(section, item, index),
           onOpenGallery: (url: string) => this.openGallery(url),
+          onOpenVideoFullscreen: (item: PictureCarouselMediaItem, index: number) =>
+            this.openSocialVideoFullscreen(item, index),
         })
       } else {
         this.NonSocialBody()

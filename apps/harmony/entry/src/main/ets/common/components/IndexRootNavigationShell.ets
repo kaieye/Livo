@@ -245,7 +245,6 @@ export struct IndexRootNavigationShell {
       .barPosition(BarPosition.End)
       .barOverlap(true)
       .barHeight(this.hideBottomTabs ? 0 : BOTTOM_TAB_BAR_HEIGHT)
-      .animation({ duration: 150, curve: Curve.EaseInOut })
       .barFloatingStyle({
         barWidth: {
           smallWidth: ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH,

@@ -31,6 +31,7 @@ export struct TweetEntryCard {
   @State private isTextExpanded: boolean = false
   @State private isQuotedTextExpanded: boolean = false
   @State private activeInlineVideoKey: string = ''
+  @State private inlineVideoRenderVersion: number = 0
   private readonly inlineVideoControllers: Map<string, VideoController> = new Map()
   private mainMediaItemsCacheKey: string = ''
   private mainMediaItemsCache: PictureCarouselMediaItem[] = []
@@ -174,11 +175,33 @@ export struct TweetEntryCard {
     return controller
   }
 
+  private requestInlineVideoStart(controller: VideoController): void {
+    // 列表卡片里的 Video 首次挂载与点击同帧发生时，autoPlay/start 偶尔会被吞掉。
+    // 延后一拍再补一次 start，让播放器 surface 与控制器先完成绑定。
+    setTimeout(() => {
+      try {
+        console.info(`[SOCIAL_VIDEO][TweetEntryCard] request start key=${this.activeInlineVideoKey}`)
+        controller.start()
+      } catch (error) {
+        console.error(`Failed to request social inline video start: ${error instanceof Error ? error.message : error}`)
+      }
+    }, 80)
+  }
+
   private playInlineVideo(section: string, item: PictureCarouselMediaItem, index: number): void {
     if (!(item.videoUrl || '').trim()) {
       return
     }
-    this.activeInlineVideoKey = this.mediaRenderKey(section, item, index)
+    const controller = this.inlineVideoControllerFor(section, item, index)
+    const nextKey = this.mediaRenderKey(section, item, index)
+    console.info(
+      `[SOCIAL_VIDEO][TweetEntryCard] tap play section=${section} index=${index} key=${nextKey} videoUrl=${item.videoUrl}`,
+    )
+    this.activeInlineVideoKey = nextKey
+    this.inlineVideoRenderVersion += 1
+    console.info(`[SOCIAL_VIDEO][TweetEntryCard] active key switched key=${this.activeInlineVideoKey}`)
+    console.info(`[SOCIAL_VIDEO][TweetEntryCard] render version=${this.inlineVideoRenderVersion}`)
+    this.requestInlineVideoStart(controller)
   }
 
   private cardPadding(): TweetEntryCardPadding {
@@ -213,6 +236,8 @@ export struct TweetEntryCard {
         tileSize: MAIN_TILE_SIZE,
         tileBorderRadius: 0,
         containerBorderRadius: 12,
+        activeMediaKey: this.activeInlineVideoKey,
+        renderVersion: this.inlineVideoRenderVersion,
         isVideoActive: (item: PictureCarouselMediaItem, index: number): boolean => {
           return this.isInlineVideoActive('main', item, index)
         },
@@ -236,6 +261,8 @@ export struct TweetEntryCard {
         theme: this.theme,
         flatMode: this.flatMode,
         isTextExpanded: this.isQuotedTextExpanded,
+        activeInlineVideoKey: this.activeInlineVideoKey,
+        renderVersion: this.inlineVideoRenderVersion,
         onExpandText: () => {
           this.isQuotedTextExpanded = true
         },

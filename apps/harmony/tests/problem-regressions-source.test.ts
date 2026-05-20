@@ -58,9 +58,25 @@ const inlineMediaGridSource = readFileSync(
   'utf8',
 )
 
+const inlineMediaSingleVideoSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/components/quoted-tweet/InlineMediaSingleVideo.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 const quotedTweetRendererSource = readFileSync(
   new URL(
     '../entry/src/main/ets/common/components/QuotedTweetRenderer.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
+const tweetEntryCardSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/components/TweetEntryCard.ets',
     import.meta.url,
   ),
   'utf8',
@@ -193,23 +209,130 @@ test('social inline media creates VideoController only for active playback', () 
   )
   assert.match(
     inlineMediaGridSource,
-    /videoController: this\.activeVideoControllerFor\(item, index\)/,
+    /private isActiveMediaItem\(item: PictureCarouselMediaItem, index: number\): boolean/,
+  )
+  assert.match(
+    inlineMediaGridSource,
+    /isVideoActive: this\.isActiveMediaItem\(item, index\)/,
+  )
+  assert.match(
+    inlineMediaGridSource,
+    /return this\.isVideoActive\(item, index\)/,
+  )
+  assert.match(
+    inlineMediaGridSource,
+    /videoController: this\.isActiveMediaItem\(item, index\)[\s\S]*?\? this\.controllerFor\(item, index\)[\s\S]*?: undefined/,
+  )
+  assert.match(inlineMediaGridSource, /@Prop renderVersion: number = 0/)
+  assert.match(
+    inlineMediaGridSource,
+    /private renderKey\(item: PictureCarouselMediaItem, index: number\): string/,
+  )
+  assert.match(
+    inlineMediaGridSource,
+    /return `\$\{this\.keyOf\(item, index\)\}_\$\{this\.isActiveMediaItem\(item, index\) \? 'active' : 'idle'\}_\$\{this\.renderVersion\}`/,
+  )
+  assert.match(
+    inlineMediaGridSource,
+    /\}, \(item: PictureCarouselMediaItem, index: number\) => this\.renderKey\(item, index\)\)/,
+  )
+  assert.match(inlineMediaSingleVideoSource, /@Prop renderVersion: number = 0/)
+  assert.match(inlineMediaSingleVideoSource, /private renderKey\(\): string/)
+  assert.match(inlineMediaSingleVideoSource, /\.key\(this\.renderKey\(\)\)/)
+  assert.match(
+    inlineMediaTileSource,
+    /\.onTouch\(\(event: TouchEvent\) => \{\s*event\.stopPropagation\(\)/,
+  )
+  assert.match(
+    inlineMediaTileSource,
+    /private resolvedActiveVideoHeight\(\): number/,
+  )
+  assert.match(inlineMediaTileSource, /return 208/)
+  assert.match(
+    inlineMediaTileSource,
+    /\.controls\(true\)\s*\.autoPlay\(true\)\s*\.muted\(false\)\s*\.objectFit\(ImageFit\.Contain\)\s*\.onPrepared\(\(\) => \{[\s\S]*?this\.startVideoPlayback\(\)/,
+  )
+  assert.match(
+    inlineMediaTileSource,
+    /\.height\(this\.hasVideo\(\) && this\.isVideoActive \? this\.resolvedActiveVideoHeight\(\) : this\.tileHeight\)/,
   )
   assert.match(
     inlineMediaTileSource,
     /\.width\('100%'\)\s*\.height\('100%'\)\s*\.borderRadius\(this\.tileBorderRadius\)\s*\.objectFit\(ImageFit\.Cover\)/,
   )
   assert.match(
+    readFileSync(
+      new URL(
+        '../entry/src/main/ets/common/components/ArticleSocialDetail.ets',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    /\.controls\(true\)\s*\.autoPlay\(true\)\s*\.muted\(false\)\s*\.objectFit\(ImageFit\.Contain\)\s*\.onPrepared\(\(\) => \{[\s\S]*?this\.startInlineVideo\(section, item, index\)/,
+  )
+  assert.match(
+    readFileSync(
+      new URL(
+        '../entry/src/main/ets/common/components/ArticleSocialDetail.ets',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    /\.onTouch\(\(event: TouchEvent\) => \{\s*event\.stopPropagation\(\)/,
+  )
+  assert.match(
     inlineMediaTileSource,
-    /\.width\(this\.tileWidth\)\s*\.height\(this\.tileHeight\)/,
+    /\.width\(this\.tileWidth\)\s*\.height\(this\.hasVideo\(\) && this\.isVideoActive \? this\.resolvedActiveVideoHeight\(\) : this\.tileHeight\)/,
   )
   assert.match(
     quotedTweetRendererSource,
-    /videoController: this\.isInlineVideoActive\(OUTER_SECTION_TAG, this\.outerView\(\)\.primaryMediaItem, 0\)[\s\S]*?\? this\.inlineVideoControllerFor/,
+    /@Prop activeInlineVideoKey: string = ''/,
   )
   assert.match(
     quotedTweetRendererSource,
-    /videoController: this\.isInlineVideoActive\(NESTED_SECTION_TAG, this\.nestedView\(\)\.primaryMediaItem, 0\)[\s\S]*?\? this\.inlineVideoControllerFor/,
+    /private isActiveMedia\(sectionTag: string, item: PictureCarouselMediaItem, index: number\): boolean/,
+  )
+  assert.match(
+    quotedTweetRendererSource,
+    /if \(this\.isActiveMedia\(OUTER_SECTION_TAG, this\.outerView\(\)\.primaryMediaItem, 0\)\) \{[\s\S]*?isVideoActive: true,[\s\S]*?videoController: this\.inlineVideoControllerFor/,
+  )
+  assert.match(
+    quotedTweetRendererSource,
+    /if \(this\.isActiveMedia\(NESTED_SECTION_TAG, this\.nestedView\(\)\.primaryMediaItem, 0\)\) \{[\s\S]*?isVideoActive: true,[\s\S]*?videoController: this\.inlineVideoControllerFor/,
+  )
+  assert.match(
+    tweetEntryCardSource,
+    /@State private inlineVideoRenderVersion: number = 0/,
+  )
+  assert.match(tweetEntryCardSource, /this\.inlineVideoRenderVersion \+= 1/)
+  assert.match(
+    tweetEntryCardSource,
+    /renderVersion: this\.inlineVideoRenderVersion/,
+  )
+  assert.match(quotedTweetRendererSource, /@Prop renderVersion: number = 0/)
+  assert.match(quotedTweetRendererSource, /renderVersion: this\.renderVersion/)
+  assert.match(
+    tweetEntryCardSource,
+    /activeMediaKey: this\.activeInlineVideoKey/,
+  )
+  assert.match(
+    tweetEntryCardSource,
+    /activeInlineVideoKey: this\.activeInlineVideoKey/,
+  )
+  assert.match(
+    tweetEntryCardSource,
+    /private requestInlineVideoStart\(controller: VideoController\): void/,
+  )
+  assert.match(
+    tweetEntryCardSource,
+    /const controller = this\.inlineVideoControllerFor\(section, item, index\)[\s\S]*?this\.requestInlineVideoStart\(controller\)/,
+  )
+  assert.match(
+    readFileSync(
+      new URL('../entry/src/main/ets/pages/ArticleDetail.ets', import.meta.url),
+      'utf8',
+    ),
+    /private requestSocialInlineVideoStart\(controller: VideoController\): void[\s\S]*?setTimeout\(\(\) => \{[\s\S]*?controller\.start\(\)/,
   )
 })
 
