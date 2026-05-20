@@ -244,15 +244,15 @@ test('inactive mode precache is staggered and does not compete with the active s
 test('load-more prefetch appends a fast page instead of rebuilding the whole mode', () => {
   assert.match(
     homeFeedLoadMorePrefetchSource,
-    /FeaturedEntriesQuery\.default\.featuredEntriesFastPageByMode\(mode, appendCount, previousEntries\.length\)/,
+    /this\.featuredEntriesQuery\.featuredEntriesFastPageByMode\(mode, appendCount, previousEntries\.length\)/,
   )
   assert.match(
     homeFeedLoadMorePrefetchSource,
-    /private mergeUniqueEntries\(previousEntries: EntryCardModel\[], nextPage: EntryCardModel\[]\): EntryCardModel\[]/,
+    /import \{ mergeUniqueEntries \} from '\.\/HomeEntryUtils'/,
   )
   assert.doesNotMatch(
     homeFeedLoadMorePrefetchSource,
-    /FeaturedEntriesQuery\.default\.featuredEntriesByMode\(mode, targetLimit\)/,
+    /this\.featuredEntriesQuery\.featuredEntriesByMode\(mode, targetLimit\)/,
   )
 })
 

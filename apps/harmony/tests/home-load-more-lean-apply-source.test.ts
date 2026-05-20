@@ -118,10 +118,10 @@ test('all modes use the fast page append path before falling back to full mode r
   )
   assert.match(
     paginationSource,
-    /FeaturedEntriesQuery\.default\.featuredEntriesFastPageByMode\(mode, appendCount, previousTotal\)/,
+    /this\.featuredEntriesQuery\.featuredEntriesFastPageByMode\(mode, appendCount, previousTotal\)/,
   )
   assert.match(
     paginationSource,
-    /const fallbackEntries = await FeaturedEntriesQuery\.default\.featuredEntriesByMode\(mode, nextLimit\)/,
+    /const fallbackEntries = await this\.featuredEntriesQuery\.featuredEntriesByMode\(mode, nextLimit\)/,
   )
 })

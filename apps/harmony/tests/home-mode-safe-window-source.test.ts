@@ -110,11 +110,11 @@ test('home pagination state does not force full render mode at startup', () => {
 test('HomeFeedSession uses bounded by-mode queries for mode reloads', () => {
   assert.match(
     sessionSource,
-    /FeaturedEntriesQuery\.default\.featuredEntriesByMode\(targetMode, safeCandidateLimit\)/,
+    /this\.featuredEntriesQuery\.featuredEntriesByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
     sessionSource,
-    /FeaturedEntriesQuery\.default\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
+    /this\.featuredEntriesQuery\.featuredEntriesFastByMode\(targetMode, safeCandidateLimit\)/,
   )
   assert.match(
     sessionSource,

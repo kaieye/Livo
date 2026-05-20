@@ -10,12 +10,20 @@ const source = readFileSync(
   'utf8',
 )
 
+const guardSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/utils/home/HomeFeedGuard.ets',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 test('home load more prefetch keeps multi-page article buffers and consumes them incrementally', () => {
   assert.match(
     source,
     /private prefetchPageMultiplier\(mode: SubscriptionMode\): number \{/,
   )
-  assert.match(source, /&& !this\.state\.homeScrollIntent\.isInteracting/)
+  assert.match(guardSource, /!this\.state\.homeScrollIntent\.isInteracting/)
   assert.match(
     source,
     /if \(mode === 'articles'\) \{\s*return Math\.max\(2, HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER\)/s,

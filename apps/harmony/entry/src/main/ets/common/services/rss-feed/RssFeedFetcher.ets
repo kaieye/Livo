@@ -69,15 +69,10 @@ async function requestWithRetry(
 
 function preferredRssHubInstances(route: string): string[] {
   const r = route.toLowerCase()
-  if (r.includes('/x/') || r.includes('/twitter/')) {
-    return ['https://rsshub.pseudoyu.com'].concat(
-      RSSHUB_INSTANCES.filter((i: string) => i !== 'https://rsshub.pseudoyu.com'),
-    )
-  }
-  if (r.includes('/bilibili/') || r.includes('/picnob/') || r.includes('/instagram/')) {
-    return ['https://rsshub.liumingye.cn'].concat(
-      RSSHUB_INSTANCES.filter((i: string) => i !== 'https://rsshub.liumingye.cn'),
-    )
+  // liumingye.cn is the only instance that supports picnob/Instagram routes.
+  // It's not in RSSHUB_INSTANCES because it returns 503 for all other routes.
+  if (r.includes('/picnob/') || r.includes('/instagram/')) {
+    return ['https://rsshub.liumingye.cn'].concat(RSSHUB_INSTANCES)
   }
   return RSSHUB_INSTANCES
 }
@@ -192,11 +187,16 @@ export async function tryNitterInstances(
 export function isRssHubUrl(url: string): boolean {
   const lower = url.toLowerCase()
   return RSSHUB_INSTANCES.some((i: string) => lower.startsWith(i.toLowerCase()))
-    || /\/(bilibili|x|twitter|youtube|instagram)\//.test(lower)
+    || lower.includes('rsshub.liumingye.cn')
+    || /\/(bilibili|x|twitter|youtube|instagram|picnob)\//.test(lower)
 }
 
 export function extractRssHubRoute(url: string): string {
-  for (const instance of RSSHUB_INSTANCES) {
+  const KNOWN_INSTANCES = [
+    ...RSSHUB_INSTANCES,
+    'https://rsshub.liumingye.cn',
+  ]
+  for (const instance of KNOWN_INSTANCES) {
     const idx = url.toLowerCase().indexOf(instance.toLowerCase())
     if (idx !== -1) {
       const route = url.substring(idx + instance.length)

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   normalizeInlineSearchQuery,
   buildInlineHighlightSegments,
-  InlineHighlightSegment,
+  type InlineHighlightSegment,
 } from '../entry/src/main/ets/common/utils/home/HomeInlineSearch.ts'
 
 test('normalizeInlineSearchQuery trims and lowercases', () => {

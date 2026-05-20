@@ -40,7 +40,7 @@ export const PIPED_INSTANCES: string[] = [
  * Default Nitter instance for Twitter/X content
  * Used for RSS feed generation from X/Twitter sources
  */
-export const DEFAULT_NITTER_INSTANCE = 'https://nitter.poast.org'
+export const DEFAULT_NITTER_INSTANCE = 'https://nitter.net'
 
 /**
  * Fallback Nitter instances for user/profile searching
@@ -48,9 +48,6 @@ export const DEFAULT_NITTER_INSTANCE = 'https://nitter.poast.org'
  */
 export const FALLBACK_NITTER_INSTANCES = [
   'https://nitter.net',
-  'https://nitter.poast.org',
-  'https://nitter.privacydev.net',
-  'https://nitter.d420.de',
 ]
 
 /**
@@ -65,13 +62,7 @@ export const DEFAULT_RSSHUB_INSTANCE = 'https://rsshub.pseudoyu.com'
  */
 export const RSSHUB_INSTANCES: string[] = [
   'https://rsshub.pseudoyu.com',
-  'https://rsshub.app',
   'https://rsshub.rssforever.com',
-  'https://rsshub-instance.zeabur.app',
-  'https://rss.shab.fun',
-  'https://rsshub.ktachibana.party',
-  'https://rsshub.liumingye.cn',
-  'https://rsshub.feeded.xyz',
 ]
 
 // ==============================================================================
@@ -137,7 +128,7 @@ export const RSS_REQUEST_TIMEOUT_MS = 15000
 /**
  * Timeout for RSSHub route requests
  */
-export const RSSHUB_REQUEST_TIMEOUT_MS = 4000
+export const RSSHUB_REQUEST_TIMEOUT_MS = 3000
 
 /**
  * Timeout for Instagram/Picnob RSSHub route requests

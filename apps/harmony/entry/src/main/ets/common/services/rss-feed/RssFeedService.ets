@@ -148,10 +148,10 @@ async function fetchBilibiliDynamicFeed(feed: Feed, uid: string): Promise<FeedRe
 }
 
 /**
- * Resolve a feed URL to a successful FeedRequestResult by trying:
+ * Resolve a feed URL to a successful FeedRequestResult:
  *   1) Direct fetch when the URL is not a known RSSHub route
- *   2) Each preferred RSSHub instance × fallback route combination
- *   3) Each Nitter fallback for X/Twitter routes when RSSHub fails
+ *   2) X/Twitter routes: skip RSSHub, go directly to Nitter
+ *   3) Other RSSHub routes: try the single surviving RSSHub instance
  *
  * The returned result owns the http.HttpRequest handle and the caller
  * is responsible for destroying it.
@@ -164,18 +164,26 @@ async function resolveRssHubFetch(
   if (!route) {
     return await fetchUrl(actualUrl, headers, RSS_REQUEST_TIMEOUT_MS)
   }
-  console.info(`${LOG_TAG} Detected RSSHub route: ${route}`)
-  const rssResult = await tryRssHubInstances(route, headers)
-  if (rssResult) {
-    return rssResult
-  }
+
+  // X/Twitter routes: skip RSSHub entirely — the only surviving instance
+  // (rsshub.rssforever.com) has no Twitter API configured. Go directly to Nitter.
   if (isXRoute(route)) {
+    console.info(`${LOG_TAG} X/Twitter route detected, bypassing RSSHub: ${route}`)
     const username = extractXRouteUsername(route)
+    if (!username) {
+      throw new Error('Could not extract X/Twitter username from route')
+    }
     const nitterResult = await tryNitterInstances(username, headers)
     if (nitterResult) {
       return nitterResult
     }
-    throw new Error('All RSSHub and Nitter instances failed')
+    throw new Error('All Nitter instances failed')
+  }
+
+  console.info(`${LOG_TAG} Detected RSSHub route: ${route}`)
+  const rssResult = await tryRssHubInstances(route, headers)
+  if (rssResult) {
+    return rssResult
   }
   throw new Error('All RSSHub instances failed')
 }

@@ -84,12 +84,17 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     return resolveHomeVisibleEntryLoadMoreStep(mode)
   }
 
+  private shouldUseLeanLoadMoreApply(mode: SubscriptionMode): boolean {
+    return mode === 'articles' || mode === 'social' || mode === 'pictures' || mode === 'videos'
+  }
+
   private applyEntriesForLoadMore(
     mode: SubscriptionMode,
     entries: EntryCardModel[],
     skipNotify: boolean,
   ): void {
-    this.actions.applyEntriesForMode(mode, entries, true, skipNotify, true, true)
+    const leanApply = this.shouldUseLeanLoadMoreApply(mode)
+    this.actions.applyEntriesForMode(mode, entries, true, skipNotify, leanApply, leanApply)
   }
 
   private revealLoadedEntriesForLoadMore(
