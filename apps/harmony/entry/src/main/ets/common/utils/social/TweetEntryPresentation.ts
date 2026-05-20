@@ -108,7 +108,22 @@ function applyRetweetSemantics(
     !trimValue(parsedRetweet.originalDisplayName) &&
     !trimValue(parsedRetweet.originalUsername)
 
-  const nestedQuoteRetweet = parseRetweetWithNestedQuote(source)
+  let nestedQuoteRetweet = parseRetweetWithNestedQuote(source)
+
+  // Fallback: for Nitter retweets where the main text isn't itself a retweet
+  // but the HTML content contains a quoted blockquote (e.g., a retweet of a
+  // tweet that quotes another user's tweet). Extract the quoted tweet from
+  // the HTML so QuotedTweetRenderer can render a nested retweet card.
+  if (!nestedQuoteRetweet && isNitterRetweet) {
+    const htmlQuote = findFirstParsedQuote(source)
+    if (htmlQuote) {
+      nestedQuoteRetweet = {
+        retweet: parsedRetweet,
+        quotedTweet: htmlQuote.quotedTweet,
+      }
+    }
+  }
+
   const parsed = nestedQuoteRetweet?.retweet || parsedRetweet
 
   // For Nitter retweets, the original author comes from <dc:creator>
