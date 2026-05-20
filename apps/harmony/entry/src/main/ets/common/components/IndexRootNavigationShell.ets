@@ -28,9 +28,9 @@ import { IndexRootTabBody } from './IndexRootTabBody'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
 
-const ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH: number = 260
-const ROOT_BOTTOM_TAB_BAR_MEDIUM_WIDTH: number = 300
-const ROOT_BOTTOM_TAB_BAR_LARGE_WIDTH: number = 340
+const ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH: number = 270
+const ROOT_BOTTOM_TAB_BAR_MEDIUM_WIDTH: number = 310
+const ROOT_BOTTOM_TAB_BAR_LARGE_WIDTH: number = 350
 const ROOT_BOTTOM_TAB_MINI_BAR_SIZE: number = 57
 
 @Component
@@ -93,6 +93,7 @@ export struct IndexRootNavigationShell {
   onThemeChange: (theme: ThemePalette) => void = () => {}
   onHomeRefresh: () => void = () => {}
   onHomeSearchOpen: () => void = () => {}
+  onMiniBarClick: () => void = () => {}
   private homeTitleMenus: HdsNavigationMenuContentOptions = {
     value: [{
       content: {
@@ -129,6 +130,10 @@ export struct IndexRootNavigationShell {
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     .borderRadius(ROOT_BOTTOM_TAB_MINI_BAR_SIZE / 2)
+    .hitTestBehavior(HitTestMode.Block)
+    .onClick(() => {
+      this.onMiniBarClick()
+    })
   }
 
   build() {
@@ -240,6 +245,7 @@ export struct IndexRootNavigationShell {
       .barPosition(BarPosition.End)
       .barOverlap(true)
       .barHeight(this.hideBottomTabs ? 0 : BOTTOM_TAB_BAR_HEIGHT)
+      .animation({ duration: 150, curve: Curve.EaseInOut })
       .barFloatingStyle({
         barWidth: {
           smallWidth: ROOT_BOTTOM_TAB_BAR_SMALL_WIDTH,
@@ -315,7 +321,7 @@ export struct IndexRootNavigationShell {
         },
         scrollEffectStyle: undefined,
       } : rootTabTitleBarStyle(),
-      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏�?
+      // 首页运行在全屏窗口中，标题和菜单需要主动避让手机状态栏�?
       avoidLayoutSafeArea: true,
       enableComponentSafeArea: false,
     })
@@ -323,7 +329,7 @@ export struct IndexRootNavigationShell {
     .hideTitleBar(this.hideTitleBar)
     .hideBackButton(true)
     .bindToScrollable(this.bindScrollers)
-    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊�?
+    // 根页运行在全屏窗口中，内容需要进入顶部区域供 HDS 页头采样模糊�?
     .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')

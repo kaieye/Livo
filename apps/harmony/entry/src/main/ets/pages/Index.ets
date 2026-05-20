@@ -21,6 +21,7 @@ import {
 import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 import { IndexHomeOverlayLayer } from '../common/components/IndexHomeOverlayLayer'
 import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
+import { AIChatPanel } from '../common/components/AIChatPanel'
 import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
 import { HdsBottomTabId } from '../common/utils/index-home/HdsBottomTabConfig'
 import { IndexHomeScrollerRegistry } from '../common/utils/index-home/IndexHomeScrollerRegistry'
@@ -118,6 +119,7 @@ struct Index {
   @State showSearch: boolean = false
   @State searchOverlayVisible: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
+  @State showAIChat: boolean = false
   @State rootSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
@@ -198,7 +200,13 @@ struct Index {
   aboutToAppear(): void { this.session.homeRuntimeCoordinator.aboutToAppear() }
   aboutToDisappear(): void { this.session.homeRuntimeCoordinator.aboutToDisappear() }
   onPageShow(): void { this.session.pageLifecycle.onPageShow() }
-  onBackPress(): boolean { return this.session.pageLifecycle.onBackPress() }
+  onBackPress(): boolean {
+    if (this.showAIChat) {
+      this.showAIChat = false
+      return true
+    }
+    return this.session.pageLifecycle.onBackPress()
+  }
 
   logHomeGroupStats(stage: string, entries: EntryCardModel[]): void { this.session.diagnosticsLogger.logHomeGroupStats(stage, entries) }
   logHomePerf(message: string): void { this.session.diagnosticsLogger.logHomePerf(message) }
@@ -454,16 +462,10 @@ struct Index {
         return undefined
       },
       onDidScroll: (mode: SubscriptionMode): void => {
-        if (mode !== 'videos') {
-          this.syncHomeModeRailState(mode)
-        }
-        this.maybeTriggerLoadMoreByScrollProgress(mode, this.readHomeModeScrollOffset(mode))
+        this.syncHomeModeRailState(mode)
         this.flushPendingLoadMoreForMode(mode)
       },
       onStopDragging: (mode: SubscriptionMode): void => {
-        if (mode === 'videos') {
-          this.syncHomeModeRailState(mode)
-        }
         this.setHomeScrollInteracting(false, mode)
         this.flushPendingLoadMoreForMode(mode)
         this.scheduleHomeLoadMorePrefetch(160)
@@ -480,6 +482,29 @@ struct Index {
       getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
       getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
     }
+  }
+
+    private getTimelineContext(): string {
+    const entries = this.visibleEntriesFor(this.mode);
+    if (!entries || entries.length === 0) {
+      return '当前时间线没有加载任何文章。';
+    }
+    const limit = Math.min(10, entries.length);
+    let context = '当前时间线的前 ' + limit + ' 篇文章如下：\n\n';
+    for (let i = 0; i < limit; i++) {
+      const entry = entries[i];
+      context += '[文章 ' + (i + 1) + ']\n';
+      context += '标题: ' + entry.title + '\n';
+      if (entry.author) {
+        context += '作者: ' + entry.author + '\n';
+      }
+      context += '来源: ' + entry.feedTitle + ' (' + (entry.viewLabel || '') + ')\n';
+      if (entry.summary) {
+        context += '摘要: ' + entry.summary + '\n';
+      }
+      context += '\n';
+    }
+    return context;
   }
 
   private handleHomeRefreshAction(): void {
@@ -527,6 +552,9 @@ struct Index {
         onThemeChange: (theme: ThemePalette) => this.session.pageLifecycle.handleRootThemeChange(theme),
         onHomeRefresh: () => this.handleHomeRefreshAction(),
         onHomeSearchOpen: () => this.session.homeInlineSearchController.open(),
+        onMiniBarClick: () => {
+          this.showAIChat = true
+        },
       })
 
       IndexHomeOverlayLayer({
@@ -561,6 +589,16 @@ struct Index {
       })
 
       MiniAudioPlayer({ theme: this.theme })
+
+      if (this.showAIChat) {
+        AIChatPanel({
+          theme: this.theme,
+          context: this.getTimelineContext(),
+          onClose: () => {
+            this.showAIChat = false
+          }
+        })
+      }
     }
     .width('100%')
     .height('100%')

@@ -347,7 +347,7 @@ export struct HomeModeEntriesPage {
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
-    .edgeEffect(this.mode === 'articles' ? EdgeEffect.None : EdgeEffect.Spring, { alwaysEnabled: true })
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
@@ -421,7 +421,7 @@ export struct HomeModeEntriesPage {
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
-    .edgeEffect(EdgeEffect.None)
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined
@@ -506,7 +506,7 @@ export struct HomeModeEntriesPage {
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
     .scrollBar(BarState.On)
-    .edgeEffect(EdgeEffect.Spring)
+    .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
       return undefined

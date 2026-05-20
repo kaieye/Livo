@@ -1,0 +1,502 @@
+import { LengthMetrics } from '@kit.ArkUI'
+import {
+  HdsNavigation,
+  HdsNavigationMenuContentOptions,
+  HdsNavigationTitleMode,
+  BlurStrategy,
+  ScrollEffectType,
+  hdsMaterial,
+} from '@kit.UIDesignKit'
+import { runChatCompletion } from '../services/article-assist/ChatCompletionRunner'
+import { AIAssistantSettingsStore } from '../services/AIAssistantSettingsStore'
+import { AIAssistantSettings, HarmonySettings } from '../models/LivoModels'
+import { ThemePalette } from '../services/ThemeService'
+import { showToast } from '../utils/PageToastHelper'
+import { AIAssistantSettingsPanel } from './AIAssistantSettingsPanel'
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  id: string
+}
+
+@Component
+export struct AIChatPanel {
+  @Prop theme: ThemePalette
+  @Prop context: string = ''
+  onClose: () => void = () => {}
+
+  @State messages: ChatMessage[] = []
+  @State inputContent: string = ''
+  @State isLoading: boolean = false
+  @State aiSettings: AIAssistantSettings | null = null
+  @State showAISettings: boolean = false
+
+  private scroller: Scroller = new Scroller()
+  private inputController: TextAreaController = new TextAreaController()
+
+  aboutToAppear() {
+    this.loadSettings()
+  }
+
+  private async loadSettings() {
+    try {
+      this.aiSettings = await AIAssistantSettingsStore.load()
+    } catch (e) {
+      showToast(this.getUIContext(), '加载 AI 助理设置失败', 2000)
+    }
+  }
+
+  private async handleSend() {
+    const text = this.inputContent.trim()
+    if (!text) {
+      return
+    }
+    if (this.isLoading) {
+      return
+    }
+    if (!this.aiSettings || !this.aiSettings.model) {
+      showToast(this.getUIContext(), '请先在「设置 > AI助手」中配置 AI 接口', 2000)
+      return
+    }
+
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: text,
+      id: Date.now().toString()
+    }
+
+    this.messages.push(userMsg)
+    this.inputContent = ''
+    this.isLoading = true
+    
+    try {
+      this.inputController.stopEditing()
+    } catch (e) {}
+
+    setTimeout(() => {
+      this.scroller.scrollEdge(Edge.Bottom)
+    }, 100)
+
+    try {
+      const assistantText = await runChatCompletion(text, this.aiSettings, this.context, 1500)
+      const assistMsg: ChatMessage = {
+        role: 'assistant',
+        content: assistantText,
+        id: (Date.now() + 1).toString()
+      }
+      this.messages.push(assistMsg)
+    } catch (err) {
+      const errMsg: ChatMessage = {
+        role: 'system',
+        content: err instanceof Error ? err.message : String(err),
+        id: (Date.now() + 1).toString()
+      }
+      this.messages.push(errMsg)
+    } finally {
+      this.isLoading = false
+      setTimeout(() => {
+        this.scroller.scrollEdge(Edge.Bottom)
+      }, 100)
+    }
+  }
+
+  private handleSuggestionClick(text: string) {
+    this.inputContent = text
+    this.handleSend()
+  }
+
+  private chatTitleMenus(): HdsNavigationMenuContentOptions {
+    return {
+      value: [{
+        content: {
+          label: 'AI助手设置',
+          icon: $r('sys.symbol.gearshape'),
+          isEnabled: true,
+          action: () => {
+            this.showAISettings = true
+          },
+        },
+      }],
+    }
+  }
+
+  @Builder
+  private SettingsSheetOverlay() {
+    Column() {
+      AIAssistantSettingsPanel({
+        onSettingsChange: (settings: HarmonySettings) => {
+          void this.loadSettings()
+        }
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
+  }
+
+  build() {
+    HdsNavigation() {
+      Column() {
+        // Chat Content Area
+        Column() {
+          if (this.messages.length === 0) {
+            Scroll() {
+              Column() {
+                Blank()
+                  .height(90)
+
+                // Robot Brand Logo
+                Image($r('app.media.ri_ai'))
+                  .width(64)
+                  .height(64)
+                  .objectFit(ImageFit.Contain)
+                  .fillColor('#7A5AF8')
+                  .margin({ bottom: 18 })
+
+                // Brand Title
+                Text('Livo AI')
+                  .fontSize(26)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.theme.textPrimary)
+                  .margin({ bottom: 8 })
+
+                // Sub-intro
+                Text("I'm here to help you with your reading needs. How can I assist you today?")
+                  .fontSize(15)
+                  .fontColor(this.theme.textSecondary)
+                  .textAlign(TextAlign.Center)
+                  .lineHeight(20)
+                  .margin({ bottom: 32 })
+
+                // Suggestions List
+                Column({ space: 10 }) {
+                  Row() {
+                    SymbolGlyph($r('sys.symbol.bolt_fill'))
+                      .fontSize(14)
+                      .fontColor(['#7A5AF8'])
+                      .margin({ right: 8 })
+                    Text('总结我今天的时间线文章')
+                      .fontSize(14)
+                      .fontColor(this.theme.textPrimary)
+                  }
+                  .width('100%')
+                  .padding(14)
+                  .backgroundColor(this.theme.surface)
+                  .borderRadius(10)
+                  .border({ width: 1, color: this.theme.divider })
+                  .onClick(() => {
+                    this.handleSuggestionClick('请帮我总结并提炼今天时间线里的核心文章与关键新闻。')
+                  })
+
+                  Row() {
+                    SymbolGlyph($r('sys.symbol.doc_plaintext'))
+                      .fontSize(14)
+                      .fontColor(['#7A5AF8'])
+                      .margin({ right: 8 })
+                    Text('我订阅源里最热门的探讨话题是什么？')
+                      .fontSize(14)
+                      .fontColor(this.theme.textPrimary)
+                  }
+                  .width('100%')
+                  .padding(14)
+                  .backgroundColor(this.theme.surface)
+                  .borderRadius(10)
+                  .border({ width: 1, color: this.theme.divider })
+                  .onClick(() => {
+                    this.handleSuggestionClick('分析当前文章列表，总结出最热门的探讨主题或趋势是什么？')
+                  })
+                }
+                .width('100%')
+                .margin({ bottom: 40 })
+
+                Blank()
+                  .height(40)
+              }
+              .width('100%')
+              .padding({ left: 24, right: 24 })
+            }
+            .width('100%')
+            .scrollBar(BarState.Off)
+          } else {
+            List({ scroller: this.scroller }) {
+              ForEach(this.messages, (item: ChatMessage) => {
+                ListItem() {
+                  if (item.role === 'user') {
+                    Row() {
+                      Blank()
+                      Row() {
+                        Text(item.content)
+                          .fontSize(15)
+                          .fontColor('#FFFFFF')
+                          .lineHeight(20)
+                      }
+                      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+                      .backgroundColor('#7A5AF8')
+                      .borderRadius(16)
+                      .constraintSize({ maxWidth: '80%' })
+                    }
+                    .width('100%')
+                    .margin({ bottom: 14 })
+                  } else {
+                    Row() {
+                      Image($r('app.media.ri_ai'))
+                        .width(32)
+                        .height(32)
+                        .objectFit(ImageFit.Contain)
+                        .fillColor('#7A5AF8')
+                        .borderRadius(16)
+                        .backgroundColor(this.theme.surface)
+                        .padding(4)
+                        .margin({ right: 10 })
+
+                      Column() {
+                        Text(item.role === 'system' ? 'System Error' : 'Livo AI')
+                          .fontSize(11)
+                          .fontColor(this.theme.textMuted)
+                          .fontWeight(FontWeight.Medium)
+                          .margin({ bottom: 4 })
+
+                        Row() {
+                          Text(item.content)
+                            .fontSize(15)
+                            .fontColor(item.role === 'system' ? '#DC2626' : this.theme.textPrimary)
+                            .lineHeight(20)
+                        }
+                        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+                        .backgroundColor(this.theme.surface)
+                        .borderRadius(16)
+                        .border({ width: 1, color: this.theme.divider })
+                        .constraintSize({ maxWidth: '85%' })
+                      }
+                      .alignItems(HorizontalAlign.Start)
+
+                      Blank()
+                    }
+                    .width('100%')
+                    .margin({ bottom: 14 })
+                    .alignItems(VerticalAlign.Top)
+                  }
+                }
+              }, (item: ChatMessage) => item.id)
+
+              if (this.isLoading) {
+                ListItem() {
+                  Row() {
+                    Image($r('app.media.ri_ai'))
+                      .width(32)
+                      .height(32)
+                      .objectFit(ImageFit.Contain)
+                      .fillColor('#7A5AF8')
+                      .borderRadius(16)
+                      .backgroundColor(this.theme.surface)
+                      .padding(4)
+                      .margin({ right: 10 })
+
+                    Column() {
+                      Text('Livo AI')
+                        .fontSize(11)
+                        .fontColor(this.theme.textMuted)
+                        .fontWeight(FontWeight.Medium)
+                        .margin({ bottom: 4 })
+
+                      Row() {
+                        Text('正在整理文章，请稍等...')
+                          .fontSize(14)
+                          .fontColor(this.theme.textMuted)
+                      }
+                      .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                      .backgroundColor(this.theme.surface)
+                      .borderRadius(16)
+                      .border({ width: 1, color: this.theme.divider })
+                    }
+                    .alignItems(HorizontalAlign.Start)
+
+                    Blank()
+                  }
+                  .width('100%')
+                  .margin({ bottom: 14 })
+                  .alignItems(VerticalAlign.Top)
+                }
+              }
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.Spring)
+          }
+        }
+        .width('100%')
+        .layoutWeight(1)
+
+        // Footer / Chat Input Card
+        Column() {
+          Column() {
+            Row() {
+              TextArea({
+                text: this.inputContent,
+                placeholder: 'Ask anything about this timeline...',
+                controller: this.inputController
+              })
+                .layoutWeight(1)
+                .placeholderColor(this.theme.textMuted)
+                .fontColor(this.theme.textPrimary)
+                .backgroundColor('#00000000')
+                .fontSize(15)
+                .maxLines(5)
+                .onChange((val: string) => {
+                  this.inputContent = val
+                })
+                .onSubmit(() => {
+                  this.handleSend()
+                })
+
+              Row() {
+                SymbolGlyph($r('sys.symbol.paperplane_fill'))
+                  .fontSize(16)
+                  .fontColor([this.inputContent.trim() ? '#FFFFFF' : this.theme.textMuted])
+              }
+              .width(36)
+              .height(36)
+              .borderRadius(18)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Center)
+              .backgroundColor(this.inputContent.trim() ? '#7A5AF8' : this.theme.divider)
+              .onClick(() => {
+                this.handleSend()
+              })
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Bottom)
+
+            Row() {
+              Row() {
+                SymbolGlyph($r('sys.symbol.at'))
+                  .fontSize(18)
+                  .fontColor([this.theme.textMuted])
+                  .margin({ right: 16 })
+
+                SymbolGlyph($r('sys.symbol.paperclip'))
+                  .fontSize(18)
+                  .fontColor([this.theme.textMuted])
+                  .margin({ right: 16 })
+
+                Row() {
+                  SymbolGlyph($r('sys.symbol.doc_plaintext'))
+                    .fontSize(12)
+                    .fontColor([this.theme.textPrimary])
+                    .margin({ right: 4 })
+                  Text('文章')
+                    .fontSize(12)
+                    .fontColor(this.theme.textPrimary)
+                }
+                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                .borderRadius(12)
+                .backgroundColor(this.theme.elevated)
+                .border({ width: 1, color: this.theme.divider })
+                .onClick(() => {
+                  this.inputContent += ' [当前文章] '
+                })
+              }
+              .alignItems(VerticalAlign.Center)
+
+              Blank()
+
+              Row() {
+                SymbolGlyph($r('sys.symbol.bolt_fill'))
+                  .fontSize(12)
+                  .fontColor(['#7A5AF8'])
+                  .margin({ right: 4 })
+
+                Text('Smart')
+                  .fontSize(12)
+                  .fontColor(this.theme.textPrimary)
+
+                SymbolGlyph($r('sys.symbol.chevron_down'))
+                  .fontSize(10)
+                  .fontColor([this.theme.textMuted])
+                  .margin({ left: 4 })
+              }
+              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+              .borderRadius(14)
+              .backgroundColor(this.theme.elevated)
+              .border({ width: 1, color: this.theme.divider })
+              .alignItems(VerticalAlign.Center)
+            }
+            .width('100%')
+            .margin({ top: 12 })
+          }
+          .width('100%')
+          .padding(12)
+          .borderRadius(16)
+          .backgroundColor(this.theme.surface)
+          .border({ width: 1, color: this.theme.divider })
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 20, top: 12 })
+        .backgroundColor(this.theme.background)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.theme.background)
+    }
+    .mode(NavigationMode.Stack)
+    .titleBar({
+      content: {
+        title: {
+          mainTitle: '',
+        },
+        menu: this.chatTitleMenus(),
+      },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(30),
+        },
+        blurStrategy: BlurStrategy.ENABLE,
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+        },
+        originalStyle: {
+          backgroundStyle: {
+            backgroundColor: '#00000000',
+            maskExtraHeight: 0,
+            blurRadius: 28,
+          },
+          contentStyle: {
+            titleStyle: {
+              mainTitleColor: $r('sys.color.font_primary'),
+              subTitleColor: $r('sys.color.font_secondary'),
+            },
+            menuStyle: {
+              backgroundColor: $r('sys.color.comp_background_tertiary'),
+              iconColor: $r('sys.color.icon_primary'),
+            },
+            backIconStyle: {
+              backgroundColor: $r('sys.color.comp_background_tertiary'),
+              iconColor: $r('sys.color.icon_primary'),
+            },
+          },
+        },
+        scrollEffectStyle: undefined,
+      },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false,
+    })
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .hideBackButton(false)
+    .bindSheet($$this.showAISettings, this.SettingsSheetOverlay(), {
+      detents: [SheetSize.LARGE],
+      dragBar: false,
+      showClose: false,
+      backgroundColor: this.theme.background,
+      preferType: SheetType.CENTER,
+    })
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+    .width('100%')
+    .height('100%')
+  }
+}

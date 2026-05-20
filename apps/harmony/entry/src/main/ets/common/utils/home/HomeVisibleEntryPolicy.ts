@@ -45,11 +45,11 @@ const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
 
 // 视频是双列网格：每行高度 ≈ 16:9 封面 (~95px) + 8 间距 + 36 标题 + 4 间距
 // + 16 元数据 + 12 行间距 ≈ 171px，按"每个 entry 对应半行滚动距离"换算
-// 单 entry 等效高度 ≈ 88。preloadRemainingCount 收紧到 8（约 4 行）以便在
-// 用户滚到末段时尽早触发，estimatedVisibleItemCount 提到 6（大屏可同时显示
-// 3 行 = 6 个 entry）以匹配真实视口。
+// 单 entry 等效高度 ≈ 88。preloadRemainingCount 提到 16（约 8 行缓冲），
+// 让触发点落在 ~46% 滚动位置，与文章栏目的 ~44% 对齐，避免大屏设备上阈值
+// 超出最大可滚动范围导致 load-more 永不触发。estimatedVisibleItemCount 保持 6。
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 8,
+  preloadRemainingCount: 16,
   estimatedItemHeight: 88,
   estimatedVisibleItemCount: 6,
 }
