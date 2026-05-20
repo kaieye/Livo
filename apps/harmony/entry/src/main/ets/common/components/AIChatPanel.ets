@@ -13,6 +13,7 @@ import { AIAssistantSettings, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette } from '../services/ThemeService'
 import { showToast } from '../utils/PageToastHelper'
 import { AIAssistantSettingsPanel } from './AIAssistantSettingsPanel'
+import { Typewriter } from '../utils/Typewriter'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -31,12 +32,19 @@ export struct AIChatPanel {
   @State isLoading: boolean = false
   @State aiSettings: AIAssistantSettings | null = null
   @State showAISettings: boolean = false
+  @State streamingContent: string = ''
+  @State streamingMessageId: string = ''
 
   private scroller: Scroller = new Scroller()
   private inputController: TextAreaController = new TextAreaController()
+  private typewriter: Typewriter = new Typewriter()
 
   aboutToAppear() {
     this.loadSettings()
+  }
+
+  aboutToDisappear() {
+    this.typewriter.cancel()
   }
 
   private async loadSettings() {
@@ -66,10 +74,15 @@ export struct AIChatPanel {
       id: Date.now().toString()
     }
 
+    // 打字机动画互斥：新消息到达时取消当前打字
+    this.typewriter.cancel()
+    this.streamingContent = ''
+    this.streamingMessageId = ''
+
     this.messages.push(userMsg)
     this.inputContent = ''
     this.isLoading = true
-    
+
     try {
       this.inputController.stopEditing()
     } catch (e) {}
@@ -80,13 +93,28 @@ export struct AIChatPanel {
 
     try {
       const assistantText = await runChatCompletion(text, this.aiSettings, this.context, 1500)
+      const assistMsgId = (Date.now() + 1).toString()
       const assistMsg: ChatMessage = {
         role: 'assistant',
         content: assistantText,
-        id: (Date.now() + 1).toString()
+        id: assistMsgId
       }
       this.messages.push(assistMsg)
+      this.isLoading = false
+
+      // 启动打字机动画
+      this.streamingMessageId = assistMsgId
+      this.typewriter.start(assistantText, {
+        onTick: (displayed: string) => {
+          this.streamingContent = displayed
+        },
+        onDone: () => {
+          this.streamingContent = ''
+          this.streamingMessageId = ''
+        }
+      })
     } catch (err) {
+      this.isLoading = false
       const errMsg: ChatMessage = {
         role: 'system',
         content: err instanceof Error ? err.message : String(err),
@@ -94,7 +122,6 @@ export struct AIChatPanel {
       }
       this.messages.push(errMsg)
     } finally {
-      this.isLoading = false
       setTimeout(() => {
         this.scroller.scrollEdge(Edge.Bottom)
       }, 100)
@@ -219,69 +246,74 @@ export struct AIChatPanel {
             .width('100%')
             .scrollBar(BarState.Off)
           } else {
-            List({ scroller: this.scroller }) {
-              ForEach(this.messages, (item: ChatMessage) => {
-                ListItem() {
-                  if (item.role === 'user') {
-                    Row() {
-                      Blank()
+            Scroll(this.scroller) {
+              Column() {
+                Blank()
+                  .layoutWeight(1)
+
+                ForEach(this.messages, (item: ChatMessage) => {
+                  Column() {
+                    if (item.role === 'user') {
                       Row() {
-                        Text(item.content)
-                          .fontSize(15)
-                          .fontColor('#FFFFFF')
-                          .lineHeight(20)
-                      }
-                      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-                      .backgroundColor('#7A5AF8')
-                      .borderRadius(16)
-                      .constraintSize({ maxWidth: '80%' })
-                    }
-                    .width('100%')
-                    .margin({ bottom: 14 })
-                  } else {
-                    Row() {
-                      Image($r('app.media.ri_ai'))
-                        .width(32)
-                        .height(32)
-                        .objectFit(ImageFit.Contain)
-                        .fillColor('#7A5AF8')
-                        .borderRadius(16)
-                        .backgroundColor(this.theme.surface)
-                        .padding(4)
-                        .margin({ right: 10 })
-
-                      Column() {
-                        Text(item.role === 'system' ? 'System Error' : 'Livo AI')
-                          .fontSize(11)
-                          .fontColor(this.theme.textMuted)
-                          .fontWeight(FontWeight.Medium)
-                          .margin({ bottom: 4 })
-
+                        Blank()
                         Row() {
                           Text(item.content)
                             .fontSize(15)
-                            .fontColor(item.role === 'system' ? '#DC2626' : this.theme.textPrimary)
+                            .fontColor('#FFFFFF')
                             .lineHeight(20)
                         }
                         .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-                        .backgroundColor(this.theme.surface)
+                        .backgroundColor('#7A5AF8')
                         .borderRadius(16)
-                        .border({ width: 1, color: this.theme.divider })
-                        .constraintSize({ maxWidth: '85%' })
+                        .constraintSize({ maxWidth: '80%' })
                       }
-                      .alignItems(HorizontalAlign.Start)
+                      .width('100%')
+                      .margin({ bottom: 14 })
+                    } else {
+                      Row() {
+                        Image($r('app.media.ri_ai'))
+                          .width(32)
+                          .height(32)
+                          .objectFit(ImageFit.Contain)
+                          .fillColor('#7A5AF8')
+                          .borderRadius(16)
+                          .backgroundColor(this.theme.surface)
+                          .padding(4)
+                          .margin({ right: 10 })
 
-                      Blank()
+                        Column() {
+                          Text(item.role === 'system' ? 'System Error' : 'Livo AI')
+                            .fontSize(11)
+                            .fontColor(this.theme.textMuted)
+                            .fontWeight(FontWeight.Medium)
+                            .margin({ bottom: 4 })
+
+                          Row() {
+                            Text(item.id === this.streamingMessageId && this.streamingContent
+                              ? this.streamingContent
+                              : item.content)
+                              .fontSize(15)
+                              .fontColor(item.role === 'system' ? '#DC2626' : this.theme.textPrimary)
+                              .lineHeight(20)
+                          }
+                          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+                          .backgroundColor(this.theme.surface)
+                          .borderRadius(16)
+                          .border({ width: 1, color: this.theme.divider })
+                          .constraintSize({ maxWidth: '85%' })
+                        }
+                        .alignItems(HorizontalAlign.Start)
+
+                        Blank()
+                      }
+                      .width('100%')
+                      .margin({ bottom: 14 })
+                      .alignItems(VerticalAlign.Top)
                     }
-                    .width('100%')
-                    .margin({ bottom: 14 })
-                    .alignItems(VerticalAlign.Top)
                   }
-                }
-              }, (item: ChatMessage) => item.id)
+                }, (item: ChatMessage) => item.id)
 
-              if (this.isLoading) {
-                ListItem() {
+                if (this.isLoading) {
                   Row() {
                     Image($r('app.media.ri_ai'))
                       .width(32)
@@ -319,6 +351,8 @@ export struct AIChatPanel {
                   .alignItems(VerticalAlign.Top)
                 }
               }
+              .width('100%')
+              .constraintSize({ minHeight: '100%' })
             }
             .width('100%')
             .layoutWeight(1)
@@ -489,7 +523,7 @@ export struct AIChatPanel {
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideBackButton(false)
     .bindSheet($$this.showAISettings, this.SettingsSheetOverlay(), {
-      detents: [SheetSize.LARGE],
+      detents: [SheetSize.MEDIUM],
       dragBar: false,
       showClose: false,
       backgroundColor: this.theme.background,
