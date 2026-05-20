@@ -34,6 +34,11 @@ export struct QuotedTweetRenderer {
   isInlineVideoActive: (sectionTag: string, item: PictureCarouselMediaItem, index: number) => boolean = () => false
   inlineVideoControllerFor: (sectionTag: string, item: PictureCarouselMediaItem, index: number) => VideoController = () => new VideoController()
   onPlayInlineVideo: (sectionTag: string, item: PictureCarouselMediaItem, index: number) => void = () => {}
+  onOpenGallery: (url: string) => void = () => {}
+
+  private isVideoItem(item: PictureCarouselMediaItem): boolean {
+    return !!(item.videoUrl || '').trim()
+  }
 
   private outerView(): QuotedTweetMediaView {
     return quotedTweetMediaView(this.quotedTweet)
@@ -121,7 +126,11 @@ export struct QuotedTweetRenderer {
             return this.inlineVideoControllerFor(OUTER_SECTION_TAG, item, index)
           },
           onTap: (item: PictureCarouselMediaItem, index: number): void => {
-            this.onPlayInlineVideo(OUTER_SECTION_TAG, item, index)
+            if (this.isVideoItem(item)) {
+              this.onPlayInlineVideo(OUTER_SECTION_TAG, item, index)
+            } else if ((item.imageUrl || '').trim()) {
+              this.onOpenGallery(item.imageUrl)
+            }
           },
         })
       }
@@ -194,7 +203,11 @@ export struct QuotedTweetRenderer {
           return this.inlineVideoControllerFor(NESTED_SECTION_TAG, item, index)
         },
         onTap: (item: PictureCarouselMediaItem, index: number): void => {
-          this.onPlayInlineVideo(NESTED_SECTION_TAG, item, index)
+          if (this.isVideoItem(item)) {
+            this.onPlayInlineVideo(NESTED_SECTION_TAG, item, index)
+          } else if ((item.imageUrl || '').trim()) {
+            this.onOpenGallery(item.imageUrl)
+          }
         },
         keyOf: (item: PictureCarouselMediaItem, index: number): string => {
           return `nested_${item.imageUrl}_${item.videoUrl}_${index}`

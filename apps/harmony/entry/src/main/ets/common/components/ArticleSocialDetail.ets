@@ -4,6 +4,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 import { PictureCarouselMediaItem, resolvePictureCarouselMediaItems } from '../utils/PictureGallery'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/social/TweetEntryPresentation'
+import { QuotedTweetRenderer } from './QuotedTweetRenderer'
 
 @Component
 export struct ArticleSocialDetail {
@@ -48,41 +49,7 @@ export struct ArticleSocialDetail {
     }
   }
 
-  private quotedTweetMediaItems(): PictureCarouselMediaItem[] {
-    return this.mediaItemsFromUrls(this.quotedTweetPresentation().mediaUrls || [])
-  }
 
-  private quotedTweetHeaderLabel(): string {
-    const baseLabel = (this.quotedTweetPresentation().displayName || '').trim()
-      || (this.quotedTweetPresentation().username || '').trim()
-      || '未知来源'
-    return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
-  }
-
-  private hasNestedQuotedTweet(): boolean {
-    return this.hasQuotedTweet() && !!this.quotedTweetPresentation().nestedQuotedTweet
-  }
-
-  private nestedQuotedTweetPresentation(): TweetQuotedPresentation {
-    return this.quotedTweetPresentation().nestedQuotedTweet || {
-      displayName: '',
-      username: '',
-      avatarUrl: '',
-      text: '',
-      mediaUrls: [],
-    }
-  }
-
-  private nestedQuotedTweetMediaItems(): PictureCarouselMediaItem[] {
-    return this.mediaItemsFromUrls(this.nestedQuotedTweetPresentation().mediaUrls || [])
-  }
-
-  private nestedQuotedTweetHeaderLabel(): string {
-    const baseLabel = (this.nestedQuotedTweetPresentation().displayName || '').trim()
-      || (this.nestedQuotedTweetPresentation().username || '').trim()
-      || '未知来源'
-    return baseLabel.endsWith(':') ? baseLabel : `${baseLabel}:`
-  }
 
   private isTweetMediaVideo(item: PictureCarouselMediaItem): boolean {
     return !!(item.videoUrl || '').trim()
@@ -176,101 +143,9 @@ export struct ArticleSocialDetail {
     })
   }
 
-  @Builder
-  private QuotedTweetDetail() {
-    Column({ space: 8 }) {
-      Text('RT')
-        .fontSize(12)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.theme.textMuted)
-        .width('100%')
 
-      Text() {
-        Span(this.quotedTweetHeaderLabel())
-          .fontWeight(FontWeight.Bold)
 
-        if ((this.quotedTweetPresentation().text || '').trim()) {
-          Span(` ${(this.quotedTweetPresentation().text || '').trim()}`)
-            .fontWeight(FontWeight.Regular)
-        }
-      }
-        .fontSize(13)
-        .lineHeight(20)
-        .fontColor(this.theme.textPrimary)
-        .width('100%')
 
-      if (this.quotedTweetMediaItems().length > 0) {
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.quotedTweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-            this.TweetMediaTile('quoted', item, index, this.quotedTweetMediaItems().length, 8)
-          }, (item: PictureCarouselMediaItem, index: number) => `${item.imageUrl}_${item.videoUrl}_${index}`)
-        }
-        .width('100%')
-        .clip(true)
-      }
-
-      if (this.hasNestedQuotedTweet()) {
-        this.NestedQuotedTweetDetail()
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding({ left: 2, right: 2, top: 2, bottom: 2 })
-  }
-
-  @Builder
-  private NestedQuotedTweetDetail() {
-    Column({ space: 0 }) {
-      Column({ space: 8 }) {
-        Text('RT')
-          .fontSize(12)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.theme.textMuted)
-          .width('100%')
-
-        Text() {
-          Span(this.nestedQuotedTweetHeaderLabel())
-            .fontWeight(FontWeight.Bold)
-
-          if ((this.nestedQuotedTweetPresentation().text || '').trim()) {
-            Span(` ${(this.nestedQuotedTweetPresentation().text || '').trim()}`)
-              .fontWeight(FontWeight.Regular)
-          }
-        }
-          .fontSize(13)
-          .lineHeight(20)
-          .fontColor(this.theme.textPrimary)
-          .width('100%')
-      }
-      .width('100%')
-      .padding({
-        left: 10,
-        right: 10,
-        top: 10,
-        bottom: this.nestedQuotedTweetMediaItems().length > 0 ? 8 : 10,
-      })
-
-      if (this.nestedQuotedTweetMediaItems().length > 0) {
-        Column() {
-          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-            ForEach(this.nestedQuotedTweetMediaItems(), (item: PictureCarouselMediaItem, index: number) => {
-              this.TweetMediaTile('nested', item, index, this.nestedQuotedTweetMediaItems().length, 0)
-            }, (item: PictureCarouselMediaItem, index: number) => `nested_${item.imageUrl}_${item.videoUrl}_${index}`)
-          }
-          .width('100%')
-        }
-        .width('100%')
-        .padding(1)
-        .backgroundColor(this.theme.divider)
-        .clip(true)
-      }
-    }
-    .width('100%')
-    .borderRadius(10)
-    .border({ width: 0.8, color: this.theme.divider })
-    .backgroundColor(this.theme.surface)
-    .clip(true)
-  }
 
   build() {
     Column({ space: 8 }) {
@@ -338,7 +213,24 @@ export struct ArticleSocialDetail {
       }
 
       if (this.hasQuotedTweet()) {
-        this.QuotedTweetDetail()
+        QuotedTweetRenderer({
+          quotedTweet: this.quotedTweetPresentation(),
+          theme: this.theme,
+          flatMode: false,
+          isTextExpanded: true,
+          isInlineVideoActive: (sectionTag: string, item: PictureCarouselMediaItem, index: number): boolean => {
+            return this.isInlineVideoActive(sectionTag, item, index)
+          },
+          inlineVideoControllerFor: (sectionTag: string, item: PictureCarouselMediaItem, index: number): VideoController => {
+            return this.inlineVideoControllerFor(sectionTag, item, index)
+          },
+          onPlayInlineVideo: (sectionTag: string, item: PictureCarouselMediaItem, index: number): void => {
+            this.onPlayInlineVideo(sectionTag, item, index)
+          },
+          onOpenGallery: (url: string): void => {
+            this.onOpenGallery(url)
+          },
+        })
       }
 
       if (this.tweetMediaItems().length > 0) {
