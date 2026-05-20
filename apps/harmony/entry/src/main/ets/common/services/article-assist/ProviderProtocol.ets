@@ -159,12 +159,23 @@ export function resolveSystemPrompt(
 ): string {
   const persona = (aiSettings.chatPersonaPrompt || '').trim()
   if (!aiSettings.enableSystemPrompt) {
-    return persona ? `Persona: ${persona}` : ''
+    // 系统提示词未启用时，至少将文章上下文作为 system prompt 送出，
+    // 避免模型收不到任何文章数据而产生空响应或幻觉。
+    const base = persona ? `Persona: ${persona}` : ''
+    return context ? `${base}\n\n${context}`.trim() : base
   }
-  return (aiSettings.systemPromptTemplate || '')
+
+  const template = aiSettings.systemPromptTemplate || ''
+  let result = template
     .replace(/\{\{context\}\}/g, context)
     .replace(/\{\{persona\}\}/g, persona)
     .trim()
+
+  // 即使用户模板未包含 {{context}}，也确保文章数据送达模型。
+  if (context && !template.includes('{{context}}')) {
+    result = result ? `${result}\n\n${context}` : context
+  }
+  return result
 }
 
 function buildAnthropicBody(context: ProviderRequestContext): string {
