@@ -13,13 +13,9 @@ import { AIAssistantSettings, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette } from '../services/ThemeService'
 import { showToast } from '../utils/PageToastHelper'
 import { AIAssistantSettingsPanel } from './AIAssistantSettingsPanel'
+import { AIChatHistoryPanel } from './AIChatHistoryPanel'
 import { Typewriter } from '../utils/Typewriter'
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  id: string
-}
+import { ChatHistoryStore, ChatMessage, ChatSession } from '../services/ChatHistoryStore'
 
 @Component
 export struct AIChatPanel {
@@ -34,17 +30,21 @@ export struct AIChatPanel {
   @State showAISettings: boolean = false
   @State streamingContent: string = ''
   @State streamingMessageId: string = ''
+  @State showHistory: boolean = false
+  @State currentSessionId: string = ''
 
   private scroller: Scroller = new Scroller()
   private inputController: TextAreaController = new TextAreaController()
   private typewriter: Typewriter = new Typewriter()
 
   aboutToAppear() {
+    this.currentSessionId = Date.now().toString()
     this.loadSettings()
   }
 
   aboutToDisappear() {
     this.typewriter.cancel()
+    this.saveCurrentSession()
   }
 
   private async loadSettings() {
@@ -133,41 +133,40 @@ export struct AIChatPanel {
     this.handleSend()
   }
 
-  private chatTitleMenus(): HdsNavigationMenuContentOptions {
-    return {
-      value: [
-        {
-          content: {
-            label: '新对话',
-            icon: $r('sys.symbol.plus'),
-            isEnabled: true,
-            action: () => {
-              this.messages = []
-            },
-          },
-        },
-        {
-          content: {
-            label: '清空对话',
-            icon: $r('sys.symbol.arrow_counterclockwise'),
-            isEnabled: true,
-            action: () => {
-              this.messages = []
-            },
-          },
-        },
-        {
-          content: {
-            label: 'AI助手设置',
-            icon: $r('sys.symbol.gearshape'),
-            isEnabled: true,
-            action: () => {
-              this.showAISettings = true
-            },
-          },
-        },
-      ],
+  private saveCurrentSession(): void {
+    if (this.messages.length === 0) {
+      return
     }
+    const title = this.messages.find((m: ChatMessage) => m.role === 'user')?.content.slice(0, 40) || '新对话'
+    const session: ChatSession = {
+      id: this.currentSessionId || Date.now().toString(),
+      title,
+      messages: this.messages.slice(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    void ChatHistoryStore.save(session)
+  }
+
+  private startNewConversation(): void {
+    this.saveCurrentSession()
+    this.messages = []
+    this.currentSessionId = Date.now().toString()
+    this.streamingContent = ''
+    this.streamingMessageId = ''
+  }
+
+  private loadSessionFromHistory(session: ChatSession): void {
+    this.saveCurrentSession()
+    this.typewriter.cancel()
+    this.messages = session.messages.slice()
+    this.currentSessionId = session.id
+    this.streamingContent = ''
+    this.streamingMessageId = ''
+    this.showHistory = false
+    setTimeout(() => {
+      this.scroller.scrollEdge(Edge.Bottom)
+    }, 200)
   }
 
   private safeDisplayText(value: string): string {
@@ -193,6 +192,61 @@ export struct AIChatPanel {
     .width('100%')
     .height('100%')
     .backgroundColor(this.theme.background)
+  }
+
+  @Builder
+  private HistorySheetOverlay() {
+    Column() {
+      AIChatHistoryPanel({
+        theme: this.theme,
+        onLoadSession: (session: ChatSession) => {
+          this.loadSessionFromHistory(session)
+        },
+        onClose: () => {
+          this.showHistory = false
+        },
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.theme.background)
+  }
+
+  private chatTitleMenus(): HdsNavigationMenuContentOptions {
+    return {
+      value: [
+        {
+          content: {
+            label: '新对话',
+            icon: $r('sys.symbol.plus'),
+            isEnabled: true,
+            action: () => {
+              this.startNewConversation()
+            },
+          },
+        },
+        {
+          content: {
+            label: '历史对话',
+            icon: $r('sys.symbol.arrow_counterclockwise_clock'),
+            isEnabled: true,
+            action: () => {
+              this.showHistory = true
+            },
+          },
+        },
+        {
+          content: {
+            label: 'AI助手设置',
+            icon: $r('sys.symbol.gearshape'),
+            isEnabled: true,
+            action: () => {
+              this.showAISettings = true
+            },
+          },
+        },
+      ],
+    }
   }
 
   build() {
@@ -377,7 +431,7 @@ export struct AIChatPanel {
                         .margin({ bottom: 4 })
 
                       Row() {
-                        Text('正在整理文章，请稍等...')
+                        Text('正在思考，请稍等...')
                           .fontSize(14)
                           .fontColor(this.theme.textMuted)
                       }
@@ -568,6 +622,13 @@ export struct AIChatPanel {
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideBackButton(false)
     .bindSheet($$this.showAISettings, this.SettingsSheetOverlay(), {
+      detents: [SheetSize.MEDIUM],
+      dragBar: false,
+      showClose: false,
+      backgroundColor: this.theme.background,
+      preferType: SheetType.CENTER,
+    })
+    .bindSheet($$this.showHistory, this.HistorySheetOverlay(), {
       detents: [SheetSize.MEDIUM],
       dragBar: false,
       showClose: false,
