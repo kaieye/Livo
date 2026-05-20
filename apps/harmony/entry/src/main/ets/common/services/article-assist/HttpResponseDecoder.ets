@@ -37,6 +37,9 @@ export function stringifyHttpResult(
   try {
     return JSON.stringify(result ?? '')
   } catch (_error) {
+    if (typeof result === 'object' && result !== null) {
+      return ''
+    }
     return String(result ?? '')
   }
 }

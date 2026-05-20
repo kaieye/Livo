@@ -47,7 +47,7 @@ export struct AIAssistantSettingsPanel {
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State saveHint: string = 'AI 助手设置将保存到本地'
   @State providerSelection: string = 'deepseek'
-  @State modelSelection: string = 'deepseek-chat'
+  @State modelSelection: string = 'deepseek-v4-flash'
   @State baseUrlDraft: string = ''
   @State apiKeyDraft: string = ''
   @State isTesting: boolean = false

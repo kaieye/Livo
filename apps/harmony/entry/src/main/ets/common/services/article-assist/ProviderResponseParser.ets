@@ -75,6 +75,13 @@ interface ProviderDeltaChunk {
   choices?: ChatChoiceResponse[]
 }
 
+function safeTrim(value: Object | string | number | boolean | null | undefined): string {
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  return ''
+}
+
 export function extractResponseContent(
   parsed: ChatCompletionResponse,
   allowReasoningFallback: boolean = true,
@@ -86,17 +93,17 @@ export function extractResponseContent(
     }
   }
 
-  const reply = (parsed.reply || '').trim()
+  const reply = typeof parsed.reply === 'string' ? parsed.reply.trim() : ''
   if (reply) {
     return reply
   }
 
-  const rootMessage = (parsed.message || '').trim()
+  const rootMessage = typeof parsed.message === 'string' ? parsed.message.trim() : ''
   if (rootMessage) {
     return rootMessage
   }
 
-  const outputText = (parsed.output_text || '').trim()
+  const outputText = safeTrim(parsed.output_text)
   if (outputText) {
     return outputText
   }
@@ -126,10 +133,10 @@ export function extractAnthropicResponseContent(
     if (!block) {
       return
     }
-    if (block.type === 'text' && (block.text || '').trim()) {
-      fragments.push((block.text || '').trim())
-    } else if (includeThinking && block.type === 'thinking' && (block.thinking || '').trim()) {
-      fragments.push((block.thinking || '').trim())
+    if (block.type === 'text' && safeTrim(block.text)) {
+      fragments.push(safeTrim(block.text))
+    } else if (includeThinking && block.type === 'thinking' && safeTrim(block.thinking)) {
+      fragments.push(safeTrim(block.thinking))
     }
   })
   return fragments.join('\n').trim()
@@ -142,7 +149,7 @@ export function extractSoftProviderError(parsed: ChatCompletionResponse): string
   }
   const statusCode = parsed.base_resp?.status_code || 0
   if (statusCode && statusCode !== 0) {
-    const statusMessage = (parsed.base_resp?.status_msg || '').trim()
+    const statusMessage = safeTrim(parsed.base_resp?.status_msg)
     return statusMessage ? `${statusCode} ${statusMessage}` : `${statusCode}`
   }
   return ''
@@ -160,15 +167,15 @@ export function extractErrorDetailFromParsed(parsed: ChatCompletionResponse | un
   if (!parsed) {
     return ''
   }
-  const statusMessage = (parsed.base_resp?.status_msg || '').trim()
+  const statusMessage = safeTrim(parsed.base_resp?.status_msg)
   if (statusMessage) {
     return statusMessage
   }
-  const message = (parsed.message || '').trim()
+  const message = safeTrim(parsed.message)
   if (message) {
     return message
   }
-  return (parsed.error?.message || '').trim()
+  return safeTrim(parsed.error?.message)
 }
 
 export function stripThinkBlocks(text: string): string {
@@ -214,12 +221,12 @@ export function parseProviderResponseLoose(raw: string): ChatCompletionResponse 
 }
 
 function extractFromChoice(choice: ChatChoiceResponse, allowReasoningFallback: boolean): string {
-  const deltaContent = (choice.delta?.content || '').trim()
+  const deltaContent = safeTrim(choice.delta?.content)
   if (deltaContent) {
     return deltaContent
   }
 
-  const choiceText = (choice.text || '').trim()
+  const choiceText = safeTrim(choice.text)
   if (choiceText) {
     return choiceText
   }
@@ -235,7 +242,7 @@ function extractFromChoice(choice: ChatChoiceResponse, allowReasoningFallback: b
   }
 
   if (messageContent && !Array.isArray(messageContent)) {
-    const singlePartText = ((messageContent as ChatContentPart).text || '').trim()
+    const singlePartText = safeTrim((messageContent as ChatContentPart).text)
     if (singlePartText) {
       return singlePartText
     }
@@ -247,7 +254,7 @@ function extractFromChoice(choice: ChatChoiceResponse, allowReasoningFallback: b
   }
 
   if (allowReasoningFallback) {
-    return (message.reasoning_content || '').trim()
+    return safeTrim(message.reasoning_content)
   }
   return ''
 }
@@ -259,11 +266,11 @@ function parseTextFromContentArray(
     return ''
   }
   if (!Array.isArray(content)) {
-    return (content.text || '').trim()
+    return safeTrim(content.text)
   }
   const fragments: string[] = []
   content.forEach((item: ChatContentPart) => {
-    const text = (item?.text || '').trim()
+    const text = safeTrim(item?.text)
     if (text) {
       fragments.push(text)
     }

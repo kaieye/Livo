@@ -96,7 +96,7 @@ export struct AIChatPanel {
       const assistMsgId = (Date.now() + 1).toString()
       const assistMsg: ChatMessage = {
         role: 'assistant',
-        content: assistantText,
+        content: typeof assistantText === 'string' ? assistantText : String(assistantText),
         id: assistMsgId
       }
       this.messages.push(assistMsg)
@@ -135,17 +135,50 @@ export struct AIChatPanel {
 
   private chatTitleMenus(): HdsNavigationMenuContentOptions {
     return {
-      value: [{
-        content: {
-          label: 'AI助手设置',
-          icon: $r('sys.symbol.gearshape'),
-          isEnabled: true,
-          action: () => {
-            this.showAISettings = true
+      value: [
+        {
+          content: {
+            label: '新对话',
+            icon: $r('sys.symbol.plus'),
+            isEnabled: true,
+            action: () => {
+              this.messages = []
+            },
           },
         },
-      }],
+        {
+          content: {
+            label: '清空对话',
+            icon: $r('sys.symbol.arrow_counterclockwise'),
+            isEnabled: true,
+            action: () => {
+              this.messages = []
+            },
+          },
+        },
+        {
+          content: {
+            label: 'AI助手设置',
+            icon: $r('sys.symbol.gearshape'),
+            isEnabled: true,
+            action: () => {
+              this.showAISettings = true
+            },
+          },
+        },
+      ],
     }
+  }
+
+  private safeDisplayText(value: string): string {
+    if (typeof value !== 'string') {
+      return ''
+    }
+    const lower = value.toLowerCase()
+    if (lower.includes('[object object]')) {
+      return '...'
+    }
+    return value
   }
 
   @Builder
@@ -189,7 +222,7 @@ export struct AIChatPanel {
                   .margin({ bottom: 8 })
 
                 // Sub-intro
-                Text("I'm here to help you with your reading needs. How can I assist you today?")
+                Text('您好，有什么可以帮您的？')
                   .fontSize(15)
                   .fontColor(this.theme.textSecondary)
                   .textAlign(TextAlign.Center)
@@ -203,7 +236,7 @@ export struct AIChatPanel {
                       .fontSize(14)
                       .fontColor(['#7A5AF8'])
                       .margin({ right: 8 })
-                    Text('总结我今天的时间线文章')
+                    Text('帮我写一段代码')
                       .fontSize(14)
                       .fontColor(this.theme.textPrimary)
                   }
@@ -213,7 +246,7 @@ export struct AIChatPanel {
                   .borderRadius(10)
                   .border({ width: 1, color: this.theme.divider })
                   .onClick(() => {
-                    this.handleSuggestionClick('请帮我总结并提炼今天时间线里的核心文章与关键新闻。')
+                    this.handleSuggestionClick('请帮我写一段代码')
                   })
 
                   Row() {
@@ -221,7 +254,7 @@ export struct AIChatPanel {
                       .fontSize(14)
                       .fontColor(['#7A5AF8'])
                       .margin({ right: 8 })
-                    Text('我订阅源里最热门的探讨话题是什么？')
+                    Text('解释一个概念')
                       .fontSize(14)
                       .fontColor(this.theme.textPrimary)
                   }
@@ -231,7 +264,7 @@ export struct AIChatPanel {
                   .borderRadius(10)
                   .border({ width: 1, color: this.theme.divider })
                   .onClick(() => {
-                    this.handleSuggestionClick('分析当前文章列表，总结出最热门的探讨主题或趋势是什么？')
+                    this.handleSuggestionClick('请帮我解释一个概念')
                   })
                 }
                 .width('100%')
@@ -257,7 +290,7 @@ export struct AIChatPanel {
                       Row() {
                         Blank()
                         Row() {
-                          Text(item.content)
+                          Text(this.safeDisplayText(item.content))
                             .fontSize(15)
                             .fontColor('#FFFFFF')
                             .lineHeight(20)
@@ -266,9 +299,20 @@ export struct AIChatPanel {
                         .backgroundColor('#7A5AF8')
                         .borderRadius(16)
                         .constraintSize({ maxWidth: '80%' })
+
+                        Image($r('app.media.ri_ai'))
+                          .width(32)
+                          .height(32)
+                          .objectFit(ImageFit.Contain)
+                          .fillColor('#7A5AF8')
+                          .borderRadius(16)
+                          .backgroundColor(this.theme.surface)
+                          .padding(4)
+                          .margin({ left: 10 })
                       }
                       .width('100%')
                       .margin({ bottom: 14 })
+                      .alignItems(VerticalAlign.Top)
                     } else {
                       Row() {
                         Image($r('app.media.ri_ai'))
@@ -282,16 +326,16 @@ export struct AIChatPanel {
                           .margin({ right: 10 })
 
                         Column() {
-                          Text(item.role === 'system' ? 'System Error' : 'Livo AI')
+                          Text(item.role === 'system' ? '系统错误' : 'Livo AI')
                             .fontSize(11)
                             .fontColor(this.theme.textMuted)
                             .fontWeight(FontWeight.Medium)
                             .margin({ bottom: 4 })
 
                           Row() {
-                            Text(item.id === this.streamingMessageId && this.streamingContent
+                            Text(this.safeDisplayText(item.id === this.streamingMessageId && this.streamingContent
                               ? this.streamingContent
-                              : item.content)
+                              : item.content))
                               .fontSize(15)
                               .fontColor(item.role === 'system' ? '#DC2626' : this.theme.textPrimary)
                               .lineHeight(20)
@@ -352,6 +396,7 @@ export struct AIChatPanel {
                 }
               }
               .width('100%')
+              .padding({ left: 16, right: 16 })
               .constraintSize({ minHeight: '100%' })
             }
             .width('100%')
@@ -369,7 +414,7 @@ export struct AIChatPanel {
             Row() {
               TextArea({
                 text: this.inputContent,
-                placeholder: 'Ask anything about this timeline...',
+                placeholder: '输入您想了解的内容...',
                 controller: this.inputController
               })
                 .layoutWeight(1)
@@ -442,7 +487,7 @@ export struct AIChatPanel {
                   .fontColor(['#7A5AF8'])
                   .margin({ right: 4 })
 
-                Text('Smart')
+                Text('智能')
                   .fontSize(12)
                   .fontColor(this.theme.textPrimary)
 

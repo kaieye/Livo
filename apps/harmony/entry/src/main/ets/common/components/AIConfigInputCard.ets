@@ -23,7 +23,7 @@ import {
 export struct AIConfigInputCard {
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop providerSelection: string = 'deepseek'
-  @Prop modelSelection: string = 'deepseek-chat'
+  @Prop modelSelection: string = 'deepseek-v4-flash'
   @Prop baseUrlDraft: string = ''
   @Prop apiKeyDraft: string = ''
   @Prop aiConfig: AIAssistantSettings = {} as AIAssistantSettings

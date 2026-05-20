@@ -593,7 +593,7 @@ struct Index {
       if (this.showAIChat) {
         AIChatPanel({
           theme: this.theme,
-          context: this.getTimelineContext(),
+          context: '',
           onClose: () => {
             this.showAIChat = false
           }

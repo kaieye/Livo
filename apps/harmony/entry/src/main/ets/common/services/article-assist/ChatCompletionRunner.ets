@@ -64,7 +64,7 @@ export async function runChatCompletion(
     apiKey,
     model,
     systemPrompt: resolveSystemPrompt(aiSettings, context),
-    userContent: `${prompt}\n\n${context}`,
+    userContent: prompt,
     maxTokens,
   }
 
@@ -80,8 +80,10 @@ export async function runChatCompletion(
         readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
         header: headers,
         extraData: requestBody,
+        expectDataType: 0,
       })
       const raw = stringifyHttpResult(response.result)
+      console.error('[ChatCompletion] raw type:', typeof response.result, 'raw head:', raw.slice(0, 200))
 
       if (response.responseCode !== 200) {
         if (response.responseCode === RATE_LIMITED_RESPONSE_CODE && attempt < MAX_RETRY_ATTEMPTS - 1) {
@@ -96,6 +98,11 @@ export async function runChatCompletion(
 
       const responseContent = parseSuccessResponse(raw, format, aiSettings)
       let content = sanitizeModelOutput(responseContent)
+      console.error('[ChatCompletion] parsedContent:', typeof responseContent, 'sanitized:', content.slice(0, 200))
+      if (typeof content !== 'string' || content.toLowerCase().includes('[object object]')) {
+        console.error('[ChatCompletion] BLOCKED [object Object] content:', content)
+        content = ''
+      }
       if (!content && shouldRetryAsMiniMaxText(aiSettings, format)) {
         content = await runMiniMaxTextFallback(request, requestContext, headers)
       }
@@ -153,6 +160,7 @@ async function runMiniMaxTextFallback(
       readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
       header: headers,
       extraData: buildRequestBody(fallbackContext),
+      expectDataType: 0,
     })
     if (fallbackResponse.responseCode !== 200) {
       return ''

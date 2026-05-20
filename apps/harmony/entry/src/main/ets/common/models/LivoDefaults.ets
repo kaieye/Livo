@@ -1,7 +1,7 @@
 import { AIAssistantSettings, AIProviderOptionMap, HarmonySettings } from './LivoTypes'
 
 export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE: string =
-  'You are Livo AI assistant. Answer in concise Chinese. Context: {{context}}. Persona: {{persona}}.'
+  'You are Livo AI, a helpful assistant. Answer in concise Chinese.'
 
 export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
   minimax: {
@@ -12,7 +12,7 @@ export const AI_PROVIDER_OPTIONS: AIProviderOptionMap = {
   deepseek: {
     label: 'DeepSeek',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
   },
   openai: {
     label: 'OpenAI',
@@ -40,7 +40,7 @@ export const DEFAULT_AI_ASSISTANT_SETTINGS: AIAssistantSettings = {
   provider: 'deepseek',
   apiKeys: {},
   baseUrl: '',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-flash',
   enableSystemPrompt: false,
   systemPromptTemplate: DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
   chatPersonaPrompt: '',
