@@ -18,7 +18,7 @@ const AUDIO_MINI_BAR_CONTROL_GAP: number = 10
 const AUDIO_MINI_BAR_TEXT_GAP: number = 4
 const AUDIO_MINI_BAR_TITLE_HEIGHT: number = 16
 const AUDIO_MINI_BAR_PROGRESS_HEIGHT: number = 14
-const AUDIO_MINI_BAR_SPEED_BUTTON_WIDTH: number = 54
+const AUDIO_MINI_BAR_SPEED_BUTTON_WIDTH: number = 42
 const AUDIO_MINI_BAR_SMALL_WIDTH: number = 330
 const AUDIO_MINI_BAR_MEDIUM_WIDTH: number = 360
 const AUDIO_MINI_BAR_LARGE_WIDTH: number = 390
@@ -115,7 +115,7 @@ export struct AudioMiniBar {
             step: 1000,
           })
             .layoutWeight(1)
-            .blockSize({ width: 10, height: 10 })
+            .blockSize({ width: 5, height: 5 })
             .onChange((nextValue: number) => {
               this.audioService.seekTo(Math.floor(nextValue))
             })
@@ -133,13 +133,13 @@ export struct AudioMiniBar {
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Start)
 
-      Row({ space: 4 }) {
+      Row({ space: 2 }) {
         Row() {
           SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
             .fontSize(22)
             .fontColor([this.theme.textPrimary])
         }
-        .width(32)
+        .width(28)
         .height(32)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
@@ -155,8 +155,6 @@ export struct AudioMiniBar {
         .height(28)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
-        .borderRadius(14)
-        .border({ width: 0.6, color: this.theme.divider })
         .onClick(() => this.cycleSpeed())
 
         Row() {
@@ -164,12 +162,13 @@ export struct AudioMiniBar {
             .fontSize(16)
             .fontColor([this.theme.textSecondary])
         }
-        .width(28)
+        .width(24)
         .height(28)
         .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
         .onClick(() => this.handleClose())
       }
+      .margin({ top: -5 })
     }
     .width('100%')
     .height(AUDIO_MINI_BAR_HEIGHT)
