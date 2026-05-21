@@ -1,6 +1,7 @@
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
+import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import { TweetEntryPresentation, TweetQuotedPresentation } from '../utils/social/TweetEntryPresentation'
 import { AvatarTile } from './AvatarTile'
 import { QuotedTweetRenderer } from './QuotedTweetRenderer'
@@ -235,7 +236,7 @@ export struct TweetEntryCard {
     if (this.flatMode) {
       return { left: 0, right: 0, top: 12, bottom: 12 }
     }
-    return { left: 14, right: 14, top: 12, bottom: 10 }
+    return { left: 14, right: 14, top: 10, bottom: 10 }
   }
 
   private cardBackgroundColor(): string {
@@ -247,7 +248,7 @@ export struct TweetEntryCard {
   }
 
   private cardBorderRadius(): number {
-    return this.flatMode ? 0 : 14
+    return this.flatMode ? 0 : CARD_RADIUS_MD
   }
 
   @Builder

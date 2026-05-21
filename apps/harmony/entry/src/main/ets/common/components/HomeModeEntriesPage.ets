@@ -165,7 +165,7 @@ export struct HomeModeEntriesPage {
   }
 
   private articleListItemBottomGap(entry: EntryCardModel, index: number): number {
-    if (this.mode !== 'articles' || index >= this.dataSource.totalCount() - 1 || this.shouldRenderTweetCard(entry)) {
+    if (this.mode !== 'articles' || index >= this.dataSource.totalCount() - 1) {
       return 0
     }
     return HOME_MODE_CONTENT_GAP
@@ -306,10 +306,8 @@ export struct HomeModeEntriesPage {
                 presentation: this.callbacks.getTweetPresentation(entry),
                 theme: this.theme,
                 isUnread: !entry.isRead,
-                // 推文在文章栏目里也完全对齐社交流的扁平列表样式，
-                // 避免额外卡片装饰带来的重绘与布局开销。
-                flatMode: true,
-                showBottomDivider: index < this.dataSource.totalCount() - 1,
+                flatMode: this.mode === 'social',
+                showBottomDivider: this.mode === 'social' && index < this.dataSource.totalCount() - 1,
                 highlightQuery: '',
                 collapsedTextLines: 7,
                 enableEnterTransition: false,

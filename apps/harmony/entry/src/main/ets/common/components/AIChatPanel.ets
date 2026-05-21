@@ -290,7 +290,7 @@ export struct AIChatPanel {
                       .fontSize(14)
                       .fontColor(['#7A5AF8'])
                       .margin({ right: 8 })
-                    Text('帮我写一段代码')
+                    Text('今天有哪些热点')
                       .fontSize(14)
                       .fontColor(this.theme.textPrimary)
                   }
@@ -300,7 +300,7 @@ export struct AIChatPanel {
                   .borderRadius(10)
                   .border({ width: 1, color: this.theme.divider })
                   .onClick(() => {
-                    this.handleSuggestionClick('请帮我写一段代码')
+                    this.handleSuggestionClick('今天有哪些热点')
                   })
 
                   Row() {
@@ -308,7 +308,7 @@ export struct AIChatPanel {
                       .fontSize(14)
                       .fontColor(['#7A5AF8'])
                       .margin({ right: 8 })
-                    Text('解释一个概念')
+                    Text('有哪些AI新事件')
                       .fontSize(14)
                       .fontColor(this.theme.textPrimary)
                   }
@@ -318,7 +318,7 @@ export struct AIChatPanel {
                   .borderRadius(10)
                   .border({ width: 1, color: this.theme.divider })
                   .onClick(() => {
-                    this.handleSuggestionClick('请帮我解释一个概念')
+                    this.handleSuggestionClick('有哪些AI新事件')
                   })
                 }
                 .width('100%')

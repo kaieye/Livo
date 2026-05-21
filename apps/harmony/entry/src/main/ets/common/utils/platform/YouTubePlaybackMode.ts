@@ -3,5 +3,5 @@ export function shouldOpenYouTubeExternallyOnFallback(): boolean {
 }
 
 export function shouldUseYouTubeWebFallback(): boolean {
-  return false
+  return true
 }

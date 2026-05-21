@@ -301,6 +301,7 @@ export struct ContentBlockItemBuilder {
       .aspectRatio(this.mediaAspectRatio())
       .constraintSize({ maxHeight: 640 })
       .borderRadius(18)
+      .backgroundColor(this.theme.elevated)
       .javaScriptAccess(true)
       .domStorageAccess(true)
       .mixedMode(MixedMode.All)
@@ -308,19 +309,18 @@ export struct ContentBlockItemBuilder {
         try {
           webview.WebCookieManager.putAcceptCookieEnabled(true)
           webview.WebCookieManager.putAcceptThirdPartyCookieEnabled(true)
-          this.videoWebController.setCustomUserAgent(WEB_VIDEO_USER_AGENT)
         } catch (_error) {
         }
       })
       .onPageBegin((_event: OnPageBeginEvent) => {
-        this.onActionHint('正在加载 YouTube 播放器...')
+        this.onActionHint('正在加载视频播放器...')
       })
       .onPageEnd((_event: OnPageEndEvent) => {
         this.onActionHint('')
       })
       .onErrorReceive((event: OnErrorReceiveEvent) => {
         if (event.request?.isMainFrame()) {
-          this.onActionHint('YouTube 播放器加载失败，请稍后重试')
+          this.onActionHint('视频播放器加载失败，请稍后重试')
         }
       })
   }
