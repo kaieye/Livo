@@ -85,6 +85,85 @@ export struct ArticleNonSocialContent {
     }
   }
 
+  private hasLeadingMediaBlocks(): boolean {
+    if (this.isPictureDetail) {
+      return false
+    }
+    const blocks = this.textBlocks
+    for (let i = 0; i < blocks.length; i += 1) {
+      const type = blocks[i].type
+      if (type === 'paragraph') {
+        return false
+      }
+      if (type === 'video' || type === 'image' || type === 'audio') {
+        return true
+      }
+    }
+    return false
+  }
+
+  @Builder
+  private LeadingMediaBlocks() {
+    ForEach(this.textBlocks, (block: ArticleContentBlock, index: number) => {
+      if (block.type !== 'paragraph' && this.renderBlockCheck(block, index)) {
+        ContentBlockItemBuilder({
+          block: block,
+          index: index,
+          theme: this.theme,
+          contentBlocks: this.entry.contentBlocks,
+          mediaAspectRatios: this.mediaAspectRatios,
+          activeVideoBlockId: this.activeVideoBlockId,
+          activeVideoPlayableUrl: this.activeVideoPlayableUrl,
+          activeVideoFallbackUrl: this.activeVideoFallbackUrl,
+          isResolvingActiveVideo: this.isResolvingActiveVideo,
+          inlineVideoPreparingBlockId: this.inlineVideoPreparingBlockId,
+          activeMovingPhoto: this.activeMovingPhoto,
+          shouldUseInlineMovingPhoto: this.shouldUseInlineMovingPhotoFor(block),
+          nativeVideoController: this.nativeVideoController,
+          movingPhotoController: this.movingPhotoController,
+          videoWebController: this.videoWebController,
+          onMediaAspectRatio: (idx: number, w: number, h: number) => this.onMediaAspectRatio(idx, w, h),
+          onActionHint: (hint: string) => this.onActionHint(hint),
+          onClearMovingPhoto: () => this.onClearMovingPhoto(),
+          onClearInlineVideoPreparing: (blockId: string) => this.onClearInlineVideoPreparing(blockId),
+          onOpenVideo: (b: ArticleContentBlock) => this.onOpenVideo(b),
+          onOpenGallery: (url: string) => this.onOpenGallery(url),
+        })
+      }
+    }, (block: ArticleContentBlock) => block.id)
+  }
+
+  @Builder
+  private ParagraphBlocks() {
+    ForEach(this.textBlocks, (block: ArticleContentBlock, index: number) => {
+      if (block.type === 'paragraph' && this.renderBlockCheck(block, index)) {
+        ContentBlockItemBuilder({
+          block: block,
+          index: index,
+          theme: this.theme,
+          contentBlocks: this.entry.contentBlocks,
+          mediaAspectRatios: this.mediaAspectRatios,
+          activeVideoBlockId: this.activeVideoBlockId,
+          activeVideoPlayableUrl: this.activeVideoPlayableUrl,
+          activeVideoFallbackUrl: this.activeVideoFallbackUrl,
+          isResolvingActiveVideo: this.isResolvingActiveVideo,
+          inlineVideoPreparingBlockId: this.inlineVideoPreparingBlockId,
+          activeMovingPhoto: this.activeMovingPhoto,
+          shouldUseInlineMovingPhoto: this.shouldUseInlineMovingPhotoFor(block),
+          nativeVideoController: this.nativeVideoController,
+          movingPhotoController: this.movingPhotoController,
+          videoWebController: this.videoWebController,
+          onMediaAspectRatio: (idx: number, w: number, h: number) => this.onMediaAspectRatio(idx, w, h),
+          onActionHint: (hint: string) => this.onActionHint(hint),
+          onClearMovingPhoto: () => this.onClearMovingPhoto(),
+          onClearInlineVideoPreparing: (blockId: string) => this.onClearInlineVideoPreparing(blockId),
+          onOpenVideo: (b: ArticleContentBlock) => this.onOpenVideo(b),
+          onOpenGallery: (url: string) => this.onOpenGallery(url),
+        })
+      }
+    }, (block: ArticleContentBlock) => block.id)
+  }
+
   build() {
     Column({ space: 20 }) {
       if (this.isPictureDetail && (this.entry.title || '').trim()) {
@@ -104,16 +183,31 @@ export struct ArticleNonSocialContent {
         })
       }
 
-      if (this.shouldRenderSummary) {
-        Text(this.entry.summary)
-          .fontSize(16)
-          .lineHeight(27)
-          .fontColor(this.theme.textSecondary)
-          .fontWeight(FontWeight.Medium)
-          .width('100%')
-      }
+      if (this.hasLeadingMediaBlocks()) {
+        this.LeadingMediaBlocks()
 
-      this.ContentBlocksList()
+        if (this.shouldRenderSummary) {
+          Text(this.entry.summary)
+            .fontSize(16)
+            .lineHeight(27)
+            .fontColor(this.theme.textSecondary)
+            .fontWeight(FontWeight.Medium)
+            .width('100%')
+        }
+
+        this.ParagraphBlocks()
+      } else {
+        if (this.shouldRenderSummary) {
+          Text(this.entry.summary)
+            .fontSize(16)
+            .lineHeight(27)
+            .fontColor(this.theme.textSecondary)
+            .fontWeight(FontWeight.Medium)
+            .width('100%')
+        }
+
+        this.ContentBlocksList()
+      }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)

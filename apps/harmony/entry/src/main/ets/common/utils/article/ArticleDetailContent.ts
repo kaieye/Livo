@@ -97,14 +97,32 @@ export function shouldRenderArticleSummary(
     return false
   }
 
-  const openingParagraphs = cleanArticleDetailText(
-    (entry?.contentParagraphs ?? []).slice(0, 3).join(' '),
-  )
+  const allParagraphs = (entry?.contentParagraphs ?? []).slice(0, 5)
+  const allParagraphsText = cleanArticleDetailText(allParagraphs.join(' '))
   if (
-    openingParagraphs &&
-    (openingParagraphs.includes(summary) || summary.includes(openingParagraphs))
+    allParagraphsText &&
+    (allParagraphsText.includes(summary) || summary.includes(allParagraphsText))
   ) {
     return false
+  }
+
+  const contentBlockParagraphs = (entry?.contentBlocks ?? [])
+    .filter(
+      (block: ArticleDetailContentBlockLike) =>
+        block.type === 'paragraph' && !!block.text,
+    )
+    .map((block: ArticleDetailContentBlockLike) => block.text ?? '')
+  if (contentBlockParagraphs.length > 0) {
+    const allBlockParagraphsText = cleanArticleDetailText(
+      contentBlockParagraphs.slice(0, 5).join(' '),
+    )
+    if (
+      allBlockParagraphsText &&
+      (allBlockParagraphsText.includes(summary) ||
+        summary.includes(allBlockParagraphsText))
+    ) {
+      return false
+    }
   }
 
   return true
@@ -141,8 +159,22 @@ export function shouldRenderArticleParagraphBlock(
     return true
   }
 
+  const paragraphIndex = (() => {
+    let count = 0
+    const blocks = entry?.contentBlocks ?? []
+    for (let i = 0; i < blocks.length; i += 1) {
+      if (blocks[i].type === 'paragraph' && blocks[i].text) {
+        if (blocks[i].text === block.text && blocks[i].type === block.type) {
+          return count
+        }
+        count += 1
+      }
+    }
+    return count
+  })()
+
   if (
-    index <= 2 &&
+    paragraphIndex <= 2 &&
     (normalizedParagraph === normalizedSummary ||
       normalizedParagraph.includes(normalizedSummary) ||
       normalizedSummary.includes(normalizedParagraph))
