@@ -21,6 +21,7 @@ import {
 export interface IndexHomeRailOwner {
   mode: SubscriptionMode
   currentHomeModeScrollOffset: number
+  homeModeRailCollapseReady: boolean
   homeModeRailDismissedByScroll: boolean
   homeModeRailDismissProgress: number
   homeModeRailExpandedOverride: boolean
@@ -69,6 +70,20 @@ export class IndexHomeRailCoordinator {
     }
   }
 
+  // 折叠"准备态"由 firstCardTopBoundary <= modeRailTopBoundary 决定。这是个布尔
+  // 阈值,滚动期间只在跨越阈值的瞬间翻转,因此独立成 @State,而连续变化的 offset
+  // 本身保持为普通字段,不再参与 ArkUI 反应链。
+  private computeCollapseReady(offset: number): boolean {
+    return HOME_MODE_SCENE_TOP_INSET - offset <= HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
+  }
+
+  private updateCollapseReadySnapshot(offset: number): void {
+    const next = this.computeCollapseReady(offset)
+    if (next !== this.owner.homeModeRailCollapseReady) {
+      this.owner.homeModeRailCollapseReady = next
+    }
+  }
+
   syncHomeModeRailState(mode: SubscriptionMode = this.owner.mode): void {
     const previousOffset = this.owner.currentHomeModeScrollOffset
     const nextOffset = this.readHomeModeScrollOffset(mode)
@@ -93,6 +108,7 @@ export class IndexHomeRailCoordinator {
     if (!offsetEffectivelyUnchanged) {
       this.owner.currentHomeModeScrollOffset = nextOffset
       this.owner.updateHeaderBlurProgress(nextOffset)
+      this.updateCollapseReadySnapshot(nextOffset)
     }
     this.owner.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
   }
@@ -103,6 +119,7 @@ export class IndexHomeRailCoordinator {
     this.owner.resetModeRailProgress()
     this.owner.currentHomeModeScrollOffset = this.owner.homeModeRailExpandedLockOffset
     this.owner.updateHeaderBlurProgress(this.owner.homeModeRailExpandedLockOffset)
+    this.updateCollapseReadySnapshot(this.owner.homeModeRailExpandedLockOffset)
   }
 
   primeHomeModeRailForRootActivation(): void {
@@ -111,6 +128,7 @@ export class IndexHomeRailCoordinator {
     this.owner.resetModeRailProgress()
     this.owner.currentHomeModeScrollOffset = 0
     this.owner.updateHeaderBlurProgress(0)
+    this.updateCollapseReadySnapshot(0)
   }
 
   homeFirstCardTopBoundary(): number {
@@ -122,7 +140,9 @@ export class IndexHomeRailCoordinator {
   }
 
   homeModeRailCollapseReady(): boolean {
-    return this.homeFirstCardTopBoundary() <= this.homeModeRailTopBoundary()
+    // 读 owner 的 @State 快照,而不是用 firstCardTopBoundary 重新计算;
+    // 让 build 路径只依赖布尔状态,不再依赖每帧变化的 offset。
+    return this.owner.homeModeRailCollapseReady
   }
 
   homeModeRailCollapseProgress(): number {

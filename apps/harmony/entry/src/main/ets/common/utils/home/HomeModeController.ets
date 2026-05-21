@@ -1,4 +1,4 @@
-import { SubscriptionMode, SUBSCRIPTION_MODES, MODE_SWIPE_TRIGGER_OFFSET, HOME_MODE_SCENE_TRANSITION_DURATION, HOME_MODE_DEBUG_ENABLED, HOME_MODE_DEBUG_PREFIX } from '../../components/HomeRootConfig'
+import { SubscriptionMode, SUBSCRIPTION_MODES, MODE_SWIPE_TRIGGER_OFFSET, HOME_MODE_SCENE_TRANSITION_DURATION, HOME_MODE_DEBUG_ENABLED, HOME_MODE_DEBUG_PREFIX, HOME_MODE_SCENE_TOP_INSET, HOME_MODE_CONTENT_TOP_SPACER_HEIGHT } from '../../components/HomeRootConfig'
 import { shouldAcceptModeSwitch } from '../ModeSwitchGuard'
 import { rememberVisitedMode } from './HomeModeVisitedCache'
 import { EntryCardModel } from '../../models/LivoModels'
@@ -13,6 +13,7 @@ export interface HomeModeState {
   homeModeRailExpandedLockOffset: number
   homeModeRailExpandedOverride: boolean
   currentHomeModeScrollOffset: number
+  homeModeRailCollapseReady: boolean
   homeModeRailDismissedByScroll: boolean
   homeModeRailDismissProgress: number
 }
@@ -58,6 +59,13 @@ export class HomeModeController {
     this.state.homeModeRailExpandedLockOffset = nextModeOffset
     this.state.homeModeRailExpandedOverride = true
     this.state.currentHomeModeScrollOffset = nextModeOffset
+    // 模式切换时 currentHomeModeScrollOffset 是普通字段不会触发反应,需要主动同步
+    // collapseReady 快照,让 build 路径能正确决定折叠/展开。
+    const nextCollapseReady =
+      HOME_MODE_SCENE_TOP_INSET - nextModeOffset <= HOME_MODE_CONTENT_TOP_SPACER_HEIGHT
+    if (this.state.homeModeRailCollapseReady !== nextCollapseReady) {
+      this.state.homeModeRailCollapseReady = nextCollapseReady
+    }
     this.state.homeModeRailDismissedByScroll = false
     this.state.homeModeRailDismissProgress = 0
     this.actions.updateHeaderBlurProgress(nextModeOffset)

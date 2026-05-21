@@ -106,7 +106,12 @@ struct Index {
   @State isModeTransitioning: boolean = false
   @State modeTransitionDirection: number = 1
   headerBlurProgress: number = 0
-  @State currentHomeModeScrollOffset: number = 0
+  // currentHomeModeScrollOffset 设计为普通字段:fling 期间每帧都会更新,如果挂成
+  // @State 会让 Index 整页 build 触达 Shell→TabBody→RootContent→ModeEntriesPage
+  // 的整条链。真正影响渲染的折叠态由 homeModeRailCollapseReady(@State) 表示,
+  // 它只在跨越阈值的瞬间翻转。
+  currentHomeModeScrollOffset: number = 0
+  @State homeModeRailCollapseReady: boolean = false
   @State homeModeRailDismissedByScroll: boolean = false
   @State homeModeRailDismissProgress: number = 0
   @State homeModeRailExpandedOverride: boolean = false
@@ -204,6 +209,54 @@ struct Index {
   // Index still holds every @State field (ArkUI reactivity), but the wiring,
   // bootstrap, reload, and precache logic lives in the session.
   readonly session: HomeFeedSession = new HomeFeedSession(this)
+  // homeRootContentCallbacks 必须只构造一次:Index.build() 每帧都会被滚动事件触发
+  // (即便已经收敛了大部分热点,模式栏折叠态翻转等仍会触发),如果每次都重新分配 17
+  // 个箭头函数会引起 GC 抖动,且让 Shell→IndexHomeRootContent 链路上的子组件
+  // 反复看到"callbacks 字段变了"。所有箭头捕获的 `this` 是稳定的 Index 实例。
+  private readonly homeRootContentCallbacks: IndexHomeRootContentCallbacks = {
+    onModeSwipe: (event: GestureEvent): void => { this.handleModeSwipe(event) },
+    getDataSource: (mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> => this.homeEntryDataSourceFor(mode),
+    isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
+    isModeLoadingMore: (_mode: SubscriptionMode): boolean => false,
+    getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
+    getSceneOpacity: (mode: SubscriptionMode): number => this.modeSceneOpacity(mode),
+    getSceneOffsetX: (mode: SubscriptionMode): number => this.modeSceneOffset(mode),
+    getSceneZIndex: (mode: SubscriptionMode): number => this.modeSceneZIndex(mode),
+    getSceneVisible: (mode: SubscriptionMode): Visibility => this.modeSceneVisible(mode),
+    getListSwapTranslateY: (mode: SubscriptionMode): number => this.modeListSwapTranslateY(mode),
+    getScroller: (mode: SubscriptionMode): Scroller => this.homeScrollerForMode(mode),
+    onWillScroll: (mode: SubscriptionMode, scrollDelta: number, scrollSource: ScrollSource): ScrollResult | void => {
+      this.markHomeUserScrollIntent(mode, scrollSource)
+      this.updateChromeFromGesture(mode, scrollDelta, scrollSource)
+      return undefined
+    },
+    onDidScroll: (mode: SubscriptionMode): void => {
+      this.syncHomeModeRailState(mode)
+      this.flushPendingLoadMoreForMode(mode)
+      this.enforceAtTopChromeState(this.readHomeModeScrollOffset(mode))
+    },
+    onStopDragging: (mode: SubscriptionMode): void => {
+      this.setHomeScrollInteracting(false, mode)
+      this.flushPendingLoadMoreForMode(mode)
+      this.scheduleHomeLoadMorePrefetch(160)
+    },
+    onEntryOpen: (entry: EntryCardModel): void => { this.openEntry(entry) },
+    onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {
+      this.handleHomeEntryAppear(mode, index, totalCount)
+    },
+    onListEndReach: (mode: SubscriptionMode, totalCount: number): void => {
+      this.handleHomeListEndReach(mode, totalCount)
+    },
+    getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
+    getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
+    getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
+    getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
+    onOpenTweetGallery: (imageUrls: string[], initialIndex: number): void => {
+      this.tweetGalleryUrls = imageUrls
+      this.tweetGalleryIndex = initialIndex
+      this.showTweetGallery = true
+    },
+  }
   // Accessors required by IndexPageLifecycleOwner (HomeFeedSessionOwner).
   get homeInlineSearchController(): HomeInlineSearchController { return this.session.homeInlineSearchController }
   get homeEntryDataManager(): HomeEntryDataManager { return this.session.homeEntryDataManager }
@@ -544,53 +597,6 @@ struct Index {
   clearAutoRefreshTimer(): void { this.session.homeRuntimeCoordinator.clearAutoRefreshTimer() }
   configureAutoRefreshTimer(): void { this.session.homeRuntimeCoordinator.configureAutoRefreshTimer() }
 
-  private indexHomeRootContentCallbacks(): IndexHomeRootContentCallbacks {
-    return {
-      onModeSwipe: (event: GestureEvent): void => { this.handleModeSwipe(event) },
-      getDataSource: (mode: SubscriptionMode): ArrayLazyDataSource<EntryCardModel> => this.homeEntryDataSourceFor(mode),
-      isModeLoading: (mode: SubscriptionMode): boolean => this.isModeLoading(mode),
-      isModeLoadingMore: (_mode: SubscriptionMode): boolean => false,
-      getEmptyStateTitle: (): string => this.homeEmptyStateTitle(),
-      getSceneOpacity: (mode: SubscriptionMode): number => this.modeSceneOpacity(mode),
-      getSceneOffsetX: (mode: SubscriptionMode): number => this.modeSceneOffset(mode),
-      getSceneZIndex: (mode: SubscriptionMode): number => this.modeSceneZIndex(mode),
-      getSceneVisible: (mode: SubscriptionMode): Visibility => this.modeSceneVisible(mode),
-      getListSwapTranslateY: (mode: SubscriptionMode): number => this.modeListSwapTranslateY(mode),
-      getScroller: (mode: SubscriptionMode): Scroller => this.homeScrollerForMode(mode),
-      onWillScroll: (mode: SubscriptionMode, scrollDelta: number, scrollSource: ScrollSource): ScrollResult | void => {
-        this.markHomeUserScrollIntent(mode, scrollSource)
-        this.updateChromeFromGesture(mode, scrollDelta, scrollSource)
-        return undefined
-      },
-      onDidScroll: (mode: SubscriptionMode): void => {
-        this.syncHomeModeRailState(mode)
-        this.flushPendingLoadMoreForMode(mode)
-        this.enforceAtTopChromeState(this.readHomeModeScrollOffset(mode))
-      },
-      onStopDragging: (mode: SubscriptionMode): void => {
-        this.setHomeScrollInteracting(false, mode)
-        this.flushPendingLoadMoreForMode(mode)
-        this.scheduleHomeLoadMorePrefetch(160)
-      },
-      onEntryOpen: (entry: EntryCardModel): void => { this.openEntry(entry) },
-      onItemAppear: (mode: SubscriptionMode, index: number, totalCount: number): void => {
-        this.handleHomeEntryAppear(mode, index, totalCount)
-      },
-      onListEndReach: (mode: SubscriptionMode, totalCount: number): void => {
-        this.handleHomeListEndReach(mode, totalCount)
-      },
-      getTweetPresentation: (entry: EntryCardModel): TweetEntryPresentation => this.presentTweetEntry(entry),
-      getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
-      getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
-      getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
-      onOpenTweetGallery: (imageUrls: string[], initialIndex: number): void => {
-        this.tweetGalleryUrls = imageUrls
-        this.tweetGalleryIndex = initialIndex
-        this.showTweetGallery = true
-      },
-    }
-  }
-
     private getTimelineContext(): string {
     const entries = this.visibleEntriesFor(this.mode);
     if (!entries || entries.length === 0) {
@@ -649,7 +655,7 @@ struct Index {
         isHomeRootTab: this.session.rootTabCoordinator.isHomeRootTab(),
         currentRootTitle: this.session.rootTabCoordinator.currentRootTitle(),
         bindScrollers: this.scrollerRegistry.currentRootBindScrollers(),
-        homeCallbacks: this.indexHomeRootContentCallbacks(),
+        homeCallbacks: this.homeRootContentCallbacks,
         rootTabSymbolPair: (tabId: HdsBottomTabId): RootTabSymbolPair => this.session.rootTabCoordinator.rootTabSymbolPair(tabId),
         onRootTabChange: (index: number) => this.session.rootTabCoordinator.handleRootTabChange(index),
         onRootTabBarClick: (index: number) => this.session.rootTabCoordinator.handleRootTabBarClick(index),

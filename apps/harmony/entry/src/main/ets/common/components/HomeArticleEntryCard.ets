@@ -7,31 +7,28 @@ import { isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
 
 @Component
 export struct HomeArticleEntryCard {
-  @Prop entry: EntryCardModel = {} as EntryCardModel
+  // entry 变更时重算预览图缓存。原实现是 articlePreviewImage() 在 build 中调用 3
+  // 次(Row.space、if、Image),每次都要做 8 字段 cacheKey 拼接 + 比对,在
+  // LazyForEach 复用时是热点。改为 @Watch 在 entry 变化的瞬间算一次,build 只读取
+  // @State,完全避开 build 中的字符串拼接。
+  @Watch('handleEntryChanged') @Prop entry: EntryCardModel = {} as EntryCardModel
   @Prop theme: ThemePalette = ThemeService.currentPalette()
   @Prop showUnreadDot: boolean = true
   @Prop highlightQuery: string = ''
   @Prop flatMode: boolean = false
-  private previewImageCacheKey: string = ''
-  private previewImageCacheValue: string = ''
+  @State private cachedPreviewImageUrl: string = ''
 
   onOpen: () => void = () => {}
 
-  private articlePreviewImage(): string {
-    const cacheKey = [
-      this.entry.id || '',
-      this.entry.feedId || '',
-      this.entry.articleUrl || '',
-      this.entry.imageUrl || '',
-      this.entry.feedImageUrl || '',
-      this.entry.mediaUrls ? this.entry.mediaUrls.join('|') : '',
-      this.entry.summary || '',
-      this.entry.title || '',
-    ].join('||')
-    if (cacheKey === this.previewImageCacheKey) {
-      return this.previewImageCacheValue
-    }
+  aboutToAppear(): void {
+    this.cachedPreviewImageUrl = this.computePreviewImage()
+  }
 
+  private handleEntryChanged(_propName: string): void {
+    this.cachedPreviewImageUrl = this.computePreviewImage()
+  }
+
+  private computePreviewImage(): string {
     const lightweightCandidates = [
       ...(this.entry.mediaUrls ?? []),
       this.entry.imageUrl || '',
@@ -39,9 +36,7 @@ export struct HomeArticleEntryCard {
     ].filter((url: string) => !!url.trim())
     if (isTweetLikeEntry(this.entry)) {
       const pictureMediaCandidates = selectPictureMediaUrls(lightweightCandidates)
-      this.previewImageCacheKey = cacheKey
-      this.previewImageCacheValue = pictureMediaCandidates[0] || lightweightCandidates[0] || ''
-      return this.previewImageCacheValue
+      return pictureMediaCandidates[0] || lightweightCandidates[0] || ''
     }
 
     const candidateUrls = [
@@ -52,15 +47,11 @@ export struct HomeArticleEntryCard {
 
     const pictureMediaCandidates = selectPictureMediaUrls(candidateUrls)
     if (pictureMediaCandidates.length > 0) {
-      this.previewImageCacheKey = cacheKey
-      this.previewImageCacheValue = pictureMediaCandidates[0]
-      return this.previewImageCacheValue
+      return pictureMediaCandidates[0]
     }
 
     const firstLikelyImage = candidateUrls.find((url: string) => this.isLikelyImageUrl(url))
-    this.previewImageCacheKey = cacheKey
-    this.previewImageCacheValue = firstLikelyImage || ''
-    return this.previewImageCacheValue
+    return firstLikelyImage || ''
   }
 
   private extractFirstImageUrlFromText(text: string): string {
@@ -119,7 +110,7 @@ export struct HomeArticleEntryCard {
 
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
-      Row({ space: this.articlePreviewImage() ? 10 : 0 }) {
+      Row({ space: this.cachedPreviewImageUrl ? 10 : 0 }) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {
             AvatarTile({
@@ -172,8 +163,8 @@ export struct HomeArticleEntryCard {
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
 
-        if (this.articlePreviewImage()) {
-          Image(this.articlePreviewImage())
+        if (this.cachedPreviewImageUrl) {
+          Image(this.cachedPreviewImageUrl)
             .width(72)
             .height(72)
             .borderRadius(8)

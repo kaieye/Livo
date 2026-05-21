@@ -49,9 +49,18 @@ export function homeEntryRenderBaseKey(entry: EntryCardModel): string {
   return `${id}|${feedId}|${articleUrl}|${title}|${publishedAt}`
 }
 
+// 文章/社交/图片列表的 LazyForEach 行级 key 生成器:滚动期间 ArkUI 会频繁调用
+// 该函数,过去把 baseKey 的 5 个字段全部拼起来导致单帧产生数百次字符串拼接,
+// 而且把 index 拼进 key,任何插入都会让全表认为 key 失效失去复用。现在只用
+// 稳定标识 + 已读状态,key 与 entry 的内容/位置解耦。
 export function homeEntryListRenderKey(entry: EntryCardModel, index: number): string {
   const readFlag = entry.isRead ? '1' : '0'
-  return `${homeEntryRenderBaseKey(entry)}|${readFlag}|${index}`
+  const id = entry.id
+  if (id) {
+    return `${id}|${readFlag}`
+  }
+  // entry.id 缺失时退化到 feedId+articleUrl 兜底,极端兜底再带 index 防同 key。
+  return `${entry.feedId}|${entry.articleUrl}|${readFlag}|${index}`
 }
 
 // 视频网格的 LazyForEach 行级 key 生成器：视频行只有 1-2 张卡片，
