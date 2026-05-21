@@ -5,26 +5,26 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\Chos1nz\\.ohos\\config\\default_harmony_4vo0Erpm0Qx8BL3otFSFUwAdCee9K0bNdYef3eHbgpA=.cer",
+          "certpath": "C:/Users/Chos1nz/.ohos/config/default_harmony_4vo0Erpm0Qx8BL3otFSFUwAdCee9K0bNdYef3eHbgpA=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BA3758D813B1EDF840769444F3BF3D723C6F1205DC885678583234D0CB5652FE9F1878218EF5420",
-          "profile": "C:\\Users\\Chos1nz\\.ohos\\config\\default_harmony_4vo0Erpm0Qx8BL3otFSFUwAdCee9K0bNdYef3eHbgpA=.p7b",
+          "keyPassword": "0000001B4E02F0A934DFC3EF3F3569F0A0292359E1EA5B8EE1611945C337A4B149C7B0F800C513622AB335",
+          "profile": "C:/Users/Chos1nz/.ohos/config/default_harmony_4vo0Erpm0Qx8BL3otFSFUwAdCee9K0bNdYef3eHbgpA=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\Chos1nz\\.ohos\\config\\default_harmony_4vo0Erpm0Qx8BL3otFSFUwAdCee9K0bNdYef3eHbgpA=.p12",
-          "storePassword": "0000001BB12DC3E410EACE5FB0F18E1AEEC470792ECF6C578CAA4A9695019C546A4145BC151CAA947482F8"
+          "storeFile": "C:/Users/Chos1nz/.ohos/config/default_harmony_4vo0Erpm0Qx8BL3otFSFUwAdCee9K0bNdYef3eHbgpA=.p12",
+          "storePassword": "0000001BBD65943C6E0F620649074815F158DB5A1EE87D131C3AF469E7A3A464393D8A2CF4D81A14852AC8"
         }
       },
       {
         "name": "release",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\Chos1nz\\Desktop\\Livo_release_file\\Livo-cert.cer",
+          "certpath": "C:/Users/Chos1nz/Desktop/Livo_release_file/Livo-cert.cer",
           "keyAlias": "Livo-Alias",
-          "keyPassword": "wuchenjun0916",
-          "profile": "C:\\Users\\Chos1nz\\Desktop\\Livo_release_file\\Livo-profileRelease.p7b",
+          "keyPassword": "0000001D1D22982D7376F62B2F3F732BCB67FA021B2AC67B2881F3F20B245C1B8A5A0EE705CD2B6F45F5D2DB9D",
+          "profile": "C:/Users/Chos1nz/Desktop/Livo_release_file/Livo-profileRelease.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\Chos1nz\\Desktop\\Livo_release_file\\Livo-1.0.0-release.p12",
-          "storePassword": "wuchenjun0916"
+          "storeFile": "C:/Users/Chos1nz/Desktop/Livo_release_file/Livo-1.0.0-release.p12",
+          "storePassword": "0000001DF79557783B78C3D2EF5A6318680E59270429FFFA152A71BE049ABF0615DF2A999E8D90955F87CB0AC8"
         }
       }
     ],
