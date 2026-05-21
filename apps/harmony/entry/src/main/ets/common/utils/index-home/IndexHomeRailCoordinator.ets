@@ -8,7 +8,6 @@ import {
   HOME_COLLAPSED_MODE_RAIL_TOP_PADDING,
   HOME_MODE_CONTENT_TOP_SPACER_HEIGHT,
   HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL,
-  HOME_MODE_RAIL_COLLAPSE_OFFSET,
   HOME_MODE_SCENE_TOP_INSET,
   HomeModeScrollOffsetMap,
   SubscriptionMode,
@@ -36,7 +35,6 @@ export interface IndexHomeRailOwner {
 export class IndexHomeRailCoordinator {
   private readonly owner: IndexHomeRailOwner
   private readonly homeModeScrollOffsets: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
-  private lastRailShownAt: number = 0
 
   constructor(owner: IndexHomeRailOwner) {
     this.owner = owner
@@ -86,35 +84,10 @@ export class IndexHomeRailCoordinator {
     // 因为它内部会按 offset 增量去重。
     const offsetEffectivelyUnchanged = !isReturningTowardsTop && !isScrollingDeeper
 
-    if (this.owner.homeModeRailExpandedOverride) {
-      if (!isScrollingDeeper) {
-        if (!offsetEffectivelyUnchanged) {
-          this.owner.currentHomeModeScrollOffset = nextOffset
-          this.owner.updateHeaderBlurProgress(nextOffset)
-        }
-        this.owner.maybeTriggerLoadMoreByScrollProgress(mode, nextOffset)
-        return
-      }
-
+    // 模式切换后的"强制展开"覆盖态：用户再次向下滚动时解除
+    if (this.owner.homeModeRailExpandedOverride && isScrollingDeeper) {
       this.owner.homeModeRailExpandedOverride = false
       this.owner.homeModeRailExpandedLockOffset = -1
-    }
-
-    if (isReturningTowardsTop) {
-      if (this.owner.homeModeRailDismissedByScroll) {
-        this.owner.animateModeRailDismiss(true)
-        this.lastRailShownAt = Date.now()
-      }
-    } else if (isScrollingDeeper && nextOffset >= HOME_MODE_RAIL_COLLAPSE_OFFSET) {
-      if (!this.owner.homeModeRailDismissedByScroll) {
-        const hysteresisElapsed = Date.now() - this.lastRailShownAt
-        // 迟滞保护：rail 刚显示后 200ms 内，不允许因微小抖动立即重新隐藏
-        if (hysteresisElapsed < 200) {
-          // 仍然更新偏移量，仅跳过隐藏动画
-        } else {
-          this.owner.animateModeRailDismiss(false)
-        }
-      }
     }
 
     if (!offsetEffectivelyUnchanged) {

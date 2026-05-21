@@ -1,5 +1,5 @@
 import { ArrayLazyDataSource } from '../common/data/ArrayLazyDataSource'
-import { HdsTabsController } from '@kit.UIDesignKit'
+import { HdsBarStyle, HdsTabsController } from '@kit.UIDesignKit'
 import { RootTabId } from '../common/navigation/AppRouter'
 import {
   DEFAULT_HARMONY_SETTINGS,
@@ -99,7 +99,7 @@ struct Index {
   @State refreshCompletedCount: number = 0
   @State refreshTotalCount: number = 0
   @State displayRefreshPercent: number = 0
-  @State mode: SubscriptionMode = 'articles'
+  @State @Watch('handleModeChangedForChrome') mode: SubscriptionMode = 'articles'
   @State renderedMode: SubscriptionMode = 'articles'
   @State previousMode: SubscriptionMode = 'articles'
   @State visitedModes: SubscriptionMode[] = ['articles']
@@ -143,6 +143,13 @@ struct Index {
   // re-evaluate their @Builder children and pull fresh entries through callbacks.
   @State homeContentVersion: number = 0
   private readonly rootTabsController: HdsTabsController = new HdsTabsController()
+  // 统一手势驱动：
+  //   - chromeScrollingDeeper = true → 用户朝列表更深处滚动：顶部模式栏隐藏、底部导航展开为 4-Tab
+  //   - chromeScrollingDeeper = false → 回到顶部方向：顶部模式栏出现、底部导航收为 Mini 按钮
+  // 初始值与 IndexRootNavigationShell 的 miniBarStyle 初始值 (COLLAPSE) 保持一致。
+  private chromeScrollingDeeper: boolean = false
+  private chromeGestureBuffer: number = 0
+  private lastChromeMode: SubscriptionMode = 'articles'
   private readonly scrollerRegistry: IndexHomeScrollerRegistry = new IndexHomeScrollerRegistry(this)
   private searchInputController: TextInputController = new TextInputController()
   readonly homeEntryDataSources: HomeEntryDataSourceMap = {
@@ -298,7 +305,92 @@ struct Index {
 
   readHomeModeScrollOffset(mode: SubscriptionMode): number { return this.session.homeRailCoordinator.readHomeModeScrollOffset(mode) }
   syncHomeModeRailState(mode: SubscriptionMode = this.mode): void { this.session.homeRailCoordinator.syncHomeModeRailState(mode) }
-  primeHomeModeRailForRootActivation(): void { this.session.homeRailCoordinator.primeHomeModeRailForRootActivation() }
+  primeHomeModeRailForRootActivation(): void {
+    this.session.homeRailCoordinator.primeHomeModeRailForRootActivation()
+    // 切换根 Tab 时把导航/模式栏重置为展开态，避免上一根 Tab 的折叠状态遗留
+    this.resetChromeCollapsedState()
+  }
+
+  private handleModeChangedForChrome(): void {
+    // 模式切换属于"主动浏览"动作，重置为初始态（模式栏出现 + 底部导航 Mini）
+    this.resetChromeCollapsedState()
+  }
+
+  private resetChromeCollapsedState(): void {
+    this.chromeGestureBuffer = 0
+    this.lastChromeMode = this.mode
+    // 无条件强制回到初始态（即使 chromeScrollingDeeper 与目标一致也要刷新一次，
+    // 防止外部状态与 UI 实际状态不同步，例如根 Tab 重新激活时）
+    this.chromeScrollingDeeper = false
+    this.animateModeRailDismiss(true)
+    this.rootTabsController.applyMiniBarStyle(HdsBarStyle.COLLAPSE)
+  }
+
+  /**
+   * 按手势方向累积，过阈值后同时驱动顶部模式栏和底部导航。
+   * 关键策略：
+   *   1. 仅接受 DRAG（用户主动拖动）。FLING 惯性、EDGE_EFFECT 回弹一律忽略，避免到顶/到底反弹时反向触发。
+   *   2. 已经在顶部 (<4px) 时，向下方向的 delta 视为回弹噪声，忽略。
+   *   3. 与缓冲方向相反的 delta 先清零再累加，避免上下抖动相互抵消导致阈值延迟。
+   */
+  private updateChromeFromGesture(mode: SubscriptionMode, scrollDelta: number, scrollSource: ScrollSource): void {
+    if (mode !== this.lastChromeMode) {
+      this.lastChromeMode = mode
+      this.chromeGestureBuffer = 0
+      return
+    }
+    if (scrollSource !== ScrollSource.DRAG) {
+      return
+    }
+    if (scrollDelta === 0) {
+      return
+    }
+
+    // 在顶部继续下拉只会产生回弹，不应翻转状态
+    const currentOffset = this.readHomeModeScrollOffset(mode)
+    if (currentOffset < 4 && scrollDelta < 0) {
+      return
+    }
+
+    const bufferIsPositive = this.chromeGestureBuffer > 0
+    const bufferIsNegative = this.chromeGestureBuffer < 0
+    if (scrollDelta > 0 && bufferIsNegative) {
+      this.chromeGestureBuffer = 0
+    } else if (scrollDelta < 0 && bufferIsPositive) {
+      this.chromeGestureBuffer = 0
+    }
+    this.chromeGestureBuffer += scrollDelta
+
+    const DEEPER_THRESHOLD: number = 32   // 上滑 32px：进入更深内容
+    const BACK_THRESHOLD: number = -20    // 下滑 20px：回到顶部方向（更灵敏，便于召回模式栏）
+
+    if (this.chromeGestureBuffer >= DEEPER_THRESHOLD) {
+      this.applyChromeState(true)
+      this.chromeGestureBuffer = 0
+    } else if (this.chromeGestureBuffer <= BACK_THRESHOLD) {
+      this.applyChromeState(false)
+      this.chromeGestureBuffer = 0
+    }
+  }
+
+  private applyChromeState(scrollingDeeper: boolean): void {
+    if (this.chromeScrollingDeeper === scrollingDeeper) {
+      return
+    }
+    this.chromeScrollingDeeper = scrollingDeeper
+    // 顶部模式栏：deeper=true 时隐藏；deeper=false 时出现
+    this.animateModeRailDismiss(!scrollingDeeper)
+    // 底部导航：deeper=true 时展开 4-Tab；deeper=false 时回到 Mini 按钮
+    this.rootTabsController.applyMiniBarStyle(scrollingDeeper ? HdsBarStyle.EXPAND : HdsBarStyle.COLLAPSE)
+  }
+
+  private enforceAtTopChromeState(offset: number): void {
+    // 接近顶部时强制回到初始态：模式栏出现 + 底部导航 Mini。覆盖任何残留的 deeper 状态。
+    if (offset < 4 && this.chromeScrollingDeeper) {
+      this.chromeGestureBuffer = 0
+      this.applyChromeState(false)
+    }
+  }
 
   animateModeRailDismiss(show: boolean): void {
     this.homeModeRailDismissedByScroll = !show
@@ -465,13 +557,15 @@ struct Index {
       getSceneVisible: (mode: SubscriptionMode): Visibility => this.modeSceneVisible(mode),
       getListSwapTranslateY: (mode: SubscriptionMode): number => this.modeListSwapTranslateY(mode),
       getScroller: (mode: SubscriptionMode): Scroller => this.homeScrollerForMode(mode),
-      onWillScroll: (mode: SubscriptionMode, _scrollOffset: number, scrollSource: ScrollSource): ScrollResult | void => {
+      onWillScroll: (mode: SubscriptionMode, scrollDelta: number, scrollSource: ScrollSource): ScrollResult | void => {
         this.markHomeUserScrollIntent(mode, scrollSource)
+        this.updateChromeFromGesture(mode, scrollDelta, scrollSource)
         return undefined
       },
       onDidScroll: (mode: SubscriptionMode): void => {
         this.syncHomeModeRailState(mode)
         this.flushPendingLoadMoreForMode(mode)
+        this.enforceAtTopChromeState(this.readHomeModeScrollOffset(mode))
       },
       onStopDragging: (mode: SubscriptionMode): void => {
         this.setHomeScrollInteracting(false, mode)

@@ -1,5 +1,6 @@
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI'
 import {
+  HdsBarStyle,
   HdsNavigation,
   HdsNavigationMenuContentOptions,
   HdsNavigationTitleMode,
@@ -95,6 +96,7 @@ export struct IndexRootNavigationShell {
   onHomeRefresh: () => void = () => {}
   onHomeSearchOpen: () => void = () => {}
   onMiniBarClick: () => void = () => {}
+  @State private currentMiniBarStyle: HdsBarStyle = HdsBarStyle.COLLAPSE
   private homeTitleMenus: HdsNavigationMenuContentOptions = {
     value: [{
       content: {
@@ -133,6 +135,8 @@ export struct IndexRootNavigationShell {
     .borderRadius(ROOT_BOTTOM_TAB_MINI_BAR_SIZE / 2)
     .hitTestBehavior(HitTestMode.Block)
     .onClick(() => {
+      // 阻止 MiniBar 默认的点击展开行为，保持圆形折叠状态
+      this.controller.applyMiniBarStyle(HdsBarStyle.COLLAPSE)
       this.onMiniBarClick()
     })
   }
@@ -255,6 +259,7 @@ export struct IndexRootNavigationShell {
         barBottomMargin: resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP),
         miniBar: {
           miniBarBuilder: (): void => this.RootBottomMiniBarBuilder(),
+          miniBarStyle: HdsBarStyle.COLLAPSE,
           miniBarWidth: {
             smallWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
             mediumWidth: ROOT_BOTTOM_TAB_MINI_BAR_SIZE,
@@ -262,6 +267,9 @@ export struct IndexRootNavigationShell {
           },
           enableMiniBarBackground: true,
           enableMiniBarClip: true,
+          onBarStyleChange: (miniBarStyle: HdsBarStyle, _tabBarStyle: HdsBarStyle) => {
+            this.currentMiniBarStyle = miniBarStyle
+          },
         },
         adaptToHandedness: true,
         systemMaterialEffect: {
