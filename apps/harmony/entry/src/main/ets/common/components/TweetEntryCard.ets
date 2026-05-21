@@ -7,6 +7,7 @@ import { QuotedTweetRenderer } from './QuotedTweetRenderer'
 import { InlineMediaGrid } from './quoted-tweet/InlineMediaGrid'
 import { PictureCarouselMediaItem } from '../utils/PictureGallery'
 import { inlineMediaItemsCacheKey, inlineMediaItemsFromUrls, MAIN_TILE_SIZE } from '../utils/InlineMediaLayout'
+import { isDirectVideoUrl } from '../utils/FeedMediaUrl'
 
 interface TweetEntryCardPadding {
   left: number
@@ -39,6 +40,7 @@ export struct TweetEntryCard {
   private quotedMediaItemsCache: PictureCarouselMediaItem[] = []
 
   onOpen: () => void = () => {}
+  onOpenGallery: (imageUrls: string[], initialIndex: number) => void = () => {}
 
   private usernameLabel(): string {
     return (this.presentation.username || '').trim()
@@ -60,6 +62,31 @@ export struct TweetEntryCard {
       this.mainMediaItemsCache = this.mediaItemsFromUrls(mediaUrls)
     }
     return this.mainMediaItemsCache
+  }
+
+  private collectImageUrls(mediaUrls: string[]): string[] {
+    const urls: string[] = []
+    for (const url of (mediaUrls || [])) {
+      const trimmed = url.trim()
+      if (trimmed && !isDirectVideoUrl(trimmed) && !urls.includes(trimmed)) {
+        urls.push(trimmed)
+      }
+    }
+    return urls
+  }
+
+  private collectQuotedImageUrls(): string[] {
+    const urls: string[] = []
+    const collect = (qt: TweetQuotedPresentation | undefined): void => {
+      if (!qt) return
+      const imageUrls = this.collectImageUrls(qt.mediaUrls || [])
+      for (const u of imageUrls) {
+        if (!urls.includes(u)) { urls.push(u) }
+      }
+      collect(qt.nestedQuotedTweet)
+    }
+    collect(this.quotedTweet())
+    return urls
   }
 
   private hasQuotedTweet(): boolean {
@@ -247,6 +274,11 @@ export struct TweetEntryCard {
         onTap: (item: PictureCarouselMediaItem, index: number): void => {
           if ((item.videoUrl || '').trim()) {
             this.playInlineVideo('main', item, index)
+          } else {
+            const imageUrls = this.collectImageUrls(
+              (this.presentation.mediaUrls || []))
+            const clickedIdx = imageUrls.indexOf(item.imageUrl || '')
+            this.onOpenGallery(imageUrls, clickedIdx >= 0 ? clickedIdx : 0)
           }
         },
       })
@@ -274,6 +306,11 @@ export struct TweetEntryCard {
         },
         onPlayInlineVideo: (sectionTag: string, item: PictureCarouselMediaItem, index: number): void => {
           this.playInlineVideo(sectionTag, item, index)
+        },
+        onOpenGallery: (url: string): void => {
+          const imageUrls = this.collectQuotedImageUrls()
+          const clickedIdx = imageUrls.indexOf(url || '')
+          this.onOpenGallery(imageUrls, clickedIdx >= 0 ? clickedIdx : 0)
         },
       })
     }

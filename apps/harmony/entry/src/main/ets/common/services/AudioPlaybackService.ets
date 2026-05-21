@@ -16,6 +16,29 @@ const AUDIO_SERVICE_ERROR = 'audioServiceError'
 const AUDIO_SERVICE_ACTIVE = 'audioServiceActive'
 const AUDIO_SERVICE_SHOULD_SHOW = 'audioServiceShouldShow'
 const AUDIO_PLAYER_COLLAPSED = 'audioPlayerCollapsed'
+const AUDIO_SERVICE_SPEED = 'audioServiceSpeed'
+
+const DEFAULT_PLAYBACK_SPEED: number = 1.0
+const SUPPORTED_PLAYBACK_SPEEDS: number[] = [1.0, 1.25, 1.5, 2.0, 0.75]
+
+function resolvePlaybackSpeedEnum(rate: number): media.PlaybackSpeed {
+  if (rate <= 0.75) {
+    return media.PlaybackSpeed.SPEED_FORWARD_0_75_X
+  }
+  if (rate <= 1.0) {
+    return media.PlaybackSpeed.SPEED_FORWARD_1_00_X
+  }
+  if (rate <= 1.25) {
+    return media.PlaybackSpeed.SPEED_FORWARD_1_25_X
+  }
+  if (rate <= 1.5) {
+    return media.PlaybackSpeed.SPEED_FORWARD_1_50_X
+  }
+  if (rate <= 1.75) {
+    return media.PlaybackSpeed.SPEED_FORWARD_1_75_X
+  }
+  return media.PlaybackSpeed.SPEED_FORWARD_2_00_X
+}
 
 function initAppStorageDefaults(): void {
   if (!AppStorage.get<boolean>(AUDIO_SERVICE_PLAYING)) {
@@ -47,6 +70,9 @@ function initAppStorageDefaults(): void {
   }
   if (AppStorage.get<boolean>(AUDIO_PLAYER_COLLAPSED) === undefined) {
     AppStorage.setOrCreate(AUDIO_PLAYER_COLLAPSED, false)
+  }
+  if (!AppStorage.get<number>(AUDIO_SERVICE_SPEED)) {
+    AppStorage.setOrCreate(AUDIO_SERVICE_SPEED, DEFAULT_PLAYBACK_SPEED)
   }
 }
 
@@ -367,6 +393,14 @@ export class AudioPlaybackService {
     try {
       await player.play()
       this.setAppStorage(AUDIO_SERVICE_PLAYING, true)
+      const speed = AppStorage.get<number>(AUDIO_SERVICE_SPEED) ?? DEFAULT_PLAYBACK_SPEED
+      if (Math.abs(speed - DEFAULT_PLAYBACK_SPEED) > 0.001) {
+        try {
+          player.setSpeed(resolvePlaybackSpeedEnum(speed))
+        } catch (err) {
+          console.warn(`[AudioService] initial setSpeed failed: ${err instanceof Error ? err.message : err}`)
+        }
+      }
     } catch (err) {
       this.setAppStorage(AUDIO_SERVICE_ERROR, '音频播放失败')
       this.setAppStorage(AUDIO_SERVICE_PLAYING, false)
@@ -422,6 +456,27 @@ export class AudioPlaybackService {
       this.updateAvSessionPlaybackState()
     } catch (err) {
       console.warn(`[AudioService] seek failed: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+
+  cyclePlaybackSpeed(): number {
+    const current = AppStorage.get<number>(AUDIO_SERVICE_SPEED) ?? DEFAULT_PLAYBACK_SPEED
+    const index = SUPPORTED_PLAYBACK_SPEEDS.findIndex((s) => Math.abs(s - current) < 0.001)
+    const nextIndex = index < 0 ? 0 : (index + 1) % SUPPORTED_PLAYBACK_SPEEDS.length
+    const next = SUPPORTED_PLAYBACK_SPEEDS[nextIndex]
+    this.applyPlaybackSpeed(next)
+    return next
+  }
+
+  applyPlaybackSpeed(rate: number): void {
+    this.setAppStorage(AUDIO_SERVICE_SPEED, rate)
+    if (!this.player) {
+      return
+    }
+    try {
+      this.player.setSpeed(resolvePlaybackSpeedEnum(rate))
+    } catch (err) {
+      console.warn(`[AudioService] setSpeed failed: ${err instanceof Error ? err.message : err}`)
     }
   }
 

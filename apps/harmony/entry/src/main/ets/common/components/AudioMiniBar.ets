@@ -1,0 +1,231 @@
+import {
+  hdsMaterial,
+  HdsTabs,
+  HdsTabsController,
+} from '@kit.UIDesignKit'
+import { ThemePalette } from '../services/ThemeService'
+import { AudioPlaybackService } from '../services/AudioPlaybackService'
+import {
+  BOTTOM_TAB_BAR_HEIGHT,
+  BOTTOM_TAB_FLOAT_GAP,
+} from '../ui/UiTokens'
+import { resolveHdsBottomTabBarBottomMargin } from '../utils/index-home/HdsBottomTabConfig'
+
+const AUDIO_MINI_BAR_HEIGHT: number = 44
+const AUDIO_MINI_BAR_STACK_GAP: number = 10
+const AUDIO_MINI_BAR_HORIZONTAL_PADDING: number = 14
+const AUDIO_MINI_BAR_CONTROL_GAP: number = 10
+const AUDIO_MINI_BAR_TEXT_GAP: number = 4
+const AUDIO_MINI_BAR_TITLE_HEIGHT: number = 16
+const AUDIO_MINI_BAR_PROGRESS_HEIGHT: number = 14
+const AUDIO_MINI_BAR_SPEED_BUTTON_WIDTH: number = 54
+const AUDIO_MINI_BAR_SMALL_WIDTH: number = 300
+const AUDIO_MINI_BAR_MEDIUM_WIDTH: number = 330
+const AUDIO_MINI_BAR_LARGE_WIDTH: number = 360
+const AUDIO_MINI_BAR_TOUCH_BUFFER: number = 8
+
+@Component
+export struct AudioMiniBar {
+  @Prop theme: ThemePalette = {} as ThemePalette
+  @StorageProp('bottomAvoidArea') private bottomAvoidArea: number = 0
+  @StorageProp('audioServiceShouldShow') private shouldShow: boolean = false
+  @StorageProp('audioServicePlaying') private playing: boolean = false
+  @StorageProp('audioServiceTrackTitle') private trackTitle: string = ''
+  @StorageProp('audioServicePositionMs') private positionMs: number = 0
+  @StorageProp('audioServiceDurationMs') private durationMs: number = 0
+  @StorageProp('audioServiceSpeed') private playbackSpeed: number = 1.0
+
+  private readonly audioService: AudioPlaybackService = AudioPlaybackService.getInstance()
+  private readonly tabsController: HdsTabsController = new HdsTabsController()
+
+  private resolveBottomPadding(): number {
+    return resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP)
+      + BOTTOM_TAB_BAR_HEIGHT
+      + this.bottomAvoidArea
+      + AUDIO_MINI_BAR_STACK_GAP
+  }
+
+  private overlayHeight(): number {
+    return this.resolveBottomPadding() + AUDIO_MINI_BAR_HEIGHT + AUDIO_MINI_BAR_TOUCH_BUFFER
+  }
+
+  private formatTime(valueMs: number): string {
+    const seconds = Math.max(0, Math.floor((valueMs || 0) / 1000))
+    const minutes = Math.floor(seconds / 60)
+    const restSeconds = seconds % 60
+    return `${minutes}:${restSeconds < 10 ? '0' : ''}${restSeconds}`
+  }
+
+  private currentProgressLabel(): string {
+    return `${this.formatTime(this.positionMs)} / ${this.formatTime(this.durationMs)}`
+  }
+
+  private togglePlayPause(): void {
+    if (this.playing) {
+      void this.audioService.pause()
+      return
+    }
+    void this.audioService.resume()
+  }
+
+  private cycleSpeed(): void {
+    this.audioService.cyclePlaybackSpeed()
+  }
+
+  private formatSpeedLabel(): string {
+    const rate = this.playbackSpeed || 1.0
+    if (Math.abs(rate - Math.floor(rate)) < 0.001) {
+      return `${rate.toFixed(0)}×`
+    }
+    return `${rate.toFixed(2).replace(/0$/, '')}×`
+  }
+
+  private handleClose(): void {
+    this.audioService.stop()
+  }
+
+  @Builder
+  private AudioBarBuilder() {
+    Row({ space: AUDIO_MINI_BAR_CONTROL_GAP }) {
+      Column({ space: AUDIO_MINI_BAR_TEXT_GAP }) {
+        // 标题使用 TextOverflow.MARQUEE，只有溢出时才滚动，行为比独立 Marquee 更稳定。
+        Text(this.trackTitle || '音频')
+          .width('100%')
+          .height(AUDIO_MINI_BAR_TITLE_HEIGHT)
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.theme.textPrimary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.MARQUEE })
+          .marqueeOptions({
+            start: true,
+            fromStart: true,
+            step: 6,
+            loop: -1,
+            delay: 0,
+            fadeout: false,
+            marqueeStartPolicy: MarqueeStartPolicy.DEFAULT,
+          })
+
+        Row({ space: 6 }) {
+          Slider({
+            value: this.positionMs,
+            min: 0,
+            max: Math.max(1, this.durationMs),
+            step: 1000,
+          })
+            .layoutWeight(1)
+            .blockSize({ width: 10, height: 10 })
+            .onChange((nextValue: number) => {
+              this.audioService.seekTo(Math.floor(nextValue))
+            })
+
+          Text(this.currentProgressLabel())
+            .fontSize(10)
+            .fontColor(this.theme.textMuted)
+            .flexShrink(0)
+        }
+        .width('100%')
+        .height(AUDIO_MINI_BAR_PROGRESS_HEIGHT)
+        .alignItems(VerticalAlign.Center)
+      }
+      .layoutWeight(1)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Start)
+
+      Row({ space: 4 }) {
+        Row() {
+          SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+            .fontSize(22)
+            .fontColor([this.theme.textPrimary])
+        }
+        .width(32)
+        .height(32)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => this.togglePlayPause())
+
+        Row() {
+          Text(this.formatSpeedLabel())
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.theme.textPrimary)
+        }
+        .width(AUDIO_MINI_BAR_SPEED_BUTTON_WIDTH)
+        .height(28)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .borderRadius(14)
+        .border({ width: 0.6, color: this.theme.divider })
+        .onClick(() => this.cycleSpeed())
+
+        Row() {
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(16)
+            .fontColor([this.theme.textSecondary])
+        }
+        .width(28)
+        .height(28)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => this.handleClose())
+      }
+    }
+    .width('100%')
+    .height(AUDIO_MINI_BAR_HEIGHT)
+    .padding({ left: AUDIO_MINI_BAR_HORIZONTAL_PADDING, right: AUDIO_MINI_BAR_HORIZONTAL_PADDING - 2 })
+    .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  private AudioTabContentBuilder() {
+    Row().width(0).height(0)
+  }
+
+  build() {
+    if (!this.shouldShow) {
+      Stack() {
+      }
+      .width(0)
+      .height(0)
+    } else {
+      Stack({ alignContent: Alignment.Bottom }) {
+        HdsTabs({ controller: this.tabsController, index: 0 }) {
+          TabContent() {
+            this.AudioTabContentBuilder()
+          }
+          .tabBar(this.AudioBarBuilder())
+        }
+        .width('100%')
+        .height(this.overlayHeight())
+        .vertical(false)
+        .scrollable(false)
+        .animationDuration(0)
+        .barPosition(BarPosition.End)
+        .barOverlap(true)
+        .barHeight(AUDIO_MINI_BAR_HEIGHT)
+        .barFloatingStyle({
+          barWidth: {
+            smallWidth: AUDIO_MINI_BAR_SMALL_WIDTH,
+            mediumWidth: AUDIO_MINI_BAR_MEDIUM_WIDTH,
+            largeWidth: AUDIO_MINI_BAR_LARGE_WIDTH,
+          },
+          barBottomMargin: this.resolveBottomPadding(),
+          systemMaterialEffect: {
+            materialType: hdsMaterial.MaterialType.ADAPTIVE,
+            materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
+          },
+          adaptToHandedness: false,
+          barOpacity: 1,
+        })
+        .backgroundColor(Color.Transparent)
+        .clip(false)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.Transparent)
+      .clip(false)
+      .hitTestBehavior(HitTestMode.Transparent)
+    }
+  }
+}

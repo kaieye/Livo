@@ -28,6 +28,7 @@ export interface IndexHomeRootContentCallbacks {
   getPictureEntry: (entry: EntryCardModel) => Entry
   getPictureCaption: (entry: EntryCardModel) => string
   getPictureGalleryUrls: (entry: EntryCardModel) => string[]
+  onOpenTweetGallery: (imageUrls: string[], initialIndex: number) => void
 }
 
 @Component
@@ -71,6 +72,7 @@ export struct IndexHomeRootContent {
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
+    onOpenTweetGallery: () => {},
   }
   @State private scenesPrewarmed: boolean = false
   private prewarmTimerId: number = -1
@@ -145,6 +147,9 @@ export struct IndexHomeRootContent {
         getPictureEntry: (entry: EntryCardModel): Entry => this.callbacks.getPictureEntry(entry),
         getPictureCaption: (entry: EntryCardModel): string => this.callbacks.getPictureCaption(entry),
         getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.callbacks.getPictureGalleryUrls(entry),
+        onOpenTweetGallery: (imageUrls: string[], initialIndex: number): void => {
+          this.callbacks.onOpenTweetGallery(imageUrls, initialIndex)
+        },
       },
     })
   }

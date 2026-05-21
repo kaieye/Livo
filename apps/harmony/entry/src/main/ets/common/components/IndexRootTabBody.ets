@@ -54,6 +54,7 @@ export struct IndexRootTabBody {
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
+    onOpenTweetGallery: () => {},
   }
   onTabAppear: (tabId: RootTabId) => void = () => {}
   onSettingsContentScrollerReady: (scroller: Scroller) => void = () => {}

@@ -44,6 +44,7 @@ export struct HomeRootTabBody {
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
+    onOpenTweetGallery: () => {},
   }
 
   build() {

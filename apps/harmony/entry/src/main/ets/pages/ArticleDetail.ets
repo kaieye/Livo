@@ -24,7 +24,7 @@ import { ArticleSocialDetail } from '../common/components/ArticleSocialDetail'
 import { ArticleDetailHeaderActions } from '../common/components/ArticleDetailHeaderActions'
 import { ArticleAIAssistResultPanel } from '../common/components/ArticleAIAssistResultPanel'
 import { ArticleNonSocialContent } from '../common/components/ArticleNonSocialContent'
-import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
+import { AudioMiniBar } from '../common/components/AudioMiniBar'
 import { EntryImageGallery } from '../common/components/EntryImageGallery'
 import {
   ArticleContentBlock,
@@ -544,7 +544,7 @@ struct ArticleDetail {
       }
       .width('100%').height('100%').backgroundColor(this.theme.background)
 
-      MiniAudioPlayer({ theme: this.theme })
+      AudioMiniBar({ theme: this.theme })
 
       if (this.showGallery) {
         EntryImageGallery({

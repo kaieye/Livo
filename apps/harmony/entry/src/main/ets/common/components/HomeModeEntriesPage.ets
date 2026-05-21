@@ -120,6 +120,7 @@ export interface HomeModeEntriesPageCallbacks {
   getPictureEntry: (entry: EntryCardModel) => Entry
   getPictureCaption: (entry: EntryCardModel) => string
   getPictureGalleryUrls: (entry: EntryCardModel) => string[]
+  onOpenTweetGallery: (imageUrls: string[], initialIndex: number) => void
 }
 
 @Component
@@ -154,6 +155,7 @@ export struct HomeModeEntriesPage {
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
+    onOpenTweetGallery: () => {},
   }
   private dataChangeListener: DataChangeListener | undefined = undefined
   private readonly videoRowDataSource: VideoRowLazyDataSource = new VideoRowLazyDataSource(() => this.dataSource)
@@ -312,6 +314,9 @@ export struct HomeModeEntriesPage {
                 collapsedTextLines: 7,
                 enableEnterTransition: false,
                 onOpen: () => this.callbacks.onEntryOpen(entry),
+                onOpenGallery: (urls: string[], idx: number): void => {
+                  this.callbacks.onOpenTweetGallery(urls, idx)
+                },
               })
             } else {
               HomeArticleEntryCard({

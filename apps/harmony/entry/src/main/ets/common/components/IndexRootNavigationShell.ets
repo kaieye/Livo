@@ -80,6 +80,7 @@ export struct IndexRootNavigationShell {
     getPictureEntry: () => ({} as Entry),
     getPictureCaption: () => '',
     getPictureGalleryUrls: () => [],
+    onOpenTweetGallery: () => {},
   }
   rootTabSymbolPair: (tabId: HdsBottomTabId) => RootTabSymbolPair = () => ({
     normal: new SymbolGlyphModifier($r('sys.symbol.house')),

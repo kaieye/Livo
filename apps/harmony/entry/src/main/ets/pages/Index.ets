@@ -22,7 +22,8 @@ import { PAGE_HORIZONTAL_PADDING } from '../common/ui/UiTokens'
 import { IndexHomeOverlayLayer } from '../common/components/IndexHomeOverlayLayer'
 import { IndexRootNavigationShell } from '../common/components/IndexRootNavigationShell'
 import { AIChatPanel } from '../common/components/AIChatPanel'
-import { MiniAudioPlayer } from '../common/components/MiniAudioPlayer'
+import { EntryImageGallery } from '../common/components/EntryImageGallery'
+import { AudioMiniBar } from '../common/components/AudioMiniBar'
 import { HdsBottomTabId } from '../common/utils/index-home/HdsBottomTabConfig'
 import { IndexHomeScrollerRegistry } from '../common/utils/index-home/IndexHomeScrollerRegistry'
 import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/utils/index-home/RootTabScrollToTopSignal'
@@ -120,6 +121,9 @@ struct Index {
   @State searchOverlayVisible: boolean = false
   @State theme: ThemePalette = ThemeService.currentPalette()
   @State showAIChat: boolean = false
+  @State showTweetGallery: boolean = false
+  @State tweetGalleryUrls: string[] = []
+  @State tweetGalleryIndex: number = 0
   @State rootSettings: HarmonySettings = DEFAULT_HARMONY_SETTINGS
   @State rootTabIndex: number = 0
   @State activeRootTabId: RootTabId = 'home'
@@ -201,6 +205,10 @@ struct Index {
   aboutToDisappear(): void { this.session.homeRuntimeCoordinator.aboutToDisappear() }
   onPageShow(): void { this.session.pageLifecycle.onPageShow() }
   onBackPress(): boolean {
+    if (this.showTweetGallery) {
+      this.showTweetGallery = false
+      return true
+    }
     if (this.showAIChat) {
       this.showAIChat = false
       return true
@@ -481,6 +489,11 @@ struct Index {
       getPictureEntry: (entry: EntryCardModel): Entry => this.pictureCardEntry(entry),
       getPictureCaption: (entry: EntryCardModel): string => this.pictureCaption(entry),
       getPictureGalleryUrls: (entry: EntryCardModel): string[] => this.pictureGalleryUrls(entry),
+      onOpenTweetGallery: (imageUrls: string[], initialIndex: number): void => {
+        this.tweetGalleryUrls = imageUrls
+        this.tweetGalleryIndex = initialIndex
+        this.showTweetGallery = true
+      },
     }
   }
 
@@ -590,7 +603,7 @@ struct Index {
         summaryTextForEntry: (entry: EntryCardModel): string => this.session.homeInlineSearchController.searchResultSummaryText(entry),
       })
 
-      MiniAudioPlayer({ theme: this.theme })
+      AudioMiniBar({ theme: this.theme })
 
       if (this.showAIChat) {
         AIChatPanel({
@@ -612,6 +625,16 @@ struct Index {
                 .animation({ duration: 120, curve: Curve.EaseIn })
             )
           )
+      }
+
+      if (this.showTweetGallery) {
+        EntryImageGallery({
+          imageUrls: this.tweetGalleryUrls,
+          initialIndex: this.tweetGalleryIndex,
+          onClose: () => {
+            this.showTweetGallery = false
+          },
+        })
       }
     }
     .width('100%')
