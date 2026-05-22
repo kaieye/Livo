@@ -18,6 +18,7 @@ import {
   AI_REQUEST_READ_TIMEOUT_MS,
 } from '../../AppConfig'
 import { AIAssistantSettings } from '../../models/LivoModels'
+import { ChatMessage as ChatHistoryMessage } from '../ChatHistoryStore'
 import { delay, stringifyHttpResult } from './HttpResponseDecoder'
 import {
   AnthropicResponse,
@@ -49,6 +50,7 @@ export async function runChatCompletion(
   aiSettings: AIAssistantSettings,
   context: string,
   maxTokens: number,
+  history?: ChatHistoryMessage[],
 ): Promise<string> {
   const endpoint = resolveCompletionEndpoint(aiSettings)
   const apiKey = resolveProviderApiKey(aiSettings)
@@ -66,6 +68,7 @@ export async function runChatCompletion(
     systemPrompt: resolveSystemPrompt(aiSettings, context),
     userContent: prompt,
     maxTokens,
+    history,
   }
 
   const requestBody = buildRequestBody(requestContext)

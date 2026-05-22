@@ -63,7 +63,7 @@ export struct AIAssistantSettingsPanel {
       const loadVersion = this.settingsMutationVersion
       const settings = await SettingsStore.load()
       this.config = settings
-      this.theme = await ThemeService.resolvePalette(settings)
+      this.theme = await ThemeService.resolvePaletteForSystemChange(settings)
       const aiSettings = await AIAssistantSettingsStore.load()
       if (loadVersion !== this.settingsMutationVersion) {
         return
@@ -89,7 +89,7 @@ export struct AIAssistantSettingsPanel {
     void SettingsStore.save(next).then((saved: HarmonySettings) => {
       this.config = saved
       this.onSettingsChange(saved)
-      void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
+      void ThemeService.resolvePaletteForSystemChange(saved).then((palette: ThemePalette) => {
         this.theme = palette
       })
       this.saveHint = '已保存 AI 功能设置'

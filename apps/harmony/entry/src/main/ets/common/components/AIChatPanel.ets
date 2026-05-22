@@ -92,7 +92,7 @@ export struct AIChatPanel {
     }, 100)
 
     try {
-      const assistantText = await runChatCompletion(text, this.aiSettings, this.context, 1500)
+      const assistantText = await runChatCompletion(text, this.aiSettings, this.context, 1500, this.messages)
       const assistMsgId = (Date.now() + 1).toString()
       const assistMsg: ChatMessage = {
         role: 'assistant',
@@ -572,6 +572,13 @@ export struct AIChatPanel {
       .width('100%')
       .height('100%')
       .backgroundColor(this.theme.background)
+      .bindSheet($$this.showAISettings, this.SettingsSheetOverlay(), {
+        detents: [SheetSize.MEDIUM],
+        dragBar: false,
+        showClose: false,
+        backgroundColor: this.theme.background,
+        preferType: SheetType.CENTER,
+      })
     }
     .mode(NavigationMode.Stack)
     .titleBar({
@@ -621,13 +628,6 @@ export struct AIChatPanel {
     })
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideBackButton(false)
-    .bindSheet($$this.showAISettings, this.SettingsSheetOverlay(), {
-      detents: [SheetSize.MEDIUM],
-      dragBar: false,
-      showClose: false,
-      backgroundColor: this.theme.background,
-      preferType: SheetType.CENTER,
-    })
     .bindSheet($$this.showHistory, this.HistorySheetOverlay(), {
       detents: [SheetSize.MEDIUM],
       dragBar: false,

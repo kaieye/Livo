@@ -21,6 +21,7 @@ import {
   AIProviderDefinition,
   AI_PROVIDER_OPTIONS,
 } from '../../models/LivoModels'
+import { ChatMessage as ChatHistoryMessage } from '../ChatHistoryStore'
 
 interface ChatMessage {
   role: string
@@ -64,6 +65,7 @@ export interface ProviderRequestContext {
   systemPrompt: string
   userContent: string
   maxTokens: number
+  history?: ChatHistoryMessage[]
 }
 
 export type ProviderFormat = 'anthropic' | 'minimax-text' | 'openai-chat'
@@ -179,10 +181,23 @@ export function resolveSystemPrompt(
 }
 
 function buildAnthropicBody(context: ProviderRequestContext): string {
-  const messages: AnthropicMessageRequest[] = [{
-    role: 'user',
-    content: [{ type: 'text', text: context.userContent }],
-  }]
+  let messages: AnthropicMessageRequest[] = []
+  if (context.history && context.history.length > 0) {
+    messages = context.history
+      .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
+      .map((m: ChatHistoryMessage) => {
+        const msg: AnthropicMessageRequest = {
+          role: m.role,
+          content: m.content
+        }
+        return msg
+      })
+  } else {
+    messages = [{
+      role: 'user',
+      content: [{ type: 'text', text: context.userContent }],
+    }]
+  }
   const body: AnthropicRequest = {
     model: context.model,
     messages,
@@ -199,7 +214,17 @@ function buildMiniMaxTextBody(context: ProviderRequestContext): string {
   if (context.systemPrompt) {
     messages.push({ role: 'system', content: context.systemPrompt })
   }
-  messages.push({ role: 'user', content: context.userContent })
+  if (context.history && context.history.length > 0) {
+    const filteredHistory = context.history
+      .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
+      .map((m: ChatHistoryMessage) => {
+        const msg: ChatMessage = { role: m.role, content: m.content }
+        return msg
+      })
+    messages.push(...filteredHistory)
+  } else {
+    messages.push({ role: 'user', content: context.userContent })
+  }
   const body: MiniMaxTextRequest = {
     model: context.model,
     messages,
@@ -213,7 +238,17 @@ function buildOpenAiChatBody(context: ProviderRequestContext): string {
   if (context.systemPrompt) {
     messages.push({ role: 'system', content: context.systemPrompt })
   }
-  messages.push({ role: 'user', content: context.userContent })
+  if (context.history && context.history.length > 0) {
+    const filteredHistory = context.history
+      .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
+      .map((m: ChatHistoryMessage) => {
+        const msg: ChatMessage = { role: m.role, content: m.content }
+        return msg
+      })
+    messages.push(...filteredHistory)
+  } else {
+    messages.push({ role: 'user', content: context.userContent })
+  }
   const body: ChatRequest = {
     model: context.model,
     messages,
