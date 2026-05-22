@@ -215,17 +215,6 @@ export struct AudioMiniBar {
     .opacity(this.resolveFullContentOpacity())
 
     Row({ space: 8 }) {
-      Row() {
-        SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
-          .fontSize(22)
-          .fontColor([this.theme.textPrimary])
-      }
-      .width(28)
-      .height(32)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => this.togglePlayPause())
-
       Text(this.trackTitle || '音频')
         .layoutWeight(1)
         .maxLines(1)
@@ -242,6 +231,32 @@ export struct AudioMiniBar {
           marqueeStartPolicy: MarqueeStartPolicy.DEFAULT,
         })
 
+      Stack() {
+        Progress({
+          value: this.positionMs,
+          total: Math.max(1, this.durationMs),
+          type: ProgressType.Ring,
+        })
+          .width(36)
+          .height(36)
+          .color('#7A5AF8')
+          .style({ strokeWidth: 2.5, scaleCount: 0, scaleWidth: 0 })
+
+        Row() {
+          SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+            .fontSize(20)
+            .fontColor([this.theme.textPrimary])
+        }
+        .width(28)
+        .height(32)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .hitTestBehavior(HitTestMode.Block)
+        .onClick(() => this.togglePlayPause())
+      }
+      .width(36)
+      .height(36)
+
       Row() {
         SymbolGlyph($r('sys.symbol.xmark'))
           .fontSize(16)
@@ -257,6 +272,7 @@ export struct AudioMiniBar {
     .height(this.resolveBarHeight())
     .padding({ left: AUDIO_MINI_BAR_HORIZONTAL_PADDING, right: AUDIO_MINI_BAR_HORIZONTAL_PADDING - 2 })
     .alignItems(VerticalAlign.Center)
+    .translate({ y: -6 })
     .opacity(this.resolveCompactContentOpacity())
   }
   .width('100%')
