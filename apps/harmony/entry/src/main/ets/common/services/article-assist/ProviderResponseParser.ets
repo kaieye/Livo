@@ -24,6 +24,7 @@ interface ChatContentPart {
 interface ChatMessageResponse {
   content?: string | ChatContentPart[] | ChatContentPart
   reasoning_content?: string
+  tool_calls?: ExtractedToolCall[]
 }
 
 interface ChatChoiceDelta {
@@ -34,6 +35,7 @@ interface ChatChoiceResponse {
   text?: string
   message?: ChatMessageResponse
   delta?: ChatChoiceDelta
+  finish_reason?: string
 }
 
 export interface ChatCompletionResponse {
@@ -52,10 +54,24 @@ export interface ChatCompletionResponse {
   object?: string
 }
 
+export interface ExtractedToolFunction {
+  name: string
+  arguments: string
+}
+
+export interface ExtractedToolCall {
+  id: string
+  type: string
+  function: ExtractedToolFunction
+}
+
 interface AnthropicTextContentBlock {
   type: string
   text?: string
   thinking?: string
+  id?: string
+  name?: string
+  input?: Record<string, Object>
 }
 
 export interface AnthropicResponse {
@@ -276,4 +292,64 @@ function parseTextFromContentArray(
     }
   })
   return fragments.join('\n').trim()
+}
+
+export function extractToolCalls(parsed: ChatCompletionResponse): ExtractedToolCall[] {
+  const firstChoice = (parsed.choices || [])[0]
+  if (!firstChoice?.message?.tool_calls) {
+    return []
+  }
+  const result: ExtractedToolCall[] = []
+  const rawCalls = firstChoice.message.tool_calls
+  for (let i = 0; i < rawCalls.length; i += 1) {
+    const tc = rawCalls[i]
+    const func: ExtractedToolFunction = {
+      name: tc.function.name,
+      arguments: tc.function.arguments,
+    }
+    const call: ExtractedToolCall = {
+      id: tc.id,
+      type: 'function',
+      function: func,
+    }
+    result.push(call)
+  }
+  return result
+}
+
+export function extractFinishReason(parsed: ChatCompletionResponse): string {
+  const firstChoice = (parsed.choices || [])[0]
+  return firstChoice?.finish_reason ?? ''
+}
+
+export interface AnthropicToolUseBlock {
+  type: string
+  id: string
+  name: string
+  input: Record<string, Object>
+}
+
+export function extractAnthropicToolCalls(parsed: AnthropicResponse): ExtractedToolCall[] {
+  const blocks = parsed.content || []
+  const result: ExtractedToolCall[] = []
+  for (let i = 0; i < blocks.length; i += 1) {
+    const b = blocks[i]
+    if (!b) {
+      continue
+    }
+    if (b.type !== 'tool_use') {
+      continue
+    }
+    const func: ExtractedToolFunction = {
+      name: b.name || '',
+      arguments: JSON.stringify(b.input || {}),
+    }
+    const call: ExtractedToolCall = {
+      id: b.id || '',
+      type: 'function',
+      function: func,
+    }
+    result.push(call)
+  }
+  return result
 }

@@ -22,26 +22,61 @@ import {
   AI_PROVIDER_OPTIONS,
 } from '../../models/LivoModels'
 import { ChatMessage as ChatHistoryMessage } from '../ChatHistoryStore'
+import { ChatToolDefinition, ToolFunctionParams, ToolCallFunction } from '../AIChatTools'
 
 interface ChatMessage {
   role: string
-  content: string
+  content: string | null
+  tool_calls?: ChatToolCallMessage[]
+  tool_call_id?: string
+  name?: string
+}
+
+export interface ChatToolCallMessage {
+  id: string
+  type: string
+  function: ToolCallFunction
+}
+
+export interface AgentMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string | null
+  tool_calls?: ChatToolCallMessage[]
+  tool_call_id?: string
+  name?: string
 }
 
 interface ChatRequest {
   model: string
   messages: ChatMessage[]
   max_tokens: number
+  tools?: ChatToolDefinition[]
+  tool_choice?: string
 }
 
-interface AnthropicTextInputBlock {
+interface AnthropicToolBlock {
+  type: string
+  id?: string
+  name?: string
+  input?: Record<string, Object>
+  text?: string
+  tool_use_id?: string
+}
+
+interface AnthropicTextBlock {
   type: string
   text: string
 }
 
+interface AnthropicToolSchema {
+  name: string
+  description: string
+  input_schema: ToolFunctionParams
+}
+
 interface AnthropicMessageRequest {
   role: string
-  content: string | AnthropicTextInputBlock[]
+  content: string | AnthropicToolBlock[]
 }
 
 interface AnthropicRequest {
@@ -49,6 +84,7 @@ interface AnthropicRequest {
   messages: AnthropicMessageRequest[]
   max_tokens: number
   system?: string
+  tools?: object[]
 }
 
 interface MiniMaxTextRequest {
@@ -66,6 +102,8 @@ export interface ProviderRequestContext {
   userContent: string
   maxTokens: number
   history?: ChatHistoryMessage[]
+  tools?: ChatToolDefinition[]
+  agentMessages?: AgentMessage[]
 }
 
 export type ProviderFormat = 'anthropic' | 'minimax-text' | 'openai-chat'
@@ -182,7 +220,52 @@ export function resolveSystemPrompt(
 
 function buildAnthropicBody(context: ProviderRequestContext): string {
   let messages: AnthropicMessageRequest[] = []
-  if (context.history && context.history.length > 0) {
+  if (context.agentMessages && context.agentMessages.length > 0) {
+    messages = []
+    for (const am of context.agentMessages) {
+      if (am.role === 'system') {
+        continue
+      }
+      if (am.role === 'tool') {
+        const toolResultBlock: AnthropicToolBlock = {
+          type: 'tool_result',
+          text: am.content || '',
+          tool_use_id: am.tool_call_id || '',
+        }
+        const toolResultMsg: AnthropicMessageRequest = {
+          role: 'user',
+          content: [toolResultBlock],
+        }
+        messages.push(toolResultMsg)
+        continue
+      }
+      if (am.tool_calls && am.tool_calls.length > 0) {
+        const blocks: AnthropicToolBlock[] = []
+        for (const tc of am.tool_calls) {
+          let input: Record<string, Object> = {}
+          try { input = JSON.parse(tc.function.arguments) as Record<string, Object> } catch (_e) {}
+          const toolUseBlock: AnthropicToolBlock = {
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input: input,
+          }
+          blocks.push(toolUseBlock)
+        }
+        const toolCallMsg: AnthropicMessageRequest = {
+          role: am.role,
+          content: blocks,
+        }
+        messages.push(toolCallMsg)
+        continue
+      }
+      const textMsg: AnthropicMessageRequest = {
+        role: am.role,
+        content: am.content || '',
+      }
+      messages.push(textMsg)
+    }
+  } else if (context.history && context.history.length > 0) {
     messages = context.history
       .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
       .map((m: ChatHistoryMessage) => {
@@ -193,9 +276,10 @@ function buildAnthropicBody(context: ProviderRequestContext): string {
         return msg
       })
   } else {
+    const textBlock: AnthropicToolBlock = { type: 'text', text: context.userContent }
     messages = [{
       role: 'user',
-      content: [{ type: 'text', text: context.userContent }],
+      content: [textBlock],
     }]
   }
   const body: AnthropicRequest = {
@@ -206,6 +290,18 @@ function buildAnthropicBody(context: ProviderRequestContext): string {
   if (context.systemPrompt) {
     body.system = context.systemPrompt
   }
+  if (context.tools && context.tools.length > 0) {
+    const anthropicTools: object[] = []
+    for (const t of context.tools) {
+      const schema: AnthropicToolSchema = {
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters,
+      }
+      anthropicTools.push(schema as object)
+    }
+    body.tools = anthropicTools
+  }
   return JSON.stringify(body)
 }
 
@@ -214,7 +310,19 @@ function buildMiniMaxTextBody(context: ProviderRequestContext): string {
   if (context.systemPrompt) {
     messages.push({ role: 'system', content: context.systemPrompt })
   }
-  if (context.history && context.history.length > 0) {
+  if (context.agentMessages && context.agentMessages.length > 0) {
+    for (const am of context.agentMessages) {
+      const msg: ChatMessage = { role: am.role, content: am.content }
+      if (am.tool_calls) {
+        msg.tool_calls = am.tool_calls
+      }
+      if (am.tool_call_id) {
+        msg.tool_call_id = am.tool_call_id
+        msg.name = am.name
+      }
+      messages.push(msg)
+    }
+  } else if (context.history && context.history.length > 0) {
     const filteredHistory = context.history
       .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
       .map((m: ChatHistoryMessage) => {
@@ -238,7 +346,22 @@ function buildOpenAiChatBody(context: ProviderRequestContext): string {
   if (context.systemPrompt) {
     messages.push({ role: 'system', content: context.systemPrompt })
   }
-  if (context.history && context.history.length > 0) {
+  if (context.agentMessages && context.agentMessages.length > 0) {
+    for (const am of context.agentMessages) {
+      const msg: ChatMessage = {
+        role: am.role,
+        content: am.content,
+      }
+      if (am.tool_calls) {
+        msg.tool_calls = am.tool_calls
+      }
+      if (am.tool_call_id) {
+        msg.tool_call_id = am.tool_call_id
+        msg.name = am.name
+      }
+      messages.push(msg)
+    }
+  } else if (context.history && context.history.length > 0) {
     const filteredHistory = context.history
       .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
       .map((m: ChatHistoryMessage) => {
@@ -253,6 +376,10 @@ function buildOpenAiChatBody(context: ProviderRequestContext): string {
     model: context.model,
     messages,
     max_tokens: context.maxTokens,
+  }
+  if (context.tools && context.tools.length > 0) {
+    body.tools = context.tools
+    body.tool_choice = 'auto'
   }
   return JSON.stringify(body)
 }
