@@ -153,6 +153,7 @@ struct Index {
   //   - chromeScrollingDeeper = false → 回到顶部方向：顶部模式栏出现、底部导航收为 Mini 按钮
   // 初始值与 IndexRootNavigationShell 的 miniBarStyle 初始值 (COLLAPSE) 保持一致。
   private chromeScrollingDeeper: boolean = false
+  @State audioBarCollapseProgress: number = 0
   private chromeGestureBuffer: number = 0
   private lastChromeMode: SubscriptionMode = 'articles'
   private readonly scrollerRegistry: IndexHomeScrollerRegistry = new IndexHomeScrollerRegistry(this)
@@ -372,11 +373,10 @@ struct Index {
   private resetChromeCollapsedState(): void {
     this.chromeGestureBuffer = 0
     this.lastChromeMode = this.mode
-    // 无条件强制回到初始态（即使 chromeScrollingDeeper 与目标一致也要刷新一次，
-    // 防止外部状态与 UI 实际状态不同步，例如根 Tab 重新激活时）
     this.chromeScrollingDeeper = false
     this.animateModeRailDismiss(true)
     this.rootTabsController.applyMiniBarStyle(HdsBarStyle.COLLAPSE)
+    this.audioBarCollapseProgress = 0
   }
 
   /**
@@ -431,10 +431,11 @@ struct Index {
       return
     }
     this.chromeScrollingDeeper = scrollingDeeper
-    // 顶部模式栏：deeper=true 时隐藏；deeper=false 时出现
     this.animateModeRailDismiss(!scrollingDeeper)
-    // 底部导航：deeper=true 时展开 4-Tab；deeper=false 时回到 Mini 按钮
     this.rootTabsController.applyMiniBarStyle(scrollingDeeper ? HdsBarStyle.EXPAND : HdsBarStyle.COLLAPSE)
+    this.animateWithUiContext({ duration: 200, curve: Curve.EaseInOut }, () => {
+      this.audioBarCollapseProgress = scrollingDeeper ? 1 : 0
+    })
   }
 
   private enforceAtTopChromeState(offset: number): void {
@@ -703,7 +704,11 @@ struct Index {
         summaryTextForEntry: (entry: EntryCardModel): string => this.session.homeInlineSearchController.searchResultSummaryText(entry),
       })
 
-      AudioMiniBar({ theme: this.theme })
+      AudioMiniBar({
+        theme: this.theme,
+        scrollCollapseProgress: this.audioBarCollapseProgress,
+        isHomeRootTab: this.session.rootTabCoordinator.isHomeRootTab(),
+      })
 
       if (this.showAIChat) {
         AIChatPanel({

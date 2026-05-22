@@ -22,6 +22,10 @@ const AUDIO_MINI_BAR_SPEED_BUTTON_WIDTH: number = 42
 const AUDIO_MINI_BAR_SMALL_WIDTH: number = 330
 const AUDIO_MINI_BAR_MEDIUM_WIDTH: number = 360
 const AUDIO_MINI_BAR_LARGE_WIDTH: number = 390
+const AUDIO_MINI_BAR_COMPACT_HEIGHT: number = 57
+const AUDIO_MINI_BAR_COMPACT_SMALL_WIDTH: number = 200
+const AUDIO_MINI_BAR_COMPACT_MEDIUM_WIDTH: number = 240
+const AUDIO_MINI_BAR_COMPACT_LARGE_WIDTH: number = 280
 const AUDIO_MINI_BAR_TOUCH_BUFFER: number = 8
 
 @Component
@@ -34,6 +38,8 @@ export struct AudioMiniBar {
   @StorageProp('audioServicePositionMs') private positionMs: number = 0
   @StorageProp('audioServiceDurationMs') private durationMs: number = 0
   @StorageProp('audioServiceSpeed') private playbackSpeed: number = 1.0
+  @Prop scrollCollapseProgress: number = 0
+  @Prop isHomeRootTab: boolean = false
 
   private readonly audioService: AudioPlaybackService = AudioPlaybackService.getInstance()
   private readonly tabsController: HdsTabsController = new HdsTabsController()
@@ -45,8 +51,25 @@ export struct AudioMiniBar {
       + AUDIO_MINI_BAR_STACK_GAP
   }
 
-  private overlayHeight(): number {
-    return this.resolveBottomPadding() + AUDIO_MINI_BAR_HEIGHT + AUDIO_MINI_BAR_TOUCH_BUFFER
+  private resolveBarHeight(): number {
+    if (!this.isHomeRootTab) {
+      return AUDIO_MINI_BAR_HEIGHT
+    }
+    return AUDIO_MINI_BAR_HEIGHT
+      + (AUDIO_MINI_BAR_COMPACT_HEIGHT - AUDIO_MINI_BAR_HEIGHT) * this.scrollCollapseProgress
+  }
+
+  private resolveBarBottomMargin(): number {
+    if (!this.isHomeRootTab) {
+      return this.resolveBottomPadding()
+    }
+    const fullMargin = this.resolveBottomPadding()
+    const compactMargin = resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + this.bottomAvoidArea
+    return fullMargin + (compactMargin - fullMargin) * this.scrollCollapseProgress
+  }
+
+  private resolveOverlayHeight(): number {
+    return this.resolveBarBottomMargin() + this.resolveBarHeight() + AUDIO_MINI_BAR_TOUCH_BUFFER
   }
 
   private formatTime(valueMs: number): string {
@@ -84,9 +107,24 @@ export struct AudioMiniBar {
     this.audioService.stop()
   }
 
+  private resolveFullContentOpacity(): number {
+    if (!this.isHomeRootTab) {
+      return 1
+    }
+    return Math.max(0, 1 - this.scrollCollapseProgress * 2)
+  }
+
+  private resolveCompactContentOpacity(): number {
+    if (!this.isHomeRootTab) {
+      return 0
+    }
+    return Math.max(0, this.scrollCollapseProgress * 2 - 1)
+  }
+
   @Builder
-  private AudioBarBuilder() {
-    Row({ space: AUDIO_MINI_BAR_CONTROL_GAP }) {
+  private UnifiedAudioBarBuilder() {
+    Stack() {
+      Row({ space: AUDIO_MINI_BAR_CONTROL_GAP }) {
       Column({ space: AUDIO_MINI_BAR_TEXT_GAP }) {
         // 标题使用 TextOverflow.MARQUEE，只有溢出时才滚动，行为比独立 Marquee 更稳定。
         Text(this.trackTitle || '音频')
@@ -171,10 +209,59 @@ export struct AudioMiniBar {
       .margin({ top: -5 })
     }
     .width('100%')
-    .height(AUDIO_MINI_BAR_HEIGHT)
+    .height(this.resolveBarHeight())
     .padding({ left: AUDIO_MINI_BAR_HORIZONTAL_PADDING, right: AUDIO_MINI_BAR_HORIZONTAL_PADDING - 2 })
     .alignItems(VerticalAlign.Center)
+    .opacity(this.resolveFullContentOpacity())
+
+    Row({ space: 8 }) {
+      Row() {
+        SymbolGlyph($r(this.playing ? 'sys.symbol.pause_fill' : 'sys.symbol.play_fill'))
+          .fontSize(22)
+          .fontColor([this.theme.textPrimary])
+      }
+      .width(28)
+      .height(32)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => this.togglePlayPause())
+
+      Text(this.trackTitle || '音频')
+        .layoutWeight(1)
+        .maxLines(1)
+        .fontSize(14)
+        .fontColor(this.theme.textPrimary)
+        .textOverflow({ overflow: TextOverflow.MARQUEE })
+        .marqueeOptions({
+          start: true,
+          fromStart: true,
+          step: 6,
+          loop: -1,
+          delay: 0,
+          fadeout: false,
+          marqueeStartPolicy: MarqueeStartPolicy.DEFAULT,
+        })
+
+      Row() {
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(16)
+          .fontColor([this.theme.textSecondary])
+      }
+      .width(24)
+      .height(28)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => this.handleClose())
+    }
+    .width('100%')
+    .height(this.resolveBarHeight())
+    .padding({ left: AUDIO_MINI_BAR_HORIZONTAL_PADDING, right: AUDIO_MINI_BAR_HORIZONTAL_PADDING - 2 })
+    .alignItems(VerticalAlign.Center)
+    .opacity(this.resolveCompactContentOpacity())
   }
+  .width('100%')
+  .height(this.resolveBarHeight())
+}
 
   @Builder
   private AudioTabContentBuilder() {
@@ -193,23 +280,27 @@ export struct AudioMiniBar {
           TabContent() {
             this.AudioTabContentBuilder()
           }
-          .tabBar(this.AudioBarBuilder())
+          .tabBar(this.UnifiedAudioBarBuilder())
         }
         .width('100%')
-        .height(this.overlayHeight())
+        .height(this.resolveOverlayHeight())
         .vertical(false)
         .scrollable(false)
         .animationDuration(0)
         .barPosition(BarPosition.End)
         .barOverlap(true)
-        .barHeight(AUDIO_MINI_BAR_HEIGHT)
+        .barHeight(this.resolveBarHeight())
         .barFloatingStyle({
-          barWidth: {
+          barWidth: this.isHomeRootTab ? {
+            smallWidth: AUDIO_MINI_BAR_SMALL_WIDTH - Math.floor((AUDIO_MINI_BAR_SMALL_WIDTH - AUDIO_MINI_BAR_COMPACT_SMALL_WIDTH) * this.scrollCollapseProgress),
+            mediumWidth: AUDIO_MINI_BAR_MEDIUM_WIDTH - Math.floor((AUDIO_MINI_BAR_MEDIUM_WIDTH - AUDIO_MINI_BAR_COMPACT_MEDIUM_WIDTH) * this.scrollCollapseProgress),
+            largeWidth: AUDIO_MINI_BAR_LARGE_WIDTH - Math.floor((AUDIO_MINI_BAR_LARGE_WIDTH - AUDIO_MINI_BAR_COMPACT_LARGE_WIDTH) * this.scrollCollapseProgress),
+          } : {
             smallWidth: AUDIO_MINI_BAR_SMALL_WIDTH,
             mediumWidth: AUDIO_MINI_BAR_MEDIUM_WIDTH,
             largeWidth: AUDIO_MINI_BAR_LARGE_WIDTH,
           },
-          barBottomMargin: this.resolveBottomPadding(),
+          barBottomMargin: this.resolveBarBottomMargin(),
           systemMaterialEffect: {
             materialType: hdsMaterial.MaterialType.ADAPTIVE,
             materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
