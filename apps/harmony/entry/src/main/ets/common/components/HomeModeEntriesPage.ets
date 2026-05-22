@@ -22,10 +22,13 @@ import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../utils
 // 这是视频模式滚动卡顿的核心原因。把缓存撑到 4 行（8 张卡）后，可视区
 // 上下各有 2 行已经构建好的复用项，刚露出来直接命中复用池而不是走 build。
 const HOME_VIDEO_LIST_CACHED_ROW_COUNT: number = 4
-// 文章/图片是单列大卡，每屏元素少，缓存 3 个 ListItem 足够覆盖弹性滚动
+// 文章是单列大卡，每屏元素少，缓存 3 个 ListItem 足够覆盖弹性滚动
 // 区段，不至于在惯性滑动时频繁触发 ItemBuilder 重建。
 const HOME_LIST_CACHED_ITEM_COUNT: number = 8
-const HOME_PICTURE_LIST_CACHED_ITEM_COUNT: number = 6
+// 图片卡含 Swiper + Image 模糊层 + Video + 轮播指示器，单卡构建成本远
+// 高于文章卡。提高缓存数让模式切换时可见区外的卡片保持构建态，避免切
+// 入切出时批量重建。
+const HOME_PICTURE_LIST_CACHED_ITEM_COUNT: number = 10
 
 class VideoRowLazyDataSource implements IDataSource {
   private readonly getEntryDataSource: () => ArrayLazyDataSource<EntryCardModel>

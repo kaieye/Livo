@@ -33,7 +33,7 @@ export struct PictureEntryCard {
   @Prop isUnread: boolean = false
   @Prop showBottomDivider: boolean = false
   @StorageProp('showUnreadDot') showUnreadDot: boolean = true
-  @State private activeMediaIndex: number = 0
+  private activeMediaIndex: number = 0
   @State private playingLivePhotoIndex: number = -1
   @State private pausedLivePhotoIndex: number = -1
   @State private preparedLivePhotoIndices: number[] = []
@@ -41,8 +41,8 @@ export struct PictureEntryCard {
   @State private livePhotoAspectRatios: number[] = []
   @State private mediaNaturalSizes: MediaSize[] = []
   @State private livePhotoMuted: boolean = true
-  @State private isFullyVisible: boolean = false
-  @State private isNearlyVisible: boolean = false
+  private isFullyVisible: boolean = false
+  private isNearlyVisible: boolean = false
   @State private cachedCarouselItems: PictureCarouselMediaItem[] = []
   private readonly livePhotoControllers: VideoController[] = []
 
@@ -317,9 +317,9 @@ export struct PictureEntryCard {
       }
       .width('100%').padding({ top: 8, bottom: 10 }).alignItems(HorizontalAlign.Start)
       .transition(this.enableEnterTransition ? livoMotion.enterSoft(this.index * 18 + 40) : TransitionEffect.IDENTITY)
-      .onVisibleAreaChange([0, 0.35, 0.6, 1.0], (isVisible: boolean, currentRatio: number) => {
-        const nextNearlyVisible = isVisible && currentRatio >= 0.35
-        const nextFullyVisible = isVisible && currentRatio >= 0.6
+      .onVisibleAreaChange([0, 0.5, 1.0], (isVisible: boolean, currentRatio: number) => {
+        const nextNearlyVisible = isVisible && currentRatio >= 0.5
+        const nextFullyVisible = isVisible && currentRatio >= 1.0
         // 可见性只控制 live photo 播放，不再销毁静态 Image 节点；
         // Swiper/List 复用时反复重建 Image 会造成半露出图片变白。
         if (

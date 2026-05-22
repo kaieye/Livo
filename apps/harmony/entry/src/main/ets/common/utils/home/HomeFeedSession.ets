@@ -233,10 +233,8 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
       targetMode,
       candidateLimit,
     )
-    const initialVisibleLimit = resolveHomeVisibleEntryInitialLimit(targetMode)
     const shouldUseFastPath = preferFastPath
       && !this.homeFeedPagination.shouldRenderAllEntriesForMode(targetMode)
-      && (targetMode !== 'pictures' || safeCandidateLimit < initialVisibleLimit)
     this.diagnosticsLogger.logHomePerf(
       `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} `
       + `deferredGrouping=${deferredGrouping} fast=${shouldUseFastPath}`,

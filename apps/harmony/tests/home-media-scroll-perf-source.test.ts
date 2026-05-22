@@ -40,17 +40,44 @@ const indexSource = readFileSync(
 )
 
 test('video home mode uses row-level lazy list instead of rebuilding the full grid on append', () => {
-  assert.match(homeModeEntriesPageSource, /class VideoRowLazyDataSource implements IDataSource/)
-  assert.match(homeModeEntriesPageSource, /LazyForEach\(this\.videoRowDataSource, \(rowEntries: EntryCardModel\[], rowIndex: number\) => \{/)
-  assert.match(homeModeEntriesPageSource, /this\.videoRowDataSource\.notifyDataAddedByEntryIndex\(index\)/)
-  assert.match(homeModeEntriesPageSource, /if \(safeEntryIndex % columns !== 0\) \{[\s\S]*?listener\.onDataChange\(rowIndex\)/)
-  assert.match(homeModeEntriesPageSource, /for \(let addRowIndex = previousRowCount; addRowIndex < nextRowCount; addRowIndex\+\+\) \{[\s\S]*?listener\.onDataAdd\(addRowIndex\)/)
-  assert.match(homeModeEntriesPageSource, /for \(let addRowIndex = rowIndex; addRowIndex < nextRowCount; addRowIndex\+\+\) \{[\s\S]*?listener\.onDataAdd\(addRowIndex\)/)
-  assert.doesNotMatch(homeModeEntriesPageSource, /onDataAdd: \(index: number\) => notifyVideoRowsReloaded\(\)/)
-  assert.doesNotMatch(homeModeEntriesPageSource, /onDataAdded: \(index: number\) => notifyVideoRowsReloaded\(\)/)
+  assert.match(
+    homeModeEntriesPageSource,
+    /class VideoRowLazyDataSource implements IDataSource/,
+  )
+  assert.match(
+    homeModeEntriesPageSource,
+    /LazyForEach\(this\.videoRowDataSource, \(rowEntries: EntryCardModel\[], rowIndex: number\) => \{/,
+  )
+  assert.match(
+    homeModeEntriesPageSource,
+    /this\.videoRowDataSource\.notifyDataAddedByEntryIndex\(index\)/,
+  )
+  assert.match(
+    homeModeEntriesPageSource,
+    /if \(safeEntryIndex % columns !== 0\) \{[\s\S]*?listener\.onDataChange\(rowIndex\)/,
+  )
+  assert.match(
+    homeModeEntriesPageSource,
+    /for \(let addRowIndex = previousRowCount; addRowIndex < nextRowCount; addRowIndex\+\+\) \{[\s\S]*?listener\.onDataAdd\(addRowIndex\)/,
+  )
+  assert.match(
+    homeModeEntriesPageSource,
+    /for \(let addRowIndex = rowIndex; addRowIndex < nextRowCount; addRowIndex\+\+\) \{[\s\S]*?listener\.onDataAdd\(addRowIndex\)/,
+  )
+  assert.doesNotMatch(
+    homeModeEntriesPageSource,
+    /onDataAdd: \(index: number\) => notifyVideoRowsReloaded\(\)/,
+  )
+  assert.doesNotMatch(
+    homeModeEntriesPageSource,
+    /onDataAdded: \(index: number\) => notifyVideoRowsReloaded\(\)/,
+  )
   assert.match(homeModeEntriesPageSource, /HomeVideoEntryCard\(/)
   assert.doesNotMatch(homeModeEntriesPageSource, /HomeVideoGrid\(/)
-  assert.doesNotMatch(homeModeEntriesPageSource, /entries: this\.currentEntries\(\)/)
+  assert.doesNotMatch(
+    homeModeEntriesPageSource,
+    /entries: this\.currentEntries\(\)/,
+  )
 })
 
 test('video home mode uses social-style early load-more triggers at row granularity', () => {
@@ -62,8 +89,14 @@ test('video home mode uses social-style early load-more triggers at row granular
     paginationSource,
     /handleHomeEntryAppear\(mode: SubscriptionMode, index: number, totalCount: number\): void \{[\s\S]*?if \(mode === 'videos'\) \{ return \}/,
   )
-  assert.match(homeModeEntriesPageSource, /const rowTailIndex = Math\.min\(total - 1, \(\(rowIndex \+ 1\) \* resolveHomeVideoGridColumns\(\)\) - 1\)/)
-  assert.match(homeModeEntriesPageSource, /this\.callbacks\.onItemAppear\(rowTailIndex, total\)/)
+  assert.match(
+    homeModeEntriesPageSource,
+    /const rowTailIndex = Math\.min\(total - 1, \(\(rowIndex \+ 1\) \* resolveHomeVideoGridColumns\(\)\) - 1\)/,
+  )
+  assert.match(
+    homeModeEntriesPageSource,
+    /this\.callbacks\.onItemAppear\(rowTailIndex, total\)/,
+  )
 })
 
 test('video home mode avoids overlay state writes during ordinary scroll frames', () => {
@@ -77,17 +110,31 @@ test('video home mode avoids overlay state writes during ordinary scroll frames'
   )
 })
 
-
 test('picture cards ignore duplicate visible-area callbacks while scrolling', () => {
-  assert.doesNotMatch(pictureEntryCardSource, /private shouldDecodeMedia\(\): boolean/)
-  assert.doesNotMatch(pictureEntryCardSource, /if \(this\.shouldDecodeMedia\(\)\)/)
-  assert.match(pictureEntryCardSource, /Image\(item\.imageUrl \|\| this\.pictureUrl\)\.width\('100%'\)\.height\('100%'\)\.objectFit\(ImageFit\.Contain\)/)
-  assert.match(pictureEntryCardSource, /const nextNearlyVisible = isVisible && currentRatio >= 0\.35/)
+  assert.doesNotMatch(
+    pictureEntryCardSource,
+    /private shouldDecodeMedia\(\): boolean/,
+  )
+  assert.doesNotMatch(
+    pictureEntryCardSource,
+    /if \(this\.shouldDecodeMedia\(\)\)/,
+  )
+  assert.match(
+    pictureEntryCardSource,
+    /Image\(item\.imageUrl \|\| this\.pictureUrl\)\.width\('100%'\)\.height\('100%'\)\.objectFit\(ImageFit\.Contain\)/,
+  )
+  assert.match(
+    pictureEntryCardSource,
+    /const nextNearlyVisible = isVisible && currentRatio >= 0\.5/,
+  )
   assert.match(
     pictureEntryCardSource,
     /nextNearlyVisible === this\.isNearlyVisible[\s\S]*?nextFullyVisible === this\.isFullyVisible/,
   )
-  assert.match(pictureEntryCardSource, /this\.syncVisibleLivePhotoPlayback\(this\.activeMediaIndex\)/)
+  assert.match(
+    pictureEntryCardSource,
+    /this\.syncVisibleLivePhotoPlayback\(this\.activeMediaIndex\)/,
+  )
 })
 
 test('video rows use stable entry keys so duplicate source ids do not leave blank cells', () => {
@@ -95,7 +142,10 @@ test('video rows use stable entry keys so duplicate source ids do not leave blan
     homeModeEntriesPageSource,
     /ForEach\(rowEntries, \(entry: EntryCardModel, entryIndex: number\) => \{[\s\S]*?homeEntryListRenderKey\(entry, \(rowIndex \* resolveHomeVideoGridColumns\(\)\) \+ entryIndex\)/,
   )
-  assert.doesNotMatch(homeModeEntriesPageSource, /\}, \(entry: EntryCardModel\) => entry\.id\)/)
+  assert.doesNotMatch(
+    homeModeEntriesPageSource,
+    /\}, \(entry: EntryCardModel\) => entry\.id\)/,
+  )
 })
 
 test('video entry card stays lean like the social item card path', () => {

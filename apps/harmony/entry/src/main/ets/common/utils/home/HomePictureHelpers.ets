@@ -12,8 +12,22 @@ export function pictureCaption(entry: EntryCardModel): string {
   return (entry.summary || '').trim()
 }
 
+const _pictureEntryCache = new Map<string, Entry>()
+
+function pictureEntryCacheKey(entry: EntryCardModel): string {
+  return `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+}
+
 export function pictureCardEntry(entry: EntryCardModel): Entry {
-  return {
+  // 同一个 EntryCardModel 在 LazyForEach 复用期间会多次调用
+  // pictureCardEntry。缓存避免每次渲染都分配新 Entry 并重复
+  // 调用 selectPictureCarouselMediaUrls。
+  const key = pictureEntryCacheKey(entry)
+  const cached = _pictureEntryCache.get(key)
+  if (cached) {
+    return cached
+  }
+  const result: Entry = {
     id: entry.id,
     feedId: entry.feedId,
     title: entry.title,
@@ -30,4 +44,6 @@ export function pictureCardEntry(entry: EntryCardModel): Entry {
     createdAt: entry.publishedAt,
     updatedAt: entry.publishedAt,
   }
+  _pictureEntryCache.set(key, result)
+  return result
 }
