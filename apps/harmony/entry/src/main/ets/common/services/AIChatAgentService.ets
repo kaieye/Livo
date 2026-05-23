@@ -50,6 +50,105 @@ function truncateToolResult(result: string): string {
   return result.slice(0, maxLen) + '\n\n...(结果已截断，总长度 ' + result.length + ' 字)'
 }
 
+interface ParsedTextToolCalls {
+  cleanedContent: string
+  toolCalls: ExtractedToolCall[]
+}
+
+function parseTextToolCalls(content: string): ParsedTextToolCalls {
+  const toolCalls: ExtractedToolCall[] = []
+  let cleaned = content
+
+  // Format 1: <tool_call>{"name":"xxx","parameters":{}}</tool_call>
+  const jsonRegex = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g
+  let match = jsonRegex.exec(content)
+  while (match) {
+    try {
+      const json = JSON.parse(match[1]) as Record<string, string>
+      if (json.name) {
+        toolCalls.push({
+          id: 'text_' + toolCalls.length,
+          type: 'function',
+          function: {
+            name: json.name,
+            arguments: JSON.stringify(json.parameters || {}),
+          },
+        })
+      }
+    } catch (_e) {
+    }
+    match = jsonRegex.exec(content)
+  }
+  cleaned = cleaned.replace(jsonRegex, '')
+
+  // Format 2 & 3: <minimax:tool_call>...</minimax:tool_call>
+  const minimaxRegex = /<minimax:tool_call>\s*([\s\S]*?)\s*<\/minimax:tool_call>/g
+  match = minimaxRegex.exec(cleaned)
+  while (match) {
+    const body = match[1].trim()
+
+    // Format 3: <invoke name="funcName"><param>value</param></invoke>
+    const invokeRegex = /<invoke\s+name\s*=\s*"([^"]+)"\s*>([\s\S]*?)<\/invoke>/g
+    let invokeMatch = invokeRegex.exec(body)
+
+    if (invokeMatch) {
+      do {
+        const invokeName = invokeMatch[1]
+        const invokeBody = invokeMatch[2]
+        const params: Record<string, string> = {}
+        const paramRegex = /<(\w+)>([\s\S]*?)<\/\1>/g
+        let paramMatch = paramRegex.exec(invokeBody)
+        while (paramMatch) {
+          params[paramMatch[1]] = paramMatch[2].trim()
+          paramMatch = paramRegex.exec(invokeBody)
+        }
+        if (invokeName) {
+          toolCalls.push({
+            id: 'text_' + toolCalls.length,
+            type: 'function',
+            function: {
+              name: invokeName,
+              arguments: JSON.stringify(params),
+            },
+          })
+        }
+        invokeMatch = invokeRegex.exec(body)
+      } while (invokeMatch)
+    } else {
+      // Format 2: func_name(arg1="val1", arg2="val2")
+      const parenIdx = body.indexOf('(')
+      if (parenIdx >= 0) {
+        const funcName = body.slice(0, parenIdx).trim()
+        const endIdx = body.lastIndexOf(')')
+        const argsStr = endIdx >= 0 ? body.slice(parenIdx + 1, endIdx).trim() : body.slice(parenIdx + 1).trim()
+        const params: Record<string, string> = {}
+        if (argsStr) {
+          const argRegex = /(\w+)\s*=\s*"([^"]*)"/g
+          let argMatch = argRegex.exec(argsStr)
+          while (argMatch) {
+            params[argMatch[1]] = argMatch[2]
+            argMatch = argRegex.exec(argsStr)
+          }
+        }
+        if (funcName) {
+          toolCalls.push({
+            id: 'text_' + toolCalls.length,
+            type: 'function',
+            function: {
+              name: funcName,
+              arguments: JSON.stringify(params),
+            },
+          })
+        }
+      }
+    }
+    match = minimaxRegex.exec(cleaned)
+  }
+  cleaned = cleaned.replace(minimaxRegex, '').trim()
+
+  return { cleanedContent: cleaned, toolCalls }
+}
+
 async function buildContextFallback(): Promise<string> {
   let ctx = ''
   try {
@@ -145,24 +244,34 @@ export async function runChatAgent(
 
     console.info('[ChatAgent] round', round, 'contentLen:', result.content.length, 'toolCalls:', result.toolCalls.length, 'finish:', result.finishReason)
 
-    if (result.toolCalls.length === 0) {
-      const text = result.content || '抱歉，我暂时无法回答这个问题。'
+    let effectiveContent = result.content
+    let effectiveToolCalls = result.toolCalls
+
+    if (effectiveToolCalls.length === 0 && (effectiveContent.includes('<tool_call>') || effectiveContent.includes('<minimax:tool_call>'))) {
+      const parsed = parseTextToolCalls(effectiveContent)
+      effectiveContent = parsed.cleanedContent
+      effectiveToolCalls = parsed.toolCalls
+      console.info('[ChatAgent] round', round, 'parsed text tool calls:', effectiveToolCalls.length)
+    }
+
+    if (effectiveToolCalls.length === 0) {
+      const text = effectiveContent || '抱歉，我暂时无法回答这个问题。'
       console.info('[ChatAgent] round', round, 'final text len:', text.length)
       return { text, toolRounds }
     }
 
-    if (result.content && result.content.length > 0) {
-      console.info('[ChatAgent] round', round, 'partial content:', result.content.slice(0, 200))
+    if (effectiveContent && effectiveContent.length > 0) {
+      console.info('[ChatAgent] round', round, 'partial content:', effectiveContent.slice(0, 200))
     }
 
-    console.info('[ChatAgent] round', round, 'executing', result.toolCalls.length, 'tools')
+    console.info('[ChatAgent] round', round, 'executing', effectiveToolCalls.length, 'tools')
     const assistantCallMessages: AgentMessage = {
       role: 'assistant',
-      content: result.content || null,
+      content: effectiveContent || null,
       tool_calls: [],
       name: undefined,
     }
-    for (const tc of result.toolCalls) {
+    for (const tc of effectiveToolCalls) {
       const func: ToolCallFunction = { name: tc.function.name, arguments: tc.function.arguments }
       const callMsg: ChatToolCallMessage = {
         id: tc.id,
@@ -173,7 +282,7 @@ export async function runChatAgent(
     }
     currentMessages.push(assistantCallMessages)
 
-    for (const tc of result.toolCalls) {
+    for (const tc of effectiveToolCalls) {
       if (onToolCall) {
         onToolCall(tc.function.name)
       }

@@ -29,9 +29,8 @@ export struct AIChatPanel {
   @State isLoading: boolean = false
   @State aiSettings: AIAssistantSettings | null = null
   @State showAISettings: boolean = false
-  @State streamingContent: string = ''
-  @State streamingMessageId: string = ''
   @State showHistory: boolean = false
+  @State streamingContent: string = ''
   @State currentSessionId: string = ''
 
   @State elapsedTime: string = ''
@@ -187,7 +186,6 @@ export struct AIChatPanel {
 
     this.typewriter.cancel()
     this.streamingContent = ''
-    this.streamingMessageId = ''
 
     this.messages.push(userMsg)
     this.inputContent = ''
@@ -215,22 +213,21 @@ export struct AIChatPanel {
       }
 
       const assistMsgId = (Date.now() + 1).toString()
-      const assistMsg: ChatMessage = {
-        role: 'assistant',
-        content: typeof result.text === 'string' ? result.text : String(result.text),
-        id: assistMsgId
-      }
-      this.messages.push(assistMsg)
       this.isLoading = false
 
-      this.streamingMessageId = assistMsgId
+      this.streamingContent = ''
       this.typewriter.start(result.text, {
         onTick: (displayed: string) => {
           this.streamingContent = displayed
         },
         onDone: () => {
+          const assistMsg: ChatMessage = {
+            role: 'assistant',
+            content: typeof result.text === 'string' ? result.text : String(result.text),
+            id: assistMsgId
+          }
+          this.messages.push(assistMsg)
           this.streamingContent = ''
-          this.streamingMessageId = ''
           this.stopTimer()
         }
       })
@@ -276,7 +273,6 @@ export struct AIChatPanel {
     this.messages = []
     this.currentSessionId = Date.now().toString()
     this.streamingContent = ''
-    this.streamingMessageId = ''
     this.clearTimers()
     this.elapsedTime = ''
     this.timerVisible = false
@@ -288,10 +284,9 @@ export struct AIChatPanel {
   private loadSessionFromHistory(session: ChatSession): void {
     this.saveCurrentSession()
     this.typewriter.cancel()
+    this.streamingContent = ''
     this.messages = session.messages.slice()
     this.currentSessionId = session.id
-    this.streamingContent = ''
-    this.streamingMessageId = ''
     this.showHistory = false
     this.elapsedTime = ''
     this.timerVisible = false
@@ -672,11 +667,7 @@ export struct AIChatPanel {
                                   .fontColor('#DC2626')
                                   .lineHeight(20)
                               } else {
-                                this.MarkdownText(
-                                  item.id === this.streamingMessageId && this.streamingContent
-                                    ? this.streamingContent
-                                    : item.content
-                                )
+                                this.MarkdownText(item.content)
                               }
                             }
                             .padding({ left: 16, right: 16, top: 12, bottom: 12 })
@@ -695,6 +686,47 @@ export struct AIChatPanel {
                       }
                     }
                   }, (item: ChatMessage) => item.id)
+
+                  if (!this.isLoading && this.streamingContent) {
+                    Row() {
+                      Image($r('app.media.ri_ai'))
+                        .width(32)
+                        .height(32)
+                        .objectFit(ImageFit.Contain)
+                        .fillColor('#7A5AF8')
+                        .borderRadius(16)
+                        .backgroundColor(this.theme.surface)
+                        .padding(4)
+                        .margin({ right: 10 })
+
+                      Column() {
+                        Text('Livo AI')
+                          .fontSize(11)
+                          .fontColor(this.theme.textMuted)
+                          .fontWeight(FontWeight.Medium)
+                          .margin({ bottom: 4 })
+
+                        Column() {
+                          Text(this.streamingContent)
+                            .fontSize(15)
+                            .fontColor(this.theme.textPrimary)
+                            .lineHeight(22)
+                            .copyOption(CopyOptions.LocalDevice)
+                        }
+                        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+                        .backgroundColor(this.theme.surface)
+                        .borderRadius(16)
+                        .border({ width: 1, color: this.theme.divider })
+                        .constraintSize({ maxWidth: '85%' })
+                      }
+                      .alignItems(HorizontalAlign.Start)
+
+                      Blank()
+                    }
+                    .width('100%')
+                    .margin({ bottom: 14 })
+                    .alignItems(VerticalAlign.Top)
+                  }
 
                   if (this.isLoading) {
                     Row() {
