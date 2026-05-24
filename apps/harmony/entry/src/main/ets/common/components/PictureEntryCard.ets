@@ -17,6 +17,7 @@ interface CardPadding {
   bottom: number
 }
 
+@Reusable
 @Component
 export struct PictureEntryCard {
   @Prop entry: Entry = {} as Entry
@@ -49,6 +50,22 @@ export struct PictureEntryCard {
   onOpen: () => void = () => {}
 
   aboutToAppear(): void {
+    this.cachedCarouselItems = this.computeCarouselMediaItems()
+  }
+
+  aboutToReuse(params: Record<string, Object>): void {
+    this.stopLivePhotoPlayback()
+    this.livePhotoControllers.length = 0
+    this.activeMediaIndex = 0
+    this.isFullyVisible = false
+    this.isNearlyVisible = false
+    this.playingLivePhotoIndex = -1
+    this.pausedLivePhotoIndex = -1
+    this.preparedLivePhotoIndices = []
+    this.livePhotoInstanceSeeds = []
+    this.livePhotoAspectRatios = []
+    this.mediaNaturalSizes = []
+    this.livePhotoMuted = true
     this.cachedCarouselItems = this.computeCarouselMediaItems()
   }
 

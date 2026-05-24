@@ -19,9 +19,22 @@ import {
 } from './HomeVisibleEntryPolicy'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 
+class VisibleEntriesCacheSlot {
+  entriesRef: Object | null = null
+  limit: number = 0
+  result: EntryCardModel[] = []
+
+  constructor(entriesRef: Object, limit: number, result: EntryCardModel[]) {
+    this.entriesRef = entriesRef
+    this.limit = limit
+    this.result = result
+  }
+}
+
 export class HomeFeedPaginationState {
   protected readonly state: HomeFeedState
   protected readonly actions: HomeFeedActions
+  private visibleEntriesCache: Record<string, VisibleEntriesCacheSlot> = {}
 
   constructor(state: HomeFeedState, actions: HomeFeedActions) {
     this.state = state
@@ -125,7 +138,13 @@ export class HomeFeedPaginationState {
     }
     const limit = this.visibleEntryLimitFor(mode)
     const safeLimit = Math.max(resolveHomeVisibleEntryInitialLimit(mode), limit)
-    return entries.slice(0, Math.min(entries.length, safeLimit))
+    const cache = this.visibleEntriesCache[mode]
+    if (cache !== undefined && cache.entriesRef === entries && cache.limit === safeLimit) {
+      return cache.result
+    }
+    const result = entries.slice(0, Math.min(entries.length, safeLimit))
+    this.visibleEntriesCache[mode] = new VisibleEntriesCacheSlot(entries, safeLimit, result)
+    return result
   }
 
   visibleEntryCountFor(mode: SubscriptionMode): number {

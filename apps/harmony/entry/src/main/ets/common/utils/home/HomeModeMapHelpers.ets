@@ -40,6 +40,25 @@ export function perModeSet<T>(mode: SubscriptionMode, value: T, map: PerModeMap<
   }
 }
 
+/** Mutate `map` in place, setting `mode` to `value`. Avoids allocating a new object
+ *  every call — critical for per-frame paths like scroll-progress tracking. */
+export function perModeSetMut<T>(mode: SubscriptionMode, value: T, map: PerModeMap<T>): void {
+  switch (mode) {
+    case 'social':
+      map.social = value
+      break
+    case 'pictures':
+      map.pictures = value
+      break
+    case 'videos':
+      map.videos = value
+      break
+    default:
+      map.articles = value
+      break
+  }
+}
+
 /** Create a PerModeMap<T> with the same `value` for all four modes. */
 export function createPerModeMap<T>(value: T): PerModeMap<T> {
   return { articles: value, social: value, pictures: value, videos: value }

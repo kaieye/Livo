@@ -23,6 +23,7 @@ import {
   createHomeScrollOffsetMap,
   perModeGet,
   perModeSet,
+  perModeSetMut,
 } from './HomeModeMapHelpers'
 import {
   resolveHomeVisibleEntryInitialLimit,
@@ -392,7 +393,7 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   private setModeScrollProgressLoadMoreValue(mode: SubscriptionMode, value: number): void {
-    this.homeLastScrollProgressLoadMoreAt = perModeSet(mode, value, this.homeLastScrollProgressLoadMoreAt)
+    perModeSetMut(mode, value, this.homeLastScrollProgressLoadMoreAt)
   }
 
   resetModeScrollProgressLoadMoreValue(mode: SubscriptionMode): void {

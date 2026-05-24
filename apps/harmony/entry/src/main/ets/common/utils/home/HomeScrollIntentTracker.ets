@@ -7,6 +7,7 @@ import {
   createHomeScrollOffsetMap,
   perModeGet,
   perModeSet,
+  perModeSetMut,
 } from './HomeModeMapHelpers'
 
 export class HomeScrollIntentTracker {
@@ -41,7 +42,7 @@ export class HomeScrollIntentTracker {
   }
 
   setConsumedVersion(mode: SubscriptionMode, value: number): void {
-    this.consumedIntentVersions = perModeSet(mode, value, this.consumedIntentVersions)
+    perModeSetMut(mode, value, this.consumedIntentVersions)
   }
 
   setInteracting(interacting: boolean): void {

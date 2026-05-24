@@ -352,7 +352,7 @@ export struct HomeModeEntriesPage {
     .cachedCount(HOME_LIST_CACHED_ITEM_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.On)
+    .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
@@ -426,7 +426,7 @@ export struct HomeModeEntriesPage {
     .cachedCount(HOME_PICTURE_LIST_CACHED_ITEM_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.On)
+    .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)
@@ -511,7 +511,7 @@ export struct HomeModeEntriesPage {
     .cachedCount(HOME_VIDEO_LIST_CACHED_ROW_COUNT)
     .clipContent(ContentClipMode.SAFE_AREA)
     .padding({ left: PAGE_HORIZONTAL_PADDING, right: PAGE_HORIZONTAL_PADDING })
-    .scrollBar(BarState.On)
+    .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     .onWillScroll((scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
       this.callbacks.onWillScroll(scrollOffset, scrollSource)

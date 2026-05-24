@@ -74,23 +74,12 @@ export struct IndexHomeRootContent {
     getPictureGalleryUrls: () => [],
     onOpenTweetGallery: () => {},
   }
-  @State private scenesPrewarmed: boolean = false
-  private prewarmTimerId: number = -1
+  private visitedModes: Set<SubscriptionMode> = new Set()
 
   aboutToAppear(): void {
-    // 首屏渲染稳定后再预挂载其余 mode scene。挂载本身不会绘制（visibility=hidden、
-    // opacity=0），但让组件树就位可避免首次切换时现场构造 List/LazyForEach 引起的卡顿。
-    this.prewarmTimerId = setTimeout(() => {
-      this.scenesPrewarmed = true
-      this.prewarmTimerId = -1
-    }, 800)
   }
 
   aboutToDisappear(): void {
-    if (this.prewarmTimerId >= 0) {
-      clearTimeout(this.prewarmTimerId)
-      this.prewarmTimerId = -1
-    }
   }
 
   private getSceneProps(mode: SubscriptionMode): ModeSceneRenderState {
@@ -104,7 +93,12 @@ export struct IndexHomeRootContent {
   }
 
   private shouldMountScene(mode: SubscriptionMode): boolean {
-    return this.getSceneProps(mode).shouldMount || this.scenesPrewarmed
+    const sceneProps = this.getSceneProps(mode)
+    if (sceneProps.shouldMount) {
+      this.visitedModes.add(mode)
+      return true
+    }
+    return this.visitedModes.has(mode)
   }
 
   @Builder
@@ -155,8 +149,6 @@ export struct IndexHomeRootContent {
   }
 
   build() {
-    // 当前模式与动画中的前一模式立即挂载；其余 mode scene 在 aboutToAppear 安排的
-    // 800ms 后预挂载，并以 visibility=hidden 隐藏，避免首次跨模式切换时现场建树卡顿。
     Stack({ alignContent: Alignment.TopStart }) {
       if (this.shouldMountScene('articles')) {
         this.ModeEntriesScene('articles')
