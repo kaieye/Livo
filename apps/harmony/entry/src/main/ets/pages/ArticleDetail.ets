@@ -88,6 +88,10 @@ struct ArticleDetail {
   private onLoadingDone(): void {
     if (!this.isLoading && this.entry) {
       void this.revealRemainingBlocks()
+      // 内容加载完成后，延迟计算初始阅读进度
+      setTimeout(() => {
+        this.updateReadingProgress()
+      }, 300)
     }
   }
 
@@ -376,13 +380,14 @@ struct ArticleDetail {
       const offset = this.scrollable.currentOffset()
       const scrollY = offset.yOffset
       const maxScroll = this.contentHeight - this.viewportHeight
-      if (maxScroll <= 0) {
-        this.readingProgress = 0
-        return
-      }
-      this.readingProgress = Math.min(1, Math.max(0, scrollY / maxScroll))
+      // 文章太短不需要滚动时，直接显示 100%
+      const targetProgress = maxScroll <= 0 ? 1 : Math.min(1, Math.max(0, scrollY / maxScroll))
+      // 使用 animateTo 实现平滑动画
+      this.getUIContext().animateTo({ duration: 300, curve: Curve.EaseInOut }, () => {
+        this.readingProgress = targetProgress
+      })
     } catch (e) {
-      // 忽略获取失败的情况
+      console.error(`[ReadingProgress] Error: ${e}`)
     }
   }
 
