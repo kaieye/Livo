@@ -27,6 +27,10 @@ import { AudioMiniBar } from '../common/components/AudioMiniBar'
 import { HdsBottomTabId } from '../common/utils/index-home/HdsBottomTabConfig'
 import { IndexHomeScrollerRegistry } from '../common/utils/index-home/IndexHomeScrollerRegistry'
 import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/utils/index-home/RootTabScrollToTopSignal'
+import {
+  writeHomeAudioBarCollapseProgress,
+  writeHomeModeRailEffectiveProgress,
+} from '../common/utils/index-home/HomeChromeProgressStore'
 import { HomeScrollIntentTracker } from '../common/utils/home/HomeScrollIntentTracker'
 import { resolveHomeVisibleEntryInitialLimit } from '../common/utils/home/HomeVisibleEntryPolicy'
 import {
@@ -112,8 +116,12 @@ struct Index {
   // 它只在跨越阈值的瞬间翻转。
   currentHomeModeScrollOffset: number = 0
   @State homeModeRailCollapseReady: boolean = false
-  @State homeModeRailDismissedByScroll: boolean = false
-  @State homeModeRailDismissProgress: number = 0
+  // 三态(dismissedByScroll / dismissProgress / audioBarCollapseProgress)曾是 @State,
+  // 但每帧滚动都翻转会让 Index.build() 整棵 (Shell→四个 ModeEntriesPage→所有卡片)
+  // 重新求值。改为普通字段 + AppStorage:写入只走 AppStorage,叶子组件 (HomeAnimatedModeRail / AudioMiniBar)
+  // 通过 @StorageProp 订阅并在自身节点上跑 .animation()。普通字段仍保留以满足 HomeModeState/IndexHomeRailOwner 接口。
+  homeModeRailDismissedByScroll: boolean = false
+  homeModeRailDismissProgress: number = 0
   @State homeModeRailExpandedOverride: boolean = false
   @State homeModeRailExpandedLockOffset: number = -1
   @State homeListSwapOpacity: number = 1
@@ -153,7 +161,9 @@ struct Index {
   //   - chromeScrollingDeeper = false → 回到顶部方向：顶部模式栏出现、底部导航收为 Mini 按钮
   // 初始值与 IndexRootNavigationShell 的 miniBarStyle 初始值 (COLLAPSE) 保持一致。
   private chromeScrollingDeeper: boolean = false
-  @State audioBarCollapseProgress: number = 0
+  // 普通字段,值随 applyChromeState 写入 AppStorage(HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY);
+  // AudioMiniBar 通过 @StorageProp 订阅。Index 自己不参与该值的反应,避免滚动每帧 rebuild。
+  audioBarCollapseProgress: number = 0
   private chromeGestureBuffer: number = 0
   private lastChromeMode: SubscriptionMode = 'articles'
   private readonly scrollerRegistry: IndexHomeScrollerRegistry = new IndexHomeScrollerRegistry(this)
@@ -377,6 +387,7 @@ struct Index {
     this.animateModeRailDismiss(true)
     this.rootTabsController.applyMiniBarStyle(HdsBarStyle.COLLAPSE)
     this.audioBarCollapseProgress = 0
+    writeHomeAudioBarCollapseProgress(0)
   }
 
   /**
@@ -433,9 +444,10 @@ struct Index {
     this.chromeScrollingDeeper = scrollingDeeper
     this.animateModeRailDismiss(!scrollingDeeper)
     this.rootTabsController.applyMiniBarStyle(scrollingDeeper ? HdsBarStyle.EXPAND : HdsBarStyle.COLLAPSE)
-    this.animateWithUiContext({ duration: 200, curve: Curve.EaseInOut }, () => {
-      this.audioBarCollapseProgress = scrollingDeeper ? 1 : 0
-    })
+    // AudioMiniBar 自己持有 .animation() (200ms EaseInOut),Index 只写 target。
+    const audioTarget = scrollingDeeper ? 1 : 0
+    this.audioBarCollapseProgress = audioTarget
+    writeHomeAudioBarCollapseProgress(audioTarget)
   }
 
   private enforceAtTopChromeState(offset: number): void {
@@ -448,15 +460,23 @@ struct Index {
 
   animateModeRailDismiss(show: boolean): void {
     this.homeModeRailDismissedByScroll = !show
-    const target = show ? 0 : 1
-    this.animateWithUiContext({ duration: 80, curve: Curve.EaseInOut }, () => {
-      this.homeModeRailDismissProgress = target
-    })
+    this.homeModeRailDismissProgress = show ? 0 : 1
+    this.syncHomeModeRailEffectiveProgress()
   }
 
   resetModeRailProgress(): void {
     this.homeModeRailDismissedByScroll = false
     this.homeModeRailDismissProgress = 0
+    this.syncHomeModeRailEffectiveProgress()
+  }
+
+  // 把当前 rail 进度按 expandedOverride / collapseReady 门控后写入 AppStorage,
+  // 让 HomeAnimatedModeRail (@StorageProp + .animation()) 自行做 80ms 缓动。
+  syncHomeModeRailEffectiveProgress(): void {
+    const effective = (this.homeModeRailExpandedOverride || !this.homeModeRailCollapseReady)
+      ? 0
+      : this.homeModeRailDismissProgress
+    writeHomeModeRailEffectiveProgress(effective)
   }
 
   markHomeUserScrollIntent(mode: SubscriptionMode, scrollSource: ScrollSource): void { this.homeScrollIntent.markUserScroll(this.mode, mode, scrollSource) }
@@ -691,8 +711,6 @@ struct Index {
         searchResultEntries: this.session.homeInlineSearchController.searchResultEntries(),
         searchShowEmptyState: this.session.homeInlineSearchController.hasSearchResultEmptyState(),
         inputController: this.searchInputController,
-        modeRailDismissOffset: this.session.homeRailCoordinator.homeModeRailDismissTranslateY(),
-        modeRailDismissOpacity: Math.max(0, 1 - this.homeModeRailDismissProgress),
         onModeChange: (mode: SubscriptionMode) => this.session.homeModeController.requestModeSwitch(mode),
         onQueryChange: (value: string) => { this.searchQuery = value },
         onSearchClose: (clearQuery: boolean) => this.session.homeInlineSearchController.close(clearQuery),
@@ -706,7 +724,6 @@ struct Index {
 
       AudioMiniBar({
         theme: this.theme,
-        scrollCollapseProgress: this.audioBarCollapseProgress,
         isHomeRootTab: this.session.rootTabCoordinator.isHomeRootTab(),
       })
 

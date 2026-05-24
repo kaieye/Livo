@@ -436,6 +436,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
   updateHeaderBlurProgress(offset: number): void { this.loadStateGate.updateHeaderBlurProgress(offset) }
   resetModeScrollIntent(mode: SubscriptionMode): void { this.owner.resetModeScrollIntent(mode) }
   ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.homeFeedPagination.ensureModeEntriesLoaded(mode) }
+  syncHomeModeRailEffectiveProgress(): void { this.owner.syncHomeModeRailEffectiveProgress() }
   // runManagedTimeout — already declared above
 
   // ── HomeInlineSearchActions ──

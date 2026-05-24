@@ -1,15 +1,32 @@
 import { EntryCardModel, Entry, selectPictureCarouselMediaUrls } from '../../models/LivoModels'
 
+// Per-entry-id memo: LazyForEach 复用 + @Reusable 复用每条目可能多次回调 captioned/gallery,
+// 都是纯函数,缓存 id→结果可避免重复字符串/数组操作。
+const _captionCache = new Map<string, string>()
+const _galleryUrlsCache = new Map<string, string[]>()
+
 export function pictureGalleryUrls(entry: EntryCardModel): string[] {
-  return entry.mediaUrls ?? []
+  const key = entry.id || ''
+  if (!key) return entry.mediaUrls ?? []
+  const cached = _galleryUrlsCache.get(key)
+  if (cached) return cached
+  const result = entry.mediaUrls ?? []
+  _galleryUrlsCache.set(key, result)
+  return result
 }
 
 export function pictureCaption(entry: EntryCardModel): string {
-  const title = (entry.title || '').trim()
-  if (title && title !== '远程条目') {
-    return title
+  const key = entry.id || ''
+  if (!key) {
+    const title = (entry.title || '').trim()
+    return title && title !== '远程条目' ? title : (entry.summary || '').trim()
   }
-  return (entry.summary || '').trim()
+  const cached = _captionCache.get(key)
+  if (cached !== undefined) return cached
+  const title = (entry.title || '').trim()
+  const result = title && title !== '远程条目' ? title : (entry.summary || '').trim()
+  _captionCache.set(key, result)
+  return result
 }
 
 const _pictureEntryCache = new Map<string, Entry>()

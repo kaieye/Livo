@@ -10,6 +10,7 @@ import {
   BOTTOM_TAB_FLOAT_GAP,
 } from '../ui/UiTokens'
 import { resolveHdsBottomTabBarBottomMargin } from '../utils/index-home/HdsBottomTabConfig'
+import { HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY } from '../utils/index-home/HomeChromeProgressStore'
 
 const AUDIO_MINI_BAR_HEIGHT: number = 44
 const AUDIO_MINI_BAR_STACK_GAP: number = 10
@@ -38,7 +39,9 @@ export struct AudioMiniBar {
   @StorageProp('audioServicePositionMs') private positionMs: number = 0
   @StorageProp('audioServiceDurationMs') private durationMs: number = 0
   @StorageProp('audioServiceSpeed') private playbackSpeed: number = 1.0
-  @Prop scrollCollapseProgress: number = 0
+  // 折叠进度由 Index 写入 AppStorage,本组件订阅并在节点上跑 .animation(),
+  // 避免 Index 顶层因 @State 进度变化触发整树 rebuild。
+  @StorageProp(HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY) private scrollCollapseProgress: number = 0
   @Prop isHomeRootTab: boolean = false
 
   private readonly audioService: AudioPlaybackService = AudioPlaybackService.getInstance()
@@ -326,6 +329,7 @@ export struct AudioMiniBar {
         })
         .backgroundColor(Color.Transparent)
         .clip(false)
+        .animation({ duration: 200, curve: Curve.EaseInOut })
       }
       .width('100%')
       .height('100%')

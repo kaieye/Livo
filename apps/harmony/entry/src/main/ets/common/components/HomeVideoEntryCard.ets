@@ -7,6 +7,7 @@ import { HighlightedInlineText } from './HighlightedInlineText'
 const HOME_VIDEO_CARD_TITLE_HEIGHT: number = 36
 const HOME_VIDEO_CARD_META_HEIGHT: number = 16
 
+@Reusable
 @Component
 export struct HomeVideoEntryCard {
   @Prop entry: EntryCardModel = {} as EntryCardModel

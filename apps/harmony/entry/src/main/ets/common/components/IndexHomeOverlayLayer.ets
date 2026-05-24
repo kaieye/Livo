@@ -3,7 +3,36 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { resolveHomeModeTitle } from '../utils/home/HomeModeMeta'
 import { HomeInlineSearchOverlay } from './HomeInlineSearchOverlay'
 import { HomeRootOverlayControls } from './HomeRootOverlayControls'
-import { SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL, SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY } from '../utils/index-home/HomeChromeProgressStore'
+
+// 通过 @StorageProp 订阅模式栏折叠进度,自己在节点上跑 .animation(),
+// 避免父层 (Index) 因 @State 进度变化而触发整树 rebuild。
+@Component
+struct HomeAnimatedModeRail {
+  @StorageProp(HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY) private railProgress: number = 0
+  @Prop theme: ThemePalette = ThemeService.currentPalette()
+  @Prop mode: SubscriptionMode = 'articles'
+  @Prop interactionLocked: boolean = false
+  onModeChange: (mode: SubscriptionMode) => void = () => {}
+
+  build() {
+    Stack() {
+      HomeRootOverlayControls({
+        theme: this.theme,
+        mode: this.mode,
+        interactionLocked: this.interactionLocked,
+        onModeChange: (mode: SubscriptionMode) => {
+          this.onModeChange(mode)
+        },
+      })
+    }
+    .width('100%')
+    .translate({ y: -1 * HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL * this.railProgress })
+    .opacity(Math.max(0, 1 - this.railProgress))
+    .animation({ duration: 80, curve: Curve.EaseInOut })
+  }
+}
 
 @Component
 export struct IndexHomeOverlayLayer {
@@ -21,8 +50,6 @@ export struct IndexHomeOverlayLayer {
   @Prop collapsedModeRailTopPadding: number = 0
   @Prop horizontalPadding: number = 0
   @Prop searchFieldOffsetY: number = 0
-  @Prop modeRailDismissOffset: number = 0
-  @Prop modeRailDismissOpacity: number = 1
   @Prop searchResultEntries: EntryCardModel[] = []
   @Prop searchShowEmptyState: boolean = false
 
@@ -36,19 +63,14 @@ export struct IndexHomeOverlayLayer {
 
   @Builder
   private OverlayControls() {
-    Stack() {
-      HomeRootOverlayControls({
-        theme: this.theme,
-        mode: this.mode,
-        interactionLocked: this.interactionLocked,
-        onModeChange: (mode: SubscriptionMode) => {
-          this.onModeChange(mode)
-        },
-      })
-    }
-    .width('100%')
-    .translate({ y: this.modeRailDismissOffset })
-    .opacity(this.modeRailDismissOpacity)
+    HomeAnimatedModeRail({
+      theme: this.theme,
+      mode: this.mode,
+      interactionLocked: this.interactionLocked,
+      onModeChange: (mode: SubscriptionMode) => {
+        this.onModeChange(mode)
+      },
+    })
   }
 
   private refreshStatusText(): string {

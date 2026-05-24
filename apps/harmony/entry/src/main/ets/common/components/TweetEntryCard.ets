@@ -19,6 +19,7 @@ interface TweetEntryCardPadding {
 
 const QUOTED_TWEET_COLLAPSED_LINES: number = 8
 
+@Reusable
 @Component
 export struct TweetEntryCard {
   @Prop presentation: TweetEntryPresentation = {} as TweetEntryPresentation
@@ -42,6 +43,20 @@ export struct TweetEntryCard {
 
   onOpen: () => void = () => {}
   onOpenGallery: (imageUrls: string[], initialIndex: number) => void = () => {}
+
+  // LazyForEach 复用本组件时,@Prop 由 ArkUI 自动重新赋值。但展开态/内联视频等
+  // 派生 @State 必须显式重置,否则新条目会带上前一条目的展开/播放状态。
+  aboutToReuse(_params: ESObject): void {
+    this.isTextExpanded = false
+    this.isQuotedTextExpanded = false
+    this.activeInlineVideoKey = ''
+    this.inlineVideoRenderVersion = 0
+    this.inlineVideoControllers.clear()
+    this.mainMediaItemsCacheKey = ''
+    this.mainMediaItemsCache = []
+    this.quotedMediaItemsCacheKey = ''
+    this.quotedMediaItemsCache = []
+  }
 
   private usernameLabel(): string {
     return (this.presentation.username || '').trim()

@@ -5,6 +5,7 @@ import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
 
+@Reusable
 @Component
 export struct HomeArticleEntryCard {
   // entry 变更时重算预览图缓存。原实现是 articlePreviewImage() 在 build 中调用 3
@@ -21,6 +22,12 @@ export struct HomeArticleEntryCard {
   onOpen: () => void = () => {}
 
   aboutToAppear(): void {
+    this.cachedPreviewImageUrl = this.computePreviewImage()
+  }
+
+  // LazyForEach 复用本组件时,@Prop 由 ArkUI 自动重新赋值;在此显式重算
+  // 派生缓存,避免依赖 @Watch 在 reuse 路径上的触发时序。
+  aboutToReuse(_params: ESObject): void {
     this.cachedPreviewImageUrl = this.computePreviewImage()
   }
 

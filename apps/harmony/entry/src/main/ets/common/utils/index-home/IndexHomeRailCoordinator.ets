@@ -31,6 +31,8 @@ export interface IndexHomeRailOwner {
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void
   animateModeRailDismiss(show: boolean): void
   resetModeRailProgress(): void
+  // collapseReady / expandedOverride 翻转后调用,把门控后的进度写入 AppStorage。
+  syncHomeModeRailEffectiveProgress(): void
 }
 
 export class IndexHomeRailCoordinator {
@@ -81,6 +83,7 @@ export class IndexHomeRailCoordinator {
     const next = this.computeCollapseReady(offset)
     if (next !== this.owner.homeModeRailCollapseReady) {
       this.owner.homeModeRailCollapseReady = next
+      this.owner.syncHomeModeRailEffectiveProgress()
     }
   }
 
@@ -103,6 +106,7 @@ export class IndexHomeRailCoordinator {
     if (this.owner.homeModeRailExpandedOverride && isScrollingDeeper) {
       this.owner.homeModeRailExpandedOverride = false
       this.owner.homeModeRailExpandedLockOffset = -1
+      this.owner.syncHomeModeRailEffectiveProgress()
     }
 
     if (!offsetEffectivelyUnchanged) {
@@ -120,6 +124,7 @@ export class IndexHomeRailCoordinator {
     this.owner.currentHomeModeScrollOffset = this.owner.homeModeRailExpandedLockOffset
     this.owner.updateHeaderBlurProgress(this.owner.homeModeRailExpandedLockOffset)
     this.updateCollapseReadySnapshot(this.owner.homeModeRailExpandedLockOffset)
+    this.owner.syncHomeModeRailEffectiveProgress()
   }
 
   primeHomeModeRailForRootActivation(): void {
@@ -129,6 +134,7 @@ export class IndexHomeRailCoordinator {
     this.owner.currentHomeModeScrollOffset = 0
     this.owner.updateHeaderBlurProgress(0)
     this.updateCollapseReadySnapshot(0)
+    this.owner.syncHomeModeRailEffectiveProgress()
   }
 
   homeFirstCardTopBoundary(): number {

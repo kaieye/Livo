@@ -27,6 +27,8 @@ export interface HomeModeActions {
   resetModeScrollIntent(mode: SubscriptionMode): void
   ensureModeEntriesLoaded(mode: SubscriptionMode): void
   runManagedTimeout(callback: () => void, delayMs: number): void
+  // 收到 rail 状态变化(override/collapseReady/dismissProgress)后,把门控后的进度写入 AppStorage。
+  syncHomeModeRailEffectiveProgress(): void
 }
 
 export class HomeModeController {
@@ -69,6 +71,7 @@ export class HomeModeController {
     this.state.homeModeRailDismissedByScroll = false
     this.state.homeModeRailDismissProgress = 0
     this.actions.updateHeaderBlurProgress(nextModeOffset)
+    this.actions.syncHomeModeRailEffectiveProgress()
     this.startModeTransition(nextMode)
     this.actions.runManagedTimeout(() => {
       if (this.state.mode !== nextMode) {
