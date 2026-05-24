@@ -216,6 +216,11 @@ struct Index {
     new IndexTweetPresentationCacheDiagnostics(this)
   private readonly tweetPresentationCache: TweetEntryPresentationCache =
     new TweetEntryPresentationCache(this.tweetPresentationCacheDiagnostics)
+  // onDidScroll 节流：滚动期间每帧都跑 syncHomeModeRailState / flushPendingLoadMore /
+  // enforceAtTopChromeState 会导致 Index 反应链频繁求值。节流到 32ms（约 2 帧@60fps）
+  // 后，折叠态翻转 / 预加载检查 / 顶部态 enforcement 仍然及时响应，但每帧开销减半。
+  private homeOnDidScrollLastAt: number = 0
+  private static readonly HOME_ON_DID_SCROLL_THROTTLE_MS: number = 32
   // HomeFeedSession owns all coordinators and bootstrap logic.
   // Index still holds every @State field (ArkUI reactivity), but the wiring,
   // bootstrap, reload, and precache logic lives in the session.
@@ -242,6 +247,11 @@ struct Index {
       return undefined
     },
     onDidScroll: (mode: SubscriptionMode): void => {
+      const now = Date.now()
+      if (now - this.homeOnDidScrollLastAt < Index.HOME_ON_DID_SCROLL_THROTTLE_MS) {
+        return
+      }
+      this.homeOnDidScrollLastAt = now
       this.syncHomeModeRailState(mode)
       this.flushPendingLoadMoreForMode(mode)
       this.enforceAtTopChromeState(this.readHomeModeScrollOffset(mode))

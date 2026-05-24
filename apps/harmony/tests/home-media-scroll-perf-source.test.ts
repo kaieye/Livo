@@ -100,13 +100,20 @@ test('video home mode uses social-style early load-more triggers at row granular
 })
 
 test('video home mode avoids overlay state writes during ordinary scroll frames', () => {
+  // onDidScroll 使用节流机制：32ms 内跳过重复调用，减少每帧 @State 写入
   assert.match(
     indexSource,
-    /onDidScroll: \(mode: SubscriptionMode\): void => \{\s*if \(mode !== 'videos'\) \{\s*this\.syncHomeModeRailState\(mode\)\s*\}\s*this\.maybeTriggerLoadMoreByScrollProgress\(mode, this\.readHomeModeScrollOffset\(mode\)\)\s*this\.flushPendingLoadMoreForMode\(mode\)/,
+    /onDidScroll: \(mode: SubscriptionMode\): void => \{\s*const now = Date\.now\(\)\s*if \(now - this\.homeOnDidScrollLastAt < Index\.HOME_ON_DID_SCROLL_THROTTLE_MS\) \{\s*return\s*\}\s*this\.homeOnDidScrollLastAt = now\s*this\.syncHomeModeRailState\(mode\)\s*this\.flushPendingLoadMoreForMode\(mode\)\s*this\.enforceAtTopChromeState\(this\.readHomeModeScrollOffset\(mode\)\)/,
+  )
+  // 节流字段声明
+  assert.match(indexSource, /private homeOnDidScrollLastAt: number = 0/)
+  assert.match(
+    indexSource,
+    /private static readonly HOME_ON_DID_SCROLL_THROTTLE_MS: number = 32/,
   )
   assert.match(
     indexSource,
-    /onStopDragging: \(mode: SubscriptionMode\): void => \{\s*if \(mode === 'videos'\) \{\s*this\.syncHomeModeRailState\(mode\)\s*\}/,
+    /onStopDragging: \(mode: SubscriptionMode\): void => \{\s*this\.setHomeScrollInteracting\(false, mode\)\s*this\.flushPendingLoadMoreForMode\(mode\)\s*this\.scheduleHomeLoadMorePrefetch\(160\)/,
   )
 })
 
