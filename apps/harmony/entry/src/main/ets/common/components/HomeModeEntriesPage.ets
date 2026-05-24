@@ -259,28 +259,22 @@ export struct HomeModeEntriesPage {
   }
 
   @Builder
-  private EmptyOrLoadingState() {
-    Column({ space: 0 }) {
-      if (this.mode !== 'articles') {
-        Blank().height(HOME_MODE_CONTENT_GAP)
-      }
-      if (this.isLoading) {
-        HomeEmptyStateCard({
-          message: '',
-          loading: true,
-          loadingMessage: '正在加载内容...',
-          theme: this.theme,
-        })
-      } else {
-        HomeEmptyStateCard({
-          message: this.emptyStateTitle,
-          loading: false,
-          loadingMessage: '',
-          theme: this.theme,
-        })
-      }
+  private EmptyCard() {
+    if (this.isLoading) {
+      HomeEmptyStateCard({
+        message: '',
+        loading: true,
+        loadingMessage: '正在加载内容...',
+        theme: this.theme,
+      })
+    } else {
+      HomeEmptyStateCard({
+        message: this.emptyStateTitle,
+        loading: false,
+        loadingMessage: '',
+        theme: this.theme,
+      })
     }
-    .width('100%')
   }
 
   @Builder
@@ -288,20 +282,24 @@ export struct HomeModeEntriesPage {
     // 统一把列表容器间距收回到 0。社交流本来就是扁平流；
     // 文章流里的推文也对齐这套布局，只给普通文章卡单独补间距。
     List({ space: 0, scroller: this.scroller }) {
-      ListItem() {
-        Column() {
-          Blank().height(HOME_MODE_SCENE_TOP_INSET)
-        }
-        .width('100%')
-      }
-      .width('100%')
-
       if (this.dataSource.totalCount() === 0) {
         ListItem() {
-          this.EmptyOrLoadingState()
+          Column() {
+            Blank().height(HOME_MODE_SCENE_TOP_INSET)
+            Blank().height(HOME_MODE_CONTENT_GAP)
+            this.EmptyCard()
+          }
+          .width('100%')
         }
         .width('100%')
       } else {
+        ListItem() {
+          Column() {
+            Blank().height(HOME_MODE_SCENE_TOP_INSET)
+          }
+          .width('100%')
+        }
+        .width('100%')
         LazyForEach(this.dataSource, (entry: EntryCardModel, index: number) => {
           ListItem() {
             if (this.shouldRenderTweetCard(entry)) {
@@ -372,20 +370,24 @@ export struct HomeModeEntriesPage {
   @Builder
   private PictureList() {
     List({ space: 0, scroller: this.scroller }) {
-      ListItem() {
-        Column() {
-          Blank().height(HOME_MODE_SCENE_TOP_INSET)
-        }
-        .width('100%')
-      }
-      .width('100%')
-
       if (this.dataSource.totalCount() === 0) {
         ListItem() {
-          this.EmptyOrLoadingState()
+          Column() {
+            Blank().height(HOME_MODE_SCENE_TOP_INSET)
+            Blank().height(HOME_MODE_CONTENT_GAP)
+            this.EmptyCard()
+          }
+          .width('100%')
         }
         .width('100%')
       } else {
+        ListItem() {
+          Column() {
+            Blank().height(HOME_MODE_SCENE_TOP_INSET)
+          }
+          .width('100%')
+        }
+        .width('100%')
         LazyForEach(this.dataSource, (entry: EntryCardModel, index: number) => {
           ListItem() {
             PictureEntryCard({
@@ -446,20 +448,24 @@ export struct HomeModeEntriesPage {
   @Builder
   private VideoGrid() {
     List({ space: 12, scroller: this.scroller }) {
-      ListItem() {
-        Column() {
-          Blank().height(HOME_MODE_SCENE_TOP_INSET)
-        }
-        .width('100%')
-      }
-      .width('100%')
-
       if (this.dataSource.totalCount() === 0) {
         ListItem() {
-          this.EmptyOrLoadingState()
+          Column() {
+            Blank().height(HOME_MODE_SCENE_TOP_INSET)
+            Blank().height(HOME_MODE_CONTENT_GAP)
+            this.EmptyCard()
+          }
+          .width('100%')
         }
         .width('100%')
       } else {
+        ListItem() {
+          Column() {
+            Blank().height(HOME_MODE_SCENE_TOP_INSET)
+          }
+          .width('100%')
+        }
+        .width('100%')
         LazyForEach(this.videoRowDataSource, (rowEntries: EntryCardModel[], rowIndex: number) => {
           ListItem() {
             Row({ space: 12 }) {

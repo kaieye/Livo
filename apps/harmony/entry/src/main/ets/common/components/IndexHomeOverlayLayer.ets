@@ -43,6 +43,7 @@ export struct IndexHomeOverlayLayer {
   @Prop isRefreshing: boolean = false
   @Prop refreshTotalCount: number = 0
   @Prop displayRefreshPercent: number = 0
+  @Prop homePostRefreshReloadPending: boolean = false
   @Prop showSearch: boolean = false
   @Prop searchOverlayVisible: boolean = false
   @Prop searchQuery: string = ''
@@ -74,6 +75,10 @@ export struct IndexHomeOverlayLayer {
   }
 
   private refreshStatusText(): string {
+    if (!this.isRefreshing && this.homePostRefreshReloadPending) {
+      return '正在更新'
+    }
+
     if (this.refreshTotalCount > 0) {
       return `刷新中 ${this.displayRefreshPercent}%`
     }
@@ -157,7 +162,7 @@ export struct IndexHomeOverlayLayer {
       if (this.searchOverlayVisible) {
         Stack({ alignContent: Alignment.TopStart }) {
           this.OverlayControls()
-          if (this.isRefreshing) {
+          if (this.isRefreshing || this.homePostRefreshReloadPending) {
             this.RefreshStatusPill()
           }
           this.SearchOverlay()
@@ -167,7 +172,7 @@ export struct IndexHomeOverlayLayer {
       } else {
         Stack({ alignContent: Alignment.TopStart }) {
           this.OverlayControls()
-          if (this.isRefreshing) {
+          if (this.isRefreshing || this.homePostRefreshReloadPending) {
             this.RefreshStatusPill()
           }
         }

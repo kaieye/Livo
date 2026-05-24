@@ -5,77 +5,60 @@ import {
   FeedViewType,
   HarmonySettings,
 } from '../models/LivoModels'
+import seedFeedsData from './discover-builtin-feeds/seed-feeds.json'
 
-export const SEED_FEEDS: Feed[] = [
-  {
-    id: 'feed-ruanyifeng',
-    title: '阮一峰的网络日志',
-    url: 'https://www.ruanyifeng.com/blog/atom.xml',
-    siteUrl: 'https://www.ruanyifeng.com/blog',
-    imageUrl: 'https://www.ruanyifeng.com/favicon.ico',
-    description: '技术、互联网与个人思考。',
-    category: '博客',
-    view: FeedViewType.Articles,
+interface SeedFeedJson {
+  id: string
+  title: string
+  url: string
+  siteUrl: string
+  imageUrl?: string
+  description: string
+  category: string
+  view: string
+  createdDaysAgo: number
+}
+
+function resolveViewType(view: string): FeedViewType {
+  switch (view) {
+    case 'articles':
+      return FeedViewType.Articles
+    case 'social':
+      return FeedViewType.SocialMedia
+    case 'pictures':
+      return FeedViewType.Pictures
+    case 'videos':
+      return FeedViewType.Videos
+    default:
+      return FeedViewType.Articles
+  }
+}
+
+function buildSeedFeed(json: SeedFeedJson): Feed {
+  const timestamp = Date.now() - json.createdDaysAgo * 24 * 60 * 60 * 1000
+  const feed: Feed = {
+    id: json.id,
+    title: json.title,
+    url: json.url,
+    siteUrl: json.siteUrl,
+    description: json.description,
+    category: json.category,
+    view: resolveViewType(json.view),
     showInAll: true,
     lastFetched: 0,
     etag: '',
     lastModified: '',
     errorCount: 0,
-    createdAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
-  },
-  {
-    id: 'feed-elonmusk-x',
-    title: 'Elon Musk / @elonmusk',
-    url: 'https://nitter.poast.org/elonmusk/rss',
-    siteUrl: 'https://x.com/elonmusk',
-    imageUrl: 'https://unavatar.io/x/elonmusk?fallback=false',
-    description: 'Elon Musk 在 X 上的公开动态。',
-    category: 'X',
-    view: FeedViewType.SocialMedia,
-    showInAll: true,
-    lastFetched: 0,
-    etag: '',
-    lastModified: '',
-    errorCount: 0,
-    createdAt: Date.now() - 21 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 21 * 24 * 60 * 60 * 1000,
-  },
-  {
-    id: 'feed-du-chenduling-instagram',
-    title: 'du_chenduling',
-    url: 'https://rsshub.liumingye.cn/picnob/user/du_chenduling',
-    siteUrl: 'https://www.instagram.com/du_chenduling/',
-    imageUrl: 'https://unavatar.io/instagram/du_chenduling?fallback=false',
-    description: 'du_chenduling 的 Instagram 图片流。',
-    category: 'Instagram',
-    view: FeedViewType.Pictures,
-    showInAll: true,
-    lastFetched: 0,
-    etag: '',
-    lastModified: '',
-    errorCount: 0,
-    createdAt: Date.now() - 21 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 21 * 24 * 60 * 60 * 1000,
-  },
-  {
-    id: 'feed-bilibili-typhoon',
-    title: '影视飓风',
-    url: 'https://rsshub.pseudoyu.com/bilibili/user/video/946974',
-    siteUrl: 'https://space.bilibili.com/946974',
-    imageUrl: 'https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg',
-    description: '影视飓风的 Bilibili 视频更新。',
-    category: 'Bilibili',
-    view: FeedViewType.Videos,
-    showInAll: true,
-    lastFetched: 0,
-    etag: '',
-    lastModified: '',
-    errorCount: 0,
-    createdAt: Date.now() - 14 * 24 * 60 * 60 * 1000,
-    updatedAt: Date.now() - 14 * 24 * 60 * 60 * 1000,
-  },
-]
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+  if (json.imageUrl && json.imageUrl.length > 0) {
+    feed.imageUrl = json.imageUrl
+  }
+  return feed
+}
+
+export const SEED_FEEDS: Feed[] = seedFeedsData.feeds.map((item) => buildSeedFeed(item as SeedFeedJson))
 
 export const SEED_ENTRIES: Entry[] = []
 

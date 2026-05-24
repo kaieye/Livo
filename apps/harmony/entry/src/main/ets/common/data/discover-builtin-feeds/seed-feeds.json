@@ -1,0 +1,48 @@
+{
+  "feeds": [
+    {
+      "id": "feed-ruanyifeng",
+      "title": "阮一峰的网络日志",
+      "url": "https://www.ruanyifeng.com/blog/atom.xml",
+      "siteUrl": "https://www.ruanyifeng.com/blog",
+      "imageUrl": "",
+      "description": "技术、互联网与个人思考。",
+      "category": "博客",
+      "view": "articles",
+      "createdDaysAgo": 45
+    },
+    {
+      "id": "feed-elonmusk-x",
+      "title": "Elon Musk / @elonmusk",
+      "url": "https://nitter.poast.org/elonmusk/rss",
+      "siteUrl": "https://x.com/elonmusk",
+      "imageUrl": "",
+      "description": "Elon Musk 在 X 上的公开动态。",
+      "category": "X",
+      "view": "social",
+      "createdDaysAgo": 21
+    },
+    {
+      "id": "feed-du-chenduling-instagram",
+      "title": "du_chenduling",
+      "url": "https://rsshub.liumingye.cn/picnob/user/du_chenduling",
+      "siteUrl": "https://www.instagram.com/du_chenduling/",
+      "imageUrl": "",
+      "description": "du_chenduling 的 Instagram 图片流。",
+      "category": "Instagram",
+      "view": "pictures",
+      "createdDaysAgo": 21
+    },
+    {
+      "id": "feed-bilibili-typhoon",
+      "title": "影视飓风",
+      "url": "https://rsshub.pseudoyu.com/bilibili/user/video/946974",
+      "siteUrl": "https://space.bilibili.com/946974",
+      "imageUrl": "",
+      "description": "影视飓风的 Bilibili 视频更新。",
+      "category": "Bilibili",
+      "view": "videos",
+      "createdDaysAgo": 14
+    }
+  ]
+}

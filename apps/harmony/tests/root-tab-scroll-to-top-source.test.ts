@@ -206,6 +206,6 @@ test('home refresh title action gives immediate visible feedback', () => {
   assert.match(homeOverlayLayerSource, /private RefreshStatusPill\(\)/)
   assert.match(
     homeOverlayLayerSource,
-    /if \(this\.isRefreshing\) \{\s*this\.RefreshStatusPill\(\)\s*\}/s,
+    /if \(this\.isRefreshing \|\| this\.homePostRefreshReloadPending\) \{\s*this\.RefreshStatusPill\(\)\s*\}/s,
   )
 })

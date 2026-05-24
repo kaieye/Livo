@@ -177,7 +177,7 @@ struct Index {
   refreshPercentAnimationTimer: number = -1
   pendingRefreshPercentTarget: number = 0
   postRefreshReloadVersion: number = 0
-  homePostRefreshReloadPending: boolean = false
+  @State homePostRefreshReloadPending: boolean = false
   feedsChangedReloadVersion: number = 0
   hasDeferredFeedsChangedReload: boolean = false
   deferredFeedsChangedRetryToken: number = 0
@@ -701,6 +701,7 @@ struct Index {
         isRefreshing: this.isRefreshing,
         refreshTotalCount: this.refreshTotalCount,
         displayRefreshPercent: this.displayRefreshPercent,
+        homePostRefreshReloadPending: this.homePostRefreshReloadPending,
         showSearch: this.showSearch,
         searchOverlayVisible: this.searchOverlayVisible,
         searchQuery: this.searchQuery,
