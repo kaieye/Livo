@@ -273,7 +273,7 @@ function fastPageCacheBufferForMode(mode: HomeEntryMode): number {
 }
 
 function shouldUseRecentModeQuery(mode: HomeEntryMode): boolean {
-  return mode === 'articles' || mode === 'social'
+  return mode === 'articles' || mode === 'social' || mode === 'pictures'
 }
 
 class FeaturedEntriesQuery {

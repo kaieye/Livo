@@ -178,7 +178,7 @@ test('picture load-more cache miss uses a small query buffer to reduce scroll ja
 test('social mode uses recent paged query instead of balanced scan on mode switch', () => {
   assert.match(
     featuredEntriesQuerySource,
-    /function shouldUseRecentModeQuery\(mode: HomeEntryMode\): boolean \{\s*return mode === 'articles' \|\| mode === 'social'\s*\}/,
+    /function shouldUseRecentModeQuery\(mode: HomeEntryMode\): boolean \{\s*return mode === 'articles' \|\| mode === 'social' \|\| mode === 'pictures'\s*\}/,
   )
   assert.match(
     featuredEntriesQuerySource,

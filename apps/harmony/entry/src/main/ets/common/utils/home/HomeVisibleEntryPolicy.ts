@@ -1,6 +1,7 @@
 export type HomeVisibleEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
 
 const HOME_VISIBLE_ENTRY_INITIAL_LIMIT: number = 18
+const HOME_VISIBLE_ENTRY_PICTURE_INITIAL_LIMIT: number = 8
 const HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT: number = 36
 const HOME_VISIBLE_ENTRY_DEFAULT_LOAD_MORE_STEP: number = 12
 const HOME_VISIBLE_ENTRY_ARTICLE_LOAD_MORE_STEP: number = 20
@@ -59,6 +60,9 @@ export function resolveHomeVisibleEntryInitialLimit(
 ): number {
   if (mode === 'videos') {
     return HOME_VISIBLE_ENTRY_VIDEO_INITIAL_LIMIT
+  }
+  if (mode === 'pictures') {
+    return HOME_VISIBLE_ENTRY_PICTURE_INITIAL_LIMIT
   }
   return HOME_VISIBLE_ENTRY_INITIAL_LIMIT
 }
