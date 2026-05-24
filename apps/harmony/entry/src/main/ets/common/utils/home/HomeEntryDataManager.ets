@@ -4,7 +4,7 @@ import { EntryCardModel } from '../../models/LivoModels'
 import { SubscriptionMode, HomeEntryDataSourceMap, HOME_ENTRY_GROUP_DEFER_DELAY_MS, HOME_FULL_MODE_CANDIDATE_LIMIT } from '../../components/HomeRootConfig'
 import { HomeEntryGroups, groupHomeEntriesByMode } from './HomeEntryGroups'
 import { cloneHomeSnapshotEntry, filterEntriesByMode } from './HomeEntryUtils'
-import { modeOfFeedView } from '../../data/AppRepositoryEntryHelpers'
+import { modeOfFeedView, uniqueEntryCardKey } from '../../data/AppRepositoryEntryHelpers'
 
 export interface HomeEntryDataState {
   featuredEntries: EntryCardModel[]
@@ -176,8 +176,18 @@ export class HomeEntryDataManager {
       ...groups.pictures,
       ...groups.videos,
     ]
-    merged.sort((a: EntryCardModel, b: EntryCardModel) => (b.publishedAt || 0) - (a.publishedAt || 0))
-    return merged
+    const seen = new Set<string>()
+    const deduped: EntryCardModel[] = []
+    merged.forEach((entry: EntryCardModel) => {
+      const key = uniqueEntryCardKey(entry)
+      if (seen.has(key)) {
+        return
+      }
+      seen.add(key)
+      deduped.push(entry)
+    })
+    deduped.sort((a: EntryCardModel, b: EntryCardModel) => (b.publishedAt || 0) - (a.publishedAt || 0))
+    return deduped
   }
 
   schedulePersistSnapshot(entries: EntryCardModel[]): void {

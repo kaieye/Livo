@@ -35,6 +35,20 @@ interface FeaturedModeEntriesCacheItem {
   entries: EntryCardModel[]
 }
 
+function deduplicateEntryCards(cards: EntryCardModel[]): EntryCardModel[] {
+  const seen = new Set<string>()
+  const deduped: EntryCardModel[] = []
+  cards.forEach((card: EntryCardModel) => {
+    const key = uniqueEntryCardKey(card)
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    deduped.push(card)
+  })
+  return deduped
+}
+
 function allowedFeedsForMode(
   feeds: Feed[],
   mode: HomeEntryMode,
@@ -395,10 +409,11 @@ class FeaturedEntriesQuery {
 
     const entries = await this.entryRepo.listRecent(safeCandidateLimit)
     const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    const deduped = deduplicateEntryCards(cards)
     logHomeFeedDebug(
-      `featuredEntriesFast limit=${safeCandidateLimit} recent=${entries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
+      `featuredEntriesFast limit=${safeCandidateLimit} recent=${entries.length} cards=${cards.length} deduped=${deduped.length} elapsedMs=${Date.now() - startedAt}`,
     )
-    return cards
+    return deduped
   }
 
   async featuredEntriesFastPage(limit: number, offset: number): Promise<EntryCardModel[]> {
@@ -411,10 +426,11 @@ class FeaturedEntriesQuery {
 
     const entries = await this.entryRepo.listRecentPage(safeLimit, safeOffset)
     const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
+    const deduped = deduplicateEntryCards(cards)
     logHomeFeedDebug(
-      `featuredEntriesFastPage limit=${safeLimit} offset=${safeOffset} recent=${entries.length} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
+      `featuredEntriesFastPage limit=${safeLimit} offset=${safeOffset} recent=${entries.length} cards=${cards.length} deduped=${deduped.length} elapsedMs=${Date.now() - startedAt}`,
     )
-    return cards
+    return deduped
   }
 
   async featuredEntriesByMode(

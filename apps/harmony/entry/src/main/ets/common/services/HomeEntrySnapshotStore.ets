@@ -1,5 +1,6 @@
 import { EntryCardModel, FeedViewType } from '../models/LivoModels'
 import { PreferenceStoreAccessor } from './PreferenceStoreAccessor'
+import { uniqueEntryCardKey } from '../data/AppRepositoryEntryHelpers'
 
 const HOME_ENTRY_SNAPSHOT_KEY: string = 'homeEntrySnapshotV1'
 const MAX_HOME_ENTRY_SNAPSHOT_ENTRIES: number = 240
@@ -50,6 +51,7 @@ function cloneHomeEntrySnapshotItem(item: EntryCardModel): EntryCardModel | unde
 }
 
 function normalizeHomeEntrySnapshotEntries(entries: EntryCardModel[]): EntryCardModel[] {
+  const seen = new Set<string>()
   const normalizedEntries: EntryCardModel[] = []
   entries.forEach((entry: EntryCardModel) => {
     if (normalizedEntries.length >= MAX_HOME_ENTRY_SNAPSHOT_ENTRIES) {
@@ -57,9 +59,16 @@ function normalizeHomeEntrySnapshotEntries(entries: EntryCardModel[]): EntryCard
     }
 
     const normalizedEntry = cloneHomeEntrySnapshotItem(entry)
-    if (normalizedEntry) {
-      normalizedEntries.push(normalizedEntry)
+    if (!normalizedEntry) {
+      return
     }
+
+    const key = uniqueEntryCardKey(normalizedEntry)
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    normalizedEntries.push(normalizedEntry)
   })
   return normalizedEntries
 }
@@ -94,6 +103,7 @@ export class HomeEntrySnapshotStore implements IHomeEntrySnapshotStore {
         return []
       }
 
+      const seen = new Set<string>()
       const normalizedEntries: EntryCardModel[] = []
       parsed.forEach((item: EntryCardModel) => {
         if (normalizedEntries.length >= MAX_HOME_ENTRY_SNAPSHOT_ENTRIES) {
@@ -101,9 +111,16 @@ export class HomeEntrySnapshotStore implements IHomeEntrySnapshotStore {
         }
 
         const normalizedItem = cloneHomeEntrySnapshotItem(item)
-        if (normalizedItem) {
-          normalizedEntries.push(normalizedItem)
+        if (!normalizedItem) {
+          return
         }
+
+        const key = uniqueEntryCardKey(normalizedItem)
+        if (seen.has(key)) {
+          return
+        }
+        seen.add(key)
+        normalizedEntries.push(normalizedItem)
       })
       return normalizedEntries
     } catch (_error) {
