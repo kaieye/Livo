@@ -396,8 +396,10 @@ struct Index {
     this.chromeScrollingDeeper = false
     this.animateModeRailDismiss(true)
     this.rootTabsController.applyMiniBarStyle(HdsBarStyle.COLLAPSE)
-    this.audioBarCollapseProgress = 0
-    writeHomeAudioBarCollapseProgress(0)
+    animateTo({ duration: 250, curve: Curve.EaseInOut }, () => {
+      this.audioBarCollapseProgress = 0
+      writeHomeAudioBarCollapseProgress(0)
+    })
   }
 
   /**
@@ -454,10 +456,12 @@ struct Index {
     this.chromeScrollingDeeper = scrollingDeeper
     this.animateModeRailDismiss(!scrollingDeeper)
     this.rootTabsController.applyMiniBarStyle(scrollingDeeper ? HdsBarStyle.EXPAND : HdsBarStyle.COLLAPSE)
-    // AudioMiniBar 自己持有 .animation() (200ms EaseInOut),Index 只写 target。
+    // 使用 animateTo 平滑过渡 AudioMiniBar 的折叠进度，避免 barFloatingStyle 跳变
     const audioTarget = scrollingDeeper ? 1 : 0
-    this.audioBarCollapseProgress = audioTarget
-    writeHomeAudioBarCollapseProgress(audioTarget)
+    animateTo({ duration: 250, curve: Curve.EaseInOut }, () => {
+      this.audioBarCollapseProgress = audioTarget
+      writeHomeAudioBarCollapseProgress(audioTarget)
+    })
   }
 
   private enforceAtTopChromeState(offset: number): void {

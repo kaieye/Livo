@@ -300,7 +300,6 @@ export struct AudioMiniBar {
         .height(this.resolveOverlayHeight())
         .vertical(false)
         .scrollable(false)
-        .animationDuration(0)
         .barPosition(BarPosition.End)
         .barOverlap(true)
         .barHeight(this.resolveBarHeight())
@@ -324,7 +323,6 @@ export struct AudioMiniBar {
         })
         .backgroundColor(Color.Transparent)
         .clip(false)
-        .animation({ duration: 200, curve: Curve.EaseInOut })
       }
       .width('100%')
       .height('100%')
