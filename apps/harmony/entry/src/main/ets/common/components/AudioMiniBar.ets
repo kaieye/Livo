@@ -110,24 +110,9 @@ export struct AudioMiniBar {
     this.audioService.stop()
   }
 
-  private resolveFullContentOpacity(): number {
-    if (!this.isHomeRootTab) {
-      return 1
-    }
-    return Math.max(0, 1 - this.scrollCollapseProgress * 2)
-  }
-
-  private resolveCompactContentOpacity(): number {
-    if (!this.isHomeRootTab) {
-      return 0
-    }
-    return Math.max(0, this.scrollCollapseProgress * 2 - 1)
-  }
-
   @Builder
-  private UnifiedAudioBarBuilder() {
-    Stack() {
-      Row({ space: AUDIO_MINI_BAR_CONTROL_GAP }) {
+  private ExpandedAudioBarBuilder() {
+    Row({ space: AUDIO_MINI_BAR_CONTROL_GAP }) {
       Column({ space: AUDIO_MINI_BAR_TEXT_GAP }) {
         // 标题使用 TextOverflow.MARQUEE，只有溢出时才滚动，行为比独立 Marquee 更稳定。
         Text(this.trackTitle || '音频')
@@ -215,8 +200,11 @@ export struct AudioMiniBar {
     .height(this.resolveBarHeight())
     .padding({ left: AUDIO_MINI_BAR_HORIZONTAL_PADDING, right: AUDIO_MINI_BAR_HORIZONTAL_PADDING - 2 })
     .alignItems(VerticalAlign.Center)
-    .opacity(this.resolveFullContentOpacity())
+    .visibility(this.isHomeRootTab && this.scrollCollapseProgress > 0.5 ? Visibility.Hidden : Visibility.Visible)
+  }
 
+  @Builder
+  private CompactAudioBarBuilder() {
     Row({ space: 8 }) {
       Text(this.trackTitle || '音频')
         .layoutWeight(1)
@@ -276,11 +264,18 @@ export struct AudioMiniBar {
     .padding({ left: AUDIO_MINI_BAR_HORIZONTAL_PADDING, right: AUDIO_MINI_BAR_HORIZONTAL_PADDING - 2 })
     .alignItems(VerticalAlign.Center)
     .translate({ y: -6 })
-    .opacity(this.resolveCompactContentOpacity())
+    .visibility(this.isHomeRootTab && this.scrollCollapseProgress > 0.5 ? Visibility.Visible : Visibility.Hidden)
   }
-  .width('100%')
-  .height(this.resolveBarHeight())
-}
+
+  @Builder
+  private UnifiedAudioBarBuilder() {
+    Stack() {
+      this.ExpandedAudioBarBuilder()
+      this.CompactAudioBarBuilder()
+    }
+    .width('100%')
+    .height(this.resolveBarHeight())
+  }
 
   @Builder
   private AudioTabContentBuilder() {

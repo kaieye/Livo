@@ -27,6 +27,10 @@
     {
       "name": "internet_reason",
       "value": "Livo 需要访问网络以拉取 RSS 订阅内容"
+    },
+    {
+      "name": "background_audio_reason",
+      "value": "Livo 需要在后台播放音频"
     }
   ]
 }

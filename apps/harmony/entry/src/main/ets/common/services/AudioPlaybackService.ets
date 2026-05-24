@@ -1,6 +1,8 @@
 import { media } from '@kit.MediaKit'
 import { audio } from '@kit.AudioKit'
 import { avSession } from '@kit.AVSessionKit'
+// TODO: BackgroundTaskKit 在 SDK 6.1.0(23) 中不可用，暂时注释
+// import { backgroundTaskManager } from '@kit.BackgroundTaskKit'
 import { AppContextService } from './AppContextService'
 
 const AUDIO_REQUEST_USER_AGENT: string =
@@ -134,6 +136,8 @@ export class AudioPlaybackService {
   private playerUrl: string = ''
   private avSessionHandle: avSession.AVSession | undefined = undefined
   private sessionReady: boolean = false
+  // TODO: 后台任务相关代码暂时注释，因为 BackgroundTaskKit 在 SDK 23 中不可用
+  // private backgroundTaskHandle: backgroundTaskManager.BackgroundTaskHandle | undefined = undefined
 
   constructor() {
     initAppStorageDefaults()
@@ -164,6 +168,13 @@ export class AudioPlaybackService {
         this.avSessionHandle = session
         this.sessionReady = true
         this.bindAvSessionCommands(session)
+        
+        session.activate().then(() => {
+          console.info('[AudioService] AVSession activated')
+        }).catch((err: Error) => {
+          console.warn(`[AudioService] AVSession activation failed: ${err.message}`)
+        })
+        
         console.info('[AudioService] AVSession created')
       }).catch((err: Error) => {
         console.warn(`[AudioService] AVSession creation failed: ${err.message}`)
@@ -297,6 +308,7 @@ export class AudioPlaybackService {
         console.warn(`[AudioService] release failed: ${err instanceof Error ? err.message : err}`)
       }
     }
+    void this.stopBackgroundTask()
   }
 
   private async prepareWithDirectUrl(player: media.AVPlayer, sourceUrl: string): Promise<boolean> {
@@ -401,6 +413,7 @@ export class AudioPlaybackService {
           console.warn(`[AudioService] initial setSpeed failed: ${err instanceof Error ? err.message : err}`)
         }
       }
+      void this.startBackgroundTask()
     } catch (err) {
       this.setAppStorage(AUDIO_SERVICE_ERROR, '音频播放失败')
       this.setAppStorage(AUDIO_SERVICE_PLAYING, false)
@@ -485,6 +498,7 @@ export class AudioPlaybackService {
     this.setAppStorage(AUDIO_SERVICE_ACTIVE, false)
     this.releasePlayer()
     this.releaseAvSession()
+    void this.stopBackgroundTask()
   }
 
   private releaseAvSession(): void {
@@ -497,6 +511,37 @@ export class AudioPlaybackService {
       this.avSessionHandle = undefined
       this.sessionReady = false
     }
+  }
+
+  // TODO: 后台任务相关代码暂时注释
+  private async startBackgroundTask(): Promise<void> {
+    // if (this.backgroundTaskHandle) {
+    //   return
+    // }
+    // try {
+    //   const ctx = AppContextService.getContext()
+    //   const request: backgroundTaskManager.TransientTaskRequest = {
+    //     type: backgroundTaskManager.TaskType.TRANSIENT_TASK,
+    //     timeout: 3600000,
+    //   }
+    //   this.backgroundTaskHandle = await backgroundTaskManager.startBackgroundTask(ctx, request)
+    //   console.info('[AudioService] Background task started')
+    // } catch (err) {
+    //   console.warn(`[AudioService] Failed to start background task: ${err instanceof Error ? err.message : err}`)
+    // }
+  }
+
+  private async stopBackgroundTask(): Promise<void> {
+    // if (!this.backgroundTaskHandle) {
+    //   return
+    // }
+    // try {
+    //   await backgroundTaskManager.stopBackgroundTask(this.backgroundTaskHandle)
+    //   this.backgroundTaskHandle = undefined
+    //   console.info('[AudioService] Background task stopped')
+    // } catch (err) {
+    //   console.warn(`[AudioService] Failed to stop background task: ${err instanceof Error ? err.message : err}`)
+    // }
   }
 
   togglePlayback(url: string, title: string): void {

@@ -105,6 +105,18 @@ export default class EntryAbility extends UIAbility {
     console.info('Livo EntryAbility onWindowStageDestroy')
   }
 
+  onForeground(): void {
+    console.info('Livo EntryAbility onForeground')
+  }
+
+  onBackground(): void {
+    console.info('Livo EntryAbility onBackground')
+    const audioService = AudioPlaybackService.getInstance()
+    if (audioService.isPlaying) {
+      console.info('[EntryAbility] Audio is playing, keeping background task active')
+    }
+  }
+
   onConfigurationUpdate(newConfig: Configuration): void {
     if (newConfig.colorMode === undefined) {
       return
