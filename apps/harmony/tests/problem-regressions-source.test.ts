@@ -336,19 +336,13 @@ test('social inline media creates VideoController only for active playback', () 
   )
 })
 
-test('home mode scenes mount active/transition immediately and prewarm the rest after a short delay', () => {
+test('home mode scenes mount active/transition immediately and unmount fully when inactive', () => {
   assert.match(
     indexHomeRootContentSource,
-    /private shouldMountScene\(mode: SubscriptionMode\): boolean \{[\s\S]*?return this\.getSceneProps\(mode\)\.shouldMount \|\| this\.scenesPrewarmed/,
+    /private shouldMountScene\(mode: SubscriptionMode\): boolean \{\s*return this\.getSceneProps\(mode\)\.shouldMount\s*\}/,
   )
-  assert.match(
-    indexHomeRootContentSource,
-    /@State private scenesPrewarmed: boolean = false/,
-  )
-  assert.match(
-    indexHomeRootContentSource,
-    /this\.prewarmTimerId = setTimeout\(\(\) => \{[\s\S]*?this\.scenesPrewarmed = true/,
-  )
+  assert.doesNotMatch(indexHomeRootContentSource, /scenesPrewarmed/)
+  assert.doesNotMatch(indexHomeRootContentSource, /visitedModes\.add\(mode\)/)
   assert.match(
     indexHomeRootContentSource,
     /if \(this\.shouldMountScene\('articles'\)\) \{[\s\S]*?this\.ModeEntriesScene\('articles'\)/,

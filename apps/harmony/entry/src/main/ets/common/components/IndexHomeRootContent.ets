@@ -74,14 +74,6 @@ export struct IndexHomeRootContent {
     getPictureGalleryUrls: () => [],
     onOpenTweetGallery: () => {},
   }
-  private visitedModes: Set<SubscriptionMode> = new Set()
-
-  aboutToAppear(): void {
-  }
-
-  aboutToDisappear(): void {
-  }
-
   private getSceneProps(mode: SubscriptionMode): ModeSceneRenderState {
     return resolveModeSceneRenderState({
       mode,
@@ -93,12 +85,7 @@ export struct IndexHomeRootContent {
   }
 
   private shouldMountScene(mode: SubscriptionMode): boolean {
-    const sceneProps = this.getSceneProps(mode)
-    if (sceneProps.shouldMount) {
-      this.visitedModes.add(mode)
-      return true
-    }
-    return this.visitedModes.has(mode)
+    return this.getSceneProps(mode).shouldMount
   }
 
   @Builder
