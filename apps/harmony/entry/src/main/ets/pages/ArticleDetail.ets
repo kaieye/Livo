@@ -69,6 +69,11 @@ struct ArticleDetail {
   @State private galleryUrls: string[] = []
   @State private showGallery: boolean = false
   @State private galleryIndex: number = 0
+  @State private readingProgress: number = 0
+  @State private contentHeight: number = 0
+  @State private viewportHeight: number = 0
+
+  private scrollable: Scroller = new Scroller()
 
   private readonly socialVideoRegistry: SocialInlineVideoRegistry = new SocialInlineVideoRegistry()
   private readonly aiAssistViewModel: ArticleAIAssistViewModel = new ArticleAIAssistViewModel(this)
@@ -365,6 +370,22 @@ struct ArticleDetail {
     this.showGallery = true
   }
 
+  private updateReadingProgress(): void {
+    if (!this.scrollable || this.viewportHeight <= 0) { return }
+    try {
+      const offset = this.scrollable.currentOffset()
+      const scrollY = offset.yOffset
+      const maxScroll = this.contentHeight - this.viewportHeight
+      if (maxScroll <= 0) {
+        this.readingProgress = 0
+        return
+      }
+      this.readingProgress = Math.min(1, Math.max(0, scrollY / maxScroll))
+    } catch (e) {
+      // 忽略获取失败的情况
+    }
+  }
+
   @Builder
   private DetailHeader() {
     SecondaryPageHeaderShell() {
@@ -508,8 +529,19 @@ struct ArticleDetail {
       Column() {
         this.DetailHeader()
 
+        // 阅读进度条
+        Row() {
+          Row()
+            .width(`${this.readingProgress * 100}%`)
+            .height(2)
+            .backgroundColor(this.theme.accent)
+        }
+        .width('100%')
+        .height(2)
+        .backgroundColor(this.theme.divider)
+
         if (this.entry && !this.isLoading) {
-          Scroll() {
+          Scroll(this.scrollable) {
             Column({ space: 18 }) {
               this.MetadataRow()
               this.TagsRow()
@@ -520,8 +552,15 @@ struct ArticleDetail {
             .alignItems(HorizontalAlign.Start)
             .justifyContent(FlexAlign.Start)
             .constraintSize({ minHeight: '100%' })
+            .onAreaChange((oldArea: Area, newArea: Area) => {
+              this.contentHeight = Number(newArea.height) || 0
+            })
           }
           .width('100%').layoutWeight(1).scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
+          .onDidScroll(() => { this.updateReadingProgress() })
+          .onAreaChange((oldArea: Area, newArea: Area) => {
+            this.viewportHeight = Number(newArea.height) || 0
+          })
         } else if (this.isLoading) {
           Column({ space: 12 }) {
             LoadingProgress()
