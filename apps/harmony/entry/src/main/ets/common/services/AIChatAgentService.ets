@@ -69,13 +69,14 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
   while (match) {
     try {
       const json = JSON.parse(match[1]) as Record<string, string>
-      if (json.name) {
+      const toolName = json.name || json.tool
+      if (toolName) {
         toolCalls.push({
           id: 'text_' + toolCalls.length,
           type: 'function',
           function: {
-            name: json.name,
-            arguments: JSON.stringify(json.parameters || {}),
+            name: toolName,
+            arguments: JSON.stringify(json.parameters || json.tool_input || {}),
           },
         })
       }
