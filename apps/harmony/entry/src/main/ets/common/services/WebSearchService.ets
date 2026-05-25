@@ -34,7 +34,7 @@ export class WebSearchService {
     }
 
     // 使用 DuckDuckGo HTML 搜索
-    return this.searchDuckDuckGo(trimmed)
+    return WebSearchService.searchDuckDuckGo(trimmed)
   }
 
   /**
@@ -64,7 +64,7 @@ export class WebSearchService {
       }
 
       const html = response.result as string
-      return this.parseDuckDuckGoHtml(html)
+      return WebSearchService.parseDuckDuckGoHtml(html)
     } catch (error) {
       console.error('[WebSearch] DuckDuckGo error:', error)
       return []
