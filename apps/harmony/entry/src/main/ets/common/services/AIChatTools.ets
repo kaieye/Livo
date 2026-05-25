@@ -306,10 +306,18 @@ export async function executeToolCall(name: string, args: string): Promise<strin
     case 'list_subscribed_feeds':
       return listFeeds()
     case 'get_feed_entries':
+      // Normalize common parameter aliases from LLM output
+      if (!parsedArgs['feedId'] && parsedArgs['id']) {
+        parsedArgs['feedId'] = parsedArgs['id']
+      }
       return getFeedEntries(parsedArgs)
     case 'get_today_updates':
       return getTodayUpdates(parsedArgs)
     case 'get_entry_detail':
+      // Normalize aliases
+      if (!parsedArgs['entryId'] && parsedArgs['id']) {
+        parsedArgs['entryId'] = parsedArgs['id']
+      }
       return getEntryDetail(parsedArgs)
     case 'get_unread_count':
       return getUnreadCount()

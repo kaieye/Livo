@@ -148,6 +148,64 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
   }
   cleaned = cleaned.replace(minimaxRegex, '').trim()
 
+  // Format 4: <function_call>...</function_call>
+  const functionCallRegex = /<function_call>\s*([\s\S]*?)\s*<\/function_call>/g
+  match = functionCallRegex.exec(cleaned)
+  while (match) {
+    const body = match[1].trim()
+    
+    // Try parsing as JSON first
+    try {
+      const json = JSON.parse(body) as Record<string, string>
+      if (json.name) {
+        toolCalls.push({
+          id: 'text_' + toolCalls.length,
+          type: 'function',
+          function: {
+            name: json.name,
+            arguments: JSON.stringify(json.parameters || json.arguments || {}),
+          },
+        })
+      }
+    } catch (_e) {}
+
+    // Fallback: extract name from first line, args from subsequent lines
+    if (toolCalls.length === 0 || toolCalls[toolCalls.length - 1].function.name !== body.split('\n')[0].trim()) {
+      const lines = body.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+      if (lines.length > 0) {
+        const name = lines[0].replace(/^["']|["']$/g, '').split(/\s+/)[0]
+        const args: Record<string, string> = {}
+        for (let i = 1; i < lines.length; i += 1) {
+          const argRegex = /(\w+)\s*=\s*"([^"]*)"/g
+          let argMatch = argRegex.exec(lines[i])
+          while (argMatch) {
+            args[argMatch[1]] = argMatch[2]
+            argMatch = argRegex.exec(lines[i])
+          }
+          // Also try key: "value" or key: value format
+          const kvRegex = /(\w+)\s*:\s*"([^"]*)"/g
+          let kvMatch = kvRegex.exec(lines[i])
+          while (kvMatch) {
+            args[kvMatch[1]] = kvMatch[2]
+            kvMatch = kvRegex.exec(lines[i])
+          }
+        }
+        if (name && name.length > 2) {
+          toolCalls.push({
+            id: 'text_' + toolCalls.length,
+            type: 'function',
+            function: {
+              name: name,
+              arguments: JSON.stringify(args),
+            },
+          })
+        }
+      }
+    }
+    match = functionCallRegex.exec(cleaned)
+  }
+  cleaned = cleaned.replace(functionCallRegex, '').trim()
+
   return { cleanedContent: cleaned, toolCalls }
 }
 
