@@ -309,6 +309,41 @@ export struct AIChatPanel {
     return value
   }
 
+  private handleEditMessage(messageId: string): void {
+    if (this.isLoading) {
+      return
+    }
+    const msgIndex = this.messages.findIndex((m: ChatMessage) => m.id === messageId)
+    if (msgIndex < 0) {
+      return
+    }
+    const msg = this.messages[msgIndex]
+    if (msg.role !== 'user') {
+      return
+    }
+
+    // 回填内容到输入框
+    this.inputContent = msg.content
+
+    // 删除该消息及之后的所有消息
+    this.messages = this.messages.slice(0, msgIndex)
+
+    // 清理状态
+    this.typewriter.cancel()
+    this.streamingContent = ''
+    this.clearTimers()
+    this.elapsedTime = ''
+    this.timerVisible = false
+    this.timerOpacity = 0
+    this.showToolBanner = false
+    this.toolStatusItems = []
+
+    // 聚焦输入框
+    setTimeout(() => {
+      this.inputContent = this.inputContent
+    }, 100)
+  }
+
   private toolLabelOf(name: string): string {
     switch (name) {
       case 'list_subscribed_feeds':
@@ -618,17 +653,28 @@ export struct AIChatPanel {
                       if (item.role === 'user') {
                         Row() {
                           Blank()
-                        Row() {
-                          Text(this.safeDisplayText(item.content))
-                            .fontSize(15)
-                            .fontColor('#FFFFFF')
-                            .lineHeight(20)
-                            .copyOption(CopyOptions.LocalDevice)
-                        }
-                        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-                        .backgroundColor('#7A5AF8')
-                        .borderRadius(16)
-                        .constraintSize({ maxWidth: '80%' })
+                          Column() {
+                            Row() {
+                              Text(this.safeDisplayText(item.content))
+                                .fontSize(15)
+                                .fontColor('#FFFFFF')
+                                .lineHeight(20)
+                                .copyOption(CopyOptions.LocalDevice)
+                                .layoutWeight(1)
+
+                              SymbolGlyph($r('sys.symbol.arrowshape_turn_up_left'))
+                                .fontSize(14)
+                                .fontColor(['rgba(255,255,255,0.7)'])
+                                .margin({ left: 8 })
+                                .onClick(() => {
+                                  this.handleEditMessage(item.id)
+                                })
+                            }
+                            .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+                          }
+                          .backgroundColor('#7A5AF8')
+                          .borderRadius(16)
+                          .constraintSize({ maxWidth: '80%' })
 
                           Image($r('app.media.ri_ai'))
                             .width(32)
