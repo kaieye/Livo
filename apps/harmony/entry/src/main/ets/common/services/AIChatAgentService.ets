@@ -1,12 +1,14 @@
 import { AIAssistantSettings } from '../models/LivoModels'
 import { ChatMessage } from './ChatHistoryStore'
 import { ChatToolDefinition, buildDefaultTools, executeToolCall, ToolCallFunction } from './AIChatTools'
-import { runChatCompletionForAgent, AgentChatCompletionResult } from './article-assist/ChatCompletionRunner'
+import { runChatCompletionForAgent, AgentChatCompletionResult, AgentAbortSignal } from './article-assist/ChatCompletionRunner'
 import { AgentMessage, ChatToolCallMessage } from './article-assist/ProviderProtocol'
 import { ExtractedToolCall } from './article-assist/ProviderResponseParser'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { Feed, Entry } from '../models/LivoModels'
+
+export { AgentAbortSignal }
 
 const MAX_AGENT_ROUNDS = 5
 
@@ -84,7 +86,7 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
   cleaned = cleaned.replace(jsonRegex, '')
 
   // Format 2 & 3: <minimax:tool_call>...</minimax:tool_call>
-  const minimaxRegex = /<minimax:tool_call>\s*([\s\S]*?)\s*<\/minimax:tool_call>/g
+  const minimaxRegex = /<minimax:tool_call>\s*([\s\S]*?)\s*<\/minimax:tool_call>/gi
   match = minimaxRegex.exec(cleaned)
   while (match) {
     const body = match[1].trim()
@@ -98,10 +100,14 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
         const invokeName = invokeMatch[1]
         const invokeBody = invokeMatch[2]
         const params: Record<string, string> = {}
-        const paramRegex = /<(\w+)>([\s\S]*?)<\/\1>/g
+        const paramRegex = /<(\w+)[^>]*>([\s\S]*?)<\/\1>/g
         let paramMatch = paramRegex.exec(invokeBody)
         while (paramMatch) {
-          params[paramMatch[1]] = paramMatch[2].trim()
+          const tagName = paramMatch[1]
+          const tagContent = paramMatch[2].trim()
+          const nameAttrMatch = paramMatch[0].match(/name\s*=\s*"([^"]+)"/)
+          const key = nameAttrMatch ? nameAttrMatch[1] : tagName
+          params[key] = tagContent
           paramMatch = paramRegex.exec(invokeBody)
         }
         if (invokeName) {
@@ -206,6 +212,56 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
   }
   cleaned = cleaned.replace(functionCallRegex, '').trim()
 
+  // Format 5: [TOOL_CALL]{tool => "funcName", args => { --key "value" }}[/TOOL_CALL]
+  const toolCallBlockRegex = /\[TOOL_CALL\]\s*([\s\S]*?)\s*\[\/TOOL_CALL\]/gi
+  match = toolCallBlockRegex.exec(cleaned)
+  while (match) {
+    const body = match[1].trim()
+    const toolMatch = body.match(/tool\s*=>\s*"([^"]+)"/i)
+    if (toolMatch) {
+      const funcName = toolMatch[1]
+      const params: Record<string, string> = {}
+      const dashArgRegex = /--(\w+)\s+"([^"]*)"/g
+      let dashMatch = dashArgRegex.exec(body)
+      while (dashMatch) {
+        params[dashMatch[1]] = dashMatch[2]
+        dashMatch = dashArgRegex.exec(body)
+      }
+      const eqArgRegex = /--(\w+)\s*=\s*"?([^"\s}]+)"?/g
+      let eqMatch = eqArgRegex.exec(body)
+      while (eqMatch) {
+        if (!params[eqMatch[1]]) {
+          params[eqMatch[1]] = eqMatch[2]
+        }
+        eqMatch = eqArgRegex.exec(body)
+      }
+      const argsBlockMatch = body.match(/args\s*=>\s*\{([\s\S]*?)\}/)
+      if (argsBlockMatch) {
+        const argsBlock = argsBlockMatch[1]
+        const kvRegex = /(\w+)\s*:\s*"([^"]*)"/g
+        let kvMatch = kvRegex.exec(argsBlock)
+        while (kvMatch) {
+          if (!params[kvMatch[1]]) {
+            params[kvMatch[1]] = kvMatch[2]
+          }
+          kvMatch = kvRegex.exec(argsBlock)
+        }
+      }
+      if (funcName) {
+        toolCalls.push({
+          id: 'text_' + toolCalls.length,
+          type: 'function',
+          function: {
+            name: funcName,
+            arguments: JSON.stringify(params),
+          },
+        })
+      }
+    }
+    match = toolCallBlockRegex.exec(cleaned)
+  }
+  cleaned = cleaned.replace(toolCallBlockRegex, '').trim()
+
   return { cleanedContent: cleaned, toolCalls }
 }
 
@@ -264,6 +320,7 @@ export async function runChatAgent(
   history?: ChatMessage[],
   tools?: ChatToolDefinition[],
   onToolCall?: (name: string) => void,
+  abortSignal?: AgentAbortSignal,
 ): Promise<AgentRunResult> {
   const toolRounds: AgentRoundDetail[] = []
   let effectiveTools = tools

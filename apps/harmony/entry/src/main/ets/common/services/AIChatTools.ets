@@ -1,7 +1,8 @@
-import { Feed, Entry } from '../models/LivoModels'
-import { FeedRepository } from '../repositories/FeedRepository'
+import { Feed, Entry, FeedViewType } from '../models/LivoModels'
+import { FeedRepository, FeedDraft } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { WebSearchService } from './WebSearchService'
+import { FeedSubscribeAction, FeedSubscribeRequest } from '../utils/feed-subscribe/FeedSubscribeAction'
 
 export interface ToolFunctionParams {
   type: string
@@ -14,6 +15,9 @@ export interface ToolParamProperties {
   limit?: ToolParamProp
   entryId?: ToolParamProp
   query?: ToolParamProp
+  url?: ToolParamProp
+  title?: ToolParamProp
+  category?: ToolParamProp
 }
 
 export interface ToolParamProp {
@@ -88,6 +92,18 @@ function searchParams(): ToolFunctionParams {
   }
 }
 
+function addFeedParams(): ToolFunctionParams {
+  return {
+    type: 'object',
+    properties: {
+      url: { type: 'string', description: '订阅源的 RSS URL 或网站 URL' },
+      title: { type: 'string', description: '订阅源的名称（可选，如果不提供会自动获取）' },
+      category: { type: 'string', description: '订阅源的分类（可选）' }
+    },
+    required: ['url']
+  }
+}
+
 export function buildDefaultTools(): ChatToolDefinition[] {
   const tools: ChatToolDefinition[] = []
   tools.push({
@@ -136,6 +152,14 @@ export function buildDefaultTools(): ChatToolDefinition[] {
       name: 'web_search',
       description: '执行网络搜索，获取实时信息。当用户的问题需要最新网络信息、新闻、天气、股票价格或其他订阅源中没有的内容时使用此工具',
       parameters: searchParams()
+    }
+  })
+  tools.push({
+    type: 'function',
+    function: {
+      name: 'add_feed',
+      description: '添加新的 RSS 订阅源。当用户要求添加、添加、订阅某个源、网站或 URL 时使用此工具。需要提供订阅源的 URL，可以可选提供名称和分类',
+      parameters: addFeedParams()
     }
   })
   return tools
@@ -294,6 +318,43 @@ async function webSearch(args: Record<string, Object>): Promise<string> {
   }
 }
 
+async function addFeed(args: Record<string, Object>): Promise<string> {
+  const url = args['url'] as string
+  if (!url) {
+    return '错误：缺少订阅源 URL 参数'
+  }
+  
+  const title = (args['title'] as string) || ''
+  const category = (args['category'] as string) || ''
+  
+  try {
+    // 检查是否已经订阅
+    const existingFeed = await FeedRepository.default.getByUrl(url)
+    if (existingFeed) {
+      return `该订阅源已存在：「${existingFeed.title}」（ID: ${existingFeed.id}），无需重复添加`
+    }
+    
+    // 使用 FeedSubscribeAction 添加订阅
+    const request: FeedSubscribeRequest = {
+      targetUrl: url,
+      targetTitle: title,
+      targetSiteUrl: url,
+      targetDescription: '',
+      customTitle: title,
+      customCategory: category,
+      selectedView: FeedViewType.Articles,
+      hideInTimeline: false,
+      mappedTargetUrl: url,
+      resolvedImageUrl: '',
+    }
+    
+    const outcome = await FeedSubscribeAction.subscribe(request)
+    return `订阅成功！已添加「${outcome.message}」（ID: ${outcome.feedId}）`
+  } catch (error) {
+    return `添加订阅失败: ${error instanceof Error ? error.message : String(error)}`
+  }
+}
+
 export async function executeToolCall(name: string, args: string): Promise<string> {
   let parsedArgs: Record<string, Object> = {}
   try {
@@ -323,6 +384,8 @@ export async function executeToolCall(name: string, args: string): Promise<strin
       return getUnreadCount()
     case 'web_search':
       return webSearch(parsedArgs)
+    case 'add_feed':
+      return addFeed(parsedArgs)
     default:
       return `{"error": "未知工具: ${name}"}`
   }

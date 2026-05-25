@@ -189,11 +189,16 @@ export interface AgentChatCompletionResult {
   finishReason: string
 }
 
+export interface AgentAbortSignal {
+  aborted: boolean
+}
+
 export async function runChatCompletionForAgent(
   agentMessages: AgentMessage[],
   tools: ChatToolDefinition[],
   aiSettings: AIAssistantSettings,
   maxTokens: number,
+  abortSignal?: AgentAbortSignal,
 ): Promise<AgentChatCompletionResult> {
   const endpoint = resolveCompletionEndpoint(aiSettings)
   const apiKey = resolveProviderApiKey(aiSettings)
@@ -227,6 +232,9 @@ export async function runChatCompletionForAgent(
   const request = http.createHttp()
   try {
     for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
+      if (abortSignal?.aborted) {
+        throw new Error('请求已取消')
+      }
       const response = await request.request(endpoint, {
         method: http.RequestMethod.POST,
         connectTimeout: AI_REQUEST_CONNECT_TIMEOUT_MS,

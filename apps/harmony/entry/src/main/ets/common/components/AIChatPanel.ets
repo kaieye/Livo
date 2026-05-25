@@ -7,7 +7,7 @@ import {
   ScrollEffectType,
   hdsMaterial,
 } from '@kit.UIDesignKit'
-import { runChatAgent, AgentRoundDetail } from '../services/AIChatAgentService'
+import { runChatAgent, AgentRoundDetail, AgentAbortSignal } from '../services/AIChatAgentService'
 import { AIAssistantSettingsStore } from '../services/AIAssistantSettingsStore'
 import { AIAssistantSettings, HarmonySettings } from '../models/LivoModels'
 import { ThemePalette } from '../services/ThemeService'
@@ -32,6 +32,9 @@ export struct AIChatPanel {
   @State showHistory: boolean = false
   @State streamingContent: string = ''
   @State currentSessionId: string = ''
+  @State editingMessageId: string = ''
+
+  private abortSignal: AgentAbortSignal | null = null
 
   @State elapsedTime: string = ''
   @State timerVisible: boolean = false
@@ -187,10 +190,24 @@ export struct AIChatPanel {
     this.typewriter.cancel()
     this.streamingContent = ''
 
-    this.messages.push(userMsg)
+    if (this.editingMessageId) {
+      const editIdx = this.messages.findIndex((m: ChatMessage) => m.id === this.editingMessageId)
+      if (editIdx >= 0) {
+        this.messages[editIdx].content = text
+      }
+      this.editingMessageId = ''
+    } else {
+      const userMsg: ChatMessage = {
+        role: 'user',
+        content: text,
+        id: Date.now().toString()
+      }
+      this.messages.push(userMsg)
+    }
     this.inputContent = ''
     this.isLoading = true
 
+    this.abortSignal = { aborted: false }
     this.startTimer()
 
     try {
@@ -204,7 +221,7 @@ export struct AIChatPanel {
     try {
       const result = await runChatAgent(text, this.aiSettings, this.messages, undefined, (name: string) => {
         this.pushToolStatus(name)
-      })
+      }, this.abortSignal)
       if (result.toolRounds.length > 0) {
         this.markLastToolDone()
         setTimeout(() => {
@@ -214,6 +231,8 @@ export struct AIChatPanel {
 
       const assistMsgId = (Date.now() + 1).toString()
       this.isLoading = false
+      this.abortSignal = null
+      this.editingMessageId = ''
 
       this.streamingContent = ''
       this.typewriter.start(result.text, {
@@ -233,6 +252,8 @@ export struct AIChatPanel {
       })
     } catch (err) {
       this.isLoading = false
+      this.abortSignal = null
+      this.editingMessageId = ''
       this.stopTimer()
       this.dismissToolBanner()
       const errMsg: ChatMessage = {
@@ -240,12 +261,24 @@ export struct AIChatPanel {
         content: err instanceof Error ? err.message : String(err),
         id: (Date.now() + 1).toString()
       }
-      this.messages.push(errMsg)
+      if (err instanceof Error && err.message.includes('取消')) {
+        // Don't show error for user-initiated cancellation
+      } else {
+        this.messages.push(errMsg)
+      }
     } finally {
       setTimeout(() => {
         this.scroller.scrollEdge(Edge.Bottom)
       }, 100)
     }
+  }
+
+  private handleStop() {
+    if (this.abortSignal) {
+      this.abortSignal.aborted = true
+    }
+    this.typewriter.cancel()
+    this.streamingContent = ''
   }
 
   private handleSuggestionClick(text: string) {
@@ -273,6 +306,8 @@ export struct AIChatPanel {
     this.messages = []
     this.currentSessionId = Date.now().toString()
     this.streamingContent = ''
+    this.editingMessageId = ''
+    this.abortSignal = null
     this.clearTimers()
     this.elapsedTime = ''
     this.timerVisible = false
@@ -285,6 +320,7 @@ export struct AIChatPanel {
     this.saveCurrentSession()
     this.typewriter.cancel()
     this.streamingContent = ''
+    this.editingMessageId = ''
     this.messages = session.messages.slice()
     this.currentSessionId = session.id
     this.showHistory = false
@@ -324,13 +360,16 @@ export struct AIChatPanel {
 
     // 回填内容到输入框
     this.inputContent = msg.content
+    this.editingMessageId = msg.id
 
-    // 删除该消息及之后的所有消息
-    this.messages = this.messages.slice(0, msgIndex)
+    // 删除该消息之后的所有消息（保留该消息之前的历史）
+    this.messages = this.messages.slice(0, msgIndex + 1)
 
     // 清理状态
     this.typewriter.cancel()
     this.streamingContent = ''
+    this.editingMessageId = ''
+    this.abortSignal = null
     this.clearTimers()
     this.elapsedTime = ''
     this.timerVisible = false
@@ -358,6 +397,8 @@ export struct AIChatPanel {
         return '统计未读'
       case 'web_search':
         return '网络搜索'
+      case 'add_feed':
+        return '添加订阅源'
       default:
         return name
     }
@@ -870,18 +911,28 @@ export struct AIChatPanel {
                   })
 
                 Row() {
-                  SymbolGlyph($r('sys.symbol.paperplane_fill'))
-                    .fontSize(16)
-                    .fontColor([this.inputContent.trim() ? '#FFFFFF' : this.theme.textMuted])
+                  if (this.isLoading) {
+                    SymbolGlyph($r('sys.symbol.xmark_circle_fill'))
+                      .fontSize(16)
+                      .fontColor(['#FFFFFF'])
+                  } else {
+                    SymbolGlyph($r('sys.symbol.paperplane_fill'))
+                      .fontSize(16)
+                      .fontColor([this.inputContent.trim() ? '#FFFFFF' : this.theme.textMuted])
+                  }
                 }
                 .width(36)
                 .height(36)
                 .borderRadius(18)
                 .justifyContent(FlexAlign.Center)
                 .alignItems(VerticalAlign.Center)
-                .backgroundColor(this.inputContent.trim() ? '#7A5AF8' : this.theme.divider)
+                .backgroundColor(this.isLoading ? '#DC2626' : (this.inputContent.trim() ? '#7A5AF8' : this.theme.divider))
                 .onClick(() => {
-                  this.handleSend()
+                  if (this.isLoading) {
+                    this.handleStop()
+                  } else {
+                    this.handleSend()
+                  }
                 })
               }
               .width('100%')
