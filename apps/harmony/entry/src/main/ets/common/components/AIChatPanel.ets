@@ -321,6 +321,8 @@ export struct AIChatPanel {
         return '查看文章详情'
       case 'get_unread_count':
         return '统计未读'
+      case 'web_search':
+        return '网络搜索'
       default:
         return name
     }

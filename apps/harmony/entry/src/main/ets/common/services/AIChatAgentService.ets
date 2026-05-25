@@ -29,11 +29,13 @@ const AGENT_SYSTEM_PROMPT = `你是 Livo 的智能助手，可以帮用户查看
 - get_today_updates：查看今天哪些订阅源更新了内容
 - get_entry_detail：查看某篇文章的完整内容和细节
 - get_unread_count：查看未读文章统计
+- web_search：执行网络搜索，获取实时信息（新闻、天气、股票、最新事件等）
 
 使用规则：
 1. 默认使用中文回复。
 2. 当用户的问题需要查询订阅数据时，必须调用对应的 function，不要凭空猜测或描述你要调用什么函数。
-3. 回复时使用友好的语气，对信息做适当的归纳和总结。`
+3. 当用户的问题需要最新网络信息（如新闻、天气、股票、实时事件等）时，使用 web_search 工具。
+4. 回复时使用友好的语气，对信息做适当的归纳和总结。`
 
 function toolCallResultSummary(name: string, result: string): string {
   if (result.length > 0 && (result.charAt(0) === '{' || result.startsWith('错误'))) {

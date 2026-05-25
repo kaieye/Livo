@@ -1,6 +1,7 @@
 import { Feed, Entry } from '../models/LivoModels'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
+import { WebSearchService } from './WebSearchService'
 
 export interface ToolFunctionParams {
   type: string
@@ -12,6 +13,7 @@ export interface ToolParamProperties {
   feedId?: ToolParamProp
   limit?: ToolParamProp
   entryId?: ToolParamProp
+  query?: ToolParamProp
 }
 
 export interface ToolParamProp {
@@ -76,6 +78,16 @@ function entryParams(): ToolFunctionParams {
   }
 }
 
+function searchParams(): ToolFunctionParams {
+  return {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: '搜索关键词或问题' }
+    },
+    required: ['query']
+  }
+}
+
 export function buildDefaultTools(): ChatToolDefinition[] {
   const tools: ChatToolDefinition[] = []
   tools.push({
@@ -116,6 +128,14 @@ export function buildDefaultTools(): ChatToolDefinition[] {
       name: 'get_unread_count',
       description: '查询未读文章总数和各订阅源的未读数量统计',
       parameters: emptyParams()
+    }
+  })
+  tools.push({
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: '执行网络搜索，获取实时信息。当用户的问题需要最新网络信息、新闻、天气、股票价格或其他订阅源中没有的内容时使用此工具',
+      parameters: searchParams()
     }
   })
   return tools
@@ -260,6 +280,20 @@ async function getUnreadCount(): Promise<string> {
   return result
 }
 
+async function webSearch(args: Record<string, Object>): Promise<string> {
+  const query = args['query'] as string
+  if (!query) {
+    return '错误：缺少搜索关键词参数'
+  }
+  
+  try {
+    const results = await WebSearchService.search(query)
+    return WebSearchService.formatResultsForAI(results, query)
+  } catch (error) {
+    return `搜索失败: ${error instanceof Error ? error.message : String(error)}`
+  }
+}
+
 export async function executeToolCall(name: string, args: string): Promise<string> {
   let parsedArgs: Record<string, Object> = {}
   try {
@@ -279,6 +313,8 @@ export async function executeToolCall(name: string, args: string): Promise<strin
       return getEntryDetail(parsedArgs)
     case 'get_unread_count':
       return getUnreadCount()
+    case 'web_search':
+      return webSearch(parsedArgs)
     default:
       return `{"error": "未知工具: ${name}"}`
   }
