@@ -26,7 +26,6 @@ export struct IndexRootTabBody {
   @Prop modeTransitionDirection: number = 1
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
-  @Prop homeLoadMoreInProgress: boolean = false
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
@@ -74,7 +73,6 @@ export struct IndexRootTabBody {
           showUnreadDot: this.showUnreadDot,
           homeInitialLoadPending: this.homeInitialLoadPending,
           isHomeStartupRefreshing: this.isHomeStartupRefreshing,
-          homeLoadMoreInProgress: this.homeLoadMoreInProgress,
           homeListSwapAnimating: this.homeListSwapAnimating,
           homeListSwapMode: this.homeListSwapMode,
           homeListSwapOpacity: this.homeListSwapOpacity,
@@ -85,6 +83,9 @@ export struct IndexRootTabBody {
         SubscriptionsContent({
           inheritedTheme: this.theme,
           mode: this.subscriptionsMode,
+          onModeChange: (mode: SubscriptionMode) => {
+            this.subscriptionsMode = mode
+          },
         })
       } else if (this.tabId === 'discover') {
         DiscoverContent({

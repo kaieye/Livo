@@ -22,6 +22,7 @@ struct Subscriptions {
         SubscriptionsContent({
           inheritedTheme: this.theme,
           mode: this.mode,
+          onModeChange: (mode: SubscriptionMode) => { this.handleModeChange(mode) },
         })
       }
       .mode(NavigationMode.Stack)

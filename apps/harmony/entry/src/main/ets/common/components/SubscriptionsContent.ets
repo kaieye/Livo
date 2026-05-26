@@ -10,7 +10,7 @@ import {
   SubscriptionsAvatarHydrationCoordinator,
 } from '../utils/subscriptions/SubscriptionsAvatarHydrationCoordinator'
 import { SubscriptionMode, HOME_MODE_SCENE_TOP_INSET } from './HomeRootConfig'
-import { resolveSubscriptionModeLabel } from '../utils/subscriptions/SubscriptionsModePresentation'
+import { resolveSubscriptionModeLabel, resolveSubscriptionSwipeTarget, SubscriptionSwipeAnalysisInput } from '../utils/subscriptions/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
@@ -43,6 +43,7 @@ export struct SubscriptionsContent {
   @StorageProp('subscriptionsOverlayBackAt') @Watch('handleOverlayBackSignal') subscriptionsOverlayBackAt: number = 0
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
   @Prop @Watch('syncInheritedTheme') inheritedTheme: ThemePalette = ThemeService.currentPalette()
+  onModeChange: (mode: SubscriptionMode) => void = () => {}
   scroller: Scroller = new Scroller()
   private readonly hydratedFeedIds: Set<string> = new Set()
   private headerBlurOffset: number = 0
@@ -329,6 +330,28 @@ export struct SubscriptionsContent {
         void this.refreshFeeds()
       }
     })
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionEnd((event: GestureEvent) => {
+          this.handleModeSwipe(event)
+        })
+    )
+  }
+
+  private handleModeSwipe(event: GestureEvent): void {
+    if (this.overlayLevel > 0) {
+      return
+    }
+    const input: SubscriptionSwipeAnalysisInput = {
+      currentMode: this.mode,
+      isTransitioning: false,
+      offsetX: event.offsetX,
+      offsetY: event.offsetY,
+    }
+    const nextMode = resolveSubscriptionSwipeTarget(input)
+    if (nextMode) {
+      this.onModeChange(nextMode)
+    }
   }
 
   build() {
