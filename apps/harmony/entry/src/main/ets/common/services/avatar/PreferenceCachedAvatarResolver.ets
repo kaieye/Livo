@@ -3,7 +3,7 @@ import { DiscoverAvatarCacheStore } from '../DiscoverAvatarCacheStore'
 import {
   discoverAvatarCacheKeys,
   isDiscoverAvatarCacheableImageUrl,
-} from '../../utils/discover/DiscoverAvatarPresentation'
+} from '../../coordinators/discover/DiscoverAvatarPresentation'
 
 function trimValue(value: string | undefined): string {
   return (value || '').trim()

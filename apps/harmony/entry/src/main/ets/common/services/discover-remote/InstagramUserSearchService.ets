@@ -7,7 +7,7 @@ import {
   extractXFollowersFromText,
   parseInstagramProfilesFromSearchHtml,
   parseInstagramProfilesFromTopsearchPayload,
-} from '../../utils/discover/DiscoverRemoteSearchParsing'
+} from '../../coordinators/discover/DiscoverRemoteSearchParsing'
 import { formatInstagramFeedTitle } from '../../utils/social/SocialFeedTitles'
 import {
   decodeBasicEntities,

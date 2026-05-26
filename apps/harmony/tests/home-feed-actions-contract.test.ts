@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const ownerSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedSessionOwner.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedSessionOwner.ets',
     import.meta.url,
   ),
   'utf8',
@@ -12,7 +12,7 @@ const ownerSource = readFileSync(
 
 const fakeSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/FakeHomeFeedActions.ets',
+    '../entry/src/main/ets/common/coordinators/home/FakeHomeFeedActions.ets',
     import.meta.url,
   ),
   'utf8',

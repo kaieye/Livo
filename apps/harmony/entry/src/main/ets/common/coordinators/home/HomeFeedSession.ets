@@ -23,13 +23,13 @@ import {
   HOME_MAX_CANDIDATE_LIMIT,
   SubscriptionMode,
 } from '../../components/HomeRootConfig'
-import { IndexHomeDiagnosticsLogger, IndexHomeDiagnosticsOwner } from '../index-home/IndexHomeDiagnosticsLogger'
-import { IndexHomeLoadStateGate, IndexHomeLoadStateOwner } from '../index-home/IndexHomeLoadStateGate'
-import { IndexHomeModeScenePresenter, IndexHomeModeSceneOwner } from '../index-home/IndexHomeModeScenePresenter'
-import { IndexHomeRailCoordinator, IndexHomeRailOwner } from '../index-home/IndexHomeRailCoordinator'
-import { IndexHomeRuntimeCoordinator, IndexHomeRuntimeOwner } from '../index-home/IndexHomeRuntimeCoordinator'
-import { IndexRootTabCoordinator, IndexRootTabOwner } from '../index-home/IndexRootTabCoordinator'
-import { IndexPageLifecycleController, IndexPageLifecycleOwner } from '../index-home/IndexPageLifecycleController'
+import { IndexHomeDiagnosticsLogger, IndexHomeDiagnosticsOwner } from '../../coordinators/index-home/IndexHomeDiagnosticsLogger'
+import { IndexHomeLoadStateGate, IndexHomeLoadStateOwner } from '../../coordinators/index-home/IndexHomeLoadStateGate'
+import { IndexHomeModeScenePresenter, IndexHomeModeSceneOwner } from '../../coordinators/index-home/IndexHomeModeScenePresenter'
+import { IndexHomeRailCoordinator, IndexHomeRailOwner } from '../../coordinators/index-home/IndexHomeRailCoordinator'
+import { IndexHomeRuntimeCoordinator, IndexHomeRuntimeOwner } from '../../coordinators/index-home/IndexHomeRuntimeCoordinator'
+import { IndexRootTabCoordinator, IndexRootTabOwner } from '../../coordinators/index-home/IndexRootTabCoordinator'
+import { IndexPageLifecycleController, IndexPageLifecycleOwner } from '../../coordinators/index-home/IndexPageLifecycleController'
 import { RootTabId } from '../../navigation/AppRouter'
 
 /**

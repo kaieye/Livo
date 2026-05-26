@@ -6,7 +6,7 @@ import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresent
 import {
   buildSubscriptionFeedIconCandidates,
   resolveSubscriptionFeedIconSource,
-} from '../utils/subscriptions/SubscriptionsAvatarPolicy'
+} from '../coordinators/subscriptions/SubscriptionsAvatarPolicy'
 import {
   CARD_RADIUS_LG,
   CARD_RADIUS_MD,

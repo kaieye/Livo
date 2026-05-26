@@ -13,7 +13,7 @@ import {
   ROOT_PAGE_TITLE_TEXT_BOTTOM_OFFSET,
 } from '../common/components/FloatingRootPageLayout'
 import { ROOT_BOTTOM_TITLE_HEIGHT } from '../common/components/HomeRootConfig'
-import { rootTabTitleBarStyle } from '../common/utils/index-home/IndexRootChrome'
+import { rootTabTitleBarStyle } from '../common/coordinators/index-home/IndexRootChrome'
 
 @Entry
 @Component

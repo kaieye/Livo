@@ -4,7 +4,7 @@ import {
   normalizeInlineSearchQuery,
   buildInlineHighlightSegments,
   type InlineHighlightSegment,
-} from '../entry/src/main/ets/common/utils/home/HomeInlineSearch.ts'
+} from '../entry/src/main/ets/common/coordinators/home/HomeInlineSearch.ts'
 
 test('normalizeInlineSearchQuery trims and lowercases', () => {
   assert.equal(normalizeInlineSearchQuery('  Hello World  '), 'hello world')

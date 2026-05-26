@@ -110,7 +110,7 @@ test('model conversion normalizes feed titles before entry and detail rendering'
 
 test('feed detail title resolver normalizes raw x titles from every snapshot source', () => {
   const source = readFileSync(
-    'entry/src/main/ets/common/utils/feed-detail/FeedDetailViewModel.ets',
+    'entry/src/main/ets/common/coordinators/feed-detail/FeedDetailViewModel.ets',
     'utf8',
   )
 

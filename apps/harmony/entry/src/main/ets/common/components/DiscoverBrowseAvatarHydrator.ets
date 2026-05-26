@@ -10,7 +10,7 @@ import {
   isDiscoverAvatarCacheableImageUrl,
   isDiscoverAvatarPlaceholderUrl,
   resolveDiscoverAvatarImageUrl,
-} from '../utils/discover/DiscoverAvatarPresentation'
+} from '../coordinators/discover/DiscoverAvatarPresentation'
 import { DiscoverBrowseAvatarHydrationTask } from './DiscoverTypes'
 
 export class DiscoverBrowseAvatarHydrator {

@@ -6,7 +6,7 @@ import {
 } from '@kit.UIDesignKit'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
-import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../utils/home/HomeModeMeta'
+import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../coordinators/home/HomeModeMeta'
 
 @Component
 export struct HomeRootOverlayControls {

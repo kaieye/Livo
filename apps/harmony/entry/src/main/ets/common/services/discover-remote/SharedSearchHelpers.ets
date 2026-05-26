@@ -1,6 +1,6 @@
 import { FeedViewType } from '../../models/LivoModels'
 import { escapeHtml } from '../../utils/HtmlParser'
-import { DiscoverRemoteViewMapping } from '../../utils/discover/DiscoverRemoteSearchParsing'
+import { DiscoverRemoteViewMapping } from '../../coordinators/discover/DiscoverRemoteSearchParsing'
 import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 
 /**

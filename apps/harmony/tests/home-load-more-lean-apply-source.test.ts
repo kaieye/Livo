@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const paginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
@@ -12,7 +12,7 @@ const paginationSource = readFileSync(
 
 const dataManagerSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeEntryDataManager.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeEntryDataManager.ets',
     import.meta.url,
   ),
   'utf8',
@@ -20,7 +20,7 @@ const dataManagerSource = readFileSync(
 
 const visibleEntryPolicySource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeVisibleEntryPolicy.ts',
+    '../entry/src/main/ets/common/coordinators/home/HomeVisibleEntryPolicy.ts',
     import.meta.url,
   ),
   'utf8',
@@ -28,7 +28,7 @@ const visibleEntryPolicySource = readFileSync(
 
 const paginationStateSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedPaginationState.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPaginationState.ets',
     import.meta.url,
   ),
   'utf8',

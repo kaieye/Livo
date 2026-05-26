@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const visibleEntryPolicySource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeVisibleEntryPolicy.ts',
+    '../entry/src/main/ets/common/coordinators/home/HomeVisibleEntryPolicy.ts',
     import.meta.url,
   ),
   'utf8',
@@ -20,7 +20,7 @@ const homeRootConfigSource = readFileSync(
 
 const homeFeedPaginationStateSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedPaginationState.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPaginationState.ets',
     import.meta.url,
   ),
   'utf8',
@@ -28,7 +28,7 @@ const homeFeedPaginationStateSource = readFileSync(
 
 const sessionSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedSession.ets',
     import.meta.url,
   ),
   'utf8',
@@ -36,7 +36,7 @@ const sessionSource = readFileSync(
 
 const homeFeedPaginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
@@ -44,7 +44,7 @@ const homeFeedPaginationSource = readFileSync(
 
 const homeModeMapHelpersSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeModeMapHelpers.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeModeMapHelpers.ets',
     import.meta.url,
   ),
   'utf8',

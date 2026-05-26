@@ -5,7 +5,7 @@ import { EntryRepository } from '../common/repositories/EntryRepository'
 import { goBack, openVideoPlayer } from '../common/navigation/AppRouter'
 import { TranslationFormattingHint } from '../common/services/ArticleAssistService'
 import { ExternalUrlService } from '../common/services/ExternalUrlService'
-import { resolveArticleSourceUrl } from '../common/utils/article/ArticleSourceUrl'
+import { resolveArticleSourceUrl } from '../common/coordinators/article/ArticleSourceUrl'
 import { isDirectVideoUrl } from '../common/utils/FeedMediaUrl'
 import { PictureCarouselMediaItem } from '../common/utils/PictureGallery'
 import {
@@ -13,11 +13,11 @@ import {
   resolvePictureDetailTextBlocks,
   shouldRenderArticleParagraphBlock,
   shouldRenderArticleSummary,
-} from '../common/utils/article/ArticleDetailContent'
-import { ArticleAIAssistViewModel } from '../common/utils/article/ArticleAIAssistViewModel'
-import { ArticleInlineVideoPlaybackController } from '../common/utils/article/ArticleInlineVideoPlaybackController'
+} from '../common/coordinators/article/ArticleDetailContent'
+import { ArticleAIAssistViewModel } from '../common/coordinators/article/ArticleAIAssistViewModel'
+import { ArticleInlineVideoPlaybackController } from '../common/coordinators/article/ArticleInlineVideoPlaybackController'
 import { SocialInlineVideoRegistry } from '../common/utils/social/SocialInlineVideoRegistry'
-import { ArticleEntryLoader, copyArticleEntryWithStarState } from '../common/utils/article/ArticleEntryLoader'
+import { ArticleEntryLoader, copyArticleEntryWithStarState } from '../common/coordinators/article/ArticleEntryLoader'
 import { PageHeader } from '../common/components/PageHeader'
 import { SecondaryPageHeaderShell } from '../common/components/SecondaryPageHeaderShell'
 import { ArticleSocialDetail } from '../common/components/ArticleSocialDetail'

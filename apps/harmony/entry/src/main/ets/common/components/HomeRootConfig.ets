@@ -7,7 +7,7 @@ import {
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
 } from './FloatingRootPageLayout'
 import { BOTTOM_TAB_BAR_HEIGHT, BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
-import { resolveHdsBottomTabBarBottomMargin } from '../utils/index-home/HdsBottomTabConfig'
+import { resolveHdsBottomTabBarBottomMargin } from '../coordinators/index-home/HdsBottomTabConfig'
 import { HOME_MODES, HomeMode } from '../coordinators/home/HomeModeMeta'
 import { resolveHomeVisibleEntryInitialLimit } from '../coordinators/home/HomeVisibleEntryPolicy'
 

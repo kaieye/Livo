@@ -39,7 +39,7 @@ import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
 import { HomeFeedLoadMoreDrain } from './HomeFeedLoadMoreDrain'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 import { mergeUniqueEntries } from './HomeEntryUtils'
-import { writeHomeLoadMoreInProgress } from '../index-home/HomeChromeProgressStore'
+import { writeHomeLoadMoreInProgress } from '../../coordinators/index-home/HomeChromeProgressStore'
 
 export class HomeFeedPagination extends HomeFeedPaginationState {
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()

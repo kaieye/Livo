@@ -4,7 +4,7 @@ import { resolveHomeModeTitle } from '../coordinators/home/HomeModeMeta'
 import { HomeInlineSearchOverlay } from './HomeInlineSearchOverlay'
 import { HomeRootOverlayControls } from './HomeRootOverlayControls'
 import { HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL, SubscriptionMode } from './HomeRootConfig'
-import { HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY } from '../utils/index-home/HomeChromeProgressStore'
+import { HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY } from '../coordinators/index-home/HomeChromeProgressStore'
 
 // 通过 @StorageProp 订阅模式栏折叠进度,自己在节点上跑 .animation(),
 // 避免父层 (Index) 因 @State 进度变化而触发整树 rebuild。

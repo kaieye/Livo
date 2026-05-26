@@ -12,8 +12,8 @@ import {
 import type { DiscoverBuiltinFeed } from '../../../data/DiscoverBuiltinFeeds'
 import { FeedViewType } from '../../../models/LivoModels'
 import { FeedRepository } from '../../../repositories/FeedRepository'
-import { FeedSubscribeAction } from '../../../utils/feed-subscribe/FeedSubscribeAction'
-import type { FeedSubscribeRequest } from '../../../utils/feed-subscribe/FeedSubscribeAction'
+import { FeedSubscribeAction } from '../../../coordinators/feed-subscribe/FeedSubscribeAction'
+import type { FeedSubscribeRequest } from '../../../coordinators/feed-subscribe/FeedSubscribeAction'
 
 const DISCOVER_CATEGORY_VALUES: string[] = ['articles', 'social', 'pictures', 'videos', 'ai', 'podcast', 'news', 'all']
 

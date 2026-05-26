@@ -10,8 +10,8 @@ import type { Feed, RemoteFeedResult } from '../../../models/LivoModels'
 import { FeedRefreshCoordinator } from '../../../data/FeedRefreshCoordinator'
 import { FeedRepository } from '../../../repositories/FeedRepository'
 import { EntryRepository } from '../../../repositories/EntryRepository'
-import { FeedSubscribeAction } from '../../../utils/feed-subscribe/FeedSubscribeAction'
-import type { FeedSubscribeRequest } from '../../../utils/feed-subscribe/FeedSubscribeAction'
+import { FeedSubscribeAction } from '../../../coordinators/feed-subscribe/FeedSubscribeAction'
+import type { FeedSubscribeRequest } from '../../../coordinators/feed-subscribe/FeedSubscribeAction'
 
 const VIEW_NAMES: string[] = ['文章', '社交', '视频', '图片']
 

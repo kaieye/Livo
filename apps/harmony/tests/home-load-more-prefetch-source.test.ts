@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedLoadMorePrefetch.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedLoadMorePrefetch.ets',
     import.meta.url,
   ),
   'utf8',
@@ -12,7 +12,7 @@ const source = readFileSync(
 
 const guardSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedGuard.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedGuard.ets',
     import.meta.url,
   ),
   'utf8',

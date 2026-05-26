@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { HomeFeedStateBag } from '../main/ets/common/utils/home/HomeFeedStateBag'
-import { FakeHomeFeedActions } from '../main/ets/common/utils/home/FakeHomeFeedActions'
-import { HomeFeedState, HomeFeedActions } from '../main/ets/common/utils/home/HomeFeedSessionOwner'
+import { HomeFeedStateBag } from '../main/ets/common/coordinators/home/HomeFeedStateBag'
+import { FakeHomeFeedActions } from '../main/ets/common/coordinators/home/FakeHomeFeedActions'
+import { HomeFeedState, HomeFeedActions } from '../main/ets/common/coordinators/home/HomeFeedSessionOwner'
 
 /**
  * Validates that HomeFeedStateBag and FakeHomeFeedActions work as

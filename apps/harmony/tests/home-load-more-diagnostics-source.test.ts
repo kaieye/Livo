@@ -4,14 +4,14 @@ import { readFileSync } from 'node:fs'
 
 const paginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
 )
 const dataManagerSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeEntryDataManager.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeEntryDataManager.ets',
     import.meta.url,
   ),
   'utf8',
@@ -60,7 +60,7 @@ test('load more diagnostics logs query, append notification, and tweet presentat
   assert.match(
     readFileSync(
       new URL(
-        '../entry/src/main/ets/common/utils/home/HomeFeedLoadMorePrefetch.ets',
+        '../entry/src/main/ets/common/coordinators/home/HomeFeedLoadMorePrefetch.ets',
         import.meta.url,
       ),
       'utf8',

@@ -23,9 +23,13 @@ import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../utils/index-home/RootTabScrollToTopSignal'
+} from '../coordinators/index-home/RootTabScrollToTopSignal'
+import {
+  SETTINGS_ACTIVE_SHEET_KEY,
+  writeSettingsActiveSheet,
+  writeSettingsOverlayLevel,
+} from '../utils/AppSignals'
 
-const SETTINGS_ACTIVE_SHEET_KEY: string = 'settingsActiveSheetKey'
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
 const SETTINGS_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
 const SETTINGS_TITLE_BAR_OVERLAY_SPACER: number =
@@ -54,7 +58,7 @@ export struct SettingsContent {
     if (restoreSheet && !this.showSettingsSheet) {
       this.activeSheet = restoreSheet
       this.showSettingsSheet = true
-      AppStorage.setOrCreate('settingsOverlayLevel', 1)
+      writeSettingsOverlayLevel(1)
     }
 
     this.theme = this.inheritedTheme
@@ -66,13 +70,13 @@ export struct SettingsContent {
     if (this.storedActiveSheet && !this.showSettingsSheet) {
       this.activeSheet = this.storedActiveSheet
       this.showSettingsSheet = true
-      AppStorage.setOrCreate('settingsOverlayLevel', 1)
+      writeSettingsOverlayLevel(1)
       return
     }
 
     if (!this.storedActiveSheet && this.showSettingsSheet && this.activeSheet === '') {
       this.showSettingsSheet = false
-      AppStorage.setOrCreate('settingsOverlayLevel', 0)
+      writeSettingsOverlayLevel(0)
     }
   }
 
@@ -107,15 +111,15 @@ export struct SettingsContent {
 
     this.activeSheet = sheet
     this.showSettingsSheet = true
-    AppStorage.setOrCreate('settingsOverlayLevel', 1)
-    AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, sheet)
+    writeSettingsOverlayLevel(1)
+    writeSettingsActiveSheet(sheet)
   }
 
   private closeSheet(): void {
     this.showSettingsSheet = false
     this.activeSheet = ''
-    AppStorage.setOrCreate('settingsOverlayLevel', 0)
-    AppStorage.setOrCreate(SETTINGS_ACTIVE_SHEET_KEY, '')
+    writeSettingsOverlayLevel(0)
+    writeSettingsActiveSheet('')
   }
 
   private resolveSubtitle(item: SettingItem): string {

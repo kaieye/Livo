@@ -258,6 +258,21 @@ export struct HomeModeEntriesPage {
     .border({ width: 0.8, color: this.theme.divider })
   }
 
+  // footer 始终常驻列表末尾,通过 Visibility 切换显隐。Visibility.Hidden 保留
+  // 布局空间但不绘制内容,这样:
+  // 1) List.contentHeight 始终包含 footer 高度,onReachEnd 在 footer 完全
+  //    进入视口时触发,而不是"最后一条卡的一半被截断时"触发。
+  // 2) isLoadingMore 翻转时只切换 visibility,不再插入/删除 ListItem,避免
+  //    LazyForEach 同帧 layout 抖动把最后一条卡推成"半截可见"。
+  @Builder
+  private LoadMoreFooterSlot() {
+    Column() {
+      this.LoadMoreFooter()
+    }
+    .width('100%')
+    .visibility(this.isLoadingMore ? Visibility.Visible : Visibility.Hidden)
+  }
+
   @Builder
   private EmptyCard() {
     if (this.isLoading) {
@@ -334,9 +349,9 @@ export struct HomeModeEntriesPage {
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
 
-      if (this.isLoadingMore) {
+      if (this.dataSource.totalCount() > 0) {
         ListItem() {
-          this.LoadMoreFooter()
+          this.LoadMoreFooterSlot()
         }
         .width('100%')
       }
@@ -414,9 +429,9 @@ export struct HomeModeEntriesPage {
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }
 
-      if (this.isLoadingMore) {
+      if (this.dataSource.totalCount() > 0) {
         ListItem() {
-          this.LoadMoreFooter()
+          this.LoadMoreFooterSlot()
         }
         .width('100%')
       }
@@ -511,9 +526,9 @@ export struct HomeModeEntriesPage {
         }, (rowEntries: EntryCardModel[], rowIndex: number) => homeVideoRowRenderKey(rowEntries, rowIndex))
       }
 
-      if (this.isLoadingMore) {
+      if (this.dataSource.totalCount() > 0) {
         ListItem() {
-          this.LoadMoreFooter()
+          this.LoadMoreFooterSlot()
         }
         .width('100%')
       }

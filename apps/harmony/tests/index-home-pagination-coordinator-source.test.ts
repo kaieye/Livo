@@ -9,7 +9,7 @@ const indexSource = readFileSync(
 
 const paginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
@@ -51,6 +51,21 @@ test('home list shows a bottom loading footer only while load-more is actually f
   assert.match(entriesPageSource, /private LoadMoreFooter\(\)/)
   assert.match(entriesPageSource, /LoadingProgress\(\)/)
   assert.match(entriesPageSource, /Text\('正在加载更多'\)/)
+  // footer 必须始终常驻列表末尾（仅在 totalCount===0 时跳过）,通过 Visibility
+  // 切换显隐。否则插入/删除 footer ListItem 会让 List.contentHeight 跳变,
+  // 把最后一条卡推成"半截可见"。
+  assert.match(
+    entriesPageSource,
+    /private LoadMoreFooterSlot\(\)[\s\S]*?\.visibility\(this\.isLoadingMore \? Visibility\.Visible : Visibility\.Hidden\)/,
+  )
+  assert.match(
+    entriesPageSource,
+    /if \(this\.dataSource\.totalCount\(\) > 0\) \{\s*ListItem\(\) \{\s*this\.LoadMoreFooterSlot\(\)\s*\}/,
+  )
+  assert.doesNotMatch(
+    entriesPageSource,
+    /if \(this\.isLoadingMore\) \{\s*ListItem\(\) \{\s*this\.LoadMoreFooter\(\)/,
+  )
   assert.match(
     entriesPageSource,
     /\.onReachEnd\(\(\) => \{\s*this\.callbacks\.onListEndReach\(this\.dataSource\.totalCount\(\)\)\s*\}\)/,

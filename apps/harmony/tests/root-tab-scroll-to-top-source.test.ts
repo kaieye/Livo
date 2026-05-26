@@ -11,21 +11,21 @@ const rootShellSource = readFileSync(
 )
 const rootCoordinatorSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/index-home/IndexRootTabCoordinator.ets',
+    '../entry/src/main/ets/common/coordinators/index-home/IndexRootTabCoordinator.ets',
     import.meta.url,
   ),
   'utf8',
 )
 const rootChromeSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/index-home/IndexRootChrome.ets',
+    '../entry/src/main/ets/common/coordinators/index-home/IndexRootChrome.ets',
     import.meta.url,
   ),
   'utf8',
 )
 const rootVisibilityPolicySource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/index-home/RootTabVisibilityPolicy.ets',
+    '../entry/src/main/ets/common/coordinators/index-home/RootTabVisibilityPolicy.ets',
     import.meta.url,
   ),
   'utf8',

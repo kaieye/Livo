@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const sessionSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedSession.ets',
     import.meta.url,
   ),
   'utf8',

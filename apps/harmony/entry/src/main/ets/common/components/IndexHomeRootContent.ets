@@ -5,7 +5,7 @@ import { HomeModeEntriesPage } from './HomeModeEntriesPage'
 import { SubscriptionMode } from './HomeRootConfig'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
-import { HOME_LOAD_MORE_IN_PROGRESS_KEY } from '../utils/index-home/HomeChromeProgressStore'
+import { HOME_LOAD_MORE_IN_PROGRESS_KEY } from '../coordinators/index-home/HomeChromeProgressStore'
 
 export interface IndexHomeRootContentCallbacks {
   onModeSwipe: (event: GestureEvent) => void

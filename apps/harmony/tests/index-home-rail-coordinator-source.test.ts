@@ -9,7 +9,7 @@ const indexSource = readFileSync(
 
 const sessionSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedSession.ets',
     import.meta.url,
   ),
   'utf8',
@@ -17,7 +17,7 @@ const sessionSource = readFileSync(
 
 const railCoordinatorSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/index-home/IndexHomeRailCoordinator.ets',
+    '../entry/src/main/ets/common/coordinators/index-home/IndexHomeRailCoordinator.ets',
     import.meta.url,
   ),
   'utf8',

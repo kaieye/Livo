@@ -24,13 +24,13 @@ import { IndexRootNavigationShell } from '../common/components/IndexRootNavigati
 import { AIChatPanel } from '../common/components/AIChatPanel'
 import { EntryImageGallery } from '../common/components/EntryImageGallery'
 import { AudioMiniBar } from '../common/components/AudioMiniBar'
-import { HdsBottomTabId } from '../common/utils/index-home/HdsBottomTabConfig'
-import { IndexHomeScrollerRegistry } from '../common/utils/index-home/IndexHomeScrollerRegistry'
-import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/utils/index-home/RootTabScrollToTopSignal'
+import { HdsBottomTabId } from '../common/coordinators/index-home/HdsBottomTabConfig'
+import { IndexHomeScrollerRegistry } from '../common/coordinators/index-home/IndexHomeScrollerRegistry'
+import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/coordinators/index-home/RootTabScrollToTopSignal'
 import {
   writeHomeAudioBarCollapseProgress,
   writeHomeModeRailEffectiveProgress,
-} from '../common/utils/index-home/HomeChromeProgressStore'
+} from '../common/coordinators/index-home/HomeChromeProgressStore'
 import { HomeScrollIntentTracker } from '../common/coordinators/home/HomeScrollIntentTracker'
 import { resolveHomeVisibleEntryInitialLimit } from '../common/coordinators/home/HomeVisibleEntryPolicy'
 import {

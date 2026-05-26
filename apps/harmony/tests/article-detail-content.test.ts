@@ -8,7 +8,7 @@ import {
   resolvePictureDetailTextBlocks,
   shouldRenderArticleParagraphBlock,
   shouldRenderArticleSummary,
-} from '../entry/src/main/ets/common/utils/article/ArticleDetailContent.ts'
+} from '../entry/src/main/ets/common/coordinators/article/ArticleDetailContent.ts'
 
 test('article detail summary hides duplicated title and opening paragraph', () => {
   assert.equal(

@@ -9,7 +9,7 @@ import {
   isDirectVideoMimeType,
   isDirectVideoUrl,
 } from '../entry/src/main/ets/common/utils/FeedMediaUrl.ts'
-import { selectArticleVideoUrls } from '../entry/src/main/ets/common/utils/article/ArticleVideoSource.ts'
+import { selectArticleVideoUrls } from '../entry/src/main/ets/common/coordinators/article/ArticleVideoSource.ts'
 
 const articleContentBuilderSource = readFileSync(
   new URL(

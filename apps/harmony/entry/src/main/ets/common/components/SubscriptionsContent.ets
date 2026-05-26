@@ -4,13 +4,17 @@ import { FeedRepository } from '../repositories/FeedRepository'
 import { feedCardFromFeed } from '../data/AppRepositoryEntryHelpers'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
+import {
+  writeSubscriptionsOverlayLevel,
+  writeSubscriptionsRailDismissProgress,
+} from '../utils/AppSignals'
 
 
 import {
   SubscriptionsAvatarHydrationCoordinator,
-} from '../utils/subscriptions/SubscriptionsAvatarHydrationCoordinator'
+} from '../coordinators/subscriptions/SubscriptionsAvatarHydrationCoordinator'
 import { SubscriptionMode, HOME_MODE_SCENE_TOP_INSET } from './HomeRootConfig'
-import { resolveSubscriptionModeLabel, resolveSubscriptionSwipeTarget, SubscriptionSwipeAnalysisInput } from '../utils/subscriptions/SubscriptionsModePresentation'
+import { resolveSubscriptionModeLabel, resolveSubscriptionSwipeTarget, SubscriptionSwipeAnalysisInput } from '../coordinators/subscriptions/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
 import {
@@ -24,7 +28,7 @@ import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../utils/index-home/RootTabScrollToTopSignal'
+} from '../coordinators/index-home/RootTabScrollToTopSignal'
 
 @Component
 export struct SubscriptionsContent {
@@ -70,7 +74,7 @@ export struct SubscriptionsContent {
 
   private syncOverlayLevel(level: number): void {
     this.overlayLevel = level
-    AppStorage.setOrCreate('subscriptionsOverlayLevel', level)
+    writeSubscriptionsOverlayLevel(level)
   }
 
   private settleSubscriptionsRootVisible(): void {
@@ -182,13 +186,13 @@ export struct SubscriptionsContent {
     if (isReturningTowardsTop) {
       if (this.subscriptionsRailDismissedByScroll) {
         this.subscriptionsRailDismissedByScroll = false
-        AppStorage.setOrCreate<number>('subscriptionsRailDismissProgress', 0)
+        writeSubscriptionsRailDismissProgress(0)
         this.lastRailShownAt = Date.now()
       }
     } else if (isScrollingDeeper && nextOffset >= 48) {
       if (!this.subscriptionsRailDismissedByScroll && Date.now() - this.lastRailShownAt >= 200) {
         this.subscriptionsRailDismissedByScroll = true
-        AppStorage.setOrCreate<number>('subscriptionsRailDismissProgress', 1)
+        writeSubscriptionsRailDismissProgress(1)
       }
     }
   }

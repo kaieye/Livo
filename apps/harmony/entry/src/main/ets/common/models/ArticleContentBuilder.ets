@@ -1,4 +1,4 @@
-import { selectArticleVideoUrls } from '../utils/article/ArticleVideoSource'
+import { selectArticleVideoUrls } from '../coordinators/article/ArticleVideoSource'
 import { isDirectAudioUrl } from '../utils/FeedMediaUrl'
 import {
   extractEntryGalleryImageUrls,

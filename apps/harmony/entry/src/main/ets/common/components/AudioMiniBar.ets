@@ -9,8 +9,8 @@ import {
   BOTTOM_TAB_BAR_HEIGHT,
   BOTTOM_TAB_FLOAT_GAP,
 } from '../ui/UiTokens'
-import { resolveHdsBottomTabBarBottomMargin } from '../utils/index-home/HdsBottomTabConfig'
-import { HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY } from '../utils/index-home/HomeChromeProgressStore'
+import { resolveHdsBottomTabBarBottomMargin } from '../coordinators/index-home/HdsBottomTabConfig'
+import { HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY } from '../coordinators/index-home/HomeChromeProgressStore'
 
 const AUDIO_MINI_BAR_HEIGHT: number = 44
 const AUDIO_MINI_BAR_STACK_GAP: number = 10

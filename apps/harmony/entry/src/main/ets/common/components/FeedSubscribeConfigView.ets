@@ -9,9 +9,9 @@ import {
   feedFaviconUrl,
   isBilibiliFeedSource,
   mapBilibiliTargetUrl,
-} from '../utils/feed-subscribe/FeedSubscribeTargetUrl'
-import { feedMatchesTarget } from '../utils/feed-subscribe/FeedSubscribeTargetMatcher'
-import { FeedSubscribeAction, FeedSubscribeRequest } from '../utils/feed-subscribe/FeedSubscribeAction'
+} from '../coordinators/feed-subscribe/FeedSubscribeTargetUrl'
+import { feedMatchesTarget } from '../coordinators/feed-subscribe/FeedSubscribeTargetMatcher'
+import { FeedSubscribeAction, FeedSubscribeRequest } from '../coordinators/feed-subscribe/FeedSubscribeAction'
 import { PageHeader } from './PageHeader'
 import { SecondaryPageHeaderShell } from './SecondaryPageHeaderShell'
 import { FeedSubscribeInfoCard } from './feed-subscribe-config/FeedSubscribeInfoCard'

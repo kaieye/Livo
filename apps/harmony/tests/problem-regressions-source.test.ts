@@ -20,7 +20,7 @@ const rssFeedFetcherSource = readFileSync(
 
 const articleInlineVideoPlaybackControllerSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/article/ArticleInlineVideoPlaybackController.ets',
+    '../entry/src/main/ets/common/coordinators/article/ArticleInlineVideoPlaybackController.ets',
     import.meta.url,
   ),
   'utf8',
@@ -97,7 +97,7 @@ const indexSource = readFileSync(
 
 const sessionSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedSession.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedSession.ets',
     import.meta.url,
   ),
   'utf8',
@@ -105,7 +105,7 @@ const sessionSource = readFileSync(
 
 const homeFeedLoadMorePrefetchSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/utils/home/HomeFeedLoadMorePrefetch.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedLoadMorePrefetch.ets',
     import.meta.url,
   ),
   'utf8',
@@ -394,7 +394,7 @@ test('load-more no longer triggers by scroll progress before hard bottom reach',
   )
   const homeFeedPaginationSource = readFileSync(
     new URL(
-      '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
+      '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
       import.meta.url,
     ),
     'utf8',
