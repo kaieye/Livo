@@ -181,7 +181,7 @@ export struct SettingsContent {
           Blank()
             .height(SETTINGS_TITLE_BAR_OVERLAY_SPACER)
 
-          Column({ space: 14 }) {
+          Column({ space: 8 }) {
             this.Group(SETTINGS_PRIMARY_GROUP)
             this.Group(SETTINGS_SECOND_GROUP)
             this.Group(SETTINGS_THIRD_GROUP)

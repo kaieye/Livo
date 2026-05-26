@@ -15,6 +15,7 @@
  */
 
 import { http } from '@kit.NetworkKit'
+import { util } from '@kit.ArkTS'
 import { AIProvider } from '../models/LivoModels'
 import { delay, stringifyHttpResult } from './article-assist/HttpResponseDecoder'
 import {
@@ -64,6 +65,7 @@ export class AIAssistantConnectionTestService {
     const requestContext = AIAssistantConnectionTestService.buildContext(input, endpoint, format)
     const body = buildRequestBody(requestContext)
     const headers = buildRequestHeaders(input.apiKey, format)
+    const bodyBuf = new util.TextEncoder().encodeInto(body).buffer
 
     const request = http.createHttp()
     try {
@@ -73,7 +75,7 @@ export class AIAssistantConnectionTestService {
           connectTimeout: CONNECTION_TEST_CONNECT_TIMEOUT_MS,
           readTimeout: CONNECTION_TEST_READ_TIMEOUT_MS,
           header: headers,
-          extraData: body,
+          extraData: bodyBuf,
         })
         const raw = stringifyHttpResult(response.result)
 
@@ -195,7 +197,7 @@ export class AIAssistantConnectionTestService {
         connectTimeout: CONNECTION_TEST_CONNECT_TIMEOUT_MS,
         readTimeout: CONNECTION_TEST_READ_TIMEOUT_MS,
         header: headers,
-        extraData: buildRequestBody(fallbackContext),
+          extraData: new util.TextEncoder().encodeInto(buildRequestBody(fallbackContext)).buffer,
       })
       if (fallbackResponse.responseCode !== 200) {
         return ''

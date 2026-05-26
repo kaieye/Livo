@@ -13,6 +13,7 @@
  */
 
 import { http } from '@kit.NetworkKit'
+import { util } from '@kit.ArkTS'
 import {
   AI_REQUEST_CONNECT_TIMEOUT_MS,
   AI_REQUEST_READ_TIMEOUT_MS,
@@ -52,6 +53,16 @@ const MAX_RETRY_ATTEMPTS = 2
 const RATE_LIMITED_RESPONSE_CODE = 529
 const RETRY_DELAY_MS = 900
 
+function stringToArrayBuffer(str: string): ArrayBuffer {
+  const encoder = new util.TextEncoder()
+  const encoded = encoder.encodeInto(str)
+  const result = new Uint8Array(encoded.byteLength)
+  for (let i = 0; i < encoded.byteLength; i++) {
+    result[i] = encoded[i]
+  }
+  return result.buffer
+}
+
 export async function runChatCompletion(
   prompt: string,
   aiSettings: AIAssistantSettings,
@@ -89,8 +100,9 @@ export async function runChatCompletion(
         connectTimeout: AI_REQUEST_CONNECT_TIMEOUT_MS,
         readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
         header: headers,
-        extraData: requestBody,
+        extraData: stringToArrayBuffer(requestBody),
         expectDataType: 0,
+        usingProtocol: http.HttpProtocol.HTTP1_1,
       })
       const raw = stringifyHttpResult(response.result)
       console.error('[ChatCompletion] raw type:', typeof response.result, 'raw head:', raw.slice(0, 200))
@@ -100,10 +112,8 @@ export async function runChatCompletion(
           await delay(RETRY_DELAY_MS)
           continue
         }
-        const detail = extractErrorDetail(raw)
-        throw new Error(detail
-          ? `AI 请求失败：HTTP ${response.responseCode} - ${detail}`
-          : `AI 请求失败：HTTP ${response.responseCode}`)
+        const detail = extractErrorDetail(raw) || (raw ? raw.slice(0, 200) : '空响应')
+        throw new Error(`AI 请求失败：HTTP ${response.responseCode} - ${detail}`)
       }
 
       const responseContent = parseSuccessResponse(raw, format, aiSettings)
@@ -169,7 +179,7 @@ async function runMiniMaxTextFallback(
       connectTimeout: AI_REQUEST_CONNECT_TIMEOUT_MS,
       readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
       header: headers,
-      extraData: buildRequestBody(fallbackContext),
+      extraData: stringToArrayBuffer(buildRequestBody(fallbackContext)),
       expectDataType: 0,
     })
     if (fallbackResponse.responseCode !== 200) {
@@ -243,8 +253,9 @@ export async function runChatCompletionForAgent(
         connectTimeout: AI_REQUEST_CONNECT_TIMEOUT_MS,
         readTimeout: AI_REQUEST_READ_TIMEOUT_MS,
         header: headers,
-        extraData: requestBody,
+        extraData: stringToArrayBuffer(requestBody),
         expectDataType: 0,
+        usingProtocol: http.HttpProtocol.HTTP1_1,
       })
       const raw = stringifyHttpResult(response.result)
       console.info('[ChatAgent] resp code:', response.responseCode, 'raw head:', raw.slice(0, 300))
@@ -254,10 +265,8 @@ export async function runChatCompletionForAgent(
           await delay(RETRY_DELAY_MS)
           continue
         }
-        const detail = extractErrorDetail(raw)
-        throw new Error(detail
-          ? `AI 请求失败：HTTP ${response.responseCode} - ${detail}`
-          : `AI 请求失败：HTTP ${response.responseCode}`)
+        const detail = extractErrorDetail(raw) || (raw ? raw.slice(0, 200) : '空响应')
+        throw new Error(`AI 请求失败：HTTP ${response.responseCode} - ${detail}`)
       }
 
       const result = parseAgentResponse(raw, format)
