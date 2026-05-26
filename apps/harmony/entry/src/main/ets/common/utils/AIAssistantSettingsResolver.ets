@@ -1,5 +1,6 @@
 import {
   AIAssistantSettings,
+  AgentPermissionSettings,
   AI_PROVIDER_OPTIONS,
   AIProvider,
   AIProviderDefinition,
@@ -37,6 +38,7 @@ export interface AIAssistantSettingsPatch {
   enableSystemPrompt?: boolean
   systemPromptTemplate?: string
   chatPersonaPrompt?: string
+  agentPermissions?: AgentPermissionSettings
 }
 
 export const AI_PROVIDER_ORDER: AIProvider[] = [
@@ -140,6 +142,7 @@ export function resolveAIAssistantState(settings: AIAssistantSettings): Resolved
     enableSystemPrompt: settings.enableSystemPrompt,
     systemPromptTemplate: settings.systemPromptTemplate,
     chatPersonaPrompt: settings.chatPersonaPrompt,
+    agentPermissions: normalizeAgentPermissionSettings(settings.agentPermissions),
   }
 
   return {
@@ -183,5 +186,19 @@ export function patchAIAssistantSettings(settings: AIAssistantSettings, patch: A
     enableSystemPrompt: patch.enableSystemPrompt ?? settings.enableSystemPrompt,
     systemPromptTemplate: patch.systemPromptTemplate ?? settings.systemPromptTemplate,
     chatPersonaPrompt: patch.chatPersonaPrompt ?? settings.chatPersonaPrompt,
+    agentPermissions: normalizeAgentPermissionSettings(patch.agentPermissions ?? settings.agentPermissions),
+  }
+}
+
+export function normalizeAgentPermissionSettings(
+  permissions?: AgentPermissionSettings,
+): AgentPermissionSettings {
+  const defaults = DEFAULT_AI_ASSISTANT_SETTINGS.agentPermissions
+  return {
+    allowRead: permissions?.allowRead ?? defaults.allowRead,
+    allowNavigate: permissions?.allowNavigate ?? defaults.allowNavigate,
+    allowMutate: permissions?.allowMutate ?? defaults.allowMutate,
+    allowDestructive: permissions?.allowDestructive ?? defaults.allowDestructive,
+    allowExternal: permissions?.allowExternal ?? defaults.allowExternal,
   }
 }

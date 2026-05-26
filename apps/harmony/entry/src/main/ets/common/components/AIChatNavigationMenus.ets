@@ -3,6 +3,7 @@ import { HdsNavigationMenuContentOptions } from '@kit.UIDesignKit'
 export function buildAIChatTitleMenus(
   onNewConversation: () => void,
   onOpenHistory: () => void,
+  onOpenTrace: () => void,
   onOpenSettings: () => void,
 ): HdsNavigationMenuContentOptions {
   return {
@@ -21,6 +22,14 @@ export function buildAIChatTitleMenus(
           icon: $r('sys.symbol.arrow_counterclockwise_clock'),
           isEnabled: true,
           action: onOpenHistory,
+        },
+      },
+      {
+        content: {
+          label: '执行轨迹',
+          icon: $r('sys.symbol.list_bullet_square_fill'),
+          isEnabled: true,
+          action: onOpenTrace,
         },
       },
       {

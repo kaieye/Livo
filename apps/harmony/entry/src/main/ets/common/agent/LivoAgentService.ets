@@ -50,7 +50,7 @@ export type LivoAgentContinuationState = AgentContinuationState
 export type LivoAgentPendingConfirmation = AgentPendingConfirmation
 
 export async function runLivoAgent(request: LivoAgentRunRequest): Promise<LivoAgentRunResult> {
-  const tools = buildDefaultTools()
+  const tools = buildDefaultTools(request.aiSettings.agentPermissions)
   console.info('[LivoAgent] run started', 'history:', request.history ? request.history.length : 0)
 
   return runChatAgent(
@@ -67,7 +67,7 @@ export async function runLivoAgent(request: LivoAgentRunRequest): Promise<LivoAg
 }
 
 export async function resumeLivoAgent(request: LivoAgentResumeRequest): Promise<LivoAgentRunResult> {
-  const tools = buildDefaultTools()
+  const tools = buildDefaultTools(request.aiSettings.agentPermissions)
   console.info('[LivoAgent] resume started', 'nextRound:', request.continuation.nextRound)
 
   return resumeChatAgent(

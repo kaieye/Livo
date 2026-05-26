@@ -4,6 +4,7 @@ import type {
   AgentToolArgs,
   AgentToolInputSchema,
   AgentToolParamSchema,
+  AgentToolValue,
   AgentToolRun,
 } from './AgentTypes.ts'
 import { AgentPolicyGuard } from './PolicyGuard.ts'
@@ -157,7 +158,7 @@ export function validateToolArgs(
 function validateType(
   key: string,
   prop: AgentToolParamSchema,
-  value: object,
+  value: AgentToolValue,
 ): string {
   if (prop.type === 'string' && typeof value !== 'string') {
     return `参数 ${key} 必须是 string`

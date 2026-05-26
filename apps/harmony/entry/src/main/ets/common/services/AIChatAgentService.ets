@@ -7,7 +7,15 @@ import { ExtractedToolCall } from './article-assist/ProviderResponseParser'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { Feed, Entry } from '../models/LivoModels'
-import type { AgentConfirmationRequest, AgentToolRun } from '../agent/AgentTypes.ts'
+import {
+  isAgentCapabilityAllowed,
+  normalizeAgentPermissionSettings,
+} from '../agent/AgentTypes.ts'
+import type {
+  AgentConfirmationRequest,
+  AgentPermissionSettings,
+  AgentToolRun,
+} from '../agent/AgentTypes.ts'
 import { agentToolResultToText } from '../agent/AgentToolResultText.ts'
 
 export { AgentAbortSignal }
@@ -335,7 +343,14 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
   return { cleanedContent: cleaned, toolCalls }
 }
 
-async function buildContextFallback(pageContext: string = ''): Promise<string> {
+async function buildContextFallback(
+  pageContext: string = '',
+  permissions?: AgentPermissionSettings,
+): Promise<string> {
+  if (!isAgentCapabilityAllowed('read', permissions)) {
+    return '当前 Agent 权限未允许读取本地订阅上下文。'
+  }
+
   let ctx = ''
   const trimmedPageContext = pageContext.trim()
   if (trimmedPageContext) {
@@ -399,12 +414,13 @@ export async function runChatAgent(
 ): Promise<AgentRunResult> {
   let effectiveTools = tools
   if (!effectiveTools || effectiveTools.length === 0) {
-    effectiveTools = buildDefaultTools()
+    effectiveTools = buildDefaultTools(aiSettings.agentPermissions)
   }
 
   const enrichedPrompt = AGENT_SYSTEM_PROMPT
 
-  const contextFallback = await buildContextFallback(pageContext)
+  const agentPermissions = normalizeAgentPermissionSettings(aiSettings.agentPermissions)
+  const contextFallback = await buildContextFallback(pageContext, agentPermissions)
   const systemWithContext = enrichedPrompt + '\n\n当前订阅数据如下（如果模型不支持 function calling，请直接基于此数据回答）：\n' + contextFallback
 
   const agentMessages: AgentMessage[] = [{ role: 'system', content: systemWithContext, name: undefined }]
@@ -423,7 +439,7 @@ export async function runChatAgent(
 
   let currentMessages = agentMessages
 
-  return runAgentLoop(currentMessages, effectiveTools, aiSettings, [], 0, onToolEvent, abortSignal)
+  return runAgentLoop(currentMessages, effectiveTools, aiSettings, [], 0, onToolEvent, abortSignal, agentPermissions)
 }
 
 export async function resumeChatAgent(
@@ -435,24 +451,26 @@ export async function resumeChatAgent(
 ): Promise<AgentRunResult> {
   let effectiveTools = tools
   if (!effectiveTools || effectiveTools.length === 0) {
-    effectiveTools = buildDefaultTools()
+    effectiveTools = buildDefaultTools(aiSettings.agentPermissions)
   }
 
   const currentMessages = continuation.messages.slice()
   const toolRounds = continuation.toolRounds.slice()
+  const agentPermissions = normalizeAgentPermissionSettings(aiSettings.agentPermissions)
   const pendingResult = await executeAgentToolCall(
     continuation.pendingToolCall,
     true,
     toolRounds,
     onToolEvent,
     abortSignal,
+    agentPermissions,
   )
   currentMessages.push(toToolResultMessage(continuation.pendingToolCall, pendingResult.text))
 
   const remaining = continuation.remainingToolCalls
   for (let index = 0; index < remaining.length; index += 1) {
     const tc = remaining[index]
-    const executed = await executeAgentToolCall(tc, false, toolRounds, onToolEvent, abortSignal)
+    const executed = await executeAgentToolCall(tc, false, toolRounds, onToolEvent, abortSignal, agentPermissions)
     if (executed.run.result.status === 'confirmation_required') {
       return buildConfirmationRequiredResult(
         tc,
@@ -474,6 +492,7 @@ export async function resumeChatAgent(
     continuation.nextRound,
     onToolEvent,
     abortSignal,
+    agentPermissions,
   )
 }
 
@@ -485,6 +504,7 @@ async function runAgentLoop(
   startRound: number,
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   abortSignal?: AgentAbortSignal,
+  agentPermissions?: AgentPermissionSettings,
 ): Promise<AgentRunResult> {
   for (let round = 0; round < MAX_AGENT_ROUNDS; round += 1) {
     if (round < startRound) {
@@ -545,7 +565,7 @@ async function runAgentLoop(
 
     for (let toolIndex = 0; toolIndex < effectiveToolCalls.length; toolIndex += 1) {
       const tc = effectiveToolCalls[toolIndex]
-      const executed = await executeAgentToolCall(tc, false, toolRounds, onToolEvent, abortSignal)
+      const executed = await executeAgentToolCall(tc, false, toolRounds, onToolEvent, abortSignal, agentPermissions)
       if (executed.run.result.status === 'confirmation_required') {
         return buildConfirmationRequiredResult(
           tc,
@@ -583,6 +603,7 @@ async function executeAgentToolCall(
   toolRounds: AgentRoundDetail[],
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   abortSignal?: AgentAbortSignal,
+  agentPermissions?: AgentPermissionSettings,
 ): Promise<ExecutedAgentToolCall> {
   if (abortSignal?.aborted) {
     throw new Error('请求已取消')
@@ -595,7 +616,7 @@ async function executeAgentToolCall(
     args: tc.function.arguments,
   })
 
-  const run = await executeToolCallRun(tc.function.name, tc.function.arguments, confirmed)
+  const run = await executeToolCallRun(tc.function.name, tc.function.arguments, confirmed, agentPermissions)
   const toolText = truncateToolResult(agentToolResultToText(run.result))
   const resultSummary = toolCallResultSummary(tc.function.name, toolText)
   const roundDetail: AgentRoundDetail = {

@@ -1,3 +1,4 @@
+import { isAgentCapabilityAllowed } from './AgentTypes.ts'
 import type {
   AgentConfirmationRequest,
   AgentExecutionContext,
@@ -17,8 +18,17 @@ export class AgentPolicyGuard {
   evaluate(
     tool: AgentTool,
     _args: AgentToolArgs,
-    _context: AgentExecutionContext,
+    context: AgentExecutionContext,
   ): AgentPolicyDecision {
+    if (!isAgentCapabilityAllowed(tool.capability, context.agentPermissions)) {
+      return {
+        allowed: false,
+        requiresConfirmation: false,
+        reason: disabledPermissionReason(tool),
+        risk: tool.risk,
+      }
+    }
+
     if (tool.capability === 'read') {
       return {
         allowed: true,
@@ -109,4 +119,20 @@ function formatArgsPreview(args: AgentToolArgs): string {
     preview += `${key}: ${rendered}\n`
   }
   return preview.trim()
+}
+
+function disabledPermissionReason(tool: AgentTool): string {
+  if (tool.capability === 'read') {
+    return `当前 Agent 权限未允许读取本地数据，已阻止「${tool.title}」。`
+  }
+  if (tool.capability === 'navigate') {
+    return `当前 Agent 权限未允许打开页面，已阻止「${tool.title}」。`
+  }
+  if (tool.capability === 'mutate') {
+    return `当前 Agent 权限未允许修改应用数据或设置，已阻止「${tool.title}」。`
+  }
+  if (tool.capability === 'destructive') {
+    return `当前 Agent 权限未允许删除或覆盖数据，已阻止「${tool.title}」。`
+  }
+  return `当前 Agent 权限未允许访问外部服务或导出数据，已阻止「${tool.title}」。`
 }

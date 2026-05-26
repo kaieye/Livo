@@ -8,6 +8,7 @@ import { ChatHistoryStore, ChatMessage, ChatSession } from '../services/ChatHist
 import { AIChatPanelLayout } from './AIChatPanelLayout'
 import { PendingAgentConfirmationView, ToolStatusItem, ToolTraceStatus } from './AIChatPanelTypes'
 import { aiChatToolLabelOf } from './AIChatToolLabels'
+import { AIChatTraceRecorder } from './AIChatTraceRecorder'
 @Component
 export struct AIChatPanel {
   @Prop theme: ThemePalette
@@ -19,6 +20,7 @@ export struct AIChatPanel {
   @State aiSettings: AIAssistantSettings | null = null
   @State showAISettings: boolean = false
   @State showHistory: boolean = false
+  @State showTrace: boolean = false
   @State streamingContent: string = ''
   @State currentSessionId: string = ''
   @State editingMessageId: string = ''
@@ -32,6 +34,7 @@ export struct AIChatPanel {
   @State pendingConfirmation: PendingAgentConfirmationView | null = null
   @State isConfirming: boolean = false
   private pendingContinuation: LivoAgentContinuationState | null = null
+  private traceRecorder: AIChatTraceRecorder = new AIChatTraceRecorder()
   private scroller: Scroller = new Scroller()
   private inputController: TextAreaController = new TextAreaController()
   private typewriter: Typewriter = new Typewriter()
@@ -220,6 +223,7 @@ export struct AIChatPanel {
     this.inputContent = ''
     this.isLoading = true
     this.abortSignal = { aborted: false }
+    this.traceRecorder.start(text, this.currentSessionId)
     this.startTimer()
     try {
       this.inputController.stopEditing()
@@ -254,6 +258,7 @@ export struct AIChatPanel {
       if (err instanceof Error && err.message.includes('取消')) {
         // Don't show error for user-initiated cancellation
       } else {
+        void this.traceRecorder.saveFailed(errMsg.content)
         this.messages.push(errMsg)
       }
     } finally {
@@ -263,6 +268,7 @@ export struct AIChatPanel {
     }
   }
   private handleAgentRunResult(result: LivoAgentRunResult): void {
+    void this.traceRecorder.saveResult(result)
     if (result.status === 'confirmation_required' && result.confirmation && result.continuation) {
       this.pendingConfirmation = this.toPendingConfirmationView(result.confirmation)
       this.pendingContinuation = result.continuation
@@ -358,6 +364,7 @@ export struct AIChatPanel {
       content: `已取消执行「${aiChatToolLabelOf(pending.toolName)}」。`,
       id: (Date.now() + 1).toString()
     }
+    void this.traceRecorder.saveCancelled(pending.toolName, aiChatToolLabelOf(pending.toolName))
     this.messages.push(assistMsg)
     setTimeout(() => {
       this.dismissToolBanner()
@@ -413,6 +420,7 @@ export struct AIChatPanel {
     this.messages = session.messages.slice()
     this.currentSessionId = session.id
     this.showHistory = false
+    this.showTrace = false
     this.pendingConfirmation = null
     this.pendingContinuation = null
     this.isConfirming = false
@@ -474,6 +482,7 @@ export struct AIChatPanel {
       inputContent: $inputContent,
       showAISettings: $showAISettings,
       showHistory: $showHistory,
+      showTrace: $showTrace,
       scroller: this.scroller,
       inputController: this.inputController,
       onSuggestionClick: (text: string) => { this.handleSuggestionClick(text) },

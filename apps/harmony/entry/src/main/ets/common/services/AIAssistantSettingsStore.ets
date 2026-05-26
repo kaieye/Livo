@@ -12,6 +12,11 @@ const AI_KEY_MODEL: string = 'aiModel'
 const AI_KEY_ENABLE_SYSTEM_PROMPT: string = 'aiEnableSystemPrompt'
 const AI_KEY_SYSTEM_PROMPT_TEMPLATE: string = 'aiSystemPromptTemplate'
 const AI_KEY_CHAT_PERSONA_PROMPT: string = 'aiChatPersonaPrompt'
+const AI_KEY_AGENT_ALLOW_READ: string = 'aiAgentAllowRead'
+const AI_KEY_AGENT_ALLOW_NAVIGATE: string = 'aiAgentAllowNavigate'
+const AI_KEY_AGENT_ALLOW_MUTATE: string = 'aiAgentAllowMutate'
+const AI_KEY_AGENT_ALLOW_DESTRUCTIVE: string = 'aiAgentAllowDestructive'
+const AI_KEY_AGENT_ALLOW_EXTERNAL: string = 'aiAgentAllowExternal'
 const AI_PROVIDERS: string[] = ['minimax', 'deepseek', 'openai', 'anthropic', 'glm', 'custom']
 
 export interface IAIAssistantSettingsStore {
@@ -43,6 +48,12 @@ export class AIAssistantSettingsStore implements IAIAssistantSettingsStore {
         AI_KEY_CHAT_PERSONA_PROMPT,
         await pref.get('ai.chatPersonaPrompt', DEFAULT_AI_ASSISTANT_SETTINGS.chatPersonaPrompt),
       )
+      const defaultPermissions = DEFAULT_AI_ASSISTANT_SETTINGS.agentPermissions
+      const allowRead = await pref.get(AI_KEY_AGENT_ALLOW_READ, defaultPermissions.allowRead)
+      const allowNavigate = await pref.get(AI_KEY_AGENT_ALLOW_NAVIGATE, defaultPermissions.allowNavigate)
+      const allowMutate = await pref.get(AI_KEY_AGENT_ALLOW_MUTATE, defaultPermissions.allowMutate)
+      const allowDestructive = await pref.get(AI_KEY_AGENT_ALLOW_DESTRUCTIVE, defaultPermissions.allowDestructive)
+      const allowExternal = await pref.get(AI_KEY_AGENT_ALLOW_EXTERNAL, defaultPermissions.allowExternal)
 
       // 迁移旧的单一 apiKey 到 per-provider 存储
       const legacyApiKey = await pref.get('aiApiKey', await pref.get('ai.apiKey', ''))
@@ -65,6 +76,13 @@ export class AIAssistantSettingsStore implements IAIAssistantSettingsStore {
         enableSystemPrompt: enableSystemPrompt as boolean,
         systemPromptTemplate: systemPromptTemplate as string,
         chatPersonaPrompt: chatPersonaPrompt as string,
+        agentPermissions: {
+          allowRead: allowRead as boolean,
+          allowNavigate: allowNavigate as boolean,
+          allowMutate: allowMutate as boolean,
+          allowDestructive: allowDestructive as boolean,
+          allowExternal: allowExternal as boolean,
+        },
       }
     } catch (error) {
       throw new Error(`加载 AI 设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
@@ -80,6 +98,12 @@ export class AIAssistantSettingsStore implements IAIAssistantSettingsStore {
       await pref.put(AI_KEY_ENABLE_SYSTEM_PROMPT, next.enableSystemPrompt)
       await pref.put(AI_KEY_SYSTEM_PROMPT_TEMPLATE, next.systemPromptTemplate)
       await pref.put(AI_KEY_CHAT_PERSONA_PROMPT, next.chatPersonaPrompt)
+      const permissions = next.agentPermissions || DEFAULT_AI_ASSISTANT_SETTINGS.agentPermissions
+      await pref.put(AI_KEY_AGENT_ALLOW_READ, permissions.allowRead)
+      await pref.put(AI_KEY_AGENT_ALLOW_NAVIGATE, permissions.allowNavigate)
+      await pref.put(AI_KEY_AGENT_ALLOW_MUTATE, permissions.allowMutate)
+      await pref.put(AI_KEY_AGENT_ALLOW_DESTRUCTIVE, permissions.allowDestructive)
+      await pref.put(AI_KEY_AGENT_ALLOW_EXTERNAL, permissions.allowExternal)
       for (const p of AI_PROVIDERS) {
         await pref.put(`aiApiKey_${p}`, next.apiKeys[p] ?? '')
       }

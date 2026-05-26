@@ -2,6 +2,7 @@ import { SettingsStore } from '../services/SettingsStore'
 import { AIAssistantSettingsStore } from '../services/AIAssistantSettingsStore'
 import {
   AIAssistantSettings,
+  AgentPermissionSettings,
   AIProvider,
   AITargetLanguage,
   DEFAULT_AI_ASSISTANT_SETTINGS,
@@ -39,6 +40,7 @@ import { TranslationFeatureCard } from './TranslationFeatureCard'
 import { SummaryFeatureCard } from './SummaryFeatureCard'
 import { AIConfigInputCard } from './AIConfigInputCard'
 import { SystemPromptCard } from './SystemPromptCard'
+import { AgentPermissionCard } from './AgentPermissionCard'
 
 @Component
 export struct AIAssistantSettingsPanel {
@@ -176,6 +178,10 @@ export struct AIAssistantSettingsPanel {
 
   private updateChatPersonaPrompt(nextValue: string): void {
     this.aiConfig = patchAIAssistantSettings(this.aiConfig, { chatPersonaPrompt: nextValue })
+  }
+
+  private updateAgentPermissions(permissions: AgentPermissionSettings): void {
+    this.syncAISettings(patchAIAssistantSettings(this.aiConfig, { agentPermissions: permissions }))
   }
 
   private persistCurrentDraft(): void {
@@ -378,6 +384,14 @@ export struct AIAssistantSettingsPanel {
           onEnableSystemPromptChange: (enabled: boolean) => this.updateEnableSystemPrompt(enabled),
           onSystemPromptTemplateChange: (template: string) => this.updateSystemPromptTemplate(template),
           onChatPersonaPromptChange: (persona: string) => this.updateChatPersonaPrompt(persona),
+        })
+
+        this.FeatureSectionLabel('Agent 权限', 75)
+        AgentPermissionCard({
+          theme: this.theme,
+          permissions: this.aiConfig.agentPermissions,
+          iconDelay: 75,
+          onPermissionsChange: (permissions: AgentPermissionSettings) => this.updateAgentPermissions(permissions),
         })
 
         this.ActionButtons()

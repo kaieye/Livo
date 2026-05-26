@@ -15,7 +15,10 @@ const agentUiSourcePaths = [
   '../entry/src/main/ets/common/components/AIChatToolLabels.ts',
   '../entry/src/main/ets/common/components/AIChatNavigationMenus.ets',
   '../entry/src/main/ets/common/components/AIChatSheets.ets',
+  '../entry/src/main/ets/common/components/AIChatTracePanel.ets',
+  '../entry/src/main/ets/common/components/AIChatTraceRecorder.ts',
   '../entry/src/main/ets/common/agent/LivoAgentService.ets',
+  '../entry/src/main/ets/common/agent/AgentTraceStore.ets',
 ]
 
 const livoAgentServiceSource = readFileSync(
@@ -37,7 +40,10 @@ const aiChatPanelSource = readFileSync(
 test('LivoAgentService 作为统一 agent 入口组装默认工具和旧模型循环', () => {
   assert.match(livoAgentServiceSource, /export async function runLivoAgent/)
   assert.match(livoAgentServiceSource, /export async function resumeLivoAgent/)
-  assert.match(livoAgentServiceSource, /buildDefaultTools\(\)/)
+  assert.match(
+    livoAgentServiceSource,
+    /buildDefaultTools\(request\.aiSettings\.agentPermissions\)/,
+  )
   assert.match(livoAgentServiceSource, /runChatAgent\(/)
   assert.match(livoAgentServiceSource, /resumeChatAgent\(/)
   assert.match(livoAgentServiceSource, /LivoAgentEventType = 'tool_started'/)
@@ -48,6 +54,7 @@ test('AIChatPanel 通过 LivoAgentService 消费 agent 事件', () => {
   assert.match(aiChatPanelSource, /from '\.\.\/agent\/LivoAgentService'/)
   assert.match(aiChatPanelSource, /await runLivoAgent\(\{/)
   assert.match(aiChatPanelSource, /await resumeLivoAgent\(\{/)
+  assert.match(aiChatPanelSource, /AIChatTraceRecorder/)
   assert.match(aiChatPanelSource, /onEvent: \(event\) =>/)
   assert.match(aiChatPanelSource, /this\.handleAgentEvent\(event\)/)
   assert.match(aiChatPanelSource, /pendingConfirmation/)

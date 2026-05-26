@@ -1,8 +1,13 @@
 import {
+  buildAllowedAgentToolRegistry,
   buildDefaultAgentToolRegistry,
   executeDefaultAgentToolRun,
 } from '../agent/DefaultAgentTools'
-import type { AgentToolRun } from '../agent/AgentTypes.ts'
+import type {
+  AgentPermissionSettings,
+  AgentToolArgs,
+  AgentToolRun,
+} from '../agent/AgentTypes.ts'
 import { agentToolResultToText } from '../agent/AgentToolResultText.ts'
 
 export interface ToolFunctionParams {
@@ -40,8 +45,13 @@ export interface ToolCallFunction {
   arguments: string
 }
 
-export function buildDefaultTools(): ChatToolDefinition[] {
-  const agentDefinitions = buildDefaultAgentToolRegistry().toModelToolDefinitions()
+export function buildDefaultTools(
+  permissions?: AgentPermissionSettings,
+): ChatToolDefinition[] {
+  const registry = permissions
+    ? buildAllowedAgentToolRegistry(permissions)
+    : buildDefaultAgentToolRegistry()
+  const agentDefinitions = registry.toModelToolDefinitions()
   const tools: ChatToolDefinition[] = []
   for (const definition of agentDefinitions) {
     const parameters: ToolFunctionParams = {
@@ -69,14 +79,15 @@ export async function executeToolCallRun(
   name: string,
   args: string,
   confirmed: boolean = false,
+  permissions?: AgentPermissionSettings,
 ): Promise<AgentToolRun> {
-  let parsedArgs: Record<string, Object> = {}
+  let parsedArgs: AgentToolArgs = {}
   try {
     const raw = JSON.parse(args || '{}') as object
-    parsedArgs = raw as Record<string, Object>
+    parsedArgs = raw as AgentToolArgs
   } catch (_error) {
     // 参数解析失败时交给工具 schema 返回明确错误。
   }
 
-  return executeDefaultAgentToolRun(name, parsedArgs, confirmed)
+  return executeDefaultAgentToolRun(name, parsedArgs, confirmed, permissions)
 }

@@ -3,6 +3,7 @@ import type {
   AgentToolInputSchema,
   AgentToolParamSchema,
   AgentToolResult,
+  AgentToolValue,
 } from '../agent/AgentTypes.ts'
 import { AgentHarness } from '../agent/AgentHarness.ts'
 import {
@@ -43,7 +44,7 @@ export interface AppActionToolCallFunction {
 export interface AppActionResult {
   success: boolean
   message: string
-  data?: Record<string, Object>
+  data?: Record<string, AgentToolValue>
 }
 
 export interface AppActionAgentRound {
@@ -263,7 +264,7 @@ function stringifyCompatArgs(rawArgs: Object | undefined): string {
 }
 
 function toAppActionResult(result: AgentToolResult): AppActionResult {
-  const data: Record<string, Object> = {}
+  const data: Record<string, AgentToolValue> = {}
   if (result.data) {
     const keys = Object.keys(result.data)
     for (const key of keys) {
@@ -271,7 +272,7 @@ function toAppActionResult(result: AgentToolResult): AppActionResult {
     }
   }
   if (result.confirmation) {
-    data['confirmation'] = result.confirmation as Object
+    data['confirmation'] = result.confirmation
   }
 
   return {

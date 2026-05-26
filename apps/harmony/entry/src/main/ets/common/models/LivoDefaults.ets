@@ -44,6 +44,13 @@ export const DEFAULT_AI_ASSISTANT_SETTINGS: AIAssistantSettings = {
   enableSystemPrompt: false,
   systemPromptTemplate: DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
   chatPersonaPrompt: '',
+  agentPermissions: {
+    allowRead: true,
+    allowNavigate: true,
+    allowMutate: true,
+    allowDestructive: true,
+    allowExternal: true,
+  },
 }
 
 export const DEFAULT_HARMONY_SETTINGS: HarmonySettings = {

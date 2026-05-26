@@ -324,7 +324,7 @@ finalText
 - [x] 封装设置页、账号页、数据控制页操作工具。
 - [x] 封装订阅刷新、OPML 导入导出、缓存清理工具。
 - [x] 为每个 destructive 工具补强确认文案与对象预览。
-- [ ] 增加用户可配置的 agent 权限开关。
+- [x] 增加用户可配置的 agent 权限开关。
 
 ### P5：质量与验收
 
@@ -332,4 +332,4 @@ finalText
 - [x] 跑通现有 `tests/app-action-agent.test.ts` 的迁移后等价场景。
 - [x] 跑通 Harmony debug build。
 - [x] 补充失败降级：模型不支持 tool calling 时，仍可回答只读上下文问题，但不能执行写入。
-- [ ] 增加 trace 查看入口或导出能力。
+- [x] 增加 trace 查看入口或导出能力。

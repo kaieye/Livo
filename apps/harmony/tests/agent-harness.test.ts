@@ -6,8 +6,13 @@ import {
   validateToolArgs,
 } from '../entry/src/main/ets/common/agent/AgentHarness.ts'
 import type {
+  AgentPermissionSettings,
   AgentTool,
   AgentToolInputSchema,
+} from '../entry/src/main/ets/common/agent/AgentTypes.ts'
+import {
+  isAgentCapabilityAllowed,
+  normalizeAgentPermissionSettings,
 } from '../entry/src/main/ets/common/agent/AgentTypes.ts'
 import { AgentToolRegistry } from '../entry/src/main/ets/common/agent/ToolRegistry.ts'
 
@@ -180,6 +185,54 @@ test('AgentHarness 确认后执行写入工具', async () => {
   assert.equal(executed, true)
   assert.equal(run.result.status, 'success')
   assert.equal(run.result.message, '已修改')
+})
+
+test('AgentHarness 按用户权限阻止被关闭的工具能力', async () => {
+  let executed = false
+  const registry = new AgentToolRegistry([
+    createTool({
+      name: 'open_page',
+      title: '打开页面',
+      capability: 'navigate',
+      risk: 'low',
+      execute: async () => {
+        executed = true
+        return { status: 'success', message: '已打开页面' }
+      },
+    }),
+  ])
+  const harness = new AgentHarness(registry)
+  const permissions: AgentPermissionSettings = {
+    allowRead: true,
+    allowNavigate: false,
+    allowMutate: true,
+    allowDestructive: true,
+    allowExternal: true,
+  }
+
+  const run = await harness.execute({
+    toolName: 'open_page',
+    args: {},
+    context: {
+      sessionId: 's1',
+      now: Date.now(),
+      agentPermissions: permissions,
+    },
+    confirmed: true,
+  })
+
+  assert.equal(executed, false)
+  assert.equal(run.result.status, 'failed')
+  assert.match(run.result.message, /未允许打开页面/)
+})
+
+test('Agent 权限默认值补齐并按能力判断', () => {
+  const normalized = normalizeAgentPermissionSettings({ allowMutate: false })
+
+  assert.equal(normalized.allowRead, true)
+  assert.equal(normalized.allowMutate, false)
+  assert.equal(isAgentCapabilityAllowed('read', normalized), true)
+  assert.equal(isAgentCapabilityAllowed('mutate', normalized), false)
 })
 
 test('AgentHarness 将工具异常转为失败结果', async () => {

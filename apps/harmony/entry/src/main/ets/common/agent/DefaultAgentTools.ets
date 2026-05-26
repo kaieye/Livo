@@ -1,4 +1,12 @@
-import type { AgentToolArgs, AgentToolRun } from './AgentTypes.ts'
+import {
+  isAgentCapabilityAllowed,
+  normalizeAgentPermissionSettings,
+} from './AgentTypes.ts'
+import type {
+  AgentPermissionSettings,
+  AgentToolArgs,
+  AgentToolRun,
+} from './AgentTypes.ts'
 import { AgentToolRegistry } from './ToolRegistry.ts'
 import { AgentHarness } from './AgentHarness.ts'
 import { agentToolResultToText } from './AgentToolResultText.ts'
@@ -96,6 +104,17 @@ export function buildDefaultAgentToolRegistry(): AgentToolRegistry {
   ])
 }
 
+export function buildAllowedAgentToolRegistry(
+  permissions?: AgentPermissionSettings,
+): AgentToolRegistry {
+  const normalizedPermissions = normalizeAgentPermissionSettings(permissions)
+  const allTools = buildDefaultAgentToolRegistry().list()
+  const allowedTools = allTools.filter((tool) => {
+    return isAgentCapabilityAllowed(tool.capability, normalizedPermissions)
+  })
+  return new AgentToolRegistry(allowedTools)
+}
+
 export function normalizeDefaultAgentToolArgs(name: string, args: AgentToolArgs): AgentToolArgs {
   const next: AgentToolArgs = {}
   const keys = Object.keys(args)
@@ -128,6 +147,7 @@ export async function executeDefaultAgentToolRun(
   name: string,
   args: AgentToolArgs,
   confirmed: boolean = false,
+  permissions?: AgentPermissionSettings,
 ): Promise<AgentToolRun> {
   const registry = buildDefaultAgentToolRegistry()
   const harness = new AgentHarness(registry)
@@ -137,6 +157,7 @@ export async function executeDefaultAgentToolRun(
     context: {
       sessionId: 'ai-chat',
       now: Date.now(),
+      agentPermissions: normalizeAgentPermissionSettings(permissions),
     },
     confirmed,
   })

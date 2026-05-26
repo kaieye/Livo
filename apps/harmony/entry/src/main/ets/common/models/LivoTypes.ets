@@ -122,6 +122,14 @@ export type AITargetLanguage = 'zh-CN' | 'zh-TW' | 'en' | 'ja' | 'ko' | 'fr' | '
 export type AIProvider = 'minimax' | 'deepseek' | 'openai' | 'anthropic' | 'glm' | 'custom'
 export type AccountProvider = 'youtube' | 'x' | 'instagram' | 'bilibili'
 
+export interface AgentPermissionSettings {
+  allowRead: boolean
+  allowNavigate: boolean
+  allowMutate: boolean
+  allowDestructive: boolean
+  allowExternal: boolean
+}
+
 export interface HarmonySettings {
   autoRefresh: boolean
   aiSummaryEnabled: boolean
@@ -162,6 +170,7 @@ export interface AIAssistantSettings {
   enableSystemPrompt: boolean
   systemPromptTemplate: string
   chatPersonaPrompt: string
+  agentPermissions: AgentPermissionSettings
 }
 
 export interface RemoteFeedResult {

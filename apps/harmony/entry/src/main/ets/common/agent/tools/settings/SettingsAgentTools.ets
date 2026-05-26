@@ -21,6 +21,14 @@ const AI_PROVIDER_VALUES: string[] = ['minimax', 'deepseek', 'openai', 'anthropi
 const LANGUAGE_VALUES: string[] = ['zh-CN', 'en']
 const TRANSLATION_LANGUAGE_VALUES: string[] = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar']
 
+class SanitizedAgentPermissionSettings {
+  allowRead: boolean = true
+  allowNavigate: boolean = true
+  allowMutate: boolean = true
+  allowDestructive: boolean = true
+  allowExternal: boolean = true
+}
+
 class SanitizedAIAssistantSettings {
   provider: AIProvider = 'deepseek'
   baseUrl: string = ''
@@ -28,6 +36,7 @@ class SanitizedAIAssistantSettings {
   enableSystemPrompt: boolean = false
   systemPromptTemplate: string = ''
   chatPersonaPrompt: string = ''
+  agentPermissions: SanitizedAgentPermissionSettings = new SanitizedAgentPermissionSettings()
   apiKeyConfigured: Record<string, boolean> = {}
 }
 
@@ -127,6 +136,13 @@ function sanitizedAISettings(settings: AIAssistantSettings): SanitizedAIAssistan
   result.enableSystemPrompt = settings.enableSystemPrompt
   result.systemPromptTemplate = settings.systemPromptTemplate
   result.chatPersonaPrompt = settings.chatPersonaPrompt
+  const permissions = new SanitizedAgentPermissionSettings()
+  permissions.allowRead = settings.agentPermissions.allowRead
+  permissions.allowNavigate = settings.agentPermissions.allowNavigate
+  permissions.allowMutate = settings.agentPermissions.allowMutate
+  permissions.allowDestructive = settings.agentPermissions.allowDestructive
+  permissions.allowExternal = settings.agentPermissions.allowExternal
+  result.agentPermissions = permissions
   result.apiKeyConfigured = apiKeyConfigured
   return result
 }
@@ -200,7 +216,8 @@ export function buildGetSettingsTool(): AgentTool {
         `跨栏目搜索 ${settings.searchAllHomeCategories ? '开启' : '关闭'}。\n` +
         `AI 功能：摘要 ${settings.aiSummaryEnabled ? '开启' : '关闭'}，翻译 ${settings.aiTranslationEnabled ? '开启' : '关闭'}，` +
         `翻译目标 ${settings.aiTranslationLanguage}。\n` +
-        `AI 运行配置：${aiSettings.provider} / ${aiSettings.model}，API Key ${((aiSettings.apiKeys[aiSettings.provider] || '').trim()) ? '已配置' : '未配置'}。`
+        `AI 运行配置：${aiSettings.provider} / ${aiSettings.model}，API Key ${((aiSettings.apiKeys[aiSettings.provider] || '').trim()) ? '已配置' : '未配置'}。\n` +
+        `Agent 权限：读取 ${aiSettings.agentPermissions.allowRead ? '开启' : '关闭'}，导航 ${aiSettings.agentPermissions.allowNavigate ? '开启' : '关闭'}，写入 ${aiSettings.agentPermissions.allowMutate ? '开启' : '关闭'}，破坏性操作 ${aiSettings.agentPermissions.allowDestructive ? '开启' : '关闭'}，外部访问 ${aiSettings.agentPermissions.allowExternal ? '开启' : '关闭'}。`
       return {
         status: 'success',
         message,
@@ -341,6 +358,7 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         chatPersonaPrompt: typeof args['chatPersonaPrompt'] === 'string'
           ? args['chatPersonaPrompt'] as string
           : current.chatPersonaPrompt,
+        agentPermissions: current.agentPermissions,
       }
       const saved = await AIAssistantSettingsStore.default.save(next)
       console.info('[SettingsAgent] update_ai_runtime_settings saved provider:', saved.provider)
