@@ -10,7 +10,7 @@ import {
   HomeModeScrollOffsetMap,
   HomeModeVisibleEntryLimitMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { resolveHomeVisibleEntryInitialLimit } from './HomeVisibleEntryPolicy'
 
 // ── Generic per-mode-map operations ──────────────────────────────────────

@@ -18,7 +18,7 @@ import {
   HomeModePendingLoadMoreMap,
   HomeModeScrollOffsetMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import {
   createHomeLoadMoreTimestampMap,
   createHomePendingLoadMoreMap,

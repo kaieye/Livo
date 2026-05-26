@@ -1,4 +1,4 @@
-import { SubscriptionMode, SUBSCRIPTION_MODES, MODE_SWIPE_TRIGGER_OFFSET, HOME_MODE_SCENE_TRANSITION_DURATION, HOME_MODE_DEBUG_ENABLED, HOME_MODE_DEBUG_PREFIX, HOME_MODE_SCENE_TOP_INSET, HOME_MODE_CONTENT_TOP_SPACER_HEIGHT } from '../../components/HomeRootConfig'
+import { SubscriptionMode, SUBSCRIPTION_MODES, MODE_SWIPE_TRIGGER_OFFSET, HOME_MODE_SCENE_TRANSITION_DURATION, HOME_MODE_DEBUG_ENABLED, HOME_MODE_DEBUG_PREFIX, HOME_MODE_SCENE_TOP_INSET, HOME_MODE_CONTENT_TOP_SPACER_HEIGHT } from '../../config/HomeRootConfig'
 import { shouldAcceptModeSwitch } from '../../utils/ModeSwitchGuard'
 import { rememberVisitedMode } from './HomeModeVisitedCache'
 import { EntryCardModel } from '../../models/LivoModels'

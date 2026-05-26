@@ -22,7 +22,7 @@ import {
   HOME_LIST_SWAP_ENTRY_OFFSET_Y,
   HOME_MAX_CANDIDATE_LIMIT,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { IndexHomeDiagnosticsLogger, IndexHomeDiagnosticsOwner } from '../../coordinators/index-home/IndexHomeDiagnosticsLogger'
 import { IndexHomeLoadStateGate, IndexHomeLoadStateOwner } from '../../coordinators/index-home/IndexHomeLoadStateGate'
 import { IndexHomeModeScenePresenter, IndexHomeModeSceneOwner } from '../../coordinators/index-home/IndexHomeModeScenePresenter'

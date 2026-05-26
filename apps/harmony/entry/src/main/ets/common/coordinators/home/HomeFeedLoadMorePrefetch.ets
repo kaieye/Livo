@@ -5,7 +5,7 @@ import {
   HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
   HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { resolveHomeVisibleEntryLoadMoreStep } from './HomeVisibleEntryPolicy'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'

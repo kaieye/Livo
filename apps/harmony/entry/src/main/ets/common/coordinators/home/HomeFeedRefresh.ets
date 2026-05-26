@@ -14,7 +14,7 @@ import {
   HOME_REFRESH_PROGRESS_UI_THROTTLE_MS,
   HOME_STARTUP_REFRESH_COOLDOWN_MS,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { RefreshStateManager } from './RefreshStateManager'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'

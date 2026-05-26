@@ -6,7 +6,7 @@ import {
   HOME_MODE_BOTTOM_TAB_SPACER,
   HOME_MODE_CONTENT_GAP,
   HOME_MODE_SCENE_TOP_INSET,
-} from '../components/HomeRootConfig'
+} from '../config/HomeRootConfig'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import { homeEntryListRenderKey, homeVideoRowRenderKey, isTweetLikeEntry } from '../coordinators/home/HomeEntryUtils'
 import { HomeArticleEntryCard } from './HomeArticleEntryCard'

@@ -5,7 +5,7 @@ import {
 } from '@kit.UIDesignKit'
 import { SubscriptionsContent } from '../common/components/SubscriptionsContent'
 import { SubscriptionsModeRail } from '../common/components/SubscriptionsModeRail'
-import { SubscriptionMode } from '../common/components/HomeRootConfig'
+import { SubscriptionMode } from '../common/config/HomeRootConfig'
 import { rootTabTitleBarStyle } from '../common/coordinators/index-home/IndexRootChrome'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 

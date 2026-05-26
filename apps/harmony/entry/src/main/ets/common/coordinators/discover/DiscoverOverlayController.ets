@@ -16,10 +16,10 @@ import { resolveDiscoverOverlayReturnLevel } from './DiscoverNavigationPolicy'
 import { resolveSocialFeedDisplayImageUrl } from '../../utils/social/SocialFeedPresentation'
 import { DiscoverFocusController } from './DiscoverFocusController'
 import {
-  writeDiscoverHasForegroundOverlay,
-  writeDiscoverOverlayLevel,
-  writeDiscoverRootVisibleSince,
-  writeDiscoverSearchDismissAt,
+  discoverHasForegroundOverlay,
+  discoverOverlayLevel,
+  discoverRootVisibleSince,
+  discoverSearchDismissAt,
 } from '../../utils/AppSignals'
 
 export interface DiscoverOverlayOwner {
@@ -49,14 +49,14 @@ export class DiscoverOverlayController {
   private syncRoute(route: DiscoverOverlayRoute, level: number): void {
     this.owner.activeOverlayRoute = route
     this.owner.overlayLevel = level
-    writeDiscoverOverlayLevel(level)
-    writeDiscoverHasForegroundOverlay(level > 0)
+    discoverOverlayLevel.write(level)
+    discoverHasForegroundOverlay.write(level > 0)
   }
 
   private scheduleNavigation(action: () => void): void {
     this.focus.dismissSearchFocus('overlay-navigation')
     action()
-    writeDiscoverHasForegroundOverlay(this.owner.overlayLevel > 0)
+    discoverHasForegroundOverlay.write(this.owner.overlayLevel > 0)
   }
 
   private resetOverlayToRoot(): void {
@@ -114,7 +114,7 @@ export class DiscoverOverlayController {
   // ── Lifecycle / signals ──
 
   settleDiscoverRootVisible(): void {
-    writeDiscoverRootVisibleSince(Date.now())
+    discoverRootVisibleSince.write(Date.now())
     if (this.owner.activeOverlayRoute === 'none') {
       this.syncRoute('none', 0)
     }
@@ -290,7 +290,7 @@ export class DiscoverOverlayController {
   }
 
   onSubscribeConfigSubscribed(): void {
-    writeDiscoverSearchDismissAt(Date.now())
+    discoverSearchDismissAt.write(Date.now())
     this.closeSubscribeConfigToTarget()
   }
 

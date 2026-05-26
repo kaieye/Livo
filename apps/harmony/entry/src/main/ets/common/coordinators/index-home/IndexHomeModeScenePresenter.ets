@@ -1,5 +1,5 @@
 import { ModeSceneRenderState, resolveModeSceneRenderState } from '../../utils/ModeSceneTransition'
-import { SubscriptionMode } from '../../components/HomeRootConfig'
+import { SubscriptionMode } from '../../config/HomeRootConfig'
 
 export interface IndexHomeModeSceneOwner {
   renderedMode: SubscriptionMode

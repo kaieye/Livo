@@ -5,7 +5,7 @@ import {
   HOME_LOAD_STATE_DIAG_PREFIX,
   HOME_PERF_DIAG_ENABLED,
   HOME_PERF_DIAG_PREFIX,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 
 export class HomePerfLogger {
   sessionId: number = 0

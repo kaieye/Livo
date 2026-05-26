@@ -26,8 +26,8 @@ import {
 } from '../coordinators/index-home/RootTabScrollToTopSignal'
 import {
   SETTINGS_ACTIVE_SHEET_KEY,
-  writeSettingsActiveSheet,
-  writeSettingsOverlayLevel,
+  settingsActiveSheet,
+  settingsOverlayLevel,
 } from '../utils/AppSignals'
 
 const SETTINGS_TITLE_BAR_MINI_HEIGHT: number = 56
@@ -58,7 +58,7 @@ export struct SettingsContent {
     if (restoreSheet && !this.showSettingsSheet) {
       this.activeSheet = restoreSheet
       this.showSettingsSheet = true
-      writeSettingsOverlayLevel(1)
+      settingsOverlayLevel.write(1)
     }
 
     this.theme = this.inheritedTheme
@@ -70,13 +70,13 @@ export struct SettingsContent {
     if (this.storedActiveSheet && !this.showSettingsSheet) {
       this.activeSheet = this.storedActiveSheet
       this.showSettingsSheet = true
-      writeSettingsOverlayLevel(1)
+      settingsOverlayLevel.write(1)
       return
     }
 
     if (!this.storedActiveSheet && this.showSettingsSheet && this.activeSheet === '') {
       this.showSettingsSheet = false
-      writeSettingsOverlayLevel(0)
+      settingsOverlayLevel.write(0)
     }
   }
 
@@ -111,15 +111,15 @@ export struct SettingsContent {
 
     this.activeSheet = sheet
     this.showSettingsSheet = true
-    writeSettingsOverlayLevel(1)
-    writeSettingsActiveSheet(sheet)
+    settingsOverlayLevel.write(1)
+    settingsActiveSheet.write(sheet)
   }
 
   private closeSheet(): void {
     this.showSettingsSheet = false
     this.activeSheet = ''
-    writeSettingsOverlayLevel(0)
-    writeSettingsActiveSheet('')
+    settingsOverlayLevel.write(0)
+    settingsActiveSheet.write('')
   }
 
   private resolveSubtitle(item: SettingItem): string {

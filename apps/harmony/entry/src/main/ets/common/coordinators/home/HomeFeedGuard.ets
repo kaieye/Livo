@@ -1,4 +1,4 @@
-import { SubscriptionMode } from '../../components/HomeRootConfig'
+import { SubscriptionMode } from '../../config/HomeRootConfig'
 import { HomeFeedState } from './HomeFeedSessionOwner'
 
 /**

@@ -8,11 +8,11 @@ import {
   HOME_MAX_CANDIDATE_LIMIT,
   RootTabSymbolPair,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import {
-  writeDiscoverHasForegroundOverlay,
-  writeDiscoverNavigationResetAt,
-  writeDiscoverOverlayLevel,
+  discoverHasForegroundOverlay,
+  discoverNavigationResetAt,
+  discoverOverlayLevel,
 } from '../../utils/AppSignals'
 
 export interface IndexRootTabOwner {
@@ -128,9 +128,9 @@ export class IndexRootTabCoordinator {
     this.owner.activeRootTabId = tabId
     this.owner.logHomeInlineSearchFocusDebug('root-tab-change', `nextTab=${tabId}`)
     if (previousTabId === 'discover' && tabId !== 'discover') {
-      writeDiscoverHasForegroundOverlay(false)
-      writeDiscoverOverlayLevel(0)
-      writeDiscoverNavigationResetAt(Date.now())
+      discoverHasForegroundOverlay.write(false)
+      discoverOverlayLevel.write(0)
+      discoverNavigationResetAt.write(Date.now())
     }
     if (tabId !== 'home') {
       this.owner.closeHomeInlineSearch(true)

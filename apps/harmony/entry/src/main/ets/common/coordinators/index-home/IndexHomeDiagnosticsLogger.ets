@@ -17,7 +17,7 @@ import {
   HOME_PERF_DIAG_ENABLED,
   HOME_PERF_DIAG_PREFIX,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 
 export interface IndexHomeDiagnosticsOwner {
   homePerfSessionId: number

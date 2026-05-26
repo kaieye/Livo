@@ -3,7 +3,7 @@ import {
   SUBSCRIPTION_MODES,
   SubscriptionMode,
   MODE_SWIPE_TRIGGER_OFFSET,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 
 export function resolveSubscriptionModeLabel(mode: SubscriptionMode): string {
   switch (mode) {

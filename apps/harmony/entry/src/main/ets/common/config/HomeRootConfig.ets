@@ -5,7 +5,7 @@ import {
   ROOT_MODE_RAIL_TOP_GAP,
   ROOT_PAGE_MODE_TOP_OFFSET,
   ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT,
-} from './FloatingRootPageLayout'
+} from '../components/FloatingRootPageLayout'
 import { BOTTOM_TAB_BAR_HEIGHT, BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
 import { resolveHdsBottomTabBarBottomMargin } from '../coordinators/index-home/HdsBottomTabConfig'
 import { HOME_MODES, HomeMode } from '../coordinators/home/HomeModeMeta'

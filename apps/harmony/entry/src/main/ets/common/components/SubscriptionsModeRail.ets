@@ -4,7 +4,7 @@ import {
   HdsTabsController,
   hdsMaterial,
 } from '@kit.UIDesignKit'
-import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from '../config/HomeRootConfig'
 import { BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../coordinators/home/HomeModeMeta'
 

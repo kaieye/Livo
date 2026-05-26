@@ -10,7 +10,7 @@ import {
   HomeModeNoProgressCountMap,
   HomeModeVisibleEntryLimitMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 
 /**
  * Readable and writable data properties consumed by home-feed coordinators

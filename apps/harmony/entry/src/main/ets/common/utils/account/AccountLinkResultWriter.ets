@@ -2,13 +2,13 @@
 // Handles AppStorage persistence for account link operations
 
 import {
-  writeAccountLinkResultAt,
-  writeAccountLinkResultDisplayName,
-  writeAccountLinkResultLinked,
-  writeAccountLinkResultProvider,
-  writeAccountsStatusRefreshAt,
-  writeSettingsActiveSheet,
-  writeSettingsOverlayLevel,
+  accountLinkResultAt,
+  accountLinkResultDisplayName,
+  accountLinkResultLinked,
+  accountLinkResultProvider,
+  accountsStatusRefreshAt,
+  settingsActiveSheet,
+  settingsOverlayLevel,
 } from '../AppSignals'
 
 export type AccountProvider = 'youtube' | 'x' | 'instagram' | 'bilibili'
@@ -20,11 +20,11 @@ export interface AccountLinkResult {
 }
 
 export function writeAccountLinkResult(result: AccountLinkResult): void {
-  writeSettingsActiveSheet('accounts')
-  writeSettingsOverlayLevel(1)
-  writeAccountLinkResultProvider(result.provider)
-  writeAccountLinkResultDisplayName(result.displayName)
-  writeAccountLinkResultLinked(result.linked)
-  writeAccountLinkResultAt(Date.now())
-  writeAccountsStatusRefreshAt(Date.now())
+  settingsActiveSheet.write('accounts')
+  settingsOverlayLevel.write(1)
+  accountLinkResultProvider.write(result.provider)
+  accountLinkResultDisplayName.write(result.displayName)
+  accountLinkResultLinked.write(result.linked)
+  accountLinkResultAt.write(Date.now())
+  accountsStatusRefreshAt.write(Date.now())
 }

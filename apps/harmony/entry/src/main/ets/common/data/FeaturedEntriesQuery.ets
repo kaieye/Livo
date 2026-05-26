@@ -28,7 +28,7 @@ import {
   HOME_ENTRY_MODE_ORDER,
   modeMatchesFeedView,
 } from './AppRepositoryEntryHelpers'
-import { HOME_FAST_PAGE_CACHE_BUFFER } from '../components/HomeRootConfig'
+import { HOME_FAST_PAGE_CACHE_BUFFER } from '../config/HomeRootConfig'
 import { EntryCardCache, IEntryCardCache } from './EntryCardCache'
 
 function deduplicateEntryCards(cards: EntryCardModel[]): EntryCardModel[] {

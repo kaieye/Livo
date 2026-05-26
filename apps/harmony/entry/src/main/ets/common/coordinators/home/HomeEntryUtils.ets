@@ -1,6 +1,6 @@
 import { EntryCardModel } from '../../models/LivoModels'
-import { SubscriptionMode } from '../../components/HomeRootConfig'
-import { modeOfFeedView } from '../../data/AppRepositoryEntryHelpers'
+import { SubscriptionMode } from '../../config/HomeRootConfig'
+import { modeOfFeedView, uniqueEntryCardKey } from '../../data/AppRepositoryEntryHelpers'
 
 /**
  * Merge `next` entries into `previous`, deduplicating by composite key
@@ -18,12 +18,12 @@ export function mergeUniqueEntries(
   const seen = new Set<string>()
   const merged: EntryCardModel[] = []
   previous.forEach((entry: EntryCardModel) => {
-    const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+    const key = uniqueEntryCardKey(entry)
     seen.add(key)
     merged.push(entry)
   })
   next.forEach((entry: EntryCardModel) => {
-    const key = `${entry.id}|${entry.feedId}|${entry.articleUrl}`
+    const key = uniqueEntryCardKey(entry)
     if (seen.has(key)) {
       return
     }

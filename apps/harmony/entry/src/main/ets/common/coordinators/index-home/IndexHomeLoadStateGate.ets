@@ -1,5 +1,5 @@
 import { EntryCardModel } from '../../models/LivoModels'
-import { HEADER_BLUR_SCROLL_RANGE } from '../../components/HomeRootConfig'
+import { HEADER_BLUR_SCROLL_RANGE } from '../../config/HomeRootConfig'
 
 export interface IndexHomeLoadStateOwner {
   homeInitialLoadPending: boolean

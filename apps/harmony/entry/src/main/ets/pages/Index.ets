@@ -63,7 +63,7 @@ import {
   HomeModeVisibleEntryLimitMap,
   RootTabSymbolPair,
   SubscriptionMode,
-} from '../common/components/HomeRootConfig'
+} from '../common/config/HomeRootConfig'
 
 class IndexTweetPresentationCacheDiagnostics implements TweetEntryPresentationCacheDiagnostics {
   private readonly owner: Index

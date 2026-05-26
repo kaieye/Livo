@@ -1,7 +1,7 @@
 import { HomeEntrySnapshotStore } from '../../services/HomeEntrySnapshotStore'
 import { ArrayLazyDataSource } from '../../data/ArrayLazyDataSource'
 import { EntryCardModel } from '../../models/LivoModels'
-import { SubscriptionMode, HomeEntryDataSourceMap, HOME_ENTRY_GROUP_DEFER_DELAY_MS, HOME_FULL_MODE_CANDIDATE_LIMIT } from '../../components/HomeRootConfig'
+import { SubscriptionMode, HomeEntryDataSourceMap, HOME_ENTRY_GROUP_DEFER_DELAY_MS, HOME_FULL_MODE_CANDIDATE_LIMIT } from '../../config/HomeRootConfig'
 import { HomeEntryGroups, groupHomeEntriesByMode } from './HomeEntryGroups'
 import { cloneHomeSnapshotEntry, filterEntriesByMode } from './HomeEntryUtils'
 import { modeOfFeedView, uniqueEntryCardKey } from '../../data/AppRepositoryEntryHelpers'

@@ -5,7 +5,7 @@ import {
   hdsMaterial,
 } from '@kit.UIDesignKit'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_HEIGHT, SubscriptionMode } from '../config/HomeRootConfig'
 import { HOME_MODES, HomeMode, resolveHomeModeSymbol, resolveHomeModeTitle } from '../coordinators/home/HomeModeMeta'
 
 @Component

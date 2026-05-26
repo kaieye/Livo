@@ -5,15 +5,15 @@ import { feedCardFromFeed } from '../data/AppRepositoryEntryHelpers'
 import { FeedRefreshPayload } from '../services/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
-  writeSubscriptionsOverlayLevel,
-  writeSubscriptionsRailDismissProgress,
+  subscriptionsOverlayLevel as subscriptionsOverlayLevelSignal,
+  subscriptionsRailDismissProgress,
 } from '../utils/AppSignals'
 
 
 import {
   SubscriptionsAvatarHydrationCoordinator,
 } from '../coordinators/subscriptions/SubscriptionsAvatarHydrationCoordinator'
-import { SubscriptionMode, HOME_MODE_SCENE_TOP_INSET } from './HomeRootConfig'
+import { SubscriptionMode, HOME_MODE_SCENE_TOP_INSET } from '../config/HomeRootConfig'
 import { resolveSubscriptionModeLabel, resolveSubscriptionSwipeTarget, SubscriptionSwipeAnalysisInput } from '../coordinators/subscriptions/SubscriptionsModePresentation'
 import { SubscriptionsFeedListSection } from './SubscriptionsFeedListSection'
 import { SubscriptionsOverlayLayer } from './SubscriptionsOverlayLayer'
@@ -74,7 +74,7 @@ export struct SubscriptionsContent {
 
   private syncOverlayLevel(level: number): void {
     this.overlayLevel = level
-    writeSubscriptionsOverlayLevel(level)
+    subscriptionsOverlayLevelSignal.write(level)
   }
 
   private settleSubscriptionsRootVisible(): void {
@@ -186,13 +186,13 @@ export struct SubscriptionsContent {
     if (isReturningTowardsTop) {
       if (this.subscriptionsRailDismissedByScroll) {
         this.subscriptionsRailDismissedByScroll = false
-        writeSubscriptionsRailDismissProgress(0)
+        subscriptionsRailDismissProgress.write(0)
         this.lastRailShownAt = Date.now()
       }
     } else if (isScrollingDeeper && nextOffset >= 48) {
       if (!this.subscriptionsRailDismissedByScroll && Date.now() - this.lastRailShownAt >= 200) {
         this.subscriptionsRailDismissedByScroll = true
-        writeSubscriptionsRailDismissProgress(1)
+        subscriptionsRailDismissProgress.write(1)
       }
     }
   }

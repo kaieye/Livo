@@ -1,6 +1,6 @@
 import { RootTabId } from '../../navigation/AppRouter'
 import { EntryCardModel } from '../../models/LivoModels'
-import { HOME_INLINE_SEARCH_RESULT_LIMIT } from '../../components/HomeRootConfig'
+import { HOME_INLINE_SEARCH_RESULT_LIMIT } from '../../config/HomeRootConfig'
 import { HOME_INLINE_SEARCH_INPUT_ID, HOME_INLINE_SEARCH_MOTION_DURATION } from '../../components/HomeInlineSearchOverlay'
 import { filterSearchResults, searchResultSummaryText } from './HomeSearchHelper'
 import { normalizeInlineSearchQuery } from './HomeInlineSearch'

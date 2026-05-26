@@ -2,7 +2,7 @@ import {
   HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS,
   HomeModeScrollOffsetMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import {
   createHomeScrollOffsetMap,
   perModeGet,

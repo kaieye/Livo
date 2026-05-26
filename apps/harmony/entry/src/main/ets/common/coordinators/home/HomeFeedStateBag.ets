@@ -12,7 +12,7 @@ import {
   HomeModeNoProgressCountMap,
   HomeModeVisibleEntryLimitMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import {
   createHomeCandidateLimitMap,
   createHomeLoadedMap,

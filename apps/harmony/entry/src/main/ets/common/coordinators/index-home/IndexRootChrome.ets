@@ -7,7 +7,7 @@ import {
 import { BlurStrategy } from '@hms.hds.hdsBaseComponent'
 import { RootTabId } from '../../navigation/AppRouter'
 import { HdsBottomTabId } from './HdsBottomTabConfig'
-import { RootTabSymbolPair } from '../../components/HomeRootConfig'
+import { RootTabSymbolPair } from '../../config/HomeRootConfig'
 
 export function rootTitleFor(tabId: RootTabId): string {
   switch (tabId) {

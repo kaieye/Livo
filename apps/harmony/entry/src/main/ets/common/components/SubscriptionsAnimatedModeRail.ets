@@ -1,4 +1,4 @@
-import { SubscriptionMode } from './HomeRootConfig'
+import { SubscriptionMode } from '../config/HomeRootConfig'
 import { SubscriptionsModeRail } from './SubscriptionsModeRail'
 
 @Component

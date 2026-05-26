@@ -1,6 +1,6 @@
 import { EntryCardModel } from '../../models/LivoModels'
 import { HomeFeedActions, HomeFeedState } from './HomeFeedSessionOwner'
-import { SubscriptionMode } from '../../components/HomeRootConfig'
+import { SubscriptionMode } from '../../config/HomeRootConfig'
 
 /**
  * Minimal test double implementing {@link HomeFeedActions}.

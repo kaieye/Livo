@@ -22,7 +22,7 @@ import {
   HdsBottomTabId,
   resolveHdsBottomTabBarBottomMargin,
 } from '../coordinators/index-home/HdsBottomTabConfig'
-import { RootTabSymbolPair, SubscriptionMode } from './HomeRootConfig'
+import { RootTabSymbolPair, SubscriptionMode } from '../config/HomeRootConfig'
 import { HomeRootTabBody } from './HomeRootTabBody'
 import { IndexHomeRootContentCallbacks } from './IndexHomeRootContent'
 import { IndexRootTabBody } from './IndexRootTabBody'

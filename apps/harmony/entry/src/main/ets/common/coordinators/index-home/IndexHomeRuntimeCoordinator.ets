@@ -3,7 +3,7 @@ import { SettingsStore } from '../../services/SettingsStore'
 import {
   AUTO_REFRESH_MIN_INTERVAL_MINUTES,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../../models/LivoModels'
 import { ThemePalette, ThemeService } from '../../services/ThemeService'
 import { resolveSystemBarStyle } from '../../utils/SystemBarStyle'

@@ -8,7 +8,7 @@ import {
   HomeModeVisibleEntryLimitMap,
   HomeModeCandidateLimitMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import {
   perModeGet,
   perModeSet,

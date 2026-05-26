@@ -11,7 +11,7 @@ import {
   HOME_MODE_SCENE_TOP_INSET,
   HomeModeScrollOffsetMap,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { PAGE_HORIZONTAL_PADDING } from '../../ui/UiTokens'
 import {
   createHomeScrollOffsetMap,

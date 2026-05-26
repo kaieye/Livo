@@ -1,5 +1,5 @@
 import { RootTabId } from '../../navigation/AppRouter'
-import { SubscriptionMode } from '../../components/HomeRootConfig'
+import { SubscriptionMode } from '../../config/HomeRootConfig'
 
 export interface IndexHomeScrollerRegistryOwner {
   activeRootTabId: RootTabId

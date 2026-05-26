@@ -3,7 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { resolveHomeModeTitle } from '../coordinators/home/HomeModeMeta'
 import { HomeInlineSearchOverlay } from './HomeInlineSearchOverlay'
 import { HomeRootOverlayControls } from './HomeRootOverlayControls'
-import { HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL, SubscriptionMode } from './HomeRootConfig'
+import { HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL, SubscriptionMode } from '../config/HomeRootConfig'
 import { HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY } from '../coordinators/index-home/HomeChromeProgressStore'
 
 // 通过 @StorageProp 订阅模式栏折叠进度,自己在节点上跑 .animation(),

@@ -1,7 +1,7 @@
 import {
   HOME_LOAD_MORE_SCROLL_QUIESCENT_MS,
   SubscriptionMode,
-} from '../../components/HomeRootConfig'
+} from '../../config/HomeRootConfig'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 import { writeHomeLoadMoreInProgress } from '../index-home/HomeChromeProgressStore'

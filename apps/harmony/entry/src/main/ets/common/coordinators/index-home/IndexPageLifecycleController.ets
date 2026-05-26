@@ -4,11 +4,10 @@ import { ThemePalette } from '../../services/ThemeService'
 import { HomeEntryDataManager } from '../../coordinators/home/HomeEntryDataManager'
 import { HomeInlineSearchController } from '../../coordinators/home/HomeInlineSearchController'
 import {
-  readSettingsActiveSheet,
-  readSubscriptionsOverlayLevel,
-  writeDiscoverOverlayBackAt,
-  writeSettingsActiveSheet,
-  writeSubscriptionsOverlayBackAt,
+  settingsActiveSheet,
+  subscriptionsOverlayLevel as subscriptionsOverlayLevelSignal,
+  discoverOverlayBackAt,
+  subscriptionsOverlayBackAt,
 } from '../../utils/AppSignals'
 
 export interface IndexPageLifecycleOwner {
@@ -42,23 +41,23 @@ export class IndexPageLifecycleController {
   }
 
   private restoreSettingsSheetIfNeeded(): void {
-    const storedSheet = readSettingsActiveSheet()
+    const storedSheet = settingsActiveSheet.read()
     if (!storedSheet) {
       return
     }
-    writeSettingsActiveSheet('')
-    writeSettingsActiveSheet(storedSheet)
+    settingsActiveSheet.write('')
+    settingsActiveSheet.write(storedSheet)
   }
 
   onBackPress(): boolean {
     if (this.owner.currentRootTabId() === 'discover' && this.owner.discoverOverlayLevel > 0) {
-      writeDiscoverOverlayBackAt(Date.now())
+      discoverOverlayBackAt.write(Date.now())
       return true
     }
     if (this.owner.currentRootTabId() === 'subscriptions') {
-      const subscriptionsOverlayLevel = readSubscriptionsOverlayLevel()
+      const subscriptionsOverlayLevel = subscriptionsOverlayLevelSignal.read()
       if (subscriptionsOverlayLevel > 0) {
-        writeSubscriptionsOverlayBackAt(Date.now())
+        subscriptionsOverlayBackAt.write(Date.now())
         return true
       }
     }
