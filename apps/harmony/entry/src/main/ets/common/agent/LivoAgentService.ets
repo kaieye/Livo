@@ -1,16 +1,16 @@
 import { AIAssistantSettings } from '../models/LivoModels'
 import { ChatMessage } from '../services/ChatHistoryStore'
+import { buildDefaultTools } from '../services/AIChatTools'
 import {
-  runChatAgent,
-  resumeChatAgent,
+  runAgentCore,
+  resumeAgentCore,
   AgentAbortSignal,
   AgentContinuationState,
   AgentPendingConfirmation,
   AgentRoundDetail,
   AgentRunResult,
   AgentToolExecutionEvent,
-} from '../services/AIChatAgentService'
-import { buildDefaultTools } from '../services/AIChatTools'
+} from './LivoAgentLoop'
 
 export { AgentAbortSignal }
 
@@ -53,7 +53,7 @@ export async function runLivoAgent(request: LivoAgentRunRequest): Promise<LivoAg
   const tools = buildDefaultTools(request.aiSettings.agentPermissions)
   console.info('[LivoAgent] run started', 'history:', request.history ? request.history.length : 0)
 
-  return runChatAgent(
+  return runAgentCore(
     request.prompt,
     request.aiSettings,
     request.history,
@@ -70,7 +70,7 @@ export async function resumeLivoAgent(request: LivoAgentResumeRequest): Promise<
   const tools = buildDefaultTools(request.aiSettings.agentPermissions)
   console.info('[LivoAgent] resume started', 'nextRound:', request.continuation.nextRound)
 
-  return resumeChatAgent(
+  return resumeAgentCore(
     request.continuation,
     request.aiSettings,
     tools,

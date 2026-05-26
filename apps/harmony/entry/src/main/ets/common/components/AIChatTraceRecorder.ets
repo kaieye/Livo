@@ -1,5 +1,5 @@
 import type { LivoAgentRunResult } from '../agent/LivoAgentService'
-import type { AgentRoundDetail } from '../services/AIChatAgentService'
+import type { AgentRoundDetail } from '../agent/LivoAgentLoop'
 import { AgentTraceStore } from '../agent/AgentTraceStore'
 import type {
   AgentTraceRecord,
@@ -51,9 +51,17 @@ export class AIChatTraceRecorder {
       risk: '',
       at: Date.now(),
     }
-    await AgentTraceStore.save(
-      this.buildRecord('cancelled', `已取消执行「${toolLabel}」。`, [call]),
-    )
+    const now = Date.now()
+    await AgentTraceStore.save({
+      traceId: this.traceId || `trace_${now}`,
+      sessionId: this.sessionId || 'ai-chat',
+      startedAt: this.startedAt || now,
+      completedAt: now,
+      promptSummary: this.promptSummary || '未记录提示',
+      finalText: `已取消执行「${toolLabel}」。`,
+      status: 'cancelled',
+      toolCalls: [call],
+    })
     this.reset()
   }
 

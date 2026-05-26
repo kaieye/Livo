@@ -28,7 +28,7 @@
 - `entry/src/main/ets/common/navigation/AppRouter.ets`
   - 已封装根标签、文章详情、订阅详情、视频播放、图片预览、设置页、账号登录等导航能力。
 
-判断：不要另起一个操作助手页面。应将 `AppActionAgentService` 的应用动作迁入统一工具注册表，让 AI 对话页通过同一个 Agent Harness 执行所有能力。
+判断：不要另起一个操作助手页面。应将 `AppActionAgentService` 的应用动作迁入统一工具注册表，让 AI 对话页通过同一个 Agent Harness 执行所有能力。**P6 完成后**：`AppActionAgentService` 与 `AppActionPanel` 已下线，应用内只剩一个 agent 入口（`AIChatPanel` → `LivoAgentService` → `LivoAgentLoop` → `AgentToolRegistryProvider` → `AgentHarness`）。
 
 ## Harness Engineering 原则
 
@@ -333,3 +333,82 @@ finalText
 - [x] 跑通 Harmony debug build。
 - [x] 补充失败降级：模型不支持 tool calling 时，仍可回答只读上下文问题，但不能执行写入。
 - [x] 增加 trace 查看入口或导出能力。
+
+### P6：架构深化与收口
+
+P0-P5 完成后，agent 模块进入"新旧并存"过渡态：`LivoAgentService` 是 wrapper，核心仍在 `AIChatAgentService`；`ChatToolDefinition`/`AppActionToolDefinition` 与 `AgentToolDefinition` 三层翻译；系统 prompt 重复 registry 信息；registry 每次 new。这一阶段把过渡态收口，让 agent_arch.md 的边界图（AIChatPanel → LivoAgentService → AgentHarness）真正成立。
+
+工程节奏：6.1 → 6.2 → (6.3 / 6.4 / 6.5 可并行) → 6.6；6.7 独立，建议前六项稳定后再启动。
+
+#### 6.1 抽出 ToolCallParser
+
+- [x] 新建 `common/agent/parsers/ToolCallParser.ts`，把 `AIChatAgentService.parseTextToolCalls`（约 200 行）整体迁入。
+- [x] 拆为 5 个 `tryParseXxx` helper：`<tool_call>` JSON、`<minimax:tool_call>` invoke、`<minimax:tool_call>` 函数式、`<function_call>`、`[TOOL_CALL]`。
+- [x] `AIChatAgentService` 改为 `import { parseTextToolCalls } from '../agent/parsers/ToolCallParser'`。
+- [x] 新增 `tests/tool-call-parser.test.ts`：每种格式至少一个正向用例，加 1-2 个异常输入用例（无 name、损坏 JSON）。
+- [x] 验收：`node --test tests/tool-call-parser.test.ts` 通过（20/20）；`AIChatAgentService.ets` 从 714 行降到 507 行。
+
+#### 6.2 LivoAgentService 接管 agent 编排
+
+- [x] 把 `AGENT_SYSTEM_PROMPT`、`buildContextFallback`、`runAgentLoop`、`executeAgentToolCall`、`buildConfirmationRequiredResult`、`toToolResultMessage`、`emitToolEvent` 全部搬入 `common/agent/LivoAgentLoop.ets`（约 488 行）。
+- [x] `AIChatAgentService.ets` 已删除（净减 507 行）。
+- [x] `LivoAgentService.ets`（110 行）改为入口 wrapper：`runAgentCore` / `resumeAgentCore` 从 `LivoAgentLoop` import，不再依赖 services 层。
+- [x] `AIChatTraceRecorder.ets` 的 `import type { AgentRoundDetail }` 改为 from `LivoAgentLoop`。
+- [x] 更新所有引用旧路径的测试：`livo-agent-service-source.test.ts`、`agent-p4-tools-source.test.ts`、`navigation-agent-tools-source.test.ts`。
+- [x] 验收：`AIChatPanel` 不再 import `services/AIChatAgentService`（文件已不存在）；51 个 agent 测试全过；`pnpm build:debug` BUILD SUCCESSFUL。
+- 备注：测试仍保留 source-level 断言；行为测试（fake LLM + fake registry）需要先把 `LivoAgentLoop` 改为接受 dependency injection，留到 P6.3 重写 `ChatCompletionRunner` 时一起做。
+
+#### 6.3 删除 ChatToolDefinition / AppActionToolDefinition 翻译层
+
+- [x] `article-assist/ChatCompletionRunner` 的 `tools` 形参改为 `AgentToolDefinition[]`。
+- [x] `AIChatTools.ets`（93 → 43 行）缩成 `buildDefaultTools` + `executeToolCall` + `executeToolCallRun`；`buildDefaultTools` 直接返回 `registry.toModelToolDefinitions()`。
+- [x] 删除 `ChatToolDefinition`、`ChatToolCall`、`ToolFunction`、`ToolFunctionParams`、`ToolParamProp`、`ToolCallFunction` 六个类型；`ProviderProtocol`/`ChatCompletionRunner`/`LivoAgentLoop` 改用 `AgentToolDefinition` + `AgentToolInputSchema` + `ExtractedToolFunction`。
+- [x] `AppActionAgentService.ets`（307 → 224 行）：删除 `AppActionToolDefinition`、`AppActionToolParams`、`AppActionToolProp`、`AppActionToolCall`、`AppActionToolCallFunction`、`buildAppActionTools`、`toAppActionParams`、`toAppActionProp`（均无外部调用）。
+- [x] 验收：搜索仓库代码无 `ChatToolDefinition` / `AppActionToolDefinition` 残留；51 个测试全过；BUILD SUCCESSFUL。
+
+#### 6.4 系统 prompt 由 registry 自动生成工具清单
+
+- [x] `AGENT_SYSTEM_PROMPT` 从 47 行压缩到 13 行：只保留规则（中文回复、必须 function calling、写入需确认、prompt injection 防护、回复总结实际动作）。
+- [x] 删除 35 个硬编码工具名清单；模型通过 OpenAI function calling 的 `tools` 参数读取 `registry.toModelToolDefinitions()`。
+- [x] 业务提示（如 "不修改 API Key"）已在对应 `build*Tool()` 的 description 中（如 `update_ai_runtime_settings` 的 description: "...该工具不会接收或保存 API Key"）。
+- [x] 新增 `tests/agent-system-prompt.test.ts`（3 个测试）：断言 prompt 不含任一具体工具名字面、保留行为规则、行数 ≤25。
+- [x] 验收：加新工具时只改 `build*Tool()`，prompt 不需要动；55 个测试全过；BUILD SUCCESSFUL。
+
+#### 6.5 AgentToolRegistryProvider 单例 + 上下文过滤 seam
+
+- [x] 新建 `common/agent/AgentToolRegistryProvider.ts`：lazy build + 单例 + viewCache；`full()` 返回全量 registry（builder 仅执行一次）；`forPermissions(perm)` / `forContext(ctx)` 返回按 permissions + activeRoute + activeRootTab 分桶缓存的过滤视图。
+- [x] `DefaultAgentTools.ets` 抽出 `buildAllAgentTools(): AgentTool[]`，模块加载时 `agentToolRegistryProvider.setBuilder(buildAllAgentTools)`；`buildDefaultAgentToolRegistry` / `buildAllowedAgentToolRegistry` / `executeDefaultAgentToolRun` 全部委托给 Provider，不再 `new AgentToolRegistry(...)`。
+- [x] `AppActionAgentService.ets` 中两处 `new` 改用 `agentToolRegistryProvider.full()`。
+- [x] 新增 `tests/agent-tool-registry-provider.test.ts`（7 个测试）：full 单例 / 同 permissions 复用 / 不同 permissions 不同 list / 不同 activeRoute 分桶 / Harness 透传 capability 门禁 / builder 未设置抛错。
+- [x] 验收：62 个测试全过；BUILD SUCCESSFUL；一次 agent run 内 builder 只触发 1 次（测试断言 `buildCount === 1`）。
+
+#### 6.6 迁移 AppActionPanel 后删除 AppActionAgentService
+
+- [x] 经盘点 `AppActionPanel.ets` 没有任何外部 import（grep 确认仅 agent_arch.md / 测试 / 自身引用），直接下线整个面板（935 行）。
+- [x] 删除 `common/services/AppActionAgentService.ets`（224 行）和 `tests/app-action-agent.test.ts`（76 行）。
+- [x] 验收：56 个测试全过；BUILD SUCCESSFUL；应用内只剩一个 agent 入口（`AIChatPanel` → `LivoAgentService` → `LivoAgentLoop` → `AgentToolRegistryProvider` → `AgentHarness`）。
+
+#### 6.7 HomeFeedSession 收敛 Owner 回调接口（评估调整版）
+
+**评估结论（2026-05-26 复盘）**：原方案"改 coordinator 返回 effects 列表"的方向被推翻。理由：
+
+1. **现状比 Explore agent 初步报告更好**：`HomeFeedSessionOwner.ets` 已经做了 `HomeFeedState`（60 个 state 字段）/ `HomeFeedActions`（30 个方法）的接口分离；`FakeHomeFeedActions.ets`（155 行）已经存在，每个 action 方法都有 fake 实现 + `callLog` 用于断言。testability seam 已经就位。
+2. **`HomeFeedSession` 末尾 30 行 forwarder 不是 shallow 代码，而是必要的接口适配层**：把 Index page 的具体方法签名重新打包成标准化 `HomeFeedActions` 接口供 coordinator 使用。1:1 转发是 adapter pattern 的合理形态，不是 shallow module 的"deletion test"指向的对象。
+3. **"effects-out" 不符合 ArkUI reactive 范式**：ArkUI `@State` 期望同步更新；如果 coordinator 改成"返回 effect 列表 → 由 HomeFeedSession 统一 apply"，会破坏立即响应性，让动画/refresh/滚动追踪等延迟一帧——这会引入回归风险，且没有对应的收益。
+4. **`HomeScrollIntentTracker`（76 行）本身就是 deep module**：自包含状态 + API，没有 owner 回调；之前被列为"shallow"是误判。
+
+**真正的债务**（未解决，列为长期 follow-up）：
+
+- 7 个 coordinator 的行为测试覆盖率为 0。`FakeHomeFeedActions` 基础设施已经具备，但行为测试需要在 `entry/src/test/` 用 HypiumTest（DevEco Studio IDE 跑），Node `tsx` 测试无法 runtime import `.ets`。
+- 这是工程范围更大、且需要 HarmonyOS 工具链支持的工作，不属于 P6 收口范畴。
+
+**本次 P6.7 实际落地**：
+
+- [x] 完成评估并记录上述结论（4 条复盘）。
+- [x] 新增 `tests/home-feed-actions-contract.test.ts`（4 个测试）：断言 `HomeFeedState` / `HomeFeedActions` / `HomeFeedSessionOwner` 接口拆分仍然成立；`FakeHomeFeedActions` 实现 `HomeFeedActions` 全部方法（动态枚举接口方法名 + 逐个断言 fake 中存在），防止未来添加 owner 方法时漏掉 fake 实现，导致 testability seam 退化。
+- [x] 验收：4 个新测试通过；总测试 60 个全过；BUILD SUCCESSFUL。
+
+**Long-term follow-up（不在 P6 范围）**：
+
+- 用 HypiumTest 在 `entry/src/test/` 给 `HomeFeedPagination`、`HomeFeedRefresh`、`HomeEntryDataManager` 各加一个核心方法的行为测试（用 `FakeHomeFeedActions` + `HomeFeedStateBag` 作为 fixture）。每补一个 coordinator 测试就是一次小的、可独立验证的 PR。
+- 不要追求"删除 forwarder"——除非未来某个 forwarder 真的引入了逻辑差异，那时再单独评估。

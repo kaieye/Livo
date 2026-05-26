@@ -78,7 +78,7 @@ const dataToolsSource = readFileSync(
 
 const chatAgentSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/services/AIChatAgentService.ets',
+    '../entry/src/main/ets/common/agent/LivoAgentLoop.ets',
     import.meta.url,
   ),
   'utf8',
@@ -120,14 +120,20 @@ test('P4 设置、账号和数据控制工具接入默认注册表', () => {
   assert.match(defaultToolsSource, /buildUnlinkAccountTool\(\)/)
 })
 
+const registryProviderSource = readFileSync(
+  new URL(
+    '../entry/src/main/ets/common/agent/AgentToolRegistryProvider.ts',
+    import.meta.url,
+  ),
+  'utf8',
+)
+
 test('P4 Agent 权限开关接入设置、工具清单和 Harness 门禁', () => {
   assert.match(agentTypesSource, /interface AgentPermissionSettings/)
   assert.match(policyGuardSource, /isAgentCapabilityAllowed/)
   assert.match(aiChatToolsSource, /buildAllowedAgentToolRegistry/)
-  assert.match(
-    defaultToolsSource,
-    /agentPermissions: normalizeAgentPermissionSettings/,
-  )
+  assert.match(registryProviderSource, /agentPermissions: normalized/)
+  assert.match(defaultToolsSource, /agentToolRegistryProvider\.executeToolRun/)
   assert.match(settingsToolsSource, /Agent 权限：读取/)
   assert.match(aiSettingsPanelSource, /AgentPermissionCard/)
   assert.match(agentPermissionCardSource, /读取本地上下文/)

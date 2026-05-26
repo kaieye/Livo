@@ -22,7 +22,11 @@ import {
   AI_PROVIDER_OPTIONS,
 } from '../../models/LivoModels'
 import { ChatMessage as ChatHistoryMessage } from '../ChatHistoryStore'
-import { ChatToolDefinition, ToolFunctionParams, ToolCallFunction } from '../AIChatTools'
+import type {
+  AgentToolDefinition,
+  AgentToolInputSchema,
+} from '../../agent/AgentTypes.ts'
+import type { ExtractedToolFunction } from './ProviderResponseParser'
 
 interface ChatMessage {
   role: string
@@ -35,7 +39,7 @@ interface ChatMessage {
 export interface ChatToolCallMessage {
   id: string
   type: string
-  function: ToolCallFunction
+  function: ExtractedToolFunction
 }
 
 export interface AgentMessage {
@@ -50,7 +54,7 @@ interface ChatRequest {
   model: string
   messages: ChatMessage[]
   max_tokens: number
-  tools?: ChatToolDefinition[]
+  tools?: AgentToolDefinition[]
   tool_choice?: string
 }
 
@@ -71,7 +75,7 @@ interface AnthropicTextBlock {
 interface AnthropicToolSchema {
   name: string
   description: string
-  input_schema: ToolFunctionParams
+  input_schema: AgentToolInputSchema
 }
 
 interface AnthropicMessageRequest {
@@ -102,7 +106,7 @@ export interface ProviderRequestContext {
   userContent: string
   maxTokens: number
   history?: ChatHistoryMessage[]
-  tools?: ChatToolDefinition[]
+  tools?: AgentToolDefinition[]
   agentMessages?: AgentMessage[]
 }
 

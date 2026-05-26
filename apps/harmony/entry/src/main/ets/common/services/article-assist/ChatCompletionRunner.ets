@@ -44,7 +44,7 @@ import {
   resolveProviderApiKey,
   resolveSystemPrompt,
 } from './ProviderProtocol'
-import { ChatToolDefinition } from '../AIChatTools'
+import type { AgentToolDefinition } from '../../agent/AgentTypes.ts'
 import { sanitizeModelOutput } from './TranslationOutput'
 
 const MAX_RETRY_ATTEMPTS = 2
@@ -196,7 +196,7 @@ export interface AgentAbortSignal {
 
 export async function runChatCompletionForAgent(
   agentMessages: AgentMessage[],
-  tools: ChatToolDefinition[],
+  tools: AgentToolDefinition[],
   aiSettings: AIAssistantSettings,
   maxTokens: number,
   abortSignal?: AgentAbortSignal,

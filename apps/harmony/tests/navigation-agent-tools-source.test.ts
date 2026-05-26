@@ -20,7 +20,7 @@ const defaultToolsSource = readFileSync(
 
 const aiChatAgentSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/services/AIChatAgentService.ets',
+    '../entry/src/main/ets/common/agent/LivoAgentLoop.ets',
     import.meta.url,
   ),
   'utf8',
@@ -61,16 +61,23 @@ test('默认 Agent 工具注册表包含导航工具', () => {
   assert.match(defaultToolsSource, /buildOpenImageViewerTool\(\)/)
 })
 
-test('AI 对话提示词和状态栏标签包含导航工具', () => {
+test('导航工具描述足够具体且状态栏标签覆盖到位', () => {
   assert.match(
-    aiChatAgentSource,
-    /open_root_tab：打开首页、订阅、发现或设置根标签/,
+    navigationToolsSource,
+    /打开应用底部导航中的首页、订阅、发现或设置标签/,
   )
   assert.match(
-    aiChatAgentSource,
-    /open_settings_panel：打开设置首页或具体设置面板/,
+    navigationToolsSource,
+    /打开设置首页或通用、外观、数据控制、隐私、关于等设置面板/,
   )
   assert.match(toolLabelsSource, /case 'open_root_tab':/)
   assert.match(toolLabelsSource, /case 'open_entry_detail':/)
   assert.match(toolLabelsSource, /case 'open_image_viewer':/)
+})
+
+test('系统 prompt 不再硬编码具体工具名', () => {
+  assert.doesNotMatch(aiChatAgentSource, /open_root_tab：/)
+  assert.doesNotMatch(aiChatAgentSource, /open_settings_panel：/)
+  assert.doesNotMatch(aiChatAgentSource, /list_subscribed_feeds：/)
+  assert.doesNotMatch(aiChatAgentSource, /add_feed：/)
 })

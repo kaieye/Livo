@@ -1,14 +1,11 @@
-import {
-  isAgentCapabilityAllowed,
-  normalizeAgentPermissionSettings,
-} from './AgentTypes.ts'
 import type {
   AgentPermissionSettings,
+  AgentTool,
   AgentToolArgs,
   AgentToolRun,
 } from './AgentTypes.ts'
 import { AgentToolRegistry } from './ToolRegistry.ts'
-import { AgentHarness } from './AgentHarness.ts'
+import { agentToolRegistryProvider } from './AgentToolRegistryProvider.ts'
 import { agentToolResultToText } from './AgentToolResultText.ts'
 import {
   buildAddFeedTool,
@@ -62,8 +59,8 @@ import {
   buildOpenVideoPlayerTool,
 } from './tools/navigation/NavigationAgentTools'
 
-export function buildDefaultAgentToolRegistry(): AgentToolRegistry {
-  return new AgentToolRegistry([
+export function buildAllAgentTools(): AgentTool[] {
+  return [
     buildListSubscribedFeedsTool(),
     buildGetFeedEntriesTool(),
     buildGetTodayUpdatesTool(),
@@ -101,18 +98,19 @@ export function buildDefaultAgentToolRegistry(): AgentToolRegistry {
     buildOpenSettingsPanelTool(),
     buildOpenVideoPlayerTool(),
     buildOpenImageViewerTool(),
-  ])
+  ]
+}
+
+agentToolRegistryProvider.setBuilder(buildAllAgentTools)
+
+export function buildDefaultAgentToolRegistry(): AgentToolRegistry {
+  return agentToolRegistryProvider.full()
 }
 
 export function buildAllowedAgentToolRegistry(
   permissions?: AgentPermissionSettings,
 ): AgentToolRegistry {
-  const normalizedPermissions = normalizeAgentPermissionSettings(permissions)
-  const allTools = buildDefaultAgentToolRegistry().list()
-  const allowedTools = allTools.filter((tool) => {
-    return isAgentCapabilityAllowed(tool.capability, normalizedPermissions)
-  })
-  return new AgentToolRegistry(allowedTools)
+  return agentToolRegistryProvider.forPermissions(permissions)
 }
 
 export function normalizeDefaultAgentToolArgs(name: string, args: AgentToolArgs): AgentToolArgs {
@@ -149,17 +147,10 @@ export async function executeDefaultAgentToolRun(
   confirmed: boolean = false,
   permissions?: AgentPermissionSettings,
 ): Promise<AgentToolRun> {
-  const registry = buildDefaultAgentToolRegistry()
-  const harness = new AgentHarness(registry)
-  const run = await harness.execute({
-    toolName: name,
-    args: normalizeDefaultAgentToolArgs(name, args),
-    context: {
-      sessionId: 'ai-chat',
-      now: Date.now(),
-      agentPermissions: normalizeAgentPermissionSettings(permissions),
-    },
+  return agentToolRegistryProvider.executeToolRun(
+    name,
+    normalizeDefaultAgentToolArgs(name, args),
     confirmed,
-  })
-  return run
+    permissions,
+  )
 }

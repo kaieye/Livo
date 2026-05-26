@@ -6,68 +6,18 @@ import {
 import type {
   AgentPermissionSettings,
   AgentToolArgs,
+  AgentToolDefinition,
   AgentToolRun,
 } from '../agent/AgentTypes.ts'
 import { agentToolResultToText } from '../agent/AgentToolResultText.ts'
 
-export interface ToolFunctionParams {
-  type: string
-  properties: Record<string, ToolParamProp>
-  required: string[]
-  additionalProperties?: boolean
-}
-
-export interface ToolParamProp {
-  type: string
-  description?: string
-  enum?: string[]
-}
-
-export interface ToolFunction {
-  name: string
-  description: string
-  parameters: ToolFunctionParams
-}
-
-export interface ChatToolDefinition {
-  type: string
-  function: ToolFunction
-}
-
-export interface ChatToolCall {
-  id: string
-  type: string
-  function: ToolCallFunction
-}
-
-export interface ToolCallFunction {
-  name: string
-  arguments: string
-}
-
 export function buildDefaultTools(
   permissions?: AgentPermissionSettings,
-): ChatToolDefinition[] {
+): AgentToolDefinition[] {
   const registry = permissions
     ? buildAllowedAgentToolRegistry(permissions)
     : buildDefaultAgentToolRegistry()
-  const agentDefinitions = registry.toModelToolDefinitions()
-  const tools: ChatToolDefinition[] = []
-  for (const definition of agentDefinitions) {
-    const parameters: ToolFunctionParams = {
-      type: definition.function.parameters.type,
-      properties: definition.function.parameters.properties,
-      required: definition.function.parameters.required,
-      additionalProperties: definition.function.parameters.additionalProperties,
-    }
-    const func: ToolFunction = {
-      name: definition.function.name,
-      description: definition.function.description,
-      parameters,
-    }
-    tools.push({ type: definition.type, function: func })
-  }
-  return tools
+  return registry.toModelToolDefinitions()
 }
 
 export async function executeToolCall(name: string, args: string): Promise<string> {

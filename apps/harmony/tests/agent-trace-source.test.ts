@@ -20,7 +20,7 @@ const tracePanelSource = readFileSync(
 
 const traceRecorderSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/components/AIChatTraceRecorder.ts',
+    '../entry/src/main/ets/common/components/AIChatTraceRecorder.ets',
     import.meta.url,
   ),
   'utf8',
