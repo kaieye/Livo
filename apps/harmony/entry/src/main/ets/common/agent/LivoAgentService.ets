@@ -1,6 +1,9 @@
 import { AIAssistantSettings } from '../models/LivoModels'
 import { ChatMessage } from '../services/ChatHistoryStore'
-import { buildDefaultTools } from '../services/AIChatTools'
+import {
+  buildAllowedAgentToolRegistry,
+  buildDefaultAgentToolRegistry,
+} from './DefaultAgentTools'
 import {
   runAgentCore,
   resumeAgentCore,
@@ -50,7 +53,10 @@ export type LivoAgentContinuationState = AgentContinuationState
 export type LivoAgentPendingConfirmation = AgentPendingConfirmation
 
 export async function runLivoAgent(request: LivoAgentRunRequest): Promise<LivoAgentRunResult> {
-  const tools = buildDefaultTools(request.aiSettings.agentPermissions)
+  const registry = request.aiSettings.agentPermissions
+    ? buildAllowedAgentToolRegistry(request.aiSettings.agentPermissions)
+    : buildDefaultAgentToolRegistry()
+  const tools = registry.toModelToolDefinitions()
   console.info('[LivoAgent] run started', 'history:', request.history ? request.history.length : 0)
 
   return runAgentCore(
@@ -67,7 +73,10 @@ export async function runLivoAgent(request: LivoAgentRunRequest): Promise<LivoAg
 }
 
 export async function resumeLivoAgent(request: LivoAgentResumeRequest): Promise<LivoAgentRunResult> {
-  const tools = buildDefaultTools(request.aiSettings.agentPermissions)
+  const registry = request.aiSettings.agentPermissions
+    ? buildAllowedAgentToolRegistry(request.aiSettings.agentPermissions)
+    : buildDefaultAgentToolRegistry()
+  const tools = registry.toModelToolDefinitions()
   console.info('[LivoAgent] resume started', 'nextRound:', request.continuation.nextRound)
 
   return resumeAgentCore(

@@ -1,8 +1,9 @@
-import { executeToolCallRun } from '../services/AIChatTools'
+import { executeDefaultAgentToolRun } from './DefaultAgentTools'
 import { agentToolResultToText } from './AgentToolResultText.ts'
 import { AgentAbortSignal } from '../services/article-assist/ChatCompletionRunner'
 import type {
   AgentPermissionSettings,
+  AgentToolArgs,
   AgentToolRun,
 } from './AgentTypes.ts'
 import type {
@@ -114,7 +115,14 @@ export async function executeAgentToolCall(
   }
   emitToolEvent(onToolEvent, startedEvent)
 
-  const run = await executeToolCallRun(tc.function.name, tc.function.arguments, confirmed, agentPermissions)
+  let parsedArgs: AgentToolArgs = {}
+  try {
+    const raw = JSON.parse(tc.function.arguments || '{}') as object
+    parsedArgs = raw as AgentToolArgs
+  } catch (_error) {
+  }
+
+  const run = await executeDefaultAgentToolRun(tc.function.name, parsedArgs, confirmed, agentPermissions)
   const toolText = truncateToolResult(agentToolResultToText(run.result))
   const resultSummary = toolCallResultSummary(tc.function.name, toolText)
   const roundDetail: AgentRoundDetail = {

@@ -1,8 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore'
 import { Entry } from '../models/LivoModels'
-import { AppDatabaseService } from '../services/AppDatabaseService'
 import { resultLong, resultString } from '../utils/ResultSetHelper'
-import { RdbTable } from './RdbTable'
+import { IDatabaseAccess, RdbTable, defaultDatabaseAccess } from './RdbTable'
 
 function boolToNumber(value: boolean): number {
   return value ? 1 : 0
@@ -56,8 +55,6 @@ function mapEntry(result: relationalStore.ResultSet): Entry {
   }
 }
 
-const table = new RdbTable<Entry>('entries', mapEntry)
-
 export interface IEntryRepository {
   listRecent(limit?: number): Promise<Entry[]>
   listRecentPage(limit?: number, offset?: number): Promise<Entry[]>
@@ -76,12 +73,20 @@ export interface IEntryRepository {
 export class EntryRepository implements IEntryRepository {
   static readonly default: EntryRepository = new EntryRepository()
 
+  private readonly entriesTable: RdbTable<Entry>
+  private readonly db: IDatabaseAccess
+
+  constructor(db?: IDatabaseAccess) {
+    this.db = db ?? defaultDatabaseAccess
+    this.entriesTable = new RdbTable<Entry>('entries', mapEntry, this.db)
+  }
+
   async listRecent(limit: number = 20): Promise<Entry[]> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.orderByDesc('published_at')
     predicates.orderByDesc('id')
     predicates.limitAs(limit)
-    return table.list(predicates)
+    return this.entriesTable.list(predicates)
   }
 
   async listRecentPage(limit: number = 20, offset: number = 0): Promise<Entry[]> {
@@ -90,7 +95,7 @@ export class EntryRepository implements IEntryRepository {
     predicates.orderByDesc('id')
     predicates.limitAs(Math.max(1, limit))
     predicates.offsetAs(Math.max(0, offset))
-    return table.list(predicates)
+    return this.entriesTable.list(predicates)
   }
 
   async listStarred(limit: number = 100): Promise<Entry[]> {
@@ -98,46 +103,46 @@ export class EntryRepository implements IEntryRepository {
     predicates.equalTo('is_starred', 1)
     predicates.orderByDesc('published_at')
     predicates.limitAs(limit)
-    return table.list(predicates)
+    return this.entriesTable.list(predicates)
   }
 
   async listByFeed(feedId: string): Promise<Entry[]> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('feed_id', feedId)
     predicates.orderByDesc('published_at')
-    return table.list(predicates)
+    return this.entriesTable.list(predicates)
   }
 
   async getById(entryId: string): Promise<Entry | undefined> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('id', entryId)
     predicates.limitAs(1)
-    return table.getOne(predicates)
+    return this.entriesTable.getOne(predicates)
   }
 
   async countUnread(): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('is_read', 0)
-    return table.count(predicates)
+    return this.entriesTable.count(predicates)
   }
 
   async countStarred(): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('is_starred', 1)
-    return table.count(predicates)
+    return this.entriesTable.count(predicates)
   }
 
   async countUnreadByFeed(feedId: string): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('feed_id', feedId)
     predicates.equalTo('is_read', 0)
-    return table.count(predicates)
+    return this.entriesTable.count(predicates)
   }
 
   async removeByFeed(feedId: string): Promise<void> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('feed_id', feedId)
-    await table.delete(predicates)
+    await this.entriesTable.delete(predicates)
   }
 
   async upsertMany(entries: Entry[]): Promise<void> {
@@ -145,7 +150,7 @@ export class EntryRepository implements IEntryRepository {
       return
     }
 
-    await AppDatabaseService.withRdb('批量插入条目', async (store) => {
+    await this.db.withRdb('批量插入条目', async (store) => {
       for (const entry of entries) {
         const predicates = new relationalStore.RdbPredicates('entries')
         predicates.equalTo('id', entry.id)
@@ -191,7 +196,7 @@ export class EntryRepository implements IEntryRepository {
   async markRead(entryId: string, isRead: boolean): Promise<void> {
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('id', entryId)
-    await table.update(predicates, {
+    await this.entriesTable.update(predicates, {
       is_read: boolToNumber(isRead),
       updated_at: Date.now(),
     })
@@ -204,7 +209,7 @@ export class EntryRepository implements IEntryRepository {
     }
     const predicates = new relationalStore.RdbPredicates('entries')
     predicates.equalTo('id', entryId)
-    await table.update(predicates, {
+    await this.entriesTable.update(predicates, {
       is_starred: boolToNumber(!entry.isStarred),
       updated_at: Date.now(),
     })

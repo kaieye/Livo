@@ -1,9 +1,10 @@
 import { AIAssistantSettings } from '../models/LivoModels'
 import { ChatMessage } from '../services/ChatHistoryStore'
 import {
-  buildDefaultTools,
-  executeToolCallRun,
-} from '../services/AIChatTools'
+  buildAllowedAgentToolRegistry,
+  buildDefaultAgentToolRegistry,
+  executeDefaultAgentToolRun,
+} from './DefaultAgentTools'
 import {
   runChatCompletionForAgent,
   AgentChatCompletionResult,
@@ -28,6 +29,7 @@ import {
 import type {
   AgentConfirmationRequest,
   AgentPermissionSettings,
+  AgentToolArgs,
   AgentToolDefinition,
   AgentToolRun,
 } from './AgentTypes.ts'
@@ -187,7 +189,10 @@ export async function runAgentCore(
 ): Promise<AgentRunResult> {
   let effectiveTools = tools
   if (!effectiveTools || effectiveTools.length === 0) {
-    effectiveTools = buildDefaultTools(aiSettings.agentPermissions)
+    const registry = aiSettings.agentPermissions
+      ? buildAllowedAgentToolRegistry(aiSettings.agentPermissions)
+      : buildDefaultAgentToolRegistry()
+    effectiveTools = registry.toModelToolDefinitions()
   }
 
   const agentPermissions = normalizeAgentPermissionSettings(aiSettings.agentPermissions)
@@ -227,7 +232,10 @@ export async function resumeAgentCore(
 ): Promise<AgentRunResult> {
   let effectiveTools = tools
   if (!effectiveTools || effectiveTools.length === 0) {
-    effectiveTools = buildDefaultTools(aiSettings.agentPermissions)
+    const registry = aiSettings.agentPermissions
+      ? buildAllowedAgentToolRegistry(aiSettings.agentPermissions)
+      : buildDefaultAgentToolRegistry()
+    effectiveTools = registry.toModelToolDefinitions()
   }
 
   const currentMessages = continuation.messages.slice()
@@ -399,7 +407,14 @@ async function executeAgentToolCall(
     args: tc.function.arguments,
   })
 
-  const run = await executeToolCallRun(tc.function.name, tc.function.arguments, confirmed, agentPermissions)
+  let parsedArgs: AgentToolArgs = {}
+  try {
+    const raw = JSON.parse(tc.function.arguments || '{}') as object
+    parsedArgs = raw as AgentToolArgs
+  } catch (_error) {
+  }
+
+  const run = await executeDefaultAgentToolRun(tc.function.name, parsedArgs, confirmed, agentPermissions)
   const toolText = truncateToolResult(agentToolResultToText(run.result))
   const resultSummary = toolCallResultSummary(tc.function.name, toolText)
   const roundDetail: AgentRoundDetail = {

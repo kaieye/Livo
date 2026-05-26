@@ -1,17 +1,47 @@
 import relationalStore from '@ohos.data.relationalStore'
 import { AppDatabaseService } from '../services/AppDatabaseService'
 
+export interface IDatabaseAccess {
+  withRdb<T>(operationLabel: string, fn: (store: relationalStore.RdbStore) => Promise<T>): Promise<T>
+  withRdbResult<T>(
+    operationLabel: string,
+    fn: (store: relationalStore.RdbStore) => Promise<relationalStore.ResultSet>,
+    mapRow: (result: relationalStore.ResultSet) => T,
+  ): Promise<T[]>
+}
+
+class AppDatabaseAccessor implements IDatabaseAccess {
+  withRdb<T>(operationLabel: string, fn: (store: relationalStore.RdbStore) => Promise<T>): Promise<T> {
+    return AppDatabaseService.withRdb(operationLabel, fn)
+  }
+  withRdbResult<T>(
+    operationLabel: string,
+    fn: (store: relationalStore.RdbStore) => Promise<relationalStore.ResultSet>,
+    mapRow: (result: relationalStore.ResultSet) => T,
+  ): Promise<T[]> {
+    return AppDatabaseService.withRdbResult(operationLabel, fn, mapRow)
+  }
+}
+
+export const defaultDatabaseAccess: IDatabaseAccess = new AppDatabaseAccessor()
+
 export class RdbTable<T> {
   private readonly tableName: string
   private readonly mapRow: (result: relationalStore.ResultSet) => T
+  private readonly db: IDatabaseAccess
 
-  constructor(tableName: string, mapRow: (result: relationalStore.ResultSet) => T) {
+  constructor(
+    tableName: string,
+    mapRow: (result: relationalStore.ResultSet) => T,
+    db?: IDatabaseAccess,
+  ) {
     this.tableName = tableName
     this.mapRow = mapRow
+    this.db = db ?? defaultDatabaseAccess
   }
 
   async getOne(predicates: relationalStore.RdbPredicates): Promise<T | undefined> {
-    return AppDatabaseService.withRdb('查询', async (store) => {
+    return this.db.withRdb('查询', async (store) => {
       const result = await store.query(predicates)
       if (!result.goToNextRow()) {
         result.close()
@@ -24,7 +54,7 @@ export class RdbTable<T> {
   }
 
   async list(predicates: relationalStore.RdbPredicates): Promise<T[]> {
-    return AppDatabaseService.withRdbResult(
+    return this.db.withRdbResult(
       '查询',
       (store) => store.query(predicates),
       this.mapRow,
@@ -32,7 +62,7 @@ export class RdbTable<T> {
   }
 
   async count(predicates: relationalStore.RdbPredicates): Promise<number> {
-    return AppDatabaseService.withRdb('统计', async (store) => {
+    return this.db.withRdb('统计', async (store) => {
       const result = await store.query(predicates, ['id'])
       const total = result.rowCount
       result.close()
@@ -41,14 +71,14 @@ export class RdbTable<T> {
   }
 
   async insert(row: relationalStore.ValuesBucket): Promise<number> {
-    return AppDatabaseService.withRdb('新增', (store): Promise<number> => store.insert(this.tableName, row))
+    return this.db.withRdb('新增', (store): Promise<number> => store.insert(this.tableName, row))
   }
 
   async update(predicates: relationalStore.RdbPredicates, values: relationalStore.ValuesBucket): Promise<number> {
-    return AppDatabaseService.withRdb('更新', (store): Promise<number> => store.update(values, predicates))
+    return this.db.withRdb('更新', (store): Promise<number> => store.update(values, predicates))
   }
 
   async delete(predicates: relationalStore.RdbPredicates): Promise<void> {
-    await AppDatabaseService.withRdb('删除', (store) => store.delete(predicates))
+    await this.db.withRdb('删除', (store) => store.delete(predicates))
   }
 }

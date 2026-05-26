@@ -29,11 +29,7 @@ import {
   modeMatchesFeedView,
 } from './AppRepositoryEntryHelpers'
 import { HOME_FAST_PAGE_CACHE_BUFFER } from '../components/HomeRootConfig'
-
-interface FeaturedModeEntriesCacheItem {
-  signature: string
-  entries: EntryCardModel[]
-}
+import { EntryCardCache } from './EntryCardCache'
 
 function deduplicateEntryCards(cards: EntryCardModel[]): EntryCardModel[] {
   const seen = new Set<string>()
@@ -265,12 +261,6 @@ async function recentModeEntries(
   return result
 }
 
-function modeFeedSignature(mode: HomeEntryMode, feeds: Feed[]): string {
-  const allowedFeedIds = allowedFeedsForMode(feeds, mode)
-    .map((feed: Feed) => `${feed.id}:${feed.updatedAt}:${feed.view}`)
-  return `${mode}|${allowedFeedIds.join('|')}`
-}
-
 function fastPageCacheBufferForMode(mode: HomeEntryMode): number {
   if (mode === 'pictures') {
     return 12
@@ -298,50 +288,15 @@ class FeaturedEntriesQuery {
 
   private readonly feedRepo: IFeedRepository
   private readonly entryRepo: IEntryRepository
-  private readonly modeEntriesCache: Map<string, FeaturedModeEntriesCacheItem> = new Map()
+  private readonly modeEntriesCache: EntryCardCache = new EntryCardCache()
 
   constructor(feedRepo: IFeedRepository, entryRepo: IEntryRepository) {
     this.feedRepo = feedRepo
     this.entryRepo = entryRepo
   }
 
-  /**
-   * Reset the per-mode entry cache so the next query always hits the database.
-   * Useful between test cases to prevent stale cache from leaking across tests.
-   */
   clearModeEntriesCache(): void {
     this.modeEntriesCache.clear()
-  }
-
-  private cachedModeEntries(
-    mode: HomeEntryMode,
-    feeds: Feed[],
-    targetCount: number,
-  ): EntryCardModel[] | undefined {
-    const cache = this.modeEntriesCache.get(mode)
-    const signature = modeFeedSignature(mode, feeds)
-    if (!cache || cache.signature !== signature) {
-      return undefined
-    }
-    if (cache.entries.length < targetCount) {
-      return undefined
-    }
-    return cache.entries.slice(0, targetCount)
-  }
-
-  private storeModeEntriesCache(
-    mode: HomeEntryMode,
-    feeds: Feed[],
-    entries: EntryCardModel[],
-  ): void {
-    const existing = this.modeEntriesCache.get(mode)
-    if (existing && existing.entries.length > entries.length) {
-      return
-    }
-    this.modeEntriesCache.set(mode, {
-      signature: modeFeedSignature(mode, feeds),
-      entries: [...entries],
-    })
   }
 
   async featuredEntries(candidateLimit: number = HOME_ENTRY_CANDIDATE_LIMIT): Promise<EntryCardModel[]> {
@@ -440,7 +395,7 @@ class FeaturedEntriesQuery {
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(1, candidateLimit)
     const feeds = sortFeedsStable(await this.feedRepo.list())
-    const cached = this.cachedModeEntries(mode, feeds, safeCandidateLimit)
+    const cached = this.modeEntriesCache.get(mode, feeds, safeCandidateLimit)
     if (cached) {
       logHomeFeedDebug(
         `featuredEntriesByMode cache-hit mode=${mode} limit=${safeCandidateLimit} result=${cached.length} elapsedMs=${Date.now() - startedAt}`,
@@ -452,7 +407,7 @@ class FeaturedEntriesQuery {
     const result = shouldUseRecentModeQuery(mode)
       ? await recentModeEntries(this.entryRepo, mode, feeds, feedMap, safeCandidateLimit, true)
       : await balancedModeEntries(this.entryRepo, mode, feeds, feedMap, safeCandidateLimit)
-    this.storeModeEntriesCache(mode, feeds, result)
+    this.modeEntriesCache.set(mode, feeds, result)
 
     logHomeFeedDebug(
       `featuredEntriesByMode mode=${mode} limit=${safeCandidateLimit} result=${result.length} elapsedMs=${Date.now() - startedAt}`,
@@ -467,7 +422,7 @@ class FeaturedEntriesQuery {
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(1, candidateLimit)
     const feeds = sortFeedsStable(await this.feedRepo.list())
-    const cached = this.cachedModeEntries(mode, feeds, safeCandidateLimit)
+    const cached = this.modeEntriesCache.get(mode, feeds, safeCandidateLimit)
     if (cached) {
       logHomeFeedDebug(
         `featuredEntriesFastByMode cache-hit mode=${mode} limit=${safeCandidateLimit} cards=${cached.length} elapsedMs=${Date.now() - startedAt}`,
@@ -479,7 +434,7 @@ class FeaturedEntriesQuery {
     const cards = shouldUseRecentModeQuery(mode)
       ? await recentModeEntries(this.entryRepo, mode, feeds, feedMap, safeCandidateLimit, true)
       : await balancedModeEntries(this.entryRepo, mode, feeds, feedMap, safeCandidateLimit, true)
-    this.storeModeEntriesCache(mode, feeds, cards)
+    this.modeEntriesCache.set(mode, feeds, cards)
 
     logHomeFeedDebug(
       `featuredEntriesFastByMode mode=${mode} limit=${safeCandidateLimit} cards=${cards.length} elapsedMs=${Date.now() - startedAt}`,
@@ -498,7 +453,7 @@ class FeaturedEntriesQuery {
     const feeds = sortFeedsStable(await this.feedRepo.list())
     const targetVisibleCount = safeOffset + safeLimit
     const cacheLookupStartedAt = Date.now()
-    const cached = this.cachedModeEntries(mode, feeds, targetVisibleCount)
+    const cached = this.modeEntriesCache.get(mode, feeds, targetVisibleCount)
     const cacheLookupMs = Date.now() - cacheLookupStartedAt
     if (cached) {
       const cachedPage = cached.slice(safeOffset, safeOffset + safeLimit)
@@ -511,14 +466,13 @@ class FeaturedEntriesQuery {
     }
     const feedMap = new Map<string, Feed>()
     feeds.forEach((feed: Feed) => feedMap.set(feed.id, feed))
-    // 图片卡片解码和布局成本高，加载更多时只预取小缓冲，避免触底瞬间全量扫库和建卡。
     const queryTarget = targetVisibleCount + fastPageCacheBufferForMode(mode)
     const dbQueryStartedAt = Date.now()
     const expandedEntries = shouldUseRecentModeQuery(mode)
       ? await recentModeEntries(this.entryRepo, mode, feeds, feedMap, queryTarget, true)
       : await balancedModeEntries(this.entryRepo, mode, feeds, feedMap, queryTarget, true)
     const dbQueryMs = Date.now() - dbQueryStartedAt
-    this.storeModeEntriesCache(mode, feeds, expandedEntries)
+    this.modeEntriesCache.set(mode, feeds, expandedEntries)
     const result = expandedEntries
       .slice(safeOffset, safeOffset + safeLimit)
     const totalElapsed = Date.now() - startedAt

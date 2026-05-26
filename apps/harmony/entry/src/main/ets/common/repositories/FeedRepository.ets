@@ -1,9 +1,8 @@
 import relationalStore from '@ohos.data.relationalStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
-import { AppDatabaseService } from '../services/AppDatabaseService'
 import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/social/SocialFeedTitles'
 import { resultLong, resultString } from '../utils/ResultSetHelper'
-import { RdbTable } from './RdbTable'
+import { IDatabaseAccess, RdbTable, defaultDatabaseAccess } from './RdbTable'
 
 const FEED_FETCH_STATE_DEBUG_ENABLED: boolean = true
 const FEED_FETCH_STATE_DEBUG_PREFIX: string = '[FeedFetchStateDebug]'
@@ -78,16 +77,22 @@ function createFeedId(url: string): string {
   return `feed-${compact || Date.now()}`
 }
 
-const table = new RdbTable<Feed>('feeds', mapFeed)
-
 export class FeedRepository implements IFeedRepository {
   static readonly default: FeedRepository = new FeedRepository()
+
+  private readonly feedsTable: RdbTable<Feed>
+  private readonly db: IDatabaseAccess
+
+  constructor(db?: IDatabaseAccess) {
+    this.db = db ?? defaultDatabaseAccess
+    this.feedsTable = new RdbTable<Feed>('feeds', mapFeed, this.db)
+  }
 
   async getByUrl(url: string): Promise<Feed | undefined> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     predicates.equalTo('url', url.trim())
     predicates.limitAs(1)
-    return table.getOne(predicates)
+    return this.feedsTable.getOne(predicates)
   }
 
   async getBySiteUrl(siteUrl: string): Promise<Feed | undefined> {
@@ -99,30 +104,30 @@ export class FeedRepository implements IFeedRepository {
     predicates.equalTo('site_url', trimmed)
     predicates.orderByDesc('updated_at')
     predicates.limitAs(1)
-    return table.getOne(predicates)
+    return this.feedsTable.getOne(predicates)
   }
 
   async list(): Promise<Feed[]> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     predicates.orderByAsc('created_at')
     predicates.orderByAsc('id')
-    return table.list(predicates)
+    return this.feedsTable.list(predicates)
   }
 
   async getById(feedId: string): Promise<Feed | undefined> {
     const predicates = new relationalStore.RdbPredicates('feeds')
     predicates.equalTo('id', feedId)
     predicates.limitAs(1)
-    return table.getOne(predicates)
+    return this.feedsTable.getOne(predicates)
   }
 
   async count(): Promise<number> {
     const predicates = new relationalStore.RdbPredicates('feeds')
-    return table.count(predicates)
+    return this.feedsTable.count(predicates)
   }
 
   async insert(feed: Feed): Promise<void> {
-    await table.insert({
+    await this.feedsTable.insert({
       id: feed.id,
       title: feed.title,
       url: feed.url,
@@ -189,7 +194,7 @@ export class FeedRepository implements IFeedRepository {
     const nextUrl = draft.url.trim()
     const nextSiteUrl = draft.siteUrl.trim()
 
-    await table.update(predicates, {
+    await this.feedsTable.update(predicates, {
       title: normalizeSocialFeedTitle(draft.title.trim(), nextUrl, nextSiteUrl),
       url: nextUrl,
       site_url: nextSiteUrl,
@@ -208,7 +213,7 @@ export class FeedRepository implements IFeedRepository {
     feedId: string,
     next: UpdateFetchStateParams,
   ): Promise<void> {
-    await AppDatabaseService.withRdb('更新抓取状态', async (store) => {
+    await this.db.withRdb('更新抓取状态', async (store) => {
       const current = await this.getById(feedId)
       if (!current) {
         throw new Error('订阅源不存在')
@@ -259,7 +264,7 @@ export class FeedRepository implements IFeedRepository {
   }
 
   async remove(feedId: string): Promise<void> {
-    await AppDatabaseService.withRdb('删除订阅源', async (store) => {
+    await this.db.withRdb('删除订阅源', async (store) => {
       const entryPredicates = new relationalStore.RdbPredicates('entries')
       entryPredicates.equalTo('feed_id', feedId)
       await store.delete(entryPredicates)
