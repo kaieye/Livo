@@ -255,7 +255,7 @@ function pickStringField(
 ): string {
   for (const key of keys) {
     const value = json[key]
-    if (typeof value === 'string' && value.length > 0) {
+    if (typeof value === 'string' && (value as string).length > 0) {
       return value
     }
   }

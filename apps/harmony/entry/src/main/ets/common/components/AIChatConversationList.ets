@@ -93,6 +93,7 @@ export struct AIChatConversationList {
               .fontSize(15)
               .fontColor('#DC2626')
               .lineHeight(20)
+              .copyOption(CopyOptions.LocalDevice)
           } else {
             AIChatMarkdownText({ content: item.content, theme: this.theme })
           }
