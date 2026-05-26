@@ -85,6 +85,7 @@ export interface AgentRunResult {
   status?: AgentRunStatus
   confirmation?: AgentPendingConfirmation
   continuation?: AgentContinuationState
+  reasoningContent?: string
 }
 
 const AGENT_SYSTEM_PROMPT = `你是 Livo 应用内的智能助手，可以帮用户查看和管理 RSS 订阅，并按需操作应用功能。
@@ -204,6 +205,9 @@ export async function runAgentCore(
     for (const m of history) {
       if (m.role === 'user' || m.role === 'assistant') {
         const am: AgentMessage = { role: m.role, content: m.content, name: undefined }
+        if (m.reasoning_content) {
+          am.reasoning_content = m.reasoning_content
+        }
         agentMessages.push(am)
       }
     }
@@ -314,7 +318,7 @@ async function runAgentLoop(
     if (effectiveToolCalls.length === 0) {
       const text = effectiveContent || '抱歉，我暂时无法回答这个问题。'
       console.info('[LivoAgent] round', round, 'final text len:', text.length)
-      return { text, toolRounds, status: 'completed' }
+      return { text, toolRounds, status: 'completed', reasoningContent: result.reasoningContent }
     }
 
     if (effectiveContent && effectiveContent.length > 0) {
@@ -327,6 +331,9 @@ async function runAgentLoop(
       content: effectiveContent || null,
       tool_calls: [],
       name: undefined,
+    }
+    if (result.reasoningContent) {
+      assistantCallMessages.reasoning_content = result.reasoningContent
     }
     for (const tc of effectiveToolCalls) {
       const func: ExtractedToolFunction = { name: tc.function.name, arguments: tc.function.arguments }
@@ -361,7 +368,7 @@ async function runAgentLoop(
     const finalResult = await runChatCompletionForAgent(currentMessages, effectiveTools, aiSettings, 2000, abortSignal)
     const text = finalResult.content || '抱歉，我暂时无法回答这个问题。'
     console.info('[LivoAgent] final result len:', text.length, 'toolCalls:', finalResult.toolCalls.length)
-    return { text, toolRounds, status: 'completed' }
+    return { text, toolRounds, status: 'completed', reasoningContent: finalResult.reasoningContent }
   } catch (err) {
     console.error('[LivoAgent] final call error:', err instanceof Error ? err.message : String(err))
     throw new Error(err instanceof Error ? err.message : String(err))

@@ -31,6 +31,7 @@ import {
   extractResponseContent,
   extractSoftProviderError,
   extractToolCalls,
+  extractReasoningContent,
 } from './ProviderResponseParser'
 import {
   AgentMessage,
@@ -188,6 +189,7 @@ export interface AgentChatCompletionResult {
   toolCalls: ExtractedToolCall[]
   finishReason: string
   nativeToolCallingSupported: boolean
+  reasoningContent: string
 }
 
 export interface AgentAbortSignal {
@@ -281,6 +283,7 @@ function parseAgentResponse(raw: string, format: ProviderFormat): AgentChatCompl
       toolCalls,
       finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
       nativeToolCallingSupported: true,
+      reasoningContent: '',
     }
   }
   const parsed = JSON.parse(raw) as ChatCompletionResponse
@@ -291,6 +294,7 @@ function parseAgentResponse(raw: string, format: ProviderFormat): AgentChatCompl
   const content = extractResponseContent(parsed)
   const toolCalls = extractToolCalls(parsed)
   const finishReason = extractFinishReason(parsed)
+  const reasoningContent = extractReasoningContent(parsed)
   console.info('[ChatAgent] openai parsed - contentLen:', content.length, 'toolCalls:', toolCalls.length, 'finish:', finishReason)
   if (toolCalls.length > 0) {
     for (let i = 0; i < toolCalls.length; i += 1) {
@@ -302,6 +306,7 @@ function parseAgentResponse(raw: string, format: ProviderFormat): AgentChatCompl
     toolCalls,
     finishReason: finishReason || (toolCalls.length > 0 ? 'tool_calls' : 'stop'),
     nativeToolCallingSupported: supportsNativeToolCalling(format),
+    reasoningContent: sanitizeModelOutput(reasoningContent),
   }
 }
 

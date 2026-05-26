@@ -289,9 +289,9 @@ export struct AIChatPanel {
         this.dismissToolBanner()
       }, 1200)
     }
-    this.finishAssistantResponse(result.text)
+    this.finishAssistantResponse(result.text, result.reasoningContent)
   }
-  private finishAssistantResponse(text: string): void {
+  private finishAssistantResponse(text: string, reasoningContent?: string): void {
     const assistMsgId = (Date.now() + 1).toString()
     this.isLoading = false
     this.isConfirming = false
@@ -307,6 +307,9 @@ export struct AIChatPanel {
           role: 'assistant',
           content: typeof text === 'string' ? text : String(text),
           id: assistMsgId
+        }
+        if (reasoningContent) {
+          assistMsg.reasoning_content = reasoningContent
         }
         this.messages.push(assistMsg)
         this.streamingContent = ''

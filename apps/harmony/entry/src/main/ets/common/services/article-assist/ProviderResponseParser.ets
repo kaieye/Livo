@@ -322,6 +322,12 @@ export function extractFinishReason(parsed: ChatCompletionResponse): string {
   return firstChoice?.finish_reason ?? ''
 }
 
+export function extractReasoningContent(parsed: ChatCompletionResponse): string {
+  const firstChoice = (parsed.choices || [])[0]
+  const message = firstChoice?.message
+  return message?.reasoning_content ? safeTrim(message.reasoning_content) : ''
+}
+
 export interface AnthropicToolUseBlock {
   type: string
   id: string

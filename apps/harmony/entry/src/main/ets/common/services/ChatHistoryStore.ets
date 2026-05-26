@@ -7,6 +7,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   id: string
+  reasoning_content?: string
 }
 
 export interface ChatSession {

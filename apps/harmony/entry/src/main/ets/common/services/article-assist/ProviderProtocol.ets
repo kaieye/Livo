@@ -34,6 +34,7 @@ interface ChatMessage {
   tool_calls?: ChatToolCallMessage[]
   tool_call_id?: string
   name?: string
+  reasoning_content?: string
 }
 
 export interface ChatToolCallMessage {
@@ -48,6 +49,7 @@ export interface AgentMessage {
   tool_calls?: ChatToolCallMessage[]
   tool_call_id?: string
   name?: string
+  reasoning_content?: string
 }
 
 interface ChatRequest {
@@ -324,6 +326,9 @@ function buildMiniMaxTextBody(context: ProviderRequestContext): string {
         msg.tool_call_id = am.tool_call_id
         msg.name = am.name
       }
+      if (am.reasoning_content) {
+        msg.reasoning_content = am.reasoning_content
+      }
       messages.push(msg)
     }
   } else if (context.history && context.history.length > 0) {
@@ -331,6 +336,9 @@ function buildMiniMaxTextBody(context: ProviderRequestContext): string {
       .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
       .map((m: ChatHistoryMessage) => {
         const msg: ChatMessage = { role: m.role, content: m.content }
+        if (m.reasoning_content) {
+          msg.reasoning_content = m.reasoning_content
+        }
         return msg
       })
     messages.push(...filteredHistory)
@@ -363,6 +371,9 @@ function buildOpenAiChatBody(context: ProviderRequestContext): string {
         msg.tool_call_id = am.tool_call_id
         msg.name = am.name
       }
+      if (am.reasoning_content) {
+        msg.reasoning_content = am.reasoning_content
+      }
       messages.push(msg)
     }
   } else if (context.history && context.history.length > 0) {
@@ -370,6 +381,9 @@ function buildOpenAiChatBody(context: ProviderRequestContext): string {
       .filter((m: ChatHistoryMessage) => m.role === 'user' || m.role === 'assistant')
       .map((m: ChatHistoryMessage) => {
         const msg: ChatMessage = { role: m.role, content: m.content }
+        if (m.reasoning_content) {
+          msg.reasoning_content = m.reasoning_content
+        }
         return msg
       })
     messages.push(...filteredHistory)
