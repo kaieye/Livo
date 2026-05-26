@@ -85,6 +85,11 @@ export const HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER: number = 2
 // LoadMoreFooter 最短可见时长。预取命中时实际耗时可能 < 50ms，但用户仍需要
 // 看到"加载中"反馈才能感知到操作生效，否则会觉得"按了没反应"。
 export const HOME_LOAD_MORE_FOOTER_MIN_VISIBLE_MS: number = 480
+// onReachEnd 触发时如果用户仍在 fling（惯性滑动），同步执行 revealLoadedEntries
+// 和 LazyForEach 增量通知会占用主线程几十~几百毫秒，把 fling 帧 abort 掉，
+// 表现为「滑到最后一条一小部分就被强制停下」。drain 用 lastUserScrollAt 等待
+// 至少 QUIESCENT_MS 没有滚动事件才执行真正的请求，给 fling 减速到停的时间。
+export const HOME_LOAD_MORE_SCROLL_QUIESCENT_MS: number = 140
 export const HOME_FAST_PAGE_CACHE_BUFFER: number = 60
 export const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
 export const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3

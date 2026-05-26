@@ -6,6 +6,6 @@ import { SettingsStore } from '../services/SettingsStore'
  * across settings panels and standalone pages.
  */
 export async function loadThemeForComponent(): Promise<ThemePalette> {
-  const settings = await SettingsStore.load()
+  const settings = await SettingsStore.default.load()
   return ThemeService.resolvePalette(settings)
 }

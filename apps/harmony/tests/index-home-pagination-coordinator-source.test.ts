@@ -51,12 +51,25 @@ test('home list shows a bottom loading footer only while load-more is actually f
   assert.match(entriesPageSource, /private LoadMoreFooter\(\)/)
   assert.match(entriesPageSource, /LoadingProgress\(\)/)
   assert.match(entriesPageSource, /Text\('正在加载更多'\)/)
-  // footer 必须始终常驻列表末尾（仅在 totalCount===0 时跳过）,通过 Visibility
-  // 切换显隐。否则插入/删除 footer ListItem 会让 List.contentHeight 跳变,
-  // 把最后一条卡推成"半截可见"。
+  // footer 始终常驻列表末尾,根据三态切换内容(spinner / "没有更多了"):
+  //   - modeHasMoreEntriesNow=true → LoadMoreFooter(spinner)
+  //   - 否则 → LoadMoreFooterExhausted("没有更多了")
+  // 这样既保证用户滑到底自然能看到加载动画,又在没更多时不会一直转 spinner。
   assert.match(
     entriesPageSource,
-    /private LoadMoreFooterSlot\(\)[\s\S]*?\.visibility\(this\.isLoadingMore \? Visibility\.Visible : Visibility\.Hidden\)/,
+    /private LoadMoreFooterSlot\(\)[\s\S]*?if \(this\.modeHasMoreEntriesNow\(\)\) \{[\s\S]*?this\.LoadMoreFooter\(\)[\s\S]*?\} else \{[\s\S]*?this\.LoadMoreFooterExhausted\(\)/,
+  )
+  assert.match(
+    entriesPageSource,
+    /private LoadMoreFooterExhausted\(\)[\s\S]*?Text\('—— 没有更多了 ——'\)/,
+  )
+  assert.match(
+    entriesPageSource,
+    /@StorageProp\(HOME_HAS_MORE_BY_MODE_KEY\) homeHasMoreByMode: HomeHasMoreByMode/,
+  )
+  assert.doesNotMatch(
+    entriesPageSource,
+    /\.visibility\(this\.isLoadingMore \? Visibility\.Visible : Visibility\.Hidden\)/,
   )
   assert.match(
     entriesPageSource,

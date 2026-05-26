@@ -156,7 +156,7 @@ struct ArticleDetail {
 
   private async handleArticleAIAssist(): Promise<void> {
     try {
-      const settings = await SettingsStore.load()
+      const settings = await SettingsStore.default.load()
       this.applyAISettings(settings)
       await this.runArticleAIAssist()
     } catch (error) {

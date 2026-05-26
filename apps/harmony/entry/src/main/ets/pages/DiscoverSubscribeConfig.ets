@@ -23,7 +23,7 @@ struct DiscoverSubscribeConfig {
   }
 
   private async loadPage(): Promise<void> {
-    const settings = await SettingsStore.load()
+    const settings = await SettingsStore.default.load()
     this.theme = await ThemeService.resolvePalette(settings)
 
     const params = getStringParams()

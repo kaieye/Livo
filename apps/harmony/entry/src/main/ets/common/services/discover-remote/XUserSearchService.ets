@@ -4,6 +4,7 @@ import {
   buildXProfileSeedFromProfile,
   dedupeAndLimitDiscoverCandidates,
   DiscoverRemoteProfileSeed,
+  DiscoverRemoteViewMapping,
   extractXFollowersFromText,
   parseXProfilesFromSearchHtml,
 } from '../../coordinators/discover/DiscoverRemoteSearchParsing'
@@ -20,31 +21,18 @@ import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 import {
   SOCIAL_VIEW_MAPPING,
   buildProfileAnchorSnippet,
-  buildSocialQueryVariants,
-  withConfiguredRssHubCandidate,
 } from './SharedSearchHelpers'
+import { runSocialProfileSearch } from './SearchPipeline'
 
 export async function searchXUsers(query: string, rsshubBase: string): Promise<ResolvedDiscoverCandidate[]> {
-  const clean = query.trim().replace(/^@+/, '')
-  const searchSeeds = await searchXUsersByNitter(clean)
-
-  const fallbackSeeds: DiscoverRemoteProfileSeed[] = []
-  for (const username of buildSocialQueryVariants(query, 15)) {
-    const seed = await fetchXProfileSeed(username)
-    if (seed) {
-      fallbackSeeds.push(seed)
-    }
-  }
-
-  const dedupedSeeds = dedupeAndLimitDiscoverCandidates(
-    [...searchSeeds, ...fallbackSeeds],
-    12,
-  )
-
-  return dedupedSeeds.map((seed) => withConfiguredRssHubCandidate(
-    buildXCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
+  return runSocialProfileSearch(
+    query,
     rsshubBase,
-  ))
+    searchXUsersByNitter,
+    fetchXProfileSeed,
+    buildXCandidateFromProfile as (seed: DiscoverRemoteProfileSeed, viewMapping: DiscoverRemoteViewMapping) => ResolvedDiscoverCandidate,
+    SOCIAL_VIEW_MAPPING,
+  )
 }
 
 async function searchXUsersByNitter(query: string): Promise<DiscoverRemoteProfileSeed[]> {

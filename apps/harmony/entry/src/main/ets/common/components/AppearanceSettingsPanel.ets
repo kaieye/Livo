@@ -36,7 +36,7 @@ export struct AppearanceSettingsPanel {
 
   private async loadSettings(): Promise<void> {
     const loadVersion = this.settingsMutationVersion
-    const saved = await SettingsStore.load()
+    const saved = await SettingsStore.default.load()
     const palette = await ThemeService.resolvePalette(saved)
     if (loadVersion !== this.settingsMutationVersion) {
       return
@@ -62,7 +62,7 @@ export struct AppearanceSettingsPanel {
       }
       this.applyResolvedState(next, resolved)
     })
-    void SettingsStore.save(next).then((saved: HarmonySettings) => {
+    void SettingsStore.default.save(next).then((saved: HarmonySettings) => {
       void ThemeService.resolvePalette(saved).then((palette: ThemePalette) => {
         if (mutationVersion !== this.settingsMutationVersion) {
           return

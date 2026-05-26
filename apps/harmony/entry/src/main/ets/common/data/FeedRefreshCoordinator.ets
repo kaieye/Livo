@@ -8,11 +8,11 @@ import { RefreshLogStore } from '../services/RefreshLogStore'
 import { RssFeedService, FeedRefreshPayload } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { BackgroundTaskService } from '../services/BackgroundTaskService'
-import { canonicalFeedUrl, normalizeSocialFeedDescription } from '../utils/social/SocialFeedTitles'
-import { resolvePreferredStoredFeedImageUrl, resolvePreferredStoredFeedTitle, resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
+import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
 import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
 import { sortFeedsStable } from './AppRepositoryEntryHelpers'
+import { normalizeFeedPayloadMetadata, resolveNormalizedFeedImageUrl } from './FeedMetadataNormalizer'
 
 const SUCCESSFUL_REFRESH_COOLDOWN_MS: number = 3 * 60 * 1000
 const REFRESH_CONCURRENCY: number = 4
@@ -115,20 +115,25 @@ class FeedRefreshCoordinator {
     for (const feed of feeds) {
       try {
         const payload = await RssFeedService.fetchFeedEntries(feed)
-        const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
-        const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
-        const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
-        const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
-        const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '')
-        const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
+        const metadata = normalizeFeedPayloadMetadata(
+          feed,
+          payload.resolvedFeedUrl || '',
+          payload.feedTitle || '',
+          payload.siteUrl || '',
+          payload.imageUrl || '',
+          payload.description || '',
+        )
+        const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+          metadata.url, metadata.siteUrl, payload.imageUrl || '', feed.imageUrl || '')
+        const nextImageUrl = resolveNormalizedFeedImageUrl(feed, nextResolvedImageUrl)
 
         await this.entryRepo.upsertMany(payload.entries)
         await this.feedRepo.updateFetchState(feed.id, {
-          url: nextUrl,
-          title: nextTitle,
-          siteUrl: nextSiteUrl,
+          url: metadata.url,
+          title: metadata.title,
+          siteUrl: metadata.siteUrl,
           imageUrl: nextImageUrl,
-          description: nextDescription,
+          description: metadata.description,
           lastFetched: Date.now(),
           etag: payload.etag,
           lastModified: payload.lastModified,
@@ -175,22 +180,26 @@ class FeedRefreshCoordinator {
         const existingEntryIds = new Set(existingEntries.map(e => e.id))
         newEntriesCount = payload.entries.filter(e => !existingEntryIds.has(e.id)).length
       }
-      const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
-      const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
-      const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
-      const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
+      const metadata = normalizeFeedPayloadMetadata(
+        feed,
+        payload.resolvedFeedUrl || '',
+        payload.feedTitle || '',
+        payload.siteUrl || '',
+        payload.imageUrl || '',
+        payload.description || '',
+      )
       const nextResolvedImageUrl = preferFastImageResolve
         ? (payload.imageUrl || feed.imageUrl || '')
-        : await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '')
-      const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
+        : await SocialFeedAvatarService.resolveFeedAvatar(metadata.url, metadata.siteUrl, payload.imageUrl || '', feed.imageUrl || '')
+      const nextImageUrl = resolveNormalizedFeedImageUrl(feed, nextResolvedImageUrl)
 
       await this.entryRepo.upsertMany(payload.entries)
       await this.feedRepo.updateFetchState(feedId, {
-        url: nextUrl,
-        title: nextTitle,
-        siteUrl: nextSiteUrl,
+        url: metadata.url,
+        title: metadata.title,
+        siteUrl: metadata.siteUrl,
         imageUrl: nextImageUrl,
-        description: nextDescription,
+        description: metadata.description,
         lastFetched: Date.now(),
         etag: payload.etag,
         lastModified: payload.lastModified,
@@ -244,12 +253,17 @@ class FeedRefreshCoordinator {
       throw new Error('订阅源不存在')
     }
 
-    const nextUrl = canonicalFeedUrl(payload.resolvedFeedUrl || feed.url, payload.siteUrl || feed.siteUrl || '') || feed.url
-    const nextSiteUrl = payload.siteUrl || feed.siteUrl || ''
-    const nextTitle = resolvePreferredStoredFeedTitle(feed.title, payload.feedTitle || '', nextUrl, nextSiteUrl)
-    const nextDescription = normalizeSocialFeedDescription(payload.description || feed.description || '', nextUrl, nextSiteUrl)
-    const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(nextUrl, nextSiteUrl, payload.imageUrl || '', feed.imageUrl || '')
-    const nextImageUrl = resolvePreferredStoredFeedImageUrl(feed.imageUrl || '', nextResolvedImageUrl)
+    const metadata = normalizeFeedPayloadMetadata(
+      feed,
+      payload.resolvedFeedUrl || '',
+      payload.feedTitle || '',
+      payload.siteUrl || '',
+      payload.imageUrl || '',
+      payload.description || '',
+    )
+    const nextResolvedImageUrl = await SocialFeedAvatarService.resolveFeedAvatar(
+      metadata.url, metadata.siteUrl, payload.imageUrl || '', feed.imageUrl || '')
+    const nextImageUrl = resolveNormalizedFeedImageUrl(feed, nextResolvedImageUrl)
     const normalizedPreviewEntries = rekeyPreviewEntries(feedId, payload.entries)
     const existingEntries = await this.entryRepo.listByFeed(feedId)
     const shouldReplace = existingEntries.length === 0 || normalizedPreviewEntries.length >= existingEntries.length
@@ -261,18 +275,18 @@ class FeedRefreshCoordinator {
     }
     await this.entryRepo.upsertMany(normalizedPreviewEntries)
     await this.feedRepo.updateFetchState(feedId, {
-      url: nextUrl,
-      title: nextTitle,
-      siteUrl: nextSiteUrl,
+      url: metadata.url,
+      title: metadata.title,
+      siteUrl: metadata.siteUrl,
       imageUrl: nextImageUrl,
-      description: nextDescription,
+      description: metadata.description,
       lastFetched: Date.now(),
       etag: payload.etag,
       lastModified: payload.lastModified,
       errorCount: 0,
     })
 
-    debugLog(`seedFeedFromPreview updated feedId=${feedId} nextTitleLen=${nextTitle.trim().length} nextUrl=${nextUrl} nextSiteUrl=${nextSiteUrl}`)
+    debugLog(`seedFeedFromPreview updated feedId=${feedId} nextTitleLen=${metadata.title.trim().length} nextUrl=${metadata.url} nextSiteUrl=${metadata.siteUrl}`)
   }
 
   private async refreshFeedsWithPool(

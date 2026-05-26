@@ -63,7 +63,7 @@ export struct AIAssistantSettingsPanel {
   private async loadSettings(): Promise<void> {
     try {
       const loadVersion = this.settingsMutationVersion
-      const settings = await SettingsStore.load()
+      const settings = await SettingsStore.default.load()
       this.config = settings
       this.theme = await ThemeService.resolvePaletteForSystemChange(settings)
       const aiSettings = await AIAssistantSettingsStore.load()
@@ -88,7 +88,7 @@ export struct AIAssistantSettingsPanel {
 
   private syncGeneralSettings(next: HarmonySettings): void {
     this.config = next
-    void SettingsStore.save(next).then((saved: HarmonySettings) => {
+    void SettingsStore.default.save(next).then((saved: HarmonySettings) => {
       this.config = saved
       this.onSettingsChange(saved)
       void ThemeService.resolvePaletteForSystemChange(saved).then((palette: ThemePalette) => {

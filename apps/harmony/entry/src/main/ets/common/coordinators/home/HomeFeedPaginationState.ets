@@ -13,6 +13,7 @@ import {
   perModeGet,
   perModeSet,
 } from './HomeModeMapHelpers'
+import { writeHomeHasMoreByMode } from '../index-home/HomeChromeProgressStore'
 import {
   resolveHomeVisibleEntryInitialLimit,
   resolveHomeVisibleEntryRevealStep,
@@ -192,6 +193,8 @@ export class HomeFeedPaginationState {
     }
     this.state.homeHasMoreEntriesByMode =
       perModeSet(mode, next, this.state.homeHasMoreEntriesByMode)
+    // 同步给 AppStorage 供 LoadMoreFooterSlot 切换三态(spinner / "没更多了")。
+    writeHomeHasMoreByMode(this.state.homeHasMoreEntriesByMode)
     this.actions.logHomeLoadState(
       `modeHasMore mode=${mode} next=${next ? 'true' : 'false'} reason=${reason} `
       + `globalHasMore=${this.state.homeHasMoreEntries} visible=${this.visibleEntryCountFor(mode)}/${this.totalEntryCountFor(mode)}`,

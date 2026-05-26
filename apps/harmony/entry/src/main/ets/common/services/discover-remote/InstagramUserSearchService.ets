@@ -4,6 +4,7 @@ import {
   buildInstagramProfileSeedFromProfile,
   dedupeAndLimitDiscoverCandidates,
   DiscoverRemoteProfileSeed,
+  DiscoverRemoteViewMapping,
   extractXFollowersFromText,
   parseInstagramProfilesFromSearchHtml,
   parseInstagramProfilesFromTopsearchPayload,
@@ -28,10 +29,19 @@ import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 import {
   SOCIAL_VIEW_MAPPING,
   buildProfileAnchorSnippet,
-  buildSocialQueryVariants,
-  dedupeCandidates,
-  withConfiguredRssHubCandidate,
 } from './SharedSearchHelpers'
+import { runSocialProfileSearch, SocialPrimarySearch, SocialProfileFetch, SocialCandidateBuilder } from './SearchPipeline'
+
+export async function searchInstagramUsers(query: string, rsshubBase: string): Promise<ResolvedDiscoverCandidate[]> {
+  return runSocialProfileSearch(
+    query,
+    rsshubBase,
+    searchInstagramUsersByTopsearch,
+    fetchInstagramProfileSeed,
+    buildInstagramCandidateFromProfile as SocialCandidateBuilder,
+    SOCIAL_VIEW_MAPPING,
+  )
+}
 
 function isGenericInstagramHtml(html: string, ogTitle: string): boolean {
   const normalizedTitle = stripHtml(ogTitle).trim().toLowerCase()
@@ -39,32 +49,6 @@ function isGenericInstagramHtml(html: string, ogTitle: string): boolean {
     return true
   }
   return /log into instagram/i.test(html) || /create an account or log in to instagram/i.test(html)
-}
-
-export async function searchInstagramUsers(query: string, rsshubBase: string): Promise<ResolvedDiscoverCandidate[]> {
-  const clean = query.trim().replace(/^@+/, '')
-  const searchSeeds = await searchInstagramUsersByTopsearch(clean)
-  const variants = buildSocialQueryVariants(query, 30)
-  const seedResults = await Promise.allSettled(
-    variants.map((username: string) => fetchInstagramProfileSeed(username)),
-  )
-
-  const fallbackSeeds: DiscoverRemoteProfileSeed[] = []
-  seedResults.forEach((result: PromiseSettledResult<DiscoverRemoteProfileSeed | undefined>) => {
-    if (result.status === 'fulfilled' && result.value) {
-      fallbackSeeds.push(result.value)
-    }
-  })
-
-  const dedupedSeeds = dedupeAndLimitDiscoverCandidates(
-    [...searchSeeds, ...fallbackSeeds],
-    12,
-  )
-
-  return dedupeCandidates(dedupedSeeds.map((seed: DiscoverRemoteProfileSeed) => withConfiguredRssHubCandidate(
-    buildInstagramCandidateFromProfile(seed, SOCIAL_VIEW_MAPPING) as ResolvedDiscoverCandidate,
-    rsshubBase,
-  )))
 }
 
 async function searchInstagramUsersByTopsearch(query: string): Promise<DiscoverRemoteProfileSeed[]> {

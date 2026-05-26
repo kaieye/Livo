@@ -77,14 +77,4 @@ export class SettingsStore implements ISettingsStore {
       throw new Error(`保存设置失败：${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
-
-  // --- Static convenience methods (delegate to singleton, backward-compatible) ---
-
-  static async load(): Promise<HarmonySettings> {
-    return SettingsStore.default.load()
-  }
-
-  static async save(next: HarmonySettings): Promise<HarmonySettings> {
-    return SettingsStore.default.save(next)
-  }
 }

@@ -67,7 +67,7 @@ export class ArticleEntryLoader {
       this.owner.isLoading = false
 
       // Settings/theme/AI assist
-      const settings = await SettingsStore.load()
+      const settings = await SettingsStore.default.load()
       this.owner.theme = await ThemeService.resolvePalette(settings)
       this.owner.applyAISettings(settings)
       this.owner.resetAIResultsIfEntryChanged()
@@ -80,7 +80,7 @@ export class ArticleEntryLoader {
     // No snapshot — full DB load
     this.owner.entry = await this.loadEntryById(entryId)
     const upgraded = await this.upgradeLegacyEntryIfNeeded()
-    const settings = await SettingsStore.load()
+    const settings = await SettingsStore.default.load()
     this.owner.theme = await ThemeService.resolvePalette(settings)
     this.owner.applyAISettings(settings)
     this.owner.resetAIResultsIfEntryChanged()

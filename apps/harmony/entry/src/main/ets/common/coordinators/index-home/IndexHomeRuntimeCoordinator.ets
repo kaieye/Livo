@@ -120,7 +120,7 @@ export class IndexHomeRuntimeCoordinator {
   }
 
   async handleSystemThemeChanged(): Promise<void> {
-    const settings = await SettingsStore.load()
+    const settings = await SettingsStore.default.load()
     if (!shouldRefreshThemeOnSystemColorModeChange(settings.themeMode)) {
       return
     }

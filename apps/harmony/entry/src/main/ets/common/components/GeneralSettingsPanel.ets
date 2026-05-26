@@ -56,7 +56,7 @@ export struct GeneralSettingsPanel {
   }
 
   private async loadSettings(): Promise<void> {
-    this.config = await SettingsStore.load()
+    this.config = await SettingsStore.default.load()
     this.refreshIntervalSelection = `${this.config.refreshIntervalMinutes}`
     this.theme = await ThemeService.resolvePalette(this.config)
     this.saveHint = '已加载通用配置'
@@ -66,7 +66,7 @@ export struct GeneralSettingsPanel {
     this.config = next
     this.refreshIntervalSelection = `${next.refreshIntervalMinutes}`
     console.info(`[GeneralSettings] syncSettings -> refreshIntervalMinutes=${next.refreshIntervalMinutes}`)
-    void SettingsStore.save(next).then((saved: HarmonySettings) => {
+    void SettingsStore.default.save(next).then((saved: HarmonySettings) => {
       this.config = saved
       this.refreshIntervalSelection = `${saved.refreshIntervalMinutes}`
       this.onSettingsChange(saved)

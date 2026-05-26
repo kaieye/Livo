@@ -6,7 +6,7 @@ import {
   FeedWithCount,
   EntryCardModel,
   toEntryCardModel,
-  toEntryCardModelWithTiming,
+  EntryCardTiming,
   toFeedCardModel,
 } from '../models/LivoModels'
 import { EntryRepository } from '../repositories/EntryRepository'
@@ -264,7 +264,8 @@ export function measureEntryCardBuild(
   const feedDisplayMs = Date.now() - t1
 
   const t2 = Date.now()
-  const result = toEntryCardModelWithTiming(entry, {
+  const entryTiming: EntryCardTiming = { mediaCtxMs: 0, videoUrlsMs: 0, imageUrlMs: 0 }
+  const card = toEntryCardModel(entry, {
     id: feed.id,
     title: displayTitle,
     url: feed.url,
@@ -280,17 +281,17 @@ export function measureEntryCardBuild(
     errorCount: feed.errorCount,
     createdAt: feed.createdAt,
     updatedAt: feed.updatedAt,
-  })
+  }, entryTiming)
   const toCardModelMs = Date.now() - t2
 
   return {
-    card: result.card,
+    card,
     timing: {
       feedDisplayMs,
       toCardModelMs,
-      mediaCtxMs: result.timing.mediaCtxMs,
-      videoUrlsMs: result.timing.videoUrlsMs,
-      imageUrlMs: result.timing.imageUrlMs,
+      mediaCtxMs: entryTiming.mediaCtxMs,
+      videoUrlsMs: entryTiming.videoUrlsMs,
+      imageUrlMs: entryTiming.imageUrlMs,
       totalMs: Date.now() - t0,
     },
   }

@@ -140,7 +140,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     this.owner.homeInitialLoadPending = true
     this.owner.theme = ThemeService.currentPalette()
     void this.homeRuntimeCoordinator.applySystemBarStyle(this.owner.theme)
-    const settingsPromise = SettingsStore.load()
+    const settingsPromise = SettingsStore.default.load()
     const feedsPromise = FeedRepository.default.list()
     const currentMode = this.owner.mode
     let restoredFromSnapshot: boolean = false

@@ -67,7 +67,7 @@ export default class EntryAbility extends UIAbility {
           this.syncAvoidArea(mainWindow)
         })
 
-        const settings = await SettingsStore.load()
+        const settings = await SettingsStore.default.load()
         await ThemeService.resolvePalette(settings)
         const existingCount = await FeedRepository.default.count()
         if (existingCount === 0) {
@@ -75,7 +75,7 @@ export default class EntryAbility extends UIAbility {
             await FeedRepository.default.insert(feed)
           }
           await EntryRepository.default.upsertMany(SEED_ENTRIES)
-          await SettingsStore.save(seedSettings())
+          await SettingsStore.default.save(seedSettings())
           void FeedRefreshCoordinator.default.hydrateSeedFeeds(SEED_FEEDS)
         }
         await FeedRefreshCoordinator.default.bootstrap()

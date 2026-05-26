@@ -16,6 +16,11 @@ import { TweetEntryCard } from './TweetEntryCard'
 import { HomeEmptyStateCard } from './HomeEmptyStateCard'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../coordinators/home/HomeVideoGrid'
+import {
+  createDefaultHomeHasMoreByMode,
+  HOME_HAS_MORE_BY_MODE_KEY,
+  HomeHasMoreByMode,
+} from '../coordinators/index-home/HomeChromeProgressStore'
 
 // LazyForEach 默认 cachedCount=1 在双列视频网格里只缓存 2 张卡，快速滚动
 // 时几乎每帧都要重新 build HomeVideoEntryCard（包含远程封面图解码），
@@ -137,6 +142,10 @@ export struct HomeModeEntriesPage {
   dataSource: ArrayLazyDataSource<EntryCardModel> = new ArrayLazyDataSource<EntryCardModel>(() => [])
   @Prop isLoading: boolean = false
   @Prop isLoadingMore: boolean = false
+  // 当前栏目是否还有更多内容。直接从 AppStorage 订阅,HomeFeedPaginationState
+  // 在 setModeHasMoreEntries 时同步写入。当 hasMore=false 且未在加载,footer
+  // 显示"没有更多了"而不是 spinner,避免「滑到底 spinner 永远在转」的误导。
+  @StorageProp(HOME_HAS_MORE_BY_MODE_KEY) homeHasMoreByMode: HomeHasMoreByMode = createDefaultHomeHasMoreByMode()
   @Prop emptyStateTitle: string = ''
   @Prop theme: ThemePalette = {} as ThemePalette
   @Prop showUnreadDot: boolean = true
@@ -258,19 +267,44 @@ export struct HomeModeEntriesPage {
     .border({ width: 0.8, color: this.theme.divider })
   }
 
-  // footer 始终常驻列表末尾,通过 Visibility 切换显隐。Visibility.Hidden 保留
-  // 布局空间但不绘制内容,这样:
-  // 1) List.contentHeight 始终包含 footer 高度,onReachEnd 在 footer 完全
-  //    进入视口时触发,而不是"最后一条卡的一半被截断时"触发。
-  // 2) isLoadingMore 翻转时只切换 visibility,不再插入/删除 ListItem,避免
-  //    LazyForEach 同帧 layout 抖动把最后一条卡推成"半截可见"。
+  // footer 始终常驻列表末尾,根据「正在加载 / 还可加载 / 没有更多」三态切换内容。
+  // 设计原则:onReachEnd 只在到达 contentEnd 才触发,如果用 visibility 切换会
+  // 让 fling 过程中看不到加载动画,等用户滑到底才"突然出现"。所以 footer 永远
+  // 占布局位置,内容根据状态决定:
+  //   - isLoadingMore=true → spinner + "正在加载更多"
+  //   - 该栏目 hasMore=true 但未在加载 → spinner + "上滑加载更多"(预告动画)
+  //   - 该栏目 hasMore=false → "—— 没有更多了 ——",停止 spinner 避免误导
   @Builder
   private LoadMoreFooterSlot() {
-    Column() {
+    if (this.modeHasMoreEntriesNow()) {
       this.LoadMoreFooter()
+    } else {
+      this.LoadMoreFooterExhausted()
+    }
+  }
+
+  private modeHasMoreEntriesNow(): boolean {
+    if (this.isLoadingMore) {
+      return true
+    }
+    const map = this.homeHasMoreByMode
+    if (this.mode === 'articles') { return map.articles }
+    if (this.mode === 'social') { return map.social }
+    if (this.mode === 'pictures') { return map.pictures }
+    return map.videos
+  }
+
+  @Builder
+  private LoadMoreFooterExhausted() {
+    Row() {
+      Text('—— 没有更多了 ——')
+        .fontSize(12)
+        .fontColor(this.theme.textMuted)
     }
     .width('100%')
-    .visibility(this.isLoadingMore ? Visibility.Visible : Visibility.Hidden)
+    .justifyContent(FlexAlign.Center)
+    .padding({ top: 18, bottom: 18 })
+    .margin({ top: HOME_MODE_CONTENT_GAP })
   }
 
   @Builder

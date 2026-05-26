@@ -38,7 +38,7 @@ struct FeedDetail {
   }
 
   private async loadSettings(): Promise<void> {
-    const settings = await SettingsStore.load()
+    const settings = await SettingsStore.default.load()
     this.theme = await ThemeService.resolvePalette(settings)
   }
 

@@ -46,14 +46,19 @@ export function toFeedCardModel(feed: FeedWithCount): FeedCardModel {
   }
 }
 
-export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
+export interface EntryCardTiming {
+  mediaCtxMs: number
+  videoUrlsMs: number
+  imageUrlMs: number
+}
+
+export function toEntryCardModel(entry: Entry, feed: Feed, timing?: EntryCardTiming): EntryCardModel {
   const definition = viewDefinitionOf(feed.view)
   const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
   const displayFeedImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl ?? '', feed.url, feed.siteUrl || '', displayFeedTitle)
   const t0 = Date.now()
   const mediaCtx = resolveEntryMediaContext(entry, feed)
   const mediaCtxMs = Date.now() - t0
-  // 快速路径：先检查 mediaUrls 和 articleUrl，无需 join 5 字段
   let hasVideoMedia = false
   const mediaUrls = entry.mediaUrls ?? []
   for (let vi = 0; vi < mediaUrls.length; vi += 1) {
@@ -86,6 +91,12 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
   })
   const imageUrlMs = Date.now() - tImg
 
+  if (timing) {
+    timing.mediaCtxMs = mediaCtxMs
+    timing.videoUrlsMs = videoUrlsMs
+    timing.imageUrlMs = imageUrlMs
+  }
+
   return {
     id: entry.id,
     feedId: entry.feedId,
@@ -110,76 +121,6 @@ export function toEntryCardModel(entry: Entry, feed: Feed): EntryCardModel {
     hasVideoMedia,
     isRead: entry.isRead,
     isStarred: entry.isStarred,
-  }
-}
-
-export interface ToEntryCardModelTiming {
-  mediaCtxMs: number
-  videoUrlsMs: number
-  imageUrlMs: number
-}
-
-export interface ToEntryCardModelWithTimingResult {
-  card: EntryCardModel
-  timing: ToEntryCardModelTiming
-}
-
-export function toEntryCardModelWithTiming(entry: Entry, feed: Feed): ToEntryCardModelWithTimingResult {
-  const definition = viewDefinitionOf(feed.view)
-  const displayFeedTitle = resolveSocialFeedDisplayTitle(feed.title, feed.url, feed.siteUrl || '')
-  const displayFeedImageUrl = resolveSocialFeedDisplayImageUrl(feed.imageUrl ?? '', feed.url, feed.siteUrl || '', displayFeedTitle)
-  const t0 = Date.now()
-  const mediaCtx = resolveEntryMediaContext(entry, feed)
-  const mediaCtxMs = Date.now() - t0
-  const hasVideoMedia = extractSupportedVideoUrls(
-    [entry.title, entry.summary, entry.content, entry.url, ...(entry.mediaUrls ?? [])].join('\n'),
-    entry.url || feedSiteUrl(feed),
-    entry.url,
-  ).length > 0
-  const videoUrlsMs = Date.now() - t0 - mediaCtxMs
-
-  const tImg = Date.now()
-  const imageUrl = resolveEntryCardImageUrl({
-    title: entry.title,
-    summary: entry.summary,
-    content: entry.content,
-    articleUrl: entry.url,
-    siteUrl: feedSiteUrl(feed),
-    mediaUrls: entry.mediaUrls ?? [],
-  })
-  const imageUrlMs = Date.now() - tImg
-
-  return {
-    card: {
-      id: entry.id,
-      feedId: entry.feedId,
-      title: entry.title,
-      summary: entry.summary,
-      content: entry.content,
-      imageUrl,
-      feedImageUrl: displayFeedImageUrl,
-      author: entry.author,
-      articleUrl: entry.url,
-      publishedAt: entry.publishedAt,
-      publishedLabel: formatPublishedAt(entry.publishedAt),
-      readingLabel: `${entry.readingTimeMinutes} 分钟`,
-      tags: entry.tags,
-      mediaUrls: selectPictureMediaUrls(mediaCtx.pictureUrls),
-      rawMediaUrls: mediaCtx.rawUrls,
-      feedTitle: displayFeedTitle,
-      feedCategory: feed.category ?? '未分类',
-      view: feed.view,
-      viewLabel: definition.label,
-      viewBadgeColor: definition.badgeColor,
-      hasVideoMedia,
-      isRead: entry.isRead,
-      isStarred: entry.isStarred,
-    },
-    timing: {
-      mediaCtxMs,
-      videoUrlsMs,
-      imageUrlMs,
-    },
   }
 }
 
