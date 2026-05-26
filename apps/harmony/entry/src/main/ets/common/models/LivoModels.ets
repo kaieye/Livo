@@ -164,32 +164,9 @@ export function toArticleDetailModel(entry: Entry, feed: Feed): ArticleDetailMod
     .filter((block: ArticleContentBlock) => block.type === 'paragraph')
     .map((block: ArticleContentBlock) => block.text)
 
-  return {
-    id: card.id,
-    feedId: card.feedId,
-    title: card.title,
-    summary: card.summary,
-    content: card.content,
-    imageUrl: card.imageUrl,
-    feedImageUrl: card.feedImageUrl,
-    author: card.author,
-    articleUrl: card.articleUrl,
-    publishedAt: card.publishedAt,
-    publishedLabel: card.publishedLabel,
-    readingLabel: card.readingLabel,
-    tags: card.tags,
-    mediaUrls: card.mediaUrls,
-    rawMediaUrls: card.rawMediaUrls,
-    feedTitle: card.feedTitle,
-    feedCategory: card.feedCategory,
-    view: card.view,
-    viewLabel: card.viewLabel,
-    viewBadgeColor: card.viewBadgeColor,
-    hasVideoMedia: card.hasVideoMedia,
-    isRead: card.isRead,
-    isStarred: card.isStarred,
-    contentParagraphs: paragraphs,
-    contentBlocks: blocks,
-    siteUrl: feedSiteUrl(feed),
-  }
+  const model = articleDetailModelFromCard(card)
+  model.contentParagraphs = paragraphs
+  model.contentBlocks = blocks
+  model.siteUrl = feedSiteUrl(feed)
+  return model
 }

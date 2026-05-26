@@ -2,7 +2,7 @@ import relationalStore from '@ohos.data.relationalStore'
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { normalizeSocialFeedDescription, normalizeSocialFeedTitle } from '../utils/social/SocialFeedTitles'
 import { resultLong, resultString } from '../utils/ResultSetHelper'
-import { IDatabaseAccess, RdbTable, defaultDatabaseAccess } from './RdbTable'
+import { boolToNumber, numberToBool, IDatabaseAccess, RdbTable, defaultDatabaseAccess } from './RdbTable'
 
 const FEED_FETCH_STATE_DEBUG_ENABLED: boolean = true
 const FEED_FETCH_STATE_DEBUG_PREFIX: string = '[FeedFetchStateDebug]'
@@ -43,14 +43,6 @@ export interface IFeedRepository {
   remove(feedId: string): Promise<void>
 }
 
-function boolToNumber(value: boolean): number {
-  return value ? 1 : 0
-}
-
-function numberToBool(value: number): boolean {
-  return value === 1
-}
-
 function mapFeed(result: relationalStore.ResultSet): Feed {
   return {
     id: resultString(result, 'id'),
@@ -78,7 +70,14 @@ function createFeedId(url: string): string {
 }
 
 export class FeedRepository implements IFeedRepository {
-  static readonly default: FeedRepository = new FeedRepository()
+  private static _default?: FeedRepository
+
+  static get default(): FeedRepository {
+    if (!FeedRepository._default) {
+      FeedRepository._default = new FeedRepository()
+    }
+    return FeedRepository._default
+  }
 
   private readonly feedsTable: RdbTable<Feed>
   private readonly db: IDatabaseAccess

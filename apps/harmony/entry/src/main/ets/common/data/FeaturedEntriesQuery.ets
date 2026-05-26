@@ -29,7 +29,7 @@ import {
   modeMatchesFeedView,
 } from './AppRepositoryEntryHelpers'
 import { HOME_FAST_PAGE_CACHE_BUFFER } from '../components/HomeRootConfig'
-import { EntryCardCache } from './EntryCardCache'
+import { EntryCardCache, IEntryCardCache } from './EntryCardCache'
 
 function deduplicateEntryCards(cards: EntryCardModel[]): EntryCardModel[] {
   const seen = new Set<string>()
@@ -288,7 +288,7 @@ class FeaturedEntriesQuery {
 
   private readonly feedRepo: IFeedRepository
   private readonly entryRepo: IEntryRepository
-  private readonly modeEntriesCache: EntryCardCache = new EntryCardCache()
+  private readonly modeEntriesCache: IEntryCardCache = new EntryCardCache()
 
   constructor(feedRepo: IFeedRepository, entryRepo: IEntryRepository) {
     this.feedRepo = feedRepo

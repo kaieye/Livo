@@ -1,15 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore'
 import { Entry } from '../models/LivoModels'
 import { resultLong, resultString } from '../utils/ResultSetHelper'
-import { IDatabaseAccess, RdbTable, defaultDatabaseAccess } from './RdbTable'
-
-function boolToNumber(value: boolean): number {
-  return value ? 1 : 0
-}
-
-function numberToBool(value: number): boolean {
-  return value === 1
-}
+import { boolToNumber, numberToBool, IDatabaseAccess, RdbTable, defaultDatabaseAccess } from './RdbTable'
 
 function parseTags(tagsJson: string): string[] {
   if (!tagsJson.trim()) {
@@ -71,7 +63,14 @@ export interface IEntryRepository {
 }
 
 export class EntryRepository implements IEntryRepository {
-  static readonly default: EntryRepository = new EntryRepository()
+  private static _default?: EntryRepository
+
+  static get default(): EntryRepository {
+    if (!EntryRepository._default) {
+      EntryRepository._default = new EntryRepository()
+    }
+    return EntryRepository._default
+  }
 
   private readonly entriesTable: RdbTable<Entry>
   private readonly db: IDatabaseAccess
@@ -152,26 +151,6 @@ export class EntryRepository implements IEntryRepository {
 
     await this.db.withRdb('批量插入条目', async (store) => {
       for (const entry of entries) {
-        const predicates = new relationalStore.RdbPredicates('entries')
-        predicates.equalTo('id', entry.id)
-        const updatedRows = await store.update({
-          feed_id: entry.feedId,
-          title: entry.title,
-          url: entry.url,
-          summary: entry.summary,
-          content: entry.content,
-          author: entry.author,
-          published_at: entry.publishedAt,
-          reading_time_minutes: entry.readingTimeMinutes,
-          tags_json: JSON.stringify(entry.tags),
-          media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
-          updated_at: Date.now(),
-        }, predicates)
-
-        if ((updatedRows as number) > 0) {
-          continue
-        }
-
         await store.insert('entries', {
           id: entry.id,
           feed_id: entry.feedId,
@@ -187,8 +166,8 @@ export class EntryRepository implements IEntryRepository {
           tags_json: JSON.stringify(entry.tags),
           media_urls_json: JSON.stringify(entry.mediaUrls ?? []),
           created_at: entry.createdAt,
-          updated_at: entry.updatedAt,
-        })
+          updated_at: Date.now(),
+        }, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE)
       }
     })
   }
@@ -203,16 +182,10 @@ export class EntryRepository implements IEntryRepository {
   }
 
   async toggleStar(entryId: string): Promise<void> {
-    const entry = await this.getById(entryId)
-    if (!entry) {
-      throw new Error('条目不存在')
-    }
-    const predicates = new relationalStore.RdbPredicates('entries')
-    predicates.equalTo('id', entryId)
-    await this.entriesTable.update(predicates, {
-      is_starred: boolToNumber(!entry.isStarred),
-      updated_at: Date.now(),
-    })
+    await this.entriesTable.executeSql(
+      `UPDATE entries SET is_starred = 1 - is_starred, updated_at = ? WHERE id = ?`,
+      [Date.now(), entryId],
+    )
   }
 
 }

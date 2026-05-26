@@ -13,9 +13,14 @@ const source = readFileSync(
 test('featured entries mode queries share a per-mode cache across fast and paged paths', () => {
   assert.match(
     source,
-    /private readonly modeEntriesCache: Map<string, FeaturedModeEntriesCacheItem> = new Map\(\)/,
+    /private readonly modeEntriesCache: IEntryCardCache = new EntryCardCache\(\)/,
   )
-  assert.match(source, /private cachedModeEntries\(/)
+  assert.match(source, /this\.modeEntriesCache\.set\(mode, feeds, result\)/)
+  assert.match(source, /this\.modeEntriesCache\.set\(mode, feeds, cards\)/)
+  assert.match(
+    source,
+    /this\.modeEntriesCache\.set\(mode, feeds, expandedEntries\)/,
+  )
   assert.match(source, /async function recentModeEntries\(/)
   assert.match(
     source,
@@ -23,10 +28,16 @@ test('featured entries mode queries share a per-mode cache across fast and paged
   )
   assert.match(
     source,
-    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(this\.entryRepo, mode, feeds, feedMap, safeCandidateLimit, true\)/,
+    /shouldUseRecentModeQuery\(mode\)\s*\?\s*await recentModeEntries\(this\.entryRepo, mode, feeds, feedMap, safeCandidateLimit/,
   )
-  assert.match(source, /this\.storeModeEntriesCache\(mode, feeds, result\)/)
-  assert.match(source, /this\.storeModeEntriesCache\(mode, feeds, cards\)/)
+  assert.match(
+    source,
+    /this\.modeEntriesCache\.get\(mode, feeds, safeCandidateLimit\)/,
+  )
+  assert.match(
+    source,
+    /this\.modeEntriesCache\.get\(mode, feeds, targetVisibleCount\)/,
+  )
   assert.match(
     source,
     /featuredEntriesFastPageByMode cache-hit mode=\$\{mode\}/,
