@@ -23,7 +23,7 @@ export function decodeHtml(value: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, '\'')
+    .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
 }
 
@@ -35,7 +35,7 @@ export function decodeBasicEntities(value: string): string {
     .replace(/\\u002F/gi, '/')
     .replace(/&#0*64;/gi, '@')
     .replace(/\\"/g, '"')
-    .replace(/&#39;/g, '\'')
+    .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&')
 }
@@ -51,7 +51,10 @@ export function escapeHtml(value: string): string {
 
 // Strip all HTML tags and normalize whitespace
 export function stripHtml(value: string): string {
-  return decodeHtml(value).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+  return decodeHtml(value)
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 // Strip CDATA markers
@@ -61,7 +64,10 @@ export function stripCdata(value: string): string {
 
 // Extract content from a specific XML/HTML tag
 export function pickTag(block: string, tagName: string): string {
-  const regex = new RegExp(`<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)</${tagName}>`, 'i')
+  const regex = new RegExp(
+    `<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)</${tagName}>`,
+    'i',
+  )
   const matched = block.match(regex)
   return matched && matched[1] ? stripCdata(matched[1]).trim() : ''
 }
@@ -78,8 +84,15 @@ export function pickFirst(block: string, tagNames: string[]): string {
 }
 
 // Extract tag content from within a container tag
-export function pickTagFromContainer(xml: string, containerName: string, tagName: string): string {
-  const containerRegex = new RegExp(`<${containerName}(?:\\s[^>]*)?>([\\s\\S]*?)</${containerName}>`, 'i')
+export function pickTagFromContainer(
+  xml: string,
+  containerName: string,
+  tagName: string,
+): string {
+  const containerRegex = new RegExp(
+    `<${containerName}(?:\\s[^>]*)?>([\\s\\S]*?)</${containerName}>`,
+    'i',
+  )
   const container = xml.match(containerRegex)
   if (!container?.[1]) {
     return ''
@@ -87,13 +100,21 @@ export function pickTagFromContainer(xml: string, containerName: string, tagName
   return pickTag(container[1], tagName)
 }
 
-function extractMetaAttributeContent(html: string, attributeName: string, attributeValue: string): string {
+function extractMetaAttributeContent(
+  html: string,
+  attributeName: string,
+  attributeValue: string,
+): string {
   const pattern = /<meta\b[^>]*>/gi
   let matched: RegExpExecArray | null = pattern.exec(html)
 
   while (matched) {
     const tag = matched[0] ?? ''
-    if (!new RegExp(`\\b${attributeName}=(["'])${attributeValue}\\1`, 'i').test(tag)) {
+    if (
+      !new RegExp(`\\b${attributeName}=(["'])${attributeValue}\\1`, 'i').test(
+        tag,
+      )
+    ) {
       matched = pattern.exec(html)
       continue
     }
@@ -122,7 +143,11 @@ export function extractMetaNameContent(html: string, name: string): string {
 // Check if content looks like an HTML document
 export function looksLikeHtmlDocument(value: string): boolean {
   const sample = value.slice(0, 2000)
-  return /<html[\s>]/i.test(sample) || /<head[\s>]/i.test(sample) || /<body[\s>]/i.test(sample)
+  return (
+    /<html[\s>]/i.test(sample) ||
+    /<head[\s>]/i.test(sample) ||
+    /<body[\s>]/i.test(sample)
+  )
 }
 
 // Normalize rich content (decode HTML and use fallback if empty)

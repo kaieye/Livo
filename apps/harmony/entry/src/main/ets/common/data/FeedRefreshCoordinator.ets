@@ -11,6 +11,7 @@ import { BackgroundTaskService } from '../services/BackgroundTaskService'
 import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
 import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
+import { runConcurrencyPool } from '../utils/ConcurrencyPool'
 import { sortFeedsStable } from './AppRepositoryEntryHelpers'
 import { normalizeFeedPayloadMetadata, resolveNormalizedFeedImageUrl } from './FeedMetadataNormalizer'
 
@@ -268,44 +269,14 @@ class FeedRefreshCoordinator {
     refreshConcurrency: number,
     onProgress?: (completedCount: number, totalCount: number) => void,
   ): Promise<PromiseSettledResult<RemoteFeedResult>[]> {
-    const results: PromiseSettledResult<RemoteFeedResult>[] = new Array(feeds.length)
-    let nextIndex = 0
-    let completedCount = 0
-
-    const worker = async (): Promise<void> => {
-      while (true) {
-        const currentIndex = nextIndex
-        nextIndex += 1
-        if (currentIndex >= feeds.length) {
-          return
-        }
-
-        const feed = feeds[currentIndex]
-        if (!feed) {
-          results[currentIndex] = { status: 'rejected', reason: '订阅源不存在' }
-          completedCount += 1
-          onProgress?.(completedCount, feeds.length)
-          continue
-        }
-
-        try {
-          const value = await this.refreshFeed(feed.id, true, false, false, false)
-          results[currentIndex] = { status: 'fulfilled', value }
-        } catch (reason) {
-          results[currentIndex] = { status: 'rejected', reason }
-        }
-
-        completedCount += 1
-        onProgress?.(completedCount, feeds.length)
-      }
-    }
-
-    const workers: Promise<void>[] = []
-    for (let index = 0; index < Math.min(refreshConcurrency, feeds.length); index += 1) {
-      workers.push(worker())
-    }
-    await Promise.all(workers)
-    return results
+    return runConcurrencyPool(
+      feeds,
+      refreshConcurrency,
+      async (feed: Feed, _index: number) => {
+        return this.refreshFeed(feed.id, true, false, false, false)
+      },
+      onProgress,
+    )
   }
 
   async refreshAllFeeds(

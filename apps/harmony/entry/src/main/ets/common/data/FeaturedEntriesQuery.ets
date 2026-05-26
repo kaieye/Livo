@@ -30,83 +30,12 @@ import {
 } from './AppRepositoryEntryHelpers'
 import { HOME_FAST_PAGE_CACHE_BUFFER } from '../config/HomeRootConfig'
 import { EntryCardCache, IEntryCardCache } from './EntryCardCache'
-
-function deduplicateEntryCards(cards: EntryCardModel[]): EntryCardModel[] {
-  const seen = new Set<string>()
-  const deduped: EntryCardModel[] = []
-  cards.forEach((card: EntryCardModel) => {
-    const key = uniqueEntryCardKey(card)
-    if (seen.has(key)) {
-      return
-    }
-    seen.add(key)
-    deduped.push(card)
-  })
-  return deduped
-}
-
-function allowedFeedsForMode(
-  feeds: Feed[],
-  mode: HomeEntryMode,
-): Feed[] {
-  return feeds.filter((feed: Feed) => modeMatchesFeedView(mode, feed.view))
-}
-
-function groupModeCardsByFeed(
-  cards: EntryCardModel[],
-  allowedFeeds: Feed[],
-): Map<string, EntryCardModel[]> {
-  const buckets = new Map<string, EntryCardModel[]>()
-  allowedFeeds.forEach((feed: Feed) => {
-    buckets.set(feed.id, [])
-  })
-  cards.forEach((card: EntryCardModel) => {
-    const bucket = buckets.get(card.feedId)
-    if (bucket) {
-      bucket.push(card)
-    }
-  })
-  return buckets
-}
-
-function roundRobinFeedCards(
-  buckets: Map<string, EntryCardModel[]>,
-  allowedFeeds: Feed[],
-  targetCount: number,
-): EntryCardModel[] {
-  const result: EntryCardModel[] = []
-  const seen = new Set<string>()
-  let progressed = true
-
-  while (result.length < targetCount && progressed) {
-    progressed = false
-    allowedFeeds.forEach((feed: Feed) => {
-      if (result.length >= targetCount) {
-        return
-      }
-      const bucket = buckets.get(feed.id)
-      if (!bucket || bucket.length === 0) {
-        return
-      }
-      const card = bucket.shift()
-      if (!card) {
-        return
-      }
-      const key = uniqueEntryCardKey(card)
-      if (seen.has(key)) {
-        return
-      }
-      seen.add(key)
-      result.push(card)
-      progressed = true
-    })
-  }
-
-  result.sort((left: EntryCardModel, right: EntryCardModel) => {
-    return (right.publishedAt || 0) - (left.publishedAt || 0)
-  })
-  return result
-}
+import {
+  deduplicateEntryCards,
+  allowedFeedsForMode,
+  groupModeCardsByFeed,
+  roundRobinFeedCards,
+} from './HomeEntryBalancer'
 
 async function balancedModeEntries(
   entryRepo: IEntryRepository,
@@ -138,7 +67,7 @@ async function balancedModeEntries(
       break
     }
 
-    const allowedFeedIds = new Set<string>(allowedFeeds.map((feed: Feed) => feed.id))
+    const allowedFeedIds = new Set<string>(allowedFeeds.map((feed) => feed.id))
     const filterStartedAt = Date.now()
     const scopedEntries = page.filter((entry: Entry) => allowedFeedIds.has(entry.feedId))
     const filterMs = Date.now() - filterStartedAt
@@ -175,7 +104,13 @@ async function balancedModeEntries(
 
   const roundRobinStartedAt = Date.now()
   const buckets = groupModeCardsByFeed(pooledCards, allowedFeeds)
-  const result = roundRobinFeedCards(buckets, allowedFeeds, targetCount)
+  const result = roundRobinFeedCards(
+    buckets,
+    allowedFeeds.map((f) => f.id),
+    targetCount,
+    uniqueEntryCardKey,
+    (a: EntryCardModel, b: EntryCardModel) => (b.publishedAt || 0) - (a.publishedAt || 0),
+  )
   const roundRobinMs = Date.now() - roundRobinStartedAt
 
   console.info(
@@ -200,7 +135,7 @@ async function recentModeEntries(
     return []
   }
 
-  const allowedFeedIds = new Set<string>(allowedFeeds.map((feed: Feed) => feed.id))
+  const allowedFeedIds = new Set<string>(allowedFeeds.map((feed) => feed.id))
   const result: EntryCardModel[] = []
   const seen = new Set<string>()
   const pageSize = Math.max(120, Math.min(720, targetCount * 3))
@@ -364,7 +299,7 @@ class FeaturedEntriesQuery {
 
     const entries = await this.entryRepo.listRecent(safeCandidateLimit)
     const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
-    const deduped = deduplicateEntryCards(cards)
+    const deduped = deduplicateEntryCards(cards, uniqueEntryCardKey)
     logHomeFeedDebug(
       `featuredEntriesFast limit=${safeCandidateLimit} recent=${entries.length} cards=${cards.length} deduped=${deduped.length} elapsedMs=${Date.now() - startedAt}`,
     )
@@ -381,7 +316,7 @@ class FeaturedEntriesQuery {
 
     const entries = await this.entryRepo.listRecentPage(safeLimit, safeOffset)
     const cards = await buildEntryCardsChunked(entries, (entry: Entry) => feedMap.get(entry.feedId))
-    const deduped = deduplicateEntryCards(cards)
+    const deduped = deduplicateEntryCards(cards, uniqueEntryCardKey)
     logHomeFeedDebug(
       `featuredEntriesFastPage limit=${safeLimit} offset=${safeOffset} recent=${entries.length} cards=${cards.length} deduped=${deduped.length} elapsedMs=${Date.now() - startedAt}`,
     )

@@ -1,4 +1,3 @@
-import type { EntryCardModel, Feed } from '../models/LivoModels'
 import type { HomeEntryMode } from './HomeEntryModeUtils'
 import { modeMatchesFeedView } from './HomeEntryModeUtils'
 
@@ -7,24 +6,38 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 
 interface CacheItem {
   signature: string
-  entries: EntryCardModel[]
+  entries: object[]
   savedAt: number
 }
 
-function allowedFeedsForMode(feeds: Feed[], mode: HomeEntryMode): Feed[] {
+export interface FeedLike {
+  id: string
+  view: number
+  updatedAt: number
+}
+
+function allowedFeedsForMode(
+  feeds: FeedLike[],
+  mode: HomeEntryMode,
+): FeedLike[] {
   return feeds.filter((feed) => modeMatchesFeedView(mode, feed.view))
 }
 
-function modeFeedSignature(mode: HomeEntryMode, feeds: Feed[]): string {
-  const allowedFeedIds = allowedFeedsForMode(feeds, mode)
-    .map((feed) => `${feed.id}:${feed.updatedAt}:${feed.view}`)
+function modeFeedSignature(mode: HomeEntryMode, feeds: FeedLike[]): string {
+  const allowedFeedIds = allowedFeedsForMode(feeds, mode).map(
+    (feed) => `${feed.id}:${feed.updatedAt}:${feed.view}`,
+  )
   return `${mode}|${allowedFeedIds.join('|')}`
 }
 
 export interface IEntryCardCache {
   clear(): void
-  get(mode: HomeEntryMode, feeds: Feed[], targetCount: number): EntryCardModel[] | undefined
-  set(mode: HomeEntryMode, feeds: Feed[], entries: EntryCardModel[]): void
+  get(
+    mode: HomeEntryMode,
+    feeds: FeedLike[],
+    targetCount: number,
+  ): object[] | undefined
+  set(mode: HomeEntryMode, feeds: FeedLike[], entries: object[]): void
 }
 
 export class EntryCardCache implements IEntryCardCache {
@@ -36,7 +49,11 @@ export class EntryCardCache implements IEntryCardCache {
     this.modeOrder = []
   }
 
-  get(mode: HomeEntryMode, feeds: Feed[], targetCount: number): EntryCardModel[] | undefined {
+  get(
+    mode: HomeEntryMode,
+    feeds: FeedLike[],
+    targetCount: number,
+  ): object[] | undefined {
     const cache = this.store.get(mode)
     if (!cache) {
       return undefined
@@ -56,7 +73,7 @@ export class EntryCardCache implements IEntryCardCache {
     return cache.entries.slice(0, targetCount)
   }
 
-  set(mode: HomeEntryMode, feeds: Feed[], entries: EntryCardModel[]): void {
+  set(mode: HomeEntryMode, feeds: FeedLike[], entries: object[]): void {
     const existing = this.store.get(mode)
     if (existing && existing.entries.length > entries.length) {
       return
