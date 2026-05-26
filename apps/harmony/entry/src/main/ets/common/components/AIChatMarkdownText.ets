@@ -1,4 +1,5 @@
 import { ThemePalette } from '../services/ThemeService'
+import { ExternalUrlService } from '../services/ExternalUrlService'
 import { parseMarkdown, MdLine, MdLineKind, MdSpan } from '../utils/MarkdownParser'
 
 @Component
@@ -48,11 +49,23 @@ export struct AIChatMarkdownText {
               .fontColor(this.theme.textMuted)
           }
           ForEach(line.spans, (span: MdSpan, si: number) => {
-            Span(span.text)
-              .fontSize(this.headerSizeOf(line.kind))
-              .fontWeight(span.bold || this.isHeaderKind(line.kind) ? FontWeight.Bold : FontWeight.Normal)
-              .fontColor(span.code ? '#E879F9' : this.theme.textPrimary)
-              .fontStyle(span.italic ? FontStyle.Italic : FontStyle.Normal)
+            if (span.url) {
+              Span(span.text)
+                .fontSize(this.headerSizeOf(line.kind))
+                .fontWeight(span.bold || this.isHeaderKind(line.kind) ? FontWeight.Bold : FontWeight.Normal)
+                .fontColor('#4A90D9')
+                .fontStyle(span.italic ? FontStyle.Italic : FontStyle.Normal)
+                .decoration({ type: TextDecorationType.Underline, color: '#4A90D9' })
+                .onClick(() => {
+                  ExternalUrlService.open(span.url!)
+                })
+            } else {
+              Span(span.text)
+                .fontSize(this.headerSizeOf(line.kind))
+                .fontWeight(span.bold || this.isHeaderKind(line.kind) ? FontWeight.Bold : FontWeight.Normal)
+                .fontColor(span.code ? '#E879F9' : this.theme.textPrimary)
+                .fontStyle(span.italic ? FontStyle.Italic : FontStyle.Normal)
+            }
           }, (span: MdSpan, si: number) => `s_${idx}_${si}`)
           Span('\n')
         }

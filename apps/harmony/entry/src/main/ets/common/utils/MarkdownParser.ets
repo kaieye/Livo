@@ -14,6 +14,54 @@ export interface MdSpan {
   bold: boolean
   italic: boolean
   code: boolean
+  url?: string
+}
+
+interface LinkSegment {
+  text: string
+  url?: string
+}
+
+function extractBareUrls(text: string): LinkSegment[] {
+  const urlRegex = /(https?:\/\/[^\s)]+)/g
+  const segments: LinkSegment[] = []
+  let lastIdx = 0
+  let match: RegExpExecArray | null
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      segments.push({ text: text.slice(lastIdx, match.index) })
+    }
+    const url = match[1]
+    segments.push({ text: url, url })
+    lastIdx = match.index + match[0].length
+  }
+  if (lastIdx < text.length) {
+    segments.push({ text: text.slice(lastIdx) })
+  }
+  return segments
+}
+
+function extractLinkSegments(line: string): LinkSegment[] {
+  const mdLinkRegex = /\[([^\]]*?)\]\(((?:https?:\/\/)[^) ]+)\)/g
+  const segments: LinkSegment[] = []
+  let lastIdx = 0
+  let mdMatch: RegExpExecArray | null
+
+  while ((mdMatch = mdLinkRegex.exec(line)) !== null) {
+    if (mdMatch.index > lastIdx) {
+      segments.push(...extractBareUrls(line.slice(lastIdx, mdMatch.index)))
+    }
+    segments.push({ text: mdMatch[1] || mdMatch[2], url: mdMatch[2] })
+    lastIdx = mdMatch.index + mdMatch[0].length
+  }
+  if (lastIdx < line.length) {
+    segments.push(...extractBareUrls(line.slice(lastIdx)))
+  }
+  if (segments.length === 0) {
+    segments.push(...extractBareUrls(line))
+  }
+  return segments
 }
 
 export interface MdLine {
@@ -22,7 +70,7 @@ export interface MdLine {
   orderedIndex: number
 }
 
-function parseInlineSpans(line: string): MdSpan[] {
+function parseFormatting(line: string): MdSpan[] {
   if (!line) {
     return []
   }
@@ -82,6 +130,28 @@ function parseInlineSpans(line: string): MdSpan[] {
     spans.push({ text: current, bold: false, italic: false, code: false })
   }
   return spans
+}
+
+function parseInlineSpans(line: string): MdSpan[] {
+  if (!line) {
+    return []
+  }
+  const segments = extractLinkSegments(line)
+  const result: MdSpan[] = []
+  for (const seg of segments) {
+    if (seg.url) {
+      result.push({
+        text: seg.text,
+        bold: false,
+        italic: false,
+        code: false,
+        url: seg.url,
+      })
+    } else {
+      result.push(...parseFormatting(seg.text))
+    }
+  }
+  return result
 }
 
 function detectLineKind(line: string): MdLineKind {
