@@ -1,9 +1,8 @@
 import { media } from '@kit.MediaKit'
 import { audio } from '@kit.AudioKit'
 import { avSession } from '@kit.AVSessionKit'
-// TODO: BackgroundTaskKit 在 SDK 6.1.0(23) 中不可用，暂时注释
-// import { backgroundTaskManager } from '@kit.BackgroundTaskKit'
 import { AppContextService } from './AppContextService'
+import { BackgroundTaskService } from './BackgroundTaskService'
 
 const AUDIO_REQUEST_USER_AGENT: string =
   'Mozilla/5.0 (Linux; OpenHarmony) AppleWebKit/537.36 (KHTML, like Gecko) Livo/1.0 Mobile Safari/537.36'
@@ -136,8 +135,7 @@ export class AudioPlaybackService {
   private playerUrl: string = ''
   private avSessionHandle: avSession.AVSession | undefined = undefined
   private sessionReady: boolean = false
-  // TODO: 后台任务相关代码暂时注释，因为 BackgroundTaskKit 在 SDK 23 中不可用
-  // private backgroundTaskHandle: backgroundTaskManager.BackgroundTaskHandle | undefined = undefined
+  private backgroundTaskHeld: boolean = false
 
   constructor() {
     initAppStorageDefaults()
@@ -513,35 +511,29 @@ export class AudioPlaybackService {
     }
   }
 
-  // TODO: 后台任务相关代码暂时注释
   private async startBackgroundTask(): Promise<void> {
-    // if (this.backgroundTaskHandle) {
-    //   return
-    // }
-    // try {
-    //   const ctx = AppContextService.getContext()
-    //   const request: backgroundTaskManager.TransientTaskRequest = {
-    //     type: backgroundTaskManager.TaskType.TRANSIENT_TASK,
-    //     timeout: 3600000,
-    //   }
-    //   this.backgroundTaskHandle = await backgroundTaskManager.startBackgroundTask(ctx, request)
-    //   console.info('[AudioService] Background task started')
-    // } catch (err) {
-    //   console.warn(`[AudioService] Failed to start background task: ${err instanceof Error ? err.message : err}`)
-    // }
+    if (this.backgroundTaskHeld) {
+      return
+    }
+    this.backgroundTaskHeld = true
+    try {
+      await BackgroundTaskService.acquire('audioPlayback')
+    } catch (err) {
+      this.backgroundTaskHeld = false
+      console.warn(`[AudioService] Failed to start background task: ${err instanceof Error ? err.message : err}`)
+    }
   }
 
   private async stopBackgroundTask(): Promise<void> {
-    // if (!this.backgroundTaskHandle) {
-    //   return
-    // }
-    // try {
-    //   await backgroundTaskManager.stopBackgroundTask(this.backgroundTaskHandle)
-    //   this.backgroundTaskHandle = undefined
-    //   console.info('[AudioService] Background task stopped')
-    // } catch (err) {
-    //   console.warn(`[AudioService] Failed to stop background task: ${err instanceof Error ? err.message : err}`)
-    // }
+    if (!this.backgroundTaskHeld) {
+      return
+    }
+    this.backgroundTaskHeld = false
+    try {
+      await BackgroundTaskService.release('audioPlayback')
+    } catch (err) {
+      console.warn(`[AudioService] Failed to stop background task: ${err instanceof Error ? err.message : err}`)
+    }
   }
 
   togglePlayback(url: string, title: string): void {

@@ -745,7 +745,7 @@ struct Index {
       if (this.showAIChat) {
         AIChatPanel({
           theme: this.theme,
-          context: '',
+          context: this.getTimelineContext(),
           onClose: () => {
             this.animateWithUiContext({ duration: 120, curve: Curve.EaseIn }, () => {
               this.showAIChat = false

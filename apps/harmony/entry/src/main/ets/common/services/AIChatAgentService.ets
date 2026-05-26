@@ -1,12 +1,14 @@
 import { AIAssistantSettings } from '../models/LivoModels'
 import { ChatMessage } from './ChatHistoryStore'
-import { ChatToolDefinition, buildDefaultTools, executeToolCall, ToolCallFunction } from './AIChatTools'
+import { ChatToolDefinition, buildDefaultTools, executeToolCallRun, ToolCallFunction } from './AIChatTools'
 import { runChatCompletionForAgent, AgentChatCompletionResult, AgentAbortSignal } from './article-assist/ChatCompletionRunner'
 import { AgentMessage, ChatToolCallMessage } from './article-assist/ProviderProtocol'
 import { ExtractedToolCall } from './article-assist/ProviderResponseParser'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { EntryRepository } from '../repositories/EntryRepository'
 import { Feed, Entry } from '../models/LivoModels'
+import type { AgentConfirmationRequest, AgentToolRun } from '../agent/AgentTypes.ts'
+import { agentToolResultToText } from '../agent/AgentToolResultText.ts'
 
 export { AgentAbortSignal }
 
@@ -16,11 +18,46 @@ export interface AgentRoundDetail {
   name: string
   args: string
   resultSummary: string
+  status?: string
+  elapsedMs?: number
+  confirmation?: AgentConfirmationRequest
+}
+
+export type AgentRunStatus = 'completed' | 'confirmation_required'
+export type AgentToolEventType = 'tool_started' | 'tool_completed' | 'tool_failed' | 'confirmation_required'
+
+export interface AgentToolExecutionEvent {
+  type: AgentToolEventType
+  toolCallId: string
+  toolName: string
+  args: string
+  message?: string
+  resultSummary?: string
+  elapsedMs?: number
+  confirmation?: AgentConfirmationRequest
+}
+
+export interface AgentPendingConfirmation {
+  toolCallId: string
+  toolName: string
+  args: string
+  confirmation: AgentConfirmationRequest
+}
+
+export interface AgentContinuationState {
+  messages: AgentMessage[]
+  pendingToolCall: ExtractedToolCall
+  remainingToolCalls: ExtractedToolCall[]
+  toolRounds: AgentRoundDetail[]
+  nextRound: number
 }
 
 export interface AgentRunResult {
   text: string
   toolRounds: AgentRoundDetail[]
+  status?: AgentRunStatus
+  confirmation?: AgentPendingConfirmation
+  continuation?: AgentContinuationState
 }
 
 const AGENT_SYSTEM_PROMPT = `你是 Livo 的智能助手，可以帮用户查看和管理 RSS 订阅。
@@ -32,12 +69,44 @@ const AGENT_SYSTEM_PROMPT = `你是 Livo 的智能助手，可以帮用户查看
 - get_entry_detail：查看某篇文章的完整内容和细节
 - get_unread_count：查看未读文章统计
 - web_search：执行网络搜索，获取实时信息（新闻、天气、股票、最新事件等）
+- add_feed：添加自定义 RSS 订阅源
+- remove_subscription：删除订阅源及其本地文章
+- refresh_subscription：刷新指定订阅源
+- refresh_all_subscriptions：刷新全部订阅源
+- list_builtin_feeds：查看应用内嵌推荐订阅源
+- add_builtin_subscription：从推荐列表添加订阅源
+- get_settings：查看设置摘要（不含 API Key）
+- toggle_theme_mode：切换深色/浅色/跟随系统
+- change_accent_color：调整主题强调色
+- update_general_settings：更新通用设置
+- update_ai_feature_settings：更新 AI 摘要和翻译开关
+- update_ai_runtime_settings：更新 AI 提供商、模型、Base URL 或提示词（不修改 API Key）
+- view_starred_entries：查看收藏内容
+- view_chat_history：查看历史对话
+- view_refresh_log：查看刷新日志
+- export_opml：导出 OPML
+- import_opml：导入 OPML
+- clear_refresh_log：清空刷新日志
+- clear_local_cache：清理本地缓存
+- list_account_providers：查看账号关联状态
+- open_account_login：打开账号登录/关联页
+- unlink_account：取消账号关联
+- refresh_account_status：刷新账号状态
+- mark_all_read：全部标记为已读
+- open_root_tab：打开首页、订阅、发现或设置根标签
+- go_back：返回上一页
+- open_entry_detail：打开文章详情页
+- open_feed_detail：打开订阅详情页
+- open_settings_panel：打开设置首页或具体设置面板
+- open_video_player：打开视频播放页
+- open_image_viewer：打开图片预览页
 
 使用规则：
 1. 默认使用中文回复。
 2. 当用户的问题需要查询订阅数据时，必须调用对应的 function，不要凭空猜测或描述你要调用什么函数。
 3. 当用户的问题需要最新网络信息（如新闻、天气、股票、实时事件等）时，使用 web_search 工具。
-4. 回复时使用友好的语气，对信息做适当的归纳和总结。`
+4. 当工具返回需要确认时，不要声称已完成动作，应告诉用户需要确认。
+5. 回复时使用友好的语气，对信息做适当的归纳和总结。`
 
 function toolCallResultSummary(name: string, result: string): string {
   if (result.length > 0 && (result.charAt(0) === '{' || result.startsWith('错误'))) {
@@ -266,8 +335,12 @@ function parseTextToolCalls(content: string): ParsedTextToolCalls {
   return { cleanedContent: cleaned, toolCalls }
 }
 
-async function buildContextFallback(): Promise<string> {
+async function buildContextFallback(pageContext: string = ''): Promise<string> {
   let ctx = ''
+  const trimmedPageContext = pageContext.trim()
+  if (trimmedPageContext) {
+    ctx += `当前页面上下文：\n${trimmedPageContext}\n\n`
+  }
   try {
     const feeds = await FeedRepository.default.list()
     if (feeds.length === 0) {
@@ -320,10 +393,10 @@ export async function runChatAgent(
   aiSettings: AIAssistantSettings,
   history?: ChatMessage[],
   tools?: ChatToolDefinition[],
-  onToolCall?: (name: string) => void,
+  onToolEvent?: (event: AgentToolExecutionEvent) => void,
   abortSignal?: AgentAbortSignal,
+  pageContext: string = '',
 ): Promise<AgentRunResult> {
-  const toolRounds: AgentRoundDetail[] = []
   let effectiveTools = tools
   if (!effectiveTools || effectiveTools.length === 0) {
     effectiveTools = buildDefaultTools()
@@ -331,7 +404,7 @@ export async function runChatAgent(
 
   const enrichedPrompt = AGENT_SYSTEM_PROMPT
 
-  const contextFallback = await buildContextFallback()
+  const contextFallback = await buildContextFallback(pageContext)
   const systemWithContext = enrichedPrompt + '\n\n当前订阅数据如下（如果模型不支持 function calling，请直接基于此数据回答）：\n' + contextFallback
 
   const agentMessages: AgentMessage[] = [{ role: 'system', content: systemWithContext, name: undefined }]
@@ -350,11 +423,77 @@ export async function runChatAgent(
 
   let currentMessages = agentMessages
 
+  return runAgentLoop(currentMessages, effectiveTools, aiSettings, [], 0, onToolEvent, abortSignal)
+}
+
+export async function resumeChatAgent(
+  continuation: AgentContinuationState,
+  aiSettings: AIAssistantSettings,
+  tools?: ChatToolDefinition[],
+  onToolEvent?: (event: AgentToolExecutionEvent) => void,
+  abortSignal?: AgentAbortSignal,
+): Promise<AgentRunResult> {
+  let effectiveTools = tools
+  if (!effectiveTools || effectiveTools.length === 0) {
+    effectiveTools = buildDefaultTools()
+  }
+
+  const currentMessages = continuation.messages.slice()
+  const toolRounds = continuation.toolRounds.slice()
+  const pendingResult = await executeAgentToolCall(
+    continuation.pendingToolCall,
+    true,
+    toolRounds,
+    onToolEvent,
+    abortSignal,
+  )
+  currentMessages.push(toToolResultMessage(continuation.pendingToolCall, pendingResult.text))
+
+  const remaining = continuation.remainingToolCalls
+  for (let index = 0; index < remaining.length; index += 1) {
+    const tc = remaining[index]
+    const executed = await executeAgentToolCall(tc, false, toolRounds, onToolEvent, abortSignal)
+    if (executed.run.result.status === 'confirmation_required') {
+      return buildConfirmationRequiredResult(
+        tc,
+        remaining.slice(index + 1),
+        currentMessages,
+        toolRounds,
+        continuation.nextRound,
+        executed,
+      )
+    }
+    currentMessages.push(toToolResultMessage(tc, executed.text))
+  }
+
+  return runAgentLoop(
+    currentMessages,
+    effectiveTools,
+    aiSettings,
+    toolRounds,
+    continuation.nextRound,
+    onToolEvent,
+    abortSignal,
+  )
+}
+
+async function runAgentLoop(
+  currentMessages: AgentMessage[],
+  effectiveTools: ChatToolDefinition[],
+  aiSettings: AIAssistantSettings,
+  toolRounds: AgentRoundDetail[],
+  startRound: number,
+  onToolEvent?: (event: AgentToolExecutionEvent) => void,
+  abortSignal?: AgentAbortSignal,
+): Promise<AgentRunResult> {
   for (let round = 0; round < MAX_AGENT_ROUNDS; round += 1) {
+    if (round < startRound) {
+      continue
+    }
     console.info('[ChatAgent] round', round, 'messages:', currentMessages.length)
     let result: AgentChatCompletionResult
     try {
-      result = await runChatCompletionForAgent(currentMessages, effectiveTools, aiSettings, 2000)
+      result = await runChatCompletionForAgent(currentMessages, effectiveTools, aiSettings, 2000, abortSignal)
     } catch (err) {
       console.error('[ChatAgent] round', round, 'error:', err instanceof Error ? err.message : String(err))
       throw new Error(err instanceof Error ? err.message : String(err))
@@ -365,17 +504,21 @@ export async function runChatAgent(
     let effectiveContent = result.content
     let effectiveToolCalls = result.toolCalls
 
-    if (effectiveToolCalls.length === 0 && (effectiveContent.includes('<tool_call>') || effectiveContent.includes('<minimax:tool_call>'))) {
+    const nativeToolCallingSupported = result.nativeToolCallingSupported !== false
+    if (nativeToolCallingSupported && effectiveToolCalls.length === 0 && (effectiveContent.includes('<tool_call>') || effectiveContent.includes('<minimax:tool_call>'))) {
       const parsed = parseTextToolCalls(effectiveContent)
       effectiveContent = parsed.cleanedContent
       effectiveToolCalls = parsed.toolCalls
       console.info('[ChatAgent] round', round, 'parsed text tool calls:', effectiveToolCalls.length)
     }
+    if (!nativeToolCallingSupported && effectiveToolCalls.length === 0 && (effectiveContent.includes('<tool_call>') || effectiveContent.includes('<minimax:tool_call>'))) {
+      console.info('[ChatAgent] round', round, 'ignored text tool calls because provider has no native tool-calling support')
+    }
 
     if (effectiveToolCalls.length === 0) {
       const text = effectiveContent || '抱歉，我暂时无法回答这个问题。'
       console.info('[ChatAgent] round', round, 'final text len:', text.length)
-      return { text, toolRounds }
+      return { text, toolRounds, status: 'completed' }
     }
 
     if (effectiveContent && effectiveContent.length > 0) {
@@ -400,36 +543,151 @@ export async function runChatAgent(
     }
     currentMessages.push(assistantCallMessages)
 
-    for (const tc of effectiveToolCalls) {
-      if (onToolCall) {
-        onToolCall(tc.function.name)
+    for (let toolIndex = 0; toolIndex < effectiveToolCalls.length; toolIndex += 1) {
+      const tc = effectiveToolCalls[toolIndex]
+      const executed = await executeAgentToolCall(tc, false, toolRounds, onToolEvent, abortSignal)
+      if (executed.run.result.status === 'confirmation_required') {
+        return buildConfirmationRequiredResult(
+          tc,
+          effectiveToolCalls.slice(toolIndex + 1),
+          currentMessages,
+          toolRounds,
+          round + 1,
+          executed,
+        )
       }
-      const rawResult = await executeToolCall(tc.function.name, tc.function.arguments)
-      const toolResult = truncateToolResult(rawResult)
-      const rd: AgentRoundDetail = {
-        name: tc.function.name,
-        args: tc.function.arguments,
-        resultSummary: toolCallResultSummary(tc.function.name, toolResult),
-      }
-      toolRounds.push(rd)
-      const toolMsg: AgentMessage = {
-        role: 'tool',
-        content: toolResult,
-        tool_call_id: tc.id,
-        name: tc.function.name,
-      }
-      currentMessages.push(toolMsg)
+      currentMessages.push(toToolResultMessage(tc, executed.text))
     }
   }
 
   try {
     console.info('[ChatAgent] max rounds reached, making final call, messages:', currentMessages.length)
-    const finalResult = await runChatCompletionForAgent(currentMessages, effectiveTools, aiSettings, 2000)
+    const finalResult = await runChatCompletionForAgent(currentMessages, effectiveTools, aiSettings, 2000, abortSignal)
     const text = finalResult.content || '抱歉，我暂时无法回答这个问题。'
     console.info('[ChatAgent] final result len:', text.length, 'toolCalls:', finalResult.toolCalls.length)
-    return { text, toolRounds }
+    return { text, toolRounds, status: 'completed' }
   } catch (err) {
     console.error('[ChatAgent] final call error:', err instanceof Error ? err.message : String(err))
     throw new Error(err instanceof Error ? err.message : String(err))
+  }
+}
+
+interface ExecutedAgentToolCall {
+  run: AgentToolRun
+  text: string
+}
+
+async function executeAgentToolCall(
+  tc: ExtractedToolCall,
+  confirmed: boolean,
+  toolRounds: AgentRoundDetail[],
+  onToolEvent?: (event: AgentToolExecutionEvent) => void,
+  abortSignal?: AgentAbortSignal,
+): Promise<ExecutedAgentToolCall> {
+  if (abortSignal?.aborted) {
+    throw new Error('请求已取消')
+  }
+
+  emitToolEvent(onToolEvent, {
+    type: 'tool_started',
+    toolCallId: tc.id,
+    toolName: tc.function.name,
+    args: tc.function.arguments,
+  })
+
+  const run = await executeToolCallRun(tc.function.name, tc.function.arguments, confirmed)
+  const toolText = truncateToolResult(agentToolResultToText(run.result))
+  const resultSummary = toolCallResultSummary(tc.function.name, toolText)
+  const roundDetail: AgentRoundDetail = {
+    name: tc.function.name,
+    args: tc.function.arguments,
+    resultSummary,
+    status: run.result.status,
+    elapsedMs: run.elapsedMs,
+    confirmation: run.result.confirmation,
+  }
+  toolRounds.push(roundDetail)
+
+  if (run.result.status === 'confirmation_required') {
+    emitToolEvent(onToolEvent, {
+      type: 'confirmation_required',
+      toolCallId: tc.id,
+      toolName: tc.function.name,
+      args: tc.function.arguments,
+      message: run.result.message,
+      resultSummary,
+      elapsedMs: run.elapsedMs,
+      confirmation: run.result.confirmation,
+    })
+  } else {
+    emitToolEvent(onToolEvent, {
+      type: run.result.status === 'success' ? 'tool_completed' : 'tool_failed',
+      toolCallId: tc.id,
+      toolName: tc.function.name,
+      args: tc.function.arguments,
+      message: run.result.message,
+      resultSummary,
+      elapsedMs: run.elapsedMs,
+    })
+  }
+
+  return {
+    run,
+    text: toolText,
+  }
+}
+
+function buildConfirmationRequiredResult(
+  tc: ExtractedToolCall,
+  remainingToolCalls: ExtractedToolCall[],
+  currentMessages: AgentMessage[],
+  toolRounds: AgentRoundDetail[],
+  nextRound: number,
+  executed: ExecutedAgentToolCall,
+): AgentRunResult {
+  const confirmation = executed.run.result.confirmation
+  if (!confirmation) {
+    return {
+      text: executed.text,
+      toolRounds,
+      status: 'completed',
+    }
+  }
+
+  return {
+    text: executed.text,
+    toolRounds,
+    status: 'confirmation_required',
+    confirmation: {
+      toolCallId: tc.id,
+      toolName: tc.function.name,
+      args: tc.function.arguments,
+      confirmation,
+    },
+    continuation: {
+      messages: currentMessages.slice(),
+      pendingToolCall: tc,
+      remainingToolCalls,
+      toolRounds: toolRounds.slice(),
+      nextRound,
+    },
+  }
+}
+
+function toToolResultMessage(tc: ExtractedToolCall, toolResult: string): AgentMessage {
+  return {
+    role: 'tool',
+    content: toolResult,
+    tool_call_id: tc.id,
+    name: tc.function.name,
+  }
+}
+
+function emitToolEvent(
+  onToolEvent: ((event: AgentToolExecutionEvent) => void) | undefined,
+  event: AgentToolExecutionEvent,
+): void {
+  if (onToolEvent) {
+    onToolEvent(event)
   }
 }

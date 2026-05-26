@@ -7,6 +7,7 @@ import { EntryRepository, IEntryRepository } from '../repositories/EntryReposito
 import { RefreshLogStore } from '../services/RefreshLogStore'
 import { RssFeedService, FeedRefreshPayload } from '../services/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
+import { BackgroundTaskService } from '../services/BackgroundTaskService'
 import { canonicalFeedUrl, normalizeSocialFeedDescription } from '../utils/social/SocialFeedTitles'
 import { resolvePreferredStoredFeedImageUrl, resolvePreferredStoredFeedTitle, resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
@@ -364,11 +365,30 @@ class FeedRefreshCoordinator {
       onProgress?.(skippedByCooldownCount, feeds.length)
     }
 
-    const results = await this.refreshFeedsWithPool(
-      pendingFeeds,
-      this.resolveRefreshConcurrency(pendingFeeds.length),
-      (completedCount, totalCount) => onProgress?.(skippedByCooldownCount + completedCount, skippedByCooldownCount + totalCount),
-    )
+    let backgroundTaskHeld: boolean = false
+    try {
+      await BackgroundTaskService.acquire('dataTransfer')
+      backgroundTaskHeld = true
+    } catch (error) {
+      console.warn(`[FeedRefreshCoordinator] Failed to acquire background task: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    let results: PromiseSettledResult<RemoteFeedResult>[] = []
+    try {
+      results = await this.refreshFeedsWithPool(
+        pendingFeeds,
+        this.resolveRefreshConcurrency(pendingFeeds.length),
+        (completedCount, totalCount) => onProgress?.(skippedByCooldownCount + completedCount, skippedByCooldownCount + totalCount),
+      )
+    } finally {
+      if (backgroundTaskHeld) {
+        try {
+          await BackgroundTaskService.release('dataTransfer')
+        } catch (error) {
+          console.warn(`[FeedRefreshCoordinator] Failed to release background task: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+    }
 
     let refreshedCount = 0
     let failedCount = 0

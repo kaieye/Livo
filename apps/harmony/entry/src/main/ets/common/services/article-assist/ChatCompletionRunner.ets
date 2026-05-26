@@ -187,6 +187,7 @@ export interface AgentChatCompletionResult {
   content: string
   toolCalls: ExtractedToolCall[]
   finishReason: string
+  nativeToolCallingSupported: boolean
 }
 
 export interface AgentAbortSignal {
@@ -275,7 +276,12 @@ function parseAgentResponse(raw: string, format: ProviderFormat): AgentChatCompl
     const content = extractAnthropicResponseContent(parsed)
     const toolCalls = extractAnthropicToolCalls(parsed)
     console.info('[ChatAgent] anthropic parsed - contentLen:', content.length, 'toolCalls:', toolCalls.length)
-    return { content: sanitizeModelOutput(content), toolCalls, finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop' }
+    return {
+      content: sanitizeModelOutput(content),
+      toolCalls,
+      finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+      nativeToolCallingSupported: true,
+    }
   }
   const parsed = JSON.parse(raw) as ChatCompletionResponse
   const softError = extractSoftProviderError(parsed)
@@ -295,7 +301,12 @@ function parseAgentResponse(raw: string, format: ProviderFormat): AgentChatCompl
     content: sanitizeModelOutput(content),
     toolCalls,
     finishReason: finishReason || (toolCalls.length > 0 ? 'tool_calls' : 'stop'),
+    nativeToolCallingSupported: supportsNativeToolCalling(format),
   }
+}
+
+function supportsNativeToolCalling(format: ProviderFormat): boolean {
+  return format !== 'minimax-text'
 }
 
 function sanitizeEndpointForLog(endpoint: string): string {
