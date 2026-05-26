@@ -167,11 +167,11 @@ export struct HomeModeEntriesPage {
     return isTweetLikeEntry(entry) && (this.mode === 'social' || this.mode === 'articles')
   }
 
-  private articleListItemBottomGap(entry: EntryCardModel, index: number): number {
-    if (this.mode !== 'articles' || index >= this.dataSource.totalCount() - 1) {
-      return 0
-    }
-    return HOME_MODE_CONTENT_GAP
+  // 文章流条目间距:此前在每个 ListItem 上读 dataSource.totalCount() 并算 margin,
+  // LazyForEach itemBuilder 滑入新卡时每次都会再走一遍。改用 List({ space }) 让
+  // 系统自动只在条目之间插入间距(末尾不会重复加),省掉 itemBuilder 内的查找。
+  private articleListContainerSpace(): number {
+    return this.mode === 'articles' ? HOME_MODE_CONTENT_GAP : 0
   }
 
   aboutToAppear(): void {
@@ -279,9 +279,9 @@ export struct HomeModeEntriesPage {
 
   @Builder
   private ArticleOrSocialList() {
-    // 统一把列表容器间距收回到 0。社交流本来就是扁平流；
-    // 文章流里的推文也对齐这套布局，只给普通文章卡单独补间距。
-    List({ space: 0, scroller: this.scroller }) {
+    // 文章模式给每个条目之间留 HOME_MODE_CONTENT_GAP；社交模式扁平流间距为 0。
+    // 间距走 List 容器的 space,LazyForEach itemBuilder 不再每条都查 totalCount。
+    List({ space: this.articleListContainerSpace(), scroller: this.scroller }) {
       if (this.dataSource.totalCount() === 0) {
         ListItem() {
           Column() {
@@ -308,7 +308,9 @@ export struct HomeModeEntriesPage {
                 theme: this.theme,
                 isUnread: !entry.isRead,
                 flatMode: this.mode === 'social',
-                showBottomDivider: this.mode === 'social' && index < this.dataSource.totalCount() - 1,
+                // 最后一条的分隔线被列表底部 BottomTabSpacer 覆盖,不再查 totalCount
+                // 来跳过末尾,LazyForEach 复用时省掉一次 dataSource 访问。
+                showBottomDivider: this.mode === 'social',
                 highlightQuery: '',
                 collapsedTextLines: 7,
                 enableEnterTransition: false,
@@ -328,7 +330,6 @@ export struct HomeModeEntriesPage {
             }
           }
           .width('100%')
-          .margin({ bottom: this.articleListItemBottomGap(entry, index) })
           .onAppear(() => this.callbacks.onItemAppear(index, this.dataSource.totalCount()))
         }, (entry: EntryCardModel, index: number) => homeEntryListRenderKey(entry, index))
       }

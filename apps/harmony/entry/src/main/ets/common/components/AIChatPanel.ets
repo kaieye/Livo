@@ -20,7 +20,6 @@ export struct AIChatPanel {
   @State aiSettings: AIAssistantSettings | null = null
   @State showAISettings: boolean = false
   @State showHistory: boolean = false
-  @State showTrace: boolean = false
   @State streamingContent: string = ''
   @State currentSessionId: string = ''
   @State editingMessageId: string = ''
@@ -423,7 +422,6 @@ export struct AIChatPanel {
     this.messages = session.messages.slice()
     this.currentSessionId = session.id
     this.showHistory = false
-    this.showTrace = false
     this.pendingConfirmation = null
     this.pendingContinuation = null
     this.isConfirming = false
@@ -485,7 +483,6 @@ export struct AIChatPanel {
       inputContent: $inputContent,
       showAISettings: $showAISettings,
       showHistory: $showHistory,
-      showTrace: $showTrace,
       scroller: this.scroller,
       inputController: this.inputController,
       onSuggestionClick: (text: string) => { this.handleSuggestionClick(text) },

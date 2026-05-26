@@ -15,7 +15,7 @@ import { AIChatInputComposer } from './AIChatInputComposer'
 import { AIChatRunStatusBar } from './AIChatRunStatusBar'
 import { PendingAgentConfirmationView, ToolStatusItem } from './AIChatPanelTypes'
 import { buildAIChatTitleMenus } from './AIChatNavigationMenus'
-import { AIChatHistorySheet, AIChatSettingsSheet, AIChatTraceSheet } from './AIChatSheets'
+import { AIChatHistorySheet, AIChatSettingsSheet } from './AIChatSheets'
 
 @Component
 export struct AIChatPanelLayout {
@@ -34,7 +34,6 @@ export struct AIChatPanelLayout {
   @Link inputContent: string
   @Link showAISettings: boolean
   @Link showHistory: boolean
-  @Link showTrace: boolean
   scroller: Scroller = new Scroller()
   inputController: TextAreaController = new TextAreaController()
   onSuggestionClick: (text: string) => void = () => {}
@@ -70,11 +69,6 @@ export struct AIChatPanelLayout {
     })
   }
 
-  @Builder
-  private TraceSheetOverlay() {
-    AIChatTraceSheet({ theme: this.theme })
-  }
-
   private chatTitleMenus() {
     return buildAIChatTitleMenus(
       () => {
@@ -82,9 +76,6 @@ export struct AIChatPanelLayout {
       },
       () => {
         this.showHistory = true
-      },
-      () => {
-        this.showTrace = true
       },
       () => {
         this.showAISettings = true
@@ -212,13 +203,6 @@ export struct AIChatPanelLayout {
     .titleMode(HdsNavigationTitleMode.MINI)
     .hideBackButton(false)
     .bindSheet($$this.showHistory, this.HistorySheetOverlay(), {
-      detents: [SheetSize.MEDIUM],
-      dragBar: false,
-      showClose: false,
-      backgroundColor: this.theme.background,
-      preferType: SheetType.CENTER,
-    })
-    .bindSheet($$this.showTrace, this.TraceSheetOverlay(), {
       detents: [SheetSize.MEDIUM],
       dragBar: false,
       showClose: false,

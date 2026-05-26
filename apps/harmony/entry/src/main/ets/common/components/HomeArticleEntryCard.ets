@@ -5,6 +5,19 @@ import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
 import { isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
 
+// 预览图缓存:LazyForEach 复用本卡片时,aboutToReuse + @Watch 都会重算 computePreviewImage,
+// 内部对 summary/title 做多次正则匹配 + selectPictureMediaUrls 过滤,单卡 ~10 次正则。
+// 滑动期间每条卡复用一次就是一份开销,按 entry id 缓存后只有首次计算一次。
+const _articlePreviewImageCache: Map<string, string> = new Map<string, string>()
+
+function articlePreviewImageCacheKey(entry: EntryCardModel): string {
+  const id = (entry.id || '').trim()
+  if (id) {
+    return id
+  }
+  return `${entry.feedId}|${entry.articleUrl}|${entry.title}`
+}
+
 @Reusable
 @Component
 export struct HomeArticleEntryCard {
@@ -36,6 +49,17 @@ export struct HomeArticleEntryCard {
   }
 
   private computePreviewImage(): string {
+    const cacheKey = articlePreviewImageCacheKey(this.entry)
+    const cached = _articlePreviewImageCache.get(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    const result = this.computePreviewImageUncached()
+    _articlePreviewImageCache.set(cacheKey, result)
+    return result
+  }
+
+  private computePreviewImageUncached(): string {
     const lightweightCandidates = [
       ...(this.entry.mediaUrls ?? []),
       this.entry.imageUrl || '',
