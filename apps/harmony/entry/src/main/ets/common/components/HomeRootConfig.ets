@@ -8,8 +8,8 @@ import {
 } from './FloatingRootPageLayout'
 import { BOTTOM_TAB_BAR_HEIGHT, BOTTOM_TAB_FLOAT_GAP } from '../ui/UiTokens'
 import { resolveHdsBottomTabBarBottomMargin } from '../utils/index-home/HdsBottomTabConfig'
-import { HOME_MODES, HomeMode } from '../utils/home/HomeModeMeta'
-import { resolveHomeVisibleEntryInitialLimit } from '../utils/home/HomeVisibleEntryPolicy'
+import { HOME_MODES, HomeMode } from '../coordinators/home/HomeModeMeta'
+import { resolveHomeVisibleEntryInitialLimit } from '../coordinators/home/HomeVisibleEntryPolicy'
 
 export type SubscriptionMode = HomeMode
 
@@ -70,13 +70,21 @@ export const HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT: number = 6000
 export const HOME_FULL_MODE_CANDIDATE_LIMIT: number = 20000
 export const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 120
 export const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
-export const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = true
+// 用户反馈"加载更多触发过早"：item-appear（卡片露出）和 scroll-progress（滚动进度）
+// 这两类提前触发器在视觉上让用户感觉"还没滑到底就开始抖动/加载"。改为只用
+// onReachEnd（HomeFeedLoadMoreDrain）作为唯一触发，保证"真正滑到底"才发起 load-more。
+// 保留开关方便后续如有需要重新开启远端预读。
+export const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = false
+export const HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED: boolean = false
 export const HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED: boolean = true
 export const HOME_LOAD_MORE_AFTER_STOP_DELAY_MS: number = 100
 export const HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS: number = 800
 export const HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS: number = 80
 export const HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS: number = 120
 export const HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER: number = 2
+// LoadMoreFooter 最短可见时长。预取命中时实际耗时可能 < 50ms，但用户仍需要
+// 看到"加载中"反馈才能感知到操作生效，否则会觉得"按了没反应"。
+export const HOME_LOAD_MORE_FOOTER_MIN_VISIBLE_MS: number = 480
 export const HOME_FAST_PAGE_CACHE_BUFFER: number = 60
 export const HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT: number = 8
 export const HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR: number = 3

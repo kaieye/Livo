@@ -15,7 +15,6 @@ export struct HomeRootTabBody {
   @Prop modeTransitionDirection: number = 1
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
-  @Prop homeLoadMoreInProgress: boolean = false
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1
@@ -58,7 +57,6 @@ export struct HomeRootTabBody {
       showUnreadDot: this.showUnreadDot,
       homeInitialLoadPending: this.homeInitialLoadPending,
       isHomeStartupRefreshing: this.isHomeStartupRefreshing,
-      homeLoadMoreInProgress: this.homeLoadMoreInProgress,
       homeListSwapAnimating: this.homeListSwapAnimating,
       homeListSwapMode: this.homeListSwapMode,
       homeListSwapOpacity: this.homeListSwapOpacity,

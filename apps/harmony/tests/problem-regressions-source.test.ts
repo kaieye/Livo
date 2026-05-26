@@ -381,13 +381,34 @@ test('load-more prefetch appends a fast page instead of rebuilding the whole mod
   )
 })
 
-test('all home modes can trigger load-more by scroll progress before hard bottom reach', () => {
-  assert.match(
-    indexPageSource,
-    /if \(mode !== 'videos'\) \{[\s\S]*?this\.syncHomeModeRailState\(mode\)/,
+test('load-more no longer triggers by scroll progress before hard bottom reach', () => {
+  // 用户反馈"加载更多触发过早":scroll-progress 在约 46% 滚动位置就预读下一页,
+  // 表现为"还没滑到底就开始加载"。改为只用 onReachEnd 真触底,scroll-progress
+  // 触发器通过开关关闭并在函数入口 early-return,需要时可重新开启。
+  const homeRootConfigSource = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/components/HomeRootConfig.ets',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  const homeFeedPaginationSource = readFileSync(
+    new URL(
+      '../entry/src/main/ets/common/utils/home/HomeFeedPagination.ets',
+      import.meta.url,
+    ),
+    'utf8',
   )
   assert.match(
-    indexPageSource,
-    /this\.maybeTriggerLoadMoreByScrollProgress\(mode, this\.readHomeModeScrollOffset\(mode\)\)/,
+    homeRootConfigSource,
+    /export const HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED: boolean = false/,
+  )
+  assert.match(
+    homeRootConfigSource,
+    /export const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = false/,
+  )
+  assert.match(
+    homeFeedPaginationSource,
+    /maybeTriggerLoadMoreByScrollProgress\(mode: SubscriptionMode, currentOffset: number\): void \{[\s\S]*?if \(!HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED\) \{ return \}/,
   )
 })

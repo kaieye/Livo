@@ -261,7 +261,12 @@ export struct PictureEntryCard {
 
   @Builder private FramedImageSlide(item: PictureCarouselMediaItem, index: number) {
     Stack({ alignContent: Alignment.Center }) {
-      Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Cover).opacity(0.26).blur(14).borderRadius(14).draggable(false)
+      // flatMode 下(首页瀑布流场景)跳过模糊背景层:单卡构造从两张 Image 减为一张,
+      // GPU 离屏渲染 (blur(14)) 也免掉,在 LazyForEach 批量构建时显著减压。
+      // 非 flatMode 场景保留模糊层提供视觉填充。
+      if (!this.flatMode) {
+        Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Cover).opacity(0.26).blur(14).borderRadius(14).draggable(false)
+      }
       Image(item.imageUrl || this.pictureUrl).width('100%').height('100%').objectFit(ImageFit.Contain).borderRadius(14).backgroundColor(this.theme.elevated)
         .draggable(false)
         .shadow({ radius: this.theme.isDark ? 14 : 16, color: this.theme.isDark ? 'rgba(0,0,0,0.34)' : 'rgba(15,23,42,0.16)', offsetX: 0, offsetY: 3 })
@@ -302,7 +307,19 @@ export struct PictureEntryCard {
   }
 
   @Builder private MediaCarousel() {
-    if (this.carouselMediaItems().length > 0) {
+    if (this.carouselMediaItems().length === 1) {
+      // 单图占比最大,直接挂一张 Slide 跳过 Swiper。
+      // Swiper 即使单图也会初始化手势识别、DotIndicator、onChange 等,
+      // 在 LazyForEach 复用图片栏目时是滚动卡顿的元凶之一。
+      Stack({ alignContent: Alignment.Center }) {
+        if (this.carouselMediaItems()[0].kind === 'livePhoto') {
+          this.LivePhotoSlide(this.carouselMediaItems()[0], 0)
+        } else {
+          this.FramedImageSlide(this.carouselMediaItems()[0], 0)
+        }
+      }
+      .width('100%').constraintSize({ maxHeight: 640 }).clip(true).borderRadius(14).backgroundColor(this.theme.elevated)
+    } else if (this.carouselMediaItems().length > 1) {
       Stack({ alignContent: Alignment.Center }) {
         Swiper() {
           ForEach(this.carouselMediaItems(), (item: PictureCarouselMediaItem, idx: number) => {

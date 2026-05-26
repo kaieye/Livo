@@ -3,7 +3,7 @@ import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { CARD_RADIUS_MD } from '../ui/UiTokens'
 import { AvatarTile } from './AvatarTile'
 import { HighlightedInlineText } from './HighlightedInlineText'
-import { isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
+import { isTweetLikeEntry } from '../coordinators/home/HomeEntryUtils'
 
 // 预览图缓存:LazyForEach 复用本卡片时,aboutToReuse + @Watch 都会重算 computePreviewImage,
 // 内部对 summary/title 做多次正则匹配 + selectPictureMediaUrls 过滤,单卡 ~10 次正则。

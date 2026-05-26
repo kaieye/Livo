@@ -9,10 +9,10 @@ import {
 } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { showToast } from '../common/utils/PageToastHelper'
-import { createEmptyHomeEntryGroups, HomeEntryGroups } from '../common/utils/home/HomeEntryGroups'
-import { HomeFeedSession } from '../common/utils/home/HomeFeedSession'
-import { HomeInlineSearchController } from '../common/utils/home/HomeInlineSearchController'
-import { HomeEntryDataManager } from '../common/utils/home/HomeEntryDataManager'
+import { createEmptyHomeEntryGroups, HomeEntryGroups } from '../common/coordinators/home/HomeEntryGroups'
+import { HomeFeedSession } from '../common/coordinators/home/HomeFeedSession'
+import { HomeInlineSearchController } from '../common/coordinators/home/HomeInlineSearchController'
+import { HomeEntryDataManager } from '../common/coordinators/home/HomeEntryDataManager'
 import { TweetEntryPresentation } from '../common/utils/social/TweetEntryPresentation'
 import {
   TweetEntryPresentationCache,
@@ -31,8 +31,8 @@ import {
   writeHomeAudioBarCollapseProgress,
   writeHomeModeRailEffectiveProgress,
 } from '../common/utils/index-home/HomeChromeProgressStore'
-import { HomeScrollIntentTracker } from '../common/utils/home/HomeScrollIntentTracker'
-import { resolveHomeVisibleEntryInitialLimit } from '../common/utils/home/HomeVisibleEntryPolicy'
+import { HomeScrollIntentTracker } from '../common/coordinators/home/HomeScrollIntentTracker'
+import { resolveHomeVisibleEntryInitialLimit } from '../common/coordinators/home/HomeVisibleEntryPolicy'
 import {
   createHomeCandidateLimitMap,
   createHomeLoadedMap,
@@ -40,8 +40,8 @@ import {
   createPerModeMap,
   createHomeNoProgressCountMap,
   createHomeVisibleEntryLimitMap,
-} from '../common/utils/home/HomeModeMapHelpers'
-import { pictureCaption, pictureCardEntry, pictureGalleryUrls } from '../common/utils/home/HomePictureHelpers'
+} from '../common/coordinators/home/HomeModeMapHelpers'
+import { pictureCaption, pictureCardEntry, pictureGalleryUrls } from '../common/coordinators/home/HomePictureHelpers'
 import { IndexHomeRootContentCallbacks } from '../common/components/IndexHomeRootContent'
 import {
   AUTO_REFRESH_MIN_INTERVAL_MINUTES,
@@ -149,7 +149,12 @@ struct Index {
   @State homeCandidateLimitsByMode: HomeModeCandidateLimitMap = createHomeCandidateLimitMap()
   @State homeHasMoreEntries: boolean = true
   @State homeHasMoreEntriesByMode: HomeModeHasMoreMap = createPerModeMap<boolean>(true)
-  @State homeLoadMoreInProgress: boolean = false
+  // load-more 进行中标志:此前是 @State,每次翻转触发 Index 整树 rebuild
+  // (Shell → TabBody → IndexHomeRootContent),并通过 4 层 @Prop 透传给
+  // LoadMoreFooter。改为普通字段 + AppStorage:HomeFeedPagination 写入时
+  // 同步走 writeHomeLoadMoreInProgress,LoadMoreFooter 的宿主 IndexHomeRootContent
+  // 直接 @StorageProp 订阅,Index 整页不再为此 rebuild。
+  homeLoadMoreInProgress: boolean = false
   @State homeVisibleEntryLimits: HomeModeVisibleEntryLimitMap = createHomeVisibleEntryLimitMap()
   // Bumped whenever entry groups or visible-entry limits change so that
   // descendant components (Shell → TabBody → IndexHomeRootContent → HomeModeEntriesPage)
@@ -679,7 +684,6 @@ struct Index {
         modeTransitionDirection: this.modeTransitionDirection,
         homeInitialLoadPending: this.homeInitialLoadPending,
         isHomeStartupRefreshing: this.isHomeStartupRefreshing,
-        homeLoadMoreInProgress: this.homeLoadMoreInProgress,
         homeListSwapAnimating: this.homeListSwapAnimating,
         homeListSwapMode: this.homeListSwapMode,
         homeListSwapOpacity: this.homeListSwapOpacity,

@@ -42,7 +42,6 @@ export struct IndexRootNavigationShell {
   @Prop mode: SubscriptionMode = 'articles'
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
-  @Prop homeLoadMoreInProgress: boolean = false
   @Prop renderedMode: SubscriptionMode = 'articles'
   @Prop previousMode: SubscriptionMode = 'articles'
   @Prop isModeTransitioning: boolean = false
@@ -155,7 +154,6 @@ export struct IndexRootNavigationShell {
             showUnreadDot: this.showUnreadDot,
             homeInitialLoadPending: this.homeInitialLoadPending,
             isHomeStartupRefreshing: this.isHomeStartupRefreshing,
-            homeLoadMoreInProgress: this.homeLoadMoreInProgress,
             homeListSwapAnimating: this.homeListSwapAnimating,
             homeListSwapMode: this.homeListSwapMode,
             homeListSwapOpacity: this.homeListSwapOpacity,

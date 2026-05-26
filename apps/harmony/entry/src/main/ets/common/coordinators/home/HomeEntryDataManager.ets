@@ -328,13 +328,18 @@ export class HomeEntryDataManager {
 
   notifyModeAppended(mode: SubscriptionMode, startIndex: number): void {
     const startedAt = Date.now()
-    this.dataSourceFor(mode).notifyDataAdded(startIndex)
+    const dataSource = this.dataSourceFor(mode)
+    // 计算自 startIndex 起追加了多少条:LazyForEach 旧总数 = startIndex,新总数 = totalCount。
+    // 通过 notifyDataAddedRange 循环通知每个新位置,避免单次 onDataAdd + 总数突增触发 reloadData。
+    const newTotalCount = dataSource.totalCount()
+    const addedCount = Math.max(0, newTotalCount - startIndex)
+    dataSource.notifyDataAddedRange(startIndex, addedCount)
     const elapsedMs = Date.now() - startedAt
     console.info(
-      `[LIVO-PERF] notifyDataAdded mode=${mode} startIndex=${startIndex} elapsedMs=${elapsedMs}`,
+      `[LIVO-PERF] notifyDataAdded mode=${mode} startIndex=${startIndex} addedCount=${addedCount} elapsedMs=${elapsedMs}`,
     )
     this.actions.logHomeLoadMore(
-      `notifyModeAppended mode=${mode} startIndex=${startIndex} elapsedMs=${elapsedMs}`,
+      `notifyModeAppended mode=${mode} startIndex=${startIndex} addedCount=${addedCount} elapsedMs=${elapsedMs}`,
     )
   }
 

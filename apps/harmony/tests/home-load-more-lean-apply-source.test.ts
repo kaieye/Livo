@@ -106,7 +106,7 @@ test('load-more page sizes are configured per layout in the visible entry policy
   )
   assert.match(
     visibleEntryPolicySource,
-    /const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 24/,
+    /const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 8/,
   )
   assert.match(paginationSource, /currentModeLimit \+ loadMoreStep/)
 })

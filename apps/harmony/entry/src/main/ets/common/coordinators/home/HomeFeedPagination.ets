@@ -3,6 +3,7 @@ import { EntryCardModel } from '../../models/LivoModels'
 import {
   HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
   HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
+  HOME_LOAD_MORE_FOOTER_MIN_VISIBLE_MS,
   HOME_LOAD_MORE_ITEM_APPEAR_DEBOUNCE_MS,
   HOME_LOAD_MORE_ITEM_APPEAR_MIN_INTERVAL_MS,
   HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED,
@@ -11,6 +12,7 @@ import {
   HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR,
   HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
   HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS,
+  HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED,
   HOME_MODE_SWITCH_CANDIDATE_LIMIT,
   HomeModeLoadMoreTimestampMap,
   HomeModePendingLoadMoreMap,
@@ -28,6 +30,7 @@ import {
 import {
   resolveHomeVisibleEntryInitialLimit,
   resolveHomeVisibleEntryLoadMoreStep,
+  resolveHomeVisibleEntryRevealStep,
   shouldPreloadHomeVisibleEntries,
 } from './HomeVisibleEntryPolicy'
 import { HomeFeedPaginationState } from './HomeFeedPaginationState'
@@ -36,6 +39,7 @@ import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
 import { HomeFeedLoadMoreDrain } from './HomeFeedLoadMoreDrain'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 import { mergeUniqueEntries } from './HomeEntryUtils'
+import { writeHomeLoadMoreInProgress } from '../index-home/HomeChromeProgressStore'
 
 export class HomeFeedPagination extends HomeFeedPaginationState {
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
@@ -106,9 +110,12 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     if (nextTotal <= previousVisibleTotal) {
       return
     }
+    // 用 reveal step（小于 load-more step）控制每次 load-more 后 visibleLimit 的
+    // 增长幅度。否则视频栏目一次 reveal 24 张 = 12 行,LazyForEach 同帧 mount
+    // 太多卡片,造成"最后一张被截断"和滚动卡顿。
     const nextVisibleLimit = Math.min(
       nextTotal,
-      Math.max(this.visibleEntryLimitFor(mode), previousVisibleTotal + resolveHomeVisibleEntryLoadMoreStep(mode)),
+      Math.max(this.visibleEntryLimitFor(mode), previousVisibleTotal + resolveHomeVisibleEntryRevealStep(mode)),
     )
     this.setVisibleEntryLimitFor(mode, nextVisibleLimit)
   }
@@ -116,6 +123,11 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   async appendFeaturedEntriesFromLocalFast(mode: SubscriptionMode, nextLimit: number): Promise<void> {
     const previousEntries = this.actions.filteredEntriesFor(mode)
     const previousTotal = previousEntries.length
+    // LazyForEach 看到的是 visibleEntriesFor(mode) 的切片,长度是 visibleEntryCount。
+    // 当 visibleEntryLimit < filteredEntries.length(有 buffered entries)时,
+    // notify 必须传 previousVisibleTotal 而不是 previousTotal,否则 LazyForEach
+    // 收到越界 index 会回退到全量 reloadData,引发"加载更多特别卡"。
+    const previousVisibleTotal = this.visibleEntryCountFor(mode)
     const currentLimit = this.candidateLimitForMode(mode)
     const appendCount = Math.max(1, nextLimit - currentLimit)
     const pageQueryStartedAt = Date.now()
@@ -138,7 +150,16 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
           `append-empty-fallback prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
         )
       }
-      this.applyEntriesForLoadMore(mode, fallbackEntries, false)
+      // skipNotify=true → in-place 替换,避免替换 entryGroups 整对象触发 Index
+      // 重建,同时避开 LazyForEach 的全量 reloadData。仅在数据真的缩短时才
+      // 手动 reload;增长时走 appended;长度未变则不通知。
+      this.applyEntriesForLoadMore(mode, fallbackEntries, true)
+      if (fallbackEntries.length > previousTotal) {
+        this.revealLoadedEntriesForLoadMore(mode, previousVisibleTotal, fallbackEntries.length)
+        this.actions.notifyHomeEntryDataAppendedForMode(mode, previousVisibleTotal)
+      } else if (fallbackEntries.length < previousTotal) {
+        this.actions.notifyHomeEntryDataReloadedForMode(mode)
+      }
       return
     }
 
@@ -158,14 +179,23 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
           `append-no-progress prevTotal=${previousTotal} fallback=${fallbackEntries.length} nextLimit=${nextLimit}`,
         )
       }
-      this.applyEntriesForLoadMore(mode, fallbackEntries, false)
+      // 同 nextPage.length===0 分支:in-place + 按变化决定通知方式,避免不必要的 reloadData。
+      this.applyEntriesForLoadMore(mode, fallbackEntries, true)
+      if (fallbackEntries.length > previousTotal) {
+        this.revealLoadedEntriesForLoadMore(mode, previousVisibleTotal, fallbackEntries.length)
+        this.actions.notifyHomeEntryDataAppendedForMode(mode, previousVisibleTotal)
+      } else if (fallbackEntries.length < previousTotal) {
+        this.actions.notifyHomeEntryDataReloadedForMode(mode)
+      }
       return
     }
 
     this.setCandidateLimitForMode(mode, nextLimit)
-    this.revealLoadedEntriesForLoadMore(mode, previousTotal, merged.length)
+    // reveal 按 visible 数量比较(参数名 previousVisibleTotal),传 mode 总数会
+    // 让条件 `nextTotal <= previousVisibleTotal` 错判,直接 return 不增长 visible。
+    this.revealLoadedEntriesForLoadMore(mode, previousVisibleTotal, merged.length)
     this.applyEntriesForLoadMore(mode, merged, true)
-    this.actions.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
+    this.actions.notifyHomeEntryDataAppendedForMode(mode, previousVisibleTotal)
   }
 
   private applyResolvedLoadMoreEntries(
@@ -175,28 +205,31 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     nextLimit: number,
   ): void {
     const startedAt = Date.now()
+    // 同 appendFeaturedEntriesFromLocalFast:notify 必须传 LazyForEach 旧可见数量
+    // 而不是 mode 总数,否则越界 index 触发全量 reloadData。
+    const previousVisibleTotal = this.visibleEntryCountFor(mode)
     this.syncModePaginationFromReloadResult(mode, nextEntries, nextLimit)
     const syncedAt = Date.now()
-    this.revealLoadedEntriesForLoadMore(mode, previousTotal, nextEntries.length)
+    this.revealLoadedEntriesForLoadMore(mode, previousVisibleTotal, nextEntries.length)
     this.applyEntriesForLoadMore(mode, nextEntries, true)
     const appliedAt = Date.now()
     if (nextEntries.length > previousTotal) {
       if (mode === 'articles' || mode === 'social') {
         this.actions.beginTweetPresentationDiagSession(mode, 'prefetch-resolve', previousTotal)
       }
-      this.actions.notifyHomeEntryDataAppendedForMode(mode, previousTotal)
+      this.actions.notifyHomeEntryDataAppendedForMode(mode, previousVisibleTotal)
       this.actions.runManagedTimeout(() => {
         this.actions.flushTweetPresentationDiagSession('prefetch-resolve-post-append')
       }, 600)
       this.actions.logHomeLoadMore(
-        `applyResolvedLoadMoreEntries mode=${mode} growth=true prevTotal=${previousTotal} nextEntries=${nextEntries.length} `
+        `applyResolvedLoadMoreEntries mode=${mode} growth=true prevTotal=${previousTotal} prevVisible=${previousVisibleTotal} nextEntries=${nextEntries.length} `
         + `syncMs=${syncedAt - startedAt} applyMs=${appliedAt - syncedAt} totalMs=${Date.now() - startedAt}`,
       )
       return
     }
     this.actions.notifyHomeEntryDataReloadedForMode(mode)
     this.actions.logHomeLoadMore(
-      `applyResolvedLoadMoreEntries mode=${mode} growth=false prevTotal=${previousTotal} nextEntries=${nextEntries.length} `
+      `applyResolvedLoadMoreEntries mode=${mode} growth=false prevTotal=${previousTotal} prevVisible=${previousVisibleTotal} nextEntries=${nextEntries.length} `
       + `syncMs=${syncedAt - startedAt} applyMs=${appliedAt - syncedAt} totalMs=${Date.now() - startedAt}`,
     )
   }
@@ -226,6 +259,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     if (this.state.searchOverlayVisible) { return 'search-overlay' }
     if (this.actions.hasHomeInlineSearchQuery()) { return 'search-query-active' }
     if (this.state.homeInitialLoadPending) { return 'initial-load-pending' }
+    // mode 级初始 reload (ensureModeEntriesLoaded) 进行中时,LazyForEach 仍可能展示
+    // precache 的少量数据;此时第一条 onAppear 会触发 load-more 抢跑,导致用户看到
+    // "切到栏目就开始加载更多"。等 reload 完成、hasMore 被正确同步后再让 load-more 跑。
+    if (this.isModeLoading(mode)) { return 'mode-initial-loading' }
     if (this.state.homeLoadMoreInProgress) { return 'load-more-in-progress' }
     if (!hasBufferedEntries && !this.modeHasMoreEntries(mode)) { return 'mode-no-more' }
     if (!hasBufferedEntries && !this.state.homeHasMoreEntries) { return 'no-buffer-and-no-more' }
@@ -236,8 +273,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   private shouldRetryLoadMoreBlockedReason(reason: string): boolean {
     // 'no-recent-scroll-intent' is transient: once another scroll arrives the
     // pending request can succeed, so keep it queued instead of dropping it.
+    // 'mode-initial-loading' 也是临时的:等 reload 完成,pending 请求应被允许继续。
     return reason === 'load-more-in-progress'
       || reason === 'initial-load-pending'
+      || reason === 'mode-initial-loading'
       || reason === 'no-recent-scroll-intent'
   }
 
@@ -297,10 +336,13 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     const requestToken = this.state.homeLoadMoreRequestToken + 1
     this.state.homeLoadMoreRequestToken = requestToken
     const prefetchedEntries = this.consumePrefetchedHomeEntries(mode, nextLimit)
-    const shouldShowLoadMoreFooter = !prefetchedEntries
-    if (shouldShowLoadMoreFooter) {
-      this.state.homeLoadMoreInProgress = true
-    }
+    // 不论是否命中预取,都让 LoadMoreFooter 可见至少一段时间(footer-min-visible)。
+    // 此前仅在没有预取时显示 footer,导致用户滑到底瞬间数据已就绪却看不到
+    // "加载中"动画,觉得"按了没反应"。footer 通过 AppStorage 驱动,Index 顶层
+    // 不会因此 rebuild,显示成本可控。
+    const footerShownAt = Date.now()
+    this.state.homeLoadMoreInProgress = true
+    writeHomeLoadMoreInProgress(true)
     const requestStartedAt = Date.now()
     this.actions.logHomePerf(
       `loadMore start mode=${mode} nextLimit=${nextLimit} hasPrefetch=${prefetchedEntries ? 'true' : 'false'}`,
@@ -348,8 +390,17 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       })
       .finally(() => {
         if (this.state.homeLoadMoreRequestToken !== requestToken) { return }
-        if (shouldShowLoadMoreFooter) {
+        const clearFooter = (): void => {
+          if (this.state.homeLoadMoreRequestToken !== requestToken) { return }
           this.state.homeLoadMoreInProgress = false
+          writeHomeLoadMoreInProgress(false)
+        }
+        const elapsed = Date.now() - footerShownAt
+        const remaining = HOME_LOAD_MORE_FOOTER_MIN_VISIBLE_MS - elapsed
+        if (remaining > 0) {
+          this.actions.runManagedTimeout(clearFooter, remaining)
+        } else {
+          clearFooter()
         }
         this.state.lastHomeLoadMoreCompletedAt = Date.now()
         this.scheduleHomeLoadMorePrefetch()
@@ -401,6 +452,10 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   maybeTriggerLoadMoreByScrollProgress(mode: SubscriptionMode, currentOffset: number): void {
+    // 用户反馈"加载更多触发过早":scroll-progress 在 ~46% 滚动位置就预读下一页,
+    // 体感是"还没滑到底就开始加载"。改为只用 onReachEnd 真触底触发,留下函数
+    // 体便于后续如需重新启用。
+    if (!HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED) { return }
     if (
       mode !== this.state.mode
       || !this.actions.isHomeRootTab()
@@ -487,6 +542,11 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
     index: number,
   ): boolean {
     if (visibleCount <= 0) { return false }
+    // 视口内数据量未达初始期望时,该栏目要么还在初始 reload,要么数据本来就不够;
+    // onItemAppear 在这种"接近末尾"假象下触发 load-more 会让用户切到栏目立刻看到
+    // LoadMoreFooter 闪一下,且 load-more 多半因数据不够返回 hasMore=false。
+    // 直接 short-circuit 避免误触发。
+    if (visibleCount < resolveHomeVisibleEntryInitialLimit(mode)) { return false }
     const remainingVisibleCount = visibleCount - index - 1
     // item-appear 回调在滚动期间高频触发（每张卡片进入可见区即执行一次），
     // 必须保持极轻量。此处仅根据 mode 字面量选择固定阈值；高度估算精确性由

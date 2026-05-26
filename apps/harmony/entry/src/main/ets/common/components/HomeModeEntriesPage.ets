@@ -8,27 +8,27 @@ import {
   HOME_MODE_SCENE_TOP_INSET,
 } from '../components/HomeRootConfig'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
-import { homeEntryListRenderKey, homeVideoRowRenderKey, isTweetLikeEntry } from '../utils/home/HomeEntryUtils'
+import { homeEntryListRenderKey, homeVideoRowRenderKey, isTweetLikeEntry } from '../coordinators/home/HomeEntryUtils'
 import { HomeArticleEntryCard } from './HomeArticleEntryCard'
 import { HomeVideoEntryCard } from './HomeVideoEntryCard'
 import { PictureEntryCard } from './PictureEntryCard'
 import { TweetEntryCard } from './TweetEntryCard'
 import { HomeEmptyStateCard } from './HomeEmptyStateCard'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
-import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../utils/home/HomeVideoGrid'
+import { resolveHomeVideoGridColumns, resolveHomeVideoSceneKind } from '../coordinators/home/HomeVideoGrid'
 
 // LazyForEach 默认 cachedCount=1 在双列视频网格里只缓存 2 张卡，快速滚动
 // 时几乎每帧都要重新 build HomeVideoEntryCard（包含远程封面图解码），
-// 这是视频模式滚动卡顿的核心原因。把缓存撑到 4 行（8 张卡）后，可视区
-// 上下各有 2 行已经构建好的复用项，刚露出来直接命中复用池而不是走 build。
+// 这是视频模式滚动卡顿的核心原因。提高到 4 行(8 张卡)：覆盖视口上下各 2
+// 行复用余量,显著减少快速回滚时"被截断的最后一行"和重复 mount。
 const HOME_VIDEO_LIST_CACHED_ROW_COUNT: number = 4
-// 文章是单列大卡，每屏元素少，缓存 3 个 ListItem 足够覆盖弹性滚动
-// 区段，不至于在惯性滑动时频繁触发 ItemBuilder 重建。
-const HOME_LIST_CACHED_ITEM_COUNT: number = 8
-// 图片卡含 Swiper + Image 模糊层 + Video + 轮播指示器，单卡构建成本远
-// 高于文章卡。提高缓存数让模式切换时可见区外的卡片保持构建态，避免切
-// 入切出时批量重建。
-const HOME_PICTURE_LIST_CACHED_ITEM_COUNT: number = 10
+// 文章是单列大卡,每屏元素少。cachedCount=4 足够覆盖滚动复用,
+// load-more 完成后批量 build 卡片数减半,显著缓解"加载更多特别卡"。
+const HOME_LIST_CACHED_ITEM_COUNT: number = 4
+// 图片卡含 Swiper + Image 模糊层 + Video + 轮播指示器,单卡构建成本远
+// 高于文章卡。cachedCount=4 让 load-more 后 LazyForEach 一次性 mount 的
+// 卡片数从 12-13 张减到 ~6 张,主线程占用从几百 ms 降到百 ms 级。
+const HOME_PICTURE_LIST_CACHED_ITEM_COUNT: number = 4
 
 class VideoRowLazyDataSource implements IDataSource {
   private readonly getEntryDataSource: () => ArrayLazyDataSource<EntryCardModel>
@@ -403,7 +403,9 @@ export struct HomeModeEntriesPage {
               highlightQuery: '',
               enableEnterTransition: false,
               flatMode: true,
-              showBottomDivider: index < this.dataSource.totalCount() - 1,
+              // 末尾分隔线被 BottomTabSpacer 遮挡;此前查 totalCount-1 的判断是
+              // LazyForEach itemBuilder 滑入新卡时的固定开销,改为常量后省掉。
+              showBottomDivider: true,
               onOpen: () => this.callbacks.onEntryOpen(entry),
             })
           }
@@ -449,7 +451,15 @@ export struct HomeModeEntriesPage {
   @Builder
   private VideoGrid() {
     List({ space: 12, scroller: this.scroller }) {
-      if (this.dataSource.totalCount() === 0) {
+      // 首次进入视频栏目时,featured entries 可能先到 precache 的 1-2 条,
+      // ensureModeEntriesLoaded 真正 reload 完成才会推满整页。如果直接渲染
+      // videoRowDataSource,会出现"1 张卡 + 右列 Blank"的半行状态,体验上像
+      // 应用卡住。所以在 isLoading 且数据不足一行(双列)时退化为 EmptyCard
+      // (loading skeleton),等首页数据稳定再渲染网格。
+      if (
+        this.dataSource.totalCount() === 0
+        || (this.isLoading && this.dataSource.totalCount() < resolveHomeVideoGridColumns())
+      ) {
         ListItem() {
           Column() {
             Blank().height(HOME_MODE_SCENE_TOP_INSET)

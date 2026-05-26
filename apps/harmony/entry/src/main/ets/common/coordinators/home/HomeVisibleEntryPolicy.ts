@@ -9,7 +9,12 @@ const HOME_VISIBLE_ENTRY_PICTURE_LOAD_MORE_STEP: number = 8
 const HOME_VISIBLE_ENTRY_VIDEO_LOAD_MORE_STEP: number = 24
 const HOME_VISIBLE_ENTRY_ARTICLE_REVEAL_STEP: number = 10
 const HOME_VISIBLE_ENTRY_PICTURE_REVEAL_STEP: number = 6
-const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 24
+// 视频是双列网格,reveal step 是 load-more 完成后一次性"显形"的卡片数。
+// 之前是 24（= load-more step）,意味着 LazyForEach 一帧 mount 12 行 24 张
+// 卡片,主线程几百 ms 占用,表现为"列表卡住、最末一项被截断"。改成 8 张
+// （= 4 行）让 visibleLimit 平滑增长,配合 List.cachedCount 让 recycler 有
+// 余地复用节点。剩余 buffered entries 在用户继续下滑时由 expand 阶段补齐。
+const HOME_VISIBLE_ENTRY_VIDEO_REVEAL_STEP: number = 8
 
 interface HomeVisibleEntryPreloadPolicy {
   preloadRemainingCount: number
@@ -44,13 +49,11 @@ const HOME_VISIBLE_ENTRY_PICTURE_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy =
     estimatedVisibleItemCount: 2,
   }
 
-// 视频是双列网格：每行高度 ≈ 16:9 封面 (~95px) + 8 间距 + 36 标题 + 4 间距
-// + 16 元数据 + 12 行间距 ≈ 171px，按"每个 entry 对应半行滚动距离"换算
-// 单 entry 等效高度 ≈ 88。preloadRemainingCount 提到 16（约 8 行缓冲），
-// 让触发点落在 ~46% 滚动位置，与文章栏目的 ~44% 对齐，避免大屏设备上阈值
-// 超出最大可滚动范围导致 load-more 永不触发。estimatedVisibleItemCount 保持 6。
+// 视频是双列网格。preloadRemainingCount 这个字段曾用于 scroll-progress 预触发,
+// 现在该触发器已被 HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED 关闭(load-more
+// 只由真触底 onReachEnd 触发),这里保留固定常量供测试和后续如需开启时使用。
 const HOME_VISIBLE_ENTRY_VIDEO_PRELOAD_POLICY: HomeVisibleEntryPreloadPolicy = {
-  preloadRemainingCount: 16,
+  preloadRemainingCount: 8,
   estimatedItemHeight: 88,
   estimatedVisibleItemCount: 6,
 }

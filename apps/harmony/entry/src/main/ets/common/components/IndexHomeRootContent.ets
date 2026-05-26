@@ -5,6 +5,7 @@ import { HomeModeEntriesPage } from './HomeModeEntriesPage'
 import { SubscriptionMode } from './HomeRootConfig'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'
 import { ArrayLazyDataSource } from '../data/ArrayLazyDataSource'
+import { HOME_LOAD_MORE_IN_PROGRESS_KEY } from '../utils/index-home/HomeChromeProgressStore'
 
 export interface IndexHomeRootContentCallbacks {
   onModeSwipe: (event: GestureEvent) => void
@@ -42,7 +43,9 @@ export struct IndexHomeRootContent {
   @Prop modeTransitionDirection: number = 1
   @Prop homeInitialLoadPending: boolean = false
   @Prop isHomeStartupRefreshing: boolean = false
-  @Prop homeLoadMoreInProgress: boolean = false
+  // 直接订阅 AppStorage,不再走 4 层 @Prop 透传。HomeFeedPagination 切换 load-more
+  // 状态时只更新这里,父级 Index/Shell/TabBody 不会因此 rebuild。
+  @StorageProp(HOME_LOAD_MORE_IN_PROGRESS_KEY) homeLoadMoreInProgress: boolean = false
   @Prop homeListSwapAnimating: boolean = false
   @Prop homeListSwapMode: SubscriptionMode = 'articles'
   @Prop homeListSwapOpacity: number = 1

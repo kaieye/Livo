@@ -4,6 +4,11 @@
 
 export const HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY = 'homeModeRailEffectiveProgress'
 export const HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY = 'homeAudioBarCollapseProgress'
+// load-more 进行中标志:此前是 Index 的 @State,经 4 层 @Prop 传到 LoadMoreFooter。
+// 每次写入触发整条 Shell → TabBody → IndexHomeRootContent 链路重新求值,
+// 是"下滑加载更多特别卡"的根因。改走 AppStorage 后只有 LoadMoreFooter 的
+// 宿主 (IndexHomeRootContent) 通过 @StorageProp 订阅,Index 本体不再 rebuild。
+export const HOME_LOAD_MORE_IN_PROGRESS_KEY = 'homeLoadMoreInProgress'
 
 export function writeHomeModeRailEffectiveProgress(value: number): void {
   AppStorage.setOrCreate<number>(HOME_MODE_RAIL_EFFECTIVE_PROGRESS_KEY, value)
@@ -11,4 +16,8 @@ export function writeHomeModeRailEffectiveProgress(value: number): void {
 
 export function writeHomeAudioBarCollapseProgress(value: number): void {
   AppStorage.setOrCreate<number>(HOME_AUDIO_BAR_COLLAPSE_PROGRESS_KEY, value)
+}
+
+export function writeHomeLoadMoreInProgress(value: boolean): void {
+  AppStorage.setOrCreate<boolean>(HOME_LOAD_MORE_IN_PROGRESS_KEY, value)
 }

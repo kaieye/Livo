@@ -43,7 +43,7 @@ test('load more diagnostics logs query, append notification, and tweet presentat
   )
   assert.match(
     dataManagerSource,
-    /notifyModeAppended mode=\$\{mode\} startIndex=\$\{startIndex\} elapsedMs=/,
+    /notifyModeAppended mode=\$\{mode\} startIndex=\$\{startIndex\} addedCount=\$\{addedCount\} elapsedMs=/,
   )
   assert.match(
     indexSource,

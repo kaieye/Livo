@@ -61,7 +61,11 @@ test('home list shows a bottom loading footer only while load-more is actually f
   )
   assert.match(
     paginationSource,
-    /const shouldShowLoadMoreFooter = !prefetchedEntries/,
+    /this\.state\.homeLoadMoreInProgress = true\s*writeHomeLoadMoreInProgress\(true\)/,
+  )
+  assert.match(
+    paginationSource,
+    /HOME_LOAD_MORE_FOOTER_MIN_VISIBLE_MS - elapsed/,
   )
   assert.doesNotMatch(
     paginationSource,

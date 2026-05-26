@@ -152,7 +152,7 @@ test('article load more follows append-style update path near the end of the lis
   )
   assert.match(
     homeFeedPaginationSource,
-    /private applyResolvedLoadMoreEntries\([\s\S]*?this\.actions\.notifyHomeEntryDataAppendedForMode\(mode, previousTotal\)/,
+    /private applyResolvedLoadMoreEntries\([\s\S]*?this\.actions\.notifyHomeEntryDataAppendedForMode\(mode, previousVisibleTotal\)/,
   )
   assert.doesNotMatch(
     homeFeedPaginationSource,
