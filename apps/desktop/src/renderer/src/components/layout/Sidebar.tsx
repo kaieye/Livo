@@ -1,12 +1,5 @@
-﻿import {
-  memo,
-  startTransition,
-  useState,
-  useMemo,
-  useCallback,
-  useRef,
-  useEffect,
-} from 'react'
+﻿import { memo, useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
@@ -60,6 +53,7 @@ import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useQuickSearchStore } from '../search/QuickSearch'
 import { useShortcutHelpStore } from '../shortcuts/shortcut-help-store'
+import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 
 const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
   [FeedViewType.Articles]: <FileText size={18} />,
@@ -69,14 +63,6 @@ const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
 }
 
 const EMPTY_FOLDERS_STORAGE_KEY = 'livo-empty-folders'
-
-function isWideLayoutView(view: FeedViewType | null): boolean {
-  return (
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Videos ||
-    view === FeedViewType.Pictures
-  )
-}
 
 function getPathLikeFromFeedUrl(rawUrl: string): string {
   try {
@@ -315,6 +301,8 @@ function loadPersistedEmptyFolders(): Array<{
 }
 
 export function Sidebar({ width }: { width?: number }) {
+  const navigate = useNavigate()
+  const location = useLocation()
   const navFocusRef = useRef<HTMLElement>(null)
   const isSidebarFocusHighlighted = useLayoutFocusTarget('sidebar', navFocusRef)
   useFocusableHotkeyScope('sidebar', navFocusRef)
@@ -322,8 +310,6 @@ export function Sidebar({ width }: { width?: number }) {
     feeds,
     selectedFeedId,
     activeView,
-    setSelectedFeed,
-    setActiveView,
     loadFeeds,
     refreshAll,
     refreshFeed,
@@ -370,7 +356,6 @@ export function Sidebar({ width }: { width?: number }) {
     })
   }, [filteredFeeds, allFeedsSearchLower])
   const { markAllRead } = useEntryStore()
-  const setSettingsOpen = useSettingsStore((s) => s.setOpen)
   const settingsLoaded = useSettingsStore((s) => s.isLoaded)
   const showRecommended = useSettingsStore(
     (s) => s.settings.general.showRecommended,
@@ -397,8 +382,7 @@ export function Sidebar({ width }: { width?: number }) {
   }, [rawViewTabs])
   const language = useSettingsStore((s) => s.settings.general.language)
   const { isPanelOpen, setPanelOpen } = useAIChatStore()
-  const { isOpen: isDiscoverOpen, setOpen: setDiscoverOpen } =
-    useDiscoverStore()
+  const { isOpen: isDiscoverOpen } = useDiscoverStore()
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
   const isSearchOpen = useQuickSearchStore((s) => s.isOpen)
   const toggleShortcutHelp = useShortcutHelpStore((s) => s.toggle)
@@ -410,7 +394,6 @@ export function Sidebar({ width }: { width?: number }) {
     ok: boolean
   } | null>(null)
   const refreshHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const viewSwitchRafRef = useRef<number | null>(null)
   const [uiActiveView, setUiActiveView] = useState<FeedViewType | null>(
     activeView,
   )
@@ -1193,56 +1176,30 @@ export function Sidebar({ width }: { width?: number }) {
     setUiActiveView(activeView)
   }, [activeView])
 
-  useEffect(() => {
-    return () => {
-      if (viewSwitchRafRef.current !== null)
-        window.cancelAnimationFrame(viewSwitchRafRef.current)
-    }
-  }, [])
-
   const handleSelectFeed = useCallback(
     (feedId: string | null) => {
-      // Close discover panel when selecting a feed
-      if (isDiscoverOpen) setDiscoverOpen(false)
-      if (selectedFeedId === feedId) return
+      if (selectedFeedId === feedId && !isDiscoverOpen) return
 
-      // Perform scope switches in a transition to keep tab clicks responsive.
-      startTransition(() => {
-        setSelectedFeed(feedId)
-      })
+      if (feedId === 'starred') {
+        navigate('/starred')
+      } else if (feedId) {
+        navigate(`/feed/${feedId}`)
+      } else {
+        navigate('/')
+      }
     },
-    [isDiscoverOpen, selectedFeedId, setDiscoverOpen, setSelectedFeed],
+    [isDiscoverOpen, selectedFeedId, navigate],
   )
 
   const handleSelectView = useCallback(
     (view: FeedViewType | null) => {
-      // Close discover panel when switching views
-      if (isDiscoverOpen) setDiscoverOpen(false)
       setUiActiveView(view)
       if (activeView === view) return
 
-      const layoutModeChanged =
-        isWideLayoutView(activeView) !== isWideLayoutView(view)
-
-      // When layout mode changes (3-column <-> wide), switch immediately to avoid one-frame stale layout flicker.
-      if (layoutModeChanged) {
-        startTransition(() => {
-          setActiveView(view)
-        })
-        return
-      }
-
-      // Let pointer feedback paint first, then switch the expensive content tree.
-      if (viewSwitchRafRef.current !== null)
-        window.cancelAnimationFrame(viewSwitchRafRef.current)
-      viewSwitchRafRef.current = window.requestAnimationFrame(() => {
-        startTransition(() => {
-          setActiveView(view)
-        })
-        viewSwitchRafRef.current = null
-      })
+      const slug = view !== null ? VIEW_TYPE_SLUGS[view] : null
+      navigate(slug ? `/${slug}` : '/')
     },
-    [activeView, isDiscoverOpen, setActiveView, setDiscoverOpen],
+    [activeView, navigate],
   )
 
   const handleContextMenu = useCallback(
@@ -1989,7 +1946,10 @@ export function Sidebar({ width }: { width?: number }) {
           </button>
 
           <button
-            onClick={() => setDiscoverOpen(!isDiscoverOpen)}
+            onClick={() => {
+              const isDiscoverRoute = location.pathname === '/discover'
+              navigate(isDiscoverRoute ? '/' : '/discover')
+            }}
             className={`sidebar-item w-full ${isDiscoverOpen ? 'sidebar-item-active' : 'text-text-secondary dark:text-text-dark-secondary'}`}
           >
             <Compass size={18} />
@@ -2056,7 +2016,7 @@ export function Sidebar({ width }: { width?: number }) {
               />
             </button>
             <button
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => navigate('/settings')}
               className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary"
               title={t('sidebar.settings')}
             >

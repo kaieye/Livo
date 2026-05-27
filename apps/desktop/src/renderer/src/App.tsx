@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
+import { Outlet } from 'react-router-dom'
 import { LocalErrorBoundary } from './components/LocalErrorBoundary'
-import { Layout } from './components/layout/Layout'
 import { QuickSearchPanel } from './components/search/QuickSearch'
 import { CornerPlayer } from './components/media/MediaPlayer'
 import { TextContextMenu } from './components/ui/TextContextMenu'
@@ -64,24 +64,29 @@ function LazyShortcutHelpDialogMount() {
   )
 }
 
+/**
+ * Root layout component rendered by the HashRouter.
+ * Provides <Outlet /> for child routes and mounts global overlays
+ * (Settings, AI Chat, Quick Search, Command Palette, Corner Player, Context Menu).
+ */
 export default function App() {
   return (
     <>
-      <Layout />
+      <Outlet />
       <LocalErrorBoundary
         title="设置面板加载失败"
         onDismiss={() => useSettingsStore.getState().setOpen(false)}
       >
         <LazySettingsDialogMount />
       </LocalErrorBoundary>
-      <LocalErrorBoundary title="快速搜索出现问题">
-        <QuickSearchPanel />
-      </LocalErrorBoundary>
       <LocalErrorBoundary
         title="AI 面板加载失败"
         onDismiss={() => useAIChatStore.getState().setPanelOpen(false)}
       >
         <LazyAIChatPanelMount />
+      </LocalErrorBoundary>
+      <LocalErrorBoundary title="快速搜索出现问题">
+        <QuickSearchPanel />
       </LocalErrorBoundary>
       <LocalErrorBoundary
         title="快捷键帮助出现问题"

@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
+import { RouterProvider } from 'react-router-dom'
+import { router } from './router'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { recordAppMetric } from './lib/performance-metrics'
 import { RootProviders } from './providers/RootProviders'
@@ -40,7 +41,7 @@ try {
     <React.StrictMode>
       <ErrorBoundary>
         <RootProviders>
-          <App />
+          <RouterProvider router={router} />
         </RootProviders>
       </ErrorBoundary>
     </React.StrictMode>,
