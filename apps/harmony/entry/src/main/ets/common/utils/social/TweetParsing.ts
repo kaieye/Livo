@@ -9,6 +9,8 @@ import {
   uniqueUrls,
 } from './TweetTextNormalization.ts'
 
+// ── Source types ────────────────────────────────────────────
+
 export interface TweetPresentationSource {
   title?: string
   summary?: string
@@ -161,6 +163,8 @@ export function extractMetrics(source: string): TweetMetrics {
     viewCount: text.match(/(\d+)\s+views?\b/)?.[1] ?? '',
   }
 }
+
+// ── Retweet parsing ──────────────────────────────────────────
 
 export interface ParsedRetweet {
   style: 'pure' | 'commented'
@@ -586,6 +590,8 @@ function parseRetweetWithLoosePattern(
     ...retweetBody,
   }
 }
+
+// ── Quote tweet parsing ──────────────────────────────────────
 
 export interface TweetQuotedPresentation {
   displayName: string
