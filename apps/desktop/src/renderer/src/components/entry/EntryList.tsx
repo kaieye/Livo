@@ -43,6 +43,7 @@ import {
 } from '../../lib/social-url'
 import { LRUCache } from '../../lib/lru-cache'
 import { getEntryLoadLimit } from '../../lib/entry-load-limit'
+import { useHomeFeedCoordinator } from '../../hooks/useHomeFeedCoordinator'
 import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '../../lib/date-locale'
 import {
@@ -592,23 +593,38 @@ function cleanRelativeTime(date: Date | string | number): string {
 }
 
 export function EntryList({ width }: { width?: number }) {
+  const coordinator = useHomeFeedCoordinator()
   const {
     entries,
-    selectedEntry,
     isLoading,
     isLoadingMore,
     hasMoreEntries,
-    loadEntries,
     loadMoreEntries,
+    loadEntries,
     clearListCache,
+    viewFeedIds,
+    baseFilteredEntries,
+    recommendedFeedIds,
+    filterMode,
+    setFilterMode,
+    feedById,
+    currentFeed,
+    reloadCurrentList,
+    reloadCurrentListFresh,
+    handleListScroll: coordinatorHandleScroll,
+    searchQuery,
+    setSearchQuery,
+    handleSearch,
+    entryLoadLimit,
+  } = coordinator
+  const entryStore = useEntryStore()
+  const {
+    selectedEntry,
     selectEntry,
     markAllRead,
     markAboveRead,
     markBelowRead,
-    searchQuery,
-    setSearchQuery,
-    search,
-  } = useEntryStore()
+  } = entryStore
   const {
     selectedFeedId,
     feeds,
@@ -626,11 +642,6 @@ export function EntryList({ width }: { width?: number }) {
     imageProxy: settings.imageProxy,
   }))
   const { t } = useTranslation()
-  const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')
-  const entryLoadLimit = useMemo(
-    () => getEntryLoadLimit(activeView),
-    [activeView],
-  )
 
   // Context menu state
   const { menuState, showMenu, hideMenu } = useEntryContextMenu()
@@ -638,61 +649,7 @@ export function EntryList({ width }: { width?: number }) {
   const [posterEntry, setPosterEntry] = useState<Entry | null>(null)
 
   const viewDef = activeView !== null ? VIEW_DEFINITIONS[activeView] : null
-
-  // Compute feed IDs for the active view (excluding recommended feeds)
-  const viewFeedIds = useMemo(
-    () =>
-      activeView !== null
-        ? feeds
-            .filter(
-              (f) =>
-                (f.view ?? FeedViewType.Articles) === activeView &&
-                f.category !== RECOMMENDED_CATEGORY &&
-                f.showInAll !== false,
-            )
-            .map((f) => f.id)
-        : undefined,
-    [feeds, activeView],
-  )
-
-  // Loading entries when feed selection changes
-  useEffect(() => {
-    if (selectedFeedId === 'starred') {
-      loadEntries({ starred: true, limit: entryLoadLimit })
-    } else if (selectedFeedId) {
-      loadEntries({
-        feedId: selectedFeedId,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      loadEntries({
-        feedIds: viewFeedIds,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else {
-      loadEntries({
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    }
-  }, [selectedFeedId, filterMode, loadEntries, viewFeedIds, entryLoadLimit])
-
-  const handleSearch = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault()
-      search(searchQuery)
-    },
-    [search, searchQuery],
-  )
-
-  const feedById = useMemo(
-    () => new Map(feeds.map((f) => [f.id, f] as const)),
-    [feeds],
-  )
-  const currentFeed = selectedFeedId ? feedById.get(selectedFeedId) : undefined
-  const title =
+  const displayTitle =
     selectedFeedId === 'starred'
       ? t('entryList.starred')
       : currentFeed?.title ||
@@ -700,32 +657,6 @@ export function EntryList({ width }: { width?: number }) {
           ? t(VIEW_TYPE_I18N_KEYS[activeView!] || 'common.all')
           : t('common.all'))
 
-  const reloadCurrentList = useCallback(() => {
-    if (selectedFeedId === 'starred') {
-      loadEntries({ starred: true, limit: entryLoadLimit })
-    } else if (selectedFeedId) {
-      loadEntries({
-        feedId: selectedFeedId,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      loadEntries({
-        feedIds: viewFeedIds,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else {
-      loadEntries({
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    }
-  }, [entryLoadLimit, filterMode, loadEntries, selectedFeedId, viewFeedIds])
-  const reloadCurrentListFresh = useCallback(() => {
-    clearListCache()
-    reloadCurrentList()
-  }, [clearListCache, reloadCurrentList])
   const mediaFailureRefreshAtRef = useRef(new Map<string, number>())
   const mediaFailureRefreshInFlightRef = useRef(new Set<string>())
   const handleEntryMediaAllFailed = useCallback(
@@ -749,68 +680,6 @@ export function EntryList({ width }: { width?: number }) {
     },
     [refreshFeed, reloadCurrentListFresh],
   )
-
-  // Build a set of recommended feed IDs so we can exclude their entries
-  const recommendedFeedIds = useMemo(
-    () =>
-      new Set(
-        feeds
-          .filter((f) => f.category === RECOMMENDED_CATEGORY)
-          .map((f) => f.id),
-      ),
-    [feeds],
-  )
-  const receiveRecommended = general.showRecommended
-
-  // Filter entries by active view (when showing all feeds) - exclude recommended feeds
-  const baseFilteredEntries = useMemo(() => {
-    const filtered = selectedFeedId
-      ? entries
-      : activeView !== null
-        ? entries.filter((entry) => {
-            const feed = feedById.get(entry.feedId)
-            if (!feed) return false
-            if (feed.showInAll === false) return false
-            if (!receiveRecommended && recommendedFeedIds.has(entry.feedId))
-              return false
-            return (feed.view ?? FeedViewType.Articles) === activeView
-          })
-        : entries.filter((entry) => {
-            const feed = feedById.get(entry.feedId)
-            if (!feed) return false
-            if (feed.showInAll === false) return false
-            if (!receiveRecommended && recommendedFeedIds.has(entry.feedId))
-              return false
-            return true
-          })
-
-    // Safety fallback: in "All" view, if filters accidentally remove everything
-    // while entries already exist, show raw entries to avoid blank timeline.
-    let finalFiltered = filtered
-    if (
-      !selectedFeedId &&
-      activeView === null &&
-      entries.length > 0 &&
-      filtered.length === 0
-    ) {
-      finalFiltered = entries.filter((entry) => {
-        const feed = feedById.get(entry.feedId)
-        if (!feed) return false
-        if (feed.showInAll === false) return false
-        if (!receiveRecommended && recommendedFeedIds.has(entry.feedId))
-          return false
-        return true
-      })
-    }
-    return finalFiltered
-  }, [
-    activeView,
-    entries,
-    feedById,
-    receiveRecommended,
-    recommendedFeedIds,
-    selectedFeedId,
-  ])
 
   // Picture feed entries must not go through social dedupe because dedupe merges media arrays
   // and can mix photos from different posts into a single card.
@@ -957,35 +826,27 @@ export function EntryList({ width }: { width?: number }) {
 
   const handleListScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget
-      const hasScrolledEnough = el.scrollTop > SOCIAL_LIST_SCROLL_GUARD_PX
-      const nearBottom =
-        el.scrollTop + el.clientHeight >=
-        el.scrollHeight - SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX
-
-      if (isGridMode && hasMoreGridEntries && hasScrolledEnough && nearBottom) {
-        setGridVisibleCount((prev) =>
-          Math.min(prev + GRID_LOAD_MORE_COUNT, renderEntries.length),
-        )
-      }
-      if (
-        !searchQuery.trim() &&
-        hasMoreEntries &&
-        !isLoadingMore &&
-        hasScrolledEnough &&
-        nearBottom
-      ) {
-        void loadMoreEntries()
+      // Delegate load-more logic to coordinator
+      coordinatorHandleScroll(e)
+      // Grid progressive rendering (local rendering concern)
+      if (isGridMode && hasMoreGridEntries) {
+        const el = e.currentTarget
+        if (
+          el.scrollTop > SOCIAL_LIST_SCROLL_GUARD_PX &&
+          el.scrollTop + el.clientHeight >=
+            el.scrollHeight - SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX
+        ) {
+          setGridVisibleCount((prev) =>
+            Math.min(prev + GRID_LOAD_MORE_COUNT, renderEntries.length),
+          )
+        }
       }
     },
     [
-      hasMoreEntries,
-      hasMoreGridEntries,
+      coordinatorHandleScroll,
       isGridMode,
-      isLoadingMore,
-      loadMoreEntries,
+      hasMoreGridEntries,
       renderEntries.length,
-      searchQuery,
     ],
   )
 
@@ -1022,8 +883,8 @@ export function EntryList({ width }: { width?: number }) {
       <div className="flex-shrink-0 space-y-2.5 px-4 pb-2 pt-3">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 truncate text-base font-semibold">
-            {viewDef && <span className={viewDef.color}>{title}</span>}
-            {!viewDef && title}
+            {viewDef && <span className={viewDef.color}>{displayTitle}</span>}
+            {!viewDef && displayTitle}
           </h2>
           <div className="flex items-center gap-1">
             <button
