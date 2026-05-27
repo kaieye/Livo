@@ -72,7 +72,7 @@ export const HOME_LOAD_MORE_MIN_INTERVAL_MS: number = 120
 export const HOME_LOAD_MORE_TRIGGER_SCROLL_WINDOW_MS: number = 1200
 // 用户反馈"加载更多触发过早"：item-appear（卡片露出）和 scroll-progress（滚动进度）
 // 这两类提前触发器在视觉上让用户感觉"还没滑到底就开始抖动/加载"。改为只用
-// onReachEnd（HomeFeedLoadMoreDrain）作为唯一触发，保证"真正滑到底"才发起 load-more。
+// onReachEnd 作为唯一触发，保证"真正滑到底"才发起 load-more。
 // 保留开关方便后续如有需要重新开启远端预读。
 export const HOME_LOAD_MORE_ITEM_APPEAR_TRIGGER_ENABLED: boolean = false
 export const HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED: boolean = false

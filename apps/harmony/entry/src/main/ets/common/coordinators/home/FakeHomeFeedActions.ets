@@ -13,7 +13,7 @@ import { SubscriptionMode } from '../../config/HomeRootConfig'
  * ```
  * const state = new HomeFeedStateBag()
  * const actions = new FakeHomeFeedActions(state)
- * const prefetcher = new HomeFeedLoadMorePrefetch(state, actions, fakeOwner)
+ * const pagination = new HomeFeedPagination(state, actions)
  * ```
  */
 export class FakeHomeFeedActions implements HomeFeedActions {

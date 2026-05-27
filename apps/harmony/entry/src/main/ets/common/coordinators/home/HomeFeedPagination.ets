@@ -1,6 +1,7 @@
 import { FeaturedEntriesQuery } from '../../data/FeaturedEntriesQuery'
 import { EntryCardModel } from '../../models/LivoModels'
 import {
+  HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED,
   HOME_LOAD_MORE_AFTER_STOP_DELAY_MS,
   HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER,
   HOME_LOAD_MORE_FOOTER_MIN_VISIBLE_MS,
@@ -12,6 +13,7 @@ import {
   HOME_LOAD_MORE_NEAR_END_TRIGGER_DIVISOR,
   HOME_LOAD_MORE_NEAR_END_TRIGGER_MIN_COUNT,
   HOME_LOAD_MORE_POST_COMPLETE_COOLDOWN_MS,
+  HOME_LOAD_MORE_SCROLL_QUIESCENT_MS,
   HOME_LOAD_MORE_SCROLL_PROGRESS_TRIGGER_ENABLED,
   HOME_MODE_SWITCH_CANDIDATE_LIMIT,
   HomeModeLoadMoreTimestampMap,
@@ -35,11 +37,12 @@ import {
 } from './HomeVisibleEntryPolicy'
 import { HomeFeedPaginationState } from './HomeFeedPaginationState'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
-import { HomeFeedLoadMorePrefetch } from './HomeFeedLoadMorePrefetch'
-import { HomeFeedLoadMoreDrain } from './HomeFeedLoadMoreDrain'
 import { HomeFeedGuard, HomeFeedGuardProvider } from './HomeFeedGuard'
 import { mergeUniqueEntries } from './HomeEntryUtils'
 import { writeHomeLoadMoreInProgress } from '../../coordinators/index-home/HomeChromeProgressStore'
+
+const HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS: number = 90
+const HOME_LOAD_MORE_DRAIN_START_COOLDOWN_MS: number = 400
 
 export class HomeFeedPagination extends HomeFeedPaginationState {
   private homePendingLoadMoreModes: HomeModePendingLoadMoreMap = createHomePendingLoadMoreMap()
@@ -47,8 +50,13 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   private homeLastScrollProgressLoadMoreAt: HomeModeScrollOffsetMap = createHomeScrollOffsetMap()
   private readonly featuredEntriesQuery: FeaturedEntriesQuery
   private readonly guard: HomeFeedGuard
-  private readonly prefetcher: HomeFeedLoadMorePrefetch
-  private readonly drainController: HomeFeedLoadMoreDrain
+  private readonly prefetchGuard: HomeFeedGuard
+  private readonly drainGuard: HomeFeedGuard
+  private drainToken: number = 0
+  private drainingMode: SubscriptionMode | '' = ''
+  private stuckDrainRetryCount: number = 0
+  private lastDrainStartedAt: number = 0
+  private footerHintedByDrain: boolean = false
 
   constructor(
     state: HomeFeedState,
@@ -68,20 +76,131 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
       (mode: SubscriptionMode) => actions.readHomeModeScrollOffset(mode),
     )
     this.guard = new HomeFeedGuard(state, provider)
-    // HomeFeedPagination(State) already exposes the trio of methods the prefetch
-    // owner interface needs, so we pass `this` directly instead of an inline
-    // object literal (ArkTS forbids untyped object literals).
-    this.prefetcher = new HomeFeedLoadMorePrefetch(state, actions, this, this.featuredEntriesQuery)
-    this.drainController = new HomeFeedLoadMoreDrain(state, actions, this)
+    const prefetchProvider = new HomeFeedGuardProvider(
+      () => actions.isHomeRootTab(),
+      () => actions.hasHomeInlineSearchQuery(),
+      () => false,
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => this.shouldRenderAllEntriesForMode(mode),
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => this.modeHasMoreEntries(mode),
+      (_mode: SubscriptionMode) => 0,
+    )
+    this.prefetchGuard = new HomeFeedGuard(state, prefetchProvider)
+    const drainProvider = new HomeFeedGuardProvider(
+      () => actions.isHomeRootTab(),
+      () => actions.hasHomeInlineSearchQuery(),
+      () => false,
+      (_mode: SubscriptionMode) => false,
+      (_mode: SubscriptionMode) => false,
+      (mode: SubscriptionMode) => this.hasBufferedEntriesForMode(mode),
+      (mode: SubscriptionMode) => this.modeHasMoreEntries(mode),
+      (_mode: SubscriptionMode) => 0,
+    )
+    this.drainGuard = new HomeFeedGuard(state, drainProvider)
   }
 
-  // === Prefetch (delegated to HomeFeedLoadMorePrefetch) ===
-  canPrefetchHomeLoadMore(): boolean { return this.prefetcher.canPrefetch() }
-  invalidateHomeLoadMorePrefetch(): void { this.prefetcher.invalidate() }
-  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void { this.prefetcher.schedule(delayMs) }
-  async prefetchHomeLoadMore(): Promise<void> { await this.prefetcher.run() }
+  // === Load-more prefetch ===
+  canPrefetchHomeLoadMore(): boolean {
+    if (!HOME_LOAD_MORE_BACKGROUND_PREFETCH_ENABLED) {
+      return false
+    }
+    return this.prefetchGuard.canPrefetch()
+  }
+
+  invalidateHomeLoadMorePrefetch(): void {
+    this.state.homeLoadMorePrefetchToken += 1
+    this.state.homeLoadMorePrefetchInProgress = false
+    this.state.homeLoadMorePrefetchLimit = 0
+    this.state.homeLoadMorePrefetchEntries = []
+    this.state.homeLoadMorePrefetchMode = this.state.mode
+  }
+
+  scheduleHomeLoadMorePrefetch(delayMs: number = 220): void {
+    this.actions.runManagedTimeout(() => {
+      void this.prefetchHomeLoadMore()
+    }, delayMs)
+  }
+
+  private prefetchPageMultiplier(mode: SubscriptionMode): number {
+    if (mode === 'articles') {
+      return Math.max(2, HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER)
+    }
+    return HOME_LOAD_MORE_FETCH_AHEAD_PAGE_MULTIPLIER
+  }
+
+  async prefetchHomeLoadMore(): Promise<void> {
+    if (!this.canPrefetchHomeLoadMore()) {
+      return
+    }
+    const mode = this.state.mode
+    const currentLimit = this.candidateLimitForMode(mode)
+    const step = resolveHomeVisibleEntryLoadMoreStep(mode)
+    const targetLimit = Math.min(
+      HOME_LOAD_MORE_MAX_CANDIDATE_LIMIT,
+      currentLimit + step * this.prefetchPageMultiplier(mode),
+    )
+    if (targetLimit <= currentLimit) {
+      return
+    }
+    if (this.state.homeLoadMorePrefetchLimit >= targetLimit && this.state.homeLoadMorePrefetchEntries.length > 0) {
+      return
+    }
+    if (this.state.homeLoadMorePrefetchInProgress) {
+      return
+    }
+
+    this.state.homeLoadMorePrefetchInProgress = true
+    const token = this.state.homeLoadMorePrefetchToken + 1
+    this.state.homeLoadMorePrefetchToken = token
+    this.actions.logHomeLoadMore(`prefetch start mode=${mode} currentLimit=${currentLimit} targetLimit=${targetLimit}`)
+
+    try {
+      const previousEntries = this.actions.filteredEntriesFor(mode)
+      const appendCount = Math.max(1, targetLimit - previousEntries.length)
+      const nextPage = await this.featuredEntriesQuery.featuredEntriesFastPageByMode(mode, appendCount, previousEntries.length)
+      if (!this.state.isComponentActive || this.state.homeLoadMorePrefetchToken !== token) {
+        return
+      }
+      const entries = mergeUniqueEntries(previousEntries, nextPage, targetLimit)
+      if (entries.length <= previousEntries.length) {
+        this.actions.logHomeLoadMore(
+          `prefetch skip-no-growth mode=${mode} targetLimit=${targetLimit} previous=${previousEntries.length} page=${nextPage.length}`,
+        )
+        return
+      }
+      this.state.homeLoadMorePrefetchLimit = targetLimit
+      this.state.homeLoadMorePrefetchEntries = entries
+      this.state.homeLoadMorePrefetchMode = mode
+      this.actions.logHomeLoadMore(`prefetch done mode=${mode} targetLimit=${targetLimit} entries=${entries.length}`)
+    } catch (_error) {
+      this.actions.logHomeLoadMore(`prefetch failed targetLimit=${targetLimit}`)
+    } finally {
+      if (this.state.homeLoadMorePrefetchToken === token) {
+        this.state.homeLoadMorePrefetchInProgress = false
+      }
+    }
+  }
+
   consumePrefetchedHomeEntries(mode: SubscriptionMode, nextLimit: number): EntryCardModel[] | undefined {
-    return this.prefetcher.consume(mode, nextLimit)
+    if (this.state.homeLoadMorePrefetchMode !== mode) {
+      return undefined
+    }
+    if (this.state.homeLoadMorePrefetchLimit < nextLimit || this.state.homeLoadMorePrefetchEntries.length === 0) {
+      return undefined
+    }
+    const entries = this.state.homeLoadMorePrefetchEntries.slice(0, nextLimit)
+    const remainingPrefetchedLimit = this.state.homeLoadMorePrefetchLimit
+    this.state.homeLoadMorePrefetchEntries = this.state.homeLoadMorePrefetchEntries
+    this.state.homeLoadMorePrefetchInProgress = false
+    this.actions.logHomeLoadMore(
+      `consume-prefetch nextLimit=${nextLimit} entries=${entries.length} prefetchedLimit=${remainingPrefetchedLimit}`,
+    )
+    if (remainingPrefetchedLimit === nextLimit) {
+      this.state.homeLoadMorePrefetchLimit = 0
+      this.state.homeLoadMorePrefetchEntries = []
+    }
+    return entries
   }
 
   private resolveLoadMoreStepForMode(mode: SubscriptionMode): number {
@@ -420,7 +539,92 @@ export class HomeFeedPagination extends HomeFeedPaginationState {
   }
 
   handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void {
-    this.drainController.handleListEndReach(mode, totalCount)
+    if (!this.shouldStartHomeLoadMoreDrain(mode, totalCount)) {
+      return
+    }
+    const now = Date.now()
+    if (now - this.lastDrainStartedAt < HOME_LOAD_MORE_DRAIN_START_COOLDOWN_MS) {
+      return
+    }
+    this.lastDrainStartedAt = now
+    this.drainToken += 1
+    this.drainingMode = mode
+    this.stuckDrainRetryCount = 0
+    const token = this.drainToken
+    // onReachEnd 先点亮 footer,真正的 request 等滚动静止后再执行。
+    if (!this.footerHintedByDrain) {
+      this.footerHintedByDrain = true
+      writeHomeLoadMoreInProgress(true)
+    }
+    this.actions.logHomeLoadMore(`drain start mode=${mode} total=${totalCount}`)
+    this.scheduleHomeLoadMoreDrainStep(mode, token)
+  }
+
+  private shouldStartHomeLoadMoreDrain(mode: SubscriptionMode, totalCount: number): boolean {
+    if (this.drainingMode === mode || this.state.homeLoadMoreInProgress || this.pendingLoadMoreForMode(mode)) {
+      return false
+    }
+    return this.canRunHomeLoadMoreDrain(mode, totalCount)
+  }
+
+  private canRunHomeLoadMoreDrain(mode: SubscriptionMode, totalCount: number): boolean {
+    return this.drainGuard.canDrain(mode, totalCount)
+  }
+
+  private scheduleHomeLoadMoreDrainStep(mode: SubscriptionMode, token: number): void {
+    this.actions.runManagedTimeout(() => {
+      this.stepHomeLoadMoreDrain(mode, token, 0)
+    }, 0)
+  }
+
+  private stepHomeLoadMoreDrain(mode: SubscriptionMode, token: number, attempt: number): void {
+    if (token !== this.drainToken) {
+      return
+    }
+    if (!this.canRunHomeLoadMoreDrain(mode, 1)) {
+      this.finishHomeLoadMoreDrain(mode, `drain stop mode=${mode} reason=inactive-or-exhausted`, true)
+      return
+    }
+    // fling 期间 lastUserScrollAt 会持续刷新;等 QUIESCENT_MS 内没有滚动事件,
+    // 再执行 visibleLimit 增长和 LazyForEach 增量通知，避免打断末尾惯性滚动。
+    const sinceLastScroll = Date.now() - this.state.homeScrollIntent.lastUserScrollAt
+    if (
+      this.state.homeScrollIntent.isInteracting
+      || sinceLastScroll < HOME_LOAD_MORE_SCROLL_QUIESCENT_MS
+      || this.state.homeLoadMoreInProgress
+      || this.pendingLoadMoreForMode(mode)
+    ) {
+      this.actions.runManagedTimeout(() => {
+        this.stepHomeLoadMoreDrain(mode, token, attempt + 1)
+      }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
+      return
+    }
+
+    const handled = this.requestLoadMoreForMode(mode, true)
+    if (!handled) {
+      if (this.stuckDrainRetryCount >= 3) {
+        this.finishHomeLoadMoreDrain(mode, `drain stuck-bottom-exhausted mode=${mode} attempts=${attempt + 1}`, true)
+        return
+      }
+      this.stuckDrainRetryCount += 1
+      this.actions.runManagedTimeout(() => {
+        this.stepHomeLoadMoreDrain(mode, token, attempt + 1)
+      }, HOME_LOAD_MORE_DRAIN_RETRY_DELAY_MS)
+      return
+    }
+
+    this.finishHomeLoadMoreDrain(mode, `drain page-done mode=${mode} attempts=${attempt + 1} stuckRetries=${this.stuckDrainRetryCount}`, false)
+  }
+
+  private finishHomeLoadMoreDrain(mode: SubscriptionMode, message: string, clearHintedFooter: boolean): void {
+    if (this.drainingMode === mode) {
+      this.drainingMode = ''
+    }
+    if (clearHintedFooter && this.footerHintedByDrain) {
+      writeHomeLoadMoreInProgress(false)
+    }
+    this.footerHintedByDrain = false
+    this.actions.logHomeLoadMore(message)
   }
 
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean {

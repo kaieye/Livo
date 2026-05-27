@@ -103,9 +103,9 @@ const sessionSource = readFileSync(
   'utf8',
 )
 
-const homeFeedLoadMorePrefetchSource = readFileSync(
+const homeFeedPaginationSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/coordinators/home/HomeFeedLoadMorePrefetch.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
@@ -368,15 +368,15 @@ test('inactive mode precache is staggered and does not compete with the active s
 
 test('load-more prefetch appends a fast page instead of rebuilding the whole mode', () => {
   assert.match(
-    homeFeedLoadMorePrefetchSource,
+    homeFeedPaginationSource,
     /this\.featuredEntriesQuery\.featuredEntriesFastPageByMode\(mode, appendCount, previousEntries\.length\)/,
   )
   assert.match(
-    homeFeedLoadMorePrefetchSource,
+    homeFeedPaginationSource,
     /import \{ mergeUniqueEntries \} from '\.\/HomeEntryUtils'/,
   )
   assert.doesNotMatch(
-    homeFeedLoadMorePrefetchSource,
+    homeFeedPaginationSource,
     /this\.featuredEntriesQuery\.featuredEntriesByMode\(mode, targetLimit\)/,
   )
 })

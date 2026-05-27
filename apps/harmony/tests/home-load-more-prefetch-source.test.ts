@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/coordinators/home/HomeFeedLoadMorePrefetch.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',
@@ -18,7 +18,9 @@ const guardSource = readFileSync(
   'utf8',
 )
 
-test('home load more prefetch keeps multi-page article buffers and consumes them incrementally', () => {
+test('home pagination keeps multi-page article prefetch buffers and consumes them incrementally', () => {
+  assert.match(source, /private readonly prefetchGuard: HomeFeedGuard/)
+  assert.doesNotMatch(source, /new HomeFeedLoadMorePrefetch/)
   assert.match(
     source,
     /private prefetchPageMultiplier\(mode: SubscriptionMode\): number \{/,

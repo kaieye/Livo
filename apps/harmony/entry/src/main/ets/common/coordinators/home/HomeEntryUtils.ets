@@ -7,7 +7,7 @@ import { modeOfFeedView, uniqueEntryCardKey } from '../../data/AppRepositoryEntr
  * (`${id}|${feedId}|${articleUrl}`), and optionally slice to `limit`.
  *
  * Extracted from HomeFeedPagination.appendFeaturedEntriesFromLocalFast()
- * and HomeFeedLoadMorePrefetch.run() — both contained near-identical
+ * and HomeFeedPagination.prefetchHomeLoadMore() — both contained near-identical
  * Set<string>-based dedup logic with drift.
  */
 export function mergeUniqueEntries(

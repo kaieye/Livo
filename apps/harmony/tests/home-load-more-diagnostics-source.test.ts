@@ -58,13 +58,7 @@ test('load more diagnostics logs query, append notification, and tweet presentat
     /this\.diagnostics\?\.onAccess\(false, Date\.now\(\) - startedAt\)/,
   )
   assert.match(
-    readFileSync(
-      new URL(
-        '../entry/src/main/ets/common/coordinators/home/HomeFeedLoadMorePrefetch.ets',
-        import.meta.url,
-      ),
-      'utf8',
-    ),
+    paginationSource,
     /consume-prefetch nextLimit=\$\{nextLimit\} entries=\$\{entries\.length\} prefetchedLimit=\$\{remainingPrefetchedLimit\}/,
   )
 })

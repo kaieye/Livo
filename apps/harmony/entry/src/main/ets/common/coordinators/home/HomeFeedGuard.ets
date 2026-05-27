@@ -40,8 +40,7 @@ export class HomeFeedGuardProvider {
 
 /**
  * Encapsulates the shared boolean-state conjunctions that were previously
- * duplicated across HomeFeedPagination, HomeFeedLoadMorePrefetch,
- * HomeFeedRefresh, and HomeFeedLoadMoreDrain.
+ * duplicated across HomeFeedPagination and HomeFeedRefresh.
  *
  * Adding a new guard condition (e.g. "suppress all fetches when battery is low")
  * now changes ONE file instead of 4-5.
@@ -83,7 +82,7 @@ export class HomeFeedGuard {
    * (a build-time flag, not runtime state).
    *
    * Replaces the 12-condition conjunction formerly in
-   * HomeFeedLoadMorePrefetch.canPrefetch().
+   * HomeFeedPagination.canPrefetchHomeLoadMore().
    */
   canPrefetch(): boolean {
     return this.state.isComponentActive
@@ -131,7 +130,7 @@ export class HomeFeedGuard {
    * Can the drain controller step forward for `mode`?
    *
    * Replaces the 7-condition conjunction formerly in
-   * HomeFeedLoadMoreDrain.canRun().
+   * HomeFeedPagination.canRunHomeLoadMoreDrain().
    */
   canDrain(mode: SubscriptionMode, totalCount: number): boolean {
     if (totalCount <= 0) {
