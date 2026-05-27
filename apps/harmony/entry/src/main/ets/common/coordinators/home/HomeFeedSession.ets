@@ -2,6 +2,7 @@ import { EntryCardModel, HarmonySettings } from '../../models/LivoModels'
 import { ThemePalette, ThemeService } from '../../services/ThemeService'
 import { SettingsStore } from '../../services/SettingsStore'
 import { HomeEntrySnapshotStore } from '../../services/HomeEntrySnapshotStore'
+import { RefreshLogStore } from '../../services/RefreshLogStore'
 import { FeedRepository } from '../../repositories/FeedRepository'
 import { FeaturedEntriesQuery } from '../../data/FeaturedEntriesQuery'
 import { FeedRefreshCoordinator } from '../../data/FeedRefreshCoordinator'
@@ -111,7 +112,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     this.homeInlineSearchController = new HomeInlineSearchController(owner, this)
     this.homeRuntimeCoordinator = new IndexHomeRuntimeCoordinator(owner)
     this.pageLifecycle = new IndexPageLifecycleController(owner)
-    this.homeFeedRefresh = new HomeFeedRefresh(owner, this, this.feedRefreshCoordinator)
+    this.homeFeedRefresh = new HomeFeedRefresh(owner, this, this.feedRefreshCoordinator, RefreshLogStore.default)
     this.homeFeedPagination = new HomeFeedPagination(owner, this, this.featuredEntriesQuery)
   }
 

@@ -15,42 +15,69 @@ export type SubscriptionMode = HomeMode
 
 export const SUBSCRIPTION_MODES: SubscriptionMode[] = HOME_MODES
 
-// 首页根页面的布局和分页调参集中放置，避免页面文件继续膨胀。
-export const MODE_SWIPE_TRIGGER_OFFSET: number = 56
-export const HOME_MODE_CONTENT_GAP: number = 6
-// 底部导航栏以悬浮重叠方式渲染，首页列表尾部需要留出可滚出的遮挡区。
-export const HOME_MODE_BOTTOM_TAB_SPACER: number =
-  BOTTOM_TAB_BAR_HEIGHT + resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + HOME_MODE_CONTENT_GAP
+export class HomeLayoutConfig {
+  static readonly modeContentGap: number = 6
+  static readonly modeBottomTabSpacer: number =
+    BOTTOM_TAB_BAR_HEIGHT + resolveHdsBottomTabBarBottomMargin(BOTTOM_TAB_FLOAT_GAP) + 6
+  static readonly modeSwipeTriggerOffset: number = 56
+  static readonly listSwapEnterDuration: number = 180
+  static readonly listSwapEntryOffsetY: number = 8
+  static readonly listSwapEntryMinOpacity: number = 0.88
+  static readonly listSwapAnimationEnabled: boolean = true
+  static readonly headerBlurScrollRange: number = 72
+  static readonly rootTitleBarMiniHeight: number = 56
+  static readonly rootTitleBarBottomTitleHeight: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
+  static readonly titleBarOverlaySpacer: number =
+    56 + ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
+  static readonly modeContentTopSpacerHeight: number = HomeLayoutConfig.titleBarOverlaySpacer
+  static readonly modeRailHeight: number = 48
+  static readonly modeSceneTopInset: number =
+    HomeLayoutConfig.modeContentTopSpacerHeight + ROOT_MODE_RAIL_TOP_GAP + 48
+  static readonly modeRailCollapseOffset: number = ROOT_MODE_RAIL_TOP_GAP + 48
+  static readonly modeRailCollapseDismissTravel: number = 22
+  static readonly rootBottomTitleHeight: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
+  static readonly collapsedModeRailTopOffset: number = 0
+  static readonly collapsedModeRailSize: number = 40
+  static readonly collapsedModeRailFallbackTopAvoidArea: number = 14
+  static readonly collapsedModeRailBaseAdjustment: number = -6
+  static readonly collapsedModeRailTopPadding: number =
+    HomeLayoutConfig.modeContentTopSpacerHeight - 40 - ROOT_MODE_RAIL_TOP_GAP
+  static readonly inlineSearchActionSize: number = 40
+  static readonly inlineSearchActionGap: number = 8
+  static readonly inlineSearchResultLimit: number = 6
+  static readonly inlineSearchVerticalTravel: number = 18
+  static readonly modeSceneTransitionDuration: number = 180
+}
 
-export const HOME_LIST_SWAP_ENTER_DURATION: number = 180
-export const HOME_LIST_SWAP_ENTRY_OFFSET_Y: number = 8
-export const HOME_LIST_SWAP_ENTRY_MIN_OPACITY: number = 0.88
-export const HOME_LIST_SWAP_ANIMATION_ENABLED: boolean = true
+// ── Backward-compatible aliases ──
 
-export const HEADER_BLUR_SCROLL_RANGE: number = 72
-export const ROOT_TITLE_BAR_MINI_HEIGHT: number = 56
-export const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
-export const HOME_TITLE_BAR_OVERLAY_SPACER: number =
-  ROOT_TITLE_BAR_MINI_HEIGHT + HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT + ROOT_PAGE_MODE_TOP_OFFSET
-export const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT: number = HOME_TITLE_BAR_OVERLAY_SPACER
-export const HOME_MODE_RAIL_HEIGHT: number = 48
-export const HOME_MODE_SCENE_TOP_INSET: number =
-  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT + ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
-export const HOME_MODE_RAIL_COLLAPSE_OFFSET: number = ROOT_MODE_RAIL_TOP_GAP + HOME_MODE_RAIL_HEIGHT
-export const HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL: number = 22
-export const ROOT_BOTTOM_TITLE_HEIGHT: number = ROOT_PAGE_TITLE_BAR_BOTTOM_HEIGHT
-export const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET: number = 0
-export const HOME_COLLAPSED_MODE_RAIL_SIZE: number = 40
-export const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA: number = 14
-export const HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT: number = -6
-export const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING: number =
-  HOME_MODE_CONTENT_TOP_SPACER_HEIGHT - HOME_COLLAPSED_MODE_RAIL_SIZE - ROOT_MODE_RAIL_TOP_GAP
-
-export const HOME_INLINE_SEARCH_ACTION_SIZE: number = 40
-export const HOME_INLINE_SEARCH_ACTION_GAP: number = 8
-export const HOME_INLINE_SEARCH_RESULT_LIMIT: number = 6
-export const HOME_INLINE_SEARCH_VERTICAL_TRAVEL: number = 18
-export const HOME_MODE_SCENE_TRANSITION_DURATION: number = 180
+export const MODE_SWIPE_TRIGGER_OFFSET = HomeLayoutConfig.modeSwipeTriggerOffset
+export const HOME_MODE_CONTENT_GAP = HomeLayoutConfig.modeContentGap
+export const HOME_MODE_BOTTOM_TAB_SPACER = HomeLayoutConfig.modeBottomTabSpacer
+export const HOME_LIST_SWAP_ENTER_DURATION = HomeLayoutConfig.listSwapEnterDuration
+export const HOME_LIST_SWAP_ENTRY_OFFSET_Y = HomeLayoutConfig.listSwapEntryOffsetY
+export const HOME_LIST_SWAP_ENTRY_MIN_OPACITY = HomeLayoutConfig.listSwapEntryMinOpacity
+export const HOME_LIST_SWAP_ANIMATION_ENABLED = HomeLayoutConfig.listSwapAnimationEnabled
+export const HEADER_BLUR_SCROLL_RANGE = HomeLayoutConfig.headerBlurScrollRange
+export const ROOT_TITLE_BAR_MINI_HEIGHT = HomeLayoutConfig.rootTitleBarMiniHeight
+export const HOME_ROOT_TITLE_BAR_BOTTOM_TITLE_HEIGHT = HomeLayoutConfig.rootTitleBarBottomTitleHeight
+export const HOME_TITLE_BAR_OVERLAY_SPACER = HomeLayoutConfig.titleBarOverlaySpacer
+export const HOME_MODE_CONTENT_TOP_SPACER_HEIGHT = HomeLayoutConfig.modeContentTopSpacerHeight
+export const HOME_MODE_RAIL_HEIGHT = HomeLayoutConfig.modeRailHeight
+export const HOME_MODE_SCENE_TOP_INSET = HomeLayoutConfig.modeSceneTopInset
+export const HOME_MODE_RAIL_COLLAPSE_OFFSET = HomeLayoutConfig.modeRailCollapseOffset
+export const HOME_MODE_RAIL_COLLAPSE_DISMISS_TRAVEL = HomeLayoutConfig.modeRailCollapseDismissTravel
+export const ROOT_BOTTOM_TITLE_HEIGHT = HomeLayoutConfig.rootBottomTitleHeight
+export const HOME_COLLAPSED_MODE_RAIL_TOP_OFFSET = HomeLayoutConfig.collapsedModeRailTopOffset
+export const HOME_COLLAPSED_MODE_RAIL_SIZE = HomeLayoutConfig.collapsedModeRailSize
+export const HOME_COLLAPSED_MODE_RAIL_FALLBACK_TOP_AVOID_AREA = HomeLayoutConfig.collapsedModeRailFallbackTopAvoidArea
+export const HOME_COLLAPSED_MODE_RAIL_BASE_ADJUSTMENT = HomeLayoutConfig.collapsedModeRailBaseAdjustment
+export const HOME_COLLAPSED_MODE_RAIL_TOP_PADDING = HomeLayoutConfig.collapsedModeRailTopPadding
+export const HOME_INLINE_SEARCH_ACTION_SIZE = HomeLayoutConfig.inlineSearchActionSize
+export const HOME_INLINE_SEARCH_ACTION_GAP = HomeLayoutConfig.inlineSearchActionGap
+export const HOME_INLINE_SEARCH_RESULT_LIMIT = HomeLayoutConfig.inlineSearchResultLimit
+export const HOME_INLINE_SEARCH_VERTICAL_TRAVEL = HomeLayoutConfig.inlineSearchVerticalTravel
+export const HOME_MODE_SCENE_TRANSITION_DURATION = HomeLayoutConfig.modeSceneTransitionDuration
 
 export const HOME_REFRESH_FIRST_SWAP_DELAY_MS: number = 72
 export const HOME_REFRESH_FINAL_RELOAD_DELAY_MS: number = 460

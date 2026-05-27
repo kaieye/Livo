@@ -1,4 +1,4 @@
-import { RefreshLogStore } from '../../services/RefreshLogStore'
+import { RefreshLogStore, IRefreshLogStore } from '../../services/RefreshLogStore'
 import { FeedRefreshCoordinator } from '../../data/FeedRefreshCoordinator'
 import {
   HOME_FEEDS_CHANGED_SUPPRESS_EXTRA_MS,
@@ -52,27 +52,36 @@ export class HomeFeedRefresh {
   private readonly state: HomeFeedState
   private readonly actions: HomeFeedActions
   private readonly feedRefreshCoordinator: FeedRefreshCoordinator
+  private readonly refreshLogStore: IRefreshLogStore
   private readonly guard: HomeFeedGuard
 
   constructor(
     state: HomeFeedState,
     actions: HomeFeedActions,
     feedRefreshCoordinator?: FeedRefreshCoordinator,
+    refreshLogStore?: IRefreshLogStore,
+    guard?: HomeFeedGuard,
   ) {
     this.state = state
     this.actions = actions
     this.feedRefreshCoordinator = feedRefreshCoordinator ?? FeedRefreshCoordinator.default
-    const provider = new HomeFeedGuardProvider(
-      () => actions.isHomeRootTab(),
-      () => actions.hasHomeInlineSearchQuery(),
-      () => actions.hasRecentHomeScrollIntent(),
-      (mode: SubscriptionMode) => actions.pendingLoadMoreForMode(mode),
-      (mode: SubscriptionMode) => actions.shouldRenderAllEntriesForMode(mode),
-      (_mode: SubscriptionMode) => false,
-      (_mode: SubscriptionMode) => false,
-      (mode: SubscriptionMode) => actions.readHomeModeScrollOffset(mode),
-    )
-    this.guard = new HomeFeedGuard(state, provider)
+    this.refreshLogStore = refreshLogStore ?? RefreshLogStore.default
+
+    if (guard) {
+      this.guard = guard
+    } else {
+      const provider = new HomeFeedGuardProvider(
+        () => actions.isHomeRootTab(),
+        () => actions.hasHomeInlineSearchQuery(),
+        () => actions.hasRecentHomeScrollIntent(),
+        (mode: SubscriptionMode) => actions.pendingLoadMoreForMode(mode),
+        (_mode: SubscriptionMode) => false,
+        (_mode: SubscriptionMode) => false,
+        (_mode: SubscriptionMode) => false,
+        (mode: SubscriptionMode) => actions.readHomeModeScrollOffset(mode),
+      )
+      this.guard = new HomeFeedGuard(state, provider)
+    }
   }
 
   async shouldRunStartupRefresh(snapshotRestored: boolean): Promise<boolean> {
@@ -81,7 +90,7 @@ export class HomeFeedRefresh {
     }
 
     try {
-      const logs = await RefreshLogStore.load()
+      const logs = await this.refreshLogStore.load()
       if (logs.length <= 0) {
         return true
       }

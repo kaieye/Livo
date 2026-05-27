@@ -4,10 +4,11 @@ import {
 } from '../models/LivoModels'
 import { FeedRepository, IFeedRepository, UpdateFetchStateParams } from '../repositories/FeedRepository'
 import { EntryRepository, IEntryRepository } from '../repositories/EntryRepository'
-import { RefreshLogStore } from '../services/RefreshLogStore'
-import { RssFeedService, FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
+import { RefreshLogStore, IRefreshLogStore } from '../services/RefreshLogStore'
+import { RssFeedService, IRssFeedService, FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
+import { IAvatarResolver } from '../services/avatar/IAvatarResolver'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
-import { BackgroundTaskService } from '../services/BackgroundTaskService'
+import { BackgroundTaskService, IBackgroundTaskService } from '../services/BackgroundTaskService'
 import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'
 import { rekeyPreviewEntries } from '../utils/PreviewFeedSeed'
 import { bumpFeedsChangedSignal } from '../utils/FeedChangeSignal'
@@ -27,9 +28,14 @@ function debugLog(message: string): void {
   }
 }
 
-async function appendRefreshLog(successFeedCount: number, failedFeedCount: number, failedFeedTitles: string[]): Promise<void> {
+async function appendRefreshLog(
+  refreshLogStore: IRefreshLogStore,
+  successFeedCount: number,
+  failedFeedCount: number,
+  failedFeedTitles: string[],
+): Promise<void> {
   const normalizedTitles = failedFeedTitles.filter((title: string) => !!title)
-  await RefreshLogStore.append({
+  await refreshLogStore.append({
     id: `${Date.now()}-${Math.floor(Math.random() * 100000)}`,
     refreshedAt: Date.now(),
     successFeedCount: Math.max(0, successFeedCount),
@@ -42,17 +48,36 @@ class FeedRefreshCoordinator {
   static readonly default: FeedRefreshCoordinator = new FeedRefreshCoordinator(
     FeedRepository.default,
     EntryRepository.default,
+    RssFeedService.default,
+    SocialFeedAvatarService.getResolver(),
+    BackgroundTaskService,
+    RefreshLogStore.default,
   )
 
   private readonly feedRepo: IFeedRepository
   private readonly entryRepo: IEntryRepository
+  private readonly rssFeedService: IRssFeedService
+  private readonly avatarResolver: IAvatarResolver
+  private readonly backgroundTaskService: IBackgroundTaskService
+  private readonly refreshLogStore: IRefreshLogStore
   private bootstrapped: boolean = false
   private seedFeedHydrationStarted: boolean = false
   private feedMetadataRepairStarted: boolean = false
 
-  constructor(feedRepo: IFeedRepository, entryRepo: IEntryRepository) {
+  constructor(
+    feedRepo: IFeedRepository,
+    entryRepo: IEntryRepository,
+    rssFeedService?: IRssFeedService,
+    avatarResolver?: IAvatarResolver,
+    backgroundTaskService?: IBackgroundTaskService,
+    refreshLogStore?: IRefreshLogStore,
+  ) {
     this.feedRepo = feedRepo
     this.entryRepo = entryRepo
+    this.rssFeedService = rssFeedService ?? RssFeedService.default
+    this.avatarResolver = avatarResolver ?? SocialFeedAvatarService.getResolver()
+    this.backgroundTaskService = backgroundTaskService ?? BackgroundTaskService
+    this.refreshLogStore = refreshLogStore ?? RefreshLogStore.default
   }
 
   async bootstrap(): Promise<void> {
@@ -115,7 +140,7 @@ class FeedRefreshCoordinator {
 
     for (const feed of feeds) {
       try {
-        const payload = await RssFeedService.fetchFeedEntries(feed)
+        const payload = await this.rssFeedService.fetchFeedEntries(feed)
         const updateParams = await this.resolveFeedUpdateState(feed, payload, false)
         await this.entryRepo.upsertMany(payload.entries)
         await this.feedRepo.updateFetchState(feed.id, updateParams)
@@ -146,7 +171,7 @@ class FeedRefreshCoordinator {
     )
     const nextResolvedImageUrl = preferFastImageResolve
       ? (imageUrl || feed.imageUrl || '')
-      : await SocialFeedAvatarService.resolveFeedAvatar(metadata.url, metadata.siteUrl, imageUrl, feed.imageUrl || '')
+      : await this.avatarResolver.resolveFeedAvatar(metadata.url, metadata.siteUrl, imageUrl, feed.imageUrl || '')
     const nextImageUrl = resolveNormalizedFeedImageUrl(feed, nextResolvedImageUrl)
 
     return {
@@ -284,7 +309,7 @@ class FeedRefreshCoordinator {
   ): Promise<RemoteFeedResult> {
     const feeds = sortFeedsStable(await this.feedRepo.list())
     if (feeds.length === 0) {
-      await appendRefreshLog(0, 0, [])
+      await appendRefreshLog(this.refreshLogStore, 0, 0, [])
       return {
         entries: [],
         sourceLabel: '暂无可刷新的订阅源',
@@ -305,7 +330,7 @@ class FeedRefreshCoordinator {
     onProgress?.(0, feeds.length)
 
     if (pendingFeeds.length === 0) {
-      await appendRefreshLog(0, 0, [])
+      await appendRefreshLog(this.refreshLogStore, 0, 0, [])
       return {
         entries: [],
         sourceLabel: '全部订阅源 3 分钟内已刷新，已跳过重复抓取',
@@ -326,7 +351,7 @@ class FeedRefreshCoordinator {
 
     let backgroundTaskHeld: boolean = false
     try {
-      await BackgroundTaskService.acquire('dataTransfer')
+      await this.backgroundTaskService.acquire('dataTransfer')
       backgroundTaskHeld = true
     } catch (error) {
       console.warn(`[FeedRefreshCoordinator] Failed to acquire background task: ${error instanceof Error ? error.message : String(error)}`)
@@ -342,7 +367,7 @@ class FeedRefreshCoordinator {
     } finally {
       if (backgroundTaskHeld) {
         try {
-          await BackgroundTaskService.release('dataTransfer')
+          await this.backgroundTaskService.release('dataTransfer')
         } catch (error) {
           console.warn(`[FeedRefreshCoordinator] Failed to release background task: ${error instanceof Error ? error.message : String(error)}`)
         }
@@ -389,7 +414,7 @@ class FeedRefreshCoordinator {
     const failedFeedSuffix = failedFeedSummary ? `：${failedFeedSummary}${failedFeedLabels.length > 3 ? ' 等' : ''}` : ''
     const allSkippedByCooldown = skippedByCooldownCount === feeds.length && failedCount === 0
 
-    await appendRefreshLog(refreshedCount, failedCount, failedFeedLabels)
+    await appendRefreshLog(this.refreshLogStore, refreshedCount, failedCount, failedFeedLabels)
 
     debugLog(`refreshAllFeeds done refreshed=${refreshedCount} failed=${failedCount} skipped=${skippedByCooldownCount}`)
 

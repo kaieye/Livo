@@ -40,6 +40,11 @@ import {
 
 export { FeedRefreshPayload }
 
+export interface IRssFeedService {
+  fetchFeedEntries(feed: Feed): Promise<FeedRefreshPayload>
+  previewFeedUrl(url: string): Promise<FeedRefreshPayload>
+}
+
 const LOG_TAG = '[RssFeedService]'
 
 function extractBilibiliDynamicUid(url: string): string {
@@ -267,8 +272,10 @@ function readHeader(response: http.HttpResponse, names: string[]): string {
   return ''
 }
 
-export class RssFeedService {
-  static async previewFeedUrl(url: string): Promise<FeedRefreshPayload> {
+export class RssFeedService implements IRssFeedService {
+  static readonly default: RssFeedService = new RssFeedService()
+
+  async previewFeedUrl(url: string): Promise<FeedRefreshPayload> {
     const candidates = previewUrlVariants(url)
     let lastError = 'unknown error'
     for (const candidateUrl of candidates) {
@@ -283,7 +290,7 @@ export class RssFeedService {
         updatedAt: 0,
       }
       try {
-        return await RssFeedService.fetchFeedEntries(dummyFeed)
+        return await this.fetchFeedEntries(dummyFeed)
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
       }
@@ -291,7 +298,7 @@ export class RssFeedService {
     throw new Error(lastError)
   }
 
-  static async fetchFeedEntries(feed: Feed): Promise<FeedRefreshPayload> {
+  async fetchFeedEntries(feed: Feed): Promise<FeedRefreshPayload> {
     const bilibiliDynamicUid = extractBilibiliDynamicUid(feed.url)
     if (bilibiliDynamicUid) {
       try {
@@ -355,5 +362,15 @@ export class RssFeedService {
     } finally {
       activeRequest.destroy()
     }
+  }
+
+  // ── Backward-compatible static delegates ──
+
+  static async fetchFeedEntries(feed: Feed): Promise<FeedRefreshPayload> {
+    return RssFeedService.default.fetchFeedEntries(feed)
+  }
+
+  static async previewFeedUrl(url: string): Promise<FeedRefreshPayload> {
+    return RssFeedService.default.previewFeedUrl(url)
   }
 }

@@ -8,7 +8,12 @@ const TAG: string = '[BackgroundTaskService]'
 
 export type BackgroundTaskMode = 'audioPlayback' | 'dataTransfer'
 
-class BackgroundTaskServiceImpl {
+export interface IBackgroundTaskService {
+  acquire(mode: BackgroundTaskMode): Promise<void>
+  release(mode: BackgroundTaskMode): Promise<void>
+}
+
+class BackgroundTaskServiceImpl implements IBackgroundTaskService {
   private static instance: BackgroundTaskServiceImpl | undefined = undefined
 
   private readonly counts: Map<BackgroundTaskMode, number> = new Map<BackgroundTaskMode, number>()
