@@ -3,14 +3,11 @@ import { createHashRouter } from 'react-router-dom'
 import App from '../App'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
+const SubscriptionsPage = lazy(() => import('../pages/SubscriptionsPage'))
 
 /**
  * Route definitions for the Livo desktop app.
  * Uses HashRouter since Electron serves via file:// protocol.
- *
- * Currently all routes render HomePage (the 3-column layout).
- * Independent pages (ArticleDetail, FeedDetail, VideoPlayer, ImageViewer, AccountLogin)
- * will be added as separate route components in tasks 1.1-1.6.
  *
  * Route order matters: specific paths must come before catch-all (:viewType).
  */
@@ -19,8 +16,6 @@ export const router = createHashRouter([
     path: '/',
     element: <App />,
     children: [
-      // All routes currently use HomePage with URL sync.
-      // The Layout component handles discover/settings as content-area overlays.
       {
         index: true,
         element: (
@@ -58,6 +53,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={null}>
             <HomePage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'subscriptions',
+        element: (
+          <Suspense fallback={null}>
+            <SubscriptionsPage />
           </Suspense>
         ),
       },
