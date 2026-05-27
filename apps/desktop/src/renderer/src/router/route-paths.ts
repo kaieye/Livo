@@ -8,8 +8,10 @@ export const ROUTES = {
   home: '/',
   starred: '/starred',
   feed: (feedId: string) => `/feed/${feedId}`,
+  feedDetail: (feedId: string) => `/feed-detail/${feedId}`,
   discover: '/discover',
   settings: '/settings',
+  subscriptions: '/subscriptions',
   viewType: (view: FeedViewType) => {
     const slug = VIEW_TYPE_SLUGS[view]
     return slug ? `/${slug}` : '/'

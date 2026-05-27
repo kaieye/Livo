@@ -54,8 +54,14 @@ GitNexus 使用状态：
 
 ### 1. 独立页面路由系统
 
-- [ ] **1.1** 新增 Subscriptions 页面（订阅管理 + Mode Rail 切换 Articles/Social/Videos/Pictures） → 依赖: 0.1, 0.2
-- [ ] **1.2** 新增 FeedDetail 页面（订阅源详情：元信息、预览卡片、文章列表、订阅/编辑操作） → 依赖: 0.1, 0.2, 0.3
+- [x] **1.1** 新增 Subscriptions 页面（订阅管理 + Mode Rail 切换 Articles/Social/Videos/Pictures） → 依赖: 0.1, 0.2 ✅
+  - 完成标准:`pages/SubscriptionsPage.tsx` + `components/subscriptions/SubscriptionsModeRail.tsx` + `components/subscriptions/FeedGroupList.tsx`,按 category 分组,4 模式切换,page-local mode 状态
+  - 文件:`lib/feed-filters.ts` (新建 `isUserFeed` predicate)、`lib/feed-grouping.ts` (language-neutral grouping util)、`router/routes.tsx` (注册 `/subscriptions`)
+- [x] **1.2** 新增 FeedDetail 页面（订阅源详情：元信息、预览卡片、文章列表、订阅/编辑操作） → 依赖: 0.1, 0.2, 0.3 ✅
+  - 实现:`pages/FeedDetailPage.tsx`(498 行) — Hero(avatar/title/meta)、操作栏(refresh/openSite/edit-disabled/unsubscribe)、文章预览列表(点击回 `/feed/:id` 选中)、未订阅预览模式、空/加载/notFound 状态、a11y(landmark + aria-label)
+  - 文件:`locales/{en,zh-CN}/feed-detail.ts`(新建 namespace)、`router/{routes,route-paths}.tsx`(注册 `/feed-detail/:feedId` + `ROUTES.feedDetail`)、`components/subscriptions/FeedGroupList.tsx`(跳转入口)
+  - 复用:`lib/feed-filters.ts isUserFeed`、`lib/view-type-keys.ts VIEW_TYPE_I18N_KEYS`、`useFeedStore`/`useEntryStore`
+  - 遗留(留待 1.3 解决):Edit 按钮已禁用(Coming Soon)；setTimeout(0) 绕 Layout reset effect；FeedHeroAvatar/ArticlePreviewRow img-fallback 重复；refreshFeed 隐式 reload home scope
 - [ ] **1.3** 新增 ArticleDetail 页面（复用现有 EntryContent 能力，页面化承载 AI 辅助、社交详情、图片画廊、内嵌视频） → 依赖: 0.1, 0.2, 0.3
 - [ ] **1.4** 新增 VideoPlayer 页面（复用现有 YouTube 解析 + iframe/webview 回退，统一全屏播放入口） → 依赖: 0.1, 0.2
 - [ ] **1.5** 新增 ImageViewer 页面（图片全屏查看） → 依赖: 0.1, 0.2

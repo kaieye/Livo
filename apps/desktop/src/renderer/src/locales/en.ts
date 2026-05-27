@@ -1,94 +1,96 @@
-import { enCommon } from "./en/common"
-import { enContextMenu } from "./en/context-menu"
-import { enDiscover } from "./en/discover"
-import { enEntry } from "./en/entry"
-import { enErrorBoundary } from "./en/error-boundary"
-import { enImportProgress } from "./en/import-progress"
-import { enQuickSearch } from "./en/quick-search"
-import { enRecommendations } from "./en/recommendations"
-import { enSettings } from "./en/settings"
-import { enShortcuts } from "./en/shortcuts"
-import { enSidebar } from "./en/sidebar"
+import { enCommon } from './en/common'
+import { enContextMenu } from './en/context-menu'
+import { enDiscover } from './en/discover'
+import { enEntry } from './en/entry'
+import { enErrorBoundary } from './en/error-boundary'
+import { enFeedDetail } from './en/feed-detail'
+import { enImportProgress } from './en/import-progress'
+import { enQuickSearch } from './en/quick-search'
+import { enRecommendations } from './en/recommendations'
+import { enSettings } from './en/settings'
+import { enShortcuts } from './en/shortcuts'
+import { enSidebar } from './en/sidebar'
 
 export const en = {
   settings: enSettings,
   common: enCommon,
 
   viewTypes: {
-    articles: "Articles",
-    socialMedia: "Social Media",
-    videos: "Videos",
-    pictures: "Pictures",
+    articles: 'Articles',
+    socialMedia: 'Social Media',
+    videos: 'Videos',
+    pictures: 'Pictures',
   },
 
   entry: enEntry,
 
   entryList: {
-    starred: "Starred",
-    all: "All",
-    unread: "Unread",
-    searchArticles: "Search articles...",
-    noArticles: "No articles",
-    addFeedToStart: "Add a feed to get started",
-    play: "Play",
-    images: "img",
-    showMore: "Show more",
-    showLess: "Show less",
-    today: "Today",
-    yesterday: "Yesterday",
-    daysAgo: "{{days}} days ago",
-    earlier: "Earlier",
-    copyTitle: "Copy Title",
-    titleCopied: "Title copied",
-    share: "Share",
-    shareEntry: "Share Entry",
-    saveImage: "Save Image",
-    imageSaved: "Image saved",
-    exportPDF: "Export PDF",
-    sharePoster: "Share Poster",
-    posterTitle: "Share Poster",
-    posterSaving: "Generating...",
-    posterSaved: "Poster saved",
-    viewImageGallery: "View Gallery ({{count}})",
-    videoPlayer: "Video Player",
-    saveToReadwise: "Save to Readwise",
-    saveToInstapaper: "Save to Instapaper",
-    savedSuccessfully: "Saved successfully",
-    saveFailed: "Save failed",
-    integrations: "Integrations",
-    integrationsDesc: "Save articles to third-party services",
+    starred: 'Starred',
+    all: 'All',
+    unread: 'Unread',
+    searchArticles: 'Search articles...',
+    noArticles: 'No articles',
+    addFeedToStart: 'Add a feed to get started',
+    play: 'Play',
+    images: 'img',
+    showMore: 'Show more',
+    showLess: 'Show less',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    daysAgo: '{{days}} days ago',
+    earlier: 'Earlier',
+    copyTitle: 'Copy Title',
+    titleCopied: 'Title copied',
+    share: 'Share',
+    shareEntry: 'Share Entry',
+    saveImage: 'Save Image',
+    imageSaved: 'Image saved',
+    exportPDF: 'Export PDF',
+    sharePoster: 'Share Poster',
+    posterTitle: 'Share Poster',
+    posterSaving: 'Generating...',
+    posterSaved: 'Poster saved',
+    viewImageGallery: 'View Gallery ({{count}})',
+    videoPlayer: 'Video Player',
+    saveToReadwise: 'Save to Readwise',
+    saveToInstapaper: 'Save to Instapaper',
+    savedSuccessfully: 'Saved successfully',
+    saveFailed: 'Save failed',
+    integrations: 'Integrations',
+    integrationsDesc: 'Save articles to third-party services',
   },
 
   sidebar: enSidebar,
 
   aiChat: {
-    title: "AI Assistant",
-    clearChat: "Clear chat",
-    currentlyReading: "Currently reading:",
-    welcome: "AI Assistant",
-    welcomeDesc: "Ask questions about the current article, or have any conversation",
-    suggestion1: "Summarize the key points of this article",
+    title: 'AI Assistant',
+    clearChat: 'Clear chat',
+    currentlyReading: 'Currently reading:',
+    welcome: 'AI Assistant',
+    welcomeDesc:
+      'Ask questions about the current article, or have any conversation',
+    suggestion1: 'Summarize the key points of this article',
     suggestion2: "What problems are there with this article's views?",
-    suggestion3: "Explain this article in simple terms",
-    inputPlaceholder: "Type a message...",
-    error: "Error: {{message}}",
+    suggestion3: 'Explain this article in simple terms',
+    inputPlaceholder: 'Type a message...',
+    error: 'Error: {{message}}',
   },
 
   social: {
-    translateTweet: "Translate",
-    summarizeTweet: "AI Summary",
-    translation: "AI Translation",
-    aiSummary: "AI Summary",
+    translateTweet: 'Translate',
+    summarizeTweet: 'AI Summary',
+    translation: 'AI Translation',
+    aiSummary: 'AI Summary',
   },
 
   media: {
-    rewind10: "Rewind 10s",
-    forward10: "Forward 10s",
-    playbackSpeed: "Playback speed",
-    unmute: "Unmute",
-    mute: "Mute",
-    download: "Download",
-    closePlayer: "Close player",
+    rewind10: 'Rewind 10s',
+    forward10: 'Forward 10s',
+    playbackSpeed: 'Playback speed',
+    unmute: 'Unmute',
+    mute: 'Mute',
+    download: 'Download',
+    closePlayer: 'Close player',
   },
 
   discover: enDiscover,
@@ -98,26 +100,26 @@ export const en = {
   shortcuts: enShortcuts,
 
   actionLabels: {
-    field_entryTitle: "Article Title",
-    field_entryContent: "Article Content",
-    field_entryAuthor: "Article Author",
-    field_entryUrl: "Article URL",
-    field_feedTitle: "Feed Title",
-    field_feedUrl: "Feed URL",
-    field_feedCategory: "Feed Category",
-    op_contains: "Contains",
-    op_notContains: "Not Contains",
-    op_equals: "Equals",
-    op_notEquals: "Not Equals",
-    op_matchesRegex: "Matches Regex",
-    op_startsWith: "Starts With",
-    op_endsWith: "Ends With",
+    field_entryTitle: 'Article Title',
+    field_entryContent: 'Article Content',
+    field_entryAuthor: 'Article Author',
+    field_entryUrl: 'Article URL',
+    field_feedTitle: 'Feed Title',
+    field_feedUrl: 'Feed URL',
+    field_feedCategory: 'Feed Category',
+    op_contains: 'Contains',
+    op_notContains: 'Not Contains',
+    op_equals: 'Equals',
+    op_notEquals: 'Not Equals',
+    op_matchesRegex: 'Matches Regex',
+    op_startsWith: 'Starts With',
+    op_endsWith: 'Ends With',
     effect_block: "Block (don't add)",
-    effect_star: "Auto Star",
-    effect_markRead: "Mark Read",
-    effect_notify: "Desktop Notification",
-    effect_readability: "Auto Readability",
-    effect_summarize: "Auto AI Summary",
+    effect_star: 'Auto Star',
+    effect_markRead: 'Mark Read',
+    effect_notify: 'Desktop Notification',
+    effect_readability: 'Auto Readability',
+    effect_summarize: 'Auto AI Summary',
   },
 
   importProgress: enImportProgress,
@@ -128,10 +130,12 @@ export const en = {
 
   contextMenu: enContextMenu,
 
+  feedDetail: enFeedDetail,
+
   time: {
-    justNow: "Just Now",
-    minutesAgo: "{{minutes}}m ago",
-    hoursAgo: "{{hours}}h ago",
-    daysAgo: "{{days}}d ago",
+    justNow: 'Just Now',
+    minutesAgo: '{{minutes}}m ago',
+    hoursAgo: '{{hours}}h ago',
+    daysAgo: '{{days}}d ago',
   },
 }

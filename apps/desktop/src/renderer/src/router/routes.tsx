@@ -4,6 +4,7 @@ import App from '../App'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
 const SubscriptionsPage = lazy(() => import('../pages/SubscriptionsPage'))
+const FeedDetailPage = lazy(() => import('../pages/FeedDetailPage'))
 
 /**
  * Route definitions for the Livo desktop app.
@@ -61,6 +62,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={null}>
             <SubscriptionsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'feed-detail/:feedId',
+        element: (
+          <Suspense fallback={null}>
+            <FeedDetailPage />
           </Suspense>
         ),
       },

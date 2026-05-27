@@ -35,8 +35,11 @@ export const FeedGroupList = memo(function FeedGroupList({
   // Stable callback so memoised CategoryGroup / FeedRow don't re-render on
   // every parent render. (Without this, the inline arrow recreated each render
   // would defeat the React.memo wrappers below.)
+  // From the Subscriptions management page we navigate into the per-feed
+  // detail page (P0-1.2) instead of switching the home view's selectedFeedId,
+  // mirroring the Harmony FeedDetail entry path.
   const handleSelect = useCallback(
-    (feedId: string) => navigate(ROUTES.feed(feedId)),
+    (feedId: string) => navigate(ROUTES.feedDetail(feedId)),
     [navigate],
   )
 
