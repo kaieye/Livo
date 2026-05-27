@@ -1,6 +1,6 @@
 import { Entry, EntryCardModel } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { ModeSceneRenderState, resolveModeSceneRenderState } from '../utils/ModeSceneTransition'
+import { ModeSceneRenderState, resolveModeSceneRenderState } from '../utils/ModeTransition'
 import { HomeModeEntriesPage } from './HomeModeEntriesPage'
 import { SubscriptionMode } from '../config/HomeRootConfig'
 import { TweetEntryPresentation } from '../utils/social/TweetEntryPresentation'

@@ -1,5 +1,5 @@
 import { FeedViewType } from '../../models/LivoModels'
-import { DEFAULT_NITTER_INSTANCE, DEFAULT_RSSHUB_INSTANCE } from '../../AppConfig'
+import { DEFAULT_NITTER_INSTANCE, DEFAULT_RSSHUB_INSTANCE } from '../../config/PlatformInstances'
 import { DiscoverSearchPlatform, ResolvedDiscoverCandidate, WebUrlParts } from './DiscoverTypes'
 import { extractWebParts } from './DiscoverUrlParsing'
 import { sortResolvedCandidates } from './DiscoverCandidateScoring'

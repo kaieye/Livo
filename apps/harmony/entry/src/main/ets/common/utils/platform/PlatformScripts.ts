@@ -1,5 +1,72 @@
-// Web script builders for account login detection
-// Pure functions that return JavaScript strings for web injection
+export interface BilibiliCookieGroupsInput {
+  documentCookies: string
+  currentUrl: string
+  fetchCookie: (url: string) => string
+  probeUrls?: string[]
+}
+
+export interface YouTubeCookieGroupsInput {
+  documentCookies: string
+  currentUrl: string
+  fetchCookie: (url: string) => string
+  probeUrls?: string[]
+}
+
+export const BILIBILI_PROBE_URLS: string[] = [
+  'https://www.bilibili.com/',
+  'https://passport.bilibili.com/',
+  'https://m.bilibili.com/',
+  'https://account.bilibili.com/',
+]
+
+export const YOUTUBE_PROBE_URLS: string[] = [
+  'https://m.youtube.com/',
+  'https://www.youtube.com/',
+  'https://studio.youtube.com/',
+  'https://myaccount.google.com/',
+  'https://accounts.google.com/',
+]
+
+function buildCookieGroups(
+  documentCookies: string,
+  currentUrl: string,
+  probeUrls: string[],
+  fetchCookie: (url: string) => string,
+): string[] {
+  const cookieGroups: string[] = []
+  if (documentCookies.trim()) {
+    cookieGroups.push(documentCookies)
+  }
+  if (currentUrl.trim()) {
+    cookieGroups.push(fetchCookie(currentUrl))
+  }
+  probeUrls.forEach((url: string) => {
+    cookieGroups.push(fetchCookie(url))
+  })
+  return cookieGroups
+}
+
+export function buildBilibiliCookieGroups(
+  input: BilibiliCookieGroupsInput,
+): string[] {
+  return buildCookieGroups(
+    input.documentCookies,
+    input.currentUrl,
+    input.probeUrls || BILIBILI_PROBE_URLS,
+    input.fetchCookie,
+  )
+}
+
+export function buildYouTubeCookieGroups(
+  input: YouTubeCookieGroupsInput,
+): string[] {
+  return buildCookieGroups(
+    input.documentCookies,
+    input.currentUrl,
+    input.probeUrls || YOUTUBE_PROBE_URLS,
+    input.fetchCookie,
+  )
+}
 
 export function buildBilibiliNavScript(): string {
   return `
@@ -84,7 +151,7 @@ export function buildYouTubePageStateScript(): string {
           read(document.querySelector('a[href^="/@"]')?.textContent) ||
           byPattern([
             /"channelHandle":"(@[^"]+)"/,
-            /\\"channelHandle\\":"(@[^\\"]+)\\"/
+            /\\"channelHandle\\":"(@[^\\"]+)\\"/ 
           ]);
         const accountName =
           read(document.querySelector('yt-formatted-string#account-name')?.textContent) ||
@@ -92,11 +159,11 @@ export function buildYouTubePageStateScript(): string {
           read(document.querySelector('img#img')?.getAttribute('alt')).replace(/^Google Account[:\\s]*/i, '') ||
           byPattern([
             /"accountName":"([^"]+)"/,
-            /\\"accountName\\":"([^\\"]+)\\"/
+            /\\"accountName\\":"([^\\"]+)\\"/ 
           ]);
         const channelName = byPattern([
           /"channelName":"([^"]+)"/,
-          /\\"channelName\\":"([^\\"]+)\\"/
+          /\\"channelName\\":"([^\\"]+)\\"/ 
         ]);
         const displayName = byPattern([
           /"displayName":"([^"]+)"/,
@@ -104,7 +171,7 @@ export function buildYouTubePageStateScript(): string {
           /"fullName":"([^"]+)"/,
           /\\"fullName\\":"([^\\"]+)\\"/,
           /"givenName":"([^"]+)"/,
-          /\\"givenName\\":"([^\\"]+)\\"/
+          /\\"givenName\\":"([^\\"]+)\\"/ 
         ]);
         return JSON.stringify({
           currentUrl: location.href || '',

@@ -1,4 +1,4 @@
-import { DEFAULT_RSSHUB_INSTANCE } from '../../AppConfig'
+import { DEFAULT_RSSHUB_INSTANCE } from '../../config/PlatformInstances'
 import { DiscoverSearchPlatform, RecommendedFeed, WebUrlParts } from './DiscoverTypes'
 
 export function normalizeDiscoverInput(value: string): string {

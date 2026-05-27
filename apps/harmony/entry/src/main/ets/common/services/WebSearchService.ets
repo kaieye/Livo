@@ -4,7 +4,7 @@ import {
   REQUEST_READ_TIMEOUT_MS,
   BASIC_BROWSER_USER_AGENT,
   ACCEPT_HTML,
-} from '../AppConfig'
+} from '../config/NetworkConfig'
 
 export interface WebSearchResult {
   title: string

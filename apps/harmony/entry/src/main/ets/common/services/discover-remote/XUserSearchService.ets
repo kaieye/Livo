@@ -9,14 +9,16 @@ import {
   parseXProfilesFromSearchHtml,
 } from '../../coordinators/discover/DiscoverRemoteSearchParsing'
 import {
-  FALLBACK_NITTER_INSTANCES,
   BASIC_BROWSER_USER_AGENT,
   DEFAULT_ACCEPT_LANGUAGE,
   ACCEPT_HTML,
   ACCEPT_TEXT_OR_HTML,
   SHORT_REQUEST_TIMEOUT_MS,
   MEDIUM_REQUEST_TIMEOUT_MS,
-} from '../../AppConfig'
+} from '../../config/NetworkConfig'
+import {
+  FALLBACK_NITTER_INSTANCES,
+} from '../../config/PlatformInstances'
 import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 import {
   SOCIAL_VIEW_MAPPING,

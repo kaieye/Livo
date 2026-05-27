@@ -3,16 +3,18 @@ import { Feed, FeedViewType } from '../../models/LivoModels'
 import { canonicalFeedUrl } from '../../utils/social/SocialFeedTitles'
 import { looksLikeHtmlDocument } from '../../utils/HtmlParser'
 import {
-  RSSHUB_INSTANCES,
   DESKTOP_BROWSER_USER_AGENT,
   RSS_ACCEPT_LANGUAGE,
   ACCEPT_RSS_XML,
-  BILIBILI_ORIGIN,
   LONG_REQUEST_TIMEOUT_MS,
   RSS_REQUEST_TIMEOUT_MS,
   ACCEPT_JSON,
+} from '../../config/NetworkConfig'
+import {
+  RSSHUB_INSTANCES,
+  BILIBILI_ORIGIN,
   bilibiliSpaceReferer,
-} from '../../AppConfig'
+} from '../../config/PlatformInstances'
 import {
   FeedRefreshPayload,
   BilibiliDynamicApiPayload,

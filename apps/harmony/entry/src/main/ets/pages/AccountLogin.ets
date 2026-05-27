@@ -9,20 +9,23 @@ import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import {
   buildAccountLoginRenderExitMessage,
   resolveAccountLoginWebPolicy,
-} from '../common/utils/account/AccountLoginWebPolicy'
-import { detectBilibiliLogin } from '../common/utils/platform/BilibiliLoginDetection'
-import { detectYouTubeLoginState } from '../common/utils/platform/YouTubeLoginDetection'
-import { BilibiliPageState, BilibiliWebNavResponse } from '../common/utils/platform/BilibiliWebState'
-import { YouTubePageState } from '../common/utils/platform/YouTubeWebState'
-import { buildBilibiliCookieGroups, buildYouTubeCookieGroups } from '../common/utils/platform/CookieGroupBuilder'
+} from '../common/utils/account/AccountDisplay'
 import {
+  BilibiliLoginDetectionResult,
+  BilibiliPageState,
+  BilibiliWebNavResponse,
+  detectBilibiliLogin,
+} from '../common/utils/platform/BilibiliLogin'
+import {
+  buildBilibiliCookieGroups,
   buildBilibiliNavScript,
   buildBilibiliPageStateScript,
+  buildYouTubeCookieGroups,
   buildYouTubePageStateScript,
   buildYouTubeProfileFetchScript,
-} from '../common/utils/platform/WebScriptBuilder'
+} from '../common/utils/platform/PlatformScripts'
+import { detectYouTubeLoginState, normalizeYouTubeProfileSources, resolveYouTubeProfileName, YouTubePageState } from '../common/utils/platform/YouTubeLogin'
 import { PollingController } from '../common/utils/PollingController'
-import { normalizeYouTubeProfileSources, resolveYouTubeProfileName } from '../common/utils/platform/YouTubeProfileResolver'
 import { writeAccountLinkResult } from '../common/utils/account/AccountLinkResultWriter'
 
 @Entry

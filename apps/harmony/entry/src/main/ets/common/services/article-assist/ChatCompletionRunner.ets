@@ -17,7 +17,7 @@ import { util } from '@kit.ArkTS'
 import {
   AI_REQUEST_CONNECT_TIMEOUT_MS,
   AI_REQUEST_READ_TIMEOUT_MS,
-} from '../../AppConfig'
+} from '../../config/NetworkConfig'
 import { AIAssistantSettings } from '../../models/LivoModels'
 import { ChatMessage as ChatHistoryMessage } from '../ChatHistoryStore'
 import { delay, stringifyHttpResult } from './HttpResponseDecoder'

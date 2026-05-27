@@ -10,7 +10,7 @@ import { resolveSocialFeedDisplayTitle } from '../entry/src/main/ets/common/util
 import {
   parseNitterRetweetFromTitle,
   parseRetweetAuthorFromTitle,
-} from '../entry/src/main/ets/common/utils/social/TweetRetweetParsing.ts'
+} from '../entry/src/main/ets/common/utils/social/TweetParsing.ts'
 import {
   presentTweetEntryFromCard,
   presentTweetEntryFromEntry,

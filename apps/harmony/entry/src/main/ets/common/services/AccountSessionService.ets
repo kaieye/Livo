@@ -3,13 +3,15 @@ import preferences from '@ohos.data.preferences'
 import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { AppContextService } from './AppContextService'
 import { resolveBilibiliStoredState } from '../utils/platform/BilibiliAccountStatus'
-import { resolveYouTubeLoginUrl } from '../utils/platform/YouTubeLoginUrl'
+import { resolveYouTubeLoginUrl } from '../utils/platform/YouTubeLogin'
 import {
   ACCEPT_JSON,
-  BILIBILI_REFERER,
   MEDIUM_REQUEST_TIMEOUT_MS,
   MOBILE_BROWSER_USER_AGENT,
-} from '../AppConfig'
+} from '../config/NetworkConfig'
+import {
+  BILIBILI_REFERER,
+} from '../config/PlatformInstances'
 
 const ACCOUNT_PREFERENCES_NAME = 'livo_harmony_accounts'
 const BILIBILI_NAV_URL = 'https://api.bilibili.com/x/web-interface/nav'

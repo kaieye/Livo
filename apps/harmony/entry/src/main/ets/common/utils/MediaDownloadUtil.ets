@@ -6,7 +6,7 @@ import {
   ACCEPT_ANY,
   MEDIUM_REQUEST_TIMEOUT_MS,
   RSS_REQUEST_TIMEOUT_MS,
-} from '../AppConfig'
+} from '../config/NetworkConfig'
 
 function resolveFileExtension(mediaUrl: string, fallback: string): string {
   const normalized = (mediaUrl || '').split('?')[0].split('#')[0].toLowerCase()

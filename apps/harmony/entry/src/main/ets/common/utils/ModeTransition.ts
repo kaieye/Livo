@@ -51,3 +51,15 @@ export function resolveModeSceneRenderState(
     zIndex: 0,
   }
 }
+
+export interface ModeSwitchGuardInput<TMode extends string> {
+  currentMode: TMode
+  nextMode: TMode
+  isTransitioning: boolean
+}
+
+export function shouldAcceptModeSwitch<TMode extends string>(
+  input: ModeSwitchGuardInput<TMode>,
+): boolean {
+  return input.nextMode !== input.currentMode
+}

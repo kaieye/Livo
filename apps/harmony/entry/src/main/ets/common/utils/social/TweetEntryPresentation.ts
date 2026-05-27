@@ -12,24 +12,22 @@ import {
   extractMetrics,
   extractText,
   extractUsername,
+  findFirstParsedQuote,
   normalizeUsernameLabel,
-  preferredSourceAvatarUrl,
-  xAvatarUrl,
-} from './TweetSourceExtraction.ts'
-import type { TweetPresentationSource } from './TweetSourceExtraction.ts'
-import {
   parseNitterRetweetFromTitle,
   parseRetweet,
   parseRetweetAuthorFromTitle,
-  stripDuplicatedRetweetLeadingBadge,
-} from './TweetRetweetParsing.ts'
-import {
-  findFirstParsedQuote,
   parseRetweetWithNestedQuote,
-} from './TweetQuoteParsing.ts'
-import type { TweetQuotedPresentation } from './TweetQuoteParsing.ts'
+  preferredSourceAvatarUrl,
+  stripDuplicatedRetweetLeadingBadge,
+  xAvatarUrl,
+} from './TweetParsing.ts'
+import type {
+  TweetQuotedPresentation,
+  TweetPresentationSource,
+} from './TweetParsing.ts'
 
-export type { TweetQuotedPresentation } from './TweetQuoteParsing.ts'
+export type { TweetQuotedPresentation } from './TweetParsing.ts'
 
 export interface TweetEntryPresentation {
   kind: 'tweet' | 'retweet' | 'quote'

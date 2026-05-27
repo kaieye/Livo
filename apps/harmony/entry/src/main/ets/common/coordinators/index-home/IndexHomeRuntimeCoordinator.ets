@@ -6,8 +6,7 @@ import {
 } from '../../config/HomeRootConfig'
 import { DEFAULT_HARMONY_SETTINGS, EntryCardModel, HarmonySettings } from '../../models/LivoModels'
 import { ThemePalette, ThemeService } from '../../services/ThemeService'
-import { resolveSystemBarStyle } from '../../utils/SystemBarStyle'
-import { shouldRefreshThemeOnSystemColorModeChange } from '../../utils/ThemeRefresh'
+import { resolveSystemBarStyle, shouldRefreshThemeOnSystemColorModeChange } from '../../utils/SystemAppearance'
 
 export interface IndexHomeRuntimeOwner {
   isComponentActive: boolean

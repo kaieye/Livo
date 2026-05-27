@@ -1,4 +1,4 @@
-import { DEFAULT_RSSHUB_INSTANCE } from '../AppConfig'
+import { DEFAULT_RSSHUB_INSTANCE } from '../config/PlatformInstances'
 import { DiscoverSearchPlatform, ResolvedDiscoverCandidate } from './discover/DiscoverTypes'
 import { FeedRefreshPayload } from './rss-feed/RssFeedService'
 import { searchBilibiliUsers } from './discover-remote/BilibiliUserSearchService'

@@ -1,4 +1,4 @@
-import { shouldAcceptModeSwitch } from '../../utils/ModeSwitchGuard'
+import { shouldAcceptModeSwitch } from '../../utils/ModeTransition'
 import {
   SUBSCRIPTION_MODES,
   SubscriptionMode,

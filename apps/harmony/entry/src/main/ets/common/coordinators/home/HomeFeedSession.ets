@@ -36,7 +36,7 @@ import {
   HOME_PERF_DIAG_PREFIX,
   SubscriptionMode,
 } from '../../config/HomeRootConfig'
-import { ModeSceneRenderState, resolveModeSceneRenderState } from '../../utils/ModeSceneTransition'
+import { ModeSceneRenderState, resolveModeSceneRenderState } from '../../utils/ModeTransition'
 import { IndexHomeRailCoordinator, IndexHomeRailOwner } from '../../coordinators/index-home/IndexHomeRailCoordinator'
 import { IndexHomeRuntimeCoordinator, IndexHomeRuntimeOwner } from '../../coordinators/index-home/IndexHomeRuntimeCoordinator'
 import { IndexRootTabCoordinator, IndexRootTabOwner } from '../../coordinators/index-home/IndexRootTabCoordinator'

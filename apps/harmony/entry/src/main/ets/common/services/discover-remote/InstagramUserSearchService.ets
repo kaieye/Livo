@@ -22,9 +22,11 @@ import {
   DEFAULT_ACCEPT_LANGUAGE,
   ACCEPT_HTML,
   ACCEPT_JSON,
+} from '../../config/NetworkConfig'
+import {
   INSTAGRAM_REFERER,
   INSTAGRAM_APP_ID,
-} from '../../AppConfig'
+} from '../../config/PlatformInstances'
 import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 import {
   SOCIAL_VIEW_MAPPING,

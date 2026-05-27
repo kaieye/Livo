@@ -6,7 +6,7 @@ import {
   DEFAULT_ACCEPT_LANGUAGE,
   ACCEPT_HTML,
   MEDIUM_REQUEST_TIMEOUT_MS,
-} from '../../AppConfig'
+} from '../../config/NetworkConfig'
 import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 
 interface ParsedYouTubeChannel {

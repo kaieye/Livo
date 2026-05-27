@@ -20,3 +20,11 @@ export function resolveSystemBarStyle(
     statusBarContentColor: theme.isDark ? '#FFFFFF' : '#000000',
   }
 }
+
+export type ThemeMode = 'light' | 'dark' | 'system'
+
+export function shouldRefreshThemeOnSystemColorModeChange(
+  themeMode: ThemeMode,
+): boolean {
+  return themeMode === 'system'
+}

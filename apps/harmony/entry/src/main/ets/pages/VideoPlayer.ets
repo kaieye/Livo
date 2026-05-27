@@ -7,7 +7,7 @@ import { MediaSaveService } from '../common/services/MediaSaveService'
 import { VideoResolverService } from '../common/services/VideoResolverService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { loadThemeForComponent } from '../common/utils/PageThemeHelper'
-import { resolveVideoPlayerLaunchState, VideoPlayerLaunchMode } from '../common/utils/VideoPlayerLaunchState'
+import { resolveVideoPlayerLaunchState, VideoPlayerLaunchMode } from '../common/utils/VideoPlayback'
 
 @Entry
 @Component

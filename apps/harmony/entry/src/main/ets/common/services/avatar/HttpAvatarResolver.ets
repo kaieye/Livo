@@ -11,11 +11,13 @@ import {
   DEFAULT_ACCEPT_LANGUAGE,
   ACCEPT_HTML,
   ACCEPT_JSON,
-  BILIBILI_ORIGIN,
-  bilibiliSpaceReferer,
   MEDIUM_REQUEST_TIMEOUT_MS,
   SHORT_REQUEST_TIMEOUT_MS,
-} from '../../AppConfig'
+} from '../../config/NetworkConfig'
+import {
+  BILIBILI_ORIGIN,
+  bilibiliSpaceReferer,
+} from '../../config/PlatformInstances'
 
 function trimValue(value: string | undefined): string {
   return (value || '').trim()

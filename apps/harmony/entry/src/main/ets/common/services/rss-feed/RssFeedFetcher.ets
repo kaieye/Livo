@@ -1,12 +1,14 @@
 import http from '@ohos.net.http'
 import { expandRssHubFallbackRoutes } from '../../utils/platform/RssHubFallbackRoute'
 import {
-  RSSHUB_INSTANCES,
   RSSHUB_REQUEST_TIMEOUT_MS,
   RSSHUB_INSTAGRAM_REQUEST_TIMEOUT_MS,
   RSS_REQUEST_TIMEOUT_MS,
+} from '../../config/NetworkConfig'
+import {
+  RSSHUB_INSTANCES,
   FALLBACK_NITTER_INSTANCES,
-} from '../../AppConfig'
+} from '../../config/PlatformInstances'
 
 export interface FeedRequestResult {
   response: http.HttpResponse

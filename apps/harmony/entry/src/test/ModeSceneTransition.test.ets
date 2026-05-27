@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { resolveModeSceneRenderState } from '../main/ets/common/utils/ModeSceneTransition'
+import { resolveModeSceneRenderState } from '../main/ets/common/utils/ModeTransition'
 
 export default function modeSceneTransitionTest() {
   describe('modeSceneTransitionTest', () => {

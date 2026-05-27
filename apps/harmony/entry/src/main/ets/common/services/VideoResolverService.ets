@@ -6,16 +6,18 @@ import {
   PipedStream,
   selectInvidiousPlayableUrl,
   selectPipedPlayableUrl,
-} from '../utils/VideoPlayableSelection'
+} from '../utils/VideoPlayback'
 import {
-  INVIDIOUS_INSTANCES,
-  PIPED_INSTANCES,
   DIRECT_PLAYBACK_TIMEOUT_MS,
   REQUEST_CONNECT_TIMEOUT_MS,
   REQUEST_READ_TIMEOUT_MS,
   BASIC_BROWSER_USER_AGENT,
   ACCEPT_JSON,
-} from '../AppConfig'
+} from '../config/NetworkConfig'
+import {
+  INVIDIOUS_INSTANCES,
+  PIPED_INSTANCES,
+} from '../config/PlatformInstances'
 
 export interface YouTubePlaybackResolution {
   playableUrl: string

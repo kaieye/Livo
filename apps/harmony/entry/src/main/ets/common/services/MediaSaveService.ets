@@ -7,7 +7,7 @@ import {
   ACCEPT_ANY,
   MEDIUM_REQUEST_TIMEOUT_MS,
   RSS_REQUEST_TIMEOUT_MS,
-} from '../AppConfig'
+} from '../config/NetworkConfig'
 
 export type MediaSaveKind = 'image' | 'video'
 

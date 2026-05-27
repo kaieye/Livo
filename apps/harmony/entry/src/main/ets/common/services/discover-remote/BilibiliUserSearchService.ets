@@ -7,12 +7,14 @@ import {
   DEFAULT_ACCEPT_LANGUAGE,
   ACCEPT_HTML,
   ACCEPT_JSON,
-  BILIBILI_REFERER,
-  BILIBILI_ORIGIN,
   SHORT_REQUEST_TIMEOUT_MS,
   MEDIUM_REQUEST_TIMEOUT_MS,
+} from '../../config/NetworkConfig'
+import {
+  BILIBILI_REFERER,
+  BILIBILI_ORIGIN,
   bilibiliSpaceReferer,
-} from '../../AppConfig'
+} from '../../config/PlatformInstances'
 import { ResolvedDiscoverCandidate } from '../discover/DiscoverTypes'
 
 interface BilibiliSearchResult {

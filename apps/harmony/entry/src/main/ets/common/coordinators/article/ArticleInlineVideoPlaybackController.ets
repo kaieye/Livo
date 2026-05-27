@@ -6,7 +6,7 @@ import { VideoResolverService } from '../../services/VideoResolverService'
 import { ExternalUrlService } from '../../services/ExternalUrlService'
 import { openVideoPlayer } from '../../navigation/AppRouter'
 import { resolveYouTubePlaybackDisplay } from '../../utils/platform/YouTubePlaybackDisplay'
-import { resolveVideoPlaybackTarget } from '../../utils/VideoPlaybackTarget'
+import { resolveVideoPlaybackTarget } from '../../utils/VideoPlayback'
 import {
   shouldOpenYouTubeExternallyOnFallback,
   shouldUseYouTubeWebFallback,

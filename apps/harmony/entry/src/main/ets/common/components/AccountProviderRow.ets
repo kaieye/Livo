@@ -1,6 +1,6 @@
 import { AccountProvider, AccountStatusResult } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
-import { accountCardHeadlineStatus } from '../utils/account/AccountCardHeadline'
+import { accountCardHeadlineStatus } from '../utils/account/AccountDisplay'
 import {
   accountProviderBadgeBackground,
   accountProviderBadgeResource,

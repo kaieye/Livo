@@ -9,10 +9,12 @@ import { AccountSessionService } from './AccountSessionService'
 import {
   DESKTOP_BROWSER_USER_AGENT,
   ACCEPT_JSON,
-  BILIBILI_REFERER,
   MEDIUM_REQUEST_TIMEOUT_MS,
-} from '../AppConfig'
-import { DEFAULT_RSSHUB_INSTANCE } from '../AppConfig'
+} from '../config/NetworkConfig'
+import {
+  BILIBILI_REFERER,
+  DEFAULT_RSSHUB_INSTANCE,
+} from '../config/PlatformInstances'
 
 const BILIBILI_PAGE_SIZE = 50
 const BILIBILI_MAX_COUNT = 300

@@ -11,7 +11,7 @@ import { EntryRepository } from '../common/repositories/EntryRepository'
 import { FeedRefreshCoordinator } from '../common/data/FeedRefreshCoordinator'
 import { SEED_FEEDS, SEED_ENTRIES, seedSettings } from '../common/data/SeedData'
 import { ThemeService } from '../common/services/ThemeService'
-import { resolveSystemBarStyle } from '../common/utils/SystemBarStyle'
+import { resolveSystemBarStyle } from '../common/utils/SystemAppearance'
 import { AudioPlaybackService } from '../common/services/AudioPlaybackService'
 
 export default class EntryAbility extends UIAbility {
