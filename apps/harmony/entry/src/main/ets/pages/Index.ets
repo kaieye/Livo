@@ -26,7 +26,7 @@ import { EntryImageGallery } from '../common/components/EntryImageGallery'
 import { AudioMiniBar } from '../common/components/AudioMiniBar'
 import { HdsBottomTabId } from '../common/coordinators/index-home/HdsBottomTabConfig'
 import { IndexHomeScrollerRegistry } from '../common/coordinators/index-home/IndexHomeScrollerRegistry'
-import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/coordinators/index-home/RootTabScrollToTopSignal'
+import { emitRootTabScrollToTop, scrollScrollerToTop } from '../common/coordinators/index-home/RootTabHelpers'
 import {
   writeHomeAudioBarCollapseProgress,
   writeHomeModeRailEffectiveProgress,
@@ -302,9 +302,9 @@ struct Index {
     return this.session.pageLifecycle.onBackPress()
   }
 
-  logHomeGroupStats(stage: string, entries: EntryCardModel[]): void { this.session.diagnosticsLogger.logHomeGroupStats(stage, entries) }
-  logHomePerf(message: string): void { this.session.diagnosticsLogger.logHomePerf(message) }
-  logHomeAsyncError(stage: string, error: Error | string | Object): void { this.session.diagnosticsLogger.logHomeAsyncError(stage, error) }
+  logHomeGroupStats(stage: string, entries: EntryCardModel[]): void { this.session.logHomeGroupStats(stage, entries) }
+  logHomePerf(message: string): void { this.session.logHomePerf(message) }
+  logHomeAsyncError(stage: string, error: Error | string | Object): void { this.session.logHomeAsyncError(stage, error) }
   runManagedTimeout(callback: () => void, delayMs: number): void { this.session.homeRuntimeCoordinator.runManagedTimeout(callback, delayMs) }
   beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void {
     this.tweetPresentationDiagToken += 1
@@ -315,7 +315,7 @@ struct Index {
     this.tweetPresentationDiagHits = 0
     this.tweetPresentationDiagMisses = 0
     this.tweetPresentationDiagMissCostMs = 0
-    this.session.diagnosticsLogger.logHomeLoadMore(
+    this.session.logHomeLoadMore(
       `tweet-presentation-diag-start token=${this.tweetPresentationDiagToken} mode=${mode} reason=${reason} startIndex=${expectedStartIndex}`,
     )
   }
@@ -323,7 +323,7 @@ struct Index {
     if (!this.tweetPresentationDiagStartedAt) {
       return
     }
-    this.session.diagnosticsLogger.logHomeLoadMore(
+    this.session.logHomeLoadMore(
       `tweet-presentation-diag-done token=${this.tweetPresentationDiagToken} mode=${this.tweetPresentationDiagMode} `
       + `reason=${reason} source=${this.tweetPresentationDiagReason} startIndex=${this.tweetPresentationDiagExpectedStartIndex} `
       + `elapsedMs=${Date.now() - this.tweetPresentationDiagStartedAt} hits=${this.tweetPresentationDiagHits} `
@@ -379,8 +379,8 @@ struct Index {
     this.getUIContext().animateTo(options, event)
   }
 
-  homeEmptyStateTitle(): string { return this.session.loadStateGate.homeEmptyStateTitle() }
-  updateHeaderBlurProgress(offset: number): void { this.session.loadStateGate.updateHeaderBlurProgress(offset) }
+  homeEmptyStateTitle(): string { return this.session.homeEmptyStateTitle() }
+  updateHeaderBlurProgress(offset: number): void { this.session.updateHeaderBlurProgress(offset) }
 
   readHomeModeScrollOffset(mode: SubscriptionMode): number { return this.session.homeRailCoordinator.readHomeModeScrollOffset(mode) }
   syncHomeModeRailState(mode: SubscriptionMode = this.mode): void { this.session.homeRailCoordinator.syncHomeModeRailState(mode) }
@@ -613,7 +613,7 @@ struct Index {
   }
   persistHomeSnapshotNow(): void { this.session.homeEntryDataManager.persistSnapshotNow() }
   applyHomeEntries(nextEntries: EntryCardModel[], deferredGrouping: boolean = true): void { this.session.homeEntryDataManager.applyHomeEntries(nextEntries, deferredGrouping) }
-  modeListSwapTranslateY(mode: SubscriptionMode): number { return this.session.modeScenePresenter.modeListSwapTranslateY(mode) }
+  modeListSwapTranslateY(mode: SubscriptionMode): number { return this.session.modeListSwapTranslateY(mode) }
   notifyHomeEntryDataReloaded(): void { this.session.homeEntryDataManager.notifyAllReloaded() }
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void {
     this.homeEntryDataSourceFor(mode).notifyDataAdded(startIndex)
@@ -630,10 +630,10 @@ struct Index {
   pictureGalleryUrls(entry: EntryCardModel): string[] { return pictureGalleryUrls(entry) }
   pictureCaption(entry: EntryCardModel): string { return pictureCaption(entry) }
   pictureCardEntry(entry: EntryCardModel): Entry { return pictureCardEntry(entry) }
-  modeSceneVisible(mode: SubscriptionMode): Visibility { return this.session.modeScenePresenter.getSceneProps(mode).visibility === 'visible' ? Visibility.Visible : Visibility.Hidden }
-  modeSceneOpacity(mode: SubscriptionMode): number { return this.session.modeScenePresenter.getSceneProps(mode).opacity }
-  modeSceneOffset(mode: SubscriptionMode): number { return this.session.modeScenePresenter.getSceneProps(mode).offset }
-  modeSceneZIndex(mode: SubscriptionMode): number { return this.session.modeScenePresenter.getSceneProps(mode).zIndex }
+  modeSceneVisible(mode: SubscriptionMode): Visibility { return this.session.getModeSceneProps(mode).visibility === 'visible' ? Visibility.Visible : Visibility.Hidden }
+  modeSceneOpacity(mode: SubscriptionMode): number { return this.session.getModeSceneProps(mode).opacity }
+  modeSceneOffset(mode: SubscriptionMode): number { return this.session.getModeSceneProps(mode).offset }
+  modeSceneZIndex(mode: SubscriptionMode): number { return this.session.getModeSceneProps(mode).zIndex }
   clearAutoRefreshTimer(): void { this.session.homeRuntimeCoordinator.clearAutoRefreshTimer() }
   configureAutoRefreshTimer(): void { this.session.homeRuntimeCoordinator.configureAutoRefreshTimer() }
 

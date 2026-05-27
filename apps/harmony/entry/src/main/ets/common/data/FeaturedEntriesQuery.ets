@@ -223,7 +223,7 @@ class FeaturedEntriesQuery {
 
   private readonly feedRepo: IFeedRepository
   private readonly entryRepo: IEntryRepository
-  private readonly modeEntriesCache: IEntryCardCache = new EntryCardCache()
+  private readonly modeEntriesCache: IEntryCardCache<EntryCardModel, Feed> = new EntryCardCache<EntryCardModel, Feed>()
 
   constructor(feedRepo: IFeedRepository, entryRepo: IEntryRepository) {
     this.feedRepo = feedRepo

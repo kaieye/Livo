@@ -73,15 +73,6 @@ test('HomeFeedSession owns all coordinator instances and bootstrap logic', () =>
   )
   assert.match(
     sessionSource,
-    /readonly diagnosticsLogger: IndexHomeDiagnosticsLogger/,
-  )
-  assert.match(sessionSource, /readonly loadStateGate: IndexHomeLoadStateGate/)
-  assert.match(
-    sessionSource,
-    /readonly modeScenePresenter: IndexHomeModeScenePresenter/,
-  )
-  assert.match(
-    sessionSource,
     /readonly pageLifecycle: IndexPageLifecycleController/,
   )
   // HomeFeedSession owns bootstrap logic.

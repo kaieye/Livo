@@ -13,7 +13,7 @@ const source = readFileSync(
 test('featured entries mode queries share a per-mode cache across fast and paged paths', () => {
   assert.match(
     source,
-    /private readonly modeEntriesCache: IEntryCardCache = new EntryCardCache\(\)/,
+    /private readonly modeEntriesCache: IEntryCardCache<EntryCardModel, Feed> = new EntryCardCache<EntryCardModel, Feed>\(\)/,
   )
   assert.match(source, /this\.modeEntriesCache\.set\(mode, feeds, result\)/)
   assert.match(source, /this\.modeEntriesCache\.set\(mode, feeds, cards\)/)

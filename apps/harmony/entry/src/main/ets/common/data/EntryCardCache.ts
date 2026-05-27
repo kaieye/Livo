@@ -4,44 +4,53 @@ import { modeMatchesFeedView } from './HomeEntryModeUtils'
 const MAX_CACHED_MODES = 5
 const CACHE_TTL_MS = 5 * 60 * 1000
 
-interface CacheItem {
-  signature: string
-  entries: object[]
-  savedAt: number
-}
-
 export interface FeedLike {
   id: string
   view: number
   updatedAt: number
 }
 
-function allowedFeedsForMode(
-  feeds: FeedLike[],
+interface CacheItem<TEntry> {
+  signature: string
+  entries: TEntry[]
+  savedAt: number
+}
+
+function allowedFeedsForMode<TFeed extends FeedLike>(
+  feeds: TFeed[],
   mode: HomeEntryMode,
-): FeedLike[] {
+): TFeed[] {
   return feeds.filter((feed) => modeMatchesFeedView(mode, feed.view))
 }
 
-function modeFeedSignature(mode: HomeEntryMode, feeds: FeedLike[]): string {
+function modeFeedSignature<TFeed extends FeedLike>(
+  mode: HomeEntryMode,
+  feeds: TFeed[],
+): string {
   const allowedFeedIds = allowedFeedsForMode(feeds, mode).map(
     (feed) => `${feed.id}:${feed.updatedAt}:${feed.view}`,
   )
   return `${mode}|${allowedFeedIds.join('|')}`
 }
 
-export interface IEntryCardCache {
+export interface IEntryCardCache<
+  TEntry = object,
+  TFeed extends FeedLike = FeedLike,
+> {
   clear(): void
   get(
     mode: HomeEntryMode,
-    feeds: FeedLike[],
+    feeds: TFeed[],
     targetCount: number,
-  ): object[] | undefined
-  set(mode: HomeEntryMode, feeds: FeedLike[], entries: object[]): void
+  ): TEntry[] | undefined
+  set(mode: HomeEntryMode, feeds: TFeed[], entries: TEntry[]): void
 }
 
-export class EntryCardCache implements IEntryCardCache {
-  private readonly store: Map<string, CacheItem> = new Map()
+export class EntryCardCache<
+  TEntry = object,
+  TFeed extends FeedLike = FeedLike,
+> implements IEntryCardCache<TEntry, TFeed> {
+  private readonly store: Map<string, CacheItem<TEntry>> = new Map()
   private modeOrder: string[] = []
 
   clear(): void {
@@ -51,9 +60,9 @@ export class EntryCardCache implements IEntryCardCache {
 
   get(
     mode: HomeEntryMode,
-    feeds: FeedLike[],
+    feeds: TFeed[],
     targetCount: number,
-  ): object[] | undefined {
+  ): TEntry[] | undefined {
     const cache = this.store.get(mode)
     if (!cache) {
       return undefined
@@ -73,7 +82,7 @@ export class EntryCardCache implements IEntryCardCache {
     return cache.entries.slice(0, targetCount)
   }
 
-  set(mode: HomeEntryMode, feeds: FeedLike[], entries: object[]): void {
+  set(mode: HomeEntryMode, feeds: TFeed[], entries: TEntry[]): void {
     const existing = this.store.get(mode)
     if (existing && existing.entries.length > entries.length) {
       return

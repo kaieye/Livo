@@ -41,7 +41,7 @@ import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../coordinators/index-home/RootTabScrollToTopSignal'
+} from '../coordinators/index-home/RootTabHelpers'
 
 const HEADER_BLUR_SCROLL_RANGE: number = 72
 const DISCOVER_TITLE_BAR_MINI_HEIGHT: number = 56

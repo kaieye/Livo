@@ -1,5 +1,5 @@
 import { EntryCardModel, FeedViewType } from '../models/LivoModels'
-import { PreferenceStoreAccessor } from './PreferenceStoreAccessor'
+import { loadJsonArray, saveJsonArray } from './PreferenceStoreAccessor'
 import { uniqueEntryCardKey } from '../data/AppRepositoryEntryHelpers'
 
 const HOME_ENTRY_SNAPSHOT_KEY: string = 'homeEntrySnapshotV1'
@@ -94,66 +94,23 @@ export class HomeEntrySnapshotStore implements IHomeEntrySnapshotStore {
   static readonly default: HomeEntrySnapshotStore = new HomeEntrySnapshotStore()
 
   async load(): Promise<EntryCardModel[]> {
-    try {
-      const pref = await PreferenceStoreAccessor.getPreferences()
-      const raw = await pref.get(HOME_ENTRY_SNAPSHOT_KEY, '[]')
-      const text = typeof raw === 'string' ? raw : '[]'
-      const parsed = JSON.parse(text) as EntryCardModel[]
-      if (!Array.isArray(parsed)) {
-        return []
-      }
-
-      const seen = new Set<string>()
-      const normalizedEntries: EntryCardModel[] = []
-      parsed.forEach((item: EntryCardModel) => {
-        if (normalizedEntries.length >= MAX_HOME_ENTRY_SNAPSHOT_ENTRIES) {
-          return
-        }
-
-        const normalizedItem = cloneHomeEntrySnapshotItem(item)
-        if (!normalizedItem) {
-          return
-        }
-
-        const key = uniqueEntryCardKey(normalizedItem)
-        if (seen.has(key)) {
-          return
-        }
-        seen.add(key)
-        normalizedEntries.push(normalizedItem)
-      })
-      return normalizedEntries
-    } catch (_error) {
-      return []
-    }
+    const parsed = await loadJsonArray<EntryCardModel>(HOME_ENTRY_SNAPSHOT_KEY)
+    return normalizeHomeEntrySnapshotEntries(parsed)
   }
 
   async save(entries: EntryCardModel[]): Promise<EntryCardModel[]> {
     const normalizedEntries = normalizeHomeEntrySnapshotEntries(entries)
-    const pref = await PreferenceStoreAccessor.getPreferences()
-    try {
-      await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(normalizedEntries))
-      await pref.flush()
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : '保存首页快照失败')
-    }
+    await saveJsonArray(HOME_ENTRY_SNAPSHOT_KEY, normalizedEntries, '保存首页快照失败')
     return normalizedEntries
   }
 
   async removeByFeedId(feedId: string): Promise<EntryCardModel[]> {
-    const pref = await PreferenceStoreAccessor.getPreferences()
     const currentEntries = await this.load()
     const nextEntries = filterHomeEntrySnapshotEntriesByFeedId(currentEntries, feedId)
     if (nextEntries.length === currentEntries.length) {
       return currentEntries
     }
-
-    try {
-      await pref.put(HOME_ENTRY_SNAPSHOT_KEY, JSON.stringify(nextEntries))
-      await pref.flush()
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : '移除首页快照失败')
-    }
+    await saveJsonArray(HOME_ENTRY_SNAPSHOT_KEY, nextEntries, '移除首页快照失败')
     return nextEntries
   }
 

@@ -13,19 +13,29 @@ import { HomeModeController, HomeModeState, HomeModeActions } from './HomeModeCo
 import { HomeFeedRefresh } from './HomeFeedRefresh'
 import { HomeFeedPagination } from './HomeFeedPagination'
 import { HomeFeedState, HomeFeedActions } from './HomeFeedSessionOwner'
+import { describeError, duplicateKeyCount, homeEntryRenderBaseKey } from './HomeEntryUtils'
 import {
+  HEADER_BLUR_SCROLL_RANGE,
+  HOME_ASYNC_ERROR_DEBUG_ENABLED,
+  HOME_ASYNC_ERROR_PREFIX,
   HOME_FULL_MODE_CANDIDATE_LIMIT,
+  HOME_GROUP_DEBUG_ENABLED,
+  HOME_GROUP_DEBUG_PREFIX,
   HOME_INITIAL_CANDIDATE_LIMIT,
   HOME_LIST_SWAP_ANIMATION_ENABLED,
   HOME_LIST_SWAP_ENTER_DURATION,
   HOME_LIST_SWAP_ENTRY_MIN_OPACITY,
   HOME_LIST_SWAP_ENTRY_OFFSET_Y,
+  HOME_LOAD_MORE_DEBUG_ENABLED,
+  HOME_LOAD_MORE_DEBUG_PREFIX,
+  HOME_LOAD_STATE_DIAG_ENABLED,
+  HOME_LOAD_STATE_DIAG_PREFIX,
   HOME_MAX_CANDIDATE_LIMIT,
+  HOME_PERF_DIAG_ENABLED,
+  HOME_PERF_DIAG_PREFIX,
   SubscriptionMode,
 } from '../../config/HomeRootConfig'
-import { IndexHomeDiagnosticsLogger, IndexHomeDiagnosticsOwner } from '../../coordinators/index-home/IndexHomeDiagnosticsLogger'
-import { IndexHomeLoadStateGate, IndexHomeLoadStateOwner } from '../../coordinators/index-home/IndexHomeLoadStateGate'
-import { IndexHomeModeScenePresenter, IndexHomeModeSceneOwner } from '../../coordinators/index-home/IndexHomeModeScenePresenter'
+import { ModeSceneRenderState, resolveModeSceneRenderState } from '../../utils/ModeSceneTransition'
 import { IndexHomeRailCoordinator, IndexHomeRailOwner } from '../../coordinators/index-home/IndexHomeRailCoordinator'
 import { IndexHomeRuntimeCoordinator, IndexHomeRuntimeOwner } from '../../coordinators/index-home/IndexHomeRuntimeCoordinator'
 import { IndexRootTabCoordinator, IndexRootTabOwner } from '../../coordinators/index-home/IndexRootTabCoordinator'
@@ -44,9 +54,6 @@ export interface HomeFeedSessionOwner
     HomeModeState,
     HomeInlineSearchState,
     HomeEntryDataState,
-    IndexHomeDiagnosticsOwner,
-    IndexHomeLoadStateOwner,
-    IndexHomeModeSceneOwner,
     IndexHomeRailOwner,
     IndexHomeRuntimeOwner,
     IndexRootTabOwner,
@@ -71,9 +78,6 @@ export interface HomeFeedSessionOwner
 }
 
 export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeInlineSearchActions, HomeEntryDataActions {
-  readonly diagnosticsLogger: IndexHomeDiagnosticsLogger
-  readonly loadStateGate: IndexHomeLoadStateGate
-  readonly modeScenePresenter: IndexHomeModeScenePresenter
   readonly homeRailCoordinator: IndexHomeRailCoordinator
   readonly rootTabCoordinator: IndexRootTabCoordinator
   readonly homeModeController: HomeModeController
@@ -100,9 +104,6 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     this.featuredEntriesQuery = featuredEntriesQuery ?? FeaturedEntriesQuery.default
     this.feedRefreshCoordinator = feedRefreshCoordinator ?? FeedRefreshCoordinator.default
 
-    this.diagnosticsLogger = new IndexHomeDiagnosticsLogger(owner)
-    this.loadStateGate = new IndexHomeLoadStateGate(owner)
-    this.modeScenePresenter = new IndexHomeModeScenePresenter(owner)
     this.homeRailCoordinator = new IndexHomeRailCoordinator(owner)
     this.rootTabCoordinator = new IndexRootTabCoordinator(owner)
     this.homeModeController = new HomeModeController(owner, this)
@@ -135,7 +136,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
 
   private async bootstrapHomeFeed(): Promise<void> {
     const startedAt = Date.now()
-    this.diagnosticsLogger.logHomePerf('loadInitialData start')
+    this.logHomePerf('loadInitialData start')
     this.homeFeedPagination.resetModeLoadMoreStates('load-initial')
     this.owner.homeInitialLoadPending = true
     this.owner.theme = ThemeService.currentPalette()
@@ -151,7 +152,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     } else {
       await this.loadFastLocalEntries()
     }
-    this.loadStateGate.settleInitialHomeLoadState()
+    this.settleInitialHomeLoadState()
     const settings = await settingsPromise
     const feeds = await feedsPromise
     this.owner.initialFeedCount = feeds.length
@@ -165,7 +166,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     this.homeFeedPagination.ensureModeEntriesLoaded(currentMode)
     this.precacheNonActiveModes()
     this.primeActiveModeLoadMorePrefetch('bootstrap')
-    this.diagnosticsLogger.logHomePerf(
+    this.logHomePerf(
       `loadInitialData done elapsedMs=${Date.now() - startedAt} featured=${this.owner.featuredEntries.length}`,
     )
   }
@@ -235,7 +236,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     )
     const shouldUseFastPath = preferFastPath
       && !this.homeFeedPagination.shouldRenderAllEntriesForMode(targetMode)
-    this.diagnosticsLogger.logHomePerf(
+    this.logHomePerf(
       `reload start mode=${targetMode} limit=${safeCandidateLimit} animated=${animated} `
       + `deferredGrouping=${deferredGrouping} fast=${shouldUseFastPath}`,
     )
@@ -247,7 +248,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
       nextEntries,
       safeCandidateLimit,
     )
-    this.diagnosticsLogger.logHomeGroupStats(
+    this.logHomeGroupStats(
       `reloadFeaturedEntriesFromLocal mode=${targetMode} limit=${safeCandidateLimit} animated=${animated}`,
       nextEntries,
     )
@@ -259,7 +260,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     if (targetMode === this.owner.mode) {
       this.primeActiveModeLoadMorePrefetch(`reload-featured mode=${targetMode}`)
     }
-    this.diagnosticsLogger.logHomePerf(
+    this.logHomePerf(
       `reload done mode=${targetMode} limit=${safeCandidateLimit} `
       + `elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`,
     )
@@ -286,14 +287,14 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     }
     const startedAt = Date.now()
     const safeCandidateLimit = Math.max(HOME_INITIAL_CANDIDATE_LIMIT, candidateLimit)
-    this.diagnosticsLogger.logHomePerf(
+    this.logHomePerf(
       `reload-home start limit=${safeCandidateLimit} animated=${animated} `
       + `deferredGrouping=${deferredGrouping} fast=${preferFastPath}`,
     )
     const nextEntries = preferFastPath
       ? await this.featuredEntriesQuery.featuredEntriesFast(safeCandidateLimit)
       : await this.featuredEntriesQuery.featuredEntries(safeCandidateLimit)
-    this.diagnosticsLogger.logHomeGroupStats(
+    this.logHomeGroupStats(
       `reloadHomeEntriesFromLocal limit=${safeCandidateLimit} animated=${animated}`,
       nextEntries,
     )
@@ -303,7 +304,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     }
     this.homeEntryDataManager.applyHomeEntries(nextEntries, deferredGrouping)
     this.primeActiveModeLoadMorePrefetch('reload-home')
-    this.diagnosticsLogger.logHomePerf(
+    this.logHomePerf(
       `reload-home done limit=${safeCandidateLimit} `
       + `elapsedMs=${Date.now() - startedAt} nextEntries=${nextEntries.length}`,
     )
@@ -354,7 +355,7 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
             )
           })
           .catch((error: Error | string | Object) => {
-            this.diagnosticsLogger.logHomeAsyncError(
+            this.logHomeAsyncError(
               `precache-mode mode=${mode}`,
               error,
             )
@@ -389,19 +390,162 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     reason: string,
     delayMs: number = HomeFeedSession.ACTIVE_MODE_PREFETCH_DELAY_MS,
   ): void {
-    this.diagnosticsLogger.logHomeLoadMore(
+    this.logHomeLoadMore(
       `prefetch-prime mode=${this.owner.mode} reason=${reason} delayMs=${delayMs}`,
     )
     this.homeFeedPagination.scheduleHomeLoadMorePrefetch(delayMs)
   }
 
+  // ── Diagnostics (inlined from former IndexHomeDiagnosticsLogger) ──
+
+  describeError(error: Error | string | Object): string {
+    return describeError(error)
+  }
+
+  logHomeAsyncError(stage: string, error: Error | string | Object): void {
+    if (!HOME_ASYNC_ERROR_DEBUG_ENABLED) {
+      return
+    }
+    console.error(`${HOME_ASYNC_ERROR_PREFIX} stage=${stage} error=${this.describeError(error)}`)
+  }
+
+  logHomeLoadMore(message: string): void {
+    if (!HOME_LOAD_MORE_DEBUG_ENABLED) {
+      return
+    }
+    console.info(`${HOME_LOAD_MORE_DEBUG_PREFIX} ${message}`)
+  }
+
+  logHomePerf(message: string): void {
+    if (!HOME_PERF_DIAG_ENABLED) {
+      return
+    }
+    const elapsed = this.owner.homePerfSessionStartedAt > 0 ? Date.now() - this.owner.homePerfSessionStartedAt : 0
+    console.info(`${HOME_PERF_DIAG_PREFIX} sid=${this.owner.homePerfSessionId} t=${elapsed}ms ${message}`)
+  }
+
+  logHomeLoadState(message: string): void {
+    if (!HOME_LOAD_STATE_DIAG_ENABLED) {
+      return
+    }
+    const elapsed = this.owner.homePerfSessionStartedAt > 0 ? Date.now() - this.owner.homePerfSessionStartedAt : 0
+    console.info(`${HOME_LOAD_STATE_DIAG_PREFIX} sid=${this.owner.homePerfSessionId} t=${elapsed}ms ${message}`)
+  }
+
+  logHomeGroupStats(stage: string, entries: EntryCardModel[]): void {
+    if (!HOME_GROUP_DEBUG_ENABLED) {
+      return
+    }
+
+    const idCounter: Map<string, number> = new Map<string, number>()
+    const renderBaseCounter: Map<string, number> = new Map<string, number>()
+    let articles = 0
+    let social = 0
+    let pictures = 0
+    let videos = 0
+
+    entries.forEach((entry: EntryCardModel) => {
+      const idKey = (entry.id || '').trim()
+      const idCount = idCounter.get(idKey) ?? 0
+      idCounter.set(idKey, idCount + 1)
+
+      const renderBaseKey = homeEntryRenderBaseKey(entry)
+      const renderBaseCount = renderBaseCounter.get(renderBaseKey) ?? 0
+      renderBaseCounter.set(renderBaseKey, renderBaseCount + 1)
+
+      switch (entry.viewLabel) {
+        case '社交':
+          social += 1
+          break
+        case '图片':
+          pictures += 1
+          break
+        case '视频':
+          videos += 1
+          break
+        default:
+          articles += 1
+          break
+      }
+    })
+
+    const duplicateIdCount = duplicateKeyCount(idCounter)
+    const duplicateRenderBaseCount = duplicateKeyCount(renderBaseCounter)
+
+    console.info(
+      `${HOME_GROUP_DEBUG_PREFIX} ${stage} total=${entries.length} `
+      + `articles=${articles} social=${social} pictures=${pictures} videos=${videos} `
+      + `uniqueIds=${idCounter.size} dupIds=${duplicateIdCount} `
+      + `uniqueRender=${renderBaseCounter.size} dupRender=${duplicateRenderBaseCount} `
+      + `activeTab=${this.rootTabCoordinator.currentRootTabId()} mode=${this.owner.mode}`,
+    )
+  }
+
+  // ── Load state (inlined from former IndexHomeLoadStateGate) ──
+
+  isHomeContentLoading(): boolean {
+    if (this.owner.featuredEntries.length > 0) {
+      return false
+    }
+    return this.owner.homeInitialLoadPending || this.owner.isRefreshing || this.owner.isHomeStartupRefreshing
+  }
+
+  settleInitialHomeLoadState(force: boolean = false): void {
+    if (!this.owner.homeInitialLoadPending) {
+      return
+    }
+    if (this.owner.isHomeStartupRefreshing) {
+      return
+    }
+    if (this.owner.featuredEntries.length > 0) {
+      this.owner.homeInitialLoadPending = false
+      return
+    }
+    if (this.owner.initialFeedCount === 0 && !this.owner.isRefreshing) {
+      this.owner.homeInitialLoadPending = false
+      return
+    }
+    if (force && !this.owner.isRefreshing) {
+      this.owner.homeInitialLoadPending = false
+    }
+  }
+
+  homeEmptyStateTitle(): string {
+    return this.isHomeContentLoading()
+      ? '正在加载订阅内容'
+      : '未发现订阅推文，请先到发现页面添加或刷新订阅源'
+  }
+
+  updateHeaderBlurProgress(offset: number): void {
+    const clampedOffset = Math.max(0, Math.min(offset, HEADER_BLUR_SCROLL_RANGE))
+    const nextProgress = clampedOffset / HEADER_BLUR_SCROLL_RANGE
+    if (Math.abs(nextProgress - this.owner.headerBlurProgress) < 0.005) {
+      return
+    }
+    this.owner.headerBlurProgress = nextProgress
+  }
+
+  // ── Mode scene (inlined from former IndexHomeModeScenePresenter) ──
+
+  getModeSceneProps(mode: SubscriptionMode): ModeSceneRenderState {
+    return resolveModeSceneRenderState({
+      mode,
+      renderedMode: this.owner.renderedMode,
+      previousMode: this.owner.previousMode,
+      isTransitioning: this.owner.isModeTransitioning,
+      direction: this.owner.modeTransitionDirection,
+    })
+  }
+
+  modeListSwapTranslateY(mode: SubscriptionMode): number {
+    if (this.owner.homeListSwapAnimating && mode === this.owner.homeListSwapMode) {
+      return this.owner.homeListSwapTranslateY
+    }
+    return 0
+  }
+
   // ── HomeFeedActions ──
 
-  logHomePerf(message: string): void { this.diagnosticsLogger.logHomePerf(message) }
-  logHomeAsyncError(stage: string, error: Error | string | Object): void { this.diagnosticsLogger.logHomeAsyncError(stage, error) }
-  logHomeLoadMore(message: string): void { this.diagnosticsLogger.logHomeLoadMore(message) }
-  logHomeLoadState(message: string): void { this.diagnosticsLogger.logHomeLoadState(message) }
-  describeError(error: Error | string | Object): string { return this.diagnosticsLogger.describeError(error) }
   beginTweetPresentationDiagSession(mode: SubscriptionMode, reason: string, expectedStartIndex: number): void { this.owner.beginTweetPresentationDiagSession(mode, reason, expectedStartIndex) }
   flushTweetPresentationDiagSession(reason: string): void { this.owner.flushTweetPresentationDiagSession(reason) }
   runManagedTimeout(callback: () => void, delayMs: number): void { this.homeRuntimeCoordinator.runManagedTimeout(callback, delayMs) }
@@ -412,7 +556,6 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
   filteredEntriesFor(mode: SubscriptionMode): EntryCardModel[] { return this.owner.filteredEntriesFor(mode) }
   mergeFeaturedEntriesFromGroups(): EntryCardModel[] { return this.homeEntryDataManager.mergeFeaturedEntriesFromGroups() }
   applyEntriesForMode(mode: SubscriptionMode, entries: EntryCardModel[], deferredPersist: boolean, skipNotify?: boolean, skipMerge?: boolean, skipPersist?: boolean): void { this.homeEntryDataManager.applyEntriesForMode(mode, entries, deferredPersist, skipNotify, skipMerge, skipPersist) }
-  settleInitialHomeLoadState(force?: boolean): void { this.loadStateGate.settleInitialHomeLoadState(force) }
   schedulePersistHomeSnapshot(entries: EntryCardModel[]): void { this.homeEntryDataManager.schedulePersistSnapshot(entries) }
   notifyHomeEntryDataReloadedForMode(mode: SubscriptionMode): void { this.homeEntryDataManager.notifyModeReloaded(mode) }
   notifyHomeEntryDataAppendedForMode(mode: SubscriptionMode, startIndex: number): void { this.owner.notifyHomeEntryDataAppendedForMode(mode, startIndex) }
@@ -425,19 +568,15 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
   pendingLoadMoreForMode(mode: SubscriptionMode): boolean { return this.homeFeedPagination.pendingLoadMoreForMode(mode) }
   hasRecentHomeScrollIntent(): boolean { return this.homeFeedPagination.hasRecentHomeScrollIntent() }
   handleHomeListEndReach(mode: SubscriptionMode, totalCount: number): void { this.homeFeedPagination.handleHomeListEndReach(mode, totalCount) }
-  // reloadFeaturedEntriesFromLocal / reloadHomeEntriesFromLocal — implemented by existing methods above
+  // reloadFeaturedEntriesFromLocal / reloadHomeEntriesFromLocal — implemented by methods above
 
   // ── HomeModeActions ──
 
-  // readHomeModeScrollOffset — already declared above (shared with HomeFeedActions)
   totalEntryCountFor(mode: SubscriptionMode): number { return this.homeFeedPagination.totalEntryCountFor(mode) }
-  // filteredEntriesFor — already declared above
   setHomeScrollInteracting(interacting: boolean, mode: SubscriptionMode): void { this.owner.setHomeScrollInteracting(interacting, mode) }
-  updateHeaderBlurProgress(offset: number): void { this.loadStateGate.updateHeaderBlurProgress(offset) }
   resetModeScrollIntent(mode: SubscriptionMode): void { this.owner.resetModeScrollIntent(mode) }
   ensureModeEntriesLoaded(mode: SubscriptionMode): void { this.homeFeedPagination.ensureModeEntriesLoaded(mode) }
   syncHomeModeRailEffectiveProgress(): void { this.owner.syncHomeModeRailEffectiveProgress() }
-  // runManagedTimeout — already declared above
 
   // ── HomeInlineSearchActions ──
 
@@ -449,15 +588,10 @@ export class HomeFeedSession implements HomeFeedActions, HomeModeActions, HomeIn
     return this.owner.filteredEntriesFor(this.owner.mode)
   }
   getSearchInputController(): TextInputController { return this.owner.getSearchInputController() }
-  // runManagedTimeout — already declared above
 
   // ── HomeEntryDataActions ──
 
   markModeLoaded(mode: SubscriptionMode, loaded: boolean): void { this.homeFeedPagination.markModeLoaded(mode, loaded) }
-  // settleInitialHomeLoadState — already declared above (shared with HomeFeedActions)
   resetTweetPresentationCache(): void { this.owner.resetTweetPresentationCache() }
   animateWithUiContext(options: AnimateParam, event: () => void): void { this.owner.animateWithUiContext(options, event) }
-  // runManagedTimeout — already declared above
-  // bumpHomeContentVersion — already declared above
-  // logHomeLoadMore — already declared above
 }

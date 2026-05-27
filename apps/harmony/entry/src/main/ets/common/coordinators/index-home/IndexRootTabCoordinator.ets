@@ -2,8 +2,11 @@ import { getRequestedRootTabId, RootTabId, rootTabIndexForId } from '../../navig
 import { EntryCardModel } from '../../models/LivoModels'
 import { HdsBottomTabId, resolveHdsBottomTabItems } from './HdsBottomTabConfig'
 import { rootTabSymbolPair, rootTitleFor } from './IndexRootChrome'
-import { shouldHideRootBottomBar, shouldHideRootTitleBar } from './RootTabVisibilityPolicy'
-import { ROOT_TAB_DOUBLE_TAP_WINDOW_MS } from './RootTabScrollToTopSignal'
+import {
+  shouldHideRootBottomBar,
+  shouldHideRootTitleBar,
+  ROOT_TAB_DOUBLE_TAP_WINDOW_MS,
+} from './RootTabHelpers'
 import {
   HOME_MAX_CANDIDATE_LIMIT,
   RootTabSymbolPair,

@@ -25,7 +25,7 @@ const rootChromeSource = readFileSync(
 )
 const rootVisibilityPolicySource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/coordinators/index-home/RootTabVisibilityPolicy.ets',
+    '../entry/src/main/ets/common/coordinators/index-home/RootTabHelpers.ets',
     import.meta.url,
   ),
   'utf8',

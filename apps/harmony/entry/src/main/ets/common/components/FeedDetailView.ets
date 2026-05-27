@@ -16,8 +16,8 @@ import {
   FeedDetailDataCoordinator,
 } from '../coordinators/feed-detail/FeedDetailDataCoordinator'
 import {
-  FeedDetailHeroAvatarCoordinator,
-} from '../coordinators/feed-detail/FeedDetailHeroAvatarCoordinator'
+  FeedDetailHeroAvatar,
+} from '../coordinators/feed-detail/FeedDetailHeroAvatar'
 import {
   FeedDetailPicturePreviewLeadUrlCache,
   FeedDetailTweetPresentationCache,
@@ -92,7 +92,7 @@ export struct FeedDetailView {
   private readonly tweetPresentationCache: FeedDetailTweetPresentationCache =
     new FeedDetailTweetPresentationCache()
   private dataCoordinator: FeedDetailDataCoordinator = new FeedDetailDataCoordinator(this)
-  private avatarCoordinator: FeedDetailHeroAvatarCoordinator = new FeedDetailHeroAvatarCoordinator(this)
+  private avatarCoordinator: FeedDetailHeroAvatar = new FeedDetailHeroAvatar(this)
 
   @StorageProp('feedsChangedAt') @Watch('handleFeedsChanged') feedsChangedAt: number = 0
 

@@ -1,4 +1,4 @@
-import { PreferenceStoreAccessor } from './PreferenceStoreAccessor'
+import { loadJsonArray, saveJsonArray } from './PreferenceStoreAccessor'
 import { discoverAvatarCacheKey, isDiscoverAvatarCacheableImageUrl } from '../coordinators/discover/DiscoverAvatarPresentation'
 
 const DISCOVER_AVATAR_CACHE_KEY: string = 'discoverAvatarCacheV1'
@@ -29,30 +29,18 @@ function normalizeDiscoverAvatarCacheEntry(item: DiscoverAvatarCacheEntry): Disc
 
 export class DiscoverAvatarCacheStore {
   static async load(): Promise<DiscoverAvatarCacheEntry[]> {
-    try {
-      const pref = await PreferenceStoreAccessor.getPreferences()
-      const raw = await pref.get(DISCOVER_AVATAR_CACHE_KEY, '[]')
-      const text = typeof raw === 'string' ? raw : '[]'
-      const parsed = JSON.parse(text) as DiscoverAvatarCacheEntry[]
-      if (!Array.isArray(parsed)) {
-        return []
+    const parsed = await loadJsonArray<DiscoverAvatarCacheEntry>(DISCOVER_AVATAR_CACHE_KEY)
+    const entries: DiscoverAvatarCacheEntry[] = []
+    parsed.forEach((item: DiscoverAvatarCacheEntry) => {
+      if (entries.length >= MAX_DISCOVER_AVATAR_CACHE_ENTRIES) {
+        return
       }
-
-      const entries: DiscoverAvatarCacheEntry[] = []
-      parsed.forEach((item: DiscoverAvatarCacheEntry) => {
-        if (entries.length >= MAX_DISCOVER_AVATAR_CACHE_ENTRIES) {
-          return
-        }
-
-        const normalized = normalizeDiscoverAvatarCacheEntry(item)
-        if (normalized) {
-          entries.push(normalized)
-        }
-      })
-      return entries
-    } catch (_error) {
-      return []
-    }
+      const normalized = normalizeDiscoverAvatarCacheEntry(item)
+      if (normalized) {
+        entries.push(normalized)
+      }
+    })
+    return entries
   }
 
   static async save(entries: DiscoverAvatarCacheEntry[]): Promise<DiscoverAvatarCacheEntry[]> {
@@ -70,7 +58,6 @@ export class DiscoverAvatarCacheStore {
       if (normalizedEntries.length >= MAX_DISCOVER_AVATAR_CACHE_ENTRIES) {
         return
       }
-
       const key = discoverAvatarCacheKey(entry.targetUrl, entry.siteUrl)
       if (seenKeys.has(key)) {
         return
@@ -79,13 +66,7 @@ export class DiscoverAvatarCacheStore {
       normalizedEntries.push(entry)
     })
 
-    const pref = await PreferenceStoreAccessor.getPreferences()
-    try {
-      await pref.put(DISCOVER_AVATAR_CACHE_KEY, JSON.stringify(normalizedEntries))
-      await pref.flush()
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : '保存发现页头像缓存失败')
-    }
+    await saveJsonArray(DISCOVER_AVATAR_CACHE_KEY, normalizedEntries, '保存发现页头像缓存失败')
     return normalizedEntries
   }
 

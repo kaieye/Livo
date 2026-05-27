@@ -28,7 +28,7 @@ import {
   ROOT_TAB_SCROLL_TO_TOP_AT_KEY,
   ROOT_TAB_SCROLL_TO_TOP_TAB_KEY,
   scrollScrollerToTop,
-} from '../coordinators/index-home/RootTabScrollToTopSignal'
+} from '../coordinators/index-home/RootTabHelpers'
 
 @Component
 export struct SubscriptionsContent {

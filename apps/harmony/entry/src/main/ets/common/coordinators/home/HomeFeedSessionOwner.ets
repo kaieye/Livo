@@ -78,6 +78,7 @@ export interface HomeFeedState {
   homeListSwapAnimating: boolean
   homeListSwapMode: SubscriptionMode
   homeListSwapToken: number
+  headerBlurProgress: number
 
   // Tracker (read-only reference — mutations go through its own API)
   homeScrollIntent: HomeScrollIntentTracker

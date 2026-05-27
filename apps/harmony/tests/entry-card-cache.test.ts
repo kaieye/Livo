@@ -4,7 +4,7 @@ import {
   EntryCardCache,
   IEntryCardCache,
   FeedLike,
-} from '../entry/src/main/ets/common/data/EntryCardCachePure.ts'
+} from '../entry/src/main/ets/common/data/EntryCardCache.ts'
 
 function fakeFeed(id: string, view: number, updatedAt: number): FeedLike {
   return { id, view, updatedAt }
