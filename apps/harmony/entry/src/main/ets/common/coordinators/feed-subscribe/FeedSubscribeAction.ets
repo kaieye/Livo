@@ -18,7 +18,7 @@ import { FeedRepository } from '../../repositories/FeedRepository'
 import { HomeEntrySnapshotStore } from '../../services/HomeEntrySnapshotStore'
 import { FeedRefreshCoordinator } from '../../data/FeedRefreshCoordinator'
 import { FeedDraft } from '../../repositories/FeedRepository'
-import { FeedRefreshPayload } from '../../services/RssFeedService'
+import { FeedRefreshPayload } from '../../services/rss-feed/RssFeedService'
 import { bumpFeedsChangedSignal } from '../../utils/FeedChangeSignal'
 import { effectiveSubscribedUrl } from './FeedSubscribeTargetUrl'
 

@@ -28,7 +28,7 @@ const visibleEntryPolicySource = readFileSync(
 
 const paginationStateSource = readFileSync(
   new URL(
-    '../entry/src/main/ets/common/coordinators/home/HomeFeedPaginationState.ets',
+    '../entry/src/main/ets/common/coordinators/home/HomeFeedPagination.ets',
     import.meta.url,
   ),
   'utf8',

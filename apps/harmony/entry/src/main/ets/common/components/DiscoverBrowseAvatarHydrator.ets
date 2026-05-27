@@ -2,7 +2,7 @@ import { DiscoverBuiltinFeedSeed } from '../data/DiscoverBuiltinFeeds'
 import { DiscoverAvatarCacheStore, DiscoverAvatarCacheEntry } from '../services/DiscoverAvatarCacheStore'
 import { RecommendedFeed } from '../services/discover/DiscoverTypes'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
-import { RssFeedService } from '../services/RssFeedService'
+import { RssFeedService } from '../services/rss-feed/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import {
   discoverAvatarCacheKey,

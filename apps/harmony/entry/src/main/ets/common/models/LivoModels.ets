@@ -10,17 +10,22 @@ import {
 import { feedSiteUrl, formatPublishedAt, viewDefinitionOf } from './FeedViewUtils'
 import { selectPictureMediaUrls } from './MediaUrlUtils'
 import {
-  ArticleContentBlock,
-  ArticleDetailModel,
   Entry,
-  EntryCardModel,
   Feed,
-  FeedCardModel,
   FeedViewType,
   FeedWithCount,
-} from './LivoTypes'
+} from './DomainModels'
+import {
+  ArticleContentBlock,
+  ArticleDetailModel,
+  EntryCardModel,
+  FeedCardModel,
+} from './ViewModels'
 
-export * from './LivoTypes'
+export * from './DomainModels'
+export * from './ViewModels'
+export * from './SettingsModels'
+export * from './ResultModels'
 export * from './LivoDefaults'
 export * from './FeedViewUtils'
 export * from './MediaUrlUtils'

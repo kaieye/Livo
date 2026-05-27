@@ -1,5 +1,5 @@
 import { Entry, Feed, FeedViewType } from '../../models/LivoModels'
-import { FeedRefreshPayload } from '../../services/RssFeedService'
+import { FeedRefreshPayload } from '../../services/rss-feed/RssFeedService'
 import { extractEntryGalleryImageUrls } from '../../utils/PictureGallery'
 import { resolveEntryCardImageUrl } from '../../utils/EntryCardPreview'
 import { feedDetailHostOf } from './FeedDetailPreviewPolicy'

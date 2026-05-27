@@ -2,7 +2,7 @@ import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '
 import { openArticleDetail } from '../navigation/AppRouter'
 import { FeedRepository } from '../repositories/FeedRepository'
 import { feedCardFromFeed } from '../data/AppRepositoryEntryHelpers'
-import { FeedRefreshPayload } from '../services/RssFeedService'
+import { FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import {
   subscriptionsOverlayLevel as subscriptionsOverlayLevelSignal,

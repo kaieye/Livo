@@ -4,7 +4,7 @@ import { getStringParams, goBack } from '../common/navigation/AppRouter'
 import { Entry, Feed, FeedViewType, formatPublishedAt } from '../common/models/LivoModels'
 
 import { FeedDraft } from '../common/repositories/FeedRepository'
-import { FeedRefreshPayload, RssFeedService } from '../common/services/RssFeedService'
+import { FeedRefreshPayload, RssFeedService } from '../common/services/rss-feed/RssFeedService'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { showToast } from '../common/utils/PageToastHelper'
 import { loadThemeForComponent } from '../common/utils/PageThemeHelper'

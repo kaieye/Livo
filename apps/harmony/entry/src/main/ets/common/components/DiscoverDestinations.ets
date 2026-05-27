@@ -1,5 +1,5 @@
 import { Entry, Feed, FeedViewType, formatPublishedAt } from '../models/LivoModels'
-import { FeedRefreshPayload } from '../services/RssFeedService'
+import { FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { PAGE_HORIZONTAL_PADDING } from '../ui/UiTokens'
 import { FeedDetailView } from './FeedDetailView'

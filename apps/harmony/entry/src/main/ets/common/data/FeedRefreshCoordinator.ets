@@ -5,7 +5,7 @@ import {
 import { FeedRepository, IFeedRepository, UpdateFetchStateParams } from '../repositories/FeedRepository'
 import { EntryRepository, IEntryRepository } from '../repositories/EntryRepository'
 import { RefreshLogStore } from '../services/RefreshLogStore'
-import { RssFeedService, FeedRefreshPayload } from '../services/RssFeedService'
+import { RssFeedService, FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
 import { SocialFeedAvatarService } from '../services/SocialFeedAvatarService'
 import { BackgroundTaskService } from '../services/BackgroundTaskService'
 import { resolveSocialFeedDisplayTitle } from '../utils/social/SocialFeedPresentation'

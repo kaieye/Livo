@@ -9,7 +9,7 @@ import {
 } from './DiscoverTypes'
 import { Entry, Feed, FeedViewType, toArticleDetailModel } from '../models/LivoModels'
 import { RecommendedFeed } from '../services/discover/DiscoverTypes'
-import { FeedRefreshPayload } from '../services/RssFeedService'
+import { FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
 import { ThemePalette } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 

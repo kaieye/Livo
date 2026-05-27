@@ -1,4 +1,4 @@
-import { AIAssistantSettings, AIProviderOptionMap, HarmonySettings } from './LivoTypes'
+import { AIAssistantSettings, AIProviderOptionMap, HarmonySettings } from './SettingsModels'
 
 export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE: string =
   'You are Livo AI, a helpful assistant. Answer in concise Chinese.'

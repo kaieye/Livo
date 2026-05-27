@@ -1,5 +1,5 @@
 import { Entry, Feed, FeedViewType } from '../models/LivoModels'
-import { FeedRefreshPayload } from '../services/RssFeedService'
+import { FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { livoMotion } from '../ui/Motion'
 import { FeedDetailView } from './FeedDetailView'

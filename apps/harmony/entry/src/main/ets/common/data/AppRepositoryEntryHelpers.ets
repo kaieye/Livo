@@ -16,7 +16,9 @@ import {
   resolveSocialFeedDisplayTitle,
 } from '../utils/social/SocialFeedPresentation'
 
-export type HomeEntryMode = 'articles' | 'social' | 'pictures' | 'videos'
+import { HomeEntryMode, modeMatchesFeedView, modeOfFeedView } from './HomeEntryModeUtils'
+
+export { HomeEntryMode, modeMatchesFeedView, modeOfFeedView }
 
 interface HomeEntryModeStats {
   articles: number
@@ -316,23 +318,6 @@ export function logHomeFeedDebug(message: string): void {
   }
 
   console.info(`${HOME_FEED_DEBUG_PREFIX} ${message}`)
-}
-
-export function modeOfFeedView(view: FeedViewType): HomeEntryMode {
-  switch (view) {
-    case FeedViewType.SocialMedia:
-      return 'social'
-    case FeedViewType.Pictures:
-      return 'pictures'
-    case FeedViewType.Videos:
-      return 'videos'
-    default:
-      return 'articles'
-  }
-}
-
-export function modeMatchesFeedView(mode: HomeEntryMode, view: FeedViewType): boolean {
-  return modeOfFeedView(view) === mode
 }
 
 export function countHomeEntryModes(entries: EntryCardModel[]): HomeEntryModeStats {

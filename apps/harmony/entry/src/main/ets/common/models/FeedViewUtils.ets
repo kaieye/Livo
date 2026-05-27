@@ -1,4 +1,4 @@
-import { Feed, FeedViewType, ViewDefinition } from './LivoTypes'
+import { Feed, FeedViewType, ViewDefinition } from './DomainModels'
 
 export function feedSiteUrl(feed: Feed): string {
   return feed.siteUrl ?? feed.url

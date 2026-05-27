@@ -1,6 +1,6 @@
 import { FeedRepository } from '../../repositories/FeedRepository'
 import { Feed } from '../../models/LivoModels'
-import { FeedRefreshPayload } from '../../services/RssFeedService'
+import { FeedRefreshPayload } from '../../services/rss-feed/RssFeedService'
 import { SocialFeedAvatarService } from '../../services/SocialFeedAvatarService'
 import { resolvePreferredStoredFeedImageUrl } from '../../utils/social/SocialFeedPresentation'
 import { resolveFeedDetailPreferredDisplayImageUrl } from './FeedDetailPreviewPolicy'

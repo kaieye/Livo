@@ -23,7 +23,7 @@ import {
 import { Feed, FeedViewType } from '../models/LivoModels'
 import { DiscoverSearchPlatform, RecommendedFeed, ResolvedDiscoverCandidate } from '../services/discover/DiscoverTypes'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
-import { FeedRefreshPayload, RssFeedService } from '../services/RssFeedService'
+import { FeedRefreshPayload, RssFeedService } from '../services/rss-feed/RssFeedService'
 import { discoverViewLabel } from '../services/discover/DiscoverLabels'
 import { resolveProfileCandidatesByPlatform } from '../services/discover/DiscoverProfileResolver'
 import { resolveKeywordCandidatesByPlatform } from '../services/discover/DiscoverKeywordResolver'

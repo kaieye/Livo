@@ -3,7 +3,7 @@ import { Feed, FeedViewType } from '../models/LivoModels'
 import { ThemePalette, ThemeService } from '../services/ThemeService'
 import { showToast, TOAST_DURATION_ERROR, TOAST_DURATION_OK } from '../utils/PageToastHelper'
 import { DiscoverRemoteSearchService } from '../services/DiscoverRemoteSearchService'
-import { FeedRefreshPayload } from '../services/RssFeedService'
+import { FeedRefreshPayload } from '../services/rss-feed/RssFeedService'
 import { resolveSocialFeedDisplayImageUrl } from '../utils/social/SocialFeedPresentation'
 import {
   feedFaviconUrl,

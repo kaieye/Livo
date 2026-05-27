@@ -6,7 +6,8 @@ import {
   PictureCarouselMediaItem,
   resolvePictureCarouselMediaItems,
 } from '../utils/PictureGallery'
-import { ArticleContentBlock, Entry, Feed } from './LivoTypes'
+import { Entry, Feed } from './DomainModels'
+import { ArticleContentBlock } from './ViewModels'
 import { feedSiteUrl } from './FeedViewUtils'
 import { selectPictureCarouselMediaUrls } from './MediaUrlUtils'
 import {

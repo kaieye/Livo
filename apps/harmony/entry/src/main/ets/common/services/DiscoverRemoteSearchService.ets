@@ -1,6 +1,6 @@
 import { DEFAULT_RSSHUB_INSTANCE } from '../AppConfig'
 import { DiscoverSearchPlatform, ResolvedDiscoverCandidate } from './discover/DiscoverTypes'
-import { FeedRefreshPayload } from './RssFeedService'
+import { FeedRefreshPayload } from './rss-feed/RssFeedService'
 import { searchBilibiliUsers } from './discover-remote/BilibiliUserSearchService'
 import { searchInstagramUsers } from './discover-remote/InstagramUserSearchService'
 import { searchXUsers } from './discover-remote/XUserSearchService'

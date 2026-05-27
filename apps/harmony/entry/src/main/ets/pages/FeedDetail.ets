@@ -4,7 +4,7 @@ import { getStringParams, goBack, openArticleDetail, openDiscoverSubscribeConfig
 import { Entry, Feed, FeedCardModel, FeedViewType, toArticleDetailModel } from '../common/models/LivoModels'
 import { ThemePalette, ThemeService } from '../common/services/ThemeService'
 import { FeedDetailView } from '../common/components/FeedDetailView'
-import { FeedRefreshPayload } from '../common/services/RssFeedService'
+import { FeedRefreshPayload } from '../common/services/rss-feed/RssFeedService'
 
 @Entry
 @Component
