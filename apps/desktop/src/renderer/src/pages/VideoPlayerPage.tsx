@@ -3,15 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, ExternalLink, Loader2, VideoOff } from 'lucide-react'
 
-import { useEntryStore } from '../store/entry-store'
 import { VideoPlayer } from '../components/ui/VideoPlayer'
+import { useDeepLinkEntry } from '../hooks/useDeepLinkEntry'
 import { resolvePreferredEntryVideo } from '../lib/entry-video-source'
 import {
   buildYoutubeIframeUrl,
   extractYoutubeVideoId,
   resolveYoutubePlayback,
 } from '../lib/youtube-playback'
-import type { Entry } from '../../../shared/types'
 
 type YoutubePlayback = { kind: 'direct' | 'iframe'; url: string }
 
@@ -26,57 +25,7 @@ export default function VideoPlayerPage() {
   const navigate = useNavigate()
   const { entryId } = useParams<{ entryId: string }>()
 
-  const storeEntries = useEntryStore((s) => s.entries)
-  const selectedEntry = useEntryStore((s) => s.selectedEntry)
-  const selectEntry = useEntryStore((s) => s.selectEntry)
-
-  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'missing'>(
-    'idle',
-  )
-
-  const inStoreEntry = useMemo<Entry | null>(
-    () =>
-      entryId ? (storeEntries.find((e) => e.id === entryId) ?? null) : null,
-    [storeEntries, entryId],
-  )
-
-  useEffect(() => {
-    if (!entryId) {
-      setFetchState('missing')
-      return
-    }
-
-    if (inStoreEntry) {
-      setFetchState('idle')
-      void selectEntry(inStoreEntry)
-      return
-    }
-
-    let cancelled = false
-    setFetchState('loading')
-    void window.api.entries
-      .get(entryId)
-      .then((entry) => {
-        if (cancelled) return
-        if (!entry) {
-          setFetchState('missing')
-          return
-        }
-        setFetchState('idle')
-        void selectEntry(entry)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setFetchState('missing')
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [entryId, inStoreEntry, selectEntry])
-
-  const activeEntry =
-    selectedEntry && selectedEntry.id === entryId ? selectedEntry : null
+  const { activeEntry, state: fetchState } = useDeepLinkEntry(entryId)
 
   const videoMedia = useMemo(
     () => (activeEntry ? resolvePreferredEntryVideo(activeEntry) : null),

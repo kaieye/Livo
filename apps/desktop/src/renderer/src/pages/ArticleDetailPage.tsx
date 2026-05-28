@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, BookOpen, Loader2 } from 'lucide-react'
 
-import { useEntryStore } from '../store/entry-store'
 import { EntryContent } from '../components/entry/EntryContent'
-import type { Entry } from '../../../shared/types'
+import { useDeepLinkEntry } from '../hooks/useDeepLinkEntry'
 
 // Page shell for `/entry/:entryId`. EntryContent is store-driven and renders
 // its own toolbar + body, so this page's only job is: drive `selectEntry`
@@ -17,84 +16,28 @@ export default function ArticleDetailPage() {
   const navigate = useNavigate()
   const { entryId } = useParams<{ entryId: string }>()
 
-  const storeEntries = useEntryStore((s) => s.entries)
-  const selectedEntry = useEntryStore((s) => s.selectedEntry)
-  const selectEntry = useEntryStore((s) => s.selectEntry)
-
-  // Tracks an out-of-store fetch so we can render a loading state and a
-  // not-found state independently of `selectEntry`'s own hydration flag.
-  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'missing'>(
-    'idle',
-  )
-
-  const inStoreEntry = useMemo<Entry | null>(
-    () =>
-      entryId ? (storeEntries.find((e) => e.id === entryId) ?? null) : null,
-    [storeEntries, entryId],
-  )
-
-  useEffect(() => {
-    if (!entryId) {
-      setFetchState('missing')
-      return
-    }
-
-    // Fast path: entry is already in the home list; selectEntry will hit its
-    // detail cache or invoke `window.api.entries.get` for the full content.
-    if (inStoreEntry) {
-      setFetchState('idle')
-      void selectEntry(inStoreEntry)
-      return
-    }
-
-    // Slow path: deep-link or external nav — fetch the bare entry record
-    // directly and hand it to `selectEntry` for content hydration.
-    let cancelled = false
-    setFetchState('loading')
-    void window.api.entries
-      .get(entryId)
-      .then((entry) => {
-        if (cancelled) return
-        if (!entry) {
-          setFetchState('missing')
-          return
-        }
-        setFetchState('idle')
-        void selectEntry(entry)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setFetchState('missing')
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [entryId, inStoreEntry, selectEntry])
+  const { activeEntry, state: fetchState } = useDeepLinkEntry(entryId)
 
   const handleBack = useCallback(() => {
     navigate(-1)
   }, [navigate])
 
   const headerTitle = useMemo(() => {
-    if (selectedEntry && selectedEntry.id === entryId) {
+    if (activeEntry) {
       return (
-        selectedEntry.title?.trim() ||
-        selectedEntry.author?.trim() ||
+        activeEntry.title?.trim() ||
+        activeEntry.author?.trim() ||
         t('articleDetail.pageTitle')
       )
     }
     return t('articleDetail.pageTitle')
-  }, [selectedEntry, entryId, t])
+  }, [activeEntry, t])
 
-  // The visible body depends on whether the page can resolve an entry.
   const showNotFound = fetchState === 'missing'
-  // True only when there is nothing safe to render in EntryContent yet — i.e.
-  // either no selection at all, or the store still holds the previous entry's
-  // selection while our effect is racing to set the new one.
+  // Splash until the requested entry is in the store — otherwise EntryContent
+  // would briefly render the previous selection during navigation.
   const showLoading =
-    !showNotFound &&
-    (fetchState === 'loading' || !selectedEntry || selectedEntry.id !== entryId)
+    !showNotFound && (fetchState === 'loading' || !activeEntry)
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
