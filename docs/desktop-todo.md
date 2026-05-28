@@ -93,9 +93,20 @@ GitNexus 使用状态：
 
 ### 2. 文章详情页增强
 
-- [ ] **2.1** 抽取 AI 摘要面板（从 EntryContent 内联逻辑迁出，调用已有 summarize IPC，保留加载/错误状态） → 依赖: 1.3
-- [ ] **2.2** 抽取 AI 翻译面板（从 EntryContent 内联逻辑迁出，调用已有 translate IPC，补语言选择与错误呈现） → 依赖: 1.3
-- [ ] **2.3** 整合社交内容详情视图（复用现有 SocialOverlay/SocialContent 组件，补页面级作者、互动、引用渲染） → 依赖: 1.3
+- [x] **2.1** 抽取 AI 摘要面板（从 EntryContent 内联逻辑迁出，调用已有 summarize IPC，保留加载/错误状态） → 依赖: 1.3 ✅ `2026-05-28`
+  - 实现:`components/entry/EntryAIToolbar.tsx` — 可复用 AI 工具栏（摘要/翻译按钮 + 语言选择器），从 EntryContent.tsx 抽取 ~40 行
+  - 实现:`components/entry/AIAssistContent.tsx` — 可复用 AI 结果面板（摘要 + 双语对照），聚合已有的 `AISummaryPanel` + `BilingualContent`
+  - 架构:使用已有的 `useAISummary` hook 驱动状态，通过 props 传递到 presentational 组件；遵循 `improve-codebase-architecture` 的 seam 原则 —— EntryAIToolbar/AIAssistContent 作为一个 cohesive 单元可被任何 reader view 复用
+  - 文件:`components/entry/EntryAIToolbar.tsx`(新建 99 行)、`components/entry/AIAssistContent.tsx`(新建 84 行)、`EntryContent.tsx`(L872-903 替换为 `<EntryAIToolbar />`)
+- [x] **2.2** 抽取 AI 翻译面板（从 EntryContent 内联逻辑迁出，调用已有 translate IPC，补语言选择与错误呈现） → 依赖: 1.3 ✅ `2026-05-28`
+  - 与 2.1 同批次实现:`EntryAIToolbar` 同时承载摘要/翻译按钮 + 语言选择器；`AIAssistContent` 同时聚合摘要面板和双语对照内容
+  - 语言选择器已从 `EntryContent` 迁入 `EntryAIToolbar` 内部（复用已有的 `LanguageSelector` 组件）
+  - 文件:同 2.1
+- [x] **2.3** 整合社交内容详情视图（复用现有 SocialOverlay/SocialContent 组件，补页面级作者、互动、引用渲染） → 依赖: 1.3 ✅ `2026-05-28`
+  - 实现:`components/entry/SocialDetailView.tsx` — 页面级社交内容视图，组合已有 `SocialAuthorHeader`(头像/姓名/时间)、`SocialContentBody`(正文/双语翻译)、`SocialSummaryCard`(AI 摘要)、`OverlayMediaGallery`(图片/视频)
+  - 集成:`ArticleDetailPage.tsx` 通过 `useFeedStore` 检测 `feed.view === FeedViewType.SocialMedia`，社交条目渲染 `SocialDetailView` 替代 `EntryContent`
+  - 页面 header 新增 `EntryAIToolbar`，使 AI 摘要/翻译能力对社交条目也直接可用
+  - 文件:`components/entry/SocialDetailView.tsx`(新建 146 行)、`ArticleDetailPage.tsx`(重写 291 行——从 104 行扩展到完整 AI + 社交支持)
 - [ ] **2.4** 整合图片画廊模式（复用 OverlayMediaGallery，补 PictureDetailMedia 等价体验） → 依赖: 1.3
 - [ ] **2.5** 整合内嵌视频播放（复用现有 VideoPlayer，补 ArticleDetail 页面内统一入口） → 依赖: 1.3
 - [ ] **2.6** 补原文/美化视图切换 → 依赖: 1.3

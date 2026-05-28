@@ -56,7 +56,7 @@ import { useAISummary } from '../../hooks/useAISummary'
 import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
 import { BilingualContent } from './BilingualContent'
-import { LanguageSelector } from './LanguageSelector'
+import { EntryAIToolbar } from './EntryAIToolbar'
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -869,37 +869,17 @@ export function EntryContent() {
           />
         </ToolbarButton>
 
-        <ToolbarButton
-          onClick={handleSummarize}
-          disabled={isSummarizing || !aiApiKey}
-          title={aiApiKey ? t('entry.summarize') : t('entry.configureAIKey')}
-        >
-          {isSummarizing ? (
-            <Loader2 size={16} className="animate-spin text-accent" />
-          ) : (
-            <Sparkles size={16} />
-          )}
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={handleTranslate}
-          disabled={isTranslating || !aiApiKey}
-          active={showTranslation}
-          title={aiApiKey ? t('entry.translate') : t('entry.configureAIKey')}
-        >
-          {isTranslating ? (
-            <Loader2 size={16} className="animate-spin text-accent" />
-          ) : (
-            <Languages size={16} />
-          )}
-        </ToolbarButton>
-
-        <LanguageSelector
-          value={translationTargetLanguage}
-          onChange={(lang) =>
+        <EntryAIToolbar
+          onSummarize={handleSummarize}
+          onTranslate={handleTranslate}
+          isSummarizing={isSummarizing}
+          isTranslating={isTranslating}
+          showTranslation={showTranslation}
+          translationTargetLanguage={translationTargetLanguage}
+          onLanguageChange={(lang) =>
             updateSettingsSection('translation', { targetLanguage: lang })
           }
-          disabled={isTranslating || !aiApiKey}
+          disabled={!aiApiKey}
         />
 
         <ToolbarButton
