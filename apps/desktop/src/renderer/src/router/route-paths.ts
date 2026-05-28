@@ -15,6 +15,7 @@ export const ROUTES = {
     typeof index === 'number' && index > 0
       ? `/image/${entryId}/${index}`
       : `/image/${entryId}`,
+  login: (provider?: string) => (provider ? `/login/${provider}` : '/login'),
   discover: '/discover',
   settings: '/settings',
   subscriptions: '/subscriptions',
@@ -47,6 +48,7 @@ const NON_VIEW_PATHS = new Set([
   'entry',
   'video',
   'image',
+  'login',
   'starred',
   'discover',
   'settings',

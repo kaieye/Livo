@@ -8,6 +8,7 @@ const FeedDetailPage = lazy(() => import('../pages/FeedDetailPage'))
 const ArticleDetailPage = lazy(() => import('../pages/ArticleDetailPage'))
 const VideoPlayerPage = lazy(() => import('../pages/VideoPlayerPage'))
 const ImageViewerPage = lazy(() => import('../pages/ImageViewerPage'))
+const AccountLoginPage = lazy(() => import('../pages/AccountLoginPage'))
 
 /**
  * Route definitions for the Livo desktop app.
@@ -97,6 +98,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={null}>
             <ImageViewerPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'login/:provider?',
+        element: (
+          <Suspense fallback={null}>
+            <AccountLoginPage />
           </Suspense>
         ),
       },

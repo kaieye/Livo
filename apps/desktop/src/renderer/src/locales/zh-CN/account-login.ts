@@ -1,0 +1,15 @@
+export const zhCNAccountLogin = {
+  pageTitle: '账号登录',
+  back: '返回',
+  intro: '关联账号以导入订阅、个性化推荐。',
+  providersHeading: '可用平台',
+  signIn: '去登录',
+  connected: '已关联',
+  signedInAs: '账号：{{name}}',
+  manageInSettings: '在设置中管理账号',
+  manageInSettingsHint: '可在“账号”标签页取消关联、刷新状态或导入订阅。',
+  loading: '正在打开登录窗口...',
+  linkSuccess: '账号已关联',
+  linkFailed: '登录失败，请重试',
+  unsupportedProvider: '不支持的平台',
+}

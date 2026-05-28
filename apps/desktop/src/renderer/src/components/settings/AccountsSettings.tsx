@@ -1,21 +1,22 @@
 import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { AlertCircle, Check, Loader2, UserPlus } from 'lucide-react'
 import { FeedViewType, type AccountProvider } from '../../../../shared/types'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../../shared/discover-data'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { accountStatusQueryOptions } from '../../lib/query-definitions'
-import type { AccountStatusResult } from '../../lib/account-status'
+import { refreshAccountStatus } from '../../lib/account-status'
 import { useFeedStore } from '../../store/feed-store'
+import { useSettingsStore } from '../../store/settings-store'
+import {
+  PROVIDER_CONFIGS,
+  type ProviderConfig,
+} from '../account/provider-config'
 
-interface AccountCardConfig {
-  provider: AccountProvider
-  name: string
-  colorClass: string
-  description: string
-}
+type AccountCardConfig = ProviderConfig
 
 interface PendingBilibiliCreator {
   mid: number
@@ -128,36 +129,13 @@ function buildBilibiliImportUrl(
   return `${normalizedBase}/bilibili/user/video/${uid}`
 }
 
-const ACCOUNT_CARDS: AccountCardConfig[] = [
-  {
-    provider: 'youtube',
-    name: 'YouTube',
-    colorClass: 'text-red-500',
-    description: '用于关联 YouTube 会话并获取账号名称。',
-  },
-  {
-    provider: 'x',
-    name: 'X / Twitter',
-    colorClass: 'text-slate-700 dark:text-slate-200',
-    description: '用于关联 X 会话并获取账号名称。',
-  },
-  {
-    provider: 'instagram',
-    name: 'Instagram',
-    colorClass: 'text-pink-500',
-    description: '用于关联 Instagram 会话并获取账号名称。',
-  },
-  {
-    provider: 'bilibili',
-    name: 'Bilibili',
-    colorClass: 'text-sky-500',
-    description: '用于关联 Bilibili 会话，可一键导入关注列表。',
-  },
-]
+const ACCOUNT_CARDS: AccountCardConfig[] = PROVIDER_CONFIGS
 
 export function AccountsSettings() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const closeSettings = useSettingsStore((s) => s.setOpen)
   const [selfChecking, setSelfChecking] = useState(false)
   const [selfCheckSummary, setSelfCheckSummary] = useState<string | null>(null)
   const [selfCheckRows, setSelfCheckRows] = useState<
@@ -209,6 +187,25 @@ export function AccountsSettings() {
       <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
         {t('settings.accountsDesc')}
       </p>
+
+      <div className="rounded-xl border bg-white p-4 dark:bg-surface-dark-secondary">
+        <button
+          type="button"
+          onClick={() => {
+            closeSettings(false)
+            navigate('/login')
+          }}
+          className="flex w-full items-center justify-between gap-3 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+        >
+          <span className="flex items-center gap-2">
+            <UserPlus size={16} aria-hidden="true" />
+            {t('accountLogin.manageInSettings')}
+          </span>
+        </button>
+        <p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+          {t('accountLogin.manageInSettingsHint')}
+        </p>
+      </div>
 
       <div className="space-y-3 rounded-xl border bg-white p-4 dark:bg-surface-dark-secondary">
         <div className="flex items-center gap-2">
@@ -289,23 +286,10 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
     useState<BilibiliImportProgress | null>(null)
   const status = statusQuery.data ?? { linked: false, displayName: null }
   const isStatusLoading = statusQuery.isLoading && !statusQuery.data
-  const refreshStatus = useCallback(async () => {
-    const queryOptions = accountStatusQueryOptions(config.provider)
-    try {
-      const next = await queryClient.fetchQuery(queryOptions)
-      queryClient.setQueryData(queryOptions.queryKey, next)
-      return next
-    } catch {
-      const fallback: AccountStatusResult = {
-        provider: config.provider,
-        linked: false,
-        displayName: null,
-        error: undefined,
-      }
-      queryClient.setQueryData(queryOptions.queryKey, fallback)
-      return fallback
-    }
-  }, [config.provider, queryClient])
+  const refreshStatus = useCallback(
+    () => refreshAccountStatus(config.provider, queryClient),
+    [config.provider, queryClient],
+  )
 
   const handleLink = useCallback(async () => {
     setLoading(true)
