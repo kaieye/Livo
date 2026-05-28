@@ -1,6 +1,8 @@
 import { zhCNCommon } from './zh-CN/common'
 import { zhCNContextMenu } from './zh-CN/context-menu'
 import { zhCNDiscover } from './zh-CN/discover'
+import { zhCNDiscoverPreview } from './zh-CN/discover-preview'
+import { zhCNDiscoverSubscribeConfig } from './zh-CN/discover-subscribe-config'
 import { zhCNEntry } from './zh-CN/entry'
 import { zhCNErrorBoundary } from './zh-CN/error-boundary'
 import { zhCNFeedDetail } from './zh-CN/feed-detail'
@@ -97,6 +99,8 @@ export const zhCN = {
   },
 
   discover: zhCNDiscover,
+  discoverPreview: zhCNDiscoverPreview,
+  discoverSubscribeConfig: zhCNDiscoverSubscribeConfig,
 
   quickSearch: zhCNQuickSearch,
 

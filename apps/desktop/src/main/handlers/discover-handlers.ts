@@ -6,8 +6,13 @@ import {
   DEFAULT_RSSHUB_INSTANCE,
   searchCuratedFeeds,
 } from '../../shared/discover-data'
-import { IPC } from '../../shared/types'
-import type { ResolvedProfileFeedCandidate } from '../../shared/types'
+import { FeedViewType, IPC } from '../../shared/types'
+import type {
+  DiscoverFeedPreviewEntry,
+  DiscoverFeedPreviewResult,
+  Entry,
+  ResolvedProfileFeedCandidate,
+} from '../../shared/types'
 import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
 import {
   createInstagramDiscoverCandidate,
@@ -25,10 +30,14 @@ import { getSettings } from './settings-handlers'
 import { getYouTubeAccountState } from '../services/account-session'
 import { resolveYouTubeProfileToOfficialFeed } from '../services/youtube-profile-resolver'
 import {
+  ensureInstagramUserFeedLimit,
+  ensureTwitterUserFeedLimit,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from '../services/rsshub-url'
 import { resolveFeedAvatar } from '../services/feed-avatar'
+import { buildEntriesFromParsedItems } from '../services/entry-builder'
+import { detectRouteViewFromUrl } from '../services/feed-view'
 import RssParser from 'rss-parser'
 import * as https from 'node:https'
 
@@ -341,6 +350,60 @@ function getFeedImageUrl(parsed: any): string | undefined {
     if (image) return image
   }
   return undefined
+}
+
+function buildPreviewFetchUrl(targetUrl: string): string {
+  const rawProtocolUrl = toRsshubProtocolUrl(targetUrl.trim())
+  const limitedProtocolUrl = ensureTwitterUserFeedLimit(
+    ensureInstagramUserFeedLimit(rawProtocolUrl, 100),
+    120,
+  )
+  return normalizeRsshubProtocolUrl(limitedProtocolUrl, getRSSHubInstance())
+}
+
+function inferPreviewViewFromUrl(feedUrl: string): FeedViewType {
+  const routeView = detectRouteViewFromUrl(feedUrl)
+  if (routeView !== null) return routeView
+
+  const raw = (feedUrl || '').toLowerCase()
+  if (/\/(?:twitter|x)\/user\//i.test(raw)) return FeedViewType.SocialMedia
+  if (
+    /\/instagram\/user\//i.test(raw) ||
+    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
+    /\/pixnoy\/user\//i.test(raw) ||
+    /\/piokok\/user\//i.test(raw)
+  ) {
+    return FeedViewType.Pictures
+  }
+  return FeedViewType.Articles
+}
+
+function stripPreviewText(raw?: string): string {
+  return decodeBasicHtmlEntities(String(raw || ''))
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getPreviewEntryImage(entry: Entry): string | undefined {
+  return (
+    entry.imageUrl ||
+    entry.media?.find((media) => media.type === 'photo')?.previewUrl ||
+    entry.media?.find((media) => media.type === 'photo')?.url
+  )
+}
+
+function toDiscoverPreviewEntry(entry: Entry): DiscoverFeedPreviewEntry {
+  const summary = stripPreviewText(entry.summary || entry.content || '')
+  return {
+    id: entry.id,
+    title: entry.title || entry.author || entry.url,
+    url: entry.url,
+    summary: summary ? summary.slice(0, 240) : undefined,
+    author: entry.author || undefined,
+    imageUrl: getPreviewEntryImage(entry),
+    publishedAt: entry.publishedAt,
+  }
 }
 
 async function fetchBilibiliNameByUid(uid: string): Promise<string | null> {
@@ -2383,6 +2446,60 @@ export function registerDiscoverHandlers(): void {
       }
     }
   })
+
+  ipcMain.handle(
+    IPC.DISCOVER_PREVIEW_FEED,
+    async (_event, url: string): Promise<DiscoverFeedPreviewResult> => {
+      const targetUrl = (url || '').trim()
+      if (!targetUrl) {
+        return { success: false, error: 'Feed URL is required' }
+      }
+
+      try {
+        const resolvedFeedUrl = buildPreviewFetchUrl(targetUrl)
+        console.log(`[Discover Preview] Loading preview for ${resolvedFeedUrl}`)
+        const parsed = await fetchAndParseFeed(resolvedFeedUrl)
+        const data = parsed.data
+        if (!data) {
+          return { success: false, error: 'Feed returned no data' }
+        }
+
+        const imageUrl = await resolveFeedAvatar(
+          resolvedFeedUrl,
+          getFeedImageUrl(data),
+        )
+        const view = inferPreviewViewFromUrl(resolvedFeedUrl)
+        const entries = await buildEntriesFromParsedItems(
+          'discover-preview',
+          ((data.items || []) as Array<Record<string, any>>).slice(0, 6),
+          imageUrl,
+          view,
+          Date.now(),
+        )
+        const displayTitle = await inferDiscoverResultTitle(
+          resolvedFeedUrl,
+          data.title || undefined,
+        )
+
+        return {
+          success: true,
+          preview: {
+            targetUrl,
+            resolvedFeedUrl,
+            feedTitle: displayTitle || data.title || targetUrl,
+            siteUrl: data.link || resolvedFeedUrl,
+            description: data.description || '',
+            imageUrl,
+            itemCount: data.items?.length || 0,
+            entries: entries.map(toDiscoverPreviewEntry),
+          },
+        }
+      } catch (error) {
+        console.warn(`[Discover Preview] Failed to preview ${targetUrl}`, error)
+        return { success: false, error: String(error) }
+      }
+    },
+  )
 
   // Quick probe for a Twitter user via RSSHub - returns name + avatar fast
   // Tries the configured instance first, then fallback instances

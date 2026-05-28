@@ -1,6 +1,8 @@
 import { enCommon } from './en/common'
 import { enContextMenu } from './en/context-menu'
 import { enDiscover } from './en/discover'
+import { enDiscoverPreview } from './en/discover-preview'
+import { enDiscoverSubscribeConfig } from './en/discover-subscribe-config'
 import { enEntry } from './en/entry'
 import { enErrorBoundary } from './en/error-boundary'
 import { enFeedDetail } from './en/feed-detail'
@@ -98,6 +100,8 @@ export const en = {
   },
 
   discover: enDiscover,
+  discoverPreview: enDiscoverPreview,
+  discoverSubscribeConfig: enDiscoverSubscribeConfig,
 
   quickSearch: enQuickSearch,
 

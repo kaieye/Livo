@@ -1,0 +1,14 @@
+export const enDiscoverPreview = {
+  pageTitle: 'Subscription Preview',
+  back: 'Back',
+  openSource: 'Open source',
+  loadingTitle: 'Loading subscription preview...',
+  loadingHint: 'Livo is parsing the feed and reading recent items first.',
+  errorTitle: 'Preview failed',
+  missingUrl: 'Feed URL is missing',
+  retry: 'Retry',
+  continue: 'Continue',
+  itemCount: '{{count}} items found',
+  entriesTitle: 'Content preview',
+  noEntries: 'This feed has no previewable items yet',
+}

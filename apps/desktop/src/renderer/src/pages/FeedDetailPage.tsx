@@ -108,13 +108,37 @@ export default function FeedDetailPage() {
     navigate(ROUTES.subscriptions)
   }, [feed, removeFeed, navigate, t])
 
-  // TODO(P0-3.2): Wire into DiscoverSubscribeConfig so the user can subscribe
-  // directly from preview mode. For 1.2 we hand the user off to Discover with
-  // the feed URL pre-filled would be ideal, but Discover does not yet accept
-  // a URL via route params, so we just open Discover.
   const handleSubscribe = useCallback(() => {
-    navigate(ROUTES.discover)
-  }, [navigate])
+    if (!feed) return
+    navigate(
+      ROUTES.discoverSubscribe({
+        feedId: feed.id,
+        url: feed.url,
+        title: feed.title,
+        siteUrl: feed.siteUrl,
+        imageUrl: feed.imageUrl,
+        description: feed.description,
+        category: feed.folder || feed.category,
+        view: feed.view ?? FeedViewType.Articles,
+      }),
+    )
+  }, [feed, navigate])
+
+  const handleEdit = useCallback(() => {
+    if (!feed) return
+    navigate(
+      ROUTES.discoverSubscribe({
+        feedId: feed.id,
+        url: feed.url,
+        title: feed.title,
+        siteUrl: feed.siteUrl,
+        imageUrl: feed.imageUrl,
+        description: feed.description,
+        category: feed.folder || feed.category,
+        view: feed.view ?? FeedViewType.Articles,
+      }),
+    )
+  }, [feed, navigate])
 
   const handleEntryClick = useCallback(
     (entry: Entry) => {
@@ -198,10 +222,10 @@ export default function FeedDetailPage() {
               <>
                 <button
                   type="button"
-                  disabled
-                  aria-label={t('feedDetail.editComingSoon')}
-                  title={t('feedDetail.editComingSoon')}
-                  className="rounded-md p-1.5 text-[var(--color-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={handleEdit}
+                  aria-label={t('feedDetail.edit')}
+                  title={t('feedDetail.edit')}
+                  className="rounded-md p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]"
                 >
                   <Edit3 size={16} aria-hidden="true" />
                 </button>

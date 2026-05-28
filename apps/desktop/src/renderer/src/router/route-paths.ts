@@ -1,5 +1,30 @@
 import { FeedViewType } from '@livo/models'
 
+export interface DiscoverRouteTarget {
+  feedId?: string
+  url: string
+  title?: string
+  siteUrl?: string
+  imageUrl?: string
+  description?: string
+  category?: string
+  view?: FeedViewType
+}
+
+function buildDiscoverTargetSearch(target: DiscoverRouteTarget): string {
+  const search = new URLSearchParams()
+  if (target.feedId) search.set('feedId', target.feedId)
+  search.set('url', target.url)
+  if (target.title) search.set('title', target.title)
+  if (target.siteUrl) search.set('siteUrl', target.siteUrl)
+  if (target.imageUrl) search.set('imageUrl', target.imageUrl)
+  if (target.description) search.set('description', target.description)
+  if (target.category) search.set('category', target.category)
+  if (typeof target.view === 'number') search.set('view', String(target.view))
+  const query = search.toString()
+  return query ? `?${query}` : ''
+}
+
 /**
  * Route path constants for type-safe navigation.
  * All paths are relative to the HashRouter root (#/).
@@ -17,6 +42,10 @@ export const ROUTES = {
       : `/image/${entryId}`,
   login: (provider?: string) => (provider ? `/login/${provider}` : '/login'),
   discover: '/discover',
+  discoverPreview: (target: DiscoverRouteTarget) =>
+    `/discover/preview${buildDiscoverTargetSearch(target)}`,
+  discoverSubscribe: (target: DiscoverRouteTarget) =>
+    `/discover/subscribe${buildDiscoverTargetSearch(target)}`,
   settings: '/settings',
   subscriptions: '/subscriptions',
   viewType: (view: FeedViewType) => {

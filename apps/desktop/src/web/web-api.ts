@@ -12,6 +12,7 @@ import type {
   FeedViewType,
   AppSettings,
   AccountProvider,
+  DiscoverFeedPreviewResult,
 } from '../shared/types'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
@@ -471,6 +472,49 @@ function detectViewType(
   return FVT.Articles
 }
 
+async function buildDiscoverFeedPreview(
+  targetUrl: string,
+): Promise<DiscoverFeedPreviewResult> {
+  const cleanUrl = (targetUrl || '').trim()
+  if (!cleanUrl) return { success: false, error: 'Feed URL is required' }
+
+  try {
+    const storedUrl = toRsshubProtocolUrl(cleanUrl)
+    const fetchUrl = toFetchableFeedUrl(storedUrl, DEFAULT_RSSHUB_INSTANCE)
+    const parsed = await parseFeedFromUrl(fetchUrl)
+    const now = Date.now()
+    const displayTitle = await inferDiscoverResultTitle(
+      fetchUrl,
+      parsed.title || undefined,
+    )
+    const imageUrl = parsed.image?.url || getProbeImageFromParsed(parsed)
+
+    return {
+      success: true,
+      preview: {
+        targetUrl: cleanUrl,
+        resolvedFeedUrl: fetchUrl,
+        feedTitle: displayTitle || parsed.title || cleanUrl,
+        siteUrl: parsed.link || fetchUrl,
+        description: parsed.description || '',
+        imageUrl,
+        itemCount: parsed.items.length,
+        entries: parsed.items.slice(0, 6).map((item, index) => ({
+          id: `${fetchUrl}#preview-${index}`,
+          title: item.title || item.creator || item.link || '',
+          url: item.link || '',
+          summary: item.contentSnippet || stripHTML(item.content || ''),
+          author: item.creator || undefined,
+          imageUrl: item.enclosure?.url || undefined,
+          publishedAt: item.isoDate ? new Date(item.isoDate).getTime() : now,
+        })),
+      },
+    }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+}
+
 // ====== OpenAI Client for Browser ======
 
 async function callAI(
@@ -658,9 +702,7 @@ async function fetchReadableContent(url: string) {
 
 // ====== OPML Parsing for Web ======
 
-function parseOPMLContent(
-  xml: string,
-): Array<{
+function parseOPMLContent(xml: string): Array<{
   title: string
   xmlUrl: string
   htmlUrl?: string
@@ -757,7 +799,12 @@ function emit(channel: string, ...args: unknown[]) {
 export function createWebAPI(): ElectronAPI {
   const api = {
     feeds: {
-      add: async (url: string, category?: string, view?: FeedViewType) => {
+      add: async (
+        url: string,
+        category?: string,
+        view?: FeedViewType,
+        title?: string,
+      ) => {
         try {
           const storedUrl = toRsshubProtocolUrl(url)
           const fetchUrl = toFetchableFeedUrl(
@@ -771,7 +818,7 @@ export function createWebAPI(): ElectronAPI {
 
           const feed: Feed = {
             id,
-            title: parsed.title || storedUrl,
+            title: title?.trim() || parsed.title || storedUrl,
             url: storedUrl,
             siteUrl: parsed.link,
             description: parsed.description,
@@ -1379,6 +1426,7 @@ export function createWebAPI(): ElectronAPI {
           return { valid: false, error: String(error) }
         }
       },
+      previewFeed: buildDiscoverFeedPreview,
       resolveProfileUrl: async (url: string) => {
         const resolved = resolveProfileUrlToCandidates(
           url,

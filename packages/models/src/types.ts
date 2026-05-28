@@ -115,6 +115,31 @@ export interface EntryListResult {
   hasMore: boolean
 }
 
+export interface DiscoverFeedPreviewEntry {
+  id: string
+  title: string
+  url: string
+  summary?: string
+  author?: string
+  imageUrl?: string
+  publishedAt: number
+}
+
+export interface DiscoverFeedPreview {
+  targetUrl: string
+  resolvedFeedUrl: string
+  feedTitle: string
+  siteUrl?: string
+  description?: string
+  imageUrl?: string
+  itemCount: number
+  entries: DiscoverFeedPreviewEntry[]
+}
+
+export type DiscoverFeedPreviewResult =
+  | { success: true; preview: DiscoverFeedPreview }
+  | { success: false; error: string }
+
 export interface FeedWithCount extends Feed {
   unreadCount: number
 }
@@ -421,6 +446,7 @@ export const IPC = {
   DISCOVER_RSSHUB_ROUTES: 'discover:rsshub-routes',
   DISCOVER_RSSHUB_INSTANCE: 'discover:rsshub-instance',
   DISCOVER_VALIDATE_FEED: 'discover:validate-feed',
+  DISCOVER_PREVIEW_FEED: 'discover:preview-feed',
   DISCOVER_RESOLVE_PROFILE_URL: 'discover:resolve-profile-url',
   ACCOUNT_STATUS: 'account:status',
   ACCOUNT_LINK: 'account:link',

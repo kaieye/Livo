@@ -67,7 +67,7 @@ GitNexus 使用状态：
   - 路由:`/entry/:entryId`(与 `entry-store`/`Entry` 类型命名一致；非 `/article/:id`)，`route-paths.ts` 新增 `ROUTES.entry()` + 扩 `NON_VIEW_PATHS`，`routes.tsx` 注册懒加载页
   - 文件:`pages/ArticleDetailPage.tsx`(新建)、`components/feed/FeedAvatar.tsx`(共享头像，统一 image-fallback 策略)、`locales/{en,zh-CN}/article-detail.ts`(新建 namespace)、`router/{routes,route-paths}.tsx`、`pages/FeedDetailPage.tsx`(消费 `FeedAvatar`，`handleEntryClick` 改为 `navigate(ROUTES.entry(entry.id))` — 移除 1.2 遗留的 `setTimeout(0)` hack)
   - 复用:`EntryContent`(1460 行，未改动 API)；`window.api.entries.get`(deep-link 兜底取详情)
-  - 不在范围(留给 2.x):AI 摘要面板抽取(2.1)、AI 翻译面板抽取(2.2)、社交详情整合(2.3)、图片画廊整合(2.4)、内嵌视频整合(2.5)、原文/美化切换(2.6)、星标动画+进度(2.7)；Edit 按钮(等 3.2 DiscoverSubscribeConfig)
+  - 不在范围(留给 2.x):AI 摘要面板抽取(2.1)、AI 翻译面板抽取(2.2)、社交详情整合(2.3)、图片画廊整合(2.4)、内嵌视频整合(2.5)、原文/美化切换(2.6)、星标动画+进度(2.7)；FeedDetail Edit 按钮已由 3.2 接入 DiscoverSubscribeConfig
   - 遗留:`refreshFeed` 隐式 reload home scope(store 层重构)；`ArticlePreviewRow` 图片 fallback 仍内联(只在 FeedDetailPage 用一次，留待出现第二处再抽)
 - [x] **1.4** 新增 VideoPlayer 页面（复用现有 YouTube 解析 + iframe/webview 回退，统一全屏播放入口） → 依赖: 0.1, 0.2 ✅
   - 实现:`pages/VideoPlayerPage.tsx`(~250 行) — 顶部返回头(back + 标题 + open-external) 全黑 chrome、主体由 `ui/VideoPlayer`(直链 mp4 + Bilibili webview 模态) / YouTube 内联 iframe-fallback(经 `resolveYoutubePlayback`(IPC `window.api.video.resolve`) → direct mp4 / iframe) 二路驱动、loading 与 unplayable 状态(后者带"打开原始页面"按钮)。复用 `ArticleDetailPage`(1.3) 的 entry-store 水合模式 — entry 决定标题/封面/外链，避免另起 metadata 通道
@@ -103,8 +103,21 @@ GitNexus 使用状态：
 
 ### 3. 发现流程完善
 
-- [ ] **3.1** 新增 DiscoverPreview 步骤（订阅前预览源内容） → 依赖: 0.1
-- [ ] **3.2** 新增 DiscoverSubscribeConfig 步骤（选择视图类型、分类、确认订阅） → 依赖: 3.1
+- [x] **3.1** 新增 DiscoverPreview 步骤（订阅前预览源内容） → 依赖: 0.1 ✅
+  - 实现:`pages/DiscoverPreviewPage.tsx` — 顶部返回/外链按钮、订阅源 Hero(头像/标题/域名/描述/推荐栏目)、最近 6 条内容预览、loading/error/empty 状态、底部“继续订阅”入口
+  - 路由:`/discover/preview?url=...`；`ROUTES.discoverPreview()` 生成预览链接；3.2 已将 `ROUTES.discoverSubscribe()` 改为进入页面化配置步骤
+  - IPC:`discover:preview-feed` 返回 `DiscoverFeedPreview` DTO，只暴露预览页需要的 feed metadata + preview entries；main 端复用 `fetchAndParseFeed` / `resolveFeedAvatar` / `buildEntriesFromParsedItems`，Web 端补同名实现
+  - 入口:`DiscoverPanel` 搜索结果未订阅时先跳预览页；已订阅仍走原取消订阅；`FeedDetailPage` 预览态订阅入口也改为进入同一预览页
+  - 文件:`packages/models/src/types.ts`、`src/main/handlers/discover-handlers.ts`、`src/preload/index.ts`、`src/web/web-api.ts`、`router/{routes,route-paths}.tsx`、`lib/discover-feed.ts`、`locales/{en,zh-CN}/discover-preview.ts`
+  - 不在范围(已由 3.2 接续):独立 DiscoverSubscribeConfig 页面、分类/文件夹编辑、订阅前高级配置
+- [x] **3.2** 新增 DiscoverSubscribeConfig 步骤（选择视图类型、分类、确认订阅） → 依赖: 3.1 ✅
+  - 实现:`pages/DiscoverSubscribeConfigPage.tsx` — 订阅源信息卡、名称输入、分类输入/既有分类候选、四种视图类型选择、订阅确认；已订阅源进入编辑模式并保存标题/分类/视图/URL 映射
+  - 路由:`/discover/subscribe?url=...`；`ROUTES.discoverSubscribe()` 承载预览结果和 FeedDetail 编辑上下文，`routes.tsx` 注册独立页面
+  - 架构:`lib/discover-subscribe-config.ts` 集中 URL 参数解析、已有订阅匹配、分类候选、RSSHub 社交路由 canonicalize、Bilibili view remap，避免继续把配置逻辑塞在 `DiscoverPanel`
+  - 接入:`DiscoverPreviewPage` 的“继续订阅”进入配置页；`DiscoverPanel` 移除旧栏目选择弹层，只负责搜索/预览/取消订阅；`FeedDetailPage` 的 Edit 按钮与预览态 Subscribe 接入配置页
+  - Web 兼容:`web-api.ts feeds.add()` 补 `title` 参数消费，保持 Web 端与 Electron preload 的订阅签名一致
+  - 测试:`discover-subscribe-config.test.ts` 覆盖参数解析、社交路由匹配、feedId 优先匹配、Bilibili 视图映射、分类候选去重；定向测试与 desktop typecheck 已通过
+  - 不在范围(留后续):订阅前预览缓存 seed 到本地 entry、隐藏时间线高级开关、订阅成功 toast/动画
 - [ ] **3.3** 完善多平台用户搜索体验（已有 YouTube/X/Instagram/Bilibili handlers，补结果预览、错误提示、平台状态）
 - [ ] **3.4** 实现内置订阅源分类浏览（ai/podcast/news/articles/social/pictures/videos）
 

@@ -1,4 +1,5 @@
 import type { ElectronAPI } from '../../preload/index'
+import type { DiscoverFeedPreviewResult } from '../../shared/types'
 
 declare module '*.svg' {
   const content: string
@@ -29,9 +30,7 @@ declare global {
             description: string
           }>
         >
-        popular: (
-          category?: string,
-        ) => Promise<
+        popular: (category?: string) => Promise<
           Array<{
             title: string
             url: string
@@ -55,9 +54,7 @@ declare global {
             followers?: string
           }>
         >
-        rsshubRoutes: (
-          category?: string,
-        ) => Promise<
+        rsshubRoutes: (category?: string) => Promise<
           Array<{
             name: string
             url: string
@@ -66,9 +63,7 @@ declare global {
           }>
         >
         rsshubInstance: () => Promise<string>
-        validateFeed: (
-          url: string,
-        ) => Promise<{
+        validateFeed: (url: string) => Promise<{
           valid: boolean
           title?: string
           description?: string
@@ -76,6 +71,7 @@ declare global {
           itemCount?: number
           error?: string
         }>
+        previewFeed: (url: string) => Promise<DiscoverFeedPreviewResult>
         resolveProfileUrl: (url: string) => Promise<{
           matched: boolean
           inputUrl: string
@@ -97,9 +93,7 @@ declare global {
           }>
           reason: 'invalid_url' | 'no_supported_profile_pattern' | null
         }>
-        probeTwitterUser: (
-          username: string,
-        ) => Promise<{
+        probeTwitterUser: (username: string) => Promise<{
           valid: boolean
           username: string
           title?: string
@@ -107,9 +101,7 @@ declare global {
           image?: string
           feedUrl?: string
         }>
-        probeYouTubeChannel: (
-          query: string,
-        ) => Promise<{
+        probeYouTubeChannel: (query: string) => Promise<{
           valid: boolean
           query: string
           title?: string
@@ -148,9 +140,7 @@ declare global {
             feedUrl: string
           }>
         }>
-        probeInstagramUser: (
-          username: string,
-        ) => Promise<{
+        probeInstagramUser: (username: string) => Promise<{
           valid: boolean
           username: string
           title?: string

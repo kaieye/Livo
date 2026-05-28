@@ -14,6 +14,7 @@ import type {
   DownloadUrlResult,
   SaveTextFileOptions,
   SaveTextFileResult,
+  DiscoverFeedPreviewResult,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
 
@@ -127,6 +128,8 @@ const api = {
     rsshubInstance: () => ipcRenderer.invoke('discover:rsshub-instance'),
     validateFeed: (url: string) =>
       ipcRenderer.invoke('discover:validate-feed', url),
+    previewFeed: (url: string): Promise<DiscoverFeedPreviewResult> =>
+      ipcRenderer.invoke(IPC.DISCOVER_PREVIEW_FEED, url),
     resolveProfileUrl: (url: string): Promise<ResolvedProfileUrlResult> =>
       ipcRenderer.invoke(IPC.DISCOVER_RESOLVE_PROFILE_URL, url),
     probeTwitterUser: (username: string) =>

@@ -1,24 +1,22 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useDiscoverSearchQuery } from '../../hooks/useDiscoverSearchQuery'
 import {
   type DiscoverSearchResult,
   type DiscoverSearchPlatform,
   getDiscoverSearchDebounceMs,
-  shouldPreserveExplicitDiscoverView,
   shouldImmediatelySubmitDiscoverSearch,
 } from '../../lib/discover-search'
 import { buildDiscoverInstagramPlaceholderAvatar } from '../../lib/discover-avatar'
+import { inferDiscoverFeedViewFromUrl } from '../../lib/discover-feed'
+import { canonicalizeDiscoverRoute } from '../../lib/discover-subscribe-config'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
 import { FeedViewType } from '../../../../shared/types'
-import {
-  detectBilibiliFeedViewFromUrl,
-  remapBilibiliFeedUrlToView,
-} from '../../../../shared/bilibili-feed-url'
-import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
+import { ROUTES } from '../../router/route-paths'
 import {
   Search,
   X,
@@ -225,45 +223,8 @@ function buildDiscoverAvatarFallbacks(
   })
 }
 
-function canonicalizeDiscoverRoute(inputUrl: string): string {
-  const raw = (inputUrl || '').trim()
-  if (!raw) return ''
-
-  let routeWithQuery = ''
-  const rsshubMatch = raw.match(/^rsshub:\/\/+(.+)$/i)
-  if (rsshubMatch?.[1]) {
-    routeWithQuery = rsshubMatch[1].replace(/^\/+/, '')
-  } else {
-    try {
-      const u = new URL(raw)
-      routeWithQuery = `${u.pathname.replace(/^\/+/, '')}${u.search || ''}`
-    } catch {
-      return raw.toLowerCase()
-    }
-  }
-
-  const [pathPart = '', queryPart = ''] = routeWithQuery.split('?', 2)
-  let path = pathPart.toLowerCase()
-  path = path.replace(
-    /^(picnob(?:\.info)?|pixnoy|piokok)\/user\//i,
-    'instagram/user/',
-  )
-  path = path.replace(
-    /^(?:x|twitter)\/user\/([^/?#]+)/i,
-    (_m, user: string) =>
-      `twitter/user/${decodeURIComponent(user).replace(/^@/, '').toLowerCase()}`,
-  )
-
-  if (/^instagram\/user\//i.test(path) || /^twitter\/user\//i.test(path)) {
-    const search = new URLSearchParams(queryPart || '')
-    search.delete('limit')
-    const q = search.toString()
-    return `${path}${q ? `?${q}` : ''}`
-  }
-  return `${path}${queryPart ? `?${queryPart}` : ''}`
-}
-
 export function DiscoverPanel() {
+  const navigate = useNavigate()
   const {
     searchQuery,
     submittedSearchQuery,
@@ -288,29 +249,12 @@ export function DiscoverPanel() {
     setSubscribing: state.setSubscribing,
   }))
 
-  const {
-    addFeed,
-    feeds: userFeeds,
-    removeFeed,
-    refreshFeed,
-    updateFeed,
-  } = useFeedStore()
+  const { feeds: userFeeds, removeFeed } = useFeedStore()
   const { t } = useTranslation()
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
-  const [subscribeHint, setSubscribeHint] = useState<string>('')
-  const [pendingSubscribe, setPendingSubscribe] = useState<{
-    url: string
-    title: string
-    preferredView: FeedViewType
-  } | null>(null)
-  const [selectedSubscribeView, setSelectedSubscribeView] =
-    useState<FeedViewType | null>(null)
   const [searchPage, setSearchPage] = useState(1)
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const previousPlatformRef = useRef<DiscoverSearchPlatform>(searchPlatform)
-  const subscribeHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  )
   const debouncedSearchQuery = useDebouncedValue(
     searchQuery.trim(),
     getDiscoverSearchDebounceMs(searchPlatform),
@@ -352,13 +296,6 @@ export function DiscoverPanel() {
   }, [userFeeds])
 
   useEffect(() => {
-    return () => {
-      if (subscribeHintTimerRef.current)
-        clearTimeout(subscribeHintTimerRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
     setSearchPage(1)
   }, [searchQuery])
 
@@ -386,60 +323,10 @@ export function DiscoverPanel() {
     clearSearch()
   }, [clearSearch, debouncedSearchQuery, submitSearch])
 
-  useEffect(() => {
-    if (pendingSubscribe) {
-      setSelectedSubscribeView(pendingSubscribe.preferredView)
-    } else {
-      setSelectedSubscribeView(null)
-    }
-  }, [pendingSubscribe])
-
-  const inferViewFromUrl = useCallback((targetUrl: string): FeedViewType => {
-    const lower = (targetUrl || '').toLowerCase()
-    if (/\/twitter\/user\//i.test(lower)) return FeedViewType.SocialMedia
-    const bilibiliView = detectBilibiliFeedViewFromUrl(lower)
-    if (bilibiliView !== null) return bilibiliView
-    if (/\/youtube\//i.test(lower)) return FeedViewType.Videos
-    if (
-      /\/instagram\//i.test(lower) ||
-      /\/picnob\//i.test(lower) ||
-      /\/pixnoy\//i.test(lower) ||
-      /\/piokok\//i.test(lower) ||
-      /\/imginn\//i.test(lower)
-    )
-      return FeedViewType.Pictures
-    return FeedViewType.Articles
-  }, [])
-
-  const showSubscribedToHint = useCallback(
-    (
-      url: string,
-      feed?: { view?: number; category?: string; folder?: string },
-    ) => {
-      const resolvedView =
-        typeof feed?.view === 'number'
-          ? (feed.view as FeedViewType)
-          : inferViewFromUrl(url)
-      const columnName = t(
-        VIEW_TYPE_I18N_KEYS[resolvedView] || 'viewTypes.articles',
-      )
-      const folder = (feed?.folder || feed?.category || '').trim()
-      const isNormalFolder = !!folder && folder.toLowerCase() !== 'recommended'
-      const text = isNormalFolder
-        ? t('discover.subscribedAddedToWithFolder', {
-            column: columnName,
-            folder,
-          })
-        : t('discover.subscribedAddedTo', { column: columnName })
-      setSubscribeHint(text)
-      if (subscribeHintTimerRef.current)
-        clearTimeout(subscribeHintTimerRef.current)
-      subscribeHintTimerRef.current = setTimeout(
-        () => setSubscribeHint(''),
-        2800,
-      )
-    },
-    [inferViewFromUrl, t],
+  const inferViewFromUrl = useCallback(
+    (targetUrl: string): FeedViewType =>
+      inferDiscoverFeedViewFromUrl(targetUrl),
+    [],
   )
 
   const handleSearch = useCallback(
@@ -452,54 +339,6 @@ export function DiscoverPanel() {
   const handleSearchNow = useCallback(() => {
     submitSearch(searchQuery)
   }, [searchQuery, submitSearch])
-
-  const handleSubscribe = async (
-    url: string,
-    title: string,
-    targetView?: FeedViewType,
-  ) => {
-    const nextView = targetView ?? inferViewFromUrl(url)
-    const nextUrl = remapBilibiliFeedUrlToView(url, nextView)
-    setSubscribing(url, true)
-    try {
-      const result = await addFeed(nextUrl, undefined, nextView, title)
-      if (result.success) {
-        if (
-          result.feed?.id &&
-          shouldPreserveExplicitDiscoverView({
-            requestedView: nextView,
-            persistedView:
-              typeof result.feed.view === 'number'
-                ? (result.feed.view as number)
-                : undefined,
-          })
-        ) {
-          await updateFeed(result.feed.id, { view: nextView })
-          result.feed = { ...result.feed, view: nextView }
-        }
-        setSubscribedUrls((prev) => {
-          const next = new Set(prev)
-          next.add(nextUrl)
-          const canonical = canonicalizeDiscoverRoute(nextUrl)
-          if (canonical) next.add(`route:${canonical}`)
-          return next
-        })
-        showSubscribedToHint(nextUrl, result.feed)
-        const feedId = result.feed?.id
-        if (feedId) {
-          // Run the same path as manual "refresh feed" so users don't need extra clicks.
-          void (async () => {
-            await new Promise((r) => setTimeout(r, 1200))
-            await refreshFeed(feedId)
-            await new Promise((r) => setTimeout(r, 2500))
-            await refreshFeed(feedId)
-          })()
-        }
-      }
-    } finally {
-      setSubscribing(url, false)
-    }
-  }
 
   const handleUnsubscribe = async (url: string) => {
     const targetCanonical = canonicalizeDiscoverRoute(url)
@@ -524,15 +363,20 @@ export function DiscoverPanel() {
     }
   }
 
-  const handleToggleSubscribe = (url: string, title: string) => {
-    if (isSubscribed(url)) {
-      handleUnsubscribe(url)
+  const handleToggleSubscribe = (result: DiscoverSearchResult) => {
+    if (isSubscribed(result.url)) {
+      handleUnsubscribe(result.url)
     } else {
-      setPendingSubscribe({
-        url,
-        title,
-        preferredView: inferViewFromUrl(url),
-      })
+      navigate(
+        ROUTES.discoverPreview({
+          url: result.url,
+          title: getDisplayTitle(result),
+          siteUrl: result.siteUrl,
+          imageUrl: result.image,
+          description: result.description,
+          view: inferViewFromUrl(result.url),
+        }),
+      )
     }
   }
 
@@ -647,12 +491,6 @@ export function DiscoverPanel() {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="w-full pt-[18vh]">{searchBar}</div>
 
-        {subscribeHint && (
-          <div className="mb-3 mt-2 w-full rounded-lg border border-emerald-300/60 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-            {subscribeHint}
-          </div>
-        )}
-
         {/* Search results */}
         {hasSearchQuery && (
           <div className="mx-auto mt-4 max-w-2xl space-y-3">
@@ -702,9 +540,8 @@ export function DiscoverPanel() {
                       followers={result.followers}
                       subscribed={isSubscribed(result.url)}
                       subscribing={isSubscribing(result.url)}
-                      onSubscribe={() =>
-                        handleToggleSubscribe(result.url, result.title)
-                      }
+                      actionLabel={t('discover.previewAction')}
+                      onSubscribe={() => handleToggleSubscribe(result)}
                     />
                   ))}
                   {/* Placeholders to maintain fixed height */}
@@ -757,95 +594,6 @@ export function DiscoverPanel() {
           </div>
         )}
       </div>
-
-      {pendingSubscribe && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
-          onClick={() => setPendingSubscribe(null)}
-        >
-          <div
-            className="w-[460px] max-w-[94vw] rounded-2xl border border-black/5 bg-white p-4 shadow-2xl dark:bg-surface-dark-secondary"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-base font-semibold">
-                {t('discover.chooseColumnTitle')}
-              </h3>
-              <button
-                onClick={() => setPendingSubscribe(null)}
-                className="rounded-lg p-1.5 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <p className="mb-4 text-xs text-text-secondary dark:text-text-dark-secondary">
-              {t('discover.chooseColumnDesc', {
-                title: pendingSubscribe.title,
-              })}
-            </p>
-            <div className="grid grid-cols-2 gap-2.5">
-              {(
-                [
-                  FeedViewType.Articles,
-                  FeedViewType.SocialMedia,
-                  FeedViewType.Videos,
-                  FeedViewType.Pictures,
-                ] as const
-              ).map((viewId) => {
-                const isPreferred = pendingSubscribe.preferredView === viewId
-                const isSelected = selectedSubscribeView === viewId
-                return (
-                  <button
-                    key={viewId}
-                    onClick={() => setSelectedSubscribeView(viewId)}
-                    className={`rounded-xl border px-3 py-3 text-left text-sm transition-all ${
-                      isSelected
-                        ? 'border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(255,106,0,0.2)]'
-                        : 'hover:border-accent/40 hover:bg-accent/[0.03]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">
-                        {t(VIEW_TYPE_I18N_KEYS[viewId] || 'viewTypes.articles')}
-                      </div>
-                    </div>
-                    <div className="mt-1 text-[11px] text-text-tertiary">
-                      {isPreferred
-                        ? t('discover.recommendedColumn')
-                        : t('discover.tapToAdd')}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setPendingSubscribe(null)}
-                className="rounded-lg px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={async () => {
-                  if (!pendingSubscribe) return
-                  const payload = pendingSubscribe
-                  const selectedView =
-                    selectedSubscribeView ?? payload.preferredView
-                  setPendingSubscribe(null)
-                  await handleSubscribe(
-                    payload.url,
-                    payload.title,
-                    selectedView,
-                  )
-                }}
-                className="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-all hover:bg-accent-hover active:scale-[0.99]"
-              >
-                {t('common.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -861,6 +609,7 @@ function FeedCard({
   compact,
   subscribed,
   subscribing,
+  actionLabel,
   onSubscribe,
   followers,
 }: {
@@ -873,6 +622,7 @@ function FeedCard({
   compact?: boolean
   subscribed: boolean
   subscribing: boolean
+  actionLabel?: string
   onSubscribe: () => void
   followers?: string
 }) {
@@ -1066,7 +816,7 @@ function FeedCard({
           ) : (
             <>
               <Plus size={12} />
-              <span>{t('common.subscribe')}</span>
+              <span>{actionLabel || t('common.subscribe')}</span>
             </>
           )}
         </button>

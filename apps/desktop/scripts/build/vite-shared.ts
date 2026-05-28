@@ -4,7 +4,7 @@ import { compareLocaleCompleteness } from '../../src/shared/i18n-completeness'
 import { en } from '../../src/renderer/src/locales/en'
 import { zhCN } from '../../src/renderer/src/locales/zh-CN'
 // metadata.mjs is a runtime-only build helper.
-// @ts-ignore
+// @ts-expect-error metadata.mjs intentionally has no declaration file.
 import { getBuildTimestamp, getGitCommitHash } from './metadata.mjs'
 
 export const LIVO_DEV_SERVER = {
@@ -50,9 +50,7 @@ type WebHtmlOptions = {
   description: string
 }
 
-export function createWebIndexHtmlPlugin(
-  options: WebHtmlOptions,
-): any {
+export function createWebIndexHtmlPlugin(options: WebHtmlOptions): any {
   return {
     name: 'livo:web-index-html',
     transformIndexHtml(html: string) {
@@ -65,9 +63,7 @@ export function createWebIndexHtmlPlugin(
   }
 }
 
-export function createRendererSharedConfig(
-  projectRoot = process.cwd(),
-): any {
+export function createRendererSharedConfig(projectRoot = process.cwd()): any {
   return {
     resolve: {
       alias: {
