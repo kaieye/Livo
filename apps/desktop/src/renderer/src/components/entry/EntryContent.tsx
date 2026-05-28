@@ -52,6 +52,7 @@ import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
 import { ROUTES } from '../../router/route-paths'
 import { Maximize2 } from 'lucide-react'
 import { useAISummary } from '../../hooks/useAISummary'
+import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
 
 /** Estimate reading time in minutes */
@@ -217,7 +218,7 @@ export function EntryContent() {
       ? { maxWidth: `${general.contentMaxWidth || 680}px` }
       : undefined
 
-  // AI summary — self-contained hook, resets on entry change via reset()
+  // AI summary & translation — self-contained hooks, reset on entry change via reset()
   const {
     summary,
     error,
@@ -225,11 +226,15 @@ export function EntryContent() {
     summarize,
     reset: resetSummary,
   } = useAISummary()
+  const {
+    translatedParagraphs,
+    isTranslating,
+    showTranslation,
+    translate,
+    reset: resetTranslation,
+  } = useAITranslation()
 
   // Per-entry state — keyed by entry ID, reset on switch
-  const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
-  const [isTranslating, setIsTranslating] = useState(false)
-  const [showTranslation, setShowTranslation] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [readableContent, setReadableContent] = useState<string | null>(null)
   const [isReadabilityMode, setIsReadabilityMode] = useState(false)
@@ -276,9 +281,7 @@ export function EntryContent() {
 
       // Reset ALL article-specific state
       resetSummary()
-      setTranslatedParagraphs([])
-      setShowTranslation(false)
-      setIsTranslating(false)
+      resetTranslation()
       setReadPercent(0)
       setLinkCopied(false)
       setReadableContent(null)
@@ -290,7 +293,7 @@ export function EntryContent() {
       // Scroll to top
       scrollRef.current?.scrollTo({ top: 0 })
     }
-  }, [selectedEntry, resetSummary])
+  }, [selectedEntry, resetSummary, resetTranslation])
 
   // Reading progress tracking
   useEffect(() => {
@@ -356,59 +359,11 @@ export function EntryContent() {
     void summarize(selectedEntry.content, general.language)
   }, [general.language, selectedEntry?.content, summarize])
 
-  const handleTranslate = useCallback(async () => {
+  const handleTranslate = useCallback(() => {
     if (!selectedEntry?.content) return
-
-    // Toggle off
-    if (showTranslation && translatedParagraphs.length > 0) {
-      setShowTranslation(false)
-      return
-    }
-    // Toggle on if already translated
-    if (translatedParagraphs.length > 0) {
-      setShowTranslation(true)
-      return
-    }
-
-    // Do translation paragraph by paragraph
-    setIsTranslating(true)
-    setShowTranslation(true)
     const targetLang = translationTargetLanguage || 'zh-CN'
-    const results: string[] = []
-
-    for (let i = 0; i < paragraphs.length; i++) {
-      const plainText = paragraphs[i].replace(/<[^>]*>/g, '').trim()
-      if (!plainText || plainText.length < 5) {
-        results.push('') // skip very short/empty blocks
-        continue
-      }
-      try {
-        const result = await window.api.ai.translate(paragraphs[i], targetLang)
-        if (result.success) {
-          results.push(result.translation)
-        } else {
-          results.push(
-            `<span class="text-red-400 text-xs">${t('entry.translateFailed')}</span>`,
-          )
-        }
-      } catch {
-        results.push(
-          `<span class="text-red-400 text-xs">${t('entry.translateFailed')}</span>`,
-        )
-      }
-      // Update progressively
-      setTranslatedParagraphs([...results])
-    }
-
-    setIsTranslating(false)
-  }, [
-    paragraphs,
-    selectedEntry?.content,
-    translationTargetLanguage,
-    showTranslation,
-    t,
-    translatedParagraphs.length,
-  ])
+    void translate(paragraphs, targetLang)
+  }, [paragraphs, selectedEntry?.content, translationTargetLanguage, translate])
 
   const handleCopyLink = useCallback(async () => {
     if (!selectedEntry?.url) return

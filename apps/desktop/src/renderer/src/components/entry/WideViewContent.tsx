@@ -98,6 +98,7 @@ import { Loader2, Inbox, RefreshCw, X, ExternalLink } from 'lucide-react'
 import { WideViewHeader } from './WideViewHeader'
 import { ViewRecommendations } from './ViewRecommendations'
 import { useAISummary } from '../../hooks/useAISummary'
+import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
 
 const SharePoster = lazy(() =>
@@ -1804,60 +1805,15 @@ function SocialOverlay({
   })
 
   // AI Translation & Summary
-  const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
-  const [isTranslating, setIsTranslating] = useState(false)
-  const [showTranslation, setShowTranslation] = useState(false)
+  const { translatedParagraphs, isTranslating, showTranslation, translate } =
+    useAITranslation()
   const { summary, error, isLoading: isSummarizing, summarize } = useAISummary()
 
-  const handleTranslate = useCallback(async () => {
+  const handleTranslate = useCallback(() => {
     if (paragraphs.length === 0) return
-    // Toggle off
-    if (showTranslation && translatedParagraphs.length > 0) {
-      setShowTranslation(false)
-      return
-    }
-    // Toggle on if already translated
-    if (translatedParagraphs.length > 0) {
-      setShowTranslation(true)
-      return
-    }
-    // Do translation paragraph by paragraph
-    setIsTranslating(true)
-    setShowTranslation(true)
     const targetLang = targetLanguage || general.language || 'zh-CN'
-    const results: string[] = []
-    for (let i = 0; i < paragraphs.length; i++) {
-      const plainText = paragraphs[i].replace(/<[^>]*>/g, '').trim()
-      if (!plainText || plainText.length < 5) {
-        results.push('')
-        continue
-      }
-      try {
-        const result = await window.api.ai.translate(paragraphs[i], targetLang)
-        if (result.success) {
-          results.push(result.translation)
-        } else {
-          results.push(
-            `<span class="text-red-400 text-xs">${t('entry.translateFailed')}</span>`,
-          )
-        }
-      } catch {
-        results.push(
-          `<span class="text-red-400 text-xs">${t('entry.translateFailed')}</span>`,
-        )
-      }
-      // Update progressively
-      setTranslatedParagraphs([...results])
-    }
-    setIsTranslating(false)
-  }, [
-    general.language,
-    paragraphs,
-    showTranslation,
-    t,
-    targetLanguage,
-    translatedParagraphs.length,
-  ])
+    void translate(paragraphs, targetLang)
+  }, [general.language, paragraphs, targetLanguage, translate])
 
   const handleSummarize = useCallback(() => {
     if (!plainContent) return
