@@ -76,7 +76,13 @@ GitNexus 使用状态：
   - 复用:`ui/VideoPlayer`(API 未改)、`lib/youtube-playback.ts resolveYoutubePlayback/extractYoutubeVideoId/buildYoutubeIframeUrl`、`lib/entry-video-source.ts resolvePreferredEntryVideo`、`useEntryStore.selectEntry`/`window.api.entries.get`(deep-link)、`window.api.video.resolve`(main `video-proxy` IPC，多 Invidious/Piped 实例兜底，不改)
   - 不在范围(留给 9.x/10.x/11.x):统一 main/renderer YouTube ID 提取(9.1)、Invidious/Piped fallback 测试(9.2/9.3)、抽 `isDirectVideoUrl`(9.5)、拆分 501 行 `ui/VideoPlayer`(P2)、全局 AudioPlaybackService(10.x)、视频存盘(11.x)
   - 遗留:Vimeo/TED 等其他可嵌入源在本页未走 iframe-fallback(命中 `ui/VideoPlayer` 内部 `window.open` 兜底，与现有内联表现一致)；UnplayableState 在 entry 命中但无视频 media 时也会显示，作为兜底
-- [ ] **1.5** 新增 ImageViewer 页面（图片全屏查看） → 依赖: 0.1, 0.2
+- [x] **1.5** 新增 ImageViewer 页面（图片全屏查看） → 依赖: 0.1, 0.2 ✅
+  - 实现:`pages/ImageViewerPage.tsx`(~280 行) — 顶部返回头(back + 标题 + counter `N / total` + open-external) 全黑 chrome、主体 `CachedImage` 居中 letterbox(`object-contain`)、prev/next 通过 header 隐式 + 左右 15% 边缘 hover 区按钮 + 键盘 ArrowLeft/ArrowRight 三路驱动、Escape 触发 back、loading 与 notFound 状态(后者覆盖 entry 缺失 OR 无可用图片两路)。复用 `ArticleDetailPage`(1.3) / `VideoPlayerPage`(1.4) 的 entry-store 水合模式 — entry 决定标题/外链，免另起 metadata 通道
+  - 路由:`/image/:entryId/:imageIndex?`(理由:entry 已携带 media 数组 + title + 外链，免另发解析；`imageIndex` 默认 0、URL 即真源，刷新/分享均可定位到具体图；非 `/image/:photoId` 那种需独立 photo-id 系统的形状) — `route-paths.ts` 新增 `ROUTES.image(entryId, index?)` + 扩 `NON_VIEW_PATHS`，`routes.tsx` 注册懒加载页(`image/:entryId/:imageIndex?`)
+  - 文件:`pages/ImageViewerPage.tsx`(新建)、`lib/entry-image-source.ts`(新建，`resolveEntryImages` mirror `entry-video-source.ts` 形状 — entry.media 过滤 type==='photo' 兜底 entry.imageUrl)、`locales/{en,zh-CN}/image-viewer.ts`(新建 namespace)、`router/{routes,route-paths}.tsx`、`components/entry/EntryContent.tsx`(在 featured image 上加 hover 时浮现的 Maximize2 跳转按钮，唯一入口接入点，与 1.4 video 按钮同形)
+  - 复用:`ui/CachedImage`(API 未改)、`useEntryStore.selectEntry`/`window.api.entries.get`(deep-link)、`OverlayMediaGallery` 保持原状(in-place 轮播 + lightbox 共存，未替换)
+  - 不在范围(留给 11.x/P3):图片保存到本地(11.1)、EntryImageGallery 等价体验/PictureMasonry 重设计(11.2)、`OverlayMediaGallery` 重构、pan/zoom 双指缩放(留 P3 体验优化批次)、统一 `WideViewContent` 重型 photos 抽取与 `resolveEntryImages`(等社交侧重构)
+  - 遗留:pan/zoom 未实现(Harmony ImageViewer 支持 — 留待 P3 体验批次或 11.2 一并)；OverlayMediaGallery 的 lightbox 与本页 UI 重复，仅在 EntryContent featured image 接入新入口，社交/picture 视图入口待 2.4/11.2 收敛
 - [ ] **1.6** 新增 AccountLogin 页面（账号登录流程） → 依赖: 0.1, 0.2
 
 ### 2. 文章详情页增强

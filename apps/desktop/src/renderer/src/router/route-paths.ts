@@ -11,6 +11,10 @@ export const ROUTES = {
   feedDetail: (feedId: string) => `/feed-detail/${feedId}`,
   entry: (entryId: string) => `/entry/${entryId}`,
   video: (entryId: string) => `/video/${entryId}`,
+  image: (entryId: string, index?: number) =>
+    typeof index === 'number' && index > 0
+      ? `/image/${entryId}/${index}`
+      : `/image/${entryId}`,
   discover: '/discover',
   settings: '/settings',
   subscriptions: '/subscriptions',
@@ -42,6 +46,7 @@ const NON_VIEW_PATHS = new Set([
   'feed-detail',
   'entry',
   'video',
+  'image',
   'starred',
   'discover',
   'settings',

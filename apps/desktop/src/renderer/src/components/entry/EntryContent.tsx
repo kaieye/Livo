@@ -1124,7 +1124,7 @@ export function EntryContent() {
 
             {/* Featured image */}
             {shouldShowFeaturedImage && (
-              <div className="-mx-2 mb-8 overflow-hidden rounded-xl">
+              <div className="group/featured relative -mx-2 mb-8 overflow-hidden rounded-xl">
                 <img
                   src={selectedEntry.imageUrl}
                   alt=""
@@ -1134,6 +1134,20 @@ export function EntryContent() {
                     ;(e.target as HTMLImageElement).style.display = 'none'
                   }}
                 />
+                {/* Sole entry point to the ImageViewer page (1.5). Mirrors the
+                    Maximize2 hover button 1.4 added to the inline VideoPlayer. */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(ROUTES.image(selectedEntry.id))
+                  }}
+                  title={t('imageViewer.pageTitle')}
+                  aria-label={t('imageViewer.pageTitle')}
+                  className="absolute right-3 top-3 z-10 rounded-full bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover/featured:opacity-100"
+                >
+                  <Maximize2 size={14} />
+                </button>
               </div>
             )}
 
