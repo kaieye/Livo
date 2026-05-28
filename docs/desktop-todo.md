@@ -61,8 +61,14 @@ GitNexus 使用状态：
   - 实现:`pages/FeedDetailPage.tsx`(498 行) — Hero(avatar/title/meta)、操作栏(refresh/openSite/edit-disabled/unsubscribe)、文章预览列表(点击回 `/feed/:id` 选中)、未订阅预览模式、空/加载/notFound 状态、a11y(landmark + aria-label)
   - 文件:`locales/{en,zh-CN}/feed-detail.ts`(新建 namespace)、`router/{routes,route-paths}.tsx`(注册 `/feed-detail/:feedId` + `ROUTES.feedDetail`)、`components/subscriptions/FeedGroupList.tsx`(跳转入口)
   - 复用:`lib/feed-filters.ts isUserFeed`、`lib/view-type-keys.ts VIEW_TYPE_I18N_KEYS`、`useFeedStore`/`useEntryStore`
-  - 遗留(留待 1.3 解决):Edit 按钮已禁用(Coming Soon)；setTimeout(0) 绕 Layout reset effect；FeedHeroAvatar/ArticlePreviewRow img-fallback 重复；refreshFeed 隐式 reload home scope
-- [ ] **1.3** 新增 ArticleDetail 页面（复用现有 EntryContent 能力，页面化承载 AI 辅助、社交详情、图片画廊、内嵌视频） → 依赖: 0.1, 0.2, 0.3
+  - 遗留(留待 1.3 解决):Edit 按钮已禁用(Coming Soon)；~~setTimeout(0) 绕 Layout reset effect~~ ✅ 1.3 改为跳转 `/entry/:entryId`；~~FeedHeroAvatar/ArticlePreviewRow img-fallback 重复~~ ✅ 1.3 抽出 `FeedAvatar`；refreshFeed 隐式 reload home scope(留 store 层重构)
+- [x] **1.3** 新增 ArticleDetail 页面（复用现有 EntryContent 能力，页面化承载 AI 辅助、社交详情、图片画廊、内嵌视频） → 依赖: 0.1, 0.2, 0.3 ✅
+  - 实现:`pages/ArticleDetailPage.tsx`(~165 行) — 顶部返回头(back + 标题)、`<EntryContent />` 作为正文(复用现有 toolbar/AI/社交/图库/视频/可读性/进度/星标/翻页)、loading/notFound 状态。页面用 `useEntryStore.selectEntry` 驱动 `selectedEntry`，避开 Layout `selectedEntry` 重置 effect（home scope 仍保留原 reset 行为）
+  - 路由:`/entry/:entryId`(与 `entry-store`/`Entry` 类型命名一致；非 `/article/:id`)，`route-paths.ts` 新增 `ROUTES.entry()` + 扩 `NON_VIEW_PATHS`，`routes.tsx` 注册懒加载页
+  - 文件:`pages/ArticleDetailPage.tsx`(新建)、`components/feed/FeedAvatar.tsx`(共享头像，统一 image-fallback 策略)、`locales/{en,zh-CN}/article-detail.ts`(新建 namespace)、`router/{routes,route-paths}.tsx`、`pages/FeedDetailPage.tsx`(消费 `FeedAvatar`，`handleEntryClick` 改为 `navigate(ROUTES.entry(entry.id))` — 移除 1.2 遗留的 `setTimeout(0)` hack)
+  - 复用:`EntryContent`(1460 行，未改动 API)；`window.api.entries.get`(deep-link 兜底取详情)
+  - 不在范围(留给 2.x):AI 摘要面板抽取(2.1)、AI 翻译面板抽取(2.2)、社交详情整合(2.3)、图片画廊整合(2.4)、内嵌视频整合(2.5)、原文/美化切换(2.6)、星标动画+进度(2.7)；Edit 按钮(等 3.2 DiscoverSubscribeConfig)
+  - 遗留:`refreshFeed` 隐式 reload home scope(store 层重构)；`ArticlePreviewRow` 图片 fallback 仍内联(只在 FeedDetailPage 用一次，留待出现第二处再抽)
 - [ ] **1.4** 新增 VideoPlayer 页面（复用现有 YouTube 解析 + iframe/webview 回退，统一全屏播放入口） → 依赖: 0.1, 0.2
 - [ ] **1.5** 新增 ImageViewer 页面（图片全屏查看） → 依赖: 0.1, 0.2
 - [ ] **1.6** 新增 AccountLogin 页面（账号登录流程） → 依赖: 0.1, 0.2

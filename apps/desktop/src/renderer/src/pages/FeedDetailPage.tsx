@@ -18,6 +18,7 @@ import type { Entry, FeedWithCount } from '../../../shared/types'
 import { ROUTES } from '../router/route-paths'
 import { isUserFeed } from '../lib/feed-filters'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
+import { FeedAvatar } from '../components/feed/FeedAvatar'
 
 /**
  * FeedDetailPage — desktop counterpart of the Harmony `FeedDetail` page.
@@ -31,11 +32,10 @@ import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
  *   (`!isUserFeed`) — the unsubscribe / edit actions are hidden and a
  *   "Subscribe" CTA is shown instead.
  *
- * Entry click contract: we navigate to `/feed/:feedId` and ask the entry store
- * to `selectEntry(entry)`. The home Layout has a reset effect that clears
- * `selectedEntry` when `selectedFeedId` changes, so we defer the
- * `selectEntry` call to the next macrotask. This avoids hacking the Layout
- * reset effect (proper article-detail navigation arrives in P0-1.3).
+ * Entry click contract: navigates to `/entry/:entryId` (handled by
+ * `ArticleDetailPage`). The home Layout's selectedEntry reset effect is no
+ * longer a concern because the dedicated route owns its own
+ * `selectEntry` lifecycle.
  *
  * Data freshness: we drive entries from the live `useEntryStore` selector
  * (filtered by `feedId`) rather than mirroring into local state. This keeps
@@ -49,12 +49,10 @@ export default function FeedDetailPage() {
   const feeds = useFeedStore((s) => s.feeds)
   const refreshFeed = useFeedStore((s) => s.refreshFeed)
   const removeFeed = useFeedStore((s) => s.removeFeed)
-  const setSelectedFeed = useFeedStore((s) => s.setSelectedFeed)
 
   const storeEntries = useEntryStore((s) => s.entries)
   const isEntriesLoading = useEntryStore((s) => s.isLoading)
   const loadEntries = useEntryStore((s) => s.loadEntries)
-  const selectEntry = useEntryStore((s) => s.selectEntry)
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -120,20 +118,9 @@ export default function FeedDetailPage() {
 
   const handleEntryClick = useCallback(
     (entry: Entry) => {
-      if (!feed) return
-      // Direction 2 of useUrlSync will push `/feed/<id>` when selectedFeedId
-      // changes; we still navigate explicitly so the hash updates immediately
-      // even if the user is reloading the same feed.
-      setSelectedFeed(feed.id)
-      navigate(ROUTES.feed(feed.id))
-      // Layout.tsx clears `selectedEntry` whenever `selectedFeedId` changes,
-      // via a post-commit effect. Defer to the next macrotask so our selection
-      // wins. See file-level docblock for the longer term plan (P0-1.3).
-      setTimeout(() => {
-        void selectEntry(entry)
-      }, 0)
+      navigate(ROUTES.entry(entry.id))
     },
-    [feed, navigate, selectEntry, setSelectedFeed],
+    [navigate],
   )
 
   // Reuse the shared `VIEW_TYPE_I18N_KEYS` mapping (also used by Sidebar /
@@ -271,7 +258,11 @@ export default function FeedDetailPage() {
             {/* Hero */}
             <section className="bg-[var(--color-bg-secondary)]/50 flex-shrink-0 border-b border-[var(--color-border-secondary)] px-6 py-5">
               <div className="flex items-start gap-4">
-                <FeedHeroAvatar feed={feed} />
+                <FeedAvatar
+                  imageUrl={feed.imageUrl}
+                  size="lg"
+                  className="shadow-sm"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-base font-semibold leading-snug text-[var(--color-text-primary)]">
@@ -343,29 +334,6 @@ export default function FeedDetailPage() {
 }
 
 /* ----------------------------- Sub-components ----------------------------- */
-
-function FeedHeroAvatar({ feed }: { feed: FeedWithCount }) {
-  const [errored, setErrored] = useState(false)
-  if (feed.imageUrl && !errored) {
-    return (
-      <img
-        src={feed.imageUrl}
-        alt=""
-        loading="lazy"
-        onError={() => setErrored(true)}
-        className="h-16 w-16 flex-shrink-0 rounded-xl bg-[var(--color-bg-tertiary)] object-cover shadow-sm"
-      />
-    )
-  }
-  return (
-    <div
-      aria-hidden="true"
-      className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--color-bg-tertiary)] shadow-sm"
-    >
-      <Rss size={24} className="text-[var(--color-text-tertiary)]" />
-    </div>
-  )
-}
 
 interface EntryPreviewListProps {
   entries: Entry[]

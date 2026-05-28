@@ -4,6 +4,7 @@ import { enDiscover } from './en/discover'
 import { enEntry } from './en/entry'
 import { enErrorBoundary } from './en/error-boundary'
 import { enFeedDetail } from './en/feed-detail'
+import { enArticleDetail } from './en/article-detail'
 import { enImportProgress } from './en/import-progress'
 import { enQuickSearch } from './en/quick-search'
 import { enRecommendations } from './en/recommendations'
@@ -131,6 +132,8 @@ export const en = {
   contextMenu: enContextMenu,
 
   feedDetail: enFeedDetail,
+
+  articleDetail: enArticleDetail,
 
   time: {
     justNow: 'Just Now',

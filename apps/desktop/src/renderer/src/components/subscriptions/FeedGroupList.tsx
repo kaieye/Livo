@@ -5,6 +5,7 @@ import type { FeedWithCount } from '../../../../shared/types'
 import { FeedViewType } from '../../../../shared/types'
 import { groupFeedsByCategory } from '../../lib/feed-grouping'
 import { ROUTES } from '../../router/route-paths'
+import { FeedAvatar } from '../feed/FeedAvatar'
 
 interface FeedGroupListProps {
   feeds: FeedWithCount[]
@@ -132,7 +133,7 @@ const FeedRow = memo(function FeedRow({ feed, onSelect }: FeedRowProps) {
       onClick={() => onSelect(feed.id)}
       className="group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-[var(--color-bg-secondary)]"
     >
-      <FeedAvatar feed={feed} />
+      <FeedAvatar imageUrl={feed.imageUrl} size="xs" />
       <span className="flex-1 truncate text-sm text-[var(--color-text-primary)]">
         {feed.title || feed.url}
       </span>
@@ -144,27 +145,6 @@ const FeedRow = memo(function FeedRow({ feed, onSelect }: FeedRowProps) {
     </button>
   )
 })
-
-function FeedAvatar({ feed }: { feed: FeedWithCount }) {
-  if (feed.imageUrl) {
-    return (
-      <img
-        src={feed.imageUrl}
-        alt=""
-        className="h-5 w-5 flex-shrink-0 rounded bg-[var(--color-bg-tertiary)] object-cover"
-        loading="lazy"
-        onError={(e) => {
-          ;(e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
-        }}
-      />
-    )
-  }
-  return (
-    <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-[var(--color-bg-tertiary)]">
-      <Rss size={11} className="text-[var(--color-text-tertiary)]" />
-    </div>
-  )
-}
 
 function EmptyState() {
   return (

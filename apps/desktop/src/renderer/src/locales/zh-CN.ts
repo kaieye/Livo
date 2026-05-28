@@ -4,6 +4,7 @@ import { zhCNDiscover } from './zh-CN/discover'
 import { zhCNEntry } from './zh-CN/entry'
 import { zhCNErrorBoundary } from './zh-CN/error-boundary'
 import { zhCNFeedDetail } from './zh-CN/feed-detail'
+import { zhCNArticleDetail } from './zh-CN/article-detail'
 import { zhCNImportProgress } from './zh-CN/import-progress'
 import { zhCNQuickSearch } from './zh-CN/quick-search'
 import { zhCNRecommendations } from './zh-CN/recommendations'
@@ -130,6 +131,8 @@ export const zhCN = {
   contextMenu: zhCNContextMenu,
 
   feedDetail: zhCNFeedDetail,
+
+  articleDetail: zhCNArticleDetail,
 
   time: {
     justNow: '刚刚',

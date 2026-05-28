@@ -9,6 +9,7 @@ export const ROUTES = {
   starred: '/starred',
   feed: (feedId: string) => `/feed/${feedId}`,
   feedDetail: (feedId: string) => `/feed-detail/${feedId}`,
+  entry: (entryId: string) => `/entry/${entryId}`,
   discover: '/discover',
   settings: '/settings',
   subscriptions: '/subscriptions',
@@ -35,7 +36,15 @@ export const VIEW_TYPE_FROM_SLUG: Record<string, FeedViewType> = {
 }
 
 /** Known non-view-type path segments that should not be treated as view filters. */
-const NON_VIEW_PATHS = new Set(['feed', 'starred', 'discover', 'settings'])
+const NON_VIEW_PATHS = new Set([
+  'feed',
+  'feed-detail',
+  'entry',
+  'starred',
+  'discover',
+  'settings',
+  'subscriptions',
+])
 
 /**
  * Parse the current hash path to determine the active view type and feed selection.
