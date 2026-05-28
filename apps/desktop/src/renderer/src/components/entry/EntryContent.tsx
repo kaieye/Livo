@@ -7,6 +7,7 @@ import {
   useAISettingKey,
   useGeneralSettingsShallowSelector,
   useTranslationSettingKey,
+  useSettingsActions,
 } from '../../store/settings-store'
 import { useAIChatStore } from '../../store/ai-chat-store'
 import { useStoreShallow } from '../../store/helpers'
@@ -54,6 +55,8 @@ import { Maximize2 } from 'lucide-react'
 import { useAISummary } from '../../hooks/useAISummary'
 import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
+import { BilingualContent } from './BilingualContent'
+import { LanguageSelector } from './LanguageSelector'
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -193,6 +196,7 @@ export function EntryContent() {
   const translationTargetLanguage = useTranslationSettingKey('targetLanguage')
   const aiApiKey = useAISettingKey('apiKey')
   const { setPanelOpen } = useAIChatStore()
+  const { updateSettingsSection } = useSettingsActions()
   const playerPlay = usePlayerStore((s) => s.play)
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -230,7 +234,9 @@ export function EntryContent() {
     translatedParagraphs,
     isTranslating,
     showTranslation,
+    errorMap,
     translate,
+    toggle: toggleTranslation,
     reset: resetTranslation,
   } = useAITranslation()
 
@@ -361,9 +367,28 @@ export function EntryContent() {
 
   const handleTranslate = useCallback(() => {
     if (!selectedEntry?.content) return
+    // Toggle off if currently showing
+    if (showTranslation && translatedParagraphs.length > 0) {
+      toggleTranslation()
+      return
+    }
+    // Toggle on if already translated (cached)
+    if (translatedParagraphs.length > 0) {
+      toggleTranslation()
+      return
+    }
+    // Start fresh translation
     const targetLang = translationTargetLanguage || 'zh-CN'
     void translate(paragraphs, targetLang)
-  }, [paragraphs, selectedEntry?.content, translationTargetLanguage, translate])
+  }, [
+    paragraphs,
+    selectedEntry?.content,
+    translationTargetLanguage,
+    translate,
+    showTranslation,
+    translatedParagraphs.length,
+    toggleTranslation,
+  ])
 
   const handleCopyLink = useCallback(async () => {
     if (!selectedEntry?.url) return
@@ -869,6 +894,14 @@ export function EntryContent() {
           )}
         </ToolbarButton>
 
+        <LanguageSelector
+          value={translationTargetLanguage}
+          onChange={(lang) =>
+            updateSettingsSection('translation', { targetLanguage: lang })
+          }
+          disabled={isTranslating || !aiApiKey}
+        />
+
         <ToolbarButton
           onClick={handleOpenAIChat}
           disabled={!aiApiKey}
@@ -1140,6 +1173,7 @@ export function EntryContent() {
                   paragraphs={paragraphs}
                   translations={translatedParagraphs}
                   isTranslating={isTranslating}
+                  errorMap={errorMap}
                   fontSize={general.fontSize}
                   lineHeight={general.contentLineHeight}
                   fontFamily={general.contentFontFamily}
@@ -1297,75 +1331,6 @@ function EntryDetailFallback({ title }: { title: string }) {
       <p className="dark:text-text-dark-tertiary text-xs text-text-tertiary">
         {title}
       </p>
-    </div>
-  )
-}
-
-/** ====== Bilingual content component ====== */
-function BilingualContent({
-  paragraphs,
-  translations,
-  isTranslating,
-  fontSize,
-  lineHeight,
-  fontFamily,
-}: {
-  paragraphs: string[]
-  translations: string[]
-  isTranslating: boolean
-  fontSize: number
-  lineHeight: number
-  fontFamily: string
-}) {
-  const { t } = useTranslation()
-  return (
-    <div
-      className="space-y-0"
-      style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily }}
-    >
-      {paragraphs.map((para, i) => {
-        const translated = translations[i]
-        const isLoading = isTranslating && i === translations.length
-        const plainText = para.replace(/<[^>]*>/g, '').trim()
-        if (!plainText) return null
-
-        return (
-          <div
-            key={i}
-            className="group border-l-2 border-transparent pl-0 transition-colors hover:border-accent/30 hover:pl-3"
-          >
-            {/* Original */}
-            <div
-              className="entry-content !mb-0"
-              dangerouslySetInnerHTML={{ __html: para }}
-            />
-
-            {/* Translation */}
-            {translated ? (
-              <div className="relative mb-4 mt-1">
-                <div className="flex items-start gap-2">
-                  <Languages
-                    size={12}
-                    className="mt-1 flex-shrink-0 text-accent/50"
-                  />
-                  <div
-                    className="entry-content !mb-0 text-accent/80 dark:text-orange-300/80"
-                    style={{ fontSize: `${fontSize - 1}px` }}
-                    dangerouslySetInnerHTML={{ __html: translated }}
-                  />
-                </div>
-              </div>
-            ) : isLoading ? (
-              <div className="mb-4 mt-1 flex items-center gap-2 text-xs text-text-tertiary">
-                <Loader2 size={12} className="animate-spin" />
-                {t('entry.translating')}
-              </div>
-            ) : (
-              <div className="mb-4" />
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }
