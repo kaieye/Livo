@@ -51,6 +51,8 @@ import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
 import { ROUTES } from '../../router/route-paths'
 import { Maximize2 } from 'lucide-react'
+import { useAISummary } from '../../hooks/useAISummary'
+import { AISummaryPanel } from './AISummaryPanel'
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -215,10 +217,17 @@ export function EntryContent() {
       ? { maxWidth: `${general.contentMaxWidth || 680}px` }
       : undefined
 
+  // AI summary — self-contained hook, resets on entry change via reset()
+  const {
+    summary,
+    error,
+    isLoading: isSummarizing,
+    summarize,
+    reset: resetSummary,
+  } = useAISummary()
+
   // Per-entry state — keyed by entry ID, reset on switch
-  const [summary, setSummary] = useState<string | null>(null)
   const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
-  const [isSummarizing, setIsSummarizing] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
   const [showTranslation, setShowTranslation] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -266,10 +275,9 @@ export function EntryContent() {
       prevEntryIdRef.current = selectedEntry?.id ?? null
 
       // Reset ALL article-specific state
-      setSummary(null)
+      resetSummary()
       setTranslatedParagraphs([])
       setShowTranslation(false)
-      setIsSummarizing(false)
       setIsTranslating(false)
       setReadPercent(0)
       setLinkCopied(false)
@@ -282,7 +290,7 @@ export function EntryContent() {
       // Scroll to top
       scrollRef.current?.scrollTo({ top: 0 })
     }
-  }, [selectedEntry])
+  }, [selectedEntry, resetSummary])
 
   // Reading progress tracking
   useEffect(() => {
@@ -343,21 +351,10 @@ export function EntryContent() {
     return splitHtmlIntoParagraphs(selectedEntry.content)
   }, [selectedEntry?.content])
 
-  const handleSummarize = useCallback(async () => {
+  const handleSummarize = useCallback(() => {
     if (!selectedEntry?.content) return
-    setIsSummarizing(true)
-    setSummary(null)
-    const result = await window.api.ai.summarize(
-      selectedEntry.content,
-      general.language,
-    )
-    setIsSummarizing(false)
-    if (result.success) {
-      setSummary(result.summary)
-    } else {
-      setSummary(`${t('common.error')}: ${result.error}`)
-    }
-  }, [general.language, selectedEntry?.content, t])
+    void summarize(selectedEntry.content, general.language)
+  }, [general.language, selectedEntry?.content, summarize])
 
   const handleTranslate = useCallback(async () => {
     if (!selectedEntry?.content) return
@@ -1097,24 +1094,12 @@ export function EntryContent() {
             </div>
 
             {/* AI Summary */}
-            {(isSummarizing || summary) && (
-              <div className="animate-in fade-in-0 slide-in-from-top-2 mb-8 rounded-xl border border-accent/15 bg-gradient-to-br from-accent/5 to-accent/10 p-4 transition-all duration-300">
-                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-accent">
-                  <Sparkles size={16} />
-                  {t('entry.aiSummaryTitle')}
-                </div>
-                {isSummarizing ? (
-                  <div className="flex items-center gap-2 text-sm text-text-secondary">
-                    <Loader2 size={14} className="animate-spin" />
-                    {t('entry.generatingSummary')}
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {summary}
-                  </p>
-                )}
-              </div>
-            )}
+            <AISummaryPanel
+              summary={summary}
+              error={error}
+              isLoading={isSummarizing}
+              onRetry={handleSummarize}
+            />
 
             {readabilityError && !isReadabilityMode && (
               <div className="mb-6 rounded-lg border border-amber-300/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-300">

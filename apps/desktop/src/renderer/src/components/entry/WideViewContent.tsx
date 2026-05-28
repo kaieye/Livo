@@ -97,6 +97,8 @@ import {
 import { Loader2, Inbox, RefreshCw, X, ExternalLink } from 'lucide-react'
 import { WideViewHeader } from './WideViewHeader'
 import { ViewRecommendations } from './ViewRecommendations'
+import { useAISummary } from '../../hooks/useAISummary'
+import { AISummaryPanel } from './AISummaryPanel'
 
 const SharePoster = lazy(() =>
   import('../ui/SharePoster').then((module) => ({
@@ -1803,11 +1805,9 @@ function SocialOverlay({
 
   // AI Translation & Summary
   const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
-  const [summary, setSummary] = useState<string | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
-  const [isSummarizing, setIsSummarizing] = useState(false)
   const [showTranslation, setShowTranslation] = useState(false)
-  const [showSummary, setShowSummary] = useState(false)
+  const { summary, error, isLoading: isSummarizing, summarize } = useAISummary()
 
   const handleTranslate = useCallback(async () => {
     if (paragraphs.length === 0) return
@@ -1859,34 +1859,10 @@ function SocialOverlay({
     translatedParagraphs.length,
   ])
 
-  const handleSummarize = useCallback(async () => {
+  const handleSummarize = useCallback(() => {
     if (!plainContent) return
-    // Toggle
-    if (showSummary && summary) {
-      setShowSummary(false)
-      return
-    }
-    if (summary) {
-      setShowSummary(true)
-      return
-    }
-    setIsSummarizing(true)
-    setShowSummary(true)
-    try {
-      const result = await window.api.ai.summarize(
-        plainContent,
-        general.language || 'zh-CN',
-      )
-      if (result.success) {
-        setSummary(result.summary)
-      } else {
-        setSummary(`\u274c ${result.error}`)
-      }
-    } catch (err) {
-      setSummary(`\u274c ${String(err)}`)
-    }
-    setIsSummarizing(false)
-  }, [general.language, plainContent, showSummary, summary])
+    void summarize(plainContent, general.language || 'zh-CN')
+  }, [general.language, plainContent, summarize])
 
   return (
     <Suspense fallback={null}>
@@ -1898,9 +1874,9 @@ function SocialOverlay({
         isTranslating={isTranslating}
         showTranslation={showTranslation}
         translatedParagraphCount={translatedParagraphs.length}
-        isSummarizing={isSummarizing}
-        showSummary={showSummary}
-        summary={summary}
+        isSummarizing={false}
+        showSummary={false}
+        summary={null}
         browserOpenUrl={browserOpenUrl}
         onTranslate={handleTranslate}
         onSummarize={handleSummarize}
@@ -1927,6 +1903,17 @@ function SocialOverlay({
         onSetPreviewIdx={setPreviewIdx}
         onSetLightboxOpen={setLightboxOpen}
       />
+      {/* AI Summary — rendered within overlay context, shows when summary is available */}
+      {(summary || isSummarizing || error) && (
+        <div className="absolute bottom-6 left-1/2 z-[60] w-full max-w-xl -translate-x-1/2 px-4">
+          <AISummaryPanel
+            summary={summary}
+            error={error}
+            isLoading={isSummarizing}
+            onRetry={handleSummarize}
+          />
+        </div>
+      )}
     </Suspense>
   )
 }
