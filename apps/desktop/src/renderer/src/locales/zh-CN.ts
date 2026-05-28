@@ -11,6 +11,7 @@ import { zhCNRecommendations } from './zh-CN/recommendations'
 import { zhCNSettings } from './zh-CN/settings'
 import { zhCNShortcuts } from './zh-CN/shortcuts'
 import { zhCNSidebar } from './zh-CN/sidebar'
+import { zhCNVideoPlayer } from './zh-CN/video-player'
 
 export const zhCN = {
   settings: zhCNSettings,
@@ -133,6 +134,8 @@ export const zhCN = {
   feedDetail: zhCNFeedDetail,
 
   articleDetail: zhCNArticleDetail,
+
+  videoPlayer: zhCNVideoPlayer,
 
   time: {
     justNow: '刚刚',

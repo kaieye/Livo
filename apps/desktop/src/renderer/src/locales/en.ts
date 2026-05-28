@@ -11,6 +11,7 @@ import { enRecommendations } from './en/recommendations'
 import { enSettings } from './en/settings'
 import { enShortcuts } from './en/shortcuts'
 import { enSidebar } from './en/sidebar'
+import { enVideoPlayer } from './en/video-player'
 
 export const en = {
   settings: enSettings,
@@ -134,6 +135,8 @@ export const en = {
   feedDetail: enFeedDetail,
 
   articleDetail: enArticleDetail,
+
+  videoPlayer: enVideoPlayer,
 
   time: {
     justNow: 'Just Now',

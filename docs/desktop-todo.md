@@ -69,7 +69,13 @@ GitNexus 使用状态：
   - 复用:`EntryContent`(1460 行，未改动 API)；`window.api.entries.get`(deep-link 兜底取详情)
   - 不在范围(留给 2.x):AI 摘要面板抽取(2.1)、AI 翻译面板抽取(2.2)、社交详情整合(2.3)、图片画廊整合(2.4)、内嵌视频整合(2.5)、原文/美化切换(2.6)、星标动画+进度(2.7)；Edit 按钮(等 3.2 DiscoverSubscribeConfig)
   - 遗留:`refreshFeed` 隐式 reload home scope(store 层重构)；`ArticlePreviewRow` 图片 fallback 仍内联(只在 FeedDetailPage 用一次，留待出现第二处再抽)
-- [ ] **1.4** 新增 VideoPlayer 页面（复用现有 YouTube 解析 + iframe/webview 回退，统一全屏播放入口） → 依赖: 0.1, 0.2
+- [x] **1.4** 新增 VideoPlayer 页面（复用现有 YouTube 解析 + iframe/webview 回退，统一全屏播放入口） → 依赖: 0.1, 0.2 ✅
+  - 实现:`pages/VideoPlayerPage.tsx`(~250 行) — 顶部返回头(back + 标题 + open-external) 全黑 chrome、主体由 `ui/VideoPlayer`(直链 mp4 + Bilibili webview 模态) / YouTube 内联 iframe-fallback(经 `resolveYoutubePlayback`(IPC `window.api.video.resolve`) → direct mp4 / iframe) 二路驱动、loading 与 unplayable 状态(后者带"打开原始页面"按钮)。复用 `ArticleDetailPage`(1.3) 的 entry-store 水合模式 — entry 决定标题/封面/外链，避免另起 metadata 通道
+  - 路由:`/video/:entryId`(理由:entry 已携带 source + media + poster + title，免另发解析；命名与 `entry-store` 对齐；非 `/video/:source/:videoId` 那种需为每种源单独拼接的形状) — `route-paths.ts` 新增 `ROUTES.video()` + 扩 `NON_VIEW_PATHS`，`routes.tsx` 注册懒加载页
+  - 文件:`pages/VideoPlayerPage.tsx`(新建)、`locales/{en,zh-CN}/video-player.ts`(新建 namespace)、`router/{routes,route-paths}.tsx`、`components/entry/EntryContent.tsx`(在 inline `<VideoPlayer>` 上加 hover 时浮现的 Maximize2 跳转按钮，唯一入口接入点)
+  - 复用:`ui/VideoPlayer`(API 未改)、`lib/youtube-playback.ts resolveYoutubePlayback/extractYoutubeVideoId/buildYoutubeIframeUrl`、`lib/entry-video-source.ts resolvePreferredEntryVideo`、`useEntryStore.selectEntry`/`window.api.entries.get`(deep-link)、`window.api.video.resolve`(main `video-proxy` IPC，多 Invidious/Piped 实例兜底，不改)
+  - 不在范围(留给 9.x/10.x/11.x):统一 main/renderer YouTube ID 提取(9.1)、Invidious/Piped fallback 测试(9.2/9.3)、抽 `isDirectVideoUrl`(9.5)、拆分 501 行 `ui/VideoPlayer`(P2)、全局 AudioPlaybackService(10.x)、视频存盘(11.x)
+  - 遗留:Vimeo/TED 等其他可嵌入源在本页未走 iframe-fallback(命中 `ui/VideoPlayer` 内部 `window.open` 兜底，与现有内联表现一致)；UnplayableState 在 entry 命中但无视频 media 时也会显示，作为兜底
 - [ ] **1.5** 新增 ImageViewer 页面（图片全屏查看） → 依赖: 0.1, 0.2
 - [ ] **1.6** 新增 AccountLogin 页面（账号登录流程） → 依赖: 0.1, 0.2
 

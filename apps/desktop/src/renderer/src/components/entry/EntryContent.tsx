@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
@@ -48,6 +49,8 @@ import { FeedViewType } from '../../../../shared/types'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
+import { ROUTES } from '../../router/route-paths'
+import { Maximize2 } from 'lucide-react'
 
 /** Estimate reading time in minutes */
 function estimateReadingTime(html: string): number {
@@ -189,6 +192,7 @@ export function EntryContent() {
   const { setPanelOpen } = useAIChatStore()
   const playerPlay = usePlayerStore((s) => s.play)
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   // Content width mapping — supports custom px value
   const contentWidthClasses = useMemo(
@@ -1135,13 +1139,25 @@ export function EntryContent() {
 
             {/* Video player — prioritized like Folo-dev MediaLayout */}
             {videoMedia && (
-              <div className="-mx-2 mb-8">
+              <div className="group/video relative -mx-2 mb-8">
                 <VideoPlayer
                   url={videoMedia.url}
                   poster={selectedEntry.imageUrl}
                   title={selectedEntry.title}
                   onOpenBilibiliInPage={handleOpenBilibiliInPage}
                 />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(ROUTES.video(selectedEntry.id))
+                  }}
+                  title={t('videoPlayer.openFullscreen')}
+                  aria-label={t('videoPlayer.openFullscreen')}
+                  className="absolute right-3 top-3 z-10 rounded-full bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover/video:opacity-100"
+                >
+                  <Maximize2 size={14} />
+                </button>
               </div>
             )}
 
