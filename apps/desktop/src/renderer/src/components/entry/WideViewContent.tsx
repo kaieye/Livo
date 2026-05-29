@@ -319,10 +319,27 @@ export function WideViewContent() {
   }))
   const { t } = useTranslation()
   const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')
+
+  // Derive effective active view: when in "All" view (activeView=null) but
+  // a Pictures/Social/Videos feed is selected, use the feed's view type so
+  // the wide-view content renders with the proper layout and behaviour.
+  const effectiveActiveView = useMemo(() => {
+    if (activeView !== null) return activeView
+    if (!selectedFeedId) return null
+    const feed = feeds.find((f) => f.id === selectedFeedId)
+    const feedView = feed?.view ?? FeedViewType.Articles
+    return [
+      FeedViewType.SocialMedia,
+      FeedViewType.Videos,
+      FeedViewType.Pictures,
+    ].includes(feedView)
+      ? feedView
+      : null
+  }, [activeView, selectedFeedId, feeds])
   const [masonryProbeVersion, setMasonryProbeVersion] = useState(0)
   const baseEntryLoadLimit = useMemo(
-    () => getEntryLoadLimit(activeView),
-    [activeView],
+    () => getEntryLoadLimit(effectiveActiveView),
+    [effectiveActiveView],
   )
   const [entryLoadLimit, setEntryLoadLimit] = useState(baseEntryLoadLimit)
 
@@ -342,7 +359,8 @@ export function WideViewContent() {
   // Share poster state
   const [posterEntry, setPosterEntry] = useState<Entry | null>(null)
 
-  const viewDef = activeView !== null ? VIEW_DEFINITIONS[activeView] : null
+  const viewDef =
+    effectiveActiveView !== null ? VIEW_DEFINITIONS[effectiveActiveView] : null
   const feedById = useMemo(
     () => new Map(feeds.map((f) => [f.id, f] as const)),
     [feeds],
@@ -351,17 +369,17 @@ export function WideViewContent() {
   // Compute feed IDs for the active view (excluding recommended feeds)
   const viewFeedIds = useMemo(
     () =>
-      activeView !== null
+      effectiveActiveView !== null
         ? feeds
             .filter(
               (f) =>
-                (f.view ?? FeedViewType.Articles) === activeView &&
+                (f.view ?? FeedViewType.Articles) === effectiveActiveView &&
                 f.category !== RECOMMENDED_CATEGORY &&
                 f.showInAll !== false,
             )
             .map((f) => f.id)
         : undefined,
-    [feeds, activeView],
+    [feeds, effectiveActiveView],
   )
 
   // Loading entries when feed selection changes
@@ -402,7 +420,7 @@ export function WideViewContent() {
       ? t('entryList.starred')
       : currentFeed?.title ||
         (viewDef
-          ? t(VIEW_TYPE_I18N_KEYS[activeView!] || 'common.all')
+          ? t(VIEW_TYPE_I18N_KEYS[effectiveActiveView!] || 'common.all')
           : t('common.all'))
 
   const reloadCurrentList = useCallback(() => {
@@ -439,9 +457,11 @@ export function WideViewContent() {
   const handleRefreshCurrentView = useCallback(async () => {
     if (selectedFeedId && selectedFeedId !== 'starred') {
       await refreshFeed(selectedFeedId)
-    } else if (activeView !== null) {
+    } else if (effectiveActiveView !== null) {
       const currentViewFeedIds = feeds
-        .filter((f) => (f.view ?? FeedViewType.Articles) === activeView)
+        .filter(
+          (f) => (f.view ?? FeedViewType.Articles) === effectiveActiveView,
+        )
         .map((f) => f.id)
       await refreshMultiple(currentViewFeedIds)
     } else {
@@ -449,7 +469,7 @@ export function WideViewContent() {
     }
     reloadCurrentList()
   }, [
-    activeView,
+    effectiveActiveView,
     feeds,
     refreshAll,
     refreshFeed,
@@ -471,16 +491,16 @@ export function WideViewContent() {
     entries,
     feeds,
     feedById,
-    activeView,
+    activeView: effectiveActiveView,
     selectedFeedId,
     showRecommended: general.showRecommended,
     isLoading,
   })
   const isPicturesAllView =
-    activeView === FeedViewType.Pictures && !selectedFeedId
+    effectiveActiveView === FeedViewType.Pictures && !selectedFeedId
   const isTimelineView =
-    activeView === FeedViewType.SocialMedia ||
-    (activeView === FeedViewType.Pictures && !!selectedFeedId)
+    effectiveActiveView === FeedViewType.SocialMedia ||
+    (effectiveActiveView === FeedViewType.Pictures && !!selectedFeedId)
   // Pre-compute masonry card data to avoid per-render extraction
   const masonryCards = useMemo<MasonryCardData[]>(() => {
     if (!isPicturesAllView) return []
@@ -547,7 +567,7 @@ export function WideViewContent() {
     containerRef,
   )
   const lastScrollScopeRef = useRef<string>('')
-  const viewKey = `${activeView ?? 'all'}:${selectedFeedId ?? ''}`
+  const viewKey = `${effectiveActiveView ?? 'all'}:${selectedFeedId ?? ''}`
   const [containerWidth, setContainerWidth] = useState(
     () => rememberedContainerWidthByView.get(viewKey) ?? 0,
   )
@@ -567,14 +587,14 @@ export function WideViewContent() {
   })
   useEffect(() => {
     setEntryLoadLimit(baseEntryLoadLimit)
-  }, [baseEntryLoadLimit, activeView, selectedFeedId, filterMode])
+  }, [baseEntryLoadLimit, effectiveActiveView, selectedFeedId, filterMode])
 
   const handlePagedEntryScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget
       const hasScrolledEnough = el.scrollTop > PAGED_LOAD_MORE_SCROLL_GUARD_PX
       const bottomOffset =
-        activeView === FeedViewType.Videos
+        effectiveActiveView === FeedViewType.Videos
           ? VIDEO_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX
           : SOCIAL_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX
       const nearBottom =
@@ -584,7 +604,13 @@ export function WideViewContent() {
       if (!hasMoreEntries || isLoadingMore) return
       void loadMoreEntries()
     },
-    [activeView, hasMoreEntries, isLoadingMore, loadMoreEntries, searchQuery],
+    [
+      effectiveActiveView,
+      hasMoreEntries,
+      isLoadingMore,
+      loadMoreEntries,
+      searchQuery,
+    ],
   )
 
   useEffect(() => {
@@ -605,16 +631,17 @@ export function WideViewContent() {
   ])
 
   useEffect(() => {
-    const nextScope = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
+    const nextScope = `${effectiveActiveView ?? 'all'}:${selectedFeedId ?? 'all'}`
     if (lastScrollScopeRef.current === nextScope) return
     lastScrollScopeRef.current = nextScope
     const el = containerRef.current
     if (!el) return
     el.scrollTo({ top: 0, behavior: 'auto' })
-  }, [activeView, selectedFeedId])
+  }, [effectiveActiveView, selectedFeedId])
 
   useLayoutEffect(() => {
-    if (activeView !== FeedViewType.Videos && !isPicturesAllView) return
+    if (effectiveActiveView !== FeedViewType.Videos && !isPicturesAllView)
+      return
     const el = containerRef.current
     if (!el) return
 
@@ -638,7 +665,7 @@ export function WideViewContent() {
       ro.disconnect()
       window.removeEventListener('resize', updateWidth)
     }
-  }, [activeView, isPicturesAllView, viewKey])
+  }, [effectiveActiveView, isPicturesAllView, viewKey])
 
   // On view/feed switch, sync width immediately to prevent "first render oversized
   // then shrink" flash when entering Pictures view.
@@ -650,14 +677,15 @@ export function WideViewContent() {
   }, [viewKey])
 
   useLayoutEffect(() => {
-    if (activeView !== FeedViewType.Videos && !isPicturesAllView) return
+    if (effectiveActiveView !== FeedViewType.Videos && !isPicturesAllView)
+      return
     const el = containerRef.current
     if (el) {
       const newWidth = Math.round(el.getBoundingClientRect().width)
       rememberedContainerWidthByView.set(viewKey, newWidth)
       setContainerWidth((prev) => (prev === newWidth ? prev : newWidth))
     }
-  }, [viewKey, activeView, isPicturesAllView])
+  }, [viewKey, effectiveActiveView, isPicturesAllView])
 
   const videoColumnCount = useMemo(
     () => getVideoColumnCount(containerWidth),
@@ -668,7 +696,7 @@ export function WideViewContent() {
     goPrevPage,
     goNextPage,
   } = useVideoGrid({
-    activeView,
+    activeView: effectiveActiveView,
     entries: renderEntries,
     videoColumnCount,
     videoPaginationEnabled: general.videoPagination,
@@ -676,7 +704,7 @@ export function WideViewContent() {
     inlineBilibiliOpen: !!inlineBilibili,
     containerRef,
     videoGridRef,
-    pageScopeKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${filterMode}`,
+    pageScopeKey: `${effectiveActiveView ?? 'all'}:${selectedFeedId ?? 'all'}:${filterMode}`,
   })
   const masonryColumnCount = useMemo(
     () => getMasonryColumnCount(containerWidth),
@@ -695,7 +723,7 @@ export function WideViewContent() {
     entries: renderEntries,
     columnCount: masonryColumnCount,
     containerWidth,
-    scopeKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`,
+    scopeKey: `${effectiveActiveView ?? 'all'}:${selectedFeedId ?? 'all'}`,
     decodeMediaUrl,
     onCacheUpdated: () => setMasonryProbeVersion((prev) => prev + 1),
   })
@@ -783,12 +811,12 @@ export function WideViewContent() {
 
   useEffect(() => {
     const canStayInline =
-      activeView === FeedViewType.Videos ||
-      activeView === FeedViewType.SocialMedia
+      effectiveActiveView === FeedViewType.Videos ||
+      effectiveActiveView === FeedViewType.SocialMedia
     if (!canStayInline || !general.bilibiliOpenInPage) {
       setInlineBilibili(null)
     }
-  }, [activeView, general.bilibiliOpenInPage])
+  }, [effectiveActiveView, general.bilibiliOpenInPage])
 
   useEffect(() => {
     // Switching subscription/feed should always exit full-page inline player.
@@ -798,7 +826,7 @@ export function WideViewContent() {
   return (
     <div className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-surface-dark">
       <WideViewHeader
-        activeView={activeView}
+        activeView={effectiveActiveView}
         inlineBilibili={!!inlineBilibili}
         title={title}
         viewDef={viewDef}
@@ -826,9 +854,9 @@ export function WideViewContent() {
             : ''
         }`}
         viewportClassName={`h-full ${
-          activeView === FeedViewType.Videos ||
+          effectiveActiveView === FeedViewType.Videos ||
           isPicturesAllView ||
-          (activeView === FeedViewType.SocialMedia && !!inlineBilibili)
+          (effectiveActiveView === FeedViewType.SocialMedia && !!inlineBilibili)
             ? 'overflow-hidden'
             : 'overflow-y-auto'
         }`}
@@ -843,10 +871,12 @@ export function WideViewContent() {
           <SkeletonList
             count={8}
             type={
-              activeView === FeedViewType.SocialMedia ||
-              (activeView === FeedViewType.Pictures && !!selectedFeedId)
+              effectiveActiveView === FeedViewType.SocialMedia ||
+              (effectiveActiveView === FeedViewType.Pictures &&
+                !!selectedFeedId)
                 ? 'social'
-                : activeView === FeedViewType.Videos || isPicturesAllView
+                : effectiveActiveView === FeedViewType.Videos ||
+                    isPicturesAllView
                   ? 'grid'
                   : 'article'
             }
@@ -871,8 +901,8 @@ export function WideViewContent() {
                 {isRefreshing ? t('common.refreshing') : t('common.refresh')}
               </button>
             </div>
-          ) : activeView !== null ? (
-            <ViewRecommendations viewType={activeView} />
+          ) : effectiveActiveView !== null ? (
+            <ViewRecommendations viewType={effectiveActiveView} />
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-text-secondary dark:text-text-dark-secondary">
               <Inbox size={40} className="mb-3 text-text-tertiary" />
@@ -881,8 +911,8 @@ export function WideViewContent() {
             </div>
           )
         ) : inlineBilibili &&
-          (activeView === FeedViewType.Videos ||
-            activeView === FeedViewType.SocialMedia) ? (
+          (effectiveActiveView === FeedViewType.Videos ||
+            effectiveActiveView === FeedViewType.SocialMedia) ? (
           <div className="flex h-full min-h-[520px] flex-col bg-white dark:bg-surface-dark">
             <div className="min-h-0 flex-1 bg-black">
               <webview
@@ -955,7 +985,7 @@ export function WideViewContent() {
               </Suspense>
             )}
           </ScrollArea>
-        ) : activeView === FeedViewType.Videos ? (
+        ) : effectiveActiveView === FeedViewType.Videos ? (
           /* Video grid with optional pagination */
           <div className={inlineBilibili ? 'h-full' : 'box-border h-full p-6'}>
             <Suspense fallback={<SkeletonList count={8} type="grid" />}>
