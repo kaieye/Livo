@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useDiscoverSearchQuery } from '../../hooks/useDiscoverSearchQuery'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
@@ -22,7 +23,19 @@ import {
   getDiscoverResultDisplayTitle,
 } from './DiscoverResultRow'
 import { DiscoverCenteredState } from './DiscoverCenteredState'
-import { AlertTriangle, Globe, LogIn, Search, Sparkles, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  Globe,
+  LogIn,
+  Search,
+  Sparkles,
+  X,
+  Check,
+  Plus,
+  Rss,
+  ExternalLink,
+  Loader2,
+} from 'lucide-react'
 
 // Platform icon SVGs (chip rail)
 const platformIcons: Record<string, React.ReactNode> = {
@@ -109,6 +122,38 @@ export function DiscoverPanel() {
 
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const [searchPage, setSearchPage] = useState(1)
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+  // Curated categories & popular feeds — shown when no search is active
+  const categoriesQuery = useQuery({
+    queryKey: ['discover:categories'],
+    queryFn: () => window.api.discover.categories(),
+    staleTime: 5 * 60 * 1000,
+  })
+  const categories: Array<{
+    id: string
+    name: string
+    nameEn: string
+    icon: string
+    description: string
+  }> = categoriesQuery.data ?? []
+
+  const popularFeedsQuery = useQuery({
+    queryKey: ['discover:popular', selectedCategory],
+    queryFn: () => window.api.discover.popular(selectedCategory ?? undefined),
+    staleTime: 5 * 60 * 1000,
+  })
+  const popularFeeds: Array<{
+    title: string
+    url: string
+    siteUrl: string
+    description: string
+    category: string
+    language: string
+    imageUrl?: string
+  }> = popularFeedsQuery.data ?? []
+  const isLoadingPopular = popularFeedsQuery.isPending
+
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const previousPlatformRef = useRef<DiscoverSearchPlatform>(searchPlatform)
   const debouncedSearchQuery = useDebouncedValue(
@@ -397,7 +442,110 @@ export function DiscoverPanel() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="w-full pt-[18vh]">{searchBar}</div>
+        <div className={`w-full ${hasSearchQuery ? '' : 'pt-[12vh]'}`}>
+          {searchBar}
+        </div>
+
+        {/* Featured feeds — category rail + curated feed list when no search active */}
+        {!hasSearchQuery && categories.length > 0 && (
+          <div className="mx-auto mt-6 max-w-2xl">
+            <div className="mb-4">
+              <h3 className="mb-3 text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
+                {t('discover.browseCategories')}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selectedCategory === null
+                      ? 'bg-accent text-white'
+                      : 'bg-surface-secondary text-text-secondary hover:bg-accent/10 dark:bg-surface-dark-secondary dark:text-text-dark-secondary'
+                  }`}
+                >
+                  {t('common.all')}
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                      selectedCategory === cat.id
+                        ? 'bg-accent text-white'
+                        : 'bg-surface-secondary text-text-secondary hover:bg-accent/10 dark:bg-surface-dark-secondary dark:text-text-dark-secondary'
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-3 text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
+                {t('discover.featuredFeeds')}
+                {selectedCategory &&
+                categories.find((c) => c.id === selectedCategory)
+                  ? ` — ${categories.find((c) => c.id === selectedCategory)!.name}`
+                  : ''}
+              </h3>
+
+              {isLoadingPopular ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="h-[66px] animate-pulse rounded-xl border bg-white dark:bg-surface-dark-secondary"
+                    />
+                  ))}
+                </div>
+              ) : popularFeeds.length === 0 ? (
+                <p className="text-xs text-text-tertiary">
+                  {t('discover.noCategoryFeeds')}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {popularFeeds.map((feed) => (
+                    <CuratedFeedRow
+                      key={feed.url}
+                      feed={feed}
+                      subscribed={isSubscribed(feed.url)}
+                      subscribing={isSubscribing(feed.url)}
+                      onPreview={() => {
+                        navigate(
+                          ROUTES.discoverPreview({
+                            url: feed.url,
+                            title: feed.title,
+                            siteUrl: feed.siteUrl,
+                            imageUrl: feed.imageUrl,
+                            description: feed.description,
+                            view: inferDiscoverFeedViewFromUrl(feed.url),
+                          }),
+                        )
+                      }}
+                      onToggleSubscribe={() => {
+                        if (isSubscribed(feed.url)) {
+                          handleUnsubscribe(feed.url)
+                        } else {
+                          navigate(
+                            ROUTES.discoverPreview({
+                              url: feed.url,
+                              title: feed.title,
+                              siteUrl: feed.siteUrl,
+                              imageUrl: feed.imageUrl,
+                              description: feed.description,
+                              view: inferDiscoverFeedViewFromUrl(feed.url),
+                            }),
+                          )
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Search results */}
         {hasSearchQuery && (
@@ -533,6 +681,115 @@ export function DiscoverPanel() {
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** ====== Curated feed row — simpler variant for recommended feeds ====== */
+
+interface CuratedFeedInfo {
+  title: string
+  url: string
+  siteUrl: string
+  description: string
+  category: string
+  language: string
+  imageUrl?: string
+}
+
+function CuratedFeedRow({
+  feed,
+  subscribed,
+  subscribing,
+  onPreview,
+  onToggleSubscribe,
+}: {
+  feed: CuratedFeedInfo
+  subscribed: boolean
+  subscribing: boolean
+  onPreview: () => void
+  onToggleSubscribe: () => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onPreview}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onPreview()
+        }
+      }}
+      className="group flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-3.5 transition-all duration-200 hover:border-accent/30 hover:bg-surface-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary/50"
+    >
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10">
+        <Rss size={16} className="text-accent" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="block min-w-0 truncate text-sm font-medium">
+            {feed.title}
+          </span>
+          <span className="flex-shrink-0 rounded-full bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary dark:bg-surface-dark-tertiary">
+            {feed.language === 'Chinese' ? '中' : 'EN'}
+          </span>
+        </div>
+        {feed.description && (
+          <p className="mt-0.5 truncate text-xs text-text-secondary dark:text-text-dark-secondary">
+            {feed.description}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-shrink-0 items-center gap-1">
+        <a
+          href={feed.siteUrl || feed.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="rounded-lg p-1.5 text-text-tertiary opacity-0 transition-colors hover:bg-surface-secondary hover:text-text-secondary focus:opacity-100 group-hover:opacity-100 dark:hover:bg-surface-dark-tertiary"
+          title={t('discover.viewSource')}
+        >
+          <ExternalLink size={14} />
+        </a>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSubscribe()
+          }}
+          disabled={subscribing}
+          className={`group/btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+            subscribed
+              ? 'bg-green-100 text-green-600 hover:bg-red-100 hover:text-red-600 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+              : 'bg-accent text-white hover:bg-accent-hover active:scale-95'
+          } disabled:cursor-default disabled:opacity-70`}
+        >
+          {subscribing ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : subscribed ? (
+            <>
+              <Check size={12} className="group-hover/btn:hidden" />
+              <X size={12} className="hidden group-hover/btn:block" />
+              <span className="group-hover/btn:hidden">
+                {t('common.subscribed')}
+              </span>
+              <span className="hidden group-hover/btn:block">
+                {t('discover.unsubscribeAction')}
+              </span>
+            </>
+          ) : (
+            <>
+              <Plus size={12} />
+              <span>{t('discover.previewAction')}</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   )

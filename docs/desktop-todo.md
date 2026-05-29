@@ -14,7 +14,7 @@
 
 ### 3. 发现流程完善（接续）
 
-- [ ] **3.4** 实现内置订阅源分类浏览（ai/podcast/news/articles/social/pictures/videos）
+- [x] **3.4** 实现内置订阅源分类浏览（ai/podcast/news/articles/social/pictures/videos）
 
 ### 4. 设置系统完善
 
