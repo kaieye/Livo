@@ -1,16 +1,30 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, BookOpen, Loader2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  BookOpen,
+  ExternalLink,
+  Loader2,
+  Video,
+  VideoOff,
+} from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 import { EntryContent } from '../components/entry/EntryContent'
 import { EntryAIToolbar } from '../components/entry/EntryAIToolbar'
 import { AIAssistContent } from '../components/entry/AIAssistContent'
 import { SocialDetailView } from '../components/entry/SocialDetailView'
+import { VideoPlayer } from '../components/ui/VideoPlayer'
 import { useDeepLinkEntry } from '../hooks/useDeepLinkEntry'
 import { useAISummary } from '../hooks/useAISummary'
 import { useAITranslation } from '../hooks/useAITranslation'
+import { resolvePreferredEntryVideo } from '../lib/entry-video-source'
+import {
+  buildYoutubeIframeUrl,
+  extractYoutubeVideoId,
+  resolveYoutubePlayback,
+} from '../lib/youtube-playback'
 import { useFeedStore } from '../store/feed-store'
 import {
   useGeneralSettingsShallowSelector,
@@ -55,6 +69,7 @@ export default function ArticleDetailPage() {
   )
   const isSocial = feed?.view === FeedViewType.SocialMedia
   const isPictures = feed?.view === FeedViewType.Pictures
+  const isVideos = feed?.view === FeedViewType.Videos
 
   // Redirect picture entries to ImageViewerPage for full-screen image browsing.
   // Uses replace so "back" returns to the previous page, not this redirect.
@@ -63,6 +78,62 @@ export default function ArticleDetailPage() {
       navigate(ROUTES.image(entryId), { replace: true })
     }
   }, [entryId, isPictures, navigate])
+
+  // --- Video entry support ---
+  const videoMedia = useMemo(
+    () => (activeEntry ? resolvePreferredEntryVideo(activeEntry) : null),
+    [activeEntry],
+  )
+
+  const youtubeVideoId = videoMedia
+    ? extractYoutubeVideoId(videoMedia.url)
+    : null
+  const isYouTubeVideo = !!youtubeVideoId
+
+  type YoutubePlayback = { kind: 'direct' | 'iframe'; url: string }
+  const [youtubePlayback, setYoutubePlayback] =
+    useState<YoutubePlayback | null>(null)
+  const [isResolvingYoutube, setIsResolvingYoutube] = useState(false)
+
+  useEffect(() => {
+    if (!isYouTubeVideo || !videoMedia) {
+      setYoutubePlayback(null)
+      return
+    }
+
+    const fallbackIframe = youtubeVideoId
+      ? buildYoutubeIframeUrl(youtubeVideoId)
+      : null
+
+    let cancelled = false
+    setIsResolvingYoutube(true)
+    setYoutubePlayback(null)
+
+    void resolveYoutubePlayback(window.api.video, videoMedia.url)
+      .then((result) => {
+        if (cancelled) return
+        setYoutubePlayback(result)
+      })
+      .catch(() => {
+        if (cancelled || !fallbackIframe) return
+        setYoutubePlayback({ kind: 'iframe', url: fallbackIframe })
+      })
+      .finally(() => {
+        if (cancelled) return
+        setIsResolvingYoutube(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isYouTubeVideo, videoMedia, youtubeVideoId])
+
+  const isDirectVideo =
+    !!videoMedia && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(videoMedia.url)
+  const isBilibiliVideo =
+    !!videoMedia && /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(videoMedia.url)
+  const shouldUseInlineVideoPlayer = isDirectVideo || isBilibiliVideo
+  const videoExternalUrl = activeEntry?.url || videoMedia?.url || ''
 
   // --- AI assist hooks (owned at page level for composability) ---
   const {
@@ -275,6 +346,118 @@ export default function ArticleDetailPage() {
                 summary={summary}
                 fontSize={general.fontSize}
               />
+            </div>
+          </div>
+        ) : isVideos ? (
+          // Video entry — inline player at top, content below
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {/* Inline video player */}
+            <div className="flex-shrink-0 border-b border-[var(--color-border-secondary)] bg-black">
+              {activeEntry && videoMedia ? (
+                shouldUseInlineVideoPlayer ? (
+                  <div className="mx-auto aspect-video max-w-4xl">
+                    <VideoPlayer
+                      src={videoMedia.url}
+                      previewImage={activeEntry.imageUrl}
+                      autoPlay={false}
+                      className="h-full w-full rounded-none"
+                    />
+                  </div>
+                ) : isYouTubeVideo ? (
+                  <div className="mx-auto aspect-video max-w-4xl">
+                    {isResolvingYoutube || !youtubePlayback ? (
+                      <div className="flex h-full items-center justify-center gap-2 text-sm text-white/70">
+                        <Loader2
+                          size={16}
+                          className="animate-spin"
+                          aria-hidden="true"
+                        />
+                        <span>{t('videoPlayer.loading')}</span>
+                      </div>
+                    ) : youtubePlayback.kind === 'direct' ? (
+                      <video
+                        src={youtubePlayback.url}
+                        className="h-full w-full object-contain"
+                        controls
+                        preload="metadata"
+                        onError={() => {
+                          const fallback = youtubeVideoId
+                            ? buildYoutubeIframeUrl(youtubeVideoId)
+                            : null
+                          if (fallback)
+                            setYoutubePlayback({
+                              kind: 'iframe',
+                              url: fallback,
+                            })
+                        }}
+                      />
+                    ) : (
+                      <iframe
+                        src={youtubePlayback.url}
+                        className="h-full w-full"
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+                        allowFullScreen
+                        allow="autoplay; encrypted-media; accelerometer; clipboard-write; gyroscope; picture-in-picture"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="mx-auto flex aspect-video max-w-4xl items-center justify-center bg-black/60">
+                    <div className="text-center">
+                      <VideoOff
+                        size={32}
+                        className="mx-auto mb-2 text-white/40"
+                        aria-hidden="true"
+                      />
+                      <p className="text-sm text-white/70">
+                        {t('articleDetail.videoUnplayable')}
+                      </p>
+                      {videoExternalUrl && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.open(videoExternalUrl, '_blank')
+                          }
+                          className="mt-2 text-sm text-[var(--color-accent)] hover:underline"
+                        >
+                          {t('articleDetail.videoOpenExternal')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="mx-auto flex aspect-video max-w-4xl items-center justify-center bg-black/60">
+                  <Loader2
+                    size={16}
+                    className="animate-spin text-white/70"
+                    aria-hidden="true"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Article content below video */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-[680px] px-4 py-6">
+                <AIAssistContent
+                  summary={summary}
+                  summaryError={summaryError}
+                  isSummarizing={isSummarizing}
+                  onRetrySummary={handleSummarize}
+                  showTranslation={showTranslation}
+                  paragraphs={paragraphs}
+                  translatedParagraphs={translatedParagraphs}
+                  isTranslating={isTranslating}
+                  errorMap={errorMap}
+                  fontSize={general.fontSize}
+                  lineHeight={general.contentLineHeight}
+                  fontFamily={general.contentFontFamily}
+                />
+
+                {/* Use EntryContent for description/notes below the video */}
+                <EntryContent hideVideo />
+              </div>
             </div>
           </div>
         ) : (

@@ -166,7 +166,7 @@ function htmlContainsImage(html: string, imageUrl: string): boolean {
   })
 }
 
-export function EntryContent() {
+export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const {
     selectedEntry,
     isSelectedEntryHydrating,
@@ -1105,7 +1105,7 @@ export function EntryContent() {
             )}
 
             {/* Video player — prioritized like Folo-dev MediaLayout */}
-            {videoMedia && (
+            {!hideVideo && videoMedia && (
               <div className="group/video relative -mx-2 mb-8">
                 <VideoPlayer
                   url={videoMedia.url}

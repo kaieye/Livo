@@ -4,4 +4,6 @@ export const enArticleDetail = {
   notFound: 'Article not found',
   notFoundHint: 'It may have been removed or the link is invalid.',
   loading: 'Loading article...',
+  videoUnplayable: 'Cannot play this video',
+  videoOpenExternal: 'Open original',
 }
