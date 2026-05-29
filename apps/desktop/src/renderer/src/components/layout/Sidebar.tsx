@@ -1184,22 +1184,15 @@ export function Sidebar({ width }: { width?: number }) {
       if (feedId === 'starred') {
         navigate('/starred')
       } else if (feedId) {
-        // Always navigate in the correct view context so wide-view feeds
-        // (Pictures, Videos, Social) render with the proper layout.
-        const viewForSlug = (() => {
-          if (activeView !== null) return activeView
-          // In "All" view, determine the view from the feed's configured type
-          const feed = feeds.find((f) => f.id === feedId)
-          const feedView = feed?.view ?? FeedViewType.Articles
-          return feedView !== FeedViewType.Articles ? feedView : null
-        })()
-        const slug = viewForSlug !== null ? VIEW_TYPE_SLUGS[viewForSlug] : null
+        // Preserve the active view type so the view context is not lost
+        // when selecting a feed within a view (e.g. Pictures, Videos).
+        const slug = activeView !== null ? VIEW_TYPE_SLUGS[activeView] : null
         navigate(slug ? `/${slug}/feed/${feedId}` : `/feed/${feedId}`)
       } else {
         navigate('/')
       }
     },
-    [isDiscoverOpen, selectedFeedId, navigate, activeView, feeds],
+    [isDiscoverOpen, selectedFeedId, navigate, activeView],
   )
 
   const handleSelectView = useCallback(
