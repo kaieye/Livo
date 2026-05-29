@@ -140,11 +140,19 @@ export default function FeedDetailPage() {
     )
   }, [feed, navigate])
 
+  const isPicturesFeed = feed?.view === FeedViewType.Pictures
+
   const handleEntryClick = useCallback(
     (entry: Entry) => {
-      navigate(ROUTES.entry(entry.id))
+      // Picture-type feeds navigate to ImageViewerPage for full-screen image
+      // browsing, matching the waterfall grid entry point.
+      if (isPicturesFeed) {
+        navigate(ROUTES.image(entry.id))
+      } else {
+        navigate(ROUTES.entry(entry.id))
+      }
     },
-    [navigate],
+    [navigate, isPicturesFeed],
   )
 
   // Reuse the shared `VIEW_TYPE_I18N_KEYS` mapping (also used by Sidebar /
