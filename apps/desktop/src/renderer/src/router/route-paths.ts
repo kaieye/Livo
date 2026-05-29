@@ -33,6 +33,11 @@ export const ROUTES = {
   home: '/',
   starred: '/starred',
   feed: (feedId: string) => `/feed/${feedId}`,
+  /** Navigate to a feed while preserving the active view type. */
+  viewFeed: (view: FeedViewType, feedId: string) => {
+    const slug = VIEW_TYPE_SLUGS[view]
+    return slug ? `/${slug}/feed/${feedId}` : `/feed/${feedId}`
+  },
   feedDetail: (feedId: string) => `/feed-detail/${feedId}`,
   entry: (entryId: string) => `/entry/${entryId}`,
   video: (entryId: string) => `/video/${entryId}`,
@@ -112,6 +117,10 @@ export function parseViewFromPath(pathname: string): {
   if (!NON_VIEW_PATHS.has(first)) {
     const viewType = VIEW_TYPE_FROM_SLUG[first]
     if (viewType !== undefined) {
+      // /:viewType/feed/:feedId — preserve both view type and feed selection
+      if (segments[1] === 'feed' && segments[2]) {
+        return { viewType, feedId: segments[2] }
+      }
       return { viewType, feedId: null }
     }
   }

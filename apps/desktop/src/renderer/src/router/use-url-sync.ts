@@ -41,7 +41,16 @@ export function useUrlSync(): void {
     if (settingsOpen) return '/settings'
     const { selectedFeedId, activeView } = useFeedStore.getState()
     if (selectedFeedId === 'starred') return '/starred'
-    if (selectedFeedId) return `/feed/${selectedFeedId}`
+    if (selectedFeedId) {
+      // Preserve the active view type so the view context is not lost
+      if (activeView !== null) {
+        const slug = VIEW_TYPE_SLUGS[activeView]
+        return slug
+          ? `/${slug}/feed/${selectedFeedId}`
+          : `/feed/${selectedFeedId}`
+      }
+      return `/feed/${selectedFeedId}`
+    }
     if (activeView !== null) {
       const slug = VIEW_TYPE_SLUGS[activeView]
       return slug ? `/${slug}` : '/'

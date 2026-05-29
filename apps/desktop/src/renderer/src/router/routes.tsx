@@ -129,6 +129,16 @@ export const router = createHashRouter([
           </Suspense>
         ),
       },
+      // View-specific feed selection: preserves the active view type
+      // when navigating to a specific feed within a view context.
+      {
+        path: ':viewType/feed/:feedId',
+        element: (
+          <Suspense fallback={null}>
+            <HomePage />
+          </Suspense>
+        ),
+      },
       // Catch-all: view type filter (articles, social, videos, pictures)
       {
         path: ':viewType',

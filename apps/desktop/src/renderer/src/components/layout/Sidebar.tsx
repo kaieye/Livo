@@ -1184,12 +1184,15 @@ export function Sidebar({ width }: { width?: number }) {
       if (feedId === 'starred') {
         navigate('/starred')
       } else if (feedId) {
-        navigate(`/feed/${feedId}`)
+        // Preserve the active view type so the view context is not lost
+        // when selecting a feed within a view (e.g. Pictures, Videos).
+        const slug = activeView !== null ? VIEW_TYPE_SLUGS[activeView] : null
+        navigate(slug ? `/${slug}/feed/${feedId}` : `/feed/${feedId}`)
       } else {
         navigate('/')
       }
     },
-    [isDiscoverOpen, selectedFeedId, navigate],
+    [isDiscoverOpen, selectedFeedId, navigate, activeView],
   )
 
   const handleSelectView = useCallback(
