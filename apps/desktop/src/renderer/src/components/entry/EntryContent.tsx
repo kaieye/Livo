@@ -403,8 +403,36 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
 
   const handleReadability = useCallback(async () => {
     if (!selectedEntry?.url) return
-    window.open(selectedEntry.url, '_blank')
-  }, [selectedEntry?.url])
+
+    // If already in readability mode, toggle back to original RSS content
+    if (isReadabilityMode) {
+      setIsReadabilityMode(false)
+      return
+    }
+
+    // If we already have cached readable content, just switch to it
+    if (readableContent) {
+      setIsReadabilityMode(true)
+      return
+    }
+
+    // Fetch readability content via IPC
+    setIsFetchingReadable(true)
+    setReadabilityError(null)
+    try {
+      const result = await window.api.readability.fetch(selectedEntry.url)
+      if (result.success && result.content) {
+        setReadableContent(result.content)
+        setIsReadabilityMode(true)
+      } else {
+        setReadabilityError(result.error || t('entry.cannotFetchContent'))
+      }
+    } catch (err) {
+      setReadabilityError(t('entry.fetchFailed', { error: String(err) }))
+    } finally {
+      setIsFetchingReadable(false)
+    }
+  }, [selectedEntry?.url, isReadabilityMode, readableContent, t])
 
   const handleSelectCurrentArticle = useCallback(() => {
     const el = contentRef.current
@@ -446,7 +474,9 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       },
       {
         id: 'fetch-original',
-        label: t('entry.readability', { defaultValue: '获取原文' }),
+        label: isReadabilityMode
+          ? t('entry.readabilityBack', { defaultValue: '返回原始内容' })
+          : t('entry.readability', { defaultValue: '获取原文' }),
         icon: <BookType size={14} />,
         onClick: () => {
           void handleReadability()
@@ -480,6 +510,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     handleSummarize,
     handleReadability,
     isFetchingReadable,
+    isReadabilityMode,
     toggleStar,
   ])
 

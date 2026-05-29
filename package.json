@@ -48,5 +48,8 @@
     "*.{js,mjs,cjs,ts,tsx}": [
       "eslint --fix"
     ]
+  },
+  "dependencies": {
+    "electron": "^33.4.11"
   }
 }
