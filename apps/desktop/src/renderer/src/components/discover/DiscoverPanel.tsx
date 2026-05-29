@@ -3,33 +3,28 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useDiscoverSearchQuery } from '../../hooks/useDiscoverSearchQuery'
+import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
 import {
   type DiscoverSearchResult,
   type DiscoverSearchPlatform,
   getDiscoverSearchDebounceMs,
   shouldImmediatelySubmitDiscoverSearch,
 } from '../../lib/discover-search'
-import { buildDiscoverInstagramPlaceholderAvatar } from '../../lib/discover-avatar'
 import { inferDiscoverFeedViewFromUrl } from '../../lib/discover-feed'
 import { canonicalizeDiscoverRoute } from '../../lib/discover-subscribe-config'
+import { inferDiscoverPlatform } from '../../lib/discover-platform-presentation'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
-import { FeedViewType } from '../../../../shared/types'
 import { ROUTES } from '../../router/route-paths'
 import {
-  Search,
-  X,
-  Loader2,
-  Plus,
-  Check,
-  ExternalLink,
-  Rss,
-  Globe,
-  Sparkles,
-} from 'lucide-react'
+  DiscoverResultRow,
+  getDiscoverResultDisplayTitle,
+} from './DiscoverResultRow'
+import { DiscoverCenteredState } from './DiscoverCenteredState'
+import { AlertTriangle, Globe, LogIn, Search, Sparkles, X } from 'lucide-react'
 
-// Platform icon SVGs
+// Platform icon SVGs (chip rail)
 const platformIcons: Record<string, React.ReactNode> = {
   youtube: (
     <svg
@@ -75,154 +70,6 @@ const platformIcons: Record<string, React.ReactNode> = {
 
 const SEARCH_RESULTS_PAGE_SIZE = 6
 
-function inferResultTitleFromUrl(url: string): string {
-  try {
-    const u = new URL(url)
-    const path = u.pathname
-
-    const bili = path.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
-    if (bili?.[1]) return `UID ${bili[1]} - Bilibili`
-
-    const x = path.match(/\/twitter\/user\/([a-zA-Z0-9_]+)/i)
-    if (x?.[1]) return `@${x[1]} - X`
-
-    const ig = path.match(/\/instagram\/user\/([^/?#]+)/i)
-    if (ig?.[1]) return `@${decodeURIComponent(ig[1])} - Instagram`
-
-    const host = u.hostname.replace(/^www\./i, '')
-    return `${host} - RSS`
-  } catch {
-    return url
-  }
-}
-
-function getDisplayTitle(result: { title: string; url: string }): string {
-  const title = (result.title || '').trim()
-  if (title && title !== result.url) return title
-  return inferResultTitleFromUrl(result.url)
-}
-
-function isInstagramDiscoverResult(feedUrl: string): boolean {
-  try {
-    const u = new URL(feedUrl)
-    return /\/instagram\/user\//i.test(u.pathname)
-  } catch {
-    return /\/instagram\/user\//i.test(feedUrl)
-  }
-}
-
-function normalizeFollowersLabel(raw?: string): string | undefined {
-  const text = (raw || '').trim()
-  if (!text) return undefined
-  if (/followers?/i.test(text) || /粉丝/.test(text)) return text
-  const count = text.match(/([\d]+(?:[.,]\d+)?\s*[kmb]?)/i)?.[1]?.trim()
-  if (count) return `${count} followers`
-  return undefined
-}
-
-function extractFollowersFromText(raw?: string): string | undefined {
-  const text = (raw || '').trim()
-  if (!text) return undefined
-  const withWord = text.match(
-    /([\d]+(?:[.,]\d+)?\s*[kmb]?\s*(?:followers?|粉丝))/i,
-  )?.[1]
-  if (withWord) return withWord.trim()
-  const countOnly = text.match(/^\s*([\d]+(?:[.,]\d+)?\s*[kmb]?)\s*$/i)?.[1]
-  if (countOnly) return `${countOnly.trim()} followers`
-  return undefined
-}
-
-function normalizeInstagramCardContent(params: {
-  title: string
-  url: string
-  description: string
-  followers?: string
-}): { title: string; description: string; followers?: string } {
-  const { title, url, description, followers } = params
-  const usernameFromUrl = extractInstagramUsernameFromFeedUrl(url)
-  const userFromParen = title.match(/\(@([a-z0-9._]{1,30})\)/i)?.[1]
-  const userFromSimple = title.match(
-    /^@?([a-z0-9._]{1,30})\s*-\s*(?:instagram|ins)\b/i,
-  )?.[1]
-  const username = (
-    userFromParen ||
-    userFromSimple ||
-    usernameFromUrl ||
-    ''
-  ).trim()
-  const displayNameFromTitle =
-    title
-      .match(/^(.*?)\s*\(@[a-z0-9._]{1,30}\)\s*-\s*instagram\b/i)?.[1]
-      ?.trim() ||
-    title
-      .replace(/\s*-\s*(?:instagram|ins)\s*$/i, '')
-      .replace(/^@/, '')
-      .trim()
-
-  const normalizedTitle = username
-    ? displayNameFromTitle &&
-      displayNameFromTitle.toLowerCase() !== username.toLowerCase()
-      ? `${displayNameFromTitle} (@${username}) - Instagram`
-      : `@${username} - Instagram`
-    : title
-
-  const followersLabel =
-    normalizeFollowersLabel(followers) ||
-    normalizeFollowersLabel(extractFollowersFromText(description))
-  const cleanedDescription = followersLabel
-    ? description
-        .replace(
-          /[\s,，]*[\d]+(?:[.,]\d+)?\s*[kmb]?\s*(?:followers?|粉丝)[\s,，]*/gi,
-          ' ',
-        )
-        .replace(/\s+/g, ' ')
-        .trim()
-    : description
-
-  return {
-    title: normalizedTitle,
-    description: cleanedDescription || description,
-    followers: followersLabel,
-  }
-}
-
-function extractInstagramUsernameFromFeedUrl(feedUrl: string): string | null {
-  try {
-    const u = new URL(feedUrl)
-    const m = u.pathname.match(/\/instagram\/user\/([^/?#]+)/i)
-    if (m?.[1]) return decodeURIComponent(m[1]).replace(/^@+/, '')
-  } catch {
-    // Ignore malformed URL.
-  }
-  return null
-}
-
-function buildDiscoverAvatarFallbacks(
-  imageUrl: string | undefined,
-  feedUrl: string,
-): string[] {
-  const out: string[] = []
-  if (imageUrl) out.push(imageUrl)
-
-  const igUser = extractInstagramUsernameFromFeedUrl(feedUrl)
-  if (igUser) {
-    out.push(
-      `https://unavatar.io/instagram/${encodeURIComponent(igUser)}?fallback=false`,
-    )
-    out.push(
-      `https://unavatar.io/${encodeURIComponent(`instagram.com/${igUser}`)}?fallback=false`,
-    )
-  }
-
-  const seen = new Set<string>()
-  return out.filter((x) => {
-    const key = x.trim()
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
 export function DiscoverPanel() {
   const navigate = useNavigate()
   const {
@@ -251,6 +98,15 @@ export function DiscoverPanel() {
 
   const { feeds: userFeeds, removeFeed } = useFeedStore()
   const { t } = useTranslation()
+
+  // Account status for the only platform whose backend handler today gates
+  // results on login (YouTube). We use the linked state to:
+  // 1) Show per-row "sign in required" hint badges on YouTube rows.
+  // 2) Show a platform-level banner when a YouTube-scoped search returns 0
+  //    results and the user is not signed in.
+  const youtubeAccount = useAccountStatusQuery('youtube')
+  const youtubeNeedsLogin = !youtubeAccount.data?.linked
+
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const [searchPage, setSearchPage] = useState(1)
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
@@ -270,6 +126,15 @@ export function DiscoverPanel() {
   const isSearching =
     searchQuery.trim().length > 0 &&
     (searchQueryResult.isPending || searchQueryResult.isFetching)
+  const searchErrorMessage =
+    searchQueryResult.error instanceof Error
+      ? searchQueryResult.error.message
+      : searchQueryResult.error
+        ? String(searchQueryResult.error)
+        : null
+  const hasSearchError = Boolean(
+    searchQuery.trim() && !isSearching && searchQueryResult.isError,
+  )
 
   // Platform selector options
   const platformOptions: {
@@ -323,12 +188,6 @@ export function DiscoverPanel() {
     clearSearch()
   }, [clearSearch, debouncedSearchQuery, submitSearch])
 
-  const inferViewFromUrl = useCallback(
-    (targetUrl: string): FeedViewType =>
-      inferDiscoverFeedViewFromUrl(targetUrl),
-    [],
-  )
-
   const handleSearch = useCallback(
     (query: string) => {
       setSearchQuery(query)
@@ -339,6 +198,10 @@ export function DiscoverPanel() {
   const handleSearchNow = useCallback(() => {
     submitSearch(searchQuery)
   }, [searchQuery, submitSearch])
+
+  const handleRetrySearch = useCallback(() => {
+    searchQueryResult.refetch()
+  }, [searchQueryResult])
 
   const handleUnsubscribe = async (url: string) => {
     const targetCanonical = canonicalizeDiscoverRoute(url)
@@ -363,20 +226,30 @@ export function DiscoverPanel() {
     }
   }
 
+  const buildPreviewTarget = useCallback(
+    (result: DiscoverSearchResult) => ({
+      url: result.url,
+      title: getDiscoverResultDisplayTitle(result),
+      siteUrl: result.siteUrl,
+      imageUrl: result.image,
+      description: result.description,
+      view: inferDiscoverFeedViewFromUrl(result.url),
+    }),
+    [],
+  )
+
+  const openPreview = useCallback(
+    (result: DiscoverSearchResult) => {
+      navigate(ROUTES.discoverPreview(buildPreviewTarget(result)))
+    },
+    [buildPreviewTarget, navigate],
+  )
+
   const handleToggleSubscribe = (result: DiscoverSearchResult) => {
     if (isSubscribed(result.url)) {
       handleUnsubscribe(result.url)
     } else {
-      navigate(
-        ROUTES.discoverPreview({
-          url: result.url,
-          title: getDisplayTitle(result),
-          siteUrl: result.siteUrl,
-          imageUrl: result.image,
-          description: result.description,
-          view: inferViewFromUrl(result.url),
-        }),
-      )
+      openPreview(result)
     }
   }
 
@@ -406,6 +279,41 @@ export function DiscoverPanel() {
     const start = (searchPage - 1) * SEARCH_RESULTS_PAGE_SIZE
     return searchResults.slice(start, start + SEARCH_RESULTS_PAGE_SIZE)
   }, [searchPage, searchResults])
+
+  /** Whether a result should display the inline "sign in required" hint. */
+  const resultRequiresSignIn = useCallback(
+    (result: DiscoverSearchResult) => {
+      // Today only YouTube is gated; extend when backend adds requiresAccount to discover:search.
+      const platform = inferDiscoverPlatform(result.url)
+      if (platform.id !== 'youtube') return false
+      return youtubeNeedsLogin
+    },
+    [youtubeNeedsLogin],
+  )
+
+  /**
+   * Show a one-line affordance above the empty state when a platform-scoped
+   * search yielded zero results AND that platform requires sign-in. Only
+   * YouTube is account-gated today (per `discover-handlers.ts`).
+   */
+  const platformLoginBanner = useMemo(() => {
+    if (!hasSearchQuery) return null
+    if (isSearching || hasSearchError) return null
+    if (searchResults.length > 0) return null
+    if (searchPlatform !== 'youtube') return null
+    if (!youtubeNeedsLogin) return null
+    return {
+      platformLabel: 'YouTube',
+      provider: 'youtube' as const,
+    }
+  }, [
+    hasSearchError,
+    hasSearchQuery,
+    isSearching,
+    searchPlatform,
+    searchResults.length,
+    youtubeNeedsLogin,
+  ])
 
   const searchBar = (
     <div className="mx-auto max-w-2xl space-y-2.5">
@@ -499,7 +407,23 @@ export function DiscoverPanel() {
               {t('discover.searchResults')}{' '}
               {searchResults.length > 0 && `(${searchResults.length})`}
             </h3>
-            {isSearching && searchResults.length === 0 ? (
+
+            {hasSearchError ? (
+              <DiscoverCenteredState
+                icon={<AlertTriangle size={20} className="text-amber-500" />}
+                title={t('discover.searchErrorTitle')}
+                hint={searchErrorMessage || t('discover.searchErrorHint')}
+                action={
+                  <button
+                    type="button"
+                    onClick={handleRetrySearch}
+                    className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+                  >
+                    {t('discover.retry')}
+                  </button>
+                }
+              />
+            ) : isSearching && searchResults.length === 0 ? (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, idx) => (
                   <div
@@ -518,11 +442,32 @@ export function DiscoverPanel() {
                 ))}
               </div>
             ) : searchResults.length === 0 && !isSearching ? (
-              <div className="py-12 text-center text-text-tertiary">
-                <Search size={36} className="mx-auto mb-3 opacity-50" />
-                <p className="text-sm">{t('discover.noSearchResults')}</p>
-                <p className="mt-1 text-xs">{t('discover.tryFullLink')}</p>
-              </div>
+              <>
+                {platformLoginBanner && (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                    <span>
+                      {t('discover.signInForMoreResults', {
+                        platform: platformLoginBanner.platformLabel,
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(ROUTES.login(platformLoginBanner.provider))
+                      }
+                      className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-amber-500/15 px-2.5 py-1 font-medium text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-200"
+                    >
+                      <LogIn size={12} />
+                      {t('discover.signInCta')}
+                    </button>
+                  </div>
+                )}
+                <DiscoverCenteredState
+                  icon={<Search size={20} />}
+                  title={t('discover.noSearchResults')}
+                  hint={t('discover.noResultsHint')}
+                />
+              </>
             ) : (
               <>
                 {/* Results - single column with fixed height */}
@@ -531,17 +476,15 @@ export function DiscoverPanel() {
                   style={{ minHeight: `${SEARCH_RESULTS_PAGE_SIZE * 70}px` }}
                 >
                   {pagedSearchResults.map((result) => (
-                    <FeedCard
+                    <DiscoverResultRow
                       key={result.url}
-                      title={getDisplayTitle(result)}
-                      url={result.url}
-                      description={result.description}
-                      imageUrl={result.image}
-                      followers={result.followers}
+                      result={result}
                       subscribed={isSubscribed(result.url)}
                       subscribing={isSubscribing(result.url)}
-                      actionLabel={t('discover.previewAction')}
-                      onSubscribe={() => handleToggleSubscribe(result)}
+                      requiresSignIn={resultRequiresSignIn(result)}
+                      subscribeLabel={t('discover.previewAction')}
+                      onOpenPreview={() => openPreview(result)}
+                      onToggleSubscribe={() => handleToggleSubscribe(result)}
                     />
                   ))}
                   {/* Placeholders to maintain fixed height */}
@@ -586,240 +529,10 @@ export function DiscoverPanel() {
                     </div>
                   </div>
                 )}
-
-                {/* Additional content below pagination */}
-                <div className="pb-8 pt-4">{/* Add more content here */}</div>
               </>
             )}
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-/** Individual feed card component */
-function FeedCard({
-  title,
-  url,
-  description,
-  imageUrl,
-  badge,
-  language,
-  compact,
-  subscribed,
-  subscribing,
-  actionLabel,
-  onSubscribe,
-  followers,
-}: {
-  title: string
-  url: string
-  description: string
-  imageUrl?: string
-  badge?: string
-  language?: string
-  compact?: boolean
-  subscribed: boolean
-  subscribing: boolean
-  actionLabel?: string
-  onSubscribe: () => void
-  followers?: string
-}) {
-  const { t } = useTranslation()
-  const avatarCandidates = useMemo(
-    () => buildDiscoverAvatarFallbacks(imageUrl, url),
-    [imageUrl, url],
-  )
-  const isInstagram = useMemo(() => isInstagramDiscoverResult(url), [url])
-  const placeholderAvatarLabel = useMemo(() => {
-    const usernameFromUrl = extractInstagramUsernameFromFeedUrl(url)
-    if (usernameFromUrl) return usernameFromUrl
-    return title || url
-  }, [title, url])
-  const instagramPlaceholderAvatar = useMemo(() => {
-    if (!isInstagram) return ''
-    return buildDiscoverInstagramPlaceholderAvatar(placeholderAvatarLabel)
-  }, [isInstagram, placeholderAvatarLabel])
-  const [avatarSrc, setAvatarSrc] = useState<string>(
-    isInstagram ? instagramPlaceholderAvatar : avatarCandidates[0] || '',
-  )
-  const normalizedInstagram = useMemo(
-    () =>
-      isInstagram
-        ? normalizeInstagramCardContent({ title, url, description, followers })
-        : null,
-    [description, followers, isInstagram, title, url],
-  )
-  const displayTitle = normalizedInstagram?.title || title
-  const displayDescription = normalizedInstagram?.description || description
-  const displayFollowers = normalizedInstagram?.followers || followers
-
-  useEffect(() => {
-    if (!isInstagram) {
-      setAvatarSrc(avatarCandidates[0] || '')
-      return
-    }
-
-    let cancelled = false
-    let activeLoader: HTMLImageElement | null = null
-    setAvatarSrc(instagramPlaceholderAvatar)
-
-    const tryLoad = (index: number) => {
-      const candidate = avatarCandidates[index]
-      if (!candidate) return
-      const loader = new window.Image()
-      activeLoader = loader
-      loader.onload = () => {
-        if (cancelled) return
-        setAvatarSrc(candidate)
-      }
-      loader.onerror = () => {
-        if (cancelled) return
-        tryLoad(index + 1)
-      }
-      loader.src = candidate
-    }
-
-    tryLoad(0)
-
-    return () => {
-      cancelled = true
-      if (activeLoader) {
-        activeLoader.onload = null
-        activeLoader.onerror = null
-      }
-    }
-  }, [avatarCandidates, instagramPlaceholderAvatar, isInstagram])
-
-  return (
-    <div
-      className={`group flex items-center gap-3 rounded-xl border bg-white transition-all duration-200 hover:border-accent/30 dark:bg-surface-dark-secondary ${
-        compact ? 'p-2.5' : 'p-3.5'
-      }`}
-    >
-      {/* Icon */}
-      {avatarSrc ? (
-        <img
-          src={avatarSrc}
-          alt=""
-          className={`flex-shrink-0 rounded-lg object-cover ${compact ? 'h-8 w-8' : 'h-10 w-10'}`}
-          loading="lazy"
-          onError={(e) => {
-            if (isInstagram) {
-              setAvatarSrc(instagramPlaceholderAvatar)
-              return
-            }
-            const current = e.currentTarget.currentSrc || e.currentTarget.src
-            const idx = avatarCandidates.findIndex(
-              (candidate) => candidate === current,
-            )
-            const next =
-              idx >= 0 ? avatarCandidates[idx + 1] : avatarCandidates[1]
-            if (next) {
-              setAvatarSrc(next)
-              return
-            }
-            setAvatarSrc('')
-          }}
-        />
-      ) : null}
-      <div
-        className={`flex flex-shrink-0 items-center justify-center rounded-lg bg-accent/10 ${
-          compact ? 'h-8 w-8' : 'h-10 w-10'
-        }`}
-        style={{ display: avatarSrc ? 'none' : 'flex' }}
-      >
-        <Rss size={compact ? 14 : 16} className="text-accent" />
-      </div>
-
-      {/* Info */}
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`block min-w-0 truncate font-medium ${compact ? 'text-xs' : 'text-sm'}`}
-          >
-            {displayTitle}
-          </span>
-          {isInstagram && displayFollowers && (
-            <span
-              className={`flex-shrink-0 rounded-full border border-accent/30 bg-gradient-to-r from-accent/15 to-orange-400/15 font-semibold text-accent ${
-                compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'
-              }`}
-            >
-              {displayFollowers}
-            </span>
-          )}
-          {badge && (
-            <span className="flex-shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-              {badge}
-            </span>
-          )}
-          {language && (
-            <span className="flex-shrink-0 rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary dark:bg-surface-dark-tertiary">
-              {language === 'zh'
-                ? '中'
-                : language === 'en'
-                  ? 'EN'
-                  : language.toUpperCase()}
-            </span>
-          )}
-        </div>
-        <p
-          className={`mt-0.5 truncate text-text-secondary dark:text-text-dark-secondary ${
-            compact ? 'text-[10px]' : 'text-xs'
-          }`}
-        >
-          {isInstagram
-            ? displayDescription
-            : displayFollowers || displayDescription}
-        </p>
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-shrink-0 items-center gap-1">
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => {
-            e.preventDefault()
-            window.open(url, '_blank')
-          }}
-          className="rounded-lg p-1.5 text-text-tertiary opacity-0 transition-colors hover:bg-surface-secondary hover:text-text-secondary group-hover:opacity-100 dark:hover:bg-surface-dark-tertiary"
-          title={t('discover.viewSource')}
-        >
-          <ExternalLink size={14} />
-        </a>
-        <button
-          onClick={onSubscribe}
-          disabled={subscribing}
-          className={`group/btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
-            subscribed
-              ? 'bg-green-100 text-green-600 hover:bg-red-100 hover:text-red-600 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
-              : 'bg-accent text-white hover:bg-accent-hover active:scale-95'
-          } disabled:cursor-default disabled:opacity-70`}
-        >
-          {subscribing ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : subscribed ? (
-            <>
-              <Check size={12} className="group-hover/btn:hidden" />
-              <X size={12} className="hidden group-hover/btn:block" />
-              <span className="group-hover/btn:hidden">
-                {t('common.subscribed')}
-              </span>
-              <span className="hidden group-hover/btn:block">
-                {t('discover.unsubscribeAction')}
-              </span>
-            </>
-          ) : (
-            <>
-              <Plus size={12} />
-              <span>{actionLabel || t('common.subscribe')}</span>
-            </>
-          )}
-        </button>
       </div>
     </div>
   )

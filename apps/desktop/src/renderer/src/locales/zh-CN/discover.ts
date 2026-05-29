@@ -24,4 +24,11 @@ export const zhCNDiscover = {
   subscribedAddedTo: '已加入到栏目：{{column}}',
   subscribedAddedToWithFolder: '已加入到栏目：{{column}}（文件夹：{{folder}}）',
   languageZh: '中',
+  signInRequired: '登录后可订阅',
+  signInForMoreResults: '登录 {{platform}} 后可获得更多结果',
+  signInCta: '去登录',
+  searchErrorTitle: '搜索失败',
+  searchErrorHint: '请检查网络后重试',
+  retry: '重试',
+  noResultsHint: '换个关键词、检查拼写，或试试完整链接',
 }

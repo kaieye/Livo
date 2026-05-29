@@ -25,4 +25,12 @@ export const enDiscover = {
   subscribedAddedToWithFolder:
     'Added to column: {{column}} (folder: {{folder}})',
   languageZh: 'ZH',
+  signInRequired: 'Sign in required',
+  signInForMoreResults: 'Sign in to {{platform}} for more results',
+  signInCta: 'Sign in',
+  searchErrorTitle: 'Search failed',
+  searchErrorHint: 'Check your connection and try again',
+  retry: 'Retry',
+  noResultsHint:
+    'Try a different keyword, check spelling, or paste a full feed link',
 }

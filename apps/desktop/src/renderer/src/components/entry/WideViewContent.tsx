@@ -796,7 +796,7 @@ export function WideViewContent() {
   }, [selectedFeedId])
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-surface-dark">
+    <div className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-surface-dark">
       <WideViewHeader
         activeView={activeView}
         inlineBilibili={!!inlineBilibili}

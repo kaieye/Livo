@@ -107,7 +107,8 @@ GitNexus 使用状态：
   - 集成:`ArticleDetailPage.tsx` 通过 `useFeedStore` 检测 `feed.view === FeedViewType.SocialMedia`，社交条目渲染 `SocialDetailView` 替代 `EntryContent`
   - 页面 header 新增 `EntryAIToolbar`，使 AI 摘要/翻译能力对社交条目也直接可用
   - 文件:`components/entry/SocialDetailView.tsx`(新建 146 行)、`ArticleDetailPage.tsx`(重写 291 行——从 104 行扩展到完整 AI + 社交支持)
-- [ ] **2.4** 整合图片画廊模式（复用 OverlayMediaGallery，补 PictureDetailMedia 等价体验） → 依赖: 1.3
+- [x] **2.4** 整合图片画廊模式（复用 OverlayMediaGallery，补 PictureDetailMedia 等价体验） → 依赖: 1.3 ✅ `2026-05-28`
+  - 实现：图片类 feed 条目在 ArticleDetailPage 检测到 `FeedViewType.Pictures` 后，通过 `useEffect` + `navigate(ROUTES.image(entryId), { replace: true })` 重定向到已有 ImageViewerPage（黑底全屏 + 计数器 + 键盘翻页 + 左右边缘导航），与瀑布流点开体验一致。
 - [ ] **2.5** 整合内嵌视频播放（复用现有 VideoPlayer，补 ArticleDetail 页面内统一入口） → 依赖: 1.3
 - [ ] **2.6** 补原文/美化视图切换 → 依赖: 1.3
 - [ ] **2.7** 增强星标动画 + 阅读进度保持（基于现有 Star/ReadProgress 能力） → 依赖: 1.3
@@ -129,7 +130,13 @@ GitNexus 使用状态：
   - Web 兼容:`web-api.ts feeds.add()` 补 `title` 参数消费，保持 Web 端与 Electron preload 的订阅签名一致
   - 测试:`discover-subscribe-config.test.ts` 覆盖参数解析、社交路由匹配、feedId 优先匹配、Bilibili 视图映射、分类候选去重；定向测试与 desktop typecheck 已通过
   - 不在范围(留后续):订阅前预览缓存 seed 到本地 entry、隐藏时间线高级开关、订阅成功 toast/动画
-- [ ] **3.3** 完善多平台用户搜索体验（已有 YouTube/X/Instagram/Bilibili handlers，补结果预览、错误提示、平台状态）
+- [x] **3.3** 完善多平台用户搜索体验（已有 YouTube/X/Instagram/Bilibili handlers，补结果预览、错误提示、平台状态） ✅
+  - 实现：抽出 `DiscoverResultRow` —— 平台彩色徽标（Harmony 调色板：YT #FF3B30 / IG #E1306C / Bili #00A1D6 / X #111111 / Nitter #475569 / RSSHub #2563EB）、所有平台统一显示 followers（移除 Instagram-only 分支）、整行可点击导航至 `/discover/preview`、订阅按钮 `stopPropagation` 避免误触发；键盘可达（role=button + Enter/Space）
+  - 错误态：`DiscoverCenteredState`（与 `DiscoverPreviewPage.CenteredState` 同形）渲染查询失败 + AlertTriangle + Retry 按钮；空结果改为同样的 framed 卡片（替换原裸文字），与预览/订阅页视觉一致
+  - 平台登录态：YouTube 行内显示“登录后可订阅” shield badge（基于 `useAccountStatusQuery('youtube')`）；YouTube 平台域 0 结果时上方加 amber banner“登录 YouTube 后可获得更多结果”→ 跳 `/login/youtube`（任务 1.6 路由）
+  - 架构：将 ~830 行的 `DiscoverPanel` 内联 `FeedCard` + 标题/IG 文案/头像回退 helpers 整体迁出到 `DiscoverResultRow.tsx`（一个 cohesive 表现单元），平台元数据集中到 `lib/discover-platform-presentation.ts`（`inferDiscoverPlatform`，与 Harmony `platformColor()` 同形），`DiscoverPanel` 收敛回 ~430 行只负责 query/分页/订阅状态
+  - 文件：`lib/discover-platform-presentation.ts`(新建)、`components/discover/DiscoverResultRow.tsx`(新建)、`components/discover/DiscoverCenteredState.tsx`(新建)、`components/discover/DiscoverPanel.tsx`(重写)、`locales/{en,zh-CN}/discover.ts`(新增 signInRequired / signInForMoreResults / signInCta / searchErrorTitle / searchErrorHint / retry / noResultsHint)
+  - 不在范围(留后续)：Harmony 头像多级 fallback hydration（IG 已部分支持，YT/X/Bili 通用化留 P3）；chip rail 动画；账号要求语义扩展到非-YouTube provider（IPC `discover:search` 目前未返回 `requiresAccount[]`，仅 `discover:resolve-profile-url` 有，搜索侧扩展需 backend 配套）
 - [ ] **3.4** 实现内置订阅源分类浏览（ai/podcast/news/articles/social/pictures/videos）
 
 ### 4. 设置系统完善

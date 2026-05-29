@@ -18,6 +18,7 @@ import type {
   FeedViewType,
 } from '../../../shared/types'
 import { FeedAvatar } from '../components/feed/FeedAvatar'
+import { DiscoverCenteredState } from '../components/discover/DiscoverCenteredState'
 import { inferDiscoverFeedViewFromUrl } from '../lib/discover-feed'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
 import { ROUTES } from '../router/route-paths'
@@ -147,13 +148,15 @@ export default function DiscoverPreviewPage() {
 
       <main className="flex flex-1 flex-col overflow-hidden">
         {isLoading ? (
-          <CenteredState
+          <DiscoverCenteredState
+            variant="fill"
             icon={<Loader2 size={34} className="animate-spin" />}
             title={t('discoverPreview.loadingTitle')}
             hint={t('discoverPreview.loadingHint')}
           />
         ) : error ? (
-          <CenteredState
+          <DiscoverCenteredState
+            variant="fill"
             icon={<AlertTriangle size={36} />}
             title={t('discoverPreview.errorTitle')}
             hint={error}
@@ -281,35 +284,6 @@ function hostOf(value: string): string {
 function formatPublishedAt(value: number): string {
   if (!value) return ''
   return new Date(value).toLocaleDateString()
-}
-
-function CenteredState({
-  icon,
-  title,
-  hint,
-  action,
-}: {
-  icon: React.ReactNode
-  title: string
-  hint: string
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-1 items-center justify-center px-6">
-      <div className="max-w-md text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-tertiary)]">
-          {icon}
-        </div>
-        <p className="text-sm font-medium text-[var(--color-text-primary)]">
-          {title}
-        </p>
-        <p className="mt-1 text-xs leading-relaxed text-[var(--color-text-tertiary)]">
-          {hint}
-        </p>
-        {action && <div className="mt-4">{action}</div>}
-      </div>
-    </div>
-  )
 }
 
 function PreviewEntryRow({ entry }: { entry: DiscoverFeedPreviewEntry }) {

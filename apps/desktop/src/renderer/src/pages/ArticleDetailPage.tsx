@@ -20,6 +20,7 @@ import {
 } from '../store/settings-store'
 import { splitHtmlIntoParagraphs } from '../lib/entry-text'
 import { getDateLocale } from '../lib/date-locale'
+import { ROUTES } from '../router/route-paths'
 import { FeedViewType } from '../../../shared/types'
 
 // Page shell for `/entry/:entryId`.
@@ -28,6 +29,8 @@ import { FeedViewType } from '../../../shared/types'
 // AI capabilities are available to any reader view — not just EntryContent.
 // Detects social entries via feed viewType and delegates to SocialDetailView
 // for social-specific rendering (author header, quoted tweets, media gallery).
+// Detects picture entries via feed viewType and redirects to ImageViewerPage
+// (/image/:entryId) for a dedicated full-screen image browsing experience.
 export default function ArticleDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -51,6 +54,15 @@ export default function ArticleDetailPage() {
     activeEntry ? s.feeds.find((f) => f.id === activeEntry.feedId) : null,
   )
   const isSocial = feed?.view === FeedViewType.SocialMedia
+  const isPictures = feed?.view === FeedViewType.Pictures
+
+  // Redirect picture entries to ImageViewerPage for full-screen image browsing.
+  // Uses replace so "back" returns to the previous page, not this redirect.
+  useEffect(() => {
+    if (entryId && isPictures) {
+      navigate(ROUTES.image(entryId), { replace: true })
+    }
+  }, [entryId, isPictures, navigate])
 
   // --- AI assist hooks (owned at page level for composability) ---
   const {
