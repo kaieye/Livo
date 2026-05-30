@@ -114,6 +114,32 @@ export const enSettings = {
   youtubeLoginFailed: 'Failed to link, please try again',
   accounts: 'Accounts',
   accountsDesc: 'Link third-party accounts for in-app services',
+  privacy: 'Privacy',
+  privacyInfo: 'How Livo handles your data',
+  privacyInfoDesc:
+    'Livo is designed with privacy as a priority. Your data stays on your device.',
+  privacyLocalFirst: 'Local First',
+  privacyLocalFirstDesc:
+    'Your subscriptions, article states, and settings are all stored locally on your device:',
+  privacyLocalFirstItem1:
+    'Subscriptions and folders are stored in a local database',
+  privacyLocalFirstItem2:
+    'Read/unread status, stars, and reading progress are all local',
+  privacyLocalFirstItem3: 'Settings and preferences never leave your machine',
+  privacyNetwork: 'Network Requests',
+  privacyNetworkDesc:
+    'Network access is only used when necessary for core RSS functionality:',
+  privacyNetworkItem1:
+    'Refreshing feeds and discovering new content from RSS sources',
+  privacyNetworkItem2:
+    'Loading remote media (images, videos) from original servers',
+  privacyNetworkItem3:
+    'AI features (summary, translation, chat) — only if you configure an API key',
+  privacyProxy: 'Proxy & Media',
+  privacyProxyDesc:
+    'When image proxy is enabled, remote images are loaded through a CDN proxy service. This prevents the origin server from seeing your IP address and can improve loading speed. No personal data is sent to the proxy — only the image URL is used to fetch the resource.',
+  imageProxyDetail:
+    'Uses CDN proxy (weserv.nl / wsrv.nl) to fetch images on your behalf, hiding your IP from the origin server.',
   contentWidth: 'Content Width',
   contentWidth_narrow: 'Narrow',
   contentWidth_normal: 'Normal',

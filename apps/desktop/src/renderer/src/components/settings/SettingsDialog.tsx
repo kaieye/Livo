@@ -13,6 +13,7 @@ import {
   Database,
   Link2,
   Palette,
+  Shield,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -28,6 +29,7 @@ const settingsTabImporters = {
   actions: () => import('./ActionsSettings'),
   accounts: () => import('./AccountsSettings'),
   data: () => import('./DataSettings'),
+  privacy: () => import('./PrivacySettings'),
   about: () => import('./AboutSettings'),
 } satisfies Record<SettingsTabId, () => Promise<unknown>>
 
@@ -77,6 +79,11 @@ const settingsTabComponents = {
       .data()
       .then((module) => ({ default: module.DataSettings })),
   ),
+  privacy: lazy(() =>
+    settingsTabImporters
+      .privacy()
+      .then((module) => ({ default: module.PrivacySettings })),
+  ),
   about: lazy(() =>
     settingsTabImporters
       .about()
@@ -124,6 +131,7 @@ export function SettingsDialog() {
     { id: 'actions' as const, label: t('settings.actions'), icon: Zap },
     { id: 'accounts' as const, label: t('settings.accounts'), icon: Link2 },
     { id: 'data' as const, label: t('settings.data'), icon: Database },
+    { id: 'privacy' as const, label: t('settings.privacy'), icon: Shield },
     { id: 'about' as const, label: t('settings.about'), icon: Info },
   ]
 
