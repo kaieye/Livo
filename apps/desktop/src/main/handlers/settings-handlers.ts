@@ -1,5 +1,5 @@
 ﻿import { ipcMain } from 'electron'
-import { app } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { IPC, type AppSettings } from '../../shared/types'
@@ -43,6 +43,25 @@ function saveSettings(settings: AppSettings): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
   cachedSettings = settings
+}
+
+/**
+ * Apply a partial settings update from the main process (e.g. agent settings
+ * tools), persist it, re-apply proxy config and broadcast the merged result to
+ * all renderer windows so their settings store can stay in sync.
+ */
+export async function applySettingsUpdate(
+  updates: Partial<AppSettings>,
+): Promise<AppSettings> {
+  const merged = mergeSettings(getSettings(), updates)
+  saveSettings(merged)
+  await applyProxySettings(merged)
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('settings:changed', merged)
+    }
+  }
+  return merged
 }
 
 export function registerSettingsHandlers(): void {

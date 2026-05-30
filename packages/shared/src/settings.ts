@@ -21,6 +21,7 @@ export function cloneDefaultSettings(): AppSettings {
   return {
     ...DEFAULT_SETTINGS,
     ai: { ...DEFAULT_SETTINGS.ai },
+    agentPermissions: { ...DEFAULT_SETTINGS.agentPermissions },
     general: {
       ...DEFAULT_SETTINGS.general,
       viewTabs: cloneViewTabs(),
@@ -127,6 +128,10 @@ export function normalizeSettings(input?: PartialSettings): AppSettings {
     ...defaults,
     ...raw,
     ai: { ...defaults.ai, ...(raw.ai || {}) },
+    agentPermissions: {
+      ...defaults.agentPermissions,
+      ...(raw.agentPermissions || {}),
+    },
     general: normalizeContentWidth({
       ...defaults.general,
       ...(raw.general || {}),
@@ -153,6 +158,10 @@ export function mergeSettings(
     ...current,
     ...updates,
     ai: { ...current.ai, ...(updates.ai || {}) },
+    agentPermissions: {
+      ...current.agentPermissions,
+      ...(updates.agentPermissions || {}),
+    },
     general: { ...current.general, ...(updates.general || {}) },
     data: { ...current.data, ...(updates.data || {}) },
     aggregator: { ...current.aggregator, ...(updates.aggregator || {}) },

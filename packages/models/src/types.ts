@@ -179,6 +179,12 @@ export interface ResolvedProfileUrlResult {
 export interface AIConfig {
   provider: 'openai' | 'anthropic' | 'deepseek' | 'glm' | 'ollama' | 'custom'
   apiKey: string
+  /**
+   * Remembered API keys per provider so switching providers preserves each
+   * provider's key. `apiKey` always mirrors the active provider's key and is
+   * the field the main process consumes.
+   */
+  apiKeys?: Record<string, string>
   baseUrl?: string
   model: string
   enableSystemPrompt?: boolean
@@ -207,8 +213,73 @@ export const FEED_COLUMN_DEFAULTS: Array<{
   { id: 'actions', visible: true },
 ]
 
+export type AgentToolCapability =
+  | 'read'
+  | 'navigate'
+  | 'mutate'
+  | 'destructive'
+  | 'external'
+
+export interface AgentPermissionSettings {
+  allowRead: boolean
+  allowNavigate: boolean
+  allowMutate: boolean
+  allowDestructive: boolean
+  allowExternal: boolean
+}
+
+export const DEFAULT_AGENT_PERMISSION_SETTINGS: AgentPermissionSettings = {
+  allowRead: true,
+  allowNavigate: true,
+  allowMutate: true,
+  allowDestructive: true,
+  allowExternal: true,
+}
+
+export function normalizeAgentPermissionSettings(
+  permissions?: Partial<AgentPermissionSettings>,
+): AgentPermissionSettings {
+  return {
+    allowRead:
+      permissions?.allowRead ?? DEFAULT_AGENT_PERMISSION_SETTINGS.allowRead,
+    allowNavigate:
+      permissions?.allowNavigate ??
+      DEFAULT_AGENT_PERMISSION_SETTINGS.allowNavigate,
+    allowMutate:
+      permissions?.allowMutate ?? DEFAULT_AGENT_PERMISSION_SETTINGS.allowMutate,
+    allowDestructive:
+      permissions?.allowDestructive ??
+      DEFAULT_AGENT_PERMISSION_SETTINGS.allowDestructive,
+    allowExternal:
+      permissions?.allowExternal ??
+      DEFAULT_AGENT_PERMISSION_SETTINGS.allowExternal,
+  }
+}
+
+export function isAgentCapabilityAllowed(
+  capability: AgentToolCapability,
+  permissions?: Partial<AgentPermissionSettings>,
+): boolean {
+  const normalized = normalizeAgentPermissionSettings(permissions)
+  switch (capability) {
+    case 'read':
+      return normalized.allowRead
+    case 'navigate':
+      return normalized.allowNavigate
+    case 'mutate':
+      return normalized.allowMutate
+    case 'destructive':
+      return normalized.allowDestructive
+    case 'external':
+      return normalized.allowExternal
+    default:
+      return false
+  }
+}
+
 export interface AppSettings {
   ai: AIConfig
+  agentPermissions: AgentPermissionSettings
   general: {
     language: string
     theme: 'light' | 'dark' | 'system'
@@ -276,6 +347,7 @@ export type SettingsTabId =
   | 'privacy'
   | 'about'
   | 'refreshLogs'
+  | 'agentPermissions'
 
 export interface RefreshLogEntry {
   id: string
@@ -352,12 +424,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ai: {
     provider: 'openai',
     apiKey: '',
+    apiKeys: {},
     baseUrl: '',
     model: 'gpt-4o-mini',
     enableSystemPrompt: false,
     systemPromptTemplate: DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
     chatPersonaPrompt: '',
   },
+  agentPermissions: { ...DEFAULT_AGENT_PERMISSION_SETTINGS },
   general: {
     language: 'zh-CN',
     theme: 'system',
@@ -451,6 +525,11 @@ export const IPC = {
   AI_TRANSLATE: 'ai:translate',
   AI_CHAT: 'ai:chat',
   AI_CHAT_STREAM: 'ai:chat-stream',
+  AGENT_RUN: 'agent:run',
+  AGENT_RESUME: 'agent:resume',
+  AGENT_ABORT: 'agent:abort',
+  AGENT_TRACES_LIST: 'agent:traces-list',
+  AGENT_TRACES_CLEAR: 'agent:traces-clear',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   READABILITY_FETCH: 'readability:fetch',

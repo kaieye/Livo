@@ -6,21 +6,9 @@
 
 ## P0 — 核心功能缺口
 
-### 2. 文章详情页增强（接续）
-
-- [x] **2.5** 整合内嵌视频播放（复用现有 VideoPlayer，补 ArticleDetail 页面内统一入口）
-- [x] **2.6** 补原文/美化视图切换
-- [x] **2.7** 增强星标动画 + 阅读进度保持（基于现有 Star/ReadProgress 能力）
-
-### 3. 发现流程完善（接续）
-
-- [x] **3.4** 实现内置订阅源分类浏览（ai/podcast/news/articles/social/pictures/videos）
-
 ### 4. 设置系统完善
 
-- [x] **4.3** 新增 RefreshLogSettings 面板（订阅源刷新历史记录）
-- [ ] **4.4** 新增 AgentPermissionsSettings 面板（Agent 工具权限控制）
-- [ ] **4.5** 增强 AISettings 面板（参考 Harmony 的 AIAssistantSettingsPanel）
+- [x] **4.5** 增强 AISettings 面板（参考 Harmony 的 AIAssistantSettingsPanel）
 
 ---
 
@@ -28,26 +16,28 @@
 
 ### 5. Agent 工具系统
 
-- [ ] **5.0** 定义 Agent 工具接口与权限枚举（优先放入共享包，保持 Harmony/Desktop 工具签名一致）
-- [ ] **5.1** 实现 ToolRegistry（工具注册/查找/权限检查）
-- [ ] **5.2** 实现 NavigationAgentTools（打开页面、切换Tab）
-- [ ] **5.3** 实现 FeedAgentTools（订阅管理）
-- [ ] **5.4** 实现 EntryAgentTools（文章操作）
-- [ ] **5.5** 实现 SettingsAgentTools（设置修改）
-- [ ] **5.6** 实现 DiscoverAgentTools（发现/推荐）
-- [ ] **5.7** 实现 AccountAgentTools（账号管理）
-- [ ] **5.8** 实现 DataAgentTools（数据操作）
-- [ ] **5.9** 实现 ExternalAgentTools（外部能力）
+> 已实现（main 进程，OpenAI 兼容 function calling）。核心契约抽到 `@livo/models`（见 17.3），实现位于 `apps/desktop/src/main/agent/`。
+
+- [x] **5.0** 定义 Agent 工具接口与权限枚举（`packages/models/src/agent.ts`，两端工具签名一致）
+- [x] **5.1** 实现 ToolRegistry（工具注册/查找/校验 + 模型工具定义）
+- [x] **5.2** 实现 NavigationAgentTools（打开 Tab/文章/订阅/设置面板/视频/图片，经 `agent:navigate` 事件下发渲染进程）
+- [x] **5.3** 实现 FeedAgentTools（列出/添加/删除/刷新/刷新全部/取文章）
+- [x] **5.4** 实现 EntryAgentTools（今日更新、详情、未读统计、收藏、全部已读）
+- [x] **5.5** 实现 SettingsAgentTools（查看设置、主题、强调色、通用、翻译、AI 运行配置；不读写 API Key）
+- [x] **5.6** 实现 DiscoverAgentTools（浏览内置推荐源、添加推荐订阅）
+- [x] **5.7** 实现 AccountAgentTools（状态、刷新、登录、解绑）
+- [x] **5.8** 实现 DataAgentTools（查看刷新日志、导出 OPML、清空刷新日志、清理旧文章）
+- [x] **5.9** 实现 ExternalAgentTools（DuckDuckGo 网络搜索，无需 API Key）
 
 ### 6. Agent 循环核心
 
-- [ ] **6.1** 实现 AgentLoop（多轮工具调用循环，MAX_ROUNDS=5）
-- [ ] **6.2** 实现 AgentService（对外统一接口，run/resume/abort）
-- [ ] **6.3** 实现 AgentContextBuilder（构建带页面上下文的 Agent 请求）
-- [ ] **6.4** 实现 PolicyGuard（安全策略：prompt injection 防护、权限控制）
-- [ ] **6.5** 实现 AgentTraceStore（工具调用追踪记录）
-- [ ] **6.6** 实现 Agent 错误恢复机制（网络中断/API 限流后的 retry）
-- [ ] **6.7** 实现 Agent 性能监控（每轮工具调用耗时统计）
+- [x] **6.1** 实现 AgentLoop（多轮工具调用循环，MAX_AGENT_ROUNDS=5，原生 + 文本工具调用回退）
+- [x] **6.2** 实现 AgentService（对外统一接口 run/resume/abort，挂起态托管 + TTL）
+- [x] **6.3** 实现 AgentContextBuilder（订阅/今日更新/未读上下文，受 read 权限控制）
+- [x] **6.4** 实现 PolicyGuard（五级权限控制 + prompt injection 防护提示 + 写入/删除/外链确认）
+- [x] **6.5** 实现 AgentTraceStore（工具调用追踪记录，文件持久化，最多 50 条）
+- [x] **6.6** 实现 Agent 错误恢复机制（LLM 调用指数退避重试，区分可重试/中止）
+- [x] **6.7** 实现 Agent 性能监控（每轮 LLM/工具耗时统计，随结果返回 metrics）
 
 ### 7. AI 聊天面板增强
 
@@ -57,7 +47,7 @@
 - [ ] **7.4** 实现工具执行状态栏（AIChatRunStatusBar）
 - [ ] **7.5** 实现会话历史持久化（ChatHistoryStore 等价物）
 - [ ] **7.6** 标准化多 Provider 协议（Desktop 已有 provider 配置，补 ProviderProtocol、响应解析、错误归一）
-- [ ] **7.7** 编写 Agent 循环单元测试（mock ToolRegistry）
+- [x] **7.7** 编写 Agent 循环单元测试（mock ToolRegistry，覆盖 registry/policy/harness，18 用例）
 
 ### 8. AI 辅助阅读
 
@@ -87,7 +77,6 @@
 ### 11. 图片/媒体增强
 
 - [ ] **11.1** 实现图片保存到本地（MediaSaveService 等价物）
-- [ ] **11.2** 实现图片画廊翻页浏览（EntryImageGallery 等价物）
 
 ---
 
@@ -121,7 +110,7 @@
 ### 16. 其他细节
 
 - [ ] **16.1** 接入 AI 回复 Markdown 渲染（复用已有 `react-markdown`，补链接/HTML 安全策略）
-- [ ] **16.2** 实现网络搜索服务（DuckDuckGo，无需 API Key）
+- [x] **16.2** 实现网络搜索服务（`services/web-search.ts`，DuckDuckGo HTML，无需 API Key，供 Agent web_search 工具调用）
 - [ ] **16.3** 实现 ExternalUrlService（外链统一处理 + 安全警告）
 - [ ] **16.4** 实现连接测试服务（AIAssistantConnectionTestService 等价物）
 
@@ -131,7 +120,7 @@
 
 - [ ] **17.1** 将数据模型转换逻辑（toFeedCardModel / toEntryCardModel）抽到 `packages/models`
 - [ ] **17.2** 将 ViewModel 类型定义（EntryCardModel / FeedCardModel / ArticleDetailModel）抽到共享包
-- [ ] **17.3** 将 Agent 工具接口定义抽到共享包（两端一致的工具签名）
+- [x] **17.3** 将 Agent 工具接口定义抽到共享包（`packages/models/src/agent.ts`，两端一致的工具签名与运行时 wire 类型）
 - [ ] **17.4** 将视频 URL 解析逻辑（YouTube ID 提取、Invidious/Piped 实例列表）抽到 `packages/utils`
 
 ---

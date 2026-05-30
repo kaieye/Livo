@@ -204,6 +204,18 @@ export const enSettings = {
   aiNotice: '🎉 No login, no subscription needed',
   aiNoticeDesc:
     'Configure your own AI API Key to use all AI features including summary, translation and chat. Supports OpenAI, Anthropic, DeepSeek, and MiniMax.',
+  aiModelConfig: 'Model Configuration',
+  aiModelConfigDesc:
+    'Pick a provider and fill in the API Key, Base URL and model.',
+  aiConnectionTest: 'Connection Test',
+  aiSystemPromptSection: 'System Prompt',
+  apiKeyPerProviderHint:
+    'API keys are remembered per provider and restored automatically when you switch.',
+  aiAgentPermissionsLinkDesc:
+    'Control which tool capabilities the AI assistant can use (read / navigate / mutate / external / delete).',
+  aiAutoSaveHint: 'Changes are saved locally automatically.',
+  aiResetDefaults: 'Reset to defaults',
+  aiResetDone: 'Reset to default configuration',
   enableTranslation: 'Enable Translation',
   enableTranslationDesc: 'Show translation button in article reading view',
   targetLanguage: 'Target Language',
@@ -341,4 +353,24 @@ export const enSettings = {
   refreshLogsFailedCount: '{{count}} failed',
   refreshLogsFailedFeeds: 'Failed feeds',
   refreshLogsMaxHint: 'Up to 60 most recent refresh records are retained.',
+  agentPermissions: 'Agent Permissions',
+  agentPermissionsDesc:
+    'Control which tool capabilities the AI assistant can use when running tasks. Disabling a category causes those tools to be rejected.',
+  agentPermissionsConfirmHint:
+    'Even when enabled, high-risk actions like delete, clear and overwrite import will still prompt for confirmation first.',
+  agentPermAllowRead: 'Read local context',
+  agentPermAllowReadDesc:
+    'Allow tools to read feeds, articles and history summaries.',
+  agentPermAllowNavigate: 'Open pages',
+  agentPermAllowNavigateDesc:
+    'Allow switching tabs and opening articles, feeds or settings pages.',
+  agentPermAllowMutate: 'Modify settings & subscriptions',
+  agentPermAllowMutateDesc:
+    'Write operations will still show a confirmation card.',
+  agentPermAllowExternal: 'External access / export',
+  agentPermAllowExternalDesc:
+    'Allow web search, account login and OPML export.',
+  agentPermAllowDestructive: 'Delete or overwrite data',
+  agentPermAllowDestructiveDesc:
+    'Delete, clear and overwrite import require extra confirmation.',
 } as const

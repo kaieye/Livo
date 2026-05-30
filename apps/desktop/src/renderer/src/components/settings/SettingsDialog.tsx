@@ -14,6 +14,7 @@ import {
   Link2,
   Palette,
   Shield,
+  ShieldCheck,
   Clock,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
@@ -33,6 +34,7 @@ const settingsTabImporters = {
   privacy: () => import('./PrivacySettings'),
   about: () => import('./AboutSettings'),
   refreshLogs: () => import('./RefreshLogSettings'),
+  agentPermissions: () => import('./AgentPermissionsSettings'),
 } satisfies Record<SettingsTabId, () => Promise<unknown>>
 
 const settingsTabComponents = {
@@ -96,6 +98,11 @@ const settingsTabComponents = {
       .refreshLogs()
       .then((module) => ({ default: module.RefreshLogSettings })),
   ),
+  agentPermissions: lazy(() =>
+    settingsTabImporters
+      .agentPermissions()
+      .then((module) => ({ default: module.AgentPermissionsSettings })),
+  ),
 } satisfies Record<SettingsTabId, React.ComponentType>
 
 function preloadSettingsTab(tabId: SettingsTabId) {
@@ -130,6 +137,11 @@ export function SettingsDialog() {
       icon: Rss,
     },
     { id: 'ai' as const, label: t('settings.ai'), icon: Bot },
+    {
+      id: 'agentPermissions' as const,
+      label: t('settings.agentPermissions'),
+      icon: ShieldCheck,
+    },
     {
       id: 'translation' as const,
       label: t('settings.translation'),

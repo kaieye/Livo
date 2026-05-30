@@ -12,6 +12,7 @@ import { registerReadabilityHandlers } from './handlers/readability-handlers'
 import { registerDiscoverHandlers } from './handlers/discover-handlers'
 import { registerVideoHandlers } from './handlers/video-handlers'
 import { registerAccountHandlers } from './handlers/account-handlers'
+import { registerAgentHandlers } from './handlers/agent-handlers'
 import { startAutoRefresh } from './services/feed-refresh'
 import { startAggregatorJobs } from './services/aggregator-jobs'
 import { logError, readRecentLogs } from './services/logger'
@@ -150,17 +151,25 @@ export class AppManager {
     registerDiscoverHandlers()
     registerVideoHandlers()
     registerAccountHandlers()
+    registerAgentHandlers()
   }
 
   private createTray(): void {
     this.tray = new AppTray({
       showWindow: () => this.windowManager.focusMainWindow(),
       hideWindow: () => this.windowManager.hideMainWindow(),
-      refreshAll: () => this.windowManager.sendAppCommand({ type: 'refresh-all' }),
+      refreshAll: () =>
+        this.windowManager.sendAppCommand({ type: 'refresh-all' }),
       openSettings: () =>
-        this.windowManager.sendAppCommand({ type: 'open-settings', tab: 'general' }),
+        this.windowManager.sendAppCommand({
+          type: 'open-settings',
+          tab: 'general',
+        }),
       checkForUpdates: () =>
-        this.windowManager.sendAppCommand({ type: 'open-settings', tab: 'about' }),
+        this.windowManager.sendAppCommand({
+          type: 'open-settings',
+          tab: 'about',
+        }),
       quit: () => {
         this.windowManager.prepareForQuit()
         app.quit()
@@ -185,7 +194,10 @@ export class AppManager {
       },
       checkForUpdates: () => {
         void checkForAppUpdates(true)
-        this.windowManager.sendAppCommand({ type: 'open-settings', tab: 'about' })
+        this.windowManager.sendAppCommand({
+          type: 'open-settings',
+          tab: 'about',
+        })
       },
     })
   }
@@ -272,7 +284,9 @@ export class AppManager {
         const headers = { ...(details.responseHeaders || {}) }
         const statusCode = details.statusCode || 0
         const findHeaderKey = (name: string) =>
-          Object.keys(headers).find((k) => k.toLowerCase() === name.toLowerCase())
+          Object.keys(headers).find(
+            (k) => k.toLowerCase() === name.toLowerCase(),
+          )
         const setHeader = (name: string, value: string) => {
           const key = findHeaderKey(name) || name
           headers[key] = [value]

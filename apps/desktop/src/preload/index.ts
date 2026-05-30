@@ -17,6 +17,19 @@ import type {
   DiscoverFeedPreviewResult,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
+import type {
+  AgentRunSummary,
+  AgentToolExecutionEvent,
+  AgentChatHistoryMessage,
+  AgentNavigationAction,
+  AgentTraceRecord,
+} from '../shared/types'
+
+type AgentRunResponse =
+  | ({ success: true } & AgentRunSummary)
+  | { success: false; error: string }
+
+type AgentToolEventPayload = { requestId: string } & AgentToolExecutionEvent
 
 const api = {
   // Feed operations
@@ -109,6 +122,45 @@ const api = {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
     set: (settings: Partial<AppSettings>) =>
       ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+    onChanged: (callback: (settings: AppSettings) => void) => {
+      const handler = (_event: unknown, settings: AppSettings) =>
+        callback(settings)
+      ipcRenderer.on('settings:changed', handler)
+      return () => ipcRenderer.removeListener('settings:changed', handler)
+    },
+  },
+
+  // Agent (multi-round tool-calling assistant)
+  agent: {
+    run: (payload: {
+      requestId: string
+      prompt: string
+      history?: AgentChatHistoryMessage[]
+      pageContext?: string
+    }): Promise<AgentRunResponse> => ipcRenderer.invoke(IPC.AGENT_RUN, payload),
+    resume: (payload: {
+      requestId: string
+      pendingId: string
+    }): Promise<AgentRunResponse> =>
+      ipcRenderer.invoke(IPC.AGENT_RESUME, payload),
+    abort: (requestId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke(IPC.AGENT_ABORT, requestId),
+    listTraces: (): Promise<AgentTraceRecord[]> =>
+      ipcRenderer.invoke(IPC.AGENT_TRACES_LIST),
+    clearTraces: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke(IPC.AGENT_TRACES_CLEAR),
+    onToolEvent: (callback: (data: AgentToolEventPayload) => void) => {
+      const handler = (_event: unknown, data: AgentToolEventPayload) =>
+        callback(data)
+      ipcRenderer.on('agent:tool-event', handler)
+      return () => ipcRenderer.removeListener('agent:tool-event', handler)
+    },
+    onNavigate: (callback: (action: AgentNavigationAction) => void) => {
+      const handler = (_event: unknown, action: AgentNavigationAction) =>
+        callback(action)
+      ipcRenderer.on('agent:navigate', handler)
+      return () => ipcRenderer.removeListener('agent:navigate', handler)
+    },
   },
 
   // Readability

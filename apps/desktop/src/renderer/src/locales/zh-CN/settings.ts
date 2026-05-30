@@ -188,6 +188,17 @@ export const zhCNSettings = {
   aiNotice: '🎉 无需登录，无需订阅',
   aiNoticeDesc:
     '配置你自己的 AI API Key 即可使用所有 AI 功能，包括摘要、翻译和对话。支持 OpenAI、Anthropic、DeepSeek 等，也支持 MiniMax。',
+  aiModelConfig: '模型配置',
+  aiModelConfigDesc: '选择服务提供商并填写 API Key、Base URL 和模型。',
+  aiConnectionTest: '连接测试',
+  aiSystemPromptSection: '系统提示词',
+  apiKeyPerProviderHint:
+    '每个服务提供商的 API Key 会分别记住，切换时自动恢复。',
+  aiAgentPermissionsLinkDesc:
+    '控制 AI 助手可调用的工具能力（读取 / 导航 / 修改 / 外部 / 删除）。',
+  aiAutoSaveHint: '配置更改后会自动保存到本地。',
+  aiResetDefaults: '重置为默认',
+  aiResetDone: '已重置为默认配置',
   enableTranslation: '启用翻译',
   enableTranslationDesc: '在文章阅读界面显示翻译按钮',
   targetLanguage: '目标语言',
@@ -319,4 +330,19 @@ export const zhCNSettings = {
   refreshLogsFailedCount: '失败 {{count}} 个',
   refreshLogsFailedFeeds: '失败订阅源',
   refreshLogsMaxHint: '最多保留最近 60 条刷新记录。',
+  agentPermissions: 'Agent 权限',
+  agentPermissionsDesc:
+    '控制 AI 助手在执行任务时可以调用哪些工具能力。关闭后对应类别的工具将被拒绝执行。',
+  agentPermissionsConfirmHint:
+    '即使开启，删除、清空和覆盖导入等高风险操作仍会先弹出确认。',
+  agentPermAllowRead: '读取本地上下文',
+  agentPermAllowReadDesc: '允许工具读取订阅、文章和历史摘要。',
+  agentPermAllowNavigate: '打开页面',
+  agentPermAllowNavigateDesc: '允许切换标签页和打开文章、订阅或设置页。',
+  agentPermAllowMutate: '修改设置与订阅',
+  agentPermAllowMutateDesc: '写入类操作仍会先显示确认卡。',
+  agentPermAllowExternal: '外部访问 / 导出',
+  agentPermAllowExternalDesc: '允许网络搜索、账号登录和 OPML 导出。',
+  agentPermAllowDestructive: '删除或覆盖数据',
+  agentPermAllowDestructiveDesc: '删除、清空和覆盖导入必须额外确认。',
 } as const

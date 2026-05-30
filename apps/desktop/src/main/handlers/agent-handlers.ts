@@ -1,0 +1,97 @@
+import { ipcMain } from 'electron'
+import { IPC } from '../../shared/types'
+import { agentService, type AgentServiceResult } from '../agent/service'
+import type {
+  AgentHistoryMessage,
+  AgentToolExecutionEvent,
+} from '../agent/loop'
+import { AgentTraceStore } from '../agent/trace-store'
+// Importing default-tools registers the tool builder with the registry provider.
+import '../agent/default-tools'
+
+interface AgentRunPayload {
+  requestId: string
+  prompt: string
+  history?: AgentHistoryMessage[]
+  pageContext?: string
+}
+
+interface AgentResumePayload {
+  requestId: string
+  pendingId: string
+}
+
+type AgentRunResponse =
+  | ({ success: true } & AgentServiceResult)
+  | { success: false; error: string }
+
+export function registerAgentHandlers(): void {
+  ipcMain.handle(
+    IPC.AGENT_RUN,
+    async (event, payload: AgentRunPayload): Promise<AgentRunResponse> => {
+      const onToolEvent = (toolEvent: AgentToolExecutionEvent) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:tool-event', {
+            requestId: payload.requestId,
+            ...toolEvent,
+          })
+        }
+      }
+      try {
+        const result = await agentService.run({
+          requestId: payload.requestId,
+          prompt: payload.prompt,
+          history: payload.history,
+          pageContext: payload.pageContext,
+          onToolEvent,
+        })
+        return { success: true, ...result }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IPC.AGENT_RESUME,
+    async (event, payload: AgentResumePayload): Promise<AgentRunResponse> => {
+      const onToolEvent = (toolEvent: AgentToolExecutionEvent) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:tool-event', {
+            requestId: payload.requestId,
+            ...toolEvent,
+          })
+        }
+      }
+      try {
+        const result = await agentService.resume({
+          requestId: payload.requestId,
+          pendingId: payload.pendingId,
+          onToolEvent,
+        })
+        return { success: true, ...result }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    },
+  )
+
+  ipcMain.handle(IPC.AGENT_ABORT, (_event, requestId: string) => {
+    return { success: agentService.abort(requestId) }
+  })
+
+  ipcMain.handle(IPC.AGENT_TRACES_LIST, () => {
+    return AgentTraceStore.loadAll()
+  })
+
+  ipcMain.handle(IPC.AGENT_TRACES_CLEAR, () => {
+    AgentTraceStore.clearAll()
+    return { success: true }
+  })
+}
