@@ -273,6 +273,7 @@ export type SettingsTabId =
   | 'actions'
   | 'accounts'
   | 'data'
+  | 'privacy'
   | 'about'
 
 export type AppCommandType =
