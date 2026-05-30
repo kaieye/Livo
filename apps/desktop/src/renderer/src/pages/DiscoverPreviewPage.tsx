@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { formatDistanceToNow } from 'date-fns'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -15,13 +16,19 @@ import {
 import type {
   DiscoverFeedPreview,
   DiscoverFeedPreviewEntry,
-  FeedViewType,
 } from '../../../shared/types'
+import { FeedViewType } from '../../../shared/types'
+import { EntryContent } from '../components/entry/EntryContent'
+import { SocialDetailView } from '../components/entry/SocialDetailView'
 import { FeedAvatar } from '../components/feed/FeedAvatar'
 import { DiscoverCenteredState } from '../components/discover/DiscoverCenteredState'
 import { inferDiscoverFeedViewFromUrl } from '../lib/discover-feed'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
+import { splitHtmlIntoParagraphs } from '../lib/entry-text'
+import { getDateLocale } from '../lib/date-locale'
 import { ROUTES } from '../router/route-paths'
+import { useEntryStore } from '../store/entry-store'
+import { useGeneralSettingsShallowSelector } from '../store/settings-store'
 
 interface DiscoverPreviewTarget {
   url: string
@@ -40,6 +47,7 @@ export default function DiscoverPreviewPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [openedEntryId, setOpenedEntryId] = useState<string | null>(null)
 
   const target = useMemo(
     () => parseDiscoverPreviewTarget(location.search),
@@ -95,6 +103,49 @@ export default function DiscoverPreviewPage() {
     }
   }, [reloadKey, target.url, t])
 
+  // Reset inline entry detail when the preview feed changes
+  useEffect(() => {
+    setOpenedEntryId(null)
+    useEntryStore.getState().selectEntry(null)
+  }, [reloadKey, target.url])
+
+  // Settings for SocialDetailView rendering
+  const general = useGeneralSettingsShallowSelector((s) => ({
+    fontSize: s.fontSize,
+    language: s.language,
+  }))
+
+  // Read the currently selected entry (pre-populated by handleOpenEntry)
+  const selectedEntry = useEntryStore((s) => s.selectedEntry)
+
+  const paragraphs = useMemo(() => {
+    if (!selectedEntry?.content) return []
+    return splitHtmlIntoParagraphs(selectedEntry.content)
+  }, [selectedEntry?.content])
+
+  const plainContent = useMemo(
+    () => (selectedEntry?.content ?? '').replace(/<[^>]*>/g, '').trim(),
+    [selectedEntry?.content],
+  )
+
+  const socialAuthorName = selectedEntry?.author ?? ''
+  const [avatarFailed, setAvatarFailed] = useState(false)
+  const avatarLetter = socialAuthorName
+    ? socialAuthorName.charAt(0).toUpperCase()
+    : '?'
+
+  const timeAgo = useMemo(() => {
+    if (!selectedEntry?.publishedAt) return ''
+    try {
+      return formatDistanceToNow(selectedEntry.publishedAt, {
+        addSuffix: true,
+        locale: getDateLocale(),
+      })
+    } catch {
+      return ''
+    }
+  }, [selectedEntry?.publishedAt, general.language])
+
   const handleBack = useCallback(() => navigate(-1), [navigate])
   const handleRetry = useCallback(() => setReloadKey((x) => x + 1), [])
   const handleOpenExternal = useCallback(() => {
@@ -115,6 +166,28 @@ export default function DiscoverPreviewPage() {
       }),
     )
   }, [navigate, preferredView, preview, target])
+
+  // Open a preview entry inline within this page — same rendering as the
+  // subscribed feeds' article detail. Pre-populates the entry store so
+  // EntryContent renders immediately without a route navigation.
+  const handleOpenEntry = useCallback((entry: DiscoverFeedPreviewEntry) => {
+    const previewEntry = {
+      id: entry.id,
+      feedId: '',
+      title: entry.title,
+      url: entry.url,
+      content: entry.content || entry.summary || '',
+      summary: entry.summary,
+      author: entry.author,
+      imageUrl: entry.imageUrl,
+      publishedAt: entry.publishedAt,
+      isRead: true,
+      isStarred: false,
+      createdAt: Date.now(),
+    }
+    void useEntryStore.getState().selectEntry(previewEntry)
+    setOpenedEntryId(entry.id)
+  }, [])
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
@@ -146,8 +219,54 @@ export default function DiscoverPreviewPage() {
         )}
       </header>
 
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {isLoading ? (
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {openedEntryId ? (
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="bg-[var(--color-bg-secondary)]/50 flex flex-shrink-0 items-center gap-2 border-b border-[var(--color-border-secondary)] px-6 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  useEntryStore.getState().selectEntry(null)
+                  setOpenedEntryId(null)
+                }}
+                className="rounded-md p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]"
+                title={t('discoverPreview.backToEntries')}
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+              </button>
+              <span className="text-xs text-[var(--color-text-tertiary)]">
+                {t('discoverPreview.backToEntries')}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {preferredView === FeedViewType.SocialMedia ? (
+                <div className="mx-auto max-w-[680px] px-4 py-6">
+                  <SocialDetailView
+                    entryId={openedEntryId}
+                    paragraphs={paragraphs}
+                    fullContent={selectedEntry?.content ?? ''}
+                    plainContent={plainContent}
+                    avatarUrl={selectedEntry?.authorAvatar ?? ''}
+                    avatarImageFailed={avatarFailed}
+                    avatarLetter={avatarLetter}
+                    authorName={socialAuthorName}
+                    timeAgo={timeAgo}
+                    onAvatarError={() => setAvatarFailed(true)}
+                    showTranslation={false}
+                    translatedParagraphs={[]}
+                    isTranslating={false}
+                    isSummarizing={false}
+                    showSummary={false}
+                    summary={null}
+                    fontSize={general.fontSize}
+                  />
+                </div>
+              ) : (
+                <EntryContent />
+              )}
+            </div>
+          </div>
+        ) : isLoading ? (
           <DiscoverCenteredState
             variant="fill"
             icon={<Loader2 size={34} className="animate-spin" />}
@@ -216,7 +335,10 @@ export default function DiscoverPreviewPage() {
                   <ul className="divide-y divide-[var(--color-border-secondary)] overflow-hidden rounded-md border border-[var(--color-border-secondary)]">
                     {preview.entries.map((entry) => (
                       <li key={entry.id}>
-                        <PreviewEntryRow entry={entry} />
+                        <PreviewEntryRow
+                          entry={entry}
+                          onSelect={handleOpenEntry}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -238,24 +360,26 @@ export default function DiscoverPreviewPage() {
         ) : null}
       </main>
 
-      <footer className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-[var(--color-border-secondary)] px-6 py-3">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="rounded-md px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]"
-        >
-          {t('common.cancel')}
-        </button>
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={!preview || isLoading}
-          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {t('discoverPreview.continue')}
-          <ArrowRight size={15} aria-hidden="true" />
-        </button>
-      </footer>
+      {!openedEntryId && (
+        <footer className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-[var(--color-border-secondary)] px-6 py-3">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="rounded-md px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)]"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={!preview || isLoading}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t('discoverPreview.continue')}
+            <ArrowRight size={15} aria-hidden="true" />
+          </button>
+        </footer>
+      )}
     </div>
   )
 }
@@ -286,12 +410,29 @@ function formatPublishedAt(value: number): string {
   return new Date(value).toLocaleDateString()
 }
 
-function PreviewEntryRow({ entry }: { entry: DiscoverFeedPreviewEntry }) {
+function PreviewEntryRow({
+  entry,
+  onSelect,
+}: {
+  entry: DiscoverFeedPreviewEntry
+  onSelect: (entry: DiscoverFeedPreviewEntry) => void
+}) {
   const hasImage = !!entry.imageUrl
   const dateLabel = formatPublishedAt(entry.publishedAt)
 
   return (
-    <div className="flex min-h-[76px] items-start gap-3 bg-[var(--color-bg-primary)] px-4 py-3">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(entry)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(entry)
+        }
+      }}
+      className="group flex min-h-[76px] cursor-pointer items-start gap-3 bg-[var(--color-bg-primary)] px-4 py-3 transition-colors hover:bg-[var(--color-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/40"
+    >
       {hasImage ? (
         <img
           src={entry.imageUrl}

@@ -43,6 +43,13 @@ export function useDeepLinkEntry(
       return
     }
 
+    // If the entry was pre-populated into selectedEntry by a discover preview,
+    // skip the DB fetch — the entry already has the correct id.
+    if (selectedEntry && selectedEntry.id === entryId) {
+      setState('idle')
+      return
+    }
+
     let cancelled = false
     setState('loading')
     void window.api.entries
@@ -64,7 +71,7 @@ export function useDeepLinkEntry(
     return () => {
       cancelled = true
     }
-  }, [entryId, inStoreEntry, selectEntry])
+  }, [entryId, inStoreEntry, selectEntry, selectedEntry])
 
   const activeEntry =
     selectedEntry && selectedEntry.id === entryId ? selectedEntry : null

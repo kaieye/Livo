@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { formatDistanceToNow } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useDiscoverSearchQuery } from '../../hooks/useDiscoverSearchQuery'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
+import type {
+  DiscoverFeedPreview,
+  DiscoverFeedPreviewEntry,
+} from '../../../../shared/types'
+import { FeedViewType } from '../../../../shared/types'
 import {
   type DiscoverSearchResult,
   type DiscoverSearchPlatform,
@@ -16,19 +22,30 @@ import { canonicalizeDiscoverRoute } from '../../lib/discover-subscribe-config'
 import { inferDiscoverPlatform } from '../../lib/discover-platform-presentation'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useFeedStore } from '../../store/feed-store'
+import { useEntryStore } from '../../store/entry-store'
 import { useStoreShallow } from '../../store/helpers'
+import { EntryContent } from '../entry/EntryContent'
+import { SocialDetailView } from '../entry/SocialDetailView'
 import { ROUTES } from '../../router/route-paths'
 import {
   DiscoverResultRow,
   getDiscoverResultDisplayTitle,
 } from './DiscoverResultRow'
 import { DiscoverCenteredState } from './DiscoverCenteredState'
+import { FeedAvatar } from '../feed/FeedAvatar'
+import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
+import { getDateLocale } from '../../lib/date-locale'
+import { useGeneralSettingsShallowSelector } from '../../store/settings-store'
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
   Globe,
   LogIn,
   Search,
   Sparkles,
+  User,
   X,
   Check,
   Plus,
@@ -123,6 +140,122 @@ export function DiscoverPanel() {
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const [searchPage, setSearchPage] = useState(1)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+  // Inline preview state — replaces full-screen DiscoverPreviewPage navigation
+  const [previewTarget, setPreviewTarget] = useState<{
+    url: string
+    title?: string
+    siteUrl?: string
+    imageUrl?: string
+    description?: string
+    view?: FeedViewType
+  } | null>(null)
+  const [previewData, setPreviewData] = useState<DiscoverFeedPreview | null>(
+    null,
+  )
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const [previewReloadKey, setPreviewReloadKey] = useState(0)
+
+  // Inline entry detail — when set, EntryContent renders inside the preview
+  // instead of navigating to the full-screen ArticleDetailPage
+  const [inlineEntryId, setInlineEntryId] = useState<string | null>(null)
+
+  // Open a preview entry inline using EntryContent — stays within the
+  // discover panel instead of navigating to the full-screen detail page.
+  // Pre-populates the entry store so EntryContent renders immediately.
+  const handleOpenPreviewEntry = useCallback(
+    (entry: DiscoverFeedPreviewEntry) => {
+      // Construct a minimal Entry so EntryContent can render it
+      const previewEntry = {
+        id: entry.id,
+        feedId: '',
+        title: entry.title,
+        url: entry.url,
+        content: entry.content || entry.summary || '',
+        summary: entry.summary,
+        author: entry.author,
+        imageUrl: entry.imageUrl,
+        publishedAt: entry.publishedAt,
+        isRead: true,
+        isStarred: false,
+        createdAt: Date.now(),
+      }
+      // Pre-populate store so EntryContent finds the entry
+      void useEntryStore.getState().selectEntry(previewEntry)
+      // Switch to inline detail view
+      setInlineEntryId(entry.id)
+    },
+    [],
+  )
+
+  // SocialDetailView rendering support — read selectedEntry & compute props
+  const general = useGeneralSettingsShallowSelector((s) => ({
+    fontSize: s.fontSize,
+    language: s.language,
+  }))
+
+  const selectedEntry = useEntryStore((s) => s.selectedEntry)
+
+  const paragraphs = useMemo(() => {
+    if (!selectedEntry?.content) return []
+    return splitHtmlIntoParagraphs(selectedEntry.content)
+  }, [selectedEntry?.content])
+
+  const plainContent = useMemo(
+    () => (selectedEntry?.content ?? '').replace(/<[^>]*>/g, '').trim(),
+    [selectedEntry?.content],
+  )
+
+  const socialAuthorName = selectedEntry?.author ?? ''
+  const [avatarFailed, setAvatarFailed] = useState(false)
+  const avatarLetter = socialAuthorName
+    ? socialAuthorName.charAt(0).toUpperCase()
+    : '?'
+
+  const timeAgo = useMemo(() => {
+    if (!selectedEntry?.publishedAt) return ''
+    try {
+      return formatDistanceToNow(selectedEntry.publishedAt, {
+        addSuffix: true,
+        locale: getDateLocale(),
+      })
+    } catch {
+      return ''
+    }
+  }, [selectedEntry?.publishedAt, general.language])
+
+  // ── Preview fetch effect ──
+  useEffect(() => {
+    if (!previewTarget) return
+    let cancelled = false
+    setPreviewData(null)
+    setPreviewError('')
+    setPreviewLoading(true)
+
+    window.api.discover
+      .previewFeed(previewTarget.url)
+      .then((result) => {
+        if (cancelled) return
+        if (result.success) {
+          setPreviewData(result.preview)
+        } else {
+          setPreviewError(result.error)
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setPreviewError(String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [previewTarget, previewReloadKey])
+
+  const isPreviewing = previewTarget !== null
 
   // Curated categories & popular feeds — shown when no search is active
   const categoriesQuery = useQuery({
@@ -285,9 +418,9 @@ export function DiscoverPanel() {
 
   const openPreview = useCallback(
     (result: DiscoverSearchResult) => {
-      navigate(ROUTES.discoverPreview(buildPreviewTarget(result)))
+      setPreviewTarget(buildPreviewTarget(result))
     },
-    [buildPreviewTarget, navigate],
+    [buildPreviewTarget],
   )
 
   const handleToggleSubscribe = (result: DiscoverSearchResult) => {
@@ -447,27 +580,21 @@ export function DiscoverPanel() {
         </div>
 
         {/* Featured feeds — category rail + curated feed list when no search active */}
-        {!hasSearchQuery && categories.length > 0 && (
+        {!hasSearchQuery && !isPreviewing && categories.length > 0 && (
           <div className="mx-auto mt-6 max-w-2xl">
             <div className="mb-4">
               <h3 className="mb-3 text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
                 {t('discover.browseCategories')}
               </h3>
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setSelectedCategory(null)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selectedCategory === null
-                      ? 'bg-accent text-white'
-                      : 'bg-surface-secondary text-text-secondary hover:bg-accent/10 dark:bg-surface-dark-secondary dark:text-text-dark-secondary'
-                  }`}
-                >
-                  {t('common.all')}
-                </button>
                 {categories.map((cat) => (
                   <button
                     key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
+                    onClick={() =>
+                      setSelectedCategory(
+                        selectedCategory === cat.id ? null : cat.id,
+                      )
+                    }
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                       selectedCategory === cat.id
                         ? 'bg-accent text-white'
@@ -512,31 +639,27 @@ export function DiscoverPanel() {
                       subscribed={isSubscribed(feed.url)}
                       subscribing={isSubscribing(feed.url)}
                       onPreview={() => {
-                        navigate(
-                          ROUTES.discoverPreview({
+                        setPreviewTarget({
+                          url: feed.url,
+                          title: feed.title,
+                          siteUrl: feed.siteUrl,
+                          imageUrl: feed.imageUrl,
+                          description: feed.description,
+                          view: inferDiscoverFeedViewFromUrl(feed.url),
+                        })
+                      }}
+                      onToggleSubscribe={() => {
+                        if (isSubscribed(feed.url)) {
+                          handleUnsubscribe(feed.url)
+                        } else {
+                          setPreviewTarget({
                             url: feed.url,
                             title: feed.title,
                             siteUrl: feed.siteUrl,
                             imageUrl: feed.imageUrl,
                             description: feed.description,
                             view: inferDiscoverFeedViewFromUrl(feed.url),
-                          }),
-                        )
-                      }}
-                      onToggleSubscribe={() => {
-                        if (isSubscribed(feed.url)) {
-                          handleUnsubscribe(feed.url)
-                        } else {
-                          navigate(
-                            ROUTES.discoverPreview({
-                              url: feed.url,
-                              title: feed.title,
-                              siteUrl: feed.siteUrl,
-                              imageUrl: feed.imageUrl,
-                              description: feed.description,
-                              view: inferDiscoverFeedViewFromUrl(feed.url),
-                            }),
-                          )
+                          })
                         }
                       }}
                     />
@@ -544,6 +667,252 @@ export function DiscoverPanel() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Inline preview — replaces full-screen DiscoverPreviewPage */}
+        {!hasSearchQuery && isPreviewing && previewTarget && (
+          <div className="mx-auto mt-6 max-w-2xl">
+            {/* Preview header */}
+            <div className="mb-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewTarget(null)
+                  setPreviewData(null)
+                  setPreviewError('')
+                  setInlineEntryId(null)
+                  useEntryStore.getState().selectEntry(null)
+                }}
+                className="hover:text-text-primary rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                title={t('discoverPreview.back')}
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-base font-semibold">
+                  {previewData?.feedTitle ||
+                    previewTarget.title ||
+                    previewTarget.url}
+                </h3>
+              </div>
+              {previewTarget.siteUrl && (
+                <a
+                  href={previewTarget.siteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-text-primary rounded-md p-1.5 text-text-secondary transition-colors hover:bg-surface-secondary"
+                  title={t('discoverPreview.openSource')}
+                >
+                  <ExternalLink size={16} />
+                </a>
+              )}
+            </div>
+
+            {/* Preview content — or inline entry detail when an entry is selected */}
+            {inlineEntryId ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white dark:bg-surface-dark-secondary">
+                {/* Inline back button from entry detail to entry list */}
+                <div className="flex flex-shrink-0 items-center gap-2 border-b px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useEntryStore.getState().selectEntry(null)
+                      setInlineEntryId(null)
+                    }}
+                    className="hover:text-text-primary rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-secondary"
+                    title={t('common.back')}
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <span className="text-xs text-text-tertiary">
+                    {t('discoverPreview.backToEntries')}
+                  </span>
+                </div>
+                {previewTarget?.view === FeedViewType.SocialMedia ? (
+                  <div className="flex-1 overflow-y-auto">
+                    <div className="mx-auto max-w-[680px] px-4 py-6">
+                      <SocialDetailView
+                        entryId={inlineEntryId}
+                        paragraphs={paragraphs}
+                        fullContent={selectedEntry?.content ?? ''}
+                        plainContent={plainContent}
+                        avatarUrl={selectedEntry?.authorAvatar ?? ''}
+                        avatarImageFailed={avatarFailed}
+                        avatarLetter={avatarLetter}
+                        authorName={socialAuthorName}
+                        timeAgo={timeAgo}
+                        onAvatarError={() => setAvatarFailed(true)}
+                        showTranslation={false}
+                        translatedParagraphs={[]}
+                        isTranslating={false}
+                        isSummarizing={false}
+                        showSummary={false}
+                        summary={null}
+                        fontSize={general.fontSize}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <EntryContent />
+                )}
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border bg-white dark:bg-surface-dark-secondary">
+                {previewLoading ? (
+                  <DiscoverCenteredState
+                    icon={<Loader2 size={28} className="animate-spin" />}
+                    title={t('discoverPreview.loadingTitle')}
+                    hint={t('discoverPreview.loadingHint')}
+                  />
+                ) : previewError ? (
+                  <DiscoverCenteredState
+                    icon={
+                      <AlertTriangle size={28} className="text-amber-500" />
+                    }
+                    title={t('discoverPreview.errorTitle')}
+                    hint={previewError}
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => setPreviewReloadKey((k) => k + 1)}
+                        className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+                      >
+                        {t('discoverPreview.retry')}
+                      </button>
+                    }
+                  />
+                ) : previewData ? (
+                  <>
+                    {/* Feed info */}
+                    <div className="border-b bg-surface-secondary/30 px-4 py-4 dark:bg-surface-dark-tertiary/30">
+                      <div className="flex items-start gap-3">
+                        <FeedAvatar
+                          imageUrl={
+                            previewData.imageUrl || previewTarget.imageUrl
+                          }
+                          size="lg"
+                          className="shadow-sm"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="min-w-0 truncate text-sm font-semibold">
+                              {previewData.feedTitle ||
+                                previewTarget.title ||
+                                previewTarget.url}
+                            </h3>
+                          </div>
+                          {(() => {
+                            try {
+                              const host = new URL(
+                                previewData.siteUrl ||
+                                  previewTarget.siteUrl ||
+                                  previewTarget.url,
+                              ).hostname.replace(/^www\./i, '')
+                              if (host) {
+                                return (
+                                  <p className="mt-1 truncate text-xs text-text-tertiary">
+                                    {host}
+                                  </p>
+                                )
+                              }
+                            } catch {
+                              /* ignore */
+                            }
+                            return null
+                          })()}
+                          {(previewData.description ||
+                            previewTarget.description) && (
+                            <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-text-tertiary">
+                              {previewData.description ||
+                                previewTarget.description}
+                            </p>
+                          )}
+                          <p className="mt-3 text-[11px] text-text-tertiary">
+                            {t('discoverPreview.itemCount', {
+                              count: previewData.itemCount,
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Entry list */}
+                    <div className="px-4 py-3">
+                      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+                        {t('discoverPreview.entriesTitle')}
+                      </h4>
+                      {previewData.entries.length > 0 ? (
+                        <ul className="divide-y divide-[var(--color-border-secondary)] overflow-hidden rounded-md border">
+                          {previewData.entries.map((entry) => (
+                            <li key={entry.id}>
+                              <PreviewEntryInline
+                                entry={entry}
+                                onSelect={handleOpenPreviewEntry}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-[var(--color-border-secondary)] px-4 py-12 text-center">
+                          <Rss
+                            size={28}
+                            className="mb-2 text-text-tertiary opacity-40"
+                          />
+                          <p className="text-xs text-text-secondary">
+                            {t('discoverPreview.noEntries')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {/* Footer — only when not viewing inline entry detail */}
+            {!inlineEntryId && (
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewTarget(null)
+                    setPreviewData(null)
+                    setPreviewError('')
+                    setInlineEntryId(null)
+                    useEntryStore.getState().selectEntry(null)
+                  }}
+                  className="hover:text-text-primary rounded-md px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-secondary"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!previewTarget?.url) return
+                    navigate(
+                      ROUTES.discoverSubscribe({
+                        url: previewData?.targetUrl || previewTarget.url,
+                        title: previewData?.feedTitle || previewTarget.title,
+                        siteUrl: previewData?.siteUrl || previewTarget.siteUrl,
+                        imageUrl:
+                          previewData?.imageUrl || previewTarget.imageUrl,
+                        description:
+                          previewData?.description || previewTarget.description,
+                        view:
+                          previewTarget.view ??
+                          inferDiscoverFeedViewFromUrl(previewTarget.url),
+                      }),
+                    )
+                  }}
+                  disabled={!previewData || previewLoading}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t('discoverPreview.continue')}
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -682,6 +1051,87 @@ export function DiscoverPanel() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** ====== Preview entry row — inline version for the embedded preview ====== */
+
+function formatPublishedAt(value: number): string {
+  if (!value) return ''
+  return new Date(value).toLocaleDateString()
+}
+
+function PreviewEntryInline({
+  entry,
+  onSelect,
+}: {
+  entry: DiscoverFeedPreviewEntry
+  onSelect: (entry: DiscoverFeedPreviewEntry) => void
+}) {
+  const hasImage = !!entry.imageUrl
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(entry)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(entry)
+        }
+      }}
+      className="group flex min-h-[64px] cursor-pointer items-start gap-3 bg-[var(--color-bg-primary)] px-3 py-2.5 transition-colors hover:bg-[var(--color-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/40"
+    >
+      {hasImage ? (
+        <img
+          src={entry.imageUrl}
+          alt=""
+          loading="lazy"
+          className="h-10 w-10 flex-shrink-0 rounded-lg bg-[var(--color-bg-tertiary)] object-cover"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-bg-tertiary)]"
+        >
+          <Rss size={12} className="text-[var(--color-text-tertiary)]" />
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <h4 className="line-clamp-2 text-xs font-medium leading-snug text-[var(--color-text-primary)] group-hover:text-accent">
+          {entry.title || entry.url}
+        </h4>
+        {entry.summary && (
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-tertiary)]">
+            {entry.summary}
+          </p>
+        )}
+        {(entry.author || formatPublishedAt(entry.publishedAt)) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-text-tertiary)]">
+            {entry.author && (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <User size={10} aria-hidden="true" />
+                <span className="truncate">{entry.author}</span>
+              </span>
+            )}
+            {formatPublishedAt(entry.publishedAt) && (
+              <span className="inline-flex items-center gap-1">
+                <Calendar size={10} aria-hidden="true" />
+                {formatPublishedAt(entry.publishedAt)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <ExternalLink
+        size={12}
+        className="mt-1 flex-shrink-0 text-[var(--color-text-tertiary)] opacity-0 transition-opacity group-hover:opacity-60"
+        aria-hidden="true"
+      />
     </div>
   )
 }

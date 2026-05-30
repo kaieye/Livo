@@ -120,6 +120,7 @@ export interface DiscoverFeedPreviewEntry {
   title: string
   url: string
   summary?: string
+  content?: string
   author?: string
   imageUrl?: string
   publishedAt: number

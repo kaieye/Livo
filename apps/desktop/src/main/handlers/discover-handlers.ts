@@ -400,6 +400,7 @@ function toDiscoverPreviewEntry(entry: Entry): DiscoverFeedPreviewEntry {
     title: entry.title || entry.author || entry.url,
     url: entry.url,
     summary: summary ? summary.slice(0, 240) : undefined,
+    content: entry.content || '',
     author: entry.author || undefined,
     imageUrl: getPreviewEntryImage(entry),
     publishedAt: entry.publishedAt,

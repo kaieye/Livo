@@ -11,4 +11,5 @@ export const enDiscoverPreview = {
   itemCount: '{{count}} items found',
   entriesTitle: 'Content preview',
   noEntries: 'This feed has no previewable items yet',
+  backToEntries: 'Back to list',
 }

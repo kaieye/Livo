@@ -11,4 +11,5 @@ export const zhCNDiscoverPreview = {
   itemCount: '共 {{count}} 条内容',
   entriesTitle: '内容预览',
   noEntries: '该订阅源暂时没有可预览内容',
+  backToEntries: '返回列表',
 }
