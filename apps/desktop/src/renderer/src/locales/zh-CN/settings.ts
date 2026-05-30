@@ -306,4 +306,17 @@ export const zhCNSettings = {
   feature_darkMode: '暗色模式',
   feature_darkModeDesc: '跟随系统或手动切换',
   openSourceFree: '开源免费',
+  refreshLogs: '刷新日志',
+  refreshLogsDesc: '记录每次刷新周期的时间、成功数、失败数和失败订阅源名称。',
+  refreshLogsRefresh: '刷新列表',
+  refreshLogsClear: '清空日志',
+  refreshLogsCleared: '日志已清空',
+  refreshLogsLoading: '正在加载刷新日志...',
+  refreshLogsEmpty: '暂无刷新记录',
+  refreshLogsEmptyHint:
+    '在首页执行刷新后，这里会显示刷新时间、成功数、失败数和失败订阅源。',
+  refreshLogsSuccessCount: '成功刷新 {{count}} 个订阅源',
+  refreshLogsFailedCount: '失败 {{count}} 个',
+  refreshLogsFailedFeeds: '失败订阅源',
+  refreshLogsMaxHint: '最多保留最近 60 条刷新记录。',
 } as const

@@ -206,6 +206,14 @@ const api = {
     }> => ipcRenderer.invoke(IPC.DATA_STATS),
   },
 
+  // Refresh logs
+  refreshLogs: {
+    list: (): Promise<import('../shared/types').RefreshLogEntry[]> =>
+      ipcRenderer.invoke(IPC.REFRESH_LOG_LIST),
+    clear: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke(IPC.REFRESH_LOG_CLEAR),
+  },
+
   // Video resolution (Invidious/Piped proxy) & YouTube account linking
   video: {
     resolve: (

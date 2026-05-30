@@ -25,6 +25,7 @@ import { formatFeedTitle } from './feed-title'
 import { buildEntriesFromParsedItems } from './entry-builder'
 import { logWarnQuiet } from './logger'
 import { reconcileFeedView } from './feed-view'
+import { appendRefreshLog } from './refresh-log-store'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshAllInFlight: Promise<void> | null = null
@@ -118,14 +119,6 @@ function getRefreshTimeoutMs(feedUrl: string | undefined): number {
     return 120000
   }
   return DEFAULT_FEED_REFRESH_TIMEOUT_MS
-}
-
-function getRouteAlignedView(feedUrl: string | undefined): FeedViewType | null {
-  const raw = (feedUrl || '').toLowerCase()
-  if (/\/bilibili\/user\/dynamic\//.test(raw)) return FeedViewType.SocialMedia
-  if (/\/bilibili\/user\/video\//.test(raw)) return FeedViewType.Videos
-  if (/\/bilibili\/user\/article\//.test(raw)) return FeedViewType.Articles
-  return null
 }
 
 /**
@@ -479,6 +472,12 @@ async function refreshAllFeeds(
       return
     }
 
+    // Track pre-refresh error counts to detect fresh failures
+    const errorCountBefore = new Map<string, number>()
+    for (const feed of staleFeeds) {
+      errorCountBefore.set(feed.id, feed.errorCount)
+    }
+
     let totalNew = 0
 
     // Concurrent refresh with limited parallelism
@@ -498,6 +497,31 @@ async function refreshAllFeeds(
 
     // Run data cleanup after refresh
     cleanupEntries(cleanupOptions)
+
+    // Record refresh log entry
+    const refreshedFeeds = getAllFeeds()
+    let successCount = 0
+    let failedCount = 0
+    const failedTitles: string[] = []
+    for (const feed of refreshedFeeds) {
+      const before = errorCountBefore.get(feed.id)
+      if (before !== undefined) {
+        if (feed.errorCount > before) {
+          failedCount++
+          failedTitles.push(feed.title)
+        } else {
+          successCount++
+        }
+      }
+    }
+
+    appendRefreshLog({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      refreshedAt: Date.now(),
+      successFeedCount: successCount,
+      failedFeedCount: failedCount,
+      failedFeedTitles: failedTitles,
+    })
 
     if (totalNew > 0 && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('feeds:updated', { newEntries: totalNew })

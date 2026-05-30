@@ -275,6 +275,15 @@ export type SettingsTabId =
   | 'data'
   | 'privacy'
   | 'about'
+  | 'refreshLogs'
+
+export interface RefreshLogEntry {
+  id: string
+  refreshedAt: number
+  successFeedCount: number
+  failedFeedCount: number
+  failedFeedTitles: string[]
+}
 
 export type AppCommandType =
   | 'open-settings'
@@ -460,6 +469,8 @@ export const IPC = {
   ACCOUNT_BILIBILI_FOLLOWINGS: 'account:bilibili-followings',
   DATA_CLEANUP: 'data:cleanup',
   DATA_STATS: 'data:stats',
+  REFRESH_LOG_LIST: 'refresh-log:list',
+  REFRESH_LOG_CLEAR: 'refresh-log:clear',
   VIDEO_RESOLVE: 'video:resolve',
   VIDEO_OPEN_IN_APP: 'video:open-in-app',
   VIDEO_YT_LOGIN: 'video:yt-login',

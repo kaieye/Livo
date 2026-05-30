@@ -18,9 +18,7 @@
 
 ### 4. 设置系统完善
 
-- [ ] **4.1** 新增 AppearanceSettings 独立面板（迁移已有主题模式、强调色、字体、Custom CSS 控件）
-- [ ] **4.2** 新增 PrivacySettings 面板（隐私相关配置）
-- [ ] **4.3** 新增 RefreshLogSettings 面板（订阅源刷新历史记录）
+- [x] **4.3** 新增 RefreshLogSettings 面板（订阅源刷新历史记录）
 - [ ] **4.4** 新增 AgentPermissionsSettings 面板（Agent 工具权限控制）
 - [ ] **4.5** 增强 AISettings 面板（参考 Harmony 的 AIAssistantSettingsPanel）
 

@@ -14,6 +14,7 @@ import {
   Link2,
   Palette,
   Shield,
+  Clock,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -31,6 +32,7 @@ const settingsTabImporters = {
   data: () => import('./DataSettings'),
   privacy: () => import('./PrivacySettings'),
   about: () => import('./AboutSettings'),
+  refreshLogs: () => import('./RefreshLogSettings'),
 } satisfies Record<SettingsTabId, () => Promise<unknown>>
 
 const settingsTabComponents = {
@@ -89,6 +91,11 @@ const settingsTabComponents = {
       .about()
       .then((module) => ({ default: module.AboutSettings })),
   ),
+  refreshLogs: lazy(() =>
+    settingsTabImporters
+      .refreshLogs()
+      .then((module) => ({ default: module.RefreshLogSettings })),
+  ),
 } satisfies Record<SettingsTabId, React.ComponentType>
 
 function preloadSettingsTab(tabId: SettingsTabId) {
@@ -133,6 +140,11 @@ export function SettingsDialog() {
     { id: 'data' as const, label: t('settings.data'), icon: Database },
     { id: 'privacy' as const, label: t('settings.privacy'), icon: Shield },
     { id: 'about' as const, label: t('settings.about'), icon: Info },
+    {
+      id: 'refreshLogs' as const,
+      label: t('settings.refreshLogs'),
+      icon: Clock,
+    },
   ]
 
   useEffect(() => {

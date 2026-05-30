@@ -327,4 +327,18 @@ export const enSettings = {
   feature_darkMode: 'Dark Mode',
   feature_darkModeDesc: 'Follow system or manual toggle',
   openSourceFree: 'Open Source & Free',
+  refreshLogs: 'Refresh Logs',
+  refreshLogsDesc:
+    'Records the time, success count, failure count, and failed feed names for each refresh cycle.',
+  refreshLogsRefresh: 'Refresh',
+  refreshLogsClear: 'Clear Logs',
+  refreshLogsCleared: 'Logs cleared',
+  refreshLogsLoading: 'Loading refresh logs...',
+  refreshLogsEmpty: 'No refresh records',
+  refreshLogsEmptyHint:
+    'After performing a refresh on the home page, the refresh time, success count, failure count, and failed feeds will appear here.',
+  refreshLogsSuccessCount: '{{count}} feeds refreshed successfully',
+  refreshLogsFailedCount: '{{count}} failed',
+  refreshLogsFailedFeeds: 'Failed feeds',
+  refreshLogsMaxHint: 'Up to 60 most recent refresh records are retained.',
 } as const

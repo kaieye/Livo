@@ -628,6 +628,20 @@ export function registerFeedHandlers(): void {
       cacheSizeBytes: getDirectorySize(getAppCacheDirectoryPath()),
     }
   })
+
+  // Refresh log handlers
+  const { loadRefreshLogs, clearRefreshLogs } =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../services/refresh-log-store')
+
+  ipcMain.handle(IPC.REFRESH_LOG_LIST, () => {
+    return loadRefreshLogs()
+  })
+
+  ipcMain.handle(IPC.REFRESH_LOG_CLEAR, () => {
+    clearRefreshLogs()
+    return { success: true }
+  })
 }
 
 async function bootstrapFeedEntries(
