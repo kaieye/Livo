@@ -60,6 +60,15 @@ export function registerEntryHandlers(): void {
     return { success: true, isStarred: newStarred }
   })
 
+  // Save reading progress
+  ipcMain.handle(
+    IPC.ENTRY_SAVE_PROGRESS,
+    (_event, entryId: string, readProgress: number) => {
+      updateEntry(entryId, { readProgress })
+      return { success: true }
+    },
+  )
+
   // Search entries
   ipcMain.handle(IPC.ENTRY_SEARCH, (_event, query: string, limit?: number) => {
     return searchEntries(query, limit)

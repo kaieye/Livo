@@ -92,6 +92,7 @@ import {
 import type { Entry } from '../../../../shared/types'
 import type { MediaItem } from '../../../../shared/types'
 import { ViewRecommendations } from './ViewRecommendations'
+import StarToggle from '../ui/StarToggle'
 
 const SharePoster = lazy(() =>
   import('../ui/SharePoster').then((module) => ({
@@ -2667,16 +2668,13 @@ function SocialActionBar({
           {entry.isRead ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
         {/* Star */}
-        <button
-          onClick={() => toggleStar(entry.id)}
-          className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+        <StarToggle
+          isStarred={entry.isStarred}
+          onToggle={() => toggleStar(entry.id)}
+          size={14}
           title={entry.isStarred ? t('common.unstar') : t('common.star')}
-        >
-          <Star
-            size={14}
-            className={entry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''}
-          />
-        </button>
+          className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+        />
         {/* More (context menu) */}
         <button
           onClick={(e) => onContextMenu?.(e)}

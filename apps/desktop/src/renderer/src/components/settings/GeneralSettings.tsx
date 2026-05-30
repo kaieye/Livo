@@ -12,16 +12,6 @@ import {
   DEFAULT_SETTINGS,
 } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
-import { ACCENT_COLOR_MAP } from '../../lib/appearance'
-
-const ACCENT_COLORS = Object.entries(ACCENT_COLOR_MAP).map(
-  ([name, palette]) => ({
-    name,
-    color: palette.color,
-    labelKey: `settings.accentColor_${name}`,
-  }),
-)
-
 export function GeneralSettings() {
   const general = useSettingSection('general')
   const { updateSettingsSection } = useSettingsActions()
@@ -49,64 +39,6 @@ export function GeneralSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Theme */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">
-          {t('settings.theme')}
-        </label>
-        <div className="flex gap-2">
-          {(
-            [
-              { key: 'system', label: t('settings.theme_system') },
-              { key: 'light', label: t('settings.theme_light') },
-              { key: 'dark', label: t('settings.theme_dark') },
-            ] as const
-          ).map((theme) => (
-            <button
-              key={theme.key}
-              onClick={() => {
-                void updateSettingsSection('general', { theme: theme.key })
-              }}
-              className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
-                general.theme === theme.key
-                  ? 'border-accent bg-accent/5 font-medium text-accent'
-                  : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
-              }`}
-            >
-              {theme.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Accent color */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">
-          {t('settings.accentColor')}
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {ACCENT_COLORS.map((ac) => (
-            <button
-              key={ac.name}
-              onClick={() =>
-                void updateSettingsSection('general', { accentColor: ac.name })
-              }
-              className={`h-8 w-8 rounded-full border-2 transition-all ${
-                general.accentColor === ac.name
-                  ? 'scale-110 border-text ring-2 ring-offset-2 ring-offset-white dark:ring-offset-surface-dark'
-                  : 'border-transparent hover:scale-105'
-              }`}
-              style={{
-                backgroundColor: ac.color,
-                borderColor:
-                  general.accentColor === ac.name ? ac.color : 'transparent',
-              }}
-              title={t(ac.labelKey)}
-            />
-          ))}
-        </div>
-      </div>
-
       {/* Language */}
       <div>
         <label className="mb-1.5 block text-sm font-medium">
@@ -181,29 +113,6 @@ export function GeneralSettings() {
             </p>
           </div>
         )}
-      </div>
-
-      {/* Font size */}
-      <div>
-        <label className="mb-1.5 block text-sm font-medium">
-          {t('settings.fontSize')}: {general.fontSize}px
-        </label>
-        <input
-          type="range"
-          min={12}
-          max={24}
-          value={general.fontSize}
-          onChange={(e) =>
-            void updateSettingsSection('general', {
-              fontSize: Number(e.target.value),
-            })
-          }
-          className="w-full accent-accent"
-        />
-        <div className="mt-1 flex justify-between text-xs text-text-tertiary">
-          <span>12px</span>
-          <span>24px</span>
-        </div>
       </div>
 
       <div className="flex items-center justify-between">
@@ -408,42 +317,6 @@ export function GeneralSettings() {
       {/* View Tabs Configuration */}
       <ViewTabsConfig />
 
-      {/* Opaque sidebar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <label className="text-sm font-medium">
-            {t('settings.opaqueSidebar')}
-          </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
-            {t('settings.opaqueSidebarDesc')}
-          </p>
-        </div>
-        <ToggleSwitch
-          checked={general.opaqueSidebar}
-          onChange={(v) =>
-            void updateSettingsSection('general', { opaqueSidebar: v })
-          }
-        />
-      </div>
-
-      {/* Reduce motion */}
-      <div className="flex items-center justify-between">
-        <div>
-          <label className="text-sm font-medium">
-            {t('settings.reduceMotion')}
-          </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
-            {t('settings.reduceMotionDesc')}
-          </p>
-        </div>
-        <ToggleSwitch
-          checked={general.reduceMotion}
-          onChange={(v) =>
-            void updateSettingsSection('general', { reduceMotion: v })
-          }
-        />
-      </div>
-
       {/* Render inline style */}
       <div className="flex items-center justify-between">
         <div>
@@ -522,25 +395,6 @@ export function GeneralSettings() {
         <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
           {t('settings.rsshubInstanceInstagramTip')}
         </div>
-      </div>
-
-      {/* Custom CSS */}
-      <div>
-        <label className="mb-1.5 block text-sm font-medium">
-          {t('settings.customCSS')}
-        </label>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
-          {t('settings.customCSSDesc')}
-        </p>
-        <textarea
-          value={general.customCSS || ''}
-          onChange={(e) =>
-            void updateSettingsSection('general', { customCSS: e.target.value })
-          }
-          placeholder={`${t('settings.customCSSPlaceholder')}\n.entry-content {\n  /* your styles */\n}`}
-          className="w-full resize-y rounded-lg border bg-surface-secondary px-3 py-2.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
-          rows={5}
-        />
       </div>
     </div>
   )

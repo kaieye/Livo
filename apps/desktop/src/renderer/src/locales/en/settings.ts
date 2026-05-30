@@ -1,6 +1,7 @@
 export const enSettings = {
   title: 'Settings',
   general: 'General',
+  appearance: 'Appearance',
   reading: 'Reading',
   subscriptions: 'Subscriptions',
   ai: 'AI Model',
@@ -8,6 +9,8 @@ export const enSettings = {
   actions: 'Automation',
   about: 'About',
   data: 'Data',
+  readingMigratedToAppearance:
+    'Reading settings (fonts, content width, line height) have been moved to the Appearance tab.',
   theme: 'Theme',
   theme_light: 'Light',
   theme_dark: 'Dark',

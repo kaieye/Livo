@@ -107,6 +107,7 @@ export interface Entry {
   publishedAt: number
   isRead: boolean
   isStarred: boolean
+  readProgress?: number
   createdAt: number
 }
 
@@ -264,6 +265,7 @@ export interface AppSettings {
 
 export type SettingsTabId =
   | 'general'
+  | 'appearance'
   | 'reading'
   | 'subscriptions'
   | 'ai'
@@ -433,6 +435,7 @@ export const IPC = {
   ENTRY_MARK_READ: 'entry:mark-read',
   ENTRY_MARK_ALL_READ: 'entry:mark-all-read',
   ENTRY_TOGGLE_STAR: 'entry:toggle-star',
+  ENTRY_SAVE_PROGRESS: 'entry:save-progress',
   ENTRY_SEARCH: 'entry:search',
   AI_SUMMARIZE: 'ai:summarize',
   AI_TRANSLATE: 'ai:translate',

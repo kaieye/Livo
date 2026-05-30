@@ -1115,6 +1115,10 @@ export function createWebAPI(): ElectronAPI {
         await dbUpdateEntry(entryId, { isStarred: newStarred })
         return { success: true, isStarred: newStarred }
       },
+      saveProgress: async (entryId: string, readProgress: number) => {
+        await dbUpdateEntry(entryId, { readProgress })
+        return { success: true }
+      },
       search: async (query: string, limit?: number): Promise<Entry[]> => {
         return dbSearchEntries(query, limit)
       },

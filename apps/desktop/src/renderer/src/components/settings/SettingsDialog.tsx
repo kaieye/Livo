@@ -10,9 +10,9 @@ import {
   Info,
   Zap,
   Rss,
-  BookOpen,
   Database,
   Link2,
+  Palette,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -20,6 +20,7 @@ import { useOverlayStackItem } from '../../store/overlay-stack-store'
 
 const settingsTabImporters = {
   general: () => import('./GeneralSettings'),
+  appearance: () => import('./AppearanceSettings'),
   reading: () => import('./ReadingSettings'),
   subscriptions: () => import('./FeedsSettings'),
   ai: () => import('./AISettings'),
@@ -35,6 +36,11 @@ const settingsTabComponents = {
     settingsTabImporters
       .general()
       .then((module) => ({ default: module.GeneralSettings })),
+  ),
+  appearance: lazy(() =>
+    settingsTabImporters
+      .appearance()
+      .then((module) => ({ default: module.AppearanceSettings })),
   ),
   reading: lazy(() =>
     settingsTabImporters
@@ -99,7 +105,11 @@ export function SettingsDialog() {
 
   const tabs = [
     { id: 'general' as const, label: t('settings.general'), icon: Settings },
-    { id: 'reading' as const, label: t('settings.reading'), icon: BookOpen },
+    {
+      id: 'appearance' as const,
+      label: t('settings.appearance'),
+      icon: Palette,
+    },
     {
       id: 'subscriptions' as const,
       label: t('settings.subscriptions'),

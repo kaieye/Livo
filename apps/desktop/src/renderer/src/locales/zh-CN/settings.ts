@@ -1,6 +1,7 @@
 export const zhCNSettings = {
   title: '设置',
   general: '通用',
+  appearance: '外观',
   reading: '阅读',
   subscriptions: '订阅源',
   ai: 'AI 模型',
@@ -8,6 +9,8 @@ export const zhCNSettings = {
   actions: '自动化',
   about: '关于',
   data: '数据',
+  readingMigratedToAppearance:
+    '阅读设置（字体、内容宽度、行高等）已迁移至外观选项卡。',
   theme: '外观主题',
   theme_light: '浅色',
   theme_dark: '深色',

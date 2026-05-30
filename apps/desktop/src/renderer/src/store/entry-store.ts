@@ -197,6 +197,7 @@ interface EntryState {
   markAboveRead: (entryId: string) => Promise<void>
   markBelowRead: (entryId: string) => Promise<void>
   toggleStar: (entryId: string) => Promise<void>
+  saveProgress: (entryId: string, readProgress: number) => Promise<void>
   search: (query: string) => Promise<void>
   setSearchQuery: (query: string) => void
 }
@@ -584,6 +585,24 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const cached = entryDetailCache.get(entryId)
     if (cached) {
       entryDetailCache.set(entryId, { ...cached, isStarred: result.isStarred })
+    }
+  },
+
+  saveProgress: async (entryId, readProgress) => {
+    await window.api.entries.saveProgress(entryId, readProgress)
+    set((state) => {
+      const updated = state.entries.map((e) =>
+        e.id === entryId ? { ...e, readProgress } : e,
+      )
+      const selected =
+        state.selectedEntry?.id === entryId
+          ? { ...state.selectedEntry, readProgress }
+          : state.selectedEntry
+      return { entries: updated, selectedEntry: selected }
+    })
+    const cached = entryDetailCache.get(entryId)
+    if (cached) {
+      entryDetailCache.set(entryId, { ...cached, readProgress })
     }
   },
 

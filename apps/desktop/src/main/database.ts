@@ -454,7 +454,10 @@ export function replaceEntriesForFeed(
   feedId: string,
   entries: Entry[],
 ): number {
-  const stateByKey = new Map<string, { isRead: boolean; isStarred: boolean }>()
+  const stateByKey = new Map<
+    string,
+    { isRead: boolean; isStarred: boolean; readProgress?: number }
+  >()
   const makeKeepKey = (entry: Entry): string => {
     const title = normalizeIdentityText(entry.title).slice(0, 140)
     const bucket = Math.floor((entry.publishedAt || 0) / (60 * 60 * 1000))
@@ -469,11 +472,19 @@ export function replaceEntriesForFeed(
       stateByKey.set(key, {
         isRead: !!entry.isRead,
         isStarred: !!entry.isStarred,
+        readProgress: entry.readProgress,
       })
       continue
     }
     existing.isRead = existing.isRead || !!entry.isRead
     existing.isStarred = existing.isStarred || !!entry.isStarred
+    if (
+      entry.readProgress !== undefined &&
+      (existing.readProgress === undefined ||
+        entry.readProgress > existing.readProgress)
+    ) {
+      existing.readProgress = entry.readProgress
+    }
   }
 
   data.entries = data.entries.filter((entry) => entry.feedId !== feedId)
@@ -488,6 +499,7 @@ export function replaceEntriesForFeed(
           ...entry,
           isRead: entry.isRead || keep.isRead,
           isStarred: entry.isStarred || keep.isStarred,
+          readProgress: keep.readProgress,
         }
       : entry
     const result = upsertEntry(incoming)

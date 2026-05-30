@@ -58,6 +58,8 @@ const api = {
       ipcRenderer.invoke(IPC.ENTRY_MARK_ALL_READ, feedId),
     toggleStar: (entryId: string) =>
       ipcRenderer.invoke(IPC.ENTRY_TOGGLE_STAR, entryId),
+    saveProgress: (entryId: string, readProgress: number) =>
+      ipcRenderer.invoke(IPC.ENTRY_SAVE_PROGRESS, entryId, readProgress),
     search: (query: string, limit?: number): Promise<Entry[]> =>
       ipcRenderer.invoke(IPC.ENTRY_SEARCH, query, limit),
   },

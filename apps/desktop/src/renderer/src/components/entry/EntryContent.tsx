@@ -172,6 +172,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     isSelectedEntryHydrating,
     toggleStar,
     markRead,
+    saveProgress,
     entries,
     selectEntry,
     prefetchEntryDetails,
@@ -180,6 +181,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     isSelectedEntryHydrating: s.isSelectedEntryHydrating,
     toggleStar: s.toggleStar,
     markRead: s.markRead,
+    saveProgress: s.saveProgress,
     entries: s.entries,
     selectEntry: s.selectEntry,
     prefetchEntryDetails: s.prefetchEntryDetails,
@@ -267,9 +269,15 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const contentRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Star animation key — incremented to re-trigger CSS animation
+  const [starAnimKey, setStarAnimKey] = useState(0)
+
   // Content transition
   const [isTransitioning, setIsTransitioning] = useState(false)
   const prevEntryIdRef = useRef<string | null>(null)
+  const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
 
   // Reset per-entry state when article changes
   useEffect(() => {
@@ -288,7 +296,6 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       // Reset ALL article-specific state
       resetSummary()
       resetTranslation()
-      setReadPercent(0)
       setLinkCopied(false)
       setReadableContent(null)
       setIsReadabilityMode(false)
@@ -296,12 +303,31 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       setReadabilityError(null)
       setEmbeddedPageUrl(null)
 
-      // Scroll to top
-      scrollRef.current?.scrollTo({ top: 0 })
+      // Restore saved reading progress or reset to top
+      const savedProgress = selectedEntry?.readProgress
+      if (savedProgress && savedProgress > 0) {
+        setReadPercent(savedProgress)
+        // Restore scroll position after content renders
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const el = scrollRef.current
+            if (el) {
+              const max = el.scrollHeight - el.clientHeight
+              el.scrollTo({
+                top: (savedProgress / 100) * max,
+                behavior: 'instant' as ScrollBehavior,
+              })
+            }
+          })
+        })
+      } else {
+        setReadPercent(0)
+        scrollRef.current?.scrollTo({ top: 0 })
+      }
     }
   }, [selectedEntry, resetSummary, resetTranslation])
 
-  // Reading progress tracking
+  // Reading progress tracking with debounced persistence
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -309,12 +335,29 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = el
       const max = scrollHeight - clientHeight
-      setReadPercent(max > 0 ? Math.round((scrollTop / max) * 100) : 0)
+      const pct = max > 0 ? Math.round((scrollTop / max) * 100) : 0
+      setReadPercent(pct)
+
+      // Debounce persistence to avoid excessive writes
+      if (saveProgressTimerRef.current) {
+        clearTimeout(saveProgressTimerRef.current)
+      }
+      saveProgressTimerRef.current = setTimeout(() => {
+        if (selectedEntry?.id && pct > 0) {
+          saveProgress(selectedEntry.id, pct)
+        }
+      }, 800)
     }
 
     el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
-  }, [selectedEntry])
+    return () => {
+      el.removeEventListener('scroll', handleScroll)
+      if (saveProgressTimerRef.current) {
+        clearTimeout(saveProgressTimerRef.current)
+        saveProgressTimerRef.current = null
+      }
+    }
+  }, [selectedEntry, saveProgress])
 
   // Intercept external link clicks with warning
   useEffect(() => {
@@ -888,16 +931,21 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         )}
 
         <ToolbarButton
-          onClick={() => toggleStar(selectedEntry.id)}
+          onClick={() => {
+            setStarAnimKey((k) => k + 1)
+            toggleStar(selectedEntry.id)
+          }}
           title={selectedEntry.isStarred ? t('entry.unstar') : t('entry.star')}
           active={selectedEntry.isStarred}
         >
-          <Star
-            size={16}
-            className={
-              selectedEntry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''
-            }
-          />
+          <span key={starAnimKey} className="star-pop inline-flex">
+            <Star
+              size={16}
+              className={
+                selectedEntry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''
+              }
+            />
+          </span>
         </ToolbarButton>
 
         <EntryAIToolbar
@@ -1174,7 +1222,10 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                 </div>
                 <div
                   className="entry-content"
-                  style={{ fontSize: `${general.fontSize}px` }}
+                  style={{
+                    fontSize: `${general.fontSize}px`,
+                    lineHeight: general.contentLineHeight,
+                  }}
                   dangerouslySetInnerHTML={{ __html: sanitizedReadable }}
                 />
               </div>
@@ -1192,7 +1243,10 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
               ) : (
                 <div
                   className="entry-content"
-                  style={{ fontSize: `${general.fontSize}px` }}
+                  style={{
+                    fontSize: `${general.fontSize}px`,
+                    lineHeight: general.contentLineHeight,
+                  }}
                   dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                 />
               )
