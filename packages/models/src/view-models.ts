@@ -6,52 +6,42 @@ import type { FeedViewType, MediaItem } from './types'
  *
  * Components should consume this instead of reading store state directly.
  */
-export interface EntryCardViewModel {
-  /** Unique entry identifier */
+export interface EntryCardModel {
   id: string
-  /** Parent feed identifier */
   feedId: string
-  /** Display title (processed for social media platforms) */
   title: string
-  /** Truncated summary or first paragraph */
   summary: string
-  /** Author display name, if available */
-  author: string | null
-  /** Author avatar URL, if available */
-  authorAvatar: string | null
+  /** Full entry content (HTML or plain text) */
+  content: string
   /** Thumbnail / hero image URL for the card */
-  thumbnailUrl: string | null
-  /** Source feed display name */
-  sourceName: string
+  imageUrl: string
   /** Source feed icon/avatar URL */
-  sourceIcon: string | null
-  /** Publication timestamp (ms since epoch) */
+  feedImageUrl: string
+  author: string
+  /** Original article external URL */
+  articleUrl: string
   publishedAt: number
-  /** Human-readable relative time label (e.g., "3h ago") */
   publishedLabel: string
-  /** Whether the entry has been read */
-  isRead: boolean
-  /** Whether the entry is starred/favorited */
-  isStarred: boolean
-  /** Whether this is a social media entry (Tweet, etc.) */
-  isSocial: boolean
-  /** Whether the entry contains video media */
-  hasVideo: boolean
-  /** Whether the entry contains image media */
-  hasImages: boolean
-  /** Total number of media items */
-  mediaCount: number
-  /** The feed view type this entry belongs to */
-  viewType: FeedViewType
-  /** Display label for the view type (e.g., "文章", "视频") */
-  viewLabel: string
-  /** CSS color class for the view type badge */
-  viewBadgeColor: string
-  /** Estimated reading time label (e.g., "3 min read") */
   readingLabel: string
-  /** Content tags / categories extracted from the entry */
   tags: string[]
+  /** Processed media URLs for display (e.g., picture thumbnails) */
+  mediaUrls?: string[]
+  /** Raw media URLs from the entry */
+  rawMediaUrls?: string[]
+  /** Source feed display name (processed for social media platforms) */
+  feedTitle: string
+  /** Source feed category */
+  feedCategory: string
+  viewType: FeedViewType
+  viewLabel: string
+  viewBadgeColor: string
+  hasVideoMedia: boolean
+  isRead: boolean
+  isStarred: boolean
 }
+
+/** @deprecated Use `EntryCardModel` instead — renamed for cross-platform alignment */
+export type EntryCardViewModel = EntryCardModel
 
 /**
  * View model for rendering a feed/subscription card in sidebar or feed list.

@@ -134,8 +134,8 @@
 
 ## 跨端复用项（非新功能，降低后续维护成本）
 
-- [ ] **17.1** 将数据模型转换逻辑（toFeedCardModel / toEntryCardModel）抽到 `packages/models`
-- [ ] **17.2** 将 ViewModel 类型定义（EntryCardModel / FeedCardModel / ArticleDetailModel）抽到共享包
+- [x] **17.1** 将数据模型转换逻辑（toFeedCardModel / toEntryCardModel）抽到 `packages/models` ✅ `2026-05-31`
+- [x] **17.2** 将 ViewModel 类型定义（EntryCardModel / FeedCardModel / ArticleDetailModel）抽到共享包 ✅ `2026-05-31`
 - [x] **17.3** 将 Agent 工具接口定义抽到共享包（`packages/models/src/agent.ts`，两端一致的工具签名与运行时 wire 类型）
 - [x] **17.4** 将视频 URL 解析逻辑（YouTube ID 提取、直链/可嵌入检测、Invidious/Piped 实例列表与流选择）抽到 `packages/utils/src/video-url.ts`（随 9.1/9.5 完成）
 
