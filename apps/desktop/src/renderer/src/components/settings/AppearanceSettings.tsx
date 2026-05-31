@@ -3,6 +3,7 @@ import {
   useSettingsActions,
 } from '../../store/settings-store'
 import { useTranslation } from 'react-i18next'
+import { Pipette } from 'lucide-react'
 import { ACCENT_COLOR_MAP } from '../../lib/appearance'
 
 const ACCENT_COLORS = Object.entries(ACCENT_COLOR_MAP).map(
@@ -66,6 +67,11 @@ export function AppearanceSettings() {
   const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
 
+  const isCustomAccent = !(general.accentColor in ACCENT_COLOR_MAP)
+  const customAccentValue = /^#[0-9a-f]{6}$/i.test(general.accentColor)
+    ? general.accentColor
+    : '#ff5c00'
+
   return (
     <div className="space-y-6">
       {/* Theme */}
@@ -103,7 +109,7 @@ export function AppearanceSettings() {
         <label className="mb-2 block text-sm font-medium">
           {t('settings.accentColor')}
         </label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {ACCENT_COLORS.map((ac) => (
             <button
               key={ac.name}
@@ -123,7 +129,58 @@ export function AppearanceSettings() {
               title={t(ac.labelKey)}
             />
           ))}
+
+          {/* Custom hex color */}
+          <label
+            className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 transition-all ${
+              isCustomAccent
+                ? 'scale-110 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-surface-dark'
+                : 'border-transparent hover:scale-105'
+            }`}
+            style={{
+              background: isCustomAccent
+                ? customAccentValue
+                : 'conic-gradient(from 0deg, #ef4444, #eab308, #22c55e, #3b82f6, #a855f7, #ef4444)',
+              borderColor: isCustomAccent ? customAccentValue : 'transparent',
+            }}
+            title={t('settings.accentColor_custom')}
+          >
+            <Pipette
+              size={14}
+              className={isCustomAccent ? 'text-white/90' : 'text-white'}
+            />
+            <input
+              type="color"
+              value={customAccentValue}
+              onChange={(e) =>
+                void updateSettingsSection('general', {
+                  accentColor: e.target.value,
+                })
+              }
+              className="absolute inset-0 cursor-pointer opacity-0"
+            />
+          </label>
         </div>
+
+        {isCustomAccent && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+              {t('settings.accentColor_custom')}
+            </span>
+            <input
+              type="text"
+              value={customAccentValue}
+              onChange={(e) => {
+                const value = e.target.value.trim()
+                if (/^#[0-9a-f]{6}$/i.test(value)) {
+                  void updateSettingsSection('general', { accentColor: value })
+                }
+              }}
+              spellCheck={false}
+              className="w-28 rounded-lg border bg-surface-secondary px-2.5 py-1.5 font-mono text-xs uppercase focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+            />
+          </div>
+        )}
       </div>
 
       {/* Font size */}

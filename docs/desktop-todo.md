@@ -92,9 +92,11 @@
 
 ### 12. 主题系统完善
 
-- [ ] **12.1** 完善强调色系统（已有 8 色 + 自定义 hex，补组件覆盖和设置页归属）
-- [ ] **12.2** 实现完整 ThemePalette（参考 Harmony 的 14 个 Token，映射到 CSS variables）
-- [ ] **12.3** 实现页面/视图转场动画
+- [x] **12.1** 完善强调色系统（8 色 + 自定义 hex 现已有完整 UI：AppearanceSettings 新增取色器 swatch + `<input type=color>` + hex 文本框；自定义色自动派生 hover 亮调与 soft 透明底；Layout 焦点高亮改用 `--color-accent-rgb`，去除硬编码橙色）
+- [x] **12.2** 实现完整 ThemePalette（`lib/theme-palette.ts` 移植 Harmony `ThemePalette` 全部 token：背景/表层/elevated/三级文本/divider/accentText/tabBarInactive/dragHandle 等；`paletteToCssVariables` 作为唯一来源，同时产出 Tailwind triplet token 与 Harmony 风格语义色 token，由 `appearance.ts` 在主题切换时整体下发；`tokens.css` 同步静态基线避免 FOUC，`tailwind.config` 补 elevated/divider/accent-text/tabbar-inactive）
+- [x] **12.3** 实现页面/视图转场动画（`components/layout/PageTransition.tsx` 包裹 router `<Outlet/>`，按 `getTransitionKey` 路由分组播放 0.22s fade+slide 进场；home 家族路由共用稳定 key 不重挂 HomePage，详情/发现/订阅页各自分组触发动画；自动受 `.reduce-motion` 全局禁用约束）
+
+> 备注：修复了一处 Harmony 迁移遗留缺陷——ArticleDetail/FeedDetail/Subscriptions/Discover 等新页面大量使用 `var(--color-bg-primary)`/`--color-text-primary`/`--color-border-secondary` 等 Harmony 风格语义 token，但这些变量此前**完全未定义**（页面背景/边框/主文本透明或继承）。现已在 `tokens.css` + `theme-palette.ts` 统一补齐为完整颜色值。仅 `--color-text-secondary`/`-tertiary` 与既有 Tailwind triplet 同名冲突，已通过 `-rgb` 后缀拆分解决（Tailwind 用 `*-rgb` triplet 支持 alpha，语义色用本名）。新增 14 个单测（theme-palette / page-transition / appearance accent），全套 182 用例通过。
 
 ### 13. 首页体验
 

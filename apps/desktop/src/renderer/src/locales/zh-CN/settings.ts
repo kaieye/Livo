@@ -73,6 +73,7 @@ export const zhCNSettings = {
   accentColor_teal: '青绿',
   accentColor_green: '绿色',
   accentColor_yellow: '黄色',
+  accentColor_custom: '自定义',
   showRecommended: '接收推荐源',
   showRecommendedDesc:
     '开启后接收并显示推荐源；关闭后推荐源将不再刷新，且不在列表中显示',

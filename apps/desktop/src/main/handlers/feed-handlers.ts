@@ -26,6 +26,10 @@ import {
   toRsshubProtocolUrl,
 } from '../services/rsshub-url'
 import { resolveFeedAvatar } from '../services/feed-avatar'
+import {
+  loadRefreshLogs,
+  clearRefreshLogs,
+} from '../services/refresh-log-store'
 import { formatFeedTitle } from '../services/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry-builder'
 import { detectRouteViewFromUrl } from '../services/feed-view'
@@ -630,10 +634,6 @@ export function registerFeedHandlers(): void {
   })
 
   // Refresh log handlers
-  const { loadRefreshLogs, clearRefreshLogs } =
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../services/refresh-log-store')
-
   ipcMain.handle(IPC.REFRESH_LOG_LIST, () => {
     return loadRefreshLogs()
   })

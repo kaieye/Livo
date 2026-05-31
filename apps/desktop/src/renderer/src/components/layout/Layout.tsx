@@ -216,7 +216,7 @@ export function Layout() {
         tabIndex={-1}
         className={`flex min-w-0 flex-1 outline-none transition-shadow duration-300 ${
           isContentFocusHighlighted
-            ? 'shadow-[inset_0_0_0_2px_rgba(255,92,0,0.45)]'
+            ? 'shadow-[inset_0_0_0_2px_rgb(var(--color-accent-rgb)/0.45)]'
             : ''
         }`}
       >

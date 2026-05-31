@@ -3,32 +3,65 @@
   --color-accent-hover: #ff7a33;
   --color-accent-soft: #fff0e6;
   --color-accent-rgb: 255 92 0;
+  --color-accent-text: #ffffff;
 
+  /* Tailwind triplet tokens (consumed via rgb(var(--x) / <alpha-value>)). */
   --color-surface: 255 255 255;
   --color-surface-secondary: 245 245 247;
   --color-surface-tertiary: 232 232 237;
+  --color-elevated: 250 250 252;
 
   --color-text: 29 29 31;
-  --color-text-secondary: 110 110 115;
-  --color-text-tertiary: 174 174 178;
+  --color-text-secondary-rgb: 110 110 115;
+  --color-text-tertiary-rgb: 174 174 178;
 
   --color-sidebar: 245 245 247;
   --color-sidebar-hover: 232 232 237;
 
   --color-border: 210 210 215;
+  --color-divider: 210 210 215;
+
+  --color-tabbar-inactive: rgb(110 110 115);
+  --color-drag-handle: rgba(15, 23, 42, 0.18);
+
+  /* Harmony-style semantic color tokens (consumed directly as full colors). */
+  --color-bg-primary: rgb(255 255 255);
+  --color-bg-secondary: rgb(245 245 247);
+  --color-bg-tertiary: rgb(232 232 237);
+  --color-text-primary: rgb(29 29 31);
+  --color-text-secondary: rgb(110 110 115);
+  --color-text-tertiary: rgb(174 174 178);
+  --color-border-primary: rgb(210 210 215);
+  --color-border-secondary: rgb(210 210 215);
 }
 
 :root.dark {
+  --color-accent-text: #ffffff;
+
   --color-surface: 28 28 30;
   --color-surface-secondary: 44 44 46;
   --color-surface-tertiary: 58 58 60;
+  --color-elevated: 62 62 66;
 
   --color-text: 245 245 247;
-  --color-text-secondary: 161 161 166;
-  --color-text-tertiary: 110 110 115;
+  --color-text-secondary-rgb: 161 161 166;
+  --color-text-tertiary-rgb: 110 110 115;
 
   --color-sidebar: 28 28 30;
   --color-sidebar-hover: 44 44 46;
 
   --color-border: 56 56 58;
+  --color-divider: 56 56 58;
+
+  --color-tabbar-inactive: rgb(161 161 166);
+  --color-drag-handle: rgba(255, 255, 255, 0.22);
+
+  --color-bg-primary: rgb(28 28 30);
+  --color-bg-secondary: rgb(44 44 46);
+  --color-bg-tertiary: rgb(58 58 60);
+  --color-text-primary: rgb(245 245 247);
+  --color-text-secondary: rgb(161 161 166);
+  --color-text-tertiary: rgb(110 110 115);
+  --color-border-primary: rgb(56 56 58);
+  --color-border-secondary: rgb(56 56 58);
 }

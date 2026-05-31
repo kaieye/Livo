@@ -4,6 +4,7 @@ import { LocalErrorBoundary } from './components/LocalErrorBoundary'
 import { QuickSearchPanel } from './components/search/QuickSearch'
 import { CornerPlayer } from './components/media/MediaPlayer'
 import { TextContextMenu } from './components/ui/TextContextMenu'
+import { PageTransition } from './components/layout/PageTransition'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useShortcutHelpStore } from './components/shortcuts/shortcut-help-store'
@@ -72,7 +73,9 @@ function LazyShortcutHelpDialogMount() {
 export default function App() {
   return (
     <>
-      <Outlet />
+      <PageTransition>
+        <Outlet />
+      </PageTransition>
       <LocalErrorBoundary
         title="设置面板加载失败"
         onDismiss={() => useSettingsStore.getState().setOpen(false)}

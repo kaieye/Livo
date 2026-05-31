@@ -82,6 +82,7 @@ export const enSettings = {
   accentColor_teal: 'Teal',
   accentColor_green: 'Green',
   accentColor_yellow: 'Yellow',
+  accentColor_custom: 'Custom',
   showRecommended: 'Receive Recommended Feeds',
   showRecommendedDesc:
     'When off, recommended feeds stop refreshing and are hidden from lists',
