@@ -1002,6 +1002,7 @@ export function createWebAPI(): ElectronAPI {
               }
               let imported = 0,
                 skipped = 0
+              const importedFeedIds: string[] = []
               const errors: string[] = []
               for (const opmlFeed of opmlFeeds) {
                 const storedXmlUrl = toRsshubProtocolUrl(opmlFeed.xmlUrl)
@@ -1050,6 +1051,7 @@ export function createWebAPI(): ElectronAPI {
                       createdAt: now,
                     })
                   }
+                  importedFeedIds.push(id)
                   imported++
                 } catch (err) {
                   errors.push(`${opmlFeed.title}: ${String(err).slice(0, 100)}`)
@@ -1060,6 +1062,7 @@ export function createWebAPI(): ElectronAPI {
                 total: opmlFeeds.length,
                 imported,
                 skipped,
+                importedFeedIds,
                 errors: errors.length > 0 ? errors : undefined,
               })
             } catch (err) {
@@ -1083,6 +1086,12 @@ export function createWebAPI(): ElectronAPI {
         a.click()
         URL.revokeObjectURL(url)
         return { success: true, count: feeds.length }
+      },
+
+      refreshImportedFeeds: async (_feedIds: string[]) => {
+        // Web: stub — full refresh cycle not supported in web mode.
+        // The import itself already parses feeds inline.
+        return { success: true, total: 0, refreshed: 0, failed: 0 }
       },
     },
 

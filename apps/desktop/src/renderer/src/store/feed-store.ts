@@ -109,6 +109,7 @@ interface FeedState {
     success: boolean
     imported?: number
     skipped?: number
+    importedFeedIds?: string[]
     errors?: string[]
     error?: string
     canceled?: boolean
@@ -119,6 +120,19 @@ interface FeedState {
     error?: string
     canceled?: boolean
   }>
+  refreshImportedFeeds: (feedIds: string[]) => Promise<{
+    success: boolean
+    total: number
+    refreshed: number
+    failed: number
+  }>
+  importRefreshProgress: {
+    completed: number
+    total: number
+    success: number
+    failed: number
+    currentTitle?: string
+  } | null
 }
 
 export const useFeedStore = createAppStore<FeedState>((set, get) => ({
@@ -128,6 +142,7 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   activeView: null,
   isLoading: false,
   isRefreshing: false,
+  importRefreshProgress: null,
 
   loadFeeds: async () => {
     set({ isLoading: true })
@@ -378,5 +393,37 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
 
   exportOPML: async () => {
     return await window.api.feeds.exportOPML()
+  },
+
+  refreshImportedFeeds: async (feedIds) => {
+    if (!feedIds.length)
+      return { success: true, total: 0, refreshed: 0, failed: 0 }
+
+    set({
+      importRefreshProgress: {
+        completed: 0,
+        total: feedIds.length,
+        success: 0,
+        failed: 0,
+      },
+    })
+
+    const removeListener = window.api.on(
+      'import:refresh-progress',
+      (payload) => {
+        const progress = payload as FeedState['importRefreshProgress']
+        if (!progress || typeof progress !== 'object') return
+        set({ importRefreshProgress: progress })
+      },
+    )
+
+    try {
+      const result = await window.api.feeds.refreshImportedFeeds(feedIds)
+      await get().loadFeeds()
+      return result
+    } finally {
+      removeListener()
+      setTimeout(() => set({ importRefreshProgress: null }), 800)
+    }
   },
 }))

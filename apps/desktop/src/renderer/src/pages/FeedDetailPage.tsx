@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Edit3,
   ExternalLink,
-  Globe,
   RefreshCw,
   Rss,
   Trash2,
@@ -18,7 +17,7 @@ import type { Entry, FeedWithCount } from '../../../shared/types'
 import { ROUTES } from '../router/route-paths'
 import { isUserFeed } from '../lib/feed-filters'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
-import { FeedAvatar } from '../components/feed/FeedAvatar'
+import { FeedDetailHeroCard } from '../components/feed/FeedDetailHeroCard'
 
 /**
  * FeedDetailPage — desktop counterpart of the Harmony `FeedDetail` page.
@@ -288,63 +287,22 @@ export default function FeedDetailPage() {
         ) : (
           <>
             {/* Hero */}
-            <section className="bg-[var(--color-bg-secondary)]/50 flex-shrink-0 border-b border-[var(--color-border-secondary)] px-6 py-5">
-              <div className="flex items-start gap-4">
-                <FeedAvatar
-                  imageUrl={feed.imageUrl}
-                  size="lg"
-                  className="shadow-sm"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate text-base font-semibold leading-snug text-[var(--color-text-primary)]">
-                      {feed.title || feed.url}
-                    </h2>
-                    {!isSubscribed && (
-                      <span className="inline-flex items-center rounded-md bg-[var(--color-bg-tertiary)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-                        {t('feedDetail.previewBadge')}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-tertiary)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
-                      {viewLabel}
-                    </span>
-                    <span className="text-xs text-[var(--color-text-tertiary)]">
-                      {unreadLabel}
-                    </span>
-                    {feed.category && (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-tertiary)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
-                        {feed.category}
-                      </span>
-                    )}
-                  </div>
-
-                  {feed.description && (
-                    <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-                      {feed.description}
-                    </p>
-                  )}
-
-                  <div className="mt-2 flex min-w-0 items-center gap-1.5">
-                    <Globe
-                      size={12}
-                      aria-hidden="true"
-                      className="flex-shrink-0 text-[var(--color-text-tertiary)]"
-                    />
-                    <span className="truncate text-xs text-[var(--color-text-tertiary)]">
-                      {feed.url || feed.siteUrl || ''}
-                    </span>
-                  </div>
-
-                  {!isSubscribed && (
-                    <p className="mt-3 text-xs text-[var(--color-text-tertiary)]">
-                      {t('feedDetail.previewHint')}
-                    </p>
-                  )}
-                </div>
-              </div>
+            <section className="flex-shrink-0 border-b border-[var(--color-border-secondary)] px-6 py-5">
+              <FeedDetailHeroCard
+                title={feed.title || feed.url}
+                imageUrl={feed.imageUrl}
+                url={feed.url}
+                siteUrl={feed.siteUrl}
+                description={feed.description}
+                category={feed.folder || feed.category}
+                viewLabel={viewLabel}
+                unreadLabel={unreadLabel}
+              />
+              {!isSubscribed && (
+                <p className="mt-3 text-center text-xs text-[var(--color-text-tertiary)]">
+                  {t('feedDetail.previewHint')}
+                </p>
+              )}
             </section>
 
             {/* Entry list */}

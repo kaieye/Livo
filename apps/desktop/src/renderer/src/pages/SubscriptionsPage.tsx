@@ -4,6 +4,7 @@ import { FeedViewType } from '../../../shared/types'
 import { isUserFeed } from '../lib/feed-filters'
 import { SubscriptionsModeRail } from '../components/subscriptions/SubscriptionsModeRail'
 import { FeedGroupList } from '../components/subscriptions/FeedGroupList'
+import { useSubscriptionsAvatarHydration } from '../hooks/useSubscriptionsAvatarHydration'
 
 /**
  * SubscriptionsPage provides a full-page view for managing RSS subscriptions.
@@ -25,6 +26,9 @@ export default function SubscriptionsPage() {
   const [activeView, setActiveView] = useState<FeedViewType | null>(null)
 
   const userFeeds = useMemo(() => feeds.filter(isUserFeed), [feeds])
+
+  // Pre-resolve avatars for social-media feeds on mount
+  useSubscriptionsAvatarHydration(userFeeds)
 
   const viewCounts = useMemo(() => {
     const counts = new Map<FeedViewType, number>()

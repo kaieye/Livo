@@ -118,10 +118,10 @@
 
 ### 15. 订阅体验
 
-- [ ] **15.1** 实现 FeedDetailHeroAvatar（订阅源大图头部）
-- [ ] **15.2** 实现 SubscriptionsAvatarHydration（头像预加载）
-- [ ] **15.3** 实现 FeedSubscribeViewTypeRail（订阅时视图类型选择）
-- [ ] **15.4** 增强 OPML 导入（分批刷新 + 进度提示）
+- [x] **15.1** 实现 FeedDetailHeroAvatar（订阅源大图头部）
+- [x] **15.2** 实现 SubscriptionsAvatarHydration（头像预加载）
+- [x] **15.3** 实现 FeedSubscribeViewTypeRail（订阅时视图类型选择）
+- [x] **15.4** 增强 OPML 导入（分批刷新 + 进度提示）
 
 ### 16. 其他细节
 

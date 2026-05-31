@@ -12,18 +12,14 @@ import {
   ArrowLeft,
   Check,
   ExternalLink,
-  FileText,
-  Images,
   Loader2,
-  MessageCircle,
-  Play,
   Rss,
 } from 'lucide-react'
 
 import { FeedViewType } from '../../../shared/types'
 import { FeedAvatar } from '../components/feed/FeedAvatar'
+import { FeedSubscribeViewTypeRail } from '../components/feed/FeedSubscribeViewTypeRail'
 import {
-  DISCOVER_SUBSCRIBE_VIEW_OPTIONS,
   buildDiscoverCategoryOptions,
   findDiscoverSubscribeFeed,
   hostOfDiscoverTarget,
@@ -35,16 +31,8 @@ import {
   resolveDiscoverSubscribeView,
 } from '../lib/discover-subscribe-config'
 import { shouldPreserveExplicitDiscoverView } from '../lib/discover-search'
-import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
 import { ROUTES } from '../router/route-paths'
 import { useFeedStore } from '../store/feed-store'
-
-const VIEW_TYPE_ICONS: Record<FeedViewType, ReactNode> = {
-  [FeedViewType.Articles]: <FileText size={16} aria-hidden="true" />,
-  [FeedViewType.SocialMedia]: <MessageCircle size={16} aria-hidden="true" />,
-  [FeedViewType.Videos]: <Play size={16} aria-hidden="true" />,
-  [FeedViewType.Pictures]: <Images size={16} aria-hidden="true" />,
-}
 
 export default function DiscoverSubscribeConfigPage() {
   const { t } = useTranslation()
@@ -353,41 +341,10 @@ export default function DiscoverSubscribeConfigPage() {
                   <legend className="mb-2 text-sm font-medium text-[var(--color-text-primary)]">
                     {t('discoverSubscribeConfig.viewLabel')}
                   </legend>
-                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                    {DISCOVER_SUBSCRIBE_VIEW_OPTIONS.map((view) => {
-                      const selected = selectedView === view
-                      return (
-                        <button
-                          key={view}
-                          type="button"
-                          onClick={() => setSelectedView(view)}
-                          aria-pressed={selected}
-                          className={[
-                            'flex h-[74px] min-w-0 flex-col justify-between rounded-md border p-3 text-left transition-colors',
-                            selected
-                              ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)] text-[var(--color-text-primary)]'
-                              : 'hover:border-[var(--color-accent)]/50 border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]',
-                          ].join(' ')}
-                        >
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="text-[var(--color-accent)]">
-                              {VIEW_TYPE_ICONS[view]}
-                            </span>
-                            {selected && (
-                              <Check
-                                size={15}
-                                aria-hidden="true"
-                                className="text-[var(--color-accent)]"
-                              />
-                            )}
-                          </span>
-                          <span className="truncate text-sm font-medium">
-                            {t(VIEW_TYPE_I18N_KEYS[view])}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <FeedSubscribeViewTypeRail
+                    selectedView={selectedView}
+                    onSelect={setSelectedView}
+                  />
                 </fieldset>
 
                 {submitError && (

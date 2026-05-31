@@ -48,6 +48,8 @@ const api = {
       ipcRenderer.invoke(IPC.FEED_UPDATE, feedId, updates),
     importOPML: () => ipcRenderer.invoke(IPC.FEED_IMPORT_OPML),
     exportOPML: () => ipcRenderer.invoke(IPC.FEED_EXPORT_OPML),
+    refreshImportedFeeds: (feedIds: string[]) =>
+      ipcRenderer.invoke(IPC.FEED_REFRESH_IMPORTED, feedIds),
   },
 
   // Entry operations

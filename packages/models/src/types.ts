@@ -525,6 +525,7 @@ export const IPC = {
   FEED_UPDATE: 'feed:update',
   FEED_IMPORT_OPML: 'feed:import-opml',
   FEED_EXPORT_OPML: 'feed:export-opml',
+  FEED_REFRESH_IMPORTED: 'feed:refresh-imported',
   ENTRY_LIST: 'entry:list',
   ENTRY_GET: 'entry:get',
   ENTRY_MARK_READ: 'entry:mark-read',

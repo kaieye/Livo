@@ -435,6 +435,7 @@ export function registerFeedHandlers(): void {
       let imported = 0
       let skipped = 0
       let completed = 0
+      const importedFeedIds: string[] = []
       const errors: string[] = []
       const total = opmlFeeds.length
       const CONCURRENCY = 10
@@ -538,6 +539,7 @@ export function registerFeedHandlers(): void {
             insertEntries(entriesToInsert)
           }
 
+          importedFeedIds.push(id)
           imported++
         } catch (err) {
           errors.push(`${label}: ${String(err).slice(0, 100)}`)
@@ -567,6 +569,7 @@ export function registerFeedHandlers(): void {
         total: opmlFeeds.length,
         imported,
         skipped,
+        importedFeedIds,
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (err) {
@@ -605,6 +608,98 @@ export function registerFeedHandlers(): void {
       return { success: false, error: `Failed to export OPML: ${String(err)}` }
     }
   })
+
+  // Batch refresh imported feeds with progress events.
+  // Mirrors Harmony's SubscriptionOpmlService.refreshImportedFeedsInBackground.
+  const OPML_REFRESH_GAP_MS = 180
+  const OPML_REFRESH_CONCURRENCY = 3
+
+  ipcMain.handle(
+    IPC.FEED_REFRESH_IMPORTED,
+    async (_event, feedIds: string[]) => {
+      const deduped = Array.from(new Set(feedIds.filter(Boolean)))
+      if (deduped.length === 0) {
+        return { success: true, total: 0, refreshed: 0, failed: 0 }
+      }
+
+      const win = BrowserWindow.getAllWindows()[0]
+      const sendProgress = (
+        completed: number,
+        total: number,
+        success: number,
+        failed: number,
+        currentTitle?: string,
+      ) => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('import:refresh-progress', {
+            completed,
+            total,
+            success,
+            failed,
+            currentTitle,
+          })
+        }
+      }
+
+      sendProgress(0, deduped.length, 0, 0)
+
+      let refreshed = 0
+      let failed = 0
+      const queue = [...deduped]
+
+      const worker = async () => {
+        while (queue.length > 0) {
+          const feedId = queue.shift()!
+          const feed = getFeedById(feedId)
+          const label = feed?.title || feedId
+
+          if (!feed) {
+            failed++
+            sendProgress(
+              refreshed + failed,
+              deduped.length,
+              refreshed,
+              failed,
+              label,
+            )
+          } else {
+            try {
+              await refreshSingleFeed(feed)
+              refreshed++
+            } catch {
+              failed++
+            }
+          }
+
+          sendProgress(
+            refreshed + failed,
+            deduped.length,
+            refreshed,
+            failed,
+            label,
+          )
+
+          // Small gap between refreshes to avoid hammering servers
+          if (queue.length > 0) {
+            await new Promise((r) => setTimeout(r, OPML_REFRESH_GAP_MS))
+          }
+        }
+      }
+
+      const workers = Array.from(
+        { length: Math.min(OPML_REFRESH_CONCURRENCY, deduped.length) },
+        () => worker(),
+      )
+      await Promise.all(workers)
+
+      return {
+        success: true,
+        total: deduped.length,
+        refreshed,
+        failed,
+      }
+    },
+  )
 
   // ---- Data maintenance handlers ----
 

@@ -6,6 +6,10 @@ import { useEntryStore } from '../../store/entry-store'
 import { useSettingsStore } from '../../store/settings-store'
 import { ImportProgressModal } from '../feed/ImportProgressModal'
 import {
+  OpmlImportProgress,
+  OPML_IMPORT_AUTO_REFRESH_LIMIT,
+} from '../settings/OpmlImportProgress'
+import {
   FeedViewType,
   VIEW_DEFINITIONS,
   DEFAULT_SETTINGS,
@@ -320,6 +324,8 @@ export function Sidebar({ width }: { width?: number }) {
     updateFeed,
     importOPML,
     exportOPML,
+    refreshImportedFeeds,
+    importRefreshProgress,
   } = useFeedStore()
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
@@ -1141,6 +1147,12 @@ export function Sidebar({ width }: { width?: number }) {
             : '')
         setImportResult(msg)
         setTimeout(() => setImportResult(null), 4000)
+
+        // Auto-refresh small batches in background (≤8 feeds)
+        const ids = result.importedFeedIds
+        if (ids && ids.length > 0 && ids.length <= 8) {
+          void refreshImportedFeeds(ids)
+        }
       } else {
         setShowImportProgress(false)
         setImportResult(result.error || t('sidebar.importFailed'))
@@ -1990,6 +2002,9 @@ export function Sidebar({ width }: { width?: number }) {
               {importResult}
             </div>
           )}
+
+          {/* OPML background refresh progress */}
+          {importRefreshProgress && <OpmlImportProgress />}
           {refreshHint && (
             <div
               className={`truncate rounded-lg px-3 py-1.5 text-xs ${
