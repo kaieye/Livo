@@ -34,7 +34,6 @@ export const en = {
     starred: 'Starred',
     all: 'All',
     unread: 'Unread',
-    contentModeRail: 'Content mode',
     searchArticles: 'Search articles...',
     inlineSearchEmptyTitle: 'No matches in this view',
     inlineSearchEmptyHint:

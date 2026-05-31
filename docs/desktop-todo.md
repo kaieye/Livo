@@ -101,8 +101,8 @@
 ### 13. 首页体验
 
 - [x] **13.1** 实现 ContentModeRail（首页内容模式快速切换栏）
-      → `components/entry/ContentModeRail.tsx`，挂载于 `Layout` 内容区顶部，
-      驱动 `feed-store` 的 `activeView`，含「全部 + 文章/社交/视频/图片」及未读数徽标。
+      → 已并入既有 Sidebar 的视图切换入口，不再单独挂顶部导航栏（曾尝试在 `Layout`
+      顶部加 `ContentModeRail`，因与 Sidebar 重复，按需移除，避免双重切换入口）。
 - [x] **13.2** 实现 HomeInlineSearch（首页内搜索覆盖层）
       → `components/entry/HomeInlineSearch.tsx`，对已加载条目做客户端过滤 +
       高亮的浮层下拉（标题/摘要/作者/来源），回车仍触发后端全量搜索；已接入 `EntryList` 头部。

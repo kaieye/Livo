@@ -34,7 +34,6 @@ export const zhCN = {
     starred: '收藏',
     all: '全部',
     unread: '未读',
-    contentModeRail: '内容模式',
     searchArticles: '搜索文章...',
     inlineSearchEmptyTitle: '当前分段没有匹配内容',
     inlineSearchEmptyHint: '试试标题、摘要、来源或作者相关关键词',
