@@ -5,6 +5,7 @@ import { getSettings } from './settings-handlers'
 import { createOpenAIClient, validateAIConfig } from '../services/ai-client'
 import { normalizeAIError } from '../services/provider-protocol'
 import { runWithRetry } from '../services/ai-retry'
+import { ConnectionTestService } from '../services/connection-test'
 
 export function registerAIHandlers(): void {
   // Summarize content
@@ -190,4 +191,17 @@ Rules:
       }
     },
   )
+
+  // Connection test
+  ipcMain.handle(IPC.AI_TEST_CONNECTION, async () => {
+    const settings = getSettings()
+    const aiConfig = settings.ai
+
+    return ConnectionTestService.run({
+      apiKey: aiConfig.apiKey,
+      model: aiConfig.model,
+      baseUrl: aiConfig.baseUrl || '',
+      provider: aiConfig.provider,
+    })
+  })
 }

@@ -107,19 +107,17 @@ export function AISettings() {
     setIsTesting(true)
     setTestResult(null)
     try {
-      const result = await window.api.ai.chat([
-        { role: 'user', content: "Say 'OK' if you can hear me." },
-      ])
+      const result = await window.api.ai.testConnection()
       if (result.success) {
-        setTestResult({ success: true, message: t('settings.testSuccess') })
+        setTestResult({ success: true, message: result.message })
       } else {
-        setTestResult({
-          success: false,
-          message: result.error || t('settings.testFailed'),
-        })
+        setTestResult({ success: false, message: result.message })
       }
     } catch (err) {
-      setTestResult({ success: false, message: String(err) })
+      setTestResult({
+        success: false,
+        message: String(err) || t('settings.testFailed'),
+      })
     }
     setIsTesting(false)
   }

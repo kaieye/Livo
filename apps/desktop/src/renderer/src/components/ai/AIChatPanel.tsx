@@ -21,6 +21,7 @@ import { AIChatRunStatusBar } from './AIChatRunStatusBar'
 import { AIChatConfirmationCard } from './AIChatConfirmationCard'
 import { AIChatTracePanel } from './AIChatTracePanel'
 import { AIChatHistoryPanel } from './AIChatHistoryPanel'
+import { AIChatMarkdown } from './AIChatMarkdown'
 
 const STORAGE_KEY = 'ai-chat-panel-ratio'
 
@@ -442,7 +443,11 @@ export function AIChatPanel() {
                     : 'rounded-bl-sm bg-surface-secondary dark:bg-surface-dark-secondary'
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === 'assistant' ? (
+                  <AIChatMarkdown content={msg.content} />
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                )}
               </div>
               {msg.role === 'user' && (
                 <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">

@@ -537,6 +537,7 @@ export const IPC = {
   AI_TRANSLATE: 'ai:translate',
   AI_CHAT: 'ai:chat',
   AI_CHAT_STREAM: 'ai:chat-stream',
+  AI_TEST_CONNECTION: 'ai:test-connection',
   AGENT_RUN: 'agent:run',
   AGENT_RESUME: 'agent:resume',
   AGENT_ABORT: 'agent:abort',

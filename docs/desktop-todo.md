@@ -125,10 +125,10 @@
 
 ### 16. 其他细节
 
-- [ ] **16.1** 接入 AI 回复 Markdown 渲染（复用已有 `react-markdown`，补链接/HTML 安全策略）
+- [x] **16.1** 接入 AI 回复 Markdown 渲染（`AIChatMarkdown.tsx`，react-markdown + prose 样式 + 安全链接处理）
 - [x] **16.2** 实现网络搜索服务（`services/web-search.ts`，DuckDuckGo HTML，无需 API Key，供 Agent web_search 工具调用）
-- [ ] **16.3** 实现 ExternalUrlService（外链统一处理 + 安全警告）
-- [ ] **16.4** 实现连接测试服务（AIAssistantConnectionTestService 等价物）
+- [x] **16.3** 实现 ExternalUrlService（`services/external-url.ts`，外链统一处理 + 协议验证 + 可疑检测 + 确认对话框）
+- [x] **16.4** 实现连接测试服务（`services/connection-test.ts`，专用 probe + 空响应/429 重试 + Anthropic 检测）
 
 ---
 

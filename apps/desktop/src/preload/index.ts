@@ -117,6 +117,12 @@ const api = {
       ipcRenderer.on('ai:chat-stream-error', handler)
       return () => ipcRenderer.removeListener('ai:chat-stream-error', handler)
     },
+    testConnection: (): Promise<{
+      success: boolean
+      message: string
+      duration?: number
+      modelInfo?: string
+    }> => ipcRenderer.invoke(IPC.AI_TEST_CONNECTION),
   },
 
   // Settings

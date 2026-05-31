@@ -9,6 +9,14 @@ declare module '*.svg' {
 declare global {
   interface Window {
     api: ElectronAPI & {
+      ai: {
+        testConnection: () => Promise<{
+          success: boolean
+          message: string
+          duration?: number
+          modelInfo?: string
+        }>
+      }
       readability: {
         fetch: (url: string) => Promise<{
           success: boolean
