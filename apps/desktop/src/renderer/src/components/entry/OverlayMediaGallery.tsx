@@ -1,5 +1,6 @@
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
 import { memo, type SyntheticEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { VideoPlayer } from '../ui/VideoPlayer'
 import { CachedImage } from '../ui/CachedImage'
@@ -40,6 +41,7 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
   onSetPreviewIdx: (index: number) => void
   onSetLightboxOpen: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   return (
     <>
       {displayPhotos.length > 0 && (
@@ -174,6 +176,34 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
           >
             <X size={20} />
           </button>
+          {(() => {
+            const previewPhoto = displayPhotos[previewIdx ?? 0]
+            const saveUrl = previewPhoto?.url || previewPhoto?.previewUrl
+            if (!saveUrl) return null
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void window.api.app.downloadUrl({
+                    url: saveUrl,
+                    suggestedFileName: 'image',
+                    title: t('imageViewer.save'),
+                    filters: [
+                      {
+                        name: 'Images',
+                        extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+                      },
+                    ],
+                  })
+                }}
+                aria-label={t('imageViewer.save')}
+                title={t('imageViewer.save')}
+                className="absolute right-16 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+              >
+                <Download size={20} />
+              </button>
+            )
+          })()}
           {displayPhotos.length > 1 && (previewIdx ?? 0) > 0 && (
             <button
               onClick={(e) => {

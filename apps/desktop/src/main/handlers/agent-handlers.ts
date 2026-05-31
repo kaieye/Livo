@@ -6,6 +6,8 @@ import type {
   AgentToolExecutionEvent,
 } from '../agent/loop'
 import { AgentTraceStore } from '../agent/trace-store'
+import { getSettings } from './settings-handlers'
+import { normalizeAIError } from '../services/provider-protocol'
 // Importing default-tools registers the tool builder with the registry provider.
 import '../agent/default-tools'
 
@@ -49,7 +51,7 @@ export function registerAgentHandlers(): void {
       } catch (error) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: normalizeAIError(error, getSettings().ai),
         }
       }
     },
@@ -76,7 +78,7 @@ export function registerAgentHandlers(): void {
       } catch (error) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: normalizeAIError(error, getSettings().ai),
         }
       }
     },

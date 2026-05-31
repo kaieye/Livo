@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Download,
   ExternalLink,
   ImageOff,
   Loader2,
@@ -97,6 +98,30 @@ export default function ImageViewerPage() {
     [goToIndex, safeIndex],
   )
 
+  const [isSaving, setIsSaving] = useState(false)
+  const handleSave = useCallback(
+    async (imageUrl: string, title: string) => {
+      if (!imageUrl || isSaving) return
+      setIsSaving(true)
+      try {
+        await window.api.app.downloadUrl({
+          url: imageUrl,
+          suggestedFileName: title?.trim() || 'image',
+          title: t('imageViewer.save'),
+          filters: [
+            {
+              name: 'Images',
+              extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+            },
+          ],
+        })
+      } finally {
+        setIsSaving(false)
+      }
+    },
+    [isSaving, t],
+  )
+
   // Keyboard navigation: arrows move within the gallery, Escape exits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -162,6 +187,24 @@ export default function ImageViewerPage() {
               total,
             })}
           </span>
+        )}
+        {currentSrc && (
+          <button
+            type="button"
+            onClick={() =>
+              void handleSave(currentImage?.url || currentSrc, headerTitle)
+            }
+            disabled={isSaving}
+            aria-label={t('imageViewer.save')}
+            title={t('imageViewer.save')}
+            className="rounded-md p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+          >
+            {isSaving ? (
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Download size={16} aria-hidden="true" />
+            )}
+          </button>
         )}
         {externalUrl && (
           <button

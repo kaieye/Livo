@@ -80,6 +80,10 @@ export const en = {
     suggestion3: 'Explain this article in simple terms',
     inputPlaceholder: 'Type a message...',
     error: 'Error: {{message}}',
+    newConversation: 'New conversation',
+    history: 'History',
+    trace: 'Execution trace',
+    stop: 'Stop',
   },
 
   social: {
@@ -97,6 +101,8 @@ export const en = {
     mute: 'Mute',
     download: 'Download',
     closePlayer: 'Close player',
+    previousTrack: 'Previous track',
+    nextTrack: 'Next track',
   },
 
   discover: enDiscover,

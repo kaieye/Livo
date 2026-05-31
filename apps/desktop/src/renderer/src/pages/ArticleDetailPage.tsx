@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -17,20 +17,21 @@ import { AIAssistContent } from '../components/entry/AIAssistContent'
 import { SocialDetailView } from '../components/entry/SocialDetailView'
 import { VideoPlayer } from '../components/ui/VideoPlayer'
 import { useDeepLinkEntry } from '../hooks/useDeepLinkEntry'
-import { useAISummary } from '../hooks/useAISummary'
-import { useAITranslation } from '../hooks/useAITranslation'
+import { useArticleAIAssist } from '../hooks/useArticleAIAssist'
 import { resolvePreferredEntryVideo } from '../lib/entry-video-source'
 import {
   buildYoutubeIframeUrl,
   extractYoutubeVideoId,
   resolveYoutubePlayback,
 } from '../lib/youtube-playback'
+import { isDirectVideoUrl } from '@livo/utils'
 import { useFeedStore } from '../store/feed-store'
 import {
   useGeneralSettingsShallowSelector,
   useTranslationSettingKey,
   useAISettingKey,
   useSettingsActions,
+  useSettingSection,
 } from '../store/settings-store'
 import { splitHtmlIntoParagraphs } from '../lib/entry-text'
 import { getDateLocale } from '../lib/date-locale'
@@ -128,36 +129,15 @@ export default function ArticleDetailPage() {
     }
   }, [isYouTubeVideo, videoMedia, youtubeVideoId])
 
-  const isDirectVideo =
-    !!videoMedia && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(videoMedia.url)
+  const isDirectVideo = !!videoMedia && isDirectVideoUrl(videoMedia.url)
   const isBilibiliVideo =
     !!videoMedia && /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(videoMedia.url)
   const shouldUseInlineVideoPlayer = isDirectVideo || isBilibiliVideo
   const videoExternalUrl = activeEntry?.url || videoMedia?.url || ''
 
-  // --- AI assist hooks (owned at page level for composability) ---
-  const {
-    summary,
-    error: summaryError,
-    isLoading: isSummarizing,
-    summarize,
-    reset: resetSummary,
-  } = useAISummary()
-  const {
-    translatedParagraphs,
-    isTranslating,
-    showTranslation,
-    errorMap,
-    translate,
-    toggle: toggleTranslation,
-    reset: resetTranslation,
-  } = useAITranslation()
-
-  // Reset AI state on entry change
-  useEffect(() => {
-    resetSummary()
-    resetTranslation()
-  }, [entryId, resetSummary, resetTranslation])
+  // --- AI assist ViewModel (8.1) — unified summary + translation state ---
+  const summarySettings = useSettingSection('summary')
+  const translationSettings = useSettingSection('translation')
 
   // Paragraphs for paragraph-by-paragraph translation
   const paragraphs = useMemo(() => {
@@ -165,35 +145,46 @@ export default function ArticleDetailPage() {
     return splitHtmlIntoParagraphs(activeEntry.content)
   }, [activeEntry?.content])
 
-  // --- AI action handlers ---
-  const handleSummarize = useCallback(() => {
-    if (!activeEntry?.content) return
-    void summarize(activeEntry.content, general.language)
-  }, [activeEntry?.content, general.language, summarize])
-
-  const handleTranslate = useCallback(() => {
-    if (!activeEntry?.content) return
-    // Toggle off if currently showing
-    if (showTranslation && translatedParagraphs.length > 0) {
-      toggleTranslation()
-      return
-    }
-    // Toggle on if already translated (cached)
-    if (translatedParagraphs.length > 0) {
-      toggleTranslation()
-      return
-    }
-    // Start fresh translation
-    const targetLang = translationTargetLanguage || 'zh-CN'
-    void translate(paragraphs, targetLang)
-  }, [
-    activeEntry?.content,
-    paragraphs,
-    translationTargetLanguage,
-    translate,
+  const {
+    summary,
+    summaryError,
+    isSummarizing,
+    translatedParagraphs,
+    isTranslating,
     showTranslation,
-    translatedParagraphs.length,
-    toggleTranslation,
+    translationErrorMap: errorMap,
+    summarize: handleSummarize,
+    translate: handleTranslate,
+  } = useArticleAIAssist({
+    entryId,
+    content: activeEntry?.content ?? undefined,
+    paragraphs,
+    summaryLanguage: summarySettings.language || general.language,
+    targetLanguage: translationTargetLanguage,
+  })
+
+  // Auto-trigger on entry load when enabled in settings (Harmony parity).
+  const autoTriggeredEntryRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!entryId || !activeEntry?.content || !aiApiKey) return
+    if (autoTriggeredEntryRef.current === entryId) return
+    autoTriggeredEntryRef.current = entryId
+    if (summarySettings.enabled && summarySettings.autoTrigger) {
+      handleSummarize()
+    }
+    if (translationSettings.enabled && translationSettings.autoTranslate) {
+      handleTranslate()
+    }
+  }, [
+    entryId,
+    activeEntry?.content,
+    aiApiKey,
+    summarySettings.enabled,
+    summarySettings.autoTrigger,
+    translationSettings.enabled,
+    translationSettings.autoTranslate,
+    handleSummarize,
+    handleTranslate,
   ])
 
   // --- Header ---

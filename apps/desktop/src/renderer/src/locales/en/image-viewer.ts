@@ -9,4 +9,8 @@ export const enImageViewer = {
   previous: 'Previous image',
   next: 'Next image',
   counter: '{{current}} / {{total}}',
+  save: 'Save image',
+  saving: 'Saving...',
+  saved: 'Image saved',
+  saveFailed: 'Failed to save image',
 }

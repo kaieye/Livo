@@ -18,6 +18,7 @@ import {
   normalizeBilibiliVideoUrl,
 } from '../../lib/bilibili-video'
 import { useSettingsStore } from '../../store/settings-store'
+import { isDirectVideoUrl } from '@livo/utils'
 
 export const PAUSE_INLINE_VIDEOS_EVENT = 'livo:pause-inline-videos'
 
@@ -285,7 +286,7 @@ export function VideoPlayer({
   }
 
   // If it's an embeddable URL (YouTube, etc.), don't render inline - the parent should handle embedding
-  const isDirectVideo = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src)
+  const isDirectVideo = isDirectVideoUrl(src)
 
   if (!isDirectVideo) {
     const bilibiliPageUrl = isBilibiliVideo

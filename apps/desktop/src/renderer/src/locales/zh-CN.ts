@@ -79,6 +79,10 @@ export const zhCN = {
     suggestion3: '用通俗语言解释这篇文章',
     inputPlaceholder: '输入消息...',
     error: '错误: {{message}}',
+    newConversation: '新对话',
+    history: '对话历史',
+    trace: '执行轨迹',
+    stop: '停止',
   },
 
   social: {
@@ -96,6 +100,8 @@ export const zhCN = {
     mute: '静音',
     download: '下载',
     closePlayer: '关闭播放器',
+    previousTrack: '上一首',
+    nextTrack: '下一首',
   },
 
   discover: zhCNDiscover,

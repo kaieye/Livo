@@ -1,3 +1,5 @@
+import { buildYoutubeIframeUrl, extractYouTubeId } from '@livo/utils'
+
 type YoutubeStatusApi = {
   ytStatus: () => Promise<{ loggedIn: boolean; name: string | null }>
   resolve: (
@@ -9,16 +11,8 @@ type YoutubePlaybackResult =
   | { kind: 'direct'; url: string }
   | { kind: 'iframe'; url: string }
 
-function extractYoutubeVideoId(url: string): string | null {
-  const match = url.match(
-    /(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/,
-  )
-  return match?.[1] ?? null
-}
-
-function buildYoutubeIframeUrl(videoId: string): string {
-  return `https://www.youtube.com/embed/${videoId}?controls=1&autoplay=1&mute=0`
-}
+// Backwards-compatible alias — call sites historically used this name.
+const extractYoutubeVideoId = extractYouTubeId
 
 export async function resolveYoutubePlayback(
   api: YoutubeStatusApi,

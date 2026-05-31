@@ -30,6 +30,7 @@ export function cloneDefaultSettings(): AppSettings {
     data: { ...DEFAULT_SETTINGS.data },
     aggregator: { ...DEFAULT_SETTINGS.aggregator },
     translation: { ...DEFAULT_SETTINGS.translation },
+    summary: { ...DEFAULT_SETTINGS.summary },
   }
 }
 
@@ -141,6 +142,7 @@ export function normalizeSettings(input?: PartialSettings): AppSettings {
     data: { ...defaults.data, ...(raw.data || {}) },
     aggregator: { ...defaults.aggregator, ...(raw.aggregator || {}) },
     translation: { ...defaults.translation, ...(raw.translation || {}) },
+    summary: { ...defaults.summary, ...(raw.summary || {}) },
   }
 
   if (isLegacyDefaultSystemPromptTemplate(normalized.ai.systemPromptTemplate)) {
@@ -166,5 +168,6 @@ export function mergeSettings(
     data: { ...current.data, ...(updates.data || {}) },
     aggregator: { ...current.aggregator, ...(updates.aggregator || {}) },
     translation: { ...current.translation, ...(updates.translation || {}) },
+    summary: { ...current.summary, ...(updates.summary || {}) },
   })
 }

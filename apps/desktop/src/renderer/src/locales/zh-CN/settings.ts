@@ -206,6 +206,13 @@ export const zhCNSettings = {
   autoTranslateDesc: '打开文章时自动翻译内容',
   translationNotice:
     '翻译功能使用你配置的 AI 模型，无任何限制。请确保已在「AI 模型」选项卡中配置了 API Key。',
+  enableSummary: '启用摘要',
+  enableSummaryDesc: '在文章阅读界面显示摘要按钮',
+  summaryLanguage: '输出语言',
+  autoSummary: '自动摘要',
+  autoSummaryDesc: '打开文章时自动生成摘要',
+  summaryTitle: 'AI 摘要',
+  translationTitle: 'AI 翻译',
   searchFeeds: '搜索订阅源...',
   allCategories: '全部文件夹',
   totalFeeds: '共 {{count}} 个订阅源',

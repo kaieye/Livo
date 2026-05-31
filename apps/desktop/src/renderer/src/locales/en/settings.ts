@@ -223,6 +223,13 @@ export const enSettings = {
   autoTranslateDesc: 'Automatically translate content when opening articles',
   translationNotice:
     'Translation uses your configured AI model with no limits. Please ensure you have configured an API Key in the "AI Model" tab.',
+  enableSummary: 'Enable Summary',
+  enableSummaryDesc: 'Show summary button in article reading view',
+  summaryLanguage: 'Output Language',
+  autoSummary: 'Auto Summarize',
+  autoSummaryDesc: 'Automatically summarize content when opening articles',
+  summaryTitle: 'AI Summary',
+  translationTitle: 'AI Translation',
   searchFeeds: 'Search feeds...',
   allCategories: 'All Folders',
   totalFeeds: '{{count}} feeds total',

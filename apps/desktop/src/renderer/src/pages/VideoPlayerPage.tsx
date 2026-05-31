@@ -11,6 +11,7 @@ import {
   extractYoutubeVideoId,
   resolveYoutubePlayback,
 } from '../lib/youtube-playback'
+import { isDirectVideoUrl } from '@livo/utils'
 
 type YoutubePlayback = { kind: 'direct' | 'iframe'; url: string }
 
@@ -36,10 +37,7 @@ export default function VideoPlayerPage() {
     ? extractYoutubeVideoId(videoMedia.url)
     : null
   const isYouTubeVideo = !!youtubeVideoId
-  // TODO(P2-9.5): unify with the matching regex in MediaPlayer/EntryContent —
-  // 3 inline copies today, all driven by the same direct-stream policy.
-  const isDirectVideo =
-    !!videoMedia && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(videoMedia.url)
+  const isDirectVideo = !!videoMedia && isDirectVideoUrl(videoMedia.url)
   const isBilibiliVideo =
     !!videoMedia && /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(videoMedia.url)
   // ui/VideoPlayer covers direct files (with controls) and Bilibili (modal

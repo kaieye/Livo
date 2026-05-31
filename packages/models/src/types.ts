@@ -332,6 +332,11 @@ export interface AppSettings {
     targetLanguage: string
     autoTranslate: boolean
   }
+  summary: {
+    enabled: boolean
+    autoTrigger: boolean
+    language: string
+  }
 }
 
 export type SettingsTabId =
@@ -502,6 +507,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enabled: false,
     targetLanguage: 'zh-CN',
     autoTranslate: false,
+  },
+  summary: {
+    enabled: false,
+    autoTrigger: false,
+    language: 'zh-CN',
   },
 }
 

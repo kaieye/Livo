@@ -4,21 +4,7 @@
  * and inline video player for video entries.
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import {
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
-  X,
-  Maximize2,
-  Minimize2,
-  Download,
-  Loader2,
-} from 'lucide-react'
-import { create } from 'zustand'
+import { Play, Maximize2, Minimize2, X, Loader2 } from 'lucide-react'
 import { useSettingsStore } from '../../store/settings-store'
 import {
   buildBilibiliInAppPlayerUrl,
@@ -30,296 +16,22 @@ import {
   resolveYoutubePlayback,
 } from '../../lib/youtube-playback'
 
-// ====== Player Store ======
-interface PlayOptions {
-  url: string
-  type?: 'audio' | 'video'
-  title?: string
-  artist?: string
-  feedTitle?: string
-  cover?: string
-}
-
-interface PlayerState {
-  /** Currently playing media URL */
-  url: string | null
-  type: 'audio' | 'video'
-  title: string
-  feedTitle: string
-  cover: string
-  /** Is player visible (corner mode) */
-  isVisible: boolean
-
-  play: (options: PlayOptions) => void
-  stop: () => void
-  hide: () => void
-}
-
-export const usePlayerStore = create<PlayerState>((set) => ({
-  url: null,
-  type: 'audio',
-  title: '',
-  feedTitle: '',
-  cover: '',
-  isVisible: false,
-
-  play: (options: PlayOptions) =>
-    set({
-      url: options.url,
-      type: options.type || 'audio',
-      title: options.title || '',
-      feedTitle: options.artist || options.feedTitle || '',
-      cover: options.cover || '',
-      isVisible: true,
-    }),
-  stop: () =>
-    set({ url: null, isVisible: false, title: '', feedTitle: '', cover: '' }),
-  hide: () => set({ isVisible: false }),
-}))
-
-// ====== Corner Audio Player ======
-export function CornerPlayer() {
-  const { url, type, title, feedTitle, isVisible, stop } = usePlayerStore()
-  const { t } = useTranslation()
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [volume] = useState(1)
-  const [isMuted, setIsMuted] = useState(false)
-  const [playbackRate, setPlaybackRate] = useState(1)
-  const [showRateMenu, setShowRateMenu] = useState(false)
-
-  useEffect(() => {
-    if (url && audioRef.current) {
-      audioRef.current.src = url
-      audioRef.current.play().catch(() => {})
-      setIsPlaying(true)
-    }
-  }, [url])
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume
-    }
-  }, [volume, isMuted])
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackRate
-    }
-  }, [playbackRate])
-
-  const togglePlay = useCallback(() => {
-    if (!audioRef.current) return
-    if (isPlaying) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play().catch(() => {})
-    }
-    setIsPlaying(!isPlaying)
-  }, [isPlaying])
-
-  const seek = useCallback(
-    (seconds: number) => {
-      if (!audioRef.current) return
-      audioRef.current.currentTime = Math.max(
-        0,
-        Math.min(audioRef.current.currentTime + seconds, duration),
-      )
-    },
-    [duration],
-  )
-
-  const handleTimeUpdate = useCallback(() => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime)
-    }
-  }, [])
-
-  const handleLoadedMetadata = useCallback(() => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration)
-    }
-  }, [])
-
-  const handleSeekBar = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const time = parseFloat(e.target.value)
-      if (audioRef.current) {
-        audioRef.current.currentTime = time
-      }
-      setCurrentTime(time)
-    },
-    [],
-  )
-
-  const handleClose = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ''
-    }
-    setIsPlaying(false)
-    stop()
-  }, [stop])
-
-  const handleDownload = useCallback(() => {
-    if (!url) return
-    const a = document.createElement('a')
-    a.href = url
-    a.download = title || 'audio'
-    a.target = '_blank'
-    a.click()
-  }, [url, title])
-
-  if (!isVisible || !url || type !== 'audio') return null
-
-  const formatTime = (s: number) => {
-    if (!isFinite(s)) return '0:00'
-    const m = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return `${m}:${sec.toString().padStart(2, '0')}`
-  }
-
-  const rates = [0.5, 0.75, 1, 1.25, 1.5, 2]
-
-  return (
-    <>
-      <audio
-        ref={audioRef}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={() => setIsPlaying(false)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-      />
-
-      <div className="animate-in fixed bottom-4 right-4 z-50 w-[340px] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-surface-dark-secondary">
-        {/* Track info */}
-        <div className="px-4 pb-1 pt-3">
-          <h4 className="truncate text-sm font-medium">{title}</h4>
-          <p className="truncate text-xs text-text-tertiary">{feedTitle}</p>
-        </div>
-
-        {/* Progress bar */}
-        <div className="mt-1 px-4">
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeekBar}
-            className="h-1 w-full cursor-pointer appearance-none rounded-full bg-surface-tertiary accent-accent dark:bg-surface-dark-tertiary"
-            style={{
-              background: `linear-gradient(to right, var(--color-accent) ${(currentTime / (duration || 1)) * 100}%, var(--color-surface-tertiary, #e5e5e5) ${(currentTime / (duration || 1)) * 100}%)`,
-            }}
-          />
-          <div className="mt-0.5 flex justify-between text-[10px] text-text-tertiary">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-2 px-4 pb-3 pt-1">
-          <button
-            onClick={() => seek(-10)}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-            title={t('media.rewind10')}
-          >
-            <SkipBack size={16} />
-          </button>
-          <button
-            onClick={togglePlay}
-            className="rounded-full bg-accent p-2.5 text-white transition-colors hover:bg-accent-hover"
-          >
-            {isPlaying ? (
-              <Pause size={18} />
-            ) : (
-              <Play size={18} className="ml-0.5" />
-            )}
-          </button>
-          <button
-            onClick={() => seek(10)}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-            title={t('media.forward10')}
-          >
-            <SkipForward size={16} />
-          </button>
-
-          <div className="mx-1 h-5 w-px bg-border dark:bg-border-dark" />
-
-          {/* Playback rate */}
-          <div className="relative">
-            <button
-              onClick={() => setShowRateMenu(!showRateMenu)}
-              className="rounded px-1.5 py-1 font-mono text-xs transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-              title={t('media.playbackSpeed')}
-            >
-              {playbackRate}x
-            </button>
-            {showRateMenu && (
-              <div className="absolute bottom-full left-1/2 mb-1 min-w-[48px] -translate-x-1/2 rounded-lg border bg-white py-1 shadow-lg dark:bg-surface-dark-secondary">
-                {rates.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      setPlaybackRate(r)
-                      setShowRateMenu(false)
-                    }}
-                    className={`block w-full px-2 py-1 text-center text-xs hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary ${r === playbackRate ? 'font-medium text-accent' : ''}`}
-                  >
-                    {r}x
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Volume */}
-          <button
-            onClick={() => setIsMuted(!isMuted)}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-            title={isMuted ? t('media.unmute') : t('media.mute')}
-          >
-            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          </button>
-
-          {/* Download */}
-          <button
-            onClick={handleDownload}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-            title={t('media.download')}
-          >
-            <Download size={16} />
-          </button>
-
-          {/* Close */}
-          <button
-            onClick={handleClose}
-            className="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
-            title={t('media.closePlayer')}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
-
-// ====== Inline Video Player ======
+// ====== Player store + mini bar ======
+// The audio player state machine moved to `store/player-store.ts` (backed by
+// `lib/audio-playback.ts`'s AudioPlaybackService) and the mini bar UI to
+// `AudioMiniBar.tsx`. Re-exported here for backwards-compatible import paths.
+export { usePlayerStore } from '../../store/player-store'
+export type { PlayOptions, AudioTrack } from '../../store/player-store'
+export { AudioMiniBar as CornerPlayer } from './AudioMiniBar'
 
 /** Transform a video URL into an embeddable iframe URL. */
 export function transformVideoUrl(url: string): string | null {
   if (!url) return null
 
   // YouTube
-  const youtubeMatch = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/,
-  )
-  if (youtubeMatch) {
-    return `https://www.youtube-nocookie.com/embed/${youtubeMatch[1]}?controls=1&autoplay=0&mute=0`
+  const youtubeId = extractYoutubeVideoId(url)
+  if (youtubeId) {
+    return `https://www.youtube-nocookie.com/embed/${youtubeId}?controls=1&autoplay=0&mute=0`
   }
 
   // Bilibili
@@ -385,10 +97,9 @@ export function VideoPlayer({
     (s) => s.settings.general.bilibiliOpenInPage,
   )
   const isBilibiliVideo = /(?:^|\.)(?:bilibili\.com|b23\.tv)\//i.test(url)
-  const isYouTubeVideo =
-    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)/i.test(url)
-  const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
   const youtubeVideoId = extractYoutubeVideoId(url)
+  const isYouTubeVideo = !!youtubeVideoId
+  const shouldUseBilibiliWebview = isBilibiliVideo && !bilibiliOpenInPage
   const youtubeFallbackIframeUrl = youtubeVideoId
     ? buildYoutubeIframeUrl(youtubeVideoId)
     : null

@@ -41,20 +41,24 @@
 
 ### 7. AI 聊天面板增强
 
-- [ ] **7.1** 实现 Typewriter 流式输出效果
-- [ ] **7.2** 实现 Tool Trace 面板（显示每轮工具调用详情）
-- [ ] **7.3** 实现 Agent 确认对话框（写入/删除/外链操作需用户确认）
-- [ ] **7.4** 实现工具执行状态栏（AIChatRunStatusBar）
-- [ ] **7.5** 实现会话历史持久化（ChatHistoryStore 等价物）
-- [ ] **7.6** 标准化多 Provider 协议（Desktop 已有 provider 配置，补 ProviderProtocol、响应解析、错误归一）
+- [x] **7.1** 实现 Typewriter 流式输出效果（移植 Harmony `Typewriter`，`lib/typewriter.ts`，自适应 chunk + 追平模型）
+- [x] **7.2** 实现 Tool Trace 面板（`AIChatTracePanel`，读 `agent.listTraces`/`clearTraces`，可展开查看每轮工具调用）
+- [x] **7.3** 实现 Agent 确认对话框（`AIChatConfirmationCard`，写入/删除/外链操作经 `pendingId` + `agent.resume` 确认执行）
+- [x] **7.4** 实现工具执行状态栏（`AIChatRunStatusBar`，实时工具状态 + 计时器，订阅 `agent:tool-event`）
+- [x] **7.5** 实现会话历史持久化（`store/chat-history-store.ts` + `AIChatHistoryPanel`，localStorage，最多 50 条）
+- [x] **7.6** 标准化多 Provider 协议（`services/provider-protocol.ts`，格式检测 + 错误归一，接入 ai/agent handlers，10 用例）
 - [x] **7.7** 编写 Agent 循环单元测试（mock ToolRegistry，覆盖 registry/policy/harness，18 用例）
+
+> 备注：聊天面板已从旧的裸 `chatStream` 切换到主进程 Agent 循环（`window.api.agent.run/resume/abort`），后端 main/preload 此前已就绪，本次补齐渲染端集成。导航工具下发的 `agent:navigate` 事件渲染端消费仍待接入（见 18.1）。
 
 ### 8. AI 辅助阅读
 
-- [ ] **8.1** 实现 ArticleAIAssistViewModel（文章详情页的 AI 功能状态管理）
-- [ ] **8.2** 实现 SummaryFeatureCard（AI 摘要开关 + 快捷操作）
-- [ ] **8.3** 实现 TranslationFeatureCard（AI 翻译开关 + 目标语言选择）
-- [ ] **8.4** 实现多轮 AI 调用重试策略（TranslationPipeline 等价物）
+- [x] **8.1** 实现 ArticleAIAssistViewModel（`hooks/useArticleAIAssist.ts`，合并 summary/translation 状态机 + 组合 status + 语言标签 + 自动触发；ArticleDetailPage 已接入）
+- [x] **8.2** 实现 SummaryFeatureCard（`components/settings/SummaryFeatureCard.tsx`，输出语言 + 自动摘要 + 开关；接入 TranslationSettings）
+- [x] **8.3** 实现 TranslationFeatureCard（`components/settings/TranslationFeatureCard.tsx`，目标语言 + 自动翻译 + 开关；TranslationSettings 改为卡片化）
+- [x] **8.4** 实现多轮 AI 调用重试策略（`services/ai-retry.ts`，指数退避 + 空结果重试 + 可重试错误判定 + 翻译多档降级；接入 summarize/translate handlers，8 用例）
+
+> 备注：新增 `summary` 设置段（enabled/autoTrigger/language），打通 models + shared 归一化/合并。ArticleDetailPage 根据 summary.autoTrigger / translation.autoTranslate 在打开文章时自动执行（需已配置 API Key）。`useAISummary`/`useAITranslation` 保留为底层状态机供 EntryContent/WideViewContent 复用。
 
 ---
 
@@ -62,21 +66,25 @@
 
 ### 9. 视频播放
 
-- [ ] **9.1** 统一 YouTube 视频 URL 解析（合并 main `extractYouTubeId` 与 renderer `extractYoutubeVideoId`，抽到共享 util）
-- [ ] **9.2** 为 Invidious 多实例回退补测试与失败观测
-- [ ] **9.3** 为 Piped 回退补 HLS/combined stream 兼容测试
-- [ ] **9.4** 页面化 WebView/iframe 回退播放
-- [ ] **9.5** 统一视频直链检测（抽 `isDirectVideoUrl`，替换组件内分散正则）
+- [x] **9.1** 统一 YouTube 视频 URL 解析（抽到 `packages/utils/src/video-url.ts` 的 `extractYouTubeId`；renderer `extractYoutubeVideoId` 改为别名再导出，main `video-proxy` 复用，同时满足 17.4）
+- [x] **9.2** 为 Invidious 多实例回退补测试与失败观测（`video-proxy` 重构为可注入 fetcher，`video-proxy.test.ts` 覆盖首实例成功/跳过失败实例/全失败）
+- [x] **9.3** 为 Piped 回退补 HLS/combined stream 兼容测试（`selectPipedStream` 纯函数 + 回退链测试）
+- [x] **9.4** 页面化 WebView/iframe 回退播放（`VideoPlayerPage` 已具备：直链/Bilibili webview/YouTube direct+iframe 回退）
+- [x] **9.5** 统一视频直链检测（`isDirectVideoUrl` + `isEmbeddableVideoUrl` 抽到 `@livo/utils`，替换 VideoPlayerPage/ArticleDetailPage/MediaPlayer/ui-VideoPlayer/entry-video-source 内的散落正则）
+
+> 备注：vitest 增加 `@livo/utils`/`@livo/models` → src 的别名，使纯函数与回退循环无需构建即可测试。共 11 个视频用例。
 
 ### 10. 音频播放
 
-- [ ] **10.1** 抽取 AudioPlaybackService（从 `CornerPlayer` / `usePlayerStore` 迁出播放、暂停、进度、倍速状态）
-- [ ] **10.2** 产品化 AudioMiniBar（复用现有 CornerPlayer 交互，补全局队列/封面/来源状态）
-- [ ] **10.3** 统一倍速控制策略
+- [x] **10.1** 抽取 AudioPlaybackService（`lib/audio-playback.ts`，独立 detached audio element + 快照订阅 + 注入式 element 便于测试；播放状态跨视图保持。9 用例）
+- [x] **10.2** 产品化 AudioMiniBar（`components/media/AudioMiniBar.tsx` + `store/player-store.ts`，补封面缩略图/来源/全局队列 prev-next/自动续播；`CornerPlayer` 改为其别名再导出）
+- [x] **10.3** 统一倍速控制策略（`SPEED_OPTIONS` + `nextSpeed` 抽到 audio-playback，AudioMiniBar 复用）
+
+> 备注：playback 状态（isPlaying/currentTime/duration/rate/muted）由 AudioPlaybackService 持有并镜像进 zustand store；metadata/队列由 store 持有。`usePlayerStore.play` 签名保持兼容（EntryContent 无需改动），新增 `playQueue/next/previous`。
 
 ### 11. 图片/媒体增强
 
-- [ ] **11.1** 实现图片保存到本地（MediaSaveService 等价物）
+- [x] **11.1** 实现图片保存到本地（MediaSaveService 等价物已就绪：`services/download.ts` 的 `downloadUrlToFile` + `IPC.APP_DOWNLOAD_URL` + preload `downloadUrl` + 右键菜单“保存图片/媒体”；本次补 ImageViewerPage 头部 + 画廊灯箱的保存按钮，对齐 Harmony ImageViewer）
 
 ---
 
@@ -121,7 +129,7 @@
 - [ ] **17.1** 将数据模型转换逻辑（toFeedCardModel / toEntryCardModel）抽到 `packages/models`
 - [ ] **17.2** 将 ViewModel 类型定义（EntryCardModel / FeedCardModel / ArticleDetailModel）抽到共享包
 - [x] **17.3** 将 Agent 工具接口定义抽到共享包（`packages/models/src/agent.ts`，两端一致的工具签名与运行时 wire 类型）
-- [ ] **17.4** 将视频 URL 解析逻辑（YouTube ID 提取、Invidious/Piped 实例列表）抽到 `packages/utils`
+- [x] **17.4** 将视频 URL 解析逻辑（YouTube ID 提取、直链/可嵌入检测、Invidious/Piped 实例列表与流选择）抽到 `packages/utils/src/video-url.ts`（随 9.1/9.5 完成）
 
 ---
 

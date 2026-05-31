@@ -8,4 +8,8 @@ export const zhCNImageViewer = {
   previous: '上一张',
   next: '下一张',
   counter: '{{current}} / {{total}}',
+  save: '保存图片',
+  saving: '正在保存...',
+  saved: '图片已保存',
+  saveFailed: '保存图片失败',
 }

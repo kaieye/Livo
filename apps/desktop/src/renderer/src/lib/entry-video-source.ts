@@ -1,10 +1,5 @@
+import { isEmbeddableVideoUrl } from '@livo/utils'
 import type { Entry } from '../../../shared/types'
-
-function isEmbeddableVideoUrl(url: string): boolean {
-  return /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/|bilibili\.com\/video\/|b23\.tv\/|vimeo\.com\/\d+|ted\.com\/talks\/|download\.ted\.com\/)/i.test(
-    url,
-  )
-}
 
 export function resolvePreferredEntryVideo(
   entry: Pick<Entry, 'url'> & { media?: Entry['media'] },
