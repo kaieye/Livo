@@ -16,6 +16,7 @@ import {
   Shield,
   ShieldCheck,
   Clock,
+  Star,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -35,6 +36,7 @@ const settingsTabImporters = {
   about: () => import('./AboutSettings'),
   refreshLogs: () => import('./RefreshLogSettings'),
   agentPermissions: () => import('./AgentPermissionsSettings'),
+  favorites: () => import('./FavoritesPanel'),
 } satisfies Record<SettingsTabId, () => Promise<unknown>>
 
 const settingsTabComponents = {
@@ -103,6 +105,11 @@ const settingsTabComponents = {
       .agentPermissions()
       .then((module) => ({ default: module.AgentPermissionsSettings })),
   ),
+  favorites: lazy(() =>
+    settingsTabImporters
+      .favorites()
+      .then((module) => ({ default: module.FavoritesPanel })),
+  ),
 } satisfies Record<SettingsTabId, React.ComponentType>
 
 function preloadSettingsTab(tabId: SettingsTabId) {
@@ -156,6 +163,11 @@ export function SettingsDialog() {
       id: 'refreshLogs' as const,
       label: t('settings.refreshLogs'),
       icon: Clock,
+    },
+    {
+      id: 'favorites' as const,
+      label: t('settings.favoritesTitle'),
+      icon: Star,
     },
   ]
 

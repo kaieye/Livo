@@ -112,9 +112,9 @@
 
 ### 14. 数据管理
 
-- [ ] **14.1** 实现 RefreshLogStore（刷新历史记录存储）
-- [ ] **14.2** 增强 FavoritesPanel（补独立面板、排序、筛选、批量取消收藏）
-- [ ] **14.3** 实现 FeedRefreshCoordinator（刷新协调器，分批刷新 + 限流）
+- [x] **14.1** 实现 RefreshLogStore（刷新历史记录存储）
+- [x] **14.2** 增强 FavoritesPanel（补独立面板、排序、筛选、批量取消收藏）
+- [x] **14.3** 实现 FeedRefreshCoordinator（刷新协调器，分批刷新 + 限流）
 
 ### 15. 订阅体验
 

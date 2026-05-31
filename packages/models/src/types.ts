@@ -353,6 +353,7 @@ export type SettingsTabId =
   | 'about'
   | 'refreshLogs'
   | 'agentPermissions'
+  | 'favorites'
 
 export interface RefreshLogEntry {
   id: string
@@ -604,7 +605,7 @@ export const AI_PROVIDERS = {
   deepseek: {
     name: 'DeepSeek',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
-    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
   },
   glm: {
     name: 'GLM',

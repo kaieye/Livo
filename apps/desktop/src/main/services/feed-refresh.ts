@@ -26,6 +26,7 @@ import { buildEntriesFromParsedItems } from './entry-builder'
 import { logWarnQuiet } from './logger'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from './refresh-log-store'
+import { runConcurrencyPool } from '../utils/concurrency-pool'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshAllInFlight: Promise<void> | null = null
@@ -480,20 +481,10 @@ async function refreshAllFeeds(
 
     let totalNew = 0
 
-    // Concurrent refresh with limited parallelism
-    const queue = [...staleFeeds]
-    const runWorker = async () => {
-      while (queue.length > 0) {
-        const feed = queue.shift()!
-        const newCount = await refreshSingleFeed(feed)
-        totalNew += newCount
-      }
-    }
-    const workers = Array.from(
-      { length: Math.min(concurrency, queue.length) },
-      () => runWorker(),
-    )
-    await Promise.all(workers)
+    await runConcurrencyPool(staleFeeds, concurrency, async (feed) => {
+      const newCount = await refreshSingleFeed(feed)
+      totalNew += newCount
+    })
 
     // Run data cleanup after refresh
     cleanupEntries(cleanupOptions)

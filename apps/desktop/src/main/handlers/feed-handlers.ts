@@ -30,6 +30,7 @@ import {
   loadRefreshLogs,
   clearRefreshLogs,
 } from '../services/refresh-log-store'
+import { runConcurrencyPool } from '../utils/concurrency-pool'
 import { formatFeedTitle } from '../services/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry-builder'
 import { detectRouteViewFromUrl } from '../services/feed-view'
@@ -343,10 +344,10 @@ export function registerFeedHandlers(): void {
 
     if (total === 0) return results
 
-    const queue = [...feeds]
-    const runWorker = async () => {
-      while (queue.length > 0) {
-        const feed = queue.shift()!
+    await runConcurrencyPool(
+      feeds,
+      CONCURRENCY,
+      async (feed) => {
         try {
           const newCount = await refreshSingleFeed(feed, { force: true })
           const refreshedFeed = getFeedById(feed.id)
@@ -376,13 +377,11 @@ export function registerFeedHandlers(): void {
             done: completed >= total,
           })
         }
-      }
-    }
-    const workers = Array.from(
-      { length: Math.min(CONCURRENCY, queue.length) },
-      () => runWorker(),
+      },
+      (progressCompleted) => {
+        // onProgress - reserved for future use
+      },
     )
-    await Promise.all(workers)
 
     return results
   })
