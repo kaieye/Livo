@@ -34,7 +34,11 @@ export const en = {
     starred: 'Starred',
     all: 'All',
     unread: 'Unread',
+    contentModeRail: 'Content mode',
     searchArticles: 'Search articles...',
+    inlineSearchEmptyTitle: 'No matches in this view',
+    inlineSearchEmptyHint:
+      'Try keywords from the title, summary, source or author',
     noArticles: 'No articles',
     addFeedToStart: 'Add a feed to get started',
     play: 'Play',

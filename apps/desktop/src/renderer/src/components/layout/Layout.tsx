@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { EntryList } from '../entry/EntryList'
 import { EntryContent } from '../entry/EntryContent'
 import { WideViewContent } from '../entry/WideViewContent'
+import { ContentModeRail } from '../entry/ContentModeRail'
 import { DiscoverPanel } from '../discover/DiscoverPanel'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
 import { FeedViewType } from '../../../../shared/types'
+import { isUserFeed } from '../../lib/feed-filters'
 import { getEntryLoadLimit } from '../../lib/entry-load-limit'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
@@ -43,12 +45,13 @@ export function Layout() {
   const { isDiscoverOpen } = useStoreShallow(useDiscoverStore, (s) => ({
     isDiscoverOpen: s.isOpen,
   }))
-  const { activeView, selectedFeedId, feeds } = useStoreShallow(
+  const { activeView, selectedFeedId, feeds, setActiveView } = useStoreShallow(
     useFeedStore,
     (s) => ({
       activeView: s.activeView,
       selectedFeedId: s.selectedFeedId,
       feeds: s.feeds,
+      setActiveView: s.setActiveView,
     }),
   )
   const { selectEntry, prefetchEntries } = useStoreShallow(
@@ -148,6 +151,21 @@ export function Layout() {
       FeedViewType.Pictures,
     ].includes(effectiveView)
 
+  // Unread counts per content mode for the ContentModeRail badges.
+  const { unreadByView, totalUnread } = useMemo(() => {
+    const byView = new Map<FeedViewType, number>()
+    let total = 0
+    for (const feed of feeds) {
+      if (!isUserFeed(feed)) continue
+      const unread = feed.unreadCount ?? 0
+      if (unread <= 0) continue
+      const view = feed.view ?? FeedViewType.Articles
+      byView.set(view, (byView.get(view) ?? 0) + unread)
+      total += unread
+    }
+    return { unreadByView: byView, totalUnread: total }
+  }, [feeds])
+
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)
   const [entryListWidth, setEntryListWidth] = useState(
     () => loadWidths().entryList,
@@ -222,26 +240,39 @@ export function Layout() {
       >
         {isDiscoverOpen ? (
           <DiscoverPanel />
-        ) : isWideView ? (
-          /* 2-column layout for Social Media / Videos */
-          <div className="flex min-w-0 flex-1">
-            <WideViewContent />
-          </div>
         ) : (
-          <>
-            {/* Entry List */}
-            <EntryList width={entryListWidth} />
-
-            {/* Resize handle: entry list ↔ content */}
-            <ResizeHandle
-              onMouseDown={(e) => handleMouseDown('entryList', e)}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <ContentModeRail
+              activeView={activeView}
+              selectedFeedId={selectedFeedId}
+              unreadByView={unreadByView}
+              totalUnread={totalUnread}
+              onChange={setActiveView}
             />
+            <div className="flex min-w-0 flex-1 overflow-hidden">
+              {isWideView ? (
+                /* 2-column layout for Social Media / Videos */
+                <div className="flex min-w-0 flex-1">
+                  <WideViewContent />
+                </div>
+              ) : (
+                <>
+                  {/* Entry List */}
+                  <EntryList width={entryListWidth} />
 
-            {/* Entry Content */}
-            <div className="flex min-w-0 flex-1">
-              <EntryContent />
+                  {/* Resize handle: entry list ↔ content */}
+                  <ResizeHandle
+                    onMouseDown={(e) => handleMouseDown('entryList', e)}
+                  />
+
+                  {/* Entry Content */}
+                  <div className="flex min-w-0 flex-1">
+                    <EntryContent />
+                  </div>
+                </>
+              )}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

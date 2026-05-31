@@ -24,6 +24,7 @@ import { FeedViewType, VIEW_DEFINITIONS } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { SkeletonList } from '../ui/Skeleton'
+import { HomeInlineSearch } from './HomeInlineSearch'
 import {
   ContextMenu,
   useEntryContextMenu,
@@ -73,7 +74,6 @@ import {
   withCacheBust,
 } from '../../lib/social-entry-utils'
 import {
-  Search,
   CheckCheck,
   Star,
   Loader2,
@@ -927,25 +927,20 @@ export function EntryList({ width }: { width?: number }) {
         </div>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="relative">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              const value = e.target.value
-              setSearchQuery(value)
-              if (!value.trim()) {
-                reloadCurrentList()
-              }
-            }}
-            placeholder={t('entryList.searchArticles')}
-            className="w-full rounded-lg border bg-surface-secondary py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary"
-          />
-        </form>
+        <HomeInlineSearch
+          query={searchQuery}
+          onQueryChange={(value) => {
+            setSearchQuery(value)
+            if (!value.trim()) {
+              reloadCurrentList()
+            }
+          }}
+          onSubmit={handleSearch}
+          entries={renderEntries}
+          feedTitleFor={(entry) => feedById.get(entry.feedId)?.title ?? ''}
+          onSelectEntry={(entry) => selectEntry(entry)}
+          placeholder={t('entryList.searchArticles')}
+        />
 
         {/* Filter tabs */}
         <div className="flex gap-1 text-xs">

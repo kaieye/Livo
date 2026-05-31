@@ -100,9 +100,15 @@
 
 ### 13. 首页体验
 
-- [ ] **13.1** 实现 ContentModeRail（首页内容模式快速切换栏）
-- [ ] **13.2** 实现 HomeInlineSearch（首页内搜索覆盖层）
-- [ ] **13.3** 实现 HomeSkeletonEntryCard（骨架屏加载状态）
+- [x] **13.1** 实现 ContentModeRail（首页内容模式快速切换栏）
+      → `components/entry/ContentModeRail.tsx`，挂载于 `Layout` 内容区顶部，
+      驱动 `feed-store` 的 `activeView`，含「全部 + 文章/社交/视频/图片」及未读数徽标。
+- [x] **13.2** 实现 HomeInlineSearch（首页内搜索覆盖层）
+      → `components/entry/HomeInlineSearch.tsx`，对已加载条目做客户端过滤 +
+      高亮的浮层下拉（标题/摘要/作者/来源），回车仍触发后端全量搜索；已接入 `EntryList` 头部。
+- [x] **13.3** 实现 HomeSkeletonEntryCard（骨架屏加载状态）
+      → 复核：`components/ui/Skeleton.tsx`（Article/Social/Grid + `SkeletonList`）已忠实
+      镜像 `EntryCard`，并已接入 `EntryList` 与 `WideViewContent`，无需新增重复组件。
 
 ### 14. 数据管理
 
