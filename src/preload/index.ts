@@ -17,6 +17,7 @@ import type {
   DiscoverFeedPreviewResult,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
+import type { ActionRule } from '../shared/actions'
 import type {
   AgentRunSummary,
   AgentToolExecutionEvent,
@@ -136,6 +137,12 @@ const api = {
       ipcRenderer.on('settings:changed', handler)
       return () => ipcRenderer.removeListener('settings:changed', handler)
     },
+  },
+
+  // Automation rules (synced to the main process for ingestion-time filtering)
+  actions: {
+    sync: (rules: ActionRule[]): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke(IPC.ACTIONS_SYNC, rules),
   },
 
   // Agent (multi-round tool-calling assistant)

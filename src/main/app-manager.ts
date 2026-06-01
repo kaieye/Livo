@@ -13,6 +13,7 @@ import { registerDiscoverHandlers } from './handlers/discover-handlers'
 import { registerVideoHandlers } from './handlers/video-handlers'
 import { registerAccountHandlers } from './handlers/account-handlers'
 import { registerAgentHandlers } from './handlers/agent-handlers'
+import { registerActionHandlers } from './handlers/action-handlers'
 import { startAutoRefresh } from './services/feed-refresh'
 import { startAggregatorJobs } from './services/aggregator-jobs'
 import { logError, readRecentLogs } from './services/logger'
@@ -152,6 +153,7 @@ export class AppManager {
     registerVideoHandlers()
     registerAccountHandlers()
     registerAgentHandlers()
+    registerActionHandlers()
   }
 
   private createTray(): void {

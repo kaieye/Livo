@@ -33,8 +33,17 @@ function loadFromStorage(): ActionRule[] {
   return []
 }
 
+function syncRulesToMain(rules: ActionRule[]): void {
+  try {
+    void window.api?.actions?.sync(rules)
+  } catch {
+    /* ignore: main process bridge unavailable (e.g. web mode) */
+  }
+}
+
 function saveToStorage(rules: ActionRule[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(rules))
+  syncRulesToMain(rules)
 }
 
 export const useActionsStore = createAppStore<ActionsState>((set, get) => ({
@@ -44,6 +53,7 @@ export const useActionsStore = createAppStore<ActionsState>((set, get) => ({
   loadRules: async () => {
     const rules = loadFromStorage()
     set({ rules, isLoaded: true })
+    syncRulesToMain(rules)
   },
 
   addRule: async (rule) => {

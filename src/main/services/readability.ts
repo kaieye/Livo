@@ -14,17 +14,17 @@ export interface ReadabilityResult {
 const READABILITY_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
+const MAX_CONTENT_BYTES = 2 * 1024 * 1024
+const FETCH_TIMEOUT_MS = 15_000
+
 function sanitizeHTMLString(dirtyDocumentString: string): string {
   const { window } = parseHTML(dirtyDocumentString)
   const DOMPurify = createDOMPurify(window as any)
   return DOMPurify.sanitize(dirtyDocumentString)
 }
 
-async function decodeResponseBody(response: Response): Promise<string> {
-  const buffer = await response.arrayBuffer()
-  const bytes = Buffer.from(buffer)
-  const contentType = response.headers.get('content-type') || ''
-  const charsetFromHeader = contentType.match(/charset=([\w-]+)/i)?.[1]
+function decodeHtmlBytes(bytes: Buffer, contentTypeHeader: string): string {
+  const charsetFromHeader = contentTypeHeader.match(/charset=([\w-]+)/i)?.[1]
   const detectedCharset = charsetFromHeader || chardet.detect(bytes) || 'utf-8'
 
   try {
@@ -32,6 +32,65 @@ async function decodeResponseBody(response: Response): Promise<string> {
   } catch {
     return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
   }
+}
+
+function assertSupportedContentType(contentTypeHeader: string): void {
+  const ct = contentTypeHeader.toLowerCase()
+  if (!ct) return // Some servers omit the header; let the parser attempt anyway.
+  if (
+    !/(?:text\/html|application\/xhtml\+xml|application\/xml|text\/xml)/.test(
+      ct,
+    )
+  ) {
+    throw new Error(`返回内容不是网页 (content-type: ${contentTypeHeader})`)
+  }
+}
+
+async function readBodyWithLimit(
+  response: Response,
+  controller: AbortController,
+  maxBytes: number,
+): Promise<Buffer> {
+  const reader = response.body?.getReader()
+  if (!reader) {
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (buffer.byteLength > maxBytes) {
+      throw new Error('页面体积超过 2MB 上限，已停止抓取')
+    }
+    return buffer
+  }
+
+  const chunks: Buffer[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > maxBytes) {
+      controller.abort()
+      throw new Error('页面体积超过 2MB 上限，已停止抓取')
+    }
+    chunks.push(Buffer.from(value))
+  }
+  return Buffer.concat(chunks)
+}
+
+function looksLikeVerificationPage(html: string, response: Response): boolean {
+  if (response.headers.get('cf-mitigated')) return true
+  const head = html.slice(0, 4000).toLowerCase()
+  const signals = [
+    'cf-browser-verification',
+    'cf_chl_opt',
+    '/cdn-cgi/challenge-platform',
+    'just a moment',
+    'checking your browser before',
+    'attention required! | cloudflare',
+    'please enable javascript and cookies',
+    'g-recaptcha',
+    'h-captcha',
+  ]
+  return signals.some((signal) => head.includes(signal))
 }
 
 function extractTitleFromDocument(document: Document): string {
@@ -140,23 +199,46 @@ export function extractReadableContent(
 export async function fetchReadableContent(
   url: string,
 ): Promise<ReadabilityResult> {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': READABILITY_USER_AGENT,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    },
-    signal: AbortSignal.timeout(15_000),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch page: ${response.status} ${response.statusText}`,
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': READABILITY_USER_AGENT,
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch page: ${response.status} ${response.statusText}`,
+      )
+    }
+
+    const contentTypeHeader = response.headers.get('content-type') || ''
+    assertSupportedContentType(contentTypeHeader)
+
+    const bytes = await readBodyWithLimit(
+      response,
+      controller,
+      MAX_CONTENT_BYTES,
     )
-  }
+    const html = decodeHtmlBytes(bytes, contentTypeHeader)
 
-  const html = await decodeResponseBody(response)
-  return extractReadableContent(html, url)
+    if (looksLikeVerificationPage(html, response)) {
+      throw new Error(
+        '该页面需要人工验证（如 Cloudflare 人机校验），请在浏览器中打开',
+      )
+    }
+
+    return extractReadableContent(html, url)
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export function resolveRelativeUrls(html: string, baseUrl: string): string {

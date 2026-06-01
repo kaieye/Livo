@@ -185,6 +185,8 @@ export interface AIConfig {
   enableSystemPrompt?: boolean
   systemPromptTemplate?: string
   chatPersonaPrompt?: string
+  summaryPrompt?: string
+  translationPrompt?: string
 }
 
 export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE =
@@ -431,6 +433,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enableSystemPrompt: false,
     systemPromptTemplate: DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
     chatPersonaPrompt: '',
+    summaryPrompt: '',
+    translationPrompt: '',
   },
   agentPermissions: { ...DEFAULT_AGENT_PERMISSION_SETTINGS },
   general: {
@@ -540,6 +544,7 @@ export const IPC = {
   AGENT_TRACES_CLEAR: 'agent:traces-clear',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+  ACTIONS_SYNC: 'actions:sync',
   READABILITY_FETCH: 'readability:fetch',
   DISCOVER_CATEGORIES: 'discover:categories',
   DISCOVER_POPULAR: 'discover:popular',

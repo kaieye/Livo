@@ -27,6 +27,8 @@ import { logWarnQuiet } from './logger'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from './refresh-log-store'
 import { runConcurrencyPool } from '../utils/concurrency-pool'
+import { evaluateActionRules } from '../../shared/actions'
+import { getActionRules } from './action-rules-store'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshAllInFlight: Promise<RefreshAllResult> | null = null
@@ -175,6 +177,47 @@ export function filterForeignEntries(
   })
 
   return filtered
+}
+
+/**
+ * Apply user-defined automation rules at ingestion time: drop blocked entries
+ * and pre-set star / read flags. Other effect types are evaluated but left for
+ * future handling.
+ */
+function applyActionRules(entries: Entry[], feed: Feed): Entry[] {
+  const rules = getActionRules()
+  if (rules.length === 0) return entries
+
+  const feedContext = {
+    title: feed.title,
+    url: feed.url,
+    category: feed.category,
+  }
+
+  const kept: Entry[] = []
+  for (const entry of entries) {
+    const decision = evaluateActionRules(
+      rules,
+      {
+        title: entry.title,
+        content: entry.content,
+        author: entry.author,
+        url: entry.url,
+      },
+      feedContext,
+    )
+    if (decision.blocked) continue
+    if (decision.star || decision.markRead) {
+      kept.push({
+        ...entry,
+        isStarred: entry.isStarred || decision.star,
+        isRead: entry.isRead || decision.markRead,
+      })
+    } else {
+      kept.push(entry)
+    }
+  }
+  return kept
 }
 
 function isKnownInstagramUpstreamFailure(error: unknown): boolean {
@@ -390,12 +433,13 @@ export async function refreshSingleFeed(
         now,
       )
       // Filter out entries injected by FeedBurner from unrelated domains
-      const entriesToInsert = filterForeignEntries(
+      const foreignFiltered = filterForeignEntries(
         builtEntries,
         feed.siteUrl,
         parsed.link,
         feed.url,
       )
+      const entriesToInsert = applyActionRules(foreignFiltered, feed)
       // IMPORTANT:
       // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
       // Full replacement can permanently drop history when upstream temporarily returns

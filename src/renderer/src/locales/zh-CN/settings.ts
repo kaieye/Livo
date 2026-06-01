@@ -193,6 +193,14 @@ export const zhCNSettings = {
   aiModelConfigDesc: '选择服务提供商并填写 API Key、Base URL 和模型。',
   aiConnectionTest: '连接测试',
   aiSystemPromptSection: '系统提示词',
+  aiTaskPromptSection: 'AI 任务提示词',
+  aiTaskPromptSectionDesc: '自定义摘要与翻译的提示词；留空则使用内置默认模板。',
+  aiSummaryPrompt: '摘要提示词',
+  aiSummaryPromptPlaceholder:
+    '留空使用默认。可使用 {{lang}} 占位符表示目标语言。',
+  aiTranslationPrompt: '翻译提示词',
+  aiTranslationPromptPlaceholder:
+    '留空使用默认。可使用 {{targetLanguage}} 占位符表示目标语言。',
   apiKeyPerProviderHint:
     '每个服务提供商的 API Key 会分别记住，切换时自动恢复。',
   aiAgentPermissionsLinkDesc:

@@ -6,6 +6,11 @@ import { createOpenAIClient, validateAIConfig } from '../services/ai-client'
 import { normalizeAIError } from '../services/provider-protocol'
 import { runWithRetry } from '../services/ai-retry'
 import { ConnectionTestService } from '../services/connection-test'
+import {
+  buildSummaryPrompt,
+  buildTranslatePrompt,
+  clampContentToBudget,
+} from '../services/ai-prompts'
 
 export function registerAIHandlers(): void {
   // Summarize content
@@ -29,11 +34,11 @@ export function registerAIHandlers(): void {
               messages: [
                 {
                   role: 'system',
-                  content: `You are a helpful assistant that summarizes articles. Provide a concise summary in ${lang}. Keep it under 200 words. Focus on key points and main ideas.`,
+                  content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
                 },
                 {
                   role: 'user',
-                  content: `Please summarize the following article:\n\n${content.slice(0, 8000)}`,
+                  content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
                 },
               ],
               temperature: 0.3,
@@ -64,9 +69,8 @@ export function registerAIHandlers(): void {
       try {
         const client = createOpenAIClient(aiConfig)
 
-        // Multi-tier degrade (TranslationPipeline equivalent): each retry trims
-        // the context so an over-long request that returned empty can succeed
-        // on a shorter one.
+        // Each retry trims the context further so an over-long request that
+        // returned empty can still succeed on a shorter one.
         const contentBudgets = [6000, 4000, 2500]
 
         const translation = await runWithRetry(
@@ -78,17 +82,14 @@ export function registerAIHandlers(): void {
               messages: [
                 {
                   role: 'system',
-                  content: `You are a professional translator. Translate the following content to ${targetLanguage}.
-Rules:
-- Preserve original HTML formatting and tags
-- Only output the translation, no explanations or commentary
-- Keep proper nouns, code, URLs, and technical terms as-is
-- Translate naturally, not word-by-word
-- If the content is already in the target language, output it unchanged`,
+                  content: buildTranslatePrompt(
+                    targetLanguage,
+                    aiConfig.translationPrompt,
+                  ),
                 },
                 {
                   role: 'user',
-                  content: content.slice(0, budget),
+                  content: clampContentToBudget(content, budget),
                 },
               ],
               temperature: 0.2,

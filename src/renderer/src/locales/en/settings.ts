@@ -210,6 +210,15 @@ export const enSettings = {
     'Pick a provider and fill in the API Key, Base URL and model.',
   aiConnectionTest: 'Connection Test',
   aiSystemPromptSection: 'System Prompt',
+  aiTaskPromptSection: 'AI Task Prompts',
+  aiTaskPromptSectionDesc:
+    'Customize the summary and translation prompts; leave blank to use the built-in defaults.',
+  aiSummaryPrompt: 'Summary Prompt',
+  aiSummaryPromptPlaceholder:
+    'Leave blank for default. Use the {{lang}} placeholder for the target language.',
+  aiTranslationPrompt: 'Translation Prompt',
+  aiTranslationPromptPlaceholder:
+    'Leave blank for default. Use the {{targetLanguage}} placeholder for the target language.',
   apiKeyPerProviderHint:
     'API keys are remembered per provider and restored automatically when you switch.',
   aiAgentPermissionsLinkDesc:

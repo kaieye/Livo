@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Cpu,
   MessageSquareText,
+  FileText,
   Wifi,
   RotateCcw,
   ShieldCheck,
@@ -34,13 +35,13 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-border bg-surface p-4 dark:bg-surface-dark-secondary">
+    <section className="border-border bg-surface dark:bg-surface-dark-secondary rounded-xl border p-4">
       <div className="mb-3 flex items-center gap-2">
         <Icon size={16} className="text-accent" />
         <h4 className="text-sm font-medium">{title}</h4>
       </div>
       {description && (
-        <p className="mb-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-3 text-xs">
           {description}
         </p>
       )}
@@ -128,9 +129,9 @@ export function AISettings() {
   return (
     <div className="space-y-5">
       {/* Notice */}
-      <div className="rounded-lg border border-accent/20 bg-accent/5 p-3 text-sm">
-        <p className="mb-1 font-medium text-accent">{t('settings.aiNotice')}</p>
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+      <div className="border-accent/20 bg-accent/5 rounded-lg border p-3 text-sm">
+        <p className="text-accent mb-1 font-medium">{t('settings.aiNotice')}</p>
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
           {t('settings.aiNoticeDesc')}
         </p>
       </div>
@@ -153,7 +154,7 @@ export function AISettings() {
                 onClick={() => handleProviderChange(key)}
                 className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                   ai.provider === key
-                    ? 'border-accent bg-accent/5 font-medium text-accent'
+                    ? 'border-accent bg-accent/5 text-accent font-medium'
                     : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
                 }`}
               >
@@ -184,12 +185,12 @@ export function AISettings() {
               <button
                 type="button"
                 onClick={() => setShowKey(!showKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+                className="text-text-tertiary absolute right-3 top-1/2 -translate-y-1/2"
               >
                 {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p className="mt-1 text-xs text-text-tertiary">
+            <p className="text-text-tertiary mt-1 text-xs">
               {t('settings.apiKeyPerProviderHint')}
             </p>
           </div>
@@ -215,7 +216,7 @@ export function AISettings() {
             required={isCustomProvider}
             className={inputClass}
           />
-          <p className="mt-1 text-xs text-text-tertiary">
+          <p className="text-text-tertiary mt-1 text-xs">
             {t('settings.baseUrlHint')}
             {providerConfig.defaultBaseUrl || 'N/A'}
           </p>
@@ -263,7 +264,7 @@ export function AISettings() {
           <button
             onClick={handleTestConnection}
             disabled={disableTestConnection}
-            className="rounded-lg bg-accent px-4 py-2 text-sm text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+            className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-sm text-white transition-colors disabled:opacity-50"
           >
             {isTesting ? t('settings.testing') : t('settings.testConnection')}
           </button>
@@ -297,7 +298,7 @@ export function AISettings() {
                 defaultValue: '启用系统提示词',
               })}
             </label>
-            <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
               {t('settings.enableSystemPromptDesc', {
                 defaultValue:
                   '开启后会向模型注入系统身份与上下文提示；关闭则直接调用原模型。',
@@ -345,7 +346,7 @@ export function AISettings() {
             disabled={!ai.enableSystemPrompt}
             className={`${inputClass} resize-y disabled:opacity-60`}
           />
-          <p className="mt-1 text-xs text-text-tertiary">
+          <p className="text-text-tertiary mt-1 text-xs">
             {t('settings.systemPromptTemplateDesc', {
               defaultValue:
                 '用于 AI 对话的 system prompt 模板。{{context}} 会替换为当前文章上下文，{{persona}} 会替换为「AI 个性化 Prompt」。',
@@ -375,7 +376,7 @@ export function AISettings() {
             disabled={!ai.enableSystemPrompt}
             className={`${inputClass} resize-y disabled:opacity-60`}
           />
-          <p className="mt-1 text-xs text-text-tertiary">
+          <p className="text-text-tertiary mt-1 text-xs">
             {t('settings.aiPersonaPromptDesc', {
               defaultValue:
                 '用于 AI 对话的预设系统提示词。保存后每次对话都会自动附加。',
@@ -384,37 +385,90 @@ export function AISettings() {
         </div>
       </SectionCard>
 
+      {/* Task prompts: summary & translation */}
+      <SectionCard
+        icon={FileText}
+        title={t('settings.aiTaskPromptSection', {
+          defaultValue: 'AI 任务提示词',
+        })}
+        description={t('settings.aiTaskPromptSectionDesc', {
+          defaultValue: '自定义摘要与翻译的提示词；留空则使用内置默认模板。',
+        })}
+      >
+        {/* Summary prompt */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            {t('settings.aiSummaryPrompt', { defaultValue: '摘要提示词' })}
+          </label>
+          <textarea
+            value={ai.summaryPrompt || ''}
+            onChange={(e) =>
+              void updateSettingsSection('ai', {
+                summaryPrompt: e.target.value,
+              })
+            }
+            placeholder={t('settings.aiSummaryPromptPlaceholder', {
+              defaultValue:
+                '留空使用默认。可使用 {{lang}} 占位符表示目标语言。',
+            })}
+            rows={4}
+            className={`${inputClass} resize-y`}
+          />
+        </div>
+
+        {/* Translation prompt */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            {t('settings.aiTranslationPrompt', { defaultValue: '翻译提示词' })}
+          </label>
+          <textarea
+            value={ai.translationPrompt || ''}
+            onChange={(e) =>
+              void updateSettingsSection('ai', {
+                translationPrompt: e.target.value,
+              })
+            }
+            placeholder={t('settings.aiTranslationPromptPlaceholder', {
+              defaultValue:
+                '留空使用默认。可使用 {{targetLanguage}} 占位符表示目标语言。',
+            })}
+            rows={4}
+            className={`${inputClass} resize-y`}
+          />
+        </div>
+      </SectionCard>
+
       {/* Agent permissions cross-link */}
       <button
         onClick={() => setActiveTab('agentPermissions')}
-        className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-colors hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary"
+        className="border-border bg-surface hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors"
       >
-        <ShieldCheck size={16} className="flex-shrink-0 text-accent" />
+        <ShieldCheck size={16} className="text-accent flex-shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">
             {t('settings.agentPermissions')}
           </p>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.aiAgentPermissionsLinkDesc')}
           </p>
         </div>
-        <ChevronRight size={16} className="flex-shrink-0 text-text-tertiary" />
+        <ChevronRight size={16} className="text-text-tertiary flex-shrink-0" />
       </button>
 
       {/* Footer: reset + auto-save hint */}
       <div className="flex items-center justify-between gap-3 pt-1">
-        <p className="text-xs text-text-tertiary">
+        <p className="text-text-tertiary text-xs">
           {t('settings.aiAutoSaveHint')}
         </p>
         <div className="flex items-center gap-3">
           {actionMessage && (
-            <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {actionMessage}
             </span>
           )}
           <button
             onClick={handleReset}
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
           >
             <RotateCcw size={14} />
             {t('settings.aiResetDefaults')}

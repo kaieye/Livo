@@ -151,3 +151,48 @@ export function matchAllConditions(
   if (rule.conditions.length === 0) return false
   return rule.conditions.every((c) => matchCondition(c, entry, feed))
 }
+
+export interface ActionRuleDecision {
+  blocked: boolean
+  star: boolean
+  markRead: boolean
+  /** Every effect type from matched rules, de-duplicated and in match order. */
+  effects: ActionEffectType[]
+}
+
+/**
+ * Evaluate all enabled rules against one entry and collapse the matched effects
+ * into a single decision. Effects that change what gets stored (block/star/
+ * mark_read) are surfaced as flags; the rest are returned in `effects` for the
+ * caller to act on.
+ */
+export function evaluateActionRules(
+  rules: ActionRule[],
+  entry: { title: string; content?: string; author?: string; url: string },
+  feed: { title: string; url: string; category?: string },
+): ActionRuleDecision {
+  const decision: ActionRuleDecision = {
+    blocked: false,
+    star: false,
+    markRead: false,
+    effects: [],
+  }
+  const seen = new Set<ActionEffectType>()
+
+  for (const rule of rules) {
+    if (!rule.enabled) continue
+    if (!matchAllConditions(rule, entry, feed)) continue
+
+    for (const effect of rule.actions) {
+      if (!seen.has(effect.type)) {
+        seen.add(effect.type)
+        decision.effects.push(effect.type)
+      }
+      if (effect.type === 'block') decision.blocked = true
+      else if (effect.type === 'star') decision.star = true
+      else if (effect.type === 'mark_read') decision.markRead = true
+    }
+  }
+
+  return decision
+}
