@@ -12,11 +12,17 @@ import {
   clampContentToBudget,
 } from '../services/ai-prompts'
 
+function sendToAllWindows(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(channel, payload)
+  }
+}
+
 export function registerAIHandlers(): void {
   // Summarize content
   ipcMain.handle(
     IPC.AI_SUMMARIZE,
-    async (_event, content: string, language?: string) => {
+    async (_event, content: string, language?: string, requestId?: string) => {
       const settings = getSettings()
       const aiConfig = settings.ai
 
@@ -26,21 +32,46 @@ export function registerAIHandlers(): void {
       try {
         const client = createOpenAIClient(aiConfig)
         const lang = language || settings.general.language || 'zh-CN'
+        const messages: OpenAI.ChatCompletionMessageParam[] = [
+          {
+            role: 'system',
+            content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
+          },
+          {
+            role: 'user',
+            content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
+          },
+        ]
+
+        if (requestId) {
+          const stream = await client.chat.completions.create({
+            model: aiConfig.model,
+            messages,
+            temperature: 0.3,
+            max_tokens: 500,
+            stream: true,
+          })
+
+          let summary = ''
+          for await (const chunk of stream) {
+            const delta = chunk.choices[0]?.delta?.content || ''
+            if (!delta) continue
+            summary += delta
+            sendToAllWindows('ai:summary-stream-chunk', {
+              requestId,
+              content: delta,
+            })
+          }
+          sendToAllWindows('ai:summary-stream-done', { requestId })
+
+          return { success: true, summary }
+        }
 
         const summary = await runWithRetry(
           async () => {
             const response = await client.chat.completions.create({
               model: aiConfig.model,
-              messages: [
-                {
-                  role: 'system',
-                  content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
-                },
-                {
-                  role: 'user',
-                  content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
-                },
-              ],
+              messages,
               temperature: 0.3,
               max_tokens: 500,
             })
@@ -51,7 +82,14 @@ export function registerAIHandlers(): void {
 
         return { success: true, summary }
       } catch (error) {
-        return { success: false, error: normalizeAIError(error, aiConfig) }
+        const normalized = normalizeAIError(error, aiConfig)
+        if (requestId) {
+          sendToAllWindows('ai:summary-stream-error', {
+            requestId,
+            error: normalized,
+          })
+        }
+        return { success: false, error: normalized }
       }
     },
   )
@@ -59,7 +97,12 @@ export function registerAIHandlers(): void {
   // Translate content
   ipcMain.handle(
     IPC.AI_TRANSLATE,
-    async (_event, content: string, targetLanguage: string) => {
+    async (
+      _event,
+      content: string,
+      targetLanguage: string,
+      requestId?: string,
+    ) => {
       const settings = getSettings()
       const aiConfig = settings.ai
 
@@ -68,6 +111,43 @@ export function registerAIHandlers(): void {
 
       try {
         const client = createOpenAIClient(aiConfig)
+        const systemPrompt = buildTranslatePrompt(
+          targetLanguage,
+          aiConfig.translationPrompt,
+        )
+
+        if (requestId) {
+          const stream = await client.chat.completions.create({
+            model: aiConfig.model,
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt,
+              },
+              {
+                role: 'user',
+                content: clampContentToBudget(content, 6000),
+              },
+            ],
+            temperature: 0.2,
+            max_tokens: 4000,
+            stream: true,
+          })
+
+          let translation = ''
+          for await (const chunk of stream) {
+            const delta = chunk.choices[0]?.delta?.content || ''
+            if (!delta) continue
+            translation += delta
+            sendToAllWindows('ai:translate-stream-chunk', {
+              requestId,
+              content: delta,
+            })
+          }
+          sendToAllWindows('ai:translate-stream-done', { requestId })
+
+          return { success: true, translation }
+        }
 
         // Each retry trims the context further so an over-long request that
         // returned empty can still succeed on a shorter one.
@@ -82,10 +162,7 @@ export function registerAIHandlers(): void {
               messages: [
                 {
                   role: 'system',
-                  content: buildTranslatePrompt(
-                    targetLanguage,
-                    aiConfig.translationPrompt,
-                  ),
+                  content: systemPrompt,
                 },
                 {
                   role: 'user',
@@ -102,7 +179,14 @@ export function registerAIHandlers(): void {
 
         return { success: true, translation }
       } catch (error) {
-        return { success: false, error: normalizeAIError(error, aiConfig) }
+        const normalized = normalizeAIError(error, aiConfig)
+        if (requestId) {
+          sendToAllWindows('ai:translate-stream-error', {
+            requestId,
+            error: normalized,
+          })
+        }
+        return { success: false, error: normalized }
       }
     },
   )
@@ -153,7 +237,6 @@ export function registerAIHandlers(): void {
 
       try {
         const client = createOpenAIClient(aiConfig)
-        const windows = BrowserWindow.getAllWindows()
 
         const stream = await client.chat.completions.create({
           model: aiConfig.model,
@@ -166,28 +249,22 @@ export function registerAIHandlers(): void {
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content || ''
           if (content) {
-            for (const win of windows) {
-              win.webContents.send('ai:chat-stream-chunk', {
-                requestId,
-                content,
-              })
-            }
+            sendToAllWindows('ai:chat-stream-chunk', {
+              requestId,
+              content,
+            })
           }
         }
 
-        for (const win of windows) {
-          win.webContents.send('ai:chat-stream-done', { requestId })
-        }
+        sendToAllWindows('ai:chat-stream-done', { requestId })
 
         return { success: true }
       } catch (error) {
         const normalized = normalizeAIError(error, aiConfig)
-        for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send('ai:chat-stream-error', {
-            requestId,
-            error: normalized,
-          })
-        }
+        sendToAllWindows('ai:chat-stream-error', {
+          requestId,
+          error: normalized,
+        })
         return { success: false, error: normalized }
       }
     },

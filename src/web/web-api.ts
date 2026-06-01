@@ -553,12 +553,14 @@ async function callAIStream(
   onChunk: (content: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
+  options: { temperature?: number; max_tokens?: number } = {},
 ): Promise<void> {
   const settings = await getSettings()
   const ai = settings.ai
   if (!ai.apiKey && ai.provider !== 'ollama') {
-    onError('请先在设置中配置 AI API Key')
-    return
+    const message = '请先在设置中配置 AI API Key'
+    onError(message)
+    throw new Error(message)
   }
 
   const baseUrl = ai.baseUrl || getDefaultBaseUrl(ai.provider)
@@ -572,8 +574,8 @@ async function callAIStream(
       body: JSON.stringify({
         model: ai.model,
         messages,
-        temperature: 0.7,
-        max_tokens: 4000,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.max_tokens ?? 4000,
         stream: true,
       }),
     })
@@ -611,7 +613,9 @@ async function callAIStream(
     }
     onDone()
   } catch (error) {
-    onError(String(error))
+    const message = String(error)
+    onError(message)
+    throw error
   }
 }
 
@@ -1134,46 +1138,90 @@ export function createWebAPI(): ElectronAPI {
     },
 
     ai: {
-      summarize: async (content: string, language?: string) => {
+      summarize: async (
+        content: string,
+        language?: string,
+        requestId?: string,
+      ) => {
         const settings = await getSettings()
         if (!settings.ai.apiKey && settings.ai.provider !== 'ollama')
           return { success: false, error: '请先在设置中配置 AI API Key' }
         try {
           const lang = language || settings.general.language || 'zh-CN'
-          const result = await callAI(
-            [
-              {
-                role: 'system',
-                content: `You are a helpful assistant that summarizes articles. Provide a concise summary in ${lang}. Keep it under 200 words. Focus on key points and main ideas.`,
+          const messages = [
+            {
+              role: 'system',
+              content: `You are a helpful assistant that summarizes articles. Provide a concise summary in ${lang}. Keep it under 200 words. Focus on key points and main ideas.`,
+            },
+            {
+              role: 'user',
+              content: `Please summarize the following article:\n\n${content.slice(0, 8000)}`,
+            },
+          ]
+          if (requestId) {
+            let summary = ''
+            await callAIStream(
+              messages,
+              (delta) => {
+                summary += delta
+                emit('ai:summary-stream-chunk', { requestId, content: delta })
               },
-              {
-                role: 'user',
-                content: `Please summarize the following article:\n\n${content.slice(0, 8000)}`,
-              },
-            ],
-            { temperature: 0.3, max_tokens: 500 },
-          )
+              () => emit('ai:summary-stream-done', { requestId }),
+              (error) => emit('ai:summary-stream-error', { requestId, error }),
+              { temperature: 0.3, max_tokens: 500 },
+            )
+            return { success: true, summary }
+          }
+
+          const result = await callAI(messages, {
+            temperature: 0.3,
+            max_tokens: 500,
+          })
           return { success: true, summary: result.content }
         } catch (error) {
           return { success: false, error: String(error) }
         }
       },
 
-      translate: async (content: string, targetLanguage: string) => {
+      translate: async (
+        content: string,
+        targetLanguage: string,
+        requestId?: string,
+      ) => {
         const settings = await getSettings()
         if (!settings.ai.apiKey && settings.ai.provider !== 'ollama')
           return { success: false, error: '请先在设置中配置 AI API Key' }
         try {
-          const result = await callAI(
-            [
-              {
-                role: 'system',
-                content: `You are a professional translator. Translate the following content to ${targetLanguage}. Preserve original HTML formatting and tags. Only output the translation, no explanations.`,
+          const messages = [
+            {
+              role: 'system',
+              content: `You are a professional translator. Translate the following content to ${targetLanguage}. Preserve original HTML formatting and tags. Only output the translation, no explanations.`,
+            },
+            { role: 'user', content: content.slice(0, 6000) },
+          ]
+          if (requestId) {
+            let translation = ''
+            await callAIStream(
+              messages,
+              (delta) => {
+                translation += delta
+                emit('ai:translate-stream-chunk', {
+                  requestId,
+                  content: delta,
+                })
               },
-              { role: 'user', content: content.slice(0, 6000) },
-            ],
-            { temperature: 0.2, max_tokens: 4000 },
-          )
+              () => emit('ai:translate-stream-done', { requestId }),
+              (error) =>
+                emit('ai:translate-stream-error', { requestId, error }),
+              { temperature: 0.2, max_tokens: 4000 },
+            )
+            return { success: true, translation }
+          }
+
+          const result = await callAI(messages, {
+            temperature: 0.2,
+            max_tokens: 4000,
+          })
           return { success: true, translation: result.content }
         } catch (error) {
           return { success: false, error: String(error) }

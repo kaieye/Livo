@@ -8,8 +8,13 @@ import {
   makeEntryIdentityKey,
   titlesLikelySameForRead,
 } from './entry-identity'
+import {
+  areEntrySimHashesNearDuplicate,
+  computeEntrySimHash,
+} from './entry-simhash'
 
 const MATCH_WINDOW_MS = 48 * 60 * 60 * 1000
+const NEAR_DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 export function isBrokenScraperEntry(entry: Entry): boolean {
   return /instagram\.com\/(?:p|reel)\/\d{13,}\/?$/i.test(entry.url || '')
@@ -216,6 +221,61 @@ function dedupeMirrorPairsForRead(entries: Entry[]): Entry[] {
   return out.filter((entry) => !isMirrorSingleForRead(entry))
 }
 
+function cloneEntry(entry: Entry): Entry {
+  return {
+    ...entry,
+    media: entry.media ? entry.media.map((item) => ({ ...item })) : entry.media,
+  }
+}
+
+function mergeEntriesForReadDisplay(existing: Entry, incoming: Entry): Entry {
+  const keepIncoming =
+    entryRichnessForRead(incoming) > entryRichnessForRead(existing) ||
+    (incoming.publishedAt || 0) > (existing.publishedAt || 0)
+  const winner = cloneEntry(keepIncoming ? incoming : existing)
+  const loser = keepIncoming ? existing : incoming
+  mergeEntryData(winner, loser)
+  winner.isRead = existing.isRead && incoming.isRead
+  winner.isStarred = existing.isStarred || incoming.isStarred
+  return winner
+}
+
+function dedupeNearDuplicateContentForRead(entries: Entry[]): Entry[] {
+  const out: Entry[] = []
+  const hashes: Array<{ hash: bigint; entryIndex: number }> = []
+
+  for (const entry of entries) {
+    const hash = computeEntrySimHash(entry)
+    if (!hash) {
+      out.push(entry)
+      continue
+    }
+
+    let matchIndex = -1
+    for (const candidate of hashes) {
+      const existing = out[candidate.entryIndex]
+      if (!existing) continue
+      const delta = Math.abs(
+        (existing.publishedAt || 0) - (entry.publishedAt || 0),
+      )
+      if (delta > NEAR_DUPLICATE_WINDOW_MS) continue
+      if (!areEntrySimHashesNearDuplicate(candidate.hash, hash)) continue
+      matchIndex = candidate.entryIndex
+      break
+    }
+
+    if (matchIndex === -1) {
+      hashes.push({ hash, entryIndex: out.length })
+      out.push(entry)
+      continue
+    }
+
+    out[matchIndex] = mergeEntriesForReadDisplay(out[matchIndex], entry)
+  }
+
+  return out
+}
+
 export function dedupeEntriesForRead(
   entries: Entry[],
   markEntriesOrderDirty: () => void,
@@ -278,7 +338,9 @@ export function dedupeEntriesForRead(
     }
   }
 
-  return dedupeMirrorPairsForRead(goodEntries)
+  return dedupeNearDuplicateContentForRead(
+    dedupeMirrorPairsForRead(goodEntries),
+  )
 }
 
 export function dedupeEntriesInPlace(

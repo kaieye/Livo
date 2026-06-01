@@ -46,6 +46,38 @@ describe('entry dedupe helpers', () => {
     expect(result[0].content).toBe('much longer content')
   })
 
+  it('dedupes near-identical content across feeds for read display', () => {
+    const now = Date.now()
+    const articleContent =
+      'Local-first RSS apps keep articles on the device, make reading reliable offline, reduce server lock-in, and still allow optional sync when a user needs multiple devices. This helps readers search archives quickly and avoid losing saved articles.'
+    const entries = [
+      createEntry({
+        id: 'a',
+        feedId: 'feed-a',
+        title: 'Why local RSS matters',
+        url: 'https://example.com/local-rss',
+        content: articleContent,
+        isRead: true,
+        publishedAt: now,
+      }),
+      createEntry({
+        id: 'b',
+        feedId: 'feed-b',
+        title: 'Local readers and offline reliability',
+        url: 'https://mirror.example.net/offline-reader',
+        content: articleContent,
+        isStarred: true,
+        publishedAt: now + 60_000,
+      }),
+    ]
+
+    const result = dedupeEntriesForRead(entries, () => {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].isRead).toBe(false)
+    expect(result[0].isStarred).toBe(true)
+  })
+
   it('removes broken scraper entries during in-place dedupe', () => {
     const now = Date.now()
     const entries = [

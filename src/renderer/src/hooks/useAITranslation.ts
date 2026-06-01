@@ -1,5 +1,11 @@
 import { useState, useCallback, useRef } from 'react'
 
+interface AIStreamPayload {
+  requestId: string
+  content?: string
+  error?: string
+}
+
 /**
  * Per-paragraph error record. Key is paragraph index, value is error message.
  * Only failed paragraphs appear; successful/empty paragraphs are absent.
@@ -27,6 +33,16 @@ export interface AITranslationState {
   toggle: () => void
   /** Reset all state — call on entry change */
   reset: () => void
+}
+
+function createAIRequestId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function isAIStreamPayload(value: unknown): value is AIStreamPayload {
+  if (!value || typeof value !== 'object') return false
+  const payload = value as Record<string, unknown>
+  return typeof payload.requestId === 'string'
 }
 
 /**
@@ -70,24 +86,48 @@ export function useAITranslation(): AITranslationState {
           continue
         }
 
+        let cleanupChunk = () => {}
+        let cleanupError = () => {}
         try {
+          const streamRequestId = createAIRequestId(`translate-${i}`)
+          cleanupChunk = window.api.on('ai:translate-stream-chunk', (data) => {
+            if (!isAIStreamPayload(data)) return
+            if (data.requestId !== streamRequestId || !data.content) return
+            if (requestId !== requestIdRef.current) return
+
+            results[i] = `${results[i] ?? ''}${data.content}`
+            setTranslatedParagraphs([...results])
+          })
+          cleanupError = window.api.on('ai:translate-stream-error', (data) => {
+            if (!isAIStreamPayload(data)) return
+            if (data.requestId !== streamRequestId) return
+            if (requestId !== requestIdRef.current) return
+
+            errors[i] = data.error ?? 'Translation failed'
+            setErrorMap({ ...errors })
+          })
           const result = await window.api.ai.translate(
             paragraphs[i],
             targetLang,
+            streamRequestId,
           )
+
           // Guard again after async boundary
           if (requestId !== requestIdRef.current) return
 
           if (result.success) {
-            results.push(result.translation)
+            results[i] = result.translation
           } else {
-            results.push('')
+            results[i] = ''
             errors[i] = result.error ?? 'Translation failed'
           }
         } catch (err) {
           if (requestId !== requestIdRef.current) return
-          results.push('')
+          results[i] = ''
           errors[i] = String(err)
+        } finally {
+          cleanupChunk()
+          cleanupError()
         }
 
         // Progressive update — show each paragraph as it completes

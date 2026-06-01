@@ -82,10 +82,10 @@ const api = {
 
   // AI operations
   ai: {
-    summarize: (content: string, language?: string) =>
-      ipcRenderer.invoke(IPC.AI_SUMMARIZE, content, language),
-    translate: (content: string, targetLanguage: string) =>
-      ipcRenderer.invoke(IPC.AI_TRANSLATE, content, targetLanguage),
+    summarize: (content: string, language?: string, requestId?: string) =>
+      ipcRenderer.invoke(IPC.AI_SUMMARIZE, content, language, requestId),
+    translate: (content: string, targetLanguage: string, requestId?: string) =>
+      ipcRenderer.invoke(IPC.AI_TRANSLATE, content, targetLanguage, requestId),
     chat: (messages: Array<{ role: string; content: string }>) =>
       ipcRenderer.invoke(IPC.AI_CHAT, messages),
     chatStream: (

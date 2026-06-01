@@ -1,5 +1,11 @@
 import { useState, useCallback, useRef } from 'react'
 
+interface AIStreamPayload {
+  requestId: string
+  content?: string
+  error?: string
+}
+
 interface AISummaryState {
   /** The generated summary text, null when no summary has been generated */
   summary: string | null
@@ -11,6 +17,16 @@ interface AISummaryState {
   summarize: (content: string, language?: string) => Promise<void>
   /** Reset all state (summary, error, loading) — call on entry change */
   reset: () => void
+}
+
+function createAIRequestId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function isAIStreamPayload(value: unknown): value is AIStreamPayload {
+  if (!value || typeof value !== 'object') return false
+  const payload = value as Record<string, unknown>
+  return typeof payload.requestId === 'string'
 }
 
 /**
@@ -33,13 +49,31 @@ export function useAISummary(): AISummaryState {
 
   const summarize = useCallback(async (content: string, language?: string) => {
     const requestId = ++requestIdRef.current
+    const streamRequestId = createAIRequestId('summary')
 
     setSummary(null)
     setError(null)
     setIsLoading(true)
 
+    const cleanupChunk = window.api.on('ai:summary-stream-chunk', (data) => {
+      if (!isAIStreamPayload(data)) return
+      if (data.requestId !== streamRequestId || !data.content) return
+      if (requestId !== requestIdRef.current) return
+      setSummary((prev) => `${prev ?? ''}${data.content}`)
+    })
+    const cleanupError = window.api.on('ai:summary-stream-error', (data) => {
+      if (!isAIStreamPayload(data)) return
+      if (data.requestId !== streamRequestId) return
+      if (requestId !== requestIdRef.current) return
+      setError(data.error ?? 'Unknown error')
+    })
+
     try {
-      const result = await window.api.ai.summarize(content, language)
+      const result = await window.api.ai.summarize(
+        content,
+        language,
+        streamRequestId,
+      )
 
       // Guard against stale responses (user navigated away mid-request)
       if (requestId !== requestIdRef.current) return
@@ -59,6 +93,8 @@ export function useAISummary(): AISummaryState {
       if (requestId === requestIdRef.current) {
         setIsLoading(false)
       }
+      cleanupChunk()
+      cleanupError()
     }
   }, [])
 
