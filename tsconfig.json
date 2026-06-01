@@ -1,9 +1,16 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./apps/desktop/tsconfig.json" },
-    { "path": "./packages/models/tsconfig.json" },
-    { "path": "./packages/utils/tsconfig.json" },
-    { "path": "./packages/shared/tsconfig.json" }
-  ]
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["src/renderer/src/*"],
+      "@main/*": ["src/main/*"],
+      "@preload/*": ["src/preload/*"],
+      "@shared": ["src/shared/index.ts"],
+      "@shared/*": ["src/shared/*"]
+    }
+  },
+  "include": ["src/**/*", "scripts/**/*", "*.ts", "*.mjs", "*.cjs"],
+  "exclude": ["node_modules", "out", "dist", "dist-web"]
 }

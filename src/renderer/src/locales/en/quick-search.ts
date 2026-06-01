@@ -1,0 +1,15 @@
+export const enQuickSearch = {
+  placeholder: 'Search feeds, articles...',
+  all: 'All',
+  feeds: 'Feeds',
+  articles: 'Articles',
+  typeToSearch: 'Type to start searching',
+  searchHint: 'Tab to switch type · ↑↓ select · Enter confirm',
+  noResults: 'No matching results',
+  feedsSection: 'Feeds',
+  articlesSection: 'Articles',
+  navHint: '↑↓ Navigate',
+  openHint: 'Enter Open',
+  switchTypeHint: 'Tab Switch',
+  closeHint: 'Esc Close',
+}

@@ -2,36 +2,34 @@
 
 ## 项目定位
 
-Livo 是一个开源 RSS 阅读器项目，当前以 monorepo 形式维护，目标是提供本地优先、可扩展、支持 AI 能力的多端阅读体验。
+Livo 是一个开源 RSS 阅读器项目，当前仓库只维护桌面端主应用与其 Web 入口，目标是提供本地优先、可扩展、支持 AI 能力的阅读体验。
 
-当前仓库的主要实现重心：
+当前仓库的实现重心：
 
-- `apps/desktop`：Electron 桌面端与 Web 入口
-- `apps/harmony`：HarmonyOS 版本与相关实验实现
-- `packages/*`：跨端共享类型、规则与纯工具逻辑
+- `src/main`：Electron 主进程
+- `src/preload`：安全桥接层
+- `src/renderer`：React 渲染层
+- `src/web`：Web 端入口与适配
+- `src/shared`：桌面端内部共享类型、规则、设置与纯工具逻辑
 
 ## 仓库结构
 
 ```text
 Livo/
-├── apps/
-│   ├── desktop/          # 当前桌面端主实现，含 Electron 与 Web 入口
-│   └── harmony/          # HarmonyOS 端代码、构建脚本与测试
-├── packages/
-│   ├── models/           # 跨端共享模型与类型
-│   ├── shared/           # 跨端共享配置、规则、发现数据、快捷键等
-│   └── utils/            # 跨端纯工具逻辑
-├── docs/                 # 设计文档、计划与项目文档
-├── .agents/              # 本地 agent / workflow 相关资源
-├── .claude/              # 本地 Claude / skill 相关资源
-├── package.json          # 根工作区脚本与依赖
-├── pnpm-workspace.yaml   # pnpm workspace 配置
-└── turbo.json            # Turbo 任务编排配置
+├── src/
+│   ├── main/              # Electron 主进程
+│   ├── preload/           # 安全桥接层
+│   ├── renderer/          # React 渲染层
+│   ├── shared/            # 本地共享模型、规则、设置、工具逻辑
+│   └── web/               # Web 端入口与适配
+├── scripts/               # 构建与调试脚本
+├── docs/                  # 设计文档、计划与项目文档
+├── package.json           # 单应用脚本与依赖
+├── tsconfig.json          # TypeScript 主配置
+└── eslint.config.mjs      # ESLint 配置
 ```
 
 ## 技术栈
-
-### Desktop / Web
 
 - Electron 33
 - React 19
@@ -39,101 +37,50 @@ Livo/
 - Vite
 - Zustand
 - TailwindCSS 3
-
-### Harmony
-
-- ArkTS
-- ArkUI / HarmonyOS NEXT
-- hvigor / DevEco Studio 工具链
-
-### Workspace
-
-- pnpm workspace
-- Turbo
 - ESLint
 - Prettier
 
 ## 目录说明
 
-### `apps/desktop`
+### `src/main`
 
-桌面端主应用，包含：
+Electron 主进程代码，包含窗口管理、数据访问、系统集成与主进程服务。
 
-- `src/main`：Electron 主进程
-- `src/preload`：安全桥接层
-- `src/renderer`：React 渲染层
-- `src/web`：Web 端入口与适配
+### `src/preload`
 
-### `apps/harmony`
+预加载脚本与受限桥接 API。
 
-HarmonyOS 代码目录，包含：
+### `src/renderer`
 
-- `entry/src/main/ets`：ArkTS 页面、组件、服务与工具
-- `tests`：Node 可执行的 Harmony 回归测试
-- `scripts`：Harmony 开发、构建、安装辅助脚本
+桌面端 React UI，包括页面、组件、状态管理与渲染层工具。
 
-### `packages/models`
+### `src/shared`
 
-跨端共享的数据模型与类型出口。
+应用内部共享模块，承载类型、视图模型、设置、发现数据、快捷键与平台无关工具逻辑。
 
-### `packages/shared`
+### `src/web`
 
-跨端共享的规则、设置、发现数据、快捷键定义等稳定模块。
-
-### `packages/utils`
-
-尽量不依赖运行时平台的纯工具逻辑，便于复用与测试。
+浏览器兼容入口与 Web 端适配层。
 
 ## 开发命令
 
-### 根目录常用命令
-
 ```bash
 pnpm install
-pnpm dev:desktop
+pnpm dev
 pnpm dev:web
-pnpm dev:harmony
 pnpm typecheck
 pnpm lint
 pnpm format:check
-pnpm build:desktop
+pnpm build
 pnpm build:web
-pnpm build:harmony:debug
-```
-
-### Harmony 常用命令
-
-```bash
-pnpm prepare:harmony
-pnpm build:harmony:debug
-pnpm build:harmony:release
-pnpm install:harmony:debug
-pnpm run:harmony:debug
 ```
 
 ## 测试与验证
 
-### 通用验证
-
 - `pnpm typecheck`
 - `pnpm lint`
 - `pnpm format:check`
-
-### Harmony 验证
-
-Harmony 目录下有一组 `apps/harmony/tests/*.test.ts` 回归测试，通常通过 Node 直接执行，例如：
-
-```bash
-node --test apps/harmony/tests/home-video-grid.test.ts
-node --test apps/harmony/tests/source-regressions.test.ts
-node --test apps/harmony/tests/video-playable-selection.test.ts
-```
-
-需要确认 Harmony 代码可编译时，额外运行：
-
-```bash
-pnpm build:harmony:debug
-```
+- `pnpm test`
 
 ## 开发约定
 
@@ -146,7 +93,6 @@ pnpm build:harmony:debug
 ## 文档入口
 
 - 项目总览见 [`README.md`](README.md)
-- 桌面端说明见 `apps/desktop/README.md`
 - 设计与实现文档见 `docs/superpowers/specs` 与 `docs/superpowers/plans`
 
 ## 许可证

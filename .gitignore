@@ -17,5 +17,3 @@ Folo-dev/
 .worktrees/
 .omo/
 *.tsbuildinfo
-apps/harmony/.hvigor/
-apps/harmony/entry/build/
