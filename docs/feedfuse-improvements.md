@@ -119,7 +119,6 @@
 
 Livo 前端整体成熟（虚拟化、快捷键体系、zustand 分层都很好），以下是 FeedFuse 几个值得借鉴的小点：
 
-- **URL 即状态**：FeedFuse `src/store/appStore.ts` 把选中的 view/article 同步到 URL query（pushState/replaceState + popstate 恢复），天然支持前进/后退/分享。Livo 用 `react-router-dom`，可把选中态也纳入路由。
 - **设置 draft 模式**：FeedFuse `src/store/settingsStore.ts` 用"草稿 + 校验 + 显式保存"，编辑时改 draft、校验通过才落库。比 Livo 多处即时写设置更可控。
 - **详情/列表双缓存**：`appStore` 用 `articleDetailCache` + `articleSnapshotCache` 分离，保证右栏正文在列表刷新时稳定。
 - **预览图懒加载 + 并发队列**：`ArticleList.tsx` 用 IntersectionObserver 懒加载且**并发限 2**预加载，避免一次性发起大量图片请求。
