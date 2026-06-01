@@ -4,7 +4,13 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['Folo-dev/**', 'node_modules/**', 'out/**', 'dist/**', 'coverage/**'],
+    ignores: [
+      'Folo-dev/**',
+      'node_modules/**',
+      'out/**',
+      'dist/**',
+      'coverage/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

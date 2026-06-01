@@ -3,11 +3,11 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import {
   createRendererSharedConfig,
   createSharedDefines,
-} from './scripts/build/vite-shared'
+} from '../scripts/build/vite-shared'
 
 const sharedAlias = {
-  '@shared': resolve(__dirname, 'src/shared'),
-  '@shared/video-url': resolve(__dirname, 'src/shared/video-url.ts'),
+  '@shared': resolve(__dirname, '../src/shared'),
+  '@shared/video-url': resolve(__dirname, '../src/shared/video-url.ts'),
 }
 
 export default defineConfig({
@@ -25,5 +25,5 @@ export default defineConfig({
       alias: sharedAlias,
     },
   },
-  renderer: createRendererSharedConfig(resolve('.')) as any,
+  renderer: createRendererSharedConfig(resolve(__dirname, '..')) as any,
 })

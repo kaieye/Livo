@@ -4,8 +4,8 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   resolve: {
     alias: {
-      '@shared': resolve(__dirname, 'src/shared'),
-      '@shared/video-url': resolve(__dirname, 'src/shared/video-url.ts'),
+      '@shared': resolve(__dirname, '../src/shared'),
+      '@shared/video-url': resolve(__dirname, '../src/shared/video-url.ts'),
     },
   },
   test: {

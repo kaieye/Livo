@@ -3,16 +3,18 @@ import { defineConfig } from 'vite'
 import {
   createRendererSharedConfig,
   createWebIndexHtmlPlugin,
-} from './scripts/build/vite-shared'
+} from '../scripts/build/vite-shared'
 
 /**
  * Vite configuration for the Web platform build.
  * Builds the same renderer app but with a browser-compatible API layer.
  */
-const sharedRendererConfig = createRendererSharedConfig(__dirname)
+const sharedRendererConfig = createRendererSharedConfig(
+  resolve(__dirname, '..'),
+)
 
 export default defineConfig({
-  root: resolve(__dirname, 'src/web'),
+  root: resolve(__dirname, '../src/web'),
   ...sharedRendererConfig,
   plugins: [
     ...(sharedRendererConfig.plugins ?? []),
@@ -24,7 +26,7 @@ export default defineConfig({
   ],
   build: {
     ...sharedRendererConfig.build,
-    outDir: resolve(__dirname, 'dist-web'),
+    outDir: resolve(__dirname, '../dist-web'),
     emptyOutDir: true,
   },
   server: {
