@@ -24,6 +24,8 @@ export interface AIAssistContentProps {
   isTranslating: boolean
   /** Per-paragraph error map; empty object when no errors */
   errorMap: TranslationErrorMap
+  /** Retry one failed translation segment */
+  onRetryTranslationSegment?: (index: number) => void
 
   // --- Rendering ---
   /** Font size in px for content body */
@@ -61,6 +63,7 @@ export function AIAssistContent({
   translatedParagraphs,
   isTranslating,
   errorMap,
+  onRetryTranslationSegment,
   fontSize,
   lineHeight,
   fontFamily,
@@ -88,6 +91,7 @@ export function AIAssistContent({
           translations={translatedParagraphs}
           isTranslating={isTranslating}
           errorMap={errorMap}
+          onRetrySegment={onRetryTranslationSegment}
           fontSize={fontSize}
           lineHeight={lineHeight}
           fontFamily={fontFamily}

@@ -238,6 +238,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     showTranslation,
     errorMap,
     translate,
+    retrySegment,
     toggle: toggleTranslation,
     reset: resetTranslation,
   } = useAITranslation()
@@ -410,13 +411,16 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
 
   const handleTranslate = useCallback(() => {
     if (!selectedEntry?.content) return
+    const hasTranslatedContent = translatedParagraphs.some(
+      (paragraph) => paragraph.length > 0,
+    )
     // Toggle off if currently showing
-    if (showTranslation && translatedParagraphs.length > 0) {
+    if (showTranslation && hasTranslatedContent) {
       toggleTranslation()
       return
     }
     // Toggle on if already translated (cached)
-    if (translatedParagraphs.length > 0) {
+    if (hasTranslatedContent) {
       toggleTranslation()
       return
     }
@@ -429,7 +433,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     translationTargetLanguage,
     translate,
     showTranslation,
-    translatedParagraphs.length,
+    translatedParagraphs,
     toggleTranslation,
   ])
 
@@ -853,34 +857,34 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   // Empty state
   if (!selectedEntry) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-surface-secondary dark:bg-surface-dark">
-        <div className="text-center text-text-secondary dark:text-text-dark-secondary">
+      <div className="bg-surface-secondary dark:bg-surface-dark flex flex-1 items-center justify-center">
+        <div className="text-text-secondary dark:text-text-dark-secondary text-center">
           <BookOpen
             size={48}
-            className="mx-auto mb-4 text-text-tertiary"
+            className="text-text-tertiary mx-auto mb-4"
             strokeWidth={1.5}
           />
           <p className="text-lg font-medium">{t('entry.selectArticle')}</p>
-          <p className="mt-1 text-sm text-text-tertiary">
+          <p className="text-text-tertiary mt-1 text-sm">
             {t('entry.selectArticleHint')}
           </p>
-          <div className="mt-6 space-y-1 text-xs text-text-tertiary">
+          <div className="text-text-tertiary mt-6 space-y-1 text-xs">
             <p>
-              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
                 J
               </kbd>{' '}
               /{' '}
-              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
                 K
               </kbd>{' '}
               {t('entry.navUpDown')}
             </p>
             <p>
-              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
                 S
               </kbd>{' '}
               {t('entry.starHint')}{' '}
-              <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-tertiary">
+              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
                 O
               </kbd>{' '}
               {t('entry.browserOpenHint')}
@@ -907,17 +911,17 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     : 0
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-surface-dark">
+    <div className="dark:bg-surface-dark relative flex min-w-0 flex-1 flex-col bg-white">
       {/* Reading progress bar */}
       <div className="absolute left-0 right-0 top-0 z-20 h-[2px]">
         <div
-          className="h-full bg-accent transition-all duration-150 ease-out"
+          className="bg-accent h-full transition-all duration-150 ease-out"
           style={{ width: `${readPercent}%` }}
         />
       </div>
 
       {/* Toolbar */}
-      <div className="sticky top-0 z-10 flex flex-shrink-0 items-center gap-0.5 border-b bg-white/80 px-3 py-1.5 backdrop-blur-sm dark:bg-surface-dark/80">
+      <div className="dark:bg-surface-dark/80 sticky top-0 z-10 flex flex-shrink-0 items-center gap-0.5 border-b bg-white/80 px-3 py-1.5 backdrop-blur-sm">
         {embeddedPageUrl && (
           <>
             <ToolbarButton
@@ -926,7 +930,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             >
               <X size={16} />
             </ToolbarButton>
-            <div className="mx-1 h-4 w-px bg-border dark:bg-border-dark" />
+            <div className="bg-border dark:bg-border-dark mx-1 h-4 w-px" />
           </>
         )}
 
@@ -980,7 +984,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
           }
         >
           {isFetchingReadable ? (
-            <Loader2 size={16} className="animate-spin text-accent" />
+            <Loader2 size={16} className="text-accent animate-spin" />
           ) : (
             <BookType size={16} />
           )}
@@ -1001,7 +1005,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         </ToolbarButton>
 
         {/* Separator */}
-        <div className="mx-1 h-4 w-px bg-border dark:bg-border-dark" />
+        <div className="bg-border dark:bg-border-dark mx-1 h-4 w-px" />
 
         {/* Nav buttons */}
         <ToolbarButton
@@ -1025,7 +1029,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         {readPercent > 0 && (
           <button
             onClick={scrollToTop}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-text-tertiary transition-colors hover:text-accent"
+            className="text-text-tertiary hover:text-accent flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors"
             title={t('entry.scrollToTop')}
           >
             <ReadProgressCircle percent={readPercent} />
@@ -1043,7 +1047,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         )}
 
         {/* Read status */}
-        <div className="ml-1 flex items-center gap-1 text-xs text-text-tertiary">
+        <div className="text-text-tertiary ml-1 flex items-center gap-1 text-xs">
           {selectedEntry.isRead ? (
             <CheckCircle2 size={14} className="text-green-500" />
           ) : (
@@ -1083,7 +1087,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                   dismissKeepScrollingHint()
                   goToEntry('next')
                 }}
-                className="pointer-events-auto rounded-full border border-border/40 bg-white/90 px-4 py-2 text-xs text-text-secondary shadow-sm backdrop-blur-sm hover:text-text dark:bg-surface-dark/90"
+                className="border-border/40 text-text-secondary hover:text-text dark:bg-surface-dark/90 pointer-events-auto rounded-full border bg-white/90 px-4 py-2 text-xs shadow-sm backdrop-blur-sm"
               >
                 已到底部，再按 PageDown 或点这里跳到下一篇
               </button>
@@ -1109,7 +1113,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             </h1>
 
             {/* Meta */}
-            <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+            <div className="text-text-secondary dark:text-text-dark-secondary mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
               {selectedEntry.author && (
                 <span className="flex items-center gap-1">
                   {authorAvatarUrl ? (
@@ -1236,6 +1240,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                   translations={translatedParagraphs}
                   isTranslating={isTranslating}
                   errorMap={errorMap}
+                  onRetrySegment={retrySegment}
                   fontSize={general.fontSize}
                   lineHeight={general.contentLineHeight}
                   fontFamily={general.contentFontFamily}
@@ -1253,10 +1258,10 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             ) : showEntryDetailFallback ? (
               <EntryDetailFallback title={selectedEntry.title} />
             ) : (
-              <div className="py-12 text-center text-text-secondary dark:text-text-dark-secondary">
+              <div className="text-text-secondary dark:text-text-dark-secondary py-12 text-center">
                 {isFetchingReadable ? (
                   <div className="flex flex-col items-center gap-3">
-                    <Loader2 size={24} className="animate-spin text-accent" />
+                    <Loader2 size={24} className="text-accent animate-spin" />
                     <p className="text-sm">{t('entry.fetchingContent')}</p>
                   </div>
                 ) : (
@@ -1266,7 +1271,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                       <div className="mt-3 space-y-2">
                         <button
                           onClick={handleReadability}
-                          className="inline-flex items-center gap-1 text-sm text-accent hover:underline"
+                          className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
                         >
                           <BookType size={14} />
                           {t('entry.tryFetchContent')}
@@ -1276,7 +1281,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                           href={selectedEntry.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-block text-sm text-accent hover:underline"
+                          className="text-accent inline-block text-sm hover:underline"
                           onClick={(e) => {
                             e.preventDefault()
                             window.open(selectedEntry.url, '_blank')
@@ -1292,22 +1297,22 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             )}
 
             {/* End of article — navigate */}
-            <div className="mt-16 flex items-center justify-between border-t pt-8 text-sm text-text-secondary dark:text-text-dark-secondary">
+            <div className="text-text-secondary dark:text-text-dark-secondary mt-16 flex items-center justify-between border-t pt-8 text-sm">
               <button
                 disabled={!hasPrev}
                 onClick={() => goToEntry('prev')}
-                className="flex items-center gap-1 transition-colors hover:text-accent disabled:cursor-default disabled:opacity-30"
+                className="hover:text-accent flex items-center gap-1 transition-colors disabled:cursor-default disabled:opacity-30"
               >
                 <ChevronUp size={16} />
                 {t('entry.prevArticle')}
               </button>
-              <span className="text-xs text-text-tertiary">
+              <span className="text-text-tertiary text-xs">
                 {currentIndex + 1} / {entries.length}
               </span>
               <button
                 disabled={!hasNext}
                 onClick={() => goToEntry('next')}
-                className="flex items-center gap-1 transition-colors hover:text-accent disabled:cursor-default disabled:opacity-30"
+                className="hover:text-accent flex items-center gap-1 transition-colors disabled:cursor-default disabled:opacity-30"
               >
                 {t('entry.nextArticle')}
                 <ChevronDown size={16} />
@@ -1320,7 +1325,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       {/* External link warning modal */}
       {externalLinkWarning && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40">
-          <div className="animate-in mx-4 w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl dark:bg-surface-dark-secondary">
+          <div className="animate-in dark:bg-surface-dark-secondary mx-4 w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
             <div className="mb-3 flex items-center gap-2 text-amber-500">
               <AlertTriangle size={20} />
               <h3 className="font-semibold">
@@ -1328,15 +1333,15 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
               </h3>
               <button
                 onClick={() => setExternalLinkWarning(null)}
-                className="ml-auto rounded p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary ml-auto rounded p-1"
               >
                 <X size={16} />
               </button>
             </div>
-            <p className="mb-1 text-sm text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary mb-1 text-sm">
               {t('entry.externalLinkDesc')}
             </p>
-            <p className="mb-3 break-all rounded bg-surface-secondary px-2 py-1.5 font-mono text-xs text-red-500 dark:bg-surface-dark-tertiary">
+            <p className="bg-surface-secondary dark:bg-surface-dark-tertiary mb-3 break-all rounded px-2 py-1.5 font-mono text-xs text-red-500">
               {externalLinkWarning.hostname}
             </p>
             {externalLinkWarning.isSuspicious && (
@@ -1348,7 +1353,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             <div className="flex gap-2">
               <button
                 onClick={() => setExternalLinkWarning(null)}
-                className="flex-1 rounded-lg border px-3 py-2 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex-1 rounded-lg border px-3 py-2 text-sm"
               >
                 {t('common.cancel')}
               </button>
@@ -1357,7 +1362,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                   window.open(externalLinkWarning.url, '_blank')
                   setExternalLinkWarning(null)
                 }}
-                className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm text-white hover:bg-accent/90"
+                className="bg-accent hover:bg-accent/90 flex-1 rounded-lg px-3 py-2 text-sm text-white"
               >
                 {t('common.continueAccess')}
               </button>
@@ -1381,19 +1386,19 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
 function EntryDetailFallback({ title }: { title: string }) {
   return (
     <div className="animate-in fade-in-0 space-y-5 duration-200">
-      <div className="rounded-xl border border-border/60 bg-surface-secondary/70 px-4 py-3 text-sm text-text-secondary dark:bg-surface-dark-secondary/70 dark:text-text-dark-secondary">
+      <div className="border-border/60 bg-surface-secondary/70 text-text-secondary dark:bg-surface-dark-secondary/70 dark:text-text-dark-secondary rounded-xl border px-4 py-3 text-sm">
         正在准备完整内容…
       </div>
       <div className="animate-pulse space-y-3">
-        <div className="h-4 w-40 rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
-        <div className="h-3.5 w-full rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
-        <div className="h-3.5 w-[92%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
-        <div className="h-3.5 w-[84%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
-        <div className="h-40 w-full rounded-2xl bg-surface-tertiary dark:bg-surface-dark-tertiary" />
-        <div className="h-3.5 w-full rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
-        <div className="h-3.5 w-[88%] rounded bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-4 w-40 rounded" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-full rounded" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-[92%] rounded" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-[84%] rounded" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-40 w-full rounded-2xl" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-full rounded" />
+        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-[88%] rounded" />
       </div>
-      <p className="dark:text-text-dark-tertiary text-xs text-text-tertiary">
+      <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
         {title}
       </p>
     </div>
@@ -1418,7 +1423,7 @@ function ToolbarButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-lg p-1.5 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text disabled:cursor-default disabled:opacity-30 dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary ${active ? 'bg-accent/10 !text-accent' : ''} `}
+      className={`text-text-secondary hover:bg-surface-secondary hover:text-text dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary rounded-lg p-1.5 transition-all duration-150 disabled:cursor-default disabled:opacity-30 ${active ? 'bg-accent/10 !text-accent' : ''} `}
       title={title}
     >
       {children}

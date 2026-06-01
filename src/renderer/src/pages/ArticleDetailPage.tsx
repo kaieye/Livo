@@ -189,6 +189,7 @@ export default function ArticleDetailPage() {
     translationErrorMap: errorMap,
     summarize: handleSummarize,
     translate: handleTranslate,
+    retryTranslationSegment,
   } = useArticleAIAssist({
     entryId,
     content: activeEntry?.content ?? undefined,
@@ -460,6 +461,7 @@ export default function ArticleDetailPage() {
                 translatedParagraphs={translatedParagraphs}
                 isTranslating={isTranslating}
                 errorMap={errorMap}
+                onRetryTranslationSegment={retryTranslationSegment}
                 fontSize={general.fontSize}
                 lineHeight={general.contentLineHeight}
                 fontFamily={general.contentFontFamily}
@@ -591,6 +593,7 @@ export default function ArticleDetailPage() {
                   translatedParagraphs={translatedParagraphs}
                   isTranslating={isTranslating}
                   errorMap={errorMap}
+                  onRetryTranslationSegment={retryTranslationSegment}
                   fontSize={general.fontSize}
                   lineHeight={general.contentLineHeight}
                   fontFamily={general.contentFontFamily}
@@ -622,6 +625,7 @@ export default function ArticleDetailPage() {
                 translatedParagraphs={translatedParagraphs}
                 isTranslating={isTranslating}
                 errorMap={errorMap}
+                onRetryTranslationSegment={retryTranslationSegment}
                 fontSize={general.fontSize}
                 lineHeight={general.contentLineHeight}
                 fontFamily={general.contentFontFamily}
@@ -653,23 +657,24 @@ export default function ArticleDetailPage() {
                   )}
                 </div>
               )}
-              {showTranslation && translatedParagraphs.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)]">
-                    {t('articleDetail.aiTranslation')}
-                  </h3>
-                  <div className="space-y-3">
-                    {translatedParagraphs.map((text, i) => (
-                      <p
-                        key={i}
-                        className="text-sm leading-relaxed text-[var(--color-text-secondary)]"
-                      >
-                        {text}
-                      </p>
-                    ))}
+              {showTranslation &&
+                translatedParagraphs.some((text) => text.length > 0) && (
+                  <div>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)]">
+                      {t('articleDetail.aiTranslation')}
+                    </h3>
+                    <div className="space-y-3">
+                      {translatedParagraphs.map((text, i) => (
+                        <p
+                          key={i}
+                          className="text-sm leading-relaxed text-[var(--color-text-secondary)]"
+                        >
+                          {text}
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
               {!summary && !isSummarizing && !showTranslation && (
                 <div className="flex h-full items-center justify-center text-xs text-[var(--color-text-tertiary)]">
                   {t('articleDetail.aiPanelHint')}

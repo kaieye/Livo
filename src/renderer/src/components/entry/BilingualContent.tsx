@@ -7,6 +7,7 @@ interface BilingualContentProps {
   translations: string[]
   isTranslating: boolean
   errorMap: TranslationErrorMap
+  onRetrySegment?: (index: number) => void
   fontSize: number
   lineHeight: number
   fontFamily: string
@@ -29,6 +30,7 @@ export function BilingualContent({
   translations,
   isTranslating,
   errorMap,
+  onRetrySegment,
   fontSize,
   lineHeight,
   fontFamily,
@@ -41,15 +43,16 @@ export function BilingualContent({
     >
       {paragraphs.map((para, i) => {
         const translated = translations[i]
-        const isLoading = isTranslating && i === translations.length
         const error = errorMap[i]
         const plainText = para.replace(/<[^>]*>/g, '').trim()
         if (!plainText) return null
+        const canTranslate = plainText.length >= 5
+        const isLoading = isTranslating && canTranslate && !translated && !error
 
         return (
           <div
             key={i}
-            className="group border-l-2 border-transparent pl-0 transition-colors hover:border-accent/30 hover:pl-3"
+            className="hover:border-accent/30 group border-l-2 border-transparent pl-0 transition-colors hover:pl-3"
           >
             {/* Original */}
             <div
@@ -63,22 +66,34 @@ export function BilingualContent({
                 <div className="flex items-start gap-2">
                   <Languages
                     size={12}
-                    className="mt-1 flex-shrink-0 text-accent/50"
+                    className="text-accent/50 mt-1 flex-shrink-0"
                   />
                   <div
-                    className="entry-content !mb-0 text-accent/80 dark:text-orange-300/80"
+                    className="entry-content text-accent/80 !mb-0 dark:text-orange-300/80"
                     style={{ fontSize: `${fontSize - 1}px` }}
                     dangerouslySetInnerHTML={{ __html: translated }}
                   />
                 </div>
               </div>
             ) : error ? (
-              <div className="mb-4 mt-1 flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400">
-                <AlertCircle size={12} className="flex-shrink-0" />
-                <span>{error}</span>
+              <div className="mb-4 mt-1 flex flex-wrap items-center gap-2 text-xs text-red-500 dark:text-red-400">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <AlertCircle size={12} className="flex-shrink-0" />
+                  <span className="break-words">{error}</span>
+                </div>
+                {onRetrySegment && (
+                  <button
+                    type="button"
+                    onClick={() => onRetrySegment(i)}
+                    disabled={isTranslating}
+                    className="rounded border border-red-200 px-2 py-0.5 text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/30"
+                  >
+                    {t('entry.retry')}
+                  </button>
+                )}
               </div>
             ) : isLoading ? (
-              <div className="mb-4 mt-1 flex items-center gap-2 text-xs text-text-tertiary">
+              <div className="text-text-tertiary mb-4 mt-1 flex items-center gap-2 text-xs">
                 <Loader2 size={12} className="animate-spin" />
                 {t('entry.translating')}
               </div>

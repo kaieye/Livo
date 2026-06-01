@@ -72,6 +72,8 @@ export interface ArticleAIAssist {
   translate: () => void
   /** Show/hide the bilingual view without re-fetching. */
   toggleTranslation: () => void
+  /** Retry one failed translation segment. */
+  retryTranslationSegment: (index: number) => void
   /** Run summary and/or translation together (Harmony's `run`). */
   runBoth: (which: { summary: boolean; translation: boolean }) => Promise<void>
   /** Reset all AI state. */
@@ -98,6 +100,7 @@ export function useArticleAIAssist(
     showTranslation,
     errorMap: translationErrorMap,
     translate: translateRaw,
+    retrySegment: retryTranslationSegmentRaw,
     toggle: toggleTranslation,
     reset: resetTranslation,
   } = useAITranslation()
@@ -120,12 +123,19 @@ export function useArticleAIAssist(
 
   const translate = useCallback(() => {
     // Already have a translation cached → just toggle visibility.
-    if (translatedParagraphs.length > 0) {
+    if (translatedParagraphs.some((paragraph) => paragraph.length > 0)) {
       toggleTranslation()
       return
     }
     runTranslation()
-  }, [translatedParagraphs.length, toggleTranslation, runTranslation])
+  }, [translatedParagraphs, toggleTranslation, runTranslation])
+
+  const retryTranslationSegment = useCallback(
+    (index: number) => {
+      void retryTranslationSegmentRaw(index)
+    },
+    [retryTranslationSegmentRaw],
+  )
 
   const runBoth = useCallback(
     async (which: { summary: boolean; translation: boolean }) => {
@@ -184,6 +194,7 @@ export function useArticleAIAssist(
     summarize,
     translate,
     toggleTranslation,
+    retryTranslationSegment,
     runBoth,
     reset,
   }
