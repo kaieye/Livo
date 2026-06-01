@@ -4,6 +4,7 @@ import { EntryList } from '../entry/EntryList'
 import { EntryContent } from '../entry/EntryContent'
 import { WideViewContent } from '../entry/WideViewContent'
 import { DiscoverPanel } from '../discover/DiscoverPanel'
+import { ResizeHandle } from '../ui/ResizeHandle'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
@@ -243,26 +244,6 @@ export function Layout() {
             </div>
           </>
         )}
-      </div>
-    </div>
-  )
-}
-
-/** Draggable resize handle rendered between panels */
-function ResizeHandle({
-  onMouseDown,
-}: {
-  onMouseDown: (e: React.MouseEvent) => void
-}) {
-  return (
-    <div
-      onMouseDown={onMouseDown}
-      className="group relative z-10 w-0 flex-shrink-0"
-    >
-      {/* Invisible wider hit area */}
-      <div className="absolute inset-y-0 -left-[3px] w-[6px] cursor-col-resize">
-        {/* Visible line on hover / drag */}
-        <div className="absolute inset-y-0 left-[2px] w-[2px] bg-transparent transition-colors group-hover:bg-accent/40 group-active:bg-accent" />
       </div>
     </div>
   )

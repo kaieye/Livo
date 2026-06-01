@@ -143,10 +143,10 @@
 
 ## P3+ — Desktop 特有能力整合
 
-- [ ] **18.1** 命令面板集成 Agent 工具（输入自然语言触发工具调用）
-- [ ] **18.2** 全局快捷键扩展（收藏/翻译/摘要快捷键）
-- [ ] **18.3** 独立页面适配拖拽布局（FeedDetail/ArticleDetail 支持面板宽度调整）
-- [ ] **18.4** 右键上下文菜单增强（新增页面/面板的专属菜单项）
+- [x] **18.1** 命令面板集成 Agent 工具（输入自然语言触发工具调用）
+- [x] **18.2** 全局快捷键扩展（收藏/翻译/摘要快捷键）
+- [x] **18.3** 独立页面适配拖拽布局（FeedDetail/ArticleDetail 支持面板宽度调整）
+- [x] **18.4** 右键上下文菜单增强（新增页面/面板的专属菜单项）
 
 ---
 
@@ -161,3 +161,10 @@
 | P3+      | 4      | Desktop 特有能力整合                   |
 | 复用     | 4      | 跨端代码重构                           |
 | **合计** | **75** |                                        |
+
+> 备注：P3+ Desktop 特有能力整合已全部完成（2026-05-31）：
+>
+> - 18.1 命令面板新增 AI fallback 模式（未匹配命令时输入自然语言，通过 `window.api.agent.run` 触发 Agent 工具调用）和 `useAgentNavigate` hook（消费 `agent:navigate` IPC 事件，连接导航工具与 renderer store/router）
+> - 18.2 `GlobalShortcutsProvider` 新增 `toggle-star`(S)、`ai-summarize`(Alt+S)、`ai-translate`(Alt+T)、`ai-chat`(Alt+C) 四个全局快捷键，通过 `useEntryStore.getState().selectedEntry` 获取上下文
+> - 18.3 提取共享 `ResizeHandle` 组件到 `components/ui/ResizeHandle.tsx`；`FeedDetailPage` 支持左侧 feed 信息面板（240-520px，持久化 localStorage）；`ArticleDetailPage` 标准文章视图支持可拖拽阅读宽度（360-900px）+ 右侧 AI 输出面板
+> - 18.4 `FeedDetailPage` 的 `ArticlePreviewRow` 新增右键上下文菜单（标记已读/收藏/打开浏览器/复制链接/复制标题）；`ArticleDetailPage` 三种视图（标准/社交/视频）均新增右键菜单（收藏/打开浏览器/复制链接）

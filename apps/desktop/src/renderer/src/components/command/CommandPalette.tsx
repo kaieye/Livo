@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Command, Search, X } from 'lucide-react'
+import { Command, Search, Sparkles, X } from 'lucide-react'
 import { DEFAULT_SHORTCUTS } from '../../../../shared/shortcuts'
 import { useSettingsStore } from '../../store/settings-store'
 import { useQuickSearchStore } from '../search/QuickSearch'
@@ -9,7 +9,10 @@ import { useFeedStore } from '../../store/feed-store'
 import { useAIChatStore } from '../../store/ai-chat-store'
 import { useUpdateStore } from '../../store/update-store'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
-import { useOverlayStackItem, useOverlayStackStore } from '../../store/overlay-stack-store'
+import {
+  useOverlayStackItem,
+  useOverlayStackStore,
+} from '../../store/overlay-stack-store'
 import { runLayoutCommand } from '../../lib/layout-commands'
 
 import { create } from 'zustand'
@@ -21,6 +24,7 @@ type CommandAction = {
   keywords: string[]
   shortcutId?: string
   run: () => void
+  isAiFallback?: boolean
 }
 
 interface CommandPaletteState {
@@ -30,26 +34,28 @@ interface CommandPaletteState {
   toggle: () => void
 }
 
-export const useCommandPaletteStore = create<CommandPaletteState>((set, get) => ({
-  isOpen: false,
-  open: () => {
-    useOverlayStackStore.getState().open('command-palette')
-    set({ isOpen: true })
-  },
-  close: () => {
-    useOverlayStackStore.getState().close('command-palette')
-    set({ isOpen: false })
-  },
-  toggle: () => {
-    const next = !get().isOpen
-    if (next) {
+export const useCommandPaletteStore = create<CommandPaletteState>(
+  (set, get) => ({
+    isOpen: false,
+    open: () => {
       useOverlayStackStore.getState().open('command-palette')
-    } else {
+      set({ isOpen: true })
+    },
+    close: () => {
       useOverlayStackStore.getState().close('command-palette')
-    }
-    set({ isOpen: next })
-  },
-}))
+      set({ isOpen: false })
+    },
+    toggle: () => {
+      const next = !get().isOpen
+      if (next) {
+        useOverlayStackStore.getState().open('command-palette')
+      } else {
+        useOverlayStackStore.getState().close('command-palette')
+      }
+      set({ isOpen: next })
+    },
+  }),
+)
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPaletteStore()
@@ -181,7 +187,10 @@ export function CommandPalette() {
   )
 
   const shortcutLabelMap = useMemo(
-    () => new Map(DEFAULT_SHORTCUTS.map((shortcut) => [shortcut.id, shortcut.keys])),
+    () =>
+      new Map(
+        DEFAULT_SHORTCUTS.map((shortcut) => [shortcut.id, shortcut.keys]),
+      ),
     [],
   )
 
@@ -189,14 +198,43 @@ export function CommandPalette() {
   const filteredActions = useMemo(() => {
     if (!normalizedQuery) return actions
     return actions.filter((action) => {
-      const haystack = [action.title, ...action.keywords].join(' ').toLowerCase()
+      const haystack = [action.title, ...action.keywords]
+        .join(' ')
+        .toLowerCase()
       return haystack.includes(normalizedQuery)
     })
   }, [actions, normalizedQuery])
 
+  // AI fallback action: when the query doesn't match any known command,
+  // offer to send it to the AI agent as a natural-language instruction.
+  const aiFallback: CommandAction | null = useMemo(() => {
+    const trimmed = query.trim()
+    if (!trimmed || filteredActions.length > 0) return null
+    return {
+      id: 'ai-agent-fallback',
+      title: `AI 执行: "${trimmed}"`,
+      section: 'AI 助手',
+      keywords: ['ai', 'agent', '执行'],
+      isAiFallback: true,
+      run: () => {
+        const chatStore = useAIChatStore.getState()
+        if (!chatStore.isPanelOpen) {
+          chatStore.setPanelOpen(true)
+        }
+        // Send the message after a short delay so the panel has time to mount
+        setTimeout(() => {
+          void useAIChatStore.getState().sendMessage(trimmed)
+        }, 150)
+      },
+    }
+  }, [query, filteredActions.length])
+
   const groupedActions = useMemo(() => {
     const groups = new Map<string, CommandAction[]>()
-    for (const action of filteredActions) {
+    const source = aiFallback
+      ? [aiFallback, ...filteredActions]
+      : filteredActions
+    for (const action of source) {
       const existing = groups.get(action.section)
       if (existing) {
         existing.push(action)
@@ -205,7 +243,12 @@ export function CommandPalette() {
       }
     }
     return Array.from(groups.entries())
-  }, [filteredActions])
+  }, [filteredActions, aiFallback])
+
+  const sourceActions = useMemo(
+    () => (aiFallback ? [aiFallback, ...filteredActions] : filteredActions),
+    [aiFallback, filteredActions],
+  )
 
   useEffect(() => {
     if (!isOpen) return
@@ -227,7 +270,7 @@ export function CommandPalette() {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         setSelectedIndex((index) =>
-          Math.min(index + 1, Math.max(filteredActions.length - 1, 0)),
+          Math.min(index + 1, Math.max(sourceActions.length - 1, 0)),
         )
       }
       if (event.key === 'ArrowUp') {
@@ -235,7 +278,7 @@ export function CommandPalette() {
         setSelectedIndex((index) => Math.max(index - 1, 0))
       }
       if (event.key === 'Enter') {
-        const target = filteredActions[selectedIndex]
+        const target = sourceActions[selectedIndex]
         if (!target) return
         event.preventDefault()
         target.run()
@@ -244,7 +287,7 @@ export function CommandPalette() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [close, filteredActions, isOpen, isTop, selectedIndex])
+  }, [close, sourceActions, isOpen, isTop, selectedIndex])
 
   if (!isOpen) return null
 
@@ -280,7 +323,7 @@ export function CommandPalette() {
         </div>
 
         <div className="max-h-[52vh] overflow-y-auto py-2">
-          {filteredActions.length === 0 ? (
+          {groupedActions.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-text-tertiary">
               没有匹配的命令
             </div>
@@ -291,7 +334,9 @@ export function CommandPalette() {
                   {section}
                 </div>
                 {sectionActions.map((action) => {
-                  const index = filteredActions.findIndex((item) => item.id === action.id)
+                  const index = sourceActions.findIndex(
+                    (item) => item.id === action.id,
+                  )
                   const shortcutLabel = action.shortcutId
                     ? shortcutLabelMap.get(action.shortcutId)
                     : null
@@ -306,13 +351,23 @@ export function CommandPalette() {
                       className={`flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left text-sm transition-colors ${
                         selectedIndex === index
                           ? 'bg-accent/10 text-accent'
-                          : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
+                          : action.isAiFallback
+                            ? 'bg-accent/5 hover:bg-accent/10'
+                            : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <div className="truncate">{action.title}</div>
-                        <div className="truncate text-xs text-text-tertiary">
-                          {action.keywords[0]}
+                      <div className="flex min-w-0 items-center gap-2">
+                        {action.isAiFallback && (
+                          <Sparkles
+                            size={14}
+                            className="shrink-0 text-accent"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="truncate">{action.title}</div>
+                          <div className="truncate text-xs text-text-tertiary">
+                            {action.keywords[0]}
+                          </div>
                         </div>
                       </div>
                       {shortcutLabel ? (

@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
+  Copy,
   Edit3,
   ExternalLink,
+  Eye,
+  EyeOff,
   RefreshCw,
   Rss,
+  Star,
   Trash2,
 } from 'lucide-react'
 
@@ -18,6 +22,36 @@ import { ROUTES } from '../router/route-paths'
 import { isUserFeed } from '../lib/feed-filters'
 import { VIEW_TYPE_I18N_KEYS } from '../lib/view-type-keys'
 import { FeedDetailHeroCard } from '../components/feed/FeedDetailHeroCard'
+import {
+  ContextMenu,
+  type ContextMenuAction,
+} from '../components/ui/ContextMenu'
+import { ResizeHandle } from '../components/ui/ResizeHandle'
+
+const FEED_PANEL_MIN = 240
+const FEED_PANEL_MAX = 520
+const FEED_PANEL_DEFAULT = 320
+
+function loadFeedPanelWidth(): number {
+  try {
+    const raw = localStorage.getItem('livo-feeddetail-panel-width')
+    if (raw) {
+      const n = Number(raw)
+      if (n >= FEED_PANEL_MIN && n <= FEED_PANEL_MAX) return n
+    }
+  } catch {
+    /* ignore */
+  }
+  return FEED_PANEL_DEFAULT
+}
+
+function saveFeedPanelWidth(width: number): void {
+  try {
+    localStorage.setItem('livo-feeddetail-panel-width', String(width))
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * FeedDetailPage — desktop counterpart of the Harmony `FeedDetail` page.
@@ -54,6 +88,45 @@ export default function FeedDetailPage() {
   const loadEntries = useEntryStore((s) => s.loadEntries)
 
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // 18.3 — Resizable left panel for feed hero/info
+  const [feedPanelWidth, setFeedPanelWidth] = useState(loadFeedPanelWidth)
+  const dragging = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
+
+  const handlePanelResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      dragging.current = true
+      dragStartX.current = e.clientX
+      dragStartWidth.current = feedPanelWidth
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+
+      const onMove = (ev: MouseEvent) => {
+        if (!dragging.current) return
+        const delta = ev.clientX - dragStartX.current
+        const next = Math.max(
+          FEED_PANEL_MIN,
+          Math.min(FEED_PANEL_MAX, dragStartWidth.current + delta),
+        )
+        setFeedPanelWidth(next)
+      }
+      const onUp = () => {
+        dragging.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        saveFeedPanelWidth(feedPanelWidth)
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    },
+     
+    [feedPanelWidth],
+  )
 
   const feed: FeedWithCount | null = useMemo(
     () => (feedId ? (feeds.find((f) => f.id === feedId) ?? null) : null),
@@ -285,28 +358,36 @@ export default function FeedDetailPage() {
             </div>
           </div>
         ) : (
-          <>
-            {/* Hero */}
-            <section className="flex-shrink-0 border-b border-[var(--color-border-secondary)] px-6 py-5">
-              <FeedDetailHeroCard
-                title={feed.title || feed.url}
-                imageUrl={feed.imageUrl}
-                url={feed.url}
-                siteUrl={feed.siteUrl}
-                description={feed.description}
-                category={feed.folder || feed.category}
-                viewLabel={viewLabel}
-                unreadLabel={unreadLabel}
-              />
-              {!isSubscribed && (
-                <p className="mt-3 text-center text-xs text-[var(--color-text-tertiary)]">
-                  {t('feedDetail.previewHint')}
-                </p>
-              )}
+          <div className="flex min-h-0 flex-1">
+            {/* Left panel — feed hero / info (resizable) */}
+            <section
+              className="flex-shrink-0 overflow-y-auto border-r border-[var(--color-border-secondary)]"
+              style={{ width: feedPanelWidth }}
+            >
+              <div className="px-4 py-5">
+                <FeedDetailHeroCard
+                  title={feed.title || feed.url}
+                  imageUrl={feed.imageUrl}
+                  url={feed.url}
+                  siteUrl={feed.siteUrl}
+                  description={feed.description}
+                  category={feed.folder || feed.category}
+                  viewLabel={viewLabel}
+                  unreadLabel={unreadLabel}
+                />
+                {!isSubscribed && (
+                  <p className="mt-3 text-center text-xs text-[var(--color-text-tertiary)]">
+                    {t('feedDetail.previewHint')}
+                  </p>
+                )}
+              </div>
             </section>
 
-            {/* Entry list */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Resize handle */}
+            <ResizeHandle onMouseDown={handlePanelResize} />
+
+            {/* Right panel — entry list */}
+            <div className="min-w-0 flex-1 overflow-y-auto">
               <EntryPreviewList
                 entries={entries}
                 isLoading={isEntriesLoading}
@@ -316,7 +397,7 @@ export default function FeedDetailPage() {
                 loadingLabel={t('feedDetail.loadingEntries')}
               />
             </div>
-          </>
+          </div>
         )}
       </main>
     </div>
@@ -381,6 +462,93 @@ interface ArticlePreviewRowProps {
 function ArticlePreviewRow({ entry, onSelect }: ArticlePreviewRowProps) {
   const { t } = useTranslation()
   const [thumbErrored, setThumbErrored] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+  }>({ visible: false, x: 0, y: 0 })
+
+  const toggleStar = useEntryStore((s) => s.toggleStar)
+  const markRead = useEntryStore((s) => s.markRead)
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const selectedText = window.getSelection?.()?.toString().trim() || ''
+    if (selectedText.length > 0) return // defer to text selection menu
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const handleCloseMenu = useCallback(
+    () => setContextMenu((s) => ({ ...s, visible: false })),
+    [],
+  )
+
+  const fallbackExternalUrl = /^https?:\/\//i.test((entry.url || '').trim())
+    ? (entry.url || '').trim()
+    : ''
+
+  const contextActions: ContextMenuAction[] = useMemo(
+    () => [
+      {
+        id: 'mark-read',
+        label: entry.isRead
+          ? t('contextMenu.markUnread')
+          : t('contextMenu.markRead'),
+        icon: entry.isRead ? <EyeOff size={14} /> : <Eye size={14} />,
+        onClick: () => {
+          void markRead(entry.id, !entry.isRead)
+        },
+      },
+      {
+        id: 'star',
+        label: entry.isStarred
+          ? t('contextMenu.unstar')
+          : t('contextMenu.star'),
+        icon: (
+          <Star
+            size={14}
+            className={entry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''}
+          />
+        ),
+        onClick: () => {
+          void toggleStar(entry.id)
+        },
+        separator: true,
+      },
+      {
+        id: 'open-browser',
+        label: t('contextMenu.openInBrowser'),
+        icon: <ExternalLink size={14} />,
+        onClick: () => {
+          if (!fallbackExternalUrl) return
+          if (window.api?.app?.openExternal) {
+            void window.api.app.openExternal(fallbackExternalUrl)
+          } else {
+            window.open(fallbackExternalUrl, '_blank')
+          }
+        },
+        disabled: !fallbackExternalUrl,
+      },
+      {
+        id: 'copy-link',
+        label: t('contextMenu.copyLink'),
+        icon: <Copy size={14} />,
+        onClick: () => {
+          if (entry.url) navigator.clipboard.writeText(entry.url)
+        },
+      },
+      {
+        id: 'copy-title',
+        label: t('contextMenu.copyTitle'),
+        icon: <Copy size={14} />,
+        onClick: () => {
+          if (entry.title) navigator.clipboard.writeText(entry.title)
+        },
+      },
+    ],
+    [entry, t, toggleStar, markRead, fallbackExternalUrl],
+  )
 
   const timeLabel = useMemo(() => {
     if (!entry.publishedAt) return ''
@@ -419,52 +587,64 @@ function ArticlePreviewRow({ entry, onSelect }: ArticlePreviewRowProps) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      className="flex w-full items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-[var(--color-bg-secondary)]"
-    >
-      {thumbnail && !thumbErrored ? (
-        <img
-          src={thumbnail}
-          alt=""
-          loading="lazy"
-          onError={() => setThumbErrored(true)}
-          className="h-12 w-12 flex-shrink-0 rounded-lg bg-[var(--color-bg-tertiary)] object-cover"
-        />
-      ) : (
-        <div
-          aria-hidden="true"
-          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-bg-tertiary)]"
-        >
-          <Rss size={14} className="text-[var(--color-text-tertiary)]" />
-        </div>
-      )}
-
-      <div className="min-w-0 flex-1">
-        <h3
-          className={[
-            'line-clamp-2 text-sm font-medium leading-snug',
-            entry.isRead
-              ? 'text-[var(--color-text-secondary)]'
-              : 'text-[var(--color-text-primary)]',
-          ].join(' ')}
-        >
-          {/* Author is a better fallback than a hardcoded "Untitled" for social
-              feeds where the author is the meaningful identifier. */}
-          {entry.title || entry.author?.trim() || entry.url || ''}
-        </h3>
-        {summary && (
-          <p className="mt-0.5 line-clamp-1 text-xs text-[var(--color-text-tertiary)]">
-            {summary}
-          </p>
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onContextMenu={handleContextMenu}
+        className="flex w-full items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-[var(--color-bg-secondary)]"
+      >
+        {thumbnail && !thumbErrored ? (
+          <img
+            src={thumbnail}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbErrored(true)}
+            className="h-12 w-12 flex-shrink-0 rounded-lg bg-[var(--color-bg-tertiary)] object-cover"
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-bg-tertiary)]"
+          >
+            <Rss size={14} className="text-[var(--color-text-tertiary)]" />
+          </div>
         )}
-      </div>
 
-      <span className="mt-0.5 flex-shrink-0 text-xs tabular-nums text-[var(--color-text-tertiary)]">
-        {timeLabel}
-      </span>
-    </button>
+        <div className="min-w-0 flex-1">
+          <h3
+            className={[
+              'line-clamp-2 text-sm font-medium leading-snug',
+              entry.isRead
+                ? 'text-[var(--color-text-secondary)]'
+                : 'text-[var(--color-text-primary)]',
+            ].join(' ')}
+          >
+            {/* Author is a better fallback than a hardcoded "Untitled" for social
+                feeds where the author is the meaningful identifier. */}
+            {entry.title || entry.author?.trim() || entry.url || ''}
+          </h3>
+          {summary && (
+            <p className="mt-0.5 line-clamp-1 text-xs text-[var(--color-text-tertiary)]">
+              {summary}
+            </p>
+          )}
+        </div>
+
+        <span className="mt-0.5 flex-shrink-0 text-xs tabular-nums text-[var(--color-text-tertiary)]">
+          {timeLabel}
+        </span>
+      </button>
+
+      {contextMenu.visible && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={handleCloseMenu}
+          actions={contextActions}
+        />
+      )}
+    </>
   )
 }

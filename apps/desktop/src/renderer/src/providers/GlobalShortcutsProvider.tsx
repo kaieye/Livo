@@ -2,6 +2,8 @@ import { useEffect, type PropsWithChildren } from 'react'
 import { useDiscoverStore } from '../store/discover-store'
 import { useSettingsStore } from '../store/settings-store'
 import { useStoreShallow } from '../store/helpers'
+import { useEntryStore } from '../store/entry-store'
+import { useAIChatStore } from '../store/ai-chat-store'
 import { useQuickSearchStore } from '../components/search/QuickSearch'
 import { useShortcutHelpStore } from '../components/shortcuts/shortcut-help-store'
 import { useCommandPaletteStore } from '../components/command/CommandPalette'
@@ -102,6 +104,70 @@ export function GlobalShortcutsProvider({ children }: PropsWithChildren) {
       },
     })
 
+    // 18.2 — Global shortcuts for entry actions (star / AI summarize / AI translate / AI chat)
+    const unregisterToggleStar = registerCommand({
+      id: 'global:toggle-star',
+      shortcutId: 'toggle-star',
+      blockedScopes: HOTKEY_OVERLAY_SCOPES,
+      handler: (event) => {
+        if (isEditableTarget(event.target)) return false
+        const entry = useEntryStore.getState().selectedEntry
+        if (!entry) return false
+        event.preventDefault()
+        void useEntryStore.getState().toggleStar(entry.id)
+      },
+    })
+
+    const unregisterAISummarize = registerCommand({
+      id: 'global:ai-summarize',
+      shortcutId: 'ai-summarize',
+      blockedScopes: HOTKEY_OVERLAY_SCOPES,
+      handler: (event) => {
+        if (isEditableTarget(event.target)) return false
+        const entry = useEntryStore.getState().selectedEntry
+        if (!entry?.content) return false
+        event.preventDefault()
+        // Open AI chat panel with a summarize prompt so the user sees the result
+        const chat = useAIChatStore.getState()
+        if (!chat.isPanelOpen) chat.setPanelOpen(true)
+        setTimeout(() => {
+          void useAIChatStore
+            .getState()
+            .sendMessage(`请为当前文章生成摘要：${entry.title || ''}`)
+        }, 150)
+      },
+    })
+
+    const unregisterAITranslate = registerCommand({
+      id: 'global:ai-translate',
+      shortcutId: 'ai-translate',
+      blockedScopes: HOTKEY_OVERLAY_SCOPES,
+      handler: (event) => {
+        if (isEditableTarget(event.target)) return false
+        const entry = useEntryStore.getState().selectedEntry
+        if (!entry?.content) return false
+        event.preventDefault()
+        const chat = useAIChatStore.getState()
+        if (!chat.isPanelOpen) chat.setPanelOpen(true)
+        setTimeout(() => {
+          void useAIChatStore
+            .getState()
+            .sendMessage(`请翻译当前文章为中文：${entry.title || ''}`)
+        }, 150)
+      },
+    })
+
+    const unregisterAIChat = registerCommand({
+      id: 'global:ai-chat',
+      shortcutId: 'ai-chat',
+      blockedScopes: HOTKEY_OVERLAY_SCOPES,
+      handler: (event) => {
+        if (isEditableTarget(event.target)) return false
+        event.preventDefault()
+        useAIChatStore.getState().setPanelOpen(true)
+      },
+    })
+
     const handleGlobalShortcut = (event: KeyboardEvent) => {
       handleRegisteredShortcutEvent(event)
     }
@@ -117,6 +183,10 @@ export function GlobalShortcutsProvider({ children }: PropsWithChildren) {
       unregisterShortcuts()
       unregisterSearch()
       unregisterLayoutCommands()
+      unregisterToggleStar()
+      unregisterAISummarize()
+      unregisterAITranslate()
+      unregisterAIChat()
     }
   }, [
     setDiscoverOpen,
