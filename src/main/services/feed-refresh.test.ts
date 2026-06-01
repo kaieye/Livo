@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { applyActionRulesToEntries, filterForeignEntries } from './feed-refresh'
+import {
+  applyActionRulesToEntries,
+  filterForeignEntries,
+  getNextAutoRefreshDelayMs,
+} from './feed-refresh'
 import { FeedViewType, type Entry, type Feed } from '../../shared/types'
 import type { ActionRule } from '../../shared/actions'
 
@@ -112,5 +116,41 @@ describe('applyActionRulesToEntries', () => {
     ])
 
     expect(result).toEqual([])
+  })
+})
+
+describe('getNextAutoRefreshDelayMs', () => {
+  it('disables scheduling when interval is manual', () => {
+    expect(getNextAutoRefreshDelayMs([makeFeed()], Date.now(), 0)).toBeNull()
+  })
+
+  it('checks again after the configured interval when there are no feeds', () => {
+    expect(getNextAutoRefreshDelayMs([], 1000, 15)).toBe(15 * 60 * 1000)
+  })
+
+  it('runs immediately when a feed has never been fetched', () => {
+    expect(getNextAutoRefreshDelayMs([makeFeed()], 1000, 15)).toBe(0)
+  })
+
+  it('uses the earliest due time across feeds', () => {
+    const now = 60 * 60 * 1000
+    const feeds = [
+      { ...makeFeed(), id: 'feed-1', lastFetched: now - 5 * 60 * 1000 },
+      { ...makeFeed(), id: 'feed-2', lastFetched: now - 14 * 60 * 1000 },
+    ]
+
+    expect(getNextAutoRefreshDelayMs(feeds, now, 15)).toBe(60 * 1000)
+  })
+
+  it('respects social feed failure backoff when computing the next run', () => {
+    const now = 60 * 60 * 1000
+    const feed = {
+      ...makeFeed(),
+      url: 'https://rsshub.app/instagram/user/example',
+      lastFetched: now - 30 * 60 * 1000,
+      errorCount: 3,
+    }
+
+    expect(getNextAutoRefreshDelayMs([feed], now, 15)).toBe(30 * 60 * 1000)
   })
 })

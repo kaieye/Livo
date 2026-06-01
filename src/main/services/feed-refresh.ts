@@ -35,7 +35,8 @@ import {
 import { getActionRules } from './action-rules-store'
 import { enqueueEntryActionEffects } from './entry-action-effects'
 
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+let autoRefreshGeneration = 0
 let refreshAllInFlight: Promise<RefreshAllResult> | null = null
 const feedRefreshInFlight = new Map<string, Promise<number>>()
 const RECOMMENDED_CATEGORY = 'Recommended'
@@ -97,6 +98,7 @@ const DEFAULT_CONCURRENCY = 8
 const DEFAULT_FEED_REFRESH_TIMEOUT_MS = 12000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS = 15 * 60 * 1000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS = 90 * 60 * 1000
+const AUTO_REFRESH_MIN_DELAY_MS = 1000
 
 function isInstagramFeedUrl(feedUrl: string | undefined): boolean {
   const raw = (feedUrl || '').toLowerCase()
@@ -265,6 +267,41 @@ function shouldBackOffFeed(feed: Feed, now: number, force: boolean): boolean {
   return now - feed.lastFetched < backoffMs
 }
 
+function getFeedBackoffUntilMs(feed: Feed): number | null {
+  if (!isInstagramFeedUrl(feed.url)) return null
+  if (!feed.lastFetched || feed.errorCount <= 0) return null
+  const exp = Math.max(0, feed.errorCount - 1)
+  const backoffMs = Math.min(
+    INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS * Math.pow(2, exp),
+    INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS,
+  )
+  return feed.lastFetched + backoffMs
+}
+
+export function getNextAutoRefreshDelayMs(
+  feeds: Feed[],
+  now: number,
+  intervalMinutes: number,
+): number | null {
+  if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) return null
+
+  const intervalMs = intervalMinutes * 60 * 1000
+  if (feeds.length === 0) return intervalMs
+
+  let nextDueAt = Number.POSITIVE_INFINITY
+  for (const feed of feeds) {
+    if (!feed.lastFetched) return 0
+    const dueAt = Math.max(
+      feed.lastFetched + intervalMs,
+      getFeedBackoffUntilMs(feed) ?? 0,
+    )
+    nextDueAt = Math.min(nextDueAt, dueAt)
+  }
+
+  if (!Number.isFinite(nextDueAt)) return intervalMs
+  return Math.max(0, nextDueAt - now)
+}
+
 function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -324,44 +361,69 @@ export function startAutoRefresh(
   mainWindow: BrowserWindow | null,
   options?: RefreshOptions,
 ): void {
-  if (refreshTimer) clearInterval(refreshTimer)
+  stopAutoRefresh()
+  const generation = autoRefreshGeneration + 1
+  autoRefreshGeneration = generation
+  let shouldRunInitialDurationSweep = true
+  const scheduleIntervalMinutes =
+    Number.isFinite(options?.freshnessTTL) && (options?.freshnessTTL ?? 0) > 0
+      ? Math.max(intervalMinutes, options?.freshnessTTL ?? intervalMinutes)
+      : intervalMinutes
 
-  // Always refresh once immediately on startup (but respect freshness)
-  refreshAllFeeds(options).then((result) => {
-    // After initial refresh, enrich video durations for all video/audio feeds
-    // (catches entries fetched before duration enrichment was implemented)
-    if (isVideoDurationEnrichmentEnabled()) {
-      enrichAllVideoFeeds().catch(() => {})
+  const notifyUpdated = (newEntries: number): void => {
+    if (newEntries > 0 && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('feeds:updated', { newEntries })
     }
-    if (result.totalNewEntries > 0 && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('feeds:updated', {
-        newEntries: result.totalNewEntries,
-      })
-    }
-  })
+  }
 
-  if (intervalMinutes <= 0) return
+  const scheduleNext = (): void => {
+    if (generation !== autoRefreshGeneration || intervalMinutes <= 0) return
 
-  refreshTimer = setInterval(
-    async () => {
+    const receiveRecommended = !!getSettings().general.showRecommended
+    const feeds = getAllFeeds().filter(
+      (feed) => receiveRecommended || feed.category !== RECOMMENDED_CATEGORY,
+    )
+    const delayMs = getNextAutoRefreshDelayMs(
+      feeds,
+      Date.now(),
+      scheduleIntervalMinutes,
+    )
+    if (delayMs === null) return
+
+    refreshTimer = setTimeout(
+      () => {
+        refreshTimer = null
+        void runAndSchedule()
+      },
+      Math.max(AUTO_REFRESH_MIN_DELAY_MS, delayMs),
+    )
+  }
+
+  const runAndSchedule = async (): Promise<void> => {
+    try {
       const result = await refreshAllFeeds(options)
-      if (
-        result.totalNewEntries > 0 &&
-        mainWindow &&
-        !mainWindow.isDestroyed()
-      ) {
-        mainWindow.webContents.send('feeds:updated', {
-          newEntries: result.totalNewEntries,
-        })
+      if (generation !== autoRefreshGeneration) return
+      if (shouldRunInitialDurationSweep) {
+        shouldRunInitialDurationSweep = false
+        if (isVideoDurationEnrichmentEnabled()) {
+          enrichAllVideoFeeds().catch(() => {})
+        }
       }
-    },
-    intervalMinutes * 60 * 1000,
-  )
+      notifyUpdated(result.totalNewEntries)
+    } catch (error) {
+      console.warn('[refresh] auto refresh failed', error)
+    } finally {
+      scheduleNext()
+    }
+  }
+
+  void runAndSchedule()
 }
 
 export function stopAutoRefresh(): void {
+  autoRefreshGeneration++
   if (refreshTimer) {
-    clearInterval(refreshTimer)
+    clearTimeout(refreshTimer)
     refreshTimer = null
   }
 }
