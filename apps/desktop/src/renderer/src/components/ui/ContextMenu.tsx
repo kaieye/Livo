@@ -2,8 +2,9 @@
  * Context Menu — Right-click context menu for entry items.
  * Rich context menu with mark read/unread, star, copy, share, and integrations.
  */
-import { useState, useEffect, useCallback, useRef } from "react"
-import { useTranslation } from "react-i18next"
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { openExternalUrlSafe } from '../../services/external-url'
 import {
   Eye,
   EyeOff,
@@ -16,10 +17,10 @@ import {
   Share2,
   Image as ImageIcon,
   FileText,
-} from "lucide-react"
-import type { Entry } from "../../../../shared/types"
-import type { NativeContextMenuItem } from "../../../../shared/types"
-import { useOverlayHotkeyScope } from "../../hooks/useHotkeyScope"
+} from 'lucide-react'
+import type { Entry } from '../../../../shared/types'
+import type { NativeContextMenuItem } from '../../../../shared/types'
+import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 
 export interface ContextMenuAction {
   id: string
@@ -90,7 +91,7 @@ interface ContextMenuProps {
 
 export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  useOverlayHotkeyScope("context-menu", true)
+  useOverlayHotkeyScope('context-menu', true)
 
   // Adjust position if menu overflows viewport
   const [pos, setPos] = useState({ x, y })
@@ -99,8 +100,14 @@ export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
     const el = menuRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    const newX = x + rect.width > window.innerWidth ? window.innerWidth - rect.width - 8 : x
-    const newY = y + rect.height > window.innerHeight ? window.innerHeight - rect.height - 8 : y
+    const newX =
+      x + rect.width > window.innerWidth
+        ? window.innerWidth - rect.width - 8
+        : x
+    const newY =
+      y + rect.height > window.innerHeight
+        ? window.innerHeight - rect.height - 8
+        : y
     setPos({ x: Math.max(4, newX), y: Math.max(4, newY) })
   }, [x, y])
 
@@ -112,22 +119,23 @@ export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
       }
     }
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
+      if (e.key === 'Escape') onClose()
     }
     // Use setTimeout to avoid immediately closing on the right-click event
     const timer = setTimeout(() => {
-      document.addEventListener("mousedown", handleClick)
-      document.addEventListener("keydown", handleKey)
+      document.addEventListener('mousedown', handleClick)
+      document.addEventListener('keydown', handleKey)
     }, 0)
     return () => {
       clearTimeout(timer)
-      document.removeEventListener("mousedown", handleClick)
-      document.removeEventListener("keydown", handleKey)
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
     }
   }, [onClose])
 
   const visibleActions = actions.filter((a) => !a.hidden)
-  const shouldUseNativeMenu = typeof window !== "undefined" && !!window.api?.menu?.showContextMenu
+  const shouldUseNativeMenu =
+    typeof window !== 'undefined' && !!window.api?.menu?.showContextMenu
 
   useEffect(() => {
     if (!shouldUseNativeMenu) return
@@ -166,14 +174,14 @@ export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="fixed z-[100] min-w-[200px] rounded-xl border bg-white dark:bg-surface-dark shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+      className="animate-in fade-in zoom-in-95 fixed z-[100] min-w-[200px] overflow-hidden rounded-xl border bg-white shadow-xl duration-100 dark:bg-surface-dark"
       style={{ left: pos.x, top: pos.y }}
     >
       <div className="py-1">
         {visibleActions.map((action, i) => (
           <div key={action.id}>
             {action.separator && i > 0 && (
-              <div className="h-px bg-border dark:bg-surface-dark-tertiary my-1" />
+              <div className="my-1 h-px bg-border dark:bg-surface-dark-tertiary" />
             )}
             <button
               onClick={() => {
@@ -181,13 +189,13 @@ export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
                 onClose()
               }}
               disabled={action.disabled}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+              className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                 action.danger
-                  ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  : "hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
-              } ${action.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                  ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                  : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary'
+              } ${action.disabled ? 'cursor-not-allowed opacity-40' : ''}`}
             >
-              <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+              <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
                 {action.icon}
               </span>
               <span>{action.label}</span>
@@ -211,7 +219,7 @@ export function useEntryContextMenu() {
   }>({ visible: false, x: 0, y: 0, entryId: null })
 
   const showMenu = useCallback((e: React.MouseEvent, entryId: string) => {
-    const selectedText = window.getSelection?.()?.toString().trim() || ""
+    const selectedText = window.getSelection?.()?.toString().trim() || ''
     if (selectedText.length > 0) {
       // Let native context menu handle text actions (copy/search/etc.).
       return
@@ -261,7 +269,9 @@ export function useEntryContextActions({
   onSharePoster?: () => void
 }): ContextMenuAction[] {
   const { t } = useTranslation()
-  const fallbackExternalUrl = /^https?:\/\//i.test((entry.url || "").trim()) ? (entry.url || "").trim() : ""
+  const fallbackExternalUrl = /^https?:\/\//i.test((entry.url || '').trim())
+    ? (entry.url || '').trim()
+    : ''
   const feedSite = /^https?:\/\//i.test((feedSiteUrl || '').trim())
     ? (feedSiteUrl || '').trim()
     : ''
@@ -271,37 +281,47 @@ export function useEntryContextActions({
 
   const actions: ContextMenuAction[] = [
     {
-      id: "mark-read",
-      label: entry.isRead ? t("contextMenu.markUnread") : t("contextMenu.markRead"),
+      id: 'mark-read',
+      label: entry.isRead
+        ? t('contextMenu.markUnread')
+        : t('contextMenu.markRead'),
       icon: entry.isRead ? <EyeOff size={14} /> : <Eye size={14} />,
       onClick: () => onMarkRead(entry.id, !entry.isRead),
     },
     {
-      id: "mark-above",
-      label: t("contextMenu.markAboveRead"),
+      id: 'mark-above',
+      label: t('contextMenu.markAboveRead'),
       icon: <ArrowUp size={14} />,
       onClick: () => onMarkAboveRead?.(),
       disabled: entryIndex === undefined || entryIndex <= 0,
       hidden: entryIndex === undefined,
     },
     {
-      id: "mark-below",
-      label: t("contextMenu.markBelowRead"),
+      id: 'mark-below',
+      label: t('contextMenu.markBelowRead'),
       icon: <ArrowDown size={14} />,
       onClick: () => onMarkBelowRead?.(),
-      disabled: entryIndex === undefined || totalEntries === undefined || entryIndex >= totalEntries - 1,
+      disabled:
+        entryIndex === undefined ||
+        totalEntries === undefined ||
+        entryIndex >= totalEntries - 1,
       hidden: entryIndex === undefined,
     },
     {
-      id: "star",
-      label: entry.isStarred ? t("contextMenu.unstar") : t("contextMenu.star"),
-      icon: <Star size={14} className={entry.isStarred ? "fill-yellow-500 text-yellow-500" : ""} />,
+      id: 'star',
+      label: entry.isStarred ? t('contextMenu.unstar') : t('contextMenu.star'),
+      icon: (
+        <Star
+          size={14}
+          className={entry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''}
+        />
+      ),
       onClick: () => onToggleStar(entry.id),
       separator: true,
     },
     {
-      id: "open-browser",
-      label: t("contextMenu.openInBrowser"),
+      id: 'open-browser',
+      label: t('contextMenu.openInBrowser'),
       icon: <ExternalLink size={14} />,
       onClick: () => {
         if (onOpenInBrowser) {
@@ -309,33 +329,25 @@ export function useEntryContextActions({
           return
         }
         if (fallbackExternalUrl) {
-          if (window.api?.app?.openExternal) {
-            void window.api.app.openExternal(fallbackExternalUrl)
-          } else {
-            window.open(fallbackExternalUrl, "_blank")
-          }
+          void openExternalUrlSafe(fallbackExternalUrl)
         }
       },
       separator: true,
       disabled: !onOpenInBrowser && !fallbackExternalUrl,
     },
     {
-      id: "open-feed-site",
-      label: t("contextMenu.openFeedSite", { defaultValue: '打开源站主页' }),
+      id: 'open-feed-site',
+      label: t('contextMenu.openFeedSite', { defaultValue: '打开源站主页' }),
       icon: <ExternalLink size={14} />,
       onClick: () => {
         if (!feedSite) return
-        if (window.api?.app?.openExternal) {
-          void window.api.app.openExternal(feedSite)
-        } else {
-          window.open(feedSite, "_blank")
-        }
+        void openExternalUrlSafe(feedSite)
       },
       disabled: !feedSite,
     },
     {
-      id: "copy-link",
-      label: t("contextMenu.copyLink"),
+      id: 'copy-link',
+      label: t('contextMenu.copyLink'),
       icon: <Copy size={14} />,
       onClick: () => {
         onCopyLink?.()
@@ -343,8 +355,8 @@ export function useEntryContextActions({
       },
     },
     {
-      id: "copy-title",
-      label: t("contextMenu.copyTitle"),
+      id: 'copy-title',
+      label: t('contextMenu.copyTitle'),
       icon: <FileText size={14} />,
       onClick: () => {
         onCopyTitle?.()
@@ -352,8 +364,8 @@ export function useEntryContextActions({
       },
     },
     {
-      id: "copy-summary",
-      label: t("contextMenu.copySummary", { defaultValue: '复制简介' }),
+      id: 'copy-summary',
+      label: t('contextMenu.copySummary', { defaultValue: '复制简介' }),
       icon: <FileText size={14} />,
       onClick: () => {
         if (summaryText) navigator.clipboard.writeText(summaryText)
@@ -361,8 +373,8 @@ export function useEntryContextActions({
       disabled: !summaryText,
     },
     {
-      id: "copy-media-url",
-      label: t("contextMenu.copyMediaUrl", { defaultValue: '复制媒体地址' }),
+      id: 'copy-media-url',
+      label: t('contextMenu.copyMediaUrl', { defaultValue: '复制媒体地址' }),
       icon: <ImageIcon size={14} />,
       onClick: () => {
         if (mediaUrl) navigator.clipboard.writeText(mediaUrl)
@@ -370,46 +382,51 @@ export function useEntryContextActions({
       disabled: !mediaUrl,
     },
     {
-      id: "save-image",
-      label: t("contextMenu.saveImage", { defaultValue: '保存图片' }),
+      id: 'save-image',
+      label: t('contextMenu.saveImage', { defaultValue: '保存图片' }),
       icon: <Download size={14} />,
       onClick: () => {
         if (!imageUrl) return
         void window.api.app.downloadUrl({
           url: imageUrl,
           suggestedFileName: inferSuggestedFileName(entry, imageUrl),
-          title: t("contextMenu.saveImage", { defaultValue: '保存图片' }),
-          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+          title: t('contextMenu.saveImage', { defaultValue: '保存图片' }),
+          filters: [
+            {
+              name: 'Images',
+              extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+            },
+          ],
         })
       },
       disabled: !imageUrl,
       separator: true,
     },
     {
-      id: "save-media",
-      label: t("contextMenu.saveMedia", { defaultValue: '保存媒体文件' }),
+      id: 'save-media',
+      label: t('contextMenu.saveMedia', { defaultValue: '保存媒体文件' }),
       icon: <Download size={14} />,
       onClick: () => {
         if (!mediaUrl) return
         void window.api.app.downloadUrl({
           url: mediaUrl,
           suggestedFileName: inferSuggestedFileName(entry, mediaUrl),
-          title: t("contextMenu.saveMedia", { defaultValue: '保存媒体文件' }),
+          title: t('contextMenu.saveMedia', { defaultValue: '保存媒体文件' }),
         })
       },
       disabled: !mediaUrl,
     },
     {
-      id: "share",
-      label: t("contextMenu.share"),
+      id: 'share',
+      label: t('contextMenu.share'),
       icon: <Share2 size={14} />,
       onClick: () => onShare?.(),
       separator: true,
-      hidden: typeof navigator.share !== "function" && !onShare,
+      hidden: typeof navigator.share !== 'function' && !onShare,
     },
     {
-      id: "share-poster",
-      label: t("contextMenu.sharePoster"),
+      id: 'share-poster',
+      label: t('contextMenu.sharePoster'),
       icon: <ImageIcon size={14} />,
       onClick: () => onSharePoster?.(),
       hidden: !onSharePoster,

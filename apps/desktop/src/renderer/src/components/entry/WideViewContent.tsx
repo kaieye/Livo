@@ -23,6 +23,7 @@ import {
   type UIEvent,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { openExternalUrlSafe } from '../../services/external-url'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
 import {
@@ -779,11 +780,7 @@ export function WideViewContent() {
     if (!entry.url) return
     const target = canonicalizeSocialUrl(entry.url)
     if (!target) return
-    if (window.api?.app?.openExternal) {
-      void window.api.app.openExternal(target)
-    } else {
-      window.open(target, '_blank')
-    }
+    void openExternalUrlSafe(target)
   }, [])
 
   const handleSocialBilibiliOpenInPage = useCallback(
@@ -1467,11 +1464,7 @@ function WideViewContextMenuWrapper({
     onMarkBelowRead,
     onOpenInBrowser: browserOpenUrl
       ? () => {
-          if (window.api?.app?.openExternal) {
-            void window.api.app.openExternal(browserOpenUrl)
-          } else {
-            window.open(browserOpenUrl, '_blank')
-          }
+          void openExternalUrlSafe(browserOpenUrl)
         }
       : undefined,
     feedSiteUrl,

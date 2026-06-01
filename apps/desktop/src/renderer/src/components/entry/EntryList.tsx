@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { openExternalUrlSafe } from '../../services/external-url'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
 import {
@@ -1249,11 +1250,7 @@ function EntryContextMenuWrapper({
     onMarkBelowRead,
     onOpenInBrowser: browserOpenUrl
       ? () => {
-          if (window.api?.app?.openExternal) {
-            void window.api.app.openExternal(browserOpenUrl)
-          } else {
-            window.open(browserOpenUrl, '_blank')
-          }
+          void openExternalUrlSafe(browserOpenUrl)
         }
       : undefined,
     feedSiteUrl,
@@ -2636,11 +2633,7 @@ function SocialActionBar({
         {resolvedBrowserOpenUrl && (
           <button
             onClick={() => {
-              if (window.api?.app?.openExternal) {
-                void window.api.app.openExternal(resolvedBrowserOpenUrl)
-              } else {
-                window.open(resolvedBrowserOpenUrl, '_blank')
-              }
+              void openExternalUrlSafe(resolvedBrowserOpenUrl)
             }}
             className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
             title={t('contextMenu.openInBrowser')}

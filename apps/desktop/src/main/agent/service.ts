@@ -1,12 +1,10 @@
 import { getSettings } from '../handlers/settings-handlers'
+import type { AgentRunSummary } from '@livo/models'
 import {
   runAgentCore,
   resumeAgentCore,
   type AgentContinuationState,
   type AgentHistoryMessage,
-  type AgentPendingConfirmation,
-  type AgentRoundDetail,
-  type AgentRunMetrics,
   type AgentRunResult,
   type AgentToolExecutionEvent,
 } from './loop'
@@ -16,15 +14,8 @@ import {
   type AgentTraceStatus,
 } from './trace-store'
 
-export interface AgentServiceResult {
-  text: string
-  status: 'completed' | 'confirmation_required'
-  toolRounds: AgentRoundDetail[]
-  confirmation?: AgentPendingConfirmation
-  /** When a confirmation is required, the id to pass back to `resume`. */
-  pendingId?: string
-  metrics: AgentRunMetrics
-}
+/** Back-compat alias — the canonical shape lives in `@livo/models`. */
+export type AgentServiceResult = AgentRunSummary
 
 export interface AgentServiceRunRequest {
   requestId: string

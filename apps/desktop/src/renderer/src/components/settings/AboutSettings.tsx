@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Rss, Github, Heart } from 'lucide-react'
+import { openExternalUrlSafe } from '../../services/external-url'
 import { useUpdateStore } from '../../store/update-store'
 
 function formatPublishedAt(value: string | undefined): string {
@@ -112,9 +113,7 @@ export function AboutSettings() {
             )}
             {updateInfo.hasUpdate && updateInfo.releaseUrl && (
               <button
-                onClick={() =>
-                  void window.api.app.openExternal(updateInfo.releaseUrl!)
-                }
+                onClick={() => void openExternalUrlSafe(updateInfo.releaseUrl!)}
                 className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 dark:hover:bg-black/10"
               >
                 {t('settings.openReleasePage')}

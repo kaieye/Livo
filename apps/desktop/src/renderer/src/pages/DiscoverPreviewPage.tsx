@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
+import { openExternalUrlSafe } from '../services/external-url'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -150,7 +151,7 @@ export default function DiscoverPreviewPage() {
   const handleRetry = useCallback(() => setReloadKey((x) => x + 1), [])
   const handleOpenExternal = useCallback(() => {
     if (!externalUrl) return
-    void window.api.app.openExternal(externalUrl)
+    void openExternalUrlSafe(externalUrl)
   }, [externalUrl])
 
   const handleContinue = useCallback(() => {

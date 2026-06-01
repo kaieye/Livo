@@ -10,6 +10,7 @@ import {
   unlinkAccount,
 } from '../../services/account-auth'
 import { emptyParams, objectParams } from './schema'
+import { defineReadTool } from './factories'
 
 const PROVIDER_VALUES: AccountProvider[] = [
   'youtube',
@@ -45,15 +46,12 @@ function statusLine(
 }
 
 export function buildListAccountProvidersTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'list_account_providers',
     title: '查看账号关联',
     description:
       '查看 YouTube、X、Instagram、Bilibili 等账号关联状态，不返回 cookie 或 token',
     inputSchema: emptyParams(),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (): Promise<AgentToolResult> => {
       const statuses = await Promise.all(
         PROVIDER_VALUES.map((p) => getAccountState(p)),
@@ -67,18 +65,15 @@ export function buildListAccountProvidersTool(): AgentTool {
         data: { statuses: statuses as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildRefreshAccountStatusTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'refresh_account_status',
     title: '刷新账号状态',
     description: '刷新指定平台的账号关联状态，不返回 cookie 或 token',
     inputSchema: providerParams('要刷新的平台'),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -96,7 +91,7 @@ export function buildRefreshAccountStatusTool(): AgentTool {
         data: { status: status as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildOpenAccountLoginTool(): AgentTool {

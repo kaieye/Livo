@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { IPC } from '../../shared/types'
-import { agentService, type AgentServiceResult } from '../agent/service'
+import type { AgentRunResponse } from '@livo/models'
+import { agentService } from '../agent/service'
 import type {
   AgentHistoryMessage,
   AgentToolExecutionEvent,
@@ -22,10 +23,6 @@ interface AgentResumePayload {
   requestId: string
   pendingId: string
 }
-
-type AgentRunResponse =
-  | ({ success: true } & AgentServiceResult)
-  | { success: false; error: string }
 
 export function registerAgentHandlers(): void {
   ipcMain.handle(

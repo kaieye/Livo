@@ -29,7 +29,7 @@ import { appendRefreshLog } from './refresh-log-store'
 import { runConcurrencyPool } from '../utils/concurrency-pool'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
-let refreshAllInFlight: Promise<void> | null = null
+let refreshAllInFlight: Promise<RefreshAllResult> | null = null
 const feedRefreshInFlight = new Map<string, Promise<number>>()
 const RECOMMENDED_CATEGORY = 'Recommended'
 
@@ -239,6 +239,24 @@ export interface RefreshOptions {
   cleanup?: CleanupOptions
 }
 
+export interface RefreshProgressEvent {
+  feedId: string
+  feedTitle: string
+  success: boolean
+  newEntries: number
+  completed: number
+  total: number
+  done: boolean
+}
+
+export interface RefreshAllResult {
+  totalFeeds: number
+  refreshedCount: number
+  failedCount: number
+  failedFeedTitles: string[]
+  totalNewEntries: number
+}
+
 export function startAutoRefresh(
   intervalMinutes: number,
   mainWindow: BrowserWindow | null,
@@ -247,11 +265,16 @@ export function startAutoRefresh(
   if (refreshTimer) clearInterval(refreshTimer)
 
   // Always refresh once immediately on startup (but respect freshness)
-  refreshAllFeeds(mainWindow, options).then(() => {
+  refreshAllFeeds(options).then((result) => {
     // After initial refresh, enrich video durations for all video/audio feeds
     // (catches entries fetched before duration enrichment was implemented)
     if (isVideoDurationEnrichmentEnabled()) {
       enrichAllVideoFeeds().catch(() => {})
+    }
+    if (result.totalNewEntries > 0 && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('feeds:updated', {
+        newEntries: result.totalNewEntries,
+      })
     }
   })
 
@@ -259,7 +282,16 @@ export function startAutoRefresh(
 
   refreshTimer = setInterval(
     async () => {
-      await refreshAllFeeds(mainWindow, options)
+      const result = await refreshAllFeeds(options)
+      if (
+        result.totalNewEntries > 0 &&
+        mainWindow &&
+        !mainWindow.isDestroyed()
+      ) {
+        mainWindow.webContents.send('feeds:updated', {
+          newEntries: result.totalNewEntries,
+        })
+      }
     },
     intervalMinutes * 60 * 1000,
   )
@@ -433,31 +465,32 @@ function getFeedImageUrl(parsed: any): string | undefined {
   return undefined
 }
 
-async function refreshAllFeeds(
-  mainWindow: BrowserWindow | null,
-  options?: RefreshOptions,
-): Promise<void> {
+export async function refreshAllFeeds(
+  options: RefreshOptions & {
+    onProgress?: (event: RefreshProgressEvent) => void
+  } = {},
+): Promise<RefreshAllResult> {
   if (refreshAllInFlight) {
     await refreshAllInFlight
-    return
+    return emptyRefreshAllResult()
   }
 
-  const run = (async () => {
+  const run = (async (): Promise<RefreshAllResult> => {
     const allFeeds = getAllFeeds()
     const receiveRecommended = !!getSettings().general.showRecommended
     const feeds = receiveRecommended
       ? allFeeds
       : allFeeds.filter((f) => f.category !== RECOMMENDED_CATEGORY)
     const freshnessTTL =
-      (options?.freshnessTTL ?? DEFAULT_FRESHNESS_TTL_MINUTES) * 60 * 1000
-    const concurrency = options?.concurrency ?? DEFAULT_CONCURRENCY
-    const force = options?.force ?? false
+      (options.freshnessTTL ?? DEFAULT_FRESHNESS_TTL_MINUTES) * 60 * 1000
+    const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY
+    const force = options.force ?? false
     const now = Date.now()
     const settingsCleanup: CleanupOptions = {
       entriesPerFeed: getSettings().data?.entriesPerFeed ?? 128,
       maxEntryAgeDays: getSettings().data?.maxEntryAgeDays ?? 90,
     }
-    const cleanupOptions = options?.cleanup ?? settingsCleanup
+    const cleanupOptions = options.cleanup ?? settingsCleanup
 
     // Filter feeds that need refreshing (respect freshness TTL)
     const staleFeeds = force
@@ -470,7 +503,16 @@ async function refreshAllFeeds(
 
     if (staleFeeds.length === 0) {
       cleanupEntries(cleanupOptions)
-      return
+      options.onProgress?.({
+        feedId: '',
+        feedTitle: '',
+        success: true,
+        newEntries: 0,
+        completed: 0,
+        total: 0,
+        done: true,
+      })
+      return emptyRefreshAllResult()
     }
 
     // Track pre-refresh error counts to detect fresh failures
@@ -479,12 +521,46 @@ async function refreshAllFeeds(
       errorCountBefore.set(feed.id, feed.errorCount)
     }
 
-    let totalNew = 0
-
-    await runConcurrencyPool(staleFeeds, concurrency, async (feed) => {
-      const newCount = await refreshSingleFeed(feed)
-      totalNew += newCount
+    options.onProgress?.({
+      feedId: '',
+      feedTitle: '',
+      success: true,
+      newEntries: 0,
+      completed: 0,
+      total: staleFeeds.length,
+      done: false,
     })
+
+    let totalNew = 0
+    const failedTitles: string[] = []
+
+    const settled = await runConcurrencyPool(
+      staleFeeds,
+      concurrency,
+      async (feed) => {
+        const newCount = await refreshSingleFeed(feed)
+        return newCount
+      },
+    )
+
+    // Emit per-feed progress events. Done after the pool completes so the
+    // listener sees a deterministic order and never a partial set.
+    for (let i = 0; i < settled.length; i += 1) {
+      const feed = staleFeeds[i]
+      const result = settled[i]
+      const success = result.status === 'fulfilled'
+      const newEntries = success ? result.value : 0
+      if (success) totalNew += newEntries
+      options.onProgress?.({
+        feedId: feed.id,
+        feedTitle: feed.title,
+        success,
+        newEntries,
+        completed: i + 1,
+        total: settled.length,
+        done: i + 1 === settled.length,
+      })
+    }
 
     // Run data cleanup after refresh
     cleanupEntries(cleanupOptions)
@@ -493,7 +569,6 @@ async function refreshAllFeeds(
     const refreshedFeeds = getAllFeeds()
     let successCount = 0
     let failedCount = 0
-    const failedTitles: string[] = []
     for (const feed of refreshedFeeds) {
       const before = errorCountBefore.get(feed.id)
       if (before !== undefined) {
@@ -514,15 +589,29 @@ async function refreshAllFeeds(
       failedFeedTitles: failedTitles,
     })
 
-    if (totalNew > 0 && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('feeds:updated', { newEntries: totalNew })
+    return {
+      totalFeeds: feeds.length,
+      refreshedCount: successCount,
+      failedCount,
+      failedFeedTitles: failedTitles,
+      totalNewEntries: totalNew,
     }
   })()
 
   refreshAllInFlight = run
   try {
-    await run
+    return await run
   } finally {
     if (refreshAllInFlight === run) refreshAllInFlight = null
+  }
+}
+
+function emptyRefreshAllResult(): RefreshAllResult {
+  return {
+    totalFeeds: 0,
+    refreshedCount: 0,
+    failedCount: 0,
+    failedFeedTitles: [],
+    totalNewEntries: 0,
   }
 }

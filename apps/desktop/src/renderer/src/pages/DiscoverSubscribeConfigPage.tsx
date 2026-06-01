@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { openExternalUrlSafe } from '../services/external-url'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -124,7 +125,7 @@ export default function DiscoverSubscribeConfigPage() {
   const handleOpenExternal = useCallback(() => {
     const url = effectiveTarget.siteUrl || effectiveTarget.url
     if (!url) return
-    void window.api.app.openExternal(url)
+    void openExternalUrlSafe(url)
   }, [effectiveTarget])
 
   const handleSubmit = useCallback(async () => {

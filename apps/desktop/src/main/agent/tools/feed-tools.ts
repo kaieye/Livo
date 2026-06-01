@@ -29,6 +29,7 @@ import {
 import { getSettings } from '../../handlers/settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { clampLimit, emptyParams, objectParams } from './schema'
+import { defineMutateTool, defineReadTool } from './factories'
 
 const VIEW_NAMES = ['文章', '社交', '视频', '图片']
 
@@ -115,15 +116,12 @@ export async function subscribeByUrl(
 }
 
 export function buildListSubscribedFeedsTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'list_subscribed_feeds',
     title: '查询订阅源',
     description:
       '查询用户所有已订阅的RSS源列表，返回每个源的名称、分类、最后更新时间和 ID',
     inputSchema: emptyParams(),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (): Promise<AgentToolResult> => {
       const feeds = getAllFeeds()
       if (feeds.length === 0) {
@@ -136,11 +134,11 @@ export function buildListSubscribedFeedsTool(): AgentTool {
         data: { count: feeds.length, feeds: feeds as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildGetFeedEntriesTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'get_feed_entries',
     title: '获取订阅源文章',
     description: '获取指定订阅源的文章列表',
@@ -151,9 +149,6 @@ export function buildGetFeedEntriesTool(): AgentTool {
       },
       ['feedId'],
     ),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -183,11 +178,11 @@ export function buildGetFeedEntriesTool(): AgentTool {
         data: { count: entries.length, entries: entries as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildAddFeedTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'add_feed',
     title: '添加订阅源',
     description:
@@ -200,9 +195,6 @@ export function buildAddFeedTool(): AgentTool {
       },
       ['url'],
     ),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -224,7 +216,7 @@ export function buildAddFeedTool(): AgentTool {
         data: { feedId: outcome.feedId },
       }
     },
-  }
+  })
 }
 
 export function buildRemoveSubscriptionTool(): AgentTool {
@@ -267,7 +259,7 @@ export function buildRemoveSubscriptionTool(): AgentTool {
 }
 
 export function buildRefreshSubscriptionTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'refresh_subscription',
     title: '刷新订阅源',
     description:
@@ -276,9 +268,6 @@ export function buildRefreshSubscriptionTool(): AgentTool {
       { feedId: { type: 'string', description: '要刷新的订阅源 ID' } },
       ['feedId'],
     ),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     confirmationTitle: '确认刷新订阅源',
     confirmationMessage:
       '将访问订阅源网络地址并写入最新文章、抓取状态和刷新日志。',
@@ -301,19 +290,16 @@ export function buildRefreshSubscriptionTool(): AgentTool {
         data: { feedId, newEntries: newCount },
       }
     },
-  }
+  })
 }
 
 export function buildRefreshAllSubscriptionsTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'refresh_all_subscriptions',
     title: '刷新全部订阅源',
     description:
       '刷新所有订阅源，拉取最新文章并写入本地数据。订阅数量较多时可能耗时较长',
     inputSchema: emptyParams(),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     confirmationTitle: '确认刷新全部订阅源',
     confirmationMessage:
       '将访问所有订阅源网络地址并写入最新文章、抓取状态和刷新日志。',
@@ -348,5 +334,5 @@ export function buildRefreshAllSubscriptionsTool(): AgentTool {
         data: { total: feeds.length, success, failed, newEntries: newTotal },
       }
     },
-  }
+  })
 }

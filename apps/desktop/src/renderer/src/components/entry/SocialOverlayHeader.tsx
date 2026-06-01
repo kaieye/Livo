@@ -1,6 +1,13 @@
-import { ChevronLeft, ExternalLink, Languages, Loader2, Sparkles } from "lucide-react"
-import { memo } from "react"
-import { useTranslation } from "react-i18next"
+import {
+  ChevronLeft,
+  ExternalLink,
+  Languages,
+  Loader2,
+  Sparkles,
+} from 'lucide-react'
+import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { openExternalUrlSafe } from '../../services/external-url'
 
 export const SocialOverlayHeader = memo(function SocialOverlayHeader({
   contentWidthClass,
@@ -34,14 +41,17 @@ export const SocialOverlayHeader = memo(function SocialOverlayHeader({
   const { t } = useTranslation()
 
   return (
-    <div className="sticky top-0 z-20 bg-white/95 dark:bg-surface-dark/95 backdrop-blur-sm border-b border-border/10 dark:border-border-dark/10">
-      <div className={`${contentWidthClass} mx-auto px-4 py-2 flex items-center justify-between`} style={contentWidthStyle}>
+    <div className="sticky top-0 z-20 border-b border-border/10 bg-white/95 backdrop-blur-sm dark:border-border-dark/10 dark:bg-surface-dark/95">
+      <div
+        className={`${contentWidthClass} mx-auto flex items-center justify-between px-4 py-2`}
+        style={contentWidthStyle}
+      >
         <button
           onClick={onClose}
-          className="flex items-center gap-1 px-2 py-1.5 -ml-2 rounded-lg hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary text-text-secondary transition-colors"
+          className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-text-secondary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
         >
           <ChevronLeft size={18} />
-          <span className="text-sm">{t("common.back")}</span>
+          <span className="text-sm">{t('common.back')}</span>
         </button>
         <div className="flex items-center gap-2">
           {plainContent && (
@@ -49,46 +59,52 @@ export const SocialOverlayHeader = memo(function SocialOverlayHeader({
               <button
                 onClick={onTranslate}
                 disabled={isTranslating}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
+                className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
                   showTranslation && translatedParagraphCount > 0
-                    ? "text-accent bg-accent/10"
-                    : "text-text-secondary hover:text-accent hover:bg-accent/5"
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-text-secondary hover:bg-accent/5 hover:text-accent'
                 }`}
-                title={t("social.translateTweet")}
+                title={t('social.translateTweet')}
               >
-                {isTranslating ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
-                <span>{t("social.translateTweet")}</span>
+                {isTranslating ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Languages size={14} />
+                )}
+                <span>{t('social.translateTweet')}</span>
               </button>
               <button
                 onClick={onSummarize}
                 disabled={isSummarizing}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
+                className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
                   showSummary && summary
-                    ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20"
-                    : "text-text-secondary hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/10"
+                    ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
+                    : 'text-text-secondary hover:bg-amber-50/50 hover:text-amber-600 dark:hover:bg-amber-900/10 dark:hover:text-amber-400'
                 }`}
-                title={t("social.summarizeTweet")}
+                title={t('social.summarizeTweet')}
               >
-                {isSummarizing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                <span>{t("social.summarizeTweet")}</span>
+                {isSummarizing ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+                <span>{t('social.summarizeTweet')}</span>
               </button>
             </>
           )}
           <button
             onClick={() => {
               if (!browserOpenUrl) return
-              if (window.api?.app?.openExternal) {
-                void window.api.app.openExternal(browserOpenUrl)
-              } else {
-                window.open(browserOpenUrl, "_blank")
-              }
+              void openExternalUrlSafe(browserOpenUrl)
             }}
             disabled={!browserOpenUrl}
-            className="flex items-center gap-1 text-xs text-accent disabled:text-text-tertiary disabled:cursor-not-allowed hover:underline disabled:no-underline"
-            title={t("common.openInBrowser", { defaultValue: "在浏览器中打开" })}
+            className="flex items-center gap-1 text-xs text-accent hover:underline disabled:cursor-not-allowed disabled:text-text-tertiary disabled:no-underline"
+            title={t('common.openInBrowser', {
+              defaultValue: '在浏览器中打开',
+            })}
           >
             <ExternalLink size={12} />
-            {t("common.openInBrowser", { defaultValue: "在浏览器中打开" })}
+            {t('common.openInBrowser', { defaultValue: '在浏览器中打开' })}
           </button>
         </div>
       </div>

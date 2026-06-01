@@ -28,6 +28,8 @@ export interface RetryOptions<T> {
   }) => void
   /** Injectable sleep for deterministic tests. */
   sleep?: (ms: number) => Promise<void>
+  /** Abort the retry loop. Throws DOMException('Aborted', 'AbortError') when fired. */
+  signal?: AbortSignal
 }
 
 const defaultSleep = (ms: number): Promise<void> =>
@@ -41,17 +43,24 @@ function statusOf(error: unknown): number | undefined {
   return undefined
 }
 
+function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  return (error as { name?: unknown }).name === 'AbortError'
+}
+
 /**
  * Heuristic for whether an AI provider error is transient.
  *
+ * - AbortError → never retry (the caller already gave up)
  * - 408 (timeout), 409 (conflict), 429 (rate limit) and all 5xx → retryable
  * - other 4xx (401/403 auth, 400 bad request) → non-retryable config errors
  * - errors without a status (network/timeout) → retryable
  */
 export function isRetryableAIError(error: unknown): boolean {
+  if (isAbortError(error)) return false
   const status = statusOf(error)
   if (status === undefined) {
-    // Network errors / aborted requests carry no HTTP status — worth a retry.
+    // Network errors carry no HTTP status — worth a retry.
     return true
   }
   if (status === 408 || status === 409 || status === 429) return true
@@ -65,7 +74,8 @@ export function isRetryableAIError(error: unknown): boolean {
  * tokens) on later tiers — mirroring the Harmony TranslationPipeline.
  *
  * Throws the last error if every attempt fails; throws an "empty result" error
- * if all attempts produced empty values.
+ * if all attempts produced empty values. If `signal` aborts, the in-flight
+ * sleep is interrupted with DOMException('Aborted', 'AbortError').
  */
 export async function runWithRetry<T>(
   fn: (attempt: number) => Promise<T>,
@@ -79,11 +89,13 @@ export async function runWithRetry<T>(
     isRetryableError = isRetryableAIError,
     onRetry,
     sleep = defaultSleep,
+    signal,
   } = options
 
   let lastError: unknown
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     const isLast = attempt === maxAttempts - 1
     try {
       const value = await fn(attempt)
@@ -92,7 +104,11 @@ export async function runWithRetry<T>(
           throw new Error('AI returned an empty result')
         }
         onRetry?.({ attempt, empty: true })
-        await sleep(backoff(attempt, baseDelayMs, maxDelayMs))
+        await sleepWithAbort(
+          backoff(attempt, baseDelayMs, maxDelayMs),
+          signal,
+          sleep,
+        )
         continue
       }
       return value
@@ -102,7 +118,11 @@ export async function runWithRetry<T>(
         throw error
       }
       onRetry?.({ attempt, error })
-      await sleep(backoff(attempt, baseDelayMs, maxDelayMs))
+      await sleepWithAbort(
+        backoff(attempt, baseDelayMs, maxDelayMs),
+        signal,
+        sleep,
+      )
     }
   }
 
@@ -110,6 +130,27 @@ export async function runWithRetry<T>(
   throw lastError instanceof Error
     ? lastError
     : new Error('AI request failed after retries')
+}
+
+function sleepWithAbort(
+  ms: number,
+  signal: AbortSignal | undefined,
+  sleep: (ms: number) => Promise<void>,
+): Promise<void> {
+  if (!signal) return sleep(ms)
+  if (signal.aborted)
+    return Promise.reject(new DOMException('Aborted', 'AbortError'))
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function backoff(attempt: number, base: number, max: number): number {

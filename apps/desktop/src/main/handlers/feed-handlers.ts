@@ -8,7 +8,7 @@ import {
   type FeedWithCount,
 } from '../../shared/types'
 import { fetchAndParseFeed } from '../services/rss-parser'
-import { refreshSingleFeed } from '../services/feed-refresh'
+import { refreshAllFeeds, refreshSingleFeed } from '../services/feed-refresh'
 import { getSettings } from './settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../shared/discover-data'
 import { parseOPML, generateOPML } from '../services/opml-parser'
@@ -30,7 +30,6 @@ import {
   loadRefreshLogs,
   clearRefreshLogs,
 } from '../services/refresh-log-store'
-import { runConcurrencyPool } from '../utils/concurrency-pool'
 import { formatFeedTitle } from '../services/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry-builder'
 import { detectRouteViewFromUrl } from '../services/feed-view'
@@ -320,70 +319,32 @@ export function registerFeedHandlers(): void {
     }
   })
 
-  // Refresh all feeds (concurrent, with conditional GET)
+  // Refresh all feeds (concurrent, with conditional GET).
+  // Delegates to the deep `refreshAllFeeds` module; the IPC handler's only
+  // job is to translate per-feed progress into renderer events.
   ipcMain.handle(IPC.FEED_REFRESH_ALL, async (event) => {
-    const receiveRecommended = !!getSettings().general.showRecommended
-    const feeds = receiveRecommended
-      ? getAllFeeds()
-      : getAllFeeds().filter((f) => f.category !== RECOMMENDED_CATEGORY)
-    const results: Array<{
-      feedId: string
-      success: boolean
-      newEntries?: number
-    }> = []
-    const CONCURRENCY = 8
-    const total = feeds.length
-    let completed = 0
-
-    event.sender.send('feeds:refresh-progress', {
-      total,
-      completed: 0,
-      percent: 0,
-      done: total === 0,
+    return refreshAllFeeds({
+      force: true,
+      onProgress: (progress) => {
+        const refreshedFeed = progress.feedId
+          ? getFeedById(progress.feedId)
+          : undefined
+        event.sender.send('feeds:refresh-progress', {
+          total: progress.total,
+          completed: progress.completed,
+          percent:
+            progress.total > 0
+              ? Math.round((progress.completed / progress.total) * 100)
+              : 0,
+          feedId: progress.feedId || undefined,
+          feedTitle: progress.feedTitle || undefined,
+          success: progress.success,
+          newEntries: progress.success ? progress.newEntries : undefined,
+          feed: refreshedFeed ? toRendererFeed(refreshedFeed) : undefined,
+          done: progress.done,
+        })
+      },
     })
-
-    if (total === 0) return results
-
-    await runConcurrencyPool(
-      feeds,
-      CONCURRENCY,
-      async (feed) => {
-        try {
-          const newCount = await refreshSingleFeed(feed, { force: true })
-          const refreshedFeed = getFeedById(feed.id)
-          results.push({ feedId: feed.id, success: true, newEntries: newCount })
-          completed++
-          event.sender.send('feeds:refresh-progress', {
-            total,
-            completed,
-            percent: Math.round((completed / total) * 100),
-            feedId: feed.id,
-            feedTitle: feed.title,
-            success: true,
-            newEntries: newCount,
-            feed: refreshedFeed ? toRendererFeed(refreshedFeed) : undefined,
-            done: completed >= total,
-          })
-        } catch {
-          results.push({ feedId: feed.id, success: false })
-          completed++
-          event.sender.send('feeds:refresh-progress', {
-            total,
-            completed,
-            percent: Math.round((completed / total) * 100),
-            feedId: feed.id,
-            feedTitle: feed.title,
-            success: false,
-            done: completed >= total,
-          })
-        }
-      },
-      (progressCompleted) => {
-        // onProgress - reserved for future use
-      },
-    )
-
-    return results
   })
 
   // Update feed

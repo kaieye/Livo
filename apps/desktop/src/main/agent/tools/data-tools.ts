@@ -12,16 +12,14 @@ import {
   clearRefreshLogs,
 } from '../../services/refresh-log-store'
 import { clampLimit, emptyParams, limitParams, objectParams } from './schema'
+import { defineReadTool } from './factories'
 
 export function buildViewRefreshLogTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'view_refresh_log',
     title: '查看刷新日志',
     description: '查看最近的订阅刷新历史记录',
     inputSchema: limitParams('返回日志条数，默认20，最大50'),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -45,7 +43,7 @@ export function buildViewRefreshLogTool(): AgentTool {
         data: { count: logs.length, logs: display as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildExportOpmlTool(): AgentTool {

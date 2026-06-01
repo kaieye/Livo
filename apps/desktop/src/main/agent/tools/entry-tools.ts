@@ -13,6 +13,7 @@ import {
   markAllRead as dbMarkAllRead,
 } from '../../database'
 import { clampLimit, emptyParams, limitParams, objectParams } from './schema'
+import { defineMutateTool, defineReadTool } from './factories'
 
 function entrySummary(entry: Entry, index: number): string {
   const published = new Date(entry.publishedAt).toLocaleString()
@@ -27,15 +28,12 @@ function startOfTodayMs(): number {
 }
 
 export function buildGetTodayUpdatesTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'get_today_updates',
     title: '查询今日更新',
     description:
       '查询今天有哪些订阅源更新了内容，返回按发布时间倒序排列的文章，包含标题、来源、摘要和链接',
     inputSchema: limitParams('返回文章数量，默认20，最大50'),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -73,11 +71,11 @@ export function buildGetTodayUpdatesTool(): AgentTool {
         data: { count: sliced.length, entries: sliced as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildGetEntryDetailTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'get_entry_detail',
     title: '查看文章详情',
     description: '获取指定文章的完整内容和详细信息',
@@ -85,9 +83,6 @@ export function buildGetEntryDetailTool(): AgentTool {
       { entryId: { type: 'string', description: '文章ID' } },
       ['entryId'],
     ),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -108,18 +103,15 @@ export function buildGetEntryDetailTool(): AgentTool {
         data: { entry: entry as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildGetUnreadCountTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'get_unread_count',
     title: '统计未读',
     description: '查询未读文章总数和各订阅源的未读数量统计',
     inputSchema: emptyParams(),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (): Promise<AgentToolResult> => {
       const stats = getDatabaseStats()
       const totalUnread = Math.max(0, stats.totalEntries - stats.readEntries)
@@ -146,18 +138,15 @@ export function buildGetUnreadCountTool(): AgentTool {
         data: { totalUnread, perFeed: perFeed as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildViewStarredEntriesTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'view_starred_entries',
     title: '查看收藏',
     description: '查看用户收藏的文章列表',
     inputSchema: limitParams('返回收藏数量，默认20，最大50'),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -178,18 +167,15 @@ export function buildViewStarredEntriesTool(): AgentTool {
         data: { count: entries.length, entries: entries as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildMarkAllReadTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'mark_all_read',
     title: '全部标记为已读',
     description: '将所有未读文章标记为已读',
     inputSchema: emptyParams(),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     execute: async (): Promise<AgentToolResult> => {
       const stats = getDatabaseStats()
       const before = Math.max(0, stats.totalEntries - stats.readEntries)
@@ -200,5 +186,5 @@ export function buildMarkAllReadTool(): AgentTool {
         data: { markedCount: before },
       }
     },
-  }
+  })
 }

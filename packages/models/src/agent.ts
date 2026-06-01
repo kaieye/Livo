@@ -152,6 +152,15 @@ export interface AgentRunSummary {
   metrics: AgentRunMetrics
 }
 
+/**
+ * Wire shape returned by the `agent.run` / `agent.resume` IPC handlers. Wraps
+ * {@link AgentRunSummary} with a `success` discriminant so the renderer can
+ * branch on transport-level failure without losing the typed payload.
+ */
+export type AgentRunResponse =
+  | ({ success: true } & AgentRunSummary)
+  | { success: false; error: string }
+
 export interface AgentChatHistoryMessage {
   role: 'user' | 'assistant'
   content: string

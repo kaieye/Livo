@@ -15,6 +15,7 @@ import type {
 } from '../../shared/types'
 import { normalizeAgentPermissionSettings } from '../../shared/types'
 import { createOpenAIClient } from '../services/ai-client'
+import { runWithRetry } from '../services/ai-retry'
 import { agentToolResultToText } from './tool-result-text'
 import { agentToolRegistryProvider } from './registry-provider'
 import {
@@ -115,58 +116,22 @@ function truncateToolResult(result: string): string {
   return `${result.slice(0, TOOL_RESULT_MAX_LEN)}\n\n...(结果已截断，总长度 ${result.length} 字)`
 }
 
-function isAbortError(error: unknown): boolean {
-  return (
-    (error instanceof Error && error.name === 'AbortError') ||
-    (typeof error === 'object' &&
-      error !== null &&
-      (error as { name?: string }).name === 'AbortError')
-  )
-}
-
-function isRetryableError(error: unknown): boolean {
-  if (isAbortError(error)) return false
-  const status = (error as { status?: number })?.status
-  if (typeof status === 'number') {
-    return status === 408 || status === 429 || status >= 500
-  }
-  // Network-level failures (no HTTP status) are retryable.
-  return true
-}
-
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms)
-    if (signal) {
-      signal.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(timer)
-          reject(new DOMException('Aborted', 'AbortError'))
-        },
-        { once: true },
-      )
-    }
-  })
-}
-
 interface ModelResult {
   content: string
   toolCalls: NormalizedToolCall[]
 }
 
-/** Single model call with bounded exponential-backoff retry on transient errors. */
-async function callModelWithRetry(
+/** Single model call with bounded exponential-backoff retry on transient errors.
+ * Delegates retry policy to the shared `runWithRetry`. */
+async function callModel(
   client: OpenAI,
   model: string,
   messages: ChatMessage[],
   tools: AgentToolDefinition[],
   signal?: AbortSignal,
 ): Promise<ModelResult> {
-  let lastError: unknown
-  for (let attempt = 0; attempt <= MODEL_MAX_RETRIES; attempt += 1) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    try {
+  return runWithRetry(
+    async () => {
       const response = await client.chat.completions.create(
         {
           model,
@@ -191,19 +156,13 @@ async function callModelWithRetry(
           arguments: tc.function.arguments || '{}',
         }))
       return { content, toolCalls }
-    } catch (error) {
-      lastError = error
-      if (
-        isAbortError(error) ||
-        attempt === MODEL_MAX_RETRIES ||
-        !isRetryableError(error)
-      ) {
-        break
-      }
-      await delay(500 * 2 ** attempt, signal)
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+    },
+    {
+      maxAttempts: MODEL_MAX_RETRIES + 1,
+      baseDelayMs: 500,
+      signal,
+    },
+  )
 }
 
 interface ExecutedToolCall {
@@ -363,7 +322,7 @@ async function runAgentLoop(
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
     const llmStart = nowMs()
-    const result = await callModelWithRetry(
+    const result = await callModel(
       client,
       aiConfig.model,
       messages,
@@ -445,7 +404,7 @@ async function runAgentLoop(
 
   // Reached MAX_AGENT_ROUNDS: do one final call to summarize.
   const llmStart = nowMs()
-  const finalResult = await callModelWithRetry(
+  const finalResult = await callModel(
     client,
     aiConfig.model,
     messages,

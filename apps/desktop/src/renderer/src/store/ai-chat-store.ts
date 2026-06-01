@@ -16,32 +16,14 @@ import type {
   AgentToolExecutionEvent,
   AgentRunMetrics,
   AgentChatHistoryMessage,
+  AgentRunResponse,
 } from '@livo/models'
 
 export type ChatMessage = StoredChatMessage
 
-type AgentRunResponse =
-  | {
-      success: true
-      text: string
-      status: 'completed' | 'confirmation_required'
-      toolRounds: unknown[]
-      confirmation?: {
-        toolCallId: string
-        toolName: string
-        args: string
-        confirmation: {
-          toolName: string
-          title: string
-          message: string
-          risk: string
-          argsPreview: string
-        }
-      }
-      pendingId?: string
-      metrics: AgentRunMetrics
-    }
-  | { success: false; error: string }
+// Re-export so the rest of the app imports the canonical shape from this
+// store (which already has @livo/models wired up).
+export type { AgentRunResponse }
 
 interface AIChatState {
   messages: ChatMessage[]

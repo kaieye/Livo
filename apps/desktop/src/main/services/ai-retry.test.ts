@@ -17,6 +17,13 @@ describe('isRetryableAIError', () => {
     expect(isRetryableAIError({ status: 403 })).toBe(false)
     expect(isRetryableAIError({ status: 400 })).toBe(false)
   })
+
+  it('does not retry AbortError (the caller already gave up)', () => {
+    expect(isRetryableAIError({ name: 'AbortError' })).toBe(false)
+    const err = new Error('cancelled')
+    err.name = 'AbortError'
+    expect(isRetryableAIError(err)).toBe(false)
+  })
 })
 
 describe('runWithRetry', () => {
@@ -92,5 +99,46 @@ describe('runWithRetry', () => {
     expect(onRetry).toHaveBeenCalledTimes(2)
     expect(onRetry.mock.calls[0][0]).toMatchObject({ attempt: 0 })
     expect(onRetry.mock.calls[1][0]).toMatchObject({ attempt: 1, empty: true })
+  })
+
+  it('aborts the loop when the signal is already triggered', async () => {
+    const fn = vi.fn(async () => 'never')
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      runWithRetry(fn, { sleep: noSleep, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fn).not.toHaveBeenCalled()
+  })
+
+  it('interrupts the in-flight backoff sleep when the signal fires', async () => {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 10)
+    const fn = vi.fn(async () => {
+      throw { status: 500 }
+    })
+    const start = Date.now()
+    await expect(
+      runWithRetry(fn, {
+        baseDelayMs: 5000,
+        maxDelayMs: 5000,
+        sleep: noSleep,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    // 5000ms backoff was interrupted almost immediately by the abort at 10ms.
+    expect(Date.now() - start).toBeLessThan(1000)
+  })
+
+  it('does not retry when fn throws an AbortError', async () => {
+    const fn = vi.fn(async () => {
+      const err = new Error('cancelled')
+      err.name = 'AbortError'
+      throw err
+    })
+    await expect(runWithRetry(fn, { sleep: noSleep })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(fn).toHaveBeenCalledTimes(1)
   })
 })

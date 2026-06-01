@@ -11,6 +11,7 @@ import {
   applySettingsUpdate,
 } from '../../handlers/settings-handlers'
 import { emptyParams, objectParams } from './schema'
+import { defineMutateTool, defineReadTool } from './factories'
 
 const THEME_VALUES = ['light', 'dark', 'system']
 const ACCENT_VALUES = [
@@ -81,15 +82,12 @@ function clampRefreshInterval(value: number, fallback: number): number {
 }
 
 export function buildGetSettingsTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'get_settings',
     title: '查看设置',
     description:
       '查看通用、翻译和 AI 运行配置摘要。不会返回 API Key 等敏感字段',
     inputSchema: emptyParams(),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (): Promise<AgentToolResult> => {
       const s = getSettings()
       const message =
@@ -108,11 +106,11 @@ export function buildGetSettingsTool(): AgentTool {
         },
       }
     },
-  }
+  })
 }
 
 export function buildToggleThemeModeTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'toggle_theme_mode',
     title: '切换主题模式',
     description: '切换应用的深色模式、浅色模式或跟随系统',
@@ -120,9 +118,6 @@ export function buildToggleThemeModeTool(): AgentTool {
       { mode: { type: 'string', description: '主题模式', enum: THEME_VALUES } },
       ['mode'],
     ),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -139,11 +134,11 @@ export function buildToggleThemeModeTool(): AgentTool {
             : '跟随系统'
       return { status: 'success', message: `已切换到${label}`, data: { mode } }
     },
-  }
+  })
 }
 
 export function buildChangeAccentColorTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'change_accent_color',
     title: '更改强调色',
     description: '调整应用的主题强调色',
@@ -157,9 +152,6 @@ export function buildChangeAccentColorTool(): AgentTool {
       },
       ['color'],
     ),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -174,11 +166,11 @@ export function buildChangeAccentColorTool(): AgentTool {
         data: { color },
       }
     },
-  }
+  })
 }
 
 export function buildUpdateGeneralSettingsTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'update_general_settings',
     title: '更新通用设置',
     description: '更新界面语言、刷新间隔或图片代理等通用设置',
@@ -194,9 +186,6 @@ export function buildUpdateGeneralSettingsTool(): AgentTool {
       },
       imageProxy: { type: 'boolean', description: '是否开启图片代理' },
     }),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     confirmationTitle: '确认更新通用设置',
     confirmationMessage: '将保存新的通用设置到本地偏好配置。',
     execute: async (
@@ -232,11 +221,11 @@ export function buildUpdateGeneralSettingsTool(): AgentTool {
         data: { general: saved.general as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildUpdateTranslationSettingsTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'update_translation_settings',
     title: '更新翻译设置',
     description: '更新 AI 翻译开关、目标语言和自动翻译开关',
@@ -249,9 +238,6 @@ export function buildUpdateTranslationSettingsTool(): AgentTool {
       },
       autoTranslate: { type: 'boolean', description: '是否自动翻译' },
     }),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     confirmationTitle: '确认更新翻译设置',
     confirmationMessage: '将保存翻译功能开关到本地偏好配置。',
     execute: async (
@@ -284,11 +270,11 @@ export function buildUpdateTranslationSettingsTool(): AgentTool {
         data: { translation: saved.translation as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'update_ai_runtime_settings',
     title: '更新 AI 运行配置',
     description:
@@ -314,9 +300,6 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         description: 'AI 对话人格提示，不应包含密钥',
       },
     }),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     confirmationTitle: '确认更新 AI 运行配置',
     confirmationMessage:
       '将保存 AI 提供商、模型、Base URL 或提示词配置；API Key 不会通过 Agent 工具修改。',
@@ -375,5 +358,5 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         data: { ai: sanitizeAISettings(saved.ai) },
       }
     },
-  }
+  })
 }

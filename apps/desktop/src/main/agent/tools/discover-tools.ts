@@ -11,6 +11,7 @@ import {
 import { getFeedByUrl } from '../../database'
 import { subscribeByUrl } from './feed-tools'
 import { objectParams } from './schema'
+import { defineMutateTool, defineReadTool } from './factories'
 
 const CATEGORY_VALUES = [
   'all',
@@ -44,7 +45,7 @@ function findCuratedFeed(title: string): DiscoverFeed | undefined {
 }
 
 export function buildListBuiltinFeedsTool(): AgentTool {
-  return {
+  return defineReadTool({
     name: 'list_builtin_feeds',
     title: '查看推荐订阅源',
     description: '查看应用内置的推荐订阅源，可按分类查看',
@@ -55,9 +56,6 @@ export function buildListBuiltinFeedsTool(): AgentTool {
         enum: CATEGORY_VALUES,
       },
     }),
-    capability: 'read',
-    risk: 'low',
-    requiresConfirmation: false,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -84,11 +82,11 @@ export function buildListBuiltinFeedsTool(): AgentTool {
         data: { count: feeds.length, feeds: display as unknown as object },
       }
     },
-  }
+  })
 }
 
 export function buildAddBuiltinSubscriptionTool(): AgentTool {
-  return {
+  return defineMutateTool({
     name: 'add_builtin_subscription',
     title: '添加推荐订阅源',
     description: '从应用内置的推荐订阅源列表中添加到用户订阅',
@@ -96,9 +94,6 @@ export function buildAddBuiltinSubscriptionTool(): AgentTool {
       { feedTitle: { type: 'string', description: '要添加的推荐订阅源名称' } },
       ['feedTitle'],
     ),
-    capability: 'mutate',
-    risk: 'medium',
-    requiresConfirmation: true,
     execute: async (
       _context,
       args: AgentToolArgs,
@@ -130,5 +125,5 @@ export function buildAddBuiltinSubscriptionTool(): AgentTool {
         data: { feedId: outcome.feedId },
       }
     },
-  }
+  })
 }
