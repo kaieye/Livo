@@ -100,6 +100,19 @@ export interface Entry {
   url: string
   content?: string
   summary?: string
+  /** 自动全文抓取保存的正文，不覆盖 RSS 原始正文。 */
+  readabilityContent?: string
+  readabilityTitle?: string
+  readabilityExcerpt?: string
+  readabilitySiteName?: string
+  readabilityLength?: number
+  readabilityFetchedAt?: number
+  readabilityError?: string
+  /** 自动生成的 AI 摘要。 */
+  aiSummary?: string
+  aiSummaryGeneratedAt?: number
+  aiSummaryError?: string
+  notifiedAt?: number
   author?: string
   authorAvatar?: string
   imageUrl?: string

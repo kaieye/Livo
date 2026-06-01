@@ -192,6 +192,7 @@ export default function ArticleDetailPage() {
     retryTranslationSegment,
   } = useArticleAIAssist({
     entryId,
+    initialSummary: activeEntry?.aiSummary ?? null,
     content: activeEntry?.content ?? undefined,
     paragraphs,
     summaryLanguage: summarySettings.language || general.language,

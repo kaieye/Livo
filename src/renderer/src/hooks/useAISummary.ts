@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 
 interface AIStreamPayload {
   requestId: string
@@ -17,6 +17,10 @@ interface AISummaryState {
   summarize: (content: string, language?: string) => Promise<void>
   /** Reset all state (summary, error, loading) — call on entry change */
   reset: () => void
+}
+
+interface AISummaryOptions {
+  initialSummary?: string | null
 }
 
 function createAIRequestId(prefix: string): string {
@@ -39,13 +43,21 @@ function isAIStreamPayload(value: unknown): value is AIStreamPayload {
  * This keeps the hook content-agnostic and reusable across different content sources
  * (HTML from EntryContent, plain text from WideViewContent, social text from EntryList).
  */
-export function useAISummary(): AISummaryState {
-  const [summary, setSummary] = useState<string | null>(null)
+export function useAISummary(options: AISummaryOptions = {}): AISummaryState {
+  const initialSummary = options.initialSummary ?? null
+  const [summary, setSummary] = useState<string | null>(initialSummary)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   // Track in-flight request to avoid stale state updates
   const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    requestIdRef.current++
+    setSummary(initialSummary)
+    setError(null)
+    setIsLoading(false)
+  }, [initialSummary])
 
   const summarize = useCallback(async (content: string, language?: string) => {
     const requestId = ++requestIdRef.current
@@ -100,10 +112,10 @@ export function useAISummary(): AISummaryState {
 
   const reset = useCallback(() => {
     requestIdRef.current++ // invalidate in-flight requests
-    setSummary(null)
+    setSummary(initialSummary)
     setError(null)
     setIsLoading(false)
-  }, [])
+  }, [initialSummary])
 
   return { summary, error, isLoading, summarize, reset }
 }

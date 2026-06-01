@@ -231,7 +231,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     isLoading: isSummarizing,
     summarize,
     reset: resetSummary,
-  } = useAISummary()
+  } = useAISummary({ initialSummary: selectedEntry?.aiSummary ?? null })
   const {
     translatedParagraphs,
     isTranslating,
@@ -298,7 +298,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       resetSummary()
       resetTranslation()
       setLinkCopied(false)
-      setReadableContent(null)
+      setReadableContent(selectedEntry?.readabilityContent || null)
       setIsReadabilityMode(false)
       setIsFetchingReadable(false)
       setReadabilityError(null)

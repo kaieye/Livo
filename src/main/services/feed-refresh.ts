@@ -2,8 +2,8 @@ import { BrowserWindow } from 'electron'
 import {
   getAllFeeds,
   updateFeed,
-  insertEntries,
-  replaceEntriesForFeed,
+  insertEntriesWithResult,
+  replaceEntriesForFeedWithResult,
   cleanupEntries,
   type CleanupOptions,
 } from '../database'
@@ -27,8 +27,13 @@ import { logWarnQuiet } from './logger'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from './refresh-log-store'
 import { runConcurrencyPool } from '../utils/concurrency-pool'
-import { evaluateActionRules } from '../../shared/actions'
+import {
+  evaluateActionRules,
+  type ActionEffectType,
+  type ActionRule,
+} from '../../shared/actions'
 import { getActionRules } from './action-rules-store'
+import { enqueueEntryActionEffects } from './entry-action-effects'
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshAllInFlight: Promise<RefreshAllResult> | null = null
@@ -179,14 +184,19 @@ export function filterForeignEntries(
   return filtered
 }
 
-/**
- * Apply user-defined automation rules at ingestion time: drop blocked entries
- * and pre-set star / read flags. Other effect types are evaluated but left for
- * future handling.
- */
-function applyActionRules(entries: Entry[], feed: Feed): Entry[] {
-  const rules = getActionRules()
-  if (rules.length === 0) return entries
+export interface ActionRuleAppliedEntry {
+  entry: Entry
+  effects: ActionEffectType[]
+}
+
+export function applyActionRulesToEntries(
+  entries: Entry[],
+  feed: Feed,
+  rules: ActionRule[],
+): ActionRuleAppliedEntry[] {
+  if (rules.length === 0) {
+    return entries.map((entry) => ({ entry, effects: [] }))
+  }
 
   const feedContext = {
     title: feed.title,
@@ -194,7 +204,7 @@ function applyActionRules(entries: Entry[], feed: Feed): Entry[] {
     category: feed.category,
   }
 
-  const kept: Entry[] = []
+  const kept: ActionRuleAppliedEntry[] = []
   for (const entry of entries) {
     const decision = evaluateActionRules(
       rules,
@@ -207,17 +217,26 @@ function applyActionRules(entries: Entry[], feed: Feed): Entry[] {
       feedContext,
     )
     if (decision.blocked) continue
-    if (decision.star || decision.markRead) {
-      kept.push({
-        ...entry,
-        isStarred: entry.isStarred || decision.star,
-        isRead: entry.isRead || decision.markRead,
-      })
-    } else {
-      kept.push(entry)
-    }
+
+    const nextEntry =
+      decision.star || decision.markRead
+        ? {
+            ...entry,
+            isStarred: entry.isStarred || decision.star,
+            isRead: entry.isRead || decision.markRead,
+          }
+        : entry
+
+    kept.push({ entry: nextEntry, effects: decision.effects })
   }
   return kept
+}
+
+function applyActionRules(
+  entries: Entry[],
+  feed: Feed,
+): ActionRuleAppliedEntry[] {
+  return applyActionRulesToEntries(entries, feed, getActionRules())
 }
 
 function isKnownInstagramUpstreamFailure(error: unknown): boolean {
@@ -439,16 +458,29 @@ export async function refreshSingleFeed(
         parsed.link,
         feed.url,
       )
-      const entriesToInsert = applyActionRules(foreignFiltered, feed)
+      const ruleAppliedEntries = applyActionRules(foreignFiltered, feed)
+      const entriesToInsert = ruleAppliedEntries.map(({ entry }) => entry)
+      const effectsByEntryId = new Map(
+        ruleAppliedEntries.map(({ entry, effects }) => [entry.id, effects]),
+      )
       // IMPORTANT:
       // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
       // Full replacement can permanently drop history when upstream temporarily returns
       // only a short window (e.g. 8 recent items) or degraded single-photo entries.
       // Database identity merge keeps duplicates under control while preserving richer
       // historical entries and multi-photo media arrays.
-      const newCount = isBilibiliVideoFeedUrl(feed.url)
-        ? replaceEntriesForFeed(feed.id, entriesToInsert)
-        : insertEntries(entriesToInsert)
+      const writeResult = isBilibiliVideoFeedUrl(feed.url)
+        ? replaceEntriesForFeedWithResult(feed.id, entriesToInsert)
+        : insertEntriesWithResult(entriesToInsert)
+      const newCount = writeResult.addedCount
+
+      enqueueEntryActionEffects(
+        writeResult.addedEntries.map((entry) => ({
+          entry,
+          feed,
+          effects: effectsByEntryId.get(entry.id) || [],
+        })),
+      )
 
       // Fire-and-forget: enrich video entries with duration from YouTube/Bilibili
       if (

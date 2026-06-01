@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { filterForeignEntries } from './feed-refresh'
-import type { Entry } from '../../shared/types'
+import { applyActionRulesToEntries, filterForeignEntries } from './feed-refresh'
+import { FeedViewType, type Entry, type Feed } from '../../shared/types'
+import type { ActionRule } from '../../shared/actions'
 
 function makeEntry(url: string): Entry {
   return {
@@ -13,6 +14,31 @@ function makeEntry(url: string): Entry {
     isRead: false,
     isStarred: false,
     createdAt: Date.now(),
+  }
+}
+
+function makeFeed(): Feed {
+  return {
+    id: 'feed-1',
+    title: 'Tech Feed',
+    url: 'https://example.com/feed.xml',
+    category: 'Tech',
+    view: FeedViewType.Articles,
+    errorCount: 0,
+    createdAt: 1,
+  }
+}
+
+function makeRule(partial: Partial<ActionRule>): ActionRule {
+  return {
+    id: partial.id || 'rule-1',
+    name: partial.name || 'rule',
+    enabled: partial.enabled ?? true,
+    conditions: partial.conditions || [
+      { field: 'entry.title', operator: 'contains', value: 'title' },
+    ],
+    actions: partial.actions || [],
+    createdAt: partial.createdAt || 1,
   }
 }
 
@@ -45,5 +71,46 @@ describe('filterForeignEntries', () => {
         'https://example.com/feed.xml',
       ),
     ).toEqual([ownEntry])
+  })
+})
+
+describe('applyActionRulesToEntries', () => {
+  it('keeps matched side effects on stored entries', () => {
+    const entry = makeEntry('https://blog.example.com/post-1')
+    const result = applyActionRulesToEntries([entry], makeFeed(), [
+      makeRule({
+        actions: [
+          { type: 'star' },
+          { type: 'mark_read' },
+          { type: 'notify' },
+          { type: 'readability' },
+          { type: 'summarize' },
+        ],
+      }),
+    ])
+
+    expect(result).toHaveLength(1)
+    expect(result[0].entry).toMatchObject({
+      isRead: true,
+      isStarred: true,
+    })
+    expect(result[0].effects).toEqual([
+      'star',
+      'mark_read',
+      'notify',
+      'readability',
+      'summarize',
+    ])
+  })
+
+  it('drops blocked entries before side effects run', () => {
+    const entry = makeEntry('https://blog.example.com/post-1')
+    const result = applyActionRulesToEntries([entry], makeFeed(), [
+      makeRule({
+        actions: [{ type: 'block' }, { type: 'notify' }],
+      }),
+    ])
+
+    expect(result).toEqual([])
   })
 })

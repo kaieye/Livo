@@ -94,6 +94,39 @@ export function mergeEntryData(
     existing.summary = incoming.summary
     changed = true
   }
+  if (
+    incoming.readabilityContent &&
+    (!existing.readabilityContent ||
+      (incoming.readabilityFetchedAt || 0) >
+        (existing.readabilityFetchedAt || 0))
+  ) {
+    existing.readabilityContent = incoming.readabilityContent
+    existing.readabilityTitle = incoming.readabilityTitle
+    existing.readabilityExcerpt = incoming.readabilityExcerpt
+    existing.readabilitySiteName = incoming.readabilitySiteName
+    existing.readabilityLength = incoming.readabilityLength
+    existing.readabilityFetchedAt = incoming.readabilityFetchedAt
+    existing.readabilityError = incoming.readabilityError
+    changed = true
+  }
+  if (
+    incoming.aiSummary &&
+    (!existing.aiSummary ||
+      (incoming.aiSummaryGeneratedAt || 0) >
+        (existing.aiSummaryGeneratedAt || 0))
+  ) {
+    existing.aiSummary = incoming.aiSummary
+    existing.aiSummaryGeneratedAt = incoming.aiSummaryGeneratedAt
+    existing.aiSummaryError = incoming.aiSummaryError
+    changed = true
+  }
+  if (
+    incoming.notifiedAt &&
+    (!existing.notifiedAt || incoming.notifiedAt > existing.notifiedAt)
+  ) {
+    existing.notifiedAt = incoming.notifiedAt
+    changed = true
+  }
   if (incoming.authorAvatar && !existing.authorAvatar) {
     existing.authorAvatar = incoming.authorAvatar
     changed = true

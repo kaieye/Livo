@@ -43,6 +43,8 @@ export function aiLanguageLabel(language: string): string {
 export interface ArticleAIAssistInput {
   /** Active entry id — when it changes, all AI state resets. */
   entryId?: string
+  /** Persisted summary generated before opening the article. */
+  initialSummary?: string | null
   /** Full article HTML (used for summarization). */
   content?: string
   /** Paragraphs for paragraph-by-paragraph translation. */
@@ -83,8 +85,14 @@ export interface ArticleAIAssist {
 export function useArticleAIAssist(
   input: ArticleAIAssistInput,
 ): ArticleAIAssist {
-  const { entryId, content, paragraphs, summaryLanguage, targetLanguage } =
-    input
+  const {
+    entryId,
+    initialSummary,
+    content,
+    paragraphs,
+    summaryLanguage,
+    targetLanguage,
+  } = input
 
   const {
     summary,
@@ -92,7 +100,7 @@ export function useArticleAIAssist(
     isLoading: isSummarizing,
     summarize: summarizeRaw,
     reset: resetSummary,
-  } = useAISummary()
+  } = useAISummary({ initialSummary })
 
   const {
     translatedParagraphs,

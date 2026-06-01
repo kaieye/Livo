@@ -438,22 +438,35 @@ export function insertEntry(entry: Entry): boolean {
   return result.added
 }
 
-export function insertEntries(entries: Entry[]): number {
+export interface EntryWriteResult {
+  addedCount: number
+  addedEntries: Entry[]
+}
+
+export function insertEntriesWithResult(entries: Entry[]): EntryWriteResult {
   let added = 0
   let changed = false
+  const addedEntries: Entry[] = []
   for (const entry of entries) {
     const result = upsertEntry(entry)
-    if (result.added) added++
+    if (result.added) {
+      added++
+      addedEntries.push(entry)
+    }
     if (result.changed) changed = true
   }
   if (changed) scheduleSave()
-  return added
+  return { addedCount: added, addedEntries }
 }
 
-export function replaceEntriesForFeed(
+export function insertEntries(entries: Entry[]): number {
+  return insertEntriesWithResult(entries).addedCount
+}
+
+export function replaceEntriesForFeedWithResult(
   feedId: string,
   entries: Entry[],
-): number {
+): EntryWriteResult {
   const stateByKey = new Map<
     string,
     { isRead: boolean; isStarred: boolean; readProgress?: number }
@@ -492,6 +505,7 @@ export function replaceEntriesForFeed(
   rebuildIndexes()
 
   let added = 0
+  const addedEntries: Entry[] = []
   for (const entry of entries) {
     const keep = stateByKey.get(makeKeepKey(entry))
     const incoming: Entry = keep
@@ -503,10 +517,20 @@ export function replaceEntriesForFeed(
         }
       : entry
     const result = upsertEntry(incoming)
-    if (result.added) added += 1
+    if (!keep && result.added) {
+      added += 1
+      addedEntries.push(incoming)
+    }
   }
   scheduleSave()
-  return added
+  return { addedCount: added, addedEntries }
+}
+
+export function replaceEntriesForFeed(
+  feedId: string,
+  entries: Entry[],
+): number {
+  return replaceEntriesForFeedWithResult(feedId, entries).addedCount
 }
 
 function upsertEntry(entry: Entry): { added: boolean; changed: boolean } {

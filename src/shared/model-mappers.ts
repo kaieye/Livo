@@ -360,7 +360,7 @@ export function toArticleDetailModel(
     articleUrl: card.articleUrl,
     isRead: card.isRead,
     isStarred: card.isStarred,
-    aiSummary: null,
+    aiSummary: entry.aiSummary ?? null,
     aiTranslation: null,
     isSummaryLoading: false,
     isTranslationLoading: false,
