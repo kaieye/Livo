@@ -1,9 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useFeedStore } from '../store/feed-store'
+import { useEntryStore } from '../store/entry-store'
 import { useDiscoverStore } from '../store/discover-store'
 import { useSettingsStore } from '../store/settings-store'
-import { parseViewFromPath, VIEW_TYPE_SLUGS } from './route-paths'
+import {
+  getEntryIdFromSearch,
+  parseViewFromPath,
+  VIEW_TYPE_SLUGS,
+  withEntrySearchParam,
+} from './route-paths'
 
 /**
  * Hook that establishes bidirectional synchronization between URL hash
@@ -26,11 +32,12 @@ export function useUrlSync(): void {
   const syncingFromStore = useRef(false)
 
   // Resolve current URL to the store state representation
-  const resolvePath = (pathname: string) => {
+  const resolvePath = (pathname: string, search: string) => {
     const { viewType, feedId } = parseViewFromPath(pathname)
+    const entryId = getEntryIdFromSearch(search)
     const isDiscover = pathname === '/discover'
     const isSettings = pathname === '/settings'
-    return { viewType, feedId, isDiscover, isSettings }
+    return { viewType, feedId, entryId, isDiscover, isSettings }
   }
 
   // Compute the URL that represents the current store state
@@ -40,22 +47,49 @@ export function useUrlSync(): void {
     if (discoverOpen) return '/discover'
     if (settingsOpen) return '/settings'
     const { selectedFeedId, activeView } = useFeedStore.getState()
-    if (selectedFeedId === 'starred') return '/starred'
+    const entryId = useEntryStore.getState().selectedEntry?.id ?? null
+    const withEntry = (path: string) => withEntrySearchParam(path, entryId)
+    if (selectedFeedId === 'starred') return withEntry('/starred')
     if (selectedFeedId) {
       // Preserve the active view type so the view context is not lost
       if (activeView !== null) {
         const slug = VIEW_TYPE_SLUGS[activeView]
-        return slug
+        const path = slug
           ? `/${slug}/feed/${selectedFeedId}`
           : `/feed/${selectedFeedId}`
+        return withEntry(path)
       }
-      return `/feed/${selectedFeedId}`
+      return withEntry(`/feed/${selectedFeedId}`)
     }
     if (activeView !== null) {
       const slug = VIEW_TYPE_SLUGS[activeView]
-      return slug ? `/${slug}` : '/'
+      return withEntry(slug ? `/${slug}` : '/')
     }
-    return '/'
+    return withEntry('/')
+  }
+
+  const selectEntryFromUrl = (entryId: string | null): void => {
+    const entryStore = useEntryStore.getState()
+    if (!entryId) {
+      if (entryStore.selectedEntry) void entryStore.selectEntry(null)
+      return
+    }
+    if (entryStore.selectedEntry?.id === entryId) return
+
+    // 等当前路由切换的清理 effect 跑完，再恢复 URL 指向的详情。
+    window.setTimeout(() => {
+      const current = useEntryStore.getState()
+      if (current.selectedEntry?.id === entryId) return
+      const inList = current.entries.find((entry) => entry.id === entryId)
+      if (inList) {
+        void current.selectEntry(inList)
+        return
+      }
+      void window.api.entries.get(entryId).then((entry) => {
+        if (!entry) return
+        void useEntryStore.getState().selectEntry(entry)
+      })
+    }, 0)
   }
 
   // Direction 1: URL → Store
@@ -66,8 +100,9 @@ export function useUrlSync(): void {
     }
 
     syncingFromUrl.current = true
-    const { viewType, feedId, isDiscover, isSettings } = resolvePath(
+    const { viewType, feedId, entryId, isDiscover, isSettings } = resolvePath(
       location.pathname,
+      location.search,
     )
 
     const discoverStore = useDiscoverStore.getState()
@@ -92,10 +127,11 @@ export function useUrlSync(): void {
       if (feedStore.selectedFeedId !== feedId) {
         feedStore.setSelectedFeed(feedId)
       }
+      selectEntryFromUrl(entryId)
     }
 
     syncingFromUrl.current = false
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   // Direction 2: Store → URL
   useEffect(() => {
@@ -124,10 +160,18 @@ export function useUrlSync(): void {
       navigate(computeUrl(), { replace: true })
     })
 
+    const unsubEntry = useEntryStore.subscribe((state, prevState) => {
+      if (syncingFromUrl.current) return
+      if (state.selectedEntry?.id === prevState.selectedEntry?.id) return
+      syncingFromStore.current = true
+      navigate(computeUrl(), { replace: false })
+    })
+
     return () => {
       unsubFeed()
       unsubDiscover()
       unsubSettings()
+      unsubEntry()
     }
   }, [navigate])
 }

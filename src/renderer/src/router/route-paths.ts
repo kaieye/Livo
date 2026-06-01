@@ -11,6 +11,26 @@ export interface DiscoverRouteTarget {
   view?: FeedViewType
 }
 
+export function getEntryIdFromSearch(search: string): string | null {
+  const entryId = new URLSearchParams(search).get('entry')?.trim()
+  return entryId || null
+}
+
+export function withEntrySearchParam(
+  path: string,
+  entryId: string | null,
+): string {
+  const [pathname, rawSearch = ''] = path.split('?')
+  const search = new URLSearchParams(rawSearch)
+  if (entryId) {
+    search.set('entry', entryId)
+  } else {
+    search.delete('entry')
+  }
+  const query = search.toString()
+  return query ? `${pathname}?${query}` : pathname
+}
+
 function buildDiscoverTargetSearch(target: DiscoverRouteTarget): string {
   const search = new URLSearchParams()
   if (target.feedId) search.set('feedId', target.feedId)
