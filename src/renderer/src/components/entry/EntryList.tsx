@@ -25,6 +25,7 @@ import { FeedViewType, VIEW_DEFINITIONS } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { SkeletonList } from '../ui/Skeleton'
+import { QueuedImage } from '../ui/QueuedImage'
 import { HomeInlineSearch } from './HomeInlineSearch'
 import {
   ContextMenu,
@@ -1392,7 +1393,7 @@ function EntryCard({
         {/* Compact 80x80 thumbnail */}
         {hasThumbnail && (
           <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-surface-tertiary dark:bg-surface-dark-tertiary">
-            <img
+            <QueuedImage
               src={thumbnail}
               alt=""
               className="h-full w-full object-cover"
