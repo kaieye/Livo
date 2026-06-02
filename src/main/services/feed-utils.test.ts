@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveImageUrl, extractMedia } from './feed-utils'
+import { deriveImageUrl, extractContent, extractMedia } from './feed-utils'
 
 describe('feed media extraction', () => {
   it('extracts podcast audio enclosure with iTunes cover and duration', () => {
@@ -26,6 +26,15 @@ describe('feed media extraction', () => {
       },
     ])
     expect(deriveImageUrl(item)).toBe('https://cdn.example.com/cover.jpg')
+  })
+
+  it('uses iTunes summary as podcast content when standard RSS content is missing', () => {
+    const item = {
+      itunesSummary: { _: '<p>Episode notes from iTunes.</p>' },
+      itunesSubtitle: 'Short episode subtitle',
+    }
+
+    expect(extractContent(item)).toBe('<p>Episode notes from iTunes.</p>')
   })
 
   it('extracts Atom enclosure links captured by the feed parser', () => {

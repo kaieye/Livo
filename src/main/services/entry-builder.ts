@@ -110,6 +110,18 @@ function resolveBestEntryUrl(
   return link || guid || id
 }
 
+function appendAudioUrlContentFallback(
+  content: string,
+  media: NonNullable<Entry['media']>,
+): string {
+  if (content.trim()) return content
+
+  const audioUrls = media
+    .filter((item) => item.type === 'audio' && item.url)
+    .map((item) => item.url)
+  return audioUrls[0] || content
+}
+
 function buildSingleEntry(
   feedId: string,
   rawItem: Record<string, unknown>,
@@ -118,8 +130,13 @@ function buildSingleEntry(
   _feedView: FeedViewType,
   now: number,
 ): Entry {
-  const content = extractContent(rawItem)
+  const extractedContent = extractContent(rawItem)
   const extractedMedia = extractMedia(rawItem) || []
+  // 播客条目可能只有 enclosure 音频而没有 description；保留一个可展示正文。
+  const content = appendAudioUrlContentFallback(
+    extractedContent,
+    extractedMedia,
+  )
   const derivedImage = deriveImageUrl(rawItem)
   const descStr = rawItem['description']
   const summaryStr = rawItem.summary
@@ -127,6 +144,7 @@ function buildSingleEntry(
     item.contentSnippet ||
     (typeof descStr === 'string' ? descStr : '') ||
     (typeof summaryStr === 'string' ? summaryStr : '') ||
+    extractedContent ||
     ''
   const bestSourceUrl = resolveBestEntryUrl(item, rawItem, content, summary)
   const canonicalUrl = resolveCanonicalPostUrlForEntry({

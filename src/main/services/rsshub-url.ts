@@ -1,5 +1,5 @@
 const RSSHUB_ROUTE_PREFIX =
-  /^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu)\//i
+  /^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i
 
 function canonicalizeInstagramMirrorRoute(route: string): string {
   return route.replace(

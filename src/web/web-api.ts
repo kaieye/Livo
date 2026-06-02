@@ -92,7 +92,7 @@ function toRsshubProtocolUrl(rawUrl: string): string {
     const route = parsed.pathname.replace(/^\/+/, '')
     if (
       route &&
-      /^(?:twitter|instagram|picnob(?:\.info)?|youtube|bilibili|github|weibo|zhihu)\//i.test(
+      /^(?:twitter|instagram|picnob(?:\.info)?|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i.test(
         route,
       )
     ) {
@@ -428,6 +428,10 @@ function getItunesImageUrl(scope: Element): string {
   return image?.getAttribute('href')?.trim() || image?.textContent?.trim() || ''
 }
 
+function getItunesText(scope: Element, name: 'summary' | 'subtitle'): string {
+  return scope.querySelector(`itunes\\:${name}`)?.textContent?.trim() || ''
+}
+
 function buildParsedMedia(
   enclosure: { url: string; type: string } | undefined,
   itunesImageUrl: string,
@@ -460,13 +464,20 @@ function getParsedItemImageUrl(item: ParsedFeedItem): string | undefined {
   )
 }
 
+function appendAudioContentFallback(
+  content: string,
+  media: MediaItem[] | undefined,
+): string {
+  if (content.trim()) return content
+  return media?.find((item) => item.type === 'audio')?.url || content
+}
+
 function parseRSS(doc: Document) {
   const channel = doc.querySelector('channel')
   const items = Array.from(doc.querySelectorAll('item')).map((item) => {
     const contentEncoded =
       item.querySelector('content\\:encoded, encoded')?.textContent || ''
     const description = item.querySelector('description')?.textContent || ''
-    const content = contentEncoded || description
     const date = item.querySelector('pubDate')?.textContent
     const enclosure = item.querySelector('enclosure')
     const enclosureData = enclosure
@@ -482,6 +493,12 @@ function parseRSS(doc: Document) {
         item.querySelector('itunes\\:duration')?.textContent,
       ),
     )
+    const rawContent =
+      contentEncoded ||
+      description ||
+      getItunesText(item, 'summary') ||
+      getItunesText(item, 'subtitle')
+    const content = appendAudioContentFallback(rawContent, mediaData.media)
     const creator =
       item.querySelector('dc\\:creator, creator')?.textContent ||
       item.querySelector('author')?.textContent ||
@@ -513,10 +530,6 @@ function parseRSS(doc: Document) {
 function parseAtom(doc: Document) {
   const feed = doc.querySelector('feed')
   const items = Array.from(doc.querySelectorAll('entry')).map((entry) => {
-    const content =
-      entry.querySelector('content')?.textContent ||
-      entry.querySelector('summary')?.textContent ||
-      ''
     const link =
       entry.querySelector("link[rel='alternate']")?.getAttribute('href') ||
       entry.querySelector('link')?.getAttribute('href') ||
@@ -536,6 +549,12 @@ function parseAtom(doc: Document) {
         entry.querySelector('itunes\\:duration')?.textContent,
       ),
     )
+    const rawContent =
+      entry.querySelector('content')?.textContent ||
+      entry.querySelector('summary')?.textContent ||
+      getItunesText(entry, 'summary') ||
+      getItunesText(entry, 'subtitle')
+    const content = appendAudioContentFallback(rawContent, mediaData.media)
     return {
       title: entry.querySelector('title')?.textContent || 'Untitled',
       link,

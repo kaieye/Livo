@@ -39,6 +39,7 @@ import {
   User,
   Calendar,
   Play,
+  Pause,
   AlertTriangle,
   X,
   CheckSquare,
@@ -46,7 +47,7 @@ import {
 import { formatDistanceToNow, format } from 'date-fns'
 import { getDateLocale } from '../../lib/date-locale'
 import { ContextMenu, type ContextMenuAction } from '../ui/ContextMenu'
-import { FeedViewType } from '../../../../shared/types'
+import { FeedViewType, type MediaItem } from '../../../../shared/types'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { resolvePreferredEntryVideo } from '../../lib/entry-video-source'
@@ -70,6 +71,27 @@ function estimateReadingTime(html: string): number {
     .split(/\s+/)
     .filter(Boolean).length
   return Math.max(1, Math.round(cjkCount / 400 + wordCount / 200))
+}
+
+function formatMediaDuration(seconds?: number): string {
+  if (!seconds || seconds <= 0) return ''
+  const total = Math.floor(seconds)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(secs).padStart(2, '0')}`
+}
+
+function isAudioOnlyContentFallback(
+  content: string | undefined,
+  media: MediaItem[] | undefined,
+): boolean {
+  const trimmed = (content || '').trim()
+  const audioUrl = media?.find((item) => item.type === 'audio')?.url?.trim()
+  return !!trimmed && !!audioUrl && trimmed === audioUrl
 }
 
 function normalizeMediaKey(url: string): string {
@@ -398,19 +420,29 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     return () => window.removeEventListener('keydown', handleKey)
   }, [setPanelOpen])
 
+  const articleContent = useMemo(() => {
+    if (!selectedEntry?.content) return ''
+    if (
+      isAudioOnlyContentFallback(selectedEntry.content, selectedEntry.media)
+    ) {
+      return ''
+    }
+    return selectedEntry.content
+  }, [selectedEntry?.content, selectedEntry?.media])
+
   // Content paragraphs (memoized)
   const paragraphs = useMemo(() => {
-    if (!selectedEntry?.content) return []
-    return splitHtmlIntoParagraphs(selectedEntry.content)
-  }, [selectedEntry?.content])
+    if (!articleContent) return []
+    return splitHtmlIntoParagraphs(articleContent)
+  }, [articleContent])
 
   const handleSummarize = useCallback(() => {
-    if (!selectedEntry?.content) return
-    void summarize(selectedEntry.content, general.language)
-  }, [general.language, selectedEntry?.content, summarize])
+    if (!articleContent) return
+    void summarize(articleContent, general.language)
+  }, [articleContent, general.language, summarize])
 
   const handleTranslate = useCallback(() => {
-    if (!selectedEntry?.content) return
+    if (!articleContent) return
     const hasTranslatedContent = translatedParagraphs.some(
       (paragraph) => paragraph.length > 0,
     )
@@ -428,8 +460,8 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     const targetLang = translationTargetLanguage || 'zh-CN'
     void translate(paragraphs, targetLang)
   }, [
+    articleContent,
     paragraphs,
-    selectedEntry?.content,
     translationTargetLanguage,
     translate,
     showTranslation,
@@ -508,7 +540,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         onClick: () => {
           void handleTranslate()
         },
-        disabled: !selectedEntry.content,
+        disabled: !articleContent,
       },
       {
         id: 'ai-summary',
@@ -517,7 +549,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         onClick: () => {
           void handleSummarize()
         },
-        disabled: !selectedEntry.content,
+        disabled: !articleContent,
       },
       {
         id: 'fetch-original',
@@ -551,6 +583,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     ]
   }, [
     selectedEntry,
+    articleContent,
     t,
     handleSelectCurrentArticle,
     handleTranslate,
@@ -604,7 +637,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   // Memoize sanitized HTML so scroll-triggered re-renders don't recreate DOM
   // (which would destroy playing <video> and <iframe> elements)
   const sanitizedContent = useMemo(() => {
-    if (!selectedEntry?.content) return ''
+    if (!articleContent || !selectedEntry) return ''
     const imageKeys = [
       selectedEntry.imageUrl || '',
       ...(selectedEntry.media || [])
@@ -615,7 +648,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         .flatMap((m) => [m.url || '', m.previewUrl || '']),
     ].filter(Boolean)
 
-    const dedupedHtml = stripDuplicateMediaFromHtml(selectedEntry.content, {
+    const dedupedHtml = stripDuplicateMediaFromHtml(articleContent, {
       duplicateImageKeys:
         videoMedia || currentFeed?.view !== FeedViewType.Articles
           ? imageKeys
@@ -624,13 +657,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     })
 
     return sanitizeHTML(dedupedHtml)
-  }, [
-    currentFeed?.view,
-    selectedEntry?.content,
-    selectedEntry?.imageUrl,
-    selectedEntry?.media,
-    videoMedia,
-  ])
+  }, [articleContent, currentFeed?.view, selectedEntry, videoMedia])
 
   const sanitizedReadable = useMemo(() => {
     if (!readableContent) return ''
@@ -660,7 +687,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const showEntryDetailFallback =
     isSelectedEntryHydrating &&
     !embeddedPageUrl &&
-    !selectedEntry?.content &&
+    !articleContent &&
     !selectedEntry?.summary &&
     !selectedEntry?.imageUrl &&
     !videoMedia
@@ -906,9 +933,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       locale: getDateLocale(),
     },
   )
-  const readingTime = selectedEntry.content
-    ? estimateReadingTime(selectedEntry.content)
-    : 0
+  const readingTime = articleContent ? estimateReadingTime(articleContent) : 0
 
   return (
     <div className="dark:bg-surface-dark relative flex min-w-0 flex-1 flex-col bg-white">
@@ -1211,6 +1236,16 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
               </div>
             )}
 
+            {audioMedia && (
+              <AudioPlaybackPanel
+                title={selectedEntry.title}
+                duration={audioMedia.duration}
+                playLabel={t('entry.playAudio')}
+                onPlay={handlePlayAudio}
+                audioUrl={audioMedia.url}
+              />
+            )}
+
             {/* Article content — readability / bilingual / plain */}
             {isReadabilityMode && readableContent ? (
               <div>
@@ -1233,7 +1268,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                   dangerouslySetInnerHTML={{ __html: sanitizedReadable }}
                 />
               </div>
-            ) : selectedEntry.content ? (
+            ) : articleContent ? (
               showTranslation ? (
                 <BilingualContent
                   paragraphs={paragraphs}
@@ -1255,7 +1290,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                   dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                 />
               )
-            ) : showEntryDetailFallback ? (
+            ) : audioMedia ? null : showEntryDetailFallback ? (
               <EntryDetailFallback title={selectedEntry.title} />
             ) : (
               <div className="text-text-secondary dark:text-text-dark-secondary py-12 text-center">
@@ -1401,6 +1436,96 @@ function EntryDetailFallback({ title }: { title: string }) {
       <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
         {title}
       </p>
+    </div>
+  )
+}
+
+function AudioPlaybackPanel({
+  title,
+  duration,
+  playLabel,
+  onPlay,
+  audioUrl,
+}: {
+  title: string
+  duration?: number
+  playLabel: string
+  onPlay: () => void
+  audioUrl: string
+}) {
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const currentTime = usePlayerStore((s) => s.currentTime)
+  const playerDuration = usePlayerStore((s) => s.duration)
+  const playerUrl = usePlayerStore((s) => s.url)
+  const togglePlay = usePlayerStore((s) => s.togglePlay)
+  const seekTo = usePlayerStore((s) => s.seekTo)
+
+  const isCurrentTrack = playerUrl === audioUrl
+  const effectiveDuration = isCurrentTrack ? playerDuration : duration || 0
+  const progress =
+    effectiveDuration > 0
+      ? ((isCurrentTrack ? currentTime : 0) / effectiveDuration) * 100
+      : 0
+  const durationText = formatMediaDuration(effectiveDuration)
+  const currentText = formatMediaDuration(isCurrentTrack ? currentTime : 0)
+
+  const handleClick = () => {
+    if (isCurrentTrack) {
+      togglePlay()
+    } else {
+      onPlay()
+    }
+  }
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isCurrentTrack || !effectiveDuration) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    seekTo(pct * effectiveDuration)
+  }
+
+  return (
+    <div className="border-border/70 bg-surface-secondary/70 dark:border-border-dark/70 dark:bg-surface-dark-secondary/70 mb-6 overflow-hidden rounded-lg border">
+      <button
+        type="button"
+        onClick={handleClick}
+        className="hover:bg-surface-tertiary/50 dark:hover:bg-surface-dark-tertiary/50 flex w-full items-center gap-3 px-3 py-3 text-left transition-colors"
+      >
+        <span className="bg-accent flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white">
+          {isCurrentTrack && isPlaying ? (
+            <Pause size={18} fill="currentColor" />
+          ) : (
+            <Play size={18} fill="currentColor" className="ml-0.5" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-text dark:text-text-dark-primary block text-sm font-medium">
+            {playLabel}
+          </span>
+          <span className="text-text-secondary dark:text-text-dark-secondary block truncate text-xs">
+            {title}
+          </span>
+        </span>
+        {durationText && (
+          <span className="text-text-tertiary dark:text-text-dark-tertiary flex-shrink-0 text-xs tabular-nums">
+            {currentText} / {durationText}
+          </span>
+        )}
+      </button>
+      {/* Progress bar */}
+      <div
+        className="bg-surface-tertiary dark:bg-surface-dark-tertiary group relative h-1 cursor-pointer"
+        onClick={handleSeek}
+      >
+        <div
+          className="bg-accent absolute left-0 top-0 h-full transition-[width] duration-150"
+          style={{ width: `${progress}%` }}
+        />
+        <div
+          className="bg-accent absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+          style={{ left: `calc(${progress}% - 6px)` }}
+        />
+      </div>
     </div>
   )
 }

@@ -64,7 +64,7 @@ export function AudioMiniBar() {
   const showQueueControls = state.queueLength > 1
 
   return (
-    <div className="animate-in fixed bottom-4 right-4 z-50 w-[340px] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-surface-dark-secondary">
+    <div className="animate-in dark:bg-surface-dark-secondary fixed bottom-4 right-4 z-50 w-[340px] overflow-hidden rounded-2xl border bg-white shadow-2xl">
       {/* Track info */}
       <div className="flex items-center gap-3 px-4 pb-1 pt-3">
         {state.cover ? (
@@ -75,13 +75,13 @@ export function AudioMiniBar() {
             className="h-10 w-10 flex-shrink-0 rounded-md object-cover"
           />
         ) : (
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-surface-tertiary dark:bg-surface-dark-tertiary">
+          <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md">
             <Music size={18} className="text-text-tertiary" />
           </div>
         )}
         <div className="min-w-0 flex-1">
           <h4 className="truncate text-sm font-medium">{state.title}</h4>
-          <p className="truncate text-xs text-text-tertiary">
+          <p className="text-text-tertiary truncate text-xs">
             {state.feedTitle}
           </p>
         </div>
@@ -95,12 +95,14 @@ export function AudioMiniBar() {
           max={state.duration || 0}
           value={state.currentTime}
           onChange={(e) => actions.seekTo(parseFloat(e.target.value))}
-          className="h-1 w-full cursor-pointer appearance-none rounded-full bg-surface-tertiary accent-accent dark:bg-surface-dark-tertiary"
-          style={{
-            background: `linear-gradient(to right, var(--color-accent) ${progressPct}%, var(--color-surface-tertiary, #e5e5e5) ${progressPct}%)`,
-          }}
+          className="audio-scrubber w-full cursor-pointer"
+          style={
+            {
+              '--progress': `${progressPct}%`,
+            } as React.CSSProperties
+          }
         />
-        <div className="mt-0.5 flex justify-between text-[10px] text-text-tertiary">
+        <div className="text-text-tertiary mt-0.5 flex justify-between text-[10px]">
           <span>{formatPlaybackTime(state.currentTime)}</span>
           <span>{formatPlaybackTime(state.duration)}</span>
         </div>
@@ -112,7 +114,7 @@ export function AudioMiniBar() {
           <button
             onClick={actions.previous}
             disabled={!hasPrevious}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary disabled:opacity-30 dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors disabled:opacity-30"
             title={t('media.previousTrack')}
           >
             <ChevronFirst size={16} />
@@ -120,14 +122,14 @@ export function AudioMiniBar() {
         )}
         <button
           onClick={() => actions.seekBy(-10)}
-          className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors"
           title={t('media.rewind10')}
         >
           <SkipBack size={16} />
         </button>
         <button
           onClick={actions.togglePlay}
-          className="rounded-full bg-accent p-2.5 text-white transition-colors hover:bg-accent-hover"
+          className="bg-accent hover:bg-accent-hover rounded-full p-2.5 text-white transition-colors"
         >
           {state.isPlaying ? (
             <Pause size={18} />
@@ -137,7 +139,7 @@ export function AudioMiniBar() {
         </button>
         <button
           onClick={() => actions.seekBy(10)}
-          className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors"
           title={t('media.forward10')}
         >
           <SkipForward size={16} />
@@ -146,26 +148,26 @@ export function AudioMiniBar() {
           <button
             onClick={actions.next}
             disabled={!hasNext}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary disabled:opacity-30 dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors disabled:opacity-30"
             title={t('media.nextTrack')}
           >
             <ChevronLast size={16} />
           </button>
         )}
 
-        <div className="mx-1 h-5 w-px bg-border dark:bg-border-dark" />
+        <div className="bg-border dark:bg-border-dark mx-1 h-5 w-px" />
 
         {/* Playback rate (unified SPEED_OPTIONS) */}
         <div className="relative">
           <button
             onClick={() => setShowRateMenu(!showRateMenu)}
-            className="rounded px-1.5 py-1 font-mono text-xs transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded px-1.5 py-1 font-mono text-xs transition-colors"
             title={t('media.playbackSpeed')}
           >
             {state.playbackRate}x
           </button>
           {showRateMenu && (
-            <div className="absolute bottom-full left-1/2 mb-1 min-w-[48px] -translate-x-1/2 rounded-lg border bg-white py-1 shadow-lg dark:bg-surface-dark-secondary">
+            <div className="dark:bg-surface-dark-secondary absolute bottom-full left-1/2 mb-1 min-w-[48px] -translate-x-1/2 rounded-lg border bg-white py-1 shadow-lg">
               {SPEED_OPTIONS.map((r) => (
                 <button
                   key={r}
@@ -173,8 +175,8 @@ export function AudioMiniBar() {
                     actions.setRate(r)
                     setShowRateMenu(false)
                   }}
-                  className={`block w-full px-2 py-1 text-center text-xs hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary ${
-                    r === state.playbackRate ? 'font-medium text-accent' : ''
+                  className={`hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary block w-full px-2 py-1 text-center text-xs ${
+                    r === state.playbackRate ? 'text-accent font-medium' : ''
                   }`}
                 >
                   {r}x
@@ -187,7 +189,7 @@ export function AudioMiniBar() {
         {/* Volume */}
         <button
           onClick={actions.toggleMuted}
-          className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors"
           title={state.muted ? t('media.unmute') : t('media.mute')}
         >
           {state.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -203,7 +205,7 @@ export function AudioMiniBar() {
               title: t('media.download'),
             })
           }}
-          className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors"
           title={t('media.download')}
         >
           <Download size={16} />
@@ -212,7 +214,7 @@ export function AudioMiniBar() {
         {/* Close */}
         <button
           onClick={actions.stop}
-          className="rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          className="text-text-tertiary hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 transition-colors"
           title={t('media.closePlayer')}
         >
           <X size={16} />

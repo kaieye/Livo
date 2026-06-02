@@ -26,6 +26,8 @@ const parser = new RssParser({
       ['description', 'description'],
       ['summary', 'summary'],
       ['link', 'atomLinks', { keepArray: true }],
+      ['itunes:summary', 'itunesSummary'],
+      ['itunes:subtitle', 'itunesSubtitle'],
       ['itunes:duration', 'itunesDuration'],
       ['itunes:image', 'itunesImage'],
       ['media:content', 'media:content'],
@@ -60,6 +62,8 @@ const TWITTER_RSSHUB_FALLBACKS = [
   'https://rsshub.rssforever.com',
   'https://rsshub-instance.zeabur.app',
 ]
+const RSSHUB_FALLBACK_ROUTE_PREFIX =
+  /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu|xiaoyuzhou)\//i
 const TWITTER_NITTER_FALLBACKS = [
   'https://nitter.net',
   'https://nitter.poast.org',
@@ -761,10 +765,9 @@ function buildRsshubFallbackCandidates(feedUrl: string): string[] {
     const parsed = new URL(feedUrl)
     const host = parsed.hostname.toLowerCase()
     const pathAndQuery = `${parsed.pathname}${parsed.search}`
-    const looksLikeRsshubRoute =
-      /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu)\//i.test(
-        parsed.pathname,
-      )
+    const looksLikeRsshubRoute = RSSHUB_FALLBACK_ROUTE_PREFIX.test(
+      parsed.pathname,
+    )
     if (!pathAndQuery || (!host.includes('rsshub') && !looksLikeRsshubRoute))
       return [feedUrl]
 
@@ -784,9 +787,7 @@ function isRsshubLikeUrl(feedUrl: string): boolean {
     const parsed = new URL(feedUrl)
     const host = parsed.hostname.toLowerCase()
     if (host.includes('rsshub')) return true
-    return /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu)\//i.test(
-      parsed.pathname,
-    )
+    return RSSHUB_FALLBACK_ROUTE_PREFIX.test(parsed.pathname)
   } catch {
     return false
   }

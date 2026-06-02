@@ -99,6 +99,8 @@ function collectAtomEnclosureLinks(
 function readItunesItemData(item: Record<string, unknown>): {
   image?: string
   duration?: string
+  summary?: string
+  subtitle?: string
 } {
   const direct =
     item.itunes && typeof item.itunes === 'object'
@@ -113,6 +115,14 @@ function readItunesItemData(item: Record<string, unknown>): {
       readXmlString(direct.duration) ||
       readXmlString(item.itunesDuration) ||
       readXmlString(item['itunes:duration']),
+    summary:
+      readXmlString(direct.summary) ||
+      readXmlString(item.itunesSummary) ||
+      readXmlString(item['itunes:summary']),
+    subtitle:
+      readXmlString(direct.subtitle) ||
+      readXmlString(item.itunesSubtitle) ||
+      readXmlString(item['itunes:subtitle']),
   }
 }
 
@@ -880,11 +890,14 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
 
 /** Extract content from RSS item with fallback to multiple possible fields */
 export function extractContent(item: Record<string, unknown>): string {
+  const itunes = readItunesItemData(item)
   const contentSources = [
     item['content:encoded'],
     item.content,
     item['description'],
     item.summary,
+    itunes.summary,
+    itunes.subtitle,
   ]
 
   for (const source of contentSources) {

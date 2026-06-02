@@ -20,7 +20,7 @@
   }
 
   body {
-    @apply h-full bg-white text-text dark:bg-surface-dark dark:text-text-dark-primary;
+    @apply text-text dark:bg-surface-dark dark:text-text-dark-primary h-full bg-white;
     font-family:
       var(--font-ui),
       -apple-system,
@@ -66,17 +66,17 @@
   }
 
   .sidebar-item {
-    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-sidebar-hover dark:hover:bg-sidebar-dark-hover;
+    @apply hover:bg-sidebar-hover dark:hover:bg-sidebar-dark-hover flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors;
   }
 
   .sidebar-item-active {
-    @apply bg-accent/10 font-medium text-accent;
+    @apply bg-accent/10 text-accent font-medium;
   }
 }
 
 /* Entry content styling */
 .entry-content {
-  @apply prose prose-sm max-w-none dark:prose-invert;
+  @apply prose prose-sm dark:prose-invert max-w-none;
   font-family:
     var(--font-content),
     var(--font-ui),
@@ -115,15 +115,15 @@
 }
 
 .entry-content a {
-  @apply text-accent no-underline decoration-accent/40 underline-offset-2 hover:underline;
+  @apply text-accent decoration-accent/40 no-underline underline-offset-2 hover:underline;
 }
 
 .entry-content pre {
-  @apply my-6 overflow-x-auto rounded-xl bg-surface-secondary p-4 text-[0.85em] dark:bg-surface-dark-secondary;
+  @apply bg-surface-secondary dark:bg-surface-dark-secondary my-6 overflow-x-auto rounded-xl p-4 text-[0.85em];
 }
 
 .entry-content code {
-  @apply rounded bg-surface-secondary px-1.5 py-0.5 text-[0.85em] dark:bg-surface-dark-secondary;
+  @apply bg-surface-secondary dark:bg-surface-dark-secondary rounded px-1.5 py-0.5 text-[0.85em];
 }
 
 .entry-content pre code {
@@ -131,7 +131,7 @@
 }
 
 .entry-content blockquote {
-  @apply my-6 rounded-r-lg border-l-4 border-accent/30 bg-accent/[0.03] py-2 pl-4 italic;
+  @apply border-accent/30 bg-accent/[0.03] my-6 rounded-r-lg border-l-4 py-2 pl-4 italic;
 }
 
 .entry-content table {
@@ -139,7 +139,7 @@
 }
 
 .entry-content th {
-  @apply bg-surface-secondary px-3 py-2 text-left font-semibold dark:bg-surface-dark-secondary;
+  @apply bg-surface-secondary dark:bg-surface-dark-secondary px-3 py-2 text-left font-semibold;
 }
 
 .entry-content td {
@@ -147,7 +147,7 @@
 }
 
 .entry-content hr {
-  @apply my-8 border-surface-tertiary dark:border-surface-dark-tertiary;
+  @apply border-surface-tertiary dark:border-surface-dark-tertiary my-8;
 }
 
 .entry-content ul,
@@ -164,7 +164,7 @@
 }
 
 .entry-content figcaption {
-  @apply mt-2 text-center text-xs text-text-tertiary;
+  @apply text-text-tertiary mt-2 text-center text-xs;
 }
 
 /* Responsive video & iframe */
@@ -273,7 +273,7 @@
 
 /* Keyboard shortcut key cap style */
 .key-cap {
-  @apply inline-flex h-[1.5em] min-w-[1.5em] items-center justify-center rounded border border-b-2 border-border bg-surface-secondary px-1.5 text-[10px] font-medium text-text-secondary dark:border-border-dark dark:bg-surface-dark-secondary dark:text-text-dark-secondary;
+  @apply border-border bg-surface-secondary text-text-secondary dark:border-border-dark dark:bg-surface-dark-secondary dark:text-text-dark-secondary inline-flex h-[1.5em] min-w-[1.5em] items-center justify-center rounded border border-b-2 px-1.5 text-[10px] font-medium;
 }
 
 /* External link warning shake */
@@ -339,6 +339,48 @@
 
 .page-transition {
   animation: page-transition-in 0.22s ease-out;
+}
+
+/* Audio scrubber range input */
+.audio-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  outline: none;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) var(--progress, 0%),
+    rgb(var(--color-surface-tertiary)) var(--progress, 0%)
+  );
+}
+
+.audio-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.audio-scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.audio-scrubber::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
 }
 
 /* Reduce motion — disables all animations when enabled */
