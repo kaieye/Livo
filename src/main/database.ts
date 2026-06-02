@@ -37,7 +37,11 @@ import {
   titlesLikelySameForRead,
 } from './database/entry-identity'
 import { normalizeExistingFeedTitles } from './database/feed-normalization'
-import { buildEntryIndexes, buildFeedByUrlIndex } from './database/indexes'
+import {
+  buildEntryIndexes,
+  buildFeedByUrlIndex,
+  makeEntryUrlKey,
+} from './database/indexes'
 
 export type { CleanupOptions, CleanupStats } from './database/cleanup'
 
@@ -53,11 +57,21 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 let feedByUrlIndex = new Map<string, Feed>()
 let entryByFeedUrlIndex = new Map<string, Entry>()
 let entryByFeedIdentityIndex = new Map<string, Entry>()
+let entriesByFeedIdPublishedDesc = new Map<string, Entry[]>()
+let unreadEntriesByPublishedDesc: Entry[] = []
+let starredEntriesByPublishedDesc: Entry[] = []
+let unreadCountByFeedId = new Map<string, number>()
+let entryQueryIndexesDirty = true
 let entriesByPublishedDesc: Entry[] = []
 let entriesOrderDirty = true
 
 function markEntriesOrderDirty(): void {
   entriesOrderDirty = true
+}
+
+function markEntryQueryIndexesDirty(): void {
+  entryQueryIndexesDirty = true
+  markEntriesOrderDirty()
 }
 
 function getEntriesByPublishedDesc(): Entry[] {
@@ -69,8 +83,16 @@ function getEntriesByPublishedDesc(): Entry[] {
   return entriesByPublishedDesc
 }
 
-function makeEntryUrlKey(feedId: string, url: string): string {
-  return `${feedId}\n${url}`
+function ensureEntryQueryIndexes(): void {
+  if (!entryQueryIndexesDirty) return
+  const entryIndexes = buildEntryIndexes(data.entries, makeEntryIdentityKey)
+  entryByFeedUrlIndex = entryIndexes.entryByFeedUrlIndex
+  entryByFeedIdentityIndex = entryIndexes.entryByFeedIdentityIndex
+  entriesByFeedIdPublishedDesc = entryIndexes.entriesByFeedIdPublishedDesc
+  unreadEntriesByPublishedDesc = entryIndexes.unreadEntriesByPublishedDesc
+  starredEntriesByPublishedDesc = entryIndexes.starredEntriesByPublishedDesc
+  unreadCountByFeedId = entryIndexes.unreadCountByFeedId
+  entryQueryIndexesDirty = false
 }
 
 function rebuildIndexes(): void {
@@ -78,6 +100,11 @@ function rebuildIndexes(): void {
   const entryIndexes = buildEntryIndexes(data.entries, makeEntryIdentityKey)
   entryByFeedUrlIndex = entryIndexes.entryByFeedUrlIndex
   entryByFeedIdentityIndex = entryIndexes.entryByFeedIdentityIndex
+  entriesByFeedIdPublishedDesc = entryIndexes.entriesByFeedIdPublishedDesc
+  unreadEntriesByPublishedDesc = entryIndexes.unreadEntriesByPublishedDesc
+  starredEntriesByPublishedDesc = entryIndexes.starredEntriesByPublishedDesc
+  unreadCountByFeedId = entryIndexes.unreadCountByFeedId
+  entryQueryIndexesDirty = false
   markEntriesOrderDirty()
 }
 
@@ -180,11 +207,11 @@ export async function initDatabase(): Promise<void> {
       }
 
       const dedupeResult = dedupeEntriesInPlace(data.entries, {
-        markEntriesOrderDirty,
+        markEntriesOrderDirty: markEntryQueryIndexesDirty,
       })
       if (dedupeResult.changed) {
         data.entries = dedupeResult.entries
-        markEntriesOrderDirty()
+        markEntryQueryIndexesDirty()
       }
 
       // Migration: remove entries injected by FeedBurner from unrelated domains.
@@ -342,9 +369,16 @@ function getFilteredEntries(options: {
     !options.feedId && options.feedIds && options.feedIds.length > 0
       ? new Set(options.feedIds)
       : null
+  ensureEntryQueryIndexes()
+  const orderedEntries = options.feedId
+    ? entriesByFeedIdPublishedDesc.get(options.feedId) || []
+    : options.unreadOnly && !requestedFeedIds
+      ? unreadEntriesByPublishedDesc
+      : options.starred && !requestedFeedIds
+        ? starredEntriesByPublishedDesc
+        : getEntriesByPublishedDesc()
 
   let result: Entry[] = []
-  const orderedEntries = getEntriesByPublishedDesc()
   for (const entry of orderedEntries) {
     if (!validFeedIds.has(entry.feedId)) continue
     if (options.feedId && entry.feedId !== options.feedId) continue
@@ -525,7 +559,7 @@ export function replaceEntriesForFeedWithResult(
   }
 
   data.entries = data.entries.filter((entry) => entry.feedId !== feedId)
-  markEntriesOrderDirty()
+  markEntryQueryIndexesDirty()
   rebuildIndexes()
 
   let added = 0
@@ -582,11 +616,16 @@ function upsertEntry(entry: Entry): { added: boolean; changed: boolean } {
   if (identityKey) {
     const existing = entryByFeedIdentityIndex.get(identityKey)
     if (existing) {
-      return { added: false, changed: mergeEntryData(existing, entry) }
+      return {
+        added: false,
+        changed: mergeEntryData(existing, entry, {
+          onPublishedAtAdvanced: markEntryQueryIndexesDirty,
+        }),
+      }
     }
   }
   data.entries.push(entry)
-  markEntriesOrderDirty()
+  markEntryQueryIndexesDirty()
   if (entry.url) {
     entryByFeedUrlIndex.set(makeEntryUrlKey(entry.feedId, entry.url), entry)
   }
@@ -603,7 +642,10 @@ export function updateEntry(id: string, updates: Partial<Entry>): void {
   const next = { ...previous, ...updates }
   data.entries[idx] = next
 
-  if (previous.url && previous.url !== next.url) {
+  if (
+    previous.url &&
+    (previous.url !== next.url || previous.feedId !== next.feedId)
+  ) {
     entryByFeedUrlIndex.delete(makeEntryUrlKey(previous.feedId, previous.url))
   }
   if (next.url) {
@@ -619,16 +661,26 @@ export function updateEntry(id: string, updates: Partial<Entry>): void {
     entryByFeedIdentityIndex.set(nextIdentityKey, next)
   }
 
-  if (updates.publishedAt !== undefined) markEntriesOrderDirty()
+  if (
+    updates.feedId !== undefined ||
+    updates.publishedAt !== undefined ||
+    updates.isRead !== undefined ||
+    updates.isStarred !== undefined
+  ) {
+    markEntryQueryIndexesDirty()
+  }
   scheduleSave()
 }
 
 export function markAllRead(feedId?: string): void {
+  let changed = false
   for (const entry of data.entries) {
-    if (!feedId || entry.feedId === feedId) {
+    if ((!feedId || entry.feedId === feedId) && !entry.isRead) {
       entry.isRead = true
+      changed = true
     }
   }
+  if (changed) markEntryQueryIndexesDirty()
   scheduleSave()
 }
 
@@ -753,17 +805,18 @@ export function updateAIDigestRun(
 
 export function getUnreadCount(feedId: string): number {
   if (!data.feeds.some((f) => f.id === feedId)) return 0
-  return data.entries.filter((e) => e.feedId === feedId && !e.isRead).length
+  ensureEntryQueryIndexes()
+  return unreadCountByFeedId.get(feedId) || 0
 }
 
 export function getUnreadCountMap(): Map<string, number> {
+  ensureEntryQueryIndexes()
   const validFeedIds = new Set(data.feeds.map((f) => f.id))
   const unreadByFeed = new Map<string, number>()
-
-  for (const entry of data.entries) {
-    if (entry.isRead) continue
-    if (!validFeedIds.has(entry.feedId)) continue
-    unreadByFeed.set(entry.feedId, (unreadByFeed.get(entry.feedId) || 0) + 1)
+  for (const [feedId, unreadCount] of unreadCountByFeedId) {
+    if (validFeedIds.has(feedId)) {
+      unreadByFeed.set(feedId, unreadCount)
+    }
   }
 
   return unreadByFeed

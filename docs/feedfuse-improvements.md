@@ -15,7 +15,7 @@
 | 维度 | FeedFuse（服务端） | Livo（桌面端） | 借鉴时的映射 |
 | --- | --- | --- | --- |
 | 形态 | 自托管 Web，多用户/多设备 | Electron 桌面 + Web，单用户本地 | — |
-| 数据 | PostgreSQL + 复合索引 + cursor 分页 | 单个 `livo-data.json` 全量读写 | PG → **SQLite** |
+| 数据 | PostgreSQL + 复合索引 + cursor 分页 | 单个 `livo-data.json` 全量读写，已做内存索引与入库去重 | PG → **SQLite** |
 | 后台任务 | pg-boss 任务队列 + worker 进程 | 主进程 `setInterval` | 队列 → **主进程任务调度** |
 | 流式 | SSE + DB 事件表回放（支持多端续传） | IPC 事件（`webContents.send`） | SSE → **IPC 事件**（更轻，无需 DB 回放） |
 | 提示词 | 统一模板层 + 用户可定制 | 硬编码在 handler | 直接借鉴 |
@@ -29,7 +29,7 @@
 | # | 借鉴点 | Livo 现状 | 价值 | 工作量 |
 | --- | --- | --- | --- | --- |
 | **P0 高价值（明确短板）** | | | | |
-| 4 | 本地存储升级为 SQLite | 单 JSON 全量读写，规模隐忧 | 高 | 大 |
+| 4 | 本地存储升级为 SQLite | JSON 仍全量落盘，规模隐忧 | 高 | 大 |
 | **P2 视产品方向选做** | | | | |
 | 9 | 第三方同步协议（Fever 投影模式） | 无标准同步协议 | 视需求 | 大 |
 | 10 | 播客订阅模型 | 有播放器，无订阅/剧集模型 | 视需求 | 中 |
@@ -40,15 +40,14 @@
 
 ### 4. 本地存储从 JSON 升级为 SQLite
 
-**Livo 现状**：桌面端把整库放在单个 `userData/data/livo-data.json`（`src/main/database.ts`）：整库加载进内存、500ms 防抖后 `writeFileSync` **全量落盘**。条目量大时全量序列化是明显性能瓶颈，且无法做高效分页/检索。
+**Livo 现状**：桌面端把整库放在单个 `userData/data/livo-data.json`（`src/main/database.ts`）：整库加载进内存、500ms 防抖后 `writeFileSync` **全量落盘**。当前已在 JSON 层补齐条目身份去重、按订阅/未读/收藏的发布时间倒序内存索引和未读计数缓存，但条目量大时全量序列化仍是明显性能瓶颈。
 
 **FeedFuse 做法**：PostgreSQL + 大量**复合降序索引**服务"最新优先"分页（如 `articles_feed_published_idx`、`articles_is_read_published_idx`），cursor 分页（`src/server/domains/articles/repositories/articlesRepo.ts`）。schema 见 `src/server/infra/db/migrations/*.sql`（33 个幂等顺序迁移）。
 
 **借鉴建议**：
 1. 桌面端迁移到 **SQLite**（`better-sqlite3`，同步 API 在主进程很合适），保留 `livo-data.json` 仅作为一次性导入/迁移来源。
-2. 关键索引照搬思路：`(feed_id, published_at DESC)`、`(is_read, published_at DESC)`、去重键唯一索引。
+2. SQLite 迁移时把现有 JSON 内存索引映射为真实复合/部分索引，并补 cursor 分页 IPC。
 3. 借鉴 FeedFuse 的几个 schema 细节：
-   - **去重唯一约束** `unique(feed_id, dedupe_key)` 在入库层天然防重复。
    - **任务唯一索引** `article_tasks unique(article_id, type)`——保证每篇文章每类 AI 任务只有一个实例，避免并发重复入队（Livo 若做 AI 任务队列可直接用）。
    - **单行设置表** `app_settings (id=1)` + `alter table ... add column if not exists` 的幂等迁移风格。
 4. 配合 react-query：Livo 已用 `query-sync-storage-persister`（`src/renderer/src/lib/query-client.ts`），换 SQLite 后数据查询走 IPC + cursor 分页即可。
