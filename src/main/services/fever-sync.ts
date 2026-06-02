@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { getEventBus } from './event-bus'
 import { v4 as uuidv4 } from 'uuid'
 import type { Entry, Feed, FeverAccount } from '../../shared/types'
 import { FeedViewType } from '../../shared/types'
@@ -46,10 +47,7 @@ export interface FeverSyncResult {
 }
 
 function sendProgressToRenderer(progress: FeverSyncProgress): void {
-  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-  if (win) {
-    win.webContents.send('fever:sync-progress', progress)
-  }
+  getEventBus().send('fever:sync-progress', progress)
 }
 
 function buildFeedFromFeverRemote(

@@ -1,4 +1,5 @@
 import { BrowserWindow, Notification } from 'electron'
+import { getEventBus } from './event-bus'
 import type OpenAI from 'openai'
 import type { ActionEffectType } from '../../shared/actions'
 import type { Entry, Feed } from '../../shared/types'
@@ -45,9 +46,7 @@ function plainText(value: string | undefined): string {
 }
 
 function notifyRenderer(): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send('entries:enriched')
-  }
+  getEventBus().send('entries:enriched')
 }
 
 function updateEntryAndNotify(entryId: string, updates: Partial<Entry>): void {

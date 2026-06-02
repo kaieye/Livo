@@ -19,12 +19,7 @@ function canUseFoloProxy(url: string): boolean {
     raw.includes('picnob.info') ||
     raw.includes('picnob.com') ||
     raw.includes('piokok.com') ||
-    raw.includes('pixwox.com') ||
-    raw.includes('sp1.pixnoy.com') ||
-    raw.includes('sp2.pixnoy.com') ||
-    raw.includes('sp3.pixnoy.com') ||
-    raw.includes('sp4.pixnoy.com') ||
-    raw.includes('sp5.pixnoy.com')
+    raw.includes('pixwox.com')
   )
 }
 

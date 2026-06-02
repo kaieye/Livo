@@ -4,22 +4,9 @@ import { FeedViewType } from '../../../shared/types'
 import { useSettingsStore } from './settings-store'
 import { useEntryStore } from './entry-store'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
+import { shouldUseSocialBackgroundRefresh } from '../../../shared/subscription-intake'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
-
-function isSlowSocialFeed(feed?: Partial<FeedWithCount>): boolean {
-  const rawUrl = String(feed?.url || '').toLowerCase()
-  const view = feed?.view
-  if (view === FeedViewType.SocialMedia || view === FeedViewType.Pictures)
-    return true
-  return (
-    /\/instagram\/user\//i.test(rawUrl) ||
-    /\/picnob(?:\.info)?\/user\//i.test(rawUrl) ||
-    /\/pixnoy\/user\//i.test(rawUrl) ||
-    /\/piokok\/user\//i.test(rawUrl) ||
-    /\/(?:twitter|x)\/user\//i.test(rawUrl)
-  )
-}
 
 function delayMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -160,7 +147,10 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
       // Avoid stale empty list cache for newly added subscriptions.
       useEntryStore.getState().clearListCache()
       await get().loadFeeds()
-      const shouldSkipWarmup = isSlowSocialFeed(result.feed)
+      const shouldSkipWarmup = shouldUseSocialBackgroundRefresh(
+        result.feed?.url || '',
+        result.feed?.view ?? FeedViewType.Articles,
+      )
       const newFeedId = result.feed?.id
       if (newFeedId && !shouldSkipWarmup) {
         try {

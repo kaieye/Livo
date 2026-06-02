@@ -1,4 +1,5 @@
-﻿import { ipcMain, BrowserWindow } from 'electron'
+import { registerChannel } from '../ipc/register-channel'
+import { getEventBus } from '../services/event-bus'
 import OpenAI from 'openai'
 import { IPC } from '../../shared/types'
 import { getSettings } from './settings-handlers'
@@ -33,9 +34,7 @@ import type {
 } from '../../shared/types'
 
 function sendToAllWindows(channel: string, payload: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(channel, payload)
-  }
+  getEventBus().send(channel, payload)
 }
 
 function getDigestPresetLabel(preset: AIDigestPreset): string {
@@ -69,7 +68,7 @@ async function requestDigestText(
 
 export function registerAIHandlers(): void {
   // Summarize content
-  ipcMain.handle(
+  registerChannel(
     IPC.AI_SUMMARIZE,
     async (_event, content: string, language?: string, requestId?: string) => {
       const settings = getSettings()
@@ -144,7 +143,7 @@ export function registerAIHandlers(): void {
   )
 
   // Translate content
-  ipcMain.handle(
+  registerChannel(
     IPC.AI_TRANSLATE,
     async (
       _event,
@@ -241,7 +240,7 @@ export function registerAIHandlers(): void {
   )
 
   // AI Chat (non-streaming)
-  ipcMain.handle(
+  registerChannel(
     IPC.AI_CHAT,
     async (_event, messages: Array<{ role: string; content: string }>) => {
       const settings = getSettings()
@@ -271,7 +270,7 @@ export function registerAIHandlers(): void {
   )
 
   // AI Chat (streaming via IPC events)
-  ipcMain.handle(
+  registerChannel(
     IPC.AI_CHAT_STREAM,
     async (
       _event,
@@ -319,7 +318,7 @@ export function registerAIHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.AI_FILTER_JUDGE,
     async (_event, input: AISemanticFilterInput) => {
       const settings = getSettings()
@@ -334,11 +333,11 @@ export function registerAIHandlers(): void {
     },
   )
 
-  ipcMain.handle(IPC.AI_DIGEST_LIST, async (_event, limit?: number) => {
+  registerChannel(IPC.AI_DIGEST_LIST, async (_event, limit?: number) => {
     return listAIDigestRuns(limit)
   })
 
-  ipcMain.handle(
+  registerChannel(
     IPC.AI_DIGEST_GENERATE,
     async (
       _event,
@@ -480,7 +479,7 @@ export function registerAIHandlers(): void {
   )
 
   // Connection test
-  ipcMain.handle(IPC.AI_TEST_CONNECTION, async () => {
+  registerChannel(IPC.AI_TEST_CONNECTION, async () => {
     const settings = getSettings()
     const aiConfig = settings.ai
 

@@ -4,6 +4,8 @@ import { useFeedStore } from '../../store/feed-store'
 import { useSettingsStore } from '../../store/settings-store'
 import { FeedViewType, VIEW_DEFINITIONS } from '../../../../shared/types'
 import { remapBilibiliFeedUrlToView } from '../../../../shared/bilibili-feed-url'
+import { resolveSubscriptionTarget } from '../../../../shared/subscription-intake'
+import { isInstagramFeedUrl } from '../../../../shared/url-detect'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 import {
   X,
@@ -20,18 +22,6 @@ const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
   [FeedViewType.SocialMedia]: <MessageCircle size={16} />,
   [FeedViewType.Videos]: <Play size={16} />,
   [FeedViewType.Pictures]: <Image size={16} />,
-}
-
-function isInstagramUrl(url: string): boolean {
-  const lower = url.toLowerCase().trim()
-  return (
-    lower.includes('instagram.com') ||
-    lower.includes('rsshub://instagram/') ||
-    /\/instagram\//i.test(lower) ||
-    /\/picnob\//i.test(lower) ||
-    /\/pixnoy\//i.test(lower) ||
-    /\/piokok\//i.test(lower)
-  )
 }
 
 export function AddFeedDialog({
@@ -65,62 +55,61 @@ export function AddFeedDialog({
     setResolveNote('')
 
     const inputUrl = url.trim()
-    const normalizeFeedUrl = (rawUrl: string) => {
-      if (!/^rsshub:\/\/\S+/i.test(rawUrl)) return rawUrl
-      const route = rawUrl.replace(/^rsshub:\/\//i, '').replace(/^\/+/, '')
-      const base = rsshubInstance.trim().replace(/\/+$/, '')
-      return `${base}/${route}`
-    }
-    let targetUrl = inputUrl
-    let targetTitle: string | undefined
-    let targetView = view
 
+    // Resolve profile URL via IPC, then use shared intake pipeline
+    let ipcCandidates: Array<{
+      feedUrl: string
+      title: string
+      view?: FeedViewType | number
+      requiresAccount?: string[]
+      note?: string
+    }> = []
+    let accountStates: Array<{ provider: string; linked: boolean }> = []
     try {
-      const resolved = await window.api.discover.resolveProfileUrl(
-        normalizeFeedUrl(inputUrl),
-      )
-      const firstCandidate = resolved.candidates[0]
-      if (resolved.matched && firstCandidate) {
-        const chosenCandidate =
-          resolved.platform === 'bilibili' && viewTouched
-            ? resolved.candidates.find(
-                (candidate) => candidate.view === view,
-              ) || firstCandidate
-            : firstCandidate
-
-        targetUrl = chosenCandidate.feedUrl
-        targetTitle = chosenCandidate.title
-        if (typeof chosenCandidate.view === 'number') {
-          targetView = chosenCandidate.view as FeedViewType
-        }
-
-        const youtubeState = resolved.accountStates?.find(
-          (s) => s.provider === 'youtube',
-        )
-        if (
-          chosenCandidate.requiresAccount?.includes('youtube') &&
-          youtubeState &&
-          !youtubeState.linked
-        ) {
-          setResolveNote(
-            'Detected YouTube profile. Link YouTube account in Settings -> Accounts for better compatibility.',
-          )
-        } else if (chosenCandidate.note === 'instagram_carousel_tip') {
-          setResolveNote(t('settings.instagramCarouselTip'))
-        } else {
-          setResolveNote(`Resolved: ${chosenCandidate.feedUrl}`)
-        }
-      }
+      const resolved = await window.api.discover.resolveProfileUrl(inputUrl)
+      ipcCandidates = resolved.candidates
+      accountStates = resolved.accountStates ?? []
     } catch {
-      // Ignore resolver errors and fall back to direct URL subscribe.
+      // Ignore resolver errors — fall back to direct URL subscribe
     }
 
-    targetUrl = remapBilibiliFeedUrlToView(
-      normalizeFeedUrl(targetUrl),
-      targetView,
-    )
+    const resolved = resolveSubscriptionTarget(inputUrl, {
+      rsshubInstance,
+      preferredView: viewTouched ? view : undefined,
+      resolvedCandidates: ipcCandidates,
+    })
+    const {
+      feedUrl,
+      title: resolvedTitle,
+      view: resolvedView,
+    } = resolved.target
+    let targetUrl = feedUrl
+    let targetTitle = resolvedTitle || undefined
+    let targetView = resolvedView
+
+    // Show resolve notes for special platforms
+    if (ipcCandidates.length > 0) {
+      const chosen =
+        ipcCandidates.find((c) => c.feedUrl === feedUrl) ?? ipcCandidates[0]
+      const youtubeState = accountStates.find((s) => s.provider === 'youtube')
+      if (
+        chosen.requiresAccount?.includes('youtube') &&
+        youtubeState &&
+        !youtubeState.linked
+      ) {
+        setResolveNote(
+          'Detected YouTube profile. Link YouTube account in Settings -> Accounts for better compatibility.',
+        )
+      } else if (chosen.note === 'instagram_carousel_tip') {
+        setResolveNote(t('settings.instagramCarouselTip'))
+      } else {
+        setResolveNote(`Resolved: ${feedUrl}`)
+      }
+    }
+
+    targetUrl = remapBilibiliFeedUrlToView(targetUrl, targetView)
     const result = await addFeed(
-      normalizeFeedUrl(targetUrl),
+      targetUrl,
       category.trim() || undefined,
       targetView,
       targetTitle,
@@ -140,7 +129,7 @@ export function AddFeedDialog({
       onClick={onClose}
     >
       <div
-        className="w-[480px] max-w-[90vw] overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-surface-dark-secondary"
+        className="dark:bg-surface-dark-secondary w-[480px] max-w-[90vw] overflow-hidden rounded-xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -151,7 +140,7 @@ export function AddFeedDialog({
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
           >
             <X size={18} />
           </button>
@@ -168,17 +157,17 @@ export function AddFeedDialog({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder={t('settings.feedUrlPlaceholder')}
-              className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+              className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
               autoFocus
               disabled={isLoading}
             />
-            <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
               {t('settings.feedUrlHint')}
             </p>
             {resolveNote && (
-              <p className="mt-1 text-xs text-accent">{resolveNote}</p>
+              <p className="text-accent mt-1 text-xs">{resolveNote}</p>
             )}
-            {isInstagramUrl(url) && (
+            {isInstagramFeedUrl(url) && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                 {t('settings.instagramCarouselTip')}
               </p>
@@ -207,7 +196,7 @@ export function AddFeedDialog({
                       className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
                         isSelected
                           ? `border-accent bg-accent/5 ${def.color} font-medium`
-                          : 'border-transparent bg-surface-secondary text-text-secondary hover:border-border dark:bg-surface-dark-tertiary dark:text-text-dark-secondary'
+                          : 'bg-surface-secondary text-text-secondary hover:border-border dark:bg-surface-dark-tertiary dark:text-text-dark-secondary border-transparent'
                       }`}
                     >
                       {VIEW_ICONS[viewType as FeedViewType]}
@@ -230,7 +219,7 @@ export function AddFeedDialog({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder={t('settings.categoryPlaceholder')}
-              className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+              className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
               disabled={isLoading}
             />
           </div>
@@ -245,7 +234,7 @@ export function AddFeedDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg px-4 py-2 text-sm transition-colors"
               disabled={isLoading}
             >
               {t('common.cancel')}
@@ -253,7 +242,7 @@ export function AddFeedDialog({
             <button
               type="submit"
               disabled={isLoading || !url.trim()}
-              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+              className="bg-accent hover:bg-accent-hover flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-white transition-colors disabled:opacity-50"
             >
               {isLoading && <Loader2 size={14} className="animate-spin" />}
               {isLoading ? t('settings.adding') : t('common.add')}

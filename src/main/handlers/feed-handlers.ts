@@ -1,4 +1,5 @@
-import { ipcMain, dialog, BrowserWindow, session as _session } from 'electron'
+import { dialog } from 'electron'
+import { getEventBus } from '../services/event-bus'
 import { v4 as uuidv4 } from 'uuid'
 import { readFileSync, writeFileSync } from 'fs'
 import {
@@ -7,12 +8,20 @@ import {
   type Feed,
   type FeedWithCount,
 } from '../../shared/types'
+import { registerChannel } from '../ipc/register-channel'
 import { fetchAndParseFeed } from '../services/rss-parser'
-import { refreshAllFeeds, refreshSingleFeed } from '../services/feed-refresh'
+import {
+  refreshAllFeeds,
+  refreshSingleFeed,
+  withTimeout,
+  getInitialFetchTimeoutMs,
+  bootstrapFeedEntries,
+  queueBootstrapRefresh,
+} from '../services/feed-refresh'
 import { getSettings } from './settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../shared/discover-data'
 import { parseOPML, generateOPML } from '../services/opml-parser'
-import { deriveImageUrl } from '../services/feed-utils'
+import { getFeedImageUrl } from '../services/feed-utils'
 import { queueVideoDurationEnrich } from '../services/video-duration'
 import {
   getAppCacheDirectoryPath,
@@ -25,14 +34,21 @@ import {
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from '../services/rsshub-url'
-import { resolveFeedAvatar } from '../services/feed-avatar'
+import {
+  resolveFeedAvatar,
+  getImmediateFeedAvatar,
+} from '../services/feed-avatar'
 import {
   loadRefreshLogs,
   clearRefreshLogs,
 } from '../services/refresh-log-store'
 import { formatFeedTitle } from '../services/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry-builder'
-import { detectRouteViewFromUrl } from '../services/feed-view'
+import { detectViewType } from '../services/feed-view'
+import {
+  inferDiscoverFeedViewFromUrl,
+  getWarmupStrategy,
+} from '../../shared/subscription-intake'
 import {
   getAllFeeds,
   getFeedById,
@@ -44,7 +60,6 @@ import {
   getUnreadCountMap,
   cleanupEntries,
   getDatabaseStats,
-  getEntries,
 } from '../database'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
@@ -58,7 +73,7 @@ function toRendererFeed(feed: Feed): Feed {
 
 export function registerFeedHandlers(): void {
   // Add a new feed
-  ipcMain.handle(
+  registerChannel(
     IPC.FEED_ADD,
     async (
       _event,
@@ -88,7 +103,11 @@ export function registerFeedHandlers(): void {
           legacyStoredUrl,
           rsshubInstance,
         )
-        const deferBootstrap = shouldDeferBootstrap(normalizedUrl, view)
+        const warmupStrategy = getWarmupStrategy(
+          normalizedUrl,
+          view ?? FeedViewType.Articles,
+        )
+        const deferBootstrap = warmupStrategy === 'deferred-queue'
         const existingFeed =
           getFeedByUrl(storedUrl) ||
           getFeedByUrl(normalizedUrl) ||
@@ -99,10 +118,9 @@ export function registerFeedHandlers(): void {
         if (existingFeed) {
           const wantsRecommended = (category || '') === RECOMMENDED_CATEGORY
           const updates: Partial<Feed> = {}
-          const routeView = detectRouteViewFromUrl(normalizedUrl)
+          const inferredView = inferDiscoverFeedViewFromUrl(normalizedUrl)
 
-          // If user subscribes a feed that already exists in Recommended,
-          // promote it into normal subscriptions so it appears in the sidebar list.
+          // Promote from Recommended to normal subscription
           if (
             existingFeed.category === RECOMMENDED_CATEGORY &&
             !wantsRecommended
@@ -111,12 +129,13 @@ export function registerFeedHandlers(): void {
             updates.folder = category || ''
           }
 
-          // Route-specific feeds should always use the matching view, even if an
-          // older caller passes a stale explicit view.
-          if (routeView !== null && existingFeed.view !== routeView) {
-            updates.view = routeView
-          } else if (typeof view === 'number' && existingFeed.view !== view) {
-            updates.view = view
+          // Route-derived view wins over stale explicit selection.
+          const desiredView =
+            inferredView !== FeedViewType.Articles
+              ? inferredView
+              : (view ?? existingFeed.view)
+          if (existingFeed.view !== desiredView) {
+            updates.view = desiredView
           }
           if (title?.trim()) {
             updates.title = formatFeedTitle(storedUrl, undefined, title.trim())
@@ -134,10 +153,8 @@ export function registerFeedHandlers(): void {
           if (Object.keys(updates).length > 0) {
             updateFeed(existingFeed.id, updates)
             const mergedFeed = { ...existingFeed, ...updates }
-            // Existing subscriptions (especially promoted from Recommended) may have no data yet.
-            // For social feeds, do a short blocking refresh first to improve "subscribe -> has entries"
-            // responsiveness, then continue in background if still empty.
-            if (shouldDeferBootstrap(normalizedUrl, mergedFeed.view)) {
+            const strategy = getWarmupStrategy(normalizedUrl, mergedFeed.view)
+            if (strategy === 'deferred-queue') {
               queueBootstrapRefresh(mergedFeed, normalizedUrl, mergedFeed.view)
             } else {
               await bootstrapFeedEntries(
@@ -153,7 +170,8 @@ export function registerFeedHandlers(): void {
             }
           }
 
-          if (shouldDeferBootstrap(normalizedUrl, existingFeed.view)) {
+          const strategy = getWarmupStrategy(normalizedUrl, existingFeed.view)
+          if (strategy === 'deferred-queue') {
             queueBootstrapRefresh(
               existingFeed,
               normalizedUrl,
@@ -184,6 +202,7 @@ export function registerFeedHandlers(): void {
             const result = await withTimeout(
               fetchAndParseFeed(normalizedUrl),
               initialFetchTimeoutMs,
+              `initial fetch ${normalizedUrl}`,
             )
             parsed = result.data
           } catch {
@@ -193,11 +212,12 @@ export function registerFeedHandlers(): void {
         }
         // Auto-detect view type from route/content.
         // Route-derived view wins over any stale explicit selection.
-        const routeView = detectRouteViewFromUrl(normalizedUrl)
+        const inferredView = inferDiscoverFeedViewFromUrl(normalizedUrl)
         const detectedView =
-          routeView ??
-          view ??
-          detectViewTypeFromUrlOrContent(normalizedUrl, parsed)
+          inferredView !== FeedViewType.Articles
+            ? inferredView
+            : (view ??
+              (parsed ? detectViewType(parsed) : FeedViewType.Articles))
         const feedImageUrl =
           deferBootstrap && !parsed
             ? getImmediateFeedAvatar(normalizedUrl)
@@ -248,11 +268,7 @@ export function registerFeedHandlers(): void {
         ) {
           queueVideoDurationEnrich(id)
             .then((count) => {
-              if (count > 0) {
-                const win = BrowserWindow.getAllWindows()[0]
-                if (win && !win.isDestroyed())
-                  win.webContents.send('entries:enriched')
-              }
+              if (count > 0) getEventBus().send('entries:enriched')
             })
             .catch(() => {})
         }
@@ -260,7 +276,8 @@ export function registerFeedHandlers(): void {
         // If quick add skipped/failed parsing, force a synchronous refresh once so
         // newly added subscriptions can show entries immediately.
         if (!parsed) {
-          if (shouldDeferBootstrap(normalizedUrl, detectedView)) {
+          const strategy = getWarmupStrategy(normalizedUrl, detectedView)
+          if (strategy === 'deferred-queue') {
             queueBootstrapRefresh(feed, normalizedUrl, detectedView)
           } else {
             await bootstrapFeedEntries(feed, normalizedUrl, detectedView)
@@ -280,13 +297,13 @@ export function registerFeedHandlers(): void {
   )
 
   // Remove a feed
-  ipcMain.handle(IPC.FEED_REMOVE, (_event, feedId: string) => {
+  registerChannel(IPC.FEED_REMOVE, (_event, feedId: string) => {
     deleteFeed(feedId)
     return { success: true }
   })
 
   // List all feeds with unread counts
-  ipcMain.handle(IPC.FEED_LIST, () => {
+  registerChannel(IPC.FEED_LIST, () => {
     const feeds = getAllFeeds()
     const unreadCountMap = getUnreadCountMap()
     const result: FeedWithCount[] = feeds
@@ -299,7 +316,7 @@ export function registerFeedHandlers(): void {
   })
 
   // Refresh a single feed
-  ipcMain.handle(IPC.FEED_REFRESH, async (_event, feedId: string) => {
+  registerChannel(IPC.FEED_REFRESH, async (_event, feedId: string) => {
     const feeds = getAllFeeds()
     const feed = feeds.find((f) => f.id === feedId)
     if (!feed) return { success: false, error: 'Feed not found' }
@@ -322,7 +339,7 @@ export function registerFeedHandlers(): void {
   // Refresh all feeds (concurrent, with conditional GET).
   // Delegates to the deep `refreshAllFeeds` module; the IPC handler's only
   // job is to translate per-feed progress into renderer events.
-  ipcMain.handle(IPC.FEED_REFRESH_ALL, async (event) => {
+  registerChannel(IPC.FEED_REFRESH_ALL, async (event) => {
     return refreshAllFeeds({
       force: true,
       onProgress: (progress) => {
@@ -348,7 +365,7 @@ export function registerFeedHandlers(): void {
   })
 
   // Update feed
-  ipcMain.handle(
+  registerChannel(
     IPC.FEED_UPDATE,
     (_event, feedId: string, updates: Partial<Feed>) => {
       const next = { ...updates }
@@ -371,7 +388,7 @@ export function registerFeedHandlers(): void {
   )
 
   // Import OPML
-  ipcMain.handle(IPC.FEED_IMPORT_OPML, async () => {
+  registerChannel(IPC.FEED_IMPORT_OPML, async () => {
     const result = await dialog.showOpenDialog({
       title: 'Import OPML file',
       filters: [
@@ -402,15 +419,12 @@ export function registerFeedHandlers(): void {
       const CONCURRENCY = 10
 
       const sendProgress = (current: number, title: string, status: string) => {
-        const win = BrowserWindow.getAllWindows()[0]
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('import:progress', {
-            current,
-            total,
-            title,
-            status,
-          })
-        }
+        getEventBus().send('import:progress', {
+          current,
+          total,
+          title,
+          status,
+        })
       }
 
       // Filter out already-existing feeds first
@@ -542,7 +556,7 @@ export function registerFeedHandlers(): void {
   })
 
   // Export OPML
-  ipcMain.handle(IPC.FEED_EXPORT_OPML, async () => {
+  registerChannel(IPC.FEED_EXPORT_OPML, async () => {
     const feeds = getAllFeeds()
     if (feeds.length === 0) {
       return { success: false, error: 'No feeds to export' }
@@ -575,7 +589,7 @@ export function registerFeedHandlers(): void {
   const OPML_REFRESH_GAP_MS = 180
   const OPML_REFRESH_CONCURRENCY = 3
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEED_REFRESH_IMPORTED,
     async (_event, feedIds: string[]) => {
       const deduped = Array.from(new Set(feedIds.filter(Boolean)))
@@ -583,7 +597,6 @@ export function registerFeedHandlers(): void {
         return { success: true, total: 0, refreshed: 0, failed: 0 }
       }
 
-      const win = BrowserWindow.getAllWindows()[0]
       const sendProgress = (
         completed: number,
         total: number,
@@ -591,15 +604,13 @@ export function registerFeedHandlers(): void {
         failed: number,
         currentTitle?: string,
       ) => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('import:refresh-progress', {
-            completed,
-            total,
-            success,
-            failed,
-            currentTitle,
-          })
-        }
+        getEventBus().send('import:refresh-progress', {
+          completed,
+          total,
+          success,
+          failed,
+          currentTitle,
+        })
       }
 
       sendProgress(0, deduped.length, 0, 0)
@@ -665,7 +676,7 @@ export function registerFeedHandlers(): void {
   // ---- Data maintenance handlers ----
 
   // Manual data cleanup
-  ipcMain.handle(
+  registerChannel(
     IPC.DATA_CLEANUP,
     (
       _event,
@@ -680,7 +691,7 @@ export function registerFeedHandlers(): void {
   )
 
   // Get database statistics
-  ipcMain.handle(IPC.DATA_STATS, () => {
+  registerChannel(IPC.DATA_STATS, () => {
     const stats = getDatabaseStats()
     return {
       ...stats,
@@ -689,269 +700,12 @@ export function registerFeedHandlers(): void {
   })
 
   // Refresh log handlers
-  ipcMain.handle(IPC.REFRESH_LOG_LIST, () => {
+  registerChannel(IPC.REFRESH_LOG_LIST, () => {
     return loadRefreshLogs()
   })
 
-  ipcMain.handle(IPC.REFRESH_LOG_CLEAR, () => {
+  registerChannel(IPC.REFRESH_LOG_CLEAR, () => {
     clearRefreshLogs()
     return { success: true }
   })
-}
-
-async function bootstrapFeedEntries(
-  feed: Feed,
-  normalizedUrl: string,
-  view?: FeedViewType,
-): Promise<void> {
-  const bootstrapTimeoutMs = getBootstrapRefreshTimeoutMs(normalizedUrl, view)
-
-  await withTimeout(
-    refreshSingleFeed(feed, { force: true }),
-    bootstrapTimeoutMs,
-  ).catch(() => {})
-  const hasEntriesAfterFirstTry =
-    getEntries({
-      feedId: feed.id,
-      limit: 1,
-      skipDedupe: true,
-    }).entries.length > 0
-  if (hasEntriesAfterFirstTry) return
-
-  // One extra retry for unstable social routes/instances.
-  await withTimeout(
-    refreshSingleFeed(feed, { force: true }),
-    bootstrapTimeoutMs,
-  ).catch(() => {})
-}
-
-async function bootstrapFeedEntriesQuick(
-  feed: Feed,
-  normalizedUrl: string,
-  view?: FeedViewType,
-): Promise<void> {
-  const quickTimeoutMs = Math.min(
-    7000,
-    getBootstrapRefreshTimeoutMs(normalizedUrl, view),
-  )
-  await withTimeout(
-    refreshSingleFeed(feed, { force: true }),
-    quickTimeoutMs,
-  ).catch(() => {})
-}
-
-function hasAnyEntries(feedId: string): boolean {
-  return (
-    getEntries({
-      feedId,
-      limit: 1,
-      skipDedupe: true,
-    }).entries.length > 0
-  )
-}
-
-function queueBootstrapRefresh(
-  feed: Feed,
-  normalizedUrl: string,
-  view?: FeedViewType,
-): void {
-  void (async () => {
-    // Retry a few rounds in background for unstable social upstreams so users
-    // don't have to manually click refresh after subscribing.
-    for (let round = 0; round < 3; round++) {
-      if (round === 0) {
-        await bootstrapFeedEntriesQuick(feed, normalizedUrl, view).catch(
-          () => {},
-        )
-      } else {
-        await bootstrapFeedEntries(feed, normalizedUrl, view).catch(() => {})
-      }
-
-      const refreshed = getFeedById(feed.id)
-      const hasEntries = hasAnyEntries(feed.id)
-      const hasAvatar = !!(refreshed?.imageUrl || '').trim()
-
-      const win = BrowserWindow.getAllWindows()[0]
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('feeds:updated', {
-          feedId: feed.id,
-          background: true,
-          round: round + 1,
-          hasEntries,
-          hasAvatar,
-        })
-      }
-
-      if (hasEntries && hasAvatar) break
-      await delayMs(2000 * (round + 1))
-    }
-  })().catch(() => {})
-}
-
-function delayMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-// ---- Helper functions ----
-
-/** Detect view type from parsed feed content */
-function detectViewType(parsed: any): FeedViewType {
-  const items =
-    (parsed as { items?: Array<Record<string, unknown>> }).items || []
-
-  let videoCount = 0
-  let imageCount = 0
-
-  for (const item of items.slice(0, 10)) {
-    const enclosure = item.enclosure as
-      | { type?: string; url?: string }
-      | undefined
-    const content = String(item.content || item['content:encoded'] || '')
-
-    if (
-      enclosure?.type?.startsWith('video/') ||
-      content.includes('<video') ||
-      content.includes('youtube.com/embed')
-    ) {
-      videoCount++
-    } else if (
-      enclosure?.type?.startsWith('image/') ||
-      content.includes('<img')
-    ) {
-      // Check if image-heavy (multiple images)
-      const imgCount = (content.match(/<img/g) || []).length
-      if (imgCount >= 3) imageCount++
-    }
-  }
-
-  const total = items.length || 1
-  if (videoCount / total > 0.5) return FeedViewType.Videos
-  if (imageCount / total > 0.5) return FeedViewType.SocialMedia
-
-  return FeedViewType.Articles
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`Timeout after ${timeoutMs}ms`)),
-      timeoutMs,
-    )
-    promise
-      .then((value) => {
-        clearTimeout(timer)
-        resolve(value)
-      })
-      .catch((error) => {
-        clearTimeout(timer)
-        reject(error)
-      })
-  })
-}
-
-function getInitialFetchTimeoutMs(url: string, view?: FeedViewType): number {
-  const raw = (url || '').toLowerCase()
-  const isSocialRoute =
-    /\/(?:twitter|x)\/user\//i.test(raw) ||
-    /\/instagram\/user\//i.test(raw) ||
-    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
-    /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw) ||
-    /\/bilibili\/user\/dynamic\//i.test(raw)
-  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
-  if (
-    isSocialRoute ||
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Pictures
-  ) {
-    return 18000
-  }
-  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
-    return 45000
-  }
-  return 6000
-}
-
-function getBootstrapRefreshTimeoutMs(
-  url: string,
-  view?: FeedViewType,
-): number {
-  const raw = (url || '').toLowerCase()
-  const isSocialRoute =
-    /\/(?:twitter|x)\/user\//i.test(raw) ||
-    /\/instagram\/user\//i.test(raw) ||
-    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
-    /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw) ||
-    /\/bilibili\/user\/dynamic\//i.test(raw)
-  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
-
-  if (
-    isSocialRoute ||
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Pictures
-  ) {
-    return 45000
-  }
-  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
-    return 120000
-  }
-  return 18000
-}
-
-function shouldDeferBootstrap(url: string, view?: FeedViewType): boolean {
-  const raw = (url || '').toLowerCase()
-  const isSocialRoute =
-    /\/(?:twitter|x)\/user\//i.test(raw) ||
-    /\/instagram\/user\//i.test(raw) ||
-    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
-    /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw) ||
-    /\/bilibili\/user\/dynamic\//i.test(raw)
-  return (
-    isSocialRoute ||
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Pictures
-  )
-}
-
-function getImmediateFeedAvatar(url: string): string | undefined {
-  const raw = (url || '').trim()
-  if (!raw) return undefined
-  const ig =
-    raw.match(/\/instagram\/user\/([^/?#]+)/i) ||
-    raw.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i) ||
-    raw.match(/\/pixnoy\/user\/([^/?#]+)/i) ||
-    raw.match(/\/piokok\/user\/([^/?#]+)/i)
-  const username = ig?.[1] ? decodeURIComponent(ig[1]).replace(/^@+/, '') : ''
-  if (!username) return undefined
-  const initial = username.charAt(0).toUpperCase()
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#833AB4"/><stop offset="50%" stop-color="#E1306C"/><stop offset="100%" stop-color="#F77737"/></linearGradient></defs><rect width="128" height="128" rx="32" fill="url(#ig)"/><text x="64" y="82" text-anchor="middle" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="56" font-weight="700">${initial}</text></svg>`)}`
-}
-
-function getFeedImageUrl(parsed: any): string | undefined {
-  const imageUrl =
-    (parsed['image'] as { url?: string } | undefined)?.url ||
-    (parsed['itunes'] as { image?: string } | undefined)?.image
-  if (imageUrl) return imageUrl
-
-  const items =
-    (parsed['items'] as Array<Record<string, unknown>> | undefined) || []
-  for (const item of items.slice(0, 3)) {
-    const image = deriveImageUrl(item)
-    if (image) return image
-  }
-  return undefined
-}
-
-function detectViewTypeFromUrlOrContent(
-  url: string,
-  parsed: any,
-): FeedViewType {
-  const routeView = detectRouteViewFromUrl(url)
-  if (routeView !== null) return routeView
-  return parsed ? detectViewType(parsed) : FeedViewType.Articles
 }

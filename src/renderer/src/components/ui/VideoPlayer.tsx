@@ -58,7 +58,9 @@ function decodeMirrorPreviewUrl(rawUrl: string): string {
       h === 'media.picnob.info' ||
       h === 'media.pixnoy.com' ||
       h.includes('piokok.com') ||
-      h.includes('picnob.com')
+      h.includes('picnob.com') ||
+      h.includes('pixwox.com') ||
+      /^sp\d+\.pixnoy\./i.test(h)
 
     if (isPicnobMirror(host) && parsed.pathname === '/get') {
       const qIndex = normalized.indexOf('?')
@@ -81,7 +83,8 @@ function decodeMirrorPreviewUrl(rawUrl: string): string {
     if (
       (host.includes('pixnoy') ||
         host.includes('picnob') ||
-        host.includes('piokok')) &&
+        host.includes('piokok') ||
+        host.includes('pixwox')) &&
       parsed.searchParams.has('o')
     ) {
       const encoded = parsed.searchParams.get('o') || ''
@@ -333,7 +336,7 @@ export function VideoPlayer({
               onError={handlePreviewError}
             />
           ) : (
-            <div className="h-full w-full bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+            <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-full w-full" />
           )}
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/40">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
@@ -415,7 +418,7 @@ export function VideoPlayer({
               onError={handlePreviewError}
             />
           ) : (
-            <div className="h-full w-full bg-surface-tertiary dark:bg-surface-dark-tertiary" />
+            <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-full w-full" />
           )}
         </>
       )}

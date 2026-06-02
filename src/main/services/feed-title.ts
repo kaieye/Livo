@@ -175,11 +175,8 @@ function extractTwitterUsernameFromFeedUrl(feedUrl: string): string {
 
 function isInstagramFeedUrl(feedUrl: string): boolean {
   const p = getPathLike(feedUrl).toLowerCase()
-  return (
-    /\/instagram\/user\//i.test(p) ||
-    /\/picnob(?:\.info)?\/user\//i.test(p) ||
-    /\/pixnoy\/user\//i.test(p) ||
-    /\/piokok\/user\//i.test(p)
+  return /(?:^|\/)(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
+    p,
   )
 }
 

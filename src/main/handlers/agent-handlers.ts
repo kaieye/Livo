@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
 import { IPC } from '../../shared/types'
+import { registerChannel } from '../ipc/register-channel'
 import type { AgentRunResponse } from '@shared'
 import { agentService } from '../agent/service'
 import type {
@@ -25,7 +25,7 @@ interface AgentResumePayload {
 }
 
 export function registerAgentHandlers(): void {
-  ipcMain.handle(
+  registerChannel(
     IPC.AGENT_RUN,
     async (event, payload: AgentRunPayload): Promise<AgentRunResponse> => {
       const onToolEvent = (toolEvent: AgentToolExecutionEvent) => {
@@ -54,7 +54,7 @@ export function registerAgentHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.AGENT_RESUME,
     async (event, payload: AgentResumePayload): Promise<AgentRunResponse> => {
       const onToolEvent = (toolEvent: AgentToolExecutionEvent) => {
@@ -81,15 +81,15 @@ export function registerAgentHandlers(): void {
     },
   )
 
-  ipcMain.handle(IPC.AGENT_ABORT, (_event, requestId: string) => {
+  registerChannel(IPC.AGENT_ABORT, (_event, requestId: string) => {
     return { success: agentService.abort(requestId) }
   })
 
-  ipcMain.handle(IPC.AGENT_TRACES_LIST, () => {
+  registerChannel(IPC.AGENT_TRACES_LIST, () => {
     return AgentTraceStore.loadAll()
   })
 
-  ipcMain.handle(IPC.AGENT_TRACES_CLEAR, () => {
+  registerChannel(IPC.AGENT_TRACES_CLEAR, () => {
     AgentTraceStore.clearAll()
     return { success: true }
   })

@@ -1,6 +1,6 @@
-import { ipcMain } from 'electron'
 import { IPC } from '../../shared/types'
 import type { FeverAccount } from '../../shared/types'
+import { registerChannel } from '../ipc/register-channel'
 import {
   getFeverAccounts,
   getFeverAccountById,
@@ -14,11 +14,11 @@ import { syncFeverAccount } from '../services/fever-sync'
 import { v4 as uuidv4 } from 'uuid'
 
 export function registerFeverHandlers(): void {
-  ipcMain.handle(IPC.FEVER_ACCOUNTS_LIST, () => {
+  registerChannel(IPC.FEVER_ACCOUNTS_LIST, () => {
     return getFeverAccounts()
   })
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEVER_ACCOUNTS_CREATE,
     (
       _event,
@@ -39,7 +39,7 @@ export function registerFeverHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEVER_ACCOUNTS_UPDATE,
     (
       _event,
@@ -53,7 +53,7 @@ export function registerFeverHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEVER_ACCOUNTS_DELETE,
     (_event, id: string): { success: boolean; error?: string } => {
       const existing = getFeverAccountById(id)
@@ -63,7 +63,7 @@ export function registerFeverHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEVER_VERIFY,
     async (
       _event,
@@ -90,7 +90,7 @@ export function registerFeverHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEVER_SYNC,
     async (
       _event,
@@ -106,7 +106,7 @@ export function registerFeverHandlers(): void {
     },
   )
 
-  ipcMain.handle(
+  registerChannel(
     IPC.FEVER_SYNC_ALL,
     async (): Promise<{
       success: boolean
@@ -138,7 +138,7 @@ export function registerFeverHandlers(): void {
     },
   )
 
-  ipcMain.handle(IPC.FEVER_SYNC_STATE, (_event, accountId: string) => {
+  registerChannel(IPC.FEVER_SYNC_STATE, (_event, accountId: string) => {
     return getFeverSyncState(accountId) || null
   })
 }

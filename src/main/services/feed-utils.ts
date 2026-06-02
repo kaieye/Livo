@@ -3,6 +3,7 @@
  * Extracts media, images, content, and author avatars from parsed RSS items.
  */
 import type { MediaItem } from '../../shared/types'
+import { isMirrorMediaUrl } from '../../shared/url-detect'
 
 type MediaAttrs = {
   url?: string
@@ -231,13 +232,7 @@ function collectMediaThumbnailNodes(item: Record<string, unknown>): unknown[] {
 function isKnownSocialMirrorImageUrl(url: string): boolean {
   const value = (url || '').toLowerCase()
   if (!value) return false
-  return (
-    /^https?:\/\/media\.(?:picnob|pixnoy|piokok|pixwox)\.[^/]+\//i.test(
-      value,
-    ) ||
-    /^https?:\/\/sp\d+\.pixnoy\.[^/]+\//i.test(value) ||
-    value.includes('ig_cache_key=')
-  )
+  return isMirrorMediaUrl(value)
 }
 
 function decodeUrlSafeBase64(value: string): string {
@@ -931,6 +926,21 @@ export function extractAuthorAvatar(
   if (feedImageUrl) return feedImageUrl
 
   return ''
+}
+
+export function getFeedImageUrl(parsed: any): string | undefined {
+  const imageUrl =
+    (parsed['image'] as { url?: string } | undefined)?.url ||
+    (parsed['itunes'] as { image?: string } | undefined)?.image
+  if (imageUrl) return imageUrl
+
+  const items =
+    (parsed['items'] as Array<Record<string, unknown>> | undefined) || []
+  for (const item of items.slice(0, 3)) {
+    const image = deriveImageUrl(item)
+    if (image) return image
+  }
+  return undefined
 }
 
 /** Decode HTML entities in URLs extracted from RSS HTML content */

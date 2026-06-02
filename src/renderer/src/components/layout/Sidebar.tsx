@@ -11,6 +11,10 @@ import {
   VIEW_DEFINITIONS,
   DEFAULT_SETTINGS,
 } from '../../../../shared/types'
+import {
+  resolveSubscriptionTarget,
+  findExistingFeed,
+} from '../../../../shared/subscription-intake'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import {
@@ -222,7 +226,9 @@ function extractInstagramNameFromUrl(value: string): string {
     const instagram = pathLike.match(/\/instagram\/user\/([^/?#]+)/i)
     if (instagram?.[1])
       return decodeURIComponent(instagram[1]).replace(/^@/, '')
-    const picnob = pathLike.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
+    const picnob = pathLike.match(
+      /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
+    )
     if (picnob?.[1]) return decodeURIComponent(picnob[1]).replace(/^@/, '')
     if (/^(www\.)?instagram\.com$/i.test(u.hostname)) {
       return (u.pathname.split('/').filter(Boolean)[0] || '').replace(/^@/, '')
@@ -240,7 +246,9 @@ function extractInstagramUsernameFromFeedRoute(value: string): string | null {
     const instagram = pathLike.match(/\/instagram\/user\/([^/?#]+)/i)
     if (instagram?.[1])
       return decodeURIComponent(instagram[1]).replace(/^@/, '')
-    const picnob = pathLike.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
+    const picnob = pathLike.match(
+      /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
+    )
     if (picnob?.[1]) return decodeURIComponent(picnob[1]).replace(/^@/, '')
   } catch {
     // Ignore parse failures.
@@ -709,7 +717,7 @@ export function Sidebar({ width }: { width?: number }) {
         const route = parsed.pathname.replace(/^\/+/, '')
         if (
           route &&
-          /^(?:twitter|instagram|picnob(?:\.info)?|youtube|bilibili|github|weibo|zhihu)\//i.test(
+          /^(?:twitter|instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox|youtube|bilibili|github|weibo|zhihu)\//i.test(
             route,
           )
         ) {
@@ -1251,65 +1259,32 @@ export function Sidebar({ width }: { width?: number }) {
         }
       | { ok: false; error: string }
     > => {
-      const normalizeFeedUrl = (rawUrl: string): string => {
-        const trimmed = rawUrl.trim()
-        const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
-        if (rsshubMatch?.[1]) {
-          const path = rsshubMatch[1].replace(/^\/+/, '')
-          return `rsshub://${path}`
-        }
-        try {
-          const parsed = new URL(trimmed)
-          if (/^https?:$/i.test(parsed.protocol)) {
-            const path = parsed.pathname.replace(/^\/+/, '')
-            if (
-              path &&
-              /^(?:twitter|instagram|picnob(?:\.info)?|youtube|bilibili|github|weibo|zhihu)\//i.test(
-                path,
-              )
-            ) {
-              return `rsshub://${path}${parsed.search || ''}`
-            }
-          }
-        } catch {
-          // Ignore parse failures.
-        }
-        return trimmed
-      }
-
-      let targetUrl = normalizeFeedUrl(inputUrl)
-      let targetTitle = fallbackTitle
-      let targetView = fallbackView
-
+      let ipcCandidates: Array<{
+        feedUrl: string
+        title: string
+        view?: FeedViewType | number
+      }> = []
       try {
         const resolved = await window.api.discover.resolveProfileUrl(inputUrl)
-        const firstCandidate = resolved.candidates[0]
-        if (resolved.matched && firstCandidate) {
-          const chosenCandidate = firstCandidate
-
-          targetUrl = chosenCandidate.feedUrl
-          targetTitle = chosenCandidate.title || targetTitle
-          if (typeof chosenCandidate.view === 'number') {
-            targetView = chosenCandidate.view as FeedViewType
-          }
-        }
+        ipcCandidates = resolved.candidates
       } catch {
-        return {
-          ok: true as const,
-          targetUrl,
-          targetTitle,
-          targetView,
-        }
+        // Fall through to use input as-is
       }
+
+      const resolved = resolveSubscriptionTarget(inputUrl, {
+        rsshubInstance,
+        preferredView: fallbackView,
+        resolvedCandidates: ipcCandidates,
+      })
 
       return {
         ok: true as const,
-        targetUrl,
-        targetTitle,
-        targetView,
+        targetUrl: resolved.target.feedUrl,
+        targetTitle: resolved.target.title || fallbackTitle,
+        targetView: resolved.target.view,
       }
     },
-    [],
+    [rsshubInstance],
   )
 
   const _handleInstagramUnsubscribe = async (username: string) => {
@@ -1387,12 +1362,11 @@ export function Sidebar({ width }: { width?: number }) {
         resolvedTarget.targetTitle || 'Instagram',
         feedUrl,
       )
-      const targetView = /\/picnob(?:\.info)?\/user\//i.test(feedUrl)
-        ? preferredView
-        : resolvedTarget.targetView
-      const existingNormal = feeds.find(
-        (f) => f.url === feedUrl && f.category !== RECOMMENDED_CATEGORY,
-      )
+      const targetView =
+        /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(feedUrl)
+          ? preferredView
+          : resolvedTarget.targetView
+      const existingNormal = findExistingFeed(feeds, feedUrl)
       if (existingNormal) {
         const existingView = existingNormal.view ?? FeedViewType.Articles
         if (existingView !== targetView) {
@@ -1423,6 +1397,7 @@ export function Sidebar({ width }: { width?: number }) {
         setTimeout(() => setInstagramSearchResult(null), 3000)
         return
       }
+      // Check if feed exists in Recommended (not caught by findExistingFeed)
       const existingRecommended = feeds.find(
         (f) => f.url === feedUrl && f.category === RECOMMENDED_CATEGORY,
       )
@@ -1561,21 +1536,11 @@ export function Sidebar({ width }: { width?: number }) {
         }
         feedUrl = picked.feedUrl
       }
-      const existingInOtherView = feeds.find((f) => {
-        if (f.category === RECOMMENDED_CATEGORY) return false
-        if (
-          !isFeedSubscribedInTargetView(f, preferredView) &&
-          (f.url || '') === feedUrl
-        )
-          return true
-        const user = extractInstagramUsernameFromFeedRoute(f.url || '')
-        return !!(
-          user &&
-          user.toLowerCase() === lowerRaw &&
-          !isFeedSubscribedInTargetView(f, preferredView)
-        )
-      })
-      if (existingInOtherView) {
+      const existingInOtherView = findExistingFeed(feeds, feedUrl)
+      if (
+        existingInOtherView &&
+        !isFeedSubscribedInTargetView(existingInOtherView, preferredView)
+      ) {
         const finalTitle = formatInstagramFeedTitle(
           instagramCandidate?.title,
           raw || feedUrl,
@@ -2924,7 +2889,7 @@ const FeedIcon = memo(function FeedIcon({
     try {
       const parsed = new URL(raw)
       if (
-        /^media\.(picnob|pixnoy)\./i.test(parsed.hostname) &&
+        /^media\.(picnob|pixnoy|piokok|pixwox)\./i.test(parsed.hostname) &&
         parsed.pathname === '/get'
       ) {
         const marker = 'url='
@@ -2942,7 +2907,9 @@ const FeedIcon = memo(function FeedIcon({
       }
       if (
         (parsed.hostname.includes('pixnoy') ||
-          parsed.hostname.includes('picnob')) &&
+          parsed.hostname.includes('picnob') ||
+          parsed.hostname.includes('piokok') ||
+          parsed.hostname.includes('pixwox')) &&
         parsed.searchParams.has('o')
       ) {
         const encoded = parsed.searchParams.get('o') || ''
@@ -2981,7 +2948,9 @@ const FeedIcon = memo(function FeedIcon({
       } catch {}
       const rsshub = raw.match(/\/instagram\/user\/([^/?#]+)/i)
       if (rsshub?.[1]) return decodeURIComponent(rsshub[1]).replace(/^@/, '')
-      const picnob = raw.match(/\/picnob(?:\.info)?\/user\/([^/?#]+)/i)
+      const picnob = raw.match(
+        /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
+      )
       if (picnob?.[1]) return decodeURIComponent(picnob[1]).replace(/^@/, '')
       const unavatar = raw.match(/unavatar\.io\/instagram\/([^/?#]+)/i)
       if (unavatar?.[1])

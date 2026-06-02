@@ -6,6 +6,7 @@ import https from 'https'
 import http from 'http'
 import { BrowserWindow } from 'electron'
 import { getEntries, updateEntry, getAllFeeds } from '../database'
+import { getEventBus } from './event-bus'
 import { FeedViewType } from '../../shared/types'
 
 /** Simple in-memory cache: videoId 鈫?duration in seconds */
@@ -316,10 +317,7 @@ export async function enrichAllVideoFeeds(): Promise<void> {
 /** Send IPC to renderer to trigger entry re-fetch */
 function notifyRenderer(): void {
   try {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('entries:enriched')
-    }
+    getEventBus().send('entries:enriched')
   } catch {
     // Ignore
   }

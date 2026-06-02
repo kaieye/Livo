@@ -1,4 +1,4 @@
-import { ipcMain, session } from 'electron'
+import { session } from 'electron'
 import {
   CURATED_FEEDS,
   DISCOVER_CATEGORIES,
@@ -14,6 +14,7 @@ import type {
   ResolvedProfileFeedCandidate,
 } from '../../shared/types'
 import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
+import { registerChannel } from '../ipc/register-channel'
 import {
   createInstagramDiscoverCandidate,
   INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS,
@@ -368,10 +369,7 @@ function inferPreviewViewFromUrl(feedUrl: string): FeedViewType {
   const raw = (feedUrl || '').toLowerCase()
   if (/\/(?:twitter|x)\/user\//i.test(raw)) return FeedViewType.SocialMedia
   if (
-    /\/instagram\/user\//i.test(raw) ||
-    /\/picnob(?:\.info)?\/user\//i.test(raw) ||
-    /\/pixnoy\/user\//i.test(raw) ||
-    /\/piokok\/user\//i.test(raw)
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(raw)
   ) {
     return FeedViewType.Pictures
   }
@@ -2146,12 +2144,12 @@ async function probeInstagramUsersByKeyword(
 
 export function registerDiscoverHandlers(): void {
   // Get categories
-  ipcMain.handle('discover:categories', () => {
+  registerChannel(IPC.DISCOVER_CATEGORIES, () => {
     return DISCOVER_CATEGORIES
   })
 
   // Get curated feeds, optionally filtered by category
-  ipcMain.handle('discover:popular', (_event, category?: string) => {
+  registerChannel(IPC.DISCOVER_POPULAR, (_event, category?: string) => {
     if (category) {
       return CURATED_FEEDS.filter((f) => f.category === category)
     }
@@ -2166,8 +2164,8 @@ export function registerDiscoverHandlers(): void {
     | 'instagram'
 
   // Search feeds by query (check curated feeds + try as URL)
-  ipcMain.handle(
-    'discover:search',
+  registerChannel(
+    IPC.DISCOVER_SEARCH,
     async (_event, query: string, platform: DiscoverSearchPlatform = 'all') => {
       const cacheKey = `${query.trim().toLowerCase()}:${platform}`
       const shouldUseCache = platform !== 'instagram'
@@ -2404,7 +2402,7 @@ export function registerDiscoverHandlers(): void {
   )
 
   // Get RSSHub routes - prepend instance URL to make them subscribable
-  ipcMain.handle('discover:rsshub-routes', (_event, category?: string) => {
+  registerChannel(IPC.DISCOVER_RSSHUB_ROUTES, (_event, category?: string) => {
     const routes = category
       ? RSSHUB_ROUTES.filter((r) => r.category === category)
       : RSSHUB_ROUTES
@@ -2416,12 +2414,12 @@ export function registerDiscoverHandlers(): void {
   })
 
   // Get RSSHub instance config
-  ipcMain.handle('discover:rsshub-instance', () => {
+  registerChannel(IPC.DISCOVER_RSSHUB_INSTANCE, () => {
     return getRSSHubInstance()
   })
 
   // Validate a feed URL (try to fetch and parse)
-  ipcMain.handle('discover:validate-feed', async (_event, url: string) => {
+  registerChannel(IPC.DISCOVER_VALIDATE_FEED, async (_event, url: string) => {
     try {
       const fetchableUrl = normalizeRsshubProtocolUrl(url, getRSSHubInstance())
       const parsed = await fetchAndParseFeed(fetchableUrl)
@@ -2448,7 +2446,7 @@ export function registerDiscoverHandlers(): void {
     }
   })
 
-  ipcMain.handle(
+  registerChannel(
     IPC.DISCOVER_PREVIEW_FEED,
     async (_event, url: string): Promise<DiscoverFeedPreviewResult> => {
       const targetUrl = (url || '').trim()
@@ -2504,106 +2502,112 @@ export function registerDiscoverHandlers(): void {
 
   // Quick probe for a Twitter user via RSSHub - returns name + avatar fast
   // Tries the configured instance first, then fallback instances
-  ipcMain.handle('twitter:probe-user', async (_event, username: string) => {
-    const clean = username.trim().replace(/^@/, '')
-    const instance = getRSSHubInstance()
-    const allInstances = [
-      instance,
-      ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
-    ]
-    const allCandidates = [
-      ...allInstances.map(
-        (inst) => `${inst}/twitter/user/${encodeURIComponent(clean)}`,
-      ),
-      ...FALLBACK_NITTER_INSTANCES.map(
-        (inst) =>
-          `${inst.replace(/\/+$/, '')}/${encodeURIComponent(clean)}/rss`,
-      ),
-    ]
+  registerChannel(
+    IPC.DISCOVER_PROBE_TWITTER_USER,
+    async (_event, username: string) => {
+      const clean = username.trim().replace(/^@/, '')
+      const instance = getRSSHubInstance()
+      const allInstances = [
+        instance,
+        ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
+      ]
+      const allCandidates = [
+        ...allInstances.map(
+          (inst) => `${inst}/twitter/user/${encodeURIComponent(clean)}`,
+        ),
+        ...FALLBACK_NITTER_INSTANCES.map(
+          (inst) =>
+            `${inst.replace(/\/+$/, '')}/${encodeURIComponent(clean)}/rss`,
+        ),
+      ]
 
-    for (const feedUrl of allCandidates) {
-      try {
-        const parsed = await fastParser.parseURL(feedUrl)
-        const parsedName = extractTwitterDisplayNameFromText(
-          parsed.title || '',
-          clean,
-        )
-        const fetchedName = parsedName
-          ? ''
-          : await fetchXDisplayNameByUsername(clean)
-        return {
-          valid: true,
-          username: clean,
-          title: parsedName
-            ? `${parsedName} - X`
-            : fetchedName
-              ? `${fetchedName} - X`
-              : formatFeedTitle(feedUrl, parsed.title || '', `${clean} - X`),
-          description: parsed.description || '',
-          // Use unavatar.io for always-fresh Twitter profile pictures
-          image: `https://unavatar.io/x/${encodeURIComponent(clean)}`,
-          feedUrl,
+      for (const feedUrl of allCandidates) {
+        try {
+          const parsed = await fastParser.parseURL(feedUrl)
+          const parsedName = extractTwitterDisplayNameFromText(
+            parsed.title || '',
+            clean,
+          )
+          const fetchedName = parsedName
+            ? ''
+            : await fetchXDisplayNameByUsername(clean)
+          return {
+            valid: true,
+            username: clean,
+            title: parsedName
+              ? `${parsedName} - X`
+              : fetchedName
+                ? `${fetchedName} - X`
+                : formatFeedTitle(feedUrl, parsed.title || '', `${clean} - X`),
+            description: parsed.description || '',
+            // Use unavatar.io for always-fresh Twitter profile pictures
+            image: `https://unavatar.io/x/${encodeURIComponent(clean)}`,
+            feedUrl,
+          }
+        } catch {
+          // Try next instance
+          continue
         }
-      } catch {
-        // Try next instance
-        continue
       }
-    }
-    return { valid: false, username: clean }
-  })
+      return { valid: false, username: clean }
+    },
+  )
 
   // Quick probe for a YouTube channel via RSSHub - returns channel name + avatar
   // Supports: @handle or plain username (channel ID intentionally disabled)
-  ipcMain.handle('youtube:probe-channel', async (_event, query: string) => {
-    const instance = getRSSHubInstance()
-    const allInstances = [
-      instance,
-      ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
-    ]
-    const clean = query.trim().replace(/^@/, '')
-    if (!clean) return { valid: false, query }
+  registerChannel(
+    IPC.DISCOVER_PROBE_YOUTUBE_CHANNEL,
+    async (_event, query: string) => {
+      const instance = getRSSHubInstance()
+      const allInstances = [
+        instance,
+        ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
+      ]
+      const clean = query.trim().replace(/^@/, '')
+      if (!clean) return { valid: false, query }
 
-    if (looksLikeYouTubeChannelId(clean)) {
-      return { valid: false, query: clean }
-    }
+      if (looksLikeYouTubeChannelId(clean)) {
+        return { valid: false, query: clean }
+      }
 
-    // Try multiple RSSHub route patterns
-    const routes = [
-      `/youtube/user/@${clean}`, // @handle format
-      `/youtube/user/${clean}`, // plain username
-    ]
+      // Try multiple RSSHub route patterns
+      const routes = [
+        `/youtube/user/@${clean}`, // @handle format
+        `/youtube/user/${clean}`, // plain username
+      ]
 
-    // Try all instance+route combinations in parallel for faster results
-    // (some instances may time out; Promise.any returns the first success)
-    const attempts = allInstances.flatMap((inst) =>
-      routes.map(async (route) => {
-        const feedUrl = `${inst}${route}`
-        const parsed = await fastParser.parseURL(feedUrl)
-        const image =
-          (parsed as any).image?.url || (parsed as any).itunes?.image || ''
-        return {
-          valid: true as const,
-          query: clean,
-          title: parsed.title || clean,
-          description: parsed.description || '',
-          image,
-          feedUrl,
-          feedRoute: route,
-        }
-      }),
-    )
+      // Try all instance+route combinations in parallel for faster results
+      // (some instances may time out; Promise.any returns the first success)
+      const attempts = allInstances.flatMap((inst) =>
+        routes.map(async (route) => {
+          const feedUrl = `${inst}${route}`
+          const parsed = await fastParser.parseURL(feedUrl)
+          const image =
+            (parsed as any).image?.url || (parsed as any).itunes?.image || ''
+          return {
+            valid: true as const,
+            query: clean,
+            title: parsed.title || clean,
+            description: parsed.description || '',
+            image,
+            feedUrl,
+            feedRoute: route,
+          }
+        }),
+      )
 
-    try {
-      return await Promise.any(attempts)
-    } catch {
-      // All attempts failed
-      return { valid: false, query: clean }
-    }
-  })
+      try {
+        return await Promise.any(attempts)
+      } catch {
+        // All attempts failed
+        return { valid: false, query: clean }
+      }
+    },
+  )
 
   // Probe multi-platform video sources by keyword (for candidate list)
-  ipcMain.handle(
-    'discover:probe-video-sources',
+  registerChannel(
+    IPC.DISCOVER_PROBE_VIDEO_SOURCES,
     async (_event, query: string) => {
       const instance = getRSSHubInstance()
       const candidates = await probeVideoSourcesByKeyword(query, instance)
@@ -2612,8 +2616,8 @@ export function registerDiscoverHandlers(): void {
   )
 
   // Fast probe for Bilibili UID (name + avatar + canonical video feed URL)
-  ipcMain.handle(
-    'discover:probe-bilibili-uid',
+  registerChannel(
+    IPC.DISCOVER_PROBE_BILIBILI_UID,
     async (_event, uidRaw: string) => {
       const uid = (uidRaw || '').trim().match(/^(\d{3,})$/)?.[1]
       if (!uid) return { valid: false, uid: uidRaw }
@@ -2632,8 +2636,8 @@ export function registerDiscoverHandlers(): void {
   )
 
   // Probe Bilibili users by keyword (for Social tab candidate list)
-  ipcMain.handle(
-    'discover:probe-bilibili-users',
+  registerChannel(
+    IPC.DISCOVER_PROBE_BILIBILI_USERS,
     async (_event, query: string) => {
       const instance = getRSSHubInstance()
       const candidates = await probeBilibiliUsersByKeyword(query, instance)
@@ -2642,7 +2646,7 @@ export function registerDiscoverHandlers(): void {
   )
 
   // Resolve a creator/profile homepage URL into one or more subscribable feed URLs.
-  ipcMain.handle(
+  registerChannel(
     IPC.DISCOVER_RESOLVE_PROFILE_URL,
     async (_event, inputUrl: string) => {
       const currentInstance = getRSSHubInstance()
@@ -2739,43 +2743,46 @@ export function registerDiscoverHandlers(): void {
   )
 
   // Quick probe for an Instagram user via RSSHub official route.
-  ipcMain.handle('instagram:probe-user', async (_event, username: string) => {
-    const instance = getRSSHubInstance()
-    const allInstances = [
-      instance,
-      ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
-    ]
-    const clean = username.trim().replace(/^@/, '')
-    if (!clean) return { valid: false, username: clean }
+  registerChannel(
+    IPC.DISCOVER_PROBE_INSTAGRAM_USER,
+    async (_event, username: string) => {
+      const instance = getRSSHubInstance()
+      const allInstances = [
+        instance,
+        ...FALLBACK_RSSHUB_INSTANCES.filter((i) => i !== instance),
+      ]
+      const clean = username.trim().replace(/^@/, '')
+      if (!clean) return { valid: false, username: clean }
 
-    const routes = [`/instagram/user/${encodeURIComponent(clean)}`]
-    const profileAvatarPromise = fetchInstagramAvatarByUsername(clean).catch(
-      () => undefined,
-    )
-    const attempts = allInstances.flatMap((inst) =>
-      routes.map(async (route) => {
-        const feedUrl = `${inst}${route}`
-        const fetched = await fetchAndParseFeed(feedUrl)
-        const data = fetched.data
-        if (!data) throw new Error('Empty feed data')
-        const image =
-          (await resolveFeedAvatar(feedUrl, getFeedImageUrl(data))) ||
-          (await profileAvatarPromise) ||
-          `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${clean.charAt(0).toUpperCase()}</text></svg>`)}`
-        return {
-          valid: true as const,
-          username: clean,
-          title: data.title || `@${clean}`,
-          description: data.description || '',
-          image,
-          feedUrl: toRsshubProtocolUrl(feedUrl),
-        }
-      }),
-    )
-    try {
-      return await Promise.any(attempts)
-    } catch {
-      return { valid: false, username: clean }
-    }
-  })
+      const routes = [`/instagram/user/${encodeURIComponent(clean)}`]
+      const profileAvatarPromise = fetchInstagramAvatarByUsername(clean).catch(
+        () => undefined,
+      )
+      const attempts = allInstances.flatMap((inst) =>
+        routes.map(async (route) => {
+          const feedUrl = `${inst}${route}`
+          const fetched = await fetchAndParseFeed(feedUrl)
+          const data = fetched.data
+          if (!data) throw new Error('Empty feed data')
+          const image =
+            (await resolveFeedAvatar(feedUrl, getFeedImageUrl(data))) ||
+            (await profileAvatarPromise) ||
+            `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${clean.charAt(0).toUpperCase()}</text></svg>`)}`
+          return {
+            valid: true as const,
+            username: clean,
+            title: data.title || `@${clean}`,
+            description: data.description || '',
+            image,
+            feedUrl: toRsshubProtocolUrl(feedUrl),
+          }
+        }),
+      )
+      try {
+        return await Promise.any(attempts)
+      } catch {
+        return { valid: false, username: clean }
+      }
+    },
+  )
 }

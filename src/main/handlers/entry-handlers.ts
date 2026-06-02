@@ -1,4 +1,4 @@
-﻿import { ipcMain } from 'electron'
+import { registerChannel } from '../ipc/register-channel'
 import { IPC } from '../../shared/types'
 import {
   getEntries,
@@ -44,7 +44,7 @@ function feverWriteBack(
 
 export function registerEntryHandlers(): void {
   // List entries
-  ipcMain.handle(
+  registerChannel(
     IPC.ENTRY_LIST,
     async (
       _event,
@@ -65,12 +65,12 @@ export function registerEntryHandlers(): void {
   )
 
   // Get single entry
-  ipcMain.handle(IPC.ENTRY_GET, async (_event, entryId: string) => {
+  registerChannel(IPC.ENTRY_GET, async (_event, entryId: string) => {
     return getEntryById(entryId) || null
   })
 
   // Mark entry as read
-  ipcMain.handle(
+  registerChannel(
     IPC.ENTRY_MARK_READ,
     (_event, entryId: string, isRead: boolean) => {
       updateEntry(entryId, { isRead })
@@ -80,7 +80,7 @@ export function registerEntryHandlers(): void {
   )
 
   // Mark all entries as read
-  ipcMain.handle(IPC.ENTRY_MARK_ALL_READ, (_event, feedId?: string) => {
+  registerChannel(IPC.ENTRY_MARK_ALL_READ, (_event, feedId?: string) => {
     // Get entries before marking to trigger write-back
     const unreadEntries = getEntries({
       feedId,
@@ -96,7 +96,7 @@ export function registerEntryHandlers(): void {
   })
 
   // Toggle star
-  ipcMain.handle(IPC.ENTRY_TOGGLE_STAR, (_event, entryId: string) => {
+  registerChannel(IPC.ENTRY_TOGGLE_STAR, (_event, entryId: string) => {
     const entry = getEntryById(entryId)
     if (!entry) return { success: false, isStarred: false }
     const newStarred = !entry.isStarred
@@ -106,7 +106,7 @@ export function registerEntryHandlers(): void {
   })
 
   // Save reading progress
-  ipcMain.handle(
+  registerChannel(
     IPC.ENTRY_SAVE_PROGRESS,
     (_event, entryId: string, readProgress: number) => {
       updateEntry(entryId, { readProgress })
@@ -115,7 +115,7 @@ export function registerEntryHandlers(): void {
   )
 
   // Mark entry as listened
-  ipcMain.handle(
+  registerChannel(
     IPC.ENTRY_MARK_LISTENED,
     (_event, entryId: string, isListened: boolean) => {
       updateEntry(entryId, { isListened })
@@ -124,7 +124,7 @@ export function registerEntryHandlers(): void {
   )
 
   // Save listen progress
-  ipcMain.handle(
+  registerChannel(
     IPC.ENTRY_SAVE_LISTEN_PROGRESS,
     (_event, entryId: string, listenProgress: number) => {
       updateEntry(entryId, { listenProgress })
@@ -133,7 +133,7 @@ export function registerEntryHandlers(): void {
   )
 
   // Search entries
-  ipcMain.handle(IPC.ENTRY_SEARCH, (_event, query: string, limit?: number) => {
+  registerChannel(IPC.ENTRY_SEARCH, (_event, query: string, limit?: number) => {
     return searchEntries(query, limit)
   })
 }

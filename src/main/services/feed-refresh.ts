@@ -1,6 +1,9 @@
 import { BrowserWindow } from 'electron'
+import { getEventBus } from './event-bus'
 import {
   getAllFeeds,
+  getFeedById,
+  getEntries,
   updateFeed,
   insertEntriesWithResult,
   replaceEntriesForFeedWithResult,
@@ -18,12 +21,17 @@ import {
   canonicalizeInstagramFeedUrl,
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
+  normalizeFeedUrl,
   normalizeRsshubProtocolUrl,
 } from './rsshub-url'
 import { resolveFeedAvatar } from './feed-avatar'
 import { formatFeedTitle } from './feed-title'
 import { buildEntriesFromParsedItems } from './entry-builder'
 import { logWarnQuiet } from './logger'
+import {
+  isInstagramFeedUrl as _isInstagramFeed,
+  isInstagramUserFeedUrl as _isInstagramUserFeed,
+} from '../../shared/url-detect'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from './refresh-log-store'
 import { runConcurrencyPool } from '../utils/concurrency-pool'
@@ -77,8 +85,7 @@ function isPlaceholderAvatar(url: string | undefined): boolean {
 }
 
 function isInstagramLikeFeed(feedUrl: string | undefined): boolean {
-  const raw = (feedUrl || '').toLowerCase()
-  return /instagram|picnob|pixnoy|piokok/.test(raw)
+  return _isInstagramFeed(feedUrl || '')
 }
 
 function pickBestFeedAvatar(
@@ -112,10 +119,7 @@ const INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS = 90 * 60 * 1000
 const AUTO_REFRESH_MIN_DELAY_MS = 1000
 
 function isInstagramFeedUrl(feedUrl: string | undefined): boolean {
-  const raw = (feedUrl || '').toLowerCase()
-  return /(?:^|\/)(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//.test(
-    raw,
-  )
+  return _isInstagramUserFeed(feedUrl || '')
 }
 
 function isBilibiliDynamicFeedUrl(feedUrl: string | undefined): boolean {
@@ -155,8 +159,7 @@ export function filterForeignEntries(
 ): Entry[] {
   const rawFeedUrl = (feedUrl || '').toLowerCase()
   const isTwitterFeed = /\/(?:twitter|x)\/user\//i.test(rawFeedUrl)
-  const isInstagramMirrorFeed =
-    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//i.test(rawFeedUrl)
+  const isInstagramMirrorFeed = _isInstagramUserFeed(rawFeedUrl)
   const isBilibiliUserFeed =
     /\/bilibili\/user\/(?:dynamic|video|article)\//i.test(rawFeedUrl)
   if (isTwitterFeed || isInstagramMirrorFeed || isBilibiliUserFeed) {
@@ -475,7 +478,7 @@ export function getNextAutoRefreshDelayMs(
   return Math.max(0, nextDueAt - now)
 }
 
-function withTimeout<T>(
+export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   context: string,
@@ -617,11 +620,8 @@ export async function refreshSingleFeed(
     const now = Date.now()
     const rsshubInstance =
       getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
+    const normalizedFeedUrl = normalizeFeedUrl(feed.url, rsshubInstance)
     const canonicalFeedUrl = canonicalizeInstagramFeedUrl(feed.url)
-    const normalizedFeedUrl = normalizeRsshubProtocolUrl(
-      canonicalFeedUrl,
-      rsshubInstance,
-    )
 
     try {
       // Update the feed URL to include limit param so subsequent refreshes use it directly
@@ -725,11 +725,7 @@ export async function refreshSingleFeed(
       ) {
         queueVideoDurationEnrich(feed.id)
           .then((count) => {
-            if (count > 0) {
-              const win = BrowserWindow.getAllWindows()[0]
-              if (win && !win.isDestroyed())
-                win.webContents.send('entries:enriched')
-            }
+            if (count > 0) getEventBus().send('entries:enriched')
           })
           .catch(() => {})
       }
@@ -941,4 +937,161 @@ function emptyRefreshAllResult(): RefreshAllResult {
     failedFeedTitles: [],
     totalNewEntries: 0,
   }
+}
+
+// ---- Bootstrap helpers ----
+
+export function getInitialFetchTimeoutMs(
+  url: string,
+  view?: FeedViewType,
+): number {
+  const raw = (url || '').toLowerCase()
+  const isSocialRoute =
+    /\/(?:twitter|x)\/user\//i.test(raw) ||
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
+      raw,
+    ) ||
+    /\/bilibili\/user\/dynamic\//i.test(raw)
+  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
+  if (
+    isSocialRoute ||
+    view === FeedViewType.SocialMedia ||
+    view === FeedViewType.Pictures
+  ) {
+    return 18000
+  }
+  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
+    return 45000
+  }
+  return 6000
+}
+
+export function getBootstrapRefreshTimeoutMs(
+  url: string,
+  view?: FeedViewType,
+): number {
+  const raw = (url || '').toLowerCase()
+  const isSocialRoute =
+    /\/(?:twitter|x)\/user\//i.test(raw) ||
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
+      raw,
+    ) ||
+    /\/bilibili\/user\/dynamic\//i.test(raw)
+  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
+
+  if (
+    isSocialRoute ||
+    view === FeedViewType.SocialMedia ||
+    view === FeedViewType.Pictures
+  ) {
+    return 45000
+  }
+  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
+    return 120000
+  }
+  return 18000
+}
+
+export function shouldDeferBootstrap(
+  url: string,
+  view?: FeedViewType,
+): boolean {
+  const raw = (url || '').toLowerCase()
+  const isSocialRoute =
+    /\/(?:twitter|x)\/user\//i.test(raw) ||
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
+      raw,
+    ) ||
+    /\/bilibili\/user\/dynamic\//i.test(raw)
+  return (
+    isSocialRoute ||
+    view === FeedViewType.SocialMedia ||
+    view === FeedViewType.Pictures
+  )
+}
+
+export async function bootstrapFeedEntries(
+  feed: Feed,
+  normalizedUrl: string,
+  view?: FeedViewType,
+): Promise<void> {
+  const bootstrapTimeoutMs = getBootstrapRefreshTimeoutMs(normalizedUrl, view)
+
+  await withTimeout(
+    refreshSingleFeed(feed, { force: true }),
+    bootstrapTimeoutMs,
+    `bootstrap ${normalizedUrl}`,
+  ).catch(() => {})
+  const hasEntriesAfterFirstTry =
+    getEntries({
+      feedId: feed.id,
+      limit: 1,
+      skipDedupe: true,
+    }).entries.length > 0
+  if (hasEntriesAfterFirstTry) return
+
+  await withTimeout(
+    refreshSingleFeed(feed, { force: true }),
+    bootstrapTimeoutMs,
+    `bootstrap retry ${normalizedUrl}`,
+  ).catch(() => {})
+}
+
+export async function bootstrapFeedEntriesQuick(
+  feed: Feed,
+  normalizedUrl: string,
+  view?: FeedViewType,
+): Promise<void> {
+  const quickTimeoutMs = Math.min(
+    7000,
+    getBootstrapRefreshTimeoutMs(normalizedUrl, view),
+  )
+  await withTimeout(
+    refreshSingleFeed(feed, { force: true }),
+    quickTimeoutMs,
+    `bootstrap quick ${normalizedUrl}`,
+  ).catch(() => {})
+}
+
+function hasAnyEntries(feedId: string): boolean {
+  return (
+    getEntries({
+      feedId,
+      limit: 1,
+      skipDedupe: true,
+    }).entries.length > 0
+  )
+}
+
+export function queueBootstrapRefresh(
+  feed: Feed,
+  normalizedUrl: string,
+  view?: FeedViewType,
+): void {
+  void (async () => {
+    for (let round = 0; round < 3; round++) {
+      if (round === 0) {
+        await bootstrapFeedEntriesQuick(feed, normalizedUrl, view).catch(
+          () => {},
+        )
+      } else {
+        await bootstrapFeedEntries(feed, normalizedUrl, view).catch(() => {})
+      }
+
+      const refreshed = getFeedById(feed.id)
+      const hasEntries = hasAnyEntries(feed.id)
+      const hasAvatar = !!(refreshed?.imageUrl || '').trim()
+
+      getEventBus().send('feeds:updated', {
+        feedId: feed.id,
+        background: true,
+        round: round + 1,
+        hasEntries,
+        hasAvatar,
+      })
+
+      if (hasEntries && hasAvatar) break
+      await new Promise((resolve) => setTimeout(resolve, 2000 * (round + 1)))
+    }
+  })().catch(() => {})
 }

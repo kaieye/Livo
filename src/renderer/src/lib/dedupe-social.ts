@@ -1,4 +1,5 @@
 import type { Entry } from '../../../shared/types'
+import { isMirrorHost } from '../../../shared/url-detect'
 
 function stripHtml(input: string): string {
   return (input || '').replace(/<[^>]+>/g, ' ')
@@ -107,20 +108,7 @@ function extractInstagramPostIdFromText(input: string): string {
 }
 
 function isPicnobMirrorHost(host: string): boolean {
-  const lower = host.toLowerCase()
-  return (
-    lower === 'media.picnob.info' ||
-    lower === 'media.pixnoy.com' ||
-    lower.includes('piokok.com') ||
-    lower.includes('picnob.com') ||
-    lower.includes('pixnoy.com') ||
-    lower.includes('pixwox.com') ||
-    lower.includes('sp1.pixnoy.com') ||
-    lower.includes('sp2.pixnoy.com') ||
-    lower.includes('sp3.pixnoy.com') ||
-    lower.includes('sp4.pixnoy.com') ||
-    lower.includes('sp5.pixnoy.com')
-  )
+  return isMirrorHost(host)
 }
 
 function extractInstagramAssetId(input: string): string {

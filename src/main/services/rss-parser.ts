@@ -3,6 +3,7 @@ import https from 'https'
 import http from 'http'
 import { session } from 'electron'
 import { fetchBilibiliDynamicFeedFromOfficialApi } from './bilibili-dynamic'
+import { isMirrorHost, isInstagramUserFeedUrl } from '../../shared/url-detect'
 import {
   fetchBilibiliVideoFeedFromSpacePage,
   mapParsedDynamicFeedToVideoFeed,
@@ -104,7 +105,8 @@ function isInstagramRelatedUrl(url: string): boolean {
     /\/instagram\//i.test(lower) ||
     /\/picnob\//i.test(lower) ||
     /\/pixnoy\//i.test(lower) ||
-    /\/piokok\//i.test(lower)
+    /\/piokok\//i.test(lower) ||
+    /\/pixwox\//i.test(lower)
   )
 }
 
@@ -148,20 +150,7 @@ function isPlaceholderMirrorPostUrl(url: string): boolean {
 }
 
 function isPicnobMirrorHost(host: string): boolean {
-  const lower = host.toLowerCase()
-  return (
-    lower === 'media.picnob.info' ||
-    lower === 'media.pixnoy.com' ||
-    lower.includes('piokok.com') ||
-    lower.includes('picnob.com') ||
-    lower.includes('pixnoy.com') ||
-    lower.includes('pixwox.com') ||
-    lower.includes('sp1.pixnoy.com') ||
-    lower.includes('sp2.pixnoy.com') ||
-    lower.includes('sp3.pixnoy.com') ||
-    lower.includes('sp4.pixnoy.com') ||
-    lower.includes('sp5.pixnoy.com')
-  )
+  return isMirrorHost(host)
 }
 
 function collectMediaContentNodes(item: Record<string, any>): unknown[] {
@@ -352,7 +341,12 @@ function extractInstagramUsernameFromFeedUrl(feedUrl: string): string | null {
       const host = (u.hostname || '').toLowerCase()
       const parts = u.pathname.split('/').filter(Boolean)
       if (
-        (host === 'instagram' || host === 'picnob' || host === 'picnob.info') &&
+        (host === 'instagram' ||
+          host === 'picnob' ||
+          host === 'picnob.info' ||
+          host === 'pixnoy' ||
+          host === 'piokok' ||
+          host === 'pixwox') &&
         parts[0]?.toLowerCase() === 'user' &&
         parts[1]
       ) {
@@ -373,6 +367,9 @@ function extractInstagramUsernameFromFeedUrl(feedUrl: string): string | null {
     const piokokMatch = path.match(/\/piokok\/user\/([^/?#]+)/i)
     if (piokokMatch?.[1])
       return decodeURIComponent(piokokMatch[1]).replace(/^@/, '')
+    const pixwoxMatch = path.match(/\/pixwox\/user\/([^/?#]+)/i)
+    if (pixwoxMatch?.[1])
+      return decodeURIComponent(pixwoxMatch[1]).replace(/^@/, '')
   } catch {
     // Ignore invalid URL.
   }
@@ -458,7 +455,8 @@ function getFeedItemKey(item: Record<string, any>): string {
       if (
         (host.includes('pixnoy') ||
           host.includes('picnob') ||
-          host.includes('piokok')) &&
+          host.includes('piokok') ||
+          host.includes('pixwox')) &&
         parsed.searchParams.has('o')
       ) {
         const encoded = parsed.searchParams.get('o') || ''
@@ -1086,12 +1084,13 @@ export async function fetchAndParseFeed(
         `${b}/instagram/user/${encodeURIComponent(instagramUser)}?limit=100`,
       )
 
-      // Try mirror routes (picnob, pixnoy, piokok) which may provide all carousel images
+      // Try mirror routes (picnob, pixnoy, piokok, pixwox) which may provide all carousel images
       // unlike the official Instagram route which typically only provides the first image
       pushUnique(`${b}/picnob/user/${encodeURIComponent(instagramUser)}`)
       pushUnique(`${b}/picnob.info/user/${encodeURIComponent(instagramUser)}`)
       pushUnique(`${b}/pixnoy/user/${encodeURIComponent(instagramUser)}`)
       pushUnique(`${b}/piokok/user/${encodeURIComponent(instagramUser)}`)
+      pushUnique(`${b}/pixwox/user/${encodeURIComponent(instagramUser)}`)
     }
 
     // Instagram/Picnob routes on public instances are often slow and uneven:

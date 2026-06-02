@@ -1,4 +1,4 @@
-import { app, ipcMain, protocol, session, Menu } from 'electron'
+import { app, protocol, session, Menu } from 'electron'
 import { join } from 'path'
 import { initDatabase, getDatabase } from './database'
 import { registerFeedHandlers } from './handlers/feed-handlers'
@@ -35,6 +35,7 @@ import { AppTray } from './services/tray'
 import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili-orphan-recovery'
 import { startCacheMaintenance } from './services/cache-maintenance'
 import { downloadUrlToFile, saveTextFile } from './services/download'
+import { registerChannel } from './ipc/register-channel'
 
 export class AppManager {
   readonly windowManager: WindowManager
@@ -331,12 +332,12 @@ export class AppManager {
   }
 
   private registerAppIpc(): void {
-    ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion())
-    ipcMain.handle(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
+    registerChannel(IPC.APP_GET_VERSION, () => app.getVersion())
+    registerChannel(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
       this.windowManager.safeOpenExternal(url)
       return { success: true }
     })
-    ipcMain.handle(
+    registerChannel(
       IPC.APP_REPORT_ERROR,
       (
         _event,
@@ -351,34 +352,34 @@ export class AppManager {
         return { success: true }
       },
     )
-    ipcMain.handle(IPC.APP_READ_RECENT_LOGS, (_event, maxLines?: number) => {
+    registerChannel(IPC.APP_READ_RECENT_LOGS, (_event, maxLines?: number) => {
       return {
         success: true,
         content: readRecentLogs(typeof maxLines === 'number' ? maxLines : 200),
       }
     })
-    ipcMain.handle(IPC.APP_OPEN_DATA_DIRECTORY, () => {
+    registerChannel(IPC.APP_OPEN_DATA_DIRECTORY, () => {
       return openDirectory(getUserDataDirectoryPath())
     })
-    ipcMain.handle(IPC.APP_OPEN_CACHE_DIRECTORY, () => {
+    registerChannel(IPC.APP_OPEN_CACHE_DIRECTORY, () => {
       return openDirectory(getAppCacheDirectoryPath())
     })
-    ipcMain.handle(IPC.APP_OPEN_LOGS_DIRECTORY, () => {
+    registerChannel(IPC.APP_OPEN_LOGS_DIRECTORY, () => {
       return openDirectory(getLogDirectory())
     })
-    ipcMain.handle(IPC.APP_CLEAR_CACHE, async () => {
+    registerChannel(IPC.APP_CLEAR_CACHE, async () => {
       return clearApplicationCache()
     })
-    ipcMain.handle(IPC.APP_CHECK_FOR_UPDATES, async () => {
+    registerChannel(IPC.APP_CHECK_FOR_UPDATES, async () => {
       return checkForAppUpdates()
     })
-    ipcMain.handle(IPC.APP_SAVE_TEXT_FILE, async (_event, options) => {
+    registerChannel(IPC.APP_SAVE_TEXT_FILE, async (_event, options) => {
       return saveTextFile(options)
     })
-    ipcMain.handle(IPC.APP_DOWNLOAD_URL, async (_event, options) => {
+    registerChannel(IPC.APP_DOWNLOAD_URL, async (_event, options) => {
       return downloadUrlToFile(options)
     })
-    ipcMain.handle(
+    registerChannel(
       IPC.MENU_SHOW_CONTEXT,
       async (_event, items: NativeContextMenuItem[]) => {
         const filtered = Array.isArray(items) ? items : []

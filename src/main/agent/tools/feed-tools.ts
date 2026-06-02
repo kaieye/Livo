@@ -23,6 +23,7 @@ import { detectRouteViewFromUrl } from '../../services/feed-view'
 import { formatFeedTitle } from '../../services/feed-title'
 import {
   canonicalizeInstagramFeedUrl,
+  normalizeFeedUrlNoLimits,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from '../../services/rsshub-url'
@@ -56,7 +57,7 @@ export async function subscribeByUrl(
   category: string,
 ): Promise<{ feedId: string; feedTitle: string; existed: boolean }> {
   const storedUrl = canonicalizeInstagramFeedUrl(toRsshubProtocolUrl(rawUrl))
-  const normalizedUrl = normalizeRsshubProtocolUrl(storedUrl, rsshubInstance())
+  const normalizedUrl = normalizeFeedUrlNoLimits(rawUrl, rsshubInstance())
 
   const existing =
     getFeedByUrl(storedUrl) ||

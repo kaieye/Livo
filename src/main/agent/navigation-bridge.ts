@@ -1,9 +1,9 @@
-import { BrowserWindow } from 'electron'
 import type {
   AgentNavigationAction,
   AgentRootTab,
   AgentSettingsPanel,
 } from '../../shared/types'
+import { getEventBus } from '../services/event-bus'
 
 export type { AgentNavigationAction, AgentRootTab, AgentSettingsPanel }
 
@@ -14,9 +14,5 @@ export type { AgentNavigationAction, AgentRootTab, AgentSettingsPanel }
  * renderer subscribes and performs the corresponding store action.
  */
 export function dispatchAgentNavigation(action: AgentNavigationAction): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send('agent:navigate', action)
-    }
-  }
+  getEventBus().send('agent:navigate', action)
 }

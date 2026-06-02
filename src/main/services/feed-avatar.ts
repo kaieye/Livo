@@ -20,8 +20,12 @@ function extractInstagramUsername(feedUrl: string): string | null {
     if (pixnoy?.[1]) return decodeURIComponent(pixnoy[1]).replace(/^@/, '')
     const piokok = path.match(/\/piokok\/user\/([^/?#]+)/i)
     if (piokok?.[1]) return decodeURIComponent(piokok[1]).replace(/^@/, '')
+    const pixwox = path.match(/\/pixwox\/user\/([^/?#]+)/i)
+    if (pixwox?.[1]) return decodeURIComponent(pixwox[1]).replace(/^@/, '')
     // rsshub://picnob/user/{name} or rsshub://instagram/user/{name}
-    if (/^(picnob|picnob\.info|pixnoy|piokok|instagram)$/i.test(u.hostname)) {
+    if (
+      /^(picnob|picnob\.info|pixnoy|piokok|pixwox|instagram)$/i.test(u.hostname)
+    ) {
       const hostRoute = path.match(/\/user\/([^/?#]+)/i)
       if (hostRoute?.[1])
         return decodeURIComponent(hostRoute[1]).replace(/^@/, '')
@@ -36,12 +40,12 @@ function extractInstagramUsername(feedUrl: string): string | null {
   // Fallback for non-standard URL parse cases.
   const raw = feedUrl.trim()
   const protoHostRoute = raw.match(
-    /^rsshub:\/\/(?:picnob(?:\.info)?|pixnoy|piokok|instagram)\/user\/([^/?#]+)/i,
+    /^rsshub:\/\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox|instagram)\/user\/([^/?#]+)/i,
   )
   if (protoHostRoute?.[1])
     return decodeURIComponent(protoHostRoute[1]).replace(/^@/, '')
   const protoPathRoute = raw.match(
-    /^rsshub:\/\/(?:[^/]+\/)?(?:picnob(?:\.info)?|pixnoy|piokok|instagram)\/user\/([^/?#]+)/i,
+    /^rsshub:\/\/(?:[^/]+\/)?(?:picnob(?:\.info)?|pixnoy|piokok|pixwox|instagram)\/user\/([^/?#]+)/i,
   )
   if (protoPathRoute?.[1])
     return decodeURIComponent(protoPathRoute[1]).replace(/^@/, '')
@@ -211,4 +215,16 @@ export async function resolveFeedAvatar(
   }
 
   return incomingImageUrl || existingImageUrl
+}
+
+export function getImmediateFeedAvatar(url: string): string | undefined {
+  const raw = (url || '').trim()
+  if (!raw) return undefined
+  const ig = raw.match(
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
+  )
+  const username = ig?.[1] ? decodeURIComponent(ig[1]).replace(/^@+/, '') : ''
+  if (!username) return undefined
+  const initial = username.charAt(0).toUpperCase()
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#833AB4"/><stop offset="50%" stop-color="#E1306C"/><stop offset="100%" stop-color="#F77737"/></linearGradient></defs><rect width="128" height="128" rx="32" fill="url(#ig)"/><text x="64" y="82" text-anchor="middle" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="56" font-weight="700">${initial}</text></svg>`)}`
 }

@@ -9,10 +9,11 @@
  * - VIDEO_YT_STATUS: Checks whether YouTube/Google cookies exist.
  * - VIDEO_YT_LOGOUT: Clears YouTube/Google cookies.
  */
-import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import { join } from 'path'
 import { writeFileSync, existsSync, mkdirSync } from 'fs'
 import { IPC } from '../../shared/types'
+import { registerChannel } from '../ipc/register-channel'
 import { resolveVideoUrl } from '../services/video-proxy'
 
 /** Mobile Chrome UA - Google shows plain email+password login */
@@ -62,11 +63,11 @@ try {
 
 export function registerVideoHandlers(): void {
   // 鈹€鈹€ Invidious/Piped video resolution 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-  ipcMain.handle(IPC.VIDEO_RESOLVE, async (_event, url: string) => {
+  registerChannel(IPC.VIDEO_RESOLVE, async (_event, url: string) => {
     return resolveVideoUrl(url)
   })
 
-  ipcMain.handle(IPC.VIDEO_OPEN_IN_APP, async (_event, url: string) => {
+  registerChannel(IPC.VIDEO_OPEN_IN_APP, async (_event, url: string) => {
     try {
       if (!/^https?:\/\//i.test(url)) {
         return { success: false, error: 'Invalid URL' }
@@ -102,7 +103,7 @@ export function registerVideoHandlers(): void {
   })
 
   // 鈹€鈹€ YouTube account: open Google login window 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-  ipcMain.handle(IPC.VIDEO_YT_LOGIN, async () => {
+  registerChannel(IPC.VIDEO_YT_LOGIN, async () => {
     return new Promise<{ success: boolean; error?: string }>((resolve) => {
       const loginWin = new BrowserWindow({
         width: 420,
@@ -155,7 +156,7 @@ export function registerVideoHandlers(): void {
   })
 
   // 鈹€鈹€ YouTube account: check if logged in 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-  ipcMain.handle(IPC.VIDEO_YT_STATUS, async () => {
+  registerChannel(IPC.VIDEO_YT_STATUS, async () => {
     try {
       const cookies = await session.defaultSession.cookies.get({
         domain: '.youtube.com',
@@ -174,7 +175,7 @@ export function registerVideoHandlers(): void {
   })
 
   // 鈹€鈹€ YouTube account: clear cookies (logout) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-  ipcMain.handle(IPC.VIDEO_YT_LOGOUT, async () => {
+  registerChannel(IPC.VIDEO_YT_LOGOUT, async () => {
     try {
       for (const domain of YT_COOKIE_DOMAINS) {
         const cookies = await session.defaultSession.cookies.get({ domain })

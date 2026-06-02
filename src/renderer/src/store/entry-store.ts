@@ -1,5 +1,6 @@
 import { createAppStore } from './helpers'
 import type { Entry, EntryListResult } from '../../../shared/types'
+import { isMirrorHost } from '../../../shared/url-detect'
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
 const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
@@ -15,21 +16,38 @@ const entryDetailCache = new Map<string, Entry>()
 const entryDetailInFlight = new Map<string, Promise<Entry | null>>()
 const entrySnapshotCache = new Map<string, Entry>()
 
+/** Returns cached result if fresh, or an existing in-flight promise. null = miss. */
+function getCachedListResult(cacheKey: string): EntryListResult | null {
+  const cached = entryListCache.get(cacheKey)
+  if (!cached) return null
+  const ttl = cached.result?.entries?.length
+    ? ENTRY_LIST_CACHE_TTL_MS
+    : EMPTY_ENTRY_LIST_CACHE_TTL_MS
+  if (Date.now() - cached.cachedAt < ttl) return cached.result
+  return null
+}
+
+/** Fetch with in-flight dedup and cache store. */
+async function fetchAndCacheList(
+  cacheKey: string,
+  fetchFn: () => Promise<EntryListResult>,
+): Promise<EntryListResult> {
+  const existing = entryListInFlight.get(cacheKey)
+  if (existing) return existing
+  const promise = fetchFn()
+    .then((result) => {
+      entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
+      return result
+    })
+    .finally(() => {
+      entryListInFlight.delete(cacheKey)
+    })
+  entryListInFlight.set(cacheKey, promise)
+  return promise
+}
+
 function isPicnobMirrorHost(host: string): boolean {
-  const lower = host.toLowerCase()
-  return (
-    lower === 'media.picnob.info' ||
-    lower === 'media.pixnoy.com' ||
-    lower.includes('piokok.com') ||
-    lower.includes('picnob.com') ||
-    lower.includes('pixnoy.com') ||
-    lower.includes('pixwox.com') ||
-    lower.includes('sp1.pixnoy.com') ||
-    lower.includes('sp2.pixnoy.com') ||
-    lower.includes('sp3.pixnoy.com') ||
-    lower.includes('sp4.pixnoy.com') ||
-    lower.includes('sp5.pixnoy.com')
-  )
+  return isMirrorHost(host)
 }
 
 function extractAssetIdFromRaw(input?: string): string {
@@ -43,7 +61,10 @@ function extractAssetIdFromRaw(input?: string): string {
       if (nested) return extractAssetIdFromRaw(nested)
     }
     if (
-      (host.includes('pixnoy') || host.includes('picnob')) &&
+      (host.includes('pixnoy') ||
+        host.includes('picnob') ||
+        host.includes('pixwox') ||
+        host.includes('piokok')) &&
       parsed.searchParams.has('o')
     ) {
       const encoded = parsed.searchParams.get('o') || ''
@@ -328,46 +349,32 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     })
 
     const cacheKey = buildListCacheKey(normalizedOptions)
-    const cached = entryListCache.get(cacheKey)
-    const ttl = cached?.result?.entries?.length
-      ? ENTRY_LIST_CACHE_TTL_MS
-      : EMPTY_ENTRY_LIST_CACHE_TTL_MS
-    if (cached && Date.now() - cached.cachedAt < ttl) {
+    const cachedHit = getCachedListResult(cacheKey)
+    if (cachedHit) {
       set({
-        entries: cacheEntrySnapshots(cached.result.entries),
+        entries: cacheEntrySnapshots(cachedHit.entries),
         isLoading: false,
         isLoadingMore: false,
-        hasMoreEntries: cached.result.hasMore,
+        hasMoreEntries: cachedHit.hasMore,
       })
       return
     }
 
     set({ isLoading: true, isLoadingMore: false, hasMoreEntries: false })
     try {
-      const existing = entryListInFlight.get(cacheKey)
-      const entriesPromise =
-        existing ??
-        window.api.entries
-          .list({
-            feedId: normalizedOptions.feedId,
-            feedIds: normalizedOptions.feedIds,
-            starred: normalizedOptions.starred,
-            unreadOnly: normalizedOptions.unreadOnly,
-            limit: normalizedOptions.limit,
-            offset: 0,
-            compact: true,
-            maxContentLength: 520,
-            skipDedupe: false,
-          })
-          .then((result) => {
-            entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
-            return result
-          })
-          .finally(() => {
-            entryListInFlight.delete(cacheKey)
-          })
-      if (!existing) entryListInFlight.set(cacheKey, entriesPromise)
-      const result = await entriesPromise
+      const result = await fetchAndCacheList(cacheKey, () =>
+        window.api.entries.list({
+          feedId: normalizedOptions.feedId,
+          feedIds: normalizedOptions.feedIds,
+          starred: normalizedOptions.starred,
+          unreadOnly: normalizedOptions.unreadOnly,
+          limit: normalizedOptions.limit,
+          offset: 0,
+          compact: true,
+          maxContentLength: 520,
+          skipDedupe: false,
+        }),
+      )
       const isLatestQuery = get().paginationQueryKey === queryKey
       if (!isLatestQuery) return
       set({
@@ -385,18 +392,9 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
 
   prefetchEntries: async (options) => {
     const cacheKey = buildListCacheKey(options)
-    const cached = entryListCache.get(cacheKey)
-    const ttl = cached?.result?.entries?.length
-      ? ENTRY_LIST_CACHE_TTL_MS
-      : EMPTY_ENTRY_LIST_CACHE_TTL_MS
-    if (cached && Date.now() - cached.cachedAt < ttl) return
-    if (entryListInFlight.has(cacheKey)) {
-      await entryListInFlight.get(cacheKey)
-      return
-    }
-
-    const promise = window.api.entries
-      .list({
+    if (getCachedListResult(cacheKey)) return
+    const result = await fetchAndCacheList(cacheKey, () =>
+      window.api.entries.list({
         feedId: options?.feedId,
         feedIds: options?.feedIds,
         starred: options?.starred,
@@ -405,17 +403,9 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         compact: true,
         maxContentLength: 520,
         skipDedupe: false,
-      })
-      .then((result) => {
-        cacheEntrySnapshots(result.entries)
-        entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
-        return result
-      })
-      .finally(() => {
-        entryListInFlight.delete(cacheKey)
-      })
-    entryListInFlight.set(cacheKey, promise)
-    await promise
+      }),
+    )
+    cacheEntrySnapshots(result.entries)
   },
 
   loadMoreEntries: async () => {
@@ -438,44 +428,27 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       offset,
     }
     const cacheKey = buildListCacheKey(pageOptions)
-    const cached = entryListCache.get(cacheKey)
-    const ttl = cached?.result?.entries?.length
-      ? ENTRY_LIST_CACHE_TTL_MS
-      : EMPTY_ENTRY_LIST_CACHE_TTL_MS
 
     set({ isLoadingMore: true })
 
     try {
-      let nextPage: EntryListResult
-      if (cached && Date.now() - cached.cachedAt < ttl) {
-        nextPage = cached.result
-      } else {
-        const existing = entryListInFlight.get(cacheKey)
-        const promise =
-          existing ??
-          window.api.entries
-            .list({
-              feedId: pageOptions.feedId,
-              feedIds: pageOptions.feedIds,
-              starred: pageOptions.starred,
-              unreadOnly: pageOptions.unreadOnly,
-              limit: pageOptions.limit,
-              offset: pageOptions.offset,
-              compact: true,
-              maxContentLength: 520,
-              skipDedupe: false,
-            })
-            .then((result) => {
-              cacheEntrySnapshots(result.entries)
-              entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
-              return result
-            })
-            .finally(() => {
-              entryListInFlight.delete(cacheKey)
-            })
-        if (!existing) entryListInFlight.set(cacheKey, promise)
-        nextPage = await promise
-      }
+      const cachedHit = getCachedListResult(cacheKey)
+      const nextPage =
+        cachedHit ??
+        (await fetchAndCacheList(cacheKey, () =>
+          window.api.entries.list({
+            feedId: pageOptions.feedId,
+            feedIds: pageOptions.feedIds,
+            starred: pageOptions.starred,
+            unreadOnly: pageOptions.unreadOnly,
+            limit: pageOptions.limit,
+            offset: pageOptions.offset,
+            compact: true,
+            maxContentLength: 520,
+            skipDedupe: false,
+          }),
+        ))
+      if (!cachedHit) cacheEntrySnapshots(nextPage.entries)
 
       set((current) => ({
         entries: mergeEntriesById(

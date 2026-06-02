@@ -19,7 +19,11 @@ function extractInstagramUsername(input: string): string | null {
     if (pixnoy?.[1]) return decodeURIComponent(pixnoy[1]).replace(/^@/, '')
     const piokok = path.match(/\/piokok\/user\/([^/?#]+)/i)
     if (piokok?.[1]) return decodeURIComponent(piokok[1]).replace(/^@/, '')
-    if (/^(picnob|picnob\.info|pixnoy|piokok|instagram)$/i.test(u.hostname)) {
+    const pixwox = path.match(/\/pixwox\/user\/([^/?#]+)/i)
+    if (pixwox?.[1]) return decodeURIComponent(pixwox[1]).replace(/^@/, '')
+    if (
+      /^(picnob|picnob\.info|pixnoy|piokok|pixwox|instagram)$/i.test(u.hostname)
+    ) {
       const hostRoute = path.match(/\/user\/([^/?#]+)/i)
       if (hostRoute?.[1])
         return decodeURIComponent(hostRoute[1]).replace(/^@/, '')
@@ -33,7 +37,7 @@ function extractInstagramUsername(input: string): string | null {
   }
   // rsshub:// protocol
   const proto = raw.match(
-    /^rsshub:\/\/(?:picnob(?:\.info)?|pixnoy|piokok|instagram)\/user\/([^/?#]+)/i,
+    /^rsshub:\/\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox|instagram)\/user\/([^/?#]+)/i,
   )
   if (proto?.[1]) return decodeURIComponent(proto[1]).replace(/^@/, '')
   // Title-based extraction

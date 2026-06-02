@@ -1151,7 +1151,7 @@ function emit(channel: string, ...args: unknown[]) {
 // ====== Build the WebAPI object ======
 
 export function createWebAPI(): ElectronAPI {
-  const api = {
+  const api: ElectronAPI = {
     feeds: {
       add: async (
         url: string,

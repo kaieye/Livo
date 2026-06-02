@@ -1,12 +1,12 @@
-import { ipcMain } from 'electron'
 import { IPC } from '../../shared/types'
+import { registerChannel } from '../ipc/register-channel'
 import {
   fetchReadableContent,
   resolveRelativeUrls,
 } from '../services/readability'
 
 export function registerReadabilityHandlers(): void {
-  ipcMain.handle(IPC.READABILITY_FETCH, async (_event, url: string) => {
+  registerChannel(IPC.READABILITY_FETCH, async (_event, url: string) => {
     try {
       const result = await fetchReadableContent(url)
       const content = resolveRelativeUrls(result.content, url)

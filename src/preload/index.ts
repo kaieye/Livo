@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/types'
+import { type IpcChannel, unwrapIpcEnvelope } from '../shared/ipc-contracts'
 import type {
   AppSettings,
   Feed,
@@ -39,6 +40,14 @@ type AgentRunResponse =
 
 type AgentToolEventPayload = { requestId: string } & AgentToolExecutionEvent
 
+async function invokeIpc<T = any>(
+  channel: IpcChannel,
+  ...args: unknown[]
+): Promise<T> {
+  const result = await ipcRenderer.invoke(channel, ...args)
+  return unwrapIpcEnvelope<T>(result)
+}
+
 const api = {
   // Feed operations
   feeds: {
@@ -47,17 +56,17 @@ const api = {
       category?: string,
       view?: FeedViewType,
       title?: string,
-    ) => ipcRenderer.invoke(IPC.FEED_ADD, url, category, view, title),
-    remove: (feedId: string) => ipcRenderer.invoke(IPC.FEED_REMOVE, feedId),
-    list: (): Promise<FeedWithCount[]> => ipcRenderer.invoke(IPC.FEED_LIST),
-    refresh: (feedId: string) => ipcRenderer.invoke(IPC.FEED_REFRESH, feedId),
-    refreshAll: () => ipcRenderer.invoke(IPC.FEED_REFRESH_ALL),
+    ) => invokeIpc(IPC.FEED_ADD, url, category, view, title),
+    remove: (feedId: string) => invokeIpc(IPC.FEED_REMOVE, feedId),
+    list: (): Promise<FeedWithCount[]> => invokeIpc(IPC.FEED_LIST),
+    refresh: (feedId: string) => invokeIpc(IPC.FEED_REFRESH, feedId),
+    refreshAll: () => invokeIpc(IPC.FEED_REFRESH_ALL),
     update: (feedId: string, updates: Partial<Feed>) =>
-      ipcRenderer.invoke(IPC.FEED_UPDATE, feedId, updates),
-    importOPML: () => ipcRenderer.invoke(IPC.FEED_IMPORT_OPML),
-    exportOPML: () => ipcRenderer.invoke(IPC.FEED_EXPORT_OPML),
+      invokeIpc(IPC.FEED_UPDATE, feedId, updates),
+    importOPML: () => invokeIpc(IPC.FEED_IMPORT_OPML),
+    exportOPML: () => invokeIpc(IPC.FEED_EXPORT_OPML),
     refreshImportedFeeds: (feedIds: string[]) =>
-      ipcRenderer.invoke(IPC.FEED_REFRESH_IMPORTED, feedIds),
+      invokeIpc(IPC.FEED_REFRESH_IMPORTED, feedIds),
   },
 
   // Entry operations
@@ -72,53 +81,47 @@ const api = {
       compact?: boolean
       maxContentLength?: number
       skipDedupe?: boolean
-    }): Promise<EntryListResult> => ipcRenderer.invoke(IPC.ENTRY_LIST, options),
+    }): Promise<EntryListResult> => invokeIpc(IPC.ENTRY_LIST, options),
     get: (entryId: string): Promise<Entry | null> =>
-      ipcRenderer.invoke(IPC.ENTRY_GET, entryId),
+      invokeIpc(IPC.ENTRY_GET, entryId),
     markRead: (entryId: string, isRead: boolean) =>
-      ipcRenderer.invoke(IPC.ENTRY_MARK_READ, entryId, isRead),
+      invokeIpc(IPC.ENTRY_MARK_READ, entryId, isRead),
     markAllRead: (feedId?: string) =>
-      ipcRenderer.invoke(IPC.ENTRY_MARK_ALL_READ, feedId),
-    toggleStar: (entryId: string) =>
-      ipcRenderer.invoke(IPC.ENTRY_TOGGLE_STAR, entryId),
+      invokeIpc(IPC.ENTRY_MARK_ALL_READ, feedId),
+    toggleStar: (entryId: string) => invokeIpc(IPC.ENTRY_TOGGLE_STAR, entryId),
     saveProgress: (entryId: string, readProgress: number) =>
-      ipcRenderer.invoke(IPC.ENTRY_SAVE_PROGRESS, entryId, readProgress),
+      invokeIpc(IPC.ENTRY_SAVE_PROGRESS, entryId, readProgress),
     markListened: (entryId: string, isListened: boolean) =>
-      ipcRenderer.invoke(IPC.ENTRY_MARK_LISTENED, entryId, isListened),
+      invokeIpc(IPC.ENTRY_MARK_LISTENED, entryId, isListened),
     saveListenProgress: (entryId: string, listenProgress: number) =>
-      ipcRenderer.invoke(
-        IPC.ENTRY_SAVE_LISTEN_PROGRESS,
-        entryId,
-        listenProgress,
-      ),
+      invokeIpc(IPC.ENTRY_SAVE_LISTEN_PROGRESS, entryId, listenProgress),
     search: (query: string, limit?: number): Promise<Entry[]> =>
-      ipcRenderer.invoke(IPC.ENTRY_SEARCH, query, limit),
+      invokeIpc(IPC.ENTRY_SEARCH, query, limit),
   },
 
   // AI operations
   ai: {
     summarize: (content: string, language?: string, requestId?: string) =>
-      ipcRenderer.invoke(IPC.AI_SUMMARIZE, content, language, requestId),
+      invokeIpc(IPC.AI_SUMMARIZE, content, language, requestId),
     translate: (content: string, targetLanguage: string, requestId?: string) =>
-      ipcRenderer.invoke(IPC.AI_TRANSLATE, content, targetLanguage, requestId),
+      invokeIpc(IPC.AI_TRANSLATE, content, targetLanguage, requestId),
     chat: (messages: Array<{ role: string; content: string }>) =>
-      ipcRenderer.invoke(IPC.AI_CHAT, messages),
+      invokeIpc(IPC.AI_CHAT, messages),
     chatStream: (
       messages: Array<{ role: string; content: string }>,
       requestId: string,
-    ) => ipcRenderer.invoke(IPC.AI_CHAT_STREAM, messages, requestId),
+    ) => invokeIpc(IPC.AI_CHAT_STREAM, messages, requestId),
     judgeFilter: (
       input: AISemanticFilterInput,
-    ): Promise<AISemanticFilterResult> =>
-      ipcRenderer.invoke(IPC.AI_FILTER_JUDGE, input),
+    ): Promise<AISemanticFilterResult> => invokeIpc(IPC.AI_FILTER_JUDGE, input),
     digest: {
       listRuns: (limit?: number): Promise<AIDigestRun[]> =>
-        ipcRenderer.invoke(IPC.AI_DIGEST_LIST, limit),
+        invokeIpc(IPC.AI_DIGEST_LIST, limit),
       generate: (input: {
         preset: AIDigestPreset
         feedId?: string
       }): Promise<AIDigestGenerateResult> =>
-        ipcRenderer.invoke(IPC.AI_DIGEST_GENERATE, input),
+        invokeIpc(IPC.AI_DIGEST_GENERATE, input),
     },
     onStreamChunk: (
       callback: (data: { requestId: string; content: string }) => void,
@@ -151,14 +154,14 @@ const api = {
       message: string
       duration?: number
       modelInfo?: string
-    }> => ipcRenderer.invoke(IPC.AI_TEST_CONNECTION),
+    }> => invokeIpc(IPC.AI_TEST_CONNECTION),
   },
 
   // Settings
   settings: {
-    get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
+    get: (): Promise<AppSettings> => invokeIpc(IPC.SETTINGS_GET),
     set: (settings: Partial<AppSettings>) =>
-      ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+      invokeIpc(IPC.SETTINGS_SET, settings),
     onChanged: (callback: (settings: AppSettings) => void) => {
       const handler = (_event: unknown, settings: AppSettings) =>
         callback(settings)
@@ -170,7 +173,7 @@ const api = {
   // Automation rules (synced to the main process for ingestion-time filtering)
   actions: {
     sync: (rules: ActionRule[]): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke(IPC.ACTIONS_SYNC, rules),
+      invokeIpc(IPC.ACTIONS_SYNC, rules),
   },
 
   // Agent (multi-round tool-calling assistant)
@@ -180,18 +183,17 @@ const api = {
       prompt: string
       history?: AgentChatHistoryMessage[]
       pageContext?: string
-    }): Promise<AgentRunResponse> => ipcRenderer.invoke(IPC.AGENT_RUN, payload),
+    }): Promise<AgentRunResponse> => invokeIpc(IPC.AGENT_RUN, payload),
     resume: (payload: {
       requestId: string
       pendingId: string
-    }): Promise<AgentRunResponse> =>
-      ipcRenderer.invoke(IPC.AGENT_RESUME, payload),
+    }): Promise<AgentRunResponse> => invokeIpc(IPC.AGENT_RESUME, payload),
     abort: (requestId: string): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke(IPC.AGENT_ABORT, requestId),
+      invokeIpc(IPC.AGENT_ABORT, requestId),
     listTraces: (): Promise<AgentTraceRecord[]> =>
-      ipcRenderer.invoke(IPC.AGENT_TRACES_LIST),
+      invokeIpc(IPC.AGENT_TRACES_LIST),
     clearTraces: (): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke(IPC.AGENT_TRACES_CLEAR),
+      invokeIpc(IPC.AGENT_TRACES_CLEAR),
     onToolEvent: (callback: (data: AgentToolEventPayload) => void) => {
       const handler = (_event: unknown, data: AgentToolEventPayload) =>
         callback(data)
@@ -208,81 +210,79 @@ const api = {
 
   // Readability
   readability: {
-    fetch: (url: string) => ipcRenderer.invoke('readability:fetch', url),
+    fetch: (url: string) => invokeIpc(IPC.READABILITY_FETCH, url),
   },
 
   // Discover
   discover: {
-    categories: () => ipcRenderer.invoke('discover:categories'),
-    popular: (category?: string) =>
-      ipcRenderer.invoke('discover:popular', category),
+    categories: () => invokeIpc(IPC.DISCOVER_CATEGORIES),
+    popular: (category?: string) => invokeIpc(IPC.DISCOVER_POPULAR, category),
     search: (
       query: string,
       platform?: 'all' | 'youtube' | 'bilibili' | 'x' | 'instagram',
-    ) => ipcRenderer.invoke('discover:search', query, platform),
+    ) => invokeIpc(IPC.DISCOVER_SEARCH, query, platform),
     rsshubRoutes: (category?: string) =>
-      ipcRenderer.invoke('discover:rsshub-routes', category),
-    rsshubInstance: () => ipcRenderer.invoke('discover:rsshub-instance'),
-    validateFeed: (url: string) =>
-      ipcRenderer.invoke('discover:validate-feed', url),
+      invokeIpc(IPC.DISCOVER_RSSHUB_ROUTES, category),
+    rsshubInstance: () => invokeIpc(IPC.DISCOVER_RSSHUB_INSTANCE),
+    validateFeed: (url: string) => invokeIpc(IPC.DISCOVER_VALIDATE_FEED, url),
     previewFeed: (url: string): Promise<DiscoverFeedPreviewResult> =>
-      ipcRenderer.invoke(IPC.DISCOVER_PREVIEW_FEED, url),
+      invokeIpc(IPC.DISCOVER_PREVIEW_FEED, url),
     resolveProfileUrl: (url: string): Promise<ResolvedProfileUrlResult> =>
-      ipcRenderer.invoke(IPC.DISCOVER_RESOLVE_PROFILE_URL, url),
+      invokeIpc(IPC.DISCOVER_RESOLVE_PROFILE_URL, url),
     probeTwitterUser: (username: string) =>
-      ipcRenderer.invoke('twitter:probe-user', username),
+      invokeIpc(IPC.DISCOVER_PROBE_TWITTER_USER, username),
     probeYouTubeChannel: (query: string) =>
-      ipcRenderer.invoke('youtube:probe-channel', query),
+      invokeIpc(IPC.DISCOVER_PROBE_YOUTUBE_CHANNEL, query),
     probeVideoSources: (query: string) =>
-      ipcRenderer.invoke('discover:probe-video-sources', query),
+      invokeIpc(IPC.DISCOVER_PROBE_VIDEO_SOURCES, query),
     probeBilibiliUid: (uid: string) =>
-      ipcRenderer.invoke('discover:probe-bilibili-uid', uid),
+      invokeIpc(IPC.DISCOVER_PROBE_BILIBILI_UID, uid),
     probeBilibiliUsers: (query: string) =>
-      ipcRenderer.invoke('discover:probe-bilibili-users', query),
+      invokeIpc(IPC.DISCOVER_PROBE_BILIBILI_USERS, query),
     probeInstagramUser: (username: string) =>
-      ipcRenderer.invoke('instagram:probe-user', username),
+      invokeIpc(IPC.DISCOVER_PROBE_INSTAGRAM_USER, username),
   },
 
   // App
   app: {
-    getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.APP_GET_VERSION),
+    getVersion: (): Promise<string> => invokeIpc(IPC.APP_GET_VERSION),
     openExternal: (url: string): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke(IPC.APP_OPEN_EXTERNAL, url),
+      invokeIpc(IPC.APP_OPEN_EXTERNAL, url),
     reportError: (payload: {
       source: string
       message: string
       stack?: string
       componentStack?: string
     }): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke(IPC.APP_REPORT_ERROR, payload),
+      invokeIpc(IPC.APP_REPORT_ERROR, payload),
     readRecentLogs: (
       maxLines?: number,
     ): Promise<{ success: boolean; content: string }> =>
-      ipcRenderer.invoke(IPC.APP_READ_RECENT_LOGS, maxLines),
+      invokeIpc(IPC.APP_READ_RECENT_LOGS, maxLines),
     openDataDirectory: (): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.APP_OPEN_DATA_DIRECTORY),
+      invokeIpc(IPC.APP_OPEN_DATA_DIRECTORY),
     openCacheDirectory: (): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.APP_OPEN_CACHE_DIRECTORY),
+      invokeIpc(IPC.APP_OPEN_CACHE_DIRECTORY),
     openLogsDirectory: (): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.APP_OPEN_LOGS_DIRECTORY),
+      invokeIpc(IPC.APP_OPEN_LOGS_DIRECTORY),
     clearCache: (): Promise<{
       success: boolean
       clearedBytes: number
       error?: string
-    }> => ipcRenderer.invoke(IPC.APP_CLEAR_CACHE),
+    }> => invokeIpc(IPC.APP_CLEAR_CACHE),
     checkForUpdates: (): Promise<AppUpdateInfo> =>
-      ipcRenderer.invoke(IPC.APP_CHECK_FOR_UPDATES),
+      invokeIpc(IPC.APP_CHECK_FOR_UPDATES),
     saveTextFile: (options: SaveTextFileOptions): Promise<SaveTextFileResult> =>
-      ipcRenderer.invoke(IPC.APP_SAVE_TEXT_FILE, options),
+      invokeIpc(IPC.APP_SAVE_TEXT_FILE, options),
     downloadUrl: (options: DownloadUrlOptions): Promise<DownloadUrlResult> =>
-      ipcRenderer.invoke(IPC.APP_DOWNLOAD_URL, options),
+      invokeIpc(IPC.APP_DOWNLOAD_URL, options),
   },
 
   menu: {
     showContextMenu: (
       items: NativeContextMenuItem[],
     ): Promise<{ id: string | null }> =>
-      ipcRenderer.invoke(IPC.MENU_SHOW_CONTEXT, items),
+      invokeIpc(IPC.MENU_SHOW_CONTEXT, items),
   },
 
   // Data maintenance
@@ -290,7 +290,7 @@ const api = {
     cleanup: (options?: {
       entriesPerFeed?: number
       maxEntryAgeDays?: number
-    }) => ipcRenderer.invoke(IPC.DATA_CLEANUP, options),
+    }) => invokeIpc(IPC.DATA_CLEANUP, options),
     stats: (): Promise<{
       totalFeeds: number
       totalEntries: number
@@ -298,15 +298,15 @@ const api = {
       starredEntries: number
       dataSizeBytes: number
       cacheSizeBytes: number
-    }> => ipcRenderer.invoke(IPC.DATA_STATS),
+    }> => invokeIpc(IPC.DATA_STATS),
   },
 
   // Refresh logs
   refreshLogs: {
     list: (): Promise<import('../shared/types').RefreshLogEntry[]> =>
-      ipcRenderer.invoke(IPC.REFRESH_LOG_LIST),
+      invokeIpc(IPC.REFRESH_LOG_LIST),
     clear: (): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke(IPC.REFRESH_LOG_CLEAR),
+      invokeIpc(IPC.REFRESH_LOG_CLEAR),
   },
 
   // Video resolution (Invidious/Piped proxy) & YouTube account linking
@@ -319,15 +319,15 @@ const api = {
       quality?: string
       title?: string
       error?: string
-    }> => ipcRenderer.invoke(IPC.VIDEO_RESOLVE, url),
+    }> => invokeIpc(IPC.VIDEO_RESOLVE, url),
     openInApp: (url: string): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.VIDEO_OPEN_IN_APP, url),
+      invokeIpc(IPC.VIDEO_OPEN_IN_APP, url),
     ytLogin: (): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.VIDEO_YT_LOGIN),
+      invokeIpc(IPC.VIDEO_YT_LOGIN),
     ytStatus: (): Promise<{ loggedIn: boolean; name: string | null }> =>
-      ipcRenderer.invoke(IPC.VIDEO_YT_STATUS),
+      invokeIpc(IPC.VIDEO_YT_STATUS),
     ytLogout: (): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.VIDEO_YT_LOGOUT),
+      invokeIpc(IPC.VIDEO_YT_LOGOUT),
   },
 
   // Linked account sessions
@@ -339,52 +339,51 @@ const api = {
       linked: boolean
       displayName?: string | null
       error?: string
-    }> => ipcRenderer.invoke(IPC.ACCOUNT_STATUS, provider),
+    }> => invokeIpc(IPC.ACCOUNT_STATUS, provider),
     link: (
       provider: AccountProvider,
     ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.ACCOUNT_LINK, provider),
+      invokeIpc(IPC.ACCOUNT_LINK, provider),
     unlink: (
       provider: AccountProvider,
     ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.ACCOUNT_UNLINK, provider),
+      invokeIpc(IPC.ACCOUNT_UNLINK, provider),
     setDisplayName: (
       provider: AccountProvider,
       displayName: string,
     ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.ACCOUNT_SET_DISPLAY_NAME, provider, displayName),
+      invokeIpc(IPC.ACCOUNT_SET_DISPLAY_NAME, provider, displayName),
     bilibiliFollowings: (): Promise<{
       success: boolean
       creators?: Array<{ mid: number; uname: string }>
       error?: string
-    }> => ipcRenderer.invoke(IPC.ACCOUNT_BILIBILI_FOLLOWINGS),
+    }> => invokeIpc(IPC.ACCOUNT_BILIBILI_FOLLOWINGS),
   },
 
   // Fever sync
   fever: {
     listAccounts: (): Promise<FeverAccount[]> =>
-      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_LIST),
+      invokeIpc(IPC.FEVER_ACCOUNTS_LIST),
     createAccount: (input: {
       baseUrl: string
       username: string
       apiKey: string
-    }): Promise<FeverAccount> =>
-      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_CREATE, input),
+    }): Promise<FeverAccount> => invokeIpc(IPC.FEVER_ACCOUNTS_CREATE, input),
     updateAccount: (
       id: string,
       updates: Partial<FeverAccount>,
     ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_UPDATE, id, updates),
+      invokeIpc(IPC.FEVER_ACCOUNTS_UPDATE, id, updates),
     deleteAccount: (
       id: string,
     ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_DELETE, id),
+      invokeIpc(IPC.FEVER_ACCOUNTS_DELETE, id),
     verify: (
       baseUrl: string,
       username: string,
       apiKey: string,
     ): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.FEVER_VERIFY, baseUrl, username, apiKey),
+      invokeIpc(IPC.FEVER_VERIFY, baseUrl, username, apiKey),
     sync: (
       accountId: string,
     ): Promise<{
@@ -393,13 +392,13 @@ const api = {
       itemsSynced: number
       newEntries: number
       error?: string
-    }> => ipcRenderer.invoke(IPC.FEVER_SYNC, accountId),
+    }> => invokeIpc(IPC.FEVER_SYNC, accountId),
     syncAll: (): Promise<{
       success: boolean
       results: Array<{ accountId: string; success: boolean; error?: string }>
-    }> => ipcRenderer.invoke(IPC.FEVER_SYNC_ALL),
+    }> => invokeIpc(IPC.FEVER_SYNC_ALL),
     getSyncState: (accountId: string): Promise<FeverSyncState | null> =>
-      ipcRenderer.invoke(IPC.FEVER_SYNC_STATE, accountId),
+      invokeIpc(IPC.FEVER_SYNC_STATE, accountId),
     onSyncProgress: (
       callback: (data: {
         accountId: string

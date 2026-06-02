@@ -50,7 +50,8 @@ function detectResultPlatform(
       p.includes('/instagram/') ||
       p.includes('/picnob') ||
       p.includes('/pixnoy') ||
-      p.includes('/piokok')
+      p.includes('/piokok') ||
+      p.includes('/pixwox')
     )
       return 'instagram'
   } catch {
@@ -113,7 +114,7 @@ function extractDiscoverAliasIdentity(
   }
   if (platform === 'instagram') {
     const matched = result.url.match(
-      /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\/([^/?#]+)/i,
+      /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
     )
     const username = matched?.[1]
       ? normalizeDiscoverMatchValue(

@@ -1,9 +1,9 @@
 const RSSHUB_ROUTE_PREFIX =
-  /^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i
+  /^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i
 
 function canonicalizeInstagramMirrorRoute(route: string): string {
   return route.replace(
-    /^(picnob(?:\.info)?|pixnoy|piokok)\/user\//i,
+    /^(picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i,
     'instagram/user/',
   )
 }
@@ -121,6 +121,35 @@ export function ensureInstagramUserFeedLimit(
   } catch {
     return trimmed
   }
+}
+
+/**
+ * Full feed URL normalization pipeline:
+ * toRsshubProtocol → ensureInstagramLimit → ensureTwitterLimit → canonicalize → resolve rsshub://
+ */
+export function normalizeFeedUrl(
+  rawUrl: string,
+  rsshubInstance: string,
+): string {
+  const rsshub = toRsshubProtocolUrl(rawUrl)
+  const limited = ensureTwitterUserFeedLimit(
+    ensureInstagramUserFeedLimit(rsshub, 100),
+    120,
+  )
+  const canonical = canonicalizeInstagramFeedUrl(limited)
+  return normalizeRsshubProtocolUrl(canonical, rsshubInstance)
+}
+
+/**
+ * Like normalizeFeedUrl but without limit injection — used for legacy URL matching.
+ */
+export function normalizeFeedUrlNoLimits(
+  rawUrl: string,
+  rsshubInstance: string,
+): string {
+  const rsshub = toRsshubProtocolUrl(rawUrl)
+  const canonical = canonicalizeInstagramFeedUrl(rsshub)
+  return normalizeRsshubProtocolUrl(canonical, rsshubInstance)
 }
 
 export function ensureTwitterUserFeedLimit(

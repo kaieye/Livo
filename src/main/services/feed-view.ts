@@ -1,11 +1,5 @@
 import { FeedViewType } from '../../shared/types'
-
-function isInstagramUserFeedUrl(url: string): boolean {
-  const raw = (url || '').toLowerCase()
-  return /(?:^|\/)(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//.test(
-    raw,
-  )
-}
+import { isInstagramUserFeedUrl } from '../../shared/url-detect'
 
 export function detectRouteViewFromUrl(url: string): FeedViewType | null {
   try {
@@ -29,4 +23,50 @@ export function reconcileFeedView(url: string, currentView: FeedViewType) {
     return FeedViewType.Pictures
   }
   return currentView
+}
+
+/** Detect view type from parsed feed content */
+export function detectViewType(parsed: {
+  items?: Array<Record<string, unknown>>
+}): FeedViewType {
+  const items = parsed.items || []
+
+  let videoCount = 0
+  let imageCount = 0
+
+  for (const item of items.slice(0, 10)) {
+    const enclosure = item.enclosure as
+      | { type?: string; url?: string }
+      | undefined
+    const content = String(item.content || item['content:encoded'] || '')
+
+    if (
+      enclosure?.type?.startsWith('video/') ||
+      content.includes('<video') ||
+      content.includes('youtube.com/embed')
+    ) {
+      videoCount++
+    } else if (
+      enclosure?.type?.startsWith('image/') ||
+      content.includes('<img')
+    ) {
+      const imgCount = (content.match(/<img/g) || []).length
+      if (imgCount >= 3) imageCount++
+    }
+  }
+
+  const total = items.length || 1
+  if (videoCount / total > 0.5) return FeedViewType.Videos
+  if (imageCount / total > 0.5) return FeedViewType.SocialMedia
+
+  return FeedViewType.Articles
+}
+
+export function detectViewTypeFromUrlOrContent(
+  url: string,
+  parsed: any,
+): FeedViewType {
+  const routeView = detectRouteViewFromUrl(url)
+  if (routeView !== null) return routeView
+  return parsed ? detectViewType(parsed) : FeedViewType.Articles
 }

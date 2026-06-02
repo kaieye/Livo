@@ -84,7 +84,7 @@ export function extractPixnoyOriginUrl(url: string): string {
       })
       return candidates[0] || ''
     }
-    if (!/pixnoy|pixnob/i.test(parsed.hostname)) return ''
+    if (!/pixnoy|pixnob|piokok|pixwox/i.test(parsed.hostname)) return ''
     const encoded = parsed.searchParams.get('o')
     if (!encoded) return ''
     const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')

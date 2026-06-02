@@ -1,4 +1,4 @@
-﻿import { ipcMain } from 'electron'
+import { registerChannel } from '../ipc/register-channel'
 import { IPC, type AccountProvider } from '../../shared/types'
 import {
   getAccountState,
@@ -20,7 +20,7 @@ function isSupportedProvider(value: string): value is AccountProvider {
 }
 
 export function registerAccountHandlers(): void {
-  ipcMain.handle(IPC.ACCOUNT_STATUS, async (_event, provider: string) => {
+  registerChannel(IPC.ACCOUNT_STATUS, async (_event, provider: string) => {
     if (!isSupportedProvider(provider)) {
       return {
         provider,
@@ -32,21 +32,21 @@ export function registerAccountHandlers(): void {
     return getAccountState(provider)
   })
 
-  ipcMain.handle(IPC.ACCOUNT_LINK, async (_event, provider: string) => {
+  registerChannel(IPC.ACCOUNT_LINK, async (_event, provider: string) => {
     if (!isSupportedProvider(provider)) {
       return { success: false, error: 'Unsupported provider' }
     }
     return linkAccount(provider)
   })
 
-  ipcMain.handle(IPC.ACCOUNT_UNLINK, async (_event, provider: string) => {
+  registerChannel(IPC.ACCOUNT_UNLINK, async (_event, provider: string) => {
     if (!isSupportedProvider(provider)) {
       return { success: false, error: 'Unsupported provider' }
     }
     return unlinkAccount(provider)
   })
 
-  ipcMain.handle(
+  registerChannel(
     IPC.ACCOUNT_SET_DISPLAY_NAME,
     async (_event, provider: string, displayName: string) => {
       if (!isSupportedProvider(provider)) {
@@ -56,7 +56,7 @@ export function registerAccountHandlers(): void {
     },
   )
 
-  ipcMain.handle(IPC.ACCOUNT_BILIBILI_FOLLOWINGS, async () => {
+  registerChannel(IPC.ACCOUNT_BILIBILI_FOLLOWINGS, async () => {
     const state = await getAccountState('bilibili')
     if (!state.linked) {
       return { success: false, error: 'Bilibili account is not linked' }

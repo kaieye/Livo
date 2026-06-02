@@ -2,6 +2,7 @@ import type { FeedWithCount } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
 import { remapBilibiliFeedUrlToView } from '../../../shared/bilibili-feed-url'
 import { inferDiscoverFeedViewFromUrl } from './discover-feed'
+import { canonicalizeDiscoverRoute } from '../../../shared/subscription-intake'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 
@@ -145,44 +146,6 @@ export function feedMatchesDiscoverTarget(
   return !!feedRoute && targetRoutes.includes(feedRoute)
 }
 
-export function canonicalizeDiscoverRoute(inputUrl: string): string {
-  const raw = (inputUrl || '').trim()
-  if (!raw) return ''
-
-  let routeWithQuery = ''
-  const rsshubMatch = raw.match(/^rsshub:\/\/+(.+)$/i)
-  if (rsshubMatch?.[1]) {
-    routeWithQuery = rsshubMatch[1].replace(/^\/+/, '')
-  } else {
-    try {
-      const parsed = new URL(raw)
-      routeWithQuery = `${parsed.pathname.replace(/^\/+/, '')}${parsed.search || ''}`
-    } catch {
-      return raw.toLowerCase()
-    }
-  }
-
-  const [pathPart = '', queryPart = ''] = routeWithQuery.split('?', 2)
-  let path = pathPart.toLowerCase()
-  path = path.replace(
-    /^(picnob(?:\.info)?|pixnoy|piokok)\/user\//i,
-    'instagram/user/',
-  )
-  path = path.replace(
-    /^(?:x|twitter)\/user\/([^/?#]+)/i,
-    (_match, user: string) =>
-      `twitter/user/${decodeURIComponent(user).replace(/^@/, '').toLowerCase()}`,
-  )
-
-  if (/^instagram\/user\//i.test(path) || /^twitter\/user\//i.test(path)) {
-    const search = new URLSearchParams(queryPart || '')
-    search.delete('limit')
-    const query = search.toString()
-    return `${path}${query ? `?${query}` : ''}`
-  }
-  return `${path}${queryPart ? `?${queryPart}` : ''}`
-}
-
 export function hostOfDiscoverTarget(target: DiscoverSubscribeTarget): string {
   return hostOf(target.siteUrl || target.url)
 }
@@ -228,3 +191,5 @@ function hostOf(value: string): string {
     return ''
   }
 }
+
+export { canonicalizeDiscoverRoute }

@@ -1,5 +1,6 @@
-﻿import { ipcMain } from 'electron'
-import { app, BrowserWindow } from 'electron'
+import { registerChannel } from '../ipc/register-channel'
+import { app } from 'electron'
+import { getEventBus } from '../services/event-bus'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { IPC, type AppSettings } from '../../shared/types'
@@ -56,20 +57,16 @@ export async function applySettingsUpdate(
   const merged = mergeSettings(getSettings(), updates)
   saveSettings(merged)
   await applyProxySettings(merged)
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send('settings:changed', merged)
-    }
-  }
+  getEventBus().send('settings:changed', merged)
   return merged
 }
 
 export function registerSettingsHandlers(): void {
-  ipcMain.handle(IPC.SETTINGS_GET, () => {
+  registerChannel(IPC.SETTINGS_GET, () => {
     return getSettings()
   })
 
-  ipcMain.handle(
+  registerChannel(
     IPC.SETTINGS_SET,
     async (_event, newSettings: Partial<AppSettings>) => {
       const current = getSettings()

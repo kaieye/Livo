@@ -67,10 +67,7 @@ export function inferDiscoverPlatform(url: string): DiscoverPlatformBadge {
     }
   }
   if (
-    /\/instagram\//i.test(lower) ||
-    /\/picnob(?:\.info)?\//i.test(lower) ||
-    /\/pixnoy\//i.test(lower) ||
-    /\/piokok\//i.test(lower) ||
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\//i.test(lower) ||
     /\/imginn\//i.test(lower)
   ) {
     return {

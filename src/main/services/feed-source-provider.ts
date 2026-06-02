@@ -3,12 +3,7 @@ import type { Feed } from '../../shared/types'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../shared/discover-data'
 import { getSettings } from '../handlers/settings-handlers'
 import { fetchAndParseFeed, type FetchFeedOptions } from './rss-parser'
-import {
-  canonicalizeInstagramFeedUrl,
-  ensureInstagramUserFeedLimit,
-  ensureTwitterUserFeedLimit,
-  normalizeRsshubProtocolUrl,
-} from './rsshub-url'
+import { normalizeFeedUrl } from './rsshub-url'
 import {
   getAggregatorSnapshot,
   pruneAggregatorSnapshots,
@@ -16,6 +11,7 @@ import {
   touchAggregatorFailure,
   type AggregatorDiagnostics,
 } from './aggregator-store'
+import { isInstagramUserFeedUrl } from '../../shared/url-detect'
 
 type ParsedFeed = RssParser.Output<Record<string, any>>
 
@@ -32,7 +28,7 @@ export interface AggregatedFeedPayload {
 function isHighRiskFeed(feedUrl: string | undefined): boolean {
   const raw = (feedUrl || '').toLowerCase()
   return (
-    /(?:^|\/)(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\//.test(raw) ||
+    isInstagramUserFeedUrl(raw) ||
     /(?:^|\/)(?:twitter|x)\/user\//.test(raw) ||
     /\/bilibili\/user\/dynamic\//.test(raw)
   )
@@ -41,7 +37,7 @@ function isHighRiskFeed(feedUrl: string | undefined): boolean {
 function getFeedKey(feed: Feed, normalizedUrl: string): string {
   const raw = normalizedUrl.toLowerCase()
   const instagramUser = raw.match(
-    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok)\/user\/([^/?#]+)/i,
+    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
   )?.[1]
   if (instagramUser)
     return `instagram:user:${decodeURIComponent(instagramUser).replace(/^@/, '')}`
@@ -62,14 +58,7 @@ function getFeedKey(feed: Feed, normalizedUrl: string): string {
 function getNormalizedFeedUrl(feed: Feed): string {
   const rsshubInstance =
     getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
-  const canonicalFeedUrl = canonicalizeInstagramFeedUrl(
-    feed.upstreamUrl || feed.url,
-  )
-  const limitedUrl = ensureTwitterUserFeedLimit(
-    ensureInstagramUserFeedLimit(canonicalFeedUrl, 100),
-    120,
-  )
-  return normalizeRsshubProtocolUrl(limitedUrl, rsshubInstance)
+  return normalizeFeedUrl(feed.upstreamUrl || feed.url, rsshubInstance)
 }
 
 function getDesiredSource(feed: Feed): AggregatedFeedPayload['source'] {
