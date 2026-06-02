@@ -21,6 +21,7 @@ export type ConditionField =
   | 'feed.title'
   | 'feed.url'
   | 'feed.category'
+  | 'ai.semantic'
 
 export type ConditionOperator =
   | 'contains'
@@ -30,6 +31,7 @@ export type ConditionOperator =
   | 'matches_regex'
   | 'starts_with'
   | 'ends_with'
+  | 'semantic_matches'
 
 export interface ActionCondition {
   field: ConditionField
@@ -57,6 +59,7 @@ export const CONDITION_FIELD_LABELS: Record<ConditionField, string> = {
   'feed.title': '订阅源标题',
   'feed.url': '订阅源 URL',
   'feed.category': '订阅源分类',
+  'ai.semantic': 'AI 语义',
 }
 
 export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
@@ -67,6 +70,7 @@ export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
   matches_regex: '匹配正则',
   starts_with: '以…开头',
   ends_with: '以…结尾',
+  semantic_matches: '匹配语义',
 }
 
 export const ACTION_EFFECT_LABELS: Record<ActionEffectType, string> = {
@@ -92,6 +96,8 @@ export function matchCondition(
   entry: { title: string; content?: string; author?: string; url: string },
   feed: { title: string; url: string; category?: string },
 ): boolean {
+  if (isSemanticCondition(condition)) return false
+
   let fieldValue = ''
   switch (condition.field) {
     case 'entry.title':
@@ -114,6 +120,9 @@ export function matchCondition(
       break
     case 'feed.category':
       fieldValue = feed.category || ''
+      break
+    case 'ai.semantic':
+      fieldValue = ''
       break
   }
 
@@ -140,7 +149,16 @@ export function matchCondition(
       } catch {
         return false
       }
+    case 'semantic_matches':
+      return false
   }
+}
+
+export function isSemanticCondition(condition: ActionCondition): boolean {
+  return (
+    condition.field === 'ai.semantic' ||
+    condition.operator === 'semantic_matches'
+  )
 }
 
 export function matchAllConditions(

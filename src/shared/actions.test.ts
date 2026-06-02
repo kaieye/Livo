@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateActionRules, type ActionRule } from './actions'
+import {
+  evaluateActionRules,
+  isSemanticCondition,
+  type ActionRule,
+} from './actions'
 
 const entry = {
   title: 'AI weekly digest',
@@ -76,5 +80,21 @@ describe('evaluateActionRules', () => {
 
     expect(decision.blocked).toBe(false)
     expect(decision.effects).toEqual([])
+  })
+
+  it('keeps semantic conditions out of the sync evaluator', () => {
+    const rule = makeRule({
+      conditions: [
+        {
+          field: 'ai.semantic',
+          operator: 'semantic_matches',
+          value: '报道大模型产品进展',
+        },
+      ],
+      actions: [{ type: 'block' }],
+    })
+
+    expect(isSemanticCondition(rule.conditions[0])).toBe(true)
+    expect(evaluateActionRules([rule], entry, feed).blocked).toBe(false)
   })
 })

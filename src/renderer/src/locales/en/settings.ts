@@ -283,6 +283,7 @@ export const enSettings = {
   conditionsAll: '(match all)',
   addCondition: 'Add Condition',
   matchValue: 'Match value...',
+  semanticMatchValue: 'e.g. related to funding news, but not ads...',
   performActions: 'Actions',
   ruleName: 'Rule Name',
   disableRule: 'Disable Rule',

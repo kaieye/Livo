@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyActionRulesToEntriesAsync,
   applyActionRulesToEntries,
   filterForeignEntries,
   getNextAutoRefreshDelayMs,
 } from './feed-refresh'
 import { FeedViewType, type Entry, type Feed } from '../../shared/types'
 import type { ActionRule } from '../../shared/actions'
+import type { AIConfig } from '../../shared/types'
 
 function makeEntry(url: string): Entry {
   return {
@@ -44,6 +46,12 @@ function makeRule(partial: Partial<ActionRule>): ActionRule {
     actions: partial.actions || [],
     createdAt: partial.createdAt || 1,
   }
+}
+
+const aiConfig: AIConfig = {
+  provider: 'openai',
+  apiKey: 'test-key',
+  model: 'test-model',
 }
 
 describe('filterForeignEntries', () => {
@@ -153,6 +161,66 @@ describe('applyActionRulesToEntries', () => {
     ])
 
     expect(result[0].effects).toEqual(['notify'])
+  })
+
+  it('applies semantic rules through the injected AI judge', async () => {
+    const entry = makeEntry('https://blog.example.com/post-1')
+    const result = await applyActionRulesToEntriesAsync(
+      [entry],
+      makeFeed(),
+      [
+        makeRule({
+          conditions: [
+            {
+              field: 'ai.semantic',
+              operator: 'semantic_matches',
+              value: '与产品发布有关',
+            },
+          ],
+          actions: [{ type: 'star' }, { type: 'mark_read' }],
+        }),
+      ],
+      {
+        aiConfig,
+        semanticJudge: async (input) => ({
+          matched: input.condition === '与产品发布有关',
+          confidence: 0.92,
+          reason: '主题匹配',
+        }),
+      },
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0].entry.isRead).toBe(true)
+    expect(result[0].entry.isStarred).toBe(true)
+  })
+
+  it('treats failed semantic rules as not matched', async () => {
+    const entry = makeEntry('https://blog.example.com/post-1')
+    const result = await applyActionRulesToEntriesAsync(
+      [entry],
+      makeFeed(),
+      [
+        makeRule({
+          conditions: [
+            {
+              field: 'ai.semantic',
+              operator: 'semantic_matches',
+              value: '应该屏蔽',
+            },
+          ],
+          actions: [{ type: 'block' }],
+        }),
+      ],
+      {
+        aiConfig,
+        semanticJudge: async () => {
+          throw new Error('judge failed')
+        },
+      },
+    )
+
+    expect(result).toEqual([{ entry, effects: [] }])
   })
 })
 

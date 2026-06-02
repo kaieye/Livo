@@ -16,6 +16,7 @@ import {
   CONDITION_FIELD_LABELS,
   CONDITION_OPERATOR_LABELS,
   ACTION_EFFECT_LABELS,
+  isSemanticCondition,
 } from '../../../../shared/actions'
 import {
   Plus,
@@ -131,7 +132,7 @@ export function ActionsSettings() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary text-sm">
             {t('settings.actionsDesc')}
           </p>
         </div>
@@ -141,14 +142,14 @@ export function ActionsSettings() {
       <div className="flex items-center gap-2">
         <button
           onClick={handleAdd}
-          className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+          className="bg-accent hover:bg-accent-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white transition-colors"
         >
           <Plus size={14} />
           {t('settings.addRule')}
         </button>
         <button
           onClick={handleImport}
-          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
         >
           <Upload size={14} />
           {t('settings.importRules')}
@@ -156,19 +157,19 @@ export function ActionsSettings() {
         <button
           onClick={handleExport}
           disabled={rules.length === 0}
-          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors hover:bg-surface-secondary disabled:opacity-40 dark:hover:bg-surface-dark-secondary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-40"
         >
           <Download size={14} />
           {t('settings.exportRules')}
         </button>
         {importResult && (
-          <span className="ml-2 text-xs text-accent">{importResult}</span>
+          <span className="text-accent ml-2 text-xs">{importResult}</span>
         )}
       </div>
 
       {/* Rules list */}
       {rules.length === 0 ? (
-        <div className="py-12 text-center text-text-tertiary">
+        <div className="text-text-tertiary py-12 text-center">
           <Zap size={36} className="mx-auto mb-3 opacity-50" />
           <p className="text-sm">{t('settings.noRules')}</p>
           <p className="mt-1 text-xs">{t('settings.noRulesHint')}</p>
@@ -224,7 +225,7 @@ function RuleCard({
   const { t } = useTranslation()
   return (
     <div
-      className={`rounded-xl border transition-all ${rule.enabled ? 'bg-white dark:bg-surface-dark-secondary' : 'bg-surface-secondary opacity-60 dark:bg-surface-dark'}`}
+      className={`rounded-xl border transition-all ${rule.enabled ? 'dark:bg-surface-dark-secondary bg-white' : 'bg-surface-secondary dark:bg-surface-dark opacity-60'}`}
     >
       {/* Header */}
       <div
@@ -237,14 +238,14 @@ function RuleCard({
         {/* Summary badges */}
         <div className="flex items-center gap-1">
           {rule.conditions.length > 0 && (
-            <span className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] text-text-tertiary dark:bg-surface-dark-tertiary">
+            <span className="bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
               {rule.conditions.length} {t('settings.conditions')}
             </span>
           )}
           {rule.actions.map((a, i) => (
             <span
               key={i}
-              className="flex items-center gap-0.5 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent"
+              className="bg-accent/10 text-accent flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px]"
             >
               {EFFECT_ICONS[a.type]}
             </span>
@@ -269,7 +270,7 @@ function RuleCard({
             e.stopPropagation()
             onEdit()
           }}
-          className="rounded p-1 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded p-1 transition-colors"
           title={t('common.edit')}
         >
           <Edit3 size={14} />
@@ -310,13 +311,13 @@ function RulePreview({ rule }: { rule: ActionRule }) {
   return (
     <div className="space-y-2 text-xs">
       <div>
-        <span className="font-medium text-text-secondary dark:text-text-dark-secondary">
+        <span className="text-text-secondary dark:text-text-dark-secondary font-medium">
           {t('settings.conditionsLabel')}
         </span>
         {rule.conditions.map((c, i) => (
           <div
             key={i}
-            className="ml-4 mt-1 text-text-secondary dark:text-text-dark-secondary"
+            className="text-text-secondary dark:text-text-dark-secondary ml-4 mt-1"
           >
             {t(`actionLabels.field_${c.field.replace('.', '_')}`, {
               defaultValue: CONDITION_FIELD_LABELS[c.field],
@@ -324,21 +325,21 @@ function RulePreview({ rule }: { rule: ActionRule }) {
             {t(`actionLabels.op_${c.operator}`, {
               defaultValue: CONDITION_OPERATOR_LABELS[c.operator],
             })}{' '}
-            <span className="rounded bg-surface-secondary px-1 font-mono dark:bg-surface-dark-tertiary">
+            <span className="bg-surface-secondary dark:bg-surface-dark-tertiary rounded px-1 font-mono">
               {c.value || t('settings.emptyValue')}
             </span>
           </div>
         ))}
       </div>
       <div>
-        <span className="font-medium text-text-secondary dark:text-text-dark-secondary">
+        <span className="text-text-secondary dark:text-text-dark-secondary font-medium">
           {t('settings.actionsLabel')}
         </span>
         <div className="ml-4 mt-1 flex flex-wrap gap-1">
           {rule.actions.map((a, i) => (
             <span
               key={i}
-              className="flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent"
+              className="bg-accent/10 text-accent flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
             >
               {EFFECT_ICONS[a.type]}{' '}
               {t(`actionLabels.effect_${a.type}`, {
@@ -389,7 +390,20 @@ function RuleEditor({
     updates: Partial<ActionCondition>,
   ) => {
     setConditions(
-      conditions.map((c, i) => (i === index ? { ...c, ...updates } : c)),
+      conditions.map((c, i) => {
+        if (i !== index) return c
+        const next: ActionCondition = { ...c, ...updates }
+        if (next.field === 'ai.semantic') {
+          next.operator = 'semantic_matches'
+        } else if (next.operator === 'semantic_matches') {
+          next.operator = 'contains'
+        }
+        if (updates.operator === 'semantic_matches') {
+          next.field = 'ai.semantic'
+          next.operator = 'semantic_matches'
+        }
+        return next
+      }),
     )
   }
 
@@ -405,29 +419,29 @@ function RuleEditor({
     <div className="space-y-4">
       {/* Name */}
       <div>
-        <label className="text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+        <label className="text-text-secondary dark:text-text-dark-secondary text-xs font-medium">
           {t('settings.ruleName')}
         </label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full rounded-lg border bg-surface-secondary px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary mt-1 w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2"
         />
       </div>
 
       {/* Conditions */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+          <label className="text-text-secondary dark:text-text-dark-secondary text-xs font-medium">
             {t('settings.conditions')}{' '}
-            <span className="font-normal text-text-tertiary">
+            <span className="text-text-tertiary font-normal">
               {t('settings.conditionsAll')}
             </span>
           </label>
           <button
             onClick={addCondition}
-            className="flex items-center gap-0.5 text-xs text-accent hover:underline"
+            className="text-accent flex items-center gap-0.5 text-xs hover:underline"
           >
             <Plus size={12} /> {t('settings.addCondition')}
           </button>
@@ -442,7 +456,7 @@ function RuleEditor({
                     field: e.target.value as ConditionField,
                   })
                 }
-                className="rounded-lg border bg-surface-secondary px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+                className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:ring-1"
               >
                 {Object.entries(CONDITION_FIELD_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>
@@ -459,22 +473,30 @@ function RuleEditor({
                     operator: e.target.value as ConditionOperator,
                   })
                 }
-                className="rounded-lg border bg-surface-secondary px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+                className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:ring-1"
               >
-                {Object.entries(CONDITION_OPERATOR_LABELS).map(
-                  ([key, label]) => (
+                {Object.entries(CONDITION_OPERATOR_LABELS)
+                  .filter(([key]) =>
+                    cond.field === 'ai.semantic'
+                      ? key === 'semantic_matches'
+                      : key !== 'semantic_matches',
+                  )
+                  .map(([key, label]) => (
                     <option key={key} value={key}>
                       {t(`actionLabels.op_${key}`, { defaultValue: label })}
                     </option>
-                  ),
-                )}
+                  ))}
               </select>
               <input
                 type="text"
                 value={cond.value}
                 onChange={(e) => updateCondition(i, { value: e.target.value })}
-                placeholder={t('settings.matchValue')}
-                className="flex-1 rounded-lg border bg-surface-secondary px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+                placeholder={
+                  isSemanticCondition(cond)
+                    ? t('settings.semanticMatchValue')
+                    : t('settings.matchValue')
+                }
+                className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary flex-1 rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:ring-1"
               />
               <button
                 onClick={() => removeCondition(i)}
@@ -489,7 +511,7 @@ function RuleEditor({
 
       {/* Actions */}
       <div>
-        <label className="mb-2 block text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+        <label className="text-text-secondary dark:text-text-dark-secondary mb-2 block text-xs font-medium">
           {t('settings.performActions')}
         </label>
         <div className="flex flex-wrap gap-2">
@@ -504,7 +526,7 @@ function RuleEditor({
                 className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-accent text-white'
-                    : 'border hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary'
+                    : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary border'
                 }`}
               >
                 {EFFECT_ICONS[type]}
@@ -519,13 +541,13 @@ function RuleEditor({
       <div className="flex justify-end gap-2 border-t pt-2">
         <button
           onClick={onDone}
-          className="rounded-lg border px-3 py-1.5 text-xs transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+          className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg border px-3 py-1.5 text-xs transition-colors"
         >
           {t('common.cancel')}
         </button>
         <button
           onClick={handleSave}
-          className="flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+          className="bg-accent hover:bg-accent-hover flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
         >
           <Check size={12} />
           {t('common.save')}

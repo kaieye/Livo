@@ -265,6 +265,7 @@ export const zhCNSettings = {
   conditionsAll: '(全部匹配)',
   addCondition: '添加条件',
   matchValue: '匹配值...',
+  semanticMatchValue: '例如：与融资新闻相关，且不是广告...',
   performActions: '执行操作',
   ruleName: '规则名称',
   disableRule: '禁用规则',

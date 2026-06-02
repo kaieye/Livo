@@ -29,11 +29,21 @@ import { appendRefreshLog } from './refresh-log-store'
 import { runConcurrencyPool } from '../utils/concurrency-pool'
 import {
   evaluateActionRules,
+  isSemanticCondition,
+  matchCondition,
   type ActionEffectType,
+  type ActionCondition,
   type ActionRule,
 } from '../../shared/actions'
 import { getActionRules } from './action-rules-store'
 import { enqueueEntryActionEffects } from './entry-action-effects'
+import { judgeSemanticFilter } from './ai-filter'
+import { validateAIConfig } from './ai-client'
+import type {
+  AIConfig,
+  AISemanticFilterDecision,
+  AISemanticFilterInput,
+} from '../../shared/types'
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshGeneration = 0
@@ -191,6 +201,16 @@ export interface ActionRuleAppliedEntry {
   effects: ActionEffectType[]
 }
 
+type SemanticFilterJudge = (
+  input: AISemanticFilterInput,
+  config: AIConfig,
+) => Promise<AISemanticFilterDecision>
+
+export interface ApplyActionRulesOptions {
+  aiConfig?: AIConfig
+  semanticJudge?: SemanticFilterJudge
+}
+
 export function applyActionRulesToEntries(
   entries: Entry[],
   feed: Feed,
@@ -235,6 +255,135 @@ export function applyActionRulesToEntries(
   return kept
 }
 
+async function matchSemanticActionCondition(
+  condition: ActionCondition,
+  entry: Entry,
+  feed: Feed,
+  options: ApplyActionRulesOptions,
+): Promise<boolean> {
+  const value = condition.value.trim()
+  const config = options.aiConfig
+  const judge = options.semanticJudge ?? judgeSemanticFilter
+  if (!value || !config) return false
+
+  try {
+    const decision = await judge(
+      {
+        condition: value,
+        title: entry.title,
+        summary: entry.summary || entry.content,
+        feedTitle: feed.title,
+        author: entry.author,
+        url: entry.url,
+      },
+      config,
+    )
+    return decision.matched
+  } catch {
+    return false
+  }
+}
+
+async function matchAllActionConditions(
+  rule: ActionRule,
+  entry: Entry,
+  feed: Feed,
+  options: ApplyActionRulesOptions,
+): Promise<boolean> {
+  if (rule.conditions.length === 0) return false
+
+  const feedContext = {
+    title: feed.title,
+    url: feed.url,
+    category: feed.category,
+  }
+
+  for (const condition of rule.conditions) {
+    if (isSemanticCondition(condition)) {
+      const matched = await matchSemanticActionCondition(
+        condition,
+        entry,
+        feed,
+        options,
+      )
+      if (!matched) return false
+      continue
+    }
+
+    if (
+      !matchCondition(
+        condition,
+        {
+          title: entry.title,
+          content: entry.content,
+          author: entry.author,
+          url: entry.url,
+        },
+        feedContext,
+      )
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+export async function applyActionRulesToEntriesAsync(
+  entries: Entry[],
+  feed: Feed,
+  rules: ActionRule[],
+  options: ApplyActionRulesOptions = {},
+): Promise<ActionRuleAppliedEntry[]> {
+  if (rules.length === 0) {
+    return entries.map((entry) => ({ entry, effects: [] }))
+  }
+
+  const kept: ActionRuleAppliedEntry[] = []
+  for (const entry of entries) {
+    const decision = {
+      blocked: false,
+      star: false,
+      markRead: false,
+      effects: [] as ActionEffectType[],
+    }
+    const seen = new Set<ActionEffectType>()
+
+    for (const rule of rules) {
+      if (!rule.enabled) continue
+      if (!(await matchAllActionConditions(rule, entry, feed, options))) {
+        continue
+      }
+
+      for (const effect of rule.actions) {
+        if (!seen.has(effect.type)) {
+          seen.add(effect.type)
+          decision.effects.push(effect.type)
+        }
+        if (effect.type === 'block') decision.blocked = true
+        else if (effect.type === 'star') decision.star = true
+        else if (effect.type === 'mark_read') decision.markRead = true
+      }
+    }
+
+    if (decision.blocked) continue
+
+    const effects = filterPodcastActionEffects(decision.effects, entry, feed)
+    const nextEntry =
+      decision.star || decision.markRead
+        ? {
+            ...entry,
+            isStarred: entry.isStarred || decision.star,
+            isRead: entry.isRead || decision.markRead,
+          }
+        : entry
+
+    kept.push({ entry: nextEntry, effects })
+  }
+
+  return kept
+}
+
 const PODCAST_TEXT_EFFECTS = new Set<ActionEffectType>([
   'readability',
   'summarize',
@@ -254,11 +403,14 @@ function filterPodcastActionEffects(
   return effects.filter((effect) => !PODCAST_TEXT_EFFECTS.has(effect))
 }
 
-function applyActionRules(
+async function applyActionRules(
   entries: Entry[],
   feed: Feed,
-): ActionRuleAppliedEntry[] {
-  return applyActionRulesToEntries(entries, feed, getActionRules())
+): Promise<ActionRuleAppliedEntry[]> {
+  const aiConfig = getSettings().ai
+  return applyActionRulesToEntriesAsync(entries, feed, getActionRules(), {
+    aiConfig: validateAIConfig(aiConfig) ? undefined : aiConfig,
+  })
 }
 
 function isKnownInstagramUpstreamFailure(error: unknown): boolean {
@@ -540,7 +692,7 @@ export async function refreshSingleFeed(
         parsed.link,
         feed.url,
       )
-      const ruleAppliedEntries = applyActionRules(foreignFiltered, feed)
+      const ruleAppliedEntries = await applyActionRules(foreignFiltered, feed)
       const entriesToInsert = ruleAppliedEntries.map(({ entry }) => entry)
       const effectsByEntryId = new Map(
         ruleAppliedEntries.map(({ entry, effects }) => [entry.id, effects]),
