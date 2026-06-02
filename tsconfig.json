@@ -2,13 +2,12 @@
   "extends": "./config/tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["src/renderer/src/*"],
-      "@main/*": ["src/main/*"],
-      "@preload/*": ["src/preload/*"],
-      "@shared": ["src/shared/index.ts"],
-      "@shared/*": ["src/shared/*"]
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@main/*": ["./src/main/*"],
+      "@preload/*": ["./src/preload/*"],
+      "@shared": ["./src/shared/index.ts"],
+      "@shared/*": ["./src/shared/*"]
     }
   },
   "include": [
