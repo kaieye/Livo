@@ -221,6 +221,40 @@ export type AISemanticFilterResult =
   | { success: true; decision: AISemanticFilterDecision }
   | { success: false; error: string }
 
+export type AIDigestPreset = 'today' | 'week'
+
+export type AIDigestRunStatus = 'running' | 'completed' | 'failed'
+
+export interface AIDigestCandidate {
+  id: string
+  title: string
+  summary?: string
+  content?: string
+  feedTitle?: string
+  url?: string
+  publishedAt: number
+}
+
+export interface AIDigestRun {
+  id: string
+  preset: AIDigestPreset
+  feedId?: string
+  title: string
+  status: AIDigestRunStatus
+  windowStartAt: number
+  windowEndAt: number
+  sourceEntryIds: string[]
+  candidateCount: number
+  content?: string
+  error?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type AIDigestGenerateResult =
+  | { success: true; run: AIDigestRun; candidates: AIDigestCandidate[] }
+  | { success: false; error: string; run?: AIDigestRun }
+
 export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE =
   'You are Livo AI assistant. Answer in concise Chinese. Context: {{context}}. Persona: {{persona}}.'
 
@@ -569,6 +603,8 @@ export const IPC = {
   AI_CHAT: 'ai:chat',
   AI_CHAT_STREAM: 'ai:chat-stream',
   AI_FILTER_JUDGE: 'ai:filter-judge',
+  AI_DIGEST_LIST: 'ai:digest-list',
+  AI_DIGEST_GENERATE: 'ai:digest-generate',
   AI_TEST_CONNECTION: 'ai:test-connection',
   AGENT_RUN: 'agent:run',
   AGENT_RESUME: 'agent:resume',

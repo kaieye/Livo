@@ -16,6 +16,10 @@ import type {
   DiscoverFeedPreviewResult,
   AISemanticFilterInput,
   AISemanticFilterResult,
+  AIDigestCandidate,
+  AIDigestGenerateResult,
+  AIDigestPreset,
+  AIDigestRun,
 } from '../shared/types'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
@@ -642,6 +646,119 @@ async function buildDiscoverFeedPreview(
 }
 
 // ====== OpenAI Client for Browser ======
+
+const WEB_DIGEST_RUNS_KEY = 'livo-ai-digest-runs'
+
+function getWebDigestPresetLabel(preset: AIDigestPreset): string {
+  return preset === 'week' ? '本周趋势' : '今日简报'
+}
+
+function getWebDigestWindow(
+  preset: AIDigestPreset,
+  now = Date.now(),
+): { windowStartAt: number; windowEndAt: number } {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  if (preset === 'week') {
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
+  }
+  return { windowStartAt: start.getTime(), windowEndAt: now }
+}
+
+function readWebDigestRuns(): AIDigestRun[] {
+  try {
+    const raw = localStorage.getItem(WEB_DIGEST_RUNS_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? (parsed as AIDigestRun[]) : []
+  } catch {
+    return []
+  }
+}
+
+function writeWebDigestRuns(runs: AIDigestRun[]): void {
+  localStorage.setItem(WEB_DIGEST_RUNS_KEY, JSON.stringify(runs.slice(0, 100)))
+}
+
+function saveWebDigestRun(run: AIDigestRun): AIDigestRun {
+  const runs = readWebDigestRuns()
+  const index = runs.findIndex((item) => item.id === run.id)
+  if (index >= 0) runs[index] = run
+  else runs.unshift(run)
+  writeWebDigestRuns(runs)
+  return run
+}
+
+function stripDigestText(value: string | undefined): string {
+  return (value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function listWebDigestCandidates(options: {
+  preset: AIDigestPreset
+  feedId?: string
+  now?: number
+}): Promise<AIDigestCandidate[]> {
+  const now = options.now ?? Date.now()
+  const { windowStartAt, windowEndAt } = getWebDigestWindow(options.preset, now)
+  const [feeds, entries] = await Promise.all([getAllFeeds(), dbGetEntries({})])
+  const feedsById = new Map(feeds.map((feed) => [feed.id, feed]))
+  return entries
+    .filter((entry) => {
+      if (options.feedId && entry.feedId !== options.feedId) return false
+      return (
+        entry.publishedAt >= windowStartAt && entry.publishedAt <= windowEndAt
+      )
+    })
+    .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+    .slice(0, 80)
+    .map((entry) => {
+      const feed = feedsById.get(entry.feedId)
+      const content = stripDigestText(
+        entry.readabilityContent || entry.content || entry.summary,
+      )
+      const summary = stripDigestText(entry.aiSummary || entry.summary)
+      return {
+        id: entry.id,
+        title: entry.title || summary.slice(0, 80) || content.slice(0, 80),
+        summary,
+        content,
+        feedTitle: feed?.title,
+        url: entry.url,
+        publishedAt: entry.publishedAt,
+      }
+    })
+    .filter(
+      (candidate) => candidate.title || candidate.summary || candidate.content,
+    )
+}
+
+function buildWebDigestMessages(input: {
+  presetLabel: string
+  candidates: AIDigestCandidate[]
+}): Array<{ role: string; content: string }> {
+  return [
+    {
+      role: 'system',
+      content:
+        '你是 RSS 阅读简报编辑。只依据输入文章生成结构化 Markdown 报告，不编造事实。',
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({
+        preset: input.presetLabel,
+        articles: input.candidates.slice(0, 12).map((candidate) => ({
+          id: candidate.id,
+          title: candidate.title,
+          source: candidate.feedTitle,
+          text: (candidate.summary || candidate.content || '').slice(0, 2400),
+        })),
+        output: '生成关键趋势、值得关注、后续观察三部分；每个判断附来源 id。',
+      }),
+    },
+  ]
+}
 
 async function callAI(
   messages: Array<{ role: string; content: string }>,
@@ -1492,6 +1609,78 @@ export function createWebAPI(): ElectronAPI {
         } catch (error) {
           return { success: false, error: String(error) }
         }
+      },
+
+      digest: {
+        listRuns: async (limit = 20): Promise<AIDigestRun[]> => {
+          return readWebDigestRuns()
+            .sort(
+              (a, b) =>
+                (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt),
+            )
+            .slice(0, Math.max(1, Math.min(limit, 100)))
+        },
+        generate: async (input: {
+          preset: AIDigestPreset
+          feedId?: string
+        }): Promise<AIDigestGenerateResult> => {
+          const preset = input.preset === 'week' ? 'week' : 'today'
+          const presetLabel = getWebDigestPresetLabel(preset)
+          const now = Date.now()
+          const { windowStartAt, windowEndAt } = getWebDigestWindow(preset, now)
+          const candidates = await listWebDigestCandidates({
+            preset,
+            feedId: input.feedId,
+            now,
+          })
+          const run = saveWebDigestRun({
+            id: `digest-${now}-${Math.random().toString(36).slice(2, 8)}`,
+            preset,
+            feedId: input.feedId,
+            title: presetLabel,
+            status: 'running',
+            windowStartAt,
+            windowEndAt,
+            sourceEntryIds: [],
+            candidateCount: candidates.length,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          if (candidates.length === 0) {
+            const failed = saveWebDigestRun({
+              ...run,
+              status: 'failed',
+              error: '当前时间窗内没有可用于生成简报的文章',
+              updatedAt: Date.now(),
+            })
+            return { success: false, error: failed.error || '', run: failed }
+          }
+
+          try {
+            const selected = candidates.slice(0, 12)
+            const result = await callAI(
+              buildWebDigestMessages({ presetLabel, candidates: selected }),
+              { temperature: 0.3, max_tokens: 2200 },
+            )
+            const completed = saveWebDigestRun({
+              ...run,
+              status: 'completed',
+              sourceEntryIds: selected.map((candidate) => candidate.id),
+              content: result.content,
+              updatedAt: Date.now(),
+            })
+            return { success: true, run: completed, candidates: selected }
+          } catch (error) {
+            const failed = saveWebDigestRun({
+              ...run,
+              status: 'failed',
+              error: String(error),
+              updatedAt: Date.now(),
+            })
+            return { success: false, error: String(error), run: failed }
+          }
+        },
       },
 
       onStreamChunk: (

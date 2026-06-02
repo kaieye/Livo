@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, Check, Loader2, UserPlus } from 'lucide-react'
-import { FeedViewType, type AccountProvider } from '../../../../shared/types'
+import { FeedViewType } from '../../../../shared/types'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../../shared/discover-data'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
@@ -184,35 +184,35 @@ export function AccountsSettings() {
 
   return (
     <div className="space-y-8">
-      <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+      <p className="text-text-secondary dark:text-text-dark-secondary text-sm">
         {t('settings.accountsDesc')}
       </p>
 
-      <div className="rounded-xl border bg-white p-4 dark:bg-surface-dark-secondary">
+      <div className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-4">
         <button
           type="button"
           onClick={() => {
             closeSettings(false)
             navigate('/login')
           }}
-          className="flex w-full items-center justify-between gap-3 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+          className="bg-accent hover:bg-accent-hover flex w-full items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
         >
           <span className="flex items-center gap-2">
             <UserPlus size={16} aria-hidden="true" />
             {t('accountLogin.manageInSettings')}
           </span>
         </button>
-        <p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mt-2 text-xs">
           {t('accountLogin.manageInSettingsHint')}
         </p>
       </div>
 
-      <div className="space-y-3 rounded-xl border bg-white p-4 dark:bg-surface-dark-secondary">
+      <div className="dark:bg-surface-dark-secondary space-y-3 rounded-xl border bg-white p-4">
         <div className="flex items-center gap-2">
           <button
             onClick={handleSelfCheck}
             disabled={selfChecking}
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs text-white disabled:opacity-60"
+            className="bg-accent flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-white disabled:opacity-60"
           >
             {selfChecking && <Loader2 size={14} className="animate-spin" />}
             一键自检
@@ -737,8 +737,8 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
   ])
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-white dark:bg-surface-dark-secondary">
-      <div className="flex items-center gap-3 border-b bg-surface-secondary/50 px-4 py-3 dark:bg-surface-dark-tertiary/50">
+    <div className="dark:bg-surface-dark-secondary overflow-hidden rounded-xl border bg-white">
+      <div className="bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 flex items-center gap-3 border-b px-4 py-3">
         <span className={`text-sm font-semibold ${config.colorClass}`}>
           {config.name}
         </span>
@@ -754,23 +754,23 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
       </div>
 
       <div className="px-4 py-3.5">
-        <p className="mb-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-3 text-xs">
           {config.description}
         </p>
         {status.displayName && (
-          <p className="mb-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mb-3 text-xs">
             账号: {status.displayName}
           </p>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
           {loading ? (
-            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+            <div className="text-text-secondary flex items-center gap-1.5 text-xs">
               <Loader2 size={14} className="animate-spin" />
               处理中...
             </div>
           ) : isStatusLoading ? (
-            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+            <div className="text-text-secondary flex items-center gap-1.5 text-xs">
               <Loader2 size={14} className="animate-spin" />
               正在检查状态...
             </div>
@@ -784,7 +784,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           ) : (
             <button
               onClick={handleLink}
-              className="rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+              className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-xs font-medium text-white transition-colors"
             >
               关联账号
             </button>
@@ -793,7 +793,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           <button
             onClick={handleCheck}
             disabled={loading}
-            className="rounded-lg border border-border px-3 py-2 text-xs transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-2 text-xs transition-colors disabled:opacity-60"
           >
             检查关联
           </button>
@@ -802,7 +802,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
             <button
               onClick={() => void handlePreviewBilibiliFollowings(false)}
               disabled={loading || importing || previewing}
-              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
+              className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors disabled:opacity-60"
             >
               {(importing || previewing) && (
                 <Loader2 size={12} className="animate-spin" />
@@ -814,7 +814,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
             <button
               onClick={() => void handlePreviewBilibiliFollowings(true)}
               disabled={loading || importing || previewing}
-              className="rounded-lg border border-border px-3 py-2 text-xs transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
+              className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-2 text-xs transition-colors disabled:opacity-60"
             >
               刷新关注缓存
             </button>
@@ -838,8 +838,8 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           <p className="mt-2 text-xs text-red-500">{errorDetail}</p>
         )}
         {config.provider === 'bilibili' && importProgress && (
-          <div className="mt-2 rounded-md border border-border bg-surface-secondary/50 p-2 dark:bg-surface-dark-tertiary/50">
-            <div className="flex items-center justify-between text-xs text-text-secondary dark:text-text-dark-secondary">
+          <div className="border-border bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 mt-2 rounded-md border p-2">
+            <div className="text-text-secondary dark:text-text-dark-secondary flex items-center justify-between text-xs">
               <span>
                 导入进度：{importProgress.completed}/{importProgress.total}
               </span>
@@ -848,9 +848,9 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
                 失败 {importProgress.failed}
               </span>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary">
+            <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary mt-1.5 h-1.5 overflow-hidden rounded-full">
               <div
-                className="h-full bg-accent transition-[width] duration-200"
+                className="bg-accent h-full transition-[width] duration-200"
                 style={{
                   width: `${importProgress.total > 0 ? Math.round((importProgress.completed / importProgress.total) * 100) : 0}%`,
                 }}
@@ -859,21 +859,21 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
           </div>
         )}
         {config.provider === 'bilibili' && followingsCacheUpdatedAt && (
-          <p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-2 text-xs">
             关注缓存时间：{new Date(followingsCacheUpdatedAt).toLocaleString()}
           </p>
         )}
         {config.provider === 'bilibili' && previewStats && (
-          <div className="mt-3 rounded-md border border-border bg-surface-secondary/60 p-2.5 dark:bg-surface-dark-tertiary/60">
-            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+          <div className="border-border bg-surface-secondary/60 dark:bg-surface-dark-tertiary/60 mt-3 rounded-md border p-2.5">
+            <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
               预览结果：共 {previewStats.total} 个关注，可新增{' '}
               {previewStats.canImport}，已存在 {previewStats.exists}，已勾选{' '}
               {selectedCreatorMids.length}
             </p>
             {pendingCreators && pendingCreators.length > 0 && (
               <div className="mt-2 space-y-2">
-                <div className="rounded border border-border bg-white/70 p-2 dark:bg-surface-dark-secondary/70">
-                  <p className="mb-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+                <div className="border-border dark:bg-surface-dark-secondary/70 rounded border bg-white/70 p-2">
+                  <p className="text-text-secondary dark:text-text-dark-secondary mb-1.5 text-xs">
                     导入到栏目（可多选，默认勾选视频）
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
@@ -916,19 +916,19 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
                       )
                     }
                     disabled={loading || importing || previewing}
-                    className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
+                    className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded border px-2 py-1 text-xs disabled:opacity-60"
                   >
                     全选可导入
                   </button>
                   <button
                     onClick={() => setSelectedCreatorMids([])}
                     disabled={loading || importing || previewing}
-                    className="rounded border border-border px-2 py-1 text-xs hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
+                    className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded border px-2 py-1 text-xs disabled:opacity-60"
                   >
                     清空选择
                   </button>
                 </div>
-                <div className="max-h-56 space-y-1 overflow-auto rounded border border-border bg-white/70 p-2 dark:bg-surface-dark-secondary/70">
+                <div className="border-border dark:bg-surface-dark-secondary/70 max-h-56 space-y-1 overflow-auto rounded border bg-white/70 p-2">
                   {pendingCreators.map((creator) => {
                     const checked = selectedCreatorMids.includes(creator.mid)
                     return (
@@ -983,7 +983,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
                   selectedCreatorMids.length === 0 ||
                   selectedImportViews.length === 0
                 }
-                className="rounded-md bg-accent px-3 py-1.5 text-xs text-white disabled:opacity-60"
+                className="bg-accent rounded-md px-3 py-1.5 text-xs text-white disabled:opacity-60"
               >
                 确认导入
               </button>
@@ -996,7 +996,7 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
                   setSelectedCreatorMids([])
                 }}
                 disabled={loading || importing || previewing}
-                className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-secondary disabled:opacity-60 dark:hover:bg-surface-dark-tertiary"
+                className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-md border px-3 py-1.5 text-xs disabled:opacity-60"
               >
                 取消
               </button>
@@ -1010,13 +1010,13 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               value={manualName}
               onChange={(e) => setManualName(e.target.value)}
               placeholder="手动输入账号名（自动识别失败时）"
-              className="flex-1 rounded-md border bg-surface-secondary px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 dark:bg-surface-dark-tertiary"
+              className="bg-surface-secondary focus:ring-accent/40 dark:bg-surface-dark-tertiary flex-1 rounded-md border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2"
               disabled={loading}
             />
             <button
               onClick={handleSaveName}
               disabled={loading || !manualName.trim()}
-              className="rounded-md bg-accent px-3 py-1.5 text-xs text-white disabled:opacity-60"
+              className="bg-accent rounded-md px-3 py-1.5 text-xs text-white disabled:opacity-60"
             >
               保存账号名
             </button>

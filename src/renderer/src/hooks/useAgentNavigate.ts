@@ -7,7 +7,6 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { AgentNavigationAction } from '@shared'
 import { useSettingsStore } from '../store/settings-store'
-import { useFeedStore } from '../store/feed-store'
 import { useDiscoverStore } from '../store/discover-store'
 import { ROUTES } from '../router/route-paths'
 

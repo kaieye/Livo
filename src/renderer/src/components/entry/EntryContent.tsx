@@ -14,7 +14,7 @@ import { useStoreShallow } from '../../store/helpers'
 import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { useEntryScrollNavigation } from '../../hooks/useEntryScrollNavigation'
 import { usePlayerStore } from '../media/MediaPlayer'
-import { VideoPlayer, transformVideoUrl } from '../media/MediaPlayer'
+import { VideoPlayer } from '../media/MediaPlayer'
 import {
   sanitizeHTML,
   isExternalUrl,

@@ -75,6 +75,7 @@ export function createRendererSharedConfig(projectRoot = process.cwd()): any {
     plugins: [react(), createI18nCompletenessPlugin()],
     server: LIVO_DEV_SERVER,
     build: {
+      chunkSizeWarningLimit: 700,
       rollupOptions: {
         output: {
           manualChunks(id: string) {

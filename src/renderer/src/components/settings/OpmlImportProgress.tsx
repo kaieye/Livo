@@ -27,17 +27,10 @@ interface OpmlImportProgressProps {
  */
 export function OpmlImportProgress({
   importedFeedIds,
-  onRefreshComplete,
+  onRefreshComplete: _onRefreshComplete,
 }: OpmlImportProgressProps) {
   const { t } = useTranslation()
   const progress = useFeedStore((s) => s.importRefreshProgress)
-  const refreshImportedFeeds = useFeedStore((s) => s.refreshImportedFeeds)
-
-  // Trigger refresh on mount if within limits
-  const shouldAutoRefresh =
-    importedFeedIds &&
-    importedFeedIds.length > 0 &&
-    importedFeedIds.length <= OPML_IMPORT_AUTO_REFRESH_LIMIT
 
   // The caller is expected to invoke refreshImportedFeeds when ready.
   // This component only displays progress.

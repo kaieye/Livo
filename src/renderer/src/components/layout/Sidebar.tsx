@@ -5,10 +5,7 @@ import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useSettingsStore } from '../../store/settings-store'
 import { ImportProgressModal } from '../feed/ImportProgressModal'
-import {
-  OpmlImportProgress,
-  OPML_IMPORT_AUTO_REFRESH_LIMIT,
-} from '../settings/OpmlImportProgress'
+import { OpmlImportProgress } from '../settings/OpmlImportProgress'
 import {
   FeedViewType,
   VIEW_DEFINITIONS,
@@ -390,6 +387,7 @@ export function Sidebar({ width }: { width?: number }) {
   const language = useSettingsStore((s) => s.settings.general.language)
   const { isPanelOpen, setPanelOpen } = useAIChatStore()
   const { isOpen: isDiscoverOpen } = useDiscoverStore()
+  const isDigestRoute = location.pathname === '/digest'
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
   const isSearchOpen = useQuickSearchStore((s) => s.isOpen)
   const toggleShortcutHelp = useShortcutHelpStore((s) => s.toggle)
@@ -1730,19 +1728,19 @@ export function Sidebar({ width }: { width?: number }) {
       >
         {/* Drag region for titlebar */}
         <div className="drag-region flex h-12 items-end px-4 pb-1">
-          <span className="no-drag text-base font-bold text-accent">Livo</span>
+          <span className="no-drag text-accent text-base font-bold">Livo</span>
         </div>
 
         {/* View type tabs */}
         <div className="px-2 pb-1 pt-1">
-          <div className="flex items-center gap-0.5 rounded-lg bg-surface-secondary p-0.5 dark:bg-surface-dark-secondary">
+          <div className="bg-surface-secondary dark:bg-surface-dark-secondary flex items-center gap-0.5 rounded-lg p-0.5">
             {/* All */}
             <button
               onMouseDown={() => setUiActiveView(null)}
               onClick={() => handleSelectView(null)}
               className={`duration-120 flex flex-1 items-center justify-center rounded-md p-1.5 transition-[background-color,color,transform] active:scale-95 ${
                 uiActiveView === null
-                  ? 'bg-white text-accent shadow-sm dark:bg-surface-dark'
+                  ? 'text-accent dark:bg-surface-dark bg-white shadow-sm'
                   : 'hover:text-text-primary text-text-secondary dark:text-text-dark-secondary dark:hover:text-text-dark-primary'
               }`}
               title={t('common.all')}
@@ -1764,14 +1762,14 @@ export function Sidebar({ width }: { width?: number }) {
                       onClick={() => handleSelectView(viewType)}
                       className={`duration-120 relative flex flex-1 items-center justify-center rounded-md p-1.5 transition-[background-color,color,transform] active:scale-95 ${
                         uiActiveView === viewType
-                          ? `bg-white shadow-sm dark:bg-surface-dark ${def.color}`
+                          ? `dark:bg-surface-dark bg-white shadow-sm ${def.color}`
                           : 'hover:text-text-primary text-text-secondary dark:text-text-dark-secondary dark:hover:text-text-dark-primary'
                       }`}
                       title={t(VIEW_TYPE_I18N_KEYS[viewType] || def.name)}
                     >
                       {VIEW_ICONS[viewType]}
                       {unread > 0 && (
-                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent" />
+                        <span className="bg-accent absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full" />
                       )}
                     </button>
                   )
@@ -1792,7 +1790,7 @@ export function Sidebar({ width }: { width?: number }) {
           {/* All feeds in current view */}
           <button
             onClick={() => handleSelectFeed(null)}
-            className={`sidebar-item w-full ${selectedFeedId === null ? 'sidebar-item-active' : ''}`}
+            className={`sidebar-item w-full ${selectedFeedId === null && !isDigestRoute ? 'sidebar-item-active' : ''}`}
           >
             <Rss size={18} />
             <span className="flex-1 truncate text-left">
@@ -1801,7 +1799,7 @@ export function Sidebar({ width }: { width?: number }) {
                 : t('common.all')}
             </span>
             {totalUnread > 0 && (
-              <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-xs text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary">
+              <span className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary rounded-full px-2 py-0.5 text-xs">
                 {totalUnread}
               </span>
             )}
@@ -1831,12 +1829,20 @@ export function Sidebar({ width }: { width?: number }) {
             </span>
           </button>
 
+          <button
+            onClick={() => navigate('/digest')}
+            className={`sidebar-item w-full ${isDigestRoute ? 'sidebar-item-active' : ''}`}
+          >
+            <Sparkles size={18} />
+            <span className="flex-1 truncate text-left">AI 简报</span>
+          </button>
+
           {showGlobalFeedSearch && (
             <div className="mt-1 px-1">
               <div className="relative">
                 <Search
                   size={14}
-                  className="dark:text-text-dark-tertiary pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary"
+                  className="dark:text-text-dark-tertiary text-text-tertiary pointer-events-none absolute left-2 top-1/2 -translate-y-1/2"
                 />
                 <input
                   value={allFeedsSearch}
@@ -1847,7 +1853,7 @@ export function Sidebar({ width }: { width?: number }) {
                       'Search subscribed feeds in this column',
                     ),
                   })}
-                  className="dark:placeholder:text-text-dark-tertiary w-full rounded-lg border bg-white py-1.5 pl-7 pr-2 text-xs placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                  className="dark:placeholder:text-text-dark-tertiary placeholder:text-text-tertiary focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white py-1.5 pl-7 pr-2 text-xs focus:outline-none focus:ring-1"
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') setAllFeedsSearch('')
                     if (e.key === 'Enter') {
@@ -1873,19 +1879,19 @@ export function Sidebar({ width }: { width?: number }) {
                   setShowNewFolder(true)
                   setNewFolderName(getDefaultFolderName())
                 }}
-                className="mb-1 flex w-full items-center gap-1.5 px-3 py-1 text-xs font-medium text-text-tertiary transition-colors hover:text-accent"
+                className="text-text-tertiary hover:text-accent mb-1 flex w-full items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors"
               >
                 <FolderPlus size={13} />
                 <span>{t('sidebar.newFolder')}</span>
               </button>
             ) : (
               <div className="mb-1 flex items-center gap-1 px-3 py-1">
-                <FolderPlus size={13} className="flex-shrink-0 text-accent" />
+                <FolderPlus size={13} className="text-accent flex-shrink-0" />
                 <input
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   placeholder={getDefaultFolderName()}
-                  className="min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-xs focus:outline-none focus:ring-1"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && newFolderName.trim()) {
@@ -1944,13 +1950,13 @@ export function Sidebar({ width }: { width?: number }) {
             )}
 
             {userVisibleFeedCount === 0 && activeView !== null && (
-              <div className="py-6 text-center text-xs text-text-secondary dark:text-text-dark-secondary">
+              <div className="text-text-secondary dark:text-text-dark-secondary py-6 text-center text-xs">
                 <p>{t('sidebar.noFeedsInCategory')}</p>
                 <p className="mt-1">{t('sidebar.addFeedHint')}</p>
               </div>
             )}
             {userVisibleFeedCount === 0 && allFeedsSearchLower && (
-              <div className="py-6 text-center text-xs text-text-secondary dark:text-text-dark-secondary">
+              <div className="text-text-secondary dark:text-text-dark-secondary py-6 text-center text-xs">
                 <p>
                   {t('common.noResults', {
                     defaultValue: i18nDefault(
@@ -1991,14 +1997,14 @@ export function Sidebar({ width }: { width?: number }) {
           >
             <Search size={18} />
             <span className="flex-1 text-left">{t('sidebar.search')}</span>
-            <kbd className="rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] text-text-tertiary dark:bg-surface-dark-tertiary">
+            <kbd className="bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
               Ctrl+K
             </kbd>
           </button>
 
           {/* Import result notification */}
           {importResult && (
-            <div className="truncate rounded-lg bg-accent/10 px-3 py-1.5 text-xs text-accent">
+            <div className="bg-accent/10 text-accent truncate rounded-lg px-3 py-1.5 text-xs">
               {importResult}
             </div>
           )}
@@ -2021,7 +2027,7 @@ export function Sidebar({ width }: { width?: number }) {
             <button
               onClick={handleImportOPML}
               disabled={isImporting}
-              className="sidebar-item flex-1 justify-center text-text-secondary disabled:opacity-50 dark:text-text-dark-secondary"
+              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center disabled:opacity-50"
               title={t('sidebar.importOPML')}
             >
               <Upload
@@ -2031,7 +2037,7 @@ export function Sidebar({ width }: { width?: number }) {
             </button>
             <button
               onClick={() => exportOPML()}
-              className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary"
+              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
               title={t('sidebar.exportOPML')}
             >
               <Download size={18} />
@@ -2039,7 +2045,7 @@ export function Sidebar({ width }: { width?: number }) {
             <button
               onClick={refreshAll}
               disabled={isRefreshing}
-              className="sidebar-item flex-1 justify-center text-text-secondary disabled:opacity-50 dark:text-text-dark-secondary"
+              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center disabled:opacity-50"
               title={t('sidebar.refreshAll')}
             >
               <RefreshCw
@@ -2049,14 +2055,14 @@ export function Sidebar({ width }: { width?: number }) {
             </button>
             <button
               onClick={() => navigate('/settings')}
-              className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary"
+              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
               title={t('sidebar.settings')}
             >
               <Settings size={18} />
             </button>
             <button
               onClick={toggleShortcutHelp}
-              className="sidebar-item flex-1 justify-center text-text-secondary dark:text-text-dark-secondary"
+              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
               title={t('sidebar.shortcuts')}
             >
               <Keyboard size={18} />
@@ -2074,7 +2080,7 @@ export function Sidebar({ width }: { width?: number }) {
       {/* Feed context menu */}
       {contextMenu && (
         <div
-          className="fixed z-50 min-w-[160px] rounded-lg border bg-white py-1 shadow-lg dark:bg-surface-dark-secondary"
+          className="dark:bg-surface-dark-secondary fixed z-50 min-w-[160px] rounded-lg border bg-white py-1 shadow-lg"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseLeave={() => setContextMenu(null)}
         >
@@ -2082,7 +2088,7 @@ export function Sidebar({ width }: { width?: number }) {
             /* Recommended feed 锟?subscribe or read actions only (built-in, cannot delete) */
             <>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="text-accent hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={async () => {
                   // "Subscribe" here means move from Recommended to normal subscriptions.
                   const feed = feeds.find((f) => f.id === contextMenu.feedId)
@@ -2118,7 +2124,7 @@ export function Sidebar({ width }: { width?: number }) {
                 {t('sidebar.subscribe')}
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={() => {
                   const feed = feeds.find((f) => f.id === contextMenu.feedId)
                   if (feed)
@@ -2137,7 +2143,7 @@ export function Sidebar({ width }: { width?: number }) {
                 {t('sidebar.editFeed')}
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -2186,7 +2192,7 @@ export function Sidebar({ width }: { width?: number }) {
                 {t('sidebar.refreshFeed')}
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={() => {
                   markAllRead(contextMenu.feedId)
                   setContextMenu(null)
@@ -2200,7 +2206,7 @@ export function Sidebar({ width }: { width?: number }) {
             /* User feed 锟?normal actions */
             <>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={() => {
                   const feed = feeds.find((f) => f.id === contextMenu.feedId)
                   if (feed)
@@ -2219,7 +2225,7 @@ export function Sidebar({ width }: { width?: number }) {
                 {t('sidebar.editFeed')}
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -2268,7 +2274,7 @@ export function Sidebar({ width }: { width?: number }) {
                 {t('sidebar.refreshFeed')}
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
                 onClick={() => {
                   markAllRead(contextMenu.feedId)
                   setContextMenu(null)
@@ -2278,7 +2284,7 @@ export function Sidebar({ width }: { width?: number }) {
                 {t('sidebar.markAllRead')}
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500"
                 onClick={() => {
                   unsubscribeFeed(contextMenu.feedId)
                   setContextMenu(null)
@@ -2295,13 +2301,13 @@ export function Sidebar({ width }: { width?: number }) {
       {/* Category context menu */}
       {categoryContextMenu && (
         <div
-          className="fixed z-50 min-w-[180px] rounded-lg border bg-white py-1 shadow-lg dark:bg-surface-dark-secondary"
+          className="dark:bg-surface-dark-secondary fixed z-50 min-w-[180px] rounded-lg border bg-white py-1 shadow-lg"
           style={{ left: categoryContextMenu.x, top: categoryContextMenu.y }}
           onMouseLeave={() => setCategoryContextMenu(null)}
         >
           {!isDefaultCategoryMenu && (
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
               onClick={() => {
                 setRenamingCategory({
                   oldName: categoryContextMenu.category,
@@ -2315,7 +2321,7 @@ export function Sidebar({ width }: { width?: number }) {
             </button>
           )}
           <button
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -2361,7 +2367,7 @@ export function Sidebar({ width }: { width?: number }) {
             {t('sidebar.refreshCategory')}
           </button>
           <button
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
             onClick={() => {
               for (const fid of categoryContextMenu.feedIds) markAllRead(fid)
               setCategoryContextMenu(null)
@@ -2372,7 +2378,7 @@ export function Sidebar({ width }: { width?: number }) {
           </button>
           {!isDefaultCategoryMenu && (
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-500"
               onClick={() => {
                 if (
                   categoryContextMenu.feedIds.length === 0 ||
@@ -2402,7 +2408,7 @@ export function Sidebar({ width }: { width?: number }) {
           onClick={() => setRenamingCategory(null)}
         >
           <div
-            className="w-[340px] space-y-4 rounded-xl bg-white p-5 shadow-2xl dark:bg-surface-dark-secondary"
+            className="dark:bg-surface-dark-secondary w-[340px] space-y-4 rounded-xl bg-white p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-medium">{t('sidebar.renameFolder')}</h3>
@@ -2414,7 +2420,7 @@ export function Sidebar({ width }: { width?: number }) {
                   newName: e.target.value,
                 })
               }
-              className="w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+              className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -2435,7 +2441,7 @@ export function Sidebar({ width }: { width?: number }) {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setRenamingCategory(null)}
-                className="rounded-lg px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg px-3 py-1.5 text-sm"
               >
                 {t('common.cancel')}
               </button>
@@ -2451,7 +2457,7 @@ export function Sidebar({ width }: { width?: number }) {
                   }
                   setRenamingCategory(null)
                 }}
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90"
+                className="bg-accent hover:bg-accent/90 rounded-lg px-3 py-1.5 text-sm text-white"
               >
                 {t('common.save')}
               </button>
@@ -2467,21 +2473,21 @@ export function Sidebar({ width }: { width?: number }) {
           onClick={() => setEditingFeed(null)}
         >
           <div
-            className="w-[400px] space-y-4 rounded-xl bg-white p-5 shadow-2xl dark:bg-surface-dark-secondary"
+            className="dark:bg-surface-dark-secondary w-[400px] space-y-4 rounded-xl bg-white p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium">{t('sidebar.editFeed')}</h3>
               <button
                 onClick={() => setEditingFeed(null)}
-                className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
               >
                 <XIcon size={16} />
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+                <label className="text-text-secondary dark:text-text-dark-secondary mb-1 block text-xs font-medium">
                   {t('sidebar.editFeedTitle')}
                 </label>
                 <input
@@ -2489,12 +2495,12 @@ export function Sidebar({ width }: { width?: number }) {
                   onChange={(e) =>
                     setEditingFeed({ ...editingFeed, title: e.target.value })
                   }
-                  className="w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+                <label className="text-text-secondary dark:text-text-dark-secondary mb-1 flex items-center gap-1 text-xs font-medium">
                   <Link size={12} />
                   {t('sidebar.editFeedUrl')}
                 </label>
@@ -2503,12 +2509,12 @@ export function Sidebar({ width }: { width?: number }) {
                   onChange={(e) =>
                     setEditingFeed({ ...editingFeed, url: e.target.value })
                   }
-                  className="w-full rounded-lg border bg-white px-3 py-1.5 font-mono text-sm text-xs focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white px-3 py-1.5 font-mono text-sm text-xs focus:outline-none focus:ring-1"
                   placeholder="https://example.com/feed.xml"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+                <label className="text-text-secondary dark:text-text-dark-secondary mb-1 block text-xs font-medium">
                   {t('sidebar.editFeedCategory')}
                 </label>
                 <input
@@ -2516,12 +2522,12 @@ export function Sidebar({ width }: { width?: number }) {
                   onChange={(e) =>
                     setEditingFeed({ ...editingFeed, category: e.target.value })
                   }
-                  className="w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
                   placeholder={t('common.uncategorized')}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+                <label className="text-text-secondary dark:text-text-dark-secondary mb-1 block text-xs font-medium">
                   {t('sidebar.editFeedView')}
                 </label>
                 <select
@@ -2532,7 +2538,7 @@ export function Sidebar({ width }: { width?: number }) {
                       view: Number(e.target.value) as FeedViewType,
                     })
                   }
-                  className="w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
                 >
                   {Object.entries(VIEW_DEFINITIONS).map(([k]) => (
                     <option key={k} value={k}>
@@ -2544,7 +2550,7 @@ export function Sidebar({ width }: { width?: number }) {
                   ))}
                 </select>
               </div>
-              <label className="flex items-center justify-between gap-3 rounded-lg border bg-surface-secondary/50 px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-tertiary/50">
+              <label className="bg-surface-secondary/50 dark:border-border-dark dark:bg-surface-dark-tertiary/50 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
                 <span className="text-text-primary dark:text-text-dark-primary">
                   {t('sidebar.editFeedShowInAll', {
                     defaultValue: i18nDefault('Show in All', 'Show in All'),
@@ -2559,14 +2565,14 @@ export function Sidebar({ width }: { width?: number }) {
                       showInAll: e.target.checked,
                     })
                   }
-                  className="h-4 w-4 accent-accent"
+                  className="accent-accent h-4 w-4"
                 />
               </label>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setEditingFeed(null)}
-                className="rounded-lg px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg px-3 py-1.5 text-sm"
               >
                 {t('common.cancel')}
               </button>
@@ -2581,7 +2587,7 @@ export function Sidebar({ width }: { width?: number }) {
                   })
                   setEditingFeed(null)
                 }}
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90"
+                className="bg-accent hover:bg-accent/90 rounded-lg px-3 py-1.5 text-sm text-white"
               >
                 {t('common.save')}
               </button>
@@ -2597,7 +2603,7 @@ export function Sidebar({ width }: { width?: number }) {
           className="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-1/2"
           style={{ left: dragOverlay.x, top: dragOverlay.y }}
         >
-          <div className="dark:text-text-dark flex items-center gap-2 whitespace-nowrap rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-text shadow-xl ring-1 ring-black/10 dark:bg-surface-dark dark:ring-white/10">
+          <div className="dark:text-text-dark text-text dark:bg-surface-dark flex items-center gap-2 whitespace-nowrap rounded-lg bg-white px-3 py-1.5 text-sm font-medium shadow-xl ring-1 ring-black/10 dark:ring-white/10">
             <GripVertical size={12} className="text-text-tertiary" />
             {dragOverlay.label}
           </div>
@@ -2679,7 +2685,7 @@ const FeedCategory = memo(function FeedCategory({
       data-drop-category={category}
       className={`mb-1 rounded-lg transition-all duration-300 ${
         isDropHover
-          ? 'scale-[1.01] bg-accent/10 ring-2 ring-inset ring-accent/40'
+          ? 'bg-accent/10 ring-accent/40 scale-[1.01] ring-2 ring-inset'
           : ''
       }`}
     >
@@ -2703,7 +2709,7 @@ const FeedCategory = memo(function FeedCategory({
           className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
         />
         {category}
-        <span className="ml-auto text-text-tertiary">{feeds.length}</span>
+        <span className="text-text-tertiary ml-auto">{feeds.length}</span>
       </button>
       <div
         className="overflow-hidden transition-all duration-300 ease-in-out"
@@ -2745,7 +2751,7 @@ const FeedCategory = memo(function FeedCategory({
                     <button
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
-                      className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-1 ring-accent/50' : ''}`}
+                      className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
                     >
                       <GripVertical
                         size={12}
@@ -2766,7 +2772,7 @@ const FeedCategory = memo(function FeedCategory({
                       <span className="flex-1 truncate text-left">
                         {getSidebarFeedDisplayTitle(feed)}
                       </span>
-                      <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                      <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
                         {feed.unreadCount}
                       </span>
                     </button>
@@ -2790,7 +2796,7 @@ const FeedCategory = memo(function FeedCategory({
                     <button
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
-                      className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-1 ring-accent/50' : ''}`}
+                      className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
                     >
                       {/* Drag grip 锟?pointer-based drag for smooth following */}
                       <GripVertical
@@ -2812,7 +2818,7 @@ const FeedCategory = memo(function FeedCategory({
                       <span className="flex-1 truncate text-left">
                         {getSidebarFeedDisplayTitle(feed)}
                       </span>
-                      <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                      <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
                         {feed.unreadCount}
                       </span>
                     </button>
@@ -2857,7 +2863,7 @@ const RecommendedSection = memo(function RecommendedSection({
   const totalUnread = feeds.reduce((sum, f) => sum + f.unreadCount, 0)
 
   return (
-    <div className="mb-1 mt-2 border-t border-border pt-2 dark:border-border-dark">
+    <div className="border-border dark:border-border-dark mb-1 mt-2 border-t pt-2">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-1 px-3 py-1 text-xs font-medium tracking-wider text-amber-600 dark:text-amber-400"
@@ -2874,7 +2880,7 @@ const RecommendedSection = memo(function RecommendedSection({
           </span>
         )}
         {totalUnread === 0 && (
-          <span className="ml-auto text-text-tertiary">{feeds.length}</span>
+          <span className="text-text-tertiary ml-auto">{feeds.length}</span>
         )}
       </button>
       {expanded && (
@@ -2897,7 +2903,7 @@ const RecommendedSection = memo(function RecommendedSection({
               <span className="flex-1 truncate text-left">
                 {getSidebarFeedDisplayTitle(feed)}
               </span>
-              <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+              <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
                 {feed.unreadCount}
               </span>
             </button>

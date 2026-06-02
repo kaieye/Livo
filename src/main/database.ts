@@ -11,7 +11,13 @@ import {
   mkdirSync,
   statSync,
 } from 'fs'
-import type { Feed, Entry } from '../shared/types'
+import type {
+  AIDigestCandidate,
+  AIDigestPreset,
+  AIDigestRun,
+  Entry,
+  Feed,
+} from '../shared/types'
 import { FeedViewType } from '../shared/types'
 import {
   cleanupDatabaseEntries,
@@ -38,9 +44,10 @@ export type { CleanupOptions, CleanupStats } from './database/cleanup'
 interface DatabaseData {
   feeds: Feed[]
   entries: Entry[]
+  aiDigestRuns?: AIDigestRun[]
 }
 
-let data: DatabaseData = { feeds: [], entries: [] }
+let data: DatabaseData = { feeds: [], entries: [], aiDigestRuns: [] }
 let dbPath = ''
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let feedByUrlIndex = new Map<string, Feed>()
@@ -74,6 +81,24 @@ function rebuildIndexes(): void {
   markEntriesOrderDirty()
 }
 
+function normalizeDatabaseShape(): void {
+  if (!data.feeds) data.feeds = []
+  if (!data.entries) data.entries = []
+  if (!Array.isArray(data.aiDigestRuns)) data.aiDigestRuns = []
+}
+
+function getAIDigestRuns(): AIDigestRun[] {
+  if (!Array.isArray(data.aiDigestRuns)) data.aiDigestRuns = []
+  return data.aiDigestRuns
+}
+
+function stripDigestText(value: string | undefined): string {
+  return (value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function getDbDir(): string {
   const userDataPath = app.getPath('userData')
   return join(userDataPath, 'data')
@@ -100,8 +125,7 @@ export async function initDatabase(): Promise<void> {
       if (sourceDbPath !== dbPath && !existsSync(dbPath)) {
         writeFileSync(dbPath, raw)
       }
-      if (!data.feeds) data.feeds = []
-      if (!data.entries) data.entries = []
+      normalizeDatabaseShape()
 
       // Migration: ensure all feeds have a view field
       for (const feed of data.feeds) {
@@ -214,7 +238,7 @@ export async function initDatabase(): Promise<void> {
         }
       }
     } catch {
-      data = { feeds: [], entries: [] }
+      data = { feeds: [], entries: [], aiDigestRuns: [] }
     }
   }
 
@@ -622,6 +646,109 @@ export function searchEntries(query: string, limit = 50): Entry[] {
   return dedupeEntriesForRead(result, markEntriesOrderDirty)
     .sort((a, b) => b.publishedAt - a.publishedAt)
     .slice(0, limit)
+}
+
+export function getDigestWindow(
+  preset: AIDigestPreset,
+  now = Date.now(),
+): { windowStartAt: number; windowEndAt: number } {
+  const date = new Date(now)
+  const start = new Date(date)
+  start.setHours(0, 0, 0, 0)
+  if (preset === 'week') {
+    const day = start.getDay()
+    const diffToMonday = (day + 6) % 7
+    start.setDate(start.getDate() - diffToMonday)
+  }
+  return { windowStartAt: start.getTime(), windowEndAt: now }
+}
+
+export function listDigestCandidates(options: {
+  preset: AIDigestPreset
+  feedId?: string
+  limit?: number
+  now?: number
+}): AIDigestCandidate[] {
+  const { windowStartAt, windowEndAt } = getDigestWindow(
+    options.preset,
+    options.now,
+  )
+  const feedsById = new Map(data.feeds.map((feed) => [feed.id, feed]))
+  const limit = Math.max(1, Math.min(options.limit ?? 80, 200))
+  const candidates: AIDigestCandidate[] = []
+
+  for (const entry of getEntriesByPublishedDesc()) {
+    if (candidates.length >= limit) break
+    if (options.feedId && entry.feedId !== options.feedId) continue
+    if (entry.publishedAt < windowStartAt || entry.publishedAt > windowEndAt)
+      continue
+    const feed = feedsById.get(entry.feedId)
+    if (!feed || feed.showInAll === false) continue
+    const content = stripDigestText(
+      entry.readabilityContent || entry.content || entry.summary,
+    )
+    const summary = stripDigestText(entry.aiSummary || entry.summary)
+    if (!entry.title && !content && !summary) continue
+    candidates.push({
+      id: entry.id,
+      title: entry.title || summary.slice(0, 80) || content.slice(0, 80),
+      summary,
+      content,
+      feedTitle: feed.title,
+      url: entry.url,
+      publishedAt: entry.publishedAt,
+    })
+  }
+
+  return candidates
+}
+
+export function listAIDigestRuns(limit = 20): AIDigestRun[] {
+  return [...getAIDigestRuns()]
+    .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
+    .slice(0, Math.max(1, Math.min(limit, 100)))
+}
+
+export function upsertAIDigestRun(
+  input: Omit<AIDigestRun, 'id' | 'createdAt' | 'updatedAt'>,
+): AIDigestRun {
+  const runs = getAIDigestRuns()
+  const now = Date.now()
+  const existing = runs.find(
+    (run) =>
+      run.preset === input.preset &&
+      run.feedId === input.feedId &&
+      run.windowStartAt === input.windowStartAt,
+  )
+  if (existing) {
+    Object.assign(existing, {
+      ...input,
+      updatedAt: now,
+    })
+    scheduleSave()
+    return existing
+  }
+
+  const run: AIDigestRun = {
+    ...input,
+    id: `digest-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: now,
+    updatedAt: now,
+  }
+  runs.push(run)
+  scheduleSave()
+  return run
+}
+
+export function updateAIDigestRun(
+  id: string,
+  updates: Partial<Omit<AIDigestRun, 'id' | 'createdAt'>>,
+): AIDigestRun | null {
+  const run = getAIDigestRuns().find((item) => item.id === id)
+  if (!run) return null
+  Object.assign(run, updates, { updatedAt: Date.now() })
+  scheduleSave()
+  return run
 }
 
 export function getUnreadCount(feedId: string): number {

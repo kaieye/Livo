@@ -1355,7 +1355,7 @@ async function fetchXFollowersViaJinaNode(
   return undefined
 }
 
-async function fetchXFollowersByUsername(
+async function _fetchXFollowersByUsername(
   usernameRaw: string,
 ): Promise<string | undefined> {
   const username = usernameRaw.trim().replace(/^@+/, '')
@@ -1631,7 +1631,7 @@ function normalizeImageUrl(input: string): string {
   return decodeHtmlEntities((input || '').trim()).replace(/\\\//g, '/')
 }
 
-function isInstagramLetterFallbackAvatar(url?: string): boolean {
+function _isInstagramLetterFallbackAvatar(url?: string): boolean {
   const raw = (url || '').trim().toLowerCase()
   if (!raw.startsWith('data:image/svg+xml')) return false
   return (
@@ -1639,7 +1639,7 @@ function isInstagramLetterFallbackAvatar(url?: string): boolean {
   )
 }
 
-async function withSoftTimeout<T>(
+async function _withSoftTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
 ): Promise<T | undefined> {

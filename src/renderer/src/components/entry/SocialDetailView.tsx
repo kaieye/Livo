@@ -59,7 +59,7 @@ export interface SocialDetailViewProps {
  * consider promoting shared layout logic to a more generic SocialContentLayout.
  */
 export const SocialDetailView = memo(function SocialDetailView({
-  entryId,
+  entryId: _entryId,
   paragraphs,
   fullContent,
   plainContent,

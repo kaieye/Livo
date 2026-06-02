@@ -99,7 +99,6 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     refreshFeed,
     refreshMultiple,
     refreshAll,
-    isRefreshing,
   } = useFeedStore()
 
   const showRecommended = useGeneralSettingKey('showRecommended')
@@ -275,7 +274,6 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
 
   // Progressive grid rendering state
   const GRID_INITIAL_COUNT = 40
-  const GRID_LOAD_MORE_COUNT = 40
   const [gridVisibleCount, setGridVisibleCount] = useState(GRID_INITIAL_COUNT)
 
   // Handle scroll for load-more and grid progressive rendering

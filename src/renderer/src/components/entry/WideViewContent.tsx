@@ -821,7 +821,7 @@ export function WideViewContent() {
   }, [selectedFeedId])
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-surface-dark">
+    <div className="dark:bg-surface-dark relative flex min-w-0 flex-1 flex-col bg-white">
       <WideViewHeader
         activeView={effectiveActiveView}
         inlineBilibili={!!inlineBilibili}
@@ -880,8 +880,8 @@ export function WideViewContent() {
           />
         ) : renderEntries.length === 0 ? (
           selectedFeedId && selectedFeedId !== 'starred' ? (
-            <div className="flex flex-col items-center justify-center py-12 text-text-secondary dark:text-text-dark-secondary">
-              <Inbox size={40} className="mb-3 text-text-tertiary" />
+            <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
+              <Inbox size={40} className="text-text-tertiary mb-3" />
               <p className="text-sm">{t('entryList.noArticles')}</p>
               <button
                 onClick={async () => {
@@ -889,7 +889,7 @@ export function WideViewContent() {
                   loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
                 }}
                 disabled={isRefreshing}
-                className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90 disabled:opacity-50"
+                className="bg-accent hover:bg-accent/90 mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white disabled:opacity-50"
               >
                 <RefreshCw
                   size={14}
@@ -901,8 +901,8 @@ export function WideViewContent() {
           ) : effectiveActiveView !== null ? (
             <ViewRecommendations viewType={effectiveActiveView} />
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-text-secondary dark:text-text-dark-secondary">
-              <Inbox size={40} className="mb-3 text-text-tertiary" />
+            <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
+              <Inbox size={40} className="text-text-tertiary mb-3" />
               <p className="text-sm">{t('entryList.noArticles')}</p>
               <p className="mt-1 text-xs">{t('entryList.addFeedToStart')}</p>
             </div>
@@ -910,7 +910,7 @@ export function WideViewContent() {
         ) : inlineBilibili &&
           (effectiveActiveView === FeedViewType.Videos ||
             effectiveActiveView === FeedViewType.SocialMedia) ? (
-          <div className="flex h-full min-h-[520px] flex-col bg-white dark:bg-surface-dark">
+          <div className="dark:bg-surface-dark flex h-full min-h-[520px] flex-col bg-white">
             <div className="min-h-0 flex-1 bg-black">
               <webview
                 src={inlineBilibili.url}
@@ -1291,13 +1291,13 @@ function VideoModal({
           {/* Bilibili: keep inside current page and show web page on the right side */}
           {videoSource.type === 'bilibili' && (
             <div className="flex h-full w-full flex-col lg:flex-row">
-              <div className="w-full overflow-y-auto bg-white p-4 dark:bg-surface-dark lg:w-[34%]">
+              <div className="dark:bg-surface-dark w-full overflow-y-auto bg-white p-4 lg:w-[34%]">
                 {entry.title && (
                   <h3 className="text-base font-semibold leading-snug">
                     {entry.title}
                   </h3>
                 )}
-                <div className="mt-1.5 flex items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+                <div className="text-text-secondary dark:text-text-dark-secondary mt-1.5 flex items-center gap-2 text-xs">
                   {feedTitle && <span>{feedTitle}</span>}
                   <span>·</span>
                   <span>{timeAgo}</span>
@@ -1308,7 +1308,7 @@ function VideoModal({
                         href={entry.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-accent hover:underline"
+                        className="text-accent inline-flex items-center gap-1 hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <ExternalLink size={11} />
@@ -1320,7 +1320,7 @@ function VideoModal({
                 {description &&
                   !isDescriptionRedundant(entry.title, description) && (
                     <div
-                      className="prose prose-sm mt-3 max-w-none text-text-secondary dark:prose-invert dark:text-text-dark-secondary"
+                      className="prose prose-sm text-text-secondary dark:prose-invert dark:text-text-dark-secondary mt-3 max-w-none"
                       dangerouslySetInnerHTML={{ __html: description }}
                     />
                   )}
@@ -1378,13 +1378,13 @@ function VideoModal({
 
         {/* Info area below video */}
         {videoSource.type !== 'bilibili' && (
-          <div className="max-h-[22vh] min-h-[132px] overflow-y-auto rounded-b-xl bg-white p-5 dark:bg-surface-dark">
+          <div className="dark:bg-surface-dark max-h-[22vh] min-h-[132px] overflow-y-auto rounded-b-xl bg-white p-5">
             {entry.title && (
               <h3 className="text-base font-semibold leading-snug">
                 {entry.title}
               </h3>
             )}
-            <div className="mt-1.5 flex items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+            <div className="text-text-secondary dark:text-text-dark-secondary mt-1.5 flex items-center gap-2 text-xs">
               {feedTitle && <span>{feedTitle}</span>}
               <span>·</span>
               <span>{timeAgo}</span>
@@ -1395,7 +1395,7 @@ function VideoModal({
                     href={entry.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-accent hover:underline"
+                    className="text-accent inline-flex items-center gap-1 hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ExternalLink size={11} />
@@ -1407,7 +1407,7 @@ function VideoModal({
             {description &&
               !isDescriptionRedundant(entry.title || '', description) && (
                 <div
-                  className="prose prose-sm mt-3 max-w-none text-text-secondary dark:prose-invert dark:text-text-dark-secondary"
+                  className="prose prose-sm text-text-secondary dark:prose-invert dark:text-text-dark-secondary mt-3 max-w-none"
                   dangerouslySetInnerHTML={{ __html: description }}
                 />
               )}
@@ -1486,7 +1486,6 @@ function SocialOverlay({
   feed?: { title?: string; imageUrl?: string; url?: string; siteUrl?: string }
   onClose: () => void
 }) {
-  const { t } = useTranslation()
   const general = useGeneralSettingsShallowSelector((settings) => ({
     contentWidth: settings.contentWidth,
     contentMaxWidth: settings.contentMaxWidth,

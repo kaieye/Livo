@@ -17,12 +17,18 @@ export default defineConfig({
     resolve: {
       alias: sharedAlias,
     },
+    build: {
+      chunkSizeWarningLimit: 800,
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     define: createSharedDefines(),
     resolve: {
       alias: sharedAlias,
+    },
+    build: {
+      chunkSizeWarningLimit: 300,
     },
   },
   renderer: createRendererSharedConfig(resolve(__dirname, '..')) as any,

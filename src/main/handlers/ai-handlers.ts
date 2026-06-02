@@ -12,12 +12,59 @@ import {
   buildTranslatePrompt,
   clampContentToBudget,
 } from '../services/ai-prompts'
-import type { AISemanticFilterInput } from '../../shared/types'
+import {
+  buildDigestBatchMessages,
+  buildDigestBudgetPlan,
+  buildDigestReduceMessages,
+  buildDigestRerankMessages,
+  selectValidDigestRerankIds,
+} from '../services/ai-digest'
+import {
+  getDigestWindow,
+  listAIDigestRuns,
+  listDigestCandidates,
+  updateAIDigestRun,
+  upsertAIDigestRun,
+} from '../database'
+import type {
+  AIDigestGenerateResult,
+  AIDigestPreset,
+  AISemanticFilterInput,
+} from '../../shared/types'
 
 function sendToAllWindows(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(channel, payload)
   }
+}
+
+function getDigestPresetLabel(preset: AIDigestPreset): string {
+  return preset === 'week' ? '本周趋势' : '今日简报'
+}
+
+function normalizeDigestPreset(value: unknown): AIDigestPreset {
+  return value === 'week' ? 'week' : 'today'
+}
+
+async function requestDigestText(
+  client: OpenAI,
+  model: string,
+  messages: OpenAI.ChatCompletionMessageParam[],
+  maxTokens: number,
+  temperature: number,
+): Promise<string> {
+  return runWithRetry(
+    async () => {
+      const response = await client.chat.completions.create({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      })
+      return response.choices[0]?.message?.content || ''
+    },
+    { isEmpty: (text) => !text.trim() },
+  )
 }
 
 export function registerAIHandlers(): void {
@@ -283,6 +330,151 @@ export function registerAIHandlers(): void {
         return { success: true, decision }
       } catch (error) {
         return { success: false, error: normalizeAIError(error, aiConfig) }
+      }
+    },
+  )
+
+  ipcMain.handle(IPC.AI_DIGEST_LIST, async (_event, limit?: number) => {
+    return listAIDigestRuns(limit)
+  })
+
+  ipcMain.handle(
+    IPC.AI_DIGEST_GENERATE,
+    async (
+      _event,
+      input?: { preset?: AIDigestPreset; feedId?: string },
+    ): Promise<AIDigestGenerateResult> => {
+      const settings = getSettings()
+      const aiConfig = settings.ai
+      const preset = normalizeDigestPreset(input?.preset)
+      const presetLabel = getDigestPresetLabel(preset)
+      const now = Date.now()
+      const { windowStartAt, windowEndAt } = getDigestWindow(preset, now)
+      const candidates = listDigestCandidates({
+        preset,
+        feedId: input?.feedId,
+        limit: 80,
+        now,
+      })
+      const run = upsertAIDigestRun({
+        preset,
+        feedId: input?.feedId,
+        title: presetLabel,
+        status: 'running',
+        windowStartAt,
+        windowEndAt,
+        sourceEntryIds: [],
+        candidateCount: candidates.length,
+        content: '',
+        error: undefined,
+      })
+
+      if (candidates.length === 0) {
+        const failed = updateAIDigestRun(run.id, {
+          status: 'failed',
+          error: '当前时间窗内没有可用于生成简报的文章',
+        })
+        return {
+          success: false,
+          error: failed?.error || '当前时间窗内没有可用于生成简报的文章',
+          run: failed || run,
+        }
+      }
+
+      const configError = validateAIConfig(aiConfig)
+      if (configError) {
+        const failed = updateAIDigestRun(run.id, {
+          status: 'failed',
+          error: configError,
+        })
+        return { success: false, error: configError, run: failed || run }
+      }
+
+      try {
+        const client = createOpenAIClient(aiConfig)
+        const topic = presetLabel
+        const maxIds = Math.min(12, candidates.length)
+        let selectedIds = candidates
+          .slice(0, 1)
+          .map((candidate) => candidate.id)
+
+        if (candidates.length > 1) {
+          const rerankRaw = await requestDigestText(
+            client,
+            aiConfig.model,
+            buildDigestRerankMessages({ topic, candidates, maxIds }),
+            800,
+            0,
+          )
+          const selection = selectValidDigestRerankIds(
+            rerankRaw,
+            candidates.map((candidate) => candidate.id),
+            maxIds,
+          )
+          if (selection.ids.length === 0) {
+            throw new Error('AI 未返回有效候选文章 id')
+          }
+          selectedIds = selection.ids
+        }
+
+        const candidateById = new Map(
+          candidates.map((candidate) => [candidate.id, candidate]),
+        )
+        const selectedCandidates = selectedIds
+          .map((id) => candidateById.get(id))
+          .filter((candidate): candidate is (typeof candidates)[number] =>
+            Boolean(candidate),
+          )
+        const plan = buildDigestBudgetPlan(selectedCandidates, {
+          totalContextChars: 60_000,
+          promptReserveChars: 8_000,
+        })
+        const batchNotes: string[] = []
+
+        for (const batch of plan.batches) {
+          const note = await requestDigestText(
+            client,
+            aiConfig.model,
+            buildDigestBatchMessages({ topic, presetLabel, batch }),
+            1200,
+            0.2,
+          )
+          batchNotes.push(note)
+        }
+
+        const content = await requestDigestText(
+          client,
+          aiConfig.model,
+          buildDigestReduceMessages({
+            topic,
+            presetLabel,
+            windowStartAt,
+            windowEndAt,
+            batchNotes,
+          }),
+          2200,
+          0.3,
+        )
+        const completed = updateAIDigestRun(run.id, {
+          status: 'completed',
+          title: presetLabel,
+          sourceEntryIds: selectedIds,
+          content,
+          error: undefined,
+        })
+
+        return {
+          success: true,
+          run: completed || run,
+          candidates: selectedCandidates,
+        }
+      } catch (error) {
+        const normalized = normalizeAIError(error, aiConfig)
+        const failed = updateAIDigestRun(run.id, {
+          status: 'failed',
+          error: normalized,
+        })
+        return { success: false, error: normalized, run: failed || run }
       }
     },
   )

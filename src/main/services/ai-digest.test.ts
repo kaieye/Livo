@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildDigestBudgetPlan,
+  buildDigestBatchMessages,
+  buildDigestReduceMessages,
   buildDigestRerankMessages,
   getDigestArticleCharBudget,
   selectValidDigestRerankIds,
@@ -88,5 +90,34 @@ describe('ai digest tools', () => {
     expect(String(messages[0].content)).toContain('不要编造 id')
     expect(String(messages[1].content)).toContain('"maxIds":3')
     expect(String(messages[1].content)).toContain('entry-1')
+  })
+
+  it('builds batch notes messages with source ids', () => {
+    const plan = buildDigestBudgetPlan(candidates.slice(0, 2))
+    const messages = buildDigestBatchMessages({
+      topic: '今日简报',
+      presetLabel: '今日简报',
+      batch: plan.batches[0],
+    })
+
+    expect(messages).toHaveLength(2)
+    expect(String(messages[0].content)).toContain('不编造事实')
+    expect(String(messages[1].content)).toContain('entry-1')
+    expect(String(messages[1].content)).toContain('按主题聚合')
+  })
+
+  it('builds reduce messages from batch notes and window bounds', () => {
+    const messages = buildDigestReduceMessages({
+      topic: '本周趋势',
+      presetLabel: '本周趋势',
+      windowStartAt: Date.parse('2026-06-01T00:00:00.000Z'),
+      windowEndAt: Date.parse('2026-06-02T00:00:00.000Z'),
+      batchNotes: ['- 趋势 A（entry-1）'],
+    })
+
+    expect(messages).toHaveLength(2)
+    expect(String(messages[1].content)).toContain('2026-06-01T00:00:00.000Z')
+    expect(String(messages[1].content)).toContain('趋势 A')
+    expect(String(messages[1].content)).toContain('不要输出代码块')
   })
 })

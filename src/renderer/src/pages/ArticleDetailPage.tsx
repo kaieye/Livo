@@ -8,7 +8,6 @@ import {
   ExternalLink,
   Loader2,
   Star,
-  Video,
   VideoOff,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
@@ -260,7 +259,7 @@ export default function ArticleDetailPage() {
     } catch {
       return ''
     }
-  }, [activeEntry?.publishedAt, general.language])
+  }, [activeEntry?.publishedAt])
 
   // Plain text (for social AI ops)
   const plainContent = useMemo(

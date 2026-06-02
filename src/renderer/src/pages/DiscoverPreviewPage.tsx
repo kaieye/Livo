@@ -145,7 +145,7 @@ export default function DiscoverPreviewPage() {
     } catch {
       return ''
     }
-  }, [selectedEntry?.publishedAt, general.language])
+  }, [selectedEntry?.publishedAt])
 
   const handleBack = useCallback(() => navigate(-1), [navigate])
   const handleRetry = useCallback(() => setReloadKey((x) => x + 1), [])
@@ -432,7 +432,7 @@ function PreviewEntryRow({
           onSelect(entry)
         }
       }}
-      className="group flex min-h-[76px] cursor-pointer items-start gap-3 bg-[var(--color-bg-primary)] px-4 py-3 transition-colors hover:bg-[var(--color-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/40"
+      className="focus:ring-accent/40 group flex min-h-[76px] cursor-pointer items-start gap-3 bg-[var(--color-bg-primary)] px-4 py-3 transition-colors hover:bg-[var(--color-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-inset"
     >
       {hasImage ? (
         <img

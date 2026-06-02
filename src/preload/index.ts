@@ -17,6 +17,9 @@ import type {
   DiscoverFeedPreviewResult,
   AISemanticFilterInput,
   AISemanticFilterResult,
+  AIDigestGenerateResult,
+  AIDigestRun,
+  AIDigestPreset,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
 import type { ActionRule } from '../shared/actions'
@@ -98,6 +101,15 @@ const api = {
       input: AISemanticFilterInput,
     ): Promise<AISemanticFilterResult> =>
       ipcRenderer.invoke(IPC.AI_FILTER_JUDGE, input),
+    digest: {
+      listRuns: (limit?: number): Promise<AIDigestRun[]> =>
+        ipcRenderer.invoke(IPC.AI_DIGEST_LIST, limit),
+      generate: (input: {
+        preset: AIDigestPreset
+        feedId?: string
+      }): Promise<AIDigestGenerateResult> =>
+        ipcRenderer.invoke(IPC.AI_DIGEST_GENERATE, input),
+    },
     onStreamChunk: (
       callback: (data: { requestId: string; content: string }) => void,
     ) => {

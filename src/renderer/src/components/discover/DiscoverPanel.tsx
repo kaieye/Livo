@@ -223,7 +223,7 @@ export function DiscoverPanel() {
     } catch {
       return ''
     }
-  }, [selectedEntry?.publishedAt, general.language])
+  }, [selectedEntry?.publishedAt])
 
   // ── Preview fetch effect ──
   useEffect(() => {
@@ -521,7 +521,7 @@ export function DiscoverPanel() {
         <div className="relative flex-1">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+            className="text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2"
           />
           <input
             type="text"
@@ -534,11 +534,11 @@ export function DiscoverPanel() {
               }
             }}
             placeholder={t('discover.searchPlaceholder')}
-            className="w-full rounded-xl border bg-surface-secondary py-2.5 pl-9 pr-4 text-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+            className="bg-surface-secondary placeholder:text-text-tertiary focus:ring-accent/50 dark:bg-surface-dark-secondary w-full rounded-xl border py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2"
           />
           {isSearching && hasSearchQuery && (
-            <div className="absolute -bottom-1 left-3 right-3 h-0.5 overflow-hidden rounded-full bg-accent/10">
-              <div className="search-progress-slide h-full w-1/3 bg-accent/70" />
+            <div className="bg-accent/10 absolute -bottom-1 left-3 right-3 h-0.5 overflow-hidden rounded-full">
+              <div className="search-progress-slide bg-accent/70 h-full w-1/3" />
             </div>
           )}
         </div>
@@ -546,7 +546,7 @@ export function DiscoverPanel() {
           type="button"
           onClick={handleSearchNow}
           disabled={!searchQuery.trim() || isSearching}
-          className="h-[42px] rounded-xl bg-accent px-3 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          className="bg-accent hover:bg-accent-hover h-[42px] rounded-xl px-3 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
           {t('common.search')}
         </button>
@@ -555,9 +555,9 @@ export function DiscoverPanel() {
   )
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-surface-dark">
+    <div className="dark:bg-surface-dark relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
       {/* Header */}
-      <div className="flex-shrink-0 border-b bg-white/80 backdrop-blur-sm dark:bg-surface-dark/80">
+      <div className="dark:bg-surface-dark/80 flex-shrink-0 border-b bg-white/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 px-6 py-3">
           <div className="flex items-center gap-2">
             <Sparkles size={20} className="text-accent" />
@@ -566,7 +566,7 @@ export function DiscoverPanel() {
           <div className="flex-1" />
           <button
             onClick={() => setOpen(false)}
-            className="rounded-lg p-1.5 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5 transition-colors"
           >
             <X size={18} />
           </button>
@@ -583,7 +583,7 @@ export function DiscoverPanel() {
         {!hasSearchQuery && !isPreviewing && categories.length > 0 && (
           <div className="mx-auto mt-6 max-w-2xl">
             <div className="mb-4">
-              <h3 className="mb-3 text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
+              <h3 className="text-text-secondary dark:text-text-dark-secondary mb-3 text-sm font-medium">
                 {t('discover.browseCategories')}
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -609,7 +609,7 @@ export function DiscoverPanel() {
             </div>
 
             <div>
-              <h3 className="mb-3 text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
+              <h3 className="text-text-secondary dark:text-text-dark-secondary mb-3 text-sm font-medium">
                 {t('discover.featuredFeeds')}
                 {selectedCategory &&
                 categories.find((c) => c.id === selectedCategory)
@@ -622,12 +622,12 @@ export function DiscoverPanel() {
                   {Array.from({ length: 4 }).map((_, idx) => (
                     <div
                       key={idx}
-                      className="h-[66px] animate-pulse rounded-xl border bg-white dark:bg-surface-dark-secondary"
+                      className="dark:bg-surface-dark-secondary h-[66px] animate-pulse rounded-xl border bg-white"
                     />
                   ))}
                 </div>
               ) : popularFeeds.length === 0 ? (
-                <p className="text-xs text-text-tertiary">
+                <p className="text-text-tertiary text-xs">
                   {t('discover.noCategoryFeeds')}
                 </p>
               ) : (
@@ -684,7 +684,7 @@ export function DiscoverPanel() {
                   setInlineEntryId(null)
                   useEntryStore.getState().selectEntry(null)
                 }}
-                className="hover:text-text-primary rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-md p-1 transition-colors"
                 title={t('discoverPreview.back')}
               >
                 <ArrowLeft size={18} />
@@ -701,7 +701,7 @@ export function DiscoverPanel() {
                   href={previewTarget.siteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-text-primary rounded-md p-1.5 text-text-secondary transition-colors hover:bg-surface-secondary"
+                  className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary rounded-md p-1.5 transition-colors"
                   title={t('discoverPreview.openSource')}
                 >
                   <ExternalLink size={16} />
@@ -711,7 +711,7 @@ export function DiscoverPanel() {
 
             {/* Preview content — or inline entry detail when an entry is selected */}
             {inlineEntryId ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white dark:bg-surface-dark-secondary">
+              <div className="dark:bg-surface-dark-secondary flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-white">
                 {/* Inline back button from entry detail to entry list */}
                 <div className="flex flex-shrink-0 items-center gap-2 border-b px-3 py-2">
                   <button
@@ -720,12 +720,12 @@ export function DiscoverPanel() {
                       useEntryStore.getState().selectEntry(null)
                       setInlineEntryId(null)
                     }}
-                    className="hover:text-text-primary rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-secondary"
+                    className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary rounded-md p-1 transition-colors"
                     title={t('common.back')}
                   >
                     <ArrowLeft size={16} />
                   </button>
-                  <span className="text-xs text-text-tertiary">
+                  <span className="text-text-tertiary text-xs">
                     {t('discoverPreview.backToEntries')}
                   </span>
                 </div>
@@ -758,7 +758,7 @@ export function DiscoverPanel() {
                 )}
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl border bg-white dark:bg-surface-dark-secondary">
+              <div className="dark:bg-surface-dark-secondary overflow-hidden rounded-xl border bg-white">
                 {previewLoading ? (
                   <DiscoverCenteredState
                     icon={<Loader2 size={28} className="animate-spin" />}
@@ -776,7 +776,7 @@ export function DiscoverPanel() {
                       <button
                         type="button"
                         onClick={() => setPreviewReloadKey((k) => k + 1)}
-                        className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+                        className="bg-accent hover:bg-accent-hover rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
                       >
                         {t('discoverPreview.retry')}
                       </button>
@@ -785,7 +785,7 @@ export function DiscoverPanel() {
                 ) : previewData ? (
                   <>
                     {/* Feed info */}
-                    <div className="border-b bg-surface-secondary/30 px-4 py-4 dark:bg-surface-dark-tertiary/30">
+                    <div className="bg-surface-secondary/30 dark:bg-surface-dark-tertiary/30 border-b px-4 py-4">
                       <div className="flex items-start gap-3">
                         <FeedAvatar
                           imageUrl={
@@ -811,7 +811,7 @@ export function DiscoverPanel() {
                               ).hostname.replace(/^www\./i, '')
                               if (host) {
                                 return (
-                                  <p className="mt-1 truncate text-xs text-text-tertiary">
+                                  <p className="text-text-tertiary mt-1 truncate text-xs">
                                     {host}
                                   </p>
                                 )
@@ -823,12 +823,12 @@ export function DiscoverPanel() {
                           })()}
                           {(previewData.description ||
                             previewTarget.description) && (
-                            <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-text-tertiary">
+                            <p className="text-text-tertiary mt-2 line-clamp-3 text-xs leading-relaxed">
                               {previewData.description ||
                                 previewTarget.description}
                             </p>
                           )}
-                          <p className="mt-3 text-[11px] text-text-tertiary">
+                          <p className="text-text-tertiary mt-3 text-[11px]">
                             {t('discoverPreview.itemCount', {
                               count: previewData.itemCount,
                             })}
@@ -839,7 +839,7 @@ export function DiscoverPanel() {
 
                     {/* Entry list */}
                     <div className="px-4 py-3">
-                      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+                      <h4 className="text-text-secondary mb-2 text-[11px] font-semibold uppercase tracking-wide">
                         {t('discoverPreview.entriesTitle')}
                       </h4>
                       {previewData.entries.length > 0 ? (
@@ -857,9 +857,9 @@ export function DiscoverPanel() {
                         <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-[var(--color-border-secondary)] px-4 py-12 text-center">
                           <Rss
                             size={28}
-                            className="mb-2 text-text-tertiary opacity-40"
+                            className="text-text-tertiary mb-2 opacity-40"
                           />
-                          <p className="text-xs text-text-secondary">
+                          <p className="text-text-secondary text-xs">
                             {t('discoverPreview.noEntries')}
                           </p>
                         </div>
@@ -882,7 +882,7 @@ export function DiscoverPanel() {
                     setInlineEntryId(null)
                     useEntryStore.getState().selectEntry(null)
                   }}
-                  className="hover:text-text-primary rounded-md px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-secondary"
+                  className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary rounded-md px-3 py-1.5 text-sm transition-colors"
                 >
                   {t('common.cancel')}
                 </button>
@@ -906,7 +906,7 @@ export function DiscoverPanel() {
                     )
                   }}
                   disabled={!previewData || previewLoading}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="bg-accent inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t('discoverPreview.continue')}
                   <ArrowRight size={15} />
@@ -920,7 +920,7 @@ export function DiscoverPanel() {
         {hasSearchQuery && (
           <div className="mx-auto mt-4 max-w-2xl space-y-3">
             <div ref={searchResultsTopRef} />
-            <h3 className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">
+            <h3 className="text-text-secondary dark:text-text-dark-secondary text-sm font-medium">
               {t('discover.searchResults')}{' '}
               {searchResults.length > 0 && `(${searchResults.length})`}
             </h3>
@@ -934,7 +934,7 @@ export function DiscoverPanel() {
                   <button
                     type="button"
                     onClick={handleRetrySearch}
-                    className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+                    className="bg-accent hover:bg-accent-hover rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
                   >
                     {t('discover.retry')}
                   </button>
@@ -945,15 +945,15 @@ export function DiscoverPanel() {
                 {Array.from({ length: 4 }).map((_, idx) => (
                   <div
                     key={idx}
-                    className="h-[68px] animate-pulse rounded-xl border bg-white px-3.5 py-3 dark:bg-surface-dark-secondary"
+                    className="dark:bg-surface-dark-secondary h-[68px] animate-pulse rounded-xl border bg-white px-3.5 py-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary" />
+                      <div className="bg-surface-secondary dark:bg-surface-dark-tertiary h-10 w-10 rounded-lg" />
                       <div className="min-w-0 flex-1">
-                        <div className="mb-2 h-3.5 w-1/3 rounded bg-surface-secondary dark:bg-surface-dark-tertiary" />
-                        <div className="h-3 w-1/2 rounded bg-surface-secondary dark:bg-surface-dark-tertiary" />
+                        <div className="bg-surface-secondary dark:bg-surface-dark-tertiary mb-2 h-3.5 w-1/3 rounded" />
+                        <div className="bg-surface-secondary dark:bg-surface-dark-tertiary h-3 w-1/2 rounded" />
                       </div>
-                      <div className="h-7 w-14 rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary" />
+                      <div className="bg-surface-secondary dark:bg-surface-dark-tertiary h-7 w-14 rounded-lg" />
                     </div>
                   </div>
                 ))}
@@ -1017,14 +1017,14 @@ export function DiscoverPanel() {
                 {/* Pagination - always visible at fixed position */}
                 {searchResults.length > SEARCH_RESULTS_PAGE_SIZE && (
                   <div className="pb-2 pt-4">
-                    <div className="flex items-center justify-center gap-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+                    <div className="text-text-secondary dark:text-text-dark-secondary flex items-center justify-center gap-3 text-xs">
                       <button
                         type="button"
                         disabled={searchPage <= 1}
                         onClick={() =>
                           setSearchPage((prev) => Math.max(1, prev - 1))
                         }
-                        className="flex items-center gap-1 rounded-lg border px-3 py-1.5 transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-surface-dark-secondary"
+                        className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex items-center gap-1 rounded-lg border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {t('common.prevPage')}
                       </button>
@@ -1039,7 +1039,7 @@ export function DiscoverPanel() {
                             Math.min(totalSearchPages, prev + 1),
                           )
                         }
-                        className="flex items-center gap-1 rounded-lg border px-3 py-1.5 transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-surface-dark-secondary"
+                        className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex items-center gap-1 rounded-lg border px-3 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {t('common.nextPage')}
                       </button>
@@ -1082,7 +1082,7 @@ function PreviewEntryInline({
           onSelect(entry)
         }
       }}
-      className="group flex min-h-[64px] cursor-pointer items-start gap-3 bg-[var(--color-bg-primary)] px-3 py-2.5 transition-colors hover:bg-[var(--color-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/40"
+      className="focus:ring-accent/40 group flex min-h-[64px] cursor-pointer items-start gap-3 bg-[var(--color-bg-primary)] px-3 py-2.5 transition-colors hover:bg-[var(--color-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-inset"
     >
       {hasImage ? (
         <img
@@ -1101,7 +1101,7 @@ function PreviewEntryInline({
       )}
 
       <div className="min-w-0 flex-1">
-        <h4 className="line-clamp-2 text-xs font-medium leading-snug text-[var(--color-text-primary)] group-hover:text-accent">
+        <h4 className="group-hover:text-accent line-clamp-2 text-xs font-medium leading-snug text-[var(--color-text-primary)]">
           {entry.title || entry.url}
         </h4>
         {entry.summary && (
@@ -1174,9 +1174,9 @@ function CuratedFeedRow({
           onPreview()
         }
       }}
-      className="group flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-3.5 transition-all duration-200 hover:border-accent/30 hover:bg-surface-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary/50"
+      className="hover:border-accent/30 hover:bg-surface-secondary/50 focus:ring-accent/50 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary/50 group flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-3.5 transition-all duration-200 focus:outline-none focus:ring-2"
     >
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10">
+      <div className="bg-accent/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
         <Rss size={16} className="text-accent" />
       </div>
 
@@ -1185,12 +1185,12 @@ function CuratedFeedRow({
           <span className="block min-w-0 truncate text-sm font-medium">
             {feed.title}
           </span>
-          <span className="flex-shrink-0 rounded-full bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary dark:bg-surface-dark-tertiary">
+          <span className="bg-surface-secondary text-text-tertiary dark:bg-surface-dark-tertiary flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
             {feed.language === 'Chinese' ? '中' : 'EN'}
           </span>
         </div>
         {feed.description && (
-          <p className="mt-0.5 truncate text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
             {feed.description}
           </p>
         )}
@@ -1202,7 +1202,7 @@ function CuratedFeedRow({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="rounded-lg p-1.5 text-text-tertiary opacity-0 transition-colors hover:bg-surface-secondary hover:text-text-secondary focus:opacity-100 group-hover:opacity-100 dark:hover:bg-surface-dark-tertiary"
+          className="text-text-tertiary hover:bg-surface-secondary hover:text-text-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100"
           title={t('discover.viewSource')}
         >
           <ExternalLink size={14} />
@@ -1217,7 +1217,7 @@ function CuratedFeedRow({
           className={`group/btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
             subscribed
               ? 'bg-green-100 text-green-600 hover:bg-red-100 hover:text-red-600 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
-              : 'bg-accent text-white hover:bg-accent-hover active:scale-95'
+              : 'bg-accent hover:bg-accent-hover text-white active:scale-95'
           } disabled:cursor-default disabled:opacity-70`}
         >
           {subscribing ? (

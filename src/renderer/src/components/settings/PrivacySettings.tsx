@@ -3,7 +3,7 @@ import {
   useSettingsActions,
 } from '../../store/settings-store'
 import { useTranslation } from 'react-i18next'
-import { Shield, Globe, Server, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Shield, Globe, Server } from 'lucide-react'
 
 function ToggleSwitch({
   checked,
@@ -12,7 +12,6 @@ function ToggleSwitch({
   checked: boolean
   onChange: (v: boolean) => void
 }) {
-  const Icon = checked ? ToggleRight : ToggleLeft
   return (
     <button
       type="button"
@@ -44,7 +43,7 @@ function InfoCard({
   return (
     <div className="dark:bg-surface-dark-primary rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex-shrink-0 text-accent">
+        <div className="text-accent mt-0.5 flex-shrink-0">
           <Icon size={22} />
         </div>
         <div className="min-w-0 space-y-2">

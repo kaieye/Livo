@@ -49,6 +49,22 @@ export interface DigestBudgetPlan {
   batches: DigestBatch[]
 }
 
+export interface DigestComposeInput {
+  topic: string
+  presetLabel: string
+  windowStartAt: number
+  windowEndAt: number
+  plan: DigestBudgetPlan
+}
+
+export interface DigestReduceInput {
+  topic: string
+  presetLabel: string
+  windowStartAt: number
+  windowEndAt: number
+  batchNotes: string[]
+}
+
 const DEFAULT_TOTAL_CONTEXT_CHARS = 60_000
 const DEFAULT_PROMPT_RESERVE_CHARS = 6_000
 const DEFAULT_MAX_ARTICLES_PER_BATCH = 4
@@ -213,4 +229,58 @@ export function buildDigestBudgetPlan(
   }
 
   return { articleCharBudget, batches }
+}
+
+export function buildDigestBatchMessages(input: {
+  topic: string
+  presetLabel: string
+  batch: DigestBatch
+}): OpenAI.ChatCompletionMessageParam[] {
+  return [
+    {
+      role: 'system',
+      content:
+        '你是阅读分析助手。只依据给定文章提炼要点，输出 Markdown 列表，不编造事实。',
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({
+        topic: normalizeText(input.topic),
+        preset: normalizeText(input.presetLabel),
+        articles: input.batch.articles,
+        output:
+          '按主题聚合 3-6 条要点；每条保留涉及的文章 id；不要输出无来源判断。',
+      }),
+    },
+  ]
+}
+
+export function buildDigestReduceMessages(
+  input: DigestReduceInput,
+): OpenAI.ChatCompletionMessageParam[] {
+  return [
+    {
+      role: 'system',
+      content:
+        '你是 RSS 阅读简报编辑。基于批次要点生成结构化 Markdown 报告，内容要紧凑、可扫描。',
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({
+        topic: normalizeText(input.topic),
+        preset: normalizeText(input.presetLabel),
+        windowStartAt: new Date(input.windowStartAt).toISOString(),
+        windowEndAt: new Date(input.windowEndAt).toISOString(),
+        batchNotes: input.batchNotes.map((note) =>
+          clampContentToBudget(normalizeText(note), 6000),
+        ),
+        output: {
+          title: '一级标题',
+          sections: ['关键趋势', '值得关注', '后续观察'],
+          requirement:
+            '输出 Markdown；每个判断后用括号列出来源 id；不要输出代码块。',
+        },
+      }),
+    },
+  ]
 }

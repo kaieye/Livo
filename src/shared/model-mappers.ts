@@ -148,7 +148,7 @@ export function resolveSocialFeedDisplayImageUrl(
   feedImageUrl: string | undefined | null,
   feedUrl: string | undefined | null,
   siteUrl: string | undefined | null,
-  displayTitle: string,
+  _displayTitle: string,
 ): string {
   const existing = (feedImageUrl || '').trim()
   if (existing) return existing
@@ -174,7 +174,7 @@ export function resolveSocialFeedDisplayImageUrl(
  */
 export function resolveEntryCardImageUrl(
   entry: Entry,
-  feedSiteUrl: string,
+  _feedSiteUrl: string,
 ): string {
   // 1. Media items — prefer first photo
   if (entry.media?.length) {

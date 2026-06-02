@@ -23,7 +23,6 @@ import {
 } from '../../store/settings-store'
 import { FeedViewType, VIEW_DEFINITIONS } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
-import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { SkeletonList } from '../ui/Skeleton'
 import { QueuedImage } from '../ui/QueuedImage'
 import { HomeInlineSearch } from './HomeInlineSearch'
@@ -45,7 +44,6 @@ import {
   normalizeSocialHandle,
 } from '../../lib/social-url'
 import { LRUCache } from '../../lib/lru-cache'
-import { getEntryLoadLimit } from '../../lib/entry-load-limit'
 import { useHomeFeedCoordinator } from '../../hooks/useHomeFeedCoordinator'
 import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '../../lib/date-locale'
@@ -601,13 +599,9 @@ export function EntryList({ width }: { width?: number }) {
     entries,
     isLoading,
     isLoadingMore,
-    hasMoreEntries,
-    loadMoreEntries,
     loadEntries,
     clearListCache,
-    viewFeedIds,
     baseFilteredEntries,
-    recommendedFeedIds,
     filterMode,
     setFilterMode,
     feedById,
@@ -879,7 +873,7 @@ export function EntryList({ width }: { width?: number }) {
 
   return (
     <div
-      className="flex flex-shrink-0 flex-col border-r bg-white dark:bg-surface-dark"
+      className="dark:bg-surface-dark flex flex-shrink-0 flex-col border-r bg-white"
       style={{ width: width ?? (isGridMode ? 480 : 340) }}
     >
       {/* Header */}
@@ -907,7 +901,7 @@ export function EntryList({ width }: { width?: number }) {
                 reloadCurrentListFresh()
               }}
               disabled={isRefreshing}
-              className="rounded-lg p-1.5 hover:bg-surface-secondary disabled:opacity-50 dark:hover:bg-surface-dark-secondary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5 disabled:opacity-50"
               title={t('common.refresh')}
             >
               <RefreshCw
@@ -917,7 +911,7 @@ export function EntryList({ width }: { width?: number }) {
             </button>
             <button
               onClick={() => markAllRead(selectedFeedId || undefined)}
-              className="rounded-lg p-1.5 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
               title={t('common.markAllRead')}
             >
               <CheckCheck
@@ -970,20 +964,20 @@ export function EntryList({ width }: { width?: number }) {
 
         {isRefreshing && refreshProgress && refreshProgress.total > 0 && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-[11px] text-text-tertiary">
+            <div className="text-text-tertiary flex items-center justify-between text-[11px]">
               <span>{`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}</span>
               <span>{`${refreshProgress.percent}%`}</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary">
+            <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-1.5 w-full overflow-hidden rounded-full">
               <div
-                className="h-full bg-accent transition-[width] duration-200"
+                className="bg-accent h-full transition-[width] duration-200"
                 style={{
                   width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%`,
                 }}
               />
             </div>
             {refreshProgress.feedTitle && (
-              <div className="truncate text-[11px] text-text-tertiary">
+              <div className="text-text-tertiary truncate text-[11px]">
                 {refreshProgress.feedTitle}
               </div>
             )}
@@ -1012,8 +1006,8 @@ export function EntryList({ width }: { width?: number }) {
         ) : renderEntries.length === 0 ? (
           selectedFeedId && selectedFeedId !== 'starred' ? (
             /* A specific feed is selected but has no entries - offer refresh */
-            <div className="flex flex-col items-center justify-center py-12 text-text-secondary dark:text-text-dark-secondary">
-              <Inbox size={40} className="mb-3 text-text-tertiary" />
+            <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
+              <Inbox size={40} className="text-text-tertiary mb-3" />
               <p className="text-sm">{t('entryList.noArticles')}</p>
               <button
                 onClick={async () => {
@@ -1022,7 +1016,7 @@ export function EntryList({ width }: { width?: number }) {
                   loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
                 }}
                 disabled={isRefreshing}
-                className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/90 disabled:opacity-50"
+                className="bg-accent hover:bg-accent/90 mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white disabled:opacity-50"
               >
                 <RefreshCw
                   size={14}
@@ -1034,8 +1028,8 @@ export function EntryList({ width }: { width?: number }) {
           ) : activeView !== null ? (
             <ViewRecommendations viewType={activeView} />
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-text-secondary dark:text-text-dark-secondary">
-              <Inbox size={40} className="mb-3 text-text-tertiary" />
+            <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
+              <Inbox size={40} className="text-text-tertiary mb-3" />
               <p className="text-sm">{t('entryList.noArticles')}</p>
               <p className="mt-1 text-xs">{t('entryList.addFeedToStart')}</p>
             </div>
@@ -1058,8 +1052,8 @@ export function EntryList({ width }: { width?: number }) {
                   style={{ transform: `translateY(${row.start}px)` }}
                 >
                   {item.type === 'header' ? (
-                    <div className="flex h-9 items-center border-b border-transparent bg-white/80 backdrop-blur-sm dark:bg-surface-dark/80">
-                      <div className="dark:text-text-dark m-auto flex w-full max-w-[clamp(45ch,60vw,65ch)] select-none gap-3 pl-4 text-sm font-bold text-text">
+                    <div className="dark:bg-surface-dark/80 flex h-9 items-center border-b border-transparent bg-white/80 backdrop-blur-sm">
+                      <div className="dark:text-text-dark text-text m-auto flex w-full max-w-[clamp(45ch,60vw,65ch)] select-none gap-3 pl-4 text-sm font-bold">
                         <span>
                           {t(
                             item.labelKey,
@@ -1135,7 +1129,7 @@ export function EntryList({ width }: { width?: number }) {
               })}
             </div>
             {hasMoreGridEntries && (
-              <div className="flex items-center justify-center py-4 text-text-tertiary">
+              <div className="text-text-tertiary flex items-center justify-center py-4">
                 <Loader2 size={16} className="animate-spin" />
               </div>
             )}
@@ -1168,7 +1162,7 @@ export function EntryList({ width }: { width?: number }) {
         )}
 
         {isLoadingMore && (
-          <div className="flex items-center justify-center py-4 text-text-tertiary">
+          <div className="text-text-tertiary flex items-center justify-center py-4">
             <Loader2 size={16} className="animate-spin" />
           </div>
         )}
@@ -1313,16 +1307,16 @@ function EntryCard({
         }
       }}
       onContextMenu={onContextMenu}
-      className={`w-full cursor-pointer border-b border-surface-secondary px-4 py-3.5 text-left transition-colors dark:border-surface-dark-tertiary ${
+      className={`border-surface-secondary dark:border-surface-dark-tertiary w-full cursor-pointer border-b px-4 py-3.5 text-left transition-colors ${
         isActive
-          ? 'border-l-2 !border-l-accent bg-accent/5'
+          ? '!border-l-accent bg-accent/5 border-l-2'
           : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary'
       } ${dimRead && entry.isRead && !isActive ? 'opacity-50' : ''}`}
     >
       <div className="flex items-start gap-3">
         {/* Unread indicator */}
         {!entry.isRead && (
-          <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-accent" />
+          <div className="bg-accent mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" />
         )}
 
         <div
@@ -1330,12 +1324,12 @@ function EntryCard({
           style={{ maxWidth: hasThumbnail ? 'calc(100% - 92px)' : undefined }}
         >
           {/* Feed name + time */}
-          <div className="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-text-secondary dark:text-text-dark-secondary">
+          <div className="text-text-secondary dark:text-text-dark-secondary mb-0.5 flex items-center gap-1 text-[10px] font-bold">
             {feedTitle && (
               <span className="max-w-[120px] truncate">{feedTitle}</span>
             )}
             {feedTitle && <span className="text-text-tertiary">·</span>}
-            <span className="flex-shrink-0 text-text-tertiary">{timeAgo}</span>
+            <span className="text-text-tertiary flex-shrink-0">{timeAgo}</span>
             {entry.isStarred && (
               <Star
                 size={10}
@@ -1383,7 +1377,7 @@ function EntryCard({
                 .replace(/\s+/g, ' ')
                 .trim()
               return cleanSummary ? (
-                <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-text-secondary dark:text-text-dark-secondary">
+                <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 line-clamp-2 text-[13px] leading-snug">
                   {cleanSummary}
                 </p>
               ) : null
@@ -1392,7 +1386,7 @@ function EntryCard({
 
         {/* Compact 80x80 thumbnail */}
         {hasThumbnail && (
-          <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-surface-tertiary dark:bg-surface-dark-tertiary">
+          <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg">
             <QueuedImage
               src={thumbnail}
               alt=""
@@ -1511,12 +1505,12 @@ export const GridCard = memo(function GridCard({
       onContextMenu={onContextMenu}
       className={`w-full overflow-hidden rounded-xl border text-left transition-all ${
         isActive
-          ? 'border-accent ring-2 ring-accent/30'
-          : 'border-transparent hover:border-border dark:hover:border-surface-dark-tertiary'
+          ? 'border-accent ring-accent/30 ring-2'
+          : 'hover:border-border dark:hover:border-surface-dark-tertiary border-transparent'
       } bg-surface-secondary dark:bg-surface-dark-secondary`}
     >
       {/* Cover image */}
-      <div className="relative aspect-[4/3] bg-surface-tertiary dark:bg-surface-dark-tertiary">
+      <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary relative aspect-[4/3]">
         {!isVideo && photoCovers.length > 1 ? (
           <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-[1px] bg-black/10">
             {photoCovers.map((src, idx) => (
@@ -1551,7 +1545,7 @@ export const GridCard = memo(function GridCard({
             }}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-text-tertiary">
+          <div className="text-text-tertiary flex h-full w-full items-center justify-center">
             {isVideo ? <Play size={32} /> : <Inbox size={32} />}
           </div>
         )}
@@ -1584,7 +1578,7 @@ export const GridCard = memo(function GridCard({
             return null
           })()}
         {!entry.isRead && (
-          <div className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-accent" />
+          <div className="bg-accent absolute right-2 top-2 h-2.5 w-2.5 rounded-full" />
         )}
         {entry.media &&
           entry.media.filter((m) => m.type === 'photo').length > 1 && (
@@ -1627,14 +1621,14 @@ export const GridCard = memo(function GridCard({
               return null
             }
             return (
-              <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-text-secondary dark:text-text-dark-secondary">
+              <p className="text-text-secondary dark:text-text-dark-secondary mt-1 line-clamp-2 text-[11px] leading-snug">
                 {cleanSummary}
               </p>
             )
           })()}
-        <div className="mt-1 flex items-center justify-between text-[10px] text-text-tertiary">
+        <div className="text-text-tertiary mt-1 flex items-center justify-between text-[10px]">
           <div className="flex min-w-0 items-center gap-1">
-            <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-tertiary text-[9px] uppercase text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary">
+            <span className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[9px] uppercase">
               {avatarUrl && !avatarImageFailed ? (
                 <img
                   src={avatarUrl}
@@ -2197,7 +2191,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
       <div
         className={`group relative flex py-4 ${
           !entry.isRead
-            ? 'before:absolute before:-left-3 before:top-8 before:block before:size-2 before:rounded-full before:bg-accent'
+            ? 'before:bg-accent before:absolute before:-left-3 before:top-8 before:block before:size-2 before:rounded-full'
             : ''
         }`}
       >
@@ -2219,7 +2213,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
               }}
             />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-tertiary text-sm font-bold text-text-secondary dark:bg-surface-dark-tertiary">
+            <div className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
               {avatarLetter}
             </div>
           )}
@@ -2318,7 +2312,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
               >
                 {sanitizedContent ? (
                   <div
-                    className="prose max-w-none cursor-pointer select-text align-middle text-sm leading-relaxed dark:prose-invert prose-blockquote:mt-0"
+                    className="prose dark:prose-invert prose-blockquote:mt-0 max-w-none cursor-pointer select-text align-middle text-sm leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                   />
                 ) : (
@@ -2337,7 +2331,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                     title={t('entryList.expandMore', {
                       defaultValue: 'Expand',
                     })}
-                    className="bg-background/95 hover:text-text-primary inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-text-secondary shadow-sm transition-colors"
+                    className="bg-background/95 hover:text-text-primary border-border text-text-secondary inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition-colors"
                   >
                     <ChevronDown size={14} />
                   </button>
@@ -2353,7 +2347,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                     title={t('entryList.collapse', {
                       defaultValue: 'Collapse',
                     })}
-                    className="bg-background/95 hover:text-text-primary inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-text-secondary shadow-sm transition-colors"
+                    className="bg-background/95 hover:text-text-primary border-border text-text-secondary inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition-colors"
                   >
                     <ChevronUp size={14} />
                   </button>
@@ -2389,7 +2383,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                     title={t('entryList.expandMore', {
                       defaultValue: 'Expand',
                     })}
-                    className="bg-background/95 hover:text-text-primary inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-text-secondary shadow-sm transition-colors"
+                    className="bg-background/95 hover:text-text-primary border-border text-text-secondary inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition-colors"
                   >
                     <ChevronDown size={14} />
                   </button>
@@ -2419,7 +2413,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                   setIsMediaExpanded(false)
                 }}
                 title={t('entryList.collapse', { defaultValue: 'Collapse' })}
-                className="bg-background/95 hover:text-text-primary inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-text-secondary shadow-sm transition-colors"
+                className="bg-background/95 hover:text-text-primary border-border text-text-secondary inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition-colors"
               >
                 <ChevronUp size={14} />
               </button>
@@ -2429,15 +2423,15 @@ export const SocialMediaItem = memo(function SocialMediaItem({
           {/* AI Translation result - bilingual paragraph-by-paragraph */}
           {showTweetTranslation && (
             <div
-              className="mt-2 rounded-lg border border-accent/20 bg-accent/5 p-2.5"
+              className="border-accent/20 bg-accent/5 mt-2 rounded-lg border p-2.5"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-accent">
+              <div className="text-accent mb-1.5 flex items-center gap-1.5 text-xs font-medium">
                 <Languages size={12} />
                 {t('social.translation')}
               </div>
               {isTranslatingTweet && tweetTranslatedParagraphs.length === 0 ? (
-                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+                <div className="text-text-secondary flex items-center gap-1.5 text-xs">
                   <Loader2 size={12} className="animate-spin" />
                   {t('entry.translating')}
                 </div>
@@ -2453,7 +2447,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                     return (
                       <div
                         key={i}
-                        className="group border-l-2 border-transparent pl-0 transition-colors hover:border-accent/30 hover:pl-2"
+                        className="hover:border-accent/30 group border-l-2 border-transparent pl-0 transition-colors hover:pl-2"
                       >
                         {para.includes('<') ? (
                           <div
@@ -2470,16 +2464,16 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                             <div className="flex items-start gap-1.5">
                               <Languages
                                 size={10}
-                                className="mt-1 flex-shrink-0 text-accent/50"
+                                className="text-accent/50 mt-1 flex-shrink-0"
                               />
                               <div
-                                className="!mb-0 text-sm leading-relaxed text-accent/80 dark:text-orange-300/80"
+                                className="text-accent/80 !mb-0 text-sm leading-relaxed dark:text-orange-300/80"
                                 dangerouslySetInnerHTML={{ __html: translated }}
                               />
                             </div>
                           </div>
                         ) : isLoading ? (
-                          <div className="mb-2 mt-0.5 flex items-center gap-1.5 text-xs text-text-tertiary">
+                          <div className="text-text-tertiary mb-2 mt-0.5 flex items-center gap-1.5 text-xs">
                             <Loader2 size={10} className="animate-spin" />
                             {t('entry.translating')}
                           </div>
@@ -2505,7 +2499,7 @@ export const SocialMediaItem = memo(function SocialMediaItem({
                 {t('social.aiSummary')}
               </div>
               {isSummarizingTweet ? (
-                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+                <div className="text-text-secondary flex items-center gap-1.5 text-xs">
                   <Loader2 size={12} className="animate-spin" />
                   {t('entry.generatingSummary')}
                 </div>
@@ -2621,7 +2615,7 @@ function SocialActionBar({
         <button
           onClick={onSummarize}
           disabled={isSummarizing}
-          className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
           title={t('social.summarizeTweet')}
         >
           {isSummarizing ? (
@@ -2636,7 +2630,7 @@ function SocialActionBar({
             onClick={() => {
               void openExternalUrlSafe(resolvedBrowserOpenUrl)
             }}
-            className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+            className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
             title={t('contextMenu.openInBrowser')}
           >
             <Globe size={14} />
@@ -2647,7 +2641,7 @@ function SocialActionBar({
         {/* Mark read/unread */}
         <button
           onClick={() => markRead(entry.id, !entry.isRead)}
-          className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
           title={
             entry.isRead
               ? t('contextMenu.markUnread')
@@ -2662,12 +2656,12 @@ function SocialActionBar({
           onToggle={() => toggleStar(entry.id)}
           size={14}
           title={entry.isStarred ? t('common.unstar') : t('common.star')}
-          className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
         />
         {/* More (context menu) */}
         <button
           onClick={(e) => onContextMenu?.(e)}
-          className="rounded-md p-1.5 text-text-secondary transition-colors hover:bg-gray-100 dark:text-text-dark-secondary dark:hover:bg-neutral-700"
+          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
           title={t('contextMenu.more')}
         >
           <MoreHorizontal size={14} />
@@ -3005,7 +2999,7 @@ function SocialMediaGallery({
                 }}
               >
                 {isFailed ? (
-                  <div className="dark:text-text-dark-tertiary flex h-full min-h-[120px] w-full items-center justify-center rounded bg-surface-tertiary text-xs text-text-tertiary dark:bg-surface-dark-tertiary">
+                  <div className="dark:text-text-dark-tertiary bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary flex h-full min-h-[120px] w-full items-center justify-center rounded text-xs">
                     图片加载失败
                   </div>
                 ) : (
@@ -3037,7 +3031,7 @@ function SocialMediaGallery({
               const isFailed = !!token && failedPhotoTokens.has(token)
               return isFailed ? (
                 <div
-                  className="dark:text-text-dark-tertiary flex w-full items-center justify-center rounded bg-surface-tertiary text-sm text-text-tertiary dark:bg-surface-dark-tertiary"
+                  className="dark:text-text-dark-tertiary bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary flex w-full items-center justify-center rounded text-sm"
                   style={{ maxHeight: '70vh', minHeight: '240px' }}
                 >
                   图片加载失败
@@ -3092,7 +3086,7 @@ function SocialMediaGallery({
                     }}
                   >
                     {isFailed ? (
-                      <div className="dark:text-text-dark-tertiary flex h-full w-full items-center justify-center rounded bg-surface-tertiary text-xs text-text-tertiary dark:bg-surface-dark-tertiary">
+                      <div className="dark:text-text-dark-tertiary bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary flex h-full w-full items-center justify-center rounded text-xs">
                         图片加载失败
                       </div>
                     ) : (
