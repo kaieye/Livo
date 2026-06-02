@@ -14,6 +14,8 @@ import type {
   AppSettings,
   AccountProvider,
   DiscoverFeedPreviewResult,
+  AISemanticFilterInput,
+  AISemanticFilterResult,
 } from '../shared/types'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
@@ -754,6 +756,93 @@ function getDefaultBaseUrl(provider: string): string {
   return urls[provider] || 'https://api.openai.com/v1'
 }
 
+function normalizeAIText(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : ''
+}
+
+function buildWebSemanticFilterMessages(
+  input: AISemanticFilterInput,
+): Array<{ role: string; content: string }> {
+  const condition = normalizeAIText(input.condition)
+  const title = normalizeAIText(input.title)
+  if (!condition) throw new Error('过滤条件 不能为空')
+  if (!title) throw new Error('标题 不能为空')
+
+  const summary = normalizeAIText(input.summary).slice(0, 2400)
+  const evidence = [
+    `订阅源：${normalizeAIText(input.feedTitle) || '未知'}`,
+    `标题：${title}`,
+    input.author ? `作者：${normalizeAIText(input.author)}` : '',
+    input.url ? `URL：${normalizeAIText(input.url)}` : '',
+    summary ? `摘要：${summary}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return [
+    {
+      role: 'system',
+      content:
+        '你是文章过滤判定器。只根据给定的标题、摘要和元数据判断文章是否符合过滤条件。输出严格 JSON，不要输出解释性正文。',
+    },
+    {
+      role: 'user',
+      content: [
+        `过滤条件：${condition}`,
+        '',
+        '文章信息：',
+        evidence,
+        '',
+        '输出格式：{"matched":true|false,"confidence":0到1之间的数字,"reason":"不超过40字的中文原因"}',
+      ].join('\n'),
+    },
+  ]
+}
+
+function parseWebSemanticFilterDecision(raw: string): AISemanticFilterResult {
+  const text = raw.trim()
+  if (!text) return { success: false, error: 'AI 返回为空' }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start === -1 || end <= start) {
+      return { success: false, error: 'AI 返回不是 JSON 对象' }
+    }
+    try {
+      parsed = JSON.parse(text.slice(start, end + 1))
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { success: false, error: 'AI 返回不是 JSON 对象' }
+  }
+
+  const record = parsed as Record<string, unknown>
+  if (typeof record.matched !== 'boolean') {
+    return { success: false, error: 'AI 返回缺少 matched 布尔值' }
+  }
+
+  const confidence =
+    typeof record.confidence === 'number' && Number.isFinite(record.confidence)
+      ? Math.max(0, Math.min(1, record.confidence))
+      : 0
+
+  return {
+    success: true,
+    decision: {
+      matched: record.matched,
+      confidence,
+      reason: normalizeAIText(record.reason).slice(0, 80),
+    },
+  }
+}
+
 // ====== Readability for Web ======
 
 async function fetchReadableContent(url: string) {
@@ -1381,6 +1470,25 @@ export function createWebAPI(): ElectronAPI {
             (error) => emit('ai:chat-stream-error', { requestId, error }),
           )
           return { success: true }
+        } catch (error) {
+          return { success: false, error: String(error) }
+        }
+      },
+
+      judgeFilter: async (
+        input: AISemanticFilterInput,
+      ): Promise<AISemanticFilterResult> => {
+        const settings = await getSettings()
+        if (!settings.ai.apiKey && settings.ai.provider !== 'ollama') {
+          return { success: false, error: '请先在设置中配置 AI API Key' }
+        }
+
+        try {
+          const result = await callAI(buildWebSemanticFilterMessages(input), {
+            temperature: 0,
+            max_tokens: 180,
+          })
+          return parseWebSemanticFilterDecision(result.content)
         } catch (error) {
           return { success: false, error: String(error) }
         }

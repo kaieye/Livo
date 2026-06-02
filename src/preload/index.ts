@@ -15,6 +15,8 @@ import type {
   SaveTextFileOptions,
   SaveTextFileResult,
   DiscoverFeedPreviewResult,
+  AISemanticFilterInput,
+  AISemanticFilterResult,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
 import type { ActionRule } from '../shared/actions'
@@ -92,6 +94,10 @@ const api = {
       messages: Array<{ role: string; content: string }>,
       requestId: string,
     ) => ipcRenderer.invoke(IPC.AI_CHAT_STREAM, messages, requestId),
+    judgeFilter: (
+      input: AISemanticFilterInput,
+    ): Promise<AISemanticFilterResult> =>
+      ipcRenderer.invoke(IPC.AI_FILTER_JUDGE, input),
     onStreamChunk: (
       callback: (data: { requestId: string; content: string }) => void,
     ) => {

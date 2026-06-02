@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { IPC } from '../../shared/types'
 import { getSettings } from './settings-handlers'
 import { createOpenAIClient, validateAIConfig } from '../services/ai-client'
+import { judgeSemanticFilter } from '../services/ai-filter'
 import { normalizeAIError } from '../services/provider-protocol'
 import { runWithRetry } from '../services/ai-retry'
 import { ConnectionTestService } from '../services/connection-test'
@@ -11,6 +12,7 @@ import {
   buildTranslatePrompt,
   clampContentToBudget,
 } from '../services/ai-prompts'
+import type { AISemanticFilterInput } from '../../shared/types'
 
 function sendToAllWindows(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -266,6 +268,21 @@ export function registerAIHandlers(): void {
           error: normalized,
         })
         return { success: false, error: normalized }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IPC.AI_FILTER_JUDGE,
+    async (_event, input: AISemanticFilterInput) => {
+      const settings = getSettings()
+      const aiConfig = settings.ai
+
+      try {
+        const decision = await judgeSemanticFilter(input, aiConfig)
+        return { success: true, decision }
+      } catch (error) {
+        return { success: false, error: normalizeAIError(error, aiConfig) }
       }
     },
   )
