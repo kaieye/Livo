@@ -220,6 +220,7 @@ export function applyActionRulesToEntries(
     )
     if (decision.blocked) continue
 
+    const effects = filterPodcastActionEffects(decision.effects, entry, feed)
     const nextEntry =
       decision.star || decision.markRead
         ? {
@@ -229,9 +230,28 @@ export function applyActionRulesToEntries(
           }
         : entry
 
-    kept.push({ entry: nextEntry, effects: decision.effects })
+    kept.push({ entry: nextEntry, effects })
   }
   return kept
+}
+
+const PODCAST_TEXT_EFFECTS = new Set<ActionEffectType>([
+  'readability',
+  'summarize',
+])
+
+function isPodcastLikeEntry(entry: Entry, feed: Feed): boolean {
+  if ((feed.category || '').trim().toLowerCase() === 'podcast') return true
+  return (entry.media || []).some((item) => item.type === 'audio')
+}
+
+function filterPodcastActionEffects(
+  effects: ActionEffectType[],
+  entry: Entry,
+  feed: Feed,
+): ActionEffectType[] {
+  if (!isPodcastLikeEntry(entry, feed)) return effects
+  return effects.filter((effect) => !PODCAST_TEXT_EFFECTS.has(effect))
 }
 
 function applyActionRules(

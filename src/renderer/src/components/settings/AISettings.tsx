@@ -6,9 +6,10 @@ import { useTranslation } from 'react-i18next'
 import {
   AI_PROVIDERS,
   DEFAULT_SETTINGS,
+  type AIConfig,
   type AIProvider,
 } from '../../../../shared/types'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Eye,
   EyeOff,
@@ -54,6 +55,9 @@ export function AISettings() {
   const ai = useSettingSection('ai')
   const { updateSettingsSection, setActiveTab } = useSettingsActions()
   const { t } = useTranslation()
+  const [draftAi, setDraftAi] = useState<AIConfig>(ai)
+  const [isDirty, setIsDirty] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [testResult, setTestResult] = useState<{
     success: boolean
@@ -62,49 +66,113 @@ export function AISettings() {
   const [isTesting, setIsTesting] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
 
-  const providerConfig = AI_PROVIDERS[ai.provider]
-  const isCustomProvider = ai.provider === 'custom'
-  const isApiKeyMissing = ai.provider !== 'ollama' && !ai.apiKey.trim()
-  const isBaseUrlMissing = isCustomProvider && !(ai.baseUrl || '').trim()
-  const isModelMissing = isCustomProvider && !ai.model.trim()
-  const disableTestConnection =
-    isTesting || isApiKeyMissing || isBaseUrlMissing || isModelMissing
+  useEffect(() => {
+    if (!isDirty) setDraftAi(ai)
+  }, [ai, isDirty])
 
-  const handleProviderChange = (provider: AIProvider) => {
-    const config = AI_PROVIDERS[provider]
-    // Remember the current provider's key, then restore the target provider's
-    // previously entered key (or empty for a fresh provider).
-    const rememberedKeys = { ...(ai.apiKeys || {}), [ai.provider]: ai.apiKey }
-    const nextKey =
-      provider === 'ollama' ? 'ollama' : (rememberedKeys[provider] ?? '')
-    void updateSettingsSection('ai', {
-      provider,
-      baseUrl: '',
-      model: config.models[0] || '',
-      apiKey: nextKey,
-      apiKeys: rememberedKeys,
-    })
+  const providerConfig = AI_PROVIDERS[draftAi.provider]
+  const isCustomProvider = draftAi.provider === 'custom'
+  const isApiKeyMissing =
+    draftAi.provider !== 'ollama' && !draftAi.apiKey.trim()
+  const isBaseUrlMissing = isCustomProvider && !(draftAi.baseUrl || '').trim()
+  const isModelMissing = isCustomProvider && !draftAi.model.trim()
+  const draftValidationMessage = isBaseUrlMissing
+    ? t('settings.aiValidationBaseUrlRequired')
+    : isModelMissing
+      ? t('settings.aiValidationModelRequired')
+      : null
+  const disableTestConnection =
+    isTesting ||
+    isDirty ||
+    isApiKeyMissing ||
+    isBaseUrlMissing ||
+    isModelMissing
+  const disableSave = isSaving || !isDirty || !!draftValidationMessage
+
+  const markDraftChanged = () => {
+    setIsDirty(true)
     setTestResult(null)
     setActionMessage(null)
   }
 
-  const handleApiKeyChange = (value: string) => {
-    void updateSettingsSection('ai', {
-      apiKey: value,
-      apiKeys: { ...(ai.apiKeys || {}), [ai.provider]: value },
+  const updateDraftAi = (updates: Partial<AIConfig>) => {
+    setDraftAi((current) => ({ ...current, ...updates }))
+    markDraftChanged()
+  }
+
+  const handleProviderChange = (provider: AIProvider) => {
+    const config = AI_PROVIDERS[provider]
+    setDraftAi((current) => {
+      const rememberedKeys = {
+        ...(current.apiKeys || {}),
+        [current.provider]: current.apiKey,
+      }
+      const nextKey =
+        provider === 'ollama' ? 'ollama' : (rememberedKeys[provider] ?? '')
+      return {
+        ...current,
+        provider,
+        baseUrl: '',
+        model: config.models[0] || '',
+        apiKey: nextKey,
+        apiKeys: rememberedKeys,
+      }
     })
+    markDraftChanged()
+  }
+
+  const handleApiKeyChange = (value: string) => {
+    setDraftAi((current) => {
+      return {
+        ...current,
+        apiKey: value,
+        apiKeys: { ...(current.apiKeys || {}), [current.provider]: value },
+      }
+    })
+    markDraftChanged()
   }
 
   const handleReset = () => {
-    void updateSettingsSection('ai', {
+    setDraftAi({
       ...DEFAULT_SETTINGS.ai,
       apiKeys: {},
     })
+    setIsDirty(true)
     setTestResult(null)
-    setActionMessage(t('settings.aiResetDone'))
+    setActionMessage(t('settings.aiResetDraftDone'))
+  }
+
+  const handleCancelDraft = () => {
+    setDraftAi(ai)
+    setIsDirty(false)
+    setTestResult(null)
+    setActionMessage(t('settings.aiDraftDiscarded'))
+  }
+
+  const handleSaveDraft = async () => {
+    if (draftValidationMessage) {
+      setActionMessage(draftValidationMessage)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await updateSettingsSection('ai', draftAi)
+      setIsDirty(false)
+      setTestResult(null)
+      setActionMessage(t('settings.aiDraftSaved'))
+    } catch (err) {
+      setActionMessage(`${t('settings.aiDraftSaveFailed')}: ${String(err)}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleTestConnection = async () => {
+    if (isDirty) {
+      setActionMessage(t('settings.aiTestSaveFirst'))
+      return
+    }
     setIsTesting(true)
     setTestResult(null)
     try {
@@ -153,7 +221,7 @@ export function AISettings() {
                 key={key}
                 onClick={() => handleProviderChange(key)}
                 className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  ai.provider === key
+                  draftAi.provider === key
                     ? 'border-accent bg-accent/5 text-accent font-medium'
                     : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
                 }`}
@@ -165,7 +233,7 @@ export function AISettings() {
         </div>
 
         {/* API Key */}
-        {ai.provider !== 'ollama' && (
+        {draftAi.provider !== 'ollama' && (
           <div>
             <label className="mb-1.5 block text-sm font-medium">
               {t('settings.apiKey')}
@@ -174,7 +242,7 @@ export function AISettings() {
             <div className="relative">
               <input
                 type={showKey ? 'text' : 'password'}
-                value={ai.apiKey}
+                value={draftAi.apiKey}
                 onChange={(e) => handleApiKeyChange(e.target.value)}
                 placeholder={t('settings.apiKeyPlaceholder', {
                   provider: providerConfig.name,
@@ -206,10 +274,8 @@ export function AISettings() {
           </label>
           <input
             type="text"
-            value={ai.baseUrl || ''}
-            onChange={(e) =>
-              void updateSettingsSection('ai', { baseUrl: e.target.value })
-            }
+            value={draftAi.baseUrl || ''}
+            onChange={(e) => updateDraftAi({ baseUrl: e.target.value })}
             placeholder={
               providerConfig.defaultBaseUrl || t('settings.baseUrlPlaceholder')
             }
@@ -230,10 +296,8 @@ export function AISettings() {
           </label>
           {providerConfig.models.length > 0 ? (
             <select
-              value={ai.model}
-              onChange={(e) =>
-                void updateSettingsSection('ai', { model: e.target.value })
-              }
+              value={draftAi.model}
+              onChange={(e) => updateDraftAi({ model: e.target.value })}
               required={isCustomProvider}
               className={inputClass}
             >
@@ -246,10 +310,8 @@ export function AISettings() {
           ) : (
             <input
               type="text"
-              value={ai.model}
-              onChange={(e) =>
-                void updateSettingsSection('ai', { model: e.target.value })
-              }
+              value={draftAi.model}
+              onChange={(e) => updateDraftAi({ model: e.target.value })}
               placeholder={t('settings.modelPlaceholder')}
               required={isCustomProvider}
               className={inputClass}
@@ -282,6 +344,11 @@ export function AISettings() {
               {testResult.message}
             </div>
           )}
+          {isDirty && (
+            <span className="text-text-tertiary text-xs">
+              {t('settings.aiTestSaveFirst')}
+            </span>
+          )}
         </div>
       </SectionCard>
 
@@ -307,19 +374,19 @@ export function AISettings() {
           </div>
           <button
             onClick={() =>
-              void updateSettingsSection('ai', {
-                enableSystemPrompt: !ai.enableSystemPrompt,
+              updateDraftAi({
+                enableSystemPrompt: !draftAi.enableSystemPrompt,
               })
             }
             className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${
-              ai.enableSystemPrompt
+              draftAi.enableSystemPrompt
                 ? 'bg-accent'
                 : 'bg-gray-300 dark:bg-gray-600'
             }`}
           >
             <span
               className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                ai.enableSystemPrompt ? 'translate-x-5' : ''
+                draftAi.enableSystemPrompt ? 'translate-x-5' : ''
               }`}
             />
           </button>
@@ -333,9 +400,9 @@ export function AISettings() {
             })}
           </label>
           <textarea
-            value={ai.systemPromptTemplate || ''}
+            value={draftAi.systemPromptTemplate || ''}
             onChange={(e) =>
-              void updateSettingsSection('ai', {
+              updateDraftAi({
                 systemPromptTemplate: e.target.value,
               })
             }
@@ -343,7 +410,7 @@ export function AISettings() {
               defaultValue: '可使用 {{context}} 和 {{persona}} 两个占位符',
             })}
             rows={7}
-            disabled={!ai.enableSystemPrompt}
+            disabled={!draftAi.enableSystemPrompt}
             className={`${inputClass} resize-y disabled:opacity-60`}
           />
           <p className="text-text-tertiary mt-1 text-xs">
@@ -362,9 +429,9 @@ export function AISettings() {
             })}
           </label>
           <textarea
-            value={ai.chatPersonaPrompt || ''}
+            value={draftAi.chatPersonaPrompt || ''}
             onChange={(e) =>
-              void updateSettingsSection('ai', {
+              updateDraftAi({
                 chatPersonaPrompt: e.target.value,
               })
             }
@@ -373,7 +440,7 @@ export function AISettings() {
                 '例如：请用简洁、专业、带步骤的方式回答；优先给结论再给解释。',
             })}
             rows={5}
-            disabled={!ai.enableSystemPrompt}
+            disabled={!draftAi.enableSystemPrompt}
             className={`${inputClass} resize-y disabled:opacity-60`}
           />
           <p className="text-text-tertiary mt-1 text-xs">
@@ -401,9 +468,9 @@ export function AISettings() {
             {t('settings.aiSummaryPrompt', { defaultValue: '摘要提示词' })}
           </label>
           <textarea
-            value={ai.summaryPrompt || ''}
+            value={draftAi.summaryPrompt || ''}
             onChange={(e) =>
-              void updateSettingsSection('ai', {
+              updateDraftAi({
                 summaryPrompt: e.target.value,
               })
             }
@@ -422,9 +489,9 @@ export function AISettings() {
             {t('settings.aiTranslationPrompt', { defaultValue: '翻译提示词' })}
           </label>
           <textarea
-            value={ai.translationPrompt || ''}
+            value={draftAi.translationPrompt || ''}
             onChange={(e) =>
-              void updateSettingsSection('ai', {
+              updateDraftAi({
                 translationPrompt: e.target.value,
               })
             }
@@ -455,23 +522,46 @@ export function AISettings() {
         <ChevronRight size={16} className="text-text-tertiary flex-shrink-0" />
       </button>
 
-      {/* Footer: reset + auto-save hint */}
+      {/* 底部操作：重置、取消与保存 */}
       <div className="flex items-center justify-between gap-3 pt-1">
         <p className="text-text-tertiary text-xs">
-          {t('settings.aiAutoSaveHint')}
+          {isDirty
+            ? t('settings.aiDraftUnsavedHint')
+            : t('settings.aiDraftSavedHint')}
         </p>
         <div className="flex items-center gap-3">
-          {actionMessage && (
-            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
-              {actionMessage}
+          {(draftValidationMessage || actionMessage) && (
+            <span
+              className={`text-xs ${
+                draftValidationMessage
+                  ? 'text-red-500'
+                  : 'text-text-secondary dark:text-text-dark-secondary'
+              }`}
+            >
+              {draftValidationMessage || actionMessage}
             </span>
           )}
           <button
             onClick={handleReset}
-            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+            disabled={isSaving}
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
           >
             <RotateCcw size={14} />
             {t('settings.aiResetDefaults')}
+          </button>
+          <button
+            onClick={handleCancelDraft}
+            disabled={!isDirty || isSaving}
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            onClick={handleSaveDraft}
+            disabled={disableSave}
+            className="bg-accent hover:bg-accent-hover rounded-lg px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          >
+            {isSaving ? t('settings.aiSaving') : t('common.save')}
           </button>
         </div>
       </div>

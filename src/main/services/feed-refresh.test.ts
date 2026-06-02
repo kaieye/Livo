@@ -117,6 +117,43 @@ describe('applyActionRulesToEntries', () => {
 
     expect(result).toEqual([])
   })
+
+  it('skips text-processing effects for podcast category feeds', () => {
+    const entry = makeEntry('https://podcast.example.com/episode-1')
+    const feed = { ...makeFeed(), category: 'podcast' }
+    const result = applyActionRulesToEntries([entry], feed, [
+      makeRule({
+        actions: [
+          { type: 'star' },
+          { type: 'mark_read' },
+          { type: 'notify' },
+          { type: 'readability' },
+          { type: 'summarize' },
+        ],
+      }),
+    ])
+
+    expect(result).toHaveLength(1)
+    expect(result[0].entry).toMatchObject({
+      isRead: true,
+      isStarred: true,
+    })
+    expect(result[0].effects).toEqual(['star', 'mark_read', 'notify'])
+  })
+
+  it('skips text-processing effects for audio entries', () => {
+    const entry: Entry = {
+      ...makeEntry('https://media.example.com/episode-1'),
+      media: [{ type: 'audio', url: 'https://media.example.com/episode.mp3' }],
+    }
+    const result = applyActionRulesToEntries([entry], makeFeed(), [
+      makeRule({
+        actions: [{ type: 'notify' }, { type: 'readability' }],
+      }),
+    ])
+
+    expect(result[0].effects).toEqual(['notify'])
+  })
 })
 
 describe('getNextAutoRefreshDelayMs', () => {

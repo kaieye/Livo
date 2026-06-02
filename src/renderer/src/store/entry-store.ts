@@ -13,6 +13,7 @@ const entryListCache = new Map<
 const entryListInFlight = new Map<string, Promise<EntryListResult>>()
 const entryDetailCache = new Map<string, Entry>()
 const entryDetailInFlight = new Map<string, Promise<Entry | null>>()
+const entrySnapshotCache = new Map<string, Entry>()
 
 function isPicnobMirrorHost(host: string): boolean {
   const lower = host.toLowerCase()
@@ -155,6 +156,60 @@ function mergeEntriesById(prev: Entry[], next: Entry[]): Entry[] {
   return sortEntriesByPublishedDesc(Array.from(byId.values()))
 }
 
+function cacheEntrySnapshot(entry: Entry): Entry {
+  entrySnapshotCache.set(entry.id, entry)
+  return entry
+}
+
+function cacheEntrySnapshots(entries: Entry[]): Entry[] {
+  for (const entry of entries) cacheEntrySnapshot(entry)
+  return entries
+}
+
+function mergeEntrySnapshotState(detail: Entry, snapshot: Entry): Entry {
+  return {
+    ...detail,
+    feedId: snapshot.feedId,
+    title: snapshot.title,
+    url: snapshot.url,
+    author: snapshot.author ?? detail.author,
+    authorAvatar: snapshot.authorAvatar ?? detail.authorAvatar,
+    imageUrl: snapshot.imageUrl ?? detail.imageUrl,
+    media: snapshot.media ?? detail.media,
+    publishedAt: snapshot.publishedAt,
+    isRead: snapshot.isRead,
+    isStarred: snapshot.isStarred,
+    readProgress: snapshot.readProgress ?? detail.readProgress,
+    notifiedAt: snapshot.notifiedAt ?? detail.notifiedAt,
+    createdAt: snapshot.createdAt,
+  }
+}
+
+function getCachedEntryDetail(entryId: string): Entry | undefined {
+  const detail = entryDetailCache.get(entryId)
+  if (!detail) return undefined
+  const snapshot = entrySnapshotCache.get(entryId)
+  return snapshot ? mergeEntrySnapshotState(detail, snapshot) : detail
+}
+
+function cacheEntryDetail(entry: Entry): Entry {
+  entryDetailCache.set(entry.id, entry)
+  return getCachedEntryDetail(entry.id) ?? entry
+}
+
+function getInitialSelectedEntry(entry: Entry): Entry {
+  const snapshot = cacheEntrySnapshot(entry)
+  const detail = getCachedEntryDetail(entry.id)
+  return detail ? mergeEntrySnapshotState(detail, snapshot) : snapshot
+}
+
+function patchCachedEntry(entryId: string, patch: Partial<Entry>): void {
+  const snapshot = entrySnapshotCache.get(entryId)
+  if (snapshot) entrySnapshotCache.set(entryId, { ...snapshot, ...patch })
+  const detail = entryDetailCache.get(entryId)
+  if (detail) entryDetailCache.set(entryId, { ...detail, ...patch })
+}
+
 interface EntryState {
   entries: Entry[]
   selectedEntry: Entry | null
@@ -204,7 +259,7 @@ interface EntryState {
 
 async function fetchEntryDetail(entryId: string): Promise<Entry | null> {
   if (!entryId) return null
-  const cached = entryDetailCache.get(entryId)
+  const cached = getCachedEntryDetail(entryId)
   if (cached) return cached
 
   const existing = entryDetailInFlight.get(entryId)
@@ -214,9 +269,9 @@ async function fetchEntryDetail(entryId: string): Promise<Entry | null> {
     .get(entryId)
     .then((entry) => {
       if (entry) {
-        entryDetailCache.set(entryId, entry)
+        cacheEntryDetail(entry)
       }
-      return entry
+      return entry ? (getCachedEntryDetail(entry.id) ?? entry) : entry
     })
     .catch(() => null)
     .finally(() => {
@@ -277,7 +332,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       : EMPTY_ENTRY_LIST_CACHE_TTL_MS
     if (cached && Date.now() - cached.cachedAt < ttl) {
       set({
-        entries: cached.result.entries,
+        entries: cacheEntrySnapshots(cached.result.entries),
         isLoading: false,
         isLoadingMore: false,
         hasMoreEntries: cached.result.hasMore,
@@ -314,7 +369,9 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       const isLatestQuery = get().paginationQueryKey === queryKey
       if (!isLatestQuery) return
       set({
-        entries: sortEntriesByPublishedDesc(result.entries),
+        entries: cacheEntrySnapshots(
+          sortEntriesByPublishedDesc(result.entries),
+        ),
         isLoading: false,
         isLoadingMore: false,
         hasMoreEntries: result.hasMore,
@@ -348,6 +405,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         skipDedupe: false,
       })
       .then((result) => {
+        cacheEntrySnapshots(result.entries)
         entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
         return result
       })
@@ -406,6 +464,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
               skipDedupe: false,
             })
             .then((result) => {
+              cacheEntrySnapshots(result.entries)
               entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
               return result
             })
@@ -417,7 +476,10 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       }
 
       set((current) => ({
-        entries: mergeEntriesById(current.entries, nextPage.entries),
+        entries: mergeEntriesById(
+          current.entries,
+          cacheEntrySnapshots(nextPage.entries),
+        ),
         isLoadingMore: false,
         hasMoreEntries: nextPage.hasMore,
       }))
@@ -429,6 +491,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   clearListCache: () => {
     entryListCache.clear()
     entryListInFlight.clear()
+    entrySnapshotCache.clear()
   },
 
   refreshEntryMedia: async (entryId, feedId) => {
@@ -444,17 +507,18 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const refreshed = await window.api.entries.get(entryId).catch(() => null)
     if (!refreshed) return null
 
-    entryDetailCache.set(entryId, refreshed)
+    const nextDetail = cacheEntryDetail(refreshed)
+    cacheEntrySnapshot(nextDetail)
 
     set((state) => ({
       entries: state.entries.map((entry) =>
-        entry.id === entryId ? refreshed : entry,
+        entry.id === entryId ? nextDetail : entry,
       ),
       selectedEntry:
-        state.selectedEntry?.id === entryId ? refreshed : state.selectedEntry,
+        state.selectedEntry?.id === entryId ? nextDetail : state.selectedEntry,
     }))
 
-    return refreshed
+    return nextDetail
   },
 
   selectEntry: async (entry) => {
@@ -463,9 +527,10 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       return
     }
 
-    const cachedEntry = entryDetailCache.get(entry.id)
+    const selectedEntry = getInitialSelectedEntry(entry)
+    const cachedEntry = getCachedEntryDetail(entry.id)
     set({
-      selectedEntry: cachedEntry ?? entry,
+      selectedEntry,
       isSelectedEntryHydrating: !cachedEntry,
     })
     if (entry && !entry.isRead) {
@@ -480,10 +545,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
             ? { ...state.selectedEntry, isRead: true }
             : state.selectedEntry,
       }))
-      const cached = entryDetailCache.get(entry.id)
-      if (cached) {
-        entryDetailCache.set(entry.id, { ...cached, isRead: true })
-      }
+      patchCachedEntry(entry.id, { isRead: true })
     }
     const fullEntry = await fetchEntryDetail(entry.id)
     set((state) => {
@@ -504,6 +566,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         if (entryDetailCache.has(id)) return
         const detail = await fetchEntryDetail(id)
         if (!detail) return
+        cacheEntrySnapshot(detail)
         set((state) => ({
           entries: state.entries.map((entry) =>
             entry.id === id ? detail : entry,
@@ -526,10 +589,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
           ? { ...state.selectedEntry, isRead }
           : state.selectedEntry,
     }))
-    const cached = entryDetailCache.get(entryId)
-    if (cached) {
-      entryDetailCache.set(entryId, { ...cached, isRead })
-    }
+    patchCachedEntry(entryId, { isRead })
   },
 
   markAllRead: async (feedId) => {
@@ -538,7 +598,18 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       entries: state.entries.map((e) =>
         !feedId || e.feedId === feedId ? { ...e, isRead: true } : e,
       ),
+      selectedEntry:
+        !feedId || state.selectedEntry?.feedId === feedId
+          ? state.selectedEntry
+            ? { ...state.selectedEntry, isRead: true }
+            : state.selectedEntry
+          : state.selectedEntry,
     }))
+    for (const entry of get().entries) {
+      if (!feedId || entry.feedId === feedId) {
+        patchCachedEntry(entry.id, { isRead: true })
+      }
+    }
   },
 
   markAboveRead: async (entryId) => {
@@ -582,10 +653,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
           ? { ...state.selectedEntry, isStarred: result.isStarred }
           : state.selectedEntry,
     }))
-    const cached = entryDetailCache.get(entryId)
-    if (cached) {
-      entryDetailCache.set(entryId, { ...cached, isStarred: result.isStarred })
-    }
+    patchCachedEntry(entryId, { isStarred: result.isStarred })
   },
 
   saveProgress: async (entryId, readProgress) => {
@@ -600,10 +668,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
           : state.selectedEntry
       return { entries: updated, selectedEntry: selected }
     })
-    const cached = entryDetailCache.get(entryId)
-    if (cached) {
-      entryDetailCache.set(entryId, { ...cached, readProgress })
-    }
+    patchCachedEntry(entryId, { readProgress })
   },
 
   search: async (query) => {
@@ -623,7 +688,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     try {
       const entries = await window.api.entries.search(query)
       set({
-        entries: dedupeEntriesForClient(entries),
+        entries: cacheEntrySnapshots(dedupeEntriesForClient(entries)),
         isLoading: false,
         isLoadingMore: false,
         hasMoreEntries: false,
