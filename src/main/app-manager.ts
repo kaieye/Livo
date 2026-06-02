@@ -14,7 +14,9 @@ import { registerVideoHandlers } from './handlers/video-handlers'
 import { registerAccountHandlers } from './handlers/account-handlers'
 import { registerAgentHandlers } from './handlers/agent-handlers'
 import { registerActionHandlers } from './handlers/action-handlers'
+import { registerFeverHandlers } from './handlers/fever-handlers'
 import { startAutoRefresh } from './services/feed-refresh'
+import { startFeverAutoSync, stopFeverAutoSync } from './services/fever-sync'
 import { startAggregatorJobs } from './services/aggregator-jobs'
 import { logError, readRecentLogs } from './services/logger'
 import {
@@ -88,6 +90,7 @@ export class AppManager {
 
     startAggregatorJobs()
     this.stopCacheMaintenance = startCacheMaintenance(getSettings)
+    startFeverAutoSync()
     startAutoRefresh(settings.general.refreshInterval, mainWindow, {
       freshnessTTL: settings.data?.freshnessTTL ?? 10,
       concurrency: settings.data?.refreshConcurrency ?? 5,
@@ -110,6 +113,7 @@ export class AppManager {
     this.windowManager.prepareForQuit()
     this.tray?.destroy()
     this.tray = null
+    stopFeverAutoSync()
     if (this.stopCacheMaintenance) {
       this.stopCacheMaintenance()
       this.stopCacheMaintenance = null
@@ -154,6 +158,7 @@ export class AppManager {
     registerAccountHandlers()
     registerAgentHandlers()
     registerActionHandlers()
+    registerFeverHandlers()
   }
 
   private createTray(): void {

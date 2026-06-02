@@ -20,6 +20,8 @@ import type {
   AIDigestGenerateResult,
   AIDigestRun,
   AIDigestPreset,
+  FeverAccount,
+  FeverSyncState,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
 import type { ActionRule } from '../shared/actions'
@@ -348,6 +350,72 @@ const api = {
       creators?: Array<{ mid: number; uname: string }>
       error?: string
     }> => ipcRenderer.invoke(IPC.ACCOUNT_BILIBILI_FOLLOWINGS),
+  },
+
+  // Fever sync
+  fever: {
+    listAccounts: (): Promise<FeverAccount[]> =>
+      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_LIST),
+    createAccount: (input: {
+      baseUrl: string
+      username: string
+      apiKey: string
+    }): Promise<FeverAccount> =>
+      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_CREATE, input),
+    updateAccount: (
+      id: string,
+      updates: Partial<FeverAccount>,
+    ): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_UPDATE, id, updates),
+    deleteAccount: (
+      id: string,
+    ): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.FEVER_ACCOUNTS_DELETE, id),
+    verify: (
+      baseUrl: string,
+      username: string,
+      apiKey: string,
+    ): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.FEVER_VERIFY, baseUrl, username, apiKey),
+    sync: (
+      accountId: string,
+    ): Promise<{
+      success: boolean
+      feedsSynced: number
+      itemsSynced: number
+      newEntries: number
+      error?: string
+    }> => ipcRenderer.invoke(IPC.FEVER_SYNC, accountId),
+    syncAll: (): Promise<{
+      success: boolean
+      results: Array<{ accountId: string; success: boolean; error?: string }>
+    }> => ipcRenderer.invoke(IPC.FEVER_SYNC_ALL),
+    getSyncState: (accountId: string): Promise<FeverSyncState | null> =>
+      ipcRenderer.invoke(IPC.FEVER_SYNC_STATE, accountId),
+    onSyncProgress: (
+      callback: (data: {
+        accountId: string
+        phase: string
+        feedsSynced: number
+        itemsSynced: number
+        newEntries: number
+        error?: string
+      }) => void,
+    ) => {
+      const handler = (
+        _event: unknown,
+        data: {
+          accountId: string
+          phase: string
+          feedsSynced: number
+          itemsSynced: number
+          newEntries: number
+          error?: string
+        },
+      ) => callback(data)
+      ipcRenderer.on('fever:sync-progress', handler)
+      return () => ipcRenderer.removeListener('fever:sync-progress', handler)
+    },
   },
 
   // Events

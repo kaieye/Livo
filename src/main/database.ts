@@ -11,6 +11,10 @@ import type {
   AIDigestRun,
   Entry,
   Feed,
+  FeverAccount,
+  FeverFeedMapping,
+  FeverItemMapping,
+  FeverSyncState,
 } from '../shared/types'
 import { FeedViewType } from '../shared/types'
 import type { CleanupOptions, CleanupStats } from './database/cleanup'
@@ -262,4 +266,95 @@ export function getDatabase(): { close: () => void } {
 
 export function forceSave(): void {
   // SQLite writes are immediate — no-op for backward compat.
+}
+
+// ---- Fever account operations ----
+
+export function getFeverAccounts(): FeverAccount[] {
+  return adapter.getFeverAccounts()
+}
+
+export function getFeverAccountById(id: string): FeverAccount | undefined {
+  return adapter.getFeverAccountById(id)
+}
+
+export function insertFeverAccount(account: FeverAccount): void {
+  adapter.insertFeverAccount(account)
+}
+
+export function updateFeverAccount(
+  id: string,
+  updates: Partial<FeverAccount>,
+): void {
+  adapter.updateFeverAccount(id, updates)
+}
+
+export function deleteFeverAccount(id: string): void {
+  adapter.deleteFeverAccount(id)
+}
+
+// ---- Fever feed mapping operations ----
+
+export function getFeverFeedMappings(accountId: string): FeverFeedMapping[] {
+  return adapter.getFeverFeedMappings(accountId)
+}
+
+export function getFeverFeedMappingByRemoteId(
+  accountId: string,
+  feverFeedId: number,
+): FeverFeedMapping | undefined {
+  return adapter.getFeverFeedMappingByRemoteId(accountId, feverFeedId)
+}
+
+export function upsertFeverFeedMapping(mapping: FeverFeedMapping): void {
+  adapter.upsertFeverFeedMapping(mapping)
+}
+
+export function deleteFeverFeedMappings(accountId: string): void {
+  adapter.deleteFeverFeedMappings(accountId)
+}
+
+export function markFeverFeedMappingsInactive(
+  accountId: string,
+  activeRemoteIds: number[],
+): void {
+  adapter.markFeverFeedMappingsInactive(accountId, activeRemoteIds)
+}
+
+// ---- Fever item mapping operations ----
+
+export function getFeverItemMapping(
+  accountId: string,
+  feverItemId: number,
+): FeverItemMapping | undefined {
+  return adapter.getFeverItemMapping(accountId, feverItemId)
+}
+
+export function upsertFeverItemMapping(mapping: FeverItemMapping): void {
+  adapter.upsertFeverItemMapping(mapping)
+}
+
+export function getFeverItemMappingsByLocalEntry(
+  localEntryId: string,
+): FeverItemMapping[] {
+  return adapter.getFeverItemMappingsByLocalEntry(localEntryId)
+}
+
+export function markFeverItemMappingsInactive(
+  accountId: string,
+  feverFeedId: number,
+): void {
+  adapter.markFeverItemMappingsInactive(accountId, feverFeedId)
+}
+
+// ---- Fever sync state operations ----
+
+export function getFeverSyncState(
+  accountId: string,
+): FeverSyncState | undefined {
+  return adapter.getFeverSyncState(accountId)
+}
+
+export function upsertFeverSyncState(state: FeverSyncState): void {
+  adapter.upsertFeverSyncState(state)
 }

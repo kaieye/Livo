@@ -6,8 +6,41 @@ import {
   updateEntry,
   markAllRead as dbMarkAllRead,
   searchEntries,
+  getFeverItemMappingsByLocalEntry,
+  getFeverAccountById,
+  upsertFeverItemMapping,
   type EntryListResult,
 } from '../database'
+import { createFeverClient } from '../services/fever-client'
+
+function feverWriteBack(
+  entryId: string,
+  state: 'read' | 'unread' | 'saved' | 'unsaved',
+): void {
+  const mappings = getFeverItemMappingsByLocalEntry(entryId)
+  for (const mapping of mappings) {
+    const account = getFeverAccountById(mapping.accountId)
+    if (!account?.enabled) continue
+    const client = createFeverClient(
+      account.baseUrl,
+      account.username,
+      account.apiKey,
+    )
+    client
+      .markItem(mapping.feverItemId, state)
+      .then(() => {
+        const updates: Record<string, boolean> = {}
+        if (state === 'read' || state === 'unread')
+          updates.remoteIsRead = state === 'read'
+        if (state === 'saved' || state === 'unsaved')
+          updates.remoteIsStarred = state === 'saved'
+        upsertFeverItemMapping({ ...mapping, ...updates })
+      })
+      .catch(() => {
+        // Best-effort; reconciled on next sync
+      })
+  }
+}
 
 export function registerEntryHandlers(): void {
   // List entries
@@ -41,13 +74,24 @@ export function registerEntryHandlers(): void {
     IPC.ENTRY_MARK_READ,
     (_event, entryId: string, isRead: boolean) => {
       updateEntry(entryId, { isRead })
+      feverWriteBack(entryId, isRead ? 'read' : 'unread')
       return { success: true }
     },
   )
 
   // Mark all entries as read
   ipcMain.handle(IPC.ENTRY_MARK_ALL_READ, (_event, feedId?: string) => {
+    // Get entries before marking to trigger write-back
+    const unreadEntries = getEntries({
+      feedId,
+      unreadOnly: true,
+      limit: 10000,
+      skipDedupe: true,
+    })
     dbMarkAllRead(feedId)
+    for (const entry of unreadEntries.entries) {
+      feverWriteBack(entry.id, 'read')
+    }
     return { success: true }
   })
 
@@ -57,6 +101,7 @@ export function registerEntryHandlers(): void {
     if (!entry) return { success: false, isStarred: false }
     const newStarred = !entry.isStarred
     updateEntry(entryId, { isStarred: newStarred })
+    feverWriteBack(entryId, newStarred ? 'saved' : 'unsaved')
     return { success: true, isStarred: newStarred }
   })
 

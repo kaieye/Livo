@@ -37,6 +37,7 @@ import {
 } from '../../shared/actions'
 import { getActionRules } from './action-rules-store'
 import { enqueueEntryActionEffects } from './entry-action-effects'
+import { syncFeverAccount } from './fever-sync'
 import { judgeSemanticFilter } from './ai-filter'
 import { validateAIConfig } from './ai-client'
 import type {
@@ -612,6 +613,7 @@ export async function refreshSingleFeed(
   if (inFlight) return inFlight
 
   const task = (async (): Promise<number> => {
+    if (feed.provider === 'fever') return 0
     const now = Date.now()
     const rsshubInstance =
       getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
@@ -898,6 +900,21 @@ export async function refreshAllFeeds(
       failedFeedCount: failedCount,
       failedFeedTitles: failedTitles,
     })
+
+    // Sync Fever accounts after normal feed refresh
+    try {
+      const { getFeverAccounts } = await import('../database')
+      const feverAccounts = getFeverAccounts().filter((a) => a.enabled)
+      for (const account of feverAccounts) {
+        try {
+          await syncFeverAccount(account.id)
+        } catch (err) {
+          console.warn('[fever] sync failed for', account.baseUrl, err)
+        }
+      }
+    } catch {
+      // Database not ready or import failure — skip fever sync
+    }
 
     return {
       totalFeeds: feeds.length,

@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Clock,
   Star,
+  Flame,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -37,6 +38,7 @@ const settingsTabImporters = {
   refreshLogs: () => import('./RefreshLogSettings'),
   agentPermissions: () => import('./AgentPermissionsSettings'),
   favorites: () => import('./FavoritesPanel'),
+  fever: () => import('./FeverSettings'),
 } satisfies Record<SettingsTabId, () => Promise<unknown>>
 
 const settingsTabComponents = {
@@ -110,6 +112,11 @@ const settingsTabComponents = {
       .favorites()
       .then((module) => ({ default: module.FavoritesPanel })),
   ),
+  fever: lazy(() =>
+    settingsTabImporters
+      .fever()
+      .then((module) => ({ default: module.FeverSettings })),
+  ),
 } satisfies Record<SettingsTabId, React.ComponentType>
 
 function preloadSettingsTab(tabId: SettingsTabId) {
@@ -168,6 +175,11 @@ export function SettingsDialog() {
       id: 'favorites' as const,
       label: t('settings.favoritesTitle'),
       icon: Star,
+    },
+    {
+      id: 'fever' as const,
+      label: t('settings.fever'),
+      icon: Flame,
     },
   ]
 
@@ -235,7 +247,7 @@ export function SettingsDialog() {
     <div className="fixed inset-0 bg-black/50" style={{ zIndex }}>
       <div
         ref={dialogRef}
-        className="absolute flex resize overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-surface-dark-secondary"
+        className="dark:bg-surface-dark-secondary absolute flex resize overflow-hidden rounded-xl bg-white shadow-2xl"
         style={{
           width: 900,
           height: 620,
@@ -248,7 +260,7 @@ export function SettingsDialog() {
         }}
       >
         {/* Left sidebar */}
-        <div className="w-[200px] flex-shrink-0 space-y-1 border-r bg-sidebar p-4 dark:bg-sidebar-dark">
+        <div className="bg-sidebar dark:bg-sidebar-dark w-[200px] flex-shrink-0 space-y-1 border-r p-4">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold">{t('settings.title')}</h2>
           </div>
@@ -286,7 +298,7 @@ export function SettingsDialog() {
             <button
               onClick={() => setOpen(false)}
               onMouseDown={(e) => e.stopPropagation()}
-              className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
             >
               <X size={18} />
             </button>
@@ -310,7 +322,7 @@ export function SettingsDialog() {
 
 function SettingsTabFallback() {
   return (
-    <div className="flex min-h-[240px] items-center justify-center text-sm text-text-secondary dark:text-text-dark-secondary">
+    <div className="text-text-secondary dark:text-text-dark-secondary flex min-h-[240px] items-center justify-center text-sm">
       Loading settings...
     </div>
   )

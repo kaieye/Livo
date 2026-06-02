@@ -101,6 +101,77 @@ const MIGRATIONS: Array<{
         ON ai_digest_runs (preset, feed_id, window_start_at);
     `,
   },
+  {
+    version: 2,
+    name: 'fever-provider-column',
+    sql: `
+      ALTER TABLE feeds ADD COLUMN provider TEXT NOT NULL DEFAULT 'local';
+    `,
+  },
+  {
+    version: 3,
+    name: 'fever-tables',
+    sql: `
+      CREATE TABLE IF NOT EXISTS fever_accounts (
+        id TEXT PRIMARY KEY,
+        base_url TEXT NOT NULL,
+        username TEXT NOT NULL DEFAULT '',
+        api_key TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        auto_sync INTEGER NOT NULL DEFAULT 1,
+        sync_interval_min INTEGER NOT NULL DEFAULT 30,
+        last_sync_at INTEGER,
+        last_error TEXT,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS fever_feed_mappings (
+        account_id TEXT NOT NULL,
+        fever_feed_id INTEGER NOT NULL,
+        local_feed_id TEXT NOT NULL,
+        remote_group TEXT,
+        remote_title TEXT,
+        remote_url TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_seen_at INTEGER NOT NULL,
+        PRIMARY KEY (account_id, fever_feed_id),
+        FOREIGN KEY (account_id) REFERENCES fever_accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (local_feed_id) REFERENCES feeds(id) ON DELETE CASCADE
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS fever_feed_mappings_local_idx
+        ON fever_feed_mappings (local_feed_id);
+
+      CREATE TABLE IF NOT EXISTS fever_item_mappings (
+        account_id TEXT NOT NULL,
+        fever_item_id INTEGER NOT NULL,
+        fever_feed_id INTEGER NOT NULL,
+        local_feed_id TEXT NOT NULL,
+        local_entry_id TEXT NOT NULL,
+        remote_is_read INTEGER,
+        remote_is_starred INTEGER,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_seen_at INTEGER NOT NULL,
+        PRIMARY KEY (account_id, fever_item_id),
+        FOREIGN KEY (account_id) REFERENCES fever_accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (local_entry_id) REFERENCES entries(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS fever_item_mappings_local_idx
+        ON fever_item_mappings (local_entry_id);
+      CREATE INDEX IF NOT EXISTS fever_item_mappings_account_feed_idx
+        ON fever_item_mappings (account_id, fever_feed_id);
+
+      CREATE TABLE IF NOT EXISTS fever_sync_states (
+        account_id TEXT PRIMARY KEY,
+        last_item_id INTEGER NOT NULL DEFAULT 0,
+        last_sync_at INTEGER,
+        last_full_sync_at INTEGER,
+        last_error TEXT,
+        FOREIGN KEY (account_id) REFERENCES fever_accounts(id) ON DELETE CASCADE
+      );
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

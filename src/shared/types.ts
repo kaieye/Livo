@@ -69,8 +69,53 @@ export interface Feed {
   fetchSource?: 'auto' | 'direct' | 'local-agent' | 'private-aggregator'
   upstreamUrl?: string
   remoteFeedId?: string
+  provider?: 'local' | 'fever'
   errorCount: number
   createdAt: number
+}
+
+export interface FeverAccount {
+  id: string
+  baseUrl: string
+  username: string
+  apiKey: string
+  enabled: boolean
+  autoSync: boolean
+  syncIntervalMin: number
+  lastSyncAt?: number
+  lastError?: string
+  createdAt: number
+}
+
+export interface FeverFeedMapping {
+  accountId: string
+  feverFeedId: number
+  localFeedId: string
+  remoteGroup?: string
+  remoteTitle?: string
+  remoteUrl?: string
+  isActive: boolean
+  lastSeenAt: number
+}
+
+export interface FeverItemMapping {
+  accountId: string
+  feverItemId: number
+  feverFeedId: number
+  localFeedId: string
+  localEntryId: string
+  remoteIsRead?: boolean
+  remoteIsStarred?: boolean
+  isActive: boolean
+  lastSeenAt: number
+}
+
+export interface FeverSyncState {
+  accountId: string
+  lastItemId: number
+  lastSyncAt?: number
+  lastFullSyncAt?: number
+  lastError?: string
 }
 
 export interface AggregatorSettings {
@@ -417,6 +462,7 @@ export type SettingsTabId =
   | 'refreshLogs'
   | 'agentPermissions'
   | 'favorites'
+  | 'fever'
 
 export interface RefreshLogEntry {
   id: string
@@ -649,6 +695,14 @@ export const IPC = {
   APP_SAVE_TEXT_FILE: 'app:save-text-file',
   APP_DOWNLOAD_URL: 'app:download-url',
   MENU_SHOW_CONTEXT: 'menu:show-context',
+  FEVER_ACCOUNTS_LIST: 'fever:accounts-list',
+  FEVER_ACCOUNTS_CREATE: 'fever:accounts-create',
+  FEVER_ACCOUNTS_UPDATE: 'fever:accounts-update',
+  FEVER_ACCOUNTS_DELETE: 'fever:accounts-delete',
+  FEVER_VERIFY: 'fever:verify',
+  FEVER_SYNC: 'fever:sync',
+  FEVER_SYNC_ALL: 'fever:sync-all',
+  FEVER_SYNC_STATE: 'fever:sync-state',
 } as const
 
 export const AI_PROVIDERS = {
