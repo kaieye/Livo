@@ -91,11 +91,11 @@
 
 ### 10. 播客订阅模型
 
-**Livo 现状**：部分实现——有音频播放器（`MediaPlayer.tsx`/`AudioMiniBar.tsx`/`player-store.ts`）和视频时长富集，但**没有专门的播客订阅/剧集模型**，`enclosure` 只用于图片信号检测。
+**Livo 现状**：部分实现——有音频播放器（`MediaPlayer.tsx`/`AudioMiniBar.tsx`/`player-store.ts`）、视频时长富集，以及 RSS/Atom `enclosure` 与 `itunes:*` 媒体字段解析，但**没有专门的播客订阅/剧集模型**。
 
-**FeedFuse 做法**（`parseFeed.ts` 的 `extractMediaAttachments`）：完整解析 `<enclosure>` 与 Atom `link rel=enclosure`（仅收 `audio/*`/`video/*`）、`itunes:duration`（HH:MM:SS）、`itunes:image`；入库后**播客文章跳过全文/AI/过滤队列**（`isPodcastSource` 分支），避免对音频做无意义的正文抓取。
+**FeedFuse 做法**：入库后**播客文章跳过全文/AI/过滤队列**（`isPodcastSource` 分支），避免对音频做无意义的正文抓取。
 
-**借鉴建议**：补全 `enclosure`/`itunes:*` 字段解析，给播客类源一个专门的剧集列表视图；对播客条目跳过全文抓取与摘要等不适用的处理。
+**借鉴建议**：给播客类源一个专门的剧集列表视图；对播客条目跳过全文抓取与摘要等不适用的处理。
 
 ---
 

@@ -13,6 +13,12 @@ type MediaAttrs = {
   duration?: string
 }
 
+type AtomLinkAttrs = {
+  href?: string
+  rel?: string
+  type?: string
+}
+
 function readMediaAttrs(raw: unknown): MediaAttrs | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const rec = raw as Record<string, unknown>
@@ -29,6 +35,84 @@ function readMediaAttrs(raw: unknown): MediaAttrs | undefined {
     width: asStr(attrs.width),
     height: asStr(attrs.height),
     duration: asStr(attrs.duration),
+  }
+}
+
+function readXmlString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return String(value)
+  if (Array.isArray(value)) return readXmlString(value[0])
+  if (!value || typeof value !== 'object') return undefined
+
+  const rec = value as Record<string, unknown>
+  const text = rec._
+  return typeof text === 'string' ? text : undefined
+}
+
+function readXmlHref(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return readXmlHref(value[0])
+  if (!value || typeof value !== 'object') return undefined
+
+  const rec = value as Record<string, unknown>
+  const attrs =
+    rec.$ && typeof rec.$ === 'object'
+      ? (rec.$ as Record<string, unknown>)
+      : rec
+  const href = attrs.href
+  if (typeof href === 'string') return href
+  return readXmlString(value)
+}
+
+function readAtomLinkAttrs(raw: unknown): AtomLinkAttrs | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const rec = raw as Record<string, unknown>
+  const attrs =
+    rec.$ && typeof rec.$ === 'object'
+      ? (rec.$ as Record<string, unknown>)
+      : rec
+  const asStr = (v: unknown) => (typeof v === 'string' ? v : undefined)
+  return {
+    href: asStr(attrs.href),
+    rel: asStr(attrs.rel),
+    type: asStr(attrs.type),
+  }
+}
+
+function collectAtomEnclosureLinks(
+  item: Record<string, unknown>,
+): Array<AtomLinkAttrs & { href: string }> {
+  const rawLinks = item.atomLinks as unknown
+  const links = rawLinks
+    ? Array.isArray(rawLinks)
+      ? rawLinks
+      : [rawLinks]
+    : []
+  return links
+    .map(readAtomLinkAttrs)
+    .filter(
+      (attrs): attrs is AtomLinkAttrs & { href: string } =>
+        !!attrs?.href && (attrs.rel || '').toLowerCase() === 'enclosure',
+    )
+}
+
+function readItunesItemData(item: Record<string, unknown>): {
+  image?: string
+  duration?: string
+} {
+  const direct =
+    item.itunes && typeof item.itunes === 'object'
+      ? (item.itunes as Record<string, unknown>)
+      : {}
+  return {
+    image:
+      readXmlHref(direct.image) ||
+      readXmlHref(item.itunesImage) ||
+      readXmlHref(item['itunes:image']),
+    duration:
+      readXmlString(direct.duration) ||
+      readXmlString(item.itunesDuration) ||
+      readXmlString(item['itunes:duration']),
   }
 }
 
@@ -252,6 +336,16 @@ function isLikelyImageUrl(url: string): boolean {
   )
 }
 
+function isLikelyAudioUrl(url: string): boolean {
+  return /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)(?:[?#]|$)/i.test(
+    url.toLowerCase(),
+  )
+}
+
+function isLikelyVideoUrl(url: string): boolean {
+  return /\.(mp4|m4v|webm|mov|m3u8)(?:[?#]|$)/i.test(url.toLowerCase())
+}
+
 function isDecorativeInstagramAssetUrl(url: string): boolean {
   const raw = (url || '').trim()
   const lower = raw.toLowerCase()
@@ -346,6 +440,40 @@ export function extractMedia(
         finalUrl !== decodeHTMLEntities(enclosure.url) &&
         isMirrorProxyUrl(enclosure.url)
           ? decodeHTMLEntities(enclosure.url)
+          : undefined
+      media.push({ url: finalUrl, type: 'photo', previewUrl: mirrorPreview })
+    }
+  }
+
+  for (const link of collectAtomEnclosureLinks(item)) {
+    const type = (link.type || '').toLowerCase()
+    const decodedUrl = decodeHTMLEntities(link.href)
+    const normalizedUrl = normalizeKnownMediaUrl(link.href)
+    const finalUrl = normalizedUrl || decodedUrl
+    if (!finalUrl || media.some((m) => m.url === finalUrl)) continue
+
+    const lowerUrl = decodedUrl.toLowerCase()
+    const urlLooksLikeImage =
+      /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/i.test(lowerUrl) ||
+      lowerUrl.includes('cdninstagram') ||
+      lowerUrl.includes('scontent.') ||
+      lowerUrl.includes('fbcdn.net') ||
+      isKnownSocialMirrorImageUrl(lowerUrl)
+
+    if (type.startsWith('audio/') || (!type && isLikelyAudioUrl(decodedUrl))) {
+      media.push({ url: decodedUrl, type: 'audio' })
+    } else if (
+      (type.startsWith('video/') || (!type && isLikelyVideoUrl(decodedUrl))) &&
+      !urlLooksLikeImage
+    ) {
+      media.push({ url: decodedUrl, type: 'video' })
+    } else if (
+      (type.startsWith('image/') || urlLooksLikeImage) &&
+      !isDecorativeInstagramAssetUrl(decodedUrl)
+    ) {
+      const mirrorPreview =
+        finalUrl !== decodedUrl && isMirrorProxyUrl(link.href)
+          ? decodedUrl
           : undefined
       media.push({ url: finalUrl, type: 'photo', previewUrl: mirrorPreview })
     }
@@ -570,15 +698,15 @@ export function extractMedia(
         type: 'video',
         previewUrl:
           (item['media:thumbnail'] as { $?: { url?: string } })?.$?.url ||
-          (item.itunes as { image?: string })?.image ||
+          readItunesItemData(item).image ||
           undefined,
       })
     }
   }
 
   // 7. itunes:image as photo
-  const itunesData = item.itunes as { image?: string } | undefined
-  if (itunesData?.image && !media.some((m) => m.url === itunesData!.image)) {
+  const itunesData = readItunesItemData(item)
+  if (itunesData.image && !media.some((m) => m.url === itunesData.image)) {
     if (!media.some((m) => m.type === 'photo')) {
       media.push({
         url: normalizeKnownMediaUrl(itunesData.image) || itunesData.image,
@@ -643,6 +771,22 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
     return normalizeKnownMediaUrl(enclosure.url) || enclosure.url
   }
 
+  for (const link of collectAtomEnclosureLinks(item)) {
+    const type = (link.type || '').toLowerCase()
+    const lowerUrl = (link.href || '').toLowerCase()
+    const urlLooksLikeImage =
+      /\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/i.test(lowerUrl) ||
+      lowerUrl.includes('cdninstagram') ||
+      lowerUrl.includes('scontent.') ||
+      lowerUrl.includes('fbcdn.net') ||
+      isKnownSocialMirrorImageUrl(lowerUrl)
+    if (!(type.startsWith('image/') || (!type && urlLooksLikeImage))) {
+      continue
+    }
+    if (isDecorativeInstagramAssetUrl(link.href)) continue
+    return normalizeKnownMediaUrl(link.href) || link.href
+  }
+
   // media:content with image type
   const mediaContentItems = collectMediaContentNodes(item)
   for (const mc of mediaContentItems) {
@@ -663,7 +807,7 @@ export function deriveImageUrl(item: Record<string, unknown>): string {
     }
   }
 
-  const itunes = item.itunes as { image?: string } | undefined
+  const itunes = readItunesItemData(item)
   if (itunes?.image) {
     if (!isDecorativeInstagramAssetUrl(itunes.image))
       return normalizeKnownMediaUrl(itunes.image) || itunes.image
@@ -812,8 +956,8 @@ function isTrackingPixel(url: string): boolean {
  */
 function parseDuration(item: Record<string, unknown>): number | undefined {
   // 1. itunes:duration — can be "HH:MM:SS", "MM:SS", or plain seconds string
-  const itunes = item.itunes as { duration?: string | number } | undefined
-  if (itunes?.duration != null) {
+  const itunes = readItunesItemData(item)
+  if (itunes.duration != null) {
     const raw = String(itunes.duration).trim()
     if (/^\d+$/.test(raw)) return parseInt(raw, 10)
     const parts = raw.split(':').map(Number)

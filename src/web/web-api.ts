@@ -10,6 +10,7 @@ import type {
   Entry,
   FeedWithCount,
   FeedViewType,
+  MediaItem,
   AppSettings,
   AccountProvider,
   DiscoverFeedPreviewResult,
@@ -263,6 +264,8 @@ function getProbeImageFromParsed(
         image?: { url?: string }
         items?: Array<{
           content?: string
+          imageUrl?: string
+          media?: Array<{ url?: string; type?: string }>
           enclosure?: { url?: string; type?: string }
         }>
       }
@@ -273,6 +276,12 @@ function getProbeImageFromParsed(
   if (imageUrl) return imageUrl
   const items = parsed?.items || []
   for (const item of items.slice(0, 5)) {
+    const itemImageUrl = item.imageUrl?.trim()
+    if (itemImageUrl) return itemImageUrl
+    const mediaImageUrl = item.media
+      ?.find((media) => media.type === 'photo')
+      ?.url?.trim()
+    if (mediaImageUrl) return mediaImageUrl
     const enclosureUrl = item.enclosure?.url?.trim()
     const enclosureType = (item.enclosure?.type || '').toLowerCase()
     if (enclosureUrl && enclosureType.startsWith('image/')) return enclosureUrl
@@ -320,22 +329,28 @@ async function fetchInstagramAvatarByUsername(
 
 // ====== RSS Parsing in Browser ======
 
-/** Minimal RSS parser for the browser (no external dependency needed) */
-async function parseFeedFromUrl(feedUrl: string): Promise<{
+type ParsedFeedItem = {
+  title: string
+  link: string
+  content: string
+  contentSnippet: string
+  creator: string
+  isoDate: string
+  enclosure?: { url: string; type: string }
+  imageUrl?: string
+  media?: MediaItem[]
+}
+
+type ParsedFeed = {
   title: string
   link: string
   description: string
   image?: { url: string }
-  items: Array<{
-    title: string
-    link: string
-    content: string
-    contentSnippet: string
-    creator: string
-    isoDate: string
-    enclosure?: { url: string; type: string }
-  }>
-}> {
+  items: ParsedFeedItem[]
+}
+
+/** Minimal RSS parser for the browser (no external dependency needed) */
+async function parseFeedFromUrl(feedUrl: string): Promise<ParsedFeed> {
   let url = feedUrl.trim()
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'https://' + url
@@ -361,6 +376,84 @@ async function parseFeedFromUrl(feedUrl: string): Promise<{
   return parseRSS(doc)
 }
 
+function isParsedImageUrl(url: string): boolean {
+  return /\.(jpg|jpeg|png|webp|gif|bmp|avif)(?:[?#]|$)/i.test(url)
+}
+
+function isParsedAudioUrl(url: string): boolean {
+  return /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)(?:[?#]|$)/i.test(url)
+}
+
+function isParsedVideoUrl(url: string): boolean {
+  return /\.(mp4|m4v|webm|mov|m3u8)(?:[?#]|$)/i.test(url)
+}
+
+function mediaFromEnclosure(url: string, type: string): MediaItem | undefined {
+  const cleanUrl = url.trim()
+  if (!cleanUrl) return undefined
+  const mime = type.trim().toLowerCase()
+  if (mime.startsWith('audio/') || (!mime && isParsedAudioUrl(cleanUrl))) {
+    return { url: cleanUrl, type: 'audio' }
+  }
+  if (mime.startsWith('video/') || (!mime && isParsedVideoUrl(cleanUrl))) {
+    return { url: cleanUrl, type: 'video' }
+  }
+  if (mime.startsWith('image/') || isParsedImageUrl(cleanUrl)) {
+    return { url: cleanUrl, type: 'photo' }
+  }
+  return undefined
+}
+
+function parseDurationSeconds(
+  raw: string | null | undefined,
+): number | undefined {
+  const value = (raw || '').trim()
+  if (!value) return undefined
+  if (/^\d+$/.test(value)) return Number.parseInt(value, 10)
+  const parts = value.split(':').map((part) => Number.parseInt(part, 10))
+  if (parts.some((part) => !Number.isFinite(part))) return undefined
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  return undefined
+}
+
+function getItunesImageUrl(scope: Element): string {
+  const image = scope.querySelector('itunes\\:image')
+  return image?.getAttribute('href')?.trim() || image?.textContent?.trim() || ''
+}
+
+function buildParsedMedia(
+  enclosure: { url: string; type: string } | undefined,
+  itunesImageUrl: string,
+  duration: number | undefined,
+): { media?: MediaItem[]; imageUrl?: string } {
+  const media: MediaItem[] = []
+  const append = (item: MediaItem | undefined) => {
+    if (!item || media.some((existing) => existing.url === item.url)) return
+    media.push(item)
+  }
+
+  if (enclosure) append(mediaFromEnclosure(enclosure.url, enclosure.type))
+  if (itunesImageUrl) append({ url: itunesImageUrl, type: 'photo' })
+
+  const timed = media.find(
+    (item) =>
+      (item.type === 'audio' || item.type === 'video') && !item.duration,
+  )
+  if (timed && duration && duration > 0) timed.duration = duration
+
+  return {
+    media: media.length > 0 ? media : undefined,
+    imageUrl: media.find((item) => item.type === 'photo')?.url,
+  }
+}
+
+function getParsedItemImageUrl(item: ParsedFeedItem): string | undefined {
+  return (
+    item.imageUrl || item.media?.find((media) => media.type === 'photo')?.url
+  )
+}
+
 function parseRSS(doc: Document) {
   const channel = doc.querySelector('channel')
   const items = Array.from(doc.querySelectorAll('item')).map((item) => {
@@ -370,6 +463,19 @@ function parseRSS(doc: Document) {
     const content = contentEncoded || description
     const date = item.querySelector('pubDate')?.textContent
     const enclosure = item.querySelector('enclosure')
+    const enclosureData = enclosure
+      ? {
+          url: enclosure.getAttribute('url') || '',
+          type: enclosure.getAttribute('type') || '',
+        }
+      : undefined
+    const mediaData = buildParsedMedia(
+      enclosureData,
+      getItunesImageUrl(item),
+      parseDurationSeconds(
+        item.querySelector('itunes\\:duration')?.textContent,
+      ),
+    )
     const creator =
       item.querySelector('dc\\:creator, creator')?.textContent ||
       item.querySelector('author')?.textContent ||
@@ -381,12 +487,9 @@ function parseRSS(doc: Document) {
       contentSnippet: stripHTML(content).slice(0, 200),
       creator,
       isoDate: date ? new Date(date).toISOString() : '',
-      enclosure: enclosure
-        ? {
-            url: enclosure.getAttribute('url') || '',
-            type: enclosure.getAttribute('type') || '',
-          }
-        : undefined,
+      enclosure: enclosureData,
+      imageUrl: mediaData.imageUrl,
+      media: mediaData.media,
     }
   })
 
@@ -413,6 +516,20 @@ function parseAtom(doc: Document) {
       entry.querySelector('link')?.getAttribute('href') ||
       ''
     const date = entry.querySelector('published, updated')?.textContent || ''
+    const enclosureLink = entry.querySelector("link[rel='enclosure']")
+    const enclosure = enclosureLink
+      ? {
+          url: enclosureLink.getAttribute('href') || '',
+          type: enclosureLink.getAttribute('type') || '',
+        }
+      : undefined
+    const mediaData = buildParsedMedia(
+      enclosure,
+      getItunesImageUrl(entry),
+      parseDurationSeconds(
+        entry.querySelector('itunes\\:duration')?.textContent,
+      ),
+    )
     return {
       title: entry.querySelector('title')?.textContent || 'Untitled',
       link,
@@ -420,7 +537,9 @@ function parseAtom(doc: Document) {
       contentSnippet: stripHTML(content).slice(0, 200),
       creator: entry.querySelector('author > name')?.textContent || '',
       isoDate: date ? new Date(date).toISOString() : '',
-      enclosure: undefined,
+      enclosure,
+      imageUrl: mediaData.imageUrl,
+      media: mediaData.media,
     }
   })
 
@@ -452,13 +571,18 @@ function generateId(): string {
 
 /** Auto-detect view type from feed items */
 function detectViewType(
-  items: Array<{ content: string; enclosure?: { type: string } }>,
+  items: Array<{
+    content: string
+    enclosure?: { type: string }
+    media?: MediaItem[]
+  }>,
 ): FVT {
   let videoCount = 0,
     imageCount = 0
   for (const item of items.slice(0, 10)) {
     const enc = item.enclosure
     if (
+      item.media?.some((media) => media.type === 'video') ||
       enc?.type?.startsWith('video/') ||
       item.content.includes('<video') ||
       item.content.includes('youtube.com/embed')
@@ -505,7 +629,7 @@ async function buildDiscoverFeedPreview(
           url: item.link || '',
           summary: item.contentSnippet || stripHTML(item.content || ''),
           author: item.creator || undefined,
-          imageUrl: item.enclosure?.url || undefined,
+          imageUrl: getParsedItemImageUrl(item),
           publishedAt: item.isoDate ? new Date(item.isoDate).getTime() : now,
         })),
       },
@@ -826,7 +950,7 @@ export function createWebAPI(): ElectronAPI {
             url: storedUrl,
             siteUrl: parsed.link,
             description: parsed.description,
-            imageUrl: parsed.image?.url,
+            imageUrl: parsed.image?.url || getProbeImageFromParsed(parsed),
             category: category || '',
             view: detectedView,
             showInAll: true,
@@ -846,7 +970,8 @@ export function createWebAPI(): ElectronAPI {
               content: item.content || '',
               summary: item.contentSnippet || '',
               author: item.creator || '',
-              imageUrl: item.enclosure?.url || '',
+              imageUrl: getParsedItemImageUrl(item) || '',
+              media: item.media,
               publishedAt: item.isoDate
                 ? new Date(item.isoDate).getTime()
                 : now,
@@ -889,7 +1014,7 @@ export function createWebAPI(): ElectronAPI {
           await dbUpdateFeed(feedId, {
             title: parsed.title || feed.title,
             description: parsed.description,
-            imageUrl: parsed.image?.url,
+            imageUrl: parsed.image?.url || getProbeImageFromParsed(parsed),
             lastFetched: now,
             errorCount: 0,
           })
@@ -903,7 +1028,8 @@ export function createWebAPI(): ElectronAPI {
               content: item.content || '',
               summary: item.contentSnippet || '',
               author: item.creator || '',
-              imageUrl: item.enclosure?.url || '',
+              imageUrl: getParsedItemImageUrl(item) || '',
+              media: item.media,
               publishedAt: item.isoDate
                 ? new Date(item.isoDate).getTime()
                 : now,
@@ -943,7 +1069,7 @@ export function createWebAPI(): ElectronAPI {
             await dbUpdateFeed(feed.id, {
               title: parsed.title || feed.title,
               description: parsed.description,
-              imageUrl: parsed.image?.url,
+              imageUrl: parsed.image?.url || getProbeImageFromParsed(parsed),
               lastFetched: now,
               errorCount: 0,
             })
@@ -957,7 +1083,8 @@ export function createWebAPI(): ElectronAPI {
                 content: item.content || '',
                 summary: item.contentSnippet || '',
                 author: item.creator || '',
-                imageUrl: item.enclosure?.url || '',
+                imageUrl: getParsedItemImageUrl(item) || '',
+                media: item.media,
                 publishedAt: item.isoDate
                   ? new Date(item.isoDate).getTime()
                   : now,
@@ -1029,7 +1156,8 @@ export function createWebAPI(): ElectronAPI {
                     url: storedXmlUrl,
                     siteUrl: opmlFeed.htmlUrl || parsed.link,
                     description: parsed.description,
-                    imageUrl: parsed.image?.url,
+                    imageUrl:
+                      parsed.image?.url || getProbeImageFromParsed(parsed),
                     category: opmlFeed.category || '',
                     view: detectViewType(parsed.items),
                     showInAll: true,
@@ -1046,7 +1174,8 @@ export function createWebAPI(): ElectronAPI {
                       content: item.content || '',
                       summary: item.contentSnippet || '',
                       author: item.creator || '',
-                      imageUrl: item.enclosure?.url || '',
+                      imageUrl: getParsedItemImageUrl(item) || '',
+                      media: item.media,
                       publishedAt: item.isoDate
                         ? new Date(item.isoDate).getTime()
                         : now,
@@ -1473,9 +1602,7 @@ export function createWebAPI(): ElectronAPI {
         try {
           const fetchUrl = toFetchableFeedUrl(url, DEFAULT_RSSHUB_INSTANCE)
           const parsed = await parseFeedFromUrl(fetchUrl)
-          const fallbackImage =
-            parsed.items.find((i) => i.enclosure?.type?.startsWith('image/'))
-              ?.enclosure?.url || ''
+          const fallbackImage = getProbeImageFromParsed(parsed)
           return {
             valid: true,
             title: parsed.title,

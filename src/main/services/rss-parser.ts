@@ -25,6 +25,9 @@ const parser = new RssParser({
       // { _: "html", $: { type: "html" } }, breaking image extraction from HTML body.
       ['description', 'description'],
       ['summary', 'summary'],
+      ['link', 'atomLinks', { keepArray: true }],
+      ['itunes:duration', 'itunesDuration'],
+      ['itunes:image', 'itunesImage'],
       ['media:content', 'media:content'],
       ['media:thumbnail', 'media:thumbnail'],
       ['media:group', 'media:group'],
