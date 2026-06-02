@@ -8,6 +8,7 @@ import type { ElectronAPI } from '../preload/index'
 import type {
   Feed,
   Entry,
+  EntryListResult,
   FeedWithCount,
   FeedViewType,
   MediaItem,
@@ -92,7 +93,7 @@ function toRsshubProtocolUrl(rawUrl: string): string {
     const route = parsed.pathname.replace(/^\/+/, '')
     if (
       route &&
-      /^(?:twitter|instagram|picnob(?:\.info)?|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i.test(
+      /^(?:twitter|instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i.test(
         route,
       )
     ) {
@@ -1461,8 +1462,16 @@ export function createWebAPI(): ElectronAPI {
         unreadOnly?: boolean
         limit?: number
         offset?: number
-      }): Promise<Entry[]> => {
-        return dbGetEntries(options)
+        compact?: boolean
+        maxContentLength?: number
+        skipDedupe?: boolean
+      }): Promise<EntryListResult> => {
+        const limit = options.limit ?? 50
+        const entries = await dbGetEntries({ ...options, limit: limit + 1 })
+        return {
+          entries: entries.slice(0, limit),
+          hasMore: entries.length > limit,
+        }
       },
       get: async (entryId: string): Promise<Entry | null> => {
         return (await dbGetEntryById(entryId)) || null
@@ -1489,6 +1498,13 @@ export function createWebAPI(): ElectronAPI {
       search: async (query: string, limit?: number): Promise<Entry[]> => {
         return dbSearchEntries(query, limit)
       },
+      markListened: async (_entryId: string, _isListened: boolean) => ({
+        success: true,
+      }),
+      saveListenProgress: async (
+        _entryId: string,
+        _listenProgress: number,
+      ) => ({ success: true }),
     },
 
     ai: {
@@ -1710,7 +1726,8 @@ export function createWebAPI(): ElectronAPI {
         if (!eventListeners.has('ai:chat-stream-chunk'))
           eventListeners.set('ai:chat-stream-chunk', new Set())
         eventListeners.get('ai:chat-stream-chunk')!.add(cb)
-        return () => eventListeners.get('ai:chat-stream-chunk')?.delete(cb)
+        return (() =>
+          eventListeners.get('ai:chat-stream-chunk')?.delete(cb)) as any
       },
       onStreamDone: (callback: (data: { requestId: string }) => void) => {
         const cb = (...args: unknown[]) =>
@@ -1718,7 +1735,8 @@ export function createWebAPI(): ElectronAPI {
         if (!eventListeners.has('ai:chat-stream-done'))
           eventListeners.set('ai:chat-stream-done', new Set())
         eventListeners.get('ai:chat-stream-done')!.add(cb)
-        return () => eventListeners.get('ai:chat-stream-done')?.delete(cb)
+        return (() =>
+          eventListeners.get('ai:chat-stream-done')?.delete(cb)) as any
       },
       onStreamError: (
         callback: (data: { requestId: string; error: string }) => void,
@@ -1728,8 +1746,13 @@ export function createWebAPI(): ElectronAPI {
         if (!eventListeners.has('ai:chat-stream-error'))
           eventListeners.set('ai:chat-stream-error', new Set())
         eventListeners.get('ai:chat-stream-error')!.add(cb)
-        return () => eventListeners.get('ai:chat-stream-error')?.delete(cb)
+        return (() =>
+          eventListeners.get('ai:chat-stream-error')?.delete(cb)) as any
       },
+      testConnection: async () => ({
+        success: false,
+        message: 'Not available on web',
+      }),
     },
 
     settings: {
@@ -1742,6 +1765,7 @@ export function createWebAPI(): ElectronAPI {
         await saveSettings(merged)
         return { success: true, settings: merged }
       },
+      onChanged: () => (() => {}) as any,
     },
 
     data: {
@@ -1838,7 +1862,7 @@ export function createWebAPI(): ElectronAPI {
         category
           ? CURATED_FEEDS.filter((f) => f.category === category)
           : CURATED_FEEDS,
-      search: async (query: string) => {
+      search: async (query: string, _platform?: string) => {
         const results: Array<{
           title: string
           url: string
@@ -2207,16 +2231,75 @@ export function createWebAPI(): ElectronAPI {
         _provider: AccountProvider,
         _displayName: string,
       ) => ({ success: false as const, error: 'Not available on web' }),
+      bilibiliFollowings: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
+    },
+
+    actions: {
+      sync: async () => ({ success: true }),
+    },
+
+    agent: {
+      run: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
+      resume: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
+      abort: async () => ({ success: true }),
+      listTraces: async () => [],
+      clearTraces: async () => ({ success: true }),
+      onToolEvent: () => (() => {}) as any,
+      onNavigate: () => (() => {}) as any,
+    },
+
+    menu: {
+      showContextMenu: async () => ({ id: null }),
+    },
+
+    refreshLogs: {
+      list: async () => [],
+      clear: async () => ({ success: true }),
+    },
+
+    fever: {
+      listAccounts: async () => [],
+      createAccount: async () => {
+        throw new Error('Not available on web')
+      },
+      updateAccount: async () => ({
+        success: false,
+        error: 'Not available on web',
+      }),
+      deleteAccount: async () => ({
+        success: false,
+        error: 'Not available on web',
+      }),
+      verify: async () => ({ success: false, error: 'Not available on web' }),
+      sync: async () => ({
+        success: false,
+        feedsSynced: 0,
+        itemsSynced: 0,
+        newEntries: 0,
+        error: 'Not available on web',
+      }),
+      syncAll: async () => ({ success: false, results: [] }),
+      getSyncState: async () => null,
+      onSyncProgress: () => (() => {}) as any,
     },
 
     on: (channel: string, callback: (...args: unknown[]) => void) => {
       if (!eventListeners.has(channel)) eventListeners.set(channel, new Set())
       eventListeners.get(channel)!.add(callback)
-      return () => eventListeners.get(channel)?.delete(callback)
+      return (() => eventListeners.get(channel)?.delete(callback)) as any
     },
   }
 
-  return api as unknown as ElectronAPI
+  return api
 }
 
 /** Initialize the web platform and return the API */
