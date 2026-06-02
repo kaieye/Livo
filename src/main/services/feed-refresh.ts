@@ -22,7 +22,6 @@ import {
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
   normalizeFeedUrl,
-  normalizeRsshubProtocolUrl,
 } from './rsshub-url'
 import { resolveFeedAvatar } from './feed-avatar'
 import { formatFeedTitle } from './feed-title'
@@ -48,6 +47,12 @@ import { enqueueEntryActionEffects } from './entry-action-effects'
 import { syncFeverAccount } from './fever-sync'
 import { judgeSemanticFilter } from './ai-filter'
 import { validateAIConfig } from './ai-client'
+import {
+  FEED_REFRESH_ALL_TASK,
+  FEED_REFRESH_SINGLE_TASK,
+} from './task-contracts'
+import { getLocalTaskRunner } from './task-runner-service'
+import type { TaskRunContext } from './task-runner'
 import type {
   AIConfig,
   AISemanticFilterDecision,
@@ -56,8 +61,6 @@ import type {
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshGeneration = 0
-let refreshAllInFlight: Promise<RefreshAllResult> | null = null
-const feedRefreshInFlight = new Map<string, Promise<number>>()
 const RECOMMENDED_CATEGORY = 'Recommended'
 
 function isPlaceholderAvatar(url: string | undefined): boolean {
@@ -612,149 +615,182 @@ export async function refreshSingleFeed(
   feed: Feed,
   options?: { force?: boolean },
 ): Promise<number> {
-  const inFlight = feedRefreshInFlight.get(feed.id)
-  if (inFlight) return inFlight
+  const task = getLocalTaskRunner().enqueue(
+    FEED_REFRESH_SINGLE_TASK,
+    { feedId: feed.id, force: !!options?.force },
+    async (_payload, context) => {
+      return runRefreshSingleFeed(feed, options, context)
+    },
+    {
+      metadata: {
+        feedId: feed.id,
+        feedTitle: feed.title,
+        force: !!options?.force,
+      },
+    },
+  )
+  return task.promise
+}
 
-  const task = (async (): Promise<number> => {
-    if (feed.provider === 'fever') return 0
-    const now = Date.now()
-    const rsshubInstance =
-      getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
-    const normalizedFeedUrl = normalizeFeedUrl(feed.url, rsshubInstance)
-    const canonicalFeedUrl = canonicalizeInstagramFeedUrl(feed.url)
+async function runRefreshSingleFeed(
+  feed: Feed,
+  options: { force?: boolean } | undefined,
+  context?: TaskRunContext,
+): Promise<number> {
+  context?.reportProgress({
+    completed: 0,
+    total: 1,
+    message: feed.title,
+    data: { feedId: feed.id },
+  })
 
-    try {
-      // Update the feed URL to include limit param so subsequent refreshes use it directly
-      const feedUrlToStore = ensureTwitterUserFeedLimit(
-        ensureInstagramUserFeedLimit(canonicalFeedUrl, 100),
-        120,
-      )
-      if (feedUrlToStore !== feed.url) {
-        updateFeed(feed.id, { url: feedUrlToStore })
-        feed = { ...feed, url: feedUrlToStore }
-      }
+  if (feed.provider === 'fever') return 0
+  const now = Date.now()
+  const rsshubInstance =
+    getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
+  const normalizedFeedUrl = normalizeFeedUrl(feed.url, rsshubInstance)
+  const canonicalFeedUrl = canonicalizeInstagramFeedUrl(feed.url)
 
-      const result = await withTimeout(
-        resolveFeedPayload(feed, { force: options?.force }),
-        getRefreshTimeoutMs(feed.url),
-        normalizedFeedUrl,
-      )
+  try {
+    // 更新 RSSHub 用户路由的 limit，后续刷新直接使用规范化 URL。
+    const feedUrlToStore = ensureTwitterUserFeedLimit(
+      ensureInstagramUserFeedLimit(canonicalFeedUrl, 100),
+      120,
+    )
+    if (feedUrlToStore !== feed.url) {
+      updateFeed(feed.id, { url: feedUrlToStore })
+      feed = { ...feed, url: feedUrlToStore }
+    }
 
-      // 304 Not Modified - no need to parse entries
-      if (result.notModified || !result.parsed) {
-        updateFeed(feed.id, {
-          lastFetched: now,
-          errorCount: 0,
-          etag: result.etag || feed.etag,
-          lastModified: result.lastModified || feed.lastModified,
-        })
-        return 0
-      }
+    const result = await withTimeout(
+      resolveFeedPayload(feed, { force: options?.force }),
+      getRefreshTimeoutMs(feed.url),
+      normalizedFeedUrl,
+    )
 
-      const parsed = result.parsed
-
-      const parsedFeedImage = getFeedImageUrl(parsed)
-      const feedImageUrl = await resolveFeedAvatar(
-        normalizedFeedUrl,
-        parsedFeedImage,
-        feed.imageUrl,
-      )
-      const selectedFeedAvatar = pickBestFeedAvatar(
-        feed.url,
-        feed.imageUrl,
-        feedImageUrl,
-      )
-
+    // 304 Not Modified - no need to parse entries
+    if (result.notModified || !result.parsed) {
       updateFeed(feed.id, {
-        title: formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title),
-        description: parsed.description,
-        // Keep avatars fresh when upstream exposes a newer image, while still
-        // avoiding regressions back to placeholder/default assets.
-        imageUrl: selectedFeedAvatar,
         lastFetched: now,
         errorCount: 0,
-        etag: result.etag,
-        lastModified: result.lastModified,
-        ...(reconcileFeedView(feed.url, feed.view) !== feed.view
-          ? { view: reconcileFeedView(feed.url, feed.view) }
-          : {}),
+        etag: result.etag || feed.etag,
+        lastModified: result.lastModified || feed.lastModified,
       })
-
-      const builtEntries = await buildEntriesFromParsedItems(
-        feed.id,
-        (parsed.items || []) as Array<Record<string, any>>,
-        selectedFeedAvatar || feedImageUrl,
-        feed.view,
-        now,
-      )
-      // Filter out entries injected by FeedBurner from unrelated domains
-      const foreignFiltered = filterForeignEntries(
-        builtEntries,
-        feed.siteUrl,
-        parsed.link,
-        feed.url,
-      )
-      const ruleAppliedEntries = await applyActionRules(foreignFiltered, feed)
-      const entriesToInsert = ruleAppliedEntries.map(({ entry }) => entry)
-      const effectsByEntryId = new Map(
-        ruleAppliedEntries.map(({ entry, effects }) => [entry.id, effects]),
-      )
-      // IMPORTANT:
-      // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
-      // Full replacement can permanently drop history when upstream temporarily returns
-      // only a short window (e.g. 8 recent items) or degraded single-photo entries.
-      // Database identity merge keeps duplicates under control while preserving richer
-      // historical entries and multi-photo media arrays.
-      const writeResult = isBilibiliVideoFeedUrl(feed.url)
-        ? replaceEntriesForFeedWithResult(feed.id, entriesToInsert)
-        : insertEntriesWithResult(entriesToInsert)
-      const newCount = writeResult.addedCount
-
-      enqueueEntryActionEffects(
-        writeResult.addedEntries.map((entry) => ({
-          entry,
-          feed,
-          effects: effectsByEntryId.get(entry.id) || [],
-        })),
-      )
-
-      // Fire-and-forget: enrich video entries with duration from YouTube/Bilibili
-      if (
-        isVideoDurationEnrichmentEnabled() &&
-        feed.view === FeedViewType.Videos
-      ) {
-        queueVideoDurationEnrich(feed.id)
-          .then((count) => {
-            if (count > 0) getEventBus().send('entries:enriched')
-          })
-          .catch(() => {})
-      }
-
-      return newCount
-    } catch (error) {
-      const knownInstagramFailure =
-        isInstagramFeedUrl(feed.url) && isKnownInstagramUpstreamFailure(error)
-      const refreshMessage = `[refresh] failed: ${feed.title} (${normalizedFeedUrl})`
-      if (knownInstagramFailure) {
-        logWarnQuiet(refreshMessage, error)
-      } else {
-        console.warn(refreshMessage, error)
-      }
-      updateFeed(feed.id, {
-        errorCount: feed.errorCount + 1,
-        lastFetched: now,
+      context?.reportProgress({
+        completed: 1,
+        total: 1,
+        message: feed.title,
+        data: { feedId: feed.id, newEntries: 0 },
       })
       return 0
     }
-  })()
 
-  feedRefreshInFlight.set(feed.id, task)
-  try {
-    return await task
-  } finally {
-    if (feedRefreshInFlight.get(feed.id) === task) {
-      feedRefreshInFlight.delete(feed.id)
+    const parsed = result.parsed
+
+    const parsedFeedImage = getFeedImageUrl(parsed)
+    const feedImageUrl = await resolveFeedAvatar(
+      normalizedFeedUrl,
+      parsedFeedImage,
+      feed.imageUrl,
+    )
+    const selectedFeedAvatar = pickBestFeedAvatar(
+      feed.url,
+      feed.imageUrl,
+      feedImageUrl,
+    )
+
+    updateFeed(feed.id, {
+      title: formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title),
+      description: parsed.description,
+      // Keep avatars fresh when upstream exposes a newer image, while still
+      // avoiding regressions back to placeholder/default assets.
+      imageUrl: selectedFeedAvatar,
+      lastFetched: now,
+      errorCount: 0,
+      etag: result.etag,
+      lastModified: result.lastModified,
+      ...(reconcileFeedView(feed.url, feed.view) !== feed.view
+        ? { view: reconcileFeedView(feed.url, feed.view) }
+        : {}),
+    })
+
+    const builtEntries = await buildEntriesFromParsedItems(
+      feed.id,
+      (parsed.items || []) as Array<Record<string, any>>,
+      selectedFeedAvatar || feedImageUrl,
+      feed.view,
+      now,
+    )
+    // Filter out entries injected by FeedBurner from unrelated domains
+    const foreignFiltered = filterForeignEntries(
+      builtEntries,
+      feed.siteUrl,
+      parsed.link,
+      feed.url,
+    )
+    const ruleAppliedEntries = await applyActionRules(foreignFiltered, feed)
+    const entriesToInsert = ruleAppliedEntries.map(({ entry }) => entry)
+    const effectsByEntryId = new Map(
+      ruleAppliedEntries.map(({ entry, effects }) => [entry.id, effects]),
+    )
+    // IMPORTANT:
+    // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
+    // Full replacement can permanently drop history when upstream temporarily returns
+    // only a short window (e.g. 8 recent items) or degraded single-photo entries.
+    // Database identity merge keeps duplicates under control while preserving richer
+    // historical entries and multi-photo media arrays.
+    const writeResult = isBilibiliVideoFeedUrl(feed.url)
+      ? replaceEntriesForFeedWithResult(feed.id, entriesToInsert)
+      : insertEntriesWithResult(entriesToInsert)
+    const newCount = writeResult.addedCount
+
+    enqueueEntryActionEffects(
+      writeResult.addedEntries.map((entry) => ({
+        entry,
+        feed,
+        effects: effectsByEntryId.get(entry.id) || [],
+      })),
+    )
+
+    // Fire-and-forget: enrich video entries with duration from YouTube/Bilibili
+    if (
+      isVideoDurationEnrichmentEnabled() &&
+      feed.view === FeedViewType.Videos
+    ) {
+      queueVideoDurationEnrich(feed.id)
+        .then((count) => {
+          if (count > 0) getEventBus().send('entries:enriched')
+        })
+        .catch(() => {})
     }
+
+    context?.reportProgress({
+      completed: 1,
+      total: 1,
+      message: feed.title,
+      data: { feedId: feed.id, newEntries: newCount },
+    })
+    return newCount
+  } catch (error) {
+    const knownInstagramFailure =
+      isInstagramFeedUrl(feed.url) && isKnownInstagramUpstreamFailure(error)
+    const refreshMessage = `[refresh] failed: ${feed.title} (${normalizedFeedUrl})`
+    if (knownInstagramFailure) {
+      logWarnQuiet(refreshMessage, error)
+    } else {
+      console.warn(refreshMessage, error)
+    }
+    updateFeed(feed.id, {
+      errorCount: feed.errorCount + 1,
+      lastFetched: now,
+    })
+    context?.reportProgress({
+      completed: 1,
+      total: 1,
+      message: feed.title,
+      data: { feedId: feed.id, newEntries: 0 },
+    })
+    return 0
   }
 }
 
@@ -778,154 +814,188 @@ export async function refreshAllFeeds(
     onProgress?: (event: RefreshProgressEvent) => void
   } = {},
 ): Promise<RefreshAllResult> {
-  if (refreshAllInFlight) {
-    await refreshAllInFlight
+  const runner = getLocalTaskRunner()
+  const dedupeKey =
+    FEED_REFRESH_ALL_TASK.dedupeKey?.({ force: !!options.force }) || 'all'
+  const activeRun = runner.getActiveRun<RefreshAllResult>(
+    FEED_REFRESH_ALL_TASK.name,
+    dedupeKey,
+  )
+  if (activeRun) {
+    await activeRun.promise
     return emptyRefreshAllResult()
   }
 
-  const run = (async (): Promise<RefreshAllResult> => {
-    const allFeeds = getAllFeeds()
-    const receiveRecommended = !!getSettings().general.showRecommended
-    const feeds = receiveRecommended
-      ? allFeeds
-      : allFeeds.filter((f) => f.category !== RECOMMENDED_CATEGORY)
-    const freshnessTTL =
-      (options.freshnessTTL ?? DEFAULT_FRESHNESS_TTL_MINUTES) * 60 * 1000
-    const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY
-    const force = options.force ?? false
-    const now = Date.now()
-    const settingsCleanup: CleanupOptions = {
-      entriesPerFeed: getSettings().data?.entriesPerFeed ?? 128,
-      maxEntryAgeDays: getSettings().data?.maxEntryAgeDays ?? 90,
-    }
-    const cleanupOptions = options.cleanup ?? settingsCleanup
+  const task = runner.enqueue(
+    FEED_REFRESH_ALL_TASK,
+    { force: !!options.force },
+    async (_payload, context) => runRefreshAllFeeds(options, context),
+    { metadata: { force: !!options.force } },
+  )
+  return task.promise
+}
 
-    // Filter feeds that need refreshing (respect freshness TTL)
-    const staleFeeds = force
-      ? feeds
-      : feeds.filter((feed) => {
-          if (shouldBackOffFeed(feed, now, force)) return false
-          if (!feed.lastFetched) return true // never fetched
-          return now - feed.lastFetched >= freshnessTTL
-        })
+async function runRefreshAllFeeds(
+  options: RefreshOptions & {
+    onProgress?: (event: RefreshProgressEvent) => void
+  },
+  context?: TaskRunContext,
+): Promise<RefreshAllResult> {
+  const allFeeds = getAllFeeds()
+  const receiveRecommended = !!getSettings().general.showRecommended
+  const feeds = receiveRecommended
+    ? allFeeds
+    : allFeeds.filter((f) => f.category !== RECOMMENDED_CATEGORY)
+  const freshnessTTL =
+    (options.freshnessTTL ?? DEFAULT_FRESHNESS_TTL_MINUTES) * 60 * 1000
+  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY
+  const force = options.force ?? false
+  const now = Date.now()
+  const settingsCleanup: CleanupOptions = {
+    entriesPerFeed: getSettings().data?.entriesPerFeed ?? 128,
+    maxEntryAgeDays: getSettings().data?.maxEntryAgeDays ?? 90,
+  }
+  const cleanupOptions = options.cleanup ?? settingsCleanup
 
-    if (staleFeeds.length === 0) {
-      cleanupEntries(cleanupOptions)
-      options.onProgress?.({
-        feedId: '',
-        feedTitle: '',
-        success: true,
-        newEntries: 0,
-        completed: 0,
-        total: 0,
-        done: true,
+  // Filter feeds that need refreshing (respect freshness TTL)
+  const staleFeeds = force
+    ? feeds
+    : feeds.filter((feed) => {
+        if (shouldBackOffFeed(feed, now, force)) return false
+        if (!feed.lastFetched) return true // never fetched
+        return now - feed.lastFetched >= freshnessTTL
       })
-      return emptyRefreshAllResult()
-    }
 
-    // Track pre-refresh error counts to detect fresh failures
-    const errorCountBefore = new Map<string, number>()
-    for (const feed of staleFeeds) {
-      errorCountBefore.set(feed.id, feed.errorCount)
-    }
+  context?.reportProgress({
+    completed: 0,
+    total: staleFeeds.length,
+    message: 'refresh all',
+  })
 
+  if (staleFeeds.length === 0) {
+    cleanupEntries(cleanupOptions)
     options.onProgress?.({
       feedId: '',
       feedTitle: '',
       success: true,
       newEntries: 0,
       completed: 0,
-      total: staleFeeds.length,
-      done: false,
+      total: 0,
+      done: true,
     })
+    context?.reportProgress({
+      completed: 0,
+      total: 0,
+      message: 'refresh all done',
+    })
+    return emptyRefreshAllResult()
+  }
 
-    let totalNew = 0
-    const failedTitles: string[] = []
+  // Track pre-refresh error counts to detect fresh failures
+  const errorCountBefore = new Map<string, number>()
+  for (const feed of staleFeeds) {
+    errorCountBefore.set(feed.id, feed.errorCount)
+  }
 
-    const settled = await runConcurrencyPool(
-      staleFeeds,
-      concurrency,
-      async (feed) => {
-        const newCount = await refreshSingleFeed(feed)
-        return newCount
-      },
-    )
+  options.onProgress?.({
+    feedId: '',
+    feedTitle: '',
+    success: true,
+    newEntries: 0,
+    completed: 0,
+    total: staleFeeds.length,
+    done: false,
+  })
 
-    // Emit per-feed progress events. Done after the pool completes so the
-    // listener sees a deterministic order and never a partial set.
-    for (let i = 0; i < settled.length; i += 1) {
-      const feed = staleFeeds[i]
-      const result = settled[i]
-      const success = result.status === 'fulfilled'
-      const newEntries = success ? result.value : 0
-      if (success) totalNew += newEntries
-      options.onProgress?.({
+  let totalNew = 0
+  const failedTitles: string[] = []
+
+  const settled = await runConcurrencyPool(
+    staleFeeds,
+    concurrency,
+    async (feed) => {
+      const newCount = await refreshSingleFeed(feed)
+      return newCount
+    },
+  )
+
+  // Emit per-feed progress events. Done after the pool completes so the
+  // listener sees a deterministic order and never a partial set.
+  for (let i = 0; i < settled.length; i += 1) {
+    const feed = staleFeeds[i]
+    const result = settled[i]
+    const success = result.status === 'fulfilled'
+    const newEntries = success ? result.value : 0
+    if (success) totalNew += newEntries
+    options.onProgress?.({
+      feedId: feed.id,
+      feedTitle: feed.title,
+      success,
+      newEntries,
+      completed: i + 1,
+      total: settled.length,
+      done: i + 1 === settled.length,
+    })
+    context?.reportProgress({
+      completed: i + 1,
+      total: settled.length,
+      message: feed.title,
+      data: {
         feedId: feed.id,
-        feedTitle: feed.title,
         success,
         newEntries,
-        completed: i + 1,
-        total: settled.length,
-        done: i + 1 === settled.length,
-      })
-    }
-
-    // Run data cleanup after refresh
-    cleanupEntries(cleanupOptions)
-
-    // Record refresh log entry
-    const refreshedFeeds = getAllFeeds()
-    let successCount = 0
-    let failedCount = 0
-    for (const feed of refreshedFeeds) {
-      const before = errorCountBefore.get(feed.id)
-      if (before !== undefined) {
-        if (feed.errorCount > before) {
-          failedCount++
-          failedTitles.push(feed.title)
-        } else {
-          successCount++
-        }
-      }
-    }
-
-    appendRefreshLog({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      refreshedAt: Date.now(),
-      successFeedCount: successCount,
-      failedFeedCount: failedCount,
-      failedFeedTitles: failedTitles,
+      },
     })
+  }
 
-    // Sync Fever accounts after normal feed refresh
-    try {
-      const { getFeverAccounts } = await import('../database')
-      const feverAccounts = getFeverAccounts().filter((a) => a.enabled)
-      for (const account of feverAccounts) {
-        try {
-          await syncFeverAccount(account.id)
-        } catch (err) {
-          console.warn('[fever] sync failed for', account.baseUrl, err)
-        }
+  // Run data cleanup after refresh
+  cleanupEntries(cleanupOptions)
+
+  // Record refresh log entry
+  const refreshedFeeds = getAllFeeds()
+  let successCount = 0
+  let failedCount = 0
+  for (const feed of refreshedFeeds) {
+    const before = errorCountBefore.get(feed.id)
+    if (before !== undefined) {
+      if (feed.errorCount > before) {
+        failedCount++
+        failedTitles.push(feed.title)
+      } else {
+        successCount++
       }
-    } catch {
-      // Database not ready or import failure — skip fever sync
     }
+  }
 
-    return {
-      totalFeeds: feeds.length,
-      refreshedCount: successCount,
-      failedCount,
-      failedFeedTitles: failedTitles,
-      totalNewEntries: totalNew,
-    }
-  })()
+  appendRefreshLog({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    refreshedAt: Date.now(),
+    successFeedCount: successCount,
+    failedFeedCount: failedCount,
+    failedFeedTitles: failedTitles,
+  })
 
-  refreshAllInFlight = run
+  // Sync Fever accounts after normal feed refresh
   try {
-    return await run
-  } finally {
-    if (refreshAllInFlight === run) refreshAllInFlight = null
+    const { getFeverAccounts } = await import('../database')
+    const feverAccounts = getFeverAccounts().filter((a) => a.enabled)
+    for (const account of feverAccounts) {
+      try {
+        await syncFeverAccount(account.id)
+      } catch (err) {
+        console.warn('[fever] sync failed for', account.baseUrl, err)
+      }
+    }
+  } catch {
+    // Database not ready or import failure — skip fever sync
+  }
+
+  return {
+    totalFeeds: feeds.length,
+    refreshedCount: successCount,
+    failedCount,
+    failedFeedTitles: failedTitles,
+    totalNewEntries: totalNew,
   }
 }
 

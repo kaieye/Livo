@@ -32,6 +32,7 @@ import {
   getDiscoverResultDisplayTitle,
 } from './DiscoverResultRow'
 import { DiscoverCenteredState } from './DiscoverCenteredState'
+import { SubscribeConfigDialog } from './SubscribeConfigDialog'
 import { FeedAvatar } from '../feed/FeedAvatar'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { getDateLocale } from '../../lib/date-locale'
@@ -39,7 +40,6 @@ import { useGeneralSettingsShallowSelector } from '../../store/settings-store'
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowRight,
   Calendar,
   Globe,
   LogIn,
@@ -156,6 +156,16 @@ export function DiscoverPanel() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
   const [previewReloadKey, setPreviewReloadKey] = useState(0)
+
+  // Subscribe config dialog state — floating modal for subscribe config
+  const [subscribeTarget, setSubscribeTarget] = useState<{
+    url: string
+    title?: string
+    siteUrl?: string
+    imageUrl?: string
+    description?: string
+    view?: FeedViewType
+  } | null>(null)
 
   // Inline entry detail — when set, EntryContent renders inside the preview
   // instead of navigating to the full-screen ArticleDetailPage
@@ -427,7 +437,14 @@ export function DiscoverPanel() {
     if (isSubscribed(result.url)) {
       handleUnsubscribe(result.url)
     } else {
-      openPreview(result)
+      setSubscribeTarget({
+        url: result.url,
+        title: getDiscoverResultDisplayTitle(result),
+        siteUrl: result.siteUrl,
+        imageUrl: result.image,
+        description: result.description,
+        view: inferDiscoverFeedViewFromUrl(result.url),
+      })
     }
   }
 
@@ -652,7 +669,7 @@ export function DiscoverPanel() {
                         if (isSubscribed(feed.url)) {
                           handleUnsubscribe(feed.url)
                         } else {
-                          setPreviewTarget({
+                          setSubscribeTarget({
                             url: feed.url,
                             title: feed.title,
                             siteUrl: feed.siteUrl,
@@ -834,6 +851,37 @@ export function DiscoverPanel() {
                             })}
                           </p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!previewTarget?.url) return
+                            navigate(
+                              ROUTES.discoverSubscribe({
+                                url:
+                                  previewData?.targetUrl || previewTarget.url,
+                                title:
+                                  previewData?.feedTitle || previewTarget.title,
+                                siteUrl:
+                                  previewData?.siteUrl || previewTarget.siteUrl,
+                                imageUrl:
+                                  previewData?.imageUrl ||
+                                  previewTarget.imageUrl,
+                                description:
+                                  previewData?.description ||
+                                  previewTarget.description,
+                                view:
+                                  previewTarget.view ??
+                                  inferDiscoverFeedViewFromUrl(
+                                    previewTarget.url,
+                                  ),
+                              }),
+                            )
+                          }}
+                          disabled={!previewData || previewLoading}
+                          className="bg-accent self-center rounded-md px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t('common.subscribe')}
+                        </button>
                       </div>
                     </div>
 
@@ -867,50 +915,6 @@ export function DiscoverPanel() {
                     </div>
                   </>
                 ) : null}
-              </div>
-            )}
-
-            {/* Footer — only when not viewing inline entry detail */}
-            {!inlineEntryId && (
-              <div className="mt-3 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewTarget(null)
-                    setPreviewData(null)
-                    setPreviewError('')
-                    setInlineEntryId(null)
-                    useEntryStore.getState().selectEntry(null)
-                  }}
-                  className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary rounded-md px-3 py-1.5 text-sm transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!previewTarget?.url) return
-                    navigate(
-                      ROUTES.discoverSubscribe({
-                        url: previewData?.targetUrl || previewTarget.url,
-                        title: previewData?.feedTitle || previewTarget.title,
-                        siteUrl: previewData?.siteUrl || previewTarget.siteUrl,
-                        imageUrl:
-                          previewData?.imageUrl || previewTarget.imageUrl,
-                        description:
-                          previewData?.description || previewTarget.description,
-                        view:
-                          previewTarget.view ??
-                          inferDiscoverFeedViewFromUrl(previewTarget.url),
-                      }),
-                    )
-                  }}
-                  disabled={!previewData || previewLoading}
-                  className="bg-accent inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {t('discoverPreview.continue')}
-                  <ArrowRight size={15} />
-                </button>
               </div>
             )}
           </div>
@@ -999,7 +1003,7 @@ export function DiscoverPanel() {
                       subscribed={isSubscribed(result.url)}
                       subscribing={isSubscribing(result.url)}
                       requiresSignIn={resultRequiresSignIn(result)}
-                      subscribeLabel={t('discover.previewAction')}
+                      subscribeLabel={t('common.subscribe')}
                       onOpenPreview={() => openPreview(result)}
                       onToggleSubscribe={() => handleToggleSubscribe(result)}
                     />
@@ -1051,6 +1055,14 @@ export function DiscoverPanel() {
           </div>
         )}
       </div>
+
+      {/* Subscribe config dialog */}
+      {subscribeTarget && (
+        <SubscribeConfigDialog
+          target={subscribeTarget}
+          onClose={() => setSubscribeTarget(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1236,7 +1248,7 @@ function CuratedFeedRow({
           ) : (
             <>
               <Plus size={12} />
-              <span>{t('discover.previewAction')}</span>
+              <span>{t('common.subscribe')}</span>
             </>
           )}
         </button>
