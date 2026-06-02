@@ -38,7 +38,6 @@ import {
   Image,
   Play,
   LayoutGrid,
-  LayoutList,
   Compass,
   Keyboard,
   Search,
@@ -1813,19 +1812,6 @@ export function Sidebar({ width }: { width?: number }) {
             <Star size={18} />
             <span className="flex-1 truncate text-left">
               {t('sidebar.starred')}
-            </span>
-          </button>
-
-          {/* Subscriptions */}
-          <button
-            onClick={() => navigate('/subscriptions')}
-            className="sidebar-item w-full"
-          >
-            <LayoutList size={18} />
-            <span className="flex-1 truncate text-left">
-              {t('sidebar.subscriptions', {
-                defaultValue: i18nDefault('订阅管理', 'Subscriptions'),
-              })}
             </span>
           </button>
 

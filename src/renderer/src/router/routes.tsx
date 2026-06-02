@@ -3,7 +3,6 @@ import { createHashRouter } from 'react-router-dom'
 import App from '../App'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
-const SubscriptionsPage = lazy(() => import('../pages/SubscriptionsPage'))
 const DigestPage = lazy(() => import('../pages/DigestPage'))
 const FeedDetailPage = lazy(() => import('../pages/FeedDetailPage'))
 const ArticleDetailPage = lazy(() => import('../pages/ArticleDetailPage'))
@@ -79,14 +78,6 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={null}>
             <HomePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'subscriptions',
-        element: (
-          <Suspense fallback={null}>
-            <SubscriptionsPage />
           </Suspense>
         ),
       },

@@ -17,7 +17,6 @@ describe('getTransitionKey', () => {
     expect(getTransitionKey('/video/abc')).toBe('video')
     expect(getTransitionKey('/image/abc/2')).toBe('image')
     expect(getTransitionKey('/feed-detail/9')).toBe('feed-detail')
-    expect(getTransitionKey('/subscriptions')).toBe('subscriptions')
     expect(getTransitionKey('/login/bilibili')).toBe('login')
   })
 
@@ -28,6 +27,5 @@ describe('getTransitionKey', () => {
 
   it('tolerates trailing slashes and missing leading slash', () => {
     expect(getTransitionKey('entry/abc')).toBe('entry')
-    expect(getTransitionKey('/subscriptions/')).toBe('subscriptions')
   })
 })

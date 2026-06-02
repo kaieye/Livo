@@ -2,7 +2,6 @@ export const zhCNSidebar = {
   allFeeds: '全部',
   starred: '收藏',
   aiAssistant: 'AI 助手',
-  subscriptions: '订阅管理',
   discover: '添加订阅',
   search: '搜索',
   addFeed: '添加订阅',

@@ -25,8 +25,6 @@ export function getTransitionKey(pathname: string): string {
       return 'image'
     case 'feed-detail':
       return 'feed-detail'
-    case 'subscriptions':
-      return 'subscriptions'
     case 'login':
       return 'login'
     case 'discover':

@@ -177,7 +177,7 @@ export default function FeedDetailPage() {
     )
     if (!confirmed) return
     await removeFeed(feed.id)
-    navigate(ROUTES.subscriptions)
+    navigate(-1)
   }, [feed, removeFeed, navigate, t])
 
   const handleSubscribe = useCallback(() => {

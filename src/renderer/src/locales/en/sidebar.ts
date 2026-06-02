@@ -2,7 +2,6 @@ export const enSidebar = {
   allFeeds: 'All',
   starred: 'Starred',
   aiAssistant: 'AI Assistant',
-  subscriptions: 'Subscriptions',
   discover: 'Add Subscription',
   search: 'Search',
   addFeed: 'Add Feed',

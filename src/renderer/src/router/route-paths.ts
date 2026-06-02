@@ -72,7 +72,6 @@ export const ROUTES = {
   discoverSubscribe: (target: DiscoverRouteTarget) =>
     `/discover/subscribe${buildDiscoverTargetSearch(target)}`,
   settings: '/settings',
-  subscriptions: '/subscriptions',
   viewType: (view: FeedViewType) => {
     const slug = VIEW_TYPE_SLUGS[view]
     return slug ? `/${slug}` : '/'
@@ -106,7 +105,6 @@ const NON_VIEW_PATHS = new Set([
   'starred',
   'discover',
   'settings',
-  'subscriptions',
 ])
 
 /**

@@ -27,10 +27,6 @@ export function useAgentNavigate() {
               useDiscoverStore.getState().setOpen(true)
               return
             }
-            if (tab === 'subscriptions') {
-              navigate(ROUTES.subscriptions)
-              return
-            }
             // 'home' — navigate to root
             navigate('/')
             return
