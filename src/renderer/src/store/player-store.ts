@@ -11,6 +11,8 @@ export interface AudioTrack {
   feedTitle: string
   /** Cover/artwork URL. */
   cover: string
+  /** Associated entry ID for persisting listen progress. */
+  entryId?: string
 }
 
 /** Options accepted by `play` — backward compatible with the old PlayOptions. */
@@ -21,6 +23,10 @@ export interface PlayOptions {
   artist?: string
   feedTitle?: string
   cover?: string
+  /** Associated entry ID for persisting listen progress. */
+  entryId?: string
+  /** Saved listen progress percentage (0-100) for resume. */
+  listenProgress?: number
 }
 
 function toTrack(options: PlayOptions): AudioTrack {
@@ -30,6 +36,7 @@ function toTrack(options: PlayOptions): AudioTrack {
     title: options.title || '',
     feedTitle: options.artist || options.feedTitle || '',
     cover: options.cover || '',
+    entryId: options.entryId,
   }
 }
 
@@ -41,6 +48,8 @@ interface PlayerState {
   feedTitle: string
   cover: string
   isVisible: boolean
+  /** Entry ID of the currently playing track, for progress persistence. */
+  currentEntryId: string | null
 
   // Queue
   queue: AudioTrack[]
@@ -70,6 +79,26 @@ interface PlayerState {
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
+  // Debounced listen-progress persistence
+  let progressSaveTimer: ReturnType<typeof setTimeout> | null = null
+  let lastSavedEntryId: string | null = null
+  let lastSavedProgress = -1
+
+  function flushListenProgress(): void {
+    const { currentEntryId, currentTime, duration } = get()
+    if (!currentEntryId || duration <= 0) return
+    const pct = Math.round((currentTime / duration) * 100)
+    if (currentEntryId === lastSavedEntryId && pct === lastSavedProgress) return
+    lastSavedEntryId = currentEntryId
+    lastSavedProgress = pct
+    window.api.entries.saveListenProgress(currentEntryId, pct).catch(() => {})
+  }
+
+  function scheduleProgressSave(): void {
+    if (progressSaveTimer) clearTimeout(progressSaveTimer)
+    progressSaveTimer = setTimeout(flushListenProgress, 5000)
+  }
+
   // Bridge: reflect playback snapshots into the store so views re-render.
   audioPlayback.subscribe((snapshot) => {
     set({
@@ -79,14 +108,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       playbackRate: snapshot.playbackRate,
       muted: snapshot.muted,
     })
+    // Persist listen progress while playing
+    if (snapshot.isPlaying && snapshot.duration > 0 && get().currentEntryId) {
+      scheduleProgressSave()
+    }
   })
 
   // Advance the queue automatically when a track ends.
   audioPlayback.onTrackEnded(() => {
+    // Mark current entry as listened before advancing
+    const { currentEntryId } = get()
+    if (currentEntryId) {
+      window.api.entries.markListened(currentEntryId, true).catch(() => {})
+      window.api.entries.saveListenProgress(currentEntryId, 100).catch(() => {})
+    }
     if (get().hasNext()) get().next()
   })
 
-  function activate(track: AudioTrack): void {
+  function activate(track: AudioTrack, listenProgress?: number): void {
     set({
       url: track.url,
       type: track.type || 'audio',
@@ -94,10 +133,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       feedTitle: track.feedTitle,
       cover: track.cover,
       isVisible: true,
+      currentEntryId: track.entryId || null,
     })
     // Only audio is driven by the playback service; video is handled inline.
     if ((track.type || 'audio') === 'audio') {
       audioPlayback.load(track.url, true)
+      // Resume from saved position
+      if (listenProgress && listenProgress > 0 && listenProgress < 100) {
+        // Wait for metadata to load then seek
+        const unsubscribe = audioPlayback.subscribe((snap) => {
+          if (snap.duration > 0) {
+            unsubscribe()
+            const seekTime = (listenProgress / 100) * snap.duration
+            audioPlayback.seekTo(seekTime)
+          }
+        })
+      }
     }
   }
 
@@ -108,6 +159,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     feedTitle: '',
     cover: '',
     isVisible: false,
+    currentEntryId: null,
 
     queue: [],
     queueIndex: -1,
@@ -121,7 +173,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     play: (options) => {
       const track = toTrack(options)
       set({ queue: [track], queueIndex: 0 })
-      activate(track)
+      activate(track, options.listenProgress)
     },
 
     playQueue: (tracks, startIndex = 0) => {
@@ -129,7 +181,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const queue = tracks.map(toTrack)
       const index = Math.max(0, Math.min(startIndex, queue.length - 1))
       set({ queue, queueIndex: index })
-      activate(queue[index])
+      activate(queue[index], tracks[index].listenProgress)
     },
 
     next: () => {
@@ -164,6 +216,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     toggleMuted: () => audioPlayback.setMuted(!get().muted),
 
     stop: () => {
+      // Flush any pending progress before stopping
+      flushListenProgress()
       audioPlayback.stop()
       set({
         url: null,
@@ -171,6 +225,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         title: '',
         feedTitle: '',
         cover: '',
+        currentEntryId: null,
         queue: [],
         queueIndex: -1,
       })

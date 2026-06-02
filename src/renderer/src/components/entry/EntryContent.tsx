@@ -671,6 +671,8 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
       title: selectedEntry.title,
       artist: currentFeed?.title,
       cover: selectedEntry.imageUrl || currentFeed?.imageUrl,
+      entryId: selectedEntry.id,
+      listenProgress: selectedEntry.listenProgress,
     })
   }, [audioMedia, selectedEntry, currentFeed, playerPlay])
 
@@ -1243,6 +1245,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
                 playLabel={t('entry.playAudio')}
                 onPlay={handlePlayAudio}
                 audioUrl={audioMedia.url}
+                listenProgress={selectedEntry.listenProgress}
               />
             )}
 
@@ -1446,12 +1449,14 @@ function AudioPlaybackPanel({
   playLabel,
   onPlay,
   audioUrl,
+  listenProgress,
 }: {
   title: string
   duration?: number
   playLabel: string
   onPlay: () => void
   audioUrl: string
+  listenProgress?: number
 }) {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const currentTime = usePlayerStore((s) => s.currentTime)
@@ -1466,8 +1471,15 @@ function AudioPlaybackPanel({
     effectiveDuration > 0
       ? ((isCurrentTrack ? currentTime : 0) / effectiveDuration) * 100
       : 0
+  // Show saved progress when not currently playing this track
+  const savedProgress = !isCurrentTrack && listenProgress ? listenProgress : 0
+  const displayProgress = isCurrentTrack ? progress : savedProgress
   const durationText = formatMediaDuration(effectiveDuration)
   const currentText = formatMediaDuration(isCurrentTrack ? currentTime : 0)
+  const resumeTime =
+    listenProgress && effectiveDuration
+      ? formatMediaDuration((listenProgress / 100) * effectiveDuration)
+      : null
 
   const handleClick = () => {
     if (isCurrentTrack) {
@@ -1500,7 +1512,9 @@ function AudioPlaybackPanel({
         </span>
         <span className="min-w-0 flex-1">
           <span className="text-text dark:text-text-dark-primary block text-sm font-medium">
-            {playLabel}
+            {!isCurrentTrack && resumeTime
+              ? `继续播放 ${resumeTime}`
+              : playLabel}
           </span>
           <span className="text-text-secondary dark:text-text-dark-secondary block truncate text-xs">
             {title}
@@ -1519,7 +1533,7 @@ function AudioPlaybackPanel({
       >
         <div
           className="bg-accent absolute left-0 top-0 h-full transition-[width] duration-150"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${displayProgress}%` }}
         />
         <div
           className="bg-accent absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"

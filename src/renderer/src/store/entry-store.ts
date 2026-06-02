@@ -253,6 +253,8 @@ interface EntryState {
   markBelowRead: (entryId: string) => Promise<void>
   toggleStar: (entryId: string) => Promise<void>
   saveProgress: (entryId: string, readProgress: number) => Promise<void>
+  markListened: (entryId: string, isListened: boolean) => Promise<void>
+  saveListenProgress: (entryId: string, listenProgress: number) => Promise<void>
   search: (query: string) => Promise<void>
   setSearchQuery: (query: string) => void
 }
@@ -669,6 +671,35 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       return { entries: updated, selectedEntry: selected }
     })
     patchCachedEntry(entryId, { readProgress })
+  },
+
+  markListened: async (entryId, isListened) => {
+    await window.api.entries.markListened(entryId, isListened)
+    set((state) => ({
+      entries: state.entries.map((e) =>
+        e.id === entryId ? { ...e, isListened } : e,
+      ),
+      selectedEntry:
+        state.selectedEntry?.id === entryId
+          ? { ...state.selectedEntry, isListened }
+          : state.selectedEntry,
+    }))
+    patchCachedEntry(entryId, { isListened })
+  },
+
+  saveListenProgress: async (entryId, listenProgress) => {
+    await window.api.entries.saveListenProgress(entryId, listenProgress)
+    set((state) => {
+      const updated = state.entries.map((e) =>
+        e.id === entryId ? { ...e, listenProgress } : e,
+      )
+      const selected =
+        state.selectedEntry?.id === entryId
+          ? { ...state.selectedEntry, listenProgress }
+          : state.selectedEntry
+      return { entries: updated, selectedEntry: selected }
+    })
+    patchCachedEntry(entryId, { listenProgress })
   },
 
   search: async (query) => {

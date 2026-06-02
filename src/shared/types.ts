@@ -166,6 +166,8 @@ export interface Entry {
   isRead: boolean
   isStarred: boolean
   readProgress?: number
+  isListened?: boolean
+  listenProgress?: number
   createdAt: number
 }
 
@@ -643,6 +645,8 @@ export const IPC = {
   ENTRY_MARK_ALL_READ: 'entry:mark-all-read',
   ENTRY_TOGGLE_STAR: 'entry:toggle-star',
   ENTRY_SAVE_PROGRESS: 'entry:save-progress',
+  ENTRY_MARK_LISTENED: 'entry:mark-listened',
+  ENTRY_SAVE_LISTEN_PROGRESS: 'entry:save-listen-progress',
   ENTRY_SEARCH: 'entry:search',
   AI_SUMMARIZE: 'ai:summarize',
   AI_TRANSLATE: 'ai:translate',

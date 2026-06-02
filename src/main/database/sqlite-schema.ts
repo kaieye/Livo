@@ -172,6 +172,16 @@ const MIGRATIONS: Array<{
       );
     `,
   },
+  {
+    version: 4,
+    name: 'podcast-listen-state',
+    sql: `
+      ALTER TABLE entries ADD COLUMN is_listened INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE entries ADD COLUMN listen_progress REAL;
+      CREATE INDEX IF NOT EXISTS entries_listened_published_idx
+        ON entries (is_listened, published_at DESC, id DESC);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

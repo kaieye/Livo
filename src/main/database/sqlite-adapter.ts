@@ -97,6 +97,8 @@ function entryFromRow(row: any): Entry {
     isRead: row.is_read === 1,
     isStarred: row.is_starred === 1,
     readProgress: row.read_progress ?? undefined,
+    isListened: row.is_listened === 1,
+    listenProgress: row.listen_progress ?? undefined,
     createdAt: row.created_at,
   }
 }
@@ -342,7 +344,13 @@ export class SqliteAdapter {
 
       const stateByKey = new Map<
         string,
-        { isRead: boolean; isStarred: boolean; readProgress?: number }
+        {
+          isRead: boolean
+          isStarred: boolean
+          readProgress?: number
+          isListened: boolean
+          listenProgress?: number
+        }
       >()
       const makeKeepKey = (entry: {
         title: string
@@ -362,6 +370,8 @@ export class SqliteAdapter {
             isRead: !!entry.isRead,
             isStarred: !!entry.isStarred,
             readProgress: entry.readProgress,
+            isListened: !!entry.isListened,
+            listenProgress: entry.listenProgress,
           })
           continue
         }
@@ -373,6 +383,14 @@ export class SqliteAdapter {
             entry.readProgress > existing.readProgress)
         ) {
           existing.readProgress = entry.readProgress
+        }
+        existing.isListened = existing.isListened || !!entry.isListened
+        if (
+          entry.listenProgress !== undefined &&
+          (existing.listenProgress === undefined ||
+            entry.listenProgress > existing.listenProgress)
+        ) {
+          existing.listenProgress = entry.listenProgress
         }
       }
 
@@ -388,6 +406,8 @@ export class SqliteAdapter {
               isRead: entry.isRead || keep.isRead,
               isStarred: entry.isStarred || keep.isStarred,
               readProgress: keep.readProgress,
+              isListened: entry.isListened || keep.isListened,
+              listenProgress: keep.listenProgress,
             }
           : entry
         const result = this.upsertEntry(incoming)
@@ -416,7 +436,7 @@ export class SqliteAdapter {
         ai_summary = ?, ai_summary_generated_at = ?, ai_summary_error = ?,
         notified_at = ?, author = ?, author_avatar = ?, image_url = ?,
         media = ?, published_at = ?, is_read = ?, is_starred = ?,
-        read_progress = ?
+        read_progress = ?, is_listened = ?, listen_progress = ?
       WHERE id = ?
     `,
       )
@@ -445,6 +465,8 @@ export class SqliteAdapter {
         merged.isRead ? 1 : 0,
         merged.isStarred ? 1 : 0,
         merged.readProgress ?? null,
+        merged.isListened ? 1 : 0,
+        merged.listenProgress ?? null,
         id,
       )
   }
@@ -1223,9 +1245,10 @@ export class SqliteAdapter {
          readability_site_name, readability_length, readability_fetched_at,
          readability_error, ai_summary, ai_summary_generated_at,
          ai_summary_error, notified_at, author, author_avatar, image_url,
-         media, published_at, is_read, is_starred, read_progress, created_at)
+         media, published_at, is_read, is_starred, read_progress,
+         is_listened, listen_progress, created_at)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       )
       .run(
@@ -1254,6 +1277,8 @@ export class SqliteAdapter {
         entry.isRead ? 1 : 0,
         entry.isStarred ? 1 : 0,
         entry.readProgress ?? null,
+        entry.isListened ? 1 : 0,
+        entry.listenProgress ?? null,
         entry.createdAt,
       )
     return { added: true, changed: true }

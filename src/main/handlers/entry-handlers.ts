@@ -114,6 +114,24 @@ export function registerEntryHandlers(): void {
     },
   )
 
+  // Mark entry as listened
+  ipcMain.handle(
+    IPC.ENTRY_MARK_LISTENED,
+    (_event, entryId: string, isListened: boolean) => {
+      updateEntry(entryId, { isListened })
+      return { success: true }
+    },
+  )
+
+  // Save listen progress
+  ipcMain.handle(
+    IPC.ENTRY_SAVE_LISTEN_PROGRESS,
+    (_event, entryId: string, listenProgress: number) => {
+      updateEntry(entryId, { listenProgress })
+      return { success: true }
+    },
+  )
+
   // Search entries
   ipcMain.handle(IPC.ENTRY_SEARCH, (_event, query: string, limit?: number) => {
     return searchEntries(query, limit)

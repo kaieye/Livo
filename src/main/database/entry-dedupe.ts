@@ -169,6 +169,11 @@ function dedupeMirrorPairsForRead(entries: Entry[]): Entry[] {
     mergeTextFromEntry(winner, loser)
     winner.isRead = winner.isRead && loser.isRead
     winner.isStarred = winner.isStarred || loser.isStarred
+    winner.isListened =
+      (winner.isListened ?? false) && (loser.isListened ?? false)
+    if ((loser.listenProgress ?? 0) > (winner.listenProgress ?? 0)) {
+      winner.listenProgress = loser.listenProgress
+    }
     tsBuckets.set(tsKey, winner)
   }
 
@@ -270,6 +275,13 @@ function mergeEntriesForReadDisplay(existing: Entry, incoming: Entry): Entry {
   mergeEntryData(winner, loser)
   winner.isRead = existing.isRead && incoming.isRead
   winner.isStarred = existing.isStarred || incoming.isStarred
+  winner.isListened =
+    (existing.isListened ?? false) && (incoming.isListened ?? false)
+  if ((incoming.listenProgress ?? 0) > (existing.listenProgress ?? 0)) {
+    winner.listenProgress = incoming.listenProgress
+  } else {
+    winner.listenProgress = existing.listenProgress
+  }
   return winner
 }
 
@@ -343,10 +355,21 @@ export function dedupeEntriesForRead(
         media: merged.media || entry.media,
         isRead: existing.isRead && entry.isRead,
         isStarred: existing.isStarred || entry.isStarred,
+        isListened:
+          (existing.isListened ?? false) && (entry.isListened ?? false),
+        listenProgress:
+          (entry.listenProgress ?? 0) > (existing.listenProgress ?? 0)
+            ? entry.listenProgress
+            : existing.listenProgress,
       })
     } else {
       existing.isRead = existing.isRead && entry.isRead
       existing.isStarred = existing.isStarred || entry.isStarred
+      existing.isListened =
+        (existing.isListened ?? false) && (entry.isListened ?? false)
+      if ((entry.listenProgress ?? 0) > (existing.listenProgress ?? 0)) {
+        existing.listenProgress = entry.listenProgress
+      }
       byKey.set(key, existing)
     }
   }

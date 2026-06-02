@@ -83,6 +83,14 @@ const api = {
       ipcRenderer.invoke(IPC.ENTRY_TOGGLE_STAR, entryId),
     saveProgress: (entryId: string, readProgress: number) =>
       ipcRenderer.invoke(IPC.ENTRY_SAVE_PROGRESS, entryId, readProgress),
+    markListened: (entryId: string, isListened: boolean) =>
+      ipcRenderer.invoke(IPC.ENTRY_MARK_LISTENED, entryId, isListened),
+    saveListenProgress: (entryId: string, listenProgress: number) =>
+      ipcRenderer.invoke(
+        IPC.ENTRY_SAVE_LISTEN_PROGRESS,
+        entryId,
+        listenProgress,
+      ),
     search: (query: string, limit?: number): Promise<Entry[]> =>
       ipcRenderer.invoke(IPC.ENTRY_SEARCH, query, limit),
   },
