@@ -24,6 +24,8 @@ import type {
   AIDigestGenerateResult,
   AIDigestPreset,
   AIDigestRun,
+  TaskRunListOptions,
+  TaskRunRecord,
 } from '../shared/types'
 import {
   normalizeDiscoverQueryToFeedUrl,
@@ -1207,6 +1209,18 @@ function emit(channel: string, ...args: unknown[]) {
   if (listeners) listeners.forEach((cb) => cb(...args))
 }
 
+const webTaskRuns = new Map<string, TaskRunRecord>()
+
+function listWebTaskRuns(options?: TaskRunListOptions): TaskRunRecord[] {
+  const limit = Math.max(1, Math.min(options?.limit ?? 50, 200))
+  return Array.from(webTaskRuns.values())
+    .filter((run) =>
+      options?.taskName ? run.taskName === options.taskName : true,
+    )
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, limit)
+}
+
 // ====== Build the WebAPI object ======
 
 export function createWebAPI(): ElectronAPI {
@@ -1816,6 +1830,14 @@ export function createWebAPI(): ElectronAPI {
         success: false,
         message: 'Not available on web',
       }),
+    },
+
+    tasks: {
+      getRun: async (runId: string): Promise<TaskRunRecord | null> =>
+        webTaskRuns.get(runId) ?? null,
+      listRuns: async (
+        options?: TaskRunListOptions,
+      ): Promise<TaskRunRecord[]> => listWebTaskRuns(options),
     },
 
     settings: {

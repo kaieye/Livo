@@ -20,6 +20,8 @@ export const TASK_NAMES = {
   FEED_REFRESH_ALL: 'feed.refresh_all',
   FEED_BOOTSTRAP_REFRESH: 'feed.bootstrap_refresh',
   VIDEO_DURATION_ENRICH: 'video.duration_enrich',
+  AI_SUMMARIZE: 'ai.summarize',
+  AI_TRANSLATE: 'ai.translate',
   AI_DIGEST_GENERATE: 'ai.digest_generate',
   FEVER_SYNC: 'fever.sync',
 } as const
@@ -46,6 +48,18 @@ export interface VideoDurationEnrichTaskPayload {
 export interface AiDigestGenerateTaskPayload {
   preset?: string
   feedId?: string
+}
+
+export interface AiSummarizeTaskPayload {
+  content: string
+  language?: string
+  requestId?: string
+}
+
+export interface AiTranslateTaskPayload {
+  content: string
+  targetLanguage: string
+  requestId?: string
 }
 
 export interface FeverSyncTaskPayload {
@@ -86,6 +100,20 @@ export const VIDEO_DURATION_ENRICH_TASK: TaskContract<VideoDurationEnrichTaskPay
     timeoutMs: 300000,
     retry: { maxAttempts: 1 },
   }
+
+export const AI_SUMMARIZE_TASK: TaskContract<AiSummarizeTaskPayload> = {
+  name: TASK_NAMES.AI_SUMMARIZE,
+  concurrency: 2,
+  timeoutMs: 180000,
+  retry: { maxAttempts: 1 },
+}
+
+export const AI_TRANSLATE_TASK: TaskContract<AiTranslateTaskPayload> = {
+  name: TASK_NAMES.AI_TRANSLATE,
+  concurrency: 3,
+  timeoutMs: 180000,
+  retry: { maxAttempts: 1 },
+}
 
 export const AI_DIGEST_GENERATE_TASK: TaskContract<AiDigestGenerateTaskPayload> =
   {

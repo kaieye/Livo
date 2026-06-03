@@ -20,7 +20,13 @@ import {
   buildDigestRerankMessages,
   selectValidDigestRerankIds,
 } from '../services/ai/ai-digest'
-import { AI_DIGEST_GENERATE_TASK } from '../services/system/task-contracts'
+import {
+  AI_DIGEST_GENERATE_TASK,
+  AI_SUMMARIZE_TASK,
+  AI_TRANSLATE_TASK,
+  type AiSummarizeTaskPayload,
+  type AiTranslateTaskPayload,
+} from '../services/system/task-contracts'
 import { getLocalTaskRunner } from '../services/system/task-runner-service'
 import type { TaskRunContext } from '../services/system/task-runner'
 import { logUserOperation } from '../services/system/user-operation-log'
@@ -39,6 +45,9 @@ import type {
 import { USER_OPERATION_KEYS } from '../../shared/user-operations'
 
 type AIDigestGenerateInput = { preset?: AIDigestPreset; feedId?: string }
+
+type AISummarizeResult = { success: true; summary: string }
+type AITranslateResult = { success: true; translation: string }
 
 function sendToAllWindows(channel: string, payload: unknown): void {
   getEventBus().send(channel, payload)
@@ -267,78 +276,264 @@ async function generateAIDigest(
   }
 }
 
+async function runAISummarizeTask(
+  payload: AiSummarizeTaskPayload,
+  context?: TaskRunContext,
+): Promise<AISummarizeResult> {
+  const settings = getSettings()
+  const aiConfig = settings.ai
+  const { content, language, requestId } = payload
+
+  const fail = (error: string): never => {
+    if (requestId) {
+      sendToAllWindows('ai:summary-stream-error', { requestId, error })
+    }
+    throw new Error(error)
+  }
+
+  const configError = validateAIConfig(aiConfig)
+  if (configError) fail(configError)
+
+  try {
+    context?.reportProgress({
+      completed: 0,
+      total: 1,
+      message: '生成摘要',
+      data: { streaming: Boolean(requestId), contentLength: content.length },
+    })
+
+    const client = createOpenAIClient(aiConfig)
+    const lang = language || settings.general.language || 'zh-CN'
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
+      },
+      {
+        role: 'user',
+        content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
+      },
+    ]
+
+    if (requestId) {
+      const stream = await client.chat.completions.create({
+        model: aiConfig.model,
+        messages,
+        temperature: 0.3,
+        max_tokens: 500,
+        stream: true,
+      })
+
+      let summary = ''
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || ''
+        if (!delta) continue
+        summary += delta
+        sendToAllWindows('ai:summary-stream-chunk', {
+          requestId,
+          content: delta,
+        })
+      }
+      sendToAllWindows('ai:summary-stream-done', { requestId })
+      context?.reportProgress({
+        completed: 1,
+        total: 1,
+        message: '摘要已生成',
+        data: { streaming: true, contentLength: content.length },
+      })
+
+      return { success: true, summary }
+    }
+
+    const summary = await runWithRetry(
+      async () => {
+        const response = await client.chat.completions.create({
+          model: aiConfig.model,
+          messages,
+          temperature: 0.3,
+          max_tokens: 500,
+        })
+        return response.choices[0]?.message?.content || ''
+      },
+      { isEmpty: (text) => !text.trim() },
+    )
+
+    context?.reportProgress({
+      completed: 1,
+      total: 1,
+      message: '摘要已生成',
+      data: { streaming: false, contentLength: content.length },
+    })
+    return { success: true, summary }
+  } catch (error) {
+    const normalized = normalizeAIError(error, aiConfig)
+    if (requestId) {
+      sendToAllWindows('ai:summary-stream-error', {
+        requestId,
+        error: normalized,
+      })
+    }
+    throw new Error(normalized)
+  }
+}
+
+async function runAITranslateTask(
+  payload: AiTranslateTaskPayload,
+  context?: TaskRunContext,
+): Promise<AITranslateResult> {
+  const settings = getSettings()
+  const aiConfig = settings.ai
+  const { content, targetLanguage, requestId } = payload
+
+  const fail = (error: string): never => {
+    if (requestId) {
+      sendToAllWindows('ai:translate-stream-error', { requestId, error })
+    }
+    throw new Error(error)
+  }
+
+  const configError = validateAIConfig(aiConfig)
+  if (configError) fail(configError)
+
+  try {
+    context?.reportProgress({
+      completed: 0,
+      total: 1,
+      message: '生成翻译',
+      data: {
+        streaming: Boolean(requestId),
+        targetLanguage,
+        contentLength: content.length,
+      },
+    })
+
+    const client = createOpenAIClient(aiConfig)
+    const systemPrompt = buildTranslatePrompt(
+      targetLanguage,
+      aiConfig.translationPrompt,
+    )
+
+    if (requestId) {
+      const stream = await client.chat.completions.create({
+        model: aiConfig.model,
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt,
+          },
+          {
+            role: 'user',
+            content: clampContentToBudget(content, 6000),
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 4000,
+        stream: true,
+      })
+
+      let translation = ''
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || ''
+        if (!delta) continue
+        translation += delta
+        sendToAllWindows('ai:translate-stream-chunk', {
+          requestId,
+          content: delta,
+        })
+      }
+      sendToAllWindows('ai:translate-stream-done', { requestId })
+      context?.reportProgress({
+        completed: 1,
+        total: 1,
+        message: '翻译已生成',
+        data: {
+          streaming: true,
+          targetLanguage,
+          contentLength: content.length,
+        },
+      })
+
+      return { success: true, translation }
+    }
+
+    // Each retry trims the context further so an over-long request that
+    // returned empty can still succeed on a shorter one.
+    const contentBudgets = [6000, 4000, 2500]
+
+    const translation = await runWithRetry(
+      async (attempt) => {
+        const budget =
+          contentBudgets[Math.min(attempt, contentBudgets.length - 1)]
+        const response = await client.chat.completions.create({
+          model: aiConfig.model,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt,
+            },
+            {
+              role: 'user',
+              content: clampContentToBudget(content, budget),
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 4000,
+        })
+        return response.choices[0]?.message?.content || ''
+      },
+      { isEmpty: (text) => !text.trim() },
+    )
+
+    context?.reportProgress({
+      completed: 1,
+      total: 1,
+      message: '翻译已生成',
+      data: {
+        streaming: false,
+        targetLanguage,
+        contentLength: content.length,
+      },
+    })
+    return { success: true, translation }
+  } catch (error) {
+    const normalized = normalizeAIError(error, aiConfig)
+    if (requestId) {
+      sendToAllWindows('ai:translate-stream-error', {
+        requestId,
+        error: normalized,
+      })
+    }
+    throw new Error(normalized)
+  }
+}
+
 export function registerAIHandlers(): void {
   // Summarize content
   registerChannel(
     IPC.AI_SUMMARIZE,
     async (_event, content: string, language?: string, requestId?: string) => {
-      const settings = getSettings()
-      const aiConfig = settings.ai
-
-      const configError = validateAIConfig(aiConfig)
-      if (configError) return { success: false, error: configError }
-
+      const task = getLocalTaskRunner().enqueue(
+        AI_SUMMARIZE_TASK,
+        { content, language, requestId },
+        runAISummarizeTask,
+        {
+          metadata: {
+            operationKey: USER_OPERATION_KEYS.AI_SUMMARIZE,
+            streaming: Boolean(requestId),
+            language,
+            contentLength: content.length,
+          },
+        },
+      )
       try {
-        const client = createOpenAIClient(aiConfig)
-        const lang = language || settings.general.language || 'zh-CN'
-        const messages: OpenAI.ChatCompletionMessageParam[] = [
-          {
-            role: 'system',
-            content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
-          },
-          {
-            role: 'user',
-            content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
-          },
-        ]
-
-        if (requestId) {
-          const stream = await client.chat.completions.create({
-            model: aiConfig.model,
-            messages,
-            temperature: 0.3,
-            max_tokens: 500,
-            stream: true,
-          })
-
-          let summary = ''
-          for await (const chunk of stream) {
-            const delta = chunk.choices[0]?.delta?.content || ''
-            if (!delta) continue
-            summary += delta
-            sendToAllWindows('ai:summary-stream-chunk', {
-              requestId,
-              content: delta,
-            })
-          }
-          sendToAllWindows('ai:summary-stream-done', { requestId })
-
-          return { success: true, summary }
-        }
-
-        const summary = await runWithRetry(
-          async () => {
-            const response = await client.chat.completions.create({
-              model: aiConfig.model,
-              messages,
-              temperature: 0.3,
-              max_tokens: 500,
-            })
-            return response.choices[0]?.message?.content || ''
-          },
-          { isEmpty: (text) => !text.trim() },
-        )
-
-        return { success: true, summary }
+        const result = await task.promise
+        return { ...result, runId: task.runId }
       } catch (error) {
-        const normalized = normalizeAIError(error, aiConfig)
-        if (requestId) {
-          sendToAllWindows('ai:summary-stream-error', {
-            requestId,
-            error: normalized,
-          })
+        return {
+          success: false,
+          error: normalizeAIError(error, getSettings().ai),
+          runId: task.runId,
         }
-        return { success: false, error: normalized }
       }
     },
   )
@@ -352,90 +547,28 @@ export function registerAIHandlers(): void {
       targetLanguage: string,
       requestId?: string,
     ) => {
-      const settings = getSettings()
-      const aiConfig = settings.ai
-
-      const configError = validateAIConfig(aiConfig)
-      if (configError) return { success: false, error: configError }
-
-      try {
-        const client = createOpenAIClient(aiConfig)
-        const systemPrompt = buildTranslatePrompt(
-          targetLanguage,
-          aiConfig.translationPrompt,
-        )
-
-        if (requestId) {
-          const stream = await client.chat.completions.create({
-            model: aiConfig.model,
-            messages: [
-              {
-                role: 'system',
-                content: systemPrompt,
-              },
-              {
-                role: 'user',
-                content: clampContentToBudget(content, 6000),
-              },
-            ],
-            temperature: 0.2,
-            max_tokens: 4000,
-            stream: true,
-          })
-
-          let translation = ''
-          for await (const chunk of stream) {
-            const delta = chunk.choices[0]?.delta?.content || ''
-            if (!delta) continue
-            translation += delta
-            sendToAllWindows('ai:translate-stream-chunk', {
-              requestId,
-              content: delta,
-            })
-          }
-          sendToAllWindows('ai:translate-stream-done', { requestId })
-
-          return { success: true, translation }
-        }
-
-        // Each retry trims the context further so an over-long request that
-        // returned empty can still succeed on a shorter one.
-        const contentBudgets = [6000, 4000, 2500]
-
-        const translation = await runWithRetry(
-          async (attempt) => {
-            const budget =
-              contentBudgets[Math.min(attempt, contentBudgets.length - 1)]
-            const response = await client.chat.completions.create({
-              model: aiConfig.model,
-              messages: [
-                {
-                  role: 'system',
-                  content: systemPrompt,
-                },
-                {
-                  role: 'user',
-                  content: clampContentToBudget(content, budget),
-                },
-              ],
-              temperature: 0.2,
-              max_tokens: 4000,
-            })
-            return response.choices[0]?.message?.content || ''
+      const task = getLocalTaskRunner().enqueue(
+        AI_TRANSLATE_TASK,
+        { content, targetLanguage, requestId },
+        runAITranslateTask,
+        {
+          metadata: {
+            operationKey: USER_OPERATION_KEYS.AI_TRANSLATE,
+            streaming: Boolean(requestId),
+            targetLanguage,
+            contentLength: content.length,
           },
-          { isEmpty: (text) => !text.trim() },
-        )
-
-        return { success: true, translation }
+        },
+      )
+      try {
+        const result = await task.promise
+        return { ...result, runId: task.runId }
       } catch (error) {
-        const normalized = normalizeAIError(error, aiConfig)
-        if (requestId) {
-          sendToAllWindows('ai:translate-stream-error', {
-            requestId,
-            error: normalized,
-          })
+        return {
+          success: false,
+          error: normalizeAIError(error, getSettings().ai),
+          runId: task.runId,
         }
-        return { success: false, error: normalized }
       }
     },
   )

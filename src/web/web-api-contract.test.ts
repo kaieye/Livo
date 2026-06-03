@@ -47,6 +47,10 @@ const ELECTRON_API_SHAPE = {
     onStreamError: true,
     testConnection: true,
   },
+  tasks: {
+    getRun: true,
+    listRuns: true,
+  },
   settings: {
     get: true,
     set: true,

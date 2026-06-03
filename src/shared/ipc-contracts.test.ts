@@ -32,12 +32,23 @@ describe('ipc-contracts', () => {
         unreadOnly: true,
       },
     ])
+    expect(validateIpcArgs(IPC.TASK_RUN_GET, ['ai-summarize-1'])).toEqual([
+      'ai-summarize-1',
+    ])
+    expect(
+      validateIpcArgs(IPC.TASK_RUN_LIST, [
+        { taskName: 'ai.summarize', limit: 10 },
+      ]),
+    ).toEqual([{ taskName: 'ai.summarize', limit: 10 }])
 
     expect(() =>
       validateIpcArgs(IPC.ENTRY_MARK_READ, ['entry-1', 'yes']),
     ).toThrow(IpcValidationError)
     expect(() =>
       validateIpcArgs(IPC.READER_SNAPSHOT, [{ scope: { type: 'feed' } }]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.TASK_RUN_LIST, [{ taskName: 42 }]),
     ).toThrow(IpcValidationError)
   })
 

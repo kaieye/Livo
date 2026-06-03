@@ -16,6 +16,7 @@ import { registerAccountHandlers } from './handlers/account-handlers'
 import { registerAgentHandlers } from './handlers/agent-handlers'
 import { registerActionHandlers } from './handlers/action-handlers'
 import { registerFeverHandlers } from './handlers/fever-handlers'
+import { registerTaskHandlers } from './handlers/task-handlers'
 import { startAutoRefresh } from './services/feed/feed-refresh'
 import {
   startFeverAutoSync,
@@ -165,6 +166,7 @@ export class AppManager {
     registerAgentHandlers()
     registerActionHandlers()
     registerFeverHandlers()
+    registerTaskHandlers()
   }
 
   private createTray(): void {

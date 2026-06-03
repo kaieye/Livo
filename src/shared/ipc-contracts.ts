@@ -41,6 +41,8 @@ export const IPC = {
   AI_DIGEST_LIST: 'ai:digest-list',
   AI_DIGEST_GENERATE: 'ai:digest-generate',
   AI_TEST_CONNECTION: 'ai:test-connection',
+  TASK_RUN_GET: 'task-run:get',
+  TASK_RUN_LIST: 'task-run:list',
   AGENT_RUN: 'agent:run',
   AGENT_RESUME: 'agent:resume',
   AGENT_ABORT: 'agent:abort',
@@ -215,6 +217,8 @@ export type IpcArgsByChannel = {
     input?: { preset?: AIDigestPreset; feedId?: string },
   ]
   [IPC.AI_TEST_CONNECTION]: []
+  [IPC.TASK_RUN_GET]: [runId: string]
+  [IPC.TASK_RUN_LIST]: [options?: { taskName?: string; limit?: number }]
   [IPC.AGENT_RUN]: [
     payload: {
       requestId: string
@@ -392,6 +396,13 @@ function assertOptionalObject(
   field: string,
 ): asserts value is Record<string, unknown> | undefined {
   if (value !== undefined) assertObject(value, field)
+}
+
+function assertTaskRunListOptions(value: unknown): void {
+  assertOptionalObject(value, 'options')
+  if (!value) return
+  assertOptionalString(value.taskName, 'options.taskName')
+  assertOptionalNumber(value.limit, 'options.limit')
 }
 
 function assertStringArray(
@@ -703,6 +714,15 @@ export const IPC_CONTRACTS = {
     },
   },
   [IPC.AI_TEST_CONNECTION]: noArgs(IPC.AI_TEST_CONNECTION),
+  [IPC.TASK_RUN_GET]: oneString(IPC.TASK_RUN_GET, 'runId'),
+  [IPC.TASK_RUN_LIST]: {
+    channel: IPC.TASK_RUN_LIST,
+    validateArgs: (args) => {
+      assertArity(IPC.TASK_RUN_LIST, args, 0, 1)
+      assertTaskRunListOptions(args[0])
+      return args as IpcArgs<typeof IPC.TASK_RUN_LIST>
+    },
+  },
   [IPC.AGENT_RUN]: oneObject(IPC.AGENT_RUN, 'payload'),
   [IPC.AGENT_RESUME]: oneObject(IPC.AGENT_RESUME, 'payload'),
   [IPC.AGENT_ABORT]: oneString(IPC.AGENT_ABORT, 'requestId'),

@@ -6,6 +6,7 @@ export * from './agent'
 export * from './account'
 export * from './fever'
 export * from './app'
+export * from './task'
 
 // Re-export sibling shared modules (paths relative to src/shared/)
 export * from '../ipc-contracts'

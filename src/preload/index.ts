@@ -23,6 +23,8 @@ import type {
   AIDigestGenerateResult,
   AIDigestRun,
   AIDigestPreset,
+  TaskRunListOptions,
+  TaskRunRecord,
   FeverAccount,
   FeverSyncState,
 } from '../shared/types'
@@ -162,6 +164,13 @@ const api = {
       duration?: number
       modelInfo?: string
     }> => invokeIpc(IPC.AI_TEST_CONNECTION),
+  },
+
+  tasks: {
+    getRun: (runId: string): Promise<TaskRunRecord | null> =>
+      invokeIpc(IPC.TASK_RUN_GET, runId),
+    listRuns: (options?: TaskRunListOptions): Promise<TaskRunRecord[]> =>
+      invokeIpc(IPC.TASK_RUN_LIST, options),
   },
 
   // Settings
