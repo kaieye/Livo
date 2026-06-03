@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { mergeSettings, normalizeSettings } from './settings'
-import { FeedViewType } from './types'
+import { DEFAULT_SETTINGS, FeedViewType, FEED_COLUMN_DEFAULTS } from './types'
 
 describe('settings normalization', () => {
   it('fills nested defaults and repairs missing view tabs', () => {
@@ -71,5 +71,10 @@ describe('settings normalization', () => {
     expect(merged.translation.enabled).toBe(true)
     expect(merged.translation.targetLanguage).toBe('zh-CN')
     expect(merged.ai.model).toBeTruthy()
+  })
+
+  it('derives default feed columns from the shared column defaults', () => {
+    expect(DEFAULT_SETTINGS.general.feedColumns).toEqual(FEED_COLUMN_DEFAULTS)
+    expect(DEFAULT_SETTINGS.general.feedColumns).not.toBe(FEED_COLUMN_DEFAULTS)
   })
 })

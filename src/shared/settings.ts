@@ -1,11 +1,10 @@
 import {
-  DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE,
-  DEFAULT_SETTINGS,
   FEED_COLUMN_DEFAULTS,
   FeedViewType,
-  type AppSettings,
   type FeedColumnId,
-} from './types'
+} from './types/feed'
+import { DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE } from './types/ai'
+import { DEFAULT_SETTINGS, type AppSettings } from './settings-schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
