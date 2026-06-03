@@ -17,4 +17,7 @@ Folo-dev/
 .worktrees/
 .omo/
 *.tsbuildinfo
-docs/
+docs/*
+!docs/feedfuse-comparison-improvements.md
+!docs/development.md
+!docs/architecture.md

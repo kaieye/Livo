@@ -95,6 +95,10 @@ pnpm dev
 pnpm dev:web
 ```
 
+Web 入口复用渲染层界面，但运行在浏览器环境中，使用 IndexedDB 保存数据，并通过 `src/web/web-api.ts` 提供与 preload 相同形状的 API。它适合验证通用阅读界面和浏览器兼容路径；依赖 Electron 主进程的能力只在桌面端完整可用。
+
+桌面端专有能力包括本机 SQLite 数据目录、系统文件对话框、原生下载、主进程日志目录、Electron 缓存清理、账号登录窗口和内嵌 webview 等。
+
 ## 常用命令
 
 ```bash
@@ -135,6 +139,8 @@ pnpm test
 ## 开发文档
 
 - 仓库开发约定与协作说明见 [`AGENTS.md`](AGENTS.md)
+- 开发入口、Web 限制和常用验证见 [`docs/development.md`](docs/development.md)
+- 架构分层、IPC 契约和数据路径见 [`docs/architecture.md`](docs/architecture.md)
 - 设计与实现文档见 `docs/superpowers/specs` 与 `docs/superpowers/plans`
 
 ## 许可证
