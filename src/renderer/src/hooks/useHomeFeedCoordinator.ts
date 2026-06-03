@@ -6,6 +6,7 @@ import { FeedViewType } from '../../../shared/types'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
 import {
+  buildHomeFeedRefreshTarget,
   buildHomeFeedLoadOptions,
   computeViewFeedIds,
 } from '../lib/home-feed-scope'
@@ -193,17 +194,23 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
 
   // Refresh current feeds
   const refreshCurrentFeeds = useCallback(async () => {
-    if (selectedFeedId && selectedFeedId !== 'starred') {
-      await refreshFeed(selectedFeedId)
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      await refreshMultiple(viewFeedIds)
+    const refreshTarget = buildHomeFeedRefreshTarget({
+      selectedFeedId,
+      activeView,
+      feeds,
+    })
+    if (refreshTarget.type === 'feed') {
+      await refreshFeed(refreshTarget.feedId)
+    } else if (refreshTarget.type === 'feeds') {
+      await refreshMultiple(refreshTarget.feedIds)
     } else {
       await refreshAll()
     }
     reloadCurrentListFresh()
   }, [
     selectedFeedId,
-    viewFeedIds,
+    activeView,
+    feeds,
     refreshFeed,
     refreshMultiple,
     refreshAll,

@@ -9,6 +9,11 @@ export interface HomeFeedLoadOptions {
   limit: number
 }
 
+export type HomeFeedRefreshTarget =
+  | { type: 'feed'; feedId: string }
+  | { type: 'feeds'; feedIds: string[] }
+  | { type: 'all' }
+
 /**
  * Derive entry load options from the current home feed scope.
  * Single source of truth for: starred → selected feed → active view → all feeds.
@@ -72,4 +77,29 @@ export function computeViewFeedIds(
         (!excludeCategory || f.category !== excludeCategory),
     )
     .map((f) => f.id)
+}
+
+/**
+ * 根据当前首页范围推导刷新目标。
+ * 刷新保持当前 view 的完整范围，推荐源是否跳过交给 feed store 按用户设置处理。
+ */
+export function buildHomeFeedRefreshTarget(options: {
+  selectedFeedId: string | null
+  activeView: FeedViewType | null
+  feeds: Array<{ id: string; view?: FeedViewType }>
+}): HomeFeedRefreshTarget {
+  if (options.selectedFeedId && options.selectedFeedId !== 'starred') {
+    return { type: 'feed', feedId: options.selectedFeedId }
+  }
+
+  if (options.activeView !== null) {
+    return {
+      type: 'feeds',
+      feedIds: options.feeds
+        .filter((f) => (f.view ?? 0) === options.activeView)
+        .map((f) => f.id),
+    }
+  }
+
+  return { type: 'all' }
 }

@@ -129,8 +129,6 @@ export function EntryList({ width }: { width?: number }) {
     entries,
     isLoading,
     isLoadingMore,
-    loadEntries,
-    clearListCache,
     baseFilteredEntries,
     filterMode,
     setFilterMode,
@@ -142,7 +140,7 @@ export function EntryList({ width }: { width?: number }) {
     searchQuery,
     setSearchQuery,
     handleSearch,
-    entryLoadLimit,
+    refreshCurrentFeeds,
   } = coordinator
   const entryStore = useEntryStore()
   const {
@@ -154,11 +152,8 @@ export function EntryList({ width }: { width?: number }) {
   } = entryStore
   const {
     selectedFeedId,
-    feeds,
     activeView,
     refreshFeed,
-    refreshMultiple,
-    refreshAll,
     isRefreshing,
     refreshProgress,
   } = useFeedStore()
@@ -370,21 +365,7 @@ export function EntryList({ width }: { width?: number }) {
           </h2>
           <div className="flex items-center gap-1">
             <button
-              onClick={async () => {
-                if (selectedFeedId && selectedFeedId !== 'starred') {
-                  await refreshFeed(selectedFeedId)
-                } else if (activeView !== null) {
-                  const viewFeedIds = feeds
-                    .filter(
-                      (f) => (f.view ?? FeedViewType.Articles) === activeView,
-                    )
-                    .map((f) => f.id)
-                  await refreshMultiple(viewFeedIds)
-                } else {
-                  await refreshAll()
-                }
-                reloadCurrentListFresh()
-              }}
+              onClick={refreshCurrentFeeds}
               disabled={isRefreshing}
               className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5 disabled:opacity-50"
               title={t('common.refresh')}
@@ -495,11 +476,7 @@ export function EntryList({ width }: { width?: number }) {
               <Inbox size={40} className="text-text-tertiary mb-3" />
               <p className="text-sm">{t('entryList.noArticles')}</p>
               <button
-                onClick={async () => {
-                  await refreshFeed(selectedFeedId)
-                  clearListCache()
-                  loadEntries({ feedId: selectedFeedId, limit: entryLoadLimit })
-                }}
+                onClick={refreshCurrentFeeds}
                 disabled={isRefreshing}
                 className="bg-accent hover:bg-accent/90 mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white disabled:opacity-50"
               >

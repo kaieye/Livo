@@ -1,0 +1,89 @@
+import { describe, expect, it } from 'vitest'
+import { FeedViewType } from '../../../shared/types'
+import {
+  buildHomeFeedLoadOptions,
+  buildHomeFeedRefreshTarget,
+  computeViewFeedIds,
+} from './home-feed-scope'
+
+describe('home-feed-scope', () => {
+  const feeds = [
+    { id: 'article-1', view: FeedViewType.Articles },
+    { id: 'social-1', view: FeedViewType.SocialMedia },
+    { id: 'social-hidden', view: FeedViewType.SocialMedia, showInAll: false },
+    {
+      id: 'social-recommended',
+      view: FeedViewType.SocialMedia,
+      category: 'Recommended',
+    },
+  ]
+
+  it('按当前范围构建列表加载参数', () => {
+    expect(
+      buildHomeFeedLoadOptions({
+        selectedFeedId: 'starred',
+        activeView: FeedViewType.SocialMedia,
+        feeds,
+        unreadOnly: true,
+        limit: 20,
+      }),
+    ).toEqual({ starred: true, unreadOnly: true, limit: 20 })
+
+    expect(
+      buildHomeFeedLoadOptions({
+        selectedFeedId: 'feed-1',
+        activeView: null,
+        feeds,
+        limit: 20,
+      }),
+    ).toEqual({ feedId: 'feed-1', unreadOnly: undefined, limit: 20 })
+
+    expect(
+      buildHomeFeedLoadOptions({
+        selectedFeedId: null,
+        activeView: FeedViewType.SocialMedia,
+        feeds,
+        limit: 20,
+      }),
+    ).toEqual({
+      feedIds: ['social-1', 'social-recommended'],
+      unreadOnly: undefined,
+      limit: 20,
+    })
+  })
+
+  it('过滤 view 列表时按需排除推荐源', () => {
+    expect(
+      computeViewFeedIds(feeds, FeedViewType.SocialMedia, 'Recommended'),
+    ).toEqual(['social-1'])
+  })
+
+  it('按当前范围构建刷新目标', () => {
+    expect(
+      buildHomeFeedRefreshTarget({
+        selectedFeedId: 'feed-1',
+        activeView: FeedViewType.SocialMedia,
+        feeds,
+      }),
+    ).toEqual({ type: 'feed', feedId: 'feed-1' })
+
+    expect(
+      buildHomeFeedRefreshTarget({
+        selectedFeedId: 'starred',
+        activeView: FeedViewType.SocialMedia,
+        feeds,
+      }),
+    ).toEqual({
+      type: 'feeds',
+      feedIds: ['social-1', 'social-hidden', 'social-recommended'],
+    })
+
+    expect(
+      buildHomeFeedRefreshTarget({
+        selectedFeedId: null,
+        activeView: null,
+        feeds,
+      }),
+    ).toEqual({ type: 'all' })
+  })
+})
