@@ -9,6 +9,12 @@
  * - Strips data: URLs except for images
  * - Removes dangerous CSS properties
  */
+import {
+  createExternalUrlWarning,
+  isAllowedHtmlSrcset,
+  isAllowedHtmlUrl,
+  isExternalHttpUrl,
+} from '../../../shared/url-policy'
 
 /** Tags allowed in sanitized output */
 const ALLOWED_TAGS = new Set([
@@ -129,9 +135,6 @@ const GLOBAL_ATTRS = new Set([
   'role',
 ])
 
-/** Blocked URL protocols */
-const BLOCKED_PROTOCOLS = /^(javascript|vbscript|data(?!:image\/))/i
-
 /** Dangerous CSS properties */
 const DANGEROUS_CSS =
   /expression\s*\(|url\s*\(\s*["']?javascript:|behavior\s*:|binding\s*:/i
@@ -219,16 +222,23 @@ function sanitizeNode(node: Node): void {
           continue
         }
 
-        // Check URL attributes for dangerous protocols
+        // 检查 URL 属性，避免不同入口各自维护危险协议判断。
         if (
           attrName === 'href' ||
           attrName === 'src' ||
           attrName === 'action'
         ) {
-          if (BLOCKED_PROTOCOLS.test(attr.value.trim())) {
+          const allowImageDataUrl =
+            tagName === 'img' || tagName === 'source' || tagName === 'video'
+          if (!isAllowedHtmlUrl(attr.value, { allowImageDataUrl })) {
             attrsToRemove.push(attr.name)
             continue
           }
+        }
+
+        if (attrName === 'srcset' && !isAllowedHtmlSrcset(attr.value)) {
+          attrsToRemove.push(attr.name)
+          continue
         }
 
         // Sanitize style attribute
@@ -289,12 +299,7 @@ function isAllowedIframeSrc(src: string): boolean {
  * Used for external link warnings.
  */
 export function isExternalUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
-  } catch {
-    return false
-  }
+  return isExternalHttpUrl(url)
 }
 
 /**
@@ -306,20 +311,5 @@ export function createExternalLinkWarning(url: string): {
   hostname: string
   isSuspicious: boolean
 } {
-  const hostname = (() => {
-    try {
-      return new URL(url).hostname
-    } catch {
-      return url
-    }
-  })()
-
-  // Check for suspicious patterns
-  const isSuspicious =
-    hostname.includes('..') ||
-    hostname.match(/\d+\.\d+\.\d+\.\d+/) !== null || // IP address
-    hostname.length > 50 ||
-    url.includes('@') ||
-    url.includes('\\') // Backslash in URL
-  return { url, hostname, isSuspicious }
+  return createExternalUrlWarning(url)
 }

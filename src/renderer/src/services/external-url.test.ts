@@ -32,6 +32,11 @@ describe('openExternalUrl', () => {
     expect(result.blocked).toBe(true)
   })
 
+  it('blocks credential-bearing URLs', async () => {
+    const result = await openExternalUrl('https://user:pass@example.com/')
+    expect(result.blocked).toBe(true)
+  })
+
   it('blocks malformed URLs', async () => {
     const result = await openExternalUrl('not a url at all')
     expect(result.blocked).toBe(true)

@@ -3,6 +3,7 @@
  *
  * Wraps the IPC `window.api.app.openExternal()` with:
  * - Protocol validation (http/https only — blocks javascript:, data:, file:, etc.)
+ * - Credential-bearing URL rejection
  * - Suspicious URL detection (IP addresses, oversized hostnames, @ symbols, etc.)
  * - Optional user confirmation dialog for flagged URLs
  *
@@ -12,7 +13,7 @@
  * AI chat markdown component. This module is a pure utility — no React, no JSX.
  */
 
-import { createExternalLinkWarning } from '../utils/sanitize'
+import { classifyExternalUrl } from '../../../shared/url-policy'
 
 /**
  * Result of an external URL open attempt.
@@ -27,13 +28,6 @@ export interface OpenExternalResult {
   /** extracted hostname for display purposes */
   hostname: string
 }
-
-/**
- * Blocked URL protocols — anything other than http/https is rejected.
- * This catches javascript:, vbscript:, data:, file:, ftp:, etc.
- */
-const BLOCKED_PROTOCOLS =
-  /^(javascript|vbscript|data|file|ftp|about|chrome|edge|opera):/i
 
 /**
  * Open an external URL with security validation.
@@ -64,51 +58,21 @@ const BLOCKED_PROTOCOLS =
 export async function openExternalUrl(
   url: string,
 ): Promise<OpenExternalResult> {
-  // ---- Step 1: Parse the URL ----
-  let parsed: URL
-  try {
-    parsed = new URL(url)
-  } catch {
-    return { opened: false, blocked: true, suspicious: false, hostname: '' }
+  const policy = classifyExternalUrl(url)
+  const hostname = policy.hostname
+
+  if (policy.blocked) {
+    return { opened: false, blocked: true, suspicious: false, hostname }
   }
 
-  // ---- Step 2: Protocol validation ----
-  const protocol = parsed.protocol.toLowerCase()
-  if (protocol !== 'http:' && protocol !== 'https:') {
-    // Also check via regex to catch edge cases the URL parser might normalize
-    if (BLOCKED_PROTOCOLS.test(url.trim())) {
-      return {
-        opened: false,
-        blocked: true,
-        suspicious: false,
-        hostname: parsed.hostname || '',
-      }
-    }
-    // For other protocols the parser accepted but aren't http/https (e.g. ws:, ftp:)
-    return {
-      opened: false,
-      blocked: true,
-      suspicious: false,
-      hostname: parsed.hostname || '',
-    }
-  }
-
-  const hostname = parsed.hostname
-
-  // ---- Step 3: Suspicious URL detection (reuses patterns from sanitize.ts) ----
-  // `createExternalLinkWarning` uses `new URL()` internally and falls back
-  // to the raw string on parse failure. Since we already validated the URL
-  // above, the try/catch inside it will succeed — so we get a clean signal.
-  const { isSuspicious } = createExternalLinkWarning(url)
-
-  if (isSuspicious) {
+  if (policy.suspicious) {
     return { opened: false, blocked: false, suspicious: true, hostname }
   }
 
   // ---- Step 4: Safe URL — open via IPC ----
   if (window.api?.app?.openExternal) {
     try {
-      const result = await window.api.app.openExternal(url)
+      const result = await window.api.app.openExternal(policy.url)
       return {
         opened: result.success,
         blocked: false,
@@ -122,7 +86,7 @@ export async function openExternalUrl(
 
   // Fallback for non-Electron environments (e.g. web build)
   try {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    window.open(policy.url, '_blank', 'noopener,noreferrer')
     return { opened: true, blocked: false, suspicious: false, hostname }
   } catch {
     return { opened: false, blocked: false, suspicious: false, hostname }

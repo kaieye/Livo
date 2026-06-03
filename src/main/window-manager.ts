@@ -1,6 +1,7 @@
 import { BrowserWindow, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
 import { logError, logInfo, logWarn } from './services/system/logger'
 
@@ -26,9 +27,22 @@ export class WindowManager {
 
   safeOpenExternal(url: string): void {
     try {
-      if (!/^https?:\/\//i.test(url)) return
-      void shell.openExternal(url).catch((error) => {
-        logWarn('[external] failed to open url', url, error)
+      const policy = classifyExternalUrl(url)
+      if (policy.blocked) {
+        logWarn('[external] blocked url', {
+          url,
+          reason: policy.blockedReason,
+        })
+        return
+      }
+      if (policy.suspicious) {
+        logWarn('[external] opening suspicious url', {
+          url: policy.url,
+          hostname: policy.hostname,
+        })
+      }
+      void shell.openExternal(policy.url).catch((error) => {
+        logWarn('[external] failed to open url', policy.url, error)
       })
     } catch (error) {
       logWarn('[external] invalid external url', url, error)
