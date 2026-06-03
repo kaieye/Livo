@@ -34,7 +34,7 @@ import {
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from '../system/refresh-log-store'
 import { runConcurrencyPool } from '../../utils/concurrency-pool'
-import { syncFeverAccount } from '../fever/fever-sync'
+import { queueFeverSyncAccount } from '../fever/fever-sync'
 import {
   FEED_REFRESH_ALL_TASK,
   FEED_REFRESH_SINGLE_TASK,
@@ -747,7 +747,7 @@ async function runRefreshAllFeeds(
     const feverAccounts = getFeverAccounts().filter((a) => a.enabled)
     for (const account of feverAccounts) {
       try {
-        await syncFeverAccount(account.id)
+        await queueFeverSyncAccount(account.id).promise
       } catch (err) {
         console.warn('[fever] sync failed for', account.baseUrl, err)
       }

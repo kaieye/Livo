@@ -41,6 +41,7 @@ export interface AiDigestGenerateTaskPayload {
 
 export interface FeverSyncTaskPayload {
   accountId: string
+  force?: boolean
 }
 
 export const FEED_REFRESH_SINGLE_TASK: TaskContract<FeedRefreshSingleTaskPayload> =

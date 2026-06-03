@@ -10,7 +10,7 @@ import {
   getFeverSyncState,
 } from '../database'
 import { createFeverClient } from '../services/fever/fever-client'
-import { syncFeverAccount } from '../services/fever/fever-sync'
+import { queueFeverSyncAccount } from '../services/fever/fever-sync'
 import { v4 as uuidv4 } from 'uuid'
 
 export function registerFeverHandlers(): void {
@@ -102,7 +102,7 @@ export function registerFeverHandlers(): void {
       newEntries: number
       error?: string
     }> => {
-      return syncFeverAccount(accountId, { force: true })
+      return queueFeverSyncAccount(accountId, { force: true }).promise
     },
   )
 
@@ -120,7 +120,7 @@ export function registerFeverHandlers(): void {
       }> = []
       for (const account of accounts) {
         try {
-          const result = await syncFeverAccount(account.id)
+          const result = await queueFeverSyncAccount(account.id).promise
           results.push({
             accountId: account.id,
             success: result.success,

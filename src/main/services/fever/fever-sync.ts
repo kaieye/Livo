@@ -1,4 +1,3 @@
-import { BrowserWindow } from 'electron'
 import { getEventBus } from '../system/event-bus'
 import { v4 as uuidv4 } from 'uuid'
 import type { Entry, Feed, FeverAccount } from '../../../shared/types/index'
@@ -22,6 +21,9 @@ import {
 } from '../../database'
 import { createFeverClient } from './fever-client'
 import type { FeverApiClient, FeverFeedWithGroup } from './fever-client'
+import { FEVER_SYNC_TASK } from '../system/task-contracts'
+import type { TaskRunContext, TaskRunHandle } from '../system/task-runner'
+import { getLocalTaskRunner } from '../system/task-runner-service'
 
 const FULL_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000
 const FEVER_ITEMS_PER_PAGE = 50
@@ -46,8 +48,30 @@ export interface FeverSyncResult {
   error?: string
 }
 
-function sendProgressToRenderer(progress: FeverSyncProgress): void {
+function sendProgressToRenderer(
+  progress: FeverSyncProgress,
+  context?: TaskRunContext,
+): void {
   getEventBus().send('fever:sync-progress', progress)
+  context?.reportProgress({
+    completed: getFeverProgressStep(progress.phase),
+    total: 3,
+    message: progress.phase,
+    data: { ...progress },
+  })
+}
+
+function getFeverProgressStep(phase: FeverSyncProgress['phase']): number {
+  switch (phase) {
+    case 'feeds':
+      return 0
+    case 'items':
+      return 1
+    case 'write-back':
+      return 2
+    case 'done':
+      return 3
+  }
 }
 
 function buildFeedFromFeverRemote(
@@ -254,7 +278,7 @@ async function performWriteBack(
 
 export async function syncFeverAccount(
   accountId: string,
-  options?: { force?: boolean },
+  options?: { force?: boolean; context?: TaskRunContext },
 ): Promise<FeverSyncResult> {
   const account = getFeverAccountById(accountId)
   if (!account) {
@@ -274,22 +298,28 @@ export async function syncFeverAccount(
   )
 
   try {
-    sendProgressToRenderer({
-      accountId,
-      phase: 'feeds',
-      feedsSynced: 0,
-      itemsSynced: 0,
-      newEntries: 0,
-    })
+    sendProgressToRenderer(
+      {
+        accountId,
+        phase: 'feeds',
+        feedsSynced: 0,
+        itemsSynced: 0,
+        newEntries: 0,
+      },
+      options?.context,
+    )
 
     const localFeedByRemoteId = await syncFeeds(client, account)
-    sendProgressToRenderer({
-      accountId,
-      phase: 'items',
-      feedsSynced: localFeedByRemoteId.size,
-      itemsSynced: 0,
-      newEntries: 0,
-    })
+    sendProgressToRenderer(
+      {
+        accountId,
+        phase: 'items',
+        feedsSynced: localFeedByRemoteId.size,
+        itemsSynced: 0,
+        newEntries: 0,
+      },
+      options?.context,
+    )
 
     const { itemsSynced, newEntries } = await syncItems(
       client,
@@ -297,13 +327,16 @@ export async function syncFeverAccount(
       localFeedByRemoteId,
       options,
     )
-    sendProgressToRenderer({
-      accountId,
-      phase: 'write-back',
-      feedsSynced: localFeedByRemoteId.size,
-      itemsSynced,
-      newEntries,
-    })
+    sendProgressToRenderer(
+      {
+        accountId,
+        phase: 'write-back',
+        feedsSynced: localFeedByRemoteId.size,
+        itemsSynced,
+        newEntries,
+      },
+      options?.context,
+    )
 
     await performWriteBack(client, account, localFeedByRemoteId)
 
@@ -311,13 +344,16 @@ export async function syncFeverAccount(
       lastSyncAt: Date.now(),
       lastError: undefined,
     })
-    sendProgressToRenderer({
-      accountId,
-      phase: 'done',
-      feedsSynced: localFeedByRemoteId.size,
-      itemsSynced,
-      newEntries,
-    })
+    sendProgressToRenderer(
+      {
+        accountId,
+        phase: 'done',
+        feedsSynced: localFeedByRemoteId.size,
+        itemsSynced,
+        newEntries,
+      },
+      options?.context,
+    )
 
     return {
       success: true,
@@ -328,14 +364,17 @@ export async function syncFeverAccount(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
     updateFeverAccount(accountId, { lastError: errorMsg })
-    sendProgressToRenderer({
-      accountId,
-      phase: 'done',
-      feedsSynced: 0,
-      itemsSynced: 0,
-      newEntries: 0,
-      error: errorMsg,
-    })
+    sendProgressToRenderer(
+      {
+        accountId,
+        phase: 'done',
+        feedsSynced: 0,
+        itemsSynced: 0,
+        newEntries: 0,
+        error: errorMsg,
+      },
+      options?.context,
+    )
     return {
       success: false,
       feedsSynced: 0,
@@ -344,6 +383,27 @@ export async function syncFeverAccount(
       error: errorMsg,
     }
   }
+}
+
+export function queueFeverSyncAccount(
+  accountId: string,
+  options?: { force?: boolean },
+): TaskRunHandle<FeverSyncResult> {
+  return getLocalTaskRunner().enqueue(
+    FEVER_SYNC_TASK,
+    { accountId, force: options?.force },
+    (payload, context) =>
+      syncFeverAccount(payload.accountId, {
+        force: payload.force,
+        context,
+      }),
+    {
+      metadata: {
+        accountId,
+        force: options?.force ?? false,
+      },
+    },
+  )
 }
 
 function checkAndSyncDueAccounts(): void {
@@ -358,7 +418,7 @@ function checkAndSyncDueAccounts(): void {
     const lastSync = account.lastSyncAt || 0
     if (now - lastSync < intervalMs) continue
 
-    syncFeverAccount(account.id).catch((err) => {
+    queueFeverSyncAccount(account.id).promise.catch((err) => {
       console.warn('[fever] auto-sync failed for', account.baseUrl, err)
     })
   }
