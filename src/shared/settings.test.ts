@@ -31,6 +31,38 @@ describe('settings normalization', () => {
     expect(normalized.general.customContentMaxWidth).toBe(920)
   })
 
+  it('normalizes numeric settings to safe runtime ranges', () => {
+    const normalized = normalizeSettings({
+      general: {
+        refreshInterval: Number.POSITIVE_INFINITY,
+        fontSize: -1,
+        contentMaxWidth: 999_999,
+        customContentMaxWidth: 0,
+        contentLineHeight: 99,
+      } as any,
+      data: {
+        entriesPerFeed: -10,
+        maxEntryAgeDays: Number.NaN,
+        freshnessTTL: 1.5,
+        refreshConcurrency: 999,
+        cacheSizeLimitMB: -1,
+        codeCacheLimitMB: Number.POSITIVE_INFINITY,
+      } as any,
+    })
+
+    expect(normalized.general.refreshInterval).toBe(30)
+    expect(normalized.general.fontSize).toBe(12)
+    expect(normalized.general.contentMaxWidth).toBe(1400)
+    expect(normalized.general.customContentMaxWidth).toBe(1400)
+    expect(normalized.general.contentLineHeight).toBe(2.5)
+    expect(normalized.data.entriesPerFeed).toBe(0)
+    expect(normalized.data.maxEntryAgeDays).toBe(90)
+    expect(normalized.data.freshnessTTL).toBe(1)
+    expect(normalized.data.refreshConcurrency).toBe(20)
+    expect(normalized.data.cacheSizeLimitMB).toBe(0)
+    expect(normalized.data.codeCacheLimitMB).toBe(100)
+  })
+
   it('merges nested sections without dropping unrelated keys', () => {
     const merged = mergeSettings(normalizeSettings(), {
       translation: { enabled: true } as any,

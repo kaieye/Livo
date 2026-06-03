@@ -29,6 +29,20 @@ function mergeDefined<T>(target: T, source: unknown): T {
   return result as T
 }
 
+function normalizeNumber(
+  value: unknown,
+  fallback: number,
+  options: { min?: number; max?: number; integer?: boolean } = {},
+): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+
+  let next = options.integer ? Math.floor(numeric) : numeric
+  if (options.min !== undefined) next = Math.max(options.min, next)
+  if (options.max !== undefined) next = Math.min(options.max, next)
+  return next
+}
+
 function normalizeViewTabs(
   viewTabs: Array<{ id: FeedViewType; visible: boolean }> | undefined,
 ): Array<{ id: FeedViewType; visible: boolean }> {
@@ -71,6 +85,72 @@ function syncContentWidth(settings: AppSettings): void {
   }
 }
 
+function normalizeNumericSettings(settings: AppSettings): void {
+  const defaults = DEFAULT_SETTINGS
+
+  settings.general.refreshInterval = normalizeNumber(
+    settings.general.refreshInterval,
+    defaults.general.refreshInterval,
+    { min: 0, max: 1440, integer: true },
+  )
+  settings.general.fontSize = normalizeNumber(
+    settings.general.fontSize,
+    defaults.general.fontSize,
+    { min: 12, max: 24, integer: true },
+  )
+  settings.general.contentMaxWidth = normalizeNumber(
+    settings.general.contentMaxWidth,
+    defaults.general.contentMaxWidth,
+    { min: 400, max: 1400, integer: true },
+  )
+  settings.general.customContentMaxWidth = normalizeNumber(
+    settings.general.customContentMaxWidth,
+    defaults.general.customContentMaxWidth,
+    { min: 400, max: 1400, integer: true },
+  )
+  settings.general.contentLineHeight = normalizeNumber(
+    settings.general.contentLineHeight,
+    defaults.general.contentLineHeight,
+    { min: 1, max: 2.5 },
+  )
+  settings.general.videosPerPage = normalizeNumber(
+    settings.general.videosPerPage,
+    defaults.general.videosPerPage,
+    { min: 1, max: 100, integer: true },
+  )
+
+  settings.data.entriesPerFeed = normalizeNumber(
+    settings.data.entriesPerFeed,
+    defaults.data.entriesPerFeed,
+    { min: 0, integer: true },
+  )
+  settings.data.maxEntryAgeDays = normalizeNumber(
+    settings.data.maxEntryAgeDays,
+    defaults.data.maxEntryAgeDays,
+    { min: 0, integer: true },
+  )
+  settings.data.freshnessTTL = normalizeNumber(
+    settings.data.freshnessTTL,
+    defaults.data.freshnessTTL,
+    { min: 0, max: 1440, integer: true },
+  )
+  settings.data.refreshConcurrency = normalizeNumber(
+    settings.data.refreshConcurrency,
+    defaults.data.refreshConcurrency,
+    { min: 1, max: 20, integer: true },
+  )
+  settings.data.cacheSizeLimitMB = normalizeNumber(
+    settings.data.cacheSizeLimitMB,
+    defaults.data.cacheSizeLimitMB,
+    { min: 0, integer: true },
+  )
+  settings.data.codeCacheLimitMB = normalizeNumber(
+    settings.data.codeCacheLimitMB,
+    defaults.data.codeCacheLimitMB,
+    { min: 0, integer: true },
+  )
+}
+
 export function cloneDefaultSettings(): AppSettings {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as AppSettings
 }
@@ -91,6 +171,7 @@ export function normalizeSettings(input?: Partial<AppSettings>): AppSettings {
 
   merged.general.viewTabs = normalizeViewTabs(merged.general.viewTabs)
   merged.general.feedColumns = normalizeFeedColumns(merged.general.feedColumns)
+  normalizeNumericSettings(merged)
   syncContentWidth(merged)
 
   return merged
