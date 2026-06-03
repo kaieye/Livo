@@ -189,4 +189,56 @@ describe('useEntryStore', () => {
       maxContentLength: 520,
     })
   })
+
+  it('does not change local read state when markRead fails', async () => {
+    const unread = makeEntry({ isRead: false })
+    const { useEntryStore, api } = await loadEntryStore({
+      listResults: [],
+      detailResult: unread,
+    })
+    useEntryStore.setState({
+      entries: [unread],
+      selectedEntry: unread,
+    })
+    api.entries.markRead.mockRejectedValueOnce(new Error('mark failed'))
+
+    await expect(
+      useEntryStore.getState().markRead(unread.id, true),
+    ).rejects.toThrow('mark failed')
+
+    expect(useEntryStore.getState().entries[0]).toMatchObject({
+      id: unread.id,
+      isRead: false,
+    })
+    expect(useEntryStore.getState().selectedEntry).toMatchObject({
+      id: unread.id,
+      isRead: false,
+    })
+  })
+
+  it('does not change local starred state when toggleStar fails', async () => {
+    const unstarred = makeEntry({ isStarred: false })
+    const { useEntryStore, api } = await loadEntryStore({
+      listResults: [],
+      detailResult: unstarred,
+    })
+    useEntryStore.setState({
+      entries: [unstarred],
+      selectedEntry: unstarred,
+    })
+    api.entries.toggleStar.mockRejectedValueOnce(new Error('star failed'))
+
+    await expect(
+      useEntryStore.getState().toggleStar(unstarred.id),
+    ).rejects.toThrow('star failed')
+
+    expect(useEntryStore.getState().entries[0]).toMatchObject({
+      id: unstarred.id,
+      isStarred: false,
+    })
+    expect(useEntryStore.getState().selectedEntry).toMatchObject({
+      id: unstarred.id,
+      isStarred: false,
+    })
+  })
 })
