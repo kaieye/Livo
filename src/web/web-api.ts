@@ -11,6 +11,9 @@ import type {
   EntryListResult,
   FeedWithCount,
   FeedViewType,
+  ReaderSnapshot,
+  ReaderSnapshotRequest,
+  ReaderSnapshotScope,
   MediaItem,
   AppSettings,
   AccountProvider,
@@ -22,6 +25,14 @@ import type {
   AIDigestPreset,
   AIDigestRun,
 } from '../shared/types'
+import {
+  normalizeDiscoverQueryToFeedUrl,
+  extractBilibiliUid,
+  extractTwitterUsernameFromUrl,
+  decodeBasicHtmlEntities,
+  extractTwitterDisplayNameFromText,
+  isGenericTwitterTitle,
+} from '../main/services/discover-helpers'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
 import { resolveProfileUrlToCandidates } from '../shared/profile-resolver'
@@ -67,22 +78,6 @@ function proxiedUrl(url: string): string {
   return getCorsProxyUrl() + encodeURIComponent(url)
 }
 
-function normalizeDiscoverQueryToFeedUrl(
-  query: string,
-  rsshubInstance: string,
-): string {
-  const trimmed = query.trim()
-  if (!trimmed) return trimmed
-  const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
-  if (rsshubMatch?.[1]) {
-    const route = rsshubMatch[1].replace(/^\/+/, '')
-    const base = rsshubInstance.replace(/\/+$/, '')
-    return `${base}/${route}`
-  }
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  return `https://${trimmed}`
-}
-
 function toRsshubProtocolUrl(rawUrl: string): string {
   const trimmed = (rawUrl || '').trim()
   if (!trimmed) return trimmed
@@ -115,81 +110,6 @@ function toFetchableFeedUrl(rawUrl: string, rsshubInstance: string): string {
     return `${base}/${route}`
   }
   return trimmed
-}
-
-function extractBilibiliUid(feedUrl: string): string | null {
-  try {
-    const u = new URL(feedUrl)
-    const m = u.pathname.match(/\/bilibili\/user\/(?:video|dynamic)\/(\d+)/i)
-    return m?.[1] || null
-  } catch {
-    return null
-  }
-}
-
-function extractTwitterUsernameFromUrl(value: string): string {
-  try {
-    const u = new URL(value)
-    const rsshubMatch = u.pathname.match(/\/twitter\/user\/([^/?#]+)/i)
-    if (rsshubMatch?.[1])
-      return decodeURIComponent(rsshubMatch[1]).replace(/^@/, '')
-    if (u.hostname.toLowerCase().includes('nitter')) {
-      const parts = u.pathname.split('/').filter(Boolean)
-      if (parts.length >= 2 && parts[1].toLowerCase() === 'rss') {
-        return decodeURIComponent(parts[0]).replace(/^@/, '')
-      }
-    }
-    if (/^(www\.)?(x\.com|twitter\.com)$/i.test(u.hostname)) {
-      return (u.pathname.split('/').filter(Boolean)[0] || '').replace(/^@/, '')
-    }
-  } catch {
-    // Ignore malformed URL.
-  }
-  return ''
-}
-
-function decodeBasicHtmlEntities(input: string): string {
-  return input
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-}
-
-function extractTwitterDisplayNameFromText(
-  text: string,
-  username: string,
-): string {
-  const raw = (text || '').trim()
-  if (!raw) return ''
-  const escapedUser = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const withHandle = new RegExp(
-    `^(.+?)\\s*\\(\\s*@?${escapedUser}\\s*\\)\\s*(?:\\/|[-\\u2013\\u2014]|on)\\s*(?:x|twitter)\\s*$`,
-    'i',
-  )
-  const m1 = raw.match(withHandle)
-  if (m1?.[1]) return m1[1].trim()
-  const withoutHandle = raw.match(
-    /^(.+?)\s*(?:\/|[-\u2013\u2014]|on)\s*(?:x|twitter)\s*$/i,
-  )
-  if (withoutHandle?.[1]) {
-    const name = withoutHandle[1].trim().replace(/^@/, '')
-    if (name && name.toLowerCase() !== username.toLowerCase()) return name
-  }
-  return ''
-}
-
-function isGenericTwitterTitle(title: string, username: string): boolean {
-  const cleaned = (title || '').trim().toLowerCase()
-  const user = username.trim().replace(/^@/, '').toLowerCase()
-  if (!cleaned || !user) return true
-  return (
-    cleaned === user ||
-    cleaned === `@${user}` ||
-    cleaned === `${user} - x` ||
-    cleaned === `@${user} - x`
-  )
 }
 
 async function fetchXDisplayNameByUsername(username: string): Promise<string> {
@@ -593,6 +513,145 @@ function generateId(): string {
   return crypto.randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
+interface WebSnapshotCursorPayload {
+  v: 1
+  offset: number
+  queryKey: string
+}
+
+function normalizeSnapshotLimit(limit: number | undefined): number {
+  if (typeof limit !== 'number' || !Number.isFinite(limit)) return 10
+  return Math.max(1, Math.min(Math.floor(limit), 1000))
+}
+
+function normalizeSnapshotScope(
+  scope: ReaderSnapshotRequest['scope'],
+): ReaderSnapshotScope {
+  if (!scope) return { type: 'all' }
+  if (scope.type === 'feed') return { type: 'feed', feedId: scope.feedId }
+  if (scope.type === 'starred') return { type: 'starred' }
+  return {
+    type: 'all',
+    feedIds: Array.from(new Set((scope.feedIds || []).filter(Boolean))).sort(),
+  }
+}
+
+function buildSnapshotQueryKey(input: {
+  scope: ReaderSnapshotScope
+  unreadOnly: boolean
+  limit: number
+}): string {
+  return JSON.stringify({
+    scope: input.scope,
+    unreadOnly: input.unreadOnly,
+    limit: input.limit,
+  })
+}
+
+function decodeSnapshotCursor(
+  cursor: string | null | undefined,
+  queryKey: string,
+): number {
+  if (!cursor) return 0
+  try {
+    const payload = JSON.parse(
+      atob(cursor),
+    ) as Partial<WebSnapshotCursorPayload>
+    if (
+      payload.v !== 1 ||
+      payload.queryKey !== queryKey ||
+      typeof payload.offset !== 'number' ||
+      !Number.isFinite(payload.offset)
+    ) {
+      return 0
+    }
+    return Math.max(0, Math.floor(payload.offset))
+  } catch {
+    return 0
+  }
+}
+
+function encodeSnapshotCursor(payload: WebSnapshotCursorPayload): string {
+  return btoa(JSON.stringify(payload))
+}
+
+function toSnapshotEntryOptions(input: {
+  scope: ReaderSnapshotScope
+  unreadOnly: boolean
+}): {
+  feedId?: string
+  feedIds?: string[]
+  starred?: boolean
+  unreadOnly?: boolean
+} {
+  const base = input.unreadOnly ? { unreadOnly: true } : {}
+  switch (input.scope.type) {
+    case 'feed':
+      return { ...base, feedId: input.scope.feedId }
+    case 'starred':
+      return { ...base, starred: true }
+    case 'all':
+      return input.scope.feedIds?.length
+        ? { ...base, feedIds: input.scope.feedIds }
+        : base
+    default:
+      return base
+  }
+}
+
+async function buildWebReaderSnapshot(
+  input: ReaderSnapshotRequest = {},
+): Promise<ReaderSnapshot> {
+  const scope = normalizeSnapshotScope(input.scope)
+  const limit = normalizeSnapshotLimit(input.limit)
+  const unreadOnly = !!input.unreadOnly
+  const queryKey = buildSnapshotQueryKey({ scope, unreadOnly, limit })
+  const offset = decodeSnapshotCursor(input.cursor, queryKey)
+  const feeds = await getAllFeeds()
+  const unreadByFeedId: Record<string, number> = {}
+  const feedsWithCount: FeedWithCount[] = []
+  for (const feed of feeds) {
+    const unreadCount = await getUnreadCount(feed.id)
+    unreadByFeedId[feed.id] = unreadCount
+    feedsWithCount.push({ ...feed, unreadCount })
+  }
+  const entries = await dbGetEntries({
+    ...toSnapshotEntryOptions({ scope, unreadOnly }),
+    limit: limit + 1,
+    offset,
+  })
+  const pageEntries = entries.slice(0, limit)
+  const nextCursor =
+    entries.length > limit
+      ? encodeSnapshotCursor({ v: 1, offset: offset + limit, queryKey })
+      : null
+  const totalUnread = Object.values(unreadByFeedId).reduce(
+    (total, count) => total + count,
+    0,
+  )
+  const scopeUnread =
+    scope.type === 'feed'
+      ? unreadByFeedId[scope.feedId] || 0
+      : scope.type === 'all' && scope.feedIds?.length
+        ? scope.feedIds.reduce(
+            (total, feedId) => total + (unreadByFeedId[feedId] || 0),
+            0,
+          )
+        : totalUnread
+
+  return {
+    feeds: feedsWithCount.sort((a, b) => a.title.localeCompare(b.title)),
+    entries: pageEntries,
+    counts: {
+      totalFeeds: feedsWithCount.length,
+      totalUnread,
+      unreadByFeedId,
+      scopeUnread,
+    },
+    nextCursor,
+  }
 }
 
 /** Auto-detect view type from feed items */
@@ -1505,6 +1564,10 @@ export function createWebAPI(): ElectronAPI {
         _entryId: string,
         _listenProgress: number,
       ) => ({ success: true }),
+    },
+
+    reader: {
+      snapshot: buildWebReaderSnapshot,
     },
 
     ai: {
