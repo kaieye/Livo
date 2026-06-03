@@ -206,6 +206,34 @@ export interface FeedWithCount extends Feed {
   unreadCount: number
 }
 
+export type ReaderSnapshotScope =
+  | { type: 'all'; feedIds?: string[] }
+  | { type: 'feed'; feedId: string }
+  | { type: 'starred' }
+
+export interface ReaderSnapshotRequest {
+  scope?: ReaderSnapshotScope
+  limit?: number
+  cursor?: string | null
+  unreadOnly?: boolean
+  compact?: boolean
+  maxContentLength?: number
+}
+
+export interface ReaderSnapshotCounts {
+  totalFeeds: number
+  totalUnread: number
+  unreadByFeedId: Record<string, number>
+  scopeUnread: number
+}
+
+export interface ReaderSnapshot {
+  feeds: FeedWithCount[]
+  entries: Entry[]
+  counts: ReaderSnapshotCounts
+  nextCursor: string | null
+}
+
 export type AccountProvider = 'youtube' | 'x' | 'instagram' | 'bilibili'
 
 export interface AccountSessionState {

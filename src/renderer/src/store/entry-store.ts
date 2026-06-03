@@ -1,5 +1,10 @@
 import { createAppStore } from './helpers'
-import type { Entry, EntryListResult } from '../../../shared/types'
+import type {
+  Entry,
+  EntryListResult,
+  ReaderSnapshot,
+  ReaderSnapshotRequest,
+} from '../../../shared/types'
 import { isMirrorHost } from '../../../shared/url-detect'
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
@@ -224,6 +229,29 @@ function getInitialSelectedEntry(entry: Entry): Entry {
   return detail ? mergeEntrySnapshotState(detail, snapshot) : snapshot
 }
 
+function buildReaderSnapshotInput(options?: {
+  feedId?: string
+  feedIds?: string[]
+  starred?: boolean
+  unreadOnly?: boolean
+  limit?: number
+  cursor?: string | null
+}): ReaderSnapshotRequest {
+  const scope: ReaderSnapshotRequest['scope'] = options?.starred
+    ? { type: 'starred' }
+    : options?.feedId
+      ? { type: 'feed', feedId: options.feedId }
+      : { type: 'all', feedIds: options?.feedIds }
+  return {
+    scope,
+    limit: options?.limit,
+    cursor: options?.cursor,
+    unreadOnly: options?.unreadOnly,
+    compact: true,
+    maxContentLength: 520,
+  }
+}
+
 function patchCachedEntry(entryId: string, patch: Partial<Entry>): void {
   const snapshot = entrySnapshotCache.get(entryId)
   if (snapshot) entrySnapshotCache.set(entryId, { ...snapshot, ...patch })
@@ -238,6 +266,8 @@ interface EntryState {
   isLoading: boolean
   isLoadingMore: boolean
   hasMoreEntries: boolean
+  snapshotNextCursor: string | null
+  paginationSource: 'entries' | 'snapshot'
   paginationQueryKey: string
   paginationOptions: {
     feedId?: string
@@ -256,6 +286,13 @@ interface EntryState {
     unreadOnly?: boolean
     limit?: number
   }) => Promise<void>
+  loadSnapshot: (options?: {
+    feedId?: string
+    feedIds?: string[]
+    starred?: boolean
+    unreadOnly?: boolean
+    limit?: number
+  }) => Promise<ReaderSnapshot | null>
   prefetchEntries: (options?: {
     feedId?: string
     feedIds?: string[]
@@ -312,6 +349,8 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   isLoading: false,
   isLoadingMore: false,
   hasMoreEntries: false,
+  snapshotNextCursor: null,
+  paginationSource: 'entries',
   paginationQueryKey: '',
   paginationOptions: null,
   paginationPageSize: 0,
@@ -346,6 +385,8 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         unreadOnly: normalizedOptions.unreadOnly,
       },
       paginationPageSize: pageSize,
+      paginationSource: 'entries',
+      snapshotNextCursor: null,
     })
 
     const cacheKey = buildListCacheKey(normalizedOptions)
@@ -390,6 +431,65 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     }
   },
 
+  loadSnapshot: async (options) => {
+    const pageSize = Math.max(
+      1,
+      Math.min(options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE),
+    )
+    const normalizedOptions = {
+      feedId: options?.feedId,
+      feedIds: options?.feedIds,
+      starred: options?.starred,
+      unreadOnly: options?.unreadOnly,
+      limit: pageSize,
+    }
+    const queryKey = JSON.stringify({
+      snapshot: true,
+      feedId: normalizedOptions.feedId || '',
+      feedIds: [...(normalizedOptions.feedIds || [])].sort(),
+      starred: !!normalizedOptions.starred,
+      unreadOnly: !!normalizedOptions.unreadOnly,
+      pageSize,
+    })
+    set({
+      isLoading: true,
+      isLoadingMore: false,
+      hasMoreEntries: false,
+      paginationQueryKey: queryKey,
+      paginationOptions: {
+        feedId: normalizedOptions.feedId,
+        feedIds: normalizedOptions.feedIds,
+        starred: normalizedOptions.starred,
+        unreadOnly: normalizedOptions.unreadOnly,
+      },
+      paginationPageSize: pageSize,
+      paginationSource: 'snapshot',
+      snapshotNextCursor: null,
+    })
+
+    try {
+      const snapshot = await window.api.reader.snapshot(
+        buildReaderSnapshotInput(normalizedOptions),
+      )
+      if (get().paginationQueryKey !== queryKey) return null
+      set({
+        entries: cacheEntrySnapshots(
+          sortEntriesByPublishedDesc(snapshot.entries),
+        ),
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: snapshot.nextCursor !== null,
+        snapshotNextCursor: snapshot.nextCursor,
+      })
+      return snapshot
+    } catch {
+      if (get().paginationQueryKey === queryKey) {
+        set({ isLoading: false, isLoadingMore: false })
+      }
+      return null
+    }
+  },
+
   prefetchEntries: async (options) => {
     const cacheKey = buildListCacheKey(options)
     if (getCachedListResult(cacheKey)) return
@@ -420,6 +520,33 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       ),
     )
     if (!baseOptions) return
+
+    if (state.paginationSource === 'snapshot') {
+      const cursor = state.snapshotNextCursor
+      if (!cursor) return
+      set({ isLoadingMore: true })
+      try {
+        const snapshot = await window.api.reader.snapshot(
+          buildReaderSnapshotInput({
+            ...baseOptions,
+            limit: pageSize,
+            cursor,
+          }),
+        )
+        set((current) => ({
+          entries: mergeEntriesById(
+            current.entries,
+            cacheEntrySnapshots(snapshot.entries),
+          ),
+          isLoadingMore: false,
+          hasMoreEntries: snapshot.nextCursor !== null,
+          snapshotNextCursor: snapshot.nextCursor,
+        }))
+      } catch {
+        set({ isLoadingMore: false })
+      }
+      return
+    }
 
     const offset = state.entries.length
     const pageOptions = {
@@ -685,6 +812,8 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       isLoading: true,
       isLoadingMore: false,
       hasMoreEntries: false,
+      snapshotNextCursor: null,
+      paginationSource: 'entries',
       paginationQueryKey: '',
       paginationOptions: null,
       paginationPageSize: 0,

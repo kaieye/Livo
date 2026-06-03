@@ -3,7 +3,7 @@ import type { FeedWithCount } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
 import { useSettingsStore } from './settings-store'
 import { useEntryStore } from './entry-store'
-import { getEntryLoadLimit } from '../lib/entry-load-limit'
+import { buildHomeFeedLoadOptions } from '../lib/home-feed-scope'
 import { shouldUseSocialBackgroundRefresh } from '../../../shared/subscription-intake'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
@@ -18,28 +18,14 @@ async function reloadEntriesForCurrentScope(state: {
   feeds: FeedWithCount[]
 }): Promise<void> {
   const { clearListCache, loadEntries } = useEntryStore.getState()
-  const limit = getEntryLoadLimit(state.activeView)
-  const viewFeedIds =
-    state.activeView !== null
-      ? state.feeds
-          .filter((f) => (f.view ?? FeedViewType.Articles) === state.activeView)
-          .map((f) => f.id)
-      : []
-
   clearListCache()
-  if (state.selectedFeedId === 'starred') {
-    await loadEntries({ starred: true, limit })
-    return
-  }
-  if (state.selectedFeedId) {
-    await loadEntries({ feedId: state.selectedFeedId, limit })
-    return
-  }
-  if (viewFeedIds.length > 0) {
-    await loadEntries({ feedIds: viewFeedIds, limit })
-    return
-  }
-  await loadEntries({ limit })
+  await loadEntries(
+    buildHomeFeedLoadOptions({
+      selectedFeedId: state.selectedFeedId,
+      activeView: state.activeView,
+      feeds: state.feeds,
+    }),
+  )
 }
 
 interface FeedState {

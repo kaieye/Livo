@@ -8,6 +8,8 @@ import type {
   EntryListResult,
   FeedWithCount,
   FeedViewType,
+  ReaderSnapshot,
+  ReaderSnapshotRequest,
   AccountProvider,
   AppUpdateInfo,
   NativeContextMenuItem,
@@ -97,6 +99,11 @@ const api = {
       invokeIpc(IPC.ENTRY_SAVE_LISTEN_PROGRESS, entryId, listenProgress),
     search: (query: string, limit?: number): Promise<Entry[]> =>
       invokeIpc(IPC.ENTRY_SEARCH, query, limit),
+  },
+
+  reader: {
+    snapshot: (input?: ReaderSnapshotRequest): Promise<ReaderSnapshot> =>
+      invokeIpc(IPC.READER_SNAPSHOT, input),
   },
 
   // AI operations

@@ -7,6 +7,7 @@ import type {
   FeedViewType,
   FeverAccount,
   NativeContextMenuItem,
+  ReaderSnapshotRequest,
   SaveTextFileOptions,
 } from './types'
 import type { ActionRule } from './actions'
@@ -31,6 +32,7 @@ export const IPC = {
   ENTRY_MARK_LISTENED: 'entry:mark-listened',
   ENTRY_SAVE_LISTEN_PROGRESS: 'entry:save-listen-progress',
   ENTRY_SEARCH: 'entry:search',
+  READER_SNAPSHOT: 'reader:snapshot',
   AI_SUMMARIZE: 'ai:summarize',
   AI_TRANSLATE: 'ai:translate',
   AI_CHAT: 'ai:chat',
@@ -195,6 +197,7 @@ export type IpcArgsByChannel = {
   [IPC.ENTRY_MARK_LISTENED]: [entryId: string, isListened: boolean]
   [IPC.ENTRY_SAVE_LISTEN_PROGRESS]: [entryId: string, listenProgress: number]
   [IPC.ENTRY_SEARCH]: [query: string, limit?: number]
+  [IPC.READER_SNAPSHOT]: [input?: ReaderSnapshotRequest]
   [IPC.AI_SUMMARIZE]: [content: string, language?: string, requestId?: string]
   [IPC.AI_TRANSLATE]: [
     content: string,
@@ -338,6 +341,13 @@ function assertOptionalString(
   field: string,
 ): asserts value is string | undefined {
   if (value !== undefined) assertString(value, field)
+}
+
+function assertOptionalNullableString(
+  value: unknown,
+  field: string,
+): asserts value is string | null | undefined {
+  if (value !== undefined && value !== null) assertString(value, field)
 }
 
 function assertNumber(value: unknown, field: string): asserts value is number {
@@ -512,6 +522,33 @@ function validateEntryListOptions(value: unknown): void {
   assertOptionalBoolean(value.skipDedupe, 'options.skipDedupe')
 }
 
+function validateReaderSnapshotInput(value: unknown): void {
+  assertOptionalObject(value, 'input')
+  if (value === undefined) return
+  const input = value as Record<string, unknown>
+  assertOptionalNumber(input.limit, 'input.limit')
+  assertOptionalNullableString(input.cursor, 'input.cursor')
+  assertOptionalBoolean(input.unreadOnly, 'input.unreadOnly')
+  assertOptionalBoolean(input.compact, 'input.compact')
+  assertOptionalNumber(input.maxContentLength, 'input.maxContentLength')
+  if (input.scope === undefined) return
+  assertObject(input.scope, 'input.scope')
+  const scope = input.scope
+  assertString(scope.type, 'input.scope.type')
+  if (scope.type === 'feed') {
+    assertString(scope.feedId, 'input.scope.feedId')
+    return
+  }
+  if (scope.type === 'all') {
+    assertOptionalStringArray(scope.feedIds, 'input.scope.feedIds')
+    return
+  }
+  if (scope.type === 'starred') return
+  throw new IpcValidationError('Invalid IPC argument', {
+    'input.scope.type': 'unsupported_scope',
+  })
+}
+
 export const IPC_CONTRACTS = {
   [IPC.FEED_ADD]: {
     channel: IPC.FEED_ADD,
@@ -601,6 +638,14 @@ export const IPC_CONTRACTS = {
       assertString(args[0], 'query')
       assertOptionalNumber(args[1], 'limit')
       return args as IpcArgs<typeof IPC.ENTRY_SEARCH>
+    },
+  },
+  [IPC.READER_SNAPSHOT]: {
+    channel: IPC.READER_SNAPSHOT,
+    validateArgs: (args) => {
+      assertArity(IPC.READER_SNAPSHOT, args, 0, 1)
+      validateReaderSnapshotInput(args[0])
+      return args as IpcArgs<typeof IPC.READER_SNAPSHOT>
     },
   },
   [IPC.AI_SUMMARIZE]: {

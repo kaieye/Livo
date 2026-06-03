@@ -1,8 +1,7 @@
 import { useEffect, type PropsWithChildren } from 'react'
-import { FeedViewType } from '../../../shared/types'
 import { applyAfterReadyCallbacks } from '../initialize/queue'
 import { useInitRecommendedFeeds } from '../hooks/useInitRecommendedFeeds'
-import { getEntryLoadLimit } from '../lib/entry-load-limit'
+import { buildHomeFeedLoadOptions } from '../lib/home-feed-scope'
 import { recordAppMetric } from '../lib/performance-metrics'
 import { useEntryStore } from '../store/entry-store'
 import { useFeedStore } from '../store/feed-store'
@@ -15,30 +14,9 @@ let bootstrapPromise: Promise<void> | null = null
 function reloadEntriesForCurrentScope() {
   const { selectedFeedId, activeView, feeds } = useFeedStore.getState()
   const { loadEntries } = useEntryStore.getState()
-  const limit = getEntryLoadLimit(activeView)
-  const viewFeedIds =
-    activeView !== null
-      ? feeds
-          .filter((feed) => (feed.view ?? FeedViewType.Articles) === activeView)
-          .map((feed) => feed.id)
-      : []
-
-  if (selectedFeedId === 'starred') {
-    void loadEntries({ starred: true, limit })
-    return
-  }
-
-  if (selectedFeedId) {
-    void loadEntries({ feedId: selectedFeedId, limit })
-    return
-  }
-
-  if (viewFeedIds.length > 0) {
-    void loadEntries({ feedIds: viewFeedIds, limit })
-    return
-  }
-
-  void loadEntries({ limit })
+  void loadEntries(
+    buildHomeFeedLoadOptions({ selectedFeedId, activeView, feeds }),
+  )
 }
 
 export function AppBootstrapProvider({ children }: PropsWithChildren) {

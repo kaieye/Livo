@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Entry, EntryListResult } from '../../../shared/types'
+import type {
+  Entry,
+  EntryListResult,
+  FeedWithCount,
+  ReaderSnapshot,
+} from '../../../shared/types'
 
 function makeEntry(partial: Partial<Entry> = {}): Entry {
   return {
@@ -23,10 +28,12 @@ function makeEntry(partial: Partial<Entry> = {}): Entry {
 async function loadEntryStore(options: {
   listResults: EntryListResult[]
   detailResult: Entry
+  snapshotResults?: ReaderSnapshot[]
 }) {
   vi.resetModules()
 
   const listResults = [...options.listResults]
+  const snapshotResults = [...(options.snapshotResults || [])]
   const api = {
     entries: {
       list: vi.fn(
@@ -39,6 +46,14 @@ async function loadEntryStore(options: {
       saveProgress: vi.fn(async () => undefined),
       search: vi.fn(async () => []),
     },
+    reader: {
+      snapshot: vi.fn(async () => {
+        const result =
+          snapshotResults.shift() ?? options.snapshotResults?.at(-1)
+        if (!result) throw new Error('No snapshot result')
+        return result
+      }),
+    },
     feeds: {
       refresh: vi.fn(async () => undefined),
     },
@@ -47,6 +62,18 @@ async function loadEntryStore(options: {
   vi.stubGlobal('window', { api })
   const mod = await import('./entry-store')
   return { useEntryStore: mod.useEntryStore, api }
+}
+
+function makeFeed(partial: Partial<FeedWithCount> = {}): FeedWithCount {
+  return {
+    id: partial.id ?? 'feed-1',
+    title: partial.title ?? 'Feed title',
+    url: partial.url ?? 'https://example.com/feed.xml',
+    view: partial.view ?? 0,
+    errorCount: partial.errorCount ?? 0,
+    createdAt: partial.createdAt ?? 1000,
+    unreadCount: partial.unreadCount ?? 0,
+  }
 }
 
 describe('useEntryStore', () => {
@@ -98,6 +125,68 @@ describe('useEntryStore', () => {
       content: 'full article body',
       isStarred: true,
       readProgress: 45,
+    })
+  })
+
+  it('loads and paginates reader snapshots', async () => {
+    const first = makeEntry({
+      id: 'entry-1',
+      title: 'First',
+      publishedAt: 2000,
+    })
+    const second = makeEntry({
+      id: 'entry-2',
+      title: 'Second',
+      publishedAt: 1000,
+    })
+    const { useEntryStore, api } = await loadEntryStore({
+      listResults: [],
+      detailResult: first,
+      snapshotResults: [
+        {
+          feeds: [makeFeed({ unreadCount: 2 })],
+          entries: [first],
+          counts: {
+            totalFeeds: 1,
+            totalUnread: 2,
+            unreadByFeedId: { 'feed-1': 2 },
+            scopeUnread: 2,
+          },
+          nextCursor: 'cursor-1',
+        },
+        {
+          feeds: [makeFeed({ unreadCount: 2 })],
+          entries: [second],
+          counts: {
+            totalFeeds: 1,
+            totalUnread: 2,
+            unreadByFeedId: { 'feed-1': 2 },
+            scopeUnread: 2,
+          },
+          nextCursor: null,
+        },
+      ],
+    })
+
+    await useEntryStore.getState().loadSnapshot({ limit: 1 })
+    expect(useEntryStore.getState().entries.map((entry) => entry.id)).toEqual([
+      'entry-1',
+    ])
+    expect(useEntryStore.getState().hasMoreEntries).toBe(true)
+
+    await useEntryStore.getState().loadMoreEntries()
+    expect(useEntryStore.getState().entries.map((entry) => entry.id)).toEqual([
+      'entry-1',
+      'entry-2',
+    ])
+    expect(useEntryStore.getState().hasMoreEntries).toBe(false)
+    expect(api.reader.snapshot).toHaveBeenLastCalledWith({
+      scope: { type: 'all', feedIds: undefined },
+      limit: 1,
+      cursor: 'cursor-1',
+      unreadOnly: undefined,
+      compact: true,
+      maxContentLength: 520,
     })
   })
 })

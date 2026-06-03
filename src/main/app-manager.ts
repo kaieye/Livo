@@ -3,6 +3,7 @@ import { join } from 'path'
 import { initDatabase, getDatabase } from './database'
 import { registerFeedHandlers } from './handlers/feed-handlers'
 import { registerEntryHandlers } from './handlers/entry-handlers'
+import { registerReaderHandlers } from './handlers/reader-handlers'
 import { registerAIHandlers } from './handlers/ai-handlers'
 import {
   registerSettingsHandlers,
@@ -151,6 +152,7 @@ export class AppManager {
   private registerIpcHandlers(): void {
     registerFeedHandlers()
     registerEntryHandlers()
+    registerReaderHandlers()
     registerAIHandlers()
     registerSettingsHandlers()
     registerReadabilityHandlers()

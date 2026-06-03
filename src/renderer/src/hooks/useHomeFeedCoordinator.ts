@@ -5,6 +5,10 @@ import { useGeneralSettingKey } from '../store/settings-store'
 import { FeedViewType } from '../../../shared/types'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
+import {
+  buildHomeFeedLoadOptions,
+  computeViewFeedIds,
+} from '../lib/home-feed-scope'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
@@ -85,6 +89,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     isLoadingMore,
     hasMoreEntries,
     loadEntries,
+    loadSnapshot,
     loadMoreEntries,
     clearListCache,
     searchQuery,
@@ -109,45 +114,59 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     [activeView],
   )
 
-  // Compute feed IDs for the active view (excluding recommended feeds)
+  // View-scoped feed IDs for refresh targeting (excludes recommended feeds)
   const viewFeedIds = useMemo(
-    () =>
-      activeView !== null
-        ? feeds
-            .filter(
-              (f) =>
-                (f.view ?? FeedViewType.Articles) === activeView &&
-                f.category !== RECOMMENDED_CATEGORY &&
-                f.showInAll !== false,
-            )
-            .map((f) => f.id)
-        : undefined,
+    () => computeViewFeedIds(feeds, activeView, RECOMMENDED_CATEGORY),
     [feeds, activeView],
   )
 
+  const applySnapshotFeeds = useCallback(
+    (snapshotFeeds: typeof feeds): void => {
+      useFeedStore.setState((state) => {
+        const current = state.feeds
+        const unchanged =
+          current.length === snapshotFeeds.length &&
+          current.every((feed, index) => {
+            const next = snapshotFeeds[index]
+            return (
+              next &&
+              feed.id === next.id &&
+              feed.unreadCount === next.unreadCount &&
+              feed.title === next.title &&
+              feed.category === next.category &&
+              feed.folder === next.folder &&
+              feed.view === next.view &&
+              feed.showInAll === next.showInAll
+            )
+          })
+        return unchanged ? state : { feeds: snapshotFeeds }
+      })
+    },
+    [],
+  )
+
+  const loadCurrentSnapshot = useCallback(async () => {
+    const options = buildHomeFeedLoadOptions({
+      selectedFeedId,
+      activeView,
+      feeds,
+      unreadOnly: filterMode === 'unread',
+    })
+    const snapshot = await loadSnapshot(options)
+    if (snapshot) applySnapshotFeeds(snapshot.feeds)
+  }, [
+    activeView,
+    applySnapshotFeeds,
+    feeds,
+    filterMode,
+    loadSnapshot,
+    selectedFeedId,
+  ])
+
   // Loading entries when feed selection / filter mode changes
   useEffect(() => {
-    if (selectedFeedId === 'starred') {
-      loadEntries({ starred: true, limit: entryLoadLimit })
-    } else if (selectedFeedId) {
-      loadEntries({
-        feedId: selectedFeedId,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      loadEntries({
-        feedIds: viewFeedIds,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else {
-      loadEntries({
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    }
-  }, [selectedFeedId, filterMode, loadEntries, viewFeedIds, entryLoadLimit])
+    void loadCurrentSnapshot()
+  }, [loadCurrentSnapshot])
 
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
@@ -164,27 +183,8 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   const currentFeed = selectedFeedId ? feedById.get(selectedFeedId) : undefined
 
   const reloadCurrentList = useCallback(() => {
-    if (selectedFeedId === 'starred') {
-      loadEntries({ starred: true, limit: entryLoadLimit })
-    } else if (selectedFeedId) {
-      loadEntries({
-        feedId: selectedFeedId,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      loadEntries({
-        feedIds: viewFeedIds,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else {
-      loadEntries({
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    }
-  }, [entryLoadLimit, filterMode, loadEntries, selectedFeedId, viewFeedIds])
+    void loadCurrentSnapshot()
+  }, [loadCurrentSnapshot])
 
   const reloadCurrentListFresh = useCallback(() => {
     clearListCache()

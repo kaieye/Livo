@@ -15,9 +15,29 @@ describe('ipc-contracts', () => {
       'entry-1',
       true,
     ])
+    expect(
+      validateIpcArgs(IPC.READER_SNAPSHOT, [
+        {
+          scope: { type: 'feed', feedId: 'feed-1' },
+          limit: 20,
+          cursor: null,
+          unreadOnly: true,
+        },
+      ]),
+    ).toEqual([
+      {
+        scope: { type: 'feed', feedId: 'feed-1' },
+        limit: 20,
+        cursor: null,
+        unreadOnly: true,
+      },
+    ])
 
     expect(() =>
       validateIpcArgs(IPC.ENTRY_MARK_READ, ['entry-1', 'yes']),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.READER_SNAPSHOT, [{ scope: { type: 'feed' } }]),
     ).toThrow(IpcValidationError)
   })
 
