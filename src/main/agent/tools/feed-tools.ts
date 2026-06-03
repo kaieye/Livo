@@ -15,18 +15,18 @@ import {
   deleteFeed,
   getEntries,
 } from '../../database'
-import { fetchAndParseFeed } from '../../services/rss-parser'
-import { refreshSingleFeed } from '../../services/feed-refresh'
-import { buildEntriesFromParsedItems } from '../../services/entry-builder'
-import { resolveFeedAvatar } from '../../services/feed-avatar'
-import { detectRouteViewFromUrl } from '../../services/feed-view'
-import { formatFeedTitle } from '../../services/feed-title'
+import { fetchAndParseFeed } from '../../services/feed/rss-parser'
+import { refreshSingleFeed } from '../../services/feed/feed-refresh'
+import { buildEntriesFromParsedItems } from '../../services/entry/entry-builder'
+import { resolveFeedAvatar } from '../../services/feed/feed-avatar'
+import { detectRouteViewFromUrl } from '../../services/feed/feed-view'
+import { formatFeedTitle } from '../../services/feed/feed-title'
 import {
   canonicalizeInstagramFeedUrl,
   normalizeFeedUrlNoLimits,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
-} from '../../services/rsshub-url'
+} from '../../services/feed/rsshub-url'
 import { getSettings } from '../../handlers/settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { clampLimit, emptyParams, objectParams } from './schema'

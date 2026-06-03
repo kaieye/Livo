@@ -5,8 +5,8 @@ import {
   linkAccount,
   setManualAccountDisplayName,
   unlinkAccount,
-} from '../services/account-auth'
-import { getBilibiliFollowings } from '../services/bilibili-followings'
+} from '../services/account/account-auth'
+import { getBilibiliFollowings } from '../services/bilibili/bilibili-followings'
 
 const SUPPORTED_PROVIDERS: AccountProvider[] = [
   'youtube',

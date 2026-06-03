@@ -32,7 +32,7 @@ import {
   decodeBasicHtmlEntities,
   extractTwitterDisplayNameFromText,
   isGenericTwitterTitle,
-} from '../main/services/discover-helpers'
+} from '../main/services/discovery/discover-helpers'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
 import { resolveProfileUrlToCandidates } from '../shared/profile-resolver'

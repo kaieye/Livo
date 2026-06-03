@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AIConfig, AgentTool, AgentToolResult } from '../../shared/types'
 import { agentToolRegistryProvider } from './registry-provider'
 
-vi.mock('../services/ai-client', () => ({
+vi.mock('../services/ai/ai-client', () => ({
   createOpenAIClient: vi.fn(),
 }))
 
@@ -23,7 +23,7 @@ vi.mock('./default-tools', () => ({
 }))
 
 import { runAgentCore } from './loop'
-import { createOpenAIClient } from '../services/ai-client'
+import { createOpenAIClient } from '../services/ai/ai-client'
 
 const fakeConfig: AIConfig = {
   provider: 'openai',

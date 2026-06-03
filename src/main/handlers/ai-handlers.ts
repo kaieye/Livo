@@ -1,25 +1,25 @@
 import { registerChannel } from '../ipc/register-channel'
-import { getEventBus } from '../services/event-bus'
+import { getEventBus } from '../services/system/event-bus'
 import OpenAI from 'openai'
 import { IPC } from '../../shared/types'
 import { getSettings } from './settings-handlers'
-import { createOpenAIClient, validateAIConfig } from '../services/ai-client'
-import { judgeSemanticFilter } from '../services/ai-filter'
-import { normalizeAIError } from '../services/provider-protocol'
-import { runWithRetry } from '../services/ai-retry'
-import { ConnectionTestService } from '../services/connection-test'
+import { createOpenAIClient, validateAIConfig } from '../services/ai/ai-client'
+import { judgeSemanticFilter } from '../services/ai/ai-filter'
+import { normalizeAIError } from '../services/ai/provider-protocol'
+import { runWithRetry } from '../services/ai/ai-retry'
+import { ConnectionTestService } from '../services/ai/connection-test'
 import {
   buildSummaryPrompt,
   buildTranslatePrompt,
   clampContentToBudget,
-} from '../services/ai-prompts'
+} from '../services/ai/ai-prompts'
 import {
   buildDigestBatchMessages,
   buildDigestBudgetPlan,
   buildDigestReduceMessages,
   buildDigestRerankMessages,
   selectValidDigestRerankIds,
-} from '../services/ai-digest'
+} from '../services/ai/ai-digest'
 import {
   getDigestWindow,
   listAIDigestRuns,

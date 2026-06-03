@@ -3,7 +3,7 @@ import type {
   AgentRootTab,
   AgentSettingsPanel,
 } from '../../shared/types'
-import { getEventBus } from '../services/event-bus'
+import { getEventBus } from '../services/system/event-bus'
 
 export type { AgentNavigationAction, AgentRootTab, AgentSettingsPanel }
 

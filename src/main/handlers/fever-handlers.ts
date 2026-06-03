@@ -9,8 +9,8 @@ import {
   deleteFeverAccount,
   getFeverSyncState,
 } from '../database'
-import { createFeverClient } from '../services/fever-client'
-import { syncFeverAccount } from '../services/fever-sync'
+import { createFeverClient } from '../services/fever/fever-client'
+import { syncFeverAccount } from '../services/fever/fever-sync'
 import { v4 as uuidv4 } from 'uuid'
 
 export function registerFeverHandlers(): void {

@@ -6,11 +6,11 @@ import type {
   AgentToolResult,
 } from '../../../shared/types'
 import { getAllFeeds, cleanupEntries } from '../../database'
-import { generateOPML } from '../../services/opml-parser'
+import { generateOPML } from '../../services/feed/opml-parser'
 import {
   loadRefreshLogs,
   clearRefreshLogs,
-} from '../../services/refresh-log-store'
+} from '../../services/system/refresh-log-store'
 import { clampLimit, emptyParams, limitParams, objectParams } from './schema'
 import { defineReadTool } from './factories'
 

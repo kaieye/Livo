@@ -14,8 +14,8 @@ import type {
   AgentChatHistoryMessage,
 } from '../../shared/types'
 import { normalizeAgentPermissionSettings } from '../../shared/types'
-import { createOpenAIClient } from '../services/ai-client'
-import { runWithRetry } from '../services/ai-retry'
+import { createOpenAIClient } from '../services/ai/ai-client'
+import { runWithRetry } from '../services/ai/ai-retry'
 import { agentToolResultToText } from './tool-result-text'
 import { agentToolRegistryProvider } from './registry-provider'
 import {

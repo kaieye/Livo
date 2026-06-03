@@ -1,6 +1,6 @@
 import type { Feed } from '../../shared/types'
 import { FeedViewType } from '../../shared/types'
-import { formatFeedTitle } from '../services/feed-title'
+import { formatFeedTitle } from '../services/feed/feed-title'
 
 export function normalizeExistingFeedTitles(feeds: Feed[]): boolean {
   let changed = false

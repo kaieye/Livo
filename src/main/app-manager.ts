@@ -16,26 +16,29 @@ import { registerAccountHandlers } from './handlers/account-handlers'
 import { registerAgentHandlers } from './handlers/agent-handlers'
 import { registerActionHandlers } from './handlers/action-handlers'
 import { registerFeverHandlers } from './handlers/fever-handlers'
-import { startAutoRefresh } from './services/feed-refresh'
-import { startFeverAutoSync, stopFeverAutoSync } from './services/fever-sync'
-import { startAggregatorJobs } from './services/aggregator-jobs'
-import { logError, readRecentLogs } from './services/logger'
+import { startAutoRefresh } from './services/feed/feed-refresh'
+import {
+  startFeverAutoSync,
+  stopFeverAutoSync,
+} from './services/fever/fever-sync'
+import { startAggregatorJobs } from './services/feed/aggregator-jobs'
+import { logError, readRecentLogs } from './services/system/logger'
 import {
   clearApplicationCache,
   getAppCacheDirectoryPath,
   getLogDirectory,
   getUserDataDirectoryPath,
   openDirectory,
-} from './services/app-shell'
-import { applyProxySettings } from './services/proxy'
+} from './services/system/app-shell'
+import { applyProxySettings } from './services/system/proxy'
 import { WindowManager } from './window-manager'
 import { IPC, type NativeContextMenuItem } from '../shared/types'
 import { registerAppMenu } from './menu'
-import { checkForAppUpdates } from './services/update-check'
-import { AppTray } from './services/tray'
-import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili-orphan-recovery'
-import { startCacheMaintenance } from './services/cache-maintenance'
-import { downloadUrlToFile, saveTextFile } from './services/download'
+import { checkForAppUpdates } from './services/system/update-check'
+import { AppTray } from './services/system/tray'
+import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili/bilibili-orphan-recovery'
+import { startCacheMaintenance } from './services/system/cache-maintenance'
+import { downloadUrlToFile, saveTextFile } from './services/system/download'
 import { registerChannel } from './ipc/register-channel'
 
 export class AppManager {

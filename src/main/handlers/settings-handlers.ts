@@ -1,6 +1,6 @@
 import { registerChannel } from '../ipc/register-channel'
 import { app } from 'electron'
-import { getEventBus } from '../services/event-bus'
+import { getEventBus } from '../services/system/event-bus'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { IPC, type AppSettings } from '../../shared/types'
@@ -9,7 +9,7 @@ import {
   mergeSettings,
   normalizeSettings,
 } from '../../shared/settings'
-import { applyProxySettings } from '../services/proxy'
+import { applyProxySettings } from '../services/system/proxy'
 
 let cachedSettings: AppSettings | null = null
 

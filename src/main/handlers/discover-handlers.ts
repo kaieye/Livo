@@ -16,7 +16,7 @@ import {
   formatFollowerCount,
   normalizeXFollowersLabel,
   normalizeNameForMatch,
-} from '../services/discover-helpers'
+} from '../services/discovery/discover-helpers'
 import { FeedViewType, IPC } from '../../shared/types'
 import type {
   DiscoverFeedPreviewEntry,
@@ -29,27 +29,27 @@ import { registerChannel } from '../ipc/register-channel'
 import {
   createInstagramDiscoverCandidate,
   INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS,
-} from '../services/discover-instagram-search'
+} from '../services/discovery/discover-instagram-search'
 import {
   computeMatchTier,
   dedupeAndSortDiscoverResults,
   type DiscoverSearchResult,
-} from '../services/discover-dedupe'
-import { fetchAndParseFeed } from '../services/rss-parser'
-import { formatFeedTitle } from '../services/feed-title'
-import { deriveImageUrl } from '../services/feed-utils'
+} from '../services/discovery/discover-dedupe'
+import { fetchAndParseFeed } from '../services/feed/rss-parser'
+import { formatFeedTitle } from '../services/feed/feed-title'
+import { deriveImageUrl } from '../services/feed/feed-utils'
 import { getSettings } from './settings-handlers'
-import { getYouTubeAccountState } from '../services/account-session'
-import { resolveYouTubeProfileToOfficialFeed } from '../services/youtube-profile-resolver'
+import { getYouTubeAccountState } from '../services/account/account-session'
+import { resolveYouTubeProfileToOfficialFeed } from '../services/discovery/youtube-profile-resolver'
 import {
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
-} from '../services/rsshub-url'
-import { resolveFeedAvatar } from '../services/feed-avatar'
-import { buildEntriesFromParsedItems } from '../services/entry-builder'
-import { detectRouteViewFromUrl } from '../services/feed-view'
+} from '../services/feed/rsshub-url'
+import { resolveFeedAvatar } from '../services/feed/feed-avatar'
+import { buildEntriesFromParsedItems } from '../services/entry/entry-builder'
+import { detectRouteViewFromUrl } from '../services/feed/feed-view'
 import RssParser from 'rss-parser'
 import * as https from 'node:https'
 

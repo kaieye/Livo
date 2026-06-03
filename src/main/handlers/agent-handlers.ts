@@ -8,7 +8,7 @@ import type {
 } from '../agent/loop'
 import { AgentTraceStore } from '../agent/trace-store'
 import { getSettings } from './settings-handlers'
-import { normalizeAIError } from '../services/provider-protocol'
+import { normalizeAIError } from '../services/ai/provider-protocol'
 // Importing default-tools registers the tool builder with the registry provider.
 import '../agent/default-tools'
 

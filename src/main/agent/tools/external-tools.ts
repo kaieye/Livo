@@ -6,7 +6,7 @@ import type {
 import {
   webSearch,
   formatWebSearchResultsForAI,
-} from '../../services/web-search'
+} from '../../services/ai/web-search'
 import { objectParams } from './schema'
 
 export function buildWebSearchTool(): AgentTool {

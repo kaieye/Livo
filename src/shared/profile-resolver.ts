@@ -7,7 +7,7 @@ import {
 import {
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
-} from '../main/services/rsshub-url'
+} from '../main/services/feed/rsshub-url'
 
 function normalizeBaseUrl(input: string): URL | null {
   const trimmed = input.trim()

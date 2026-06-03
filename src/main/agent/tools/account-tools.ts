@@ -8,7 +8,7 @@ import {
   getAccountState,
   linkAccount,
   unlinkAccount,
-} from '../../services/account-auth'
+} from '../../services/account/account-auth'
 import { emptyParams, objectParams } from './schema'
 import { defineReadTool } from './factories'
 

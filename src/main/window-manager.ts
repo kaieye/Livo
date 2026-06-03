@@ -2,7 +2,7 @@ import { BrowserWindow, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import type { AppCommandPayload } from '../shared/types'
-import { logError, logInfo, logWarn } from './services/logger'
+import { logError, logInfo, logWarn } from './services/system/logger'
 
 interface WindowManagerOptions {
   isDev: boolean

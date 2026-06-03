@@ -14,7 +14,7 @@ import { join } from 'path'
 import { writeFileSync, existsSync, mkdirSync } from 'fs'
 import { IPC } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
-import { resolveVideoUrl } from '../services/video-proxy'
+import { resolveVideoUrl } from '../services/video/video-proxy'
 
 /** Mobile Chrome UA - Google shows plain email+password login */
 const MOBILE_UA =

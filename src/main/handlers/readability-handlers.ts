@@ -3,7 +3,7 @@ import { registerChannel } from '../ipc/register-channel'
 import {
   fetchReadableContent,
   resolveRelativeUrls,
-} from '../services/readability'
+} from '../services/entry/readability'
 
 export function registerReadabilityHandlers(): void {
   registerChannel(IPC.READABILITY_FETCH, async (_event, url: string) => {

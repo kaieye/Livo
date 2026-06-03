@@ -11,7 +11,7 @@ import {
   upsertFeverItemMapping,
   type EntryListResult,
 } from '../database'
-import { createFeverClient } from '../services/fever-client'
+import { createFeverClient } from '../services/fever/fever-client'
 
 function feverWriteBack(
   entryId: string,

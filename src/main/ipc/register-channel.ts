@@ -8,7 +8,7 @@ import {
   ipcOk,
   validateIpcArgs,
 } from '../../shared/ipc-contracts'
-import { logError, logWarn } from '../services/logger'
+import { logError, logWarn } from '../services/system/logger'
 
 type IpcHandler<C extends IpcChannel, R> = (
   event: IpcMainInvokeEvent,

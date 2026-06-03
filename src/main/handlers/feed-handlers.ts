@@ -1,5 +1,5 @@
 import { dialog } from 'electron'
-import { getEventBus } from '../services/event-bus'
+import { getEventBus } from '../services/system/event-bus'
 import { v4 as uuidv4 } from 'uuid'
 import { readFileSync, writeFileSync } from 'fs'
 import {
@@ -9,7 +9,7 @@ import {
   type FeedWithCount,
 } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
-import { fetchAndParseFeed } from '../services/rss-parser'
+import { fetchAndParseFeed } from '../services/feed/rss-parser'
 import {
   refreshAllFeeds,
   refreshSingleFeed,
@@ -17,34 +17,34 @@ import {
   getInitialFetchTimeoutMs,
   bootstrapFeedEntries,
   queueBootstrapRefresh,
-} from '../services/feed-refresh'
+} from '../services/feed/feed-refresh'
 import { getSettings } from './settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../shared/discover-data'
-import { parseOPML, generateOPML } from '../services/opml-parser'
-import { getFeedImageUrl } from '../services/feed-utils'
-import { queueVideoDurationEnrich } from '../services/video-duration'
+import { parseOPML, generateOPML } from '../services/feed/opml-parser'
+import { getFeedImageUrl } from '../services/feed/feed-utils'
+import { queueVideoDurationEnrich } from '../services/video/video-duration'
 import {
   getAppCacheDirectoryPath,
   getDirectorySize,
-} from '../services/app-shell'
+} from '../services/system/app-shell'
 import {
   canonicalizeInstagramFeedUrl,
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
-} from '../services/rsshub-url'
+} from '../services/feed/rsshub-url'
 import {
   resolveFeedAvatar,
   getImmediateFeedAvatar,
-} from '../services/feed-avatar'
+} from '../services/feed/feed-avatar'
 import {
   loadRefreshLogs,
   clearRefreshLogs,
-} from '../services/refresh-log-store'
-import { formatFeedTitle } from '../services/feed-title'
-import { buildEntriesFromParsedItems } from '../services/entry-builder'
-import { detectViewType } from '../services/feed-view'
+} from '../services/system/refresh-log-store'
+import { formatFeedTitle } from '../services/feed/feed-title'
+import { buildEntriesFromParsedItems } from '../services/entry/entry-builder'
+import { detectViewType } from '../services/feed/feed-view'
 import {
   inferDiscoverFeedViewFromUrl,
   getWarmupStrategy,

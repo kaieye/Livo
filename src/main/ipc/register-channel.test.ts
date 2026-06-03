@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('../services/logger', () => ({
+vi.mock('../services/system/logger', () => ({
   logError: vi.fn(),
   logWarn: vi.fn(),
 }))
