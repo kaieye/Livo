@@ -41,7 +41,9 @@ import {
 } from '../system/task-contracts'
 import { getLocalTaskRunner } from '../system/task-runner-service'
 import type { TaskRunContext } from '../system/task-runner'
+import { logUserOperation } from '../system/user-operation-log'
 import { ingestParsedFeedEntries } from '../entry/entry-ingestion-pipeline'
+import { USER_OPERATION_KEYS } from '../../../shared/user-operations'
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshGeneration = 0
@@ -326,7 +328,7 @@ export function stopAutoRefresh(): void {
  */
 export async function refreshSingleFeed(
   feed: Feed,
-  options?: { force?: boolean },
+  options?: { force?: boolean; logOperation?: boolean },
 ): Promise<number> {
   const task = getLocalTaskRunner().enqueue(
     FEED_REFRESH_SINGLE_TASK,
@@ -336,13 +338,52 @@ export async function refreshSingleFeed(
     },
     {
       metadata: {
+        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
         feedId: feed.id,
         feedTitle: feed.title,
         force: !!options?.force,
       },
     },
   )
-  return task.promise
+  const shouldLogOperation = options?.logOperation !== false
+  if (shouldLogOperation) {
+    logUserOperation({
+      operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
+      status: 'queued',
+      runId: task.runId,
+      targetId: feed.id,
+      targetLabel: feed.title,
+      details: { force: !!options?.force },
+    })
+  }
+  return task.promise.then(
+    (result) => {
+      if (shouldLogOperation) {
+        logUserOperation({
+          operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
+          status: 'succeeded',
+          runId: task.runId,
+          targetId: feed.id,
+          targetLabel: feed.title,
+          details: { newEntries: result },
+        })
+      }
+      return result
+    },
+    (error) => {
+      if (shouldLogOperation) {
+        logUserOperation({
+          operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
+          status: 'failed',
+          runId: task.runId,
+          targetId: feed.id,
+          targetLabel: feed.title,
+          error,
+        })
+      }
+      throw error
+    },
+  )
 }
 
 async function runRefreshSingleFeed(
@@ -521,9 +562,43 @@ export async function refreshAllFeeds(
     FEED_REFRESH_ALL_TASK,
     { force: !!options.force },
     async (_payload, context) => runRefreshAllFeeds(options, context),
-    { metadata: { force: !!options.force } },
+    {
+      metadata: {
+        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
+        force: !!options.force,
+      },
+    },
   )
-  return task.promise
+  logUserOperation({
+    operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
+    status: 'queued',
+    runId: task.runId,
+    details: { force: !!options.force },
+  })
+  return task.promise.then(
+    (result) => {
+      logUserOperation({
+        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
+        status: 'succeeded',
+        runId: task.runId,
+        details: {
+          refreshedCount: result.refreshedCount,
+          failedCount: result.failedCount,
+          totalNewEntries: result.totalNewEntries,
+        },
+      })
+      return result
+    },
+    (error) => {
+      logUserOperation({
+        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
+        status: 'failed',
+        runId: task.runId,
+        error,
+      })
+      throw error
+    },
+  )
 }
 
 async function runRefreshAllFeeds(
@@ -605,7 +680,7 @@ async function runRefreshAllFeeds(
     staleFeeds,
     concurrency,
     async (feed) => {
-      const newCount = await refreshSingleFeed(feed)
+      const newCount = await refreshSingleFeed(feed, { logOperation: false })
       return newCount
     },
   )

@@ -20,6 +20,10 @@ import {
   buildDigestRerankMessages,
   selectValidDigestRerankIds,
 } from '../services/ai/ai-digest'
+import { AI_DIGEST_GENERATE_TASK } from '../services/system/task-contracts'
+import { getLocalTaskRunner } from '../services/system/task-runner-service'
+import type { TaskRunContext } from '../services/system/task-runner'
+import { logUserOperation } from '../services/system/user-operation-log'
 import {
   getDigestWindow,
   listAIDigestRuns,
@@ -32,6 +36,9 @@ import type {
   AIDigestPreset,
   AISemanticFilterInput,
 } from '../../shared/types'
+import { USER_OPERATION_KEYS } from '../../shared/user-operations'
+
+type AIDigestGenerateInput = { preset?: AIDigestPreset; feedId?: string }
 
 function sendToAllWindows(channel: string, payload: unknown): void {
   getEventBus().send(channel, payload)
@@ -64,6 +71,200 @@ async function requestDigestText(
     },
     { isEmpty: (text) => !text.trim() },
   )
+}
+
+async function generateAIDigest(
+  input?: AIDigestGenerateInput,
+  context?: TaskRunContext,
+): Promise<AIDigestGenerateResult> {
+  const settings = getSettings()
+  const aiConfig = settings.ai
+  const preset = normalizeDigestPreset(input?.preset)
+  const presetLabel = getDigestPresetLabel(preset)
+  const now = Date.now()
+
+  context?.reportProgress({
+    completed: 0,
+    total: 4,
+    message: '筛选候选文章',
+    data: { preset, feedId: input?.feedId },
+  })
+
+  const { windowStartAt, windowEndAt } = getDigestWindow(preset, now)
+  const candidates = listDigestCandidates({
+    preset,
+    feedId: input?.feedId,
+    limit: 80,
+    now,
+  })
+  const run = upsertAIDigestRun({
+    preset,
+    feedId: input?.feedId,
+    title: presetLabel,
+    status: 'running',
+    windowStartAt,
+    windowEndAt,
+    sourceEntryIds: [],
+    candidateCount: candidates.length,
+    content: '',
+    error: undefined,
+  })
+
+  context?.reportProgress({
+    completed: 1,
+    total: 4,
+    message: '候选文章已就绪',
+    data: { preset, feedId: input?.feedId, digestRunId: run.id },
+  })
+
+  if (candidates.length === 0) {
+    const failed = updateAIDigestRun(run.id, {
+      status: 'failed',
+      error: '当前时间窗内没有可用于生成简报的文章',
+    })
+    context?.reportProgress({
+      completed: 4,
+      total: 4,
+      message: '没有可用于生成简报的文章',
+      data: { preset, feedId: input?.feedId, digestRunId: run.id },
+    })
+    return {
+      success: false,
+      error: failed?.error || '当前时间窗内没有可用于生成简报的文章',
+      run: failed || run,
+    }
+  }
+
+  const configError = validateAIConfig(aiConfig)
+  if (configError) {
+    const failed = updateAIDigestRun(run.id, {
+      status: 'failed',
+      error: configError,
+    })
+    context?.reportProgress({
+      completed: 4,
+      total: 4,
+      message: 'AI 配置不可用',
+      data: { preset, feedId: input?.feedId, digestRunId: run.id },
+    })
+    return { success: false, error: configError, run: failed || run }
+  }
+
+  try {
+    const client = createOpenAIClient(aiConfig)
+    const topic = presetLabel
+    const maxIds = Math.min(12, candidates.length)
+    let selectedIds = candidates.slice(0, 1).map((candidate) => candidate.id)
+
+    if (candidates.length > 1) {
+      context?.reportProgress({
+        completed: 2,
+        total: 4,
+        message: '重排候选文章',
+        data: { preset, feedId: input?.feedId, digestRunId: run.id },
+      })
+      const rerankRaw = await requestDigestText(
+        client,
+        aiConfig.model,
+        buildDigestRerankMessages({ topic, candidates, maxIds }),
+        800,
+        0,
+      )
+      const selection = selectValidDigestRerankIds(
+        rerankRaw,
+        candidates.map((candidate) => candidate.id),
+        maxIds,
+      )
+      if (selection.ids.length === 0) {
+        throw new Error('AI 未返回有效候选文章 id')
+      }
+      selectedIds = selection.ids
+    }
+
+    const candidateById = new Map(
+      candidates.map((candidate) => [candidate.id, candidate]),
+    )
+    const selectedCandidates = selectedIds
+      .map((id) => candidateById.get(id))
+      .filter((candidate): candidate is (typeof candidates)[number] =>
+        Boolean(candidate),
+      )
+    const plan = buildDigestBudgetPlan(selectedCandidates, {
+      totalContextChars: 60_000,
+      promptReserveChars: 8_000,
+    })
+    const batchNotes: string[] = []
+
+    context?.reportProgress({
+      completed: 3,
+      total: 4,
+      message: '生成批次摘要',
+      data: {
+        preset,
+        feedId: input?.feedId,
+        digestRunId: run.id,
+        selectedCount: selectedCandidates.length,
+      },
+    })
+
+    for (const batch of plan.batches) {
+      const note = await requestDigestText(
+        client,
+        aiConfig.model,
+        buildDigestBatchMessages({ topic, presetLabel, batch }),
+        1200,
+        0.2,
+      )
+      batchNotes.push(note)
+    }
+
+    const content = await requestDigestText(
+      client,
+      aiConfig.model,
+      buildDigestReduceMessages({
+        topic,
+        presetLabel,
+        windowStartAt,
+        windowEndAt,
+        batchNotes,
+      }),
+      2200,
+      0.3,
+    )
+    const completed = updateAIDigestRun(run.id, {
+      status: 'completed',
+      title: presetLabel,
+      sourceEntryIds: selectedIds,
+      content,
+      error: undefined,
+    })
+
+    context?.reportProgress({
+      completed: 4,
+      total: 4,
+      message: '简报生成完成',
+      data: { preset, feedId: input?.feedId, digestRunId: run.id },
+    })
+
+    return {
+      success: true,
+      run: completed || run,
+      candidates: selectedCandidates,
+    }
+  } catch (error) {
+    const normalized = normalizeAIError(error, aiConfig)
+    const failed = updateAIDigestRun(run.id, {
+      status: 'failed',
+      error: normalized,
+    })
+    context?.reportProgress({
+      completed: 4,
+      total: 4,
+      message: '简报生成失败',
+      data: { preset, feedId: input?.feedId, digestRunId: run.id },
+    })
+    return { success: false, error: normalized, run: failed || run }
+  }
 }
 
 export function registerAIHandlers(): void {
@@ -341,139 +542,58 @@ export function registerAIHandlers(): void {
     IPC.AI_DIGEST_GENERATE,
     async (
       _event,
-      input?: { preset?: AIDigestPreset; feedId?: string },
+      input?: AIDigestGenerateInput,
     ): Promise<AIDigestGenerateResult> => {
-      const settings = getSettings()
-      const aiConfig = settings.ai
       const preset = normalizeDigestPreset(input?.preset)
-      const presetLabel = getDigestPresetLabel(preset)
-      const now = Date.now()
-      const { windowStartAt, windowEndAt } = getDigestWindow(preset, now)
-      const candidates = listDigestCandidates({
-        preset,
-        feedId: input?.feedId,
-        limit: 80,
-        now,
+      const task = getLocalTaskRunner().enqueue(
+        AI_DIGEST_GENERATE_TASK,
+        { preset, feedId: input?.feedId },
+        async (payload, context) =>
+          generateAIDigest(
+            {
+              preset: normalizeDigestPreset(payload.preset),
+              feedId: payload.feedId,
+            },
+            context,
+          ),
+        {
+          metadata: {
+            operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
+            preset,
+            feedId: input?.feedId,
+          },
+        },
+      )
+
+      const settings = getSettings()
+      logUserOperation({
+        operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
+        status: 'queued',
+        runId: task.runId,
+        targetId: input?.feedId,
+        details: { preset },
       })
-      const run = upsertAIDigestRun({
-        preset,
-        feedId: input?.feedId,
-        title: presetLabel,
-        status: 'running',
-        windowStartAt,
-        windowEndAt,
-        sourceEntryIds: [],
-        candidateCount: candidates.length,
-        content: '',
-        error: undefined,
-      })
-
-      if (candidates.length === 0) {
-        const failed = updateAIDigestRun(run.id, {
-          status: 'failed',
-          error: '当前时间窗内没有可用于生成简报的文章',
-        })
-        return {
-          success: false,
-          error: failed?.error || '当前时间窗内没有可用于生成简报的文章',
-          run: failed || run,
-        }
-      }
-
-      const configError = validateAIConfig(aiConfig)
-      if (configError) {
-        const failed = updateAIDigestRun(run.id, {
-          status: 'failed',
-          error: configError,
-        })
-        return { success: false, error: configError, run: failed || run }
-      }
-
       try {
-        const client = createOpenAIClient(aiConfig)
-        const topic = presetLabel
-        const maxIds = Math.min(12, candidates.length)
-        let selectedIds = candidates
-          .slice(0, 1)
-          .map((candidate) => candidate.id)
-
-        if (candidates.length > 1) {
-          const rerankRaw = await requestDigestText(
-            client,
-            aiConfig.model,
-            buildDigestRerankMessages({ topic, candidates, maxIds }),
-            800,
-            0,
-          )
-          const selection = selectValidDigestRerankIds(
-            rerankRaw,
-            candidates.map((candidate) => candidate.id),
-            maxIds,
-          )
-          if (selection.ids.length === 0) {
-            throw new Error('AI 未返回有效候选文章 id')
-          }
-          selectedIds = selection.ids
-        }
-
-        const candidateById = new Map(
-          candidates.map((candidate) => [candidate.id, candidate]),
-        )
-        const selectedCandidates = selectedIds
-          .map((id) => candidateById.get(id))
-          .filter((candidate): candidate is (typeof candidates)[number] =>
-            Boolean(candidate),
-          )
-        const plan = buildDigestBudgetPlan(selectedCandidates, {
-          totalContextChars: 60_000,
-          promptReserveChars: 8_000,
+        const result = await task.promise
+        logUserOperation({
+          operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
+          status: result.success ? 'succeeded' : 'failed',
+          runId: task.runId,
+          targetId: input?.feedId,
+          details: { preset, digestRunId: result.run?.id },
+          error: result.success ? undefined : result.error,
         })
-        const batchNotes: string[] = []
-
-        for (const batch of plan.batches) {
-          const note = await requestDigestText(
-            client,
-            aiConfig.model,
-            buildDigestBatchMessages({ topic, presetLabel, batch }),
-            1200,
-            0.2,
-          )
-          batchNotes.push(note)
-        }
-
-        const content = await requestDigestText(
-          client,
-          aiConfig.model,
-          buildDigestReduceMessages({
-            topic,
-            presetLabel,
-            windowStartAt,
-            windowEndAt,
-            batchNotes,
-          }),
-          2200,
-          0.3,
-        )
-        const completed = updateAIDigestRun(run.id, {
-          status: 'completed',
-          title: presetLabel,
-          sourceEntryIds: selectedIds,
-          content,
-          error: undefined,
-        })
-
-        return {
-          success: true,
-          run: completed || run,
-          candidates: selectedCandidates,
-        }
+        return result
       } catch (error) {
-        const normalized = normalizeAIError(error, aiConfig)
-        const failed = updateAIDigestRun(run.id, {
+        logUserOperation({
+          operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
           status: 'failed',
-          error: normalized,
+          runId: task.runId,
+          targetId: input?.feedId,
+          details: { preset },
+          error,
         })
-        return { success: false, error: normalized, run: failed || run }
+        return { success: false, error: normalizeAIError(error, settings.ai) }
       }
     },
   )
