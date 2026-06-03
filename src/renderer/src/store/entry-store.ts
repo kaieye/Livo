@@ -5,7 +5,7 @@ import type {
   ReaderSnapshot,
   ReaderSnapshotRequest,
 } from '../../../shared/types'
-import { isMirrorHost } from '../../../shared/url-detect'
+import { extractInstagramAssetId } from '../lib/entry-media-url'
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
 const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
@@ -51,55 +51,6 @@ async function fetchAndCacheList(
   return promise
 }
 
-function isPicnobMirrorHost(host: string): boolean {
-  return isMirrorHost(host)
-}
-
-function extractAssetIdFromRaw(input?: string): string {
-  const raw = (input || '').trim()
-  if (!raw) return ''
-  try {
-    const parsed = new URL(raw)
-    const host = parsed.hostname.toLowerCase()
-    if (isPicnobMirrorHost(host) && parsed.pathname === '/get') {
-      const nested = parsed.searchParams.get('url') || ''
-      if (nested) return extractAssetIdFromRaw(nested)
-    }
-    if (
-      (host.includes('pixnoy') ||
-        host.includes('picnob') ||
-        host.includes('pixwox') ||
-        host.includes('piokok')) &&
-      parsed.searchParams.has('o')
-    ) {
-      const encoded = parsed.searchParams.get('o') || ''
-      if (encoded) {
-        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
-        const padded =
-          normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
-        try {
-          const decoded = atob(padded)
-          const nested = decoded.match(/https?:\/\/\S+/i)?.[0] || decoded
-          const fromNested = extractAssetIdFromRaw(nested)
-          if (fromNested) return fromNested
-        } catch {
-          // Ignore.
-        }
-      }
-    }
-    const direct = raw.match(/_(\d{14,})_/)
-    if (direct?.[1]) return direct[1]
-    const decodedUrl = decodeURIComponent(raw)
-    const decodedMatch = decodedUrl.match(/_(\d{14,})_/)
-    if (decodedMatch?.[1]) return decodedMatch[1]
-  } catch {
-    // Ignore parse/decode failures and try direct fallback below.
-  }
-  const direct = raw.match(/_(\d{14,})_/)
-  if (direct?.[1]) return direct[1]
-  return ''
-}
-
 function getEntryClientDedupKey(entry: Entry): string {
   const candidates: string[] = [
     entry.url || '',
@@ -110,7 +61,7 @@ function getEntryClientDedupKey(entry: Entry): string {
   for (const m of entry.media || [])
     candidates.push(m.url || '', m.previewUrl || '')
   for (const s of candidates) {
-    const asset = extractAssetIdFromRaw(s)
+    const asset = extractInstagramAssetId(s)
     if (asset) return `asset:${entry.feedId}:${asset}`
   }
   const title = (entry.title || '').toLowerCase().trim().slice(0, 80)

@@ -75,12 +75,12 @@ export function AIChatRunStatusBar({
   return (
     <div className="flex items-start gap-2 px-4 pb-2">
       {show && items.length > 0 && (
-        <div className="flex-1 space-y-1.5 rounded-xl border bg-surface-secondary/60 px-3 py-2 dark:bg-surface-dark-secondary/60">
+        <div className="bg-surface-secondary/60 dark:bg-surface-dark-secondary/60 flex-1 space-y-1.5 rounded-xl border px-3 py-2">
           {items.map((item) => (
             <div key={item.key}>
               <div className="flex items-center gap-1.5">
                 <StatusIcon status={item.status} />
-                <span className="flex-1 truncate text-[11px] text-text-secondary dark:text-text-dark-secondary">
+                <span className="text-text-secondary dark:text-text-dark-secondary flex-1 truncate text-[11px]">
                   {item.label}
                   {item.status === 'running' ? (
                     <RunningDots />
@@ -89,13 +89,13 @@ export function AIChatRunStatusBar({
                   )}
                 </span>
                 {item.elapsedMs !== undefined && item.elapsedMs > 0 && (
-                  <span className="text-[10px] tabular-nums text-text-tertiary">
+                  <span className="text-text-tertiary text-[10px] tabular-nums">
                     {(item.elapsedMs / 1000).toFixed(1)}s
                   </span>
                 )}
               </div>
               {item.message && item.status !== 'running' && (
-                <div className="ml-[18px] mt-0.5 line-clamp-2 text-[10px] leading-snug text-text-tertiary">
+                <div className="text-text-tertiary ml-[18px] mt-0.5 line-clamp-2 text-[10px] leading-snug">
                   {item.message}
                 </div>
               )}
@@ -104,9 +104,9 @@ export function AIChatRunStatusBar({
         </div>
       )}
       {timerVisible && (
-        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border bg-surface-secondary/60 px-2.5 py-1.5 dark:bg-surface-dark-secondary/60">
+        <div className="bg-surface-secondary/60 dark:bg-surface-dark-secondary/60 flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5">
           <Timer size={11} className="text-accent" />
-          <span className="font-mono text-[11px] tabular-nums text-text-secondary dark:text-text-dark-secondary">
+          <span className="text-text-secondary dark:text-text-dark-secondary font-mono text-[11px] tabular-nums">
             {elapsedLabel}
           </span>
         </div>

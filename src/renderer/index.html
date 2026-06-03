@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -6,12 +6,26 @@
     <title>Livo</title>
     <style>
       /* Titlebar drag region */
-      body { margin: 0; overflow: hidden; }
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
     </style>
   </head>
-  <body class="bg-white dark:bg-surface-dark">
+  <body class="dark:bg-surface-dark bg-white">
     <div id="root">
-      <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#888;">Loading Livo...</div>
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          font-family: sans-serif;
+          color: #888;
+        "
+      >
+        Loading Livo...
+      </div>
     </div>
     <script type="module" src="./src/main.tsx"></script>
   </body>

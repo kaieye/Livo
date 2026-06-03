@@ -48,7 +48,7 @@ export function ShortcutHelpDialog() {
       onClick={close}
     >
       <div
-        className="animate-in flex max-h-[80vh] w-[600px] max-w-[90vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-surface-dark-secondary"
+        className="animate-in dark:bg-surface-dark-secondary flex max-h-[80vh] w-[600px] max-w-[90vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -56,7 +56,7 @@ export function ShortcutHelpDialog() {
           <h2 className="text-base font-semibold">{t('shortcuts.title')}</h2>
           <button
             onClick={close}
-            className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
           >
             <X size={18} />
           </button>
@@ -66,7 +66,7 @@ export function ShortcutHelpDialog() {
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-4">
           {Array.from(groups.entries()).map(([category, shortcuts]) => (
             <div key={category}>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+              <h3 className="text-text-tertiary mb-2 text-xs font-semibold uppercase tracking-wider">
                 {t(`shortcuts.cat_${category}`, {
                   defaultValue: SHORTCUT_CATEGORY_LABELS[category],
                 })}
@@ -75,7 +75,7 @@ export function ShortcutHelpDialog() {
                 {shortcuts.map((s) => (
                   <div
                     key={s.id}
-                    className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+                    className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center justify-between rounded-lg px-2 py-1.5"
                   >
                     <div>
                       <span className="text-sm">
@@ -84,7 +84,7 @@ export function ShortcutHelpDialog() {
                         })}
                       </span>
                       {s.description && (
-                        <span className="ml-2 text-xs text-text-tertiary">
+                        <span className="text-text-tertiary ml-2 text-xs">
                           {t(`shortcuts.desc_${s.id.replace(/-/g, '_')}`, {
                             defaultValue: s.description,
                           })}
@@ -100,7 +100,7 @@ export function ShortcutHelpDialog() {
         </div>
 
         {/* Footer */}
-        <div className="border-t px-6 py-3 text-center text-xs text-text-tertiary">
+        <div className="text-text-tertiary border-t px-6 py-3 text-center text-xs">
           {t('shortcuts.footer', { open: 'Shift+?', close: 'Esc' })
             .split(/(Shift\+\?|Esc)/g)
             .map((part, i) =>
@@ -133,7 +133,7 @@ function KeyCombo({ keys }: { keys: string }) {
       {parts.map((part, i) => {
         if (part === ' then ') {
           return (
-            <span key={i} className="mx-0.5 text-xs text-text-tertiary">
+            <span key={i} className="text-text-tertiary mx-0.5 text-xs">
               {t('shortcuts.then')}
             </span>
           )
@@ -154,7 +154,7 @@ function KeyCombo({ keys }: { keys: string }) {
         return (
           <kbd
             key={i}
-            className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md border border-border bg-surface-secondary px-1.5 font-mono text-[11px] font-medium shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:border-border-dark dark:bg-surface-dark-tertiary"
+            className="border-border bg-surface-secondary dark:border-border-dark dark:bg-surface-dark-tertiary inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md border px-1.5 font-mono text-[11px] font-medium shadow-[0_1px_0_0_rgba(0,0,0,0.05)]"
           >
             {label}
           </kbd>

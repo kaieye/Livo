@@ -42,15 +42,15 @@ export function AISummaryPanel({
 
   return (
     <div
-      className={`animate-in fade-in-0 slide-in-from-top-2 mb-8 rounded-xl border border-accent/15 bg-gradient-to-br from-accent/5 to-accent/10 p-4 transition-all duration-300 ${className}`}
+      className={`animate-in fade-in-0 slide-in-from-top-2 border-accent/15 from-accent/5 to-accent/10 mb-8 rounded-xl border bg-gradient-to-br p-4 transition-all duration-300 ${className}`}
     >
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-accent">
+      <div className="text-accent mb-2 flex items-center gap-2 text-sm font-medium">
         <Sparkles size={16} />
         {t('entry.aiSummaryTitle')}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-text-secondary">
+        <div className="text-text-secondary flex items-center gap-2 text-sm">
           <Loader2 size={14} className="animate-spin" />
           {t('entry.generatingSummary')}
         </div>
@@ -67,7 +67,7 @@ export function AISummaryPanel({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+            className="text-accent hover:bg-accent/10 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
           >
             <RefreshCw size={12} aria-hidden="true" />
             {t('entry.retry')}

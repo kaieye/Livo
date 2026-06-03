@@ -15,8 +15,8 @@ export function TranslationSettings() {
   return (
     <div className="space-y-6">
       {/* Notice */}
-      <div className="rounded-lg border border-accent/20 bg-accent/5 p-3 text-sm">
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+      <div className="border-accent/20 bg-accent/5 rounded-lg border p-3 text-sm">
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
           {t('settings.translationNotice')}
         </p>
       </div>

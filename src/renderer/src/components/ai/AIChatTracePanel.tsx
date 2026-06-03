@@ -65,7 +65,7 @@ export function AIChatTracePanel({ onClose }: Props) {
   }, [])
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-surface-dark">
+    <div className="dark:bg-surface-dark absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-white">
       <div className="flex flex-shrink-0 items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <ListTree size={16} className="text-accent" />
@@ -76,14 +76,14 @@ export function AIChatTracePanel({ onClose }: Props) {
             <>
               <button
                 onClick={() => void clear()}
-                className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
                 title="清空"
               >
                 <Trash2 size={14} />
               </button>
               <button
                 onClick={() => void load()}
-                className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
                 title="刷新"
               >
                 <RotateCw size={14} />
@@ -92,7 +92,7 @@ export function AIChatTracePanel({ onClose }: Props) {
           )}
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
           >
             <X size={14} />
           </button>
@@ -101,15 +101,15 @@ export function AIChatTracePanel({ onClose }: Props) {
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {isLoading ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-text-secondary">
-            <Loader2 size={22} className="animate-spin text-accent" />
+          <div className="text-text-secondary flex flex-col items-center gap-2 py-10">
+            <Loader2 size={22} className="text-accent animate-spin" />
             <span className="text-xs">正在加载执行轨迹</span>
           </div>
         ) : traces.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <ListTree size={28} className="text-text-tertiary" />
             <p className="text-sm font-medium">暂无执行轨迹</p>
-            <p className="text-xs text-text-secondary">
+            <p className="text-text-secondary text-xs">
               完成一次带工具调用的 AI 对话后会出现在这里
             </p>
           </div>
@@ -119,14 +119,14 @@ export function AIChatTracePanel({ onClose }: Props) {
             return (
               <div
                 key={trace.traceId}
-                className="cursor-pointer rounded-xl border bg-surface-secondary/50 p-3 dark:bg-surface-dark-secondary/50"
+                className="bg-surface-secondary/50 dark:bg-surface-dark-secondary/50 cursor-pointer rounded-xl border p-3"
                 onClick={() => setExpandedId(expanded ? '' : trace.traceId)}
               >
                 <div className="flex items-center gap-2 text-[11px]">
                   <span style={{ color: statusColor(trace.status) }}>
                     {statusLabel(trace.status)}
                   </span>
-                  <span className="flex-1 text-text-tertiary">
+                  <span className="text-text-tertiary flex-1">
                     {formatTime(trace.startedAt)}
                   </span>
                   <span className="text-accent">
@@ -143,14 +143,14 @@ export function AIChatTracePanel({ onClose }: Props) {
                 {expanded && (
                   <div className="mt-2 space-y-1.5">
                     {trace.toolCalls.length === 0 ? (
-                      <p className="text-[11px] text-text-tertiary">
+                      <p className="text-text-tertiary text-[11px]">
                         没有工具调用
                       </p>
                     ) : (
                       trace.toolCalls.map((call: AgentTraceToolCall) => (
                         <div
                           key={call.id}
-                          className="rounded-lg bg-surface px-2.5 py-2 dark:bg-surface-dark"
+                          className="bg-surface dark:bg-surface-dark rounded-lg px-2.5 py-2"
                         >
                           <div className="flex items-center gap-2 text-[11px]">
                             <span style={{ color: statusColor(call.status) }}>
@@ -160,13 +160,13 @@ export function AIChatTracePanel({ onClose }: Props) {
                               {aiChatToolLabelOf(call.toolName)}
                             </span>
                             {call.elapsedMs > 0 && (
-                              <span className="tabular-nums text-text-tertiary">
+                              <span className="text-text-tertiary tabular-nums">
                                 {(call.elapsedMs / 1000).toFixed(1)}s
                               </span>
                             )}
                           </div>
                           {call.resultSummary && (
-                            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-text-secondary">
+                            <p className="text-text-secondary mt-1 line-clamp-2 text-[11px] leading-snug">
                               {call.resultSummary}
                             </p>
                           )}

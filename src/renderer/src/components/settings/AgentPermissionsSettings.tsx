@@ -98,21 +98,21 @@ export function AgentPermissionsSettings() {
             {t('settings.agentPermissions')}
           </h4>
         </div>
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
           {t('settings.agentPermissionsDesc')}
         </p>
       </section>
 
       {/* Permission rows */}
-      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface dark:bg-surface-dark-secondary">
+      <div className="divide-border border-border bg-surface dark:bg-surface-dark-secondary divide-y overflow-hidden rounded-xl border">
         {rows.map((row) => (
           <div key={row.key} className="flex items-center gap-3 px-4 py-3.5">
-            <row.icon size={18} className="flex-shrink-0 text-accent" />
+            <row.icon size={18} className="text-accent flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+              <p className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
                 {row.title}
               </p>
-              <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+              <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
                 {row.subtitle}
               </p>
             </div>
@@ -125,7 +125,7 @@ export function AgentPermissionsSettings() {
       </div>
 
       {/* Footer hint */}
-      <p className="dark:text-text-dark-tertiary text-xs text-text-tertiary">
+      <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
         {t('settings.agentPermissionsConfirmHint')}
       </p>
     </div>

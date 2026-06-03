@@ -33,11 +33,7 @@ import {
 } from '../ui/ContextMenu'
 import { VideoPlayer, pauseInlineVideos } from '../ui/VideoPlayer'
 import { blurhashToAverageColor } from '../../lib/blurhash'
-import {
-  getImageProxyFallbackUrls,
-  getThumbnailUrl,
-} from '../../lib/image-proxy'
-import { groupEntriesByDate } from '../../lib/date-groups'
+import { getThumbnailUrl } from '../../lib/image-proxy'
 import { useAsyncSocialDedupe } from '../../hooks/useAsyncSocialDedupe'
 import {
   canonicalizeSocialUrl,
@@ -49,30 +45,33 @@ import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '../../lib/date-locale'
 import {
   isRedundantRichText,
-  normalizeLooseText,
   splitHtmlIntoParagraphs,
 } from '../../lib/entry-text'
 import {
   decodeHtmlEntitiesUrl,
   decodeMediaUrl,
-  extractIgCacheKeyFromUrl,
-  hasTinyDecorativeDimensions,
-  isDecorativeSocialImageUrl,
 } from '../../lib/entry-media-url'
 import {
   cleanSocialPlainText,
   cleanSocialTextHtml,
-  extractImagesFromHtml,
   extractPixnoyOriginUrl,
   getPhotoDedupeKey,
-  getPhotoDedupeKeys,
   isGenericInstagramIconUrl,
-  isLikelyImageByUrl,
-  isRenderableVideoMediaItem,
   normalizeInstagramUnavatar,
   resolveEntryBrowserOpenUrl,
-  withCacheBust,
 } from '../../lib/social-entry-utils'
+import { buildEntryListDerivedModel } from '../../lib/entry-list-model'
+import {
+  advanceCardImageFallback,
+  dedupeGalleryPhotoVariants,
+  findRelatedSocialEntryFallback,
+  getRememberedMediaSrc,
+  isInstagramLikeGalleryPhoto,
+  normalizeImageCacheKey,
+  rememberMediaSrc,
+  resolveGridCardMedia,
+  resolveSocialEntryMediaDecision,
+} from '../../lib/entry-media-decision'
 import {
   CheckCheck,
   Star,
@@ -90,7 +89,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import type { Entry } from '../../../../shared/types'
-import type { MediaItem } from '../../../../shared/types'
 import { ViewRecommendations } from './ViewRecommendations'
 import StarToggle from '../ui/StarToggle'
 
@@ -103,483 +101,15 @@ const SharePoster = lazy(() =>
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
 
-/** Return a copy of the media item with decoded URLs.
- *  previewUrl is intentionally kept as-is (only HTML-entity decoded) so that
- *  mirror/proxy URLs (e.g. picnob/pixnoy) survive for rendering.
- *  decodeMediaUrl would unwrap them to expiring CDN URLs. */
-function decodeMediaUrls(m: MediaItem): MediaItem {
-  return {
-    ...m,
-    url: decodeMediaUrl(m.url),
-    previewUrl: m.previewUrl
-      ? decodeHtmlEntitiesUrl(m.previewUrl)
-      : m.previewUrl,
-  }
-}
-
 // LRU cache for expanded state of social media items
 const expandedCache = new LRUCache<string, boolean>(200)
 const mediaExpandedCache = new LRUCache<string, boolean>(200)
 const tweetTranslationCache = new LRUCache<string, string[]>(100)
 const tweetSummaryCache = new LRUCache<string, string>(100)
-const MEDIA_SRC_CACHE_STORAGE_KEY = 'livo-picture-src-cache-v4'
-const mediaSrcCache = new Map<string, string>()
-let mediaSrcCacheLoaded = false
-let mediaSrcCacheSaveTimer: number | null = null
-
-function normalizeImageCacheKey(url: string): string {
-  const raw = (url || '').trim()
-  if (!raw) return ''
-  try {
-    const u = new URL(raw)
-    // Keep query string: many image providers encode real media identity in search params.
-    // Stripping query causes cross-entry collisions and wrong image reuse.
-    const query = u.search || ''
-    u.hash = ''
-    return `${u.origin}${u.pathname}${query}`
-  } catch {
-    return raw.split('#')[0] || raw
-  }
-}
-
-function getPhotoVariantQualityScore(photo: {
-  url: string
-  previewUrl?: string
-}): number {
-  const rawUrl = decodeMediaUrl(photo.url || '')
-  const rawPreview = decodeMediaUrl(photo.previewUrl || '')
-  const target = rawUrl || rawPreview
-  if (!target) return 0
-
-  let score = 0
-  const lower = target.toLowerCase()
-  if (extractIgCacheKeyFromUrl(rawUrl) || extractIgCacheKeyFromUrl(rawPreview))
-    score += 12
-  if (lower.includes('oh=') && lower.includes('oe=')) score += 8
-  if (lower.includes('&_nc_') || lower.includes('?_nc_')) score += 5
-  if (/cdninstagram|scontent\.|fbcdn\.net/.test(lower)) score += 4
-  if (rawPreview) score += 2
-  score += Math.min(target.length, 2000) / 2000
-  return score
-}
-
-function dedupeGalleryPhotoVariants(
-  photos: Array<{
-    url: string
-    previewUrl?: string
-    width?: number
-    height?: number
-    blurhash?: string
-  }>,
-) {
-  const kept = new Map<
-    string,
-    {
-      photo: {
-        url: string
-        previewUrl?: string
-        width?: number
-        height?: number
-        blurhash?: string
-      }
-      score: number
-      order: number
-    }
-  >()
-  const fallback = new Map<
-    string,
-    {
-      photo: {
-        url: string
-        previewUrl?: string
-        width?: number
-        height?: number
-        blurhash?: string
-      }
-      score: number
-      order: number
-    }
-  >()
-
-  const register = (
-    map: Map<
-      string,
-      {
-        photo: {
-          url: string
-          previewUrl?: string
-          width?: number
-          height?: number
-          blurhash?: string
-        }
-        score: number
-        order: number
-      }
-    >,
-    key: string,
-    payload: {
-      photo: {
-        url: string
-        previewUrl?: string
-        width?: number
-        height?: number
-        blurhash?: string
-      }
-      score: number
-      order: number
-    },
-  ) => {
-    const existing = map.get(key)
-    if (
-      !existing ||
-      payload.score > existing.score ||
-      (payload.score === existing.score && payload.order < existing.order)
-    ) {
-      map.set(key, payload)
-    }
-  }
-
-  for (let index = 0; index < photos.length; index += 1) {
-    const photo = photos[index]
-    const keys = getPhotoDedupeKeys(photo.url || '', photo.previewUrl || '')
-    const payload = {
-      photo,
-      score: getPhotoVariantQualityScore(photo),
-      order: index,
-    }
-    if (keys.length === 0) {
-      const fallbackKey =
-        normalizeImageCacheKey(
-          decodeMediaUrl(photo.url || photo.previewUrl || ''),
-        ) || `idx:${index}`
-      register(fallback, fallbackKey, payload)
-      continue
-    }
-    for (const key of keys) register(kept, key, payload)
-  }
-
-  const merged = [...kept.values(), ...fallback.values()].sort(
-    (a, b) => a.order - b.order,
-  )
-
-  const unique: Array<{
-    url: string
-    previewUrl?: string
-    width?: number
-    height?: number
-    blurhash?: string
-  }> = []
-  const seenOrders = new Set<number>()
-  for (const entry of merged) {
-    if (seenOrders.has(entry.order)) continue
-    seenOrders.add(entry.order)
-    unique.push(entry.photo)
-  }
-
-  return unique
-}
-
-function isInstagramLikeGalleryPhoto(photo: {
-  url: string
-  previewUrl?: string
-}): boolean {
-  const candidate = decodeMediaUrl(
-    photo.url || photo.previewUrl || '',
-  ).toLowerCase()
-  if (!candidate) return false
-  return (
-    candidate.includes('ig_cache_key=') ||
-    /cdninstagram|scontent\.|fbcdn\.net|media\.(?:picnob|pixnoy|piokok|pixwox)\./i.test(
-      candidate,
-    )
-  )
-}
-
-function ensuremediaSrcCacheLoaded(): void {
-  if (mediaSrcCacheLoaded || typeof window === 'undefined') return
-  mediaSrcCacheLoaded = true
-  try {
-    const raw = window.localStorage.getItem(MEDIA_SRC_CACHE_STORAGE_KEY)
-    if (!raw) return
-    const parsed = JSON.parse(raw) as Record<string, string>
-    for (const [k, v] of Object.entries(parsed || {})) {
-      if (k && v) mediaSrcCache.set(k, v)
-    }
-  } catch {
-    // Ignore malformed cache.
-  }
-}
-
-function persistmediaSrcCache(): void {
-  if (typeof window === 'undefined') return
-  if (mediaSrcCacheSaveTimer) window.clearTimeout(mediaSrcCacheSaveTimer)
-  mediaSrcCacheSaveTimer = window.setTimeout(() => {
-    try {
-      const maxEntries = 1500
-      const entries = Array.from(mediaSrcCache.entries())
-      const sliced =
-        entries.length > maxEntries
-          ? entries.slice(entries.length - maxEntries)
-          : entries
-      const obj = Object.fromEntries(sliced)
-      window.localStorage.setItem(
-        MEDIA_SRC_CACHE_STORAGE_KEY,
-        JSON.stringify(obj),
-      )
-    } catch {
-      // Ignore storage failures.
-    }
-  }, 200)
-}
-
-function buildMediaFallbackCandidates(
-  primaryUrl: string,
-  coverUrl: string,
-  mirrorOriginUrl: string,
-): string[] {
-  const proxyFallbacks = getImageProxyFallbackUrls(
-    mirrorOriginUrl || coverUrl || primaryUrl,
-    {
-      width: 1280,
-      quality: 85,
-      format: 'jpg',
-    },
-  )
-  const candidates = [
-    primaryUrl,
-    coverUrl,
-    mirrorOriginUrl,
-    ...proxyFallbacks,
-  ].filter(Boolean)
-  // For Instagram CDN URLs without a working mirror origin, reconstruct a mirror
-  // proxy URL so expired signed CDN URLs can still be served via the mirror cache.
-  const seedForMirror = mirrorOriginUrl || coverUrl || primaryUrl
-  if (
-    seedForMirror &&
-    /cdninstagram\.com|fbcdn\.net|scontent\./i.test(seedForMirror)
-  ) {
-    const mirrorProxy = `https://media.pixnoy.com/get?url=${encodeURIComponent(seedForMirror)}`
-    candidates.push(mirrorProxy)
-  }
-  const unique: string[] = []
-  for (const url of candidates) {
-    if (!/^https?:\/\//i.test(url)) continue
-    const normalized = normalizeImageCacheKey(url)
-    if (
-      !normalized ||
-      unique.some((existing) => normalizeImageCacheKey(existing) === normalized)
-    )
-      continue
-    unique.push(url)
-  }
-  return unique
-}
-
-function advanceCardImageFallback(
-  e: SyntheticEvent<HTMLImageElement>,
-  seedUrl: string,
-  onExhausted?: (img: HTMLImageElement) => void,
-  previewUrl?: string,
-): void {
-  const img = e.currentTarget
-  const normalizedSeed = decodeMediaUrl(seedUrl || '')
-  const originFromMirror =
-    extractPixnoyOriginUrl(seedUrl) || extractPixnoyOriginUrl(normalizedSeed)
-  const candidates = buildMediaFallbackCandidates(
-    img.currentSrc || img.src || normalizedSeed,
-    normalizedSeed || seedUrl,
-    originFromMirror,
-  )
-  // Keep the raw (non-normalized) mirror/proxy URL as a fallback.
-  // normalizePicnobImageUrl() unwraps mirror proxy URLs (picnob/pixnoy) to direct
-  // CDN URLs, but the mirror can still serve images when signed CDN URLs have expired.
-  const rawDecoded = decodeHtmlEntitiesUrl(seedUrl || '')
-  if (
-    rawDecoded &&
-    rawDecoded !== normalizedSeed &&
-    /^https?:\/\//i.test(rawDecoded)
-  ) {
-    const rawKey = normalizeImageCacheKey(rawDecoded)
-    if (
-      rawKey &&
-      !candidates.some((c) => normalizeImageCacheKey(c) === rawKey)
-    ) {
-      candidates.splice(1, 0, rawDecoded)
-    }
-  }
-  // Also try previewUrl (may hold the original mirror proxy URL preserved during feed parsing).
-  if (previewUrl) {
-    const decodedPreview = decodeMediaUrl(previewUrl)
-    for (const pUrl of [previewUrl, decodedPreview]) {
-      if (pUrl && /^https?:\/\//i.test(pUrl)) {
-        const pKey = normalizeImageCacheKey(pUrl)
-        if (
-          pKey &&
-          !candidates.some((c) => normalizeImageCacheKey(c) === pKey)
-        ) {
-          candidates.splice(1, 0, pUrl)
-          // Also add proxy-wrapped mirror URL as a candidate
-          const mirrorProxyFallbacks = getImageProxyFallbackUrls(pUrl, {
-            width: 1280,
-            quality: 85,
-            format: 'jpg',
-          })
-          for (const mpUrl of mirrorProxyFallbacks) {
-            const mpKey = normalizeImageCacheKey(mpUrl)
-            if (
-              mpKey &&
-              !candidates.some((c) => normalizeImageCacheKey(c) === mpKey)
-            ) {
-              candidates.push(mpUrl)
-            }
-          }
-        }
-      }
-    }
-  }
-  const currentKey = normalizeImageCacheKey(img.currentSrc || img.src || '')
-  const currentIdx = candidates.findIndex(
-    (candidate) => normalizeImageCacheKey(candidate) === currentKey,
-  )
-  const nextIdx = currentIdx >= 0 ? currentIdx + 1 : 1
-  if (nextIdx < candidates.length) {
-    img.dataset.fallbackIndex = String(nextIdx)
-    img.src = withCacheBust(candidates[nextIdx])
-    return
-  }
-  onExhausted?.(img)
-}
-
-function getRememberedMediaSrc(coverUrl: string, primaryUrl: string): string {
-  ensuremediaSrcCacheLoaded()
-  const byUrl = mediaSrcCache.get(`url:${normalizeImageCacheKey(coverUrl)}`)
-  if (byUrl) {
-    if (/^https?:\/\/media\.(picnob|pixnoy)\.[^/]+\/get\?/i.test(byUrl)) {
-      mediaSrcCache.delete(`url:${normalizeImageCacheKey(coverUrl)}`)
-    } else {
-      return byUrl
-    }
-  }
-  return primaryUrl
-}
-
-function rememberMediaSrc(coverUrl: string, resolvedSrc: string): void {
-  const src = (resolvedSrc || '').trim()
-  if (!src) return
-  ensuremediaSrcCacheLoaded()
-  const urlKey = normalizeImageCacheKey(coverUrl)
-  if (urlKey) mediaSrcCache.set(`url:${urlKey}`, src)
-  persistmediaSrcCache()
-}
 
 /** Return true when the plain-text summary adds no information beyond the title. */
 function isSummaryRedundant(title: string, summary: string): boolean {
   return isRedundantRichText(title, summary)
-}
-
-function hasVideoMedia(entry: Entry): boolean {
-  if (
-    (entry.media || []).some(
-      (m) => m.type === 'video' && isRenderableVideoMediaItem(m),
-    )
-  )
-    return true
-  const html = `${entry.content || ''}\n${entry.summary || ''}`
-  return /<video\b/i.test(html)
-}
-
-function countRenderableImages(entry: Entry): number {
-  const keys = new Set<string>()
-  for (const media of entry.media || []) {
-    const preview = decodeMediaUrl(media.previewUrl || '')
-    const primary = decodeMediaUrl(media.url || '')
-    if (preview && isLikelyImageByUrl(preview))
-      keys.add(normalizeImageCacheKey(preview))
-    if (primary && isLikelyImageByUrl(primary))
-      keys.add(normalizeImageCacheKey(primary))
-  }
-  const imageUrl = decodeMediaUrl(entry.imageUrl || '')
-  if (imageUrl && isLikelyImageByUrl(imageUrl))
-    keys.add(normalizeImageCacheKey(imageUrl))
-  for (const img of extractImagesFromHtml(
-    entry.content || entry.summary || '',
-  )) {
-    const decoded = decodeMediaUrl(img)
-    if (decoded && isLikelyImageByUrl(decoded))
-      keys.add(normalizeImageCacheKey(decoded))
-  }
-  return keys.size
-}
-
-function collectEntryPostHints(entry: Entry): Set<string> {
-  const hints = new Set<string>()
-  const push = (value: string) => {
-    const key = (value || '').trim()
-    if (key) hints.add(key)
-  }
-  const html = `${entry.content || ''}\n${entry.summary || ''}`
-  const urls = [
-    entry.url || '',
-    entry.imageUrl || '',
-    ...(entry.media || []).flatMap((m) => [m.url || '', m.previewUrl || '']),
-    ...extractImagesFromHtml(html),
-    ...(html.match(/https?:\/\/[^\s"'<>]+/g) || []),
-  ]
-    .map((u) => decodeMediaUrl(u))
-    .filter(Boolean)
-
-  for (const url of urls) {
-    const igCacheKey = extractIgCacheKeyFromUrl(url)
-    const base = decodeURIComponent(igCacheKey).split('.')[0] || ''
-    if (base) push(`igk:${base}`)
-    const shortcode =
-      url.match(/instagram\.com\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)/i)?.[1] || ''
-    if (shortcode) push(`igsc:${shortcode}`)
-  }
-
-  const textKey = normalizeLooseText(
-    `${entry.title || ''} ${cleanSocialPlainText(html)}`,
-  ).slice(0, 180)
-  if (textKey) push(`txt:${textKey}`)
-  return hints
-}
-
-function areStronglySameSocialPost(a: Entry, b: Entry): boolean {
-  if (a.feedId !== b.feedId) return false
-  const delta = Math.abs((a.publishedAt || 0) - (b.publishedAt || 0))
-  if (delta > 7 * 24 * 60 * 60 * 1000) return false
-  const aHints = collectEntryPostHints(a)
-  const bHints = collectEntryPostHints(b)
-  for (const hint of aHints) {
-    if (bHints.has(hint)) return true
-  }
-  return false
-}
-
-function collapseCoverOnlyBeforeVideoEntries(entries: Entry[]): Entry[] {
-  if (entries.length <= 1) return entries
-  const compacted: Entry[] = []
-  const LOOKAHEAD = 8
-  for (let i = 0; i < entries.length; i += 1) {
-    const current = entries[i]
-    const currentIsSingleCover =
-      !hasVideoMedia(current) && countRenderableImages(current) === 1
-    if (currentIsSingleCover) {
-      const upper = Math.min(entries.length - 1, i + LOOKAHEAD)
-      let shouldMergeBackward = false
-      for (let j = i + 1; j <= upper; j += 1) {
-        const candidate = entries[j]
-        if (!hasVideoMedia(candidate)) continue
-        if (areStronglySameSocialPost(current, candidate)) {
-          shouldMergeBackward = true
-          break
-        }
-      }
-      if (shouldMergeBackward) continue
-    }
-    compacted.push(current)
-  }
-  return compacted
 }
 
 /** Clean relative time by stripping verbose locale prefixes like the English "about" prefix. */
@@ -700,62 +230,35 @@ export function EntryList({ width }: { width?: number }) {
   const baseRenderEntries = hasStaleEntriesWhileLoading
     ? entries
     : viewFilteredEntries
-  const renderEntries = useMemo(
-    () =>
-      activeView === FeedViewType.SocialMedia
-        ? collapseCoverOnlyBeforeVideoEntries(baseRenderEntries)
-        : baseRenderEntries,
-    [activeView, baseRenderEntries],
-  )
-  const entryIndexById = useMemo(
-    () =>
-      new Map(renderEntries.map((entry, index) => [entry.id, index] as const)),
-    [renderEntries],
-  )
-  const groupedRenderEntries = useMemo(
-    () => (general.groupByDate ? groupEntriesByDate(renderEntries) : []),
-    [general.groupByDate, renderEntries],
-  )
-  const useVirtualSocialList = activeView === FeedViewType.SocialMedia
-  const socialRows = useMemo(() => {
-    if (!useVirtualSocialList) return []
-    if (general.groupByDate) {
-      return groupedRenderEntries.flatMap((group) => [
-        {
-          key: `header:${group.labelKey}:${group.label}`,
-          type: 'header' as const,
-          labelKey: group.labelKey,
-          label: group.label,
-        },
-        ...group.entries.map((entry) => ({
-          key: entry.id,
-          type: 'entry' as const,
-          entry,
-          entryIndex: entryIndexById.get(entry.id) ?? 0,
-        })),
-      ])
-    }
-    return renderEntries.map((entry, index) => ({
-      key: entry.id,
-      type: 'entry' as const,
-      entry,
-      entryIndex: index,
-    }))
-  }, [
-    entryIndexById,
-    general.groupByDate,
-    groupedRenderEntries,
-    renderEntries,
-    useVirtualSocialList,
-  ])
   const isGridMode = viewDef?.gridMode ?? false
   const listScrollRef = useRef<HTMLDivElement>(null)
   const lastScrollScopeRef = useRef<string>('')
-  const useVirtualLinearList =
-    !isGridMode && activeView !== FeedViewType.SocialMedia
-  const virtualizerEntries = useMemo(
-    () => (useVirtualLinearList ? renderEntries : []),
-    [renderEntries, useVirtualLinearList],
+  const GRID_INITIAL_COUNT = 40
+  const GRID_LOAD_MORE_COUNT = 40
+  const [gridVisibleCount, setGridVisibleCount] = useState(GRID_INITIAL_COUNT)
+  const {
+    renderEntries,
+    socialRows,
+    useVirtualLinearList,
+    virtualizerEntries,
+    gridRows,
+    hasMoreGridEntries,
+  } = useMemo(
+    () =>
+      buildEntryListDerivedModel({
+        baseRenderEntries,
+        activeView,
+        groupByDate: general.groupByDate,
+        isGridMode,
+        gridVisibleCount,
+      }),
+    [
+      activeView,
+      baseRenderEntries,
+      general.groupByDate,
+      gridVisibleCount,
+      isGridMode,
+    ],
   )
   const linearListVirtualizer = useVirtualizer({
     count: virtualizerEntries.length,
@@ -765,10 +268,6 @@ export function EntryList({ width }: { width?: number }) {
     getItemKey: (index) => virtualizerEntries[index]?.id ?? index,
   })
   const virtualItems = linearListVirtualizer.getVirtualItems()
-  // Progressive grid rendering: start with a batch and grow on scroll
-  const GRID_INITIAL_COUNT = 40
-  const GRID_LOAD_MORE_COUNT = 40
-  const [gridVisibleCount, setGridVisibleCount] = useState(GRID_INITIAL_COUNT)
   // Reset visible count when the entries change (e.g. switching feeds/views)
   const gridEntriesKeyRef = useRef('')
   const gridEntriesKey = isGridMode
@@ -779,20 +278,6 @@ export function EntryList({ width }: { width?: number }) {
     if (gridVisibleCount !== GRID_INITIAL_COUNT)
       setGridVisibleCount(GRID_INITIAL_COUNT)
   }
-  const gridEntries = useMemo(() => {
-    if (!isGridMode) return []
-    return renderEntries.slice(0, gridVisibleCount)
-  }, [isGridMode, renderEntries, gridVisibleCount])
-  const hasMoreGridEntries =
-    isGridMode && gridVisibleCount < renderEntries.length
-  const gridRows = useMemo(() => {
-    if (!isGridMode) return []
-    const rows: Entry[][] = []
-    for (let index = 0; index < gridEntries.length; index += 2) {
-      rows.push(gridEntries.slice(index, index + 2))
-    }
-    return rows
-  }, [isGridMode, gridEntries])
   const gridRowVirtualizer = useVirtualizer({
     count: gridRows.length,
     getScrollElement: () => listScrollRef.current,
@@ -1426,51 +911,10 @@ export const GridCard = memo(function GridCard({
   showSummary?: boolean
 }) {
   const { t } = useTranslation()
-  const photoCovers = useMemo(() => {
-    const unique: string[] = []
-    const push = (value: string) => {
-      const candidate = decodeMediaUrl(value || '').trim()
-      if (!candidate || !isLikelyImageByUrl(candidate)) return
-      const key = normalizeImageCacheKey(candidate)
-      if (!key) return
-      if (unique.some((u) => normalizeImageCacheKey(u) === key)) return
-      unique.push(candidate)
-    }
-
-    for (const media of entry.media || []) {
-      if (media.type !== 'photo') continue
-      push(media.previewUrl || '')
-      push(media.url || '')
-      if (unique.length >= 4) break
-    }
-    if (unique.length === 0) push(entry.imageUrl || '')
-    return unique.slice(0, 4)
-  }, [entry.imageUrl, entry.media])
-
-  // Find the best image: first media photo/video, then imageUrl, then YouTube thumbnail from URL
-  const coverUrl = (() => {
-    const fromValidatedPhotos = photoCovers[0] || ''
-    if (fromValidatedPhotos) return fromValidatedPhotos
-
-    const fromMediaCandidates =
-      [
-        ...(entry.media || []).flatMap((media) => [
-          media.previewUrl || '',
-          media.url || '',
-        ]),
-        entry.imageUrl || '',
-      ]
-        .map((value) => decodeMediaUrl(value))
-        .find((value) => !!value && isLikelyImageByUrl(value)) || ''
-    if (fromMediaCandidates) return fromMediaCandidates
-
-    // Derive YouTube thumbnail from entry URL
-    const ytMatch = (entry.url || '').match(
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/,
-    )
-    if (ytMatch) return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`
-    return ''
-  })()
+  const { photoCovers, coverUrl, photoCount } = useMemo(
+    () => resolveGridCardMedia(entry),
+    [entry],
+  )
   const cleanFeedAvatar = useMemo(() => {
     const candidate = normalizeInstagramUnavatar(feedImage || '')
     return candidate && !isGenericInstagramIconUrl(candidate) ? candidate : ''
@@ -1580,13 +1024,11 @@ export const GridCard = memo(function GridCard({
         {!entry.isRead && (
           <div className="bg-accent absolute right-2 top-2 h-2.5 w-2.5 rounded-full" />
         )}
-        {entry.media &&
-          entry.media.filter((m) => m.type === 'photo').length > 1 && (
-            <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
-              {entry.media.filter((m) => m.type === 'photo').length}{' '}
-              {t('entryList.images')}
-            </div>
-          )}
+        {photoCount > 1 && (
+          <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+            {photoCount} {t('entryList.images')}
+          </div>
+        )}
       </div>
 
       {/* Info */}
@@ -1740,194 +1182,31 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     if (cleaned) return cleaned
     return (entry.title || '').trim()
   }, [sanitizedContent, htmlContent, entry.title])
-  const relatedEntryFallback = useMemo(() => {
-    const collectPostKeys = (candidate: Entry): Set<string> => {
-      const keys = new Set<string>()
-      const push = (k: string) => {
-        const value = (k || '').trim()
-        if (!value) return
-        keys.add(value)
-      }
-      const htmlText = `${candidate.content || ''}\n${candidate.summary || ''}`
-      const urls = [
-        candidate.url || '',
-        candidate.imageUrl || '',
-        ...(candidate.media || []).flatMap((m) => [
-          m.url || '',
-          m.previewUrl || '',
-        ]),
-        ...extractImagesFromHtml(htmlText),
-        ...(htmlText.match(/https?:\/\/[^\s"'<>]+/g) || []),
-      ]
-        .map((u) => decodeMediaUrl(u))
-        .filter(Boolean)
-
-      for (const url of urls) {
-        const decoded = decodeMediaUrl(url)
-        const igCacheKey = extractIgCacheKeyFromUrl(decoded)
-        const base64Part = decodeURIComponent(igCacheKey).split('.')[0] || ''
-        if (base64Part) {
-          push(`igk:${base64Part}`)
-          try {
-            const instagramId = atob(base64Part)
-            if (/^\d+$/.test(instagramId)) push(`igid:${instagramId}`)
-          } catch {
-            // ignore
-          }
-        }
-        const shortcodeMatch = decoded.match(
-          /instagram\.com\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)/i,
-        )
-        if (shortcodeMatch?.[1]) push(`igsc:${shortcodeMatch[1]}`)
-      }
-      return keys
-    }
-
-    const currentKeys = collectPostKeys(entry)
-    const currentTextKey = normalizeLooseText(
-      `${entry.title || ''} ${cleanSocialPlainText(entry.content || entry.summary || '')}`,
-    ).slice(0, 180)
-    const minTime = (entry.publishedAt || 0) - 30 * 24 * 60 * 60 * 1000
-    const maxTime = (entry.publishedAt || 0) + 30 * 24 * 60 * 60 * 1000
-
-    const isLikelySamePost = (candidate: Entry): boolean => {
-      if (candidate.id === entry.id) return false
-      if (candidate.feedId !== entry.feedId) return false
-      const ts = candidate.publishedAt || 0
-      if (ts < minTime || ts > maxTime) return false
-
-      const candidateKeys = collectPostKeys(candidate)
-      for (const key of currentKeys) {
-        if (candidateKeys.has(key)) return true
-      }
-      if (currentTextKey) {
-        const candidateTextKey = normalizeLooseText(
-          `${candidate.title || ''} ${cleanSocialPlainText(candidate.content || candidate.summary || '')}`,
-        ).slice(0, 180)
-        if (candidateTextKey && candidateTextKey === currentTextKey) return true
-      }
-      return false
-    }
-
-    const getBestImage = (candidate: Entry): string => {
-      const mediaPhotos = (candidate.media || []).filter(
-        (m) => m.type === 'photo',
-      )
-      for (const photo of mediaPhotos) {
-        const preview = decodeMediaUrl(photo.previewUrl || '')
-        if (preview && isLikelyImageByUrl(preview)) return preview
-        const primary = decodeMediaUrl(photo.url || '')
-        if (primary && isLikelyImageByUrl(primary)) return primary
-      }
-      const entryImage = decodeMediaUrl(candidate.imageUrl || '')
-      if (entryImage && isLikelyImageByUrl(entryImage)) return entryImage
-      const contentImages = extractImagesFromHtml(
-        candidate.content || candidate.summary || '',
-      )
-      const firstValid = contentImages.find((u) => isLikelyImageByUrl(u))
-      return firstValid ? decodeMediaUrl(firstValid) : ''
-    }
-
-    const related = allEntries
-      .filter(isLikelySamePost)
-      .map((candidate) => ({
-        candidate,
-        cover: getBestImage(candidate),
-        distance: Math.abs(
-          (candidate.publishedAt || 0) - (entry.publishedAt || 0),
-        ),
-      }))
-      .sort((a, b) => a.distance - b.distance)
-
-    const withCover = related.find((item) => !!item.cover)
-    if (withCover) return withCover
-    return related[0] || null
-  }, [allEntries, entry])
+  const relatedEntryFallback = useMemo(
+    () => findRelatedSocialEntryFallback(entry, allEntries),
+    [allEntries, entry],
+  )
   const browserOpenUrl = useMemo(
     () =>
       resolveEntryBrowserOpenUrl(entry) ||
       resolveEntryBrowserOpenUrl(relatedEntryFallback?.candidate || entry),
     [entry, relatedEntryFallback],
   )
-  // Folo-style: trust entry.media directly, only filter truly decorative assets and dedup by URL
-  const photos = useMemo(() => {
-    const seen = new Set<string>()
-    const result: Array<{
-      url: string
-      previewUrl?: string
-      width?: number
-      height?: number
-      blurhash?: string
-    }> = []
-    for (const m of entry.media || []) {
-      if (
-        m.type !== 'photo' &&
-        !isLikelyImageByUrl(m.url || m.previewUrl || '')
-      )
-        continue
-      const decoded = decodeMediaUrls(m)
-      if (isDecorativeSocialImageUrl(decoded.url || decoded.previewUrl || ''))
-        continue
-      if (hasTinyDecorativeDimensions(decoded.width, decoded.height)) continue
-      const key = (decoded.url || '').toLowerCase()
-      if (!key || seen.has(key)) continue
-      seen.add(key)
-      result.push(decoded)
-    }
-    if (result.length > 0) return result
-    const fallback = entry.imageUrl ? decodeMediaUrl(entry.imageUrl) : ''
-    return fallback && isLikelyImageByUrl(fallback) ? [{ url: fallback }] : []
-  }, [entry.media, entry.imageUrl])
-  const videos = useMemo(() => {
-    return (entry.media || [])
-      .filter((m) => {
-        if (m.type !== 'video') return false
-        const url = decodeMediaUrl(m.url || '').toLowerCase()
-        const preview = decodeMediaUrl(m.previewUrl || '').toLowerCase()
-        if (isLikelyImageByUrl(url) || isLikelyImageByUrl(preview)) return false
-        return true
-      })
-      .map(decodeMediaUrls)
-      .filter((m) => isRenderableVideoMediaItem(m))
-  }, [entry.media])
+  const { visibleVideos, galleryPhotos, hasMirrorDerivedPhotoContent } =
+    useMemo(
+      () =>
+        resolveSocialEntryMediaDecision({
+          entry,
+          relatedFallbackCover: relatedEntryFallback?.cover,
+        }),
+      [entry, relatedEntryFallback?.cover],
+    )
   const [isMediaExpanded, setIsMediaExpanded] = useState(
     () => mediaExpandedCache.get(entry.id) ?? false,
   )
   useEffect(() => {
     mediaExpandedCache.set(entry.id, isMediaExpanded)
   }, [entry.id, isMediaExpanded])
-  const hasBilibiliPageVideo = useMemo(
-    () =>
-      videos.some((video) =>
-        /(?:^|\.)bilibili\.com\/video\/|(?:^|\.)b23\.tv\//i.test(
-          (video.url || '').toLowerCase(),
-        ),
-      ),
-    [videos],
-  )
-  const visibleVideos = useMemo(() => {
-    if (videos.length === 0) return videos
-    const fallbackPreview =
-      photos[0]?.url || relatedEntryFallback?.cover || entry.imageUrl || ''
-    return videos.map((video) => {
-      const rawPreview = decodeMediaUrl(video.previewUrl || '')
-      const validPreview =
-        rawPreview && isLikelyImageByUrl(rawPreview) ? rawPreview : ''
-      if (validPreview) return { ...video, previewUrl: validPreview }
-      if (!fallbackPreview) return video
-      const fallback = decodeMediaUrl(fallbackPreview)
-      if (!fallback || !isLikelyImageByUrl(fallback)) return video
-      return { ...video, previewUrl: fallback }
-    })
-  }, [videos, photos, relatedEntryFallback, entry.imageUrl])
-  const galleryPhotos = hasBilibiliPageVideo ? [] : photos
-  const hasMirrorDerivedPhotoContent = useMemo(
-    () =>
-      /media\.(?:picnob|pixnoy|piokok|pixwox)\.|sp\d+\.pixnoy\./i.test(
-        `${entry.content || ''}\n${entry.summary || ''}`,
-      ),
-    [entry.content, entry.summary],
-  )
   const visibleGalleryPhotos =
     galleryPhotos.length > 9 && !isMediaExpanded
       ? galleryPhotos.slice(0, 9)

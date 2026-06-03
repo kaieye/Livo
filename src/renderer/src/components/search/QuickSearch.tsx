@@ -213,12 +213,12 @@ export function QuickSearchPanel() {
       onClick={close}
     >
       <div
-        className="animate-in w-[560px] max-w-[90vw] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-surface-dark-secondary"
+        className="animate-in dark:bg-surface-dark-secondary w-[560px] max-w-[90vw] overflow-hidden rounded-2xl border bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input */}
         <div className="flex items-center gap-3 border-b px-4 py-3">
-          <Search size={18} className="flex-shrink-0 text-text-tertiary" />
+          <Search size={18} className="text-text-tertiary flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -226,22 +226,22 @@ export function QuickSearchPanel() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t('quickSearch.placeholder')}
-            className="flex-1 bg-transparent text-sm placeholder:text-text-tertiary focus:outline-none"
+            className="placeholder:text-text-tertiary flex-1 bg-transparent text-sm focus:outline-none"
             autoFocus
           />
           {isSearching && (
-            <Loader2 size={16} className="animate-spin text-accent" />
+            <Loader2 size={16} className="text-accent animate-spin" />
           )}
 
           {/* Type filter */}
-          <div className="flex gap-0.5 rounded-lg bg-surface-secondary p-0.5 dark:bg-surface-dark-tertiary">
+          <div className="bg-surface-secondary dark:bg-surface-dark-tertiary flex gap-0.5 rounded-lg p-0.5">
             {(['all', 'feed', 'entry'] as SearchType[]).map((st) => (
               <button
                 key={st}
                 onClick={() => setSearchType(st)}
                 className={`rounded-md px-2 py-0.5 text-xs transition-colors ${
                   searchType === st
-                    ? 'bg-white font-medium text-accent shadow-sm dark:bg-surface-dark'
+                    ? 'text-accent dark:bg-surface-dark bg-white font-medium shadow-sm'
                     : 'text-text-secondary dark:text-text-dark-secondary'
                 }`}
               >
@@ -256,7 +256,7 @@ export function QuickSearchPanel() {
 
           <button
             onClick={close}
-            className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
           >
             <X size={16} className="text-text-tertiary" />
           </button>
@@ -265,7 +265,7 @@ export function QuickSearchPanel() {
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto">
           {!query.trim() ? (
-            <div className="py-12 text-center text-text-tertiary">
+            <div className="text-text-tertiary py-12 text-center">
               <Command size={32} className="mx-auto mb-2 opacity-40" />
               <p className="text-sm">{t('quickSearch.typeToSearch')}</p>
               <p className="mt-1 text-xs opacity-60">
@@ -273,7 +273,7 @@ export function QuickSearchPanel() {
               </p>
             </div>
           ) : allItems.length === 0 && !isSearching ? (
-            <div className="py-12 text-center text-text-tertiary">
+            <div className="text-text-tertiary py-12 text-center">
               <Search size={32} className="mx-auto mb-2 opacity-40" />
               <p className="text-sm">{t('quickSearch.noResults')}</p>
             </div>
@@ -282,7 +282,7 @@ export function QuickSearchPanel() {
               {/* Feed results */}
               {feedResults.length > 0 && (
                 <>
-                  <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
+                  <div className="text-text-tertiary px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider">
                     {t('quickSearch.feedsSection')}
                   </div>
                   {feedResults.map((feed, i) => {
@@ -307,7 +307,7 @@ export function QuickSearchPanel() {
                             className="h-6 w-6 rounded object-cover"
                           />
                         ) : (
-                          <div className="flex h-6 w-6 items-center justify-center rounded bg-accent/20">
+                          <div className="bg-accent/20 flex h-6 w-6 items-center justify-center rounded">
                             <Rss size={12} className="text-accent" />
                           </div>
                         )}
@@ -316,13 +316,13 @@ export function QuickSearchPanel() {
                             {feed.title}
                           </div>
                           {feed.description && (
-                            <div className="truncate text-xs text-text-tertiary">
+                            <div className="text-text-tertiary truncate text-xs">
                               {feed.description}
                             </div>
                           )}
                         </div>
                         {feed.unreadCount > 0 && (
-                          <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-xs text-text-tertiary dark:bg-surface-dark-tertiary">
+                          <span className="bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary rounded-full px-2 py-0.5 text-xs">
                             {feed.unreadCount}
                           </span>
                         )}
@@ -339,7 +339,7 @@ export function QuickSearchPanel() {
               {/* Entry results */}
               {entryResults.length > 0 && (
                 <>
-                  <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
+                  <div className="text-text-tertiary px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider">
                     {t('quickSearch.articlesSection')}
                   </div>
                   {entryResults.map((entry, i) => {
@@ -365,11 +365,11 @@ export function QuickSearchPanel() {
                       >
                         <FileText
                           size={16}
-                          className="flex-shrink-0 text-text-tertiary"
+                          className="text-text-tertiary flex-shrink-0"
                         />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{entry.title}</div>
-                          <div className="mt-0.5 flex items-center gap-2 text-xs text-text-tertiary">
+                          <div className="text-text-tertiary mt-0.5 flex items-center gap-2 text-xs">
                             {feedTitle && (
                               <span className="max-w-[140px] truncate">
                                 {feedTitle}
@@ -395,7 +395,7 @@ export function QuickSearchPanel() {
 
         {/* Footer */}
         {query.trim() && allItems.length > 0 && (
-          <div className="flex items-center gap-4 border-t px-4 py-2 text-[10px] text-text-tertiary">
+          <div className="text-text-tertiary flex items-center gap-4 border-t px-4 py-2 text-[10px]">
             <span>{t('quickSearch.navHint')}</span>
             <span>{t('quickSearch.openHint')}</span>
             <span>{t('quickSearch.switchTypeHint')}</span>

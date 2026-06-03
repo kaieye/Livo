@@ -298,7 +298,7 @@ export function CommandPalette() {
       onClick={close}
     >
       <div
-        className="w-[560px] max-w-[92vw] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-surface-dark-secondary"
+        className="dark:bg-surface-dark-secondary w-[560px] max-w-[92vw] overflow-hidden rounded-2xl border bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b px-4 py-3">
@@ -312,11 +312,11 @@ export function CommandPalette() {
               setSelectedIndex(0)
             }}
             placeholder="搜索动作..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-tertiary"
+            className="placeholder:text-text-tertiary flex-1 bg-transparent text-sm outline-none"
           />
           <button
             onClick={close}
-            className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
           >
             <X size={16} />
           </button>
@@ -324,13 +324,13 @@ export function CommandPalette() {
 
         <div className="max-h-[52vh] overflow-y-auto py-2">
           {groupedActions.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-text-tertiary">
+            <div className="text-text-tertiary px-4 py-8 text-center text-sm">
               没有匹配的命令
             </div>
           ) : (
             groupedActions.map(([section, sectionActions]) => (
               <div key={section} className="pb-2">
-                <div className="px-4 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
+                <div className="text-text-tertiary px-4 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em]">
                   {section}
                 </div>
                 {sectionActions.map((action) => {
@@ -360,18 +360,18 @@ export function CommandPalette() {
                         {action.isAiFallback && (
                           <Sparkles
                             size={14}
-                            className="shrink-0 text-accent"
+                            className="text-accent shrink-0"
                           />
                         )}
                         <div className="min-w-0">
                           <div className="truncate">{action.title}</div>
-                          <div className="truncate text-xs text-text-tertiary">
+                          <div className="text-text-tertiary truncate text-xs">
                             {action.keywords[0]}
                           </div>
                         </div>
                       </div>
                       {shortcutLabel ? (
-                        <span className="shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] text-text-tertiary dark:border-surface-dark-tertiary">
+                        <span className="border-border text-text-tertiary dark:border-surface-dark-tertiary shrink-0 rounded-md border px-2 py-0.5 text-[11px]">
                           {shortcutLabel}
                         </span>
                       ) : null}
@@ -383,7 +383,7 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div className="border-t px-4 py-2 text-xs text-text-tertiary">
+        <div className="text-text-tertiary border-t px-4 py-2 text-xs">
           使用上下方向键选择，回车执行，Esc 关闭
         </div>
       </div>

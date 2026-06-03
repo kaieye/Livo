@@ -27,13 +27,13 @@ export const SocialAuthorHeader = memo(function SocialAuthorHeader({
           onError={onAvatarError}
         />
       ) : (
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-tertiary text-sm font-bold text-text-secondary dark:bg-surface-dark-tertiary">
+        <div className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold">
           {avatarLetter}
         </div>
       )}
       <div>
         <div className="text-base font-semibold">{authorName}</div>
-        <div className="text-xs text-text-secondary dark:text-text-dark-secondary">
+        <div className="text-text-secondary dark:text-text-dark-secondary text-xs">
           {timeAgo}
         </div>
       </div>

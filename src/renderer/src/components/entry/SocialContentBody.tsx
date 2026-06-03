@@ -32,11 +32,11 @@ export const SocialContentBody = memo(function SocialContentBody({
           return (
             <div
               key={i}
-              className="group border-l-2 border-transparent pl-0 transition-colors hover:border-accent/30 hover:pl-3"
+              className="hover:border-accent/30 group border-l-2 border-transparent pl-0 transition-colors hover:pl-3"
             >
               {para.includes('<') ? (
                 <div
-                  className="entry-content prose !mb-0 max-w-none dark:prose-invert"
+                  className="entry-content prose dark:prose-invert !mb-0 max-w-none"
                   dangerouslySetInnerHTML={{ __html: para }}
                 />
               ) : (
@@ -47,17 +47,17 @@ export const SocialContentBody = memo(function SocialContentBody({
                   <div className="flex items-start gap-2">
                     <Languages
                       size={12}
-                      className="mt-1 flex-shrink-0 text-accent/50"
+                      className="text-accent/50 mt-1 flex-shrink-0"
                     />
                     <div
-                      className="entry-content !mb-0 text-accent/80 dark:text-orange-300/80"
+                      className="entry-content text-accent/80 !mb-0 dark:text-orange-300/80"
                       style={{ fontSize: `${fontSize - 1}px` }}
                       dangerouslySetInnerHTML={{ __html: translated }}
                     />
                   </div>
                 </div>
               ) : isLoading ? (
-                <div className="mb-4 mt-1 flex items-center gap-2 text-xs text-text-tertiary">
+                <div className="text-text-tertiary mb-4 mt-1 flex items-center gap-2 text-xs">
                   <Loader2 size={12} className="animate-spin" />
                   {t('entry.translating')}
                 </div>
@@ -74,7 +74,7 @@ export const SocialContentBody = memo(function SocialContentBody({
   if (fullContent) {
     return (
       <div
-        className="prose max-w-none dark:prose-invert"
+        className="prose dark:prose-invert max-w-none"
         style={{ fontSize: `${fontSize}px` }}
         dangerouslySetInnerHTML={{ __html: fullContent }}
       />

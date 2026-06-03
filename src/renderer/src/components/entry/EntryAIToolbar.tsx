@@ -57,10 +57,10 @@ export function EntryAIToolbar({
         onClick={onSummarize}
         disabled={isSummarizing || disabled}
         title={disabled ? t('entry.configureAIKey') : t('entry.summarize')}
-        className={`rounded-lg p-1.5 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary ${disabled ? 'cursor-default opacity-30' : ''}`}
+        className={`text-text-secondary hover:bg-surface-secondary hover:text-text dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary rounded-lg p-1.5 transition-all duration-150 ${disabled ? 'cursor-default opacity-30' : ''}`}
       >
         {isSummarizing ? (
-          <Loader2 size={16} className="animate-spin text-accent" />
+          <Loader2 size={16} className="text-accent animate-spin" />
         ) : (
           <Sparkles size={16} />
         )}
@@ -78,7 +78,7 @@ export function EntryAIToolbar({
         } ${disabled ? 'cursor-default opacity-30' : ''}`}
       >
         {isTranslating ? (
-          <Loader2 size={16} className="animate-spin text-accent" />
+          <Loader2 size={16} className="text-accent animate-spin" />
         ) : (
           <Languages size={16} />
         )}

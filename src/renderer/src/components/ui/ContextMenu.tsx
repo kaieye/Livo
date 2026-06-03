@@ -174,14 +174,14 @@ export function ContextMenu({ x, y, onClose, actions }: ContextMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="animate-in fade-in zoom-in-95 fixed z-[100] min-w-[200px] overflow-hidden rounded-xl border bg-white shadow-xl duration-100 dark:bg-surface-dark"
+      className="animate-in fade-in zoom-in-95 dark:bg-surface-dark fixed z-[100] min-w-[200px] overflow-hidden rounded-xl border bg-white shadow-xl duration-100"
       style={{ left: pos.x, top: pos.y }}
     >
       <div className="py-1">
         {visibleActions.map((action, i) => (
           <div key={action.id}>
             {action.separator && i > 0 && (
-              <div className="my-1 h-px bg-border dark:bg-surface-dark-tertiary" />
+              <div className="bg-border dark:bg-surface-dark-tertiary my-1 h-px" />
             )}
             <button
               onClick={() => {

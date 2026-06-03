@@ -15,7 +15,7 @@ export function ResizeHandle({
       {/* Invisible wider hit area */}
       <div className="absolute inset-y-0 -left-[3px] w-[6px] cursor-col-resize">
         {/* Visible line on hover / drag */}
-        <div className="absolute inset-y-0 left-[2px] w-[2px] bg-transparent transition-colors group-hover:bg-accent/40 group-active:bg-accent" />
+        <div className="group-hover:bg-accent/40 group-active:bg-accent absolute inset-y-0 left-[2px] w-[2px] bg-transparent transition-colors" />
       </div>
     </div>
   )

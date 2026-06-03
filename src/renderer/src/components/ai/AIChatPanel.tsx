@@ -305,7 +305,7 @@ export function AIChatPanel() {
   return (
     <div
       ref={panelRef}
-      className="animate-in zoom-in-95 slide-in-from-bottom-4 fixed flex flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl duration-200 dark:bg-surface-dark"
+      className="animate-in zoom-in-95 slide-in-from-bottom-4 dark:bg-surface-dark fixed flex flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl duration-200"
       style={{
         zIndex,
         left: pixels.x,
@@ -317,7 +317,7 @@ export function AIChatPanel() {
       {/* Header - Draggable area */}
       <div
         data-drag-handle
-        className="flex flex-shrink-0 cursor-grab select-none items-center justify-between border-b bg-surface-secondary/50 px-4 py-3 active:cursor-grabbing dark:bg-surface-dark-secondary/50"
+        className="bg-surface-secondary/50 dark:bg-surface-dark-secondary/50 flex flex-shrink-0 cursor-grab select-none items-center justify-between border-b px-4 py-3 active:cursor-grabbing"
         onMouseDown={handleHeaderMouseDown}
       >
         <div className="flex items-center gap-2">
@@ -331,7 +331,7 @@ export function AIChatPanel() {
               e.stopPropagation()
               newConversation()
             }}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
             title={t('aiChat.newConversation')}
           >
             <Plus size={14} />
@@ -341,7 +341,7 @@ export function AIChatPanel() {
               e.stopPropagation()
               setShowHistory(true)
             }}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
             title={t('aiChat.history')}
           >
             <History size={14} />
@@ -351,7 +351,7 @@ export function AIChatPanel() {
               e.stopPropagation()
               setShowTrace(true)
             }}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
             title={t('aiChat.trace')}
           >
             <ListTree size={14} />
@@ -361,7 +361,7 @@ export function AIChatPanel() {
               e.stopPropagation()
               clearMessages()
             }}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
             title={t('aiChat.clearChat')}
           >
             <Trash2 size={14} />
@@ -371,7 +371,7 @@ export function AIChatPanel() {
               e.stopPropagation()
               setPanelOpen(false)
             }}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
           >
             <X size={14} />
           </button>
@@ -380,9 +380,9 @@ export function AIChatPanel() {
 
       {/* Context indicator */}
       {selectedEntry && (
-        <div className="flex-shrink-0 truncate border-b bg-accent/5 px-4 py-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <div className="bg-accent/5 text-text-secondary dark:text-text-dark-secondary flex-shrink-0 truncate border-b px-4 py-2 text-xs">
           {t('aiChat.currentlyReading')}:{' '}
-          <span className="font-medium text-text dark:text-text-dark-primary">
+          <span className="text-text dark:text-text-dark-primary font-medium">
             {selectedEntry.title}
           </span>
         </div>
@@ -391,8 +391,8 @@ export function AIChatPanel() {
       {/* Messages */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {messages.length === 0 && !streamingContent && !pendingConfirmation && (
-          <div className="py-8 text-center text-text-secondary dark:text-text-dark-secondary">
-            <Bot size={32} className="mx-auto mb-3 text-text-tertiary" />
+          <div className="text-text-secondary dark:text-text-dark-secondary py-8 text-center">
+            <Bot size={32} className="text-text-tertiary mx-auto mb-3" />
             <p className="text-sm font-medium">{t('aiChat.welcome')}</p>
             <p className="mt-1 text-xs">{t('aiChat.welcomeDesc')}</p>
             <div className="mt-4 space-y-2">
@@ -407,7 +407,7 @@ export function AIChatPanel() {
                     setInput(suggestion)
                     inputRef.current?.focus()
                   }}
-                  className="block w-full rounded-lg bg-surface-secondary px-3 py-2 text-left text-xs transition-colors hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary"
+                  className="bg-surface-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary block w-full rounded-lg px-3 py-2 text-left text-xs transition-colors"
                 >
                   {suggestion}
                 </button>
@@ -432,15 +432,15 @@ export function AIChatPanel() {
               className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}
             >
               {msg.role === 'assistant' && (
-                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/10">
+                <div className="bg-accent/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
                   <Bot size={14} className="text-accent" />
                 </div>
               )}
               <div
                 className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'rounded-br-sm bg-accent text-white'
-                    : 'rounded-bl-sm bg-surface-secondary dark:bg-surface-dark-secondary'
+                    ? 'bg-accent rounded-br-sm text-white'
+                    : 'bg-surface-secondary dark:bg-surface-dark-secondary rounded-bl-sm'
                 }`}
               >
                 {msg.role === 'assistant' ? (
@@ -461,12 +461,12 @@ export function AIChatPanel() {
         {/* Streaming content (typewriter) */}
         {streamingContent && (
           <div className="flex gap-2.5">
-            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/10">
+            <div className="bg-accent/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
               <Bot size={14} className="text-accent" />
             </div>
-            <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-surface-secondary px-3 py-2 text-sm leading-relaxed dark:bg-surface-dark-secondary">
+            <div className="bg-surface-secondary dark:bg-surface-dark-secondary max-w-[85%] rounded-xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed">
               <p className="whitespace-pre-wrap">{streamingContent}</p>
-              <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent/50" />
+              <span className="bg-accent/50 ml-0.5 inline-block h-4 w-1.5 animate-pulse" />
             </div>
           </div>
         )}
@@ -487,11 +487,11 @@ export function AIChatPanel() {
           !showToolBanner &&
           !pendingConfirmation && (
             <div className="flex gap-2.5">
-              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/10">
+              <div className="bg-accent/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
                 <Bot size={14} className="text-accent" />
               </div>
-              <div className="rounded-xl rounded-bl-sm bg-surface-secondary px-3 py-2 dark:bg-surface-dark-secondary">
-                <Loader2 size={16} className="animate-spin text-accent" />
+              <div className="bg-surface-secondary dark:bg-surface-dark-secondary rounded-xl rounded-bl-sm px-3 py-2">
+                <Loader2 size={16} className="text-accent animate-spin" />
               </div>
             </div>
           )}
@@ -518,7 +518,7 @@ export function AIChatPanel() {
             placeholder={t('aiChat.inputPlaceholder')}
             rows={1}
             disabled={!!pendingConfirmation}
-            className="max-h-[120px] flex-1 resize-none rounded-lg border bg-surface-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50 dark:bg-surface-dark-secondary"
+            className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary max-h-[120px] flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:opacity-50"
             style={{
               height: 'auto',
               minHeight: '36px',
@@ -533,7 +533,7 @@ export function AIChatPanel() {
             <button
               type="button"
               onClick={stop}
-              className="self-end rounded-lg bg-surface-secondary p-2 text-text-secondary transition-colors hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary"
+              className="bg-surface-secondary text-text-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary self-end rounded-lg p-2 transition-colors"
               title={t('aiChat.stop')}
             >
               <Square size={16} />
@@ -542,7 +542,7 @@ export function AIChatPanel() {
             <button
               type="submit"
               disabled={!input.trim() || !!pendingConfirmation}
-              className="self-end rounded-lg bg-accent p-2 text-white transition-colors hover:bg-accent-hover disabled:opacity-40"
+              className="bg-accent hover:bg-accent-hover self-end rounded-lg p-2 text-white transition-colors disabled:opacity-40"
             >
               <Send size={16} />
             </button>
@@ -567,7 +567,7 @@ export function AIChatPanel() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            className="h-full w-full text-text-tertiary"
+            className="text-text-tertiary h-full w-full"
           >
             <path
               d="M21 15l-6-6M21 9l-2-2"

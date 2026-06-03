@@ -98,7 +98,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
     <>
       {segments.map((segment, i) =>
         segment.matched ? (
-          <mark key={i} className="bg-transparent font-semibold text-accent">
+          <mark key={i} className="text-accent bg-transparent font-semibold">
             {segment.text}
           </mark>
         ) : (
@@ -179,7 +179,7 @@ export const HomeInlineSearch = memo(function HomeInlineSearch({
       <form onSubmit={onSubmit} className="relative">
         <Search
           size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+          className="text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2"
         />
         <input
           type="text"
@@ -194,13 +194,13 @@ export const HomeInlineSearch = memo(function HomeInlineSearch({
             }
           }}
           placeholder={placeholder ?? t('entryList.searchArticles')}
-          className="w-full rounded-lg border bg-surface-secondary py-1.5 pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary w-full rounded-lg border py-1.5 pl-8 pr-8 text-sm focus:outline-none focus:ring-2"
         />
         {query && (
           <button
             type="button"
             onClick={() => onQueryChange('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-text-tertiary hover:bg-surface-tertiary hover:text-text-secondary dark:hover:bg-surface-dark-tertiary"
+            className="text-text-tertiary hover:bg-surface-tertiary hover:text-text-secondary dark:hover:bg-surface-dark-tertiary absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5"
             title={t('common.clear')}
             aria-label={t('common.clear')}
           >
@@ -210,7 +210,7 @@ export const HomeInlineSearch = memo(function HomeInlineSearch({
       </form>
 
       {showOverlay && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-[60vh] overflow-y-auto rounded-xl border border-surface-secondary bg-white shadow-lg dark:border-surface-dark-tertiary dark:bg-surface-dark">
+        <div className="border-surface-secondary dark:border-surface-dark-tertiary dark:bg-surface-dark absolute left-0 right-0 top-full z-30 mt-1.5 max-h-[60vh] overflow-y-auto rounded-xl border bg-white shadow-lg">
           {results.length > 0 ? (
             <ul className="p-1.5">
               {results.map((entry) => {
@@ -226,7 +226,7 @@ export const HomeInlineSearch = memo(function HomeInlineSearch({
                         e.preventDefault()
                         handleSelect(entry)
                       }}
-                      className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+                      className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary w-full rounded-lg px-3 py-2 text-left transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="line-clamp-2 text-sm font-semibold leading-snug">
@@ -236,13 +236,13 @@ export const HomeInlineSearch = memo(function HomeInlineSearch({
                           />
                         </span>
                         {subtitle && (
-                          <span className="flex-shrink-0 truncate text-[11px] text-text-tertiary">
+                          <span className="text-text-tertiary flex-shrink-0 truncate text-[11px]">
                             {subtitle}
                           </span>
                         )}
                       </div>
                       {snippet && (
-                        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-text-secondary dark:text-text-dark-secondary">
+                        <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 line-clamp-2 text-xs leading-snug">
                           <HighlightedText text={snippet} query={normalized} />
                         </p>
                       )}
@@ -256,7 +256,7 @@ export const HomeInlineSearch = memo(function HomeInlineSearch({
               <p className="text-sm font-medium">
                 {t('entryList.inlineSearchEmptyTitle')}
               </p>
-              <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+              <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
                 {t('entryList.inlineSearchEmptyHint')}
               </p>
             </div>

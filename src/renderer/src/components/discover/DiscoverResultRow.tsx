@@ -139,7 +139,7 @@ export function DiscoverResultRow({
       tabIndex={0}
       onClick={onOpenPreview}
       onKeyDown={handleRowKeyDown}
-      className="group flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-3.5 transition-all duration-200 hover:border-accent/30 hover:bg-surface-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary/50"
+      className="hover:border-accent/30 hover:bg-surface-secondary/50 focus:ring-accent/50 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary/50 group flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-3.5 transition-all duration-200 focus:outline-none focus:ring-2"
     >
       {/* Avatar */}
       {avatarSrc ? (
@@ -167,7 +167,7 @@ export function DiscoverResultRow({
           }}
         />
       ) : (
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10">
+        <div className="bg-accent/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
           <Rss size={16} className="text-accent" />
         </div>
       )}
@@ -199,20 +199,20 @@ export function DiscoverResultRow({
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
           {displayFollowers && (
-            <span className="flex-shrink-0 text-xs font-medium text-text-secondary dark:text-text-dark-secondary">
+            <span className="text-text-secondary dark:text-text-dark-secondary flex-shrink-0 text-xs font-medium">
               {displayFollowers}
             </span>
           )}
           {displayFollowers && displayDescription && (
             <span
               aria-hidden="true"
-              className="flex-shrink-0 text-xs text-text-tertiary"
+              className="text-text-tertiary flex-shrink-0 text-xs"
             >
               ·
             </span>
           )}
           {displayDescription && (
-            <p className="truncate text-xs text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary truncate text-xs">
               {displayDescription}
             </p>
           )}
@@ -230,7 +230,7 @@ export function DiscoverResultRow({
             // The native target="_blank" handles opening the new tab.
             event.stopPropagation()
           }}
-          className="rounded-lg p-1.5 text-text-tertiary opacity-0 transition-colors hover:bg-surface-secondary hover:text-text-secondary focus:opacity-100 group-hover:opacity-100 dark:hover:bg-surface-dark-tertiary"
+          className="text-text-tertiary hover:bg-surface-secondary hover:text-text-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100"
           title={t('discover.viewSource')}
         >
           <ExternalLink size={14} />
@@ -242,7 +242,7 @@ export function DiscoverResultRow({
           className={`group/btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
             subscribed
               ? 'bg-green-100 text-green-600 hover:bg-red-100 hover:text-red-600 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
-              : 'bg-accent text-white hover:bg-accent-hover active:scale-95'
+              : 'bg-accent hover:bg-accent-hover text-white active:scale-95'
           } disabled:cursor-default disabled:opacity-70`}
         >
           {subscribing ? (

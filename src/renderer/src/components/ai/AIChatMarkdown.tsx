@@ -62,7 +62,7 @@ export function AIChatMarkdown({ content }: AIChatMarkdownProps) {
   }
 
   return (
-    <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-text prose-p:my-1.5 prose-a:cursor-pointer prose-a:text-accent prose-a:underline prose-code:rounded prose-code:bg-surface-tertiary prose-code:px-1 prose-code:py-0.5 prose-code:font-mono prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-lg prose-pre:border prose-pre:border-border prose-pre:bg-surface-secondary prose-li:my-0.5 prose-headings:dark:text-text-dark-primary prose-pre:dark:border-border-dark prose-pre:dark:bg-surface-dark-secondary">
+    <div className="prose prose-sm dark:prose-invert prose-headings:text-text prose-p:my-1.5 prose-a:cursor-pointer prose-a:text-accent prose-a:underline prose-code:rounded prose-code:bg-surface-tertiary prose-code:px-1 prose-code:py-0.5 prose-code:font-mono prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-lg prose-pre:border prose-pre:border-border prose-pre:bg-surface-secondary prose-li:my-0.5 prose-headings:dark:text-text-dark-primary prose-pre:dark:border-border-dark prose-pre:dark:bg-surface-dark-secondary max-w-none">
       <ReactMarkdown components={components}>{content}</ReactMarkdown>
     </div>
   )

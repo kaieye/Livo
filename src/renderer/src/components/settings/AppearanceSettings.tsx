@@ -94,7 +94,7 @@ export function AppearanceSettings() {
               }}
               className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
                 general.theme === theme.key
-                  ? 'border-accent bg-accent/5 font-medium text-accent'
+                  ? 'border-accent bg-accent/5 text-accent font-medium'
                   : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
               }`}
             >
@@ -118,7 +118,7 @@ export function AppearanceSettings() {
               }
               className={`h-8 w-8 rounded-full border-2 transition-all ${
                 general.accentColor === ac.name
-                  ? 'scale-110 border-text ring-2 ring-offset-2 ring-offset-white dark:ring-offset-surface-dark'
+                  ? 'border-text dark:ring-offset-surface-dark scale-110 ring-2 ring-offset-2 ring-offset-white'
                   : 'border-transparent hover:scale-105'
               }`}
               style={{
@@ -134,7 +134,7 @@ export function AppearanceSettings() {
           <label
             className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 transition-all ${
               isCustomAccent
-                ? 'scale-110 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-surface-dark'
+                ? 'dark:ring-offset-surface-dark scale-110 ring-2 ring-offset-2 ring-offset-white'
                 : 'border-transparent hover:scale-105'
             }`}
             style={{
@@ -164,7 +164,7 @@ export function AppearanceSettings() {
 
         {isCustomAccent && (
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {t('settings.accentColor_custom')}
             </span>
             <input
@@ -177,7 +177,7 @@ export function AppearanceSettings() {
                 }
               }}
               spellCheck={false}
-              className="w-28 rounded-lg border bg-surface-secondary px-2.5 py-1.5 font-mono text-xs uppercase focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+              className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-28 rounded-lg border px-2.5 py-1.5 font-mono text-xs uppercase focus:outline-none focus:ring-2"
             />
           </div>
         )}
@@ -198,9 +198,9 @@ export function AppearanceSettings() {
               fontSize: Number(e.target.value),
             })
           }
-          className="w-full accent-accent"
+          className="accent-accent w-full"
         />
-        <div className="mt-1 flex justify-between text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1 flex justify-between text-xs">
           <span>12px</span>
           <span>24px</span>
         </div>
@@ -218,7 +218,7 @@ export function AppearanceSettings() {
               uiFontFamily: e.target.value,
             })
           }
-          className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
         >
           {fontFamilyOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -226,7 +226,7 @@ export function AppearanceSettings() {
             </option>
           ))}
         </select>
-        <p className="mt-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mt-1.5 text-xs">
           {t('settings.uiFontFamilyDesc')}
         </p>
       </div>
@@ -243,7 +243,7 @@ export function AppearanceSettings() {
               contentFontFamily: e.target.value,
             })
           }
-          className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
           style={{ fontFamily: general.contentFontFamily }}
         >
           {fontFamilyOptions.map((option) => (
@@ -253,7 +253,7 @@ export function AppearanceSettings() {
           ))}
         </select>
         <div
-          className="mt-2 rounded-lg bg-surface-secondary p-3 text-sm dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary dark:bg-surface-dark-tertiary mt-2 rounded-lg p-3 text-sm"
           style={{
             fontFamily: general.contentFontFamily,
             fontSize: `${general.fontSize}px`,
@@ -280,7 +280,7 @@ export function AppearanceSettings() {
               }}
               className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
                 general.contentWidth === option.key
-                  ? 'border-accent bg-accent/5 font-medium text-accent'
+                  ? 'border-accent bg-accent/5 text-accent font-medium'
                   : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
               }`}
               title={t(option.descKey)}
@@ -289,7 +289,7 @@ export function AppearanceSettings() {
             </button>
           ))}
         </div>
-        <p className="mt-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mt-1.5 text-xs">
           {t('settings.contentWidthDesc')}
         </p>
       </div>
@@ -311,15 +311,15 @@ export function AppearanceSettings() {
                 contentMaxWidth: Number(e.target.value),
               })
             }
-            className="w-full accent-accent"
+            className="accent-accent w-full"
           />
-          <div className="mt-1 flex justify-between text-xs text-text-tertiary">
+          <div className="text-text-tertiary mt-1 flex justify-between text-xs">
             <span>400px ({t('settings.contentMaxWidth_narrow')})</span>
             <span>1400px ({t('settings.contentMaxWidth_wide')})</span>
           </div>
-          <div className="relative mt-3 h-4 overflow-hidden rounded bg-surface-secondary dark:bg-surface-dark-tertiary">
+          <div className="bg-surface-secondary dark:bg-surface-dark-tertiary relative mt-3 h-4 overflow-hidden rounded">
             <div
-              className="h-full rounded bg-accent/30 transition-all duration-200"
+              className="bg-accent/30 h-full rounded transition-all duration-200"
               style={{
                 width: `${((general.contentMaxWidth || 680) / 1400) * 100}%`,
               }}
@@ -344,14 +344,14 @@ export function AppearanceSettings() {
               contentLineHeight: Number(e.target.value),
             })
           }
-          className="w-full accent-accent"
+          className="accent-accent w-full"
         />
-        <div className="mt-1 flex justify-between text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1 flex justify-between text-xs">
           <span>1.0 ({t('settings.lineHeight_compact')})</span>
           <span>2.5 ({t('settings.lineHeight_loose')})</span>
         </div>
         <div
-          className="mt-3 rounded-lg bg-surface-secondary p-3 text-sm dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary dark:bg-surface-dark-tertiary mt-3 rounded-lg p-3 text-sm"
           style={{ lineHeight: general.contentLineHeight }}
         >
           Livo is an elegant RSS reader with multiple view modes. The quick
@@ -365,7 +365,7 @@ export function AppearanceSettings() {
           <label className="text-sm font-medium">
             {t('settings.reduceMotion')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.reduceMotionDesc')}
           </p>
         </div>
@@ -383,7 +383,7 @@ export function AppearanceSettings() {
           <label className="text-sm font-medium">
             {t('settings.opaqueSidebar')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.opaqueSidebarDesc')}
           </p>
         </div>
@@ -400,7 +400,7 @@ export function AppearanceSettings() {
         <label className="mb-1.5 block text-sm font-medium">
           {t('settings.customCSS')}
         </label>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.customCSSDesc')}
         </p>
         <textarea
@@ -409,7 +409,7 @@ export function AppearanceSettings() {
             void updateSettingsSection('general', { customCSS: e.target.value })
           }
           placeholder={`${t('settings.customCSSPlaceholder')}\n.entry-content {\n  /* your styles */\n}`}
-          className="w-full resize-y rounded-lg border bg-surface-secondary px-3 py-2.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full resize-y rounded-lg border px-3 py-2.5 font-mono text-sm focus:outline-none focus:ring-2"
           rows={5}
         />
       </div>

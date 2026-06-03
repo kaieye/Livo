@@ -41,24 +41,24 @@ export function AboutSettings() {
     <div className="space-y-6">
       {/* Logo and name */}
       <div className="py-4 text-center">
-        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-accent/10">
+        <div className="bg-accent/10 mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl">
           <Rss size={36} className="text-accent" />
         </div>
         <h2 className="text-xl font-bold">Livo</h2>
-        <p className="mt-1 text-sm text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
           {t('settings.version')} {version || '1.0.0'}
         </p>
       </div>
 
-      <div className="space-y-3 rounded-xl border bg-surface-secondary p-4 dark:bg-surface-dark-tertiary">
+      <div className="bg-surface-secondary dark:bg-surface-dark-tertiary space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">{t('settings.checkUpdates')}</p>
-            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {t('settings.currentVersionLabel')}: {version || '1.0.0'}
             </p>
             {lastCheckedAt ? (
-              <p className="text-xs text-text-tertiary">
+              <p className="text-text-tertiary text-xs">
                 最近检查：{new Date(lastCheckedAt).toLocaleString()}
               </p>
             ) : null}
@@ -92,7 +92,7 @@ export function AboutSettings() {
                   : t('settings.updateUnavailable')}
             </p>
             {!updateInfo.error && (
-              <div className="space-y-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+              <div className="text-text-secondary dark:text-text-dark-secondary space-y-1 text-xs">
                 <p>
                   {t('settings.currentVersionLabel')}:{' '}
                   {updateInfo.currentVersion}
@@ -124,7 +124,7 @@ export function AboutSettings() {
       </div>
 
       {/* Description */}
-      <div className="space-y-2 text-center text-sm text-text-secondary dark:text-text-dark-secondary">
+      <div className="text-text-secondary dark:text-text-dark-secondary space-y-2 text-center text-sm">
         <p>{t('settings.aboutDesc')}</p>
         <p>
           <strong>{t('settings.noLoginNeeded')}</strong> ·{' '}
@@ -164,10 +164,10 @@ export function AboutSettings() {
         ].map((feature) => (
           <div
             key={feature.label}
-            className="rounded-lg bg-surface-secondary p-3 dark:bg-surface-dark-tertiary"
+            className="bg-surface-secondary dark:bg-surface-dark-tertiary rounded-lg p-3"
           >
             <p className="font-medium">{feature.label}</p>
-            <p className="mt-0.5 text-xs text-text-tertiary">{feature.desc}</p>
+            <p className="text-text-tertiary mt-0.5 text-xs">{feature.desc}</p>
           </div>
         ))}
       </div>
@@ -178,12 +178,12 @@ export function AboutSettings() {
           href="https://github.com/kaieye/Livo"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-sm text-text-secondary transition-colors hover:text-accent"
+          className="text-text-secondary hover:text-accent flex items-center gap-1.5 text-sm transition-colors"
         >
           <Github size={16} />
           GitHub
         </a>
-        <span className="flex items-center gap-1.5 text-sm text-text-secondary">
+        <span className="text-text-secondary flex items-center gap-1.5 text-sm">
           <Heart size={16} className="text-red-400" />
           {t('settings.openSourceFree')}
         </span>

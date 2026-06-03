@@ -62,22 +62,22 @@ export const VideoGridSection = memo(function VideoGridSection({
       </ScrollArea>
 
       {videoPagination && totalPages > 1 && (
-        <div className="flex shrink-0 items-center justify-center gap-3 border-t border-surface-tertiary bg-white pb-1 pt-3 dark:border-surface-dark-tertiary dark:bg-surface-dark">
+        <div className="border-surface-tertiary dark:border-surface-dark-tertiary dark:bg-surface-dark flex shrink-0 items-center justify-center gap-3 border-t bg-white pb-1 pt-3">
           <button
             onClick={onPrevPage}
             disabled={currentPage === 0}
-            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-secondary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronLeft size={16} />
             {t('common.prevPage')}
           </button>
-          <span className="text-sm text-text-secondary dark:text-text-dark-secondary">
+          <span className="text-text-secondary dark:text-text-dark-secondary text-sm">
             {currentPage + 1} / {totalPages}
           </span>
           <button
             onClick={onNextPage}
             disabled={currentPage >= totalPages - 1}
-            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-secondary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
             {t('common.nextPage')}
             <ChevronRight size={16} />

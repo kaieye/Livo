@@ -307,7 +307,7 @@ function UnviewableState({
           <button
             type="button"
             onClick={() => window.open(externalUrl, '_blank')}
-            className="inline-flex items-center gap-1 text-accent hover:underline"
+            className="text-accent inline-flex items-center gap-1 hover:underline"
           >
             <ExternalLink size={14} aria-hidden="true" />
             {t('imageViewer.openExternal')}

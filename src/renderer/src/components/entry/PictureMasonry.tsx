@@ -46,7 +46,7 @@ const MasonryCard = memo(function MasonryCard({
       onContextMenu={onContextMenu}
     >
       <div
-        className="relative overflow-hidden rounded-xl bg-surface-tertiary dark:bg-surface-dark-tertiary"
+        className="bg-surface-tertiary dark:bg-surface-dark-tertiary relative overflow-hidden rounded-xl"
         style={{
           aspectRatio,
           backgroundColor: placeholderColor,
@@ -164,7 +164,7 @@ export const PictureMasonry = memo(function PictureMasonry({
         ))}
       </div>
       {visibleCount < allCount && (
-        <div className="py-3 text-center text-xs text-text-tertiary">
+        <div className="text-text-tertiary py-3 text-center text-xs">
           {`${visibleCount}/${allCount}...`}
         </div>
       )}

@@ -21,19 +21,19 @@ export function UpdatePrompt() {
 
   return (
     <div className="pointer-events-none fixed bottom-5 left-1/2 z-[70] w-[min(92vw,560px)] -translate-x-1/2">
-      <div className="pointer-events-auto flex items-center justify-between gap-4 rounded-2xl border border-accent/20 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur dark:bg-surface-dark-secondary/95">
+      <div className="border-accent/20 dark:bg-surface-dark-secondary/95 pointer-events-auto flex items-center justify-between gap-4 rounded-2xl border bg-white/95 px-4 py-3 shadow-2xl backdrop-blur">
         <div className="min-w-0">
-          <div className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+          <div className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
             检测到新版本 {latestVersion}
           </div>
-          <div className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             当前版本 {info.currentVersion}，可以查看发行说明并手动更新。
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => dismissVersion(latestVersion)}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm"
           >
             稍后
           </button>
@@ -43,7 +43,7 @@ export function UpdatePrompt() {
               settingsStore.setActiveTab('about')
               settingsStore.setOpen(true)
             }}
-            className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:opacity-90"
+            className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
           >
             查看更新
           </button>

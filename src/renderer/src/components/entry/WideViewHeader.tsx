@@ -59,7 +59,7 @@ export const WideViewHeader = memo(function WideViewHeader({
         {inlineBilibili ? (
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
-              className="inline-flex items-center gap-1.5 rounded-md border border-surface-tertiary bg-surface-secondary/70 px-3 py-1.5 text-base font-semibold hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:bg-surface-dark-secondary/70 dark:hover:bg-surface-dark-secondary"
+              className="border-surface-tertiary bg-surface-secondary/70 hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:bg-surface-dark-secondary/70 dark:hover:bg-surface-dark-secondary inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-base font-semibold"
               onClick={onBack}
               title={t('common.back')}
             >
@@ -74,11 +74,11 @@ export const WideViewHeader = memo(function WideViewHeader({
           </h2>
         )}
         {!inlineBilibili && (
-          <div className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary">
+          <div className="text-text-secondary dark:text-text-dark-secondary flex items-center gap-2">
             <button
               onClick={() => void onRefresh()}
               disabled={isRefreshing}
-              className="rounded-lg p-1.5 hover:bg-surface-secondary disabled:opacity-50 dark:hover:bg-surface-dark-secondary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5 disabled:opacity-50"
               title={t('common.refresh')}
             >
               <RefreshCw
@@ -107,7 +107,7 @@ export const WideViewHeader = memo(function WideViewHeader({
             </button>
             <button
               onClick={onMarkAllRead}
-              className="rounded-lg p-1.5 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+              className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
               title={t('common.markAllRead')}
             >
               <CheckCheck size={16} />
@@ -123,14 +123,14 @@ export const WideViewHeader = memo(function WideViewHeader({
             <form onSubmit={onSearch} className="relative max-w-xs flex-1">
               <Search
                 size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+                className="text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2"
               />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchQueryChange(e.target.value)}
                 placeholder={t('entryList.searchArticles')}
-                className="w-full rounded-lg border bg-surface-secondary py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+                className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-2"
               />
             </form>
 
@@ -162,18 +162,18 @@ export const WideViewHeader = memo(function WideViewHeader({
                 className="flex min-w-[220px] max-w-[360px] flex-1 items-center gap-2"
                 title={refreshProgress.feedTitle || ''}
               >
-                <span className="whitespace-nowrap text-[11px] text-text-tertiary">
+                <span className="text-text-tertiary whitespace-nowrap text-[11px]">
                   {`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}
                 </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-tertiary dark:bg-surface-dark-tertiary">
+                <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-1.5 flex-1 overflow-hidden rounded-full">
                   <div
-                    className="h-full bg-accent transition-[width] duration-200"
+                    className="bg-accent h-full transition-[width] duration-200"
                     style={{
                       width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%`,
                     }}
                   />
                 </div>
-                <span className="w-9 shrink-0 text-right text-[11px] text-text-tertiary">
+                <span className="text-text-tertiary w-9 shrink-0 text-right text-[11px]">
                   {`${refreshProgress.percent}%`}
                 </span>
               </div>

@@ -29,22 +29,22 @@ export function AIChatConfirmationCard({
 
   return (
     <div className="flex gap-2.5">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/10">
+      <div className="bg-accent/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
         <Zap size={14} style={{ color }} />
       </div>
       <div
-        className="max-w-[85%] rounded-xl rounded-bl-sm border bg-surface-secondary p-3.5 dark:bg-surface-dark-secondary"
+        className="bg-surface-secondary dark:bg-surface-dark-secondary max-w-[85%] rounded-xl rounded-bl-sm border p-3.5"
         style={{ borderColor: color }}
       >
         <div className="flex items-center gap-1.5">
           <Zap size={14} style={{ color }} />
           <span className="text-sm font-medium">{confirmation.title}</span>
         </div>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mt-1.5 text-[13px] leading-relaxed">
           {confirmation.message}
         </p>
         {confirmation.argsPreview && confirmation.argsPreview !== '无参数' && (
-          <pre className="mt-2 line-clamp-4 whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-text-tertiary">
+          <pre className="text-text-tertiary mt-2 line-clamp-4 whitespace-pre-wrap break-words font-mono text-[11px] leading-snug">
             {confirmation.argsPreview}
           </pre>
         )}
@@ -67,7 +67,7 @@ export function AIChatConfirmationCard({
             type="button"
             disabled={isConfirming}
             onClick={onCancel}
-            className="inline-flex h-8 items-center gap-1 rounded-full border bg-surface px-3 text-[13px] text-text-secondary hover:bg-surface-tertiary disabled:opacity-60 dark:bg-surface-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-tertiary"
+            className="bg-surface text-text-secondary hover:bg-surface-tertiary dark:bg-surface-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-tertiary inline-flex h-8 items-center gap-1 rounded-full border px-3 text-[13px] disabled:opacity-60"
           >
             <X size={12} />
             取消

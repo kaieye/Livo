@@ -218,7 +218,7 @@ export function FavoritesPanel() {
             {t('settings.favoritesTitle')}
           </h4>
         </div>
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
           {t('settings.favoritesDesc', { count: entries.length })}
         </p>
       </section>
@@ -231,7 +231,7 @@ export function FavoritesPanel() {
             <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="appearance-none rounded-lg border border-border bg-surface px-3 py-1.5 pr-7 text-sm dark:bg-surface-dark-secondary"
+              className="border-border bg-surface dark:bg-surface-dark-secondary appearance-none rounded-lg border px-3 py-1.5 pr-7 text-sm"
             >
               {sortOptions.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -241,7 +241,7 @@ export function FavoritesPanel() {
             </select>
             <ArrowUpDown
               size={12}
-              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary"
+              className="text-text-secondary pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
             />
           </div>
 
@@ -299,7 +299,7 @@ export function FavoritesPanel() {
           {batchMode && (
             <button
               onClick={toggleSelectAll}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary"
+              className="border-border hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm"
             >
               {selectedIds.size === filteredAndSorted.length
                 ? t('settings.favoritesDeselectAll')
@@ -310,28 +310,28 @@ export function FavoritesPanel() {
           {/* Refresh */}
           <button
             onClick={loadData}
-            className="ml-auto rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary ml-auto rounded-lg border px-3 py-1.5 text-sm"
           >
             {t('settings.refreshLogsRefresh')}
           </button>
 
           {actionMsg && (
-            <span className="text-xs text-text-secondary">{actionMsg}</span>
+            <span className="text-text-secondary text-xs">{actionMsg}</span>
           )}
         </div>
       )}
 
       {/* Filters */}
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-secondary p-3 dark:bg-surface-dark-tertiary">
+        <div className="border-border bg-surface-secondary dark:bg-surface-dark-tertiary flex flex-wrap items-center gap-3 rounded-lg border p-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-secondary">
+            <span className="text-text-secondary text-xs">
               {t('settings.dataMaxEntryAgeDesc')}:
             </span>
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-              className="rounded border border-border bg-surface px-2 py-1 text-xs dark:bg-surface-dark-secondary"
+              className="border-border bg-surface dark:bg-surface-dark-secondary rounded border px-2 py-1 text-xs"
             >
               {dateFilterOptions.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -341,13 +341,13 @@ export function FavoritesPanel() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-secondary">
+            <span className="text-text-secondary text-xs">
               {t('settings.favoritesFilterByFeed')}:
             </span>
             <select
               value={feedFilter}
               onChange={(e) => setFeedFilter(e.target.value)}
-              className="max-w-[200px] rounded border border-border bg-surface px-2 py-1 text-xs dark:bg-surface-dark-secondary"
+              className="border-border bg-surface dark:bg-surface-dark-secondary max-w-[200px] rounded border px-2 py-1 text-xs"
             >
               <option value="">{t('settings.favoritesAllFeeds')}</option>
               {feedList.map((f) => (
@@ -359,7 +359,7 @@ export function FavoritesPanel() {
             {feedFilter && (
               <button
                 onClick={() => setFeedFilter('')}
-                className="rounded p-0.5 hover:bg-surface-secondary"
+                className="hover:bg-surface-secondary rounded p-0.5"
               >
                 <X size={12} />
               </button>
@@ -370,30 +370,30 @@ export function FavoritesPanel() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex min-h-[120px] items-center justify-center text-sm text-text-secondary dark:text-text-dark-secondary">
+        <div className="text-text-secondary dark:text-text-dark-secondary flex min-h-[120px] items-center justify-center text-sm">
           <Loader2 size={18} className="mr-2 animate-spin" />
           {t('settings.favoritesLoading')}
         </div>
       ) : entries.length === 0 ? (
-        <div className="rounded-lg border border-border bg-surface-secondary p-8 text-center dark:bg-surface-dark-tertiary">
+        <div className="border-border bg-surface-secondary dark:bg-surface-dark-tertiary rounded-lg border p-8 text-center">
           <Star
             size={36}
-            className="dark:text-text-dark-tertiary mx-auto mb-3 text-text-tertiary"
+            className="dark:text-text-dark-tertiary text-text-tertiary mx-auto mb-3"
           />
-          <p className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+          <p className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
             {t('settings.favoritesEmpty')}
           </p>
-          <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
             {t('settings.favoritesEmptyHint')}
           </p>
         </div>
       ) : filteredAndSorted.length === 0 ? (
-        <div className="rounded-lg border border-border bg-surface-secondary p-6 text-center dark:bg-surface-dark-tertiary">
+        <div className="border-border bg-surface-secondary dark:bg-surface-dark-tertiary rounded-lg border p-6 text-center">
           <Search
             size={28}
-            className="dark:text-text-dark-tertiary mx-auto mb-2 text-text-tertiary"
+            className="dark:text-text-dark-tertiary text-text-tertiary mx-auto mb-2"
           />
-          <p className="text-sm text-text-secondary">
+          <p className="text-text-secondary text-sm">
             {t('settings.favoritesNoMatch')}
           </p>
         </div>
@@ -402,7 +402,7 @@ export function FavoritesPanel() {
           {filteredAndSorted.map((entry) => (
             <div
               key={entry.id}
-              className={`group rounded-lg border bg-surface p-3 transition-colors hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary ${
+              className={`bg-surface hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary group rounded-lg border p-3 transition-colors ${
                 selectedIds.has(entry.id)
                   ? 'border-accent bg-accent/5'
                   : 'border-border dark:border-surface-dark-tertiary'
@@ -413,7 +413,7 @@ export function FavoritesPanel() {
                 {batchMode && (
                   <button
                     onClick={() => toggleSelect(entry.id)}
-                    className="mt-0.5 flex-shrink-0 text-text-secondary hover:text-accent"
+                    className="text-text-secondary hover:text-accent mt-0.5 flex-shrink-0"
                   >
                     {selectedIds.has(entry.id) ? (
                       <CheckSquare size={18} className="text-accent" />
@@ -431,22 +431,22 @@ export function FavoritesPanel() {
                   }}
                 >
                   <div className="mb-1 flex items-center gap-2 text-xs">
-                    <span className="truncate font-medium text-accent">
+                    <span className="text-accent truncate font-medium">
                       {feedMap.get(entry.feedId) || entry.feedId}
                     </span>
                     <span className="text-text-muted">·</span>
-                    <span className="whitespace-nowrap text-text-secondary">
+                    <span className="text-text-secondary whitespace-nowrap">
                       {timeAgo(entry.publishedAt, t)}
                     </span>
                     <span className="text-text-muted whitespace-nowrap">
                       {formatDate(entry.publishedAt)}
                     </span>
                   </div>
-                  <p className="text-text-primary line-clamp-2 text-sm font-medium dark:text-text-dark-primary">
+                  <p className="text-text-primary dark:text-text-dark-primary line-clamp-2 text-sm font-medium">
                     {entry.title}
                   </p>
                   {entry.summary && (
-                    <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+                    <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 line-clamp-2 text-xs">
                       {entry.summary}
                     </p>
                   )}
@@ -473,7 +473,7 @@ export function FavoritesPanel() {
 
       {/* Footer */}
       {entries.length > 0 && (
-        <p className="dark:text-text-dark-tertiary text-xs text-text-tertiary">
+        <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
           {filteredAndSorted.length !== entries.length
             ? t('settings.favoritesShowingFiltered', {
                 shown: filteredAndSorted.length,

@@ -64,20 +64,20 @@ export class LocalErrorBoundary extends Component<Props, State> {
           <p className="text-text-secondary dark:text-text-dark-secondary">
             {this.props.description || i18next.t('errorBoundary.panelMessage')}
           </p>
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-secondary p-3 text-[11px] leading-5 text-red-600 dark:bg-surface-dark-tertiary dark:text-red-300">
+          <pre className="bg-surface-secondary dark:bg-surface-dark-tertiary max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg p-3 text-[11px] leading-5 text-red-600 dark:text-red-300">
             {this.state.error?.message}
           </pre>
           <div className="flex items-center gap-3">
             <button
               onClick={this.handleRetry}
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white"
+              className="bg-accent rounded-lg px-3 py-1.5 text-xs font-medium text-white"
             >
               {i18next.t('errorBoundary.retry')}
             </button>
             {this.props.onDismiss ? (
               <button
                 onClick={this.props.onDismiss}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                className="border-border rounded-lg border px-3 py-1.5 text-xs"
               >
                 {i18next.t('errorBoundary.dismiss')}
               </button>

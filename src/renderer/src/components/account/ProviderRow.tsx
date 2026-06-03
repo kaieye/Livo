@@ -32,7 +32,7 @@ export function ProviderRow({
       type="button"
       onClick={onClick}
       disabled={loading}
-      className="flex w-full items-start gap-3 rounded-xl border bg-white p-4 text-left transition-colors hover:bg-surface-secondary disabled:opacity-60 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary"
+      className="hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-start gap-3 rounded-xl border bg-white p-4 text-left transition-colors disabled:opacity-60"
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -57,11 +57,11 @@ export function ProviderRow({
             </span>
           )}
         </div>
-        <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
           {config.description}
         </p>
         {isLinked && accountStatus.displayName && (
-          <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
             {t('accountLogin.signedInAs', { name: accountStatus.displayName })}
           </p>
         )}
@@ -81,7 +81,7 @@ export function ProviderRow({
           <p className="mt-1 text-xs text-red-500">{errorDetail}</p>
         )}
       </div>
-      <div className="flex flex-shrink-0 items-center gap-1 self-center text-xs text-text-secondary dark:text-text-dark-secondary">
+      <div className="text-text-secondary dark:text-text-dark-secondary flex flex-shrink-0 items-center gap-1 self-center text-xs">
         {loading ? (
           <Loader2 size={14} className="animate-spin" aria-hidden="true" />
         ) : (

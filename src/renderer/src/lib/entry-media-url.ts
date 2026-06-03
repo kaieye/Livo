@@ -1,4 +1,5 @@
 import { isMirrorHost as _isMirrorHost } from '../../../shared/url-detect'
+import type { Entry } from '../../../shared/types'
 
 export function isPicnobMirrorHost(host: string): boolean {
   return _isMirrorHost(host)
@@ -145,6 +146,28 @@ export function extractInstagramAssetId(url: string): string {
         if (nestedId) return nestedId
       }
     }
+    if (
+      (host.includes('pixnoy') ||
+        host.includes('picnob') ||
+        host.includes('pixwox') ||
+        host.includes('piokok')) &&
+      parsed.searchParams.has('o')
+    ) {
+      const encoded = parsed.searchParams.get('o') || ''
+      if (encoded) {
+        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
+        const padded =
+          normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+        try {
+          const decoded = atob(padded)
+          const nested = decoded.match(/https?:\/\/\S+/i)?.[0] || decoded
+          const nestedId = extractInstagramAssetId(nested)
+          if (nestedId) return nestedId
+        } catch {
+          // Ignore.
+        }
+      }
+    }
     const direct = raw.match(/_(\d{12,})_/)
     if (direct?.[1]) return direct[1]
     const decoded = decodeURIComponent(raw)
@@ -153,6 +176,23 @@ export function extractInstagramAssetId(url: string): string {
   } catch {
     const direct = raw.match(/_(\d{12,})_/)
     if (direct?.[1]) return direct[1]
+  }
+  return ''
+}
+
+export function extractInstagramAssetIdFromEntry(entry: Entry): string {
+  const parts: string[] = [
+    entry.url || '',
+    entry.imageUrl || '',
+    entry.content || '',
+    entry.summary || '',
+  ]
+  for (const m of entry.media || []) {
+    parts.push(m.url || '', m.previewUrl || '')
+  }
+  for (const part of parts) {
+    const id = extractInstagramAssetId(part)
+    if (id) return id
   }
   return ''
 }

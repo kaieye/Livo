@@ -71,7 +71,7 @@ export function LanguageSelector({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex items-center gap-0.5 rounded-lg px-1.5 py-1.5 text-xs font-medium text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary ${disabled ? 'cursor-default opacity-30' : ''}`}
+        className={`text-text-secondary hover:bg-surface-secondary hover:text-text dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary flex items-center gap-0.5 rounded-lg px-1.5 py-1.5 text-xs font-medium transition-all duration-150 ${disabled ? 'cursor-default opacity-30' : ''}`}
         title="Translation target language"
       >
         <span className="min-w-[1.25rem] text-center">{displayLabel}</span>
@@ -85,7 +85,7 @@ export function LanguageSelector({
               key={lang.code}
               type="button"
               onClick={() => handleSelect(lang.code)}
-              className={`block w-full px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/10 ${lang.code === value ? 'font-medium text-accent' : 'text-text-secondary dark:text-text-dark-secondary'}`}
+              className={`hover:bg-accent/10 block w-full px-3 py-1.5 text-left text-xs transition-colors ${lang.code === value ? 'text-accent font-medium' : 'text-text-secondary dark:text-text-dark-secondary'}`}
             >
               {lang.label}
             </button>

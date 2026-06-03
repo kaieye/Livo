@@ -22,7 +22,7 @@ export const SocialSummaryCard = memo(function SocialSummaryCard({
         {t('social.aiSummary')}
       </div>
       {isSummarizing ? (
-        <div className="flex items-center gap-2 text-sm text-text-secondary">
+        <div className="text-text-secondary flex items-center gap-2 text-sm">
           <Loader2 size={14} className="animate-spin" />
           {t('entry.generatingSummary')}
         </div>

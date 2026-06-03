@@ -41,14 +41,14 @@ export const SocialOverlayHeader = memo(function SocialOverlayHeader({
   const { t } = useTranslation()
 
   return (
-    <div className="sticky top-0 z-20 border-b border-border/10 bg-white/95 backdrop-blur-sm dark:border-border-dark/10 dark:bg-surface-dark/95">
+    <div className="border-border/10 dark:border-border-dark/10 dark:bg-surface-dark/95 sticky top-0 z-20 border-b bg-white/95 backdrop-blur-sm">
       <div
         className={`${contentWidthClass} mx-auto flex items-center justify-between px-4 py-2`}
         style={contentWidthStyle}
       >
         <button
           onClick={onClose}
-          className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-text-secondary transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+          className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary -ml-2 flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors"
         >
           <ChevronLeft size={18} />
           <span className="text-sm">{t('common.back')}</span>
@@ -98,7 +98,7 @@ export const SocialOverlayHeader = memo(function SocialOverlayHeader({
               void openExternalUrlSafe(browserOpenUrl)
             }}
             disabled={!browserOpenUrl}
-            className="flex items-center gap-1 text-xs text-accent hover:underline disabled:cursor-not-allowed disabled:text-text-tertiary disabled:no-underline"
+            className="text-accent disabled:text-text-tertiary flex items-center gap-1 text-xs hover:underline disabled:cursor-not-allowed disabled:no-underline"
             title={t('common.openInBrowser', {
               defaultValue: '在浏览器中打开',
             })}

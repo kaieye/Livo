@@ -241,21 +241,21 @@ export function DataSettings() {
                 value={stats.starredEntries}
               />
             </div>
-            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {t('settings.dataStorageSize', { defaultValue: '数据文件大小' })}:{' '}
-              <span className="text-text-primary font-medium dark:text-text-dark-primary">
+              <span className="text-text-primary dark:text-text-dark-primary font-medium">
                 {formatBytes(stats.dataSizeBytes)}
               </span>
             </p>
-            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {t('settings.dataCacheSize')}:{' '}
-              <span className="text-text-primary font-medium dark:text-text-dark-primary">
+              <span className="text-text-primary dark:text-text-dark-primary font-medium">
                 {formatBytes(stats.cacheSizeBytes)}
               </span>
             </p>
           </div>
         ) : (
-          <div className="text-xs text-text-secondary dark:text-text-dark-secondary">
+          <div className="text-text-secondary dark:text-text-dark-secondary text-xs">
             Loading...
           </div>
         )}
@@ -269,7 +269,7 @@ export function DataSettings() {
             {t('settings.dataEntriesPerFeed')}
           </h4>
         </div>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataEntriesPerFeedDesc')}
         </p>
         <input
@@ -284,7 +284,7 @@ export function DataSettings() {
           }
           className="settings-select"
         />
-        <div className="mt-1 text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1 text-xs">
           0 = {t('settings.dataUnlimited')}
         </div>
       </section>
@@ -293,7 +293,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataMaxEntryAge')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataMaxEntryAgeDesc')}
         </p>
         <input
@@ -308,13 +308,13 @@ export function DataSettings() {
           }
           className="settings-select"
         />
-        <div className="mt-1 text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1 text-xs">
           0 = {t('settings.dataUnlimited')}
         </div>
       </section>
 
       <section>
-        <div className="rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <div className="border-accent/25 bg-accent/5 text-text-secondary dark:text-text-dark-secondary rounded-lg border px-3 py-2 text-xs">
           {t('settings.dataRetentionRule', {
             defaultValue:
               '清理规则：仅当条目同时超出“每源保留条数”和“保留天数”时才会删除。',
@@ -327,7 +327,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataFreshnessTTL')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataFreshnessTTLDesc')}
         </p>
         <select
@@ -348,7 +348,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataConcurrency')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataConcurrencyDesc')}
         </p>
         <select
@@ -370,7 +370,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataVideoDuration')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataVideoDurationDesc')}
         </p>
         <label className="inline-flex cursor-pointer select-none items-center gap-2 text-sm">
@@ -380,7 +380,7 @@ export function DataSettings() {
             onChange={(e) =>
               updateData({ enrichVideoDuration: e.target.checked })
             }
-            className="rounded accent-accent"
+            className="accent-accent rounded"
           />
           {t('settings.dataVideoDurationEnabled')}
         </label>
@@ -390,7 +390,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataAutoCleanCache')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataAutoCleanCacheDesc')}
         </p>
         <label className="inline-flex cursor-pointer select-none items-center gap-2 text-sm">
@@ -398,7 +398,7 @@ export function DataSettings() {
             type="checkbox"
             checked={!!dataSettings.autoCleanCache}
             onChange={(e) => updateData({ autoCleanCache: e.target.checked })}
-            className="rounded accent-accent"
+            className="accent-accent rounded"
           />
           {t('settings.dataAutoCleanCacheEnabled')}
         </label>
@@ -408,7 +408,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataCacheLimit')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataCacheLimitDesc')}
         </p>
         <input
@@ -424,7 +424,7 @@ export function DataSettings() {
           className="settings-select"
           disabled={!dataSettings.autoCleanCache}
         />
-        <div className="mt-1 text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1 text-xs">
           0 = {t('settings.dataUnlimited')}
         </div>
       </section>
@@ -433,7 +433,7 @@ export function DataSettings() {
         <h4 className="mb-1 text-sm font-medium">
           {t('settings.dataCodeCacheLimit')}
         </h4>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.dataCodeCacheLimitDesc')}
         </p>
         <input
@@ -449,7 +449,7 @@ export function DataSettings() {
           className="settings-select"
           disabled={!dataSettings.autoCleanCache}
         />
-        <div className="mt-1 text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1 text-xs">
           0 = {t('settings.dataUnlimited')}
         </div>
       </section>
@@ -470,7 +470,7 @@ export function DataSettings() {
             {t('settings.dataCleanupNow')}
           </button>
           {cleanupResult && (
-            <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {cleanupResult}
             </span>
           )}
@@ -490,7 +490,7 @@ export function DataSettings() {
                 '已打开数据目录',
               )
             }
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
           >
             <FolderOpen size={14} />
             打开数据目录
@@ -502,7 +502,7 @@ export function DataSettings() {
                 '已打开缓存目录',
               )
             }
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
           >
             <FolderOpen size={14} />
             打开缓存目录
@@ -514,7 +514,7 @@ export function DataSettings() {
                 '已打开日志目录',
               )
             }
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
           >
             <FolderOpen size={14} />
             打开日志目录
@@ -522,7 +522,7 @@ export function DataSettings() {
           <button
             onClick={handleClearCache}
             disabled={cacheClearing}
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary disabled:opacity-50 dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
           >
             {cacheClearing ? (
               <Loader2 size={14} className="animate-spin" />
@@ -532,12 +532,12 @@ export function DataSettings() {
             清理缓存
           </button>
         </div>
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
           数据目录包含数据库、设置和日志；缓存目录主要是图片缓存和 Electron
           网络缓存。
         </p>
         {directoryActionMessage ? (
-          <div className="text-xs text-text-secondary dark:text-text-dark-secondary">
+          <div className="text-text-secondary dark:text-text-dark-secondary text-xs">
             {directoryActionMessage}
           </div>
         ) : null}
@@ -552,7 +552,7 @@ export function DataSettings() {
           <button
             onClick={handleLoadRecentLogs}
             disabled={logsLoading}
-            className="flex items-center gap-2 rounded-lg bg-accent/10 px-4 py-2 text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+            className="bg-accent/10 text-accent hover:bg-accent/20 flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors disabled:opacity-50"
           >
             {logsLoading ? (
               <Loader2 size={14} className="animate-spin" />
@@ -561,7 +561,7 @@ export function DataSettings() {
             )}
             读取最近日志
           </button>
-          <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+          <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
             显示主进程最近日志，便于排查刷新、窗口和渲染异常。
           </span>
         </div>
@@ -569,30 +569,30 @@ export function DataSettings() {
           <button
             onClick={handleCopyLogs}
             disabled={!recentLogs}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary disabled:opacity-50 dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
           >
             复制日志
           </button>
           <button
             onClick={handleExportLogs}
             disabled={!recentLogs}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary disabled:opacity-50 dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
           >
             导出日志
           </button>
           <button
             onClick={handleExportDiagnostics}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm"
           >
             导出诊断包
           </button>
           {logActionMessage && (
-            <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {logActionMessage}
             </span>
           )}
         </div>
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-secondary p-3 text-[11px] leading-5 text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary">
+        <pre className="bg-surface-secondary text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg p-3 text-[11px] leading-5">
           {recentLogs || '暂无日志，点击上方按钮加载。'}
         </pre>
       </section>
@@ -602,9 +602,9 @@ export function DataSettings() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg bg-surface-secondary p-3 text-center dark:bg-surface-dark-tertiary">
+    <div className="bg-surface-secondary dark:bg-surface-dark-tertiary rounded-lg p-3 text-center">
       <div className="text-lg font-semibold">{value.toLocaleString()}</div>
-      <div className="text-xs text-text-secondary dark:text-text-dark-secondary">
+      <div className="text-text-secondary dark:text-text-dark-secondary text-xs">
         {label}
       </div>
     </div>

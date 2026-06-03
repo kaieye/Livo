@@ -48,7 +48,7 @@ export function AIChatHistoryPanel({
   )
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-surface-dark">
+    <div className="dark:bg-surface-dark absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-white">
       <div className="flex flex-shrink-0 items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <MessageSquare size={16} className="text-accent" />
@@ -60,14 +60,14 @@ export function AIChatHistoryPanel({
               onNewConversation()
               load()
             }}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
             title="新对话"
           >
             <Plus size={14} />
           </button>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5"
           >
             <X size={14} />
           </button>
@@ -79,7 +79,7 @@ export function AIChatHistoryPanel({
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <MessageSquare size={28} className="text-text-tertiary" />
             <p className="text-sm font-medium">暂无历史对话</p>
-            <p className="text-xs text-text-secondary">
+            <p className="text-text-secondary text-xs">
               对话会在关闭面板或开始新对话时自动保存
             </p>
           </div>
@@ -91,14 +91,14 @@ export function AIChatHistoryPanel({
               className={`group flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 ${
                 session.id === currentSessionId
                   ? 'border-accent/40 bg-accent/5'
-                  : 'border-transparent hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary'
+                  : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary border-transparent'
               }`}
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">
                   {session.title}
                 </p>
-                <p className="mt-0.5 text-[11px] text-text-tertiary">
+                <p className="text-text-tertiary mt-0.5 text-[11px]">
                   {session.messages.length} 条 · {formatTime(session.updatedAt)}
                 </p>
               </div>
@@ -107,7 +107,7 @@ export function AIChatHistoryPanel({
                   e.stopPropagation()
                   remove(session.id)
                 }}
-                className="rounded-lg p-1.5 text-text-tertiary opacity-0 hover:bg-surface-tertiary hover:text-red-500 group-hover:opacity-100 dark:hover:bg-surface-dark-tertiary"
+                className="text-text-tertiary hover:bg-surface-tertiary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 opacity-0 hover:text-red-500 group-hover:opacity-100"
                 title="删除"
               >
                 <Trash2 size={13} />

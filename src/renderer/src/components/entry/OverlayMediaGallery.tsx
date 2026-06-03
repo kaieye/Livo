@@ -60,7 +60,7 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
                     className="flex h-full w-full flex-shrink-0 items-center justify-center"
                   >
                     {isFailed ? (
-                      <div className="dark:text-text-dark-tertiary flex min-h-[180px] w-full max-w-full items-center justify-center rounded-lg bg-surface-tertiary text-sm text-text-tertiary dark:bg-surface-dark-tertiary">
+                      <div className="dark:text-text-dark-tertiary bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary flex min-h-[180px] w-full max-w-full items-center justify-center rounded-lg text-sm">
                         图片加载失败
                       </div>
                     ) : (
@@ -150,7 +150,7 @@ export const OverlayMediaGallery = memo(function OverlayMediaGallery({
               !!previewToken && failedPhotoTokens.has(previewToken)
             return previewFailed ? (
               <div
-                className="dark:text-text-dark-tertiary flex max-h-[90vh] min-h-[240px] min-w-[240px] max-w-[90vw] items-center justify-center rounded-lg bg-surface-tertiary text-sm text-text-tertiary dark:bg-surface-dark-tertiary"
+                className="dark:text-text-dark-tertiary bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary flex max-h-[90vh] min-h-[240px] min-w-[240px] max-w-[90vw] items-center justify-center rounded-lg text-sm"
                 onClick={(e) => e.stopPropagation()}
               >
                 图片加载失败

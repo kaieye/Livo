@@ -24,8 +24,8 @@ export function FeatureCardShell({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-[var(--color-border-secondary)] bg-surface-secondary dark:bg-surface-dark-tertiary">
-      <div className="text-text-primary flex items-center gap-2 px-4 pb-1 pt-3.5 text-sm font-semibold dark:text-text-dark-primary">
+    <div className="bg-surface-secondary dark:bg-surface-dark-tertiary rounded-xl border border-[var(--color-border-secondary)]">
+      <div className="text-text-primary dark:text-text-dark-primary flex items-center gap-2 px-4 pb-1 pt-3.5 text-sm font-semibold">
         {icon}
         <span>{title}</span>
       </div>
@@ -54,11 +54,11 @@ export function FeatureToggleRow({
       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
     >
       <div className="min-w-0">
-        <div className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+        <div className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
           {label}
         </div>
         {description && (
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {description}
           </p>
         )}
@@ -89,13 +89,13 @@ export function FeatureLanguageRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+      <div className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
         {label}
       </div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-surface-primary rounded-lg border border-[var(--color-border-secondary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-secondary"
+        className="bg-surface-primary focus:ring-accent/50 dark:bg-surface-dark-secondary rounded-lg border border-[var(--color-border-secondary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2"
       >
         {AI_LANGUAGE_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

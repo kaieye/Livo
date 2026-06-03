@@ -95,8 +95,8 @@ export const TimelineSection = memo(function TimelineSection({
       ) : groupedEntries.length > 0 ? (
         groupedEntries.map((group) => (
           <div key={group.labelKey + group.label}>
-            <div className="sticky top-0 z-[1] flex h-9 items-center border-b border-transparent bg-white/80 backdrop-blur-sm dark:bg-surface-dark/80">
-              <div className="dark:text-text-dark m-auto flex w-full max-w-[clamp(45ch,60vw,65ch)] select-none gap-3 pl-2 text-base font-bold text-text">
+            <div className="dark:bg-surface-dark/80 sticky top-0 z-[1] flex h-9 items-center border-b border-transparent bg-white/80 backdrop-blur-sm">
+              <div className="dark:text-text-dark text-text m-auto flex w-full max-w-[clamp(45ch,60vw,65ch)] select-none gap-3 pl-2 text-base font-bold">
                 <span>
                   {t(
                     group.labelKey,
@@ -120,12 +120,12 @@ export const TimelineSection = memo(function TimelineSection({
 
       {!shouldUseVirtualTimeline &&
         renderedEntries.length < timelineEntries.length && (
-          <div className="py-3 text-center text-xs text-text-tertiary">
+          <div className="text-text-tertiary py-3 text-center text-xs">
             {`Loading ${renderedEntries.length}/${timelineEntries.length}...`}
           </div>
         )}
       {isLoadingMore && (
-        <div className="inline-flex w-full items-center justify-center gap-2 py-3 text-center text-xs text-text-tertiary">
+        <div className="text-text-tertiary inline-flex w-full items-center justify-center gap-2 py-3 text-center text-xs">
           <span className="inline-flex h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
           <span>Loading more...</span>
         </div>

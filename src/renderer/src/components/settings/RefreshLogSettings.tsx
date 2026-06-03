@@ -58,7 +58,7 @@ export function RefreshLogSettings() {
           <Clock size={16} className="text-accent" />
           <h4 className="text-sm font-medium">{t('settings.refreshLogs')}</h4>
         </div>
-        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
           {t('settings.refreshLogsDesc')}
         </p>
       </section>
@@ -68,7 +68,7 @@ export function RefreshLogSettings() {
         <div className="flex items-center gap-3">
           <button
             onClick={loadLogs}
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary"
+            className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
           >
             <RefreshCw size={14} />
             {t('settings.refreshLogsRefresh')}
@@ -86,7 +86,7 @@ export function RefreshLogSettings() {
             {t('settings.refreshLogsClear')}
           </button>
           {actionMessage && (
-            <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
               {actionMessage}
             </span>
           )}
@@ -95,20 +95,20 @@ export function RefreshLogSettings() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex min-h-[120px] items-center justify-center text-sm text-text-secondary dark:text-text-dark-secondary">
+        <div className="text-text-secondary dark:text-text-dark-secondary flex min-h-[120px] items-center justify-center text-sm">
           <Loader2 size={18} className="mr-2 animate-spin" />
           {t('settings.refreshLogsLoading')}
         </div>
       ) : logs.length === 0 ? (
-        <div className="rounded-lg border border-border bg-surface-secondary p-6 text-center dark:bg-surface-dark-tertiary">
+        <div className="border-border bg-surface-secondary dark:bg-surface-dark-tertiary rounded-lg border p-6 text-center">
           <FileText
             size={32}
-            className="dark:text-text-dark-tertiary mx-auto mb-3 text-text-tertiary"
+            className="dark:text-text-dark-tertiary text-text-tertiary mx-auto mb-3"
           />
-          <p className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+          <p className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
             {t('settings.refreshLogsEmpty')}
           </p>
-          <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
             {t('settings.refreshLogsEmptyHint')}
           </p>
         </div>
@@ -117,17 +117,17 @@ export function RefreshLogSettings() {
           {logs.map((log, index) => (
             <div
               key={log.id}
-              className="rounded-lg border border-border bg-surface p-3 dark:bg-surface-dark-secondary"
+              className="border-border bg-surface dark:bg-surface-dark-secondary rounded-lg border p-3"
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-text-primary text-sm font-medium dark:text-text-dark-primary">
+                <span className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
                   {formatDateTime(log.refreshedAt)}
                 </span>
                 <span className="text-text-muted dark:text-text-dark-muted text-xs">
                   #{logs.length - index}
                 </span>
               </div>
-              <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+              <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
                 {t('settings.refreshLogsSuccessCount', {
                   count: log.successFeedCount,
                 })}
@@ -137,7 +137,7 @@ export function RefreshLogSettings() {
                 })}
               </p>
               {log.failedFeedTitles && log.failedFeedTitles.length > 0 && (
-                <p className="mt-1 line-clamp-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 line-clamp-3 text-xs">
                   {t('settings.refreshLogsFailedFeeds')}
                   {': '}
                   {log.failedFeedTitles.join('、')}
@@ -149,7 +149,7 @@ export function RefreshLogSettings() {
       )}
 
       {/* Footer hint */}
-      <p className="dark:text-text-dark-tertiary text-xs text-text-tertiary">
+      <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
         {t('settings.refreshLogsMaxHint')}
       </p>
     </div>

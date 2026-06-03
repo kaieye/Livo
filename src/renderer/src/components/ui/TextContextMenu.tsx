@@ -336,7 +336,7 @@ export function TextContextMenu() {
   return (
     <div
       ref={menuRef}
-      className="animate-in fade-in zoom-in-95 fixed z-[110] min-w-[210px] overflow-hidden rounded-xl border bg-white shadow-xl duration-100 dark:bg-surface-dark"
+      className="animate-in fade-in zoom-in-95 dark:bg-surface-dark fixed z-[110] min-w-[210px] overflow-hidden rounded-xl border bg-white shadow-xl duration-100"
       style={{ left: pos.x, top: pos.y }}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -344,7 +344,7 @@ export function TextContextMenu() {
         {actions.map((action, i) => (
           <div key={action.id}>
             {action.separator && i > 0 && (
-              <div className="my-1 h-px bg-border dark:bg-surface-dark-tertiary" />
+              <div className="bg-border dark:bg-surface-dark-tertiary my-1 h-px" />
             )}
             <button
               onClick={async () => {
@@ -359,7 +359,7 @@ export function TextContextMenu() {
                   : 'cursor-not-allowed opacity-40'
               }`}
             >
-              <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-text-secondary dark:text-text-dark-secondary">
+              <span className="text-text-secondary dark:text-text-dark-secondary flex h-4 w-4 flex-shrink-0 items-center justify-center">
                 {action.icon}
               </span>
               <span className="text-text-primary dark:text-text-dark-primary">

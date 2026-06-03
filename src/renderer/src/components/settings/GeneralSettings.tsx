@@ -47,7 +47,7 @@ export function GeneralSettings() {
         <select
           value={general.language}
           onChange={(e) => handleLanguageChange(e.target.value)}
-          className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
         >
           {languageOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -69,7 +69,7 @@ export function GeneralSettings() {
           <label className="mb-1.5 block text-sm font-medium">
             {t('settings.proxy')}
           </label>
-          <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
             {t('settings.proxyDesc')}
           </p>
         </div>
@@ -87,7 +87,7 @@ export function GeneralSettings() {
               }}
               className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
                 general.proxyMode === option.key
-                  ? 'border-accent bg-accent/5 font-medium text-accent'
+                  ? 'border-accent bg-accent/5 text-accent font-medium'
                   : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
               }`}
             >
@@ -106,9 +106,9 @@ export function GeneralSettings() {
                 })
               }
               placeholder={t('settings.proxyPlaceholder')}
-              className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+              className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
             />
-            <p className="text-xs text-text-tertiary">
+            <p className="text-text-tertiary text-xs">
               {t('settings.proxyHint')}
             </p>
           </div>
@@ -120,7 +120,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.minimizeToTray')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.minimizeToTrayDesc')}
           </p>
         </div>
@@ -137,7 +137,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.startInTray')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.startInTrayDesc')}
           </p>
         </div>
@@ -161,7 +161,7 @@ export function GeneralSettings() {
               refreshInterval: Number(e.target.value),
             })
           }
-          className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
         >
           <option value={0}>{t('settings.refresh_manual')}</option>
           <option value={15}>{t('settings.refresh_15min')}</option>
@@ -178,7 +178,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.markReadOnScroll')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.markReadOnScrollDesc')}
           </p>
         </div>
@@ -194,7 +194,7 @@ export function GeneralSettings() {
       <div className="flex items-center justify-between">
         <div>
           <label className="text-sm font-medium">{t('settings.dimRead')}</label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.dimReadDesc')}
           </p>
         </div>
@@ -212,7 +212,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.groupByDate')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.groupByDateDesc')}
           </p>
         </div>
@@ -230,7 +230,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.renderMarkAsRead')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.renderMarkAsReadDesc')}
           </p>
         </div>
@@ -248,7 +248,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.videoPagination')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.videoPaginationDesc')}
           </p>
         </div>
@@ -266,7 +266,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.bilibiliOpenInPage')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.bilibiliOpenInPageDesc')}
           </p>
         </div>
@@ -284,7 +284,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.imageProxy')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.imageProxyDesc')}
           </p>
         </div>
@@ -302,7 +302,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.showRecommended')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.showRecommendedDesc')}
           </p>
         </div>
@@ -323,7 +323,7 @@ export function GeneralSettings() {
           <label className="text-sm font-medium">
             {t('settings.renderInlineStyle')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.renderInlineStyleDesc')}
           </p>
         </div>
@@ -360,7 +360,7 @@ export function GeneralSettings() {
               }
               className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
                 general.thumbnailRatio === opt.key
-                  ? 'border-accent bg-accent/5 font-medium text-accent'
+                  ? 'border-accent bg-accent/5 text-accent font-medium'
                   : 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary'
               }`}
             >
@@ -375,7 +375,7 @@ export function GeneralSettings() {
         <label className="mb-1.5 block text-sm font-medium">
           {t('settings.rsshubInstance')}
         </label>
-        <p className="mb-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+        <p className="text-text-secondary dark:text-text-dark-secondary mb-2 text-xs">
           {t('settings.rsshubInstanceDesc')}
         </p>
         <input
@@ -387,9 +387,9 @@ export function GeneralSettings() {
             })
           }
           placeholder="https://rsshub.pseudoyu.com"
-          className="w-full rounded-lg border bg-surface-secondary px-3 py-2.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 dark:bg-surface-dark-tertiary"
+          className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-tertiary w-full rounded-lg border px-3 py-2.5 font-mono text-sm focus:outline-none focus:ring-2"
         />
-        <div className="mt-1.5 text-xs text-text-tertiary">
+        <div className="text-text-tertiary mt-1.5 text-xs">
           {t('settings.rsshubInstanceHint')}
         </div>
         <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
@@ -522,13 +522,13 @@ function ViewTabsConfig() {
           <label className="text-sm font-medium">
             {t('settings.viewTabs')}
           </label>
-          <p className="mt-0.5 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
             {t('settings.viewTabsDesc')}
           </p>
         </div>
         <button
           onClick={handleReset}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-secondary hover:text-accent dark:hover:bg-surface-dark-tertiary"
+          className="text-text-secondary hover:bg-surface-secondary hover:text-accent dark:hover:bg-surface-dark-tertiary flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
           title={t('settings.viewTabsReset')}
         >
           <RotateCcw size={12} />
@@ -548,14 +548,14 @@ function ViewTabsConfig() {
                 idx > 0 ? 'border-t' : ''
               } ${dragIdx === idx ? 'opacity-40' : ''} ${
                 overIdx === idx && dragIdx !== idx
-                  ? 'bg-accent/10 ring-1 ring-inset ring-accent/30'
-                  : 'bg-white hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary'
+                  ? 'bg-accent/10 ring-accent/30 ring-1 ring-inset'
+                  : 'hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary bg-white'
               }`}
             >
               {/* Drag handle */}
               <GripVertical
                 size={14}
-                className="dark:text-text-dark-tertiary flex-shrink-0 cursor-grab touch-none text-text-tertiary active:cursor-grabbing"
+                className="dark:text-text-dark-tertiary text-text-tertiary flex-shrink-0 cursor-grab touch-none active:cursor-grabbing"
                 onPointerDown={(e) =>
                   handlePointerDragStart(
                     idx,
@@ -606,7 +606,7 @@ function ViewTabsConfig() {
               zIndex: 9999,
               pointerEvents: 'none',
             }}
-            className="whitespace-nowrap rounded-lg bg-accent/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg"
+            className="bg-accent/90 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow-lg"
           >
             {dragOverlay.label}
           </div>

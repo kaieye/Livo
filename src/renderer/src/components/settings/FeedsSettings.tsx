@@ -277,7 +277,7 @@ export function FeedsSettings() {
           <span
             key={colId}
             style={{ width: w }}
-            className="flex-shrink-0 text-center text-xs text-text-secondary dark:text-text-dark-secondary"
+            className="text-text-secondary dark:text-text-dark-secondary flex-shrink-0 text-center text-xs"
             title={t('settings.maxEntriesTip')}
           >
             {feed.maxEntries ? feed.maxEntries : t('settings.dataUnlimited')}
@@ -291,7 +291,7 @@ export function FeedsSettings() {
             className="flex-shrink-0 text-center text-xs"
           >
             {feed.unreadCount > 0 ? (
-              <span className="inline-block rounded-full bg-accent/10 px-1.5 py-0.5 font-medium text-accent">
+              <span className="bg-accent/10 text-accent inline-block rounded-full px-1.5 py-0.5 font-medium">
                 {feed.unreadCount}
               </span>
             ) : (
@@ -319,7 +319,7 @@ export function FeedsSettings() {
               <>
                 <button
                   onClick={() => startEdit(feed)}
-                  className="hover:text-text-primary rounded p-1 text-text-secondary hover:bg-surface-secondary dark:text-text-dark-secondary dark:hover:bg-surface-dark dark:hover:text-text-dark-primary"
+                  className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary dark:text-text-dark-secondary dark:hover:bg-surface-dark dark:hover:text-text-dark-primary rounded p-1"
                   title={t('common.edit')}
                 >
                   <Edit3 size={13} />
@@ -327,7 +327,7 @@ export function FeedsSettings() {
                 {feed.siteUrl && (
                   <button
                     onClick={() => window.open(feed.siteUrl, '_blank')}
-                    className="hover:text-text-primary rounded p-1 text-text-secondary hover:bg-surface-secondary dark:text-text-dark-secondary dark:hover:bg-surface-dark dark:hover:text-text-dark-primary"
+                    className="hover:text-text-primary text-text-secondary hover:bg-surface-secondary dark:text-text-dark-secondary dark:hover:bg-surface-dark dark:hover:text-text-dark-primary rounded p-1"
                     title={t('settings.visitWebsite')}
                   >
                     <ExternalLink size={13} />
@@ -344,7 +344,7 @@ export function FeedsSettings() {
                     </button>
                     <button
                       onClick={() => setConfirmDeleteId(null)}
-                      className="rounded p-1 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark"
+                      className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark rounded p-1"
                       title={t('common.cancel')}
                     >
                       <X size={13} />
@@ -360,7 +360,7 @@ export function FeedsSettings() {
                 ) : (
                   <button
                     onClick={() => setConfirmDeleteId(feed.id)}
-                    className="rounded p-1 text-text-secondary hover:bg-red-50 hover:text-red-600 dark:text-text-dark-secondary dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    className="text-text-secondary dark:text-text-dark-secondary rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                     title={t('common.delete')}
                   >
                     <Trash2 size={13} />
@@ -383,14 +383,14 @@ export function FeedsSettings() {
         <div className="relative flex-1">
           <Search
             size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary dark:text-text-dark-secondary"
+            className="text-text-secondary dark:text-text-dark-secondary absolute left-2.5 top-1/2 -translate-y-1/2"
           />
           <input
             type="text"
             placeholder={t('settings.searchFeeds')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border bg-white py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+            className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border bg-white py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-1"
           />
         </div>
 
@@ -399,7 +399,7 @@ export function FeedsSettings() {
           <select
             value={filterFolder || ''}
             onChange={(e) => setFilterFolder(e.target.value || null)}
-            className="cursor-pointer appearance-none rounded-lg border bg-white py-1.5 pl-3 pr-7 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+            className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark cursor-pointer appearance-none rounded-lg border bg-white py-1.5 pl-3 pr-7 text-sm focus:outline-none focus:ring-1"
           >
             <option value="">{t('settings.allCategories')}</option>
             {folders.map((c) => (
@@ -410,7 +410,7 @@ export function FeedsSettings() {
           </select>
           <ChevronDown
             size={14}
-            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary"
+            className="text-text-secondary pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
           />
         </div>
 
@@ -427,7 +427,7 @@ export function FeedsSettings() {
       </div>
 
       {/* Stats */}
-      <div className="flex flex-shrink-0 items-center gap-4 text-xs text-text-secondary dark:text-text-dark-secondary">
+      <div className="text-text-secondary dark:text-text-dark-secondary flex flex-shrink-0 items-center gap-4 text-xs">
         <span>{t('settings.totalFeeds', { count: visibleFeeds.length })}</span>
         {filteredUser.length + filteredRecommended.length !==
           visibleFeeds.length && (
@@ -447,12 +447,12 @@ export function FeedsSettings() {
       {/* Feed list */}
       <div className="-mx-1 min-h-0 flex-1 overflow-y-auto">
         {/* Header row */}
-        <div className="sticky top-0 z-10 flex items-center gap-0 border-b bg-white px-2 py-1.5 text-xs font-medium text-text-secondary dark:bg-surface-dark-secondary dark:text-text-dark-secondary">
+        <div className="text-text-secondary dark:bg-surface-dark-secondary dark:text-text-dark-secondary sticky top-0 z-10 flex items-center gap-0 border-b bg-white px-2 py-1.5 text-xs font-medium">
           <input
             type="checkbox"
             checked={allSelected}
             onChange={toggleAll}
-            className="mr-2 flex-shrink-0 rounded accent-accent"
+            className="accent-accent mr-2 flex-shrink-0 rounded"
           />
           <span className="min-w-0 flex-1">{t('settings.feedsHeader')}</span>
           {visibleColumns.map((colId, idx) => {
@@ -475,7 +475,7 @@ export function FeedsSettings() {
                     className="group absolute -right-px bottom-1 top-1 z-10 flex w-[3px] cursor-col-resize items-center justify-center"
                     onMouseDown={(e) => onResizeStart(colId, nextCol, e)}
                   >
-                    <div className="h-full w-px bg-border/60 transition-colors group-hover:bg-accent/60 dark:bg-border-dark/60" />
+                    <div className="bg-border/60 group-hover:bg-accent/60 dark:bg-border-dark/60 h-full w-px transition-colors" />
                   </div>
                 )}
               </span>
@@ -484,7 +484,7 @@ export function FeedsSettings() {
         </div>
 
         {filteredUser.length + filteredRecommended.length === 0 ? (
-          <div className="py-8 text-center text-sm text-text-secondary dark:text-text-dark-secondary">
+          <div className="text-text-secondary dark:text-text-dark-secondary py-8 text-center text-sm">
             {search || filterFolder
               ? t('settings.noMatchingFeeds')
               : t('settings.noFeeds')}
@@ -494,7 +494,7 @@ export function FeedsSettings() {
             {filteredUser.map((feed) => (
               <div
                 key={feed.id}
-                className={`flex items-center gap-0 border-b border-border/30 px-2 py-2 text-sm transition-colors hover:bg-surface-secondary/50 dark:border-border-dark/30 dark:hover:bg-surface-dark/50 ${
+                className={`border-border/30 hover:bg-surface-secondary/50 dark:border-border-dark/30 dark:hover:bg-surface-dark/50 flex items-center gap-0 border-b px-2 py-2 text-sm transition-colors ${
                   selectedIds.has(feed.id)
                     ? 'bg-accent/5 dark:bg-accent/10'
                     : ''
@@ -504,7 +504,7 @@ export function FeedsSettings() {
                   type="checkbox"
                   checked={selectedIds.has(feed.id)}
                   onChange={() => toggleOne(feed.id)}
-                  className="mr-2 flex-shrink-0 rounded accent-accent"
+                  className="accent-accent mr-2 flex-shrink-0 rounded"
                 />
 
                 {editingId === feed.id ? (
@@ -513,7 +513,7 @@ export function FeedsSettings() {
                     <input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
-                      className="min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                      className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1"
                       placeholder={t('settings.titlePlaceholder')}
                       autoFocus
                       onKeyDown={(e) => {
@@ -524,7 +524,7 @@ export function FeedsSettings() {
                     <input
                       value={editFolder}
                       onChange={(e) => setEditFolder(e.target.value)}
-                      className="w-24 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                      className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-24 rounded border bg-white px-2 py-0.5 text-sm focus:outline-none focus:ring-1"
                       placeholder={t('settings.category')}
                     />
                     <select
@@ -532,7 +532,7 @@ export function FeedsSettings() {
                       onChange={(e) =>
                         setEditView(Number(e.target.value) as FeedViewType)
                       }
-                      className="w-16 rounded border bg-white px-1 py-0.5 text-xs focus:outline-none dark:border-border-dark dark:bg-surface-dark"
+                      className="dark:border-border-dark dark:bg-surface-dark w-16 rounded border bg-white px-1 py-0.5 text-xs focus:outline-none"
                     >
                       {Object.entries(VIEW_DEFINITIONS).map(([k]) => (
                         <option key={k} value={k}>
@@ -553,7 +553,7 @@ export function FeedsSettings() {
                           Math.max(0, Number(e.target.value) || 0),
                         )
                       }
-                      className="w-16 rounded border bg-white px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-accent dark:border-border-dark dark:bg-surface-dark"
+                      className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark w-16 rounded border bg-white px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1"
                       placeholder={t('settings.maxEntriesPlaceholder')}
                       title={t('settings.maxEntriesTip')}
                     />
@@ -565,7 +565,7 @@ export function FeedsSettings() {
                     </button>
                     <button
                       onClick={cancelEdit}
-                      className="rounded p-1 text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark"
+                      className="text-text-secondary hover:bg-surface-secondary dark:hover:bg-surface-dark rounded p-1"
                     >
                       <X size={14} />
                     </button>
@@ -598,7 +598,7 @@ export function FeedsSettings() {
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-text-secondary dark:text-text-dark-secondary">
+                      <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
                         {feed.url}
                       </div>
                     </div>
@@ -617,13 +617,13 @@ export function FeedsSettings() {
                 {filteredRecommended.map((feed) => (
                   <div
                     key={feed.id}
-                    className="flex items-center gap-0 border-b border-border/30 bg-amber-50/20 px-2 py-2 text-sm dark:border-border-dark/30 dark:bg-amber-900/5"
+                    className="border-border/30 dark:border-border-dark/30 flex items-center gap-0 border-b bg-amber-50/20 px-2 py-2 text-sm dark:bg-amber-900/5"
                   >
                     <input
                       type="checkbox"
                       checked={false}
                       disabled
-                      className="mr-2 flex-shrink-0 rounded accent-accent opacity-40"
+                      className="accent-accent mr-2 flex-shrink-0 rounded opacity-40"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -638,7 +638,7 @@ export function FeedsSettings() {
                           {feed.title}
                         </span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-text-secondary dark:text-text-dark-secondary">
+                      <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
                         {feed.url}
                       </div>
                     </div>
@@ -660,19 +660,19 @@ export function FeedsSettings() {
           onClick={() => setConfirmBulkDelete(false)}
         >
           <div
-            className="w-[360px] space-y-4 rounded-xl bg-white p-6 shadow-2xl dark:bg-surface-dark-secondary"
+            className="dark:bg-surface-dark-secondary w-[360px] space-y-4 rounded-xl bg-white p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-semibold">
               {t('settings.confirmDelete')}
             </h3>
-            <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+            <p className="text-text-secondary dark:text-text-dark-secondary text-sm">
               {t('settings.confirmBulkDelete', { count: selectedIds.size })}
             </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirmBulkDelete(false)}
-                className="rounded-lg border px-4 py-1.5 text-sm transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark"
+                className="hover:bg-surface-secondary dark:hover:bg-surface-dark rounded-lg border px-4 py-1.5 text-sm transition-colors"
               >
                 {t('common.cancel')}
               </button>

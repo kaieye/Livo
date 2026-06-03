@@ -1,5 +1,9 @@
 import type { Entry } from '../../../shared/types'
-import { isMirrorHost } from '../../../shared/url-detect'
+import {
+  extractInstagramAssetId,
+  extractInstagramAssetIdFromEntry,
+  isPicnobMirrorHost,
+} from './entry-media-url'
 
 function stripHtml(input: string): string {
   return (input || '').replace(/<[^>]+>/g, ' ')
@@ -102,73 +106,6 @@ function extractInstagramPostIdFromText(input: string): string {
   const urls = (input || '').match(/https?:\/\/\S+/g) || []
   for (const url of urls) {
     const id = extractInstagramPostId(url)
-    if (id) return id
-  }
-  return ''
-}
-
-function isPicnobMirrorHost(host: string): boolean {
-  return isMirrorHost(host)
-}
-
-function extractInstagramAssetId(input: string): string {
-  const raw = (input || '').trim()
-  if (!raw) return ''
-  try {
-    const parsed = new URL(raw)
-    const host = parsed.hostname.toLowerCase()
-    if (isPicnobMirrorHost(host) && parsed.pathname === '/get') {
-      const nested = parsed.searchParams.get('url') || ''
-      if (nested) {
-        const nestedId = extractInstagramAssetId(nested)
-        if (nestedId) return nestedId
-      }
-    }
-    if (
-      (host.includes('pixnoy') || host.includes('picnob')) &&
-      parsed.searchParams.has('o')
-    ) {
-      const encoded = parsed.searchParams.get('o') || ''
-      if (encoded) {
-        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
-        const padded =
-          normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
-        try {
-          const decoded = atob(padded)
-          const nested = decoded.match(/https?:\/\/\S+/i)?.[0] || decoded
-          const nestedId = extractInstagramAssetId(nested)
-          if (nestedId) return nestedId
-        } catch {
-          // Ignore.
-        }
-      }
-    }
-    // Fallback to current URL after trying nested/origin URLs first.
-    const directMatch = raw.match(/_(\d{14,})_/)
-    if (directMatch?.[1]) return directMatch[1]
-    const decodedRaw = decodeURIComponent(raw)
-    const decodedMatch = decodedRaw.match(/_(\d{14,})_/)
-    if (decodedMatch?.[1]) return decodedMatch[1]
-  } catch {
-    // Ignore parse failures and try direct fallback below.
-  }
-  const directMatch = raw.match(/_(\d{14,})_/)
-  if (directMatch?.[1]) return directMatch[1]
-  return ''
-}
-
-function extractInstagramAssetIdFromEntry(entry: Entry): string {
-  const parts: string[] = [
-    entry.url || '',
-    entry.imageUrl || '',
-    entry.content || '',
-    entry.summary || '',
-  ]
-  for (const m of entry.media || []) {
-    parts.push(m.url || '', m.previewUrl || '')
-  }
-  for (const part of parts) {
-    const id = extractInstagramAssetId(part)
     if (id) return id
   }
   return ''

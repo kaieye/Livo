@@ -5,7 +5,7 @@ export function ReadingSettings() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+      <p className="text-text-secondary dark:text-text-dark-secondary text-sm">
         {t('settings.readingMigratedToAppearance')}
       </p>
     </div>

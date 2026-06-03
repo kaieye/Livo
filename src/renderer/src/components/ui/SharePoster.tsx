@@ -171,7 +171,7 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
       onClick={onClose}
     >
       <div
-        className="mx-4 w-full max-w-[500px] overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-surface-dark"
+        className="dark:bg-surface-dark mx-4 w-full max-w-[500px] overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -181,14 +181,14 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
           </h3>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Canvas preview */}
-        <div className="flex justify-center bg-surface-secondary p-4 dark:bg-surface-dark-secondary">
+        <div className="bg-surface-secondary dark:bg-surface-dark-secondary flex justify-center p-4">
           <canvas
             ref={canvasRef}
             className="rounded-xl shadow-lg"
@@ -196,7 +196,7 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
           />
           {isGenerating && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50">
-              <Loader2 size={24} className="animate-spin text-accent" />
+              <Loader2 size={24} className="text-accent animate-spin" />
             </div>
           )}
         </div>
@@ -206,7 +206,7 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
           <button
             onClick={handleSave}
             disabled={isGenerating}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            className="bg-accent hover:bg-accent-hover flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
             <Download size={14} />
             {t('entryList.saveImage')}
@@ -214,7 +214,7 @@ export function SharePoster({ entry, feedTitle, onClose }: SharePosterProps) {
           <button
             onClick={handleCopy}
             disabled={isGenerating}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium hover:bg-surface-secondary disabled:opacity-50 dark:hover:bg-surface-dark-secondary"
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium disabled:opacity-50"
           >
             <Copy size={14} />
             {t('entryList.copyTitle')}
