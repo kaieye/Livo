@@ -4,7 +4,11 @@ import {
   applyActionRulesToEntries,
   filterForeignEntries,
 } from '../entry/entry-ingestion-pipeline'
-import { getNextAutoRefreshDelayMs, refreshAllFeeds } from './feed-refresh'
+import {
+  getNextAutoRefreshDelayMs,
+  queueBootstrapRefresh,
+  refreshAllFeeds,
+} from './feed-refresh'
 import {
   FeedViewType,
   type Entry,
@@ -12,6 +16,7 @@ import {
 } from '../../../shared/types/index'
 import type { ActionRule } from '../../../shared/actions'
 import type { AIConfig } from '../../../shared/types/index'
+import { FEED_BOOTSTRAP_REFRESH_TASK } from '../system/task-contracts'
 
 const getLocalTaskRunnerMock = vi.hoisted(() => vi.fn())
 
@@ -125,6 +130,51 @@ describe('refreshAllFeeds', () => {
       runId: activeRun.runId,
     })
     expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe('queueBootstrapRefresh', () => {
+  beforeEach(() => {
+    getLocalTaskRunnerMock.mockReset()
+  })
+
+  it('通过 Task Runner 执行 deferred bootstrap', () => {
+    const feed = { ...makeFeed(), view: FeedViewType.SocialMedia }
+    const promise = Promise.resolve({
+      rounds: 0,
+      hasEntries: false,
+      hasAvatar: false,
+    })
+    const enqueue = vi.fn().mockReturnValue({
+      runId: 'feed.bootstrap_refresh-1',
+      promise,
+      getRecord: vi.fn(),
+    })
+    getLocalTaskRunnerMock.mockReturnValue({ enqueue })
+
+    queueBootstrapRefresh(
+      feed,
+      'https://rsshub.example.com/instagram/user/livo',
+      FeedViewType.SocialMedia,
+    )
+
+    expect(enqueue).toHaveBeenCalledWith(
+      FEED_BOOTSTRAP_REFRESH_TASK,
+      {
+        feed,
+        normalizedUrl: 'https://rsshub.example.com/instagram/user/livo',
+        view: FeedViewType.SocialMedia,
+      },
+      expect.any(Function),
+      {
+        metadata: {
+          feedId: feed.id,
+          feedTitle: feed.title,
+          normalizedUrl: 'https://rsshub.example.com/instagram/user/livo',
+          view: FeedViewType.SocialMedia,
+        },
+      },
+    )
   })
 })
 

@@ -260,17 +260,12 @@ export function registerFeedHandlers(): void {
           insertEntries(entriesToInsert)
         }
 
-        // Fire-and-forget: enrich video entries with duration from YouTube/Bilibili
         if (
           parsed &&
           getSettings().data?.enrichVideoDuration &&
           feed.view === FeedViewType.Videos
         ) {
-          queueVideoDurationEnrich(id)
-            .then((count) => {
-              if (count > 0) getEventBus().send('entries:enriched')
-            })
-            .catch(() => {})
+          queueVideoDurationEnrich(id).catch(() => {})
         }
 
         // If quick add skipped/failed parsing, force a synchronous refresh once so

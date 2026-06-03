@@ -4,19 +4,19 @@
  */
 import https from 'https'
 import http from 'http'
-import { BrowserWindow } from 'electron'
 import { getEntries, updateEntry, getAllFeeds } from '../../database'
 import { getEventBus } from '../system/event-bus'
 import { FeedViewType } from '../../../shared/types/index'
+import { VIDEO_DURATION_ENRICH_TASK } from '../system/task-contracts'
+import { getLocalTaskRunner } from '../system/task-runner-service'
+import type { TaskRunContext } from '../system/task-runner'
 
 /** Simple in-memory cache: videoId 鈫?duration in seconds */
 const durationCache = new Map<string, number>()
-const enrichQueue: string[] = []
-const pendingResolvers = new Map<string, Array<(count: number) => void>>()
 const inFlightFeeds = new Set<string>()
 const lastEnrichedAt = new Map<string, number>()
-let isQueueRunning = false
 let lastAllEnrichedAt = 0
+const notificationAttachedRunIds = new Set<string>()
 
 const PER_FEED_COOLDOWN_MS = 30 * 60 * 1000
 const MAX_FETCH_PER_FEED = 12
@@ -177,14 +177,46 @@ export async function fetchVideoDurations(
  * Finds video media items lacking duration, fetches from YouTube/Bilibili,
  * and updates entries in the database. Fire-and-forget - errors are silenced.
  */
-export async function enrichVideoDurations(feedId: string): Promise<number> {
+export async function enrichVideoDurations(
+  feedId: string,
+  context?: TaskRunContext,
+): Promise<number> {
+  return runVideoDurationEnrich(feedId, context).catch((error) => {
+    console.warn('[video-duration] enrich failed', error)
+    return 0
+  })
+}
+
+async function runVideoDurationEnrich(
+  feedId: string,
+  context?: TaskRunContext,
+): Promise<number> {
+  context?.reportProgress({
+    completed: 0,
+    total: 1,
+    message: 'starting',
+    data: { feedId },
+  })
+
   const now = Date.now()
   const lastAt = lastEnrichedAt.get(feedId) || 0
   if (now - lastAt < PER_FEED_COOLDOWN_MS) {
+    context?.reportProgress({
+      completed: 1,
+      total: 1,
+      message: 'cooldown',
+      data: { feedId, enriched: 0 },
+    })
     return 0
   }
 
   if (inFlightFeeds.has(feedId)) {
+    context?.reportProgress({
+      completed: 1,
+      total: 1,
+      message: 'already-running',
+      data: { feedId, enriched: 0 },
+    })
     return 0
   }
 
@@ -212,9 +244,24 @@ export async function enrichVideoDurations(feedId: string): Promise<number> {
       }
     }
 
-    if (toFetch.length === 0) return 0
+    if (toFetch.length === 0) {
+      context?.reportProgress({
+        completed: 1,
+        total: 1,
+        message: 'no-candidates',
+        data: { feedId, enriched: 0 },
+      })
+      return 0
+    }
 
     const boundedToFetch = toFetch.slice(0, MAX_FETCH_PER_FEED)
+    let completed = 0
+    context?.reportProgress({
+      completed,
+      total: boundedToFetch.length,
+      message: 'fetching',
+      data: { feedId, enriched },
+    })
 
     // Fetch durations in batches of 3
     for (let i = 0; i < boundedToFetch.length; i += 3) {
@@ -236,57 +283,57 @@ export async function enrichVideoDurations(feedId: string): Promise<number> {
           }
         }
       }
+      completed += batch.length
+      context?.reportProgress({
+        completed,
+        total: boundedToFetch.length,
+        message: 'fetching',
+        data: { feedId, enriched },
+      })
     }
 
     lastEnrichedAt.set(feedId, Date.now())
-  } catch {
-    // Ignore errors
   } finally {
     inFlightFeeds.delete(feedId)
   }
+  context?.reportProgress({
+    completed: 1,
+    total: 1,
+    message: 'done',
+    data: { feedId, enriched },
+  })
   return enriched
 }
 
-async function drainEnrichQueue(): Promise<void> {
-  if (isQueueRunning) return
-  isQueueRunning = true
-  try {
-    while (enrichQueue.length > 0) {
-      const feedId = enrichQueue.shift()!
-      const count = await enrichVideoDurations(feedId)
-      const resolvers = pendingResolvers.get(feedId) || []
-      pendingResolvers.delete(feedId)
-      for (const resolve of resolvers) {
-        try {
-          resolve(count)
-        } catch {
-          // ignore resolve errors
-        }
-      }
-    }
-  } finally {
-    isQueueRunning = false
-  }
-}
-
 export function queueVideoDurationEnrich(feedId: string): Promise<number> {
-  return new Promise<number>((resolve) => {
-    const existingResolvers = pendingResolvers.get(feedId) || []
-    existingResolvers.push(resolve)
-    pendingResolvers.set(feedId, existingResolvers)
+  const task = getLocalTaskRunner().enqueue(
+    VIDEO_DURATION_ENRICH_TASK,
+    { feedId },
+    async (payload, context) => runVideoDurationEnrich(payload.feedId, context),
+    {
+      metadata: { feedId },
+    },
+  )
 
-    if (!enrichQueue.includes(feedId) && !inFlightFeeds.has(feedId)) {
-      enrichQueue.push(feedId)
-    }
+  if (!notificationAttachedRunIds.has(task.runId)) {
+    notificationAttachedRunIds.add(task.runId)
+    void task.promise
+      .then((count) => {
+        if (count > 0) notifyRenderer()
+      })
+      .catch(() => {})
+      .finally(() => {
+        notificationAttachedRunIds.delete(task.runId)
+      })
+  }
 
-    void drainEnrichQueue()
-  })
+  return task.promise
 }
 
 /**
  * Enrich all video/audio feeds with duration data.
  * Called once on startup to backfill durations for existing entries.
- * Notifies the renderer to re-fetch entries when done.
+ * Each queued task notifies the renderer when it updates entries.
  */
 export async function enrichAllVideoFeeds(): Promise<void> {
   const now = Date.now()
@@ -301,13 +348,8 @@ export async function enrichAllVideoFeeds(): Promise<void> {
       .filter((f) => f.view === FeedViewType.Videos)
       .slice(0, STARTUP_BACKFILL_MAX_FEEDS)
 
-    let totalEnriched = 0
     for (const feed of videoFeeds) {
-      totalEnriched += await queueVideoDurationEnrich(feed.id)
-    }
-    // Notify the renderer to re-fetch entries if any were enriched
-    if (totalEnriched > 0) {
-      notifyRenderer()
+      await queueVideoDurationEnrich(feed.id).catch(() => 0)
     }
   } catch {
     // Silently fail

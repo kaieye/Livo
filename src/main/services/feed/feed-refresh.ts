@@ -36,8 +36,10 @@ import { appendRefreshLog } from '../system/refresh-log-store'
 import { runConcurrencyPool } from '../../utils/concurrency-pool'
 import { queueFeverSyncAccount } from '../fever/fever-sync'
 import {
+  FEED_BOOTSTRAP_REFRESH_TASK,
   FEED_REFRESH_ALL_TASK,
   FEED_REFRESH_SINGLE_TASK,
+  type FeedBootstrapRefreshTaskPayload,
 } from '../system/task-contracts'
 import { getLocalTaskRunner } from '../system/task-runner-service'
 import type { TaskRunContext } from '../system/task-runner'
@@ -484,16 +486,11 @@ async function runRefreshSingleFeed(
     })
     const newCount = ingestionResult.addedCount
 
-    // Fire-and-forget: enrich video entries with duration from YouTube/Bilibili
     if (
       isVideoDurationEnrichmentEnabled() &&
       feed.view === FeedViewType.Videos
     ) {
-      queueVideoDurationEnrich(feed.id)
-        .then((count) => {
-          if (count > 0) getEventBus().send('entries:enriched')
-        })
-        .catch(() => {})
+      queueVideoDurationEnrich(feed.id).catch(() => {})
     }
 
     context?.reportProgress({
@@ -904,30 +901,88 @@ export function queueBootstrapRefresh(
   normalizedUrl: string,
   view?: FeedViewType,
 ): void {
-  void (async () => {
-    for (let round = 0; round < 3; round++) {
-      if (round === 0) {
-        await bootstrapFeedEntriesQuick(feed, normalizedUrl, view).catch(
-          () => {},
-        )
-      } else {
-        await bootstrapFeedEntries(feed, normalizedUrl, view).catch(() => {})
-      }
-
-      const refreshed = getFeedById(feed.id)
-      const hasEntries = hasAnyEntries(feed.id)
-      const hasAvatar = !!(refreshed?.imageUrl || '').trim()
-
-      getEventBus().send('feeds:updated', {
+  const task = getLocalTaskRunner().enqueue(
+    FEED_BOOTSTRAP_REFRESH_TASK,
+    { feed, normalizedUrl, view },
+    async (payload, context) => runBootstrapRefresh(payload, context),
+    {
+      metadata: {
         feedId: feed.id,
-        background: true,
-        round: round + 1,
-        hasEntries,
-        hasAvatar,
-      })
+        feedTitle: feed.title,
+        normalizedUrl,
+        view,
+      },
+    },
+  )
+  void task.promise.catch(() => {})
+}
 
-      if (hasEntries && hasAvatar) break
-      await new Promise((resolve) => setTimeout(resolve, 2000 * (round + 1)))
+async function runBootstrapRefresh(
+  payload: FeedBootstrapRefreshTaskPayload,
+  context?: TaskRunContext,
+): Promise<{ rounds: number; hasEntries: boolean; hasAvatar: boolean }> {
+  const { feed, normalizedUrl, view } = payload
+  let rounds = 0
+  let hasEntries = false
+  let hasAvatar = false
+
+  context?.reportProgress({
+    completed: 0,
+    total: 3,
+    message: feed.title,
+    data: { feedId: feed.id, phase: 'starting' },
+  })
+
+  for (let round = 0; round < 3; round++) {
+    rounds = round + 1
+    if (round === 0) {
+      await bootstrapFeedEntriesQuick(feed, normalizedUrl, view).catch(() => {})
+    } else {
+      await bootstrapFeedEntries(feed, normalizedUrl, view).catch(() => {})
     }
-  })().catch(() => {})
+
+    const refreshed = getFeedById(feed.id)
+    hasEntries = hasAnyEntries(feed.id)
+    hasAvatar = !!(refreshed?.imageUrl || '').trim()
+
+    const progressData = {
+      feedId: feed.id,
+      phase: 'round',
+      round: rounds,
+      hasEntries,
+      hasAvatar,
+    }
+    context?.reportProgress({
+      completed: rounds,
+      total: 3,
+      message: feed.title,
+      data: progressData,
+    })
+
+    getEventBus().send('feeds:updated', {
+      feedId: feed.id,
+      background: true,
+      round: rounds,
+      hasEntries,
+      hasAvatar,
+    })
+
+    if (hasEntries && hasAvatar) break
+    await new Promise((resolve) => setTimeout(resolve, 2000 * rounds))
+  }
+
+  context?.reportProgress({
+    completed: 3,
+    total: 3,
+    message: 'done',
+    data: {
+      feedId: feed.id,
+      phase: 'done',
+      rounds,
+      hasEntries,
+      hasAvatar,
+    },
+  })
+
+  return { rounds, hasEntries, hasAvatar }
 }

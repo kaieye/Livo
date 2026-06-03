@@ -1,3 +1,5 @@
+import type { Feed, FeedViewType } from '../../../shared/types/index'
+
 export interface TaskRetryPolicy {
   maxAttempts: number
   delayMs?: number
@@ -16,6 +18,7 @@ export interface TaskContract<Payload = unknown> {
 export const TASK_NAMES = {
   FEED_REFRESH_SINGLE: 'feed.refresh_single',
   FEED_REFRESH_ALL: 'feed.refresh_all',
+  FEED_BOOTSTRAP_REFRESH: 'feed.bootstrap_refresh',
   VIDEO_DURATION_ENRICH: 'video.duration_enrich',
   AI_DIGEST_GENERATE: 'ai.digest_generate',
   FEVER_SYNC: 'fever.sync',
@@ -28,6 +31,12 @@ export interface FeedRefreshSingleTaskPayload {
 
 export interface FeedRefreshAllTaskPayload {
   force: boolean
+}
+
+export interface FeedBootstrapRefreshTaskPayload {
+  feed: Feed
+  normalizedUrl: string
+  view?: FeedViewType
 }
 
 export interface VideoDurationEnrichTaskPayload {
@@ -59,6 +68,15 @@ export const FEED_REFRESH_ALL_TASK: TaskContract<FeedRefreshAllTaskPayload> = {
   dedupeKey: () => 'all',
   retry: { maxAttempts: 1 },
 }
+
+export const FEED_BOOTSTRAP_REFRESH_TASK: TaskContract<FeedBootstrapRefreshTaskPayload> =
+  {
+    name: TASK_NAMES.FEED_BOOTSTRAP_REFRESH,
+    concurrency: 2,
+    dedupeKey: (payload) => payload.feed.id,
+    timeoutMs: 240000,
+    retry: { maxAttempts: 1 },
+  }
 
 export const VIDEO_DURATION_ENRICH_TASK: TaskContract<VideoDurationEnrichTaskPayload> =
   {
