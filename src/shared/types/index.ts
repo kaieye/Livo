@@ -1,0 +1,21 @@
+// Type barrel — domain sub-modules
+export * from './feed'
+export * from './entry'
+export * from './ai'
+export * from './agent'
+export * from './account'
+export * from './fever'
+export * from './app'
+
+// Re-export sibling shared modules (paths relative to src/shared/)
+export * from '../ipc-contracts'
+export * from '../agent'
+export * from '../view-models'
+export * from '../model-mappers'
+export * from '../discover-data'
+export * from '../shortcuts'
+export * from '../settings'
+export * from '../actions'
+export * from '../bilibili-feed-url'
+export * from '../i18n-completeness'
+export * from '../video-url'
