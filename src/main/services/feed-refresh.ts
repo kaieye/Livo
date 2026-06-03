@@ -5,15 +5,13 @@ import {
   getFeedById,
   getEntries,
   updateFeed,
-  insertEntriesWithResult,
-  replaceEntriesForFeedWithResult,
   cleanupEntries,
   type CleanupOptions,
 } from '../database'
 import { deriveImageUrl } from './feed-utils'
 import { getSettings } from '../handlers/settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../shared/discover-data'
-import type { Feed, Entry } from '../../shared/types'
+import type { Feed } from '../../shared/types'
 import { FeedViewType } from '../../shared/types'
 import { queueVideoDurationEnrich, enrichAllVideoFeeds } from './video-duration'
 import { resolveFeedPayload } from './feed-source-provider'
@@ -25,7 +23,6 @@ import {
 } from './rsshub-url'
 import { resolveFeedAvatar } from './feed-avatar'
 import { formatFeedTitle } from './feed-title'
-import { buildEntriesFromParsedItems } from './entry-builder'
 import { logWarnQuiet } from './logger'
 import {
   isInstagramFeedUrl as _isInstagramFeed,
@@ -34,30 +31,14 @@ import {
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from './refresh-log-store'
 import { runConcurrencyPool } from '../utils/concurrency-pool'
-import {
-  evaluateActionRules,
-  isSemanticCondition,
-  matchCondition,
-  type ActionEffectType,
-  type ActionCondition,
-  type ActionRule,
-} from '../../shared/actions'
-import { getActionRules } from './action-rules-store'
-import { enqueueEntryActionEffects } from './entry-action-effects'
 import { syncFeverAccount } from './fever-sync'
-import { judgeSemanticFilter } from './ai-filter'
-import { validateAIConfig } from './ai-client'
 import {
   FEED_REFRESH_ALL_TASK,
   FEED_REFRESH_SINGLE_TASK,
 } from './task-contracts'
 import { getLocalTaskRunner } from './task-runner-service'
 import type { TaskRunContext } from './task-runner'
-import type {
-  AIConfig,
-  AISemanticFilterDecision,
-  AISemanticFilterInput,
-} from '../../shared/types'
+import { ingestParsedFeedEntries } from './entry-ingestion-pipeline'
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshGeneration = 0
@@ -147,277 +128,6 @@ function getRefreshTimeoutMs(feedUrl: string | undefined): number {
     return 120000
   }
   return DEFAULT_FEED_REFRESH_TIMEOUT_MS
-}
-
-/**
- * FeedBurner (and similar aggregators) sometimes inject entries from completely
- * unrelated blogs.  When the feed declares a site URL we can compare domains
- * and drop entries that clearly do not belong.
- */
-export function filterForeignEntries(
-  entries: Entry[],
-  feedSiteUrl: string | undefined,
-  parsedFeedLink: string | undefined,
-  feedUrl?: string,
-): Entry[] {
-  const rawFeedUrl = (feedUrl || '').toLowerCase()
-  const isTwitterFeed = /\/(?:twitter|x)\/user\//i.test(rawFeedUrl)
-  const isInstagramMirrorFeed = _isInstagramUserFeed(rawFeedUrl)
-  const isBilibiliUserFeed =
-    /\/bilibili\/user\/(?:dynamic|video|article)\//i.test(rawFeedUrl)
-  if (isTwitterFeed || isInstagramMirrorFeed || isBilibiliUserFeed) {
-    // Twitter fallbacks may return x.com / twitter.com / nitter links interchangeably.
-    // Instagram fallbacks may return instagram/picnob/pixnoy/piokok links interchangeably.
-    // Bilibili user feeds frequently link across sibling subdomains like
-    // space.bilibili.com / t.bilibili.com / www.bilibili.com.
-    // Keep them all instead of strict same-domain filtering.
-    return entries
-  }
-
-  const siteUrl = feedSiteUrl || parsedFeedLink || ''
-  if (!siteUrl) return entries
-  let siteHost: string
-  try {
-    siteHost = new URL(siteUrl).hostname.replace(/^www\./, '')
-  } catch {
-    return entries
-  }
-  if (!siteHost) return entries
-
-  const filtered = entries.filter((e) => {
-    if (!e.url) return true // keep entries without a URL
-    let entryHost: string
-    try {
-      entryHost = new URL(e.url).hostname.replace(/^www\./, '')
-    } catch {
-      return true
-    }
-    // Allow exact match or subdomain match (e.g. blog.example.com matches example.com)
-    return (
-      entryHost === siteHost ||
-      entryHost.endsWith('.' + siteHost) ||
-      siteHost.endsWith('.' + entryHost)
-    )
-  })
-
-  return filtered
-}
-
-export interface ActionRuleAppliedEntry {
-  entry: Entry
-  effects: ActionEffectType[]
-}
-
-type SemanticFilterJudge = (
-  input: AISemanticFilterInput,
-  config: AIConfig,
-) => Promise<AISemanticFilterDecision>
-
-export interface ApplyActionRulesOptions {
-  aiConfig?: AIConfig
-  semanticJudge?: SemanticFilterJudge
-}
-
-export function applyActionRulesToEntries(
-  entries: Entry[],
-  feed: Feed,
-  rules: ActionRule[],
-): ActionRuleAppliedEntry[] {
-  if (rules.length === 0) {
-    return entries.map((entry) => ({ entry, effects: [] }))
-  }
-
-  const feedContext = {
-    title: feed.title,
-    url: feed.url,
-    category: feed.category,
-  }
-
-  const kept: ActionRuleAppliedEntry[] = []
-  for (const entry of entries) {
-    const decision = evaluateActionRules(
-      rules,
-      {
-        title: entry.title,
-        content: entry.content,
-        author: entry.author,
-        url: entry.url,
-      },
-      feedContext,
-    )
-    if (decision.blocked) continue
-
-    const effects = filterPodcastActionEffects(decision.effects, entry, feed)
-    const nextEntry =
-      decision.star || decision.markRead
-        ? {
-            ...entry,
-            isStarred: entry.isStarred || decision.star,
-            isRead: entry.isRead || decision.markRead,
-          }
-        : entry
-
-    kept.push({ entry: nextEntry, effects })
-  }
-  return kept
-}
-
-async function matchSemanticActionCondition(
-  condition: ActionCondition,
-  entry: Entry,
-  feed: Feed,
-  options: ApplyActionRulesOptions,
-): Promise<boolean> {
-  const value = condition.value.trim()
-  const config = options.aiConfig
-  const judge = options.semanticJudge ?? judgeSemanticFilter
-  if (!value || !config) return false
-
-  try {
-    const decision = await judge(
-      {
-        condition: value,
-        title: entry.title,
-        summary: entry.summary || entry.content,
-        feedTitle: feed.title,
-        author: entry.author,
-        url: entry.url,
-      },
-      config,
-    )
-    return decision.matched
-  } catch {
-    return false
-  }
-}
-
-async function matchAllActionConditions(
-  rule: ActionRule,
-  entry: Entry,
-  feed: Feed,
-  options: ApplyActionRulesOptions,
-): Promise<boolean> {
-  if (rule.conditions.length === 0) return false
-
-  const feedContext = {
-    title: feed.title,
-    url: feed.url,
-    category: feed.category,
-  }
-
-  for (const condition of rule.conditions) {
-    if (isSemanticCondition(condition)) {
-      const matched = await matchSemanticActionCondition(
-        condition,
-        entry,
-        feed,
-        options,
-      )
-      if (!matched) return false
-      continue
-    }
-
-    if (
-      !matchCondition(
-        condition,
-        {
-          title: entry.title,
-          content: entry.content,
-          author: entry.author,
-          url: entry.url,
-        },
-        feedContext,
-      )
-    ) {
-      return false
-    }
-  }
-
-  return true
-}
-
-export async function applyActionRulesToEntriesAsync(
-  entries: Entry[],
-  feed: Feed,
-  rules: ActionRule[],
-  options: ApplyActionRulesOptions = {},
-): Promise<ActionRuleAppliedEntry[]> {
-  if (rules.length === 0) {
-    return entries.map((entry) => ({ entry, effects: [] }))
-  }
-
-  const kept: ActionRuleAppliedEntry[] = []
-  for (const entry of entries) {
-    const decision = {
-      blocked: false,
-      star: false,
-      markRead: false,
-      effects: [] as ActionEffectType[],
-    }
-    const seen = new Set<ActionEffectType>()
-
-    for (const rule of rules) {
-      if (!rule.enabled) continue
-      if (!(await matchAllActionConditions(rule, entry, feed, options))) {
-        continue
-      }
-
-      for (const effect of rule.actions) {
-        if (!seen.has(effect.type)) {
-          seen.add(effect.type)
-          decision.effects.push(effect.type)
-        }
-        if (effect.type === 'block') decision.blocked = true
-        else if (effect.type === 'star') decision.star = true
-        else if (effect.type === 'mark_read') decision.markRead = true
-      }
-    }
-
-    if (decision.blocked) continue
-
-    const effects = filterPodcastActionEffects(decision.effects, entry, feed)
-    const nextEntry =
-      decision.star || decision.markRead
-        ? {
-            ...entry,
-            isStarred: entry.isStarred || decision.star,
-            isRead: entry.isRead || decision.markRead,
-          }
-        : entry
-
-    kept.push({ entry: nextEntry, effects })
-  }
-
-  return kept
-}
-
-const PODCAST_TEXT_EFFECTS = new Set<ActionEffectType>([
-  'readability',
-  'summarize',
-])
-
-function isPodcastLikeEntry(entry: Entry, feed: Feed): boolean {
-  if ((feed.category || '').trim().toLowerCase() === 'podcast') return true
-  return (entry.media || []).some((item) => item.type === 'audio')
-}
-
-function filterPodcastActionEffects(
-  effects: ActionEffectType[],
-  entry: Entry,
-  feed: Feed,
-): ActionEffectType[] {
-  if (!isPodcastLikeEntry(entry, feed)) return effects
-  return effects.filter((effect) => !PODCAST_TEXT_EFFECTS.has(effect))
-}
-
-async function applyActionRules(
-  entries: Entry[],
-  feed: Feed,
-): Promise<ActionRuleAppliedEntry[]> {
-  const aiConfig = getSettings().ai
-  return applyActionRulesToEntriesAsync(entries, feed, getActionRules(), {
-    aiConfig: validateAIConfig(aiConfig) ? undefined : aiConfig,
-  })
 }
 
 function isKnownInstagramUpstreamFailure(error: unknown): boolean {
@@ -714,43 +424,21 @@ async function runRefreshSingleFeed(
         : {}),
     })
 
-    const builtEntries = await buildEntriesFromParsedItems(
-      feed.id,
-      (parsed.items || []) as Array<Record<string, any>>,
-      selectedFeedAvatar || feedImageUrl,
-      feed.view,
-      now,
-    )
-    // Filter out entries injected by FeedBurner from unrelated domains
-    const foreignFiltered = filterForeignEntries(
-      builtEntries,
-      feed.siteUrl,
-      parsed.link,
-      feed.url,
-    )
-    const ruleAppliedEntries = await applyActionRules(foreignFiltered, feed)
-    const entriesToInsert = ruleAppliedEntries.map(({ entry }) => entry)
-    const effectsByEntryId = new Map(
-      ruleAppliedEntries.map(({ entry, effects }) => [entry.id, effects]),
-    )
     // IMPORTANT:
     // Do incremental upsert for all feeds, including Instagram/Picnob mirror routes.
     // Full replacement can permanently drop history when upstream temporarily returns
     // only a short window (e.g. 8 recent items) or degraded single-photo entries.
     // Database identity merge keeps duplicates under control while preserving richer
     // historical entries and multi-photo media arrays.
-    const writeResult = isBilibiliVideoFeedUrl(feed.url)
-      ? replaceEntriesForFeedWithResult(feed.id, entriesToInsert)
-      : insertEntriesWithResult(entriesToInsert)
-    const newCount = writeResult.addedCount
-
-    enqueueEntryActionEffects(
-      writeResult.addedEntries.map((entry) => ({
-        entry,
-        feed,
-        effects: effectsByEntryId.get(entry.id) || [],
-      })),
-    )
+    const ingestionResult = await ingestParsedFeedEntries({
+      feed,
+      items: (parsed.items || []) as Array<Record<string, any>>,
+      authorAvatarSeed: selectedFeedAvatar || feedImageUrl,
+      parsedFeedLink: parsed.link,
+      now,
+      replaceExisting: isBilibiliVideoFeedUrl(feed.url),
+    })
+    const newCount = ingestionResult.addedCount
 
     // Fire-and-forget: enrich video entries with duration from YouTube/Bilibili
     if (

@@ -3,8 +3,8 @@ import {
   applyActionRulesToEntriesAsync,
   applyActionRulesToEntries,
   filterForeignEntries,
-  getNextAutoRefreshDelayMs,
-} from './feed-refresh'
+} from './entry-ingestion-pipeline'
+import { getNextAutoRefreshDelayMs } from './feed-refresh'
 import { FeedViewType, type Entry, type Feed } from '../../shared/types'
 import type { ActionRule } from '../../shared/actions'
 import type { AIConfig } from '../../shared/types'
