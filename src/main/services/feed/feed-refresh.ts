@@ -545,7 +545,7 @@ export async function refreshAllFeeds(
   options: RefreshOptions & {
     onProgress?: (event: RefreshProgressEvent) => void
   } = {},
-): Promise<RefreshAllResult> {
+): Promise<RefreshAllResult & { runId: string }> {
   const runner = getLocalTaskRunner()
   const dedupeKey =
     FEED_REFRESH_ALL_TASK.dedupeKey?.({ force: !!options.force }) || 'all'
@@ -554,8 +554,8 @@ export async function refreshAllFeeds(
     dedupeKey,
   )
   if (activeRun) {
-    await activeRun.promise
-    return emptyRefreshAllResult()
+    const result = await activeRun.promise
+    return { ...result, runId: activeRun.runId }
   }
 
   const task = runner.enqueue(
@@ -587,7 +587,7 @@ export async function refreshAllFeeds(
           totalNewEntries: result.totalNewEntries,
         },
       })
-      return result
+      return { ...result, runId: task.runId }
     },
     (error) => {
       logUserOperation({

@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyActionRulesToEntriesAsync,
   applyActionRulesToEntries,
   filterForeignEntries,
 } from '../entry/entry-ingestion-pipeline'
-import { getNextAutoRefreshDelayMs } from './feed-refresh'
+import { getNextAutoRefreshDelayMs, refreshAllFeeds } from './feed-refresh'
 import {
   FeedViewType,
   type Entry,
@@ -12,6 +12,12 @@ import {
 } from '../../../shared/types/index'
 import type { ActionRule } from '../../../shared/actions'
 import type { AIConfig } from '../../../shared/types/index'
+
+const getLocalTaskRunnerMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../system/task-runner-service', () => ({
+  getLocalTaskRunner: getLocalTaskRunnerMock,
+}))
 
 function makeEntry(url: string): Entry {
   return {
@@ -87,6 +93,38 @@ describe('filterForeignEntries', () => {
         'https://example.com/feed.xml',
       ),
     ).toEqual([ownEntry])
+  })
+})
+
+describe('refreshAllFeeds', () => {
+  beforeEach(() => {
+    getLocalTaskRunnerMock.mockReset()
+  })
+
+  it('returns the active run result when a batch refresh is already running', async () => {
+    const activeResult = {
+      totalFeeds: 3,
+      refreshedCount: 2,
+      failedCount: 1,
+      failedFeedTitles: ['Feed A'],
+      totalNewEntries: 4,
+    }
+    const activeRun = {
+      runId: 'feed.refresh_all-1',
+      promise: Promise.resolve(activeResult),
+    }
+    const enqueue = vi.fn()
+    const getActiveRun = vi.fn().mockReturnValue(activeRun)
+    getLocalTaskRunnerMock.mockReturnValue({
+      enqueue,
+      getActiveRun,
+    })
+
+    await expect(refreshAllFeeds()).resolves.toEqual({
+      ...activeResult,
+      runId: activeRun.runId,
+    })
+    expect(enqueue).not.toHaveBeenCalled()
   })
 })
 
