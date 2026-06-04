@@ -101,47 +101,31 @@
 
 ---
 
-## 三、已识别但未处理的优化机会
+### #8 ai-handlers.ts 管线内联 ✅
 
-### #8 ai-handlers.ts 管线内联
+**位置**：`src/main/handlers/ai-handlers.ts`
 
-**位置**：`src/main/handlers/ai-handlers.ts`  
-**规模**：746 行  
-**严重程度**：🟡 中
+**解决方案**：提取 `src/main/services/ai/ai-pipeline.ts`（~420 行）——`generateAIDigest`、`runAISummarizeTask`、`runAITranslateTask` 三大管线 + 流式输出辅助函数。
 
-**问题**：3 个业务管线函数内联在 handler 中：
-
-- `generateAIDigest()` ~200 行——digest 生成管线（候选筛选→重排→批次→汇总）
-- `runAISummarizeTask()` ~120 行——摘要生成（含流式输出）
-- `runAITranslateTask()` ~160 行——翻译生成（含流式输出 + 渐进式预算缩减重试）
-
-而 `services/ai/` 已有 `ai-digest.ts`、`ai-prompts.ts`、`ai-retry.ts` 等模块，这些管线函数天然适合放在 `services/ai/` 中。
-
-**建议方案**：提取为 `services/ai/ai-pipeline.ts`，handler 保留薄 IPC 胶水层。
-
-**预期效果**：handler 从 746 行缩减到 ~270 行（64%）。
+**效果**：`ai-handlers.ts` 从 746 行缩减到 ~230 行（-69%），handler 仅保留 IPC 胶水层。
 
 ---
 
-### #9 IPC 双重错误处理
+### #9 IPC 双重错误处理 ✅
 
-**位置**：`src/main/ipc/register-channel.ts` + 各 handler  
-**严重程度**：🟡 中
+**位置**：`src/main/ipc/register-channel.ts` + 各 handler
 
-**问题**：`register-channel.ts` 在外层统一用 `try/catch` → `ipcOk/ipcFail` 包装。但许多 handler 内层又加了 `try/catch` → `{ success: false }`，形成双层错误信封。错误消息可能被多次包装，增加调试成本。
-
-**建议方案**：审计所有 handler，统一为"外层统一捕获，内层只抛 `IpcContractError`"的模式。消除内层 `{ success: false }` 的手动返回。
+**解决方案**：新建 `src/main/ipc/handler-error.ts`，提供 `throwIpcError`、`toHandlerError`、`toHandlerErrorWith` 三个标准化工具。6 个 handler 文件（feed、video、fever、discover、account、readability）统一使用 `toHandlerError()` 替代内联的 `catch (error) → { success: false, error: String(error) }` 模式。保留 renderer 的 `result.success` 契约，不改变响应形状。
 
 ---
 
-### #10 Fever write-back 逻辑分裂
+### #10 Fever write-back 逻辑分裂 ✅
 
-**位置**：`src/main/services/fever/fever-sync.ts` + `src/main/handlers/entry-handlers.ts`  
-**严重程度**：🟢 低
+**位置**：`src/main/services/fever/fever-sync.ts` + `src/main/handlers/entry-handlers.ts`
 
-**问题**：`fever-sync.ts` 的 `performWriteBack()` 是空 stub，注释指向 `entry-handlers.ts` 的 `feverWriteBack()`。写回逻辑（标记已读/已收藏后的远程同步）分散在两个文件中，违背 locality 原则。
+**解决方案**：将 `feverWriteBack()` 从 `entry-handlers.ts` 移入 `fever-sync.ts` 并导出，`entry-handlers.ts` 改为导入调用。
 
-**建议方案**：将 `feverWriteBack()` 从 `entry-handlers.ts` 移入 `fever-sync.ts` 的 `performWriteBack()`，使 Fever 同步的完整四阶段（sync feeds → sync items → write back → queue）集中在一个模块中。
+**效果**：Fever 同步四阶段（sync feeds → sync items → write back → queue）全部集中在 `fever-sync.ts`。`entry-handlers.ts` 减少 4 个不再需要的导入。
 
 ---
 
@@ -152,10 +136,16 @@ src/main/
 ├── app-manager.ts          (215 行)  ← 从 431 缩减
 ├── handlers/
 │   ├── app-handlers.ts     (NEW, 90 行)
-│   ├── entry-handlers.ts   (139 行)
+│   ├── entry-handlers.ts   (~90 行)   ← 从 139 缩减（feverWriteBack 移出）
 │   ├── feed-handlers.ts    (~620 行)  ← 从 ~706 缩减
+│   ├── ai-handlers.ts      (~230 行)  ← 从 746 缩减（#8）
 │   └── discover-handlers.ts (959 行)  ← 从 2664 缩减
+├── ipc/
+│   ├── register-channel.ts
+│   └── handler-error.ts    (NEW, ~50 行)   ← #9
 ├── services/
+│   ├── ai/
+│   │   └── ai-pipeline.ts  (NEW, ~420 行)  ← #8
 │   ├── discovery/
 │   │   ├── discover-helpers.ts            (NEW, +30 行)
 │   │   ├── discover-youtube.ts            (NEW, ~280 行)
@@ -164,6 +154,8 @@ src/main/
 │   │   └── discover-instagram-search.ts   (+530 行)
 │   ├── feed/
 │   │   └── feed-subscriber.ts (NEW, 175 行)
+│   ├── fever/
+│   │   └── fever-sync.ts     (~330 行)  ← +feverWriteBack（#10）
 │   └── system/
 │       └── session-policies.ts (NEW, 120 行)
 ├── database.ts             (保留 — Facade 模式)

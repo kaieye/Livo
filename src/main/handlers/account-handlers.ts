@@ -1,4 +1,5 @@
 import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
 import { IPC, type AccountProvider } from '../../shared/types'
 import {
   getAccountState,
@@ -65,10 +66,7 @@ export function registerAccountHandlers(): void {
       const creators = await getBilibiliFollowings()
       return { success: true, creators }
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      }
+      return toHandlerError(err)
     }
   })
 }

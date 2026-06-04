@@ -9,6 +9,7 @@ import {
   type FeedWithCount,
 } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
 import { fetchAndParseFeed } from '../services/feed/rss-parser'
 import {
   refreshAllFeeds,
@@ -205,7 +206,7 @@ export function registerFeedHandlers(): void {
 
         return { success: true, feed }
       } catch (error) {
-        return { success: false, error: String(error) }
+        return toHandlerError(error)
       }
     },
   )
@@ -246,7 +247,7 @@ export function registerFeedHandlers(): void {
         unreadCount,
       }
     } catch (error) {
-      return { success: false, error: String(error) }
+      return toHandlerError(error)
     }
   })
 
@@ -462,10 +463,7 @@ export function registerFeedHandlers(): void {
         errors: errors.length > 0 ? errors : undefined,
       }
     } catch (err) {
-      return {
-        success: false,
-        error: `鐠囪褰囬弬鍥︽婢惰精瑙? ${String(err)}`,
-      }
+      return toHandlerError(err, 'OPML import failed')
     }
   })
 
@@ -494,7 +492,7 @@ export function registerFeedHandlers(): void {
       writeFileSync(result.filePath, opml, 'utf-8')
       return { success: true, count: feeds.length }
     } catch (err) {
-      return { success: false, error: `Failed to export OPML: ${String(err)}` }
+      return toHandlerError(err, 'Failed to export OPML')
     }
   })
 

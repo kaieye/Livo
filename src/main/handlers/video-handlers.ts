@@ -14,6 +14,7 @@ import { join } from 'path'
 import { writeFileSync, existsSync, mkdirSync } from 'fs'
 import { IPC } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
 import { resolveVideoUrl } from '../services/video/video-proxy'
 
 /** Mobile Chrome UA - Google shows plain email+password login */
@@ -95,10 +96,7 @@ export function registerVideoHandlers(): void {
       await videoWin.loadURL(url)
       return { success: true }
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      }
+      return toHandlerError(err)
     }
   })
 
@@ -186,7 +184,7 @@ export function registerVideoHandlers(): void {
       }
       return { success: true }
     } catch (err) {
-      return { success: false, error: String(err) }
+      return toHandlerError(err)
     }
   })
 }

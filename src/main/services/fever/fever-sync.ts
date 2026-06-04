@@ -10,6 +10,7 @@ import {
   upsertFeverFeedMapping,
   markFeverFeedMappingsInactive,
   getFeverItemMapping,
+  getFeverItemMappingsByLocalEntry,
   upsertFeverItemMapping,
   getFeverSyncState,
   upsertFeverSyncState,
@@ -266,14 +267,51 @@ async function syncItems(
   return { itemsSynced, newEntries }
 }
 
+/**
+ * Push local read/star state back to the Fever server.
+ *
+ * This is called per-entry as a fire-and-forget when the user marks an entry
+ * as read/unread or starred/unstarred.  Failures are silently ignored — the
+ * next full sync will reconcile differences.
+ */
+export function feverWriteBack(
+  entryId: string,
+  state: 'read' | 'unread' | 'saved' | 'unsaved',
+): void {
+  const mappings = getFeverItemMappingsByLocalEntry(entryId)
+  for (const mapping of mappings) {
+    const account = getFeverAccountById(mapping.accountId)
+    if (!account?.enabled) continue
+    const client = createFeverClient(
+      account.baseUrl,
+      account.username,
+      account.apiKey,
+    )
+    client
+      .markItem(mapping.feverItemId, state)
+      .then(() => {
+        const updates: Record<string, boolean> = {}
+        if (state === 'read' || state === 'unread')
+          updates.remoteIsRead = state === 'read'
+        if (state === 'saved' || state === 'unsaved')
+          updates.remoteIsStarred = state === 'saved'
+        upsertFeverItemMapping({ ...mapping, ...updates })
+      })
+      .catch(() => {
+        // Best-effort; reconciled on next sync
+      })
+  }
+}
+
 async function performWriteBack(
   _client: FeverApiClient,
   _account: FeverAccount,
   _localFeedByRemoteId: Map<number, string>,
 ): Promise<void> {
-  // Write-back is handled per-entry in entry-handlers via fire-and-forget.
-  // This phase reconciles any missed changes by checking mappings.
-  // No batch operation needed — the incremental sync already pulls remote state.
+  // Per-entry write-back is handled via `feverWriteBack()` (exported above)
+  // called from entry-handlers as a fire-and-forget.  This batch phase exists
+  // as a hook for future reconciliation — the incremental sync already pulls
+  // remote state on each cycle.
 }
 
 export async function syncFeverAccount(

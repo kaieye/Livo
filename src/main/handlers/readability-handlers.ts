@@ -1,5 +1,6 @@
 import { IPC } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
 import {
   fetchReadableContent,
   resolveRelativeUrls,
@@ -20,10 +21,7 @@ export function registerReadabilityHandlers(): void {
         length: result.length,
       }
     } catch (error) {
-      return {
-        success: false,
-        error: `无法获取原文: ${String(error)}`,
-      }
+      return toHandlerError(error, '无法获取原文')
     }
   })
 }

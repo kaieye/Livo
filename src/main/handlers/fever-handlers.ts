@@ -1,6 +1,7 @@
 import { IPC } from '../../shared/types'
 import type { FeverAccount } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
 import {
   getFeverAccounts,
   getFeverAccountById,
@@ -82,10 +83,7 @@ export function registerFeverHandlers(): void {
           ? { success: true }
           : { success: false, error: 'Authentication failed' }
       } catch (err) {
-        return {
-          success: false,
-          error: err instanceof Error ? err.message : String(err),
-        }
+        return toHandlerError(err)
       }
     },
   )
@@ -129,8 +127,7 @@ export function registerFeverHandlers(): void {
         } catch (err) {
           results.push({
             accountId: account.id,
-            success: false,
-            error: err instanceof Error ? err.message : String(err),
+            ...toHandlerError(err),
           })
         }
       }

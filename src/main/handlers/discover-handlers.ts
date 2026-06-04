@@ -24,6 +24,7 @@ import type {
 } from '../../shared/types'
 import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
 import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
 import {
   computeMatchTier,
   dedupeAndSortDiscoverResults,
@@ -666,7 +667,7 @@ export function registerDiscoverHandlers(): void {
         }
       } catch (error) {
         console.warn(`[Discover Preview] Failed to preview ${targetUrl}`, error)
-        return { success: false, error: String(error) }
+        return toHandlerError(error)
       }
     },
   )
