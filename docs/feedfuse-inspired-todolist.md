@@ -31,17 +31,13 @@
 
 目标：用户能在文章页看到全文/AI 任务状态。
 
-- [ ] H2. 文章详情内联任务状态条
 - [ ] I1. 为 A/D/H 增加最小测试
 
 ### M2：分页和任务状态稳定化
 
 目标：大列表分页更稳定，任务状态不只存在内存。
 
-- [ ] C1. 设计 keyset cursor 协议
-- [ ] C2. EntryRepository 支持 keyset 查询
-- [ ] D2. 全文抓取进入 TaskRunner 并持久化终态
-- [ ] I2. 补 keyset cursor 和任务终态测试
+- [ ] I2. 补剩余任务终态测试
 
 ### M3：AI session 和 Digest 产品融合
 
@@ -74,98 +70,6 @@
 风险：
 
 - 这一步可在 A1/A2 后做，不要阻塞最小失败可见闭环。
-
-## 5. C 线：Snapshot keyset cursor
-
-### C1. 设计 cursor 协议
-
-当前：
-
-```ts
-{
-  v: (1, offset, queryKey)
-}
-```
-
-建议：
-
-```ts
-{
-  v: (2, publishedAt, id, queryKey)
-}
-```
-
-- [ ] 保持 cursor 仍为 base64url opaque string。
-- [ ] 解码时兼容 v1，老 cursor fallback 到第一页即可。
-- [ ] queryKey 继续包含 scope/unreadOnly/limit，避免跨查询误用 cursor。
-
-验收：
-
-- 切换视图后旧 cursor 不会串页。
-- 新文章插入后，下一页不会因为 offset 漂移跳过或重复太多。
-
-### C2. EntryRepository 支持 keyset 查询
-
-- [ ] `EntryListOptions` 增加：
-  - `beforePublishedAt?: number`
-  - `beforeId?: string`
-- [ ] SQL 条件增加：
-
-```sql
-AND (e.published_at < ? OR (e.published_at = ? AND e.id < ?))
-```
-
-- [ ] 保持排序：
-
-```sql
-ORDER BY e.published_at DESC, e.id DESC
-```
-
-- [ ] `getEntries` 返回下一页 cursor 所需的最后一条原始 row。
-
-注意：
-
-- Livo 当前在 SQL 后做 `dedupeEntriesForRead`，这会影响 page size。keyset 应以 SQL 原始排序为准，必要时多取若干条作为 overscan，再 dedupe 到目标 limit。
-
-验收：
-
-- 文章新增到列表顶部后，继续加载更多仍稳定。
-- 同一 publishedAt 的多条 entry 按 id 稳定分页。
-
-测试：
-
-- `entry-repository` 分页测试。
-- `reader-snapshot` cursor 编解码测试。
-
-## 6. D 线：全文任务状态化
-
-### D2. Readability 抓取走 TaskRunner
-
-当前 `IPC.READABILITY_FETCH` 是直接 fetch。
-
-- [ ] 新增 task contract：`ENTRY_FULLTEXT_FETCH_TASK`。
-- [ ] handler 中 enqueue task，并返回 runId。
-- [ ] 成功后写入 entry：
-  - readabilityContent
-  - readabilityTitle
-  - readabilityExcerpt
-  - readabilitySiteName
-  - readabilityLength
-  - readabilityFetchedAt
-  - 清空 readabilityError
-- [ ] 失败后写入 readabilityError。
-
-验收：
-
-- 关闭再打开文章仍能看到全文结果或失败原因。
-- 同一 entry 多次点击不会并发抓取多个相同任务。
-- 失败后有重试入口。
-
-测试：
-
-- `readability-handlers.test.ts`
-- `task-runner` dedupe 测试补充。
-- `entry-repository.updateEntry` 写入 readability 字段测试。
 
 ## 7. E 线：AI session 持久化
 
@@ -285,34 +189,9 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ## 9. G 线：URL 安全策略审计
 
-### G1. 明确 URL 策略分层
-
-当前 `src/shared/url-policy.ts` 主要做协议/credentials/suspicious 判断，不做 DNS/IP 解析。
-
-- [ ] 新增主进程专用策略模块，例如：
-  - `src/main/services/system/network-url-policy.ts`
-- [ ] 分层：
-  - shared：字符串协议和 HTML URL 安全。
-  - main：DNS/IP/localhost/private CIDR 判断。
-- [ ] 保留桌面场景下本地 RSSHub 可用。
-
-建议模式：
-
-| 场景              | 默认策略                                |
-| ----------------- | --------------------------------------- |
-| 用户打开外部链接  | 允许 http/https，阻止 credentials       |
-| RSS 抓取          | 允许公网 + 用户配置的 RSSHub/local 模式 |
-| Readability 全文  | 同 RSS 抓取                             |
-| 图片代理/视频解析 | 禁止危险协议，必要时校验重定向          |
-| Discover preview  | 同 RSS 抓取                             |
-
 ### G2. 审计所有外部抓取入口
 
-- [ ] `src/main/services/feed/rss-parser.ts`
 - [ ] `src/main/services/feed/feed-source-provider.ts`
-- [ ] `src/main/services/entry/readability.ts`
-- [ ] `src/main/services/video/video-proxy.ts`
-- [ ] `src/main/services/video/video-duration.ts`
 - [ ] `src/main/services/discovery/*`
 - [ ] `src/main/handlers/app-handlers.ts` 中 external/open/download 相关入口
 
@@ -334,39 +213,6 @@ CREATE TABLE entry_ai_summary_sessions (
 - redirect 到危险地址
 
 ## 10. H 线：UI 内联任务反馈
-
-### H2. 文章详情内联任务状态
-
-目标示意：
-
-```text
-┌──────────────────────────────────────────────┐
-│ 正在抓取全文...                              │
-└──────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────┐
-│ AI 摘要生成失败：AI 配置无效                  │
-│ [重试] [打开设置]                             │
-└──────────────────────────────────────────────┘
-```
-
-- [ ] 在 `EntryContent` / `ArticleDetailPage` 的正文顶部展示任务状态条。
-- [ ] 状态来源统一使用 entry taskSnapshot。
-- [ ] 失败状态提供重试按钮。
-- [ ] 配置缺失状态提供打开设置入口。
-
-涉及文件：
-
-- `src/renderer/src/components/entry/EntryContent.tsx`
-- `src/renderer/src/pages/ArticleDetailPage.tsx`
-- `src/renderer/src/components/entry/AISummaryPanel.tsx`
-- `src/renderer/src/components/entry/BilingualContent.tsx`
-
-验收：
-
-- toast 仍可存在，但主要状态不依赖 toast。
-- 切换文章后状态不串。
-- 长文、窄屏下不遮挡正文。
 
 ### H3. 快捷键帮助补齐 AI/全文操作
 
@@ -390,10 +236,7 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ### I2. P1 测试
 
-- [ ] keyset cursor 编解码。
-- [ ] `EntryRepository.getEntries` keyset 分页。
 - [ ] `entry-store.loadMoreEntries` 旧请求不覆盖新状态。
-- [ ] readability task succeeded/failed 写库。
 - [ ] 文章详情任务状态条渲染。
 
 ### I3. P2 测试
@@ -415,74 +258,30 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ## 13. 推荐执行顺序
 
-1. H2：把已派生的 entry 任务状态展示到文章详情。
-2. G1 + G2：统一外部抓取安全策略。
-3. C1 + C2：改 snapshot cursor。
-4. D2：全文抓取进入 TaskRunner 并持久化终态。
-5. E1-E3：AI 摘要 session。
-6. E4：AI 翻译 session。
-7. F1 + F3：Digest 融入阅读流。
+1. G2：补完剩余外部抓取入口审计。
+2. E1-E3：AI 摘要 session。
+3. E4：AI 翻译 session。
+4. F1 + F3：Digest 融入阅读流。
 
 ## 14. 首批可开工任务卡片
 
-### TODO-005：文章详情内联任务状态条
-
-- 类型：UI
-- 优先级：P1
-- 涉及文件：
-  - `src/renderer/src/components/entry/EntryContent.tsx`
-  - `src/renderer/src/pages/ArticleDetailPage.tsx`
-  - `src/renderer/src/components/entry/AISummaryPanel.tsx`
-- 验收：
-  - 全文/摘要失败直接显示在正文区域。
-  - 提供重试入口。
-
-### TODO-006：主进程 URL 安全策略审计
+### TODO-006：剩余主进程 URL 安全策略审计
 
 - 类型：security + tests
 - 优先级：P0
 - 涉及文件：
-  - `src/shared/url-policy.ts`
-  - `src/main/services/system/network-url-policy.ts`
-  - `src/main/services/feed/rss-parser.ts`
-  - `src/main/services/entry/readability.ts`
-  - `src/main/services/video/*`
+  - `src/main/services/feed/feed-source-provider.ts`
   - `src/main/services/discovery/*`
+  - `src/main/handlers/app-handlers.ts`
 - 验收：
-  - 危险地址有测试。
-  - 本地 RSSHub 场景不被误杀。
-
-### TODO-007：ReaderSnapshot keyset cursor
-
-- 类型：repository + snapshot + renderer store
-- 优先级：P1
-- 涉及文件：
-  - `src/main/database/repositories/entry-repository.ts`
-  - `src/main/services/entry/reader-snapshot.ts`
-  - `src/renderer/src/store/entry-store.ts`
-- 验收：
-  - 新文章插入后加载更多稳定。
-  - 同 publishedAt 多 entry 不乱序。
-
-### TODO-008：Readability 抓取任务化
-
-- 类型：TaskRunner + persistence
-- 优先级：P1
-- 涉及文件：
-  - `src/main/handlers/readability-handlers.ts`
-  - `src/main/services/entry/readability.ts`
-  - `src/main/services/system/task-contracts.ts`
-  - `src/main/services/system/task-runner.ts`
-  - `src/main/database/repositories/entry-repository.ts`
-- 验收：
-  - 成功/失败写入 entry。
-  - 重试不并发重复跑。
+  - 剩余入口显式选择 public/local 策略。
+  - 重定向到危险地址时被阻止。
 
 ### TODO-009：AI 摘要 session 最小实现
 
 - 类型：schema + AI service + IPC + UI
 - 优先级：P2
-- 依赖：TODO-005
+- 依赖：entry taskSnapshot 与文章详情内联任务状态
 - 涉及文件：
   - `src/main/database/sqlite-schema.ts`
   - `src/main/services/ai/ai-pipeline.ts`

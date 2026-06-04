@@ -215,6 +215,49 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
     })
   })
 
+  it('supports keyset pagination with publishedAt and id ordering', () => {
+    const adapter = createAdapter()
+    adapter.insertFeed(makeFeed({ id: 'feed-1' }))
+    adapter.insertEntries([
+      makeEntry({
+        id: 'entry-c',
+        title: 'C',
+        url: 'https://example.com/entry-c',
+        publishedAt: 2000,
+      }),
+      makeEntry({
+        id: 'entry-b',
+        title: 'B',
+        url: 'https://example.com/entry-b',
+        publishedAt: 2000,
+      }),
+      makeEntry({
+        id: 'entry-a',
+        title: 'A',
+        url: 'https://example.com/entry-a',
+        publishedAt: 1000,
+      }),
+    ])
+
+    const first = adapter.getEntries({ limit: 1, skipDedupe: true })
+    expect(first.entries.map((entry) => entry.id)).toEqual(['entry-c'])
+    expect(first.nextCursorEntry).toEqual({
+      id: 'entry-c',
+      publishedAt: 2000,
+    })
+
+    const second = adapter.getEntries({
+      limit: 2,
+      beforePublishedAt: first.nextCursorEntry?.publishedAt,
+      beforeId: first.nextCursorEntry?.id,
+      skipDedupe: true,
+    })
+    expect(second.entries.map((entry) => entry.id)).toEqual([
+      'entry-b',
+      'entry-a',
+    ])
+  })
+
   it('upserts digest runs by preset, feed, and window start', () => {
     const adapter = createAdapter()
     const feed = makeFeed()

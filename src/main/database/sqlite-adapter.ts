@@ -19,6 +19,10 @@ import { DigestRepository } from './repositories/digest-repository'
 import type { IDigestRepository } from './repositories/digest-repository'
 import { EntryRepository } from './repositories/entry-repository'
 import type { IEntryRepository } from './repositories/entry-repository'
+import type {
+  EntryListOptions,
+  EntryListResult,
+} from './repositories/entry-repository'
 import { FeedRepository } from './repositories/feed-repository'
 import type { IFeedRepository } from './repositories/feed-repository'
 import { FeverRepository } from './repositories/fever-repository'
@@ -119,17 +123,7 @@ export class SqliteAdapter {
     return this.entries.searchEntries(query, limit)
   }
 
-  getEntries(options: {
-    feedId?: string
-    feedIds?: string[]
-    starred?: boolean
-    unreadOnly?: boolean
-    limit?: number
-    offset?: number
-    compact?: boolean
-    maxContentLength?: number
-    skipDedupe?: boolean
-  }): { entries: Entry[]; hasMore: boolean } {
+  getEntries(options: EntryListOptions): EntryListResult {
     return this.entries.getEntries(options)
   }
 

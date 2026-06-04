@@ -20,6 +20,7 @@ export const TASK_NAMES = {
   FEED_REFRESH_ALL: 'feed.refresh_all',
   FEED_BOOTSTRAP_REFRESH: 'feed.bootstrap_refresh',
   VIDEO_DURATION_ENRICH: 'video.duration_enrich',
+  ENTRY_FULLTEXT_FETCH: 'entry.fulltext_fetch',
   AI_SUMMARIZE: 'ai.summarize',
   AI_TRANSLATE: 'ai.translate',
   AI_DIGEST_GENERATE: 'ai.digest_generate',
@@ -43,6 +44,11 @@ export interface FeedBootstrapRefreshTaskPayload {
 
 export interface VideoDurationEnrichTaskPayload {
   feedId: string
+}
+
+export interface EntryFulltextFetchTaskPayload {
+  entryId?: string
+  url: string
 }
 
 export interface AiDigestGenerateTaskPayload {
@@ -98,6 +104,15 @@ export const VIDEO_DURATION_ENRICH_TASK: TaskContract<VideoDurationEnrichTaskPay
     concurrency: 1,
     dedupeKey: (payload) => payload.feedId,
     timeoutMs: 300000,
+    retry: { maxAttempts: 1 },
+  }
+
+export const ENTRY_FULLTEXT_FETCH_TASK: TaskContract<EntryFulltextFetchTaskPayload> =
+  {
+    name: TASK_NAMES.ENTRY_FULLTEXT_FETCH,
+    concurrency: 2,
+    dedupeKey: (payload) => payload.entryId || payload.url,
+    timeoutMs: 180000,
     retry: { maxAttempts: 1 },
   }
 

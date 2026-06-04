@@ -226,7 +226,8 @@ const api = {
 
   // Readability
   readability: {
-    fetch: (url: string) => invokeIpc(IPC.READABILITY_FETCH, url),
+    fetch: (url: string, entryId?: string) =>
+      invokeIpc(IPC.READABILITY_FETCH, url, entryId),
   },
 
   // Discover

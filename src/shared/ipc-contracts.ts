@@ -234,7 +234,7 @@ export type IpcArgsByChannel = {
   [IPC.SETTINGS_GET]: []
   [IPC.SETTINGS_SET]: [settings: Partial<AppSettings>]
   [IPC.ACTIONS_SYNC]: [rules: ActionRule[]]
-  [IPC.READABILITY_FETCH]: [url: string]
+  [IPC.READABILITY_FETCH]: [url: string, entryId?: string]
   [IPC.DISCOVER_CATEGORIES]: []
   [IPC.DISCOVER_POPULAR]: [category?: string]
   [IPC.DISCOVER_SEARCH]: [
@@ -742,7 +742,15 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.ACTIONS_SYNC>
     },
   },
-  [IPC.READABILITY_FETCH]: oneString(IPC.READABILITY_FETCH, 'url'),
+  [IPC.READABILITY_FETCH]: {
+    channel: IPC.READABILITY_FETCH,
+    validateArgs: (args) => {
+      assertArity(IPC.READABILITY_FETCH, args, 1, 2)
+      assertString(args[0], 'url')
+      assertOptionalString(args[1], 'entryId')
+      return args as IpcArgs<typeof IPC.READABILITY_FETCH>
+    },
+  },
   [IPC.DISCOVER_CATEGORIES]: noArgs(IPC.DISCOVER_CATEGORIES),
   [IPC.DISCOVER_POPULAR]: optionalString(IPC.DISCOVER_POPULAR, 'category'),
   [IPC.DISCOVER_SEARCH]: {

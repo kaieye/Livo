@@ -8,16 +8,28 @@ import type {
   ReaderSnapshotScope,
 } from '../../../shared/types/index'
 import { deriveEntryTaskSnapshot } from '../../../shared/entry-task-status'
+import type { EntryTaskSnapshot } from '../../../shared/types/index'
+import type { TaskRunRecord } from '../system/task-runner'
+import { getLocalTaskRunner } from '../system/task-runner-service'
 
 const DEFAULT_SNAPSHOT_LIMIT = 10
 const MAX_SNAPSHOT_LIMIT = 1000
 const RECOMMENDED_CATEGORY = 'Recommended'
 
-interface SnapshotCursorPayload {
+interface SnapshotCursorPayloadV1 {
   v: 1
   offset: number
   queryKey: string
 }
+
+interface SnapshotCursorPayloadV2 {
+  v: 2
+  publishedAt: number
+  id: string
+  queryKey: string
+}
+
+type SnapshotCursorPayload = SnapshotCursorPayloadV1 | SnapshotCursorPayloadV2
 
 function toRendererFeed(feed: Feed): Feed {
   const folder =
@@ -60,23 +72,30 @@ function buildQueryKey(input: {
 function decodeCursor(
   cursor: string | null | undefined,
   queryKey: string,
-): number {
-  if (!cursor) return 0
+): SnapshotCursorPayloadV2 | null {
+  if (!cursor) return null
   try {
     const payload = JSON.parse(
       Buffer.from(cursor, 'base64url').toString('utf8'),
     ) as Partial<SnapshotCursorPayload>
     if (
-      payload.v !== 1 ||
+      payload.v !== 2 ||
       payload.queryKey !== queryKey ||
-      typeof payload.offset !== 'number' ||
-      !Number.isFinite(payload.offset)
+      typeof payload.publishedAt !== 'number' ||
+      !Number.isFinite(payload.publishedAt) ||
+      typeof payload.id !== 'string' ||
+      !payload.id
     ) {
-      return 0
+      return null
     }
-    return Math.max(0, Math.floor(payload.offset))
+    return {
+      v: 2,
+      publishedAt: Math.floor(payload.publishedAt),
+      id: payload.id,
+      queryKey,
+    }
   } catch {
-    return 0
+    return null
   }
 }
 
@@ -139,6 +158,36 @@ function sortFeedsForRenderer(feeds: FeedWithCount[]): FeedWithCount[] {
   return feeds.sort((a, b) => a.title.localeCompare(b.title))
 }
 
+function getActiveEntryTaskSnapshots(
+  entryIds: string[],
+): Map<string, Partial<Record<keyof EntryTaskSnapshot, TaskRunRecord>>> {
+  const entryIdSet = new Set(entryIds)
+  const result = new Map<
+    string,
+    Partial<Record<keyof EntryTaskSnapshot, TaskRunRecord>>
+  >()
+  const records = getLocalTaskRunner().listRecentRuns()
+
+  for (const record of records) {
+    if (record.status !== 'queued' && record.status !== 'running') continue
+    const entryId = record.metadata?.entryId
+    const taskKind = record.metadata?.entryTaskKind
+    if (typeof entryId !== 'string' || !entryIdSet.has(entryId)) continue
+    if (
+      taskKind !== 'fulltext' &&
+      taskKind !== 'aiSummary' &&
+      taskKind !== 'aiTranslate'
+    ) {
+      continue
+    }
+    const current = result.get(entryId) ?? {}
+    current[taskKind] = record
+    result.set(entryId, current)
+  }
+
+  return result
+}
+
 export function getReaderSnapshot(
   input: ReaderSnapshotRequest = {},
 ): ReaderSnapshot {
@@ -146,7 +195,7 @@ export function getReaderSnapshot(
   const limit = normalizeLimit(input.limit)
   const unreadOnly = !!input.unreadOnly
   const queryKey = buildQueryKey({ scope, unreadOnly, limit })
-  const offset = decodeCursor(input.cursor, queryKey)
+  const cursor = decodeCursor(input.cursor, queryKey)
   const unreadCountMap = getDb().entries.getUnreadCountMap()
   const feeds = sortFeedsForRenderer(
     getDb()
@@ -160,18 +209,30 @@ export function getReaderSnapshot(
   const result = getDb().entries.getEntries({
     ...entryOptions,
     limit,
-    offset,
+    beforePublishedAt: cursor?.publishedAt,
+    beforeId: cursor?.id,
     compact: input.compact ?? true,
     maxContentLength: input.maxContentLength ?? 520,
     skipDedupe: false,
   })
+  const activeTaskSnapshots = getActiveEntryTaskSnapshots(
+    result.entries.map((entry) => entry.id),
+  )
   const entries: ReaderSnapshotEntry[] = result.entries.map((entry) => ({
     ...entry,
-    taskSnapshot: deriveEntryTaskSnapshot(entry),
+    taskSnapshot: deriveEntryTaskSnapshot(entry, {
+      activeTasks: activeTaskSnapshots.get(entry.id),
+    }),
   }))
-  const nextCursor = result.hasMore
-    ? encodeCursor({ v: 1, offset: offset + limit, queryKey })
-    : null
+  const nextCursor =
+    result.hasMore && result.nextCursorEntry
+      ? encodeCursor({
+          v: 2,
+          publishedAt: result.nextCursorEntry.publishedAt,
+          id: result.nextCursorEntry.id,
+          queryKey,
+        })
+      : null
 
   return {
     feeds,

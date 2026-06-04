@@ -10,6 +10,7 @@ import { FeedViewType } from '../../../shared/types/index'
 import { VIDEO_DURATION_ENRICH_TASK } from '../system/task-contracts'
 import { getLocalTaskRunner } from '../system/task-runner-service'
 import type { TaskRunContext } from '../system/task-runner'
+import { assertNetworkFetchUrl } from '../system/network-url-policy'
 
 /** Simple in-memory cache: videoId 鈫?duration in seconds */
 const durationCache = new Map<string, number>()
@@ -44,13 +45,14 @@ function extractBilibiliId(url: string): string | null {
 /**
  * Fetch a URL and return the response body as string.
  */
-function fetchText(url: string, timeoutMs = 8000): Promise<string> {
+async function fetchText(url: string, timeoutMs = 8000): Promise<string> {
+  const safeUrl = await assertNetworkFetchUrl(url)
   return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(url)
+    const parsedUrl = new URL(safeUrl)
     const transport = parsedUrl.protocol === 'https:' ? https : http
 
     const req = transport.get(
-      url,
+      safeUrl,
       {
         headers: {
           'User-Agent':
@@ -67,7 +69,8 @@ function fetchText(url: string, timeoutMs = 8000): Promise<string> {
           res.statusCode < 400 &&
           res.headers.location
         ) {
-          fetchText(res.headers.location, timeoutMs).then(resolve, reject)
+          const redirectUrl = new URL(res.headers.location, safeUrl).href
+          fetchText(redirectUrl, timeoutMs).then(resolve, reject)
           return
         }
         const chunks: Buffer[] = []

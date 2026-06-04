@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getUnreadCountMap: vi.fn(),
   getEntries: vi.fn(),
   getAllFeeds: vi.fn(),
+  listRecentRuns: vi.fn(),
 }))
 
 vi.mock('../../database', () => ({
@@ -18,6 +19,12 @@ vi.mock('../../database', () => ({
     feeds: {
       getAllFeeds: mocks.getAllFeeds,
     },
+  }),
+}))
+
+vi.mock('../system/task-runner-service', () => ({
+  getLocalTaskRunner: () => ({
+    listRecentRuns: mocks.listRecentRuns,
   }),
 }))
 
@@ -59,6 +66,7 @@ describe('getReaderSnapshot', () => {
     mocks.getAllFeeds.mockReturnValue([makeFeed()])
     mocks.getUnreadCountMap.mockReturnValue(new Map([['feed-1', 1]]))
     mocks.getEntries.mockReturnValue({ entries: [], hasMore: false })
+    mocks.listRecentRuns.mockReturnValue([])
   })
 
   it('returns task snapshots for entries', () => {
@@ -103,6 +111,62 @@ describe('getReaderSnapshot', () => {
       lastRefreshAttemptedAt: 3000,
       lastRefreshError: '源站返回 HTTP 403',
       lastRefreshRawError: 'HTTPError: 403 Forbidden',
+    })
+  })
+
+  it('uses v2 keyset cursor for the next page and ignores v1 cursors', () => {
+    mocks.getEntries.mockReturnValueOnce({
+      entries: [makeEntry({ id: 'entry-2', publishedAt: 2000 })],
+      hasMore: true,
+      nextCursorEntry: { id: 'entry-2', publishedAt: 2000 },
+    })
+
+    const first = getReaderSnapshot({ limit: 1 })
+    expect(first.nextCursor).toBeTruthy()
+
+    getReaderSnapshot({ limit: 1, cursor: first.nextCursor })
+    expect(mocks.getEntries.mock.calls[1][0]).toMatchObject({
+      beforePublishedAt: 2000,
+      beforeId: 'entry-2',
+    })
+
+    const v1Cursor = Buffer.from(
+      JSON.stringify({ v: 1, offset: 10, queryKey: 'old' }),
+      'utf8',
+    ).toString('base64url')
+    getReaderSnapshot({ limit: 1, cursor: v1Cursor })
+    expect(mocks.getEntries.mock.calls[2][0]).toMatchObject({
+      beforePublishedAt: undefined,
+      beforeId: undefined,
+    })
+  })
+
+  it('merges active entry tasks into task snapshots', () => {
+    mocks.getEntries.mockReturnValue({
+      entries: [makeEntry({ id: 'entry-active' })],
+      hasMore: false,
+    })
+    mocks.listRecentRuns.mockReturnValue([
+      {
+        runId: 'entry-fulltext-fetch-1',
+        taskName: 'entry.fulltext_fetch',
+        status: 'running',
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: 1000,
+        updatedAt: 2000,
+        metadata: {
+          entryId: 'entry-active',
+          entryTaskKind: 'fulltext',
+        },
+      },
+    ])
+
+    const snapshot = getReaderSnapshot({ limit: 10 })
+
+    expect(snapshot.entries[0].taskSnapshot.fulltext).toMatchObject({
+      status: 'running',
+      updatedAt: 2000,
     })
   })
 })

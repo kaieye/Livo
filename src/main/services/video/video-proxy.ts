@@ -26,6 +26,7 @@ import {
   type InvidiousVideoResponse,
   type PipedVideoResponse,
 } from '@shared/video-url'
+import { assertNetworkFetchUrl } from '../system/network-url-policy'
 
 export { extractYouTubeId }
 
@@ -49,9 +50,10 @@ export type JsonFetcher = <T>(url: string, timeoutMs?: number) => Promise<T>
  * Fetch JSON using Electron's `net` module (no CORS restrictions).
  * Has a timeout to avoid hanging on unresponsive instances.
  */
-function fetchJSON<T>(url: string, timeoutMs = 8000): Promise<T> {
+async function fetchJSON<T>(url: string, timeoutMs = 8000): Promise<T> {
+  const safeUrl = await assertNetworkFetchUrl(url)
   return new Promise((resolve, reject) => {
-    const request = net.request(url)
+    const request = net.request(safeUrl)
     let data = ''
     let settled = false
 

@@ -11,6 +11,7 @@ import {
   fetchBilibiliVideoFeedFromSpacePage,
   mapParsedDynamicFeedToVideoFeed,
 } from '../bilibili/bilibili-video-feed'
+import { assertNetworkFetchUrl } from '../system/network-url-policy'
 
 const parser = new RssParser({
   timeout: 20000,
@@ -928,6 +929,10 @@ async function fetchFeedText(
   url: string,
   options?: FetchTextOptions,
 ): Promise<string> {
+  const safeUrl = await assertNetworkFetchUrl(url, {
+    allowLoopback: true,
+    allowPrivateNetwork: true,
+  })
   // Prefer Electron network stack, which follows app/session proxy and cert settings.
   const timeouts = options?.attemptTimeouts?.length
     ? options.attemptTimeouts
@@ -937,17 +942,17 @@ async function fetchFeedText(
   for (const timeout of timeouts) {
     try {
       // Build headers with Instagram cookie if available
-      let headers = buildRequestHeaders(url)
+      let headers = buildRequestHeaders(safeUrl)
 
       // For Instagram-related URLs, try to include session cookie
-      if (isInstagramRelatedUrl(url)) {
+      if (isInstagramRelatedUrl(safeUrl)) {
         const cookie = await getInstagramSessionCookie()
         if (cookie) {
           headers = { ...headers, Cookie: cookie }
         }
       }
 
-      const res = await session.defaultSession.fetch(url, {
+      const res = await session.defaultSession.fetch(safeUrl, {
         method: 'GET',
         headers,
         signal: AbortSignal.timeout(timeout),
@@ -962,12 +967,12 @@ async function fetchFeedText(
   try {
     // Get cookie for Instagram URLs before fallback fetch
     let cookie: string | null = null
-    if (isInstagramRelatedUrl(url)) {
+    if (isInstagramRelatedUrl(safeUrl)) {
       cookie = await getInstagramSessionCookie()
     }
 
     const fallback = await fetchWithConditional(
-      url,
+      safeUrl,
       undefined,
       undefined,
       options?.conditionalTimeoutMs ?? DEFAULT_CONDITIONAL_TIMEOUT_MS,

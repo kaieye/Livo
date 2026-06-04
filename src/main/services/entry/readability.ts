@@ -2,6 +2,7 @@ import { Readability } from '@mozilla/readability'
 import chardet from 'chardet'
 import createDOMPurify from 'dompurify'
 import { parseHTML } from 'linkedom'
+import { assertNetworkFetchUrl } from '../system/network-url-policy'
 
 export interface ReadabilityResult {
   title: string
@@ -199,11 +200,15 @@ export function extractReadableContent(
 export async function fetchReadableContent(
   url: string,
 ): Promise<ReadabilityResult> {
+  const safeUrl = await assertNetworkFetchUrl(url, {
+    allowLoopback: true,
+    allowPrivateNetwork: true,
+  })
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(safeUrl, {
       headers: {
         'User-Agent': READABILITY_USER_AGENT,
         Accept:
@@ -235,7 +240,7 @@ export async function fetchReadableContent(
       )
     }
 
-    return extractReadableContent(html, url)
+    return extractReadableContent(html, safeUrl)
   } finally {
     clearTimeout(timeout)
   }

@@ -18,13 +18,17 @@ declare global {
         }>
       }
       readability: {
-        fetch: (url: string) => Promise<{
+        fetch: (
+          url: string,
+          entryId?: string,
+        ) => Promise<{
           success: boolean
           title?: string
           content?: string
           excerpt?: string
           siteName?: string
           length?: number
+          runId?: string
           error?: string
         }>
       }

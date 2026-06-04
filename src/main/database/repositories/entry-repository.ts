@@ -20,6 +20,8 @@ export interface EntryListOptions {
   unreadOnly?: boolean
   limit?: number
   offset?: number
+  beforePublishedAt?: number
+  beforeId?: string
   compact?: boolean
   maxContentLength?: number
   skipDedupe?: boolean
@@ -28,6 +30,7 @@ export interface EntryListOptions {
 export interface EntryListResult {
   entries: Entry[]
   hasMore: boolean
+  nextCursorEntry?: Pick<Entry, 'id' | 'publishedAt'>
 }
 
 export interface EntryWriteResult {
@@ -267,12 +270,21 @@ export class EntryRepository implements IEntryRepository {
     unreadOnly?: boolean
     limit?: number
     offset?: number
+    beforePublishedAt?: number
+    beforeId?: string
     compact?: boolean
     maxContentLength?: number
     skipDedupe?: boolean
-  }): { entries: Entry[]; hasMore: boolean } {
+  }): {
+    entries: Entry[]
+    hasMore: boolean
+    nextCursorEntry?: Pick<Entry, 'id' | 'publishedAt'>
+  } {
     const offset = options.offset || 0
     const limit = options.limit || 1000
+    const useKeyset =
+      typeof options.beforePublishedAt === 'number' && !!options.beforeId
+    const fetchLimit = options.skipDedupe ? limit + 1 : limit * 3 + 1
 
     let sql = 'SELECT e.* FROM entries e INNER JOIN feeds f ON f.id = e.feed_id'
     const conditions: string[] = []
@@ -294,27 +306,64 @@ export class EntryRepository implements IEntryRepository {
       conditions.push('e.is_read = 0')
     }
 
+    if (useKeyset) {
+      conditions.push(
+        '(e.published_at < ? OR (e.published_at = ? AND e.id < ?))',
+      )
+      params.push(
+        options.beforePublishedAt,
+        options.beforePublishedAt,
+        options.beforeId,
+      )
+    }
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ')
     }
 
     sql += ' ORDER BY e.published_at DESC, e.id DESC'
 
-    // 多取一条用于判断分页是否还有后续数据。
-    sql += ' LIMIT ? OFFSET ?'
-    params.push(limit + 1, offset)
+    // 多取一条用于判断分页是否还有后续数据；去重列表额外 overscan，
+    // 避免 SQL 层页内重复导致 renderer 拿不到足够条目。
+    sql += ' LIMIT ?'
+    params.push(fetchLimit)
+    if (!useKeyset) {
+      sql += ' OFFSET ?'
+      params.push(offset)
+    }
 
     const rows = this.db.prepare(sql).all(...params) as any[]
-    const hasMore = rows.length > limit
-    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    const hasExtraRawRow = rows.length > fetchLimit - 1
+    const visibleRows = hasExtraRawRow ? rows.slice(0, fetchLimit - 1) : rows
+    const pageRows = options.skipDedupe
+      ? visibleRows.slice(0, limit)
+      : visibleRows
     let entries = pageRows.map(entryFromRow)
 
     if (!options.skipDedupe) {
       entries = dedupeEntriesForRead(entries, () => {})
-      entries.sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+      entries.sort((a, b) => {
+        const dateDelta = (b.publishedAt || 0) - (a.publishedAt || 0)
+        return dateDelta || b.id.localeCompare(a.id)
+      })
     }
+    const hasOverflowAfterDedupe = entries.length > limit
+    const resultEntries = hasOverflowAfterDedupe
+      ? entries.slice(0, limit)
+      : entries
+    const anchorEntry =
+      hasOverflowAfterDedupe || options.skipDedupe
+        ? resultEntries.at(-1)
+        : pageRows.at(-1)
+          ? entryFromRow(pageRows.at(-1))
+          : undefined
+    const nextCursorEntry = anchorEntry
+      ? { id: anchorEntry.id, publishedAt: anchorEntry.publishedAt }
+      : undefined
+    const hasMore = hasExtraRawRow || hasOverflowAfterDedupe
 
-    if (!options.compact) return { entries, hasMore }
+    if (!options.compact)
+      return { entries: resultEntries, hasMore, nextCursorEntry }
 
     const maxContentLength = Math.max(
       160,
@@ -357,13 +406,14 @@ export class EntryRepository implements IEntryRepository {
     }
 
     return {
-      entries: entries.map((entry) => ({
+      entries: resultEntries.map((entry) => ({
         ...entry,
         content: trimCompactContent(entry.content, maxContentLength),
         summary: trimCompactContent(entry.summary, maxSummaryLength),
         media: entry.media || [],
       })),
       hasMore,
+      nextCursorEntry,
     }
   }
 
