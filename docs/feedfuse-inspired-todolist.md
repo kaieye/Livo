@@ -17,7 +17,6 @@
 | 工作线                    | 优先级 | 目标                                                  | 主要收益                | 主要风险                     |
 | ------------------------- | ------ | ----------------------------------------------------- | ----------------------- | ---------------------------- |
 | A. 刷新状态结构化         | P0     | feed 记录最近刷新状态、用户错误、原始错误             | 左栏可见失败、便于诊断  | schema 和 row mapper 改动    |
-| B. ReaderSnapshot 扩容    | P0     | snapshot 暴露 feed/entry 派生状态                     | 减少 renderer 拼装状态  | snapshot 类型扩大            |
 | C. Snapshot keyset cursor | P1     | 用 publishedAt/id 替代 offset cursor                  | 分页更稳定              | 与客户端去重的关系要处理     |
 | D. 全文任务状态化         | P1     | readability 有可恢复状态和重试入口                    | 长任务体验更清楚        | 需要规范现有字段语义         |
 | E. AI session 持久化      | P2     | 摘要/翻译从 requestId 临时流升级为 entry 关联 session | 切换文章/重启后可恢复   | 改动面较大                   |
@@ -30,12 +29,10 @@
 
 ### M1：最小状态可见闭环
 
-目标：用户能在左栏看到 feed 刷新失败，在文章页看到全文/AI 任务状态，snapshot 能一次性带出这些状态。
+目标：用户能在文章页看到全文/AI 任务状态。
 
-- [ ] B1. ReaderSnapshot 返回 feed 刷新状态
-- [ ] H1. 左栏 feed 错误图标与 tooltip
 - [ ] H2. 文章详情内联任务状态条
-- [ ] I1. 为 A/B/D/H 增加最小测试
+- [ ] I1. 为 A/D/H 增加最小测试
 
 ### M2：分页和任务状态稳定化
 
@@ -79,29 +76,6 @@
 风险：
 
 - 这一步可在 A1/A2 后做，不要阻塞最小失败可见闭环。
-
-## 4. B 线：ReaderSnapshot 扩容
-
-### B1. Snapshot 返回 feed 刷新状态
-
-- [ ] 更新 `src/shared/types/entry.ts` 中 `ReaderSnapshot` 相关类型：
-  - `FeedWithCount` 已包含 Feed，Feed 扩展后自然带出。
-  - 如需更克制，可新增 `ReaderSnapshotFeed` 类型，避免所有 feed API 都暴露内部状态。
-- [ ] 更新 `src/main/services/entry/reader-snapshot.ts`：
-  - 保留 unreadCount。
-  - 透出刷新状态字段。
-- [ ] 更新 `src/renderer/src/store/entry-store.ts`：
-  - snapshot 加载后同步 feed-store 或提供明确消费路径。
-
-验收：
-
-- `window.api.reader.snapshot()` 返回的 feeds 包含刷新状态。
-- renderer 不需要额外调用 feed list 才能展示错误状态。
-
-测试：
-
-- `reader-snapshot` 单测覆盖 feed status。
-- IPC contract 测试覆盖类型兼容。
 
 ## 5. C 线：Snapshot keyset cursor
 
@@ -383,33 +357,6 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ## 10. H 线：UI 内联任务反馈
 
-### H1. 左栏 feed 错误状态
-
-目标示意：
-
-```text
-技术博客                     12
-某站点                  !   3
-                         └ hover: 最近刷新失败：HTTP 403
-```
-
-- [ ] `Sidebar` 的 feed item 增加错误图标。
-- [ ] hover/focus 显示 tooltip。
-- [ ] 错误图标不抢主要点击区域。
-- [ ] 成功刷新后自动消失。
-
-涉及文件：
-
-- `src/renderer/src/components/layout/Sidebar.tsx`
-- `src/renderer/src/store/feed-store.ts`
-- 可能涉及 `src/renderer/src/locales/*/sidebar.ts`
-
-验收：
-
-- 键盘 focus 也能读到错误信息。
-- 错误文案不会撑破 sidebar。
-- 推荐源和普通源都能显示。
-
 ### H2. 文章详情内联任务状态
 
 目标示意：
@@ -490,43 +437,15 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ## 13. 推荐执行顺序
 
-1. B1 + H1：把 feed 错误通过 snapshot/左栏展示出来。
-2. H2：把已派生的 entry 任务状态展示到文章详情。
-3. G1 + G2：统一外部抓取安全策略。
-4. C1 + C2 + C3：改 snapshot cursor。
-5. D2：全文抓取进入 TaskRunner 并持久化终态。
-6. E1-E3：AI 摘要 session。
-7. E4：AI 翻译 session。
-8. F1-F3：Digest 融入阅读流。
+1. H2：把已派生的 entry 任务状态展示到文章详情。
+2. G1 + G2：统一外部抓取安全策略。
+3. C1 + C2 + C3：改 snapshot cursor。
+4. D2：全文抓取进入 TaskRunner 并持久化终态。
+5. E1-E3：AI 摘要 session。
+6. E4：AI 翻译 session。
+7. F1-F3：Digest 融入阅读流。
 
 ## 14. 首批可开工任务卡片
-
-### TODO-002：ReaderSnapshot 暴露 feed 刷新状态
-
-- 类型：shared type + main service + renderer store
-- 优先级：P0
-- 涉及文件：
-  - `src/shared/types/entry.ts`
-  - `src/main/services/entry/reader-snapshot.ts`
-  - `src/renderer/src/store/entry-store.ts`
-  - `src/renderer/src/store/feed-store.ts`
-- 验收：
-  - snapshot 中可读到每个 feed 的最近失败。
-  - feed list 不需要额外请求就能展示状态。
-
-### TODO-003：Sidebar feed 错误提示
-
-- 类型：UI
-- 优先级：P0
-- 依赖：TODO-002
-- 涉及文件：
-  - `src/renderer/src/components/layout/Sidebar.tsx`
-  - `src/renderer/src/locales/zh-CN/sidebar.ts`
-  - `src/renderer/src/locales/en/sidebar.ts`
-- 验收：
-  - 失败 feed 显示非侵入式错误图标。
-  - hover/focus 可读错误。
-  - 成功刷新后图标消失。
 
 ### TODO-005：文章详情内联任务状态条
 

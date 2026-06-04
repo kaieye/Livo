@@ -137,7 +137,11 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
               feed.category === next.category &&
               feed.folder === next.folder &&
               feed.view === next.view &&
-              feed.showInAll === next.showInAll
+              feed.showInAll === next.showInAll &&
+              feed.lastRefreshStatus === next.lastRefreshStatus &&
+              feed.lastRefreshAttemptedAt === next.lastRefreshAttemptedAt &&
+              feed.lastRefreshError === next.lastRefreshError &&
+              feed.lastRefreshRawError === next.lastRefreshRawError
             )
           })
         return unchanged ? state : { feeds: snapshotFeeds }

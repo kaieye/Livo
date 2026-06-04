@@ -12,6 +12,8 @@ export const enSidebar = {
   shortcuts: 'Shortcuts (?)',
   markAllRead: 'Mark All Read',
   refreshFeed: 'Refresh Feed',
+  feedRefreshFailed: 'Last refresh failed: {{error}}',
+  feedRefreshFailedFallback: 'Last refresh failed',
   refreshCategory: 'Refresh Folder',
   editFeed: 'Edit Feed',
   editFeedTitle: 'Title',

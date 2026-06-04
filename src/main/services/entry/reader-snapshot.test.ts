@@ -27,6 +27,10 @@ function makeFeed(partial: Partial<Feed> = {}): Feed {
     title: partial.title ?? 'Feed title',
     url: partial.url ?? 'https://example.com/feed.xml',
     view: partial.view ?? FeedViewType.Articles,
+    lastRefreshStatus: partial.lastRefreshStatus,
+    lastRefreshAttemptedAt: partial.lastRefreshAttemptedAt,
+    lastRefreshError: partial.lastRefreshError,
+    lastRefreshRawError: partial.lastRefreshRawError,
     errorCount: partial.errorCount ?? 0,
     createdAt: partial.createdAt ?? 1000,
   }
@@ -77,6 +81,28 @@ describe('getReaderSnapshot', () => {
         fulltext: { status: 'succeeded', updatedAt: 2000 },
         aiSummary: { status: 'failed', error: 'No API key' },
       },
+    })
+  })
+
+  it('returns feed refresh status fields', () => {
+    mocks.getAllFeeds.mockReturnValue([
+      makeFeed({
+        lastRefreshStatus: 'failed',
+        lastRefreshAttemptedAt: 3000,
+        lastRefreshError: '源站返回 HTTP 403',
+        lastRefreshRawError: 'HTTPError: 403 Forbidden',
+      }),
+    ])
+
+    const snapshot = getReaderSnapshot({ limit: 10 })
+
+    expect(snapshot.feeds[0]).toMatchObject({
+      id: 'feed-1',
+      unreadCount: 1,
+      lastRefreshStatus: 'failed',
+      lastRefreshAttemptedAt: 3000,
+      lastRefreshError: '源站返回 HTTP 403',
+      lastRefreshRawError: 'HTTPError: 403 Forbidden',
     })
   })
 })

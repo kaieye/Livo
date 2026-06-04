@@ -10,6 +10,7 @@ import {
   FeedViewType,
   VIEW_DEFINITIONS,
   DEFAULT_SETTINGS,
+  type FeedWithCount,
 } from '../../../../shared/types'
 import {
   resolveSubscriptionTarget,
@@ -50,6 +51,7 @@ import {
   GripVertical,
   Link,
   Pencil,
+  AlertTriangle,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAIChatStore } from '../../store/ai-chat-store'
@@ -215,6 +217,19 @@ function getSidebarFeedDisplayTitle(feed: {
     return formatInstagramFeedTitle(rawTitle, instagramUsername)
 
   return rawTitle
+}
+
+type SidebarT = (key: string, options?: Record<string, string>) => string
+
+function getFeedRefreshIssueLabel(
+  feed: Pick<FeedWithCount, 'lastRefreshStatus' | 'lastRefreshError'>,
+  t: SidebarT,
+): string | null {
+  if (feed.lastRefreshStatus !== 'failed') return null
+  const error = feed.lastRefreshError?.trim()
+  return error
+    ? t('sidebar.feedRefreshFailed', { error })
+    : t('sidebar.feedRefreshFailedFallback')
 }
 
 function extractInstagramNameFromUrl(value: string): string {
@@ -2566,14 +2581,7 @@ export function Sidebar({ width }: { width?: number }) {
 
 type FeedCategoryProps = {
   category: string
-  feeds: Array<{
-    id: string
-    title: string
-    url?: string
-    imageUrl?: string
-    siteUrl?: string
-    unreadCount: number
-  }>
+  feeds: FeedWithCount[]
   selectedFeedId: string | null
   onSelect: (id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
@@ -2589,6 +2597,22 @@ type FeedCategoryProps = {
   highlightedFeedIds: Set<string>
 }
 
+function FeedRefreshIssueBadge({ label }: { label: string | null }) {
+  if (!label) return null
+  return (
+    <span
+      className="relative ml-1 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-amber-600 dark:text-amber-400"
+      title={label}
+      aria-hidden="true"
+    >
+      <AlertTriangle size={13} strokeWidth={2.4} />
+      <span className="dark:bg-surface-dark-secondary pointer-events-none absolute right-0 top-full z-30 mt-1 hidden max-w-56 rounded-md border border-amber-500/30 bg-white px-2 py-1 text-left text-xs font-normal leading-snug text-amber-800 shadow-lg group-hover:block group-focus-visible:block dark:text-amber-200">
+        {label}
+      </span>
+    </span>
+  )
+}
+
 const FeedCategory = memo(function FeedCategory({
   category,
   feeds,
@@ -2602,6 +2626,7 @@ const FeedCategory = memo(function FeedCategory({
   autoExpand,
   highlightedFeedIds,
 }: FeedCategoryProps) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
   const isDropHover = dropTarget === category && dragFeedId !== null
   const shouldVirtualizeFeeds = feeds.length > 80
@@ -2687,6 +2712,8 @@ const FeedCategory = memo(function FeedCategory({
                 const feed = feeds[item.index]
                 if (!feed) return null
                 const isSearchHighlighted = highlightedFeedIds.has(feed.id)
+                const displayTitle = getSidebarFeedDisplayTitle(feed)
+                const issueLabel = getFeedRefreshIssueLabel(feed, t)
                 return (
                   <div
                     key={feed.id}
@@ -2703,6 +2730,12 @@ const FeedCategory = memo(function FeedCategory({
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
                       className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
+                      title={issueLabel ?? displayTitle}
+                      aria-label={
+                        issueLabel
+                          ? `${displayTitle}. ${issueLabel}`
+                          : displayTitle
+                      }
                     >
                       <GripVertical
                         size={12}
@@ -2721,8 +2754,9 @@ const FeedCategory = memo(function FeedCategory({
                         size={20}
                       />
                       <span className="flex-1 truncate text-left">
-                        {getSidebarFeedDisplayTitle(feed)}
+                        {displayTitle}
                       </span>
+                      <FeedRefreshIssueBadge label={issueLabel} />
                       <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
                         {feed.unreadCount}
                       </span>
@@ -2735,6 +2769,8 @@ const FeedCategory = memo(function FeedCategory({
             <div className="space-y-0.5">
               {feeds.map((feed) => {
                 const isSearchHighlighted = highlightedFeedIds.has(feed.id)
+                const displayTitle = getSidebarFeedDisplayTitle(feed)
+                const issueLabel = getFeedRefreshIssueLabel(feed, t)
                 return (
                   <div
                     key={feed.id}
@@ -2748,6 +2784,12 @@ const FeedCategory = memo(function FeedCategory({
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
                       className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
+                      title={issueLabel ?? displayTitle}
+                      aria-label={
+                        issueLabel
+                          ? `${displayTitle}. ${issueLabel}`
+                          : displayTitle
+                      }
                     >
                       {/* Drag grip 锟?pointer-based drag for smooth following */}
                       <GripVertical
@@ -2767,8 +2809,9 @@ const FeedCategory = memo(function FeedCategory({
                         size={20}
                       />
                       <span className="flex-1 truncate text-left">
-                        {getSidebarFeedDisplayTitle(feed)}
+                        {displayTitle}
                       </span>
+                      <FeedRefreshIssueBadge label={issueLabel} />
                       <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
                         {feed.unreadCount}
                       </span>
@@ -2786,14 +2829,7 @@ const FeedCategory = memo(function FeedCategory({
 
 /** Recommended feeds section with a sparkle icon. */
 type RecommendedSectionProps = {
-  feeds: Array<{
-    id: string
-    title: string
-    url?: string
-    imageUrl?: string
-    siteUrl?: string
-    unreadCount: number
-  }>
+  feeds: FeedWithCount[]
   selectedFeedId: string | null
   onSelect: (id: string) => void
   onContextMenu: (
@@ -2836,29 +2872,38 @@ const RecommendedSection = memo(function RecommendedSection({
       </button>
       {expanded && (
         <div className="space-y-0.5">
-          {feeds.map((feed) => (
-            <button
-              key={feed.id}
-              onClick={() => onSelect(feed.id)}
-              onContextMenu={(e) => onContextMenu(e, feed.id, true)}
-              className={`sidebar-item w-full ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''}`}
-            >
-              <FeedIcon
-                imageUrl={feed.imageUrl}
-                siteUrl={feed.siteUrl}
-                feedUrl={feed.url}
-                title={feed.title}
-                size={20}
-                accentClass="bg-amber-500/20 text-amber-500"
-              />
-              <span className="flex-1 truncate text-left">
-                {getSidebarFeedDisplayTitle(feed)}
-              </span>
-              <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
-                {feed.unreadCount}
-              </span>
-            </button>
-          ))}
+          {feeds.map((feed) => {
+            const displayTitle = getSidebarFeedDisplayTitle(feed)
+            const issueLabel = getFeedRefreshIssueLabel(feed, t)
+            return (
+              <button
+                key={feed.id}
+                onClick={() => onSelect(feed.id)}
+                onContextMenu={(e) => onContextMenu(e, feed.id, true)}
+                className={`sidebar-item group w-full ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''}`}
+                title={issueLabel ?? displayTitle}
+                aria-label={
+                  issueLabel ? `${displayTitle}. ${issueLabel}` : displayTitle
+                }
+              >
+                <FeedIcon
+                  imageUrl={feed.imageUrl}
+                  siteUrl={feed.siteUrl}
+                  feedUrl={feed.url}
+                  title={feed.title}
+                  size={20}
+                  accentClass="bg-amber-500/20 text-amber-500"
+                />
+                <span className="flex-1 truncate text-left">
+                  {displayTitle}
+                </span>
+                <FeedRefreshIssueBadge label={issueLabel} />
+                <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
+                  {feed.unreadCount}
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

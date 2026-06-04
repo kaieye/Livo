@@ -12,6 +12,8 @@ export const zhCNSidebar = {
   shortcuts: '快捷键 (?)',
   markAllRead: '全部标为已读',
   refreshFeed: '刷新订阅源',
+  feedRefreshFailed: '最近刷新失败：{{error}}',
+  feedRefreshFailedFallback: '最近刷新失败',
   refreshCategory: '刷新该文件夹',
   editFeed: '编辑订阅源',
   editFeedTitle: '标题',
