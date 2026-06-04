@@ -297,6 +297,44 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
     })
   })
 
+  it('persists entry AI summary sessions by latest updated state', () => {
+    const adapter = createAdapter()
+    const feed = makeFeed()
+    const entry = makeEntry({ content: 'Article body' })
+    adapter.insertFeed(feed)
+    adapter.insertEntry(entry)
+
+    const first = adapter.aiSummarySessions.createSession({
+      entryId: entry.id,
+      status: 'queued',
+      draftText: '',
+      model: 'gpt-test',
+      sourceHash: 'hash-1',
+    })
+    const completed = adapter.aiSummarySessions.updateSession(first.id, {
+      status: 'succeeded',
+      draftText: '摘要草稿',
+      finalText: '摘要草稿',
+      runId: 'ai-summarize-1',
+      finishedAt: 2000,
+    })
+
+    expect(completed).toMatchObject({
+      id: first.id,
+      entryId: entry.id,
+      status: 'succeeded',
+      finalText: '摘要草稿',
+      runId: 'ai-summarize-1',
+    })
+    expect(
+      adapter.aiSummarySessions.getLatestSessionByEntryId(entry.id),
+    ).toMatchObject({
+      id: first.id,
+      status: 'succeeded',
+      finalText: '摘要草稿',
+    })
+  })
+
   it('persists Fever accounts, mappings, and sync state', () => {
     const adapter = createAdapter()
     const feed = makeFeed()

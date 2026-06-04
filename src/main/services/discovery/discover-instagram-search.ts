@@ -1,5 +1,6 @@
 import { session } from 'electron'
 import { decodeHtmlEntities, formatFollowerCount } from './discover-helpers'
+import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 export const INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS = 1600
 
@@ -98,7 +99,8 @@ async function tryConvertImageUrlToDataUri(
   const normalizedUrl = normalizeImageUrl(imageUrl)
   if (!/^https?:\/\//i.test(normalizedUrl)) return undefined
   try {
-    const res = await session.defaultSession.fetch(normalizedUrl, {
+    const safeUrl = await assertPublicDiscoveryUrl(normalizedUrl)
+    const res = await session.defaultSession.fetch(safeUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -142,7 +144,8 @@ export async function fetchInstagramAvatarByUsername(
   // Method 1: Use Instagram's public JSON endpoint (no auth required)
   try {
     const jsonUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/?__a=1&__d=dis`
-    const jsonRes = await session.defaultSession.fetch(jsonUrl, {
+    const safeJsonUrl = await assertPublicDiscoveryUrl(jsonUrl)
+    const jsonRes = await session.defaultSession.fetch(safeJsonUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -189,7 +192,8 @@ export async function fetchInstagramAvatarByUsername(
   // Method 2: Parse profile page HTML for og:image
   const profileUrl = `https://www.instagram.com/${encodeURIComponent(clean)}/`
   try {
-    const res = await session.defaultSession.fetch(profileUrl, {
+    const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
+    const res = await session.defaultSession.fetch(safeProfileUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -251,7 +255,8 @@ export async function fetchInstagramAvatarByUsername(
       // Try to fetch avatar image and convert to base64 data URI
       // Instagram CDN requires specific headers to avoid 403
       try {
-        const avatarRes = await session.defaultSession.fetch(avatarUrl, {
+        const safeAvatarUrl = await assertPublicDiscoveryUrl(avatarUrl)
+        const avatarRes = await session.defaultSession.fetch(safeAvatarUrl, {
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -309,7 +314,8 @@ export async function fetchInstagramAvatarByUsername(
     // Try picuki.com (Instagram第三方查看器) as alternative source
     try {
       const picukiUrl = `https://www.picuki.com/profile/${encodeURIComponent(clean)}`
-      const picukiRes = await session.defaultSession.fetch(picukiUrl, {
+      const safePicukiUrl = await assertPublicDiscoveryUrl(picukiUrl)
+      const picukiRes = await session.defaultSession.fetch(safePicukiUrl, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -341,12 +347,17 @@ export async function fetchInstagramAvatarByUsername(
           )
           // Try to fetch as base64
           try {
-            const res = await session.defaultSession.fetch(avatarFromPicuki, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0',
-                Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+            const safeAvatarFromPicuki =
+              await assertPublicDiscoveryUrl(avatarFromPicuki)
+            const res = await session.defaultSession.fetch(
+              safeAvatarFromPicuki,
+              {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0',
+                  Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+                },
               },
-            })
+            )
             if (res.ok) {
               const arrayBuffer = await res.arrayBuffer()
               const buffer = Buffer.from(arrayBuffer)
@@ -439,7 +450,8 @@ export async function probeInstagramUsersByKeyword(
     try {
       const profileUrl = `https://www.instagram.com/${encodeURIComponent(directHandle)}/`
       console.log(`[Instagram Search] Trying to fetch profile: ${profileUrl}`)
-      const res = await session.defaultSession.fetch(profileUrl, {
+      const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
+      const res = await session.defaultSession.fetch(safeProfileUrl, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

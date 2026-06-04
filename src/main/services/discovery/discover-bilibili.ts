@@ -1,6 +1,7 @@
 import { session } from 'electron'
 import { computeMatchTier } from './discover-dedupe'
 import { formatFollowerCount } from './discover-helpers'
+import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 export type BilibiliUserProbeCandidate = {
   uid: string
@@ -22,7 +23,8 @@ export async function fetchBilibiliNameByUid(
 
   for (const endpoint of endpoints) {
     try {
-      const res = await fetch(endpoint, {
+      const safeEndpoint = await assertPublicDiscoveryUrl(endpoint)
+      const res = await fetch(safeEndpoint, {
         headers: {
           'User-Agent': 'Mozilla/5.0',
           Accept: 'application/json, text/plain, */*',
@@ -57,7 +59,8 @@ export async function fetchBilibiliAvatarByUid(
 
   for (const endpoint of endpoints) {
     try {
-      const res = await fetch(endpoint, {
+      const safeEndpoint = await assertPublicDiscoveryUrl(endpoint)
+      const res = await fetch(safeEndpoint, {
         headers: {
           'User-Agent': 'Mozilla/5.0',
           Accept: 'application/json, text/plain, */*',
@@ -91,8 +94,9 @@ export async function probeBilibiliUsersByKeyword(
   const seen = new Set<string>()
   try {
     const endpoint = `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(clean)}`
+    const safeEndpoint = await assertPublicDiscoveryUrl(endpoint)
     // Use Electron session fetch for consistent network behavior
-    const res = await session.defaultSession.fetch(endpoint, {
+    const res = await session.defaultSession.fetch(safeEndpoint, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

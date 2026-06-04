@@ -371,7 +371,10 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     isLoading: isSummarizing,
     summarize,
     reset: resetSummary,
-  } = useAISummary({ initialSummary: selectedEntry?.aiSummary ?? null })
+  } = useAISummary({
+    entryId: selectedEntry?.id,
+    initialSummary: selectedEntry?.aiSummary ?? null,
+  })
   const {
     translatedParagraphs,
     isTranslating,

@@ -14,16 +14,15 @@
 
 ## 1. 工作线总览
 
-| 工作线                    | 优先级 | 目标                                                  | 主要收益                | 主要风险                     |
-| ------------------------- | ------ | ----------------------------------------------------- | ----------------------- | ---------------------------- |
-| A. 刷新状态结构化         | P0     | feed 记录最近刷新状态、用户错误、原始错误             | 左栏可见失败、便于诊断  | schema 和 row mapper 改动    |
-| C. Snapshot keyset cursor | P1     | 用 publishedAt/id 替代 offset cursor                  | 分页更稳定              | 与客户端去重的关系要处理     |
-| D. 全文任务状态化         | P1     | readability 有可恢复状态和重试入口                    | 长任务体验更清楚        | 需要规范现有字段语义         |
-| E. AI session 持久化      | P2     | 摘要/翻译从 requestId 临时流升级为 entry 关联 session | 切换文章/重启后可恢复   | 改动面较大                   |
-| F. Digest 融入阅读流      | P2     | AI Digest 可作为特殊 Entry/Feed 阅读                  | 产品体验更统一          | 数据模型决策较大             |
-| G. URL 安全策略审计       | P0     | 所有外部抓取入口使用统一策略                          | 降低 SSRF/危险 URL 风险 | 本地 RSSHub 和内网场景要保留 |
-| H. UI 内联任务反馈        | P1     | 文章详情和左栏直接展示任务/失败状态                   | 用户不依赖 toast 猜状态 | UI 需要克制，不堆噪音        |
-| I. 测试补强               | P0-P2  | 覆盖每条工作线的关键行为                              | 防止后续回归            | 需要控制测试粒度             |
+| 工作线                    | 优先级 | 目标                                                  | 主要收益                | 主要风险                  |
+| ------------------------- | ------ | ----------------------------------------------------- | ----------------------- | ------------------------- |
+| A. 刷新状态结构化         | P0     | feed 记录最近刷新状态、用户错误、原始错误             | 左栏可见失败、便于诊断  | schema 和 row mapper 改动 |
+| C. Snapshot keyset cursor | P1     | 用 publishedAt/id 替代 offset cursor                  | 分页更稳定              | 与客户端去重的关系要处理  |
+| D. 全文任务状态化         | P1     | readability 有可恢复状态和重试入口                    | 长任务体验更清楚        | 需要规范现有字段语义      |
+| E. AI session 持久化      | P2     | 摘要/翻译从 requestId 临时流升级为 entry 关联 session | 切换文章/重启后可恢复   | 改动面较大                |
+| F. Digest 融入阅读流      | P2     | AI Digest 可作为特殊 Entry/Feed 阅读                  | 产品体验更统一          | 数据模型决策较大          |
+| H. UI 内联任务反馈        | P1     | 文章详情和左栏直接展示任务/失败状态                   | 用户不依赖 toast 猜状态 | UI 需要克制，不堆噪音     |
+| I. 测试补强               | P0-P2  | 覆盖每条工作线的关键行为                              | 防止后续回归            | 需要控制测试粒度          |
 
 ## 2. 里程碑拆分
 
@@ -43,9 +42,6 @@
 
 目标：AI 摘要/翻译可恢复，Digest 结果进入阅读流。
 
-- [ ] E1. 设计 AI session 最小 schema
-- [ ] E2. 新增 entry 级摘要/翻译 IPC
-- [ ] E3. hooks 改为 entryId + session 驱动
 - [ ] F1. 写 ADR：Digest 是特殊 Feed 还是特殊 Entry 类型
 - [ ] I3. 补 AI session 和 Digest 链路测试
 
@@ -72,71 +68,6 @@
 - 这一步可在 A1/A2 后做，不要阻塞最小失败可见闭环。
 
 ## 7. E 线：AI session 持久化
-
-### E1. 先定义最小 session 模型
-
-建议先做摘要，翻译后置。
-
-- [ ] 新增 SQLite 表：
-
-```sql
-CREATE TABLE entry_ai_summary_sessions (
-  id TEXT PRIMARY KEY,
-  entry_id TEXT NOT NULL,
-  status TEXT NOT NULL,
-  draft_text TEXT NOT NULL DEFAULT '',
-  final_text TEXT,
-  error_code TEXT,
-  error_message TEXT,
-  raw_error_message TEXT,
-  model TEXT,
-  source_hash TEXT,
-  run_id TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  finished_at INTEGER,
-  FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
-);
-```
-
-- [ ] 先不建 event 表；draftText 足够恢复 UI。
-- [ ] 后续如果需要更细粒度调试，再补 `entry_ai_summary_events`。
-
-验收：
-
-- 每篇 entry 能查到最近一个 active/latest session。
-- 失败原因用户可读，raw message 只用于日志/诊断。
-
-### E2. 新增 entry 级摘要 IPC
-
-当前 `AI_SUMMARIZE` 只接受 content。
-
-- [ ] 新增 IPC：
-  - `AI_SUMMARIZE_ENTRY`
-  - `AI_SUMMARY_SESSION_GET`
-- [ ] 由主进程读取 entry 内容，选择优先级：
-  - readabilityContent
-  - content
-  - summary
-- [ ] 写入 session draft/final/error。
-- [ ] 保留现有 `AI_SUMMARIZE` 给通用文本摘要使用。
-
-验收：
-
-- Entry 摘要不再要求 renderer 传整篇 HTML/text。
-- session 状态能通过 ReaderSnapshot 或 session get 取回。
-
-### E3. hooks 改为 session 驱动
-
-- [ ] `useAISummary` 增加 entryId 模式。
-- [ ] 初始值来自 snapshot/session。
-- [ ] 流式 chunk 更新本地 draft，同时主进程持久化 draft。
-- [ ] entry 切换时，不再丢掉已完成/失败 session。
-
-验收：
-
-- 切换文章再回来，摘要结果仍在。
-- 生成失败后仍显示失败卡片和重试按钮。
 
 ### E4. 翻译 session
 
@@ -187,31 +118,6 @@ CREATE TABLE entry_ai_summary_sessions (
 - 同一新闻多源转载不会占满报告候选。
 - 不影响普通阅读列表中的原始信息完整性。
 
-## 9. G 线：URL 安全策略审计
-
-### G2. 审计所有外部抓取入口
-
-- [ ] `src/main/services/feed/feed-source-provider.ts`
-- [ ] `src/main/services/discovery/*`
-- [ ] `src/main/handlers/app-handlers.ts` 中 external/open/download 相关入口
-
-验收：
-
-- 每个网络入口都有明确策略。
-- 内网/localhost 是显式允许，不是无意放开。
-
-测试：
-
-- localhost
-- 127.0.0.1
-- 0.0.0.0
-- 169.254.169.254
-- 10.0.0.0/8
-- 192.168.0.0/16
-- IPv6 loopback
-- 带 username/password URL
-- redirect 到危险地址
-
 ## 10. H 线：UI 内联任务反馈
 
 ### H3. 快捷键帮助补齐 AI/全文操作
@@ -258,36 +164,5 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ## 13. 推荐执行顺序
 
-1. G2：补完剩余外部抓取入口审计。
-2. E1-E3：AI 摘要 session。
-3. E4：AI 翻译 session。
-4. F1 + F3：Digest 融入阅读流。
-
-## 14. 首批可开工任务卡片
-
-### TODO-006：剩余主进程 URL 安全策略审计
-
-- 类型：security + tests
-- 优先级：P0
-- 涉及文件：
-  - `src/main/services/feed/feed-source-provider.ts`
-  - `src/main/services/discovery/*`
-  - `src/main/handlers/app-handlers.ts`
-- 验收：
-  - 剩余入口显式选择 public/local 策略。
-  - 重定向到危险地址时被阻止。
-
-### TODO-009：AI 摘要 session 最小实现
-
-- 类型：schema + AI service + IPC + UI
-- 优先级：P2
-- 依赖：entry taskSnapshot 与文章详情内联任务状态
-- 涉及文件：
-  - `src/main/database/sqlite-schema.ts`
-  - `src/main/services/ai/ai-pipeline.ts`
-  - `src/main/handlers/ai-handlers.ts`
-  - `src/shared/ipc-contracts.ts`
-  - `src/renderer/src/hooks/useAISummary.ts`
-- 验收：
-  - 摘要切换文章后可恢复。
-  - 失败原因持久化。
+1. E4：AI 翻译 session。
+2. F1 + F3：Digest 融入阅读流。

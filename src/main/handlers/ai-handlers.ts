@@ -8,6 +8,7 @@ import { normalizeAIError } from '../services/ai/provider-protocol'
 import { ConnectionTestService } from '../services/ai/connection-test'
 import {
   generateAIDigest,
+  hashAISummarySource,
   runAISummarizeTask,
   runAITranslateTask,
   normalizeDigestPreset,
@@ -27,6 +28,19 @@ import type {
   AISemanticFilterInput,
 } from '../../shared/types'
 import { USER_OPERATION_KEYS } from '../../shared/user-operations'
+
+function pickEntrySummaryContent(entry: {
+  readabilityContent?: string
+  content?: string
+  summary?: string
+}): string {
+  return (
+    entry.readabilityContent?.trim() ||
+    entry.content?.trim() ||
+    entry.summary?.trim() ||
+    ''
+  )
+}
 
 export function registerAIHandlers(): void {
   // Summarize content
@@ -53,6 +67,75 @@ export function registerAIHandlers(): void {
         return {
           success: false,
           error: normalizeAIError(error, settingsProvider.get().ai),
+          runId: task.runId,
+        }
+      }
+    },
+  )
+
+  registerChannel(
+    IPC.AI_SUMMARY_SESSION_GET,
+    async (_event, entryId: string) => {
+      return getDb().aiSummarySessions.getLatestSessionByEntryId(entryId)
+    },
+  )
+
+  registerChannel(
+    IPC.AI_SUMMARIZE_ENTRY,
+    async (_event, entryId: string, language?: string, requestId?: string) => {
+      const entry = getDb().entries.getEntryById(entryId)
+      if (!entry) return { success: false, error: 'entry_not_found' }
+
+      const content = pickEntrySummaryContent(entry)
+      if (!content) return { success: false, error: 'entry_content_empty' }
+
+      const sourceHash = hashAISummarySource(content)
+      const session = getDb().aiSummarySessions.createSession({
+        entryId,
+        status: 'queued',
+        draftText: '',
+        model: settingsProvider.get().ai.model,
+        sourceHash,
+      })
+      const task = getLocalTaskRunner().enqueue(
+        AI_SUMMARIZE_TASK,
+        {
+          content,
+          language,
+          requestId,
+          entryId,
+          sessionId: session.id,
+          sourceHash,
+        },
+        runAISummarizeTask,
+        {
+          metadata: {
+            operationKey: USER_OPERATION_KEYS.AI_SUMMARIZE,
+            streaming: Boolean(requestId),
+            language,
+            entryId,
+            sessionId: session.id,
+            contentLength: content.length,
+          },
+        },
+      )
+      getDb().aiSummarySessions.updateSession(session.id, {
+        runId: task.runId,
+      })
+      try {
+        const result = await task.promise
+        return {
+          ...result,
+          session:
+            getDb().aiSummarySessions.getSessionById(session.id) || session,
+          runId: task.runId,
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: normalizeAIError(error, settingsProvider.get().ai),
+          session:
+            getDb().aiSummarySessions.getSessionById(session.id) || session,
           runId: task.runId,
         }
       }

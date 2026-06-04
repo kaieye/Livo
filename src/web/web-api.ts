@@ -1634,6 +1634,81 @@ export function createWebAPI(): ElectronAPI {
         }
       },
 
+      summarizeEntry: async (
+        entryId: string,
+        language?: string,
+        requestId?: string,
+      ) => {
+        const entry = await dbGetEntryById(entryId)
+        if (!entry) return { success: false, error: 'entry_not_found' }
+        const content =
+          entry.readabilityContent?.trim() ||
+          entry.content?.trim() ||
+          entry.summary?.trim() ||
+          ''
+        if (!content) return { success: false, error: 'entry_content_empty' }
+        const result = await api.ai.summarize(content, language, requestId)
+        const now = Date.now()
+        if (result.success) {
+          await dbUpdateEntry(entryId, {
+            aiSummary: result.summary,
+            aiSummaryGeneratedAt: now,
+            aiSummaryError: undefined,
+          })
+          return {
+            success: true,
+            summary: result.summary,
+            runId: `web-ai-summary-${now}`,
+            session: {
+              id: `web-ai-summary-${entryId}-${now}`,
+              entryId,
+              status: 'succeeded' as const,
+              draftText: result.summary,
+              finalText: result.summary,
+              createdAt: now,
+              updatedAt: now,
+              finishedAt: now,
+            },
+          }
+        }
+        await dbUpdateEntry(entryId, { aiSummaryError: result.error })
+        return {
+          success: false,
+          error: result.error,
+          session: {
+            id: `web-ai-summary-${entryId}-${now}`,
+            entryId,
+            status: 'failed' as const,
+            draftText: '',
+            errorMessage: result.error,
+            rawErrorMessage: result.error,
+            createdAt: now,
+            updatedAt: now,
+            finishedAt: now,
+          },
+        }
+      },
+
+      getSummarySession: async (entryId: string) => {
+        const entry = await dbGetEntryById(entryId)
+        if (!entry?.aiSummary && !entry?.aiSummaryError) return null
+        const now = entry.aiSummaryGeneratedAt || Date.now()
+        return {
+          id: `web-ai-summary-${entryId}-${now}`,
+          entryId,
+          status: entry.aiSummary
+            ? ('succeeded' as const)
+            : ('failed' as const),
+          draftText: entry.aiSummary || '',
+          finalText: entry.aiSummary,
+          errorMessage: entry.aiSummaryError,
+          rawErrorMessage: entry.aiSummaryError,
+          createdAt: now,
+          updatedAt: now,
+          finishedAt: now,
+        }
+      },
+
       translate: async (
         content: string,
         targetLanguage: string,

@@ -2,6 +2,7 @@ import {
   FeedViewType,
   type ResolvedProfileFeedCandidate,
 } from '../../../shared/types/index'
+import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 function toUrl(input: string): URL | null {
   try {
@@ -55,7 +56,8 @@ async function fetchHtml(url: string): Promise<string | null> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   try {
-    const response = await fetch(url, {
+    const safeUrl = await assertPublicDiscoveryUrl(url)
+    const response = await fetch(safeUrl, {
       method: 'GET',
       headers: {
         'User-Agent':

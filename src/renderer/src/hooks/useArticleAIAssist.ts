@@ -100,7 +100,7 @@ export function useArticleAIAssist(
     isLoading: isSummarizing,
     summarize: summarizeRaw,
     reset: resetSummary,
-  } = useAISummary({ initialSummary })
+  } = useAISummary({ initialSummary, entryId })
 
   const {
     translatedParagraphs,

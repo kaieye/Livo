@@ -827,6 +827,7 @@ async function fetchWithConditional(
   lastModified?: string,
   timeoutMs = DEFAULT_CONDITIONAL_TIMEOUT_MS,
   cookie?: string | null,
+  redirectDepth = 0,
 ): Promise<{
   body: string | null
   notModified: boolean
@@ -834,6 +835,10 @@ async function fetchWithConditional(
   lastModified?: string
 }> {
   return new Promise((resolve, reject) => {
+    if (redirectDepth > 5) {
+      reject(new Error('Too many redirects'))
+      return
+    }
     const parsedUrl = new URL(url)
     const transport = parsedUrl.protocol === 'https:' ? https : http
 
@@ -863,31 +868,40 @@ async function fetchWithConditional(
           res.headers.location
         ) {
           const redirectUrl = new URL(res.headers.location, url).href
-          // For redirect, re-fetch cookie for the new URL
-          const isRedirectInstagram = isInstagramRelatedUrl(redirectUrl)
-          if (isRedirectInstagram && !cookie) {
-            getInstagramSessionCookie().then((newCookie) => {
-              fetchWithConditional(
-                redirectUrl,
-                etag,
-                lastModified,
-                timeoutMs,
-                newCookie,
-              )
-                .then(resolve)
-                .catch(reject)
+          assertNetworkFetchUrl(redirectUrl, {
+            allowLoopback: true,
+            allowPrivateNetwork: true,
+          })
+            .then(() => {
+              // For redirect, re-fetch cookie for the new URL
+              const isRedirectInstagram = isInstagramRelatedUrl(redirectUrl)
+              if (isRedirectInstagram && !cookie) {
+                getInstagramSessionCookie().then((newCookie) => {
+                  fetchWithConditional(
+                    redirectUrl,
+                    etag,
+                    lastModified,
+                    timeoutMs,
+                    newCookie,
+                    redirectDepth + 1,
+                  )
+                    .then(resolve)
+                    .catch(reject)
+                })
+              } else {
+                fetchWithConditional(
+                  redirectUrl,
+                  etag,
+                  lastModified,
+                  timeoutMs,
+                  cookie,
+                  redirectDepth + 1,
+                )
+                  .then(resolve)
+                  .catch(reject)
+              }
             })
-          } else {
-            fetchWithConditional(
-              redirectUrl,
-              etag,
-              lastModified,
-              timeoutMs,
-              cookie,
-            )
-              .then(resolve)
-              .catch(reject)
-          }
+            .catch(reject)
           res.resume()
           return
         }

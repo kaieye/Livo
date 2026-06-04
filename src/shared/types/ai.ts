@@ -66,6 +66,43 @@ export type AIDigestGenerateResult =
   | { success: true; run: AIDigestRun; candidates: AIDigestCandidate[] }
   | { success: false; error: string; run?: AIDigestRun }
 
+export type EntryAISummarySessionStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+
+export interface EntryAISummarySession {
+  id: string
+  entryId: string
+  status: EntryAISummarySessionStatus
+  draftText: string
+  finalText?: string
+  errorCode?: string
+  errorMessage?: string
+  rawErrorMessage?: string
+  model?: string
+  sourceHash?: string
+  runId?: string
+  createdAt: number
+  updatedAt: number
+  finishedAt?: number
+}
+
+export type AISummaryEntryResult =
+  | {
+      success: true
+      summary: string
+      session: EntryAISummarySession
+      runId: string
+    }
+  | {
+      success: false
+      error: string
+      session?: EntryAISummarySession
+      runId?: string
+    }
+
 export const DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE =
   'You are Livo AI assistant. Answer in concise Chinese. Context: {{context}}. Persona: {{persona}}.'
 

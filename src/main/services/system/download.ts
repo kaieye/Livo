@@ -7,6 +7,7 @@ import type {
   SaveTextFileOptions,
   SaveTextFileResult,
 } from '../../../shared/types/index'
+import { assertNetworkFetchUrl } from './network-url-policy'
 
 export function sanitizeSuggestedFileName(fileName: string): string {
   const normalized = Array.from((fileName || '').trim())
@@ -80,18 +81,46 @@ function inferFileNameFromUrl(url: string): string {
 export async function downloadUrlToFile(
   options: DownloadUrlOptions,
 ): Promise<DownloadUrlResult> {
+  return downloadUrlToFileWithRedirectDepth(options, 0)
+}
+
+async function downloadUrlToFileWithRedirectDepth(
+  options: DownloadUrlOptions,
+  redirectDepth: number,
+): Promise<DownloadUrlResult> {
   const targetUrl = (options.url || '').trim()
   if (!targetUrl) {
     return { success: false, error: 'missing_url' }
   }
+  if (redirectDepth > 5) {
+    return { success: false, error: 'too_many_redirects' }
+  }
 
   try {
-    const response = await session.defaultSession.fetch(targetUrl, {
+    const safeUrl = await assertNetworkFetchUrl(targetUrl)
+    const response = await session.defaultSession.fetch(safeUrl, {
       headers: {
         Accept: '*/*',
         'User-Agent': `Livo/${app.getVersion()}`,
       },
+      redirect: 'manual',
     })
+
+    if (
+      response.status >= 300 &&
+      response.status < 400 &&
+      response.headers.get('location')
+    ) {
+      const redirectUrl = new URL(
+        response.headers.get('location') || '',
+        safeUrl,
+      ).href
+      await assertNetworkFetchUrl(redirectUrl)
+      return downloadUrlToFileWithRedirectDepth(
+        { ...options, url: redirectUrl },
+        redirectDepth + 1,
+      )
+    }
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` }

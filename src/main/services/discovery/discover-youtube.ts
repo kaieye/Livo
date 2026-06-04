@@ -1,5 +1,6 @@
 import { session } from 'electron'
 import { normalizeNameForMatch } from './discover-helpers'
+import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 export type VideoProbeCandidate = {
   platform: 'youtube' | 'bilibili'
@@ -171,19 +172,19 @@ async function fetchYouTubeFollowersByChannelPath(
       `${normalizedPath.replace(/\/+$/, '')}/about`,
     ]
     for (const pagePath of pathsToTry) {
-      const res = await session.defaultSession.fetch(
+      const safeUrl = await assertPublicDiscoveryUrl(
         `https://www.youtube.com${pagePath}`,
-        {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            Accept:
-              'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            Cookie: 'CONSENT=YES+',
-          },
-        },
       )
+      const res = await session.defaultSession.fetch(safeUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          Cookie: 'CONSENT=YES+',
+        },
+      })
       if (!res.ok) continue
       const html = await res.text()
       const rawCandidates: string[] = []
@@ -245,8 +246,9 @@ export async function searchYouTubeChannelsByKeyword(
   if (looksLikeYouTubeChannelId(query)) return []
   const endpoint = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`
   try {
+    const safeEndpoint = await assertPublicDiscoveryUrl(endpoint)
     // Use Electron session fetch to respect system proxy settings
-    const res = await session.defaultSession.fetch(endpoint, {
+    const res = await session.defaultSession.fetch(safeEndpoint, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

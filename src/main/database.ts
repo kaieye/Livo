@@ -17,6 +17,7 @@ import { SqliteAdapter } from './database/sqlite-adapter'
 import type {
   IFeedRepository,
   IEntryRepository,
+  IEntryAISummarySessionRepository,
   IDigestRepository,
   IFeverRepository,
   IMaintenanceRepository,
@@ -32,6 +33,7 @@ let adapter: SqliteAdapter
 export function getDb(): {
   feeds: IFeedRepository
   entries: IEntryRepository
+  aiSummarySessions: IEntryAISummarySessionRepository
   digests: IDigestRepository
   fever: IFeverRepository
   maintenance: IMaintenanceRepository
@@ -40,6 +42,7 @@ export function getDb(): {
   return {
     feeds: adapter.feeds,
     entries: adapter.entries,
+    aiSummarySessions: adapter.aiSummarySessions,
     digests: adapter.digests,
     fever: adapter.fever,
     maintenance: adapter.maintenance,

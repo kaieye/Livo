@@ -192,6 +192,32 @@ const MIGRATIONS: Array<{
       ALTER TABLE feeds ADD COLUMN last_refresh_raw_error TEXT;
     `,
   },
+  {
+    version: 6,
+    name: 'entry-ai-summary-sessions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS entry_ai_summary_sessions (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        draft_text TEXT NOT NULL DEFAULT '',
+        final_text TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        raw_error_message TEXT,
+        model TEXT,
+        source_hash TEXT,
+        run_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS entry_ai_summary_sessions_entry_updated_idx
+        ON entry_ai_summary_sessions (entry_id, updated_at DESC);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

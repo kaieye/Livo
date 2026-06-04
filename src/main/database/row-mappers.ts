@@ -1,6 +1,7 @@
 import type {
   AIDigestPreset,
   AIDigestRun,
+  EntryAISummarySession,
   Entry,
   Feed,
   FeverAccount,
@@ -37,6 +38,25 @@ export function feedFromRow(row: any): Feed {
     lastRefreshRawError: row.last_refresh_raw_error || undefined,
     errorCount: row.error_count,
     createdAt: row.created_at,
+  }
+}
+
+export function entryAISummarySessionFromRow(row: any): EntryAISummarySession {
+  return {
+    id: row.id,
+    entryId: row.entry_id,
+    status: row.status,
+    draftText: row.draft_text || '',
+    finalText: row.final_text || undefined,
+    errorCode: row.error_code || undefined,
+    errorMessage: row.error_message || undefined,
+    rawErrorMessage: row.raw_error_message || undefined,
+    model: row.model || undefined,
+    sourceHash: row.source_hash || undefined,
+    runId: row.run_id || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    finishedAt: row.finished_at ?? undefined,
   }
 }
 

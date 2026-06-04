@@ -12,6 +12,18 @@ const mocks = vi.hoisted(() => ({
   validateAIConfig: vi.fn(),
   createOpenAIClient: vi.fn(),
   createCompletion: vi.fn(),
+  entry: {
+    id: 'entry-1',
+    readabilityContent: 'readable article',
+    content: 'rss content',
+    summary: 'rss summary',
+  },
+  latestSession: null as unknown,
+  createSession: vi.fn(),
+  updateSession: vi.fn(),
+  getSessionById: vi.fn(),
+  getLatestSessionByEntryId: vi.fn(),
+  updateEntry: vi.fn(),
 }))
 
 vi.mock('electron', () => ({
@@ -44,11 +56,25 @@ vi.mock('../services/system/logger', () => ({
 }))
 
 vi.mock('../database', () => ({
-  getDigestWindow: vi.fn(),
-  listAIDigestRuns: vi.fn(),
-  listDigestCandidates: vi.fn(),
-  updateAIDigestRun: vi.fn(),
-  upsertAIDigestRun: vi.fn(),
+  getDb: () => ({
+    entries: {
+      getEntryById: vi.fn(() => mocks.entry),
+      updateEntry: mocks.updateEntry,
+    },
+    aiSummarySessions: {
+      createSession: mocks.createSession,
+      updateSession: mocks.updateSession,
+      getSessionById: mocks.getSessionById,
+      getLatestSessionByEntryId: mocks.getLatestSessionByEntryId,
+    },
+    digests: {
+      getDigestWindow: vi.fn(),
+      listAIDigestRuns: vi.fn(),
+      listDigestCandidates: vi.fn(),
+      updateAIDigestRun: vi.fn(),
+      upsertAIDigestRun: vi.fn(),
+    },
+  }),
 }))
 
 type RegisteredHandler = (
@@ -93,6 +119,26 @@ describe('registerAIHandlers', () => {
         },
       },
     })
+    mocks.createSession.mockReturnValue({
+      id: 'session-1',
+      entryId: 'entry-1',
+      status: 'queued',
+      draftText: '',
+      createdAt: 1000,
+      updatedAt: 1000,
+    })
+    mocks.getSessionById.mockReturnValue({
+      id: 'session-1',
+      entryId: 'entry-1',
+      status: 'succeeded',
+      draftText: '摘要内容',
+      finalText: '摘要内容',
+      runId: 'ai-summarize-1',
+      createdAt: 1000,
+      updatedAt: 2000,
+      finishedAt: 2000,
+    })
+    mocks.getLatestSessionByEntryId.mockReturnValue(null)
   })
 
   it('records summarize requests in the local Task Runner', async () => {
@@ -152,5 +198,40 @@ describe('registerAIHandlers', () => {
         contentLength: 'article content'.length,
       },
     })
+  })
+
+  it('summarizes an entry through a persisted summary session', async () => {
+    const { registerAIHandlers } = await import('./ai-handlers')
+    registerAIHandlers()
+
+    const summarizeEntry = getRegisteredHandler(IPC.AI_SUMMARIZE_ENTRY)
+    const result = unwrapIpcEnvelope(
+      await summarizeEntry({}, 'entry-1', 'zh-CN'),
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      summary: '摘要内容',
+      session: {
+        id: 'session-1',
+        status: 'succeeded',
+        finalText: '摘要内容',
+      },
+      runId: expect.stringContaining('ai-summarize'),
+    })
+    expect(mocks.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entryId: 'entry-1',
+        status: 'queued',
+        model: 'gpt-test',
+      }),
+    )
+    expect(mocks.updateEntry).toHaveBeenCalledWith(
+      'entry-1',
+      expect.objectContaining({
+        aiSummary: '摘要内容',
+        aiSummaryError: undefined,
+      }),
+    )
   })
 })

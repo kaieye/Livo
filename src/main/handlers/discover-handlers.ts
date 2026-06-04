@@ -1,4 +1,3 @@
-import { session } from 'electron'
 import {
   CURATED_FEEDS,
   DISCOVER_CATEGORIES,
@@ -26,7 +25,6 @@ import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
 import {
-  computeMatchTier,
   dedupeAndSortDiscoverResults,
   type DiscoverSearchResult,
 } from '../services/discovery/discover-dedupe'
@@ -61,25 +59,11 @@ import {
   fetchBilibiliNameByUid,
   fetchBilibiliAvatarByUid,
   probeBilibiliUsersByKeyword,
-  type BilibiliUserProbeCandidate,
 } from '../services/discovery/discover-bilibili'
 import {
   fetchInstagramAvatarByUsername,
   probeInstagramUsersByKeyword,
 } from '../services/discovery/discover-instagram-search'
-import RssParser from 'rss-parser'
-
-/** A lightweight RSS parser with a short timeout - used for quick probes. */
-const fastParser = new RssParser({
-  timeout: 15000,
-  headers: {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    Accept:
-      'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
-  },
-})
-
 const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
 const discoverSearchCache = new Map<
   string,
@@ -695,7 +679,9 @@ export function registerDiscoverHandlers(): void {
 
       for (const feedUrl of allCandidates) {
         try {
-          const parsed = await fastParser.parseURL(feedUrl)
+          const fetched = await fetchAndParseFeed(feedUrl)
+          const parsed = fetched.data
+          if (!parsed) throw new Error('Empty feed data')
           const parsedName = extractTwitterDisplayNameFromText(
             parsed.title || '',
             clean,
@@ -753,7 +739,9 @@ export function registerDiscoverHandlers(): void {
       const attempts = allInstances.flatMap((inst) =>
         routes.map(async (route) => {
           const feedUrl = `${inst}${route}`
-          const parsed = await fastParser.parseURL(feedUrl)
+          const fetched = await fetchAndParseFeed(feedUrl)
+          const parsed = fetched.data
+          if (!parsed) throw new Error('Empty feed data')
           const image =
             (parsed as any).image?.url || (parsed as any).itunes?.image || ''
           return {

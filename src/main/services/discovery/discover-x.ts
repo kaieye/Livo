@@ -6,8 +6,8 @@ import {
   extractTwitterDisplayNameFromText,
   formatFollowerCount,
   normalizeXFollowersLabel,
-  normalizeNameForMatch,
 } from './discover-helpers'
+import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 export type XUserProbeCandidate = {
   username: string
@@ -62,8 +62,9 @@ export async function fetchXAvatarByUsername(
   if (cached && cached.expiresAt > now) return cached.image
   try {
     const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
+    const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
     // Use session fetch to respect proxy settings
-    const res = await session.defaultSession.fetch(profileUrl, {
+    const res = await session.defaultSession.fetch(safeProfileUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -108,7 +109,8 @@ export async function fetchXDisplayNameByUsername(
   if (!clean) return ''
   try {
     const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
-    const res = await fetch(profileUrl, {
+    const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
+    const res = await fetch(safeProfileUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
         Accept:
@@ -138,9 +140,10 @@ async function fetchTextViaNodeHttps(
   url: string,
   timeoutMs = 8000,
 ): Promise<string | undefined> {
+  const safeUrl = await assertPublicDiscoveryUrl(url)
   return new Promise((resolve) => {
     const req = https.get(
-      url,
+      safeUrl,
       {
         headers: {
           'User-Agent':
@@ -213,7 +216,8 @@ export async function _fetchXFollowersByUsername(
     `https://x.com/${encodeURIComponent(username)}?lang=en`,
   ]) {
     try {
-      const res = await session.defaultSession.fetch(profileUrl, {
+      const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
+      const res = await session.defaultSession.fetch(safeProfileUrl, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
@@ -256,7 +260,8 @@ export async function _fetchXFollowersByUsername(
   // Preferred source: public syndication endpoint (no login required).
   try {
     const endpoint = `https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names=${encodeURIComponent(username)}`
-    const res = await session.defaultSession.fetch(endpoint, {
+    const safeEndpoint = await assertPublicDiscoveryUrl(endpoint)
+    const res = await session.defaultSession.fetch(safeEndpoint, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -284,7 +289,8 @@ export async function _fetchXFollowersByUsername(
   // Fallback source: parse profile page metadata/state from x.com directly.
   try {
     const profileUrl = `https://x.com/${encodeURIComponent(username)}`
-    const res = await session.defaultSession.fetch(profileUrl, {
+    const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
+    const res = await session.defaultSession.fetch(safeProfileUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -350,7 +356,8 @@ export async function _fetchXFollowersByUsername(
     `https://r.jina.ai/http://mobile.x.com/${encodeURIComponent(username)}`,
   ]) {
     try {
-      const res = await session.defaultSession.fetch(mirrorUrl, {
+      const safeMirrorUrl = await assertPublicDiscoveryUrl(mirrorUrl)
+      const res = await session.defaultSession.fetch(safeMirrorUrl, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -395,7 +402,8 @@ export async function _fetchXFollowersByUsername(
   for (const nitterInstance of FALLBACK_NITTER_INSTANCES) {
     try {
       const profileUrl = `${nitterInstance}/${encodeURIComponent(username)}`
-      const res = await session.defaultSession.fetch(profileUrl, {
+      const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
+      const res = await session.defaultSession.fetch(safeProfileUrl, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -514,7 +522,8 @@ export async function probeXUsersByKeyword(
     try {
       const searchUrl = `${nitterInstance}/search?f=users&q=${encodeURIComponent(clean)}`
       console.log(`[X Search] Trying Nitter: ${searchUrl}`)
-      const res = await session.defaultSession.fetch(searchUrl, {
+      const safeSearchUrl = await assertPublicDiscoveryUrl(searchUrl)
+      const res = await session.defaultSession.fetch(safeSearchUrl, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -596,7 +605,8 @@ export async function probeXUsersByKeyword(
   try {
     const searchUrl = `https://x.com/search?q=${encodeURIComponent(clean)}&f=user`
     console.log(`[X Search] Trying X.com: ${searchUrl}`)
-    const res = await session.defaultSession.fetch(searchUrl, {
+    const safeSearchUrl = await assertPublicDiscoveryUrl(searchUrl)
+    const res = await session.defaultSession.fetch(safeSearchUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

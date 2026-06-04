@@ -36,6 +36,16 @@ describe('ipc-contracts', () => {
       'ai-summarize-1',
     ])
     expect(
+      validateIpcArgs(IPC.AI_SUMMARIZE_ENTRY, [
+        'entry-1',
+        'zh-CN',
+        'request-1',
+      ]),
+    ).toEqual(['entry-1', 'zh-CN', 'request-1'])
+    expect(validateIpcArgs(IPC.AI_SUMMARY_SESSION_GET, ['entry-1'])).toEqual([
+      'entry-1',
+    ])
+    expect(
       validateIpcArgs(IPC.TASK_RUN_LIST, [
         { taskName: 'ai.summarize', limit: 10 },
       ]),

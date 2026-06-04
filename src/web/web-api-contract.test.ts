@@ -34,6 +34,8 @@ const ELECTRON_API_SHAPE = {
   },
   ai: {
     summarize: true,
+    summarizeEntry: true,
+    getSummarySession: true,
     translate: true,
     chat: true,
     chatStream: true,

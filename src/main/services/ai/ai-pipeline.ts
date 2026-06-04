@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { createHash } from 'crypto'
 import { getEventBus } from '../system/event-bus'
 import { settingsProvider } from '../system/settings-provider'
 import { createOpenAIClient, validateAIConfig } from './ai-client'
@@ -46,6 +47,32 @@ export function getDigestPresetLabel(preset: AIDigestPreset): string {
 
 export function normalizeDigestPreset(value: unknown): AIDigestPreset {
   return value === 'week' ? 'week' : 'today'
+}
+
+export function hashAISummarySource(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+function persistAISummarySessionPatch(
+  sessionId: string | undefined,
+  patch: Parameters<
+    ReturnType<typeof getDb>['aiSummarySessions']['updateSession']
+  >[1],
+): void {
+  if (!sessionId) return
+  getDb().aiSummarySessions.updateSession(sessionId, patch)
+}
+
+function persistEntryAISummary(
+  entryId: string | undefined,
+  summary: string,
+): void {
+  if (!entryId) return
+  getDb().entries.updateEntry(entryId, {
+    aiSummary: summary,
+    aiSummaryGeneratedAt: Date.now(),
+    aiSummaryError: undefined,
+  })
 }
 
 async function requestDigestText(
@@ -276,12 +303,20 @@ export async function runAISummarizeTask(
 ): Promise<AISummarizeResult> {
   const settings = settingsProvider.get()
   const aiConfig = settings.ai
-  const { content, language, requestId } = payload
+  const { content, language, requestId, entryId, sessionId, sourceHash } =
+    payload
 
   const fail = (error: string): never => {
     if (requestId) {
       sendToAllWindows('ai:summary-stream-error', { requestId, error })
     }
+    persistAISummarySessionPatch(sessionId, {
+      status: 'failed',
+      errorCode: 'provider_error',
+      errorMessage: error,
+      rawErrorMessage: error,
+      finishedAt: Date.now(),
+    })
     throw new Error(error)
   }
 
@@ -297,6 +332,12 @@ export async function runAISummarizeTask(
     })
 
     const client = createOpenAIClient(aiConfig)
+    persistAISummarySessionPatch(sessionId, {
+      status: 'running',
+      model: aiConfig.model,
+      sourceHash,
+      runId: context?.runId,
+    })
     const lang = language || settings.general.language || 'zh-CN'
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       {
@@ -323,6 +364,10 @@ export async function runAISummarizeTask(
         const delta = chunk.choices[0]?.delta?.content || ''
         if (!delta) continue
         summary += delta
+        persistAISummarySessionPatch(sessionId, {
+          status: 'running',
+          draftText: summary,
+        })
         sendToAllWindows('ai:summary-stream-chunk', {
           requestId,
           content: delta,
@@ -336,6 +381,16 @@ export async function runAISummarizeTask(
         data: { streaming: true, contentLength: content.length },
       })
 
+      persistAISummarySessionPatch(sessionId, {
+        status: 'succeeded',
+        draftText: summary,
+        finalText: summary,
+        errorCode: undefined,
+        errorMessage: undefined,
+        rawErrorMessage: undefined,
+        finishedAt: Date.now(),
+      })
+      persistEntryAISummary(entryId, summary)
       return { success: true, summary }
     }
 
@@ -358,6 +413,16 @@ export async function runAISummarizeTask(
       message: '摘要已生成',
       data: { streaming: false, contentLength: content.length },
     })
+    persistAISummarySessionPatch(sessionId, {
+      status: 'succeeded',
+      draftText: summary,
+      finalText: summary,
+      errorCode: undefined,
+      errorMessage: undefined,
+      rawErrorMessage: undefined,
+      finishedAt: Date.now(),
+    })
+    persistEntryAISummary(entryId, summary)
     return { success: true, summary }
   } catch (error) {
     const normalized = normalizeAIError(error, aiConfig)
@@ -366,6 +431,16 @@ export async function runAISummarizeTask(
         requestId,
         error: normalized,
       })
+    }
+    persistAISummarySessionPatch(sessionId, {
+      status: 'failed',
+      errorCode: 'provider_error',
+      errorMessage: normalized,
+      rawErrorMessage: error instanceof Error ? error.message : String(error),
+      finishedAt: Date.now(),
+    })
+    if (entryId) {
+      getDb().entries.updateEntry(entryId, { aiSummaryError: normalized })
     }
     throw new Error(normalized)
   }

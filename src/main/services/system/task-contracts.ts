@@ -60,6 +60,9 @@ export interface AiSummarizeTaskPayload {
   content: string
   language?: string
   requestId?: string
+  entryId?: string
+  sessionId?: string
+  sourceHash?: string
 }
 
 export interface AiTranslateTaskPayload {

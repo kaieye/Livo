@@ -21,6 +21,7 @@ interface AISummaryState {
 
 interface AISummaryOptions {
   initialSummary?: string | null
+  entryId?: string
 }
 
 function createAIRequestId(prefix: string): string {
@@ -45,6 +46,7 @@ function isAIStreamPayload(value: unknown): value is AIStreamPayload {
  */
 export function useAISummary(options: AISummaryOptions = {}): AISummaryState {
   const initialSummary = options.initialSummary ?? null
+  const entryId = options.entryId
   const [summary, setSummary] = useState<string | null>(initialSummary)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -57,58 +59,87 @@ export function useAISummary(options: AISummaryOptions = {}): AISummaryState {
     setSummary(initialSummary)
     setError(null)
     setIsLoading(false)
-  }, [initialSummary])
 
-  const summarize = useCallback(async (content: string, language?: string) => {
-    const requestId = ++requestIdRef.current
-    const streamRequestId = createAIRequestId('summary')
-
-    setSummary(null)
-    setError(null)
-    setIsLoading(true)
-
-    const cleanupChunk = window.api.on('ai:summary-stream-chunk', (data) => {
-      if (!isAIStreamPayload(data)) return
-      if (data.requestId !== streamRequestId || !data.content) return
-      if (requestId !== requestIdRef.current) return
-      setSummary((prev) => `${prev ?? ''}${data.content}`)
-    })
-    const cleanupError = window.api.on('ai:summary-stream-error', (data) => {
-      if (!isAIStreamPayload(data)) return
-      if (data.requestId !== streamRequestId) return
-      if (requestId !== requestIdRef.current) return
-      setError(data.error ?? 'Unknown error')
-    })
-
-    try {
-      const result = await window.api.ai.summarize(
-        content,
-        language,
-        streamRequestId,
-      )
-
-      // Guard against stale responses (user navigated away mid-request)
-      if (requestId !== requestIdRef.current) return
-
-      if (result.success) {
-        setSummary(result.summary)
+    if (!entryId) return
+    const requestId = requestIdRef.current
+    void window.api.ai
+      .getSummarySession(entryId)
+      .then((session) => {
+        if (requestId !== requestIdRef.current || !session) return
+        if (session.status === 'failed') {
+          setSummary(session.draftText || session.finalText || null)
+          setError(session.errorMessage || 'Unknown error')
+          setIsLoading(false)
+          return
+        }
+        setSummary(session.finalText || session.draftText || initialSummary)
         setError(null)
-      } else {
-        setError(result.error ?? 'Unknown error')
-        setSummary(null)
-      }
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return
-      setError(String(err))
-      setSummary(null)
-    } finally {
-      if (requestId === requestIdRef.current) {
+        setIsLoading(
+          session.status === 'queued' || session.status === 'running',
+        )
+      })
+      .catch((err) => {
+        if (requestId !== requestIdRef.current) return
+        setError(String(err))
         setIsLoading(false)
+      })
+  }, [entryId, initialSummary])
+
+  const summarize = useCallback(
+    async (content: string, language?: string) => {
+      const requestId = ++requestIdRef.current
+      const streamRequestId = createAIRequestId('summary')
+
+      setSummary(null)
+      setError(null)
+      setIsLoading(true)
+
+      const cleanupChunk = window.api.on('ai:summary-stream-chunk', (data) => {
+        if (!isAIStreamPayload(data)) return
+        if (data.requestId !== streamRequestId || !data.content) return
+        if (requestId !== requestIdRef.current) return
+        setSummary((prev) => `${prev ?? ''}${data.content}`)
+      })
+      const cleanupError = window.api.on('ai:summary-stream-error', (data) => {
+        if (!isAIStreamPayload(data)) return
+        if (data.requestId !== streamRequestId) return
+        if (requestId !== requestIdRef.current) return
+        setError(data.error ?? 'Unknown error')
+      })
+
+      try {
+        const result = entryId
+          ? await window.api.ai.summarizeEntry(
+              entryId,
+              language,
+              streamRequestId,
+            )
+          : await window.api.ai.summarize(content, language, streamRequestId)
+
+        // Guard against stale responses (user navigated away mid-request)
+        if (requestId !== requestIdRef.current) return
+
+        if (result.success) {
+          setSummary(result.summary)
+          setError(null)
+        } else {
+          setError(result.error ?? 'Unknown error')
+          setSummary(null)
+        }
+      } catch (err) {
+        if (requestId !== requestIdRef.current) return
+        setError(String(err))
+        setSummary(null)
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setIsLoading(false)
+        }
+        cleanupChunk()
+        cleanupError()
       }
-      cleanupChunk()
-      cleanupError()
-    }
-  }, [])
+    },
+    [entryId],
+  )
 
   const reset = useCallback(() => {
     requestIdRef.current++ // invalidate in-flight requests

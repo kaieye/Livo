@@ -6,5 +6,6 @@ export type {
   EntryWriteResult,
 } from './entry-repository'
 export type { IDigestRepository } from './digest-repository'
+export type { IEntryAISummarySessionRepository } from './ai-summary-session-repository'
 export type { IFeverRepository } from './fever-repository'
 export type { IMaintenanceRepository } from './maintenance-repository'

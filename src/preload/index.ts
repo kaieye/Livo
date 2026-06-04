@@ -23,6 +23,8 @@ import type {
   AIDigestGenerateResult,
   AIDigestRun,
   AIDigestPreset,
+  AISummaryEntryResult,
+  EntryAISummarySession,
   TaskRunListOptions,
   TaskRunRecord,
   FeverAccount,
@@ -112,6 +114,16 @@ const api = {
   ai: {
     summarize: (content: string, language?: string, requestId?: string) =>
       invokeIpc(IPC.AI_SUMMARIZE, content, language, requestId),
+    summarizeEntry: (
+      entryId: string,
+      language?: string,
+      requestId?: string,
+    ): Promise<AISummaryEntryResult> =>
+      invokeIpc(IPC.AI_SUMMARIZE_ENTRY, entryId, language, requestId),
+    getSummarySession: (
+      entryId: string,
+    ): Promise<EntryAISummarySession | null> =>
+      invokeIpc(IPC.AI_SUMMARY_SESSION_GET, entryId),
     translate: (content: string, targetLanguage: string, requestId?: string) =>
       invokeIpc(IPC.AI_TRANSLATE, content, targetLanguage, requestId),
     chat: (messages: Array<{ role: string; content: string }>) =>

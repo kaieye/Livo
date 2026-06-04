@@ -34,6 +34,8 @@ export const IPC = {
   ENTRY_SEARCH: 'entry:search',
   READER_SNAPSHOT: 'reader:snapshot',
   AI_SUMMARIZE: 'ai:summarize',
+  AI_SUMMARIZE_ENTRY: 'ai:summarize-entry',
+  AI_SUMMARY_SESSION_GET: 'ai:summary-session-get',
   AI_TRANSLATE: 'ai:translate',
   AI_CHAT: 'ai:chat',
   AI_CHAT_STREAM: 'ai:chat-stream',
@@ -201,6 +203,12 @@ export type IpcArgsByChannel = {
   [IPC.ENTRY_SEARCH]: [query: string, limit?: number]
   [IPC.READER_SNAPSHOT]: [input?: ReaderSnapshotRequest]
   [IPC.AI_SUMMARIZE]: [content: string, language?: string, requestId?: string]
+  [IPC.AI_SUMMARIZE_ENTRY]: [
+    entryId: string,
+    language?: string,
+    requestId?: string,
+  ]
+  [IPC.AI_SUMMARY_SESSION_GET]: [entryId: string]
   [IPC.AI_TRANSLATE]: [
     content: string,
     targetLanguage: string,
@@ -669,6 +677,20 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.AI_SUMMARIZE>
     },
   },
+  [IPC.AI_SUMMARIZE_ENTRY]: {
+    channel: IPC.AI_SUMMARIZE_ENTRY,
+    validateArgs: (args) => {
+      assertArity(IPC.AI_SUMMARIZE_ENTRY, args, 1, 3)
+      assertString(args[0], 'entryId')
+      assertOptionalString(args[1], 'language')
+      assertOptionalString(args[2], 'requestId')
+      return args as IpcArgs<typeof IPC.AI_SUMMARIZE_ENTRY>
+    },
+  },
+  [IPC.AI_SUMMARY_SESSION_GET]: oneString(
+    IPC.AI_SUMMARY_SESSION_GET,
+    'entryId',
+  ),
   [IPC.AI_TRANSLATE]: {
     channel: IPC.AI_TRANSLATE,
     validateArgs: (args) => {
