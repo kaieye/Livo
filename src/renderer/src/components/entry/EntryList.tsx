@@ -1118,12 +1118,23 @@ export const SocialMediaItem = memo(function SocialMediaItem({
   const { t } = useTranslation()
   const allEntries = useEntryStore((s) => s.entries)
 
-  // Parse social media handle from URL
+  // Parse the social handle. Prefer the subscription's *own* handle (from the
+  // feed URL) over the entry URL: retweets carry the original author in their
+  // link + dc:creator, so reading the handle off the entry URL mislabels the
+  // post as the retweeted account instead of the feed owner.
   const canonicalEntryUrl = useMemo(
     () => canonicalizeSocialUrl(entry.url || ''),
     [entry.url],
   )
-  const parsed = parseSocialHandle(canonicalEntryUrl)
+  const canonicalFeedUrl = useMemo(
+    () => canonicalizeSocialUrl(feedUrl || ''),
+    [feedUrl],
+  )
+  const parsed = useMemo(() => {
+    const fromFeed = parseSocialHandle(canonicalFeedUrl)
+    if (fromFeed.type !== 'other' && fromFeed.handle) return fromFeed
+    return parseSocialHandle(canonicalEntryUrl)
+  }, [canonicalFeedUrl, canonicalEntryUrl])
   const authorName = useMemo(() => {
     if (parsed.type === 'x') {
       const feedDisplayName = extractTwitterDisplayNameFromFeedTitle(
