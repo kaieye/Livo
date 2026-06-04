@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid'
 import { FeedViewType } from '../../../shared/types'
 import type {
   AgentTool,
@@ -9,26 +8,11 @@ import type {
 import {
   getAllFeeds,
   getFeedById,
-  getFeedByUrl,
-  insertFeed,
-  insertEntries,
   deleteFeed,
   getEntries,
 } from '../../database'
-import { fetchAndParseFeed } from '../../services/feed/rss-parser'
 import { refreshSingleFeed } from '../../services/feed/feed-refresh'
-import { buildEntriesFromParsedItems } from '../../services/entry/entry-builder'
-import { resolveFeedAvatar } from '../../services/feed/feed-avatar'
-import { detectRouteViewFromUrl } from '../../services/feed/feed-view'
-import { formatFeedTitle } from '../../services/feed/feed-title'
-import {
-  canonicalizeInstagramFeedUrl,
-  normalizeFeedUrlNoLimits,
-  normalizeRsshubProtocolUrl,
-  toRsshubProtocolUrl,
-} from '../../services/feed/rsshub-url'
-import { getSettings } from '../../handlers/settings-handlers'
-import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
+import { subscribeFeed } from '../../services/feed/feed-subscriber'
 import { clampLimit, emptyParams, objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
@@ -44,76 +28,6 @@ function feedSummary(feed: Feed): string {
       ? new Date(feed.lastFetched).toLocaleString()
       : '未获取'
   return `• ${feed.title} [${feed.category || viewName(feed.view)}] - ID: ${feed.id} - 最后更新: ${lastFetched}`
-}
-
-function rsshubInstance(): string {
-  return getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
-}
-
-/** Compact main-process subscribe used by the agent (best-effort fetch + insert). */
-export async function subscribeByUrl(
-  rawUrl: string,
-  title: string,
-  category: string,
-): Promise<{ feedId: string; feedTitle: string; existed: boolean }> {
-  const storedUrl = canonicalizeInstagramFeedUrl(toRsshubProtocolUrl(rawUrl))
-  const normalizedUrl = normalizeFeedUrlNoLimits(rawUrl, rsshubInstance())
-
-  const existing =
-    getFeedByUrl(storedUrl) ||
-    getFeedByUrl(normalizedUrl) ||
-    getFeedByUrl(toRsshubProtocolUrl(normalizedUrl))
-  if (existing) {
-    return { feedId: existing.id, feedTitle: existing.title, existed: true }
-  }
-
-  let parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>['data'] | null =
-    null
-  try {
-    parsed = (await fetchAndParseFeed(normalizedUrl)).data
-  } catch {
-    // Tolerate unreachable/slow feeds: create the subscription anyway.
-  }
-
-  const now = Date.now()
-  const id = uuidv4()
-  const routeView = detectRouteViewFromUrl(normalizedUrl)
-  const view = routeView ?? FeedViewType.Articles
-  const imageUrl = await resolveFeedAvatar(
-    normalizedUrl,
-    parsed?.image?.url as string | undefined,
-  )
-  const feed: Feed = {
-    id,
-    title: formatFeedTitle(storedUrl, parsed?.title, title || storedUrl),
-    url: storedUrl,
-    upstreamUrl: rawUrl,
-    siteUrl: parsed?.link,
-    description: parsed?.description,
-    imageUrl,
-    folder: category,
-    category,
-    view,
-    fetchSource: 'auto',
-    showInAll: true,
-    lastFetched: parsed ? now : 0,
-    errorCount: parsed ? 0 : 1,
-    createdAt: now,
-  }
-  insertFeed(feed)
-
-  if (parsed) {
-    const entries = await buildEntriesFromParsedItems(
-      id,
-      (parsed.items || []) as Array<Record<string, unknown>>,
-      imageUrl,
-      view,
-      now,
-    )
-    insertEntries(entries)
-  }
-
-  return { feedId: id, feedTitle: feed.title, existed: false }
 }
 
 export function buildListSubscribedFeedsTool(): AgentTool {
@@ -203,7 +117,7 @@ export function buildAddFeedTool(): AgentTool {
       const url = String(args['url']).trim()
       const title = String(args['title'] || '').trim()
       const category = String(args['category'] || '').trim()
-      const outcome = await subscribeByUrl(url, title, category)
+      const outcome = await subscribeFeed({ url, title, category })
       if (outcome.existed) {
         return {
           status: 'success',

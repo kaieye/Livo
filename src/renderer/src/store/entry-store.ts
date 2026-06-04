@@ -5,180 +5,28 @@ import type {
   ReaderSnapshot,
   ReaderSnapshotRequest,
 } from '../../../shared/types'
-import { extractInstagramAssetId } from '../lib/entry-media-url'
-
-const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
-const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
-const ENTRY_LIST_CACHE_VERSION = 3
-const DEFAULT_ENTRY_PAGE_SIZE = 10
-const MAX_ENTRY_PAGE_SIZE = 1000
-const entryListCache = new Map<
-  string,
-  { result: EntryListResult; cachedAt: number }
->()
-const entryListInFlight = new Map<string, Promise<EntryListResult>>()
-const entryDetailCache = new Map<string, Entry>()
-const entryDetailInFlight = new Map<string, Promise<Entry | null>>()
-const entrySnapshotCache = new Map<string, Entry>()
-
-/** Returns cached result if fresh, or an existing in-flight promise. null = miss. */
-function getCachedListResult(cacheKey: string): EntryListResult | null {
-  const cached = entryListCache.get(cacheKey)
-  if (!cached) return null
-  const ttl = cached.result?.entries?.length
-    ? ENTRY_LIST_CACHE_TTL_MS
-    : EMPTY_ENTRY_LIST_CACHE_TTL_MS
-  if (Date.now() - cached.cachedAt < ttl) return cached.result
-  return null
-}
-
-/** Fetch with in-flight dedup and cache store. */
-async function fetchAndCacheList(
-  cacheKey: string,
-  fetchFn: () => Promise<EntryListResult>,
-): Promise<EntryListResult> {
-  const existing = entryListInFlight.get(cacheKey)
-  if (existing) return existing
-  const promise = fetchFn()
-    .then((result) => {
-      entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
-      return result
-    })
-    .finally(() => {
-      entryListInFlight.delete(cacheKey)
-    })
-  entryListInFlight.set(cacheKey, promise)
-  return promise
-}
-
-function getEntryClientDedupKey(entry: Entry): string {
-  const candidates: string[] = [
-    entry.url || '',
-    entry.imageUrl || '',
-    entry.content || '',
-    entry.summary || '',
-  ]
-  for (const m of entry.media || [])
-    candidates.push(m.url || '', m.previewUrl || '')
-  for (const s of candidates) {
-    const asset = extractInstagramAssetId(s)
-    if (asset) return `asset:${entry.feedId}:${asset}`
-  }
-  const title = (entry.title || '').toLowerCase().trim().slice(0, 80)
-  const bucket = Math.floor((entry.publishedAt || 0) / (5 * 60 * 1000))
-  return `fallback:${entry.feedId}:${title}:${bucket}`
-}
-
-function entryClientRichness(entry: Entry): number {
-  return (
-    (entry.media?.length || 0) * 400 +
-    (entry.content?.length || 0) +
-    (entry.summary?.length || 0) +
-    (entry.imageUrl ? 40 : 0)
-  )
-}
-
-function dedupeEntriesForClient(entries: Entry[]): Entry[] {
-  const byKey = new Map<string, Entry>()
-  for (const entry of entries) {
-    const key = getEntryClientDedupKey(entry)
-    const existing = byKey.get(key)
-    if (!existing) {
-      byKey.set(key, entry)
-      continue
-    }
-    byKey.set(
-      key,
-      entryClientRichness(entry) >= entryClientRichness(existing)
-        ? entry
-        : existing,
-    )
-  }
-  return Array.from(byKey.values()).sort(
-    (a, b) => (b.publishedAt || 0) - (a.publishedAt || 0),
-  )
-}
-
-function buildListCacheKey(options?: {
-  feedId?: string
-  feedIds?: string[]
-  starred?: boolean
-  unreadOnly?: boolean
-  limit?: number
-  offset?: number
-}): string {
-  const feedIds = [...(options?.feedIds || [])].sort()
-  return JSON.stringify({
-    v: ENTRY_LIST_CACHE_VERSION,
-    feedId: options?.feedId || '',
-    feedIds,
-    starred: !!options?.starred,
-    unreadOnly: !!options?.unreadOnly,
-    limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
-    offset: options?.offset ?? 0,
-  })
-}
-
-function sortEntriesByPublishedDesc(entries: Entry[]): Entry[] {
-  return [...entries].sort(
-    (a, b) => (b.publishedAt || 0) - (a.publishedAt || 0),
-  )
-}
-
-function mergeEntriesById(prev: Entry[], next: Entry[]): Entry[] {
-  if (next.length === 0) return prev
-  const byId = new Map<string, Entry>()
-  for (const entry of prev) byId.set(entry.id, entry)
-  for (const entry of next) byId.set(entry.id, entry)
-  return sortEntriesByPublishedDesc(Array.from(byId.values()))
-}
-
-function cacheEntrySnapshot(entry: Entry): Entry {
-  entrySnapshotCache.set(entry.id, entry)
-  return entry
-}
-
-function cacheEntrySnapshots(entries: Entry[]): Entry[] {
-  for (const entry of entries) cacheEntrySnapshot(entry)
-  return entries
-}
-
-function mergeEntrySnapshotState(detail: Entry, snapshot: Entry): Entry {
-  return {
-    ...detail,
-    feedId: snapshot.feedId,
-    title: snapshot.title,
-    url: snapshot.url,
-    author: snapshot.author ?? detail.author,
-    authorAvatar: snapshot.authorAvatar ?? detail.authorAvatar,
-    imageUrl: snapshot.imageUrl ?? detail.imageUrl,
-    media: snapshot.media ?? detail.media,
-    publishedAt: snapshot.publishedAt,
-    isRead: snapshot.isRead,
-    isStarred: snapshot.isStarred,
-    readProgress: snapshot.readProgress ?? detail.readProgress,
-    notifiedAt: snapshot.notifiedAt ?? detail.notifiedAt,
-    createdAt: snapshot.createdAt,
-  }
-}
-
-function getCachedEntryDetail(entryId: string): Entry | undefined {
-  const detail = entryDetailCache.get(entryId)
-  if (!detail) return undefined
-  const snapshot = entrySnapshotCache.get(entryId)
-  return snapshot ? mergeEntrySnapshotState(detail, snapshot) : detail
-}
-
-function cacheEntryDetail(entry: Entry): Entry {
-  entryDetailCache.set(entry.id, entry)
-  return getCachedEntryDetail(entry.id) ?? entry
-}
-
-function getInitialSelectedEntry(entry: Entry): Entry {
-  const snapshot = cacheEntrySnapshot(entry)
-  const detail = getCachedEntryDetail(entry.id)
-  return detail ? mergeEntrySnapshotState(detail, snapshot) : snapshot
-}
+import {
+  buildListCacheKey,
+  getCachedListResult,
+  fetchAndCacheList,
+  getDefaultPageSize,
+  getMaxPageSize,
+  getCachedEntryDetail,
+  cacheEntryDetail,
+  getEntryDetailInFlight,
+  setEntryDetailInFlight,
+  deleteEntryDetailInFlight,
+  cacheEntrySnapshot,
+  cacheEntrySnapshots,
+  patchCachedEntry,
+  getInitialSelectedEntry,
+  clearAllCaches,
+  invalidateListCache,
+  hasEntryDetail,
+  sortEntriesByPublishedDesc,
+  mergeEntriesById,
+} from '../lib/entry-cache'
+import { dedupeEntriesForClient } from '../lib/entry-client-dedupe'
 
 function buildReaderSnapshotInput(options?: {
   feedId?: string
@@ -201,13 +49,6 @@ function buildReaderSnapshotInput(options?: {
     compact: true,
     maxContentLength: 520,
   }
-}
-
-function patchCachedEntry(entryId: string, patch: Partial<Entry>): void {
-  const snapshot = entrySnapshotCache.get(entryId)
-  if (snapshot) entrySnapshotCache.set(entryId, { ...snapshot, ...patch })
-  const detail = entryDetailCache.get(entryId)
-  if (detail) entryDetailCache.set(entryId, { ...detail, ...patch })
 }
 
 interface EntryState {
@@ -273,7 +114,7 @@ async function fetchEntryDetail(entryId: string): Promise<Entry | null> {
   const cached = getCachedEntryDetail(entryId)
   if (cached) return cached
 
-  const existing = entryDetailInFlight.get(entryId)
+  const existing = getEntryDetailInFlight(entryId)
   if (existing) return existing
 
   const request = window.api.entries
@@ -286,10 +127,10 @@ async function fetchEntryDetail(entryId: string): Promise<Entry | null> {
     })
     .catch(() => null)
     .finally(() => {
-      entryDetailInFlight.delete(entryId)
+      deleteEntryDetailInFlight(entryId)
     })
 
-  entryDetailInFlight.set(entryId, request)
+  setEntryDetailInFlight(entryId, request)
   return request
 }
 
@@ -310,7 +151,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   loadEntries: async (options) => {
     const pageSize = Math.max(
       1,
-      Math.min(options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE),
+      Math.min(options?.limit ?? getDefaultPageSize(), getMaxPageSize()),
     )
     const normalizedOptions = {
       feedId: options?.feedId,
@@ -385,7 +226,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   loadSnapshot: async (options) => {
     const pageSize = Math.max(
       1,
-      Math.min(options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE, MAX_ENTRY_PAGE_SIZE),
+      Math.min(options?.limit ?? getDefaultPageSize(), getMaxPageSize()),
     )
     const normalizedOptions = {
       feedId: options?.feedId,
@@ -450,7 +291,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         feedIds: options?.feedIds,
         starred: options?.starred,
         unreadOnly: options?.unreadOnly,
-        limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
+        limit: options?.limit ?? getDefaultPageSize(),
         compact: true,
         maxContentLength: 520,
         skipDedupe: false,
@@ -466,8 +307,8 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const pageSize = Math.max(
       1,
       Math.min(
-        state.paginationPageSize || DEFAULT_ENTRY_PAGE_SIZE,
-        MAX_ENTRY_PAGE_SIZE,
+        state.paginationPageSize || getDefaultPageSize(),
+        getMaxPageSize(),
       ),
     )
     if (!baseOptions) return
@@ -542,9 +383,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   },
 
   clearListCache: () => {
-    entryListCache.clear()
-    entryListInFlight.clear()
-    entrySnapshotCache.clear()
+    clearAllCaches()
   },
 
   refreshEntryMedia: async (entryId, feedId) => {
@@ -555,7 +394,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       // Keep going so we still try to read whatever the backend currently has.
     }
 
-    entryListCache.clear()
+    invalidateListCache()
 
     const refreshed = await window.api.entries.get(entryId).catch(() => null)
     if (!refreshed) return null
@@ -616,7 +455,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     if (ids.length === 0) return
     await Promise.allSettled(
       ids.map(async (id) => {
-        if (entryDetailCache.has(id)) return
+        if (hasEntryDetail(id)) return
         const detail = await fetchEntryDetail(id)
         if (!detail) return
         cacheEntrySnapshot(detail)

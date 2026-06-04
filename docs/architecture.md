@@ -1,63 +1,177 @@
-# 架构说明
+# Livo 架构审查报告
 
-Livo 当前仓库维护一个本地优先的 Electron 桌面应用及其 Web 入口。架构边界围绕 Electron main/preload/renderer 与浏览器适配层划分，不把服务端 Web 应用的部署模型引入桌面端。
+> 审查日期：2025-07  
+> 基准版本：d47cbbd (`feat: track AI tasks with run state`)
 
-## 分层
+## 词汇约定
 
-```text
-src/main      Electron 主进程：窗口、数据访问、系统集成、账号登录、任务运行器
-src/preload   安全桥接层：暴露受限 window.api，封装 IPC 调用
-src/renderer  React 渲染层：页面、组件、状态管理和 UI 工具
-src/shared    跨 main/preload/renderer 的类型、IPC 契约、设置和纯工具逻辑
-src/web       浏览器入口：初始化 Web adapter，复用 renderer 应用
+- **Module** — 任何有接口和实现的东西（函数、类、包、切片）
+- **Interface** — 调用方需要知道的全部：类型、不变量、错误模式、顺序、配置
+- **Implementation** — 接口背后的代码
+- **Depth** — 接口的 leverage：小接口背后的大量行为。**Deep** = 高 leverage。**Shallow** = 接口几乎和实现一样复杂
+- **Seam** — 接口所在的位置；行为可以在不原地编辑的情况下改变的地方
+- **Locality** — 维护者从 depth 中得到的好处：变更、bug、知识集中在一处
+- **Deletion test** — 想象删除这个模块。如果复杂度消失，它是透传的。如果复杂度重新出现在 N 个调用方，它正在 earn its keep
+
+## 一、已解决的架构问题
+
+### #2 app-manager.ts 上帝对象拆分 ✅
+
+**位置**：`src/main/app-manager.ts`
+
+**问题**：431 行的 AppManager 类承担了过多职责——13 个 handler 注册、网络会话策略（Referer 伪装/Cache 控制）、11 个应用级 IPC 通道、平台集成、缓存协议、托盘创建、菜单注册全在一个类中。
+
+**解决方案**：
+
+- 提取 `src/main/services/system/session-policies.ts`（~120 行）——Chromium 会话策略（Referer 伪装、User-Agent 剥离、媒体缓存）
+- 提取 `src/main/handlers/app-handlers.ts`（~90 行）——12 个应用级 IPC 通道，与其他 13 个 handler 模块保持一致
+
+**效果**：`app-manager.ts` 从 431 行缩减到 215 行，`onReady()` 启动流程一目了然。
+
+---
+
+### #3+#4 Feed 订阅逻辑去重 + feed-handlers 瘦身 ✅
+
+**位置**：`src/main/agent/tools/feed-tools.ts` + `src/main/handlers/feed-handlers.ts`
+
+**问题**：Agent 工具的 `subscribeByUrl()` 和 IPC handler 的 `FEED_ADD` 包含几乎相同的 URL 规范化、查重、抓取、View 检测、Feed 创建、Entry 插入逻辑（~60 行核心重复）。更关键的是 Agent 工具的 URL 规范化比 handler 少了 3 种变体（没有 legacy URL 处理、没有 limit enforcement），存在不一致的隐患。
+
+**解决方案**：
+
+- 创建 `src/main/services/feed/feed-subscriber.ts`——统一服务，封装完整的 URL 规范化（6 种变体 + limit enforcement）、查重、抓取、View 检测、Feed 创建、Entry 插入
+- Agent 工具和 IPC handler 均调用此服务
+- Handler 保留自己的"已有源更新"逻辑（Recommended 升级、View 修正、bootstrap/warmup）
+
+**效果**：
+
+- Feed 订阅核心逻辑在一处维护
+- Agent 工具获得 handler 级别的 URL 规范化能力（修复不一致隐患）
+- `feed-handlers.ts` FEED_ADD handler 缩减 ~80 行
+
+---
+
+### #6 entry-store.ts 关注点分离 ✅
+
+**位置**：`src/renderer/src/store/entry-store.ts`
+
+**问题**：788 行的 zustand store 混合了四个关注点——缓存管理（4 个 Map + TTL 逻辑）、客户端去重、store 状态+动作、IPC 调用。
+
+**解决方案**：
+
+- 提取 `src/renderer/src/lib/entry-cache.ts`（~170 行）——三级缓存层（list/detail/snapshot），含 TTL 过期、in-flight 去重、快照-详情合并
+- 提取 `src/renderer/src/lib/entry-client-dedupe.ts`（~65 行）——基于内容的客户端去重（Instagram asset ID、标题+时间桶 fallback）
+
+**效果**：`entry-store.ts` 从 788 行缩减到 628 行，缓存和去重逻辑可独立测试。
+
+---
+
+### #7 discover-handlers.ts 巨型文件拆分 ✅
+
+**位置**：`src/main/handlers/discover-handlers.ts`
+
+**问题**：2664 行的 handler 文件中，`registerDiscoverHandlers()` 从第 2021 行才开始，前 2020 行是 43 个内联 helper 函数（YouTube ~400 行、Twitter/X ~600 行、Bilibili ~200 行、Instagram ~380 行、通用 ~300 行），属于典型的"handler 承载 service 逻辑"反模式。
+
+**解决方案**：按平台拆分为 4 个服务文件：
+
+- 新建 `src/main/services/discovery/discover-youtube.ts`（~280 行）——YouTube 频道搜索、订阅者抓取
+- 新建 `src/main/services/discovery/discover-x.ts`（~610 行）——X/Twitter 用户搜索、头像/粉丝抓取、Nitter 回退
+- 新建 `src/main/services/discovery/discover-bilibili.ts`（~140 行）——Bilibili 用户名/头像、用户搜索
+- 扩展 `src/main/services/discovery/discover-instagram-search.ts`（+530 行）——Instagram 头像抓取、用户搜索
+- 扩展 `src/main/services/discovery/discover-helpers.ts`（+30 行）——新增 `decodeHtmlEntities`、`FALLBACK_RSSHUB_INSTANCES`
+
+**效果**：`discover-handlers.ts` 从 2664 行缩减到 959 行（-64%），`registerDiscoverHandlers()` 前移至第 316 行，每个平台可独立测试。
+
+---
+
+## 二、评估后跳过的候选方案
+
+### #1 database.ts "透传模块"
+
+**判定**：**Facade 模式，不应删除。**
+
+`database.ts` 的 40+ 个函数都是一行委托到 `SqliteAdapter`，但应用**删除测试**后：删除它会将单例管理、JSON 迁移、稳定导入面的复杂度扩散到 18 个调用方。它作为 Data Access Layer Facade 隐藏了 5 个 Repository（Feed、Entry、Digest、Fever、Maintenance），这正是 leverage。
+
+---
+
+### #5 shared/ barrel 拆分
+
+**判定**：**投入产出比太低，跳过。**
+
+`src/shared/types/index.ts` 的 barrel 重导出了运行时代码（`ipc-contracts.ts` 的 500+ 行验证器、`settings.ts` 的 merge/normalize 等），导致 `import { IPC } from '../../shared/types'` 路径名暗示"纯类型"却拉入运行时代码。但 44 个文件使用此路径，拆分会触及全部 44 个文件的 import，收益仅为"路径名更诚实"。无已知 bug 由此引起。
+
+---
+
+## 三、已识别但未处理的优化机会
+
+### #8 ai-handlers.ts 管线内联
+
+**位置**：`src/main/handlers/ai-handlers.ts`  
+**规模**：746 行  
+**严重程度**：🟡 中
+
+**问题**：3 个业务管线函数内联在 handler 中：
+
+- `generateAIDigest()` ~200 行——digest 生成管线（候选筛选→重排→批次→汇总）
+- `runAISummarizeTask()` ~120 行——摘要生成（含流式输出）
+- `runAITranslateTask()` ~160 行——翻译生成（含流式输出 + 渐进式预算缩减重试）
+
+而 `services/ai/` 已有 `ai-digest.ts`、`ai-prompts.ts`、`ai-retry.ts` 等模块，这些管线函数天然适合放在 `services/ai/` 中。
+
+**建议方案**：提取为 `services/ai/ai-pipeline.ts`，handler 保留薄 IPC 胶水层。
+
+**预期效果**：handler 从 746 行缩减到 ~270 行（64%）。
+
+---
+
+### #9 IPC 双重错误处理
+
+**位置**：`src/main/ipc/register-channel.ts` + 各 handler  
+**严重程度**：🟡 中
+
+**问题**：`register-channel.ts` 在外层统一用 `try/catch` → `ipcOk/ipcFail` 包装。但许多 handler 内层又加了 `try/catch` → `{ success: false }`，形成双层错误信封。错误消息可能被多次包装，增加调试成本。
+
+**建议方案**：审计所有 handler，统一为"外层统一捕获，内层只抛 `IpcContractError`"的模式。消除内层 `{ success: false }` 的手动返回。
+
+---
+
+### #10 Fever write-back 逻辑分裂
+
+**位置**：`src/main/services/fever/fever-sync.ts` + `src/main/handlers/entry-handlers.ts`  
+**严重程度**：🟢 低
+
+**问题**：`fever-sync.ts` 的 `performWriteBack()` 是空 stub，注释指向 `entry-handlers.ts` 的 `feverWriteBack()`。写回逻辑（标记已读/已收藏后的远程同步）分散在两个文件中，违背 locality 原则。
+
+**建议方案**：将 `feverWriteBack()` 从 `entry-handlers.ts` 移入 `fever-sync.ts` 的 `performWriteBack()`，使 Fever 同步的完整四阶段（sync feeds → sync items → write back → queue）集中在一个模块中。
+
+---
+
+## 四、模块结构总览（重构后）
+
 ```
+src/main/
+├── app-manager.ts          (215 行)  ← 从 431 缩减
+├── handlers/
+│   ├── app-handlers.ts     (NEW, 90 行)
+│   ├── entry-handlers.ts   (139 行)
+│   ├── feed-handlers.ts    (~620 行)  ← 从 ~706 缩减
+│   └── discover-handlers.ts (959 行)  ← 从 2664 缩减
+├── services/
+│   ├── discovery/
+│   │   ├── discover-helpers.ts            (NEW, +30 行)
+│   │   ├── discover-youtube.ts            (NEW, ~280 行)
+│   │   ├── discover-x.ts                  (NEW, ~610 行)
+│   │   ├── discover-bilibili.ts           (NEW, ~140 行)
+│   │   └── discover-instagram-search.ts   (+530 行)
+│   ├── feed/
+│   │   └── feed-subscriber.ts (NEW, 175 行)
+│   └── system/
+│       └── session-policies.ts (NEW, 120 行)
+├── database.ts             (保留 — Facade 模式)
 
-## 桌面端数据流
-
-桌面端由 renderer 调用 `window.api`，preload 通过 `ipcRenderer.invoke` 发起 IPC 请求。主进程 handler 使用 `registerChannel` 注册通道，先按 `src/shared/ipc-contracts` 校验入参，再执行主进程服务并返回统一 envelope。preload 解包 envelope 后把结果交回 renderer。
-
-```text
-renderer -> preload window.api -> IPC envelope -> main handler -> service/repository -> SQLite
+src/renderer/src/
+├── lib/
+│   ├── entry-cache.ts          (NEW, 170 行)
+│   └── entry-client-dedupe.ts  (NEW, 65 行)
+└── store/
+    └── entry-store.ts          (628 行)  ← 从 788 缩减
 ```
-
-这条路径的关键约束：
-
-- IPC channel 和参数形状由 shared 契约集中定义。
-- 主进程 handler 通过 `registerChannel` 做入参校验、错误包装和日志记录。
-- renderer 不直接访问 Node/Electron API。
-- 数据库写入最终落到 `SqliteAdapter` 和领域 repository。
-
-## Web 入口数据流
-
-Web 入口没有 Electron 主进程和 preload。`src/web/main.tsx` 初始化 `src/web/web-api.ts`，并把同形 API 挂到 `window.api`，让 renderer 继续使用相同调用方式。
-
-```text
-renderer -> web window.api -> web adapter -> IndexedDB / localStorage / browser API
-```
-
-Web adapter 的职责是保持接口形状兼容，而不是完整复制桌面能力。涉及系统目录、原生下载、Electron session、账号登录窗口、webview 和主进程日志的接口应返回明确的不可用结果或浏览器降级实现。
-
-## 数据路径
-
-桌面端核心数据保存在 Electron `userData` 下的 `data/livo.db`。首次启动时，如果 SQLite 为空且发现早期 JSON 数据文件，`src/main/database.ts` 会迁移旧数据并把 JSON 文件重命名为备份。
-
-常见桌面路径：
-
-- 数据库：`app.getPath('userData')/data/livo.db`
-- 设置：`app.getPath('userData')/data/settings.json`
-- 刷新日志：`app.getPath('userData')/data/refresh-logs.json`
-- 图片缓存：`app.getPath('userData')/cache`
-- 主进程日志：`app.getPath('userData')/logs`
-
-Web 入口使用 IndexedDB 数据库 `livo-web`，不访问桌面端 SQLite 数据，也不共享 Electron `userData` 目录。
-
-## 后台任务
-
-刷新和 AI digest 等长时间操作通过本地 Task Runner 记录 run 状态。实时事件可以用于 UI 提示，但最终状态应以 run 记录为准。桌面端不引入服务端队列；只有在出现跨进程持久队列、崩溃恢复或长期重试需求时，才评估 SQLite-backed job queue。
-
-## 维护边界
-
-- 修改主进程能力时，同步检查 preload API、IPC 契约和 Web adapter 是否需要保持形状兼容。
-- 修改 renderer 通用流程时，同时考虑桌面端和 Web 入口的可用能力差异。
-- 修改数据模型时，优先补充 SQLite adapter 或 repository 级测试，并确认旧 JSON 迁移路径是否受影响。
-- 修改长任务时，优先接入 Task Runner 的 run 状态，而不是只依赖一次性事件。

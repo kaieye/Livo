@@ -140,3 +140,33 @@ export function normalizeNameForMatch(input: string): string {
     .replace(/[@\s_.-]+/g, '')
     .trim()
 }
+
+/** Fallback RSSHub instances shared across platform probes. */
+export const FALLBACK_RSSHUB_INSTANCES = [
+  'https://rsshub.pseudoyu.com',
+  'https://rsshub.app',
+  'https://rsshub.rssforever.com',
+  'https://rsshub-instance.zeabur.app',
+]
+
+/**
+ * Full HTML entity decoder — handles numeric entities (decimal & hex)
+ * in addition to the basic named entities. Used by X and Instagram parsers.
+ */
+export function decodeHtmlEntities(input: string): string {
+  if (!input) return ''
+  return input
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_m, dec) => {
+      const code = Number(dec)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _m
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => {
+      const code = Number.parseInt(hex, 16)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _m
+    })
+}

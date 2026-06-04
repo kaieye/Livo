@@ -61,6 +61,7 @@ import {
   cleanupEntries,
   getDatabaseStats,
 } from '../database'
+import { subscribeFeed } from '../services/feed/feed-subscriber'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 
@@ -83,39 +84,22 @@ export function registerFeedHandlers(): void {
       title?: string,
     ) => {
       try {
-        const id = uuidv4()
-        const now = Date.now()
-        const rawProtocolUrl = toRsshubProtocolUrl(url.trim())
-        const limitedProtocolUrl = ensureTwitterUserFeedLimit(
-          ensureInstagramUserFeedLimit(rawProtocolUrl, 100),
-          120,
-        )
-        const storedUrl = canonicalizeInstagramFeedUrl(limitedProtocolUrl)
-        const legacyStoredUrl = canonicalizeInstagramFeedUrl(rawProtocolUrl)
-        const rsshubInstance =
-          getSettings().general.rsshubInstance?.trim() ||
-          DEFAULT_RSSHUB_INSTANCE
-        const normalizedUrl = normalizeRsshubProtocolUrl(
-          storedUrl,
-          rsshubInstance,
-        )
-        const normalizedLegacyUrl = normalizeRsshubProtocolUrl(
-          legacyStoredUrl,
-          rsshubInstance,
-        )
-        const warmupStrategy = getWarmupStrategy(
-          normalizedUrl,
-          view ?? FeedViewType.Articles,
-        )
-        const deferBootstrap = warmupStrategy === 'deferred-queue'
-        const existingFeed =
-          getFeedByUrl(storedUrl) ||
-          getFeedByUrl(normalizedUrl) ||
-          getFeedByUrl(toRsshubProtocolUrl(normalizedUrl)) ||
-          getFeedByUrl(legacyStoredUrl) ||
-          getFeedByUrl(normalizedLegacyUrl) ||
-          getFeedByUrl(toRsshubProtocolUrl(normalizedLegacyUrl))
-        if (existingFeed) {
+        const outcome = await subscribeFeed({
+          url: url.trim(),
+          title,
+          category,
+          view,
+        })
+
+        if (outcome.existed) {
+          const existingFeed = outcome.feed
+          const rsshubInstance =
+            getSettings().general.rsshubInstance?.trim() ||
+            DEFAULT_RSSHUB_INSTANCE
+          const normalizedUrl = normalizeRsshubProtocolUrl(
+            existingFeed.url,
+            rsshubInstance,
+          )
           const wantsRecommended = (category || '') === RECOMMENDED_CATEGORY
           const updates: Partial<Feed> = {}
           const inferredView = inferDiscoverFeedViewFromUrl(normalizedUrl)
@@ -138,16 +122,11 @@ export function registerFeedHandlers(): void {
             updates.view = desiredView
           }
           if (title?.trim()) {
-            updates.title = formatFeedTitle(storedUrl, undefined, title.trim())
-          }
-
-          // Upgrade legacy RSSHub user feeds to include explicit high-enough limits.
-          const upgradedUrl = ensureTwitterUserFeedLimit(
-            ensureInstagramUserFeedLimit(existingFeed.url, 100),
-            120,
-          )
-          if (upgradedUrl !== existingFeed.url) {
-            updates.url = upgradedUrl
+            updates.title = formatFeedTitle(
+              existingFeed.url,
+              undefined,
+              title.trim(),
+            )
           }
 
           if (Object.keys(updates).length > 0) {
@@ -190,92 +169,32 @@ export function registerFeedHandlers(): void {
           return { success: true, feed: existingFeed }
         }
 
-        let parsed:
-          | Awaited<ReturnType<typeof fetchAndParseFeed>>['data']
-          | null = null
-        if (!deferBootstrap) {
-          try {
-            const initialFetchTimeoutMs = getInitialFetchTimeoutMs(
-              normalizedUrl,
-              view,
-            )
-            const result = await withTimeout(
-              fetchAndParseFeed(normalizedUrl),
-              initialFetchTimeoutMs,
-              `initial fetch ${normalizedUrl}`,
-            )
-            parsed = result.data
-          } catch {
-            // Feed fetch failed/slow (e.g. RSSHub timeout) — still create the feed entry
-            // so users can subscribe and it will be fetched on next refresh
-          }
-        }
-        // Auto-detect view type from route/content.
-        // Route-derived view wins over any stale explicit selection.
-        const inferredView = inferDiscoverFeedViewFromUrl(normalizedUrl)
-        const detectedView =
-          inferredView !== FeedViewType.Articles
-            ? inferredView
-            : (view ??
-              (parsed ? detectViewType(parsed) : FeedViewType.Articles))
-        const feedImageUrl =
-          deferBootstrap && !parsed
-            ? getImmediateFeedAvatar(normalizedUrl)
-            : await resolveFeedAvatar(
-                normalizedUrl,
-                parsed ? getFeedImageUrl(parsed) : undefined,
-              )
-
-        const isRecommended = (category || '') === RECOMMENDED_CATEGORY
-        const userFolder = isRecommended ? '' : category || ''
-        const feed: Feed = {
-          id,
-          title: formatFeedTitle(storedUrl, parsed?.title, title || storedUrl),
-          url: storedUrl,
-          upstreamUrl: url.trim(),
-          siteUrl: parsed?.link,
-          description: parsed?.description,
-          imageUrl: feedImageUrl,
-          folder: userFolder,
-          category: isRecommended ? RECOMMENDED_CATEGORY : userFolder,
-          view: detectedView,
-          fetchSource: 'auto',
-          showInAll: true,
-          lastFetched: parsed ? now : 0,
-          errorCount: parsed ? 0 : 1,
-          createdAt: now,
-        }
-
-        insertFeed(feed)
-
-        // Insert entries if fetch was successful
-        if (parsed) {
-          const entriesToInsert = await buildEntriesFromParsedItems(
-            id,
-            (parsed.items || []) as Array<Record<string, any>>,
-            feedImageUrl,
-            detectedView,
-            now,
-          )
-          insertEntries(entriesToInsert)
-        }
+        // New feed — service already created it and inserted entries
+        const feed = outcome.feed
+        const rsshubInstance =
+          getSettings().general.rsshubInstance?.trim() ||
+          DEFAULT_RSSHUB_INSTANCE
+        const normalizedUrl = normalizeRsshubProtocolUrl(
+          feed.url,
+          rsshubInstance,
+        )
 
         if (
-          parsed &&
+          outcome.fetched &&
           getSettings().data?.enrichVideoDuration &&
           feed.view === FeedViewType.Videos
         ) {
-          queueVideoDurationEnrich(id).catch(() => {})
+          queueVideoDurationEnrich(feed.id).catch(() => {})
         }
 
-        // If quick add skipped/failed parsing, force a synchronous refresh once so
+        // If fetch failed/skipped, force a synchronous refresh once so
         // newly added subscriptions can show entries immediately.
-        if (!parsed) {
-          const strategy = getWarmupStrategy(normalizedUrl, detectedView)
+        if (!outcome.fetched) {
+          const strategy = getWarmupStrategy(normalizedUrl, feed.view)
           if (strategy === 'deferred-queue') {
-            queueBootstrapRefresh(feed, normalizedUrl, detectedView)
+            queueBootstrapRefresh(feed, normalizedUrl, feed.view)
           } else {
-            await bootstrapFeedEntries(feed, normalizedUrl, detectedView)
+            await bootstrapFeedEntries(feed, normalizedUrl, feed.view)
           }
           const refreshed = getFeedById(feed.id)
           return {
