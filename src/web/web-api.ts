@@ -27,6 +27,7 @@ import type {
   TaskRunListOptions,
   TaskRunRecord,
 } from '../shared/types'
+import { deriveEntryTaskSnapshot } from '../shared/entry-task-status'
 import {
   normalizeDiscoverQueryToFeedUrl,
   extractBilibiliUid,
@@ -624,7 +625,10 @@ async function buildWebReaderSnapshot(
     limit: limit + 1,
     offset,
   })
-  const pageEntries = entries.slice(0, limit)
+  const pageEntries = entries.slice(0, limit).map((entry) => ({
+    ...entry,
+    taskSnapshot: deriveEntryTaskSnapshot(entry),
+  }))
   const nextCursor =
     entries.length > limit
       ? encodeSnapshotCursor({ v: 1, offset: offset + limit, queryKey })

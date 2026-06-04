@@ -49,6 +49,29 @@ export interface EntryListResult {
   hasMore: boolean
 }
 
+export type EntryTaskStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+
+export interface EntryTaskState {
+  status: EntryTaskStatus
+  error?: string
+  updatedAt?: number
+}
+
+export interface EntryTaskSnapshot {
+  fulltext: EntryTaskState
+  aiSummary: EntryTaskState
+  aiTranslate?: EntryTaskState
+}
+
+export interface ReaderSnapshotEntry extends Entry {
+  taskSnapshot: EntryTaskSnapshot
+}
+
 export interface DiscoverFeedPreviewEntry {
   id: string
   title: string
@@ -98,7 +121,7 @@ export interface ReaderSnapshotCounts {
 
 export interface ReaderSnapshot {
   feeds: FeedWithCount[]
-  entries: Entry[]
+  entries: ReaderSnapshotEntry[]
   counts: ReaderSnapshotCounts
   nextCursor: string | null
 }

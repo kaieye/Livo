@@ -19,6 +19,8 @@ Folo-dev/
 *.tsbuildinfo
 docs/*
 !docs/feedfuse-comparison-improvements.md
+!docs/feedfuse-main-analysis.md
+!docs/feedfuse-inspired-todolist.md
 !docs/development.md
 !docs/architecture.md
 .reasonix/

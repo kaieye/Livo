@@ -4,6 +4,7 @@ import type {
   EntryListResult,
   FeedWithCount,
   ReaderSnapshot,
+  ReaderSnapshotEntry,
 } from '../../../shared/types'
 
 function makeEntry(partial: Partial<Entry> = {}): Entry {
@@ -22,6 +23,18 @@ function makeEntry(partial: Partial<Entry> = {}): Entry {
     isStarred: partial.isStarred ?? false,
     readProgress: partial.readProgress,
     createdAt: partial.createdAt ?? 1000,
+  }
+}
+
+function makeSnapshotEntry(
+  partial: Partial<ReaderSnapshotEntry> = {},
+): ReaderSnapshotEntry {
+  return {
+    ...makeEntry(partial),
+    taskSnapshot: partial.taskSnapshot ?? {
+      fulltext: { status: 'idle' },
+      aiSummary: { status: 'idle' },
+    },
   }
 }
 
@@ -129,12 +142,12 @@ describe('useEntryStore', () => {
   })
 
   it('loads and paginates reader snapshots', async () => {
-    const first = makeEntry({
+    const first = makeSnapshotEntry({
       id: 'entry-1',
       title: 'First',
       publishedAt: 2000,
     })
-    const second = makeEntry({
+    const second = makeSnapshotEntry({
       id: 'entry-2',
       title: 'Second',
       publishedAt: 1000,

@@ -1,12 +1,13 @@
 import { getDb } from '../../database'
 import type {
-  Entry,
   Feed,
   FeedWithCount,
   ReaderSnapshot,
+  ReaderSnapshotEntry,
   ReaderSnapshotRequest,
   ReaderSnapshotScope,
 } from '../../../shared/types/index'
+import { deriveEntryTaskSnapshot } from '../../../shared/entry-task-status'
 
 const DEFAULT_SNAPSHOT_LIMIT = 10
 const MAX_SNAPSHOT_LIMIT = 1000
@@ -164,7 +165,10 @@ export function getReaderSnapshot(
     maxContentLength: input.maxContentLength ?? 520,
     skipDedupe: false,
   })
-  const entries: Entry[] = result.entries
+  const entries: ReaderSnapshotEntry[] = result.entries.map((entry) => ({
+    ...entry,
+    taskSnapshot: deriveEntryTaskSnapshot(entry),
+  }))
   const nextCursor = result.hasMore
     ? encodeCursor({ v: 1, offset: offset + limit, queryKey })
     : null
