@@ -32,8 +32,6 @@
 
 目标：用户能在左栏看到 feed 刷新失败，在文章页看到全文/AI 任务状态，snapshot 能一次性带出这些状态。
 
-- [ ] A1. 扩展 Feed 刷新状态字段
-- [ ] A2. 刷新链路写入结构化成功/失败状态
 - [ ] B1. ReaderSnapshot 返回 feed 刷新状态
 - [ ] H1. 左栏 feed 错误图标与 tooltip
 - [ ] H2. 文章详情内联任务状态条
@@ -61,57 +59,6 @@
 - [ ] I3. 补 AI session 和 Digest 链路测试
 
 ## 3. A 线：刷新状态结构化
-
-### A1. 扩展 Feed 数据模型
-
-- [ ] 在 `src/shared/types/feed.ts` 增加字段：
-  - `lastRefreshStatus?: 'idle' | 'succeeded' | 'failed'`
-  - `lastRefreshAttemptedAt?: number`
-  - `lastRefreshError?: string`
-  - `lastRefreshRawError?: string`
-- [ ] 在 `src/main/database/sqlite-schema.ts` 增加迁移：
-  - `feeds.last_refresh_status TEXT`
-  - `feeds.last_refresh_attempted_at INTEGER`
-  - `feeds.last_refresh_error TEXT`
-  - `feeds.last_refresh_raw_error TEXT`
-- [ ] 更新 `src/main/database/row-mappers.ts`。
-- [ ] 更新 `src/main/database/repositories/feed-repository.ts` 的 insert/update。
-
-验收：
-
-- 老数据库能正常迁移。
-- 没有刷新记录的 feed 返回 `idle` 或 undefined，前端不显示错误。
-- 失败原因不会破坏现有 `errorCount` 逻辑。
-
-测试：
-
-- `sqlite-schema` 迁移测试。
-- `feed-repository` 读写测试。
-- `row-mappers` 字段映射测试。
-
-### A2. 刷新链路写入状态
-
-- [ ] 在 `src/main/services/feed/feed-refresh.ts` 成功刷新时写入：
-  - `lastRefreshStatus: 'succeeded'`
-  - `lastRefreshAttemptedAt: now`
-  - 清空 `lastRefreshError/RawError`
-- [ ] 在失败或已知上游失败时写入：
-  - `lastRefreshStatus: 'failed'`
-  - `lastRefreshAttemptedAt: now`
-  - `lastRefreshError`: 用户可读错误
-  - `lastRefreshRawError`: 原始 error message
-- [ ] 抽出错误映射函数，例如 `mapFeedRefreshError(error, context)`。
-
-验收：
-
-- 单 feed refresh 失败后，重新打开应用仍能看到失败状态。
-- 成功刷新后错误状态消失。
-- Instagram/RSSHub 等已知失败仍保持 quiet log，但状态可见。
-
-测试：
-
-- `feed-refresh.test.ts` 覆盖成功、失败、known Instagram failure。
-- 错误映射函数单测。
 
 ### A3. 全量刷新 run item 结果
 
@@ -543,38 +490,21 @@ CREATE TABLE entry_ai_summary_sessions (
 
 ## 13. 推荐执行顺序
 
-1. A1 + A2：先让刷新失败有结构化状态。
-2. B1 + H1：把 feed 错误通过 snapshot/左栏展示出来。
-3. H2：把已派生的 entry 任务状态展示到文章详情。
-4. G1 + G2：统一外部抓取安全策略。
-5. C1 + C2 + C3：改 snapshot cursor。
-6. D2：全文抓取进入 TaskRunner 并持久化终态。
-7. E1-E3：AI 摘要 session。
-8. E4：AI 翻译 session。
-9. F1-F3：Digest 融入阅读流。
+1. B1 + H1：把 feed 错误通过 snapshot/左栏展示出来。
+2. H2：把已派生的 entry 任务状态展示到文章详情。
+3. G1 + G2：统一外部抓取安全策略。
+4. C1 + C2 + C3：改 snapshot cursor。
+5. D2：全文抓取进入 TaskRunner 并持久化终态。
+6. E1-E3：AI 摘要 session。
+7. E4：AI 翻译 session。
+8. F1-F3：Digest 融入阅读流。
 
 ## 14. 首批可开工任务卡片
-
-### TODO-001：Feed 最近刷新状态落库
-
-- 类型：schema + repository + service
-- 优先级：P0
-- 涉及文件：
-  - `src/shared/types/feed.ts`
-  - `src/main/database/sqlite-schema.ts`
-  - `src/main/database/row-mappers.ts`
-  - `src/main/database/repositories/feed-repository.ts`
-  - `src/main/services/feed/feed-refresh.ts`
-- 验收：
-  - 单源刷新失败后重启仍可读取错误。
-  - 成功刷新清空错误。
-  - 老数据库自动迁移。
 
 ### TODO-002：ReaderSnapshot 暴露 feed 刷新状态
 
 - 类型：shared type + main service + renderer store
 - 优先级：P0
-- 依赖：TODO-001
 - 涉及文件：
   - `src/shared/types/entry.ts`
   - `src/main/services/entry/reader-snapshot.ts`
@@ -588,7 +518,7 @@ CREATE TABLE entry_ai_summary_sessions (
 
 - 类型：UI
 - 优先级：P0
-- 依赖：TODO-001 或 TODO-002
+- 依赖：TODO-002
 - 涉及文件：
   - `src/renderer/src/components/layout/Sidebar.tsx`
   - `src/renderer/src/locales/zh-CN/sidebar.ts`

@@ -6,6 +6,7 @@ import {
 } from '../entry/entry-ingestion-pipeline'
 import {
   getNextAutoRefreshDelayMs,
+  mapFeedRefreshError,
   queueBootstrapRefresh,
   refreshAllFeeds,
 } from './feed-refresh'
@@ -130,6 +131,26 @@ describe('refreshAllFeeds', () => {
       runId: activeRun.runId,
     })
     expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe('mapFeedRefreshError', () => {
+  it('keeps raw HTTP errors while returning user-readable text', () => {
+    expect(mapFeedRefreshError(new Error('HTTP 403 Forbidden'))).toEqual({
+      userMessage: '源站返回 HTTP 403',
+      rawMessage: 'HTTP 403 Forbidden',
+    })
+  })
+
+  it('maps known Instagram upstream failures to a quiet user message', () => {
+    expect(
+      mapFeedRefreshError(new Error('challenge_required'), {
+        knownInstagramFailure: true,
+      }),
+    ).toEqual({
+      userMessage: 'Instagram/RSSHub 上游暂时不可用，请稍后重试',
+      rawMessage: 'challenge_required',
+    })
   })
 })
 

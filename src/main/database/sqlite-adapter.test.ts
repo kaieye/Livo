@@ -57,6 +57,10 @@ function makeFeed(partial: Partial<Feed> = {}): Feed {
     upstreamUrl: partial.upstreamUrl,
     remoteFeedId: partial.remoteFeedId,
     provider: partial.provider,
+    lastRefreshStatus: partial.lastRefreshStatus,
+    lastRefreshAttemptedAt: partial.lastRefreshAttemptedAt,
+    lastRefreshError: partial.lastRefreshError,
+    lastRefreshRawError: partial.lastRefreshRawError,
     errorCount: partial.errorCount ?? 0,
     createdAt: partial.createdAt ?? 1000,
   }
@@ -123,6 +127,41 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
       provider: 'local',
     })
     expect(adapter.getFeedByUrl(feed.url)?.id).toBe(feed.id)
+  })
+
+  it('persists feed refresh status fields through feed repository writes', () => {
+    const adapter = createAdapter()
+    const feed = makeFeed({
+      lastRefreshStatus: 'failed',
+      lastRefreshAttemptedAt: 2000,
+      lastRefreshError: '源站返回 HTTP 403',
+      lastRefreshRawError: 'HTTP 403 Forbidden',
+    })
+
+    adapter.insertFeed(feed)
+
+    expect(adapter.getFeedById(feed.id)).toMatchObject({
+      lastRefreshStatus: 'failed',
+      lastRefreshAttemptedAt: 2000,
+      lastRefreshError: '源站返回 HTTP 403',
+      lastRefreshRawError: 'HTTP 403 Forbidden',
+    })
+
+    adapter.updateFeed(feed.id, {
+      lastRefreshStatus: 'succeeded',
+      lastRefreshAttemptedAt: 3000,
+      lastRefreshError: undefined,
+      lastRefreshRawError: undefined,
+      errorCount: 0,
+    })
+
+    expect(adapter.getFeedById(feed.id)).toMatchObject({
+      lastRefreshStatus: 'succeeded',
+      lastRefreshAttemptedAt: 3000,
+      lastRefreshError: undefined,
+      lastRefreshRawError: undefined,
+      errorCount: 0,
+    })
   })
 
   it('stores entries and applies list filters, pagination, and read counts', () => {

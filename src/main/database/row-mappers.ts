@@ -31,6 +31,10 @@ export function feedFromRow(row: any): Feed {
     upstreamUrl: row.upstream_url || undefined,
     remoteFeedId: row.remote_feed_id || undefined,
     provider: row.provider || 'local',
+    lastRefreshStatus: row.last_refresh_status || undefined,
+    lastRefreshAttemptedAt: row.last_refresh_attempted_at ?? undefined,
+    lastRefreshError: row.last_refresh_error || undefined,
+    lastRefreshRawError: row.last_refresh_raw_error || undefined,
     errorCount: row.error_count,
     createdAt: row.created_at,
   }

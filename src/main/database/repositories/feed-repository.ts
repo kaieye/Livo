@@ -39,9 +39,11 @@ export class FeedRepository implements IFeedRepository {
       INSERT OR IGNORE INTO feeds
         (id, title, url, site_url, description, image_url, folder, category,
          view, max_entries, show_in_all, last_fetched, etag, last_modified,
-         fetch_source, upstream_url, remote_feed_id, provider, error_count, created_at)
+         fetch_source, upstream_url, remote_feed_id, provider,
+         last_refresh_status, last_refresh_attempted_at, last_refresh_error,
+         last_refresh_raw_error, error_count, created_at)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       )
       .run(
@@ -63,6 +65,10 @@ export class FeedRepository implements IFeedRepository {
         f.upstreamUrl ?? null,
         f.remoteFeedId ?? null,
         f.provider ?? 'local',
+        f.lastRefreshStatus ?? null,
+        f.lastRefreshAttemptedAt ?? null,
+        f.lastRefreshError ?? null,
+        f.lastRefreshRawError ?? null,
         f.errorCount,
         f.createdAt,
       )
@@ -79,7 +85,9 @@ export class FeedRepository implements IFeedRepository {
         title = ?, url = ?, site_url = ?, description = ?, image_url = ?,
         folder = ?, category = ?, view = ?, max_entries = ?, show_in_all = ?,
         last_fetched = ?, etag = ?, last_modified = ?, fetch_source = ?,
-        upstream_url = ?, remote_feed_id = ?, provider = ?, error_count = ?
+        upstream_url = ?, remote_feed_id = ?, provider = ?,
+        last_refresh_status = ?, last_refresh_attempted_at = ?,
+        last_refresh_error = ?, last_refresh_raw_error = ?, error_count = ?
       WHERE id = ?
     `,
       )
@@ -101,6 +109,10 @@ export class FeedRepository implements IFeedRepository {
         merged.upstreamUrl ?? null,
         merged.remoteFeedId ?? null,
         merged.provider ?? 'local',
+        merged.lastRefreshStatus ?? null,
+        merged.lastRefreshAttemptedAt ?? null,
+        merged.lastRefreshError ?? null,
+        merged.lastRefreshRawError ?? null,
         merged.errorCount,
         id,
       )

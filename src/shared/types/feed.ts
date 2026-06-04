@@ -7,6 +7,8 @@ export enum FeedViewType {
   Pictures = 3,
 }
 
+export type FeedRefreshStatus = 'idle' | 'succeeded' | 'failed'
+
 export interface ViewDefinition {
   id: FeedViewType
   name: string
@@ -70,6 +72,10 @@ export interface Feed {
   upstreamUrl?: string
   remoteFeedId?: string
   provider?: 'local' | 'fever'
+  lastRefreshStatus?: FeedRefreshStatus
+  lastRefreshAttemptedAt?: number
+  lastRefreshError?: string
+  lastRefreshRawError?: string
   errorCount: number
   createdAt: number
 }

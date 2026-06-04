@@ -182,6 +182,16 @@ const MIGRATIONS: Array<{
         ON entries (is_listened, published_at DESC, id DESC);
     `,
   },
+  {
+    version: 5,
+    name: 'feed-refresh-status',
+    sql: `
+      ALTER TABLE feeds ADD COLUMN last_refresh_status TEXT;
+      ALTER TABLE feeds ADD COLUMN last_refresh_attempted_at INTEGER;
+      ALTER TABLE feeds ADD COLUMN last_refresh_error TEXT;
+      ALTER TABLE feeds ADD COLUMN last_refresh_raw_error TEXT;
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

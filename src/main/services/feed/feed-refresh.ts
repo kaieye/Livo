@@ -145,6 +145,60 @@ function isKnownInstagramUpstreamFailure(error: unknown): boolean {
   )
 }
 
+export interface FeedRefreshErrorContext {
+  knownInstagramFailure?: boolean
+}
+
+export interface FeedRefreshErrorInfo {
+  userMessage: string
+  rawMessage: string
+}
+
+function getRawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name
+  if (typeof error === 'string') return error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+export function mapFeedRefreshError(
+  error: unknown,
+  context: FeedRefreshErrorContext = {},
+): FeedRefreshErrorInfo {
+  const rawMessage = getRawErrorMessage(error) || 'Unknown refresh error'
+  const lower = rawMessage.toLowerCase()
+
+  if (context.knownInstagramFailure) {
+    return {
+      userMessage: 'Instagram/RSSHub 上游暂时不可用，请稍后重试',
+      rawMessage,
+    }
+  }
+
+  if (lower.includes('[refresh] timeout after') || lower.includes('timeout')) {
+    return {
+      userMessage: '刷新超时，请稍后重试',
+      rawMessage,
+    }
+  }
+
+  const httpStatus = rawMessage.match(/\bHTTP\s+(\d{3})\b/i)?.[1]
+  if (httpStatus) {
+    return {
+      userMessage: `源站返回 HTTP ${httpStatus}`,
+      rawMessage,
+    }
+  }
+
+  return {
+    userMessage: rawMessage,
+    rawMessage,
+  }
+}
+
 function shouldBackOffFeed(feed: Feed, now: number, force: boolean): boolean {
   if (force) return false
   if (!isInstagramFeedUrl(feed.url)) return false
@@ -425,6 +479,10 @@ async function runRefreshSingleFeed(
     if (result.notModified || !result.parsed) {
       getDb().feeds.updateFeed(feed.id, {
         lastFetched: now,
+        lastRefreshStatus: 'succeeded',
+        lastRefreshAttemptedAt: now,
+        lastRefreshError: undefined,
+        lastRefreshRawError: undefined,
         errorCount: 0,
         etag: result.etag || feed.etag,
         lastModified: result.lastModified || feed.lastModified,
@@ -459,6 +517,10 @@ async function runRefreshSingleFeed(
       // avoiding regressions back to placeholder/default assets.
       imageUrl: selectedFeedAvatar,
       lastFetched: now,
+      lastRefreshStatus: 'succeeded',
+      lastRefreshAttemptedAt: now,
+      lastRefreshError: undefined,
+      lastRefreshRawError: undefined,
       errorCount: 0,
       etag: result.etag,
       lastModified: result.lastModified,
@@ -506,7 +568,14 @@ async function runRefreshSingleFeed(
     } else {
       console.warn(refreshMessage, error)
     }
+    const refreshError = mapFeedRefreshError(error, {
+      knownInstagramFailure,
+    })
     getDb().feeds.updateFeed(feed.id, {
+      lastRefreshStatus: 'failed',
+      lastRefreshAttemptedAt: now,
+      lastRefreshError: refreshError.userMessage,
+      lastRefreshRawError: refreshError.rawMessage,
       errorCount: feed.errorCount + 1,
       lastFetched: now,
     })
