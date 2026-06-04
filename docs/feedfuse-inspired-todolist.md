@@ -52,7 +52,6 @@
 - [ ] E2. 新增 entry 级摘要/翻译 IPC
 - [ ] E3. hooks 改为 entryId + session 驱动
 - [ ] F1. 写 ADR：Digest 是特殊 Feed 还是特殊 Entry 类型
-- [ ] F2. Digest 来源文章可点击回跳
 - [ ] I3. 补 AI session 和 Digest 链路测试
 
 ## 3. A 线：刷新状态结构化
@@ -280,17 +279,6 @@ CREATE TABLE entry_ai_summary_sessions (
 - 长期选 B：Digest 作为特殊 Entry/Feed，阅读体验统一。
 - 短期先做来源可点击和详情页体验，不急着改 feed 模型。
 
-### F2. Digest 来源回跳
-
-- [ ] `AIDigestRun` 保留 `sourceEntryIds`。
-- [ ] Digest 页面显示来源列表。
-- [ ] 点击来源跳到对应 entry 详情。
-
-验收：
-
-- 用户可以从报告回看原文。
-- 原文被删除时显示失效状态，不报错。
-
 ### F3. Digest 候选去重增强
 
 - [ ] 借鉴 FeedFuse 的标题/链接聚类。
@@ -443,7 +431,7 @@ CREATE TABLE entry_ai_summary_sessions (
 4. D2：全文抓取进入 TaskRunner 并持久化终态。
 5. E1-E3：AI 摘要 session。
 6. E4：AI 翻译 session。
-7. F1-F3：Digest 融入阅读流。
+7. F1 + F3：Digest 融入阅读流。
 
 ## 14. 首批可开工任务卡片
 
@@ -514,16 +502,3 @@ CREATE TABLE entry_ai_summary_sessions (
 - 验收：
   - 摘要切换文章后可恢复。
   - 失败原因持久化。
-
-### TODO-010：Digest 来源回跳
-
-- 类型：product + UI
-- 优先级：P2
-- 涉及文件：
-  - `src/main/services/ai/ai-pipeline.ts`
-  - `src/main/database/repositories/digest-repository.ts`
-  - `src/renderer/src/pages/DigestPage.tsx`
-  - `src/renderer/src/router/*`
-- 验收：
-  - Digest 显示来源文章。
-  - 点击来源跳到原文。

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Clock3,
   FileText,
+  FileX,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -16,6 +17,11 @@ import type {
   Entry,
 } from '../../../shared/types'
 import { AIChatMarkdown } from '../components/ai/AIChatMarkdown'
+import { ROUTES } from '../router/route-paths'
+
+type DigestSourceItem =
+  | { id: string; status: 'available'; entry: Entry | AIDigestCandidate }
+  | { id: string; status: 'missing' }
 
 function formatDateTime(value: number): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -41,7 +47,7 @@ export default function DigestPage() {
   const [preset, setPreset] = useState<AIDigestPreset>('today')
   const [runs, setRuns] = useState<AIDigestRun[]>([])
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
-  const [sources, setSources] = useState<Array<Entry | AIDigestCandidate>>([])
+  const [sources, setSources] = useState<DigestSourceItem[]>([])
   const [isLoadingRuns, setIsLoadingRuns] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,6 +55,10 @@ export default function DigestPage() {
   const activeRun = useMemo(
     () => runs.find((run) => run.id === activeRunId) ?? runs[0] ?? null,
     [activeRunId, runs],
+  )
+  const availableSourceCount = useMemo(
+    () => sources.filter((source) => source.status === 'available').length,
+    [sources],
   )
 
   const loadRuns = useCallback(async () => {
@@ -74,12 +84,19 @@ export default function DigestPage() {
 
     let cancelled = false
     void Promise.all(
-      activeRun.sourceEntryIds.map((entryId) =>
-        window.api.entries.get(entryId),
-      ),
+      activeRun.sourceEntryIds.map(async (entryId) => ({
+        entryId,
+        entry: await window.api.entries.get(entryId).catch(() => null),
+      })),
     ).then((entries) => {
       if (cancelled) return
-      setSources(entries.filter((entry): entry is Entry => Boolean(entry)))
+      setSources(
+        entries.map(({ entryId, entry }) =>
+          entry
+            ? { id: entryId, status: 'available', entry }
+            : { id: entryId, status: 'missing' },
+        ),
+      )
     })
 
     return () => {
@@ -108,7 +125,13 @@ export default function DigestPage() {
         ...current.filter((run) => run.id !== result.run.id),
       ])
       setActiveRunId(result.run.id)
-      setSources(result.candidates)
+      setSources(
+        result.candidates.map((candidate) => ({
+          id: candidate.id,
+          status: 'available',
+          entry: candidate,
+        })),
+      )
     } finally {
       setIsGenerating(false)
       void loadRuns()
@@ -221,7 +244,7 @@ export default function DigestPage() {
             <div className="border-border dark:border-border-dark border-b p-4">
               <h2 className="text-sm font-semibold">来源文章</h2>
               <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
-                {sources.length} 篇
+                可打开 {availableSourceCount} / 来源 {sources.length}
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -232,21 +255,38 @@ export default function DigestPage() {
               ) : (
                 <div className="space-y-2">
                   {sources.map((source) => (
-                    <button
-                      key={source.id}
-                      onClick={() => navigate(`/entry/${source.id}`)}
-                      className="border-border hover:border-accent/50 hover:bg-accent/5 dark:border-border-dark dark:bg-surface-dark dark:hover:border-accent/50 w-full rounded-lg border bg-white px-3 py-2 text-left transition"
-                    >
-                      <div className="line-clamp-2 text-sm font-medium">
-                        {source.title}
-                      </div>
-                      <div className="text-text-tertiary mt-1 flex items-center gap-2 text-xs">
-                        <span className="truncate">
-                          {'feedTitle' in source ? source.feedTitle : ''}
-                        </span>
-                        <span>{formatDateTime(source.publishedAt)}</span>
-                      </div>
-                    </button>
+                    <div key={source.id}>
+                      {source.status === 'available' ? (
+                        <button
+                          onClick={() => navigate(ROUTES.entry(source.id))}
+                          className="border-border hover:border-accent/50 hover:bg-accent/5 dark:border-border-dark dark:bg-surface-dark dark:hover:border-accent/50 w-full rounded-lg border bg-white px-3 py-2 text-left transition"
+                        >
+                          <div className="line-clamp-2 text-sm font-medium">
+                            {source.entry.title}
+                          </div>
+                          <div className="text-text-tertiary mt-1 flex items-center gap-2 text-xs">
+                            <span className="truncate">
+                              {'feedTitle' in source.entry
+                                ? source.entry.feedTitle
+                                : ''}
+                            </span>
+                            <span>
+                              {formatDateTime(source.entry.publishedAt)}
+                            </span>
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="border-border bg-surface-tertiary/60 dark:border-border-dark dark:bg-surface-dark w-full rounded-lg border border-dashed px-3 py-2 text-left">
+                          <div className="text-text-secondary dark:text-text-dark-secondary flex items-center gap-2 text-sm font-medium">
+                            <FileX size={15} />
+                            来源文章已失效
+                          </div>
+                          <div className="text-text-tertiary mt-1 truncate text-xs">
+                            {source.id}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
