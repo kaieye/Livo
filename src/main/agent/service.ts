@@ -1,4 +1,4 @@
-import { getSettings } from '../handlers/settings-handlers'
+import { settingsProvider } from '../services/system/settings-provider'
 import type { AgentRunSummary } from '@shared'
 import {
   runAgentCore,
@@ -50,7 +50,7 @@ class AgentServiceImpl {
   >()
 
   async run(request: AgentServiceRunRequest): Promise<AgentServiceResult> {
-    const settings = getSettings()
+    const settings = settingsProvider.get()
     const controller = new AbortController()
     this.aborters.set(request.requestId, controller)
     const startedAt = Date.now()
@@ -81,7 +81,7 @@ class AgentServiceImpl {
     }
     this.pending.delete(request.pendingId)
 
-    const settings = getSettings()
+    const settings = settingsProvider.get()
     const controller = new AbortController()
     this.aborters.set(request.requestId, controller)
     try {

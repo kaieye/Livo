@@ -1,15 +1,9 @@
 import { BrowserWindow } from 'electron'
 import { getEventBus } from '../system/event-bus'
-import {
-  getAllFeeds,
-  getFeedById,
-  getEntries,
-  updateFeed,
-  cleanupEntries,
-  type CleanupOptions,
-} from '../../database'
+import { getDb } from '../../database'
+import type { CleanupOptions } from '../../database'
 import { deriveImageUrl } from './feed-utils'
-import { getSettings } from '../../handlers/settings-handlers'
+import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import type { Feed } from '../../../shared/types/index'
 import { FeedViewType } from '../../../shared/types/index'
@@ -98,7 +92,7 @@ function pickBestFeedAvatar(
 }
 
 function isVideoDurationEnrichmentEnabled(): boolean {
-  return !!getSettings().data?.enrichVideoDuration
+  return !!settingsProvider.get().data?.enrichVideoDuration
 }
 
 /** Default data-maintenance constants (overridden by settings at call site) */
@@ -275,10 +269,12 @@ export function startAutoRefresh(
   const scheduleNext = (): void => {
     if (generation !== autoRefreshGeneration || intervalMinutes <= 0) return
 
-    const receiveRecommended = !!getSettings().general.showRecommended
-    const feeds = getAllFeeds().filter(
-      (feed) => receiveRecommended || feed.category !== RECOMMENDED_CATEGORY,
-    )
+    const receiveRecommended = !!settingsProvider.get().general.showRecommended
+    const feeds = getDb()
+      .feeds.getAllFeeds()
+      .filter(
+        (feed) => receiveRecommended || feed.category !== RECOMMENDED_CATEGORY,
+      )
     const delayMs = getNextAutoRefreshDelayMs(
       feeds,
       Date.now(),
@@ -403,7 +399,8 @@ async function runRefreshSingleFeed(
   if (feed.provider === 'fever') return 0
   const now = Date.now()
   const rsshubInstance =
-    getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
+    settingsProvider.get().general.rsshubInstance?.trim() ||
+    DEFAULT_RSSHUB_INSTANCE
   const normalizedFeedUrl = normalizeFeedUrl(feed.url, rsshubInstance)
   const canonicalFeedUrl = canonicalizeInstagramFeedUrl(feed.url)
 
@@ -414,7 +411,7 @@ async function runRefreshSingleFeed(
       120,
     )
     if (feedUrlToStore !== feed.url) {
-      updateFeed(feed.id, { url: feedUrlToStore })
+      getDb().feeds.updateFeed(feed.id, { url: feedUrlToStore })
       feed = { ...feed, url: feedUrlToStore }
     }
 
@@ -426,7 +423,7 @@ async function runRefreshSingleFeed(
 
     // 304 Not Modified - no need to parse entries
     if (result.notModified || !result.parsed) {
-      updateFeed(feed.id, {
+      getDb().feeds.updateFeed(feed.id, {
         lastFetched: now,
         errorCount: 0,
         etag: result.etag || feed.etag,
@@ -455,7 +452,7 @@ async function runRefreshSingleFeed(
       feedImageUrl,
     )
 
-    updateFeed(feed.id, {
+    getDb().feeds.updateFeed(feed.id, {
       title: formatFeedTitle(normalizedFeedUrl, parsed.title, feed.title),
       description: parsed.description,
       // Keep avatars fresh when upstream exposes a newer image, while still
@@ -509,7 +506,7 @@ async function runRefreshSingleFeed(
     } else {
       console.warn(refreshMessage, error)
     }
-    updateFeed(feed.id, {
+    getDb().feeds.updateFeed(feed.id, {
       errorCount: feed.errorCount + 1,
       lastFetched: now,
     })
@@ -604,8 +601,8 @@ async function runRefreshAllFeeds(
   },
   context?: TaskRunContext,
 ): Promise<RefreshAllResult> {
-  const allFeeds = getAllFeeds()
-  const receiveRecommended = !!getSettings().general.showRecommended
+  const allFeeds = getDb().feeds.getAllFeeds()
+  const receiveRecommended = !!settingsProvider.get().general.showRecommended
   const feeds = receiveRecommended
     ? allFeeds
     : allFeeds.filter((f) => f.category !== RECOMMENDED_CATEGORY)
@@ -615,8 +612,8 @@ async function runRefreshAllFeeds(
   const force = options.force ?? false
   const now = Date.now()
   const settingsCleanup: CleanupOptions = {
-    entriesPerFeed: getSettings().data?.entriesPerFeed ?? 128,
-    maxEntryAgeDays: getSettings().data?.maxEntryAgeDays ?? 90,
+    entriesPerFeed: settingsProvider.get().data?.entriesPerFeed ?? 128,
+    maxEntryAgeDays: settingsProvider.get().data?.maxEntryAgeDays ?? 90,
   }
   const cleanupOptions = options.cleanup ?? settingsCleanup
 
@@ -636,7 +633,7 @@ async function runRefreshAllFeeds(
   })
 
   if (staleFeeds.length === 0) {
-    cleanupEntries(cleanupOptions)
+    getDb().maintenance.cleanupEntries(cleanupOptions)
     options.onProgress?.({
       feedId: '',
       feedTitle: '',
@@ -712,10 +709,10 @@ async function runRefreshAllFeeds(
   }
 
   // Run data cleanup after refresh
-  cleanupEntries(cleanupOptions)
+  getDb().maintenance.cleanupEntries(cleanupOptions)
 
   // Record refresh log entry
-  const refreshedFeeds = getAllFeeds()
+  const refreshedFeeds = getDb().feeds.getAllFeeds()
   let successCount = 0
   let failedCount = 0
   for (const feed of refreshedFeeds) {
@@ -740,8 +737,9 @@ async function runRefreshAllFeeds(
 
   // Sync Fever accounts after normal feed refresh
   try {
-    const { getFeverAccounts } = await import('../../database')
-    const feverAccounts = getFeverAccounts().filter((a) => a.enabled)
+    const feverAccounts = getDb()
+      .fever.getFeverAccounts()
+      .filter((a) => a.enabled)
     for (const account of feverAccounts) {
       try {
         await queueFeverSyncAccount(account.id).promise
@@ -856,7 +854,7 @@ export async function bootstrapFeedEntries(
     `bootstrap ${normalizedUrl}`,
   ).catch(() => {})
   const hasEntriesAfterFirstTry =
-    getEntries({
+    getDb().entries.getEntries({
       feedId: feed.id,
       limit: 1,
       skipDedupe: true,
@@ -888,7 +886,7 @@ export async function bootstrapFeedEntriesQuick(
 
 function hasAnyEntries(feedId: string): boolean {
   return (
-    getEntries({
+    getDb().entries.getEntries({
       feedId,
       limit: 1,
       skipDedupe: true,
@@ -941,7 +939,7 @@ async function runBootstrapRefresh(
       await bootstrapFeedEntries(feed, normalizedUrl, view).catch(() => {})
     }
 
-    const refreshed = getFeedById(feed.id)
+    const refreshed = getDb().feeds.getFeedById(feed.id)
     hasEntries = hasAnyEntries(feed.id)
     hasAvatar = !!(refreshed?.imageUrl || '').trim()
 

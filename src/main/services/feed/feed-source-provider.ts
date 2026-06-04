@@ -1,7 +1,7 @@
 import type RssParser from 'rss-parser'
 import type { Feed } from '../../../shared/types/index'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
-import { getSettings } from '../../handlers/settings-handlers'
+import { settingsProvider } from '../system/settings-provider'
 import { fetchAndParseFeed, type FetchFeedOptions } from './rss-parser'
 import { normalizeFeedUrl } from './rsshub-url'
 import {
@@ -57,7 +57,8 @@ function getFeedKey(feed: Feed, normalizedUrl: string): string {
 
 function getNormalizedFeedUrl(feed: Feed): string {
   const rsshubInstance =
-    getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
+    settingsProvider.get().general.rsshubInstance?.trim() ||
+    DEFAULT_RSSHUB_INSTANCE
   return normalizeFeedUrl(feed.upstreamUrl || feed.url, rsshubInstance)
 }
 
@@ -71,7 +72,7 @@ function getDesiredSource(feed: Feed): AggregatedFeedPayload['source'] {
     return explicit
   }
 
-  const settings = getSettings().aggregator
+  const settings = settingsProvider.get().aggregator
   if (!isHighRiskFeed(feed.url)) return 'direct'
   if (settings.mode === 'disabled') return 'direct'
   if (settings.mode === 'prefer-remote' || settings.mode === 'remote-only') {
@@ -133,7 +134,7 @@ async function fetchLocalAgentPayload(
 ): Promise<AggregatedFeedPayload> {
   const normalizedUrl = getNormalizedFeedUrl(feed)
   const key = getFeedKey(feed, normalizedUrl)
-  const settings = getSettings().aggregator
+  const settings = settingsProvider.get().aggregator
   pruneAggregatorSnapshots(
     Math.max(1, settings.cacheRetentionDays) * 24 * 60 * 60 * 1000,
   )

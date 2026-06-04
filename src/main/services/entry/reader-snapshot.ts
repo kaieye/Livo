@@ -1,4 +1,4 @@
-import { getAllFeeds, getEntries, getUnreadCountMap } from '../../database'
+import { getDb } from '../../database'
 import type {
   Entry,
   Feed,
@@ -146,15 +146,17 @@ export function getReaderSnapshot(
   const unreadOnly = !!input.unreadOnly
   const queryKey = buildQueryKey({ scope, unreadOnly, limit })
   const offset = decodeCursor(input.cursor, queryKey)
-  const unreadCountMap = getUnreadCountMap()
+  const unreadCountMap = getDb().entries.getUnreadCountMap()
   const feeds = sortFeedsForRenderer(
-    getAllFeeds().map((feed) => ({
-      ...toRendererFeed(feed),
-      unreadCount: unreadCountMap.get(feed.id) || 0,
-    })),
+    getDb()
+      .feeds.getAllFeeds()
+      .map((feed) => ({
+        ...toRendererFeed(feed),
+        unreadCount: unreadCountMap.get(feed.id) || 0,
+      })),
   )
   const entryOptions = toEntryOptions({ scope, unreadOnly })
-  const result = getEntries({
+  const result = getDb().entries.getEntries({
     ...entryOptions,
     limit,
     offset,

@@ -16,20 +16,25 @@ import type {
 import { runMigrations } from './sqlite-schema'
 import type { CleanupOptions, CleanupStats } from './cleanup'
 import { DigestRepository } from './repositories/digest-repository'
+import type { IDigestRepository } from './repositories/digest-repository'
 import { EntryRepository } from './repositories/entry-repository'
+import type { IEntryRepository } from './repositories/entry-repository'
 import { FeedRepository } from './repositories/feed-repository'
+import type { IFeedRepository } from './repositories/feed-repository'
 import { FeverRepository } from './repositories/fever-repository'
+import type { IFeverRepository } from './repositories/fever-repository'
 import { MaintenanceRepository } from './repositories/maintenance-repository'
+import type { IMaintenanceRepository } from './repositories/maintenance-repository'
 
 export type { CleanupOptions, CleanupStats }
 
 export class SqliteAdapter {
   private readonly db: Database.Database
-  private readonly feeds: FeedRepository
-  private readonly entries: EntryRepository
-  private readonly digests: DigestRepository
-  private readonly fever: FeverRepository
-  private readonly maintenance: MaintenanceRepository
+  readonly feeds: IFeedRepository
+  readonly entries: IEntryRepository
+  readonly digests: IDigestRepository
+  readonly fever: IFeverRepository
+  readonly maintenance: IMaintenanceRepository
 
   constructor(dbPath: string) {
     const dir = join(dbPath, '..')

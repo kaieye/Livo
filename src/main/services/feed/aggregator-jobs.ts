@@ -1,12 +1,12 @@
 import type { Feed } from '../../../shared/types/index'
-import { getAllFeeds } from '../../database'
-import { getSettings } from '../../handlers/settings-handlers'
+import { getDb } from '../../database'
+import { settingsProvider } from '../system/settings-provider'
 import { warmAggregatorForFeeds } from './feed-source-provider'
 
 let warmupTimer: ReturnType<typeof setInterval> | null = null
 
 async function runWarmup(feeds?: Feed[]): Promise<void> {
-  const targetFeeds = feeds || getAllFeeds()
+  const targetFeeds = feeds || getDb().feeds.getAllFeeds()
   await warmAggregatorForFeeds(targetFeeds)
 }
 
@@ -17,7 +17,7 @@ export function startAggregatorJobs(initialFeeds?: Feed[]): void {
 
   const intervalSeconds = Math.max(
     300,
-    getSettings().aggregator.pollIntervalSeconds || 900,
+    settingsProvider.get().aggregator.pollIntervalSeconds || 900,
   )
   warmupTimer = setInterval(() => {
     void runWarmup().catch(() => {})

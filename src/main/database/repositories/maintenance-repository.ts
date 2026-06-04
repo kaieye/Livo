@@ -5,12 +5,23 @@ import {
   type CleanupStats,
 } from '../cleanup'
 import { entryFromRow } from '../row-mappers'
-import { FeedRepository } from './feed-repository'
+import type { IFeedRepository } from './feed-repository'
 
-export class MaintenanceRepository {
+export interface IMaintenanceRepository {
+  cleanupEntries(options: CleanupOptions): CleanupStats
+  getDatabaseStats(): {
+    totalFeeds: number
+    totalEntries: number
+    readEntries: number
+    starredEntries: number
+    dataSizeBytes: number
+  }
+}
+
+export class MaintenanceRepository implements IMaintenanceRepository {
   constructor(
     private readonly db: Database.Database,
-    private readonly feeds: FeedRepository,
+    private readonly feeds: IFeedRepository,
   ) {}
 
   cleanupEntries(options: CleanupOptions): CleanupStats {

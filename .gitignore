@@ -21,3 +21,4 @@ docs/*
 !docs/feedfuse-comparison-improvements.md
 !docs/development.md
 !docs/architecture.md
+.reasonix/

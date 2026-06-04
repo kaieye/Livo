@@ -50,19 +50,9 @@ import {
   inferDiscoverFeedViewFromUrl,
   getWarmupStrategy,
 } from '../../shared/subscription-intake'
-import {
-  getAllFeeds,
-  getFeedById,
-  getFeedByUrl,
-  insertFeed,
-  deleteFeed,
-  updateFeed,
-  insertEntries,
-  getUnreadCountMap,
-  cleanupEntries,
-  getDatabaseStats,
-} from '../database'
-import { subscribeFeed } from '../services/feed/feed-subscriber'
+import { getDb } from '../database'
+import { addFeed } from '../operations/feed-operations'
+import { exportOPML } from '../operations/data-operations'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 
@@ -85,126 +75,11 @@ export function registerFeedHandlers(): void {
       title?: string,
     ) => {
       try {
-        const outcome = await subscribeFeed({
-          url: url.trim(),
-          title,
-          category,
-          view,
-        })
-
-        if (outcome.existed) {
-          const existingFeed = outcome.feed
-          const rsshubInstance =
-            getSettings().general.rsshubInstance?.trim() ||
-            DEFAULT_RSSHUB_INSTANCE
-          const normalizedUrl = normalizeRsshubProtocolUrl(
-            existingFeed.url,
-            rsshubInstance,
-          )
-          const wantsRecommended = (category || '') === RECOMMENDED_CATEGORY
-          const updates: Partial<Feed> = {}
-          const inferredView = inferDiscoverFeedViewFromUrl(normalizedUrl)
-
-          // Promote from Recommended to normal subscription
-          if (
-            existingFeed.category === RECOMMENDED_CATEGORY &&
-            !wantsRecommended
-          ) {
-            updates.category = category || ''
-            updates.folder = category || ''
-          }
-
-          // Route-derived view wins over stale explicit selection.
-          const desiredView =
-            inferredView !== FeedViewType.Articles
-              ? inferredView
-              : (view ?? existingFeed.view)
-          if (existingFeed.view !== desiredView) {
-            updates.view = desiredView
-          }
-          if (title?.trim()) {
-            updates.title = formatFeedTitle(
-              existingFeed.url,
-              undefined,
-              title.trim(),
-            )
-          }
-
-          if (Object.keys(updates).length > 0) {
-            updateFeed(existingFeed.id, updates)
-            const mergedFeed = { ...existingFeed, ...updates }
-            const strategy = getWarmupStrategy(normalizedUrl, mergedFeed.view)
-            if (strategy === 'deferred-queue') {
-              queueBootstrapRefresh(mergedFeed, normalizedUrl, mergedFeed.view)
-            } else {
-              await bootstrapFeedEntries(
-                mergedFeed,
-                normalizedUrl,
-                mergedFeed.view,
-              )
-            }
-            const refreshed = getFeedById(existingFeed.id)
-            return {
-              success: true,
-              feed: refreshed ? toRendererFeed(refreshed) : mergedFeed,
-            }
-          }
-
-          const strategy = getWarmupStrategy(normalizedUrl, existingFeed.view)
-          if (strategy === 'deferred-queue') {
-            queueBootstrapRefresh(
-              existingFeed,
-              normalizedUrl,
-              existingFeed.view,
-            )
-          } else {
-            await bootstrapFeedEntries(
-              existingFeed,
-              normalizedUrl,
-              existingFeed.view,
-            )
-          }
-          const refreshed = getFeedById(existingFeed.id)
-          if (refreshed)
-            return { success: true, feed: toRendererFeed(refreshed) }
-          return { success: true, feed: existingFeed }
+        const result = await addFeed({ url, title, category, view })
+        return {
+          success: true,
+          feed: toRendererFeed(result.feed),
         }
-
-        // New feed — service already created it and inserted entries
-        const feed = outcome.feed
-        const rsshubInstance =
-          getSettings().general.rsshubInstance?.trim() ||
-          DEFAULT_RSSHUB_INSTANCE
-        const normalizedUrl = normalizeRsshubProtocolUrl(
-          feed.url,
-          rsshubInstance,
-        )
-
-        if (
-          outcome.fetched &&
-          getSettings().data?.enrichVideoDuration &&
-          feed.view === FeedViewType.Videos
-        ) {
-          queueVideoDurationEnrich(feed.id).catch(() => {})
-        }
-
-        // If fetch failed/skipped, force a synchronous refresh once so
-        // newly added subscriptions can show entries immediately.
-        if (!outcome.fetched) {
-          const strategy = getWarmupStrategy(normalizedUrl, feed.view)
-          if (strategy === 'deferred-queue') {
-            queueBootstrapRefresh(feed, normalizedUrl, feed.view)
-          } else {
-            await bootstrapFeedEntries(feed, normalizedUrl, feed.view)
-          }
-          const refreshed = getFeedById(feed.id)
-          return {
-            success: true,
-            feed: refreshed ? toRendererFeed(refreshed) : feed,
-          }
-        }
-
-        return { success: true, feed }
       } catch (error) {
         return toHandlerError(error)
       }
@@ -213,14 +88,14 @@ export function registerFeedHandlers(): void {
 
   // Remove a feed
   registerChannel(IPC.FEED_REMOVE, (_event, feedId: string) => {
-    deleteFeed(feedId)
+    getDb().feeds.deleteFeed(feedId)
     return { success: true }
   })
 
   // List all feeds with unread counts
   registerChannel(IPC.FEED_LIST, () => {
-    const feeds = getAllFeeds()
-    const unreadCountMap = getUnreadCountMap()
+    const feeds = getDb().feeds.getAllFeeds()
+    const unreadCountMap = getDb().entries.getUnreadCountMap()
     const result: FeedWithCount[] = feeds
       .map((f) => ({
         ...toRendererFeed(f),
@@ -232,14 +107,14 @@ export function registerFeedHandlers(): void {
 
   // Refresh a single feed
   registerChannel(IPC.FEED_REFRESH, async (_event, feedId: string) => {
-    const feeds = getAllFeeds()
+    const feeds = getDb().feeds.getAllFeeds()
     const feed = feeds.find((f) => f.id === feedId)
     if (!feed) return { success: false, error: 'Feed not found' }
 
     try {
       const newCount = await refreshSingleFeed(feed, { force: true })
-      const refreshedFeed = getFeedById(feedId)
-      const unreadCount = getUnreadCountMap().get(feedId) || 0
+      const refreshedFeed = getDb().feeds.getFeedById(feedId)
+      const unreadCount = getDb().entries.getUnreadCountMap().get(feedId) || 0
       return {
         success: true,
         newEntries: newCount,
@@ -259,7 +134,7 @@ export function registerFeedHandlers(): void {
       force: true,
       onProgress: (progress) => {
         const refreshedFeed = progress.feedId
-          ? getFeedById(progress.feedId)
+          ? getDb().feeds.getFeedById(progress.feedId)
           : undefined
         event.sender.send('feeds:refresh-progress', {
           total: progress.total,
@@ -297,7 +172,7 @@ export function registerFeedHandlers(): void {
       if (next.category === RECOMMENDED_CATEGORY) {
         next.folder = ''
       }
-      updateFeed(feedId, next)
+      getDb().feeds.updateFeed(feedId, next)
       return { success: true }
     },
   )
@@ -356,9 +231,9 @@ export function registerFeedHandlers(): void {
           rsshubInstance,
         )
         const existingFeed =
-          getFeedByUrl(storedXmlUrl) ||
-          getFeedByUrl(normalizedXmlUrl) ||
-          getFeedByUrl(toRsshubProtocolUrl(normalizedXmlUrl))
+          getDb().feeds.getFeedByUrl(storedXmlUrl) ||
+          getDb().feeds.getFeedByUrl(normalizedXmlUrl) ||
+          getDb().feeds.getFeedByUrl(toRsshubProtocolUrl(normalizedXmlUrl))
         if (existingFeed) {
           skipped++
           completed++
@@ -416,7 +291,7 @@ export function registerFeedHandlers(): void {
             createdAt: now,
           }
 
-          insertFeed(feed)
+          getDb().feeds.insertFeed(feed)
 
           if (parsed) {
             const entriesToInsert = await buildEntriesFromParsedItems(
@@ -426,7 +301,7 @@ export function registerFeedHandlers(): void {
               feed.view,
               now,
             )
-            insertEntries(entriesToInsert)
+            getDb().entries.insertEntries(entriesToInsert)
           }
 
           importedFeedIds.push(id)
@@ -469,31 +344,14 @@ export function registerFeedHandlers(): void {
 
   // Export OPML
   registerChannel(IPC.FEED_EXPORT_OPML, async () => {
-    const feeds = getAllFeeds()
-    if (feeds.length === 0) {
-      return { success: false, error: 'No feeds to export' }
+    const result = await exportOPML()
+    if (!result.success) {
+      if (result.cancelled) return { success: false, canceled: true }
+      if (result.error === 'no_feeds')
+        return { success: false, error: 'No feeds to export' }
+      return toHandlerError(new Error(result.error ?? 'Failed to export OPML'))
     }
-
-    const result = await dialog.showSaveDialog({
-      title: 'Export OPML file',
-      defaultPath: 'livo-subscriptions.opml',
-      filters: [
-        { name: 'OPML Files', extensions: ['opml'] },
-        { name: 'XML Files', extensions: ['xml'] },
-      ],
-    })
-
-    if (result.canceled || !result.filePath) {
-      return { success: false, canceled: true }
-    }
-
-    try {
-      const opml = generateOPML(feeds)
-      writeFileSync(result.filePath, opml, 'utf-8')
-      return { success: true, count: feeds.length }
-    } catch (err) {
-      return toHandlerError(err, 'Failed to export OPML')
-    }
+    return { success: true, count: result.feedCount }
   })
 
   // Batch refresh imported feeds with progress events.
@@ -534,7 +392,7 @@ export function registerFeedHandlers(): void {
       const worker = async () => {
         while (queue.length > 0) {
           const feedId = queue.shift()!
-          const feed = getFeedById(feedId)
+          const feed = getDb().feeds.getFeedById(feedId)
           const label = feed?.title || feedId
 
           if (!feed) {
@@ -594,7 +452,7 @@ export function registerFeedHandlers(): void {
       _event,
       options?: { entriesPerFeed?: number; maxEntryAgeDays?: number },
     ) => {
-      const stats = cleanupEntries({
+      const stats = getDb().maintenance.cleanupEntries({
         entriesPerFeed: options?.entriesPerFeed ?? 128,
         maxEntryAgeDays: options?.maxEntryAgeDays ?? 90,
       })
@@ -604,7 +462,7 @@ export function registerFeedHandlers(): void {
 
   // Get database statistics
   registerChannel(IPC.DATA_STATS, () => {
-    const stats = getDatabaseStats()
+    const stats = getDb().maintenance.getDatabaseStats()
     return {
       ...stats,
       cacheSizeBytes: getDirectorySize(getAppCacheDirectoryPath()),

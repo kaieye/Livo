@@ -2,21 +2,14 @@ import { IPC } from '../../shared/types'
 import type { FeverAccount } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
-import {
-  getFeverAccounts,
-  getFeverAccountById,
-  insertFeverAccount,
-  updateFeverAccount,
-  deleteFeverAccount,
-  getFeverSyncState,
-} from '../database'
+import { getDb } from '../database'
 import { createFeverClient } from '../services/fever/fever-client'
 import { queueFeverSyncAccount } from '../services/fever/fever-sync'
 import { v4 as uuidv4 } from 'uuid'
 
 export function registerFeverHandlers(): void {
   registerChannel(IPC.FEVER_ACCOUNTS_LIST, () => {
-    return getFeverAccounts()
+    return getDb().fever.getFeverAccounts()
   })
 
   registerChannel(
@@ -35,7 +28,7 @@ export function registerFeverHandlers(): void {
         syncIntervalMin: 30,
         createdAt: Date.now(),
       }
-      insertFeverAccount(account)
+      getDb().fever.insertFeverAccount(account)
       return account
     },
   )
@@ -47,9 +40,9 @@ export function registerFeverHandlers(): void {
       id: string,
       updates: Partial<FeverAccount>,
     ): { success: boolean; error?: string } => {
-      const existing = getFeverAccountById(id)
+      const existing = getDb().fever.getFeverAccountById(id)
       if (!existing) return { success: false, error: 'Account not found' }
-      updateFeverAccount(id, updates)
+      getDb().fever.updateFeverAccount(id, updates)
       return { success: true }
     },
   )
@@ -57,9 +50,9 @@ export function registerFeverHandlers(): void {
   registerChannel(
     IPC.FEVER_ACCOUNTS_DELETE,
     (_event, id: string): { success: boolean; error?: string } => {
-      const existing = getFeverAccountById(id)
+      const existing = getDb().fever.getFeverAccountById(id)
       if (!existing) return { success: false, error: 'Account not found' }
-      deleteFeverAccount(id)
+      getDb().fever.deleteFeverAccount(id)
       return { success: true }
     },
   )
@@ -110,7 +103,9 @@ export function registerFeverHandlers(): void {
       success: boolean
       results: Array<{ accountId: string; success: boolean; error?: string }>
     }> => {
-      const accounts = getFeverAccounts().filter((a) => a.enabled)
+      const accounts = getDb()
+        .fever.getFeverAccounts()
+        .filter((a) => a.enabled)
       const results: Array<{
         accountId: string
         success: boolean
@@ -136,6 +131,6 @@ export function registerFeverHandlers(): void {
   )
 
   registerChannel(IPC.FEVER_SYNC_STATE, (_event, accountId: string) => {
-    return getFeverSyncState(accountId) || null
+    return getDb().fever.getFeverSyncState(accountId) || null
   })
 }

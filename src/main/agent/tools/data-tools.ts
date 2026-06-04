@@ -1,12 +1,10 @@
-import { dialog } from 'electron'
-import { writeFileSync } from 'fs'
 import type {
   AgentTool,
   AgentToolArgs,
   AgentToolResult,
 } from '../../../shared/types'
-import { getAllFeeds, cleanupEntries } from '../../database'
-import { generateOPML } from '../../services/feed/opml-parser'
+import { getDb } from '../../database'
+import { exportOPML } from '../../operations/data-operations'
 import {
   loadRefreshLogs,
   clearRefreshLogs,
@@ -60,30 +58,22 @@ export function buildExportOpmlTool(): AgentTool {
     confirmationMessage:
       '将把当前订阅列表写入你选择的 OPML 文件，不会导出文章正文或 API Key。',
     execute: async (): Promise<AgentToolResult> => {
-      const feeds = getAllFeeds()
-      if (feeds.length === 0) {
-        return { status: 'failed', message: '当前没有可导出的订阅源' }
-      }
-      const result = await dialog.showSaveDialog({
-        title: 'Export OPML file',
-        defaultPath: 'livo-subscriptions.opml',
-        filters: [
-          { name: 'OPML Files', extensions: ['opml'] },
-          { name: 'XML Files', extensions: ['xml'] },
-        ],
-      })
-      if (result.canceled || !result.filePath) {
-        return { status: 'success', message: '已取消 OPML 导出' }
-      }
-      try {
-        writeFileSync(result.filePath, generateOPML(feeds), 'utf-8')
-      } catch (error) {
-        return { status: 'failed', message: `OPML 导出失败：${String(error)}` }
+      const result = await exportOPML()
+      if (!result.success) {
+        if (result.cancelled)
+          return { status: 'success', message: '已取消 OPML 导出' }
+        return {
+          status: 'failed',
+          message: `OPML 导出失败：${result.error ?? '未知错误'}`,
+        }
       }
       return {
         status: 'success',
-        message: `OPML 导出完成，共 ${feeds.length} 条订阅`,
-        data: { feedCount: feeds.length, filePath: result.filePath },
+        message: `OPML 导出完成，共 ${result.feedCount} 条订阅`,
+        data: {
+          feedCount: result.feedCount,
+          ...(result.filePath ? { filePath: result.filePath } : {}),
+        },
       }
     },
   }
@@ -147,7 +137,10 @@ export function buildCleanupOldEntriesTool(): AgentTool {
         typeof args['maxEntryAgeDays'] === 'number'
           ? Math.max(1, Math.floor(args['maxEntryAgeDays'] as number))
           : 90
-      const stats = cleanupEntries({ entriesPerFeed, maxEntryAgeDays })
+      const stats = getDb().maintenance.cleanupEntries({
+        entriesPerFeed,
+        maxEntryAgeDays,
+      })
       return {
         status: 'success',
         message: `清理完成：移除 ${stats.removed} 篇旧文章（按数量上限 ${stats.removedByCap}，按时间 ${stats.removedByAge}）`,

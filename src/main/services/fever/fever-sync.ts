@@ -2,24 +2,7 @@ import { getEventBus } from '../system/event-bus'
 import { v4 as uuidv4 } from 'uuid'
 import type { Entry, Feed, FeverAccount } from '../../../shared/types/index'
 import { FeedViewType } from '../../../shared/types/index'
-import {
-  getFeverAccounts,
-  getFeverAccountById,
-  updateFeverAccount,
-  getFeverFeedMappingByRemoteId,
-  upsertFeverFeedMapping,
-  markFeverFeedMappingsInactive,
-  getFeverItemMapping,
-  getFeverItemMappingsByLocalEntry,
-  upsertFeverItemMapping,
-  getFeverSyncState,
-  upsertFeverSyncState,
-  insertFeed,
-  updateFeed,
-  getFeedById,
-  insertEntry,
-  updateEntry,
-} from '../../database'
+import { getDb } from '../../database'
 import { createFeverClient } from './fever-client'
 import type { FeverApiClient, FeverFeedWithGroup } from './fever-client'
 import { FEVER_SYNC_TASK } from '../system/task-contracts'
@@ -143,11 +126,14 @@ async function syncFeeds(
 
   for (const remote of remoteFeeds) {
     activeRemoteIds.push(remote.id)
-    const existing = getFeverFeedMappingByRemoteId(account.id, remote.id)
+    const existing = getDb().fever.getFeverFeedMappingByRemoteId(
+      account.id,
+      remote.id,
+    )
 
     if (existing) {
       localFeedByRemoteId.set(remote.id, existing.localFeedId)
-      upsertFeverFeedMapping({
+      getDb().fever.upsertFeverFeedMapping({
         ...existing,
         lastSeenAt: now,
         isActive: true,
@@ -156,21 +142,21 @@ async function syncFeeds(
         remoteUrl: remote.url || existing.remoteUrl,
       })
 
-      const localFeed = getFeedById(existing.localFeedId)
+      const localFeed = getDb().feeds.getFeedById(existing.localFeedId)
       if (localFeed) {
         const updates: Partial<Feed> = {}
         if (remote.title && remote.title !== localFeed.title)
           updates.title = remote.title
         if (remote.url && remote.url !== localFeed.url) updates.url = remote.url
         if (Object.keys(updates).length > 0) {
-          updateFeed(existing.localFeedId, updates)
+          getDb().feeds.updateFeed(existing.localFeedId, updates)
         }
       }
     } else {
       const feed = buildFeedFromFeverRemote(remote, account.id)
-      insertFeed(feed)
+      getDb().feeds.insertFeed(feed)
       localFeedByRemoteId.set(remote.id, feed.id)
-      upsertFeverFeedMapping({
+      getDb().fever.upsertFeverFeedMapping({
         accountId: account.id,
         feverFeedId: remote.id,
         localFeedId: feed.id,
@@ -183,7 +169,7 @@ async function syncFeeds(
     }
   }
 
-  markFeverFeedMappingsInactive(account.id, activeRemoteIds)
+  getDb().fever.markFeverFeedMappingsInactive(account.id, activeRemoteIds)
   return localFeedByRemoteId
 }
 
@@ -193,7 +179,7 @@ async function syncItems(
   localFeedByRemoteId: Map<number, string>,
   options?: { force?: boolean },
 ): Promise<{ itemsSynced: number; newEntries: number }> {
-  const syncState = getFeverSyncState(account.id)
+  const syncState = getDb().fever.getFeverSyncState(account.id)
   const now = Date.now()
   const isFullSync =
     options?.force ||
@@ -215,9 +201,12 @@ async function syncItems(
       const localFeedId = localFeedByRemoteId.get(item.feedId)
       if (!localFeedId) continue
 
-      const existingMapping = getFeverItemMapping(account.id, item.id)
+      const existingMapping = getDb().fever.getFeverItemMapping(
+        account.id,
+        item.id,
+      )
       if (existingMapping) {
-        upsertFeverItemMapping({
+        getDb().fever.upsertFeverItemMapping({
           ...existingMapping,
           lastSeenAt: now,
           isActive: true,
@@ -225,20 +214,20 @@ async function syncItems(
           remoteIsStarred: item.isSaved === 1,
         })
 
-        const entry = getFeedById(existingMapping.localEntryId)
+        const entry = getDb().feeds.getFeedById(existingMapping.localEntryId)
           ? undefined
           : undefined
         if (entry !== undefined) {
-          updateEntry(existingMapping.localEntryId, {
+          getDb().entries.updateEntry(existingMapping.localEntryId, {
             isRead: item.isRead === 1,
             isStarred: item.isSaved === 1,
           })
         }
       } else {
         const entry = buildEntryFromFeverItem(item, localFeedId)
-        insertEntry(entry)
+        getDb().entries.insertEntry(entry)
         newEntries++
-        upsertFeverItemMapping({
+        getDb().fever.upsertFeverItemMapping({
           accountId: account.id,
           feverItemId: item.id,
           feverFeedId: item.feedId,
@@ -257,7 +246,7 @@ async function syncItems(
     sinceId = items[items.length - 1].id
   }
 
-  upsertFeverSyncState({
+  getDb().fever.upsertFeverSyncState({
     accountId: account.id,
     lastItemId: highestItemId,
     lastSyncAt: now,
@@ -278,9 +267,9 @@ export function feverWriteBack(
   entryId: string,
   state: 'read' | 'unread' | 'saved' | 'unsaved',
 ): void {
-  const mappings = getFeverItemMappingsByLocalEntry(entryId)
+  const mappings = getDb().fever.getFeverItemMappingsByLocalEntry(entryId)
   for (const mapping of mappings) {
-    const account = getFeverAccountById(mapping.accountId)
+    const account = getDb().fever.getFeverAccountById(mapping.accountId)
     if (!account?.enabled) continue
     const client = createFeverClient(
       account.baseUrl,
@@ -295,7 +284,7 @@ export function feverWriteBack(
           updates.remoteIsRead = state === 'read'
         if (state === 'saved' || state === 'unsaved')
           updates.remoteIsStarred = state === 'saved'
-        upsertFeverItemMapping({ ...mapping, ...updates })
+        getDb().fever.upsertFeverItemMapping({ ...mapping, ...updates })
       })
       .catch(() => {
         // Best-effort; reconciled on next sync
@@ -318,7 +307,7 @@ export async function syncFeverAccount(
   accountId: string,
   options?: { force?: boolean; context?: TaskRunContext },
 ): Promise<FeverSyncResult> {
-  const account = getFeverAccountById(accountId)
+  const account = getDb().fever.getFeverAccountById(accountId)
   if (!account) {
     return {
       success: false,
@@ -378,7 +367,7 @@ export async function syncFeverAccount(
 
     await performWriteBack(client, account, localFeedByRemoteId)
 
-    updateFeverAccount(accountId, {
+    getDb().fever.updateFeverAccount(accountId, {
       lastSyncAt: Date.now(),
       lastError: undefined,
     })
@@ -401,7 +390,7 @@ export async function syncFeverAccount(
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
-    updateFeverAccount(accountId, { lastError: errorMsg })
+    getDb().fever.updateFeverAccount(accountId, { lastError: errorMsg })
     sendProgressToRenderer(
       {
         accountId,
@@ -445,7 +434,7 @@ export function queueFeverSyncAccount(
 }
 
 function checkAndSyncDueAccounts(): void {
-  const accounts = getFeverAccounts()
+  const accounts = getDb().fever.getFeverAccounts()
   const now = Date.now()
 
   for (const account of accounts) {

@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import { getEventBus } from '../system/event-bus'
-import { getSettings } from '../../handlers/settings-handlers'
+import { settingsProvider } from '../system/settings-provider'
 import { createOpenAIClient, validateAIConfig } from './ai-client'
 import { normalizeAIError } from './provider-protocol'
 import { runWithRetry } from './ai-retry'
@@ -21,12 +21,7 @@ import type {
   AiSummarizeTaskPayload,
   AiTranslateTaskPayload,
 } from '../system/task-contracts'
-import {
-  getDigestWindow,
-  listDigestCandidates,
-  updateAIDigestRun,
-  upsertAIDigestRun,
-} from '../../database'
+import { getDb } from '../../database'
 import type {
   AIDigestGenerateResult,
   AIDigestPreset,
@@ -80,7 +75,7 @@ export async function generateAIDigest(
   input?: AIDigestGenerateInput,
   context?: TaskRunContext,
 ): Promise<AIDigestGenerateResult> {
-  const settings = getSettings()
+  const settings = settingsProvider.get()
   const aiConfig = settings.ai
   const preset = normalizeDigestPreset(input?.preset)
   const presetLabel = getDigestPresetLabel(preset)
@@ -93,14 +88,17 @@ export async function generateAIDigest(
     data: { preset, feedId: input?.feedId },
   })
 
-  const { windowStartAt, windowEndAt } = getDigestWindow(preset, now)
-  const candidates = listDigestCandidates({
+  const { windowStartAt, windowEndAt } = getDb().digests.getDigestWindow(
+    preset,
+    now,
+  )
+  const candidates = getDb().digests.listDigestCandidates({
     preset,
     feedId: input?.feedId,
     limit: 80,
     now,
   })
-  const run = upsertAIDigestRun({
+  const run = getDb().digests.upsertAIDigestRun({
     preset,
     feedId: input?.feedId,
     title: presetLabel,
@@ -121,7 +119,7 @@ export async function generateAIDigest(
   })
 
   if (candidates.length === 0) {
-    const failed = updateAIDigestRun(run.id, {
+    const failed = getDb().digests.updateAIDigestRun(run.id, {
       status: 'failed',
       error: '当前时间窗内没有可用于生成简报的文章',
     })
@@ -140,7 +138,7 @@ export async function generateAIDigest(
 
   const configError = validateAIConfig(aiConfig)
   if (configError) {
-    const failed = updateAIDigestRun(run.id, {
+    const failed = getDb().digests.updateAIDigestRun(run.id, {
       status: 'failed',
       error: configError,
     })
@@ -234,7 +232,7 @@ export async function generateAIDigest(
       2200,
       0.3,
     )
-    const completed = updateAIDigestRun(run.id, {
+    const completed = getDb().digests.updateAIDigestRun(run.id, {
       status: 'completed',
       title: presetLabel,
       sourceEntryIds: selectedIds,
@@ -256,7 +254,7 @@ export async function generateAIDigest(
     }
   } catch (error) {
     const normalized = normalizeAIError(error, aiConfig)
-    const failed = updateAIDigestRun(run.id, {
+    const failed = getDb().digests.updateAIDigestRun(run.id, {
       status: 'failed',
       error: normalized,
     })
@@ -276,7 +274,7 @@ export async function runAISummarizeTask(
   payload: AiSummarizeTaskPayload,
   context?: TaskRunContext,
 ): Promise<AISummarizeResult> {
-  const settings = getSettings()
+  const settings = settingsProvider.get()
   const aiConfig = settings.ai
   const { content, language, requestId } = payload
 
@@ -379,7 +377,7 @@ export async function runAITranslateTask(
   payload: AiTranslateTaskPayload,
   context?: TaskRunContext,
 ): Promise<AITranslateResult> {
-  const settings = getSettings()
+  const settings = settingsProvider.get()
   const aiConfig = settings.ai
   const { content, targetLanguage, requestId } = payload
 

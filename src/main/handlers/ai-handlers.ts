@@ -1,7 +1,7 @@
 import { registerChannel } from '../ipc/register-channel'
 import OpenAI from 'openai'
 import { IPC } from '../../shared/types'
-import { getSettings } from './settings-handlers'
+import { settingsProvider } from '../services/system/settings-provider'
 import { createOpenAIClient, validateAIConfig } from '../services/ai/ai-client'
 import { judgeSemanticFilter } from '../services/ai/ai-filter'
 import { normalizeAIError } from '../services/ai/provider-protocol'
@@ -21,7 +21,7 @@ import {
 } from '../services/system/task-contracts'
 import { getLocalTaskRunner } from '../services/system/task-runner-service'
 import { logUserOperation } from '../services/system/user-operation-log'
-import { listAIDigestRuns } from '../database'
+import { getDb } from '../database'
 import type {
   AIDigestGenerateResult,
   AISemanticFilterInput,
@@ -52,7 +52,7 @@ export function registerAIHandlers(): void {
       } catch (error) {
         return {
           success: false,
-          error: normalizeAIError(error, getSettings().ai),
+          error: normalizeAIError(error, settingsProvider.get().ai),
           runId: task.runId,
         }
       }
@@ -87,7 +87,7 @@ export function registerAIHandlers(): void {
       } catch (error) {
         return {
           success: false,
-          error: normalizeAIError(error, getSettings().ai),
+          error: normalizeAIError(error, settingsProvider.get().ai),
           runId: task.runId,
         }
       }
@@ -98,7 +98,7 @@ export function registerAIHandlers(): void {
   registerChannel(
     IPC.AI_CHAT,
     async (_event, messages: Array<{ role: string; content: string }>) => {
-      const settings = getSettings()
+      const settings = settingsProvider.get()
       const aiConfig = settings.ai
 
       const configError = validateAIConfig(aiConfig)
@@ -132,7 +132,7 @@ export function registerAIHandlers(): void {
       messages: Array<{ role: string; content: string }>,
       requestId: string,
     ) => {
-      const settings = getSettings()
+      const settings = settingsProvider.get()
       const aiConfig = settings.ai
 
       const configError = validateAIConfig(aiConfig)
@@ -176,7 +176,7 @@ export function registerAIHandlers(): void {
   registerChannel(
     IPC.AI_FILTER_JUDGE,
     async (_event, input: AISemanticFilterInput) => {
-      const settings = getSettings()
+      const settings = settingsProvider.get()
       const aiConfig = settings.ai
 
       try {
@@ -189,7 +189,7 @@ export function registerAIHandlers(): void {
   )
 
   registerChannel(IPC.AI_DIGEST_LIST, async (_event, limit?: number) => {
-    return listAIDigestRuns(limit)
+    return getDb().digests.listAIDigestRuns(limit)
   })
 
   registerChannel(
@@ -219,7 +219,7 @@ export function registerAIHandlers(): void {
         },
       )
 
-      const settings = getSettings()
+      const settings = settingsProvider.get()
       logUserOperation({
         operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
         status: 'queued',
@@ -254,7 +254,7 @@ export function registerAIHandlers(): void {
 
   // Connection test
   registerChannel(IPC.AI_TEST_CONNECTION, async () => {
-    const settings = getSettings()
+    const settings = settingsProvider.get()
     const aiConfig = settings.ai
 
     return ConnectionTestService.run({

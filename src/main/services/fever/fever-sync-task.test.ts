@@ -38,21 +38,29 @@ vi.mock('./fever-client', () => ({
 }))
 
 vi.mock('../../database', () => ({
-  getFeverAccounts: vi.fn(() => []),
-  getFeverAccountById: mocks.getFeverAccountById,
-  updateFeverAccount: mocks.updateFeverAccount,
-  getFeverFeedMappingByRemoteId: mocks.getFeverFeedMappingByRemoteId,
-  upsertFeverFeedMapping: mocks.upsertFeverFeedMapping,
-  markFeverFeedMappingsInactive: mocks.markFeverFeedMappingsInactive,
-  getFeverItemMapping: mocks.getFeverItemMapping,
-  upsertFeverItemMapping: mocks.upsertFeverItemMapping,
-  getFeverSyncState: mocks.getFeverSyncState,
-  upsertFeverSyncState: mocks.upsertFeverSyncState,
-  insertFeed: mocks.insertFeed,
-  updateFeed: mocks.updateFeed,
-  getFeedById: mocks.getFeedById,
-  insertEntry: mocks.insertEntry,
-  updateEntry: mocks.updateEntry,
+  getDb: () => ({
+    fever: {
+      getFeverAccounts: vi.fn(() => []),
+      getFeverAccountById: mocks.getFeverAccountById,
+      updateFeverAccount: mocks.updateFeverAccount,
+      getFeverFeedMappingByRemoteId: mocks.getFeverFeedMappingByRemoteId,
+      upsertFeverFeedMapping: mocks.upsertFeverFeedMapping,
+      markFeverFeedMappingsInactive: mocks.markFeverFeedMappingsInactive,
+      getFeverItemMapping: mocks.getFeverItemMapping,
+      upsertFeverItemMapping: mocks.upsertFeverItemMapping,
+      getFeverSyncState: mocks.getFeverSyncState,
+      upsertFeverSyncState: mocks.upsertFeverSyncState,
+    },
+    feeds: {
+      insertFeed: mocks.insertFeed,
+      updateFeed: mocks.updateFeed,
+      getFeedById: mocks.getFeedById,
+    },
+    entries: {
+      insertEntry: mocks.insertEntry,
+      updateEntry: mocks.updateEntry,
+    },
+  }),
 }))
 
 const account: FeverAccount = {

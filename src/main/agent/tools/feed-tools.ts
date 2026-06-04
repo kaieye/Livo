@@ -5,14 +5,9 @@ import type {
   AgentToolResult,
   Feed,
 } from '../../../shared/types'
-import {
-  getAllFeeds,
-  getFeedById,
-  deleteFeed,
-  getEntries,
-} from '../../database'
+import { getDb } from '../../database'
 import { refreshSingleFeed } from '../../services/feed/feed-refresh'
-import { subscribeFeed } from '../../services/feed/feed-subscriber'
+import { addFeed } from '../../operations/feed-operations'
 import { clampLimit, emptyParams, objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
@@ -38,7 +33,7 @@ export function buildListSubscribedFeedsTool(): AgentTool {
       '查询用户所有已订阅的RSS源列表，返回每个源的名称、分类、最后更新时间和 ID',
     inputSchema: emptyParams(),
     execute: async (): Promise<AgentToolResult> => {
-      const feeds = getAllFeeds()
+      const feeds = getDb().feeds.getAllFeeds()
       if (feeds.length === 0) {
         return { status: 'success', message: '当前没有订阅任何源。' }
       }
@@ -70,14 +65,14 @@ export function buildGetFeedEntriesTool(): AgentTool {
     ): Promise<AgentToolResult> => {
       const feedId = String(args['feedId'])
       const limit = clampLimit(args['limit'], 10, 30)
-      const feed = getFeedById(feedId)
+      const feed = getDb().feeds.getFeedById(feedId)
       if (!feed) {
         return {
           status: 'failed',
           message: `未找到 ID 为 "${feedId}" 的订阅源`,
         }
       }
-      const { entries } = getEntries({ feedId, limit })
+      const { entries } = getDb().entries.getEntries({ feedId, limit })
       if (entries.length === 0) {
         return { status: 'success', message: `订阅源「${feed.title}」暂无文章` }
       }
@@ -117,18 +112,18 @@ export function buildAddFeedTool(): AgentTool {
       const url = String(args['url']).trim()
       const title = String(args['title'] || '').trim()
       const category = String(args['category'] || '').trim()
-      const outcome = await subscribeFeed({ url, title, category })
-      if (outcome.existed) {
+      const { feed, existed } = await addFeed({ url, title, category })
+      if (existed) {
         return {
           status: 'success',
-          message: `该订阅源已存在：「${outcome.feedTitle}」（ID: ${outcome.feedId}），无需重复添加`,
-          data: { feedId: outcome.feedId },
+          message: `该订阅源已存在：「${feed.title}」（ID: ${feed.id}），无需重复添加`,
+          data: { feedId: feed.id },
         }
       }
       return {
         status: 'success',
-        message: `订阅成功！已添加「${outcome.feedTitle}」（ID: ${outcome.feedId}）`,
-        data: { feedId: outcome.feedId },
+        message: `订阅成功！已添加「${feed.title}」（ID: ${feed.id}）`,
+        data: { feedId: feed.id },
       }
     },
   })
@@ -155,15 +150,19 @@ export function buildRemoveSubscriptionTool(): AgentTool {
       args: AgentToolArgs,
     ): Promise<AgentToolResult> => {
       const feedId = String(args['feedId']).trim()
-      const feed = getFeedById(feedId)
+      const feed = getDb().feeds.getFeedById(feedId)
       if (!feed) {
         return {
           status: 'failed',
           message: `未找到 ID 为 "${feedId}" 的订阅源`,
         }
       }
-      const { entries } = getEntries({ feedId, limit: 1, skipDedupe: true })
-      deleteFeed(feedId)
+      const { entries } = getDb().entries.getEntries({
+        feedId,
+        limit: 1,
+        skipDedupe: true,
+      })
+      getDb().feeds.deleteFeed(feedId)
       return {
         status: 'success',
         message: `已删除订阅源「${feed.title}」及其本地文章`,
@@ -191,7 +190,7 @@ export function buildRefreshSubscriptionTool(): AgentTool {
       args: AgentToolArgs,
     ): Promise<AgentToolResult> => {
       const feedId = String(args['feedId']).trim()
-      const feed = getFeedById(feedId)
+      const feed = getDb().feeds.getFeedById(feedId)
       if (!feed) {
         return {
           status: 'failed',
@@ -219,7 +218,7 @@ export function buildRefreshAllSubscriptionsTool(): AgentTool {
     confirmationMessage:
       '将访问所有订阅源网络地址并写入最新文章、抓取状态和刷新日志。',
     execute: async (): Promise<AgentToolResult> => {
-      const feeds = getAllFeeds()
+      const feeds = getDb().feeds.getAllFeeds()
       if (feeds.length === 0) {
         return { status: 'success', message: '当前没有可刷新的订阅源。' }
       }

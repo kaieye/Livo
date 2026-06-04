@@ -4,8 +4,8 @@ import type OpenAI from 'openai'
 import type { ActionEffectType } from '../../../shared/actions'
 import type { Entry, Feed } from '../../../shared/types/index'
 import { dispatchAgentNavigation } from '../../agent/navigation-bridge'
-import { updateEntry } from '../../database'
-import { getSettings } from '../../handlers/settings-handlers'
+import { getDb } from '../../database'
+import { settingsProvider } from '../system/settings-provider'
 import { createOpenAIClient, validateAIConfig } from '../ai/ai-client'
 import { buildSummaryPrompt, clampContentToBudget } from '../ai/ai-prompts'
 import { runWithRetry } from '../ai/ai-retry'
@@ -50,7 +50,7 @@ function notifyRenderer(): void {
 }
 
 function updateEntryAndNotify(entryId: string, updates: Partial<Entry>): void {
-  updateEntry(entryId, updates)
+  getDb().entries.updateEntry(entryId, updates)
   notifyRenderer()
 }
 
@@ -106,7 +106,7 @@ async function summarizeEntry(
 ): Promise<string> {
   if (entry.aiSummary?.trim()) return entry.aiSummary
 
-  const settings = getSettings()
+  const settings = settingsProvider.get()
   const aiConfig = settings.ai
   const configError = validateAIConfig(aiConfig)
   if (configError) throw new Error(configError)
@@ -187,7 +187,7 @@ async function runJob(job: EntryActionEffectJob): Promise<void> {
         aiSummaryError: undefined,
       })
     } catch (error) {
-      const message = normalizeAIError(error, getSettings().ai)
+      const message = normalizeAIError(error, settingsProvider.get().ai)
       updateEntryAndNotify(job.entry.id, { aiSummaryError: message })
       logWarnQuiet('[action-effects] summarize failed', {
         entryId: job.entry.id,

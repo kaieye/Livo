@@ -1,3 +1,4 @@
+import { settingsProvider } from '../../services/system/settings-provider'
 import type {
   AgentTool,
   AgentToolArgs,
@@ -89,7 +90,7 @@ export function buildGetSettingsTool(): AgentTool {
       '查看通用、翻译和 AI 运行配置摘要。不会返回 API Key 等敏感字段',
     inputSchema: emptyParams(),
     execute: async (): Promise<AgentToolResult> => {
-      const s = getSettings()
+      const s = settingsProvider.get()
       const message =
         `通用设置：语言 ${s.general.language}，主题 ${s.general.theme}，强调色 ${s.general.accentColor}，刷新间隔 ${s.general.refreshInterval} 分钟，图片代理 ${s.general.imageProxy ? '开启' : '关闭'}。\n` +
         `翻译：${s.translation.enabled ? '开启' : '关闭'}，目标语言 ${s.translation.targetLanguage}，自动翻译 ${s.translation.autoTranslate ? '开启' : '关闭'}。\n` +
@@ -124,7 +125,7 @@ export function buildToggleThemeModeTool(): AgentTool {
     ): Promise<AgentToolResult> => {
       const mode = args['mode'] as AppSettings['general']['theme']
       await applySettingsUpdate({
-        general: { ...getSettings().general, theme: mode },
+        general: { ...settingsProvider.get().general, theme: mode },
       })
       const label =
         mode === 'dark'
@@ -158,7 +159,7 @@ export function buildChangeAccentColorTool(): AgentTool {
     ): Promise<AgentToolResult> => {
       const color = String(args['color'])
       await applySettingsUpdate({
-        general: { ...getSettings().general, accentColor: color },
+        general: { ...settingsProvider.get().general, accentColor: color },
       })
       return {
         status: 'success',
@@ -195,7 +196,7 @@ export function buildUpdateGeneralSettingsTool(): AgentTool {
       if (!hasAnyArg(args)) {
         return { status: 'failed', message: '请至少提供一个要修改的通用设置项' }
       }
-      const current = getSettings().general
+      const current = settingsProvider.get().general
       const next = {
         ...current,
         language:
@@ -247,7 +248,7 @@ export function buildUpdateTranslationSettingsTool(): AgentTool {
       if (!hasAnyArg(args)) {
         return { status: 'failed', message: '请至少提供一个要修改的翻译设置项' }
       }
-      const current = getSettings().translation
+      const current = settingsProvider.get().translation
       const next = {
         ...current,
         enabled:
@@ -313,7 +314,7 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
           message: '请至少提供一个要修改的 AI 运行配置项',
         }
       }
-      const current = getSettings().ai
+      const current = settingsProvider.get().ai
       const nextProvider = (
         typeof args['provider'] === 'string'
           ? (args['provider'] as string)

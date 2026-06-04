@@ -2,7 +2,16 @@ import type Database from 'better-sqlite3'
 import type { Feed } from '../../../shared/types'
 import { feedFromRow } from '../row-mappers'
 
-export class FeedRepository {
+export interface IFeedRepository {
+  getAllFeeds(): Feed[]
+  getFeedById(id: string): Feed | undefined
+  getFeedByUrl(url: string): Feed | undefined
+  insertFeed(feed: Feed): void
+  updateFeed(id: string, updates: Partial<Feed>): void
+  deleteFeed(id: string): void
+}
+
+export class FeedRepository implements IFeedRepository {
   constructor(private readonly db: Database.Database) {}
 
   getAllFeeds(): Feed[] {

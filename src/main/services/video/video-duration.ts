@@ -4,7 +4,7 @@
  */
 import https from 'https'
 import http from 'http'
-import { getEntries, updateEntry, getAllFeeds } from '../../database'
+import { getDb } from '../../database'
 import { getEventBus } from '../system/event-bus'
 import { FeedViewType } from '../../../shared/types/index'
 import { VIDEO_DURATION_ENRICH_TASK } from '../system/task-contracts'
@@ -223,7 +223,7 @@ async function runVideoDurationEnrich(
   inFlightFeeds.add(feedId)
   let enriched = 0
   try {
-    const entries = getEntries({ feedId, limit: 50 }).entries
+    const entries = getDb().entries.getEntries({ feedId, limit: 50 }).entries
     // Collect video URLs that need duration
     const toFetch: Array<{ entryId: string; mediaIndex: number; url: string }> =
       []
@@ -278,7 +278,7 @@ async function runVideoDurationEnrich(
           const entry = entries.find((e) => e.id === r.value.entryId)
           if (entry?.media?.[r.value.mediaIndex]) {
             entry.media[r.value.mediaIndex].duration = r.value.duration
-            updateEntry(entry.id, { media: entry.media })
+            getDb().entries.updateEntry(entry.id, { media: entry.media })
             enriched++
           }
         }
@@ -343,7 +343,7 @@ export async function enrichAllVideoFeeds(): Promise<void> {
   lastAllEnrichedAt = now
 
   try {
-    const feeds = getAllFeeds()
+    const feeds = getDb().feeds.getAllFeeds()
     const videoFeeds = feeds
       .filter((f) => f.view === FeedViewType.Videos)
       .slice(0, STARTUP_BACKFILL_MAX_FEEDS)

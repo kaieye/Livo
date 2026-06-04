@@ -2,12 +2,7 @@ import { session } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
-import {
-  getFeedByUrl,
-  getOrphanEntries,
-  insertFeed,
-  reassignEntriesToFeed,
-} from '../../database'
+import { getDb } from '../../database'
 import { formatFeedTitle } from '../feed/feed-title'
 import { logInfo, logWarn } from '../system/logger'
 
@@ -180,9 +175,9 @@ export async function recoverOrphanBilibiliDynamicFeeds(): Promise<{
   recoveredFeeds: number
   reassignedEntries: number
 }> {
-  const orphanEntries = getOrphanEntries().filter((entry) =>
-    BILIBILI_DYNAMIC_ENTRY_URL_RE.test(entry.url || ''),
-  )
+  const orphanEntries = getDb()
+    .entries.getOrphanEntries()
+    .filter((entry) => BILIBILI_DYNAMIC_ENTRY_URL_RE.test(entry.url || ''))
   if (orphanEntries.length === 0) {
     return { recoveredFeeds: 0, reassignedEntries: 0 }
   }
@@ -208,14 +203,17 @@ export async function recoverOrphanBilibiliDynamicFeeds(): Promise<{
     }
 
     const routeUrl = `rsshub://bilibili/user/dynamic/${uid}`
-    let targetFeed = getFeedByUrl(routeUrl)
+    let targetFeed = getDb().feeds.getFeedByUrl(routeUrl)
     if (!targetFeed) {
       targetFeed = buildRecoveredFeed(uid, entries)
-      insertFeed(targetFeed)
+      getDb().feeds.insertFeed(targetFeed)
       recoveredFeeds += 1
     }
 
-    reassignedEntries += reassignEntriesToFeed(orphanFeedId, targetFeed.id)
+    reassignedEntries += getDb().entries.reassignEntriesToFeed(
+      orphanFeedId,
+      targetFeed.id,
+    )
   }
 
   if (recoveredFeeds > 0 || reassignedEntries > 0) {

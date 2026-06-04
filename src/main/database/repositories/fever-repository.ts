@@ -12,7 +12,35 @@ import {
   feverSyncStateFromRow,
 } from '../row-mappers'
 
-export class FeverRepository {
+export interface IFeverRepository {
+  getFeverAccounts(): FeverAccount[]
+  getFeverAccountById(id: string): FeverAccount | undefined
+  insertFeverAccount(account: FeverAccount): void
+  updateFeverAccount(id: string, updates: Partial<FeverAccount>): void
+  deleteFeverAccount(id: string): void
+  getFeverFeedMappings(accountId: string): FeverFeedMapping[]
+  getFeverFeedMappingByRemoteId(
+    accountId: string,
+    feverFeedId: number,
+  ): FeverFeedMapping | undefined
+  upsertFeverFeedMapping(mapping: FeverFeedMapping): void
+  deleteFeverFeedMappings(accountId: string): void
+  markFeverFeedMappingsInactive(
+    accountId: string,
+    activeRemoteIds: number[],
+  ): void
+  getFeverItemMapping(
+    accountId: string,
+    feverItemId: number,
+  ): FeverItemMapping | undefined
+  upsertFeverItemMapping(mapping: FeverItemMapping): void
+  getFeverItemMappingsByLocalEntry(localEntryId: string): FeverItemMapping[]
+  markFeverItemMappingsInactive(accountId: string, feverFeedId: number): void
+  getFeverSyncState(accountId: string): FeverSyncState | undefined
+  upsertFeverSyncState(state: FeverSyncState): void
+}
+
+export class FeverRepository implements IFeverRepository {
   constructor(private readonly db: Database.Database) {}
 
   getFeverAccounts(): FeverAccount[] {

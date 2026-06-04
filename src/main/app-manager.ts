@@ -1,14 +1,12 @@
 import { app, protocol } from 'electron'
 import { join } from 'path'
-import { initDatabase, getDatabase } from './database'
+import { initDatabase, getDb } from './database'
 import { registerFeedHandlers } from './handlers/feed-handlers'
 import { registerEntryHandlers } from './handlers/entry-handlers'
 import { registerReaderHandlers } from './handlers/reader-handlers'
 import { registerAIHandlers } from './handlers/ai-handlers'
-import {
-  registerSettingsHandlers,
-  getSettings,
-} from './handlers/settings-handlers'
+import { registerSettingsHandlers } from './handlers/settings-handlers'
+import { settingsProvider } from './services/system/settings-provider'
 import { registerReadabilityHandlers } from './handlers/readability-handlers'
 import { registerDiscoverHandlers } from './handlers/discover-handlers'
 import { registerVideoHandlers } from './handlers/video-handlers'
@@ -54,8 +52,8 @@ export class AppManager {
       preloadPath: join(__dirname, '../preload/index.mjs'),
       getCacheImagePath: (fileName) =>
         join(app.getPath('userData'), 'cache', 'images', fileName),
-      shouldMinimizeToTray: () => getSettings().general.minimizeToTray,
-      shouldStartInTray: () => getSettings().general.startInTray,
+      shouldMinimizeToTray: () => settingsProvider.get().general.minimizeToTray,
+      shouldStartInTray: () => settingsProvider.get().general.startInTray,
       onVisibilityChanged: () => {
         this.tray?.refreshMenu()
       },
@@ -84,7 +82,7 @@ export class AppManager {
 
     this.registerIpcHandlers()
 
-    const settings = getSettings()
+    const settings = settingsProvider.get()
     await applyProxySettings(settings)
 
     const mainWindow = this.windowManager.createMainWindow()
@@ -92,7 +90,9 @@ export class AppManager {
     this.registerMenu()
 
     startAggregatorJobs()
-    this.stopCacheMaintenance = startCacheMaintenance(getSettings)
+    this.stopCacheMaintenance = startCacheMaintenance(() =>
+      settingsProvider.get(),
+    )
     startFeverAutoSync()
     startAutoRefresh(settings.general.refreshInterval, mainWindow, {
       freshnessTTL: settings.data?.freshnessTTL ?? 10,
@@ -124,8 +124,7 @@ export class AppManager {
   }
 
   handleWindowAllClosed(): void {
-    const db = getDatabase()
-    if (db) db.close()
+    getDb().close()
     if (process.platform !== 'darwin') app.quit()
   }
 

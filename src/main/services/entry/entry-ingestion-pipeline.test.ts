@@ -7,12 +7,9 @@ import {
 import { ingestParsedFeedEntries } from './entry-ingestion-pipeline'
 import { buildEntriesFromParsedItems } from './entry-builder'
 import { enqueueEntryActionEffects } from './entry-action-effects'
-import {
-  insertEntriesWithResult,
-  replaceEntriesForFeedWithResult,
-} from '../../database'
+import { getDb } from '../../database'
 import { getActionRules } from '../actions/action-rules-store'
-import { getSettings } from '../../handlers/settings-handlers'
+import { settingsProvider } from '../system/settings-provider'
 import { validateAIConfig } from '../ai/ai-client'
 
 vi.mock('./entry-builder', () => ({
@@ -23,17 +20,33 @@ vi.mock('./entry-action-effects', () => ({
   enqueueEntryActionEffects: vi.fn(),
 }))
 
+const {
+  mockInsertEntriesWithResult,
+  mockReplaceEntriesForFeedWithResult,
+  mockGetSettings,
+} = vi.hoisted(() => ({
+  mockInsertEntriesWithResult: vi.fn(),
+  mockReplaceEntriesForFeedWithResult: vi.fn(),
+  mockGetSettings: vi.fn(),
+}))
+
 vi.mock('../../database', () => ({
-  insertEntriesWithResult: vi.fn(),
-  replaceEntriesForFeedWithResult: vi.fn(),
+  getDb: () => ({
+    entries: {
+      insertEntriesWithResult: mockInsertEntriesWithResult,
+      replaceEntriesForFeedWithResult: mockReplaceEntriesForFeedWithResult,
+    },
+  }),
 }))
 
 vi.mock('../actions/action-rules-store', () => ({
   getActionRules: vi.fn(),
 }))
 
-vi.mock('../../handlers/settings-handlers', () => ({
-  getSettings: vi.fn(),
+vi.mock('../system/settings-provider', () => ({
+  settingsProvider: {
+    get: mockGetSettings,
+  },
 }))
 
 vi.mock('../ai/ai-client', () => ({
@@ -70,13 +83,13 @@ function makeEntry(id: string, title: string, url: string): Entry {
 beforeEach(() => {
   vi.mocked(buildEntriesFromParsedItems).mockReset()
   vi.mocked(enqueueEntryActionEffects).mockReset()
-  vi.mocked(insertEntriesWithResult).mockReset()
-  vi.mocked(replaceEntriesForFeedWithResult).mockReset()
+  mockInsertEntriesWithResult.mockReset()
+  mockReplaceEntriesForFeedWithResult.mockReset()
   vi.mocked(getActionRules).mockReset()
-  vi.mocked(getSettings).mockReset()
+  mockGetSettings.mockReset()
   vi.mocked(validateAIConfig).mockReset()
 
-  vi.mocked(getSettings).mockReturnValue({
+  mockGetSettings.mockReturnValue({
     ai: {
       provider: 'openai',
       apiKey: 'test-key',
@@ -115,7 +128,7 @@ describe('ingestParsedFeedEntries', () => {
         createdAt: 1,
       },
     ])
-    vi.mocked(insertEntriesWithResult).mockReturnValue({
+    mockInsertEntriesWithResult.mockReturnValue({
       addedCount: 1,
       addedEntries: [{ ...keptEntry, isStarred: true }],
     })
@@ -135,13 +148,13 @@ describe('ingestParsedFeedEntries', () => {
       feed.view,
       123,
     )
-    expect(insertEntriesWithResult).toHaveBeenCalledWith([
+    expect(mockInsertEntriesWithResult).toHaveBeenCalledWith([
       expect.objectContaining({
         id: 'entry-1',
         isStarred: true,
       }),
     ])
-    expect(replaceEntriesForFeedWithResult).not.toHaveBeenCalled()
+    expect(mockReplaceEntriesForFeedWithResult).not.toHaveBeenCalled()
     expect(enqueueEntryActionEffects).toHaveBeenCalledWith([
       {
         entry: expect.objectContaining({ id: 'entry-1' }),
@@ -160,7 +173,7 @@ describe('ingestParsedFeedEntries', () => {
     const entry = makeEntry('entry-1', 'plain entry', 'https://example.com/1')
     vi.mocked(buildEntriesFromParsedItems).mockResolvedValue([entry])
     vi.mocked(getActionRules).mockReturnValue([])
-    vi.mocked(replaceEntriesForFeedWithResult).mockReturnValue({
+    mockReplaceEntriesForFeedWithResult.mockReturnValue({
       addedCount: 1,
       addedEntries: [entry],
     })
@@ -172,9 +185,9 @@ describe('ingestParsedFeedEntries', () => {
       replaceExisting: true,
     })
 
-    expect(replaceEntriesForFeedWithResult).toHaveBeenCalledWith(feed.id, [
+    expect(mockReplaceEntriesForFeedWithResult).toHaveBeenCalledWith(feed.id, [
       entry,
     ])
-    expect(insertEntriesWithResult).not.toHaveBeenCalled()
+    expect(mockInsertEntriesWithResult).not.toHaveBeenCalled()
   })
 })

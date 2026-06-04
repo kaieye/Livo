@@ -1,14 +1,23 @@
 import { registerChannel } from '../ipc/register-channel'
 import { IPC } from '../../shared/types'
-import {
-  getEntries,
-  getEntryById,
-  updateEntry,
-  markAllRead as dbMarkAllRead,
-  searchEntries,
-  type EntryListResult,
-} from '../database'
+import { getDb } from '../database'
+import type { EntryListResult } from '../database'
 import { feverWriteBack } from '../services/fever/fever-sync'
+import { markAllRead } from '../operations/entry-operations'
+
+/** Update an entry and trigger Fever write-back when read/star state changes. */
+function updateEntryWithWriteBack(
+  entryId: string,
+  updates: { isRead?: boolean; isStarred?: boolean },
+): void {
+  getDb().entries.updateEntry(entryId, updates)
+  if (updates.isRead !== undefined) {
+    feverWriteBack(entryId, updates.isRead ? 'read' : 'unread')
+  }
+  if (updates.isStarred !== undefined) {
+    feverWriteBack(entryId, updates.isStarred ? 'saved' : 'unsaved')
+  }
+}
 
 export function registerEntryHandlers(): void {
   // List entries
@@ -28,48 +37,36 @@ export function registerEntryHandlers(): void {
         skipDedupe?: boolean
       },
     ): Promise<EntryListResult> => {
-      return getEntries(options)
+      return getDb().entries.getEntries(options)
     },
   )
 
   // Get single entry
   registerChannel(IPC.ENTRY_GET, async (_event, entryId: string) => {
-    return getEntryById(entryId) || null
+    return getDb().entries.getEntryById(entryId) || null
   })
 
   // Mark entry as read
   registerChannel(
     IPC.ENTRY_MARK_READ,
     (_event, entryId: string, isRead: boolean) => {
-      updateEntry(entryId, { isRead })
-      feverWriteBack(entryId, isRead ? 'read' : 'unread')
+      updateEntryWithWriteBack(entryId, { isRead })
       return { success: true }
     },
   )
 
   // Mark all entries as read
   registerChannel(IPC.ENTRY_MARK_ALL_READ, (_event, feedId?: string) => {
-    // Get entries before marking to trigger write-back
-    const unreadEntries = getEntries({
-      feedId,
-      unreadOnly: true,
-      limit: 10000,
-      skipDedupe: true,
-    })
-    dbMarkAllRead(feedId)
-    for (const entry of unreadEntries.entries) {
-      feverWriteBack(entry.id, 'read')
-    }
+    markAllRead(feedId)
     return { success: true }
   })
 
   // Toggle star
   registerChannel(IPC.ENTRY_TOGGLE_STAR, (_event, entryId: string) => {
-    const entry = getEntryById(entryId)
+    const entry = getDb().entries.getEntryById(entryId)
     if (!entry) return { success: false, isStarred: false }
     const newStarred = !entry.isStarred
-    updateEntry(entryId, { isStarred: newStarred })
-    feverWriteBack(entryId, newStarred ? 'saved' : 'unsaved')
+    updateEntryWithWriteBack(entryId, { isStarred: newStarred })
     return { success: true, isStarred: newStarred }
   })
 
@@ -77,7 +74,7 @@ export function registerEntryHandlers(): void {
   registerChannel(
     IPC.ENTRY_SAVE_PROGRESS,
     (_event, entryId: string, readProgress: number) => {
-      updateEntry(entryId, { readProgress })
+      getDb().entries.updateEntry(entryId, { readProgress })
       return { success: true }
     },
   )
@@ -86,7 +83,7 @@ export function registerEntryHandlers(): void {
   registerChannel(
     IPC.ENTRY_MARK_LISTENED,
     (_event, entryId: string, isListened: boolean) => {
-      updateEntry(entryId, { isListened })
+      getDb().entries.updateEntry(entryId, { isListened })
       return { success: true }
     },
   )
@@ -95,13 +92,13 @@ export function registerEntryHandlers(): void {
   registerChannel(
     IPC.ENTRY_SAVE_LISTEN_PROGRESS,
     (_event, entryId: string, listenProgress: number) => {
-      updateEntry(entryId, { listenProgress })
+      getDb().entries.updateEntry(entryId, { listenProgress })
       return { success: true }
     },
   )
 
   // Search entries
   registerChannel(IPC.ENTRY_SEARCH, (_event, query: string, limit?: number) => {
-    return searchEntries(query, limit)
+    return getDb().entries.searchEntries(query, limit)
   })
 }

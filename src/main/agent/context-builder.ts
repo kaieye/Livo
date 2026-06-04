@@ -1,6 +1,6 @@
 import { isAgentCapabilityAllowed } from '../../shared/types'
 import type { AgentPermissionSettings } from '../../shared/types'
-import { getAllFeeds, getEntries, getDatabaseStats } from '../database'
+import { getDb } from '../database'
 
 const VIEW_NAMES = ['文章', '社交', '视频', '图片']
 
@@ -25,7 +25,7 @@ export function buildContextFallback(
   }
 
   try {
-    const feeds = getAllFeeds()
+    const feeds = getDb().feeds.getAllFeeds()
     if (feeds.length === 0) {
       return `${ctx}当前没有任何订阅源。`.trim()
     }
@@ -38,7 +38,7 @@ export function buildContextFallback(
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
     const todayMs = todayStart.getTime()
-    const { entries } = getEntries({ limit: 30 })
+    const { entries } = getDb().entries.getEntries({ limit: 30 })
     const todayEntries = entries.filter((e) => e.publishedAt >= todayMs)
     if (todayEntries.length > 0) {
       const feedMap = new Map(feeds.map((f) => [f.id, f.title]))
@@ -50,7 +50,7 @@ export function buildContextFallback(
       })
     }
 
-    const stats = getDatabaseStats()
+    const stats = getDb().maintenance.getDatabaseStats()
     const unread = Math.max(0, stats.totalEntries - stats.readEntries)
     ctx += `\n未读文章总计: ${unread} 篇`
   } catch {

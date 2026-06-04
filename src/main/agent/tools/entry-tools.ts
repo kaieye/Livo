@@ -4,14 +4,8 @@ import type {
   AgentToolResult,
   Entry,
 } from '../../../shared/types'
-import {
-  getAllFeeds,
-  getEntries,
-  getEntryById,
-  getUnreadCount,
-  getDatabaseStats,
-  markAllRead as dbMarkAllRead,
-} from '../../database'
+import { getDb } from '../../database'
+import { markAllRead } from '../../operations/entry-operations'
 import { clampLimit, emptyParams, limitParams, objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
@@ -40,10 +34,10 @@ export function buildGetTodayUpdatesTool(): AgentTool {
     ): Promise<AgentToolResult> => {
       const limit = clampLimit(args['limit'], 20, 50)
       const todayStart = startOfTodayMs()
-      const feeds = getAllFeeds()
+      const feeds = getDb().feeds.getAllFeeds()
       const feedMap = new Map(feeds.map((f) => [f.id, f]))
 
-      const { entries } = getEntries({ limit: 200 })
+      const { entries } = getDb().entries.getEntries({ limit: 200 })
       const todayEntries = entries.filter((e) => e.publishedAt >= todayStart)
       const sliced = todayEntries.slice(0, limit)
       if (sliced.length === 0) {
@@ -88,7 +82,7 @@ export function buildGetEntryDetailTool(): AgentTool {
       args: AgentToolArgs,
     ): Promise<AgentToolResult> => {
       const entryId = String(args['entryId'])
-      const entry = getEntryById(entryId)
+      const entry = getDb().entries.getEntryById(entryId)
       if (!entry) {
         return { status: 'failed', message: `未找到 ID 为 "${entryId}" 的文章` }
       }
@@ -113,7 +107,7 @@ export function buildGetUnreadCountTool(): AgentTool {
     description: '查询未读文章总数和各订阅源的未读数量统计',
     inputSchema: emptyParams(),
     execute: async (): Promise<AgentToolResult> => {
-      const stats = getDatabaseStats()
+      const stats = getDb().maintenance.getDatabaseStats()
       const totalUnread = Math.max(0, stats.totalEntries - stats.readEntries)
       if (totalUnread === 0) {
         return {
@@ -122,11 +116,11 @@ export function buildGetUnreadCountTool(): AgentTool {
           data: { totalUnread: 0 },
         }
       }
-      const feeds = getAllFeeds()
+      const feeds = getDb().feeds.getAllFeeds()
       let message = `共有 ${totalUnread} 篇未读文章：\n`
       const perFeed: Array<{ name: string; count: number }> = []
       for (const feed of feeds) {
-        const count = getUnreadCount(feed.id)
+        const count = getDb().entries.getUnreadCount(feed.id)
         if (count > 0) {
           perFeed.push({ name: feed.title, count })
           message += `  • ${feed.title}: ${count} 篇未读\n`
@@ -152,7 +146,7 @@ export function buildViewStarredEntriesTool(): AgentTool {
       args: AgentToolArgs,
     ): Promise<AgentToolResult> => {
       const limit = clampLimit(args['limit'], 20, 50)
-      const { entries } = getEntries({ starred: true, limit })
+      const { entries } = getDb().entries.getEntries({ starred: true, limit })
       if (entries.length === 0) {
         return { status: 'success', message: '暂无收藏内容' }
       }
@@ -177,13 +171,11 @@ export function buildMarkAllReadTool(): AgentTool {
     description: '将所有未读文章标记为已读',
     inputSchema: emptyParams(),
     execute: async (): Promise<AgentToolResult> => {
-      const stats = getDatabaseStats()
-      const before = Math.max(0, stats.totalEntries - stats.readEntries)
-      dbMarkAllRead()
+      const { markedCount } = markAllRead()
       return {
         status: 'success',
-        message: `已将 ${before} 篇文章标记为已读`,
-        data: { markedCount: before },
+        message: `已将 ${markedCount} 篇文章标记为已读`,
+        data: { markedCount },
       }
     },
   })

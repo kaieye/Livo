@@ -1,13 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { FeedViewType, type Feed } from '../../../shared/types'
-import {
-  getAllFeeds,
-  getFeedById,
-  getFeedByUrl,
-  insertFeed,
-  insertEntries,
-  updateFeed,
-} from '../../database'
+import { getDb } from '../../database'
 import { fetchAndParseFeed } from './rss-parser'
 import { buildEntriesFromParsedItems } from '../entry/entry-builder'
 import { resolveFeedAvatar } from './feed-avatar'
@@ -21,7 +14,7 @@ import {
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from './rsshub-url'
-import { getSettings } from '../../handlers/settings-handlers'
+import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { inferDiscoverFeedViewFromUrl } from '../../../shared/subscription-intake'
 
@@ -61,7 +54,8 @@ export async function subscribeFeed(
 ): Promise<SubscribeFeedResult> {
   const url = options.url.trim()
   const rsshubInstance =
-    getSettings().general.rsshubInstance?.trim() || DEFAULT_RSSHUB_INSTANCE
+    settingsProvider.get().general.rsshubInstance?.trim() ||
+    DEFAULT_RSSHUB_INSTANCE
 
   // ---- URL normalization ----
   const rawProtocolUrl = toRsshubProtocolUrl(url)
@@ -79,12 +73,12 @@ export async function subscribeFeed(
 
   // ---- Dedup check ----
   const existingFeed =
-    getFeedByUrl(storedUrl) ||
-    getFeedByUrl(normalizedUrl) ||
-    getFeedByUrl(toRsshubProtocolUrl(normalizedUrl)) ||
-    getFeedByUrl(legacyStoredUrl) ||
-    getFeedByUrl(normalizedLegacyUrl) ||
-    getFeedByUrl(toRsshubProtocolUrl(normalizedLegacyUrl))
+    getDb().feeds.getFeedByUrl(storedUrl) ||
+    getDb().feeds.getFeedByUrl(normalizedUrl) ||
+    getDb().feeds.getFeedByUrl(toRsshubProtocolUrl(normalizedUrl)) ||
+    getDb().feeds.getFeedByUrl(legacyStoredUrl) ||
+    getDb().feeds.getFeedByUrl(normalizedLegacyUrl) ||
+    getDb().feeds.getFeedByUrl(toRsshubProtocolUrl(normalizedLegacyUrl))
 
   if (existingFeed) {
     const upgradedUrl = ensureTwitterUserFeedLimit(
@@ -92,8 +86,8 @@ export async function subscribeFeed(
       120,
     )
     if (upgradedUrl !== existingFeed.url) {
-      updateFeed(existingFeed.id, { url: upgradedUrl })
-      const updated = getFeedById(existingFeed.id)
+      getDb().feeds.updateFeed(existingFeed.id, { url: upgradedUrl })
+      const updated = getDb().feeds.getFeedById(existingFeed.id)
       if (updated) {
         return {
           feedId: updated.id,
@@ -163,7 +157,7 @@ export async function subscribeFeed(
     errorCount: parsed ? 0 : 1,
     createdAt: now,
   }
-  insertFeed(feed)
+  getDb().feeds.insertFeed(feed)
 
   // ---- Entry insertion ----
   let entriesInserted = 0
@@ -175,7 +169,7 @@ export async function subscribeFeed(
       detectedView,
       now,
     )
-    entriesInserted = insertEntries(entries)
+    entriesInserted = getDb().entries.insertEntries(entries)
   }
 
   return {

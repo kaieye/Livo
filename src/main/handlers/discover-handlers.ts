@@ -33,7 +33,7 @@ import {
 import { fetchAndParseFeed } from '../services/feed/rss-parser'
 import { formatFeedTitle } from '../services/feed/feed-title'
 import { deriveImageUrl } from '../services/feed/feed-utils'
-import { getSettings } from './settings-handlers'
+import { settingsProvider } from '../services/system/settings-provider'
 import { getYouTubeAccountState } from '../services/account/account-session'
 import { resolveYouTubeProfileToOfficialFeed } from '../services/discovery/youtube-profile-resolver'
 import {
@@ -88,7 +88,7 @@ const discoverSearchCache = new Map<
 
 /** Return the configured RSSHub instance URL (no trailing slash) */
 function getRSSHubInstance(): string {
-  const settings = getSettings()
+  const settings = settingsProvider.get()
   const custom = settings.general.rsshubInstance?.trim()
   return (custom || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, '')
 }

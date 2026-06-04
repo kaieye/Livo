@@ -6,7 +6,28 @@ import type {
 } from '../../../shared/types'
 import { digestRunFromRow } from '../row-mappers'
 
-export class DigestRepository {
+export interface IDigestRepository {
+  getDigestWindow(
+    preset: AIDigestPreset,
+    now?: number,
+  ): { windowStartAt: number; windowEndAt: number }
+  listDigestCandidates(options: {
+    preset: AIDigestPreset
+    feedId?: string
+    limit?: number
+    now?: number
+  }): AIDigestCandidate[]
+  listAIDigestRuns(limit?: number): AIDigestRun[]
+  upsertAIDigestRun(
+    input: Omit<AIDigestRun, 'id' | 'createdAt' | 'updatedAt'>,
+  ): AIDigestRun
+  updateAIDigestRun(
+    id: string,
+    updates: Partial<Omit<AIDigestRun, 'id' | 'createdAt'>>,
+  ): AIDigestRun | null
+}
+
+export class DigestRepository implements IDigestRepository {
   constructor(private readonly db: Database.Database) {}
 
   getDigestWindow(

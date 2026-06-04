@@ -14,11 +14,8 @@ import type {
   AISemanticFilterDecision,
   AISemanticFilterInput,
 } from '../../../shared/types/index'
-import {
-  insertEntriesWithResult,
-  replaceEntriesForFeedWithResult,
-} from '../../database'
-import { getSettings } from '../../handlers/settings-handlers'
+import { getDb } from '../../database'
+import { settingsProvider } from '../system/settings-provider'
 import { buildEntriesFromParsedItems } from './entry-builder'
 import { enqueueEntryActionEffects } from './entry-action-effects'
 import { getActionRules } from '../actions/action-rules-store'
@@ -296,7 +293,7 @@ async function applyActionRules(
   entries: Entry[],
   feed: Feed,
 ): Promise<ActionRuleAppliedEntry[]> {
-  const aiConfig = getSettings().ai
+  const aiConfig = settingsProvider.get().ai
   return applyActionRulesToEntriesAsync(entries, feed, getActionRules(), {
     aiConfig: validateAIConfig(aiConfig) ? undefined : aiConfig,
   })
@@ -325,8 +322,11 @@ export async function ingestParsedFeedEntries(
   )
 
   const writeResult = input.replaceExisting
-    ? replaceEntriesForFeedWithResult(input.feed.id, entriesToInsert)
-    : insertEntriesWithResult(entriesToInsert)
+    ? getDb().entries.replaceEntriesForFeedWithResult(
+        input.feed.id,
+        entriesToInsert,
+      )
+    : getDb().entries.insertEntriesWithResult(entriesToInsert)
 
   enqueueEntryActionEffects(
     writeResult.addedEntries.map((entry) => ({

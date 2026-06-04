@@ -11,9 +11,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../database', () => ({
-  getEntries: mocks.getEntries,
-  updateEntry: mocks.updateEntry,
-  getAllFeeds: mocks.getAllFeeds,
+  getDb: () => ({
+    entries: {
+      getEntries: mocks.getEntries,
+      updateEntry: mocks.updateEntry,
+    },
+    feeds: {
+      getAllFeeds: mocks.getAllFeeds,
+    },
+  }),
 }))
 
 vi.mock('../system/event-bus', () => ({

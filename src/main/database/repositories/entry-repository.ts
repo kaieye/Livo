@@ -13,7 +13,49 @@ import {
 } from '../entry-identity'
 import { entryFromRow } from '../row-mappers'
 
-export class EntryRepository {
+export interface EntryListOptions {
+  feedId?: string
+  feedIds?: string[]
+  starred?: boolean
+  unreadOnly?: boolean
+  limit?: number
+  offset?: number
+  compact?: boolean
+  maxContentLength?: number
+  skipDedupe?: boolean
+}
+
+export interface EntryListResult {
+  entries: Entry[]
+  hasMore: boolean
+}
+
+export interface EntryWriteResult {
+  addedCount: number
+  addedEntries: Entry[]
+}
+
+export interface IEntryRepository {
+  getEntryById(id: string): Entry | undefined
+  insertEntry(entry: Entry): boolean
+  insertEntries(entries: Entry[]): number
+  insertEntriesWithResult(entries: Entry[]): EntryWriteResult
+  replaceEntriesForFeed(feedId: string, entries: Entry[]): number
+  replaceEntriesForFeedWithResult(
+    feedId: string,
+    entries: Entry[],
+  ): EntryWriteResult
+  updateEntry(id: string, updates: Partial<Entry>): void
+  markAllRead(feedId?: string): void
+  searchEntries(query: string, limit?: number): Entry[]
+  getEntries(options: EntryListOptions): EntryListResult
+  getOrphanEntries(): Entry[]
+  reassignEntriesToFeed(fromFeedId: string, toFeedId: string): number
+  getUnreadCount(feedId: string): number
+  getUnreadCountMap(): Map<string, number>
+}
+
+export class EntryRepository implements IEntryRepository {
   constructor(private readonly db: Database.Database) {}
 
   getEntryById(id: string): Entry | undefined {

@@ -20,8 +20,10 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('./settings-handlers', () => ({
-  getSettings: mocks.getSettings,
+vi.mock('../services/system/settings-provider', () => ({
+  settingsProvider: {
+    get: mocks.getSettings,
+  },
 }))
 
 vi.mock('../services/ai/ai-client', () => ({

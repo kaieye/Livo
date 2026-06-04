@@ -8,7 +8,7 @@ import {
   searchCuratedFeeds,
   type DiscoverFeed,
 } from '../../../shared/discover-data'
-import { getFeedByUrl } from '../../database'
+import { getDb } from '../../database'
 import { subscribeFeed } from '../../services/feed/feed-subscriber'
 import { objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
@@ -111,7 +111,7 @@ export function buildAddBuiltinSubscriptionTool(): AgentTool {
           message: `未找到名为 "${feedTitle}" 的推荐订阅源。${hint}`,
         }
       }
-      if (getFeedByUrl(matched.url)) {
+      if (getDb().feeds.getFeedByUrl(matched.url)) {
         return { status: 'success', message: `您已订阅 "${matched.title}"` }
       }
       const outcome = await subscribeFeed({
