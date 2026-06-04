@@ -40,7 +40,6 @@
 
 - [ ] C1. 设计 keyset cursor 协议
 - [ ] C2. EntryRepository 支持 keyset 查询
-- [ ] C3. entry-store 的 snapshot 分页加请求序号保护
 - [ ] D2. 全文抓取进入 TaskRunner 并持久化终态
 - [ ] I2. 补 keyset cursor 和任务终态测试
 
@@ -137,15 +136,6 @@ ORDER BY e.published_at DESC, e.id DESC
 
 - `entry-repository` 分页测试。
 - `reader-snapshot` cursor 编解码测试。
-
-### C3. Renderer 防旧请求覆盖
-
-- [ ] 在 `src/renderer/src/store/entry-store.ts` 的 `loadMoreEntries` snapshot 分支增加 requestId 或 queryKey 二次检查。
-- [ ] 如果用户在加载更多期间切换 feed，旧响应不得合并到新列表。
-
-验收：
-
-- 快速切换 feed + 加载更多不会串数据。
 
 ## 6. D 线：全文任务状态化
 
@@ -427,7 +417,7 @@ CREATE TABLE entry_ai_summary_sessions (
 
 1. H2：把已派生的 entry 任务状态展示到文章详情。
 2. G1 + G2：统一外部抓取安全策略。
-3. C1 + C2 + C3：改 snapshot cursor。
+3. C1 + C2：改 snapshot cursor。
 4. D2：全文抓取进入 TaskRunner 并持久化终态。
 5. E1-E3：AI 摘要 session。
 6. E4：AI 翻译 session。

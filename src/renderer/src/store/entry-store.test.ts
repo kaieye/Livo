@@ -42,6 +42,7 @@ async function loadEntryStore(options: {
   listResults: EntryListResult[]
   detailResult: Entry
   snapshotResults?: ReaderSnapshot[]
+  snapshotHandler?: () => Promise<ReaderSnapshot>
 }) {
   vi.resetModules()
 
@@ -60,12 +61,15 @@ async function loadEntryStore(options: {
       search: vi.fn(async () => []),
     },
     reader: {
-      snapshot: vi.fn(async () => {
-        const result =
-          snapshotResults.shift() ?? options.snapshotResults?.at(-1)
-        if (!result) throw new Error('No snapshot result')
-        return result
-      }),
+      snapshot: vi.fn(
+        options.snapshotHandler ??
+          (async () => {
+            const result =
+              snapshotResults.shift() ?? options.snapshotResults?.at(-1)
+            if (!result) throw new Error('No snapshot result')
+            return result
+          }),
+      ),
     },
     feeds: {
       refresh: vi.fn(async () => undefined),
@@ -75,6 +79,16 @@ async function loadEntryStore(options: {
   vi.stubGlobal('window', { api })
   const mod = await import('./entry-store')
   return { useEntryStore: mod.useEntryStore, api }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 function makeFeed(partial: Partial<FeedWithCount> = {}): FeedWithCount {
@@ -201,6 +215,91 @@ describe('useEntryStore', () => {
       compact: true,
       maxContentLength: 520,
     })
+  })
+
+  it('ignores stale snapshot pagination after switching feeds', async () => {
+    const first = makeSnapshotEntry({
+      id: 'entry-1',
+      feedId: 'feed-1',
+      title: 'First',
+      publishedAt: 3000,
+    })
+    const oldPage = makeSnapshotEntry({
+      id: 'entry-2',
+      feedId: 'feed-1',
+      title: 'Old page',
+      publishedAt: 2000,
+    })
+    const switched = makeSnapshotEntry({
+      id: 'entry-3',
+      feedId: 'feed-2',
+      title: 'Switched feed',
+      publishedAt: 1000,
+    })
+    const loadMoreResult = createDeferred<ReaderSnapshot>()
+    const snapshotResults: Array<ReaderSnapshot | Promise<ReaderSnapshot>> = [
+      {
+        feeds: [makeFeed({ id: 'feed-1', unreadCount: 2 })],
+        entries: [first],
+        counts: {
+          totalFeeds: 1,
+          totalUnread: 2,
+          unreadByFeedId: { 'feed-1': 2 },
+          scopeUnread: 2,
+        },
+        nextCursor: 'cursor-1',
+      },
+      loadMoreResult.promise,
+      {
+        feeds: [makeFeed({ id: 'feed-2', unreadCount: 1 })],
+        entries: [switched],
+        counts: {
+          totalFeeds: 1,
+          totalUnread: 1,
+          unreadByFeedId: { 'feed-2': 1 },
+          scopeUnread: 1,
+        },
+        nextCursor: null,
+      },
+    ]
+    const { useEntryStore } = await loadEntryStore({
+      listResults: [],
+      detailResult: first,
+      snapshotHandler: vi.fn(async () => {
+        const result = snapshotResults.shift()
+        if (!result) throw new Error('No snapshot result')
+        return result
+      }),
+    })
+
+    await useEntryStore.getState().loadSnapshot({
+      feedId: 'feed-1',
+      limit: 1,
+    })
+    const loadMorePromise = useEntryStore.getState().loadMoreEntries()
+    await useEntryStore.getState().loadSnapshot({
+      feedId: 'feed-2',
+      limit: 1,
+    })
+
+    loadMoreResult.resolve({
+      feeds: [makeFeed({ id: 'feed-1', unreadCount: 2 })],
+      entries: [oldPage],
+      counts: {
+        totalFeeds: 1,
+        totalUnread: 2,
+        unreadByFeedId: { 'feed-1': 2 },
+        scopeUnread: 2,
+      },
+      nextCursor: null,
+    })
+    await loadMorePromise
+
+    expect(useEntryStore.getState().entries.map((entry) => entry.id)).toEqual([
+      'entry-3',
+    ])
+    expect(useEntryStore.getState().hasMoreEntries).toBe(false)
+    expect(useEntryStore.getState().isLoadingMore).toBe(false)
   })
 
   it('does not change local read state when markRead fails', async () => {

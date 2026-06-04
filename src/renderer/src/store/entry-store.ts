@@ -1,7 +1,6 @@
 import { createAppStore } from './helpers'
 import type {
   Entry,
-  EntryListResult,
   ReaderSnapshot,
   ReaderSnapshotRequest,
 } from '../../../shared/types'
@@ -315,6 +314,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
 
     if (state.paginationSource === 'snapshot') {
       const cursor = state.snapshotNextCursor
+      const queryKey = state.paginationQueryKey
       if (!cursor) return
       set({ isLoadingMore: true })
       try {
@@ -325,6 +325,14 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
             cursor,
           }),
         )
+        const current = get()
+        if (
+          current.paginationSource !== 'snapshot' ||
+          current.paginationQueryKey !== queryKey ||
+          current.snapshotNextCursor !== cursor
+        ) {
+          return
+        }
         set((current) => ({
           entries: mergeEntriesById(
             current.entries,
@@ -335,7 +343,14 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
           snapshotNextCursor: snapshot.nextCursor,
         }))
       } catch {
-        set({ isLoadingMore: false })
+        const current = get()
+        if (
+          current.paginationSource === 'snapshot' &&
+          current.paginationQueryKey === queryKey &&
+          current.snapshotNextCursor === cursor
+        ) {
+          set({ isLoadingMore: false })
+        }
       }
       return
     }
