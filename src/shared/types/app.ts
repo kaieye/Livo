@@ -4,12 +4,21 @@ import type { SettingsTabId } from '../settings-schema'
 export type { AppSettings, SettingsTabId } from '../settings-schema'
 export { DEFAULT_SETTINGS } from '../settings-schema'
 
+export interface RefreshRunItemResult {
+  feedId: string
+  feedTitle: string
+  status: 'succeeded' | 'failed'
+  newEntries: number
+  error?: string
+}
+
 export interface RefreshLogEntry {
   id: string
   refreshedAt: number
   successFeedCount: number
   failedFeedCount: number
   failedFeedTitles: string[]
+  items?: RefreshRunItemResult[]
 }
 
 export type AppCommandType =

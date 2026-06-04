@@ -70,9 +70,145 @@ const DEFAULT_PROMPT_RESERVE_CHARS = 6_000
 const DEFAULT_MAX_ARTICLES_PER_BATCH = 4
 const DEFAULT_MAX_ARTICLE_CHARS = 8_000
 const DEFAULT_MIN_ARTICLE_CHARS = 600
+const DIGEST_TITLE_SIMILARITY_THRESHOLD = 0.82
+
+const TRACKING_QUERY_PARAMS = new Set([
+  'fbclid',
+  'gclid',
+  'igshid',
+  'mc_cid',
+  'mc_eid',
+  'mkt_tok',
+  'msclkid',
+  'ref',
+  'ref_src',
+  'spm',
+])
 
 function normalizeText(value: string | undefined): string {
   return (value || '').replace(/\s+/g, ' ').trim()
+}
+
+export function canonicalizeDigestLink(value: string | undefined): string {
+  const raw = normalizeText(value)
+  if (!raw) return ''
+
+  try {
+    const url = new URL(raw)
+    url.hash = ''
+    url.username = ''
+    url.password = ''
+
+    for (const key of Array.from(url.searchParams.keys())) {
+      const lower = key.toLowerCase()
+      if (lower.startsWith('utm_') || TRACKING_QUERY_PARAMS.has(lower)) {
+        url.searchParams.delete(key)
+      }
+    }
+    url.searchParams.sort()
+
+    const pathname =
+      url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : url.pathname
+    return `${url.protocol}//${url.host.toLowerCase()}${pathname}${url.search}`
+  } catch {
+    return raw.toLowerCase()
+  }
+}
+
+export function normalizeDigestTitle(value: string | undefined): string {
+  return normalizeText(value)
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[^\p{Letter}\p{Number}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function titleBigrams(title: string): Set<string> {
+  const compact = title.replace(/\s+/g, '')
+  if (!compact) return new Set()
+  if (compact.length <= 2) return new Set([compact])
+
+  const grams = new Set<string>()
+  for (let index = 0; index < compact.length - 1; index += 1) {
+    grams.add(compact.slice(index, index + 2))
+  }
+  return grams
+}
+
+function jaccardSimilarity(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0
+
+  let intersection = 0
+  for (const item of left) {
+    if (right.has(item)) intersection += 1
+  }
+  const union = left.size + right.size - intersection
+  return union > 0 ? intersection / union : 0
+}
+
+function digestCandidateScore(candidate: DigestCandidate): number {
+  const textLength = normalizeText(
+    candidate.summary || candidate.content,
+  ).length
+  return textLength + Math.floor((candidate.publishedAt || 0) / 1_000_000_000)
+}
+
+function pickRicherDigestCandidate<T extends DigestCandidate>(
+  left: T,
+  right: T,
+): T {
+  return digestCandidateScore(right) > digestCandidateScore(left) ? right : left
+}
+
+function areDigestCandidatesSimilar(
+  left: { canonicalLink: string; title: string; titleBigrams: Set<string> },
+  right: { canonicalLink: string; title: string; titleBigrams: Set<string> },
+): boolean {
+  if (left.canonicalLink && left.canonicalLink === right.canonicalLink) {
+    return true
+  }
+
+  const minTitleLength = Math.min(left.title.length, right.title.length)
+  if (minTitleLength < 12) return false
+
+  return (
+    jaccardSimilarity(left.titleBigrams, right.titleBigrams) >=
+    DIGEST_TITLE_SIMILARITY_THRESHOLD
+  )
+}
+
+export function dedupeDigestCandidates<T extends DigestCandidate>(
+  candidates: T[],
+): T[] {
+  const groups: Array<{
+    canonicalLink: string
+    title: string
+    titleBigrams: Set<string>
+    candidate: T
+  }> = []
+
+  for (const candidate of candidates) {
+    const current = {
+      canonicalLink: canonicalizeDigestLink(candidate.url),
+      title: normalizeDigestTitle(candidate.title),
+      titleBigrams: titleBigrams(normalizeDigestTitle(candidate.title)),
+      candidate,
+    }
+    const group = groups.find((item) =>
+      areDigestCandidatesSimilar(item, current),
+    )
+
+    if (group) {
+      group.candidate = pickRicherDigestCandidate(group.candidate, candidate)
+      continue
+    }
+
+    groups.push(current)
+  }
+
+  return groups.map((group) => group.candidate)
 }
 
 function normalizeId(value: unknown): string {

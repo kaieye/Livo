@@ -24,6 +24,9 @@ import type {
   AIDigestGenerateResult,
   AIDigestPreset,
   AIDigestRun,
+  EntryAITranslationSegment,
+  EntryAITranslationSession,
+  EntryAITranslationSessionStatus,
   TaskRunListOptions,
   TaskRunRecord,
 } from '../shared/types'
@@ -1214,6 +1217,7 @@ function emit(channel: string, ...args: unknown[]) {
 }
 
 const webTaskRuns = new Map<string, TaskRunRecord>()
+const webTranslationSessions = new Map<string, EntryAITranslationSession>()
 
 function listWebTaskRuns(options?: TaskRunListOptions): TaskRunRecord[] {
   const limit = Math.max(1, Math.min(options?.limit ?? 50, 200))
@@ -1752,6 +1756,69 @@ export function createWebAPI(): ElectronAPI {
         } catch (error) {
           return { success: false, error: String(error) }
         }
+      },
+
+      getTranslationSession: async (entryId: string) => {
+        return (
+          Array.from(webTranslationSessions.values())
+            .filter((session) => session.entryId === entryId)
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0] || null
+        )
+      },
+
+      createTranslationSession: async (input: {
+        entryId: string
+        targetLanguage: string
+        status: EntryAITranslationSessionStatus
+        segments?: EntryAITranslationSegment[]
+        errorCode?: string
+        errorMessage?: string
+        model?: string
+        configFingerprint?: string
+        runId?: string
+      }) => {
+        const now = Date.now()
+        const session: EntryAITranslationSession = {
+          id: `web-ai-translation-${input.entryId}-${now}`,
+          entryId: input.entryId,
+          targetLanguage: input.targetLanguage,
+          status: input.status,
+          segments: input.segments ?? [],
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage,
+          model: input.model,
+          configFingerprint: input.configFingerprint,
+          runId: input.runId,
+          createdAt: now,
+          updatedAt: now,
+        }
+        webTranslationSessions.set(session.id, session)
+        return session
+      },
+
+      updateTranslationSession: async (
+        sessionId: string,
+        updates: {
+          targetLanguage?: string
+          status?: EntryAITranslationSessionStatus
+          segments?: EntryAITranslationSegment[]
+          errorCode?: string
+          errorMessage?: string
+          model?: string
+          configFingerprint?: string
+          runId?: string
+          finishedAt?: number
+        },
+      ) => {
+        const current = webTranslationSessions.get(sessionId)
+        if (!current) return null
+        const next: EntryAITranslationSession = {
+          ...current,
+          ...updates,
+          updatedAt: Date.now(),
+        }
+        webTranslationSessions.set(sessionId, next)
+        return next
       },
 
       chat: async (messages: Array<{ role: string; content: string }>) => {

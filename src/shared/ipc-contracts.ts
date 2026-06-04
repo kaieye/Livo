@@ -37,6 +37,9 @@ export const IPC = {
   AI_SUMMARIZE_ENTRY: 'ai:summarize-entry',
   AI_SUMMARY_SESSION_GET: 'ai:summary-session-get',
   AI_TRANSLATE: 'ai:translate',
+  AI_TRANSLATION_SESSION_GET: 'ai:translation-session-get',
+  AI_TRANSLATION_SESSION_CREATE: 'ai:translation-session-create',
+  AI_TRANSLATION_SESSION_UPDATE: 'ai:translation-session-update',
   AI_CHAT: 'ai:chat',
   AI_CHAT_STREAM: 'ai:chat-stream',
   AI_FILTER_JUDGE: 'ai:filter-judge',
@@ -213,6 +216,12 @@ export type IpcArgsByChannel = {
     content: string,
     targetLanguage: string,
     requestId?: string,
+  ]
+  [IPC.AI_TRANSLATION_SESSION_GET]: [entryId: string]
+  [IPC.AI_TRANSLATION_SESSION_CREATE]: [input: Record<string, unknown>]
+  [IPC.AI_TRANSLATION_SESSION_UPDATE]: [
+    sessionId: string,
+    updates: Record<string, unknown>,
   ]
   [IPC.AI_CHAT]: [messages: Array<{ role: string; content: string }>]
   [IPC.AI_CHAT_STREAM]: [
@@ -699,6 +708,23 @@ export const IPC_CONTRACTS = {
       assertString(args[1], 'targetLanguage')
       assertOptionalString(args[2], 'requestId')
       return args as IpcArgs<typeof IPC.AI_TRANSLATE>
+    },
+  },
+  [IPC.AI_TRANSLATION_SESSION_GET]: oneString(
+    IPC.AI_TRANSLATION_SESSION_GET,
+    'entryId',
+  ),
+  [IPC.AI_TRANSLATION_SESSION_CREATE]: oneObject(
+    IPC.AI_TRANSLATION_SESSION_CREATE,
+    'input',
+  ),
+  [IPC.AI_TRANSLATION_SESSION_UPDATE]: {
+    channel: IPC.AI_TRANSLATION_SESSION_UPDATE,
+    validateArgs: (args) => {
+      assertArity(IPC.AI_TRANSLATION_SESSION_UPDATE, args, 2)
+      assertString(args[0], 'sessionId')
+      assertObject(args[1], 'updates')
+      return args as IpcArgs<typeof IPC.AI_TRANSLATION_SESSION_UPDATE>
     },
   },
   [IPC.AI_CHAT]: {

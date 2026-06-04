@@ -1,5 +1,9 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { getSettingsSnapshot } from '../store/settings-store'
+import type {
+  EntryAITranslationSegment,
+  EntryAITranslationSessionStatus,
+} from '../../../shared/types'
 
 interface AIStreamPayload {
   requestId: string
@@ -38,6 +42,10 @@ export interface AITranslationState {
   reset: () => void
 }
 
+export interface AITranslationOptions {
+  entryId?: string
+}
+
 function createAIRequestId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
@@ -64,6 +72,10 @@ function getTranslationConfigFingerprint(): string {
   })
 }
 
+function getTranslationModel(): string | undefined {
+  return getSettingsSnapshot().ai.model
+}
+
 function isConfigChangedError(error: unknown): boolean {
   return error instanceof Error && error.message === CONFIG_CHANGED_ERROR
 }
@@ -71,6 +83,36 @@ function isConfigChangedError(error: unknown): boolean {
 function shouldTranslateParagraph(paragraph: string): boolean {
   const plainText = paragraph.replace(/<[^>]*>/g, '').trim()
   return plainText.length >= 5
+}
+
+function buildTranslationSegments(
+  paragraphs: string[],
+  results: string[],
+  errors: TranslationErrorMap,
+  runningIndex?: number,
+): EntryAITranslationSegment[] {
+  return paragraphs.map((paragraph, index) => {
+    const errorMessage = errors[index]
+    const translatedText = results[index] ?? ''
+    const status: EntryAITranslationSegment['status'] =
+      !shouldTranslateParagraph(paragraph)
+        ? 'skipped'
+        : errorMessage
+          ? 'failed'
+          : translatedText
+            ? 'succeeded'
+            : runningIndex === index
+              ? 'running'
+              : 'queued'
+
+    return {
+      index,
+      sourceText: paragraph,
+      translatedText,
+      status,
+      errorMessage,
+    }
+  })
 }
 
 /**
@@ -83,7 +125,10 @@ function shouldTranslateParagraph(paragraph: string): boolean {
  * Design: content is passed at `translate()` call time, keeping the hook
  * content-agnostic and reusable across components (EntryContent, WideViewContent, etc.).
  */
-export function useAITranslation(): AITranslationState {
+export function useAITranslation(
+  options: AITranslationOptions = {},
+): AITranslationState {
+  const { entryId } = options
   const [translatedParagraphs, setTranslatedParagraphs] = useState<string[]>([])
   const [isTranslating, setIsTranslating] = useState(false)
   const [showTranslation, setShowTranslation] = useState(false)
@@ -95,6 +140,95 @@ export function useAITranslation(): AITranslationState {
     paragraphs: string[]
     targetLang: string
   } | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!entryId) return
+    let canceled = false
+
+    window.api.ai
+      .getTranslationSession(entryId)
+      .then((session) => {
+        if (canceled || !session) return
+        sessionIdRef.current = session.id
+
+        const segments = [...session.segments].sort(
+          (left, right) => left.index - right.index,
+        )
+        const nextTranslations: string[] = []
+        const nextErrors: TranslationErrorMap = {}
+        for (const segment of segments) {
+          nextTranslations[segment.index] = segment.translatedText || ''
+          if (segment.status === 'failed' && segment.errorMessage) {
+            nextErrors[segment.index] = segment.errorMessage
+          }
+        }
+
+        setTranslatedParagraphs(nextTranslations)
+        setErrorMap(nextErrors)
+        setShowTranslation(
+          nextTranslations.some((text) => text.length > 0) ||
+            Object.keys(nextErrors).length > 0,
+        )
+        setIsTranslating(
+          session.status === 'queued' || session.status === 'running',
+        )
+      })
+      .catch(() => {})
+
+    return () => {
+      canceled = true
+    }
+  }, [entryId])
+
+  const persistSession = useCallback(
+    async (
+      status: EntryAITranslationSessionStatus,
+      segments: EntryAITranslationSegment[],
+      patch?: {
+        targetLanguage?: string
+        errorCode?: string
+        errorMessage?: string
+        runId?: string
+        finishedAt?: number
+      },
+    ) => {
+      if (!entryId) return
+      const payload = {
+        targetLanguage: patch?.targetLanguage,
+        status,
+        segments,
+        errorCode: patch?.errorCode,
+        errorMessage: patch?.errorMessage,
+        model: getTranslationModel(),
+        configFingerprint: getTranslationConfigFingerprint(),
+        runId: patch?.runId,
+        finishedAt: patch?.finishedAt,
+      }
+
+      if (sessionIdRef.current) {
+        await window.api.ai.updateTranslationSession(
+          sessionIdRef.current,
+          payload,
+        )
+        return
+      }
+
+      const session = await window.api.ai.createTranslationSession({
+        entryId,
+        targetLanguage: patch?.targetLanguage || 'zh-CN',
+        status,
+        segments,
+        model: payload.model,
+        configFingerprint: payload.configFingerprint,
+        errorCode: payload.errorCode,
+        errorMessage: payload.errorMessage,
+        runId: payload.runId,
+      })
+      sessionIdRef.current = session.id
+    },
+    [entryId],
+  )
 
   const translateSegment = useCallback(
     async (
@@ -117,6 +251,16 @@ export function useAITranslation(): AITranslationState {
         errors[index] = CONFIG_CHANGED_ERROR
         setErrorMap({ ...errors })
         setIsTranslating(false)
+        void persistSession(
+          'config_changed',
+          buildTranslationSegments(paragraphs, results, errors),
+          {
+            targetLanguage: targetLang,
+            errorCode: 'config_changed',
+            errorMessage: CONFIG_CHANGED_ERROR,
+            finishedAt: Date.now(),
+          },
+        )
         return
       }
 
@@ -133,6 +277,16 @@ export function useAITranslation(): AITranslationState {
             errors[index] = CONFIG_CHANGED_ERROR
             setErrorMap({ ...errors })
             setIsTranslating(false)
+            void persistSession(
+              'config_changed',
+              buildTranslationSegments(paragraphs, results, errors),
+              {
+                targetLanguage: targetLang,
+                errorCode: 'config_changed',
+                errorMessage: CONFIG_CHANGED_ERROR,
+                finishedAt: Date.now(),
+              },
+            )
             return
           }
 
@@ -164,9 +318,22 @@ export function useAITranslation(): AITranslationState {
         if (result.success) {
           results[index] = result.translation
           delete errors[index]
+          void persistSession(
+            'running',
+            buildTranslationSegments(paragraphs, results, errors),
+            {
+              targetLanguage: targetLang,
+              runId: (result as { runId?: string }).runId,
+            },
+          )
         } else {
           results[index] = ''
           errors[index] = result.error ?? 'Translation failed'
+          void persistSession(
+            'running',
+            buildTranslationSegments(paragraphs, results, errors),
+            { targetLanguage: targetLang },
+          )
         }
       } catch (err) {
         if (requestId !== requestIdRef.current) return
@@ -178,8 +345,23 @@ export function useAITranslation(): AITranslationState {
           requestIdRef.current++
           setErrorMap({ ...errors })
           setIsTranslating(false)
+          void persistSession(
+            'config_changed',
+            buildTranslationSegments(paragraphs, results, errors),
+            {
+              targetLanguage: targetLang,
+              errorCode: 'config_changed',
+              errorMessage: CONFIG_CHANGED_ERROR,
+              finishedAt: Date.now(),
+            },
+          )
           return
         }
+        void persistSession(
+          'running',
+          buildTranslationSegments(paragraphs, results, errors),
+          { targetLanguage: targetLang },
+        )
       } finally {
         cleanupChunk()
         cleanupError()
@@ -190,7 +372,7 @@ export function useAITranslation(): AITranslationState {
         setErrorMap({ ...errors })
       }
     },
-    [],
+    [persistSession],
   )
 
   const translate = useCallback(
@@ -201,11 +383,17 @@ export function useAITranslation(): AITranslationState {
       contextRef.current = { paragraphs, targetLang }
       const results = paragraphs.map(() => '')
       const errors: TranslationErrorMap = {}
+      sessionIdRef.current = null
 
       setTranslatedParagraphs(results)
       setErrorMap({})
       setIsTranslating(true)
       setShowTranslation(true)
+      await persistSession(
+        'running',
+        buildTranslationSegments(paragraphs, results, errors),
+        { targetLanguage: targetLang },
+      ).catch(() => {})
 
       const queue = paragraphs
         .map((paragraph, index) => ({ paragraph, index }))
@@ -236,9 +424,19 @@ export function useAITranslation(): AITranslationState {
 
       if (requestId === requestIdRef.current) {
         setIsTranslating(false)
+        const hasErrors = Object.keys(errors).length > 0
+        void persistSession(
+          hasErrors ? 'failed' : 'succeeded',
+          buildTranslationSegments(paragraphs, results, errors),
+          {
+            targetLanguage: targetLang,
+            errorMessage: hasErrors ? '部分段落翻译失败' : undefined,
+            finishedAt: Date.now(),
+          },
+        )
       }
     },
-    [translateSegment],
+    [persistSession, translateSegment],
   )
 
   const retrySegment = useCallback(
@@ -257,6 +455,11 @@ export function useAITranslation(): AITranslationState {
       setErrorMap(errors)
       setIsTranslating(true)
       setShowTranslation(true)
+      await persistSession(
+        'running',
+        buildTranslationSegments(context.paragraphs, results, errors, index),
+        { targetLanguage: context.targetLang },
+      ).catch(() => {})
 
       await translateSegment(
         index,
@@ -270,9 +473,19 @@ export function useAITranslation(): AITranslationState {
 
       if (requestId === requestIdRef.current) {
         setIsTranslating(false)
+        const hasErrors = Object.keys(errors).length > 0
+        void persistSession(
+          hasErrors ? 'failed' : 'succeeded',
+          buildTranslationSegments(context.paragraphs, results, errors),
+          {
+            targetLanguage: context.targetLang,
+            errorMessage: hasErrors ? '部分段落翻译失败' : undefined,
+            finishedAt: Date.now(),
+          },
+        )
       }
     },
-    [errorMap, translateSegment, translatedParagraphs],
+    [errorMap, persistSession, translateSegment, translatedParagraphs],
   )
 
   const toggle = useCallback(() => {
@@ -282,6 +495,7 @@ export function useAITranslation(): AITranslationState {
   const reset = useCallback(() => {
     requestIdRef.current++ // invalidate in-flight requests
     contextRef.current = null
+    sessionIdRef.current = null
     setTranslatedParagraphs([])
     setIsTranslating(false)
     setShowTranslation(false)

@@ -5,7 +5,7 @@ import type { CleanupOptions } from '../../database'
 import { deriveImageUrl } from './feed-utils'
 import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
-import type { Feed } from '../../../shared/types/index'
+import type { Feed, RefreshRunItemResult } from '../../../shared/types/index'
 import { FeedViewType } from '../../../shared/types/index'
 import {
   queueVideoDurationEnrich,
@@ -298,6 +298,7 @@ export interface RefreshAllResult {
   failedCount: number
   failedFeedTitles: string[]
   totalNewEntries: number
+  items: RefreshRunItemResult[]
 }
 
 export function startAutoRefresh(
@@ -716,6 +717,7 @@ async function runRefreshAllFeeds(
       completed: 0,
       total: 0,
       message: 'refresh all done',
+      data: { items: [] },
     })
     return emptyRefreshAllResult()
   }
@@ -782,19 +784,41 @@ async function runRefreshAllFeeds(
 
   // Record refresh log entry
   const refreshedFeeds = getDb().feeds.getAllFeeds()
-  let successCount = 0
-  let failedCount = 0
-  for (const feed of refreshedFeeds) {
+  const refreshedFeedById = new Map(
+    refreshedFeeds.map((feed) => [feed.id, feed]),
+  )
+  const itemResults: RefreshRunItemResult[] = staleFeeds.map((feed, index) => {
+    const refreshed = refreshedFeedById.get(feed.id)
+    const result = settled[index]
     const before = errorCountBefore.get(feed.id)
-    if (before !== undefined) {
-      if (feed.errorCount > before) {
-        failedCount++
-        failedTitles.push(feed.title)
-      } else {
-        successCount++
-      }
+    const failedByErrorCount =
+      before !== undefined && refreshed ? refreshed.errorCount > before : false
+    const failedByReject = result.status === 'rejected'
+    const status = failedByErrorCount || failedByReject ? 'failed' : 'succeeded'
+    const error =
+      status === 'failed'
+        ? refreshed?.lastRefreshError ||
+          (failedByReject ? String(result.reason) : undefined)
+        : undefined
+
+    return {
+      feedId: feed.id,
+      feedTitle: refreshed?.title || feed.title,
+      status,
+      newEntries: result.status === 'fulfilled' ? result.value : 0,
+      error,
     }
-  }
+  })
+
+  const successCount = itemResults.filter(
+    (item) => item.status === 'succeeded',
+  ).length
+  const failedCount = itemResults.length - successCount
+  failedTitles.push(
+    ...itemResults
+      .filter((item) => item.status === 'failed')
+      .map((item) => item.feedTitle),
+  )
 
   appendRefreshLog({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -802,6 +826,18 @@ async function runRefreshAllFeeds(
     successFeedCount: successCount,
     failedFeedCount: failedCount,
     failedFeedTitles: failedTitles,
+    items: itemResults,
+  })
+
+  context?.reportProgress({
+    completed: settled.length,
+    total: settled.length,
+    message: 'refresh all done',
+    data: {
+      items: itemResults,
+      failedFeedTitles: failedTitles,
+      totalNewEntries: totalNew,
+    },
   })
 
   // Sync Fever accounts after normal feed refresh
@@ -826,6 +862,7 @@ async function runRefreshAllFeeds(
     failedCount,
     failedFeedTitles: failedTitles,
     totalNewEntries: totalNew,
+    items: itemResults,
   }
 }
 
@@ -836,6 +873,7 @@ function emptyRefreshAllResult(): RefreshAllResult {
     failedCount: 0,
     failedFeedTitles: [],
     totalNewEntries: 0,
+    items: [],
   }
 }
 

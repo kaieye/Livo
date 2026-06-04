@@ -89,6 +89,44 @@ export interface EntryAISummarySession {
   finishedAt?: number
 }
 
+export type EntryAITranslationSessionStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'config_changed'
+
+export type EntryAITranslationSegmentStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'skipped'
+
+export interface EntryAITranslationSegment {
+  index: number
+  sourceText: string
+  translatedText: string
+  status: EntryAITranslationSegmentStatus
+  errorMessage?: string
+}
+
+export interface EntryAITranslationSession {
+  id: string
+  entryId: string
+  targetLanguage: string
+  status: EntryAITranslationSessionStatus
+  segments: EntryAITranslationSegment[]
+  errorCode?: string
+  errorMessage?: string
+  model?: string
+  configFingerprint?: string
+  runId?: string
+  createdAt: number
+  updatedAt: number
+  finishedAt?: number
+}
+
 export type AISummaryEntryResult =
   | {
       success: true

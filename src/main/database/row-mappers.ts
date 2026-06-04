@@ -2,6 +2,8 @@ import type {
   AIDigestPreset,
   AIDigestRun,
   EntryAISummarySession,
+  EntryAITranslationSegment,
+  EntryAITranslationSession,
   Entry,
   Feed,
   FeverAccount,
@@ -53,6 +55,57 @@ export function entryAISummarySessionFromRow(row: any): EntryAISummarySession {
     rawErrorMessage: row.raw_error_message || undefined,
     model: row.model || undefined,
     sourceHash: row.source_hash || undefined,
+    runId: row.run_id || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    finishedAt: row.finished_at ?? undefined,
+  }
+}
+
+function parseTranslationSegments(value: unknown): EntryAITranslationSegment[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => {
+        const segment = item as Partial<EntryAITranslationSegment>
+        const status =
+          segment.status === 'running' ||
+          segment.status === 'succeeded' ||
+          segment.status === 'failed' ||
+          segment.status === 'skipped'
+            ? segment.status
+            : 'queued'
+        return {
+          index: Number(segment.index) || 0,
+          sourceText: String(segment.sourceText || ''),
+          translatedText: String(segment.translatedText || ''),
+          status,
+          errorMessage: segment.errorMessage
+            ? String(segment.errorMessage)
+            : undefined,
+        }
+      })
+  } catch {
+    return []
+  }
+}
+
+export function entryAITranslationSessionFromRow(
+  row: any,
+): EntryAITranslationSession {
+  return {
+    id: row.id,
+    entryId: row.entry_id,
+    targetLanguage: row.target_language,
+    status: row.status,
+    segments: parseTranslationSegments(row.segments_json),
+    errorCode: row.error_code || undefined,
+    errorMessage: row.error_message || undefined,
+    model: row.model || undefined,
+    configFingerprint: row.config_fingerprint || undefined,
     runId: row.run_id || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

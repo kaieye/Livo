@@ -19,6 +19,8 @@ import { DigestRepository } from './repositories/digest-repository'
 import type { IDigestRepository } from './repositories/digest-repository'
 import { EntryAISummarySessionRepository } from './repositories/ai-summary-session-repository'
 import type { IEntryAISummarySessionRepository } from './repositories/ai-summary-session-repository'
+import { EntryAITranslationSessionRepository } from './repositories/ai-translation-session-repository'
+import type { IEntryAITranslationSessionRepository } from './repositories/ai-translation-session-repository'
 import { EntryRepository } from './repositories/entry-repository'
 import type { IEntryRepository } from './repositories/entry-repository'
 import type {
@@ -39,6 +41,7 @@ export class SqliteAdapter {
   readonly feeds: IFeedRepository
   readonly entries: IEntryRepository
   readonly aiSummarySessions: IEntryAISummarySessionRepository
+  readonly aiTranslationSessions: IEntryAITranslationSessionRepository
   readonly digests: IDigestRepository
   readonly fever: IFeverRepository
   readonly maintenance: IMaintenanceRepository
@@ -56,6 +59,9 @@ export class SqliteAdapter {
     this.feeds = new FeedRepository(this.db)
     this.entries = new EntryRepository(this.db)
     this.aiSummarySessions = new EntryAISummarySessionRepository(this.db)
+    this.aiTranslationSessions = new EntryAITranslationSessionRepository(
+      this.db,
+    )
     this.digests = new DigestRepository(this.db)
     this.fever = new FeverRepository(this.db)
     this.maintenance = new MaintenanceRepository(this.db, this.feeds)

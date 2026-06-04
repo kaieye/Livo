@@ -39,6 +39,8 @@ import {
 } from '../../lib/social-url'
 import { LRUCache } from '../../lib/lru-cache'
 import { useHomeFeedCoordinator } from '../../hooks/useHomeFeedCoordinator'
+import { useRegisterCommand } from '../../hooks/useRegisterCommand'
+import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '../../lib/date-locale'
 import {
@@ -94,6 +96,14 @@ const SharePoster = lazy(() =>
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  )
+}
 
 // LRU cache for expanded state of social media items
 const expandedCache = new LRUCache<string, boolean>(200)
@@ -158,6 +168,18 @@ export function EntryList({ width }: { width?: number }) {
     imageProxy: settings.imageProxy,
   }))
   const { t } = useTranslation()
+
+  useRegisterCommand({
+    id: 'entry-list:refresh-current',
+    shortcutId: 'refresh-current',
+    scopes: ['content'],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (event) => {
+      if (isRefreshing || isEditableTarget(event.target)) return false
+      event.preventDefault()
+      void refreshCurrentFeeds()
+    },
+  })
 
   // Context menu state
   const { menuState, showMenu, hideMenu } = useEntryContextMenu()

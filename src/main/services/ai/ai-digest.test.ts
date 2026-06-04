@@ -4,7 +4,10 @@ import {
   buildDigestBatchMessages,
   buildDigestReduceMessages,
   buildDigestRerankMessages,
+  canonicalizeDigestLink,
+  dedupeDigestCandidates,
   getDigestArticleCharBudget,
+  normalizeDigestTitle,
   selectValidDigestRerankIds,
   type DigestCandidate,
 } from './ai-digest'
@@ -90,6 +93,58 @@ describe('ai digest tools', () => {
     expect(String(messages[0].content)).toContain('不要编造 id')
     expect(String(messages[1].content)).toContain('"maxIds":3')
     expect(String(messages[1].content)).toContain('entry-1')
+  })
+
+  it('canonicalizes digest links by removing tracking parameters', () => {
+    expect(
+      canonicalizeDigestLink(
+        'https://Example.com/news/story/?utm_source=rss&b=2&a=1&fbclid=abc#section',
+      ),
+    ).toBe('https://example.com/news/story?a=1&b=2')
+  })
+
+  it('normalizes digest titles for candidate clustering', () => {
+    expect(normalizeDigestTitle('  OpenAI：发布 AI-Agent！ ')).toBe(
+      'openai 发布 ai agent',
+    )
+  })
+
+  it('dedupes digest candidates by canonical link and similar titles', () => {
+    const deduped = dedupeDigestCandidates([
+      {
+        id: 'short-link',
+        title: 'OpenAI releases coding agent update',
+        summary: 'short',
+        url: 'https://example.com/news/agent?utm_campaign=rss',
+        publishedAt: 100,
+      },
+      {
+        id: 'rich-link',
+        title: 'OpenAI releases coding agent update',
+        summary: 'richer summary '.repeat(20),
+        url: 'https://example.com/news/agent?ref=homepage',
+        publishedAt: 90,
+      },
+      {
+        id: 'similar-title',
+        title: 'OpenAI releases a coding agent update',
+        summary: 'another source',
+        url: 'https://another.example/posts/agent-update',
+        publishedAt: 80,
+      },
+      {
+        id: 'other',
+        title: 'SQLite improves local-first feed storage',
+        summary: 'unrelated',
+        url: 'https://example.com/news/sqlite',
+        publishedAt: 70,
+      },
+    ])
+
+    expect(deduped.map((candidate) => candidate.id)).toEqual([
+      'rich-link',
+      'other',
+    ])
   })
 
   it('builds batch notes messages with source ids', () => {

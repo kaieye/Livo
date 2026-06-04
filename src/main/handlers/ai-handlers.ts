@@ -26,8 +26,38 @@ import { getDb } from '../database'
 import type {
   AIDigestGenerateResult,
   AISemanticFilterInput,
+  EntryAITranslationSegment,
+  EntryAITranslationSessionStatus,
 } from '../../shared/types'
 import { USER_OPERATION_KEYS } from '../../shared/user-operations'
+
+const translationSessionStatuses = new Set<EntryAITranslationSessionStatus>([
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'config_changed',
+])
+
+function normalizeTranslationSessionStatus(
+  value: unknown,
+): EntryAITranslationSessionStatus {
+  return translationSessionStatuses.has(
+    value as EntryAITranslationSessionStatus,
+  )
+    ? (value as EntryAITranslationSessionStatus)
+    : 'queued'
+}
+
+function normalizeTranslationSegments(
+  value: unknown,
+): EntryAITranslationSegment[] {
+  return Array.isArray(value) ? (value as EntryAITranslationSegment[]) : []
+}
+
+function hasOwnField(object: Record<string, unknown>, field: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, field)
+}
 
 function pickEntrySummaryContent(entry: {
   readabilityContent?: string
@@ -77,6 +107,66 @@ export function registerAIHandlers(): void {
     IPC.AI_SUMMARY_SESSION_GET,
     async (_event, entryId: string) => {
       return getDb().aiSummarySessions.getLatestSessionByEntryId(entryId)
+    },
+  )
+
+  registerChannel(
+    IPC.AI_TRANSLATION_SESSION_GET,
+    async (_event, entryId: string) => {
+      return getDb().aiTranslationSessions.getLatestSessionByEntryId(entryId)
+    },
+  )
+
+  registerChannel(
+    IPC.AI_TRANSLATION_SESSION_CREATE,
+    async (_event, input: Record<string, unknown>) => {
+      return getDb().aiTranslationSessions.createSession({
+        entryId: String(input.entryId || ''),
+        targetLanguage: String(input.targetLanguage || 'zh-CN'),
+        status: normalizeTranslationSessionStatus(input.status),
+        segments: normalizeTranslationSegments(input.segments),
+        errorCode: input.errorCode ? String(input.errorCode) : undefined,
+        errorMessage: input.errorMessage
+          ? String(input.errorMessage)
+          : undefined,
+        model: input.model ? String(input.model) : undefined,
+        configFingerprint: input.configFingerprint
+          ? String(input.configFingerprint)
+          : undefined,
+        runId: input.runId ? String(input.runId) : undefined,
+      })
+    },
+  )
+
+  registerChannel(
+    IPC.AI_TRANSLATION_SESSION_UPDATE,
+    async (_event, sessionId: string, updates: Record<string, unknown>) => {
+      return getDb().aiTranslationSessions.updateSession(sessionId, {
+        targetLanguage: updates.targetLanguage
+          ? String(updates.targetLanguage)
+          : undefined,
+        status: updates.status
+          ? normalizeTranslationSessionStatus(updates.status)
+          : undefined,
+        segments: updates.segments
+          ? normalizeTranslationSegments(updates.segments)
+          : undefined,
+        errorCode: hasOwnField(updates, 'errorCode')
+          ? String(updates.errorCode || '')
+          : undefined,
+        errorMessage: hasOwnField(updates, 'errorMessage')
+          ? String(updates.errorMessage || '')
+          : undefined,
+        model: updates.model ? String(updates.model) : undefined,
+        configFingerprint: updates.configFingerprint
+          ? String(updates.configFingerprint)
+          : undefined,
+        runId: updates.runId ? String(updates.runId) : undefined,
+        finishedAt:
+          typeof updates.finishedAt === 'number'
+            ? updates.finishedAt
+            : undefined,
+      })
     },
   )
 

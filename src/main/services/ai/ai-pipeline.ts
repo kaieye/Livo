@@ -15,6 +15,7 @@ import {
   buildDigestBudgetPlan,
   buildDigestReduceMessages,
   buildDigestRerankMessages,
+  dedupeDigestCandidates,
   selectValidDigestRerankIds,
 } from './ai-digest'
 import type { TaskRunContext } from '../system/task-runner'
@@ -119,12 +120,13 @@ export async function generateAIDigest(
     preset,
     now,
   )
-  const candidates = getDb().digests.listDigestCandidates({
+  const rawCandidates = getDb().digests.listDigestCandidates({
     preset,
     feedId: input?.feedId,
     limit: 80,
     now,
   })
+  const candidates = dedupeDigestCandidates(rawCandidates)
   const run = getDb().digests.upsertAIDigestRun({
     preset,
     feedId: input?.feedId,
@@ -142,7 +144,13 @@ export async function generateAIDigest(
     completed: 1,
     total: 4,
     message: '候选文章已就绪',
-    data: { preset, feedId: input?.feedId, digestRunId: run.id },
+    data: {
+      preset,
+      feedId: input?.feedId,
+      digestRunId: run.id,
+      rawCandidateCount: rawCandidates.length,
+      candidateCount: candidates.length,
+    },
   })
 
   if (candidates.length === 0) {

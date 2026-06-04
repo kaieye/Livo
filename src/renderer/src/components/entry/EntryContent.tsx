@@ -384,7 +384,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     retrySegment,
     toggle: toggleTranslation,
     reset: resetTranslation,
-  } = useAITranslation()
+  } = useAITranslation({ entryId: selectedEntry?.id })
 
   // Per-entry state — keyed by entry ID, reset on switch
   const [linkCopied, setLinkCopied] = useState(false)

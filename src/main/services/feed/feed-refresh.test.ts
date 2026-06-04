@@ -114,6 +114,7 @@ describe('refreshAllFeeds', () => {
       failedCount: 1,
       failedFeedTitles: ['Feed A'],
       totalNewEntries: 4,
+      items: [],
     }
     const activeRun = {
       runId: 'feed.refresh_all-1',

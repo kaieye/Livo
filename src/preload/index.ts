@@ -25,6 +25,9 @@ import type {
   AIDigestPreset,
   AISummaryEntryResult,
   EntryAISummarySession,
+  EntryAITranslationSegment,
+  EntryAITranslationSession,
+  EntryAITranslationSessionStatus,
   TaskRunListOptions,
   TaskRunRecord,
   FeverAccount,
@@ -126,6 +129,37 @@ const api = {
       invokeIpc(IPC.AI_SUMMARY_SESSION_GET, entryId),
     translate: (content: string, targetLanguage: string, requestId?: string) =>
       invokeIpc(IPC.AI_TRANSLATE, content, targetLanguage, requestId),
+    getTranslationSession: (
+      entryId: string,
+    ): Promise<EntryAITranslationSession | null> =>
+      invokeIpc(IPC.AI_TRANSLATION_SESSION_GET, entryId),
+    createTranslationSession: (input: {
+      entryId: string
+      targetLanguage: string
+      status: EntryAITranslationSessionStatus
+      segments?: EntryAITranslationSegment[]
+      errorCode?: string
+      errorMessage?: string
+      model?: string
+      configFingerprint?: string
+      runId?: string
+    }): Promise<EntryAITranslationSession> =>
+      invokeIpc(IPC.AI_TRANSLATION_SESSION_CREATE, input),
+    updateTranslationSession: (
+      sessionId: string,
+      updates: {
+        targetLanguage?: string
+        status?: EntryAITranslationSessionStatus
+        segments?: EntryAITranslationSegment[]
+        errorCode?: string
+        errorMessage?: string
+        model?: string
+        configFingerprint?: string
+        runId?: string
+        finishedAt?: number
+      },
+    ): Promise<EntryAITranslationSession | null> =>
+      invokeIpc(IPC.AI_TRANSLATION_SESSION_UPDATE, sessionId, updates),
     chat: (messages: Array<{ role: string; content: string }>) =>
       invokeIpc(IPC.AI_CHAT, messages),
     chatStream: (

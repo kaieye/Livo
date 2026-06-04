@@ -18,6 +18,7 @@ import type {
   IFeedRepository,
   IEntryRepository,
   IEntryAISummarySessionRepository,
+  IEntryAITranslationSessionRepository,
   IDigestRepository,
   IFeverRepository,
   IMaintenanceRepository,
@@ -34,6 +35,7 @@ export function getDb(): {
   feeds: IFeedRepository
   entries: IEntryRepository
   aiSummarySessions: IEntryAISummarySessionRepository
+  aiTranslationSessions: IEntryAITranslationSessionRepository
   digests: IDigestRepository
   fever: IFeverRepository
   maintenance: IMaintenanceRepository
@@ -43,6 +45,7 @@ export function getDb(): {
     feeds: adapter.feeds,
     entries: adapter.entries,
     aiSummarySessions: adapter.aiSummarySessions,
+    aiTranslationSessions: adapter.aiTranslationSessions,
     digests: adapter.digests,
     fever: adapter.fever,
     maintenance: adapter.maintenance,

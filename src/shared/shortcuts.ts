@@ -36,6 +36,13 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     description: '打开全局搜索面板',
   },
   {
+    id: 'command-palette',
+    label: '命令面板',
+    keys: 'Ctrl+Shift+P',
+    category: 'global',
+    description: '打开命令面板',
+  },
+  {
     id: 'quick-add',
     label: '快速添加',
     keys: 'Ctrl+N',
@@ -216,6 +223,13 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     keys: 'Ctrl+R',
     category: 'subscription',
     description: '刷新所有订阅源',
+  },
+  {
+    id: 'refresh-current',
+    label: '刷新当前视图',
+    keys: 'R',
+    category: 'subscription',
+    description: '刷新当前订阅源或视图',
   },
   {
     id: 'toggle-discover',

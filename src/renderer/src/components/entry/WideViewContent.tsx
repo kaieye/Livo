@@ -55,7 +55,9 @@ import { useOverlayMediaGallery } from '../../hooks/useOverlayMediaGallery'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useSocialOverlayAvatar } from '../../hooks/useSocialOverlayAvatar'
 import { useWideViewEntries } from '../../hooks/useWideViewEntries'
+import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { canonicalizeSocialUrl } from '../../lib/social-url'
+import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import {
   buildBilibiliInAppPlayerUrl,
   normalizeBilibiliVideoUrl,
@@ -127,6 +129,14 @@ const SocialOverlayView = lazy(() =>
     default: module.SocialOverlayView,
   })),
 )
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  )
+}
 
 function getVideoColumnCount(containerWidth: number): number {
   return containerWidth >= 1600
@@ -478,6 +488,18 @@ export function WideViewContent() {
     reloadCurrentList,
     selectedFeedId,
   ])
+
+  useRegisterCommand({
+    id: 'wide-view:refresh-current',
+    shortcutId: 'refresh-current',
+    scopes: ['content'],
+    blockedScopes: HOTKEY_OVERLAY_SCOPES,
+    handler: (event) => {
+      if (isRefreshing || isEditableTarget(event.target)) return false
+      event.preventDefault()
+      void handleRefreshCurrentView()
+    },
+  })
 
   const {
     renderEntries,
@@ -1828,7 +1850,7 @@ function SocialOverlay({
 
   // AI Translation & Summary
   const { translatedParagraphs, isTranslating, showTranslation, translate } =
-    useAITranslation()
+    useAITranslation({ entryId: entry.id })
   const { summary, error, isLoading: isSummarizing, summarize } = useAISummary()
 
   const handleTranslate = useCallback(() => {

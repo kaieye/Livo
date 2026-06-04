@@ -335,6 +335,72 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
     })
   })
 
+  it('persists entry AI translation sessions with segment state', () => {
+    const adapter = createAdapter()
+    const feed = makeFeed()
+    const entry = makeEntry({ content: 'Article body' })
+    adapter.insertFeed(feed)
+    adapter.insertEntry(entry)
+
+    const first = adapter.aiTranslationSessions.createSession({
+      entryId: entry.id,
+      targetLanguage: 'zh-CN',
+      status: 'queued',
+      model: 'gpt-test',
+      configFingerprint: 'fingerprint-1',
+      segments: [
+        {
+          index: 0,
+          sourceText: 'Article body',
+          translatedText: '',
+          status: 'queued',
+        },
+      ],
+    })
+    const completed = adapter.aiTranslationSessions.updateSession(first.id, {
+      status: 'succeeded',
+      segments: [
+        {
+          index: 0,
+          sourceText: 'Article body',
+          translatedText: '文章正文',
+          status: 'succeeded',
+        },
+      ],
+      runId: 'ai-translate-1',
+      finishedAt: 2000,
+    })
+
+    expect(completed).toMatchObject({
+      id: first.id,
+      entryId: entry.id,
+      status: 'succeeded',
+      targetLanguage: 'zh-CN',
+      runId: 'ai-translate-1',
+      segments: [
+        {
+          index: 0,
+          sourceText: 'Article body',
+          translatedText: '文章正文',
+          status: 'succeeded',
+        },
+      ],
+    })
+    expect(
+      adapter.aiTranslationSessions.getLatestSessionByEntryId(entry.id),
+    ).toMatchObject({
+      id: first.id,
+      status: 'succeeded',
+      segments: [
+        {
+          index: 0,
+          translatedText: '文章正文',
+          status: 'succeeded',
+        },
+      ],
+    })
+  })
+
   it('persists Fever accounts, mappings, and sync state', () => {
     const adapter = createAdapter()
     const feed = makeFeed()

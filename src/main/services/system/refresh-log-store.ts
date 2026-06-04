@@ -1,9 +1,23 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
-import type { RefreshLogEntry } from '../../../shared/types/index'
+import type {
+  RefreshLogEntry,
+  RefreshRunItemResult,
+} from '../../../shared/types/index'
 
 const MAX_REFRESH_LOGS = 60
+
+function normalizeRunItem(item: RefreshRunItemResult): RefreshRunItemResult {
+  const status = item.status === 'failed' ? 'failed' : 'succeeded'
+  return {
+    feedId: String(item.feedId || ''),
+    feedTitle: String(item.feedTitle || ''),
+    status,
+    newEntries: Math.max(0, Number(item.newEntries) || 0),
+    error: item.error ? String(item.error) : undefined,
+  }
+}
 
 function getLogsPath(): string {
   const userDataPath = app.getPath('userData')
@@ -19,6 +33,9 @@ function normalizeEntry(item: RefreshLogEntry): RefreshLogEntry {
     failedFeedTitles: Array.isArray(item.failedFeedTitles)
       ? item.failedFeedTitles.filter((title: string) => !!title)
       : [],
+    items: Array.isArray(item.items)
+      ? item.items.map((runItem) => normalizeRunItem(runItem))
+      : undefined,
   }
 }
 

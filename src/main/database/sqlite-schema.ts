@@ -218,6 +218,31 @@ const MIGRATIONS: Array<{
         ON entry_ai_summary_sessions (entry_id, updated_at DESC);
     `,
   },
+  {
+    version: 7,
+    name: 'entry-ai-translation-sessions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS entry_ai_translation_sessions (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        target_language TEXT NOT NULL,
+        status TEXT NOT NULL,
+        segments_json TEXT NOT NULL DEFAULT '[]',
+        error_code TEXT,
+        error_message TEXT,
+        model TEXT,
+        config_fingerprint TEXT,
+        run_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS entry_ai_translation_sessions_entry_updated_idx
+        ON entry_ai_translation_sessions (entry_id, updated_at DESC);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

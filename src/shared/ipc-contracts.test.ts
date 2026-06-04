@@ -46,6 +46,15 @@ describe('ipc-contracts', () => {
       'entry-1',
     ])
     expect(
+      validateIpcArgs(IPC.AI_TRANSLATION_SESSION_GET, ['entry-1']),
+    ).toEqual(['entry-1'])
+    expect(
+      validateIpcArgs(IPC.AI_TRANSLATION_SESSION_UPDATE, [
+        'session-1',
+        { status: 'running' },
+      ]),
+    ).toEqual(['session-1', { status: 'running' }])
+    expect(
       validateIpcArgs(IPC.TASK_RUN_LIST, [
         { taskName: 'ai.summarize', limit: 10 },
       ]),
