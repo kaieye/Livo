@@ -7,9 +7,7 @@ import {
 import { ingestParsedFeedEntries } from './entry-ingestion-pipeline'
 import { buildEntriesFromParsedItems } from './entry-builder'
 import { enqueueEntryActionEffects } from './entry-action-effects'
-import { getDb } from '../../database'
 import { getActionRules } from '../actions/action-rules-store'
-import { settingsProvider } from '../system/settings-provider'
 import { validateAIConfig } from '../ai/ai-client'
 
 vi.mock('./entry-builder', () => ({

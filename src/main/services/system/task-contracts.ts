@@ -1,4 +1,5 @@
-import type { Feed, FeedViewType } from '../../../shared/types/index'
+import type { ActionEffectType } from '../../../shared/actions'
+import type { Entry, Feed, FeedViewType } from '../../../shared/types/index'
 
 export interface TaskRetryPolicy {
   maxAttempts: number
@@ -21,6 +22,7 @@ export const TASK_NAMES = {
   FEED_BOOTSTRAP_REFRESH: 'feed.bootstrap_refresh',
   VIDEO_DURATION_ENRICH: 'video.duration_enrich',
   ENTRY_FULLTEXT_FETCH: 'entry.fulltext_fetch',
+  ENTRY_ACTION_EFFECT: 'entry.action_effect',
   AI_SUMMARIZE: 'ai.summarize',
   AI_TRANSLATE: 'ai.translate',
   AI_DIGEST_GENERATE: 'ai.digest_generate',
@@ -49,6 +51,12 @@ export interface VideoDurationEnrichTaskPayload {
 export interface EntryFulltextFetchTaskPayload {
   entryId?: string
   url: string
+}
+
+export interface EntryActionEffectTaskPayload {
+  entry: Entry
+  feed: Feed
+  effects: ActionEffectType[]
 }
 
 export interface AiDigestGenerateTaskPayload {
@@ -116,6 +124,16 @@ export const ENTRY_FULLTEXT_FETCH_TASK: TaskContract<EntryFulltextFetchTaskPaylo
     concurrency: 2,
     dedupeKey: (payload) => payload.entryId || payload.url,
     timeoutMs: 180000,
+    retry: { maxAttempts: 1 },
+  }
+
+export const ENTRY_ACTION_EFFECT_TASK: TaskContract<EntryActionEffectTaskPayload> =
+  {
+    name: TASK_NAMES.ENTRY_ACTION_EFFECT,
+    concurrency: 2,
+    dedupeKey: (payload) =>
+      `${payload.entry.id}:${payload.effects.slice().sort().join(',')}`,
+    timeoutMs: 300000,
     retry: { maxAttempts: 1 },
   }
 

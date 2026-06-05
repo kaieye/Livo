@@ -15,6 +15,7 @@ import {
   sendToAllWindows,
   type AIDigestGenerateInput,
 } from '../services/ai/ai-pipeline'
+import { translateEntrySegments } from '../services/ai/ai-translation'
 import {
   AI_DIGEST_GENERATE_TASK,
   AI_SUMMARIZE_TASK,
@@ -266,6 +267,10 @@ export function registerAIHandlers(): void {
       }
     },
   )
+
+  registerChannel(IPC.AI_TRANSLATE_ENTRY_SEGMENTS, async (_event, input) => {
+    return translateEntrySegments(input)
+  })
 
   // AI Chat (non-streaming)
   registerChannel(

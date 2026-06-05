@@ -9,8 +9,12 @@ import { subscribeFeed } from '../services/feed/feed-subscriber'
 import {
   bootstrapFeedEntries,
   queueBootstrapRefresh,
+  refreshAllFeeds as refreshAllFeedsTask,
+  refreshSingleFeed,
+  type RefreshAllResult as FeedRefreshAllResult,
+  type RefreshOptions,
+  type RefreshProgressEvent,
 } from '../services/feed/feed-refresh'
-import { refreshSingleFeed } from '../services/feed/feed-refresh'
 import { queueVideoDurationEnrich } from '../services/video/video-duration'
 import {
   inferDiscoverFeedViewFromUrl,
@@ -145,49 +149,33 @@ export function removeFeed(
   return { feed, entryCount: entries.length }
 }
 
-export interface RefreshAllResult {
-  total: number
-  success: number
-  failed: number
+export interface RefreshFeedResult {
+  feed: Feed
   newEntries: number
-  /**
-   * Called per-feed with progress updates. Omit for Agent tools.
-   */
-  onProgress?: (feedId: string, newCount: number, error?: string) => void
+  unreadCount: number
 }
 
-/** Refresh all feeds with concurrency control. */
+/** Refresh a single Feed and return the state needed by UI/Agent adapters. */
+export async function refreshFeed(
+  feedId: string,
+): Promise<RefreshFeedResult | null> {
+  const feed = getDb().feeds.getFeedById(feedId)
+  if (!feed) return null
+
+  const newEntries = await refreshSingleFeed(feed, { force: true })
+  const refreshedFeed = getDb().feeds.getFeedById(feedId) ?? feed
+  const unreadCount = getDb().entries.getUnreadCount(feedId)
+
+  return { feed: refreshedFeed, newEntries, unreadCount }
+}
+
+export type RefreshAllFeedsInput = RefreshOptions & {
+  onProgress?: (event: RefreshProgressEvent) => void
+}
+
+/** Refresh all Feeds through the shared Task Runner backed refresh Module. */
 export async function refreshAllFeeds(
-  result: RefreshAllResult,
-): Promise<RefreshAllResult> {
-  const feeds = getDb().feeds.getAllFeeds()
-  if (feeds.length === 0)
-    return { total: 0, success: 0, failed: 0, newEntries: 0 }
-
-  let success = 0
-  let failed = 0
-  let newTotal = 0
-  const CONCURRENCY = 6
-  const queue = [...feeds]
-
-  const worker = async () => {
-    while (queue.length > 0) {
-      const feed = queue.shift()!
-      try {
-        const newCount = await refreshSingleFeed(feed, { force: true })
-        newTotal += newCount
-        success += 1
-        result.onProgress?.(feed.id, newCount)
-      } catch (err) {
-        failed += 1
-        result.onProgress?.(feed.id, 0, String(err))
-      }
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker),
-  )
-
-  return { total: feeds.length, success, failed, newEntries: newTotal }
+  input: RefreshAllFeedsInput = {},
+): Promise<FeedRefreshAllResult & { runId: string }> {
+  return refreshAllFeedsTask(input)
 }

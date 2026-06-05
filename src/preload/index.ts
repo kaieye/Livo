@@ -20,6 +20,8 @@ import type {
   DiscoverFeedPreviewResult,
   AISemanticFilterInput,
   AISemanticFilterResult,
+  AITranslateEntrySegmentsInput,
+  AITranslateEntrySegmentsResult,
   AIDigestGenerateResult,
   AIDigestRun,
   AIDigestPreset,
@@ -129,6 +131,10 @@ const api = {
       invokeIpc(IPC.AI_SUMMARY_SESSION_GET, entryId),
     translate: (content: string, targetLanguage: string, requestId?: string) =>
       invokeIpc(IPC.AI_TRANSLATE, content, targetLanguage, requestId),
+    translateEntrySegments: (
+      input: AITranslateEntrySegmentsInput,
+    ): Promise<AITranslateEntrySegmentsResult> =>
+      invokeIpc(IPC.AI_TRANSLATE_ENTRY_SEGMENTS, input),
     getTranslationSession: (
       entryId: string,
     ): Promise<EntryAITranslationSession | null> =>

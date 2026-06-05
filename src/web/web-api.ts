@@ -20,6 +20,8 @@ import type {
   DiscoverFeedPreviewResult,
   AISemanticFilterInput,
   AISemanticFilterResult,
+  AITranslateEntrySegmentsInput,
+  AITranslateEntrySegmentsResult,
   AIDigestCandidate,
   AIDigestGenerateResult,
   AIDigestPreset,
@@ -38,7 +40,7 @@ import {
   decodeBasicHtmlEntities,
   extractTwitterDisplayNameFromText,
   isGenericTwitterTitle,
-} from '../main/services/discovery/discover-helpers'
+} from '../shared/discover-helpers'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
 import { resolveProfileUrlToCandidates } from '../shared/profile-resolver'
@@ -1756,6 +1758,123 @@ export function createWebAPI(): ElectronAPI {
         } catch (error) {
           return { success: false, error: String(error) }
         }
+      },
+
+      translateEntrySegments: async (
+        input: AITranslateEntrySegmentsInput,
+      ): Promise<AITranslateEntrySegmentsResult> => {
+        const entryId = input.entryId.trim()
+        const targetLanguage = input.targetLanguage.trim() || 'zh-CN'
+        if (!entryId) return { success: false, error: 'entry_id_required' }
+        if (input.paragraphs.length === 0) {
+          return { success: false, error: 'empty_content' }
+        }
+
+        const now = Date.now()
+        const shouldTranslateParagraph = (paragraph: string) =>
+          paragraph.replace(/<[^>]*>/g, '').trim().length >= 5
+        let session =
+          Array.from(webTranslationSessions.values())
+            .filter(
+              (item) =>
+                item.entryId === entryId &&
+                item.targetLanguage === targetLanguage &&
+                item.segments.length === input.paragraphs.length &&
+                item.segments.every(
+                  (segment, index) =>
+                    segment.sourceText === input.paragraphs[index],
+                ),
+            )
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0] || null
+
+        const buildSegments = (
+          translatedParagraphs: string[],
+          errorMap: Record<number, string>,
+        ): EntryAITranslationSegment[] =>
+          input.paragraphs.map((paragraph, index) => {
+            const errorMessage = errorMap[index]
+            const translatedText = translatedParagraphs[index] ?? ''
+            return {
+              index,
+              sourceText: paragraph,
+              translatedText,
+              status: !shouldTranslateParagraph(paragraph)
+                ? 'skipped'
+                : errorMessage
+                  ? 'failed'
+                  : translatedText
+                    ? 'succeeded'
+                    : 'queued',
+              errorMessage,
+            }
+          })
+
+        const translatedParagraphs: string[] = []
+        const errorMap: Record<number, string> = {}
+        if (session) {
+          for (const segment of session.segments) {
+            translatedParagraphs[segment.index] = segment.translatedText || ''
+            if (segment.status === 'failed' && segment.errorMessage) {
+              errorMap[segment.index] = segment.errorMessage
+            }
+          }
+        } else {
+          session = {
+            id: `web-ai-translation-${entryId}-${now}`,
+            entryId,
+            targetLanguage,
+            status: 'running',
+            segments: buildSegments(translatedParagraphs, errorMap),
+            model: undefined,
+            configFingerprint: undefined,
+            createdAt: now,
+            updatedAt: now,
+          }
+          webTranslationSessions.set(session.id, session)
+        }
+
+        const requestedIndexes =
+          input.indexes && input.indexes.length > 0
+            ? new Set(input.indexes)
+            : null
+        const targets = input.paragraphs
+          .map((paragraph, index) => ({ paragraph, index }))
+          .filter(({ paragraph, index }) => {
+            if (requestedIndexes && !requestedIndexes.has(index)) return false
+            return shouldTranslateParagraph(paragraph)
+          })
+
+        for (const target of targets) {
+          try {
+            translatedParagraphs[target.index] = ''
+            delete errorMap[target.index]
+            const result = await callAI(
+              [
+                {
+                  role: 'system',
+                  content: `Translate the following content to ${targetLanguage}. Preserve meaning and formatting where possible. Return only the translation.`,
+                },
+                { role: 'user', content: target.paragraph },
+              ],
+              { temperature: 0.2, max_tokens: 4000 },
+            )
+            translatedParagraphs[target.index] = result.content
+          } catch (error) {
+            errorMap[target.index] = String(error)
+          }
+        }
+
+        const hasErrors = Object.keys(errorMap).length > 0
+        const next: EntryAITranslationSession = {
+          ...session,
+          status: hasErrors ? 'failed' : 'succeeded',
+          segments: buildSegments(translatedParagraphs, errorMap),
+          errorMessage: hasErrors ? '部分段落翻译失败' : undefined,
+          updatedAt: Date.now(),
+          finishedAt: Date.now(),
+        }
+        webTranslationSessions.set(next.id, next)
+        return { success: true, session: next, translatedParagraphs, errorMap }
       },
 
       getTranslationSession: async (entryId: string) => {

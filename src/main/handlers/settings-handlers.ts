@@ -1,7 +1,6 @@
 import { registerChannel } from '../ipc/register-channel'
 import { IPC, type AppSettings } from '../../shared/types'
 import { mergeSettings } from '../../shared/settings'
-import { applyProxySettings } from '../services/system/proxy'
 import { settingsProvider } from '../services/system/settings-provider'
 
 /** @deprecated Use `settingsProvider.get()` instead. */

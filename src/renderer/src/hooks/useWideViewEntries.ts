@@ -1,10 +1,8 @@
 import { useMemo } from 'react'
 
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
-import {
-  buildWideViewBaseEntries,
-  buildWideViewEntryModel,
-} from '../lib/wide-view-entry-model'
+import { buildEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
+import { buildWideViewEntryModel } from '../lib/wide-view-entry-model'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { useAsyncSocialDedupe } from './useAsyncSocialDedupe'
 
@@ -27,7 +25,7 @@ export function useWideViewEntries({
 }) {
   const baseFilteredEntries = useMemo(
     () =>
-      buildWideViewBaseEntries({
+      buildEntryReadingSurfaceScopeModel({
         entries,
         feeds,
         feedById,
@@ -35,7 +33,7 @@ export function useWideViewEntries({
         selectedFeedId,
         showRecommended,
         recommendedCategory: RECOMMENDED_CATEGORY,
-      }),
+      }).scopedEntries,
     [activeView, entries, feedById, feeds, selectedFeedId, showRecommended],
   )
 
@@ -56,12 +54,14 @@ export function useWideViewEntries({
         feedById,
         isLoading,
         isSocialDedupeProcessing,
+        allowStaleEntriesWhileLoading: !selectedFeedId,
       }),
     [
       entries,
       feedById,
       isLoading,
       isSocialDedupeProcessing,
+      selectedFeedId,
       viewFilteredEntries,
     ],
   )

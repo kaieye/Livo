@@ -1,5 +1,7 @@
 export * from './types'
 export * from './view-models'
+export * from './discover-helpers'
+export * from './rsshub-url'
 export * from './agent'
 export * from './model-mappers'
 export * from './actions'

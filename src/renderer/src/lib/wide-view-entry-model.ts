@@ -1,4 +1,8 @@
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
+import {
+  buildEntryReadingSurfaceRenderModel,
+  buildEntryReadingSurfaceScopeModel,
+} from './entry-reading-surface-model'
 
 export interface TimelineFeedMeta {
   title?: string
@@ -32,46 +36,7 @@ export function buildWideViewBaseEntries(input: {
   showRecommended: boolean
   recommendedCategory: string
 }): Entry[] {
-  const recommendedFeedIds = new Set(
-    input.feeds
-      .filter((feed) => feed.category === input.recommendedCategory)
-      .map((feed) => feed.id),
-  )
-
-  const shouldRenderInAllScope = (entry: Entry): boolean => {
-    const feed = input.feedById.get(entry.feedId)
-    if (!feed) return false
-    if (feed.showInAll === false) return false
-    if (!input.showRecommended && recommendedFeedIds.has(entry.feedId)) {
-      return false
-    }
-    return true
-  }
-
-  if (input.selectedFeedId) {
-    if (input.selectedFeedId === 'starred') return input.entries
-    return input.entries.filter(
-      (entry) => entry.feedId === input.selectedFeedId,
-    )
-  }
-
-  if (input.activeView !== null) {
-    return input.entries.filter((entry) => {
-      const feed = input.feedById.get(entry.feedId)
-      if (!feed) return false
-      if (!shouldRenderInAllScope(entry)) return false
-      return (feed.view ?? FeedViewType.Articles) === input.activeView
-    })
-  }
-
-  const filtered = input.entries.filter(shouldRenderInAllScope)
-
-  // 全部视图加载中可能保留旧条目；这里保持原有兜底路径，避免列表闪空。
-  if (input.entries.length > 0 && filtered.length === 0) {
-    return input.entries.filter(shouldRenderInAllScope)
-  }
-
-  return filtered
+  return buildEntryReadingSurfaceScopeModel(input).scopedEntries
 }
 
 export function buildWideViewEntryModel(input: {
@@ -80,20 +45,23 @@ export function buildWideViewEntryModel(input: {
   feedById: Map<string, Feed>
   isLoading: boolean
   isSocialDedupeProcessing: boolean
+  allowStaleEntriesWhileLoading?: boolean
 }): WideViewEntryModel {
-  const hasStaleEntriesWhileLoading =
-    (input.isLoading || input.isSocialDedupeProcessing) &&
-    input.viewFilteredEntries.length === 0 &&
-    input.entries.length > 0
-  const renderEntries = hasStaleEntriesWhileLoading
-    ? input.entries
-    : input.viewFilteredEntries
+  const { renderEntries, shouldShowLoadingSkeleton } =
+    buildEntryReadingSurfaceRenderModel({
+      sourceEntries: input.entries,
+      scopedEntries: input.viewFilteredEntries,
+      isLoading: input.isLoading,
+      isPostProcessing: input.isSocialDedupeProcessing,
+      allowStaleEntriesWhileLoading:
+        input.allowStaleEntriesWhileLoading ?? true,
+    })
   const timelineEntries = renderEntries
 
   return {
     renderEntries,
     timelineEntries,
-    shouldShowLoadingSkeleton: input.isLoading && renderEntries.length === 0,
+    shouldShowLoadingSkeleton,
     timelineIndexById: new Map(
       timelineEntries.map((entry, index) => [entry.id, index] as const),
     ),

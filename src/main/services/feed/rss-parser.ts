@@ -3,10 +3,7 @@ import https from 'https'
 import http from 'http'
 import { session } from 'electron'
 import { fetchBilibiliDynamicFeedFromOfficialApi } from '../bilibili/bilibili-dynamic'
-import {
-  isMirrorHost,
-  isInstagramUserFeedUrl,
-} from '../../../shared/url-detect'
+import { isMirrorHost } from '../../../shared/url-detect'
 import {
   fetchBilibiliVideoFeedFromSpacePage,
   mapParsedDynamicFeedToVideoFeed,

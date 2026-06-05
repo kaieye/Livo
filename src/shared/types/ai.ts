@@ -127,6 +127,26 @@ export interface EntryAITranslationSession {
   finishedAt?: number
 }
 
+export interface AITranslateEntrySegmentsInput {
+  entryId: string
+  paragraphs: string[]
+  targetLanguage: string
+  indexes?: number[]
+}
+
+export type AITranslateEntrySegmentsResult =
+  | {
+      success: true
+      session: EntryAITranslationSession
+      translatedParagraphs: string[]
+      errorMap: Record<number, string>
+    }
+  | {
+      success: false
+      error: string
+      session?: EntryAITranslationSession
+    }
+
 export type AISummaryEntryResult =
   | {
       success: true

@@ -6,8 +6,12 @@ import type {
   Feed,
 } from '../../../shared/types'
 import { getDb } from '../../database'
-import { refreshSingleFeed } from '../../services/feed/feed-refresh'
-import { addFeed } from '../../operations/feed-operations'
+import {
+  addFeed,
+  refreshAllFeeds,
+  refreshFeed,
+  removeFeed,
+} from '../../operations/feed-operations'
 import { clampLimit, emptyParams, objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
@@ -150,23 +154,21 @@ export function buildRemoveSubscriptionTool(): AgentTool {
       args: AgentToolArgs,
     ): Promise<AgentToolResult> => {
       const feedId = String(args['feedId']).trim()
-      const feed = getDb().feeds.getFeedById(feedId)
-      if (!feed) {
+      const result = removeFeed(feedId)
+      if (!result) {
         return {
           status: 'failed',
           message: `未找到 ID 为 "${feedId}" 的订阅源`,
         }
       }
-      const { entries } = getDb().entries.getEntries({
-        feedId,
-        limit: 1,
-        skipDedupe: true,
-      })
-      getDb().feeds.deleteFeed(feedId)
       return {
         status: 'success',
-        message: `已删除订阅源「${feed.title}」及其本地文章`,
-        data: { feedId, title: feed.title, hadEntries: entries.length > 0 },
+        message: `已删除订阅源「${result.feed.title}」及其本地文章`,
+        data: {
+          feedId,
+          title: result.feed.title,
+          hadEntries: result.entryCount > 0,
+        },
       }
     },
   }
@@ -190,18 +192,17 @@ export function buildRefreshSubscriptionTool(): AgentTool {
       args: AgentToolArgs,
     ): Promise<AgentToolResult> => {
       const feedId = String(args['feedId']).trim()
-      const feed = getDb().feeds.getFeedById(feedId)
-      if (!feed) {
+      const result = await refreshFeed(feedId)
+      if (!result) {
         return {
           status: 'failed',
           message: `未找到 ID 为 "${feedId}" 的订阅源`,
         }
       }
-      const newCount = await refreshSingleFeed(feed, { force: true })
       return {
         status: 'success',
-        message: `已刷新「${feed.title}」，新增 ${newCount} 篇文章`,
-        data: { feedId, newEntries: newCount },
+        message: `已刷新「${result.feed.title}」，新增 ${result.newEntries} 篇文章`,
+        data: { feedId, newEntries: result.newEntries },
       }
     },
   })
@@ -218,34 +219,25 @@ export function buildRefreshAllSubscriptionsTool(): AgentTool {
     confirmationMessage:
       '将访问所有订阅源网络地址并写入最新文章、抓取状态和刷新日志。',
     execute: async (): Promise<AgentToolResult> => {
-      const feeds = getDb().feeds.getAllFeeds()
-      if (feeds.length === 0) {
+      const result = await refreshAllFeeds({ force: true })
+      if (result.totalFeeds === 0) {
         return { status: 'success', message: '当前没有可刷新的订阅源。' }
       }
-      let success = 0
-      let failed = 0
-      let newTotal = 0
-      const CONCURRENCY = 6
-      const queue = [...feeds]
-      const worker = async () => {
-        while (queue.length > 0) {
-          const feed = queue.shift()!
-          try {
-            newTotal += await refreshSingleFeed(feed, { force: true })
-            success += 1
-          } catch {
-            failed += 1
-          }
-        }
-      }
-      await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker),
-      )
-      const failedSuffix = failed > 0 ? `，失败 ${failed} 个` : ''
+      const failedSuffix =
+        result.failedCount > 0 ? `，失败 ${result.failedCount} 个` : ''
       return {
-        status: failed > 0 && success === 0 ? 'failed' : 'success',
-        message: `已刷新 ${feeds.length} 个订阅源：成功 ${success} 个${failedSuffix}，共新增 ${newTotal} 篇文章`,
-        data: { total: feeds.length, success, failed, newEntries: newTotal },
+        status:
+          result.failedCount > 0 && result.refreshedCount === 0
+            ? 'failed'
+            : 'success',
+        message: `已刷新 ${result.totalFeeds} 个订阅源：成功 ${result.refreshedCount} 个${failedSuffix}，共新增 ${result.totalNewEntries} 篇文章`,
+        data: {
+          total: result.totalFeeds,
+          success: result.refreshedCount,
+          failed: result.failedCount,
+          newEntries: result.totalNewEntries,
+          runId: result.runId,
+        },
       }
     },
   })

@@ -60,6 +60,7 @@ import {
   resolveEntryBrowserOpenUrl,
 } from '../../lib/social-entry-utils'
 import { buildEntryListDerivedModel } from '../../lib/entry-list-model'
+import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
 import {
   advanceCardImageFallback,
   findRelatedSocialEntryFallback,
@@ -230,17 +231,24 @@ export function EntryList({ width }: { width?: number }) {
     cacheKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`,
   })
 
-  // Only reuse stale entries in broad scopes (all/view-wide).
-  // For a concrete feed selection, showing previous-scope entries causes a visible flash.
-  const allowStaleEntriesWhileLoading = !selectedFeedId
-  const hasStaleEntriesWhileLoading =
-    allowStaleEntriesWhileLoading &&
-    (isLoading || isSocialDedupeProcessing) &&
-    viewFilteredEntries.length === 0 &&
-    entries.length > 0
-  const baseRenderEntries = hasStaleEntriesWhileLoading
-    ? entries
-    : viewFilteredEntries
+  const { renderEntries: baseRenderEntries, hasStaleEntriesWhileLoading } =
+    useMemo(
+      () =>
+        buildEntryReadingSurfaceRenderModel({
+          sourceEntries: entries,
+          scopedEntries: viewFilteredEntries,
+          isLoading,
+          isPostProcessing: isSocialDedupeProcessing,
+          allowStaleEntriesWhileLoading: !selectedFeedId,
+        }),
+      [
+        entries,
+        isLoading,
+        isSocialDedupeProcessing,
+        selectedFeedId,
+        viewFilteredEntries,
+      ],
+    )
   const isGridMode = viewDef?.gridMode ?? false
   const listScrollRef = useRef<HTMLDivElement>(null)
   const lastScrollScopeRef = useRef<string>('')

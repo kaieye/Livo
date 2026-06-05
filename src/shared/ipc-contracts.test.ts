@@ -55,6 +55,21 @@ describe('ipc-contracts', () => {
       ]),
     ).toEqual(['session-1', { status: 'running' }])
     expect(
+      validateIpcArgs(IPC.AI_TRANSLATE_ENTRY_SEGMENTS, [
+        {
+          entryId: 'entry-1',
+          paragraphs: ['hello'],
+          targetLanguage: 'zh-CN',
+        },
+      ]),
+    ).toEqual([
+      {
+        entryId: 'entry-1',
+        paragraphs: ['hello'],
+        targetLanguage: 'zh-CN',
+      },
+    ])
+    expect(
       validateIpcArgs(IPC.TASK_RUN_LIST, [
         { taskName: 'ai.summarize', limit: 10 },
       ]),

@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, type UIEvent } from 'react'
 import { useEntryStore } from '../store/entry-store'
 import { useFeedStore } from '../store/feed-store'
 import { useGeneralSettingKey } from '../store/settings-store'
-import { FeedViewType } from '../../../shared/types'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
 import {
@@ -10,6 +9,7 @@ import {
   buildHomeFeedLoadOptions,
   computeViewFeedIds,
 } from '../lib/home-feed-scope'
+import { buildEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
@@ -181,11 +181,24 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     [search, searchQuery],
   )
 
-  const feedById = useMemo(
-    () => new Map(feeds.map((f) => [f.id, f] as const)),
-    [feeds],
+  const readingSurfaceScope = useMemo(
+    () =>
+      buildEntryReadingSurfaceScopeModel({
+        entries,
+        feeds,
+        activeView,
+        selectedFeedId,
+        showRecommended,
+        recommendedCategory: RECOMMENDED_CATEGORY,
+      }),
+    [activeView, entries, feeds, selectedFeedId, showRecommended],
   )
-  const currentFeed = selectedFeedId ? feedById.get(selectedFeedId) : undefined
+  const {
+    feedById,
+    currentFeed,
+    recommendedFeedIds,
+    scopedEntries: baseFilteredEntries,
+  } = readingSurfaceScope
 
   const reloadCurrentList = useCallback(() => {
     void loadCurrentSnapshot()
@@ -219,68 +232,6 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     refreshMultiple,
     refreshAll,
     reloadCurrentListFresh,
-  ])
-
-  // Build a set of recommended feed IDs so we can exclude their entries
-  const recommendedFeedIds = useMemo(
-    () =>
-      new Set(
-        feeds
-          .filter((f) => f.category === RECOMMENDED_CATEGORY)
-          .map((f) => f.id),
-      ),
-    [feeds],
-  )
-  const receiveRecommended = showRecommended
-
-  // Filter entries by active view (when showing all feeds) - exclude recommended feeds
-  const baseFilteredEntries = useMemo(() => {
-    const filtered = selectedFeedId
-      ? entries
-      : activeView !== null
-        ? entries.filter((entry) => {
-            const feed = feedById.get(entry.feedId)
-            if (!feed) return false
-            if (feed.showInAll === false) return false
-            if (!receiveRecommended && recommendedFeedIds.has(entry.feedId))
-              return false
-            return (feed.view ?? FeedViewType.Articles) === activeView
-          })
-        : entries.filter((entry) => {
-            const feed = feedById.get(entry.feedId)
-            if (!feed) return false
-            if (feed.showInAll === false) return false
-            if (!receiveRecommended && recommendedFeedIds.has(entry.feedId))
-              return false
-            return true
-          })
-
-    // Safety fallback: in "All" view, if filters accidentally remove everything
-    // while entries already exist, show raw entries to avoid blank timeline.
-    let finalFiltered = filtered
-    if (
-      !selectedFeedId &&
-      activeView === null &&
-      entries.length > 0 &&
-      filtered.length === 0
-    ) {
-      finalFiltered = entries.filter((entry) => {
-        const feed = feedById.get(entry.feedId)
-        if (!feed) return false
-        if (feed.showInAll === false) return false
-        if (!receiveRecommended && recommendedFeedIds.has(entry.feedId))
-          return false
-        return true
-      })
-    }
-    return finalFiltered
-  }, [
-    activeView,
-    entries,
-    feedById,
-    receiveRecommended,
-    recommendedFeedIds,
-    selectedFeedId,
   ])
 
   // Progressive grid rendering state

@@ -7,10 +7,7 @@ import type {
   AIConfig,
 } from '../../../shared/types'
 import { AI_PROVIDERS } from '../../../shared/types'
-import {
-  getSettings,
-  applySettingsUpdate,
-} from '../../handlers/settings-handlers'
+import { applySettingsUpdate } from '../../handlers/settings-handlers'
 import { emptyParams, objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 

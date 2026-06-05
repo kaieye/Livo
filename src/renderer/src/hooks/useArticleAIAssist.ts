@@ -111,7 +111,7 @@ export function useArticleAIAssist(
     retrySegment: retryTranslationSegmentRaw,
     toggle: toggleTranslation,
     reset: resetTranslation,
-  } = useAITranslation()
+  } = useAITranslation({ entryId })
 
   // Reset all AI state whenever the active entry changes.
   useEffect(() => {

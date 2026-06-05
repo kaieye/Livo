@@ -1,6 +1,5 @@
 import type { Entry } from '../../../shared/types'
 import {
-  extractInstagramAssetId,
   extractInstagramAssetIdFromEntry,
   isPicnobMirrorHost,
 } from './entry-media-url'

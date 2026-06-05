@@ -1,7 +1,7 @@
 import { dialog } from 'electron'
 import { getEventBus } from '../services/system/event-bus'
 import { v4 as uuidv4 } from 'uuid'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import {
   IPC,
   FeedViewType,
@@ -11,34 +11,21 @@ import {
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
 import { fetchAndParseFeed } from '../services/feed/rss-parser'
-import {
-  refreshAllFeeds,
-  refreshSingleFeed,
-  withTimeout,
-  getInitialFetchTimeoutMs,
-  bootstrapFeedEntries,
-  queueBootstrapRefresh,
-} from '../services/feed/feed-refresh'
+import { refreshSingleFeed } from '../services/feed/feed-refresh'
 import { getSettings } from './settings-handlers'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../shared/discover-data'
-import { parseOPML, generateOPML } from '../services/feed/opml-parser'
+import { parseOPML } from '../services/feed/opml-parser'
 import { getFeedImageUrl } from '../services/feed/feed-utils'
-import { queueVideoDurationEnrich } from '../services/video/video-duration'
 import {
   getAppCacheDirectoryPath,
   getDirectorySize,
 } from '../services/system/app-shell'
 import {
   canonicalizeInstagramFeedUrl,
-  ensureInstagramUserFeedLimit,
-  ensureTwitterUserFeedLimit,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from '../services/feed/rsshub-url'
-import {
-  resolveFeedAvatar,
-  getImmediateFeedAvatar,
-} from '../services/feed/feed-avatar'
+import { resolveFeedAvatar } from '../services/feed/feed-avatar'
 import {
   loadRefreshLogs,
   clearRefreshLogs,
@@ -46,12 +33,13 @@ import {
 import { formatFeedTitle } from '../services/feed/feed-title'
 import { buildEntriesFromParsedItems } from '../services/entry/entry-builder'
 import { detectViewType } from '../services/feed/feed-view'
-import {
-  inferDiscoverFeedViewFromUrl,
-  getWarmupStrategy,
-} from '../../shared/subscription-intake'
 import { getDb } from '../database'
-import { addFeed } from '../operations/feed-operations'
+import {
+  addFeed,
+  refreshAllFeeds,
+  refreshFeed,
+  removeFeed as removeFeedOperation,
+} from '../operations/feed-operations'
 import { exportOPML } from '../operations/data-operations'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
@@ -88,8 +76,8 @@ export function registerFeedHandlers(): void {
 
   // Remove a feed
   registerChannel(IPC.FEED_REMOVE, (_event, feedId: string) => {
-    getDb().feeds.deleteFeed(feedId)
-    return { success: true }
+    const result = removeFeedOperation(feedId)
+    return { success: !!result }
   })
 
   // List all feeds with unread counts
@@ -107,19 +95,14 @@ export function registerFeedHandlers(): void {
 
   // Refresh a single feed
   registerChannel(IPC.FEED_REFRESH, async (_event, feedId: string) => {
-    const feeds = getDb().feeds.getAllFeeds()
-    const feed = feeds.find((f) => f.id === feedId)
-    if (!feed) return { success: false, error: 'Feed not found' }
-
     try {
-      const newCount = await refreshSingleFeed(feed, { force: true })
-      const refreshedFeed = getDb().feeds.getFeedById(feedId)
-      const unreadCount = getDb().entries.getUnreadCountMap().get(feedId) || 0
+      const result = await refreshFeed(feedId)
+      if (!result) return { success: false, error: 'Feed not found' }
       return {
         success: true,
-        newEntries: newCount,
-        feed: refreshedFeed ? toRendererFeed(refreshedFeed) : undefined,
-        unreadCount,
+        newEntries: result.newEntries,
+        feed: toRendererFeed(result.feed),
+        unreadCount: result.unreadCount,
       }
     } catch (error) {
       return toHandlerError(error)

@@ -1,6 +1,7 @@
 import type {
   AccountProvider,
   AgentChatHistoryMessage,
+  AITranslateEntrySegmentsInput,
   AppSettings,
   DownloadUrlOptions,
   Feed,
@@ -37,6 +38,7 @@ export const IPC = {
   AI_SUMMARIZE_ENTRY: 'ai:summarize-entry',
   AI_SUMMARY_SESSION_GET: 'ai:summary-session-get',
   AI_TRANSLATE: 'ai:translate',
+  AI_TRANSLATE_ENTRY_SEGMENTS: 'ai:translate-entry-segments',
   AI_TRANSLATION_SESSION_GET: 'ai:translation-session-get',
   AI_TRANSLATION_SESSION_CREATE: 'ai:translation-session-create',
   AI_TRANSLATION_SESSION_UPDATE: 'ai:translation-session-update',
@@ -217,6 +219,7 @@ export type IpcArgsByChannel = {
     targetLanguage: string,
     requestId?: string,
   ]
+  [IPC.AI_TRANSLATE_ENTRY_SEGMENTS]: [input: AITranslateEntrySegmentsInput]
   [IPC.AI_TRANSLATION_SESSION_GET]: [entryId: string]
   [IPC.AI_TRANSLATION_SESSION_CREATE]: [input: Record<string, unknown>]
   [IPC.AI_TRANSLATION_SESSION_UPDATE]: [
@@ -710,6 +713,10 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.AI_TRANSLATE>
     },
   },
+  [IPC.AI_TRANSLATE_ENTRY_SEGMENTS]: oneObject(
+    IPC.AI_TRANSLATE_ENTRY_SEGMENTS,
+    'input',
+  ),
   [IPC.AI_TRANSLATION_SESSION_GET]: oneString(
     IPC.AI_TRANSLATION_SESSION_GET,
     'entryId',
