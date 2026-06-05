@@ -423,6 +423,10 @@ export function Sidebar({ width }: { width?: number }) {
     x: number
     y: number
   } | null>(null)
+  const [blankContextMenu, setBlankContextMenu] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const [editingFeed, setEditingFeed] = useState<{
     id: string
     title: string
@@ -1639,6 +1643,20 @@ export function Sidebar({ width }: { width?: number }) {
     ? isDefaultFolderName(categoryContextMenu.category)
     : false
 
+  // Close context menus on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-context-menu]')) {
+        setContextMenu(null)
+        setCategoryContextMenu(null)
+        setBlankContextMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   return (
     <>
       <aside
@@ -1650,12 +1668,12 @@ export function Sidebar({ width }: { width?: number }) {
         style={{ width: width ?? 260 }}
       >
         {/* Drag region for titlebar */}
-        <div className="drag-region flex h-12 items-end px-4 pb-1">
+        <div className="drag-region flex h-8 items-center justify-center px-4">
           <span className="no-drag text-accent text-base font-bold">Livo</span>
         </div>
 
         {/* View type tabs */}
-        <div className="px-2 pb-1 pt-1">
+        <div className="px-2 pb-1">
           <div className="bg-surface-secondary dark:bg-surface-dark-secondary flex items-center gap-0.5 rounded-lg p-0.5">
             {/* All */}
             <button
@@ -1704,6 +1722,15 @@ export function Sidebar({ width }: { width?: number }) {
         <nav
           ref={navFocusRef}
           tabIndex={-1}
+          onContextMenu={(e) => {
+            // Only show blank menu when right-clicking the nav itself (not a feed/category)
+            if (e.target === e.currentTarget) {
+              e.preventDefault()
+              setBlankContextMenu({ x: e.clientX, y: e.clientY })
+              setContextMenu(null)
+              setCategoryContextMenu(null)
+            }
+          }}
           className={`flex-1 space-y-1 overflow-y-auto px-2 py-2 outline-none transition-shadow duration-300 ${
             isSidebarFocusHighlighted
               ? 'shadow-[inset_0_0_0_2px_rgba(255,92,0,0.55)]'
@@ -1764,55 +1791,6 @@ export function Sidebar({ width }: { width?: number }) {
 
           {/* Feed list by category */}
           <div className="pt-2">
-            {/* New folder button */}
-            {!showNewFolder ? (
-              <button
-                onClick={() => {
-                  setShowNewFolder(true)
-                  setNewFolderName(getDefaultFolderName())
-                }}
-                className="text-text-tertiary hover:text-accent mb-1 flex w-full items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors"
-              >
-                <FolderPlus size={13} />
-                <span>{t('sidebar.newFolder')}</span>
-              </button>
-            ) : (
-              <div className="mb-1 flex items-center gap-1 px-3 py-1">
-                <FolderPlus size={13} className="text-accent flex-shrink-0" />
-                <input
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder={getDefaultFolderName()}
-                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-xs focus:outline-none focus:ring-1"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newFolderName.trim()) {
-                      const name = newFolderName.trim()
-                      if (!userCategories.has(name)) {
-                        setEmptyFolders((prev) => [
-                          ...prev.filter((f) => f.name !== name),
-                          { name, view: activeView },
-                        ])
-                      }
-                      setShowNewFolder(false)
-                    } else if (e.key === 'Escape') {
-                      setShowNewFolder(false)
-                    }
-                  }}
-                  onBlur={() => {
-                    const name = newFolderName.trim()
-                    if (name && !userCategories.has(name)) {
-                      setEmptyFolders((prev) => [
-                        ...prev.filter((f) => f.name !== name),
-                        { name, view: activeView },
-                      ])
-                    }
-                    setShowNewFolder(false)
-                  }}
-                />
-              </div>
-            )}
-
             {/* User feed categories */}
             {categoryEntries.map(([category, categoryFeeds]) => (
               <FeedCategory
@@ -1857,6 +1835,44 @@ export function Sidebar({ width }: { width?: number }) {
                     ),
                   })}
                 </p>
+              </div>
+            )}
+
+            {/* Folder name input — shown after right-click "新建文件夹" */}
+            {showNewFolder && (
+              <div className="border-accent/30 bg-accent/5 dark:bg-accent/10 mt-1 flex items-center gap-1.5 rounded-lg border border-dashed px-2 py-1.5">
+                <FolderPlus size={13} className="text-accent flex-shrink-0" />
+                <input
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder={getDefaultFolderName()}
+                  className="focus:ring-accent dark:border-border-dark dark:bg-surface-dark min-w-0 flex-1 rounded border bg-white px-2 py-0.5 text-xs focus:outline-none focus:ring-1"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newFolderName.trim()) {
+                      const name = newFolderName.trim()
+                      if (!userCategories.has(name)) {
+                        setEmptyFolders((prev) => [
+                          ...prev.filter((f) => f.name !== name),
+                          { name, view: activeView },
+                        ])
+                      }
+                      setShowNewFolder(false)
+                    } else if (e.key === 'Escape') {
+                      setShowNewFolder(false)
+                    }
+                  }}
+                  onBlur={() => {
+                    const name = newFolderName.trim()
+                    if (name && !userCategories.has(name)) {
+                      setEmptyFolders((prev) => [
+                        ...prev.filter((f) => f.name !== name),
+                        { name, view: activeView },
+                      ])
+                    }
+                    setShowNewFolder(false)
+                  }}
+                />
               </div>
             )}
           </div>
@@ -1942,6 +1958,7 @@ export function Sidebar({ width }: { width?: number }) {
       {/* Feed context menu */}
       {contextMenu && (
         <div
+          data-context-menu
           className="dark:bg-surface-dark-secondary fixed z-50 min-w-[160px] rounded-lg border bg-white py-1 shadow-lg"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseLeave={() => setContextMenu(null)}
@@ -2163,6 +2180,7 @@ export function Sidebar({ width }: { width?: number }) {
       {/* Category context menu */}
       {categoryContextMenu && (
         <div
+          data-context-menu
           className="dark:bg-surface-dark-secondary fixed z-50 min-w-[180px] rounded-lg border bg-white py-1 shadow-lg"
           style={{ left: categoryContextMenu.x, top: categoryContextMenu.y }}
           onMouseLeave={() => setCategoryContextMenu(null)}
@@ -2260,6 +2278,28 @@ export function Sidebar({ width }: { width?: number }) {
               {t('sidebar.deleteFolder')}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Blank area context menu — right-click on empty list space */}
+      {blankContextMenu && (
+        <div
+          data-context-menu
+          className="dark:bg-surface-dark-secondary fixed z-50 min-w-[160px] rounded-lg border bg-white py-1 shadow-lg"
+          style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+          onMouseLeave={() => setBlankContextMenu(null)}
+        >
+          <button
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+            onClick={() => {
+              setShowNewFolder(true)
+              setNewFolderName(getDefaultFolderName())
+              setBlankContextMenu(null)
+            }}
+          >
+            <FolderPlus size={14} />
+            {t('sidebar.newFolder')}
+          </button>
         </div>
       )}
 
