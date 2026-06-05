@@ -3,7 +3,7 @@ import { FeedViewType, type Feed } from '../../../shared/types'
 import { getDb } from '../../database'
 import { fetchAndParseFeed } from './rss-parser'
 import { buildEntriesFromParsedItems } from '../entry/entry-builder'
-import { resolveFeedAvatar } from './feed-avatar'
+import { getImmediateFeedAvatar, resolveFeedAvatar } from './feed-avatar'
 import { getFeedImageUrl } from './feed-utils'
 import { detectViewType } from './feed-view'
 import { formatFeedTitle } from './feed-title'
@@ -13,6 +13,7 @@ import {
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from './rsshub-url'
+import { getEventBus } from '../system/event-bus'
 import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { inferDiscoverFeedViewFromUrl } from '../../../shared/subscription-intake'
@@ -129,12 +130,12 @@ export async function subscribeFeed(
         (parsed ? detectViewType(parsed) : FeedViewType.Articles))
 
   // ---- Avatar ----
-  const imageUrl = await resolveFeedAvatar(
-    normalizedUrl,
-    parsed ? getFeedImageUrl(parsed) : undefined,
-    undefined,
-    parsed?.link,
-  )
+  // Use immediate/local avatar so the feed appears instantly; defer network
+  // resolution to a background task so it doesn't block the subscribe flow.
+  const immediateImageUrl =
+    (parsed ? getFeedImageUrl(parsed) : undefined) ||
+    getImmediateFeedAvatar(normalizedUrl)
+  const imageUrl = immediateImageUrl
 
   // ---- Feed creation ----
   const id = uuidv4()
@@ -173,6 +174,26 @@ export async function subscribeFeed(
     )
     entriesInserted = getDb().entries.insertEntries(entries)
   }
+
+  // Resolve full avatar asynchronously and update feed when ready.
+  // resolveFeedAvatar short-circuits when a good image is already present,
+  // so this is effectively a no-op for feeds that shipped with a parsed image.
+  void (async () => {
+    try {
+      const resolved = await resolveFeedAvatar(
+        normalizedUrl,
+        parsed ? getFeedImageUrl(parsed) : undefined,
+        undefined,
+        parsed?.link,
+      )
+      if (resolved && resolved !== immediateImageUrl) {
+        getDb().feeds.updateFeed(id, { imageUrl: resolved })
+        getEventBus().send('feeds:updated', { feedId: id })
+      }
+    } catch {
+      // Best-effort; feed works without avatar.
+    }
+  })()
 
   return {
     feedId: id,
