@@ -5,7 +5,6 @@ import { useStoreShallow } from '../store/helpers'
 import { useEntryStore } from '../store/entry-store'
 import { useAIChatStore } from '../store/ai-chat-store'
 import { useQuickSearchStore } from '../components/search/QuickSearch'
-import { useShortcutHelpStore } from '../components/shortcuts/shortcut-help-store'
 import { useCommandPaletteStore } from '../components/command/CommandPalette'
 import {
   handleRegisteredShortcutEvent,
@@ -27,6 +26,7 @@ export function GlobalShortcutsProvider({ children }: PropsWithChildren) {
   const { setSettingsOpen } = useStoreShallow(useSettingsStore, (state) => ({
     setSettingsOpen: state.setOpen,
   }))
+  const setSettingsActiveTab = useSettingsStore((state) => state.setActiveTab)
   const { setDiscoverOpen } = useStoreShallow(useDiscoverStore, (state) => ({
     setDiscoverOpen: state.setOpen,
   }))
@@ -37,11 +37,6 @@ export function GlobalShortcutsProvider({ children }: PropsWithChildren) {
     useCommandPaletteStore,
     (state) => ({ toggleCommandPalette: state.toggle }),
   )
-  const { toggleShortcutHelp } = useStoreShallow(
-    useShortcutHelpStore,
-    (state) => ({ toggleShortcutHelp: state.toggle }),
-  )
-
   useEffect(() => {
     const unregisterLayoutCommands = registerLayoutCommands()
     const unregisterSearch = registerCommand({
@@ -70,7 +65,8 @@ export function GlobalShortcutsProvider({ children }: PropsWithChildren) {
       handler: (event) => {
         if (isEditableTarget(event.target)) return false
         event.preventDefault()
-        toggleShortcutHelp()
+        setSettingsActiveTab('shortcuts')
+        setSettingsOpen(true)
       },
     })
     const unregisterSettings = registerCommand({
@@ -190,10 +186,10 @@ export function GlobalShortcutsProvider({ children }: PropsWithChildren) {
     }
   }, [
     setDiscoverOpen,
+    setSettingsActiveTab,
     setSettingsOpen,
     toggleCommandPalette,
     toggleSearch,
-    toggleShortcutHelp,
   ])
 
   return children

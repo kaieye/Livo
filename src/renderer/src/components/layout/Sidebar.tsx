@@ -4,8 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useSettingsStore } from '../../store/settings-store'
-import { ImportProgressModal } from '../feed/ImportProgressModal'
-import { OpmlImportProgress } from '../settings/OpmlImportProgress'
 import {
   FeedViewType,
   VIEW_DEFINITIONS,
@@ -36,15 +34,12 @@ import {
   MessageSquare,
   Edit3,
   X as XIcon,
-  Upload,
-  Download,
   FileText,
   MessageCircle,
   Image,
   Play,
   LayoutGrid,
   Compass,
-  Keyboard,
   Search,
   Sparkles,
   FolderPlus,
@@ -52,6 +47,7 @@ import {
   Link,
   Pencil,
   AlertTriangle,
+  User,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAIChatStore } from '../../store/ai-chat-store'
@@ -59,7 +55,6 @@ import { useDiscoverStore } from '../../store/discover-store'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useQuickSearchStore } from '../search/QuickSearch'
-import { useShortcutHelpStore } from '../shortcuts/shortcut-help-store'
 import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 
 const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
@@ -341,10 +336,6 @@ export function Sidebar({ width }: { width?: number }) {
     isRefreshing,
     removeFeed,
     updateFeed,
-    importOPML,
-    exportOPML,
-    refreshImportedFeeds,
-    importRefreshProgress,
   } = useFeedStore()
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
@@ -412,10 +403,6 @@ export function Sidebar({ width }: { width?: number }) {
   const isDigestRoute = location.pathname === '/digest'
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
   const isSearchOpen = useQuickSearchStore((s) => s.isOpen)
-  const toggleShortcutHelp = useShortcutHelpStore((s) => s.toggle)
-  const [isImporting, setIsImporting] = useState(false)
-  const [showImportProgress, setShowImportProgress] = useState(false)
-  const [importResult, setImportResult] = useState<string | null>(null)
   const [refreshHint, setRefreshHint] = useState<{
     msg: string
     ok: boolean
@@ -1146,48 +1133,6 @@ export function Sidebar({ width }: { width?: number }) {
       if (searchHighlightTimerRef.current)
         clearTimeout(searchHighlightTimerRef.current)
     }
-  }, [])
-
-  const handleImportOPML = async () => {
-    setIsImporting(true)
-    setImportResult(null)
-    setShowImportProgress(true)
-    try {
-      const result = await importOPML()
-      if (result.canceled) {
-        setShowImportProgress(false)
-      } else if (result.success) {
-        const msg =
-          t('sidebar.importSuccess', {
-            imported: result.imported,
-            skipped: result.skipped,
-          }) +
-          (result.errors?.length
-            ? t('sidebar.importErrors', { errors: result.errors.length })
-            : '')
-        setImportResult(msg)
-        setTimeout(() => setImportResult(null), 4000)
-
-        // Auto-refresh small batches in background (≤8 feeds)
-        const ids = result.importedFeedIds
-        if (ids && ids.length > 0 && ids.length <= 8) {
-          void refreshImportedFeeds(ids)
-        }
-      } else {
-        setShowImportProgress(false)
-        setImportResult(result.error || t('sidebar.importFailed'))
-        setTimeout(() => setImportResult(null), 4000)
-      }
-    } catch (err) {
-      setShowImportProgress(false)
-      setImportResult(String(err))
-      setTimeout(() => setImportResult(null), 4000)
-    }
-    setIsImporting(false)
-  }
-
-  const handleImportProgressDone = useCallback(() => {
-    setShowImportProgress(false)
   }, [])
 
   const showRefreshHint = useCallback(
@@ -1968,15 +1913,6 @@ export function Sidebar({ width }: { width?: number }) {
             </kbd>
           </button>
 
-          {/* Import result notification */}
-          {importResult && (
-            <div className="bg-accent/10 text-accent truncate rounded-lg px-3 py-1.5 text-xs">
-              {importResult}
-            </div>
-          )}
-
-          {/* OPML background refresh progress */}
-          {importRefreshProgress && <OpmlImportProgress />}
           {refreshHint && (
             <div
               className={`truncate rounded-lg px-3 py-1.5 text-xs ${
@@ -1990,24 +1926,6 @@ export function Sidebar({ width }: { width?: number }) {
           )}
 
           <div className="flex gap-1">
-            <button
-              onClick={handleImportOPML}
-              disabled={isImporting}
-              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center disabled:opacity-50"
-              title={t('sidebar.importOPML')}
-            >
-              <Upload
-                size={18}
-                className={isImporting ? 'animate-pulse' : ''}
-              />
-            </button>
-            <button
-              onClick={() => exportOPML()}
-              className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
-              title={t('sidebar.exportOPML')}
-            >
-              <Download size={18} />
-            </button>
             <button
               onClick={refreshAll}
               disabled={isRefreshing}
@@ -2027,21 +1945,18 @@ export function Sidebar({ width }: { width?: number }) {
               <Settings size={18} />
             </button>
             <button
-              onClick={toggleShortcutHelp}
+              type="button"
               className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
-              title={t('sidebar.shortcuts')}
+              title={t('sidebar.profile')}
+              aria-label={t('sidebar.profile')}
             >
-              <Keyboard size={18} />
+              <span className="bg-accent/10 text-accent flex h-[22px] w-[22px] items-center justify-center rounded-full">
+                <User size={14} />
+              </span>
             </button>
           </div>
         </div>
       </aside>
-
-      {/* Import progress */}
-      <ImportProgressModal
-        open={showImportProgress}
-        onDone={handleImportProgressDone}
-      />
 
       {/* Feed context menu */}
       {contextMenu && (

@@ -8,7 +8,6 @@ import { PageTransition } from './components/layout/PageTransition'
 import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
-import { useShortcutHelpStore } from './components/shortcuts/shortcut-help-store'
 import {
   CommandPalette,
   useCommandPaletteStore,
@@ -24,12 +23,6 @@ const AIChatPanel = lazy(() =>
     default: module.AIChatPanel,
   })),
 )
-const ShortcutHelpDialog = lazy(() =>
-  import('./components/shortcuts/ShortcutHelp').then((module) => ({
-    default: module.ShortcutHelpDialog,
-  })),
-)
-
 function LazySettingsDialogMount() {
   const isOpen = useSettingsStore((state) => state.isOpen)
 
@@ -50,18 +43,6 @@ function LazyAIChatPanelMount() {
   return (
     <Suspense fallback={null}>
       <AIChatPanel />
-    </Suspense>
-  )
-}
-
-function LazyShortcutHelpDialogMount() {
-  const isOpen = useShortcutHelpStore((state) => state.isOpen)
-
-  if (!isOpen) return null
-
-  return (
-    <Suspense fallback={null}>
-      <ShortcutHelpDialog />
     </Suspense>
   )
 }
@@ -93,12 +74,6 @@ export default function App() {
       </LocalErrorBoundary>
       <LocalErrorBoundary title="快速搜索出现问题">
         <QuickSearchPanel />
-      </LocalErrorBoundary>
-      <LocalErrorBoundary
-        title="快捷键帮助出现问题"
-        onDismiss={() => useShortcutHelpStore.getState().close()}
-      >
-        <LazyShortcutHelpDialogMount />
       </LocalErrorBoundary>
       <LocalErrorBoundary
         title="命令面板出现问题"

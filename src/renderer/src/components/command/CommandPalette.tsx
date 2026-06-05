@@ -3,7 +3,6 @@ import { Command, Search, Sparkles, X } from 'lucide-react'
 import { DEFAULT_SHORTCUTS } from '../../../../shared/shortcuts'
 import { useSettingsStore } from '../../store/settings-store'
 import { useQuickSearchStore } from '../search/QuickSearch'
-import { useShortcutHelpStore } from '../shortcuts/shortcut-help-store'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useAIChatStore } from '../../store/ai-chat-store'
@@ -137,7 +136,11 @@ export function CommandPalette() {
         section: '界面',
         keywords: ['shortcut', 'help', 'keyboard'],
         shortcutId: 'show-shortcuts',
-        run: () => useShortcutHelpStore.getState().open(),
+        run: () => {
+          const store = useSettingsStore.getState()
+          store.setActiveTab('shortcuts')
+          store.setOpen(true)
+        },
       },
       {
         id: 'focus-sidebar',

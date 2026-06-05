@@ -34,6 +34,8 @@ import {
 import { DiscoverCenteredState } from './DiscoverCenteredState'
 import { SubscribeConfigDialog } from './SubscribeConfigDialog'
 import { FeedAvatar } from '../feed/FeedAvatar'
+import { ImportProgressModal } from '../feed/ImportProgressModal'
+import { OpmlImportProgress } from '../settings/OpmlImportProgress'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import { getDateLocale } from '../../lib/date-locale'
 import { useGeneralSettingsShallowSelector } from '../../store/settings-store'
@@ -52,6 +54,8 @@ import {
   Rss,
   ExternalLink,
   Loader2,
+  Upload,
+  Download,
 } from 'lucide-react'
 
 // Platform icon SVGs (chip rail)
@@ -126,7 +130,14 @@ export function DiscoverPanel() {
     setSubscribing: state.setSubscribing,
   }))
 
-  const { feeds: userFeeds, removeFeed } = useFeedStore()
+  const {
+    feeds: userFeeds,
+    removeFeed,
+    importOPML,
+    exportOPML,
+    refreshImportedFeeds,
+    importRefreshProgress,
+  } = useFeedStore()
   const { t } = useTranslation()
 
   // Account status for the only platform whose backend handler today gates
@@ -140,6 +151,12 @@ export function DiscoverPanel() {
   const [subscribedUrls, setSubscribedUrls] = useState<Set<string>>(new Set())
   const [searchPage, setSearchPage] = useState(1)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const [showImportProgress, setShowImportProgress] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
+  const importResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
 
   // Inline preview state — replaces full-screen DiscoverPreviewPage navigation
   const [previewTarget, setPreviewTarget] = useState<{
@@ -387,6 +404,64 @@ export function DiscoverPanel() {
     submitSearch(searchQuery)
   }, [searchQuery, submitSearch])
 
+  const showImportResult = useCallback((message: string) => {
+    setImportResult(message)
+    if (importResultTimerRef.current) {
+      clearTimeout(importResultTimerRef.current)
+    }
+    importResultTimerRef.current = setTimeout(() => {
+      setImportResult(null)
+      importResultTimerRef.current = null
+    }, 4000)
+  }, [])
+
+  const handleImportOPML = useCallback(async () => {
+    setIsImporting(true)
+    setImportResult(null)
+    setShowImportProgress(true)
+    try {
+      const result = await importOPML()
+      if (result.canceled) {
+        setShowImportProgress(false)
+      } else if (result.success) {
+        showImportResult(
+          t('sidebar.importSuccess', {
+            imported: result.imported,
+            skipped: result.skipped,
+          }) +
+            (result.errors?.length
+              ? t('sidebar.importErrors', { errors: result.errors.length })
+              : ''),
+        )
+
+        const ids = result.importedFeedIds
+        if (ids && ids.length > 0 && ids.length <= 8) {
+          void refreshImportedFeeds(ids)
+        }
+      } else {
+        setShowImportProgress(false)
+        showImportResult(result.error || t('sidebar.importFailed'))
+      }
+    } catch (err) {
+      setShowImportProgress(false)
+      showImportResult(String(err))
+    } finally {
+      setIsImporting(false)
+    }
+  }, [importOPML, refreshImportedFeeds, showImportResult, t])
+
+  const handleImportProgressDone = useCallback(() => {
+    setShowImportProgress(false)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (importResultTimerRef.current) {
+        clearTimeout(importResultTimerRef.current)
+      }
+    }
+  }, [])
+
   const handleRetrySearch = useCallback(() => {
     searchQueryResult.refetch()
   }, [searchQueryResult])
@@ -582,6 +657,27 @@ export function DiscoverPanel() {
           </div>
           <div className="flex-1" />
           <button
+            type="button"
+            onClick={handleImportOPML}
+            disabled={isImporting}
+            className="text-text-secondary hover:bg-surface-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            title={t('settings.importOPML')}
+          >
+            <Upload size={14} className={isImporting ? 'animate-pulse' : ''} />
+            <span>{t('settings.importOPML')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void exportOPML()
+            }}
+            className="text-text-secondary hover:bg-surface-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors"
+            title={t('settings.exportOPML')}
+          >
+            <Download size={14} />
+            <span>{t('settings.exportOPML')}</span>
+          </button>
+          <button
             onClick={() => setOpen(false)}
             className="hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary rounded-lg p-1.5 transition-colors"
           >
@@ -595,6 +691,17 @@ export function DiscoverPanel() {
         <div className={`w-full ${hasSearchQuery ? '' : 'pt-[12vh]'}`}>
           {searchBar}
         </div>
+
+        {(importResult || importRefreshProgress) && (
+          <div className="mx-auto mt-3 max-w-2xl space-y-2">
+            {importResult && (
+              <div className="bg-accent/10 text-accent rounded-lg px-3 py-2 text-sm">
+                {importResult}
+              </div>
+            )}
+            {importRefreshProgress && <OpmlImportProgress />}
+          </div>
+        )}
 
         {/* Featured feeds — category rail + curated feed list when no search active */}
         {!hasSearchQuery && !isPreviewing && categories.length > 0 && (
@@ -1063,6 +1170,10 @@ export function DiscoverPanel() {
           onClose={() => setSubscribeTarget(null)}
         />
       )}
+      <ImportProgressModal
+        open={showImportProgress}
+        onDone={handleImportProgressDone}
+      />
     </div>
   )
 }

@@ -75,6 +75,7 @@ export type SettingsTabId =
   | 'general'
   | 'appearance'
   | 'reading'
+  | 'shortcuts'
   | 'subscriptions'
   | 'ai'
   | 'translation'

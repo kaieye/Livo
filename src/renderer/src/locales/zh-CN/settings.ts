@@ -3,6 +3,7 @@ export const zhCNSettings = {
   general: '通用',
   appearance: '外观',
   reading: '阅读',
+  shortcuts: '快捷键',
   subscriptions: '订阅源',
   ai: 'AI 模型',
   translation: '翻译',

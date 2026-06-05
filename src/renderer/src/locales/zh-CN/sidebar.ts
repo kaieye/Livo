@@ -10,6 +10,7 @@ export const zhCNSidebar = {
   refreshAll: '刷新全部',
   settings: '设置',
   shortcuts: '快捷键 (?)',
+  profile: '个人信息',
   markAllRead: '全部标为已读',
   refreshFeed: '刷新订阅源',
   feedRefreshFailed: '最近刷新失败：{{error}}',

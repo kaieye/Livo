@@ -3,6 +3,7 @@ export const enSettings = {
   general: 'General',
   appearance: 'Appearance',
   reading: 'Reading',
+  shortcuts: 'Shortcuts',
   subscriptions: 'Subscriptions',
   ai: 'AI Model',
   translation: 'Translation',

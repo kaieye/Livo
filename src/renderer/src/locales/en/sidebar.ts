@@ -10,6 +10,7 @@ export const enSidebar = {
   refreshAll: 'Refresh All',
   settings: 'Settings',
   shortcuts: 'Shortcuts (?)',
+  profile: 'Profile',
   markAllRead: 'Mark All Read',
   refreshFeed: 'Refresh Feed',
   feedRefreshFailed: 'Last refresh failed: {{error}}',

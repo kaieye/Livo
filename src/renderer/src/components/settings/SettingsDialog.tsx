@@ -18,6 +18,7 @@ import {
   Clock,
   Star,
   Flame,
+  Keyboard,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -27,6 +28,7 @@ const settingsTabImporters = {
   general: () => import('./GeneralSettings'),
   appearance: () => import('./AppearanceSettings'),
   reading: () => import('./ReadingSettings'),
+  shortcuts: () => import('./ShortcutsSettings'),
   subscriptions: () => import('./FeedsSettings'),
   ai: () => import('./AISettings'),
   translation: () => import('./TranslationSettings'),
@@ -56,6 +58,11 @@ const settingsTabComponents = {
     settingsTabImporters
       .reading()
       .then((module) => ({ default: module.ReadingSettings })),
+  ),
+  shortcuts: lazy(() =>
+    settingsTabImporters
+      .shortcuts()
+      .then((module) => ({ default: module.ShortcutsSettings })),
   ),
   subscriptions: lazy(() =>
     settingsTabImporters
@@ -149,6 +156,11 @@ export function SettingsDialog() {
       id: 'subscriptions' as const,
       label: t('settings.subscriptions'),
       icon: Rss,
+    },
+    {
+      id: 'shortcuts' as const,
+      label: t('settings.shortcuts'),
+      icon: Keyboard,
     },
     { id: 'ai' as const, label: t('settings.ai'), icon: Bot },
     {

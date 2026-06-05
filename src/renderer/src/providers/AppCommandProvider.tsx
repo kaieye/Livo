@@ -1,7 +1,6 @@
 import { useEffect, type PropsWithChildren } from 'react'
 import type { AppCommandPayload } from '../../../shared/types'
 import { useQuickSearchStore } from '../components/search/QuickSearch'
-import { useShortcutHelpStore } from '../components/shortcuts/shortcut-help-store'
 import { useFeedStore } from '../store/feed-store'
 import { useSettingsStore } from '../store/settings-store'
 
@@ -32,9 +31,12 @@ export function AppCommandProvider({ children }: PropsWithChildren) {
         case 'open-search':
           useQuickSearchStore.getState().open()
           break
-        case 'show-shortcuts':
-          useShortcutHelpStore.getState().open()
+        case 'show-shortcuts': {
+          const settingsStore = useSettingsStore.getState()
+          settingsStore.setActiveTab('shortcuts')
+          settingsStore.setOpen(true)
           break
+        }
         case 'refresh-all':
           void useFeedStore.getState().refreshAll()
           break
