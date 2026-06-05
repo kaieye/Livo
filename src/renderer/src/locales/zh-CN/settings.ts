@@ -59,7 +59,7 @@ export const zhCNSettings = {
   rsshubInstance: 'RSSHub 实例地址',
   rsshubInstanceDesc: '公共实例可能不稳定，建议自建或使用可靠的第三方实例',
   rsshubInstanceHint:
-    '推荐实例: rsshub.pseudoyu.com · rsshub.app · 或自建 RSSHub',
+    '推荐实例: rsshub.pseudoyu.com · rsshub.rssforever.com · 或自建 RSSHub',
   rsshubInstanceInstagramTip:
     'Instagram 轮播图片需自建 RSSHub 并配置 Instagram Cookie',
   instagramCarouselTip:

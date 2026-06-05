@@ -68,7 +68,7 @@ export const enSettings = {
   rsshubInstanceDesc:
     'Public instances may be unstable. Consider self-hosting or using a reliable third-party instance',
   rsshubInstanceHint:
-    'Recommended: rsshub.pseudoyu.com · rsshub.app · or self-host',
+    'Recommended: rsshub.pseudoyu.com · rsshub.rssforever.com · or self-host',
   rsshubInstanceInstagramTip:
     'Instagram carousel images require self-hosted RSSHub with Instagram cookies',
   instagramCarouselTip:

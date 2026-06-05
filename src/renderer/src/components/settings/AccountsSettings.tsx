@@ -44,9 +44,7 @@ const BILIBILI_IMPORT_VIEW_OPTIONS: Array<{
 
 const BILIBILI_RSSHUB_FALLBACK_INSTANCES = [
   'https://rsshub.pseudoyu.com',
-  'https://rsshub.app',
   'https://rsshub.rssforever.com',
-  'https://rsshub-instance.zeabur.app',
 ]
 const BILIBILI_FOLLOWINGS_CACHE_KEY = 'livo.bilibili.followings.cache.v1'
 

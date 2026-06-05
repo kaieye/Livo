@@ -144,9 +144,7 @@ export function normalizeNameForMatch(input: string): string {
 /** Fallback RSSHub instances shared across platform probes. */
 export const FALLBACK_RSSHUB_INSTANCES = [
   'https://rsshub.pseudoyu.com',
-  'https://rsshub.app',
   'https://rsshub.rssforever.com',
-  'https://rsshub-instance.zeabur.app',
 ]
 
 /**

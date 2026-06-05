@@ -60,9 +60,7 @@ export interface FetchFeedResult {
 
 const TWITTER_RSSHUB_FALLBACKS = [
   'https://rsshub.pseudoyu.com',
-  'https://rsshub.app',
   'https://rsshub.rssforever.com',
-  'https://rsshub-instance.zeabur.app',
 ]
 const RSSHUB_FALLBACK_ROUTE_PREFIX =
   /^\/(?:bilibili|twitter|youtube|instagram|github|weibo|zhihu|xiaoyuzhou)\//i
