@@ -52,6 +52,20 @@ describe('home-feed-scope', () => {
     })
   })
 
+  it('栏目里只有一个可见订阅源时使用单 feed 加载路径', () => {
+    expect(
+      buildHomeFeedLoadOptions({
+        selectedFeedId: null,
+        activeView: FeedViewType.Videos,
+        feeds: [
+          { id: 'video-hidden', view: FeedViewType.Videos, showInAll: false },
+          { id: 'video-1', view: FeedViewType.Videos },
+        ],
+        limit: 20,
+      }),
+    ).toEqual({ feedId: 'video-1', unreadOnly: undefined, limit: 20 })
+  })
+
   it('过滤 view 列表时按需排除推荐源', () => {
     expect(
       computeViewFeedIds(feeds, FeedViewType.SocialMedia, 'Recommended'),

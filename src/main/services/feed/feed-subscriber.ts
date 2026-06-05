@@ -8,7 +8,6 @@ import { getFeedImageUrl } from './feed-utils'
 import { detectViewType } from './feed-view'
 import { formatFeedTitle } from './feed-title'
 import {
-  canonicalizeInstagramFeedUrl,
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
   normalizeRsshubProtocolUrl,
@@ -63,8 +62,8 @@ export async function subscribeFeed(
     ensureInstagramUserFeedLimit(rawProtocolUrl, 100),
     120,
   )
-  const storedUrl = canonicalizeInstagramFeedUrl(limitedProtocolUrl)
-  const legacyStoredUrl = canonicalizeInstagramFeedUrl(rawProtocolUrl)
+  const storedUrl = limitedProtocolUrl
+  const legacyStoredUrl = rawProtocolUrl
   const normalizedUrl = normalizeRsshubProtocolUrl(storedUrl, rsshubInstance)
   const normalizedLegacyUrl = normalizeRsshubProtocolUrl(
     legacyStoredUrl,
@@ -111,10 +110,11 @@ export async function subscribeFeed(
 
   // ---- Fetch + parse ----
   const now = Date.now()
+  const fetchUrl = /^https?:\/\//i.test(url) ? url : normalizedUrl
   let parsed: Awaited<ReturnType<typeof fetchAndParseFeed>>['data'] | null =
     null
   try {
-    parsed = (await fetchAndParseFeed(normalizedUrl)).data
+    parsed = (await fetchAndParseFeed(fetchUrl)).data
   } catch {
     // Tolerate unreachable/slow feeds: create the subscription anyway.
   }

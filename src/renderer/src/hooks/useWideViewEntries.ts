@@ -46,25 +46,26 @@ export function useWideViewEntries({
     cacheKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`,
   })
 
-  const model = useMemo(
-    () =>
-      buildWideViewEntryModel({
-        entries,
-        viewFilteredEntries,
-        feedById,
-        isLoading,
-        isSocialDedupeProcessing,
-        allowStaleEntriesWhileLoading: !selectedFeedId,
-      }),
-    [
+  const model = useMemo(() => {
+    const result = buildWideViewEntryModel({
       entries,
+      viewFilteredEntries,
       feedById,
       isLoading,
       isSocialDedupeProcessing,
-      selectedFeedId,
-      viewFilteredEntries,
-    ],
-  )
+      allowStaleEntriesWhileLoading: !selectedFeedId,
+    })
+    // PERF: mark when WideView entry model computation is done
+    performance.mark('vs:wideview-memos')
+    return result
+  }, [
+    entries,
+    feedById,
+    isLoading,
+    isSocialDedupeProcessing,
+    selectedFeedId,
+    viewFilteredEntries,
+  ])
 
   return { ...model, isSocialDedupeProcessing }
 }

@@ -45,16 +45,17 @@ export function canonicalizeDiscoverRoute(inputUrl: string): string {
   const [pathPart = '', queryPart = ''] = routeWithQuery.split('?', 2)
   let path = pathPart.toLowerCase()
   path = path.replace(
-    /^(picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i,
-    'instagram/user/',
-  )
-  path = path.replace(
     /^(?:x|twitter)\/user\/([^/?#]+)/i,
     (_match, user: string) =>
       `twitter/user/${decodeURIComponent(user).replace(/^@/, '').toLowerCase()}`,
   )
 
-  if (/^instagram\/user\//i.test(path) || /^twitter\/user\//i.test(path)) {
+  if (
+    /^(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
+      path,
+    ) ||
+    /^twitter\/user\//i.test(path)
+  ) {
     const search = new URLSearchParams(queryPart || '')
     search.delete('limit')
     const query = search.toString()

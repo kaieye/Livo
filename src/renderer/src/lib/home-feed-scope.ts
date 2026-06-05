@@ -46,6 +46,9 @@ export function buildHomeFeedLoadOptions(options: {
     const viewFeedIds = feeds
       .filter((f) => (f.view ?? 0) === activeView && f.showInAll !== false)
       .map((f) => f.id)
+    if (viewFeedIds.length === 1) {
+      return { feedId: viewFeedIds[0], unreadOnly, limit }
+    }
     if (viewFeedIds.length > 0) {
       return { feedIds: viewFeedIds, unreadOnly, limit }
     }

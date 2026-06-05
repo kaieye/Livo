@@ -13,7 +13,6 @@ import {
 } from '../video/video-duration'
 import { resolveFeedPayload } from './feed-source-provider'
 import {
-  canonicalizeInstagramFeedUrl,
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
   normalizeFeedUrl,
@@ -497,12 +496,11 @@ async function runRefreshSingleFeed(
     settingsProvider.get().general.rsshubInstance?.trim() ||
     DEFAULT_RSSHUB_INSTANCE
   const normalizedFeedUrl = normalizeFeedUrl(feed.url, rsshubInstance)
-  const canonicalFeedUrl = canonicalizeInstagramFeedUrl(feed.url)
 
   try {
     // 更新 RSSHub 用户路由的 limit，后续刷新直接使用规范化 URL。
     const feedUrlToStore = ensureTwitterUserFeedLimit(
-      ensureInstagramUserFeedLimit(canonicalFeedUrl, 100),
+      ensureInstagramUserFeedLimit(feed.url, 100),
       120,
     )
     if (feedUrlToStore !== feed.url) {

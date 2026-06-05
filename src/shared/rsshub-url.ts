@@ -1,13 +1,6 @@
 const RSSHUB_ROUTE_PREFIX =
   /^(?:twitter|x|instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox|youtube|bilibili|github|weibo|zhihu|xiaoyuzhou)\//i
 
-function canonicalizeInstagramMirrorRoute(route: string): string {
-  return route.replace(
-    /^(picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i,
-    'instagram/user/',
-  )
-}
-
 function extractRsshubRoute(rawUrl: string): string | null {
   const trimmed = rawUrl.trim()
   if (!trimmed) return null
@@ -39,7 +32,7 @@ export function normalizeRsshubProtocolUrl(
   const route = extractRsshubRoute(trimmed)
   if (!route) return trimmed
   const base = rsshubInstance.replace(/\/+$/, '')
-  return `${base}/${canonicalizeInstagramMirrorRoute(route)}`
+  return `${base}/${route}`
 }
 
 export function toRsshubProtocolUrl(rawUrl: string): string {
@@ -47,29 +40,7 @@ export function toRsshubProtocolUrl(rawUrl: string): string {
   if (!trimmed) return trimmed
   const route = extractRsshubRoute(trimmed)
   if (!route) return trimmed
-  return `rsshub://${canonicalizeInstagramMirrorRoute(route)}`
-}
-
-export function canonicalizeInstagramFeedUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim()
-  if (!trimmed) return trimmed
-
-  const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
-  if (rsshubMatch?.[1]) {
-    return `rsshub://${canonicalizeInstagramMirrorRoute(rsshubMatch[1].replace(/^\/+/, ''))}`
-  }
-
-  try {
-    const parsed = new URL(trimmed)
-    const route = parsed.pathname.replace(/^\/+/, '')
-    if (!route) return trimmed
-    const canonicalRoute = canonicalizeInstagramMirrorRoute(route)
-    if (canonicalRoute === route) return trimmed
-    parsed.pathname = `/${canonicalRoute}`
-    return parsed.toString()
-  } catch {
-    return trimmed
-  }
+  return `rsshub://${route}`
 }
 
 export function ensureInstagramUserFeedLimit(
@@ -86,9 +57,8 @@ export function ensureInstagramUserFeedLimit(
 
   const appendLimitToRoute = (routeWithMaybeQuery: string): string => {
     const [path = '', query = ''] = routeWithMaybeQuery.split('?', 2)
-    const canonicalPath = canonicalizeInstagramMirrorRoute(path)
-    if (!/^instagram\/user\//i.test(canonicalPath)) {
-      return `${canonicalPath}${query ? `?${query}` : ''}`
+    if (!/^instagram\/user\//i.test(path)) {
+      return `${path}${query ? `?${query}` : ''}`
     }
 
     const search = new URLSearchParams(query)
@@ -97,7 +67,7 @@ export function ensureInstagramUserFeedLimit(
       search.set('limit', String(normalizedLimit))
     }
     const nextQuery = search.toString()
-    return `${canonicalPath}${nextQuery ? `?${nextQuery}` : ''}`
+    return `${path}${nextQuery ? `?${nextQuery}` : ''}`
   }
 
   const rsshubMatch = trimmed.match(/^rsshub:\/\/+(.+)$/i)
@@ -125,7 +95,7 @@ export function ensureInstagramUserFeedLimit(
 
 /**
  * Full feed URL normalization pipeline:
- * toRsshubProtocol → ensureInstagramLimit → ensureTwitterLimit → canonicalize → resolve rsshub://
+ * toRsshubProtocol → ensureInstagramLimit → ensureTwitterLimit → resolve rsshub://
  */
 export function normalizeFeedUrl(
   rawUrl: string,
@@ -136,8 +106,7 @@ export function normalizeFeedUrl(
     ensureInstagramUserFeedLimit(rsshub, 100),
     120,
   )
-  const canonical = canonicalizeInstagramFeedUrl(limited)
-  return normalizeRsshubProtocolUrl(canonical, rsshubInstance)
+  return normalizeRsshubProtocolUrl(limited, rsshubInstance)
 }
 
 /**
@@ -148,8 +117,7 @@ export function normalizeFeedUrlNoLimits(
   rsshubInstance: string,
 ): string {
   const rsshub = toRsshubProtocolUrl(rawUrl)
-  const canonical = canonicalizeInstagramFeedUrl(rsshub)
-  return normalizeRsshubProtocolUrl(canonical, rsshubInstance)
+  return normalizeRsshubProtocolUrl(rsshub, rsshubInstance)
 }
 
 export function ensureTwitterUserFeedLimit(

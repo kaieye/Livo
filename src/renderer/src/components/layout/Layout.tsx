@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { Sidebar } from './Sidebar'
 import { EntryList } from '../entry/EntryList'
 import { EntryContent } from '../entry/EntryContent'
+import { SkeletonList } from '../ui/Skeleton'
 import { WideViewContent } from '../entry/WideViewContent'
 import { DiscoverPanel } from '../discover/DiscoverPanel'
 import { ResizeHandle } from '../ui/ResizeHandle'
@@ -67,8 +74,93 @@ export function Layout() {
 
   // Clear stale detail content when switching view/feed scope.
   useEffect(() => {
+    performance.mark('vs:selectEntry-null')
     void selectEntry(null)
   }, [activeView, selectedFeedId, selectEntry])
+
+  // PERF: mark when React commits the new view layout (before paint)
+  useLayoutEffect(() => {
+    performance.mark('vs:layout-commit')
+  }, [activeView, selectedFeedId])
+
+  // PERF: defer content mount so Layout commits fast (skeleton first, then real component).
+  // Uses a ref checked during render to show skeleton immediately on view switch,
+  // then mounts the real component on the next animation frame.
+  const deferRef = useRef(false)
+  const prevViewKeyRef2 = useRef(`${activeView}:${selectedFeedId}`)
+  const currentViewKey2 = `${activeView}:${selectedFeedId}`
+  if (currentViewKey2 !== prevViewKeyRef2.current) {
+    prevViewKeyRef2.current = currentViewKey2
+    deferRef.current = true
+  }
+  // During render: if a switch was just detected, show skeleton regardless of state
+  const effectiveShowContent = !deferRef.current
+
+  useEffect(() => {
+    if (!deferRef.current) return
+    deferRef.current = false
+    const raf = requestAnimationFrame(() => {
+      performance.mark('vs:content-mounted')
+      // Toggle dummy state to force re-render → real content mounts
+      setShowContent((c) => !c)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [activeView, selectedFeedId])
+
+  // Dummy state to trigger re-render after rAF
+  const [showContent, setShowContent] = useState(true)
+
+  // PERF: schedule a post-paint measurement collection
+  useEffect(() => {
+    const measure = () => {
+      performance.mark('vs:paint')
+      const marks = performance.getEntriesByType('mark')
+      const startMark = marks.find((m) => m.name === 'vs:start')
+      if (!startMark) return
+
+      const measureFrom = (name: string, label: string) => {
+        const m = marks.find((x) => x.name === name)
+        if (m && m.startTime >= startMark.startTime) {
+          console.log(
+            `  ${label}: ${(m.startTime - startMark.startTime).toFixed(1)}ms`,
+          )
+        }
+      }
+
+      console.groupCollapsed(
+        `🔍 View-switch perf (${(performance.now() - startMark.startTime).toFixed(1)}ms total to paint)`,
+      )
+      measureFrom('vs:store', '→ store update')
+      measureFrom('vs:layout-commit', '→ Layout commit (skeleton)')
+      measureFrom('vs:selectEntry-null', '→ selectEntry(null)')
+      measureFrom('vs:content-mounted', '→ Content mounted')
+      measureFrom('vs:wideview-memos', '→ WideView useMemos done')
+      measureFrom('vs:wideview-masonry', '→ WideView masonryCards')
+      measureFrom('vs:wideview-layout1', '→ WideView useLayoutEffect #1')
+      measureFrom('vs:entrylist-memos', '→ EntryList useMemos done')
+      measureFrom('vs:child-commit', '→ Child commit')
+      measureFrom('vs:paint', '→ post-paint rAF')
+      console.groupEnd()
+
+      // Cleanup marks for next measurement
+      ;[
+        'vs:start',
+        'vs:store',
+        'vs:layout-commit',
+        'vs:selectEntry-null',
+        'vs:content-mounted',
+        'vs:wideview-memos',
+        'vs:wideview-masonry',
+        'vs:wideview-layout1',
+        'vs:entrylist-memos',
+        'vs:child-commit',
+        'vs:paint',
+      ].forEach((name) => performance.clearMarks(name))
+    }
+
+    const raf = requestAnimationFrame(measure)
+    return () => cancelAnimationFrame(raf)
+  }, [activeView, selectedFeedId])
 
   // Warm common timeline caches in the background to reduce first-switch stutter.
   useEffect(() => {
@@ -76,7 +168,6 @@ export function Layout() {
 
     let cancelled = false
     const run = async () => {
-      // Prioritize the currently janky tabs first.
       const commonViews = [
         FeedViewType.SocialMedia,
         FeedViewType.Videos,
@@ -128,7 +219,7 @@ export function Layout() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [feeds, prefetchEntries, selectedFeedId])
+  }, [activeView, feeds, prefetchEntries, selectedFeedId])
 
   // Determine the effective view for layout decisions.
   // When activeView is null (All view) but a Pictures/Social/Videos feed is
@@ -223,6 +314,23 @@ export function Layout() {
       >
         {isDiscoverOpen ? (
           <DiscoverPanel />
+        ) : !effectiveShowContent ? (
+          /* Skeleton shown while deferring content mount */
+          <div className="dark:bg-surface-dark flex min-w-0 flex-1 flex-col bg-white">
+            <div className="flex h-12 items-center gap-2 border-b px-4">
+              <div className="bg-surface-secondary h-4 w-24 animate-pulse rounded" />
+            </div>
+            <SkeletonList
+              count={8}
+              type={
+                isWideView && effectiveView === FeedViewType.SocialMedia
+                  ? 'social'
+                  : isWideView
+                    ? 'grid'
+                    : 'article'
+              }
+            />
+          </div>
         ) : isWideView ? (
           /* 2-column layout for Social Media / Videos */
           <div className="flex min-w-0 flex-1">

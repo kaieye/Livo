@@ -21,7 +21,6 @@ import {
   getDirectorySize,
 } from '../services/system/app-shell'
 import {
-  canonicalizeInstagramFeedUrl,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from '../services/feed/rsshub-url'
@@ -206,9 +205,7 @@ export function registerFeedHandlers(): void {
         const rsshubInstance =
           getSettings().general.rsshubInstance?.trim() ||
           DEFAULT_RSSHUB_INSTANCE
-        const storedXmlUrl = canonicalizeInstagramFeedUrl(
-          toRsshubProtocolUrl(opmlFeed.xmlUrl),
-        )
+        const storedXmlUrl = toRsshubProtocolUrl(opmlFeed.xmlUrl)
         const normalizedXmlUrl = normalizeRsshubProtocolUrl(
           storedXmlUrl,
           rsshubInstance,
@@ -237,7 +234,7 @@ export function registerFeedHandlers(): void {
             | null = null
           try {
             const fetchUrl = normalizeRsshubProtocolUrl(
-              canonicalizeInstagramFeedUrl(opmlFeed.xmlUrl),
+              opmlFeed.xmlUrl,
               getSettings().general.rsshubInstance?.trim() ||
                 DEFAULT_RSSHUB_INSTANCE,
             )

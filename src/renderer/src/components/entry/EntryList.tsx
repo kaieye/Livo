@@ -15,6 +15,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { openExternalUrlSafe } from '../../services/external-url'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
+import { useStoreShallow } from '../../store/helpers'
 import {
   useGeneralSettingKey,
   useGeneralSettingsShallowSelector,
@@ -147,21 +148,32 @@ export function EntryList({ width }: { width?: number }) {
     handleSearch,
     refreshCurrentFeeds,
   } = coordinator
-  const entryStore = useEntryStore()
   const {
     selectedEntry,
     selectEntry,
     markAllRead,
     markAboveRead,
     markBelowRead,
-  } = entryStore
+  } = useStoreShallow(useEntryStore, (s) => ({
+    selectedEntry: s.selectedEntry,
+    selectEntry: s.selectEntry,
+    markAllRead: s.markAllRead,
+    markAboveRead: s.markAboveRead,
+    markBelowRead: s.markBelowRead,
+  }))
   const {
     selectedFeedId,
     activeView,
     refreshFeed,
     isRefreshing,
     refreshProgress,
-  } = useFeedStore()
+  } = useStoreShallow(useFeedStore, (s) => ({
+    selectedFeedId: s.selectedFeedId,
+    activeView: s.activeView,
+    refreshFeed: s.refreshFeed,
+    isRefreshing: s.isRefreshing,
+    refreshProgress: s.refreshProgress,
+  }))
   const general = useGeneralSettingsShallowSelector((settings) => ({
     showRecommended: settings.showRecommended,
     groupByDate: settings.groupByDate,
@@ -262,23 +274,24 @@ export function EntryList({ width }: { width?: number }) {
     virtualizerEntries,
     gridRows,
     hasMoreGridEntries,
-  } = useMemo(
-    () =>
-      buildEntryListDerivedModel({
-        baseRenderEntries,
-        activeView,
-        groupByDate: general.groupByDate,
-        isGridMode,
-        gridVisibleCount,
-      }),
-    [
-      activeView,
+  } = useMemo(() => {
+    const result = buildEntryListDerivedModel({
       baseRenderEntries,
-      general.groupByDate,
-      gridVisibleCount,
+      activeView,
+      groupByDate: general.groupByDate,
       isGridMode,
-    ],
-  )
+      gridVisibleCount,
+    })
+    // PERF: mark EntryList derived model computation
+    performance.mark('vs:entrylist-memos')
+    return result
+  }, [
+    activeView,
+    baseRenderEntries,
+    general.groupByDate,
+    gridVisibleCount,
+    isGridMode,
+  ])
   const linearListVirtualizer = useVirtualizer({
     count: virtualizerEntries.length,
     getScrollElement: () => listScrollRef.current,
@@ -315,6 +328,11 @@ export function EntryList({ width }: { width?: number }) {
     getItemKey: (index) => socialRows[index]?.key ?? index,
   })
   const socialVirtualRows = socialListVirtualizer.getVirtualItems()
+
+  // PERF: mark child component commit
+  useLayoutEffect(() => {
+    performance.mark('vs:child-commit')
+  })
 
   useEffect(() => {
     const nextScope = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
@@ -716,7 +734,10 @@ function EntryContextMenuWrapper({
   onMarkBelowRead: () => void
   onSharePoster: () => void
 }) {
-  const { markRead, toggleStar } = useEntryStore()
+  const { markRead, toggleStar } = useStoreShallow(useEntryStore, (s) => ({
+    markRead: s.markRead,
+    toggleStar: s.toggleStar,
+  }))
   const feedSiteUrl = useFeedStore(
     (state) => state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
   )
@@ -741,7 +762,7 @@ function EntryContextMenuWrapper({
 }
 
 /** Standard list item card */
-function EntryCard({
+const EntryCard = memo(function EntryCard({
   entry,
   isActive,
   onSelect,
@@ -889,7 +910,7 @@ function EntryCard({
       </div>
     </article>
   )
-}
+})
 
 /** Grid card for media/video view */
 export const GridCard = memo(function GridCard({
@@ -1872,7 +1893,10 @@ function SocialActionBar({
   hasTranslation?: boolean
   showTranslation?: boolean
 }) {
-  const { markRead, toggleStar } = useEntryStore()
+  const { markRead, toggleStar } = useStoreShallow(useEntryStore, (s) => ({
+    markRead: s.markRead,
+    toggleStar: s.toggleStar,
+  }))
   const { t } = useTranslation()
   const resolvedBrowserOpenUrl = useMemo(
     () => browserOpenUrl || resolveEntryBrowserOpenUrl(entry),

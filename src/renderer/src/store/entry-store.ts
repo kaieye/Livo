@@ -7,6 +7,7 @@ import type {
 import {
   buildListCacheKey,
   getCachedListResult,
+  setCachedListResult,
   fetchAndCacheList,
   getDefaultPageSize,
   getMaxPageSize,
@@ -181,7 +182,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     })
 
     const cacheKey = buildListCacheKey(normalizedOptions)
-    const cachedHit = getCachedListResult(cacheKey)
+    const cachedHit = getCachedListResult(cacheKey, normalizedOptions.limit)
     if (cachedHit) {
       set({
         entries: cacheEntrySnapshots(cachedHit.entries),
@@ -192,7 +193,11 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       return
     }
 
-    set({ isLoading: true, isLoadingMore: false, hasMoreEntries: false })
+    set({
+      isLoading: get().entries.length === 0,
+      isLoadingMore: false,
+      hasMoreEntries: false,
+    })
     try {
       const result = await fetchAndCacheList(cacheKey, () =>
         window.api.entries.list({
@@ -242,8 +247,33 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       unreadOnly: !!normalizedOptions.unreadOnly,
       pageSize,
     })
+    const listCacheKey = buildListCacheKey(normalizedOptions)
+    const cachedHit = getCachedListResult(listCacheKey, pageSize)
+
+    // Cache hit: show entries immediately, skip IPC entirely.
+    if (cachedHit) {
+      set({
+        entries: cacheEntrySnapshots(cachedHit.entries),
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: cachedHit.hasMore,
+        paginationQueryKey: queryKey,
+        paginationOptions: {
+          feedId: normalizedOptions.feedId,
+          feedIds: normalizedOptions.feedIds,
+          starred: normalizedOptions.starred,
+          unreadOnly: normalizedOptions.unreadOnly,
+        },
+        paginationPageSize: pageSize,
+        paginationSource: 'snapshot',
+        snapshotNextCursor: null,
+      })
+      return null
+    }
+
     set({
-      isLoading: true,
+      // Keep old entries visible while loading — no skeleton flash.
+      isLoading: get().entries.length === 0,
       isLoadingMore: false,
       hasMoreEntries: false,
       paginationQueryKey: queryKey,
@@ -263,10 +293,13 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         buildReaderSnapshotInput(normalizedOptions),
       )
       if (get().paginationQueryKey !== queryKey) return null
+      const sorted = sortEntriesByPublishedDesc(snapshot.entries)
+      setCachedListResult(listCacheKey, {
+        entries: sorted,
+        hasMore: snapshot.nextCursor !== null,
+      })
       set({
-        entries: cacheEntrySnapshots(
-          sortEntriesByPublishedDesc(snapshot.entries),
-        ),
+        entries: cacheEntrySnapshots(sorted),
         isLoading: false,
         isLoadingMore: false,
         hasMoreEntries: snapshot.nextCursor !== null,

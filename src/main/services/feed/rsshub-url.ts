@@ -1,5 +1,4 @@
 export {
-  canonicalizeInstagramFeedUrl,
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
   normalizeFeedUrl,

@@ -56,46 +56,43 @@ export function buildWideViewEntryModel(input: {
       allowStaleEntriesWhileLoading:
         input.allowStaleEntriesWhileLoading ?? true,
     })
-  const timelineEntries = renderEntries
+
+  // Single-pass: build all 5 Maps in one traversal instead of 5 separate .map() calls.
+  const timelineIndexById = new Map<string, number>()
+  const timelineFeedMetaByEntryId = new Map<string, TimelineFeedMeta>()
+  const videoFeedMetaByEntryId = new Map<string, VideoFeedMeta>()
+  const renderEntryById = new Map<string, Entry>()
+  const renderEntryIndexById = new Map<string, number>()
+
+  for (let i = 0; i < renderEntries.length; i++) {
+    const entry = renderEntries[i]
+    const feed = input.feedById.get(entry.feedId)
+
+    renderEntryById.set(entry.id, entry)
+    renderEntryIndexById.set(entry.id, i)
+    timelineIndexById.set(entry.id, i)
+
+    timelineFeedMetaByEntryId.set(entry.id, {
+      title: feed?.title,
+      imageUrl: feed?.imageUrl,
+      siteUrl: feed?.siteUrl,
+      url: feed?.url,
+    })
+
+    videoFeedMetaByEntryId.set(entry.id, {
+      title: feed?.title,
+      imageUrl: feed?.imageUrl,
+    })
+  }
 
   return {
     renderEntries,
-    timelineEntries,
+    timelineEntries: renderEntries,
     shouldShowLoadingSkeleton,
-    timelineIndexById: new Map(
-      timelineEntries.map((entry, index) => [entry.id, index] as const),
-    ),
-    timelineFeedMetaByEntryId: new Map(
-      timelineEntries.map((entry) => {
-        const feed = input.feedById.get(entry.feedId)
-        return [
-          entry.id,
-          {
-            title: feed?.title,
-            imageUrl: feed?.imageUrl,
-            siteUrl: feed?.siteUrl,
-            url: feed?.url,
-          } satisfies TimelineFeedMeta,
-        ] as const
-      }),
-    ),
-    videoFeedMetaByEntryId: new Map(
-      renderEntries.map((entry) => {
-        const feed = input.feedById.get(entry.feedId)
-        return [
-          entry.id,
-          {
-            title: feed?.title,
-            imageUrl: feed?.imageUrl,
-          } satisfies VideoFeedMeta,
-        ] as const
-      }),
-    ),
-    renderEntryById: new Map(
-      renderEntries.map((entry) => [entry.id, entry] as const),
-    ),
-    renderEntryIndexById: new Map(
-      renderEntries.map((entry, index) => [entry.id, index] as const),
-    ),
+    timelineIndexById,
+    timelineFeedMetaByEntryId,
+    videoFeedMetaByEntryId,
+    renderEntryById,
+    renderEntryIndexById,
   }
 }

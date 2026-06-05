@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, type UIEvent } from 'react'
 import { useEntryStore } from '../store/entry-store'
 import { useFeedStore } from '../store/feed-store'
+import { useStoreShallow } from '../store/helpers'
 import { useGeneralSettingKey } from '../store/settings-store'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
@@ -96,7 +97,19 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     searchQuery,
     setSearchQuery,
     search,
-  } = useEntryStore()
+  } = useStoreShallow(useEntryStore, (s) => ({
+    entries: s.entries,
+    isLoading: s.isLoading,
+    isLoadingMore: s.isLoadingMore,
+    hasMoreEntries: s.hasMoreEntries,
+    loadEntries: s.loadEntries,
+    loadSnapshot: s.loadSnapshot,
+    loadMoreEntries: s.loadMoreEntries,
+    clearListCache: s.clearListCache,
+    searchQuery: s.searchQuery,
+    setSearchQuery: s.setSearchQuery,
+    search: s.search,
+  }))
 
   const {
     selectedFeedId,
@@ -105,7 +118,14 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     refreshFeed,
     refreshMultiple,
     refreshAll,
-  } = useFeedStore()
+  } = useStoreShallow(useFeedStore, (s) => ({
+    selectedFeedId: s.selectedFeedId,
+    feeds: s.feeds,
+    activeView: s.activeView,
+    refreshFeed: s.refreshFeed,
+    refreshMultiple: s.refreshMultiple,
+    refreshAll: s.refreshAll,
+  }))
 
   const showRecommended = useGeneralSettingKey('showRecommended')
   const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')

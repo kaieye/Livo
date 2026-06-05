@@ -1071,7 +1071,13 @@ export async function fetchAndParseFeed(
   }
 
   // For Instagram routes, try official route variants across fallback instances.
-  const instagramUser = extractInstagramUsernameFromFeedUrl(feedUrl)
+  // Skip for mirror routes (picnob, pixnoy, etc.) which work without auth on their specific instance.
+  const isMirrorRoute = /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\//i.test(
+    feedUrl,
+  )
+  const instagramUser = isMirrorRoute
+    ? null
+    : extractInstagramUsernameFromFeedUrl(feedUrl)
   if (instagramUser) {
     const candidates: string[] = []
     const pushUnique = (u: string) => {

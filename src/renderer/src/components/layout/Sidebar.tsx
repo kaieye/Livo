@@ -1180,6 +1180,8 @@ export function Sidebar({ width }: { width?: number }) {
       )
         return
 
+      // PERF: mark view-switch start
+      performance.mark('vs:start')
       const slug = view !== null ? VIEW_TYPE_SLUGS[view] : null
       navigate(slug ? `/${slug}` : '/')
     },

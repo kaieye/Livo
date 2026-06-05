@@ -44,7 +44,7 @@ describe('discover-subscribe-config', () => {
     ).toBe('twitter/user/openai')
     expect(
       canonicalizeDiscoverRoute('rsshub://picnob.info/user/openai?limit=100'),
-    ).toBe('instagram/user/openai')
+    ).toBe('picnob.info/user/openai')
   })
 
   it('matches an existing feed by route identity', () => {

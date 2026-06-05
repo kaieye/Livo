@@ -12,7 +12,7 @@ import type { Entry, EntryListResult } from '../../../shared/types'
 
 const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
 const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
-const ENTRY_LIST_CACHE_VERSION = 3
+const ENTRY_LIST_CACHE_VERSION = 4
 const DEFAULT_ENTRY_PAGE_SIZE = 10
 const MAX_ENTRY_PAGE_SIZE = 1000
 
@@ -32,7 +32,6 @@ export function buildListCacheKey(options?: {
   feedIds?: string[]
   starred?: boolean
   unreadOnly?: boolean
-  limit?: number
   offset?: number
 }): string {
   const feedIds = [...(options?.feedIds || [])].sort()
@@ -42,20 +41,40 @@ export function buildListCacheKey(options?: {
     feedIds,
     starred: !!options?.starred,
     unreadOnly: !!options?.unreadOnly,
-    limit: options?.limit ?? DEFAULT_ENTRY_PAGE_SIZE,
     offset: options?.offset ?? 0,
   })
 }
 
-/** Returns cached result if fresh, or an existing in-flight promise. null = miss. */
-export function getCachedListResult(cacheKey: string): EntryListResult | null {
+/** Returns cached result if fresh, sliced to limit. null = miss. */
+export function getCachedListResult(
+  cacheKey: string,
+  limit?: number,
+): EntryListResult | null {
   const cached = entryListCache.get(cacheKey)
   if (!cached) return null
   const ttl = cached.result?.entries?.length
     ? ENTRY_LIST_CACHE_TTL_MS
     : EMPTY_ENTRY_LIST_CACHE_TTL_MS
-  if (Date.now() - cached.cachedAt < ttl) return cached.result
+  if (Date.now() - cached.cachedAt < ttl) {
+    const entries = cached.result.entries
+    if (limit != null && entries.length < limit && cached.result.hasMore) {
+      // Cache has fewer entries than requested and more exist — refetch.
+      return null
+    }
+    if (limit != null && entries.length > limit) {
+      return { entries: entries.slice(0, limit), hasMore: true }
+    }
+    return cached.result
+  }
   return null
+}
+
+/** Manually populate the list cache (e.g. after a snapshot load). */
+export function setCachedListResult(
+  cacheKey: string,
+  result: EntryListResult,
+): void {
+  entryListCache.set(cacheKey, { result, cachedAt: Date.now() })
 }
 
 /** Fetch with in-flight dedup and cache store. */

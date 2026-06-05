@@ -56,10 +56,13 @@ function getFeedKey(feed: Feed, normalizedUrl: string): string {
 }
 
 function getNormalizedFeedUrl(feed: Feed): string {
+  if (feed.upstreamUrl && /^https?:\/\//i.test(feed.upstreamUrl)) {
+    return feed.upstreamUrl
+  }
   const rsshubInstance =
     settingsProvider.get().general.rsshubInstance?.trim() ||
     DEFAULT_RSSHUB_INSTANCE
-  return normalizeFeedUrl(feed.upstreamUrl || feed.url, rsshubInstance)
+  return normalizeFeedUrl(feed.url, rsshubInstance)
 }
 
 function getDesiredSource(feed: Feed): AggregatedFeedPayload['source'] {

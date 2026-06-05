@@ -79,10 +79,10 @@ describe('canonicalizeDiscoverRoute', () => {
     ).toBe('instagram/user/test')
   })
 
-  it('normalizes picnob to instagram', () => {
+  it('preserves picnob route as-is', () => {
     expect(
       canonicalizeDiscoverRoute('https://rsshub.app/picnob/user/test'),
-    ).toBe('instagram/user/test')
+    ).toBe('picnob/user/test')
   })
 
   it('normalizes twitter user case', () => {
@@ -97,6 +97,14 @@ describe('canonicalizeDiscoverRoute', () => {
         'https://rsshub.app/instagram/user/test?limit=100',
       ),
     ).toBe('instagram/user/test')
+  })
+
+  it('strips limit param for picnob', () => {
+    expect(
+      canonicalizeDiscoverRoute(
+        'https://rsshub.app/picnob/user/test?limit=100',
+      ),
+    ).toBe('picnob/user/test')
   })
 
   it('returns empty for empty input', () => {

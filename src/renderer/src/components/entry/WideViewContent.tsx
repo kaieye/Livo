@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 import { openExternalUrlSafe } from '../../services/external-url'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
+import { useStoreShallow } from '../../store/helpers'
 import {
   useGeneralSettingKey,
   useGeneralSettingsShallowSelector,
@@ -65,6 +66,7 @@ import {
 } from '../../lib/bilibili-video'
 import { getImageProxyFallbackUrls } from '../../lib/image-proxy'
 import { getEntryLoadLimit } from '../../lib/entry-load-limit'
+import { buildHomeFeedLoadOptions } from '../../lib/home-feed-scope'
 import {
   isRedundantRichText,
   normalizeLooseText,
@@ -308,7 +310,21 @@ export function WideViewContent() {
     searchQuery,
     setSearchQuery,
     search,
-  } = useEntryStore()
+  } = useStoreShallow(useEntryStore, (s) => ({
+    entries: s.entries,
+    isLoading: s.isLoading,
+    isLoadingMore: s.isLoadingMore,
+    hasMoreEntries: s.hasMoreEntries,
+    loadEntries: s.loadEntries,
+    loadMoreEntries: s.loadMoreEntries,
+    selectEntry: s.selectEntry,
+    markAllRead: s.markAllRead,
+    markAboveRead: s.markAboveRead,
+    markBelowRead: s.markBelowRead,
+    searchQuery: s.searchQuery,
+    setSearchQuery: s.setSearchQuery,
+    search: s.search,
+  }))
   const {
     selectedFeedId,
     feeds,
@@ -318,7 +334,16 @@ export function WideViewContent() {
     refreshAll,
     isRefreshing,
     refreshProgress,
-  } = useFeedStore()
+  } = useStoreShallow(useFeedStore, (s) => ({
+    selectedFeedId: s.selectedFeedId,
+    feeds: s.feeds,
+    activeView: s.activeView,
+    refreshFeed: s.refreshFeed,
+    refreshMultiple: s.refreshMultiple,
+    refreshAll: s.refreshAll,
+    isRefreshing: s.isRefreshing,
+    refreshProgress: s.refreshProgress,
+  }))
   const general = useGeneralSettingsShallowSelector((settings) => ({
     showRecommended: settings.showRecommended,
     language: settings.language,
@@ -348,11 +373,10 @@ export function WideViewContent() {
       : null
   }, [activeView, selectedFeedId, feeds])
   const [masonryProbeVersion, setMasonryProbeVersion] = useState(0)
-  const baseEntryLoadLimit = useMemo(
+  const entryLoadLimit = useMemo(
     () => getEntryLoadLimit(effectiveActiveView),
     [effectiveActiveView],
   )
-  const [entryLoadLimit, setEntryLoadLimit] = useState(baseEntryLoadLimit)
 
   // Video modal state
   const [videoEntry, setVideoEntry] = useState<Entry | null>(null)
@@ -376,46 +400,33 @@ export function WideViewContent() {
     () => new Map(feeds.map((f) => [f.id, f] as const)),
     [feeds],
   )
+  const userFeeds = useMemo(
+    () => feeds.filter((f) => f.category !== RECOMMENDED_CATEGORY),
+    [feeds],
+  )
 
-  // Compute feed IDs for the active view (excluding recommended feeds)
-  const viewFeedIds = useMemo(
+  const currentLoadOptions = useMemo(
     () =>
-      effectiveActiveView !== null
-        ? feeds
-            .filter(
-              (f) =>
-                (f.view ?? FeedViewType.Articles) === effectiveActiveView &&
-                f.category !== RECOMMENDED_CATEGORY &&
-                f.showInAll !== false,
-            )
-            .map((f) => f.id)
-        : undefined,
-    [feeds, effectiveActiveView],
+      buildHomeFeedLoadOptions({
+        selectedFeedId,
+        activeView: effectiveActiveView,
+        feeds: userFeeds,
+        unreadOnly: filterMode === 'unread',
+        limit: entryLoadLimit,
+      }),
+    [
+      effectiveActiveView,
+      entryLoadLimit,
+      filterMode,
+      selectedFeedId,
+      userFeeds,
+    ],
   )
 
   // Loading entries when feed selection changes
   useEffect(() => {
-    if (selectedFeedId === 'starred') {
-      loadEntries({ starred: true, limit: entryLoadLimit })
-    } else if (selectedFeedId) {
-      loadEntries({
-        feedId: selectedFeedId,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      loadEntries({
-        feedIds: viewFeedIds,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else {
-      loadEntries({
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    }
-  }, [selectedFeedId, filterMode, loadEntries, viewFeedIds, entryLoadLimit])
+    void loadEntries(currentLoadOptions)
+  }, [currentLoadOptions, loadEntries])
 
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
@@ -435,27 +446,8 @@ export function WideViewContent() {
           : t('common.all'))
 
   const reloadCurrentList = useCallback(() => {
-    if (selectedFeedId === 'starred') {
-      loadEntries({ starred: true, limit: entryLoadLimit })
-    } else if (selectedFeedId) {
-      loadEntries({
-        feedId: selectedFeedId,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else if (viewFeedIds && viewFeedIds.length > 0) {
-      loadEntries({
-        feedIds: viewFeedIds,
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    } else {
-      loadEntries({
-        unreadOnly: filterMode === 'unread',
-        limit: entryLoadLimit,
-      })
-    }
-  }, [entryLoadLimit, filterMode, loadEntries, selectedFeedId, viewFeedIds])
+    void loadEntries(currentLoadOptions)
+  }, [currentLoadOptions, loadEntries])
   const handleSearchQueryChange = useCallback(
     (value: string) => {
       setSearchQuery(value)
@@ -527,6 +519,7 @@ export function WideViewContent() {
   // Pre-compute masonry card data to avoid per-render extraction
   const masonryCards = useMemo<MasonryCardData[]>(() => {
     if (!isPicturesAllView) return []
+    const t0 = performance.now()
     const result: MasonryCardData[] = []
     for (const entry of renderEntries) {
       let firstImage = ''
@@ -574,6 +567,8 @@ export function WideViewContent() {
         publishedAt: entry.publishedAt || 0,
       })
     }
+    // PERF: mark masonryCards computation
+    performance.mark('vs:wideview-masonry')
     return result
     void masonryProbeVersion
   }, [isPicturesAllView, masonryProbeVersion, renderEntries])
@@ -608,10 +603,6 @@ export function WideViewContent() {
     scrollElementRef: containerRef,
     cacheKey: `${viewKey}:timeline`,
   })
-  useEffect(() => {
-    setEntryLoadLimit(baseEntryLoadLimit)
-  }, [baseEntryLoadLimit, effectiveActiveView, selectedFeedId, filterMode])
-
   const handlePagedEntryScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget
@@ -662,9 +653,22 @@ export function WideViewContent() {
     el.scrollTo({ top: 0, behavior: 'auto' })
   }, [effectiveActiveView, selectedFeedId])
 
+  // Single useLayoutEffect: measure + observe container width for Videos/Pictures,
+  // sync cached width on view switch to prevent flash, and mark perf events.
   useLayoutEffect(() => {
+    performance.mark('vs:child-commit')
+    performance.mark('vs:wideview-layout1')
+
+    // Sync cached width immediately to prevent first-render flash
+    const cached = rememberedContainerWidthByView.get(viewKey)
+    if (cached) {
+      setContainerWidth((prev) => (prev === cached ? prev : cached))
+    }
+
+    // Only Videos and Pictures views need ResizeObserver + width tracking
     if (effectiveActiveView !== FeedViewType.Videos && !isPicturesAllView)
       return
+
     const el = containerRef.current
     if (!el) return
 
@@ -674,14 +678,10 @@ export function WideViewContent() {
       setContainerWidth((prev) => (prev === newWidth ? prev : newWidth))
     }
 
-    // Initial measurement
     updateWidth()
 
-    // Use ResizeObserver for container resize
     const ro = new ResizeObserver(updateWidth)
     ro.observe(el)
-
-    // Also listen to window resize for maximize/restore
     window.addEventListener('resize', updateWidth)
 
     return () => {
@@ -689,26 +689,6 @@ export function WideViewContent() {
       window.removeEventListener('resize', updateWidth)
     }
   }, [effectiveActiveView, isPicturesAllView, viewKey])
-
-  // On view/feed switch, sync width immediately to prevent "first render oversized
-  // then shrink" flash when entering Pictures view.
-  useLayoutEffect(() => {
-    const cached = rememberedContainerWidthByView.get(viewKey)
-    if (cached) {
-      setContainerWidth((prev) => (prev === cached ? prev : cached))
-    }
-  }, [viewKey])
-
-  useLayoutEffect(() => {
-    if (effectiveActiveView !== FeedViewType.Videos && !isPicturesAllView)
-      return
-    const el = containerRef.current
-    if (el) {
-      const newWidth = Math.round(el.getBoundingClientRect().width)
-      rememberedContainerWidthByView.set(viewKey, newWidth)
-      setContainerWidth((prev) => (prev === newWidth ? prev : newWidth))
-    }
-  }, [viewKey, effectiveActiveView, isPicturesAllView])
 
   const videoColumnCount = useMemo(
     () => getVideoColumnCount(containerWidth),
@@ -1471,7 +1451,10 @@ function WideViewContextMenuWrapper({
   onMarkBelowRead: () => void
   onSharePoster: () => void
 }) {
-  const { markRead, toggleStar } = useEntryStore()
+  const { markRead, toggleStar } = useStoreShallow(useEntryStore, (s) => ({
+    markRead: s.markRead,
+    toggleStar: s.toggleStar,
+  }))
   const feedSiteUrl = useFeedStore(
     (state) => state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
   )

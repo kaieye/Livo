@@ -156,9 +156,7 @@ export function SubscribeConfigDialog({
       }
 
       onClose()
-      navigate(feedId ? ROUTES.feedDetail(feedId) : ROUTES.discover, {
-        replace: true,
-      })
+      navigate(ROUTES.discover, { replace: true })
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : String(error))
     } finally {
