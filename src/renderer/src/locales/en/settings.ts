@@ -87,6 +87,9 @@ export const enSettings = {
   showRecommended: 'Receive Recommended Feeds',
   showRecommendedDesc:
     'When off, recommended feeds stop refreshing and are hidden from lists',
+  showFeedRefreshErrorBadge: 'Feed error indicator',
+  showFeedRefreshErrorBadgeDesc:
+    'Show a warning icon next to feeds when the last refresh fails. The icon is suppressed for the first hour after each refresh attempt.',
   viewTabs: 'View Tabs',
   viewTabsDesc: 'Choose which tabs to show and drag to reorder',
   viewTabsReset: 'Reset',
@@ -383,6 +386,8 @@ export const enSettings = {
   refreshLogsSuccessCount: '{{count}} feeds refreshed successfully',
   refreshLogsFailedCount: '{{count}} failed',
   refreshLogsFailedFeeds: 'Failed feeds',
+  refreshLogsFeedSuccess: 'Refreshed successfully, {{count}} new entries',
+  refreshLogsFeedFailed: 'Refresh failed',
   refreshLogsMaxHint: 'Up to 60 most recent refresh records are retained.',
   agentPermissions: 'Agent Permissions',
   agentPermissionsDesc:

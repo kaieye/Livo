@@ -39,7 +39,6 @@ import {
   Image,
   Play,
   LayoutGrid,
-  Compass,
   Search,
   Sparkles,
   FolderPlus,
@@ -216,11 +215,25 @@ function getSidebarFeedDisplayTitle(feed: {
 
 type SidebarT = (key: string, options?: Record<string, string>) => string
 
+const FAILURE_BADGE_GRACE_MS = 60 * 60 * 1000 // 1 hour
+
 function getFeedRefreshIssueLabel(
-  feed: Pick<FeedWithCount, 'lastRefreshStatus' | 'lastRefreshError'>,
+  feed: Pick<
+    FeedWithCount,
+    'lastRefreshStatus' | 'lastRefreshError' | 'lastRefreshAttemptedAt'
+  >,
   t: SidebarT,
+  showErrorBadge?: boolean,
 ): string | null {
   if (feed.lastRefreshStatus !== 'failed') return null
+  if (showErrorBadge === false) return null
+  // Grace period: suppress the badge for the first hour after a refresh attempt
+  if (
+    feed.lastRefreshAttemptedAt != null &&
+    Date.now() - feed.lastRefreshAttemptedAt < FAILURE_BADGE_GRACE_MS
+  ) {
+    return null
+  }
   const error = feed.lastRefreshError?.trim()
   return error
     ? t('sidebar.feedRefreshFailed', { error })
@@ -1890,28 +1903,6 @@ export function Sidebar({ width }: { width?: number }) {
             <span className="flex-1 text-left">{t('sidebar.aiAssistant')}</span>
           </button>
 
-          <button
-            onClick={() => {
-              const isDiscoverRoute = location.pathname === '/discover'
-              navigate(isDiscoverRoute ? '/' : '/discover')
-            }}
-            className={`sidebar-item w-full ${isDiscoverOpen ? 'sidebar-item-active' : 'text-text-secondary dark:text-text-dark-secondary'}`}
-          >
-            <Compass size={18} />
-            <span className="flex-1 text-left">{t('sidebar.discover')}</span>
-          </button>
-
-          <button
-            onClick={toggleSearch}
-            className={`sidebar-item w-full ${isSearchOpen ? 'sidebar-item-active' : 'text-text-secondary dark:text-text-dark-secondary'}`}
-          >
-            <Search size={18} />
-            <span className="flex-1 text-left">{t('sidebar.search')}</span>
-            <kbd className="bg-surface-tertiary text-text-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
-              Ctrl+K
-            </kbd>
-          </button>
-
           {refreshHint && (
             <div
               className={`truncate rounded-lg px-3 py-1.5 text-xs ${
@@ -1935,6 +1926,23 @@ export function Sidebar({ width }: { width?: number }) {
                 size={18}
                 className={isRefreshing ? 'animate-spin' : ''}
               />
+            </button>
+            <button
+              onClick={() => {
+                const isDiscoverRoute = location.pathname === '/discover'
+                navigate(isDiscoverRoute ? '/' : '/discover')
+              }}
+              className={`sidebar-item flex-1 justify-center ${isDiscoverOpen ? 'sidebar-item-active' : 'text-text-secondary dark:text-text-dark-secondary'}`}
+              title={t('sidebar.discover')}
+            >
+              <Plus size={18} />
+            </button>
+            <button
+              onClick={toggleSearch}
+              className={`sidebar-item flex-1 justify-center ${isSearchOpen ? 'sidebar-item-active' : 'text-text-secondary dark:text-text-dark-secondary'}`}
+              title={t('sidebar.search')}
+            >
+              <Search size={18} />
             </button>
             <button
               onClick={() => navigate('/settings')}
@@ -2561,6 +2569,9 @@ const FeedCategory = memo(function FeedCategory({
   highlightedFeedIds,
 }: FeedCategoryProps) {
   const { t } = useTranslation()
+  const showFeedRefreshErrorBadge = useSettingsStore(
+    (s) => s.settings.general.showFeedRefreshErrorBadge,
+  )
   const [expanded, setExpanded] = useState(true)
   const isDropHover = dropTarget === category && dragFeedId !== null
   const shouldVirtualizeFeeds = feeds.length > 80
@@ -2647,7 +2658,11 @@ const FeedCategory = memo(function FeedCategory({
                 if (!feed) return null
                 const isSearchHighlighted = highlightedFeedIds.has(feed.id)
                 const displayTitle = getSidebarFeedDisplayTitle(feed)
-                const issueLabel = getFeedRefreshIssueLabel(feed, t)
+                const issueLabel = getFeedRefreshIssueLabel(
+                  feed,
+                  t,
+                  showFeedRefreshErrorBadge,
+                )
                 return (
                   <div
                     key={feed.id}
@@ -2704,7 +2719,11 @@ const FeedCategory = memo(function FeedCategory({
               {feeds.map((feed) => {
                 const isSearchHighlighted = highlightedFeedIds.has(feed.id)
                 const displayTitle = getSidebarFeedDisplayTitle(feed)
-                const issueLabel = getFeedRefreshIssueLabel(feed, t)
+                const issueLabel = getFeedRefreshIssueLabel(
+                  feed,
+                  t,
+                  showFeedRefreshErrorBadge,
+                )
                 return (
                   <div
                     key={feed.id}
@@ -2780,6 +2799,9 @@ const RecommendedSection = memo(function RecommendedSection({
   onContextMenu,
 }: RecommendedSectionProps) {
   const { t } = useTranslation()
+  const showFeedRefreshErrorBadge = useSettingsStore(
+    (s) => s.settings.general.showFeedRefreshErrorBadge,
+  )
   const [expanded, setExpanded] = useState(true)
   const totalUnread = feeds.reduce((sum, f) => sum + f.unreadCount, 0)
 
@@ -2808,7 +2830,11 @@ const RecommendedSection = memo(function RecommendedSection({
         <div className="space-y-0.5">
           {feeds.map((feed) => {
             const displayTitle = getSidebarFeedDisplayTitle(feed)
-            const issueLabel = getFeedRefreshIssueLabel(feed, t)
+            const issueLabel = getFeedRefreshIssueLabel(
+              feed,
+              t,
+              showFeedRefreshErrorBadge,
+            )
             return (
               <button
                 key={feed.id}

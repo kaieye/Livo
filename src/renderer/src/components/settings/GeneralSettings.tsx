@@ -314,6 +314,26 @@ export function GeneralSettings() {
         />
       </div>
 
+      {/* Feed refresh error indicator */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium">
+            {t('settings.showFeedRefreshErrorBadge')}
+          </label>
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
+            {t('settings.showFeedRefreshErrorBadgeDesc')}
+          </p>
+        </div>
+        <ToggleSwitch
+          checked={general.showFeedRefreshErrorBadge}
+          onChange={(v) =>
+            void updateSettingsSection('general', {
+              showFeedRefreshErrorBadge: v,
+            })
+          }
+        />
+      </div>
+
       {/* View Tabs Configuration */}
       <ViewTabsConfig />
 

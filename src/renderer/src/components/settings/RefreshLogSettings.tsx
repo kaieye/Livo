@@ -1,7 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Clock, Trash2, RefreshCw, Loader2, FileText } from 'lucide-react'
-import type { RefreshLogEntry } from '../../../../shared/types'
+import {
+  Clock,
+  Trash2,
+  RefreshCw,
+  Loader2,
+  FileText,
+  X,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react'
+import type {
+  RefreshLogEntry,
+  RefreshRunItemResult,
+} from '../../../../shared/types'
 
 function formatDateTime(timestamp: number): string {
   if (!timestamp || timestamp <= 0) return '--'
@@ -13,12 +25,101 @@ function formatDateTime(timestamp: number): string {
   return `${month}-${day} ${hour}:${minute}`
 }
 
+function sortItems(items: RefreshRunItemResult[]): RefreshRunItemResult[] {
+  return [...items].sort((a, b) => {
+    if (a.status === 'failed' && b.status !== 'failed') return -1
+    if (a.status !== 'failed' && b.status === 'failed') return 1
+    return a.feedTitle.localeCompare(b.feedTitle)
+  })
+}
+
+function FeedDetailModal({
+  log,
+  onClose,
+  t,
+}: {
+  log: RefreshLogEntry
+  onClose: () => void
+  t: (key: string, opts?: Record<string, unknown>) => string
+}) {
+  const items = sortItems(log.items ?? [])
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="dark:bg-surface-dark-secondary flex max-h-[70vh] w-[520px] max-w-[90vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
+          <div>
+            <h3 className="text-text-primary dark:text-text-dark-primary text-sm font-semibold">
+              {formatDateTime(log.refreshedAt)}
+            </h3>
+            <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
+              {t('settings.refreshLogsSuccessCount', {
+                count: log.successFeedCount,
+              })}
+              {' · '}
+              {t('settings.refreshLogsFailedCount', {
+                count: log.failedFeedCount,
+              })}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Feed list */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ul className="divide-border dark:divide-border-dark divide-y">
+            {items.map((item) => (
+              <li
+                key={item.feedId}
+                className="flex items-start gap-3 px-5 py-3"
+              >
+                {item.status === 'succeeded' ? (
+                  <CheckCircle2
+                    size={16}
+                    className="mt-0.5 shrink-0 text-green-500"
+                  />
+                ) : (
+                  <XCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-text-primary dark:text-text-dark-primary truncate text-sm font-medium">
+                    {item.feedTitle}
+                  </p>
+                  <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
+                    {item.status === 'succeeded'
+                      ? t('settings.refreshLogsFeedSuccess', {
+                          count: item.newEntries,
+                        })
+                      : item.error || t('settings.refreshLogsFeedFailed')}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function RefreshLogSettings() {
   const { t } = useTranslation()
   const [logs, setLogs] = useState<RefreshLogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [clearing, setClearing] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [detailLog, setDetailLog] = useState<RefreshLogEntry | null>(null)
 
   const loadLogs = useCallback(async () => {
     setIsLoading(true)
@@ -114,37 +215,40 @@ export function RefreshLogSettings() {
         </div>
       ) : (
         <div className="space-y-3">
-          {logs.map((log, index) => (
-            <div
-              key={log.id}
-              className="border-border bg-surface dark:bg-surface-dark-secondary rounded-lg border p-3"
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
-                  {formatDateTime(log.refreshedAt)}
-                </span>
-                <span className="text-text-muted dark:text-text-dark-muted text-xs">
-                  #{logs.length - index}
-                </span>
-              </div>
-              <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
-                {t('settings.refreshLogsSuccessCount', {
-                  count: log.successFeedCount,
-                })}
-                {' · '}
-                {t('settings.refreshLogsFailedCount', {
-                  count: log.failedFeedCount,
-                })}
-              </p>
-              {log.failedFeedTitles && log.failedFeedTitles.length > 0 && (
-                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 line-clamp-3 text-xs">
-                  {t('settings.refreshLogsFailedFeeds')}
-                  {': '}
-                  {log.failedFeedTitles.join('、')}
+          {logs.map((log, index) => {
+            const hasItems = log.items && log.items.length > 0
+            return (
+              <button
+                key={log.id}
+                type="button"
+                onClick={() => hasItems && setDetailLog(log)}
+                disabled={!hasItems}
+                className={`border-border bg-surface dark:bg-surface-dark-secondary w-full rounded-lg border p-3 text-left ${
+                  hasItems
+                    ? 'hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary cursor-pointer transition-colors'
+                    : 'cursor-default'
+                }`}
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
+                    {formatDateTime(log.refreshedAt)}
+                  </span>
+                  <span className="text-text-muted dark:text-text-dark-muted text-xs">
+                    #{logs.length - index}
+                  </span>
+                </div>
+                <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
+                  {t('settings.refreshLogsSuccessCount', {
+                    count: log.successFeedCount,
+                  })}
+                  {' · '}
+                  {t('settings.refreshLogsFailedCount', {
+                    count: log.failedFeedCount,
+                  })}
                 </p>
-              )}
-            </div>
-          ))}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -152,6 +256,15 @@ export function RefreshLogSettings() {
       <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
         {t('settings.refreshLogsMaxHint')}
       </p>
+
+      {/* Detail modal */}
+      {detailLog && (
+        <FeedDetailModal
+          log={detailLog}
+          onClose={() => setDetailLog(null)}
+          t={t}
+        />
+      )}
     </div>
   )
 }

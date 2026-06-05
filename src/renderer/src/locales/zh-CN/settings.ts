@@ -78,6 +78,9 @@ export const zhCNSettings = {
   showRecommended: '接收推荐源',
   showRecommendedDesc:
     '开启后接收并显示推荐源；关闭后推荐源将不再刷新，且不在列表中显示',
+  showFeedRefreshErrorBadge: '订阅源异常提示',
+  showFeedRefreshErrorBadgeDesc:
+    '刷新失败时在订阅源旁显示警告图标，每次刷新后的一小时内暂不提示。',
   viewTabs: '栏目管理',
   viewTabsDesc: '选择要显示的栏目，拖拽调整顺序',
   viewTabsReset: '恢复默认',
@@ -359,6 +362,8 @@ export const zhCNSettings = {
   refreshLogsSuccessCount: '成功刷新 {{count}} 个订阅源',
   refreshLogsFailedCount: '失败 {{count}} 个',
   refreshLogsFailedFeeds: '失败订阅源',
+  refreshLogsFeedSuccess: '刷新成功，新增 {{count}} 条',
+  refreshLogsFeedFailed: '刷新失败',
   refreshLogsMaxHint: '最多保留最近 60 条刷新记录。',
   agentPermissions: 'Agent 权限',
   agentPermissionsDesc:

@@ -42,6 +42,7 @@ export interface AppSettings {
     renderMarkAsRead: boolean
     imageProxy: boolean
     showRecommended: boolean
+    showFeedRefreshErrorBadge: boolean
     viewTabs: Array<{ id: FeedViewType; visible: boolean }>
     feedColumns: Array<{ id: FeedColumnId; visible: boolean }>
     videoPagination: boolean
@@ -133,6 +134,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     renderMarkAsRead: true,
     imageProxy: false,
     showRecommended: true,
+    showFeedRefreshErrorBadge: true,
     viewTabs: [
       { id: FeedViewType.Articles, visible: true },
       { id: FeedViewType.SocialMedia, visible: true },
