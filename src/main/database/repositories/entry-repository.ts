@@ -189,6 +189,10 @@ export class EntryRepository implements IEntryRepository {
     const existing = this.getEntryById(id)
     if (!existing) return
     const merged = { ...existing, ...updates }
+    this.persistEntry(merged)
+  }
+
+  private persistEntry(entry: Entry): void {
     this.db
       .prepare(
         `
@@ -205,33 +209,33 @@ export class EntryRepository implements IEntryRepository {
     `,
       )
       .run(
-        merged.feedId,
-        merged.title,
-        merged.url,
-        merged.content ?? null,
-        merged.summary ?? null,
-        merged.readabilityContent ?? null,
-        merged.readabilityTitle ?? null,
-        merged.readabilityExcerpt ?? null,
-        merged.readabilitySiteName ?? null,
-        merged.readabilityLength ?? null,
-        merged.readabilityFetchedAt ?? null,
-        merged.readabilityError ?? null,
-        merged.aiSummary ?? null,
-        merged.aiSummaryGeneratedAt ?? null,
-        merged.aiSummaryError ?? null,
-        merged.notifiedAt ?? null,
-        merged.author ?? null,
-        merged.authorAvatar ?? null,
-        merged.imageUrl ?? null,
-        merged.media ? JSON.stringify(merged.media) : null,
-        merged.publishedAt,
-        merged.isRead ? 1 : 0,
-        merged.isStarred ? 1 : 0,
-        merged.readProgress ?? null,
-        merged.isListened ? 1 : 0,
-        merged.listenProgress ?? null,
-        id,
+        entry.feedId,
+        entry.title,
+        entry.url,
+        entry.content ?? null,
+        entry.summary ?? null,
+        entry.readabilityContent ?? null,
+        entry.readabilityTitle ?? null,
+        entry.readabilityExcerpt ?? null,
+        entry.readabilitySiteName ?? null,
+        entry.readabilityLength ?? null,
+        entry.readabilityFetchedAt ?? null,
+        entry.readabilityError ?? null,
+        entry.aiSummary ?? null,
+        entry.aiSummaryGeneratedAt ?? null,
+        entry.aiSummaryError ?? null,
+        entry.notifiedAt ?? null,
+        entry.author ?? null,
+        entry.authorAvatar ?? null,
+        entry.imageUrl ?? null,
+        entry.media ? JSON.stringify(entry.media) : null,
+        entry.publishedAt,
+        entry.isRead ? 1 : 0,
+        entry.isStarred ? 1 : 0,
+        entry.readProgress ?? null,
+        entry.isListened ? 1 : 0,
+        entry.listenProgress ?? null,
+        entry.id,
       )
   }
 
@@ -483,7 +487,9 @@ export class EntryRepository implements IEntryRepository {
         }
       }
       if (bestMatch && bestDelta <= 48 * 60 * 60 * 1000) {
-        return { added: false, changed: mergeTextFromEntry(bestMatch, entry) }
+        const changed = mergeTextFromEntry(bestMatch, entry)
+        if (changed) this.persistEntry(bestMatch)
+        return { added: false, changed }
       }
       return { added: false, changed: false }
     }
@@ -496,11 +502,13 @@ export class EntryRepository implements IEntryRepository {
           .get(entry.feedId, entry.url) as any
         if (existingByUrl) {
           const existing = entryFromRow(existingByUrl)
+          const changed = mergeEntryData(existing, entry, {
+            onPublishedAtAdvanced: () => {},
+          })
+          if (changed) this.persistEntry(existing)
           return {
             added: false,
-            changed: mergeEntryData(existing, entry, {
-              onPublishedAtAdvanced: () => {},
-            }),
+            changed,
           }
         }
       }
@@ -511,11 +519,13 @@ export class EntryRepository implements IEntryRepository {
       for (const row of sameFeedRows) {
         const existing = entryFromRow(row)
         if (makeEntryIdentityKey(existing) === identityKey) {
+          const changed = mergeEntryData(existing, entry, {
+            onPublishedAtAdvanced: () => {},
+          })
+          if (changed) this.persistEntry(existing)
           return {
             added: false,
-            changed: mergeEntryData(existing, entry, {
-              onPublishedAtAdvanced: () => {},
-            }),
+            changed,
           }
         }
       }

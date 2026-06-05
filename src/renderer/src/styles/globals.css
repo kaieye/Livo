@@ -130,8 +130,43 @@
   @apply bg-transparent p-0;
 }
 
-.entry-content blockquote {
-  @apply border-accent/30 bg-accent/[0.03] my-6 rounded-r-lg border-l-4 py-2 pl-4 italic;
+.entry-content blockquote,
+.prose blockquote {
+  margin: 1rem 0;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 0.5rem;
+  background: var(--color-bg-secondary);
+  padding: 0.75rem 1rem;
+  color: var(--color-text-primary);
+  font-style: normal;
+}
+
+.entry-content blockquote > b:first-child,
+.prose blockquote > b:first-child,
+.entry-content .social-quote-author,
+.prose .social-quote-author {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: 0.92em;
+}
+
+.entry-content .social-quote-body,
+.prose .social-quote-body {
+  color: var(--color-text-primary);
+}
+
+.entry-content .social-quote-body > :last-child,
+.prose .social-quote-body > :last-child {
+  margin-bottom: 0;
+}
+
+.entry-content .social-quote-footer,
+.prose .social-quote-footer {
+  margin-top: 0.75rem;
+  color: var(--color-text-tertiary);
+  font-size: 0.82em;
 }
 
 .entry-content table {

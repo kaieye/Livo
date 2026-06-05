@@ -43,6 +43,67 @@ function bestTitle(rawTitle: string, summary: string): string {
   return rawTitle
 }
 
+function normalizeSocialHandle(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+}
+
+function parseNitterRetweetTitle(rawTitle: string): {
+  retweetedBy: string
+  title: string
+} | null {
+  const match = String(rawTitle || '').match(
+    /^RT by @([a-zA-Z0-9_]{1,15}):\s*/i,
+  )
+  if (!match?.[1]) return null
+
+  return {
+    retweetedBy: match[1],
+    title: rawTitle.slice(match[0].length),
+  }
+}
+
+function isNitterPureRetweetTitle(rawTitle: string, author: unknown): boolean {
+  const retweet = parseNitterRetweetTitle(rawTitle)
+  if (!retweet) return false
+
+  // nitter 纯转发的 creator/link 指向原作者，RT by 才是订阅账号。
+  const itemAuthor = normalizeSocialHandle(author)
+  if (!itemAuthor) return false
+  return itemAuthor !== normalizeSocialHandle(retweet.retweetedBy)
+}
+
+function formatHandle(value: unknown): string {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  return raw.startsWith('@') ? raw : `@${raw}`
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function escapeHtmlAttr(value: string): string {
+  return escapeHtmlText(value).replace(/"/g, '&quot;')
+}
+
+function buildNitterPureRetweetContent(
+  content: string,
+  originalAuthor: unknown,
+  originalUrl: string,
+): string {
+  const authorLabel = formatHandle(originalAuthor) || 'Original post'
+  const footer = originalUrl
+    ? `<footer class="social-quote-footer">&mdash; <cite><a href="${escapeHtmlAttr(originalUrl)}">${escapeHtmlText(originalUrl)}</a></cite></footer>`
+    : ''
+  return `<blockquote class="social-quote-card"><div class="social-quote-author">${escapeHtmlText(authorLabel)}</div><div class="social-quote-body">${content}</div>${footer}</blockquote>`
+}
+
 function resolvePublishedAt(
   item: Record<string, any>,
   rawItem: Record<string, unknown>,
@@ -160,16 +221,30 @@ function buildSingleEntry(
     : canonicalOrBest || item.link || ''
 
   const firstPhoto = extractedMedia.find((m) => m.type === 'photo' && m.url)
+  const rawTitle = item.title || ''
+  const nitterRetweet = parseNitterRetweetTitle(rawTitle)
+  const rawAuthor = item.creator || item.author || ''
+  const isNitterPureRetweet = isNitterPureRetweetTitle(rawTitle, rawAuthor)
+  const title = isNitterPureRetweet
+    ? `RT ${formatHandle(rawAuthor)}`
+    : bestTitle(nitterRetweet?.title || rawTitle, summary)
+  const entryContent = isNitterPureRetweet
+    ? buildNitterPureRetweetContent(content, rawAuthor, finalUrl)
+    : content
+  const author = isNitterPureRetweet
+    ? formatHandle(nitterRetweet?.retweetedBy)
+    : rawAuthor
+  const authorAvatar = extractAuthorAvatar(rawItem, authorAvatarSeed)
 
   return {
     id: uuidv4(),
     feedId,
-    title: bestTitle(item.title || '', summary),
+    title,
     url: finalUrl,
-    content,
+    content: entryContent,
     summary,
-    author: item.creator || item.author || '',
-    authorAvatar: extractAuthorAvatar(rawItem, authorAvatarSeed),
+    author,
+    authorAvatar,
     imageUrl: firstPhoto?.url || derivedImage,
     media: extractedMedia,
     publishedAt: resolvePublishedAt(item, rawItem, now),

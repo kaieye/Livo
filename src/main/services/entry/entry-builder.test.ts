@@ -3,6 +3,44 @@ import { FeedViewType } from '../../../shared/types/index'
 import { buildEntriesFromParsedItems } from './entry-builder'
 
 describe('entry builder', () => {
+  it('按 nitter 纯转发 item 构建为订阅源作者和原文引用块', async () => {
+    const [entry] = await buildEntriesFromParsedItems(
+      'feed-1',
+      [
+        {
+          title:
+            'RT by @elonmusk: Il y a une chose que peu de gens ont compris',
+          link: 'https://nitter.net/brivael/status/2062674109574898175#m',
+          guid: '2062674109574898175',
+          creator: '@brivael',
+          content:
+            '<p>Il y a une chose que peu de gens ont compris</p><a href="https://nitter.net/brivael/status/2062674109574898175#m">Video</a>',
+          contentSnippet: 'Il y a une chose que peu de gens ont compris',
+        },
+      ],
+      'https://nitter.net/pic/elonmusk-avatar.jpg',
+      FeedViewType.SocialMedia,
+      1_700_000_000_000,
+    )
+
+    expect(entry.title).toBe('RT @brivael')
+    expect(entry.author).toBe('@elonmusk')
+    expect(entry.url).toBe(
+      'https://nitter.net/brivael/status/2062674109574898175#m',
+    )
+    expect(entry.authorAvatar).toBe(
+      'https://nitter.net/pic/elonmusk-avatar.jpg',
+    )
+    expect(entry.content).toContain('class="social-quote-card"')
+    expect(entry.content).toContain(
+      '<div class="social-quote-author">@brivael</div>',
+    )
+    expect(entry.content).toContain(
+      'Il y a une chose que peu de gens ont compris',
+    )
+    expect(entry.content).not.toContain('RT by @elonmusk')
+  })
+
   it('builds podcast content from iTunes summary and audio enclosure', async () => {
     const [entry] = await buildEntriesFromParsedItems(
       'feed-1',

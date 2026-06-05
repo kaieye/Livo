@@ -130,4 +130,63 @@ describe('entry dedupe helpers', () => {
     expect(existing.author).toBe('月球大叔')
     expect(existing.publishedAt).toBe(incoming.publishedAt)
   })
+
+  it('upgrades legacy nitter pure retweets to quote-card presentation', () => {
+    const existing = createEntry({
+      title:
+        'RT by @elonmusk: Il y a une chose que peu de gens ont compris, et qui sera pourtant évidente dans dix ans.',
+      url: 'https://nitter.net/brivael/status/2062674109574898175#m',
+      content:
+        '<p>Il y a une chose que peu de gens ont compris, et qui sera pourtant évidente dans dix ans.</p>',
+      author: '@brivael',
+      authorAvatar: 'https://nitter.net/pic/brivael-avatar.jpg',
+    })
+    const incoming = createEntry({
+      id: 'incoming',
+      title: 'RT @brivael',
+      url: existing.url,
+      content:
+        '<blockquote class="social-quote-card"><div class="social-quote-author">@brivael</div></blockquote>',
+      author: '@elonmusk',
+      authorAvatar: 'https://nitter.net/pic/elonmusk-avatar.jpg',
+    })
+
+    const changed = mergeEntryData(existing, incoming)
+
+    expect(changed).toBe(true)
+    expect(existing.title).toBe('RT @brivael')
+    expect(existing.content).toContain('social-quote-card')
+    expect(existing.author).toBe('@elonmusk')
+    expect(existing.authorAvatar).toBe(
+      'https://nitter.net/pic/elonmusk-avatar.jpg',
+    )
+  })
+
+  it('replaces stale nitter pure retweet quote-card content', () => {
+    const existing = createEntry({
+      title: 'RT @brivael',
+      url: 'https://nitter.net/brivael/status/2062674109574898175#m',
+      content:
+        '<blockquote class="social-quote-card"><div class="social-quote-author">@brivael</div><div class="social-quote-body"><p>RT by @elonmusk: stale body</p></div></blockquote>',
+      author: '@elonmusk',
+      authorAvatar: 'https://nitter.net/pic/elonmusk-avatar.jpg',
+    })
+    const incoming = createEntry({
+      id: 'incoming',
+      title: 'RT @brivael',
+      url: existing.url,
+      content:
+        '<blockquote class="social-quote-card"><div class="social-quote-author">@brivael</div><div class="social-quote-body"><p>Il y a une chose que peu de gens ont compris</p></div></blockquote>',
+      author: '@elonmusk',
+      authorAvatar: 'https://nitter.net/pic/elonmusk-avatar.jpg',
+    })
+
+    const changed = mergeEntryData(existing, incoming)
+
+    expect(changed).toBe(true)
+    expect(existing.content).toContain(
+      'Il y a une chose que peu de gens ont compris',
+    )
+    expect(existing.content).not.toContain('stale body')
+  })
 })

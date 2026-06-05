@@ -15,9 +15,32 @@ import {
 
 const MATCH_WINDOW_MS = 48 * 60 * 60 * 1000
 const NEAR_DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+const SOCIAL_QUOTE_CARD_CLASS = 'social-quote-card'
 
 export function isBrokenScraperEntry(entry: Entry): boolean {
   return /instagram\.com\/(?:p|reel)\/\d{13,}\/?$/i.test(entry.url || '')
+}
+
+function hasSocialQuoteCard(content: string | undefined): boolean {
+  return String(content || '').includes(SOCIAL_QUOTE_CARD_CLASS)
+}
+
+function isNitterRetweetDisplayTitle(title: string | undefined): boolean {
+  return /^RT\s+@[a-zA-Z0-9_]{1,15}\s*$/.test(String(title || '').trim())
+}
+
+function isLegacyNitterRetweetTitle(title: string | undefined): boolean {
+  return /^RT by @[a-zA-Z0-9_]{1,15}:\s*/i.test(String(title || '').trim())
+}
+
+function shouldUpgradeNitterRetweetPresentation(
+  existing: Entry,
+  incoming: Entry,
+): boolean {
+  if (!isNitterRetweetDisplayTitle(incoming.title)) return false
+  if (!hasSocialQuoteCard(incoming.content)) return false
+  if (isLegacyNitterRetweetTitle(existing.title)) return true
+  return !!incoming.url && incoming.url === existing.url
 }
 
 export function mergeTextFromEntry(target: Entry, source: Entry): boolean {
@@ -59,6 +82,16 @@ export function mergeEntryData(
     changed = true
   }
 
+  const shouldUpgradeNitterRetweet = shouldUpgradeNitterRetweetPresentation(
+    existing,
+    incoming,
+  )
+
+  if (shouldUpgradeNitterRetweet && existing.title !== incoming.title) {
+    existing.title = incoming.title
+    changed = true
+  }
+
   if ((incoming.publishedAt || 0) > (existing.publishedAt || 0)) {
     existing.publishedAt = incoming.publishedAt
     changed = true
@@ -86,7 +119,12 @@ export function mergeEntryData(
     }
   }
 
-  if ((incoming.content || '').length > (existing.content || '').length) {
+  if (shouldUpgradeNitterRetweet && incoming.content !== existing.content) {
+    existing.content = incoming.content
+    changed = true
+  } else if (
+    (incoming.content || '').length > (existing.content || '').length
+  ) {
     existing.content = incoming.content
     changed = true
   }
@@ -132,10 +170,26 @@ export function mergeEntryData(
     changed = true
   }
   if (
+    shouldUpgradeNitterRetweet &&
+    incoming.authorAvatar &&
+    incoming.authorAvatar !== existing.authorAvatar
+  ) {
+    existing.authorAvatar = incoming.authorAvatar
+    changed = true
+  }
+  if (
     (incoming.author || '').trim() &&
     (!(existing.author || '').trim() ||
       (existing.author || '').includes('投稿视频') ||
       (existing.author || '').includes('视频分享')) &&
+    incoming.author !== existing.author
+  ) {
+    existing.author = incoming.author
+    changed = true
+  }
+  if (
+    shouldUpgradeNitterRetweet &&
+    (incoming.author || '').trim() &&
     incoming.author !== existing.author
   ) {
     existing.author = incoming.author

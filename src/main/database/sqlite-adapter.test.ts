@@ -215,6 +215,51 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
     })
   })
 
+  it('persists merged entry fields when an existing URL is reinserted', () => {
+    const adapter = createAdapter()
+    adapter.insertFeed(makeFeed({ id: 'feed-1' }))
+
+    const url = 'https://nitter.net/brivael/status/2062674109574898175#m'
+    adapter.insertEntry(
+      makeEntry({
+        id: 'legacy-retweet',
+        title:
+          'RT by @elonmusk: Il y a une chose que peu de gens ont compris, et qui sera pourtant évidente dans dix ans.',
+        url,
+        content:
+          '<blockquote class="social-quote-card"><div class="social-quote-author">@brivael</div><div class="social-quote-body"><p>RT by @elonmusk: stale body</p></div></blockquote>',
+        author: '@brivael',
+        authorAvatar: 'https://nitter.net/pic/brivael-avatar.jpg',
+        isRead: true,
+        isStarred: true,
+      }),
+    )
+
+    const added = adapter.insertEntry(
+      makeEntry({
+        id: 'parsed-retweet',
+        title: 'RT @brivael',
+        url,
+        content:
+          '<blockquote class="social-quote-card"><div class="social-quote-author">@brivael</div></blockquote>',
+        author: '@elonmusk',
+        authorAvatar: 'https://nitter.net/pic/elonmusk-avatar.jpg',
+      }),
+    )
+
+    const stored = adapter.getEntryById('legacy-retweet')
+    expect(added).toBe(false)
+    expect(stored).toMatchObject({
+      title: 'RT @brivael',
+      author: '@elonmusk',
+      authorAvatar: 'https://nitter.net/pic/elonmusk-avatar.jpg',
+      isRead: true,
+      isStarred: true,
+    })
+    expect(stored?.content).toContain('social-quote-card')
+    expect(stored?.content).not.toContain('stale body')
+  })
+
   it('supports keyset pagination with publishedAt and id ordering', () => {
     const adapter = createAdapter()
     adapter.insertFeed(makeFeed({ id: 'feed-1' }))
