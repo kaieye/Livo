@@ -47,13 +47,49 @@ function writeLog(level: LogLevel, message: string): void {
   appendFileSync(getLogFilePath(), line, 'utf-8')
 }
 
+// On Windows, console.log/warn/error encodes through the system codepage (e.g. GBK),
+// which garbles UTF-8 Chinese characters. Writing a UTF-8 Buffer to the raw stdout/stderr
+// fd bypasses the codepage conversion and renders correctly in any modern terminal.
+function consoleLog(...args: unknown[]): void {
+  try {
+    const line =
+      args.map((a) => (typeof a === 'string' ? a : toMessage(a))).join(' ') +
+      '\n'
+    process.stdout.write(Buffer.from(line, 'utf-8'))
+  } catch {
+    console.log(...args)
+  }
+}
+
+function consoleWarn(...args: unknown[]): void {
+  try {
+    const line =
+      args.map((a) => (typeof a === 'string' ? a : toMessage(a))).join(' ') +
+      '\n'
+    process.stderr.write(Buffer.from(line, 'utf-8'))
+  } catch {
+    console.warn(...args)
+  }
+}
+
+function consoleError(...args: unknown[]): void {
+  try {
+    const line =
+      args.map((a) => (typeof a === 'string' ? a : toMessage(a))).join(' ') +
+      '\n'
+    process.stderr.write(Buffer.from(line, 'utf-8'))
+  } catch {
+    console.error(...args)
+  }
+}
+
 export function logInfo(message: string, ...details: unknown[]): void {
-  console.log(message, ...details)
+  consoleLog(message, ...details)
   writeLog('info', [message, ...details.map(toMessage)].join(' '))
 }
 
 export function logWarn(message: string, ...details: unknown[]): void {
-  console.warn(message, ...details)
+  consoleWarn(message, ...details)
   writeLog('warn', [message, ...details.map(toMessage)].join(' '))
 }
 
@@ -62,7 +98,7 @@ export function logWarnQuiet(message: string, ...details: unknown[]): void {
 }
 
 export function logError(message: string, ...details: unknown[]): void {
-  console.error(message, ...details)
+  consoleError(message, ...details)
   writeLog('error', [message, ...details.map(toMessage)].join(' '))
 }
 
