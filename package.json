@@ -6,7 +6,7 @@
   "main": "./out/main/index.js",
   "type": "module",
   "author": "Livo",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "packageManager": "pnpm@10.17.0",
   "scripts": {
     "dev": "set ELECTRON_RUN_AS_NODE=& electron-vite dev --config config/electron.vite.config.ts",

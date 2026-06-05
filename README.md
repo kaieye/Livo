@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/OpenAI_SDK-4.x-412991" alt="OpenAI" />
   <img src="https://img.shields.io/badge/Vite-5-646cff" alt="Vite" />
   <a href="./LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-0f766e" alt="MIT" />
+    <img src="https://img.shields.io/badge/License-AGPL--3.0-0f766e" alt="AGPL-3.0" />
   </a>
 </p>
 
@@ -145,4 +145,4 @@ pnpm test
 
 ## 许可证
 
-MIT
+AGPL-3.0
