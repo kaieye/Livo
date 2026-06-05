@@ -16,7 +16,6 @@ describe('getTransitionKey', () => {
     expect(getTransitionKey('/entry/abc')).toBe('entry')
     expect(getTransitionKey('/video/abc')).toBe('video')
     expect(getTransitionKey('/image/abc/2')).toBe('image')
-    expect(getTransitionKey('/feed-detail/9')).toBe('feed-detail')
     expect(getTransitionKey('/login/bilibili')).toBe('login')
   })
 

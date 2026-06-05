@@ -4,7 +4,6 @@ import App from '../App'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
 const DigestPage = lazy(() => import('../pages/DigestPage'))
-const FeedDetailPage = lazy(() => import('../pages/FeedDetailPage'))
 const ArticleDetailPage = lazy(() => import('../pages/ArticleDetailPage'))
 const VideoPlayerPage = lazy(() => import('../pages/VideoPlayerPage'))
 const ImageViewerPage = lazy(() => import('../pages/ImageViewerPage'))
@@ -86,14 +85,6 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={null}>
             <DigestPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'feed-detail/:feedId',
-        element: (
-          <Suspense fallback={null}>
-            <FeedDetailPage />
           </Suspense>
         ),
       },

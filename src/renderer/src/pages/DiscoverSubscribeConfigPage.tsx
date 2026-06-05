@@ -152,7 +152,7 @@ export default function DiscoverSubscribeConfigPage() {
           view: selectedView,
           imageUrl: effectiveTarget.imageUrl || existingFeed.imageUrl,
         })
-        navigate(ROUTES.feedDetail(existingFeed.id), { replace: true })
+        navigate(ROUTES.feed(existingFeed.id), { replace: true })
         return
       }
 

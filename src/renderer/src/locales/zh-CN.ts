@@ -5,7 +5,6 @@ import { zhCNDiscoverPreview } from './zh-CN/discover-preview'
 import { zhCNDiscoverSubscribeConfig } from './zh-CN/discover-subscribe-config'
 import { zhCNEntry } from './zh-CN/entry'
 import { zhCNErrorBoundary } from './zh-CN/error-boundary'
-import { zhCNFeedDetail } from './zh-CN/feed-detail'
 import { zhCNArticleDetail } from './zh-CN/article-detail'
 import { zhCNImportProgress } from './zh-CN/import-progress'
 import { zhCNQuickSearch } from './zh-CN/quick-search'
@@ -146,8 +145,6 @@ export const zhCN = {
   recommendations: zhCNRecommendations,
 
   contextMenu: zhCNContextMenu,
-
-  feedDetail: zhCNFeedDetail,
 
   articleDetail: zhCNArticleDetail,
 

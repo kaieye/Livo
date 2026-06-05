@@ -5,7 +5,6 @@ import { enDiscoverPreview } from './en/discover-preview'
 import { enDiscoverSubscribeConfig } from './en/discover-subscribe-config'
 import { enEntry } from './en/entry'
 import { enErrorBoundary } from './en/error-boundary'
-import { enFeedDetail } from './en/feed-detail'
 import { enArticleDetail } from './en/article-detail'
 import { enImportProgress } from './en/import-progress'
 import { enQuickSearch } from './en/quick-search'
@@ -148,8 +147,6 @@ export const en = {
   recommendations: enRecommendations,
 
   contextMenu: enContextMenu,
-
-  feedDetail: enFeedDetail,
 
   articleDetail: enArticleDetail,
 

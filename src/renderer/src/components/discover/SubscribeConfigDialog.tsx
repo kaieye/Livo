@@ -117,7 +117,7 @@ export function SubscribeConfigDialog({
           imageUrl: effectiveTarget.imageUrl || existingFeed.imageUrl,
         })
         onClose()
-        navigate(ROUTES.feedDetail(existingFeed.id), { replace: true })
+        navigate(ROUTES.feed(existingFeed.id), { replace: true })
         return
       }
 

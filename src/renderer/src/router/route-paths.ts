@@ -58,7 +58,6 @@ export const ROUTES = {
     const slug = VIEW_TYPE_SLUGS[view]
     return slug ? `/${slug}/feed/${feedId}` : `/feed/${feedId}`
   },
-  feedDetail: (feedId: string) => `/feed-detail/${feedId}`,
   entry: (entryId: string) => `/entry/${entryId}`,
   video: (entryId: string) => `/video/${entryId}`,
   image: (entryId: string, index?: number) =>
@@ -97,7 +96,6 @@ export const VIEW_TYPE_FROM_SLUG: Record<string, FeedViewType> = {
 /** Known non-view-type path segments that should not be treated as view filters. */
 const NON_VIEW_PATHS = new Set([
   'feed',
-  'feed-detail',
   'entry',
   'video',
   'image',

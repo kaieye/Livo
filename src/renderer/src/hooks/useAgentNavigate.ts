@@ -38,7 +38,7 @@ export function useAgentNavigate() {
             navigate(ROUTES.entry(action.entryId))
             return
           case 'open-feed-detail':
-            navigate(ROUTES.feedDetail(action.feedId))
+            navigate(ROUTES.feed(action.feedId))
             return
           case 'open-settings-panel': {
             const store = useSettingsStore.getState()
