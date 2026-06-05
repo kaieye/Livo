@@ -1026,7 +1026,7 @@ export function Sidebar({ width }: { width?: number }) {
     }
     return names
   }, [emptyFolders, activeView, viewDefaultFolderNames])
-  const { userCategories, recommendedFeeds, totalUnread } = useMemo(() => {
+  const { userCategories, recommendedFeeds } = useMemo(() => {
     const groupedUserCategories = new Map<string, typeof filteredFeeds>()
     const groupedRecommendedFeeds: typeof filteredFeeds = []
 
@@ -1058,16 +1058,9 @@ export function Sidebar({ width }: { width?: number }) {
       }
     }
 
-    const unread = displayFeeds
-      .filter(
-        (f) => f.category !== RECOMMENDED_CATEGORY && f.showInAll !== false,
-      )
-      .reduce((sum, f) => sum + f.unreadCount, 0)
-
     return {
       userCategories: groupedUserCategories,
       recommendedFeeds: groupedRecommendedFeeds,
-      totalUnread: unread,
     }
   }, [
     activeView,
@@ -1175,12 +1168,18 @@ export function Sidebar({ width }: { width?: number }) {
   const handleSelectView = useCallback(
     (view: FeedViewType | null) => {
       setUiActiveView(view)
-      if (activeView === view) return
+      if (
+        activeView === view &&
+        selectedFeedId === null &&
+        !isDigestRoute &&
+        !isDiscoverOpen
+      )
+        return
 
       const slug = view !== null ? VIEW_TYPE_SLUGS[view] : null
       navigate(slug ? `/${slug}` : '/')
     },
-    [activeView, navigate],
+    [activeView, isDigestRoute, isDiscoverOpen, navigate, selectedFeedId],
   )
 
   const handleContextMenu = useCallback(
@@ -1711,24 +1710,6 @@ export function Sidebar({ width }: { width?: number }) {
               : ''
           }`}
         >
-          {/* All feeds in current view */}
-          <button
-            onClick={() => handleSelectFeed(null)}
-            className={`sidebar-item w-full ${selectedFeedId === null && !isDigestRoute ? 'sidebar-item-active' : ''}`}
-          >
-            <Rss size={18} />
-            <span className="flex-1 truncate text-left">
-              {activeView !== null
-                ? t(VIEW_TYPE_I18N_KEYS[activeView] || 'common.all')
-                : t('common.all')}
-            </span>
-            {totalUnread > 0 && (
-              <span className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary rounded-full px-2 py-0.5 text-xs">
-                {totalUnread}
-              </span>
-            )}
-          </button>
-
           {/* Starred */}
           <button
             onClick={() => handleSelectFeed('starred')}
