@@ -33,6 +33,7 @@ import {
 } from './DiscoverResultRow'
 import { DiscoverCenteredState } from './DiscoverCenteredState'
 import { SubscribeConfigDialog } from './SubscribeConfigDialog'
+import { CuratedFeedRow } from './RecommendedFeedsDrawer'
 import { FeedAvatar } from '../feed/FeedAvatar'
 import { ImportProgressModal } from '../feed/ImportProgressModal'
 import { OpmlImportProgress } from '../settings/OpmlImportProgress'
@@ -154,6 +155,17 @@ export function DiscoverPanel() {
   const [isImporting, setIsImporting] = useState(false)
   const [showImportProgress, setShowImportProgress] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+
+  // Pagination for curated feed list
+  const FEEDS_PER_PAGE = 10
+  const [displayCount, setDisplayCount] = useState(FEEDS_PER_PAGE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // Reset pagination when category changes
+  useEffect(() => {
+    setDisplayCount(FEEDS_PER_PAGE)
+  }, [selectedCategory])
+
   const importResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   )
@@ -313,6 +325,24 @@ export function DiscoverPanel() {
     imageUrl?: string
   }> = popularFeedsQuery.data ?? []
   const isLoadingPopular = popularFeedsQuery.isPending
+
+  // IntersectionObserver — load more when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setDisplayCount((prev) =>
+            Math.min(prev + FEEDS_PER_PAGE, popularFeeds.length),
+          )
+        }
+      },
+      { rootMargin: '40px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [popularFeeds.length])
 
   const searchResultsTopRef = useRef<HTMLDivElement | null>(null)
   const previousPlatformRef = useRef<DiscoverSearchPlatform>(searchPlatform)
@@ -703,7 +733,7 @@ export function DiscoverPanel() {
           </div>
         )}
 
-        {/* Featured feeds — category rail + curated feed list when no search active */}
+        {/* Featured feeds — inline category rail + scrollable curated list */}
         {!hasSearchQuery && !isPreviewing && categories.length > 0 && (
           <div className="mx-auto mt-6 max-w-2xl">
             <div className="mb-4">
@@ -755,8 +785,8 @@ export function DiscoverPanel() {
                   {t('discover.noCategoryFeeds')}
                 </p>
               ) : (
-                <div className="space-y-2">
-                  {popularFeeds.map((feed) => (
+                <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                  {popularFeeds.slice(0, displayCount).map((feed) => (
                     <CuratedFeedRow
                       key={feed.url}
                       feed={feed}
@@ -788,6 +818,18 @@ export function DiscoverPanel() {
                       }}
                     />
                   ))}
+                  {/* Sentinel for infinite scroll */}
+                  {displayCount < popularFeeds.length && (
+                    <div
+                      ref={sentinelRef}
+                      className="flex items-center justify-center py-3"
+                    >
+                      <Loader2
+                        size={16}
+                        className="text-text-tertiary animate-spin"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1255,115 +1297,6 @@ function PreviewEntryInline({
         className="mt-1 flex-shrink-0 text-[var(--color-text-tertiary)] opacity-0 transition-opacity group-hover:opacity-60"
         aria-hidden="true"
       />
-    </div>
-  )
-}
-
-/** ====== Curated feed row — simpler variant for recommended feeds ====== */
-
-interface CuratedFeedInfo {
-  title: string
-  url: string
-  siteUrl: string
-  description: string
-  category: string
-  language: string
-  imageUrl?: string
-}
-
-function CuratedFeedRow({
-  feed,
-  subscribed,
-  subscribing,
-  onPreview,
-  onToggleSubscribe,
-}: {
-  feed: CuratedFeedInfo
-  subscribed: boolean
-  subscribing: boolean
-  onPreview: () => void
-  onToggleSubscribe: () => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onPreview}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onPreview()
-        }
-      }}
-      className="hover:border-accent/30 hover:bg-surface-secondary/50 focus:ring-accent/50 dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary/50 group flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-3.5 transition-all duration-200 focus:outline-none focus:ring-2"
-    >
-      <div className="bg-accent/10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
-        <Rss size={16} className="text-accent" />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="block min-w-0 truncate text-sm font-medium">
-            {feed.title}
-          </span>
-          <span className="bg-surface-secondary text-text-tertiary dark:bg-surface-dark-tertiary flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-            {feed.language === 'Chinese' ? '中' : 'EN'}
-          </span>
-        </div>
-        {feed.description && (
-          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 truncate text-xs">
-            {feed.description}
-          </p>
-        )}
-      </div>
-
-      <div className="flex flex-shrink-0 items-center gap-1">
-        <a
-          href={feed.siteUrl || feed.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="text-text-tertiary hover:bg-surface-secondary hover:text-text-secondary dark:hover:bg-surface-dark-tertiary rounded-lg p-1.5 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100"
-          title={t('discover.viewSource')}
-        >
-          <ExternalLink size={14} />
-        </a>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleSubscribe()
-          }}
-          disabled={subscribing}
-          className={`group/btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
-            subscribed
-              ? 'bg-green-100 text-green-600 hover:bg-red-100 hover:text-red-600 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
-              : 'bg-accent hover:bg-accent-hover text-white active:scale-95'
-          } disabled:cursor-default disabled:opacity-70`}
-        >
-          {subscribing ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : subscribed ? (
-            <>
-              <Check size={12} className="group-hover/btn:hidden" />
-              <X size={12} className="hidden group-hover/btn:block" />
-              <span className="group-hover/btn:hidden">
-                {t('common.subscribed')}
-              </span>
-              <span className="hidden group-hover/btn:block">
-                {t('discover.unsubscribeAction')}
-              </span>
-            </>
-          ) : (
-            <>
-              <Plus size={12} />
-              <span>{t('common.subscribe')}</span>
-            </>
-          )}
-        </button>
-      </div>
     </div>
   )
 }
