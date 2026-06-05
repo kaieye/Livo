@@ -33,6 +33,7 @@ function makeFeed(partial: Partial<Feed> = {}): Feed {
     id: partial.id ?? 'feed-1',
     title: partial.title ?? 'Feed title',
     url: partial.url ?? 'https://example.com/feed.xml',
+    imageUrl: partial.imageUrl,
     view: partial.view ?? FeedViewType.Articles,
     lastRefreshStatus: partial.lastRefreshStatus,
     lastRefreshAttemptedAt: partial.lastRefreshAttemptedAt,
@@ -53,6 +54,9 @@ function makeEntry(partial: Partial<Entry> = {}): Entry {
     readabilityContent: partial.readabilityContent,
     readabilityFetchedAt: partial.readabilityFetchedAt,
     aiSummaryError: partial.aiSummaryError,
+    authorAvatar: partial.authorAvatar,
+    imageUrl: partial.imageUrl,
+    media: partial.media,
     publishedAt: partial.publishedAt ?? 1000,
     isRead: partial.isRead ?? false,
     isStarred: partial.isStarred ?? false,
@@ -112,6 +116,38 @@ describe('getReaderSnapshot', () => {
       lastRefreshError: '源站返回 HTTP 403',
       lastRefreshRawError: 'HTTPError: 403 Forbidden',
     })
+  })
+
+  it('hides feed avatars and entry author avatars polluted by article images', () => {
+    const articleCover = 'https://cdn.example.com/latest-cover.webp'
+    mocks.getAllFeeds.mockReturnValue([
+      makeFeed({
+        imageUrl: articleCover,
+      }),
+    ])
+    mocks.getEntries.mockReturnValue({
+      entries: [
+        makeEntry({
+          id: 'entry-latest',
+          imageUrl: articleCover,
+          authorAvatar: articleCover,
+        }),
+        makeEntry({
+          id: 'entry-older',
+          imageUrl: 'https://cdn.example.com/older-cover.webp',
+          authorAvatar: articleCover,
+        }),
+      ],
+      hasMore: false,
+    })
+
+    const snapshot = getReaderSnapshot({ limit: 10 })
+
+    expect(snapshot.feeds[0].imageUrl).toBeUndefined()
+    expect(snapshot.entries.map((entry) => entry.authorAvatar)).toEqual([
+      '',
+      '',
+    ])
   })
 
   it('uses v2 keyset cursor for the next page and ignores v1 cursors', () => {

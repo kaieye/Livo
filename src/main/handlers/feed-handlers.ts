@@ -263,6 +263,8 @@ export function registerFeedHandlers(): void {
             imageUrl: await resolveFeedAvatar(
               opmlFeed.xmlUrl,
               parsed ? getFeedImageUrl(parsed) : undefined,
+              undefined,
+              opmlFeed.htmlUrl || parsed?.link,
             ),
             folder: opmlFeed.category || '',
             category: opmlFeed.category || '',

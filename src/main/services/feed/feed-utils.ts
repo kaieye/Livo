@@ -933,13 +933,6 @@ export function getFeedImageUrl(parsed: any): string | undefined {
     (parsed['image'] as { url?: string } | undefined)?.url ||
     (parsed['itunes'] as { image?: string } | undefined)?.image
   if (imageUrl) return imageUrl
-
-  const items =
-    (parsed['items'] as Array<Record<string, unknown>> | undefined) || []
-  for (const item of items.slice(0, 3)) {
-    const image = deriveImageUrl(item)
-    if (image) return image
-  }
   return undefined
 }
 

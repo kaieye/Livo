@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { getEventBus } from '../system/event-bus'
 import { getDb } from '../../database'
 import type { CleanupOptions } from '../../database'
-import { deriveImageUrl } from './feed-utils'
+import { deriveImageUrl, extractMedia, getFeedImageUrl } from './feed-utils'
 import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import type { Feed, RefreshRunItemResult } from '../../../shared/types/index'
@@ -89,6 +89,46 @@ function pickBestFeedAvatar(
   if (!isPlaceholderAvatar(next)) return next
   if (isPlaceholderAvatar(current) && !isPlaceholderAvatar(next)) return next
   return current
+}
+
+function normalizeAvatarComparisonKey(value: string | undefined): string {
+  return (value || '').trim()
+}
+
+function collectParsedItemImageKeys(
+  items: Array<Record<string, any>>,
+): Set<string> {
+  const keys = new Set<string>()
+  const push = (value: string | undefined): void => {
+    const key = normalizeAvatarComparisonKey(value)
+    if (key) keys.add(key)
+  }
+
+  for (const item of items) {
+    push(deriveImageUrl(item))
+    for (const media of extractMedia(item) || []) {
+      if (media.type !== 'photo') continue
+      push(media.url)
+      push(media.previewUrl)
+    }
+  }
+
+  return keys
+}
+
+export function sanitizeExistingFeedAvatarForRefresh(
+  existingImageUrl: string | undefined,
+  parsedFeedImageUrl: string | undefined,
+  items: Array<Record<string, any>>,
+): string | undefined {
+  if (parsedFeedImageUrl) return existingImageUrl
+  const existingKey = normalizeAvatarComparisonKey(existingImageUrl)
+  if (!existingKey) return existingImageUrl
+
+  // 历史版本会把最新文章图写进 feed.imageUrl；刷新时不能继续保留。
+  return collectParsedItemImageKeys(items).has(existingKey)
+    ? undefined
+    : existingImageUrl
 }
 
 function isVideoDurationEnrichmentEnabled(): boolean {
@@ -499,15 +539,22 @@ async function runRefreshSingleFeed(
 
     const parsed = result.parsed
 
+    const parsedItems = (parsed.items || []) as Array<Record<string, any>>
     const parsedFeedImage = getFeedImageUrl(parsed)
+    const existingFeedImage = sanitizeExistingFeedAvatarForRefresh(
+      feed.imageUrl,
+      parsedFeedImage,
+      parsedItems,
+    )
     const feedImageUrl = await resolveFeedAvatar(
       normalizedFeedUrl,
       parsedFeedImage,
-      feed.imageUrl,
+      existingFeedImage,
+      parsed.link || feed.siteUrl,
     )
     const selectedFeedAvatar = pickBestFeedAvatar(
       feed.url,
-      feed.imageUrl,
+      existingFeedImage,
       feedImageUrl,
     )
 
@@ -538,7 +585,7 @@ async function runRefreshSingleFeed(
     // historical entries and multi-photo media arrays.
     const ingestionResult = await ingestParsedFeedEntries({
       feed,
-      items: (parsed.items || []) as Array<Record<string, any>>,
+      items: parsedItems,
       authorAvatarSeed: selectedFeedAvatar || feedImageUrl,
       parsedFeedLink: parsed.link,
       now,
@@ -588,21 +635,6 @@ async function runRefreshSingleFeed(
     })
     return 0
   }
-}
-
-function getFeedImageUrl(parsed: any): string | undefined {
-  const imageUrl =
-    (parsed['image'] as { url?: string } | undefined)?.url ||
-    (parsed['itunes'] as { image?: string } | undefined)?.image
-  if (imageUrl) return imageUrl
-
-  const items =
-    (parsed['items'] as Array<Record<string, unknown>> | undefined) || []
-  for (const item of items.slice(0, 3)) {
-    const image = deriveImageUrl(item)
-    if (image) return image
-  }
-  return undefined
 }
 
 export async function refreshAllFeeds(

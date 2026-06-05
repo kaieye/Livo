@@ -158,6 +158,75 @@ function sortFeedsForRenderer(feeds: FeedWithCount[]): FeedWithCount[] {
   return feeds.sort((a, b) => a.title.localeCompare(b.title))
 }
 
+function normalizeAvatarComparisonKey(value: string | undefined): string {
+  return (value || '').trim()
+}
+
+function collectEntryImageKeys(entry: ReaderSnapshotEntry): Set<string> {
+  const keys = new Set<string>()
+  const push = (value: string | undefined): void => {
+    const key = normalizeAvatarComparisonKey(value)
+    if (key) keys.add(key)
+  }
+
+  push(entry.imageUrl)
+  for (const media of entry.media || []) {
+    if (media.type !== 'photo') continue
+    push(media.url)
+    push(media.previewUrl)
+  }
+
+  return keys
+}
+
+function findPollutedFeedAvatarKeys(
+  feeds: FeedWithCount[],
+  entries: ReaderSnapshotEntry[],
+): Map<string, string> {
+  const entryImageKeysByFeedId = new Map<string, Set<string>>()
+  for (const entry of entries) {
+    const current = entryImageKeysByFeedId.get(entry.feedId) || new Set()
+    for (const key of collectEntryImageKeys(entry)) current.add(key)
+    entryImageKeysByFeedId.set(entry.feedId, current)
+  }
+
+  const polluted = new Map<string, string>()
+  for (const feed of feeds) {
+    const feedImageKey = normalizeAvatarComparisonKey(feed.imageUrl)
+    if (!feedImageKey) continue
+    if (entryImageKeysByFeedId.get(feed.id)?.has(feedImageKey)) {
+      polluted.set(feed.id, feedImageKey)
+    }
+  }
+  return polluted
+}
+
+function sanitizeSnapshotFeed(
+  feed: FeedWithCount,
+  pollutedFeedAvatarKeys: Map<string, string>,
+): FeedWithCount {
+  if (!pollutedFeedAvatarKeys.has(feed.id)) return feed
+  // 历史版本可能把文章封面保存为订阅源头像；快照层避免继续展示。
+  return { ...feed, imageUrl: undefined }
+}
+
+function sanitizeSnapshotEntry(
+  entry: ReaderSnapshotEntry,
+  pollutedFeedAvatarKeys: Map<string, string>,
+): ReaderSnapshotEntry {
+  const authorAvatarKey = normalizeAvatarComparisonKey(entry.authorAvatar)
+  if (!authorAvatarKey) return entry
+
+  const pollutedFeedAvatarKey = pollutedFeedAvatarKeys.get(entry.feedId)
+  if (
+    authorAvatarKey === pollutedFeedAvatarKey ||
+    collectEntryImageKeys(entry).has(authorAvatarKey)
+  ) {
+    return { ...entry, authorAvatar: '' }
+  }
+  return entry
+}
+
 function getActiveEntryTaskSnapshots(
   entryIds: string[],
 ): Map<string, Partial<Record<keyof EntryTaskSnapshot, TaskRunRecord>>> {
@@ -197,7 +266,7 @@ export function getReaderSnapshot(
   const queryKey = buildQueryKey({ scope, unreadOnly, limit })
   const cursor = decodeCursor(input.cursor, queryKey)
   const unreadCountMap = getDb().entries.getUnreadCountMap()
-  const feeds = sortFeedsForRenderer(
+  const baseFeeds = sortFeedsForRenderer(
     getDb()
       .feeds.getAllFeeds()
       .map((feed) => ({
@@ -218,12 +287,22 @@ export function getReaderSnapshot(
   const activeTaskSnapshots = getActiveEntryTaskSnapshots(
     result.entries.map((entry) => entry.id),
   )
-  const entries: ReaderSnapshotEntry[] = result.entries.map((entry) => ({
+  const baseEntries: ReaderSnapshotEntry[] = result.entries.map((entry) => ({
     ...entry,
     taskSnapshot: deriveEntryTaskSnapshot(entry, {
       activeTasks: activeTaskSnapshots.get(entry.id),
     }),
   }))
+  const pollutedFeedAvatarKeys = findPollutedFeedAvatarKeys(
+    baseFeeds,
+    baseEntries,
+  )
+  const feeds = baseFeeds.map((feed) =>
+    sanitizeSnapshotFeed(feed, pollutedFeedAvatarKeys),
+  )
+  const entries = baseEntries.map((entry) =>
+    sanitizeSnapshotEntry(entry, pollutedFeedAvatarKeys),
+  )
   const nextCursor =
     result.hasMore && result.nextCursorEntry
       ? encodeCursor({

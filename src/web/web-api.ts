@@ -193,38 +193,102 @@ async function inferDiscoverResultTitle(
   }
 }
 
-function getProbeImageFromParsed(
+export function getFeedImageFromParsed(
   parsed:
     | {
         image?: { url?: string }
-        items?: Array<{
-          content?: string
-          imageUrl?: string
-          media?: Array<{ url?: string; type?: string }>
-          enclosure?: { url?: string; type?: string }
-        }>
+        items?: unknown
       }
     | null
     | undefined,
 ): string {
-  const imageUrl = parsed?.image?.url?.trim()
-  if (imageUrl) return imageUrl
-  const items = parsed?.items || []
-  for (const item of items.slice(0, 5)) {
-    const itemImageUrl = item.imageUrl?.trim()
-    if (itemImageUrl) return itemImageUrl
-    const mediaImageUrl = item.media
-      ?.find((media) => media.type === 'photo')
-      ?.url?.trim()
-    if (mediaImageUrl) return mediaImageUrl
-    const enclosureUrl = item.enclosure?.url?.trim()
-    const enclosureType = (item.enclosure?.type || '').toLowerCase()
-    if (enclosureUrl && enclosureType.startsWith('image/')) return enclosureUrl
-    const content = item.content || ''
-    const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i)
-    if (imgMatch?.[1]) return imgMatch[1]
+  return parsed?.image?.url?.trim() || ''
+}
+
+function readHtmlAttribute(tag: string, name: string): string {
+  const pattern = new RegExp(
+    `\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    'i',
+  )
+  const match = tag.match(pattern)
+  return decodeBasicHtmlEntities(match?.[1] || match?.[2] || match?.[3] || '')
+}
+
+function resolveHttpUrl(rawUrl: string, baseUrl: string): string {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return ''
+  try {
+    const resolved = new URL(trimmed, baseUrl).toString()
+    return /^https?:\/\//i.test(resolved) ? resolved : ''
+  } catch {
+    return ''
   }
+}
+
+export function getSiteAvatarFromHtml(html: string, siteUrl: string): string {
+  // 与主进程保持同样优先级：标准元数据、站点图标、头像语义图片。
+  const metaTags = html.match(/<meta\b[^>]*>/gi) || []
+  for (const tag of metaTags) {
+    const key = `${readHtmlAttribute(tag, 'property')} ${readHtmlAttribute(tag, 'name')}`
+    if (!/\b(?:og:image|twitter:image|image)\b/i.test(key)) continue
+    const resolved = resolveHttpUrl(readHtmlAttribute(tag, 'content'), siteUrl)
+    if (resolved) return resolved
+  }
+
+  const linkTags = html.match(/<link\b[^>]*>/gi) || []
+  for (const tag of linkTags) {
+    const rel = readHtmlAttribute(tag, 'rel')
+    if (!/(?:^|\s)(?:apple-touch-icon|icon|shortcut icon)(?:\s|$)/i.test(rel))
+      continue
+    const resolved = resolveHttpUrl(readHtmlAttribute(tag, 'href'), siteUrl)
+    if (resolved) return resolved
+  }
+
+  const imageTags = html.match(/<img\b[^>]*>/gi) || []
+  for (const tag of imageTags) {
+    const semanticText = [
+      readHtmlAttribute(tag, 'alt'),
+      readHtmlAttribute(tag, 'title'),
+      readHtmlAttribute(tag, 'class'),
+      readHtmlAttribute(tag, 'id'),
+    ].join(' ')
+    if (
+      !/(?:头像|个人照片|作者|关于|avatar|profile|portrait|author|person|photo)/i.test(
+        semanticText,
+      )
+    )
+      continue
+    const resolved = resolveHttpUrl(readHtmlAttribute(tag, 'src'), siteUrl)
+    if (resolved) return resolved
+  }
+
   return ''
+}
+
+async function getSiteAvatar(siteUrl?: string): Promise<string> {
+  if (!siteUrl || !/^https?:\/\//i.test(siteUrl)) return ''
+  try {
+    const res = await fetch(proxiedUrl(siteUrl), {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    })
+    if (!res.ok) return ''
+    const contentType = (res.headers.get('content-type') || '').toLowerCase()
+    if (contentType && !contentType.includes('text/html')) return ''
+    return getSiteAvatarFromHtml(await res.text(), siteUrl)
+  } catch {
+    return ''
+  }
+}
+
+async function getFeedAvatarFromParsed(
+  parsed: ParsedFeed,
+  siteUrl?: string,
+): Promise<string> {
+  return getFeedImageFromParsed(parsed) || (await getSiteAvatar(siteUrl))
 }
 
 async function fetchInstagramAvatarByUsername(
@@ -609,6 +673,49 @@ function toSnapshotEntryOptions(input: {
   }
 }
 
+function normalizeAvatarComparisonKey(value: string | undefined): string {
+  return (value || '').trim()
+}
+
+function collectEntryImageKeys(entry: Entry): Set<string> {
+  const keys = new Set<string>()
+  const push = (value: string | undefined): void => {
+    const key = normalizeAvatarComparisonKey(value)
+    if (key) keys.add(key)
+  }
+
+  push(entry.imageUrl)
+  for (const media of entry.media || []) {
+    if (media.type !== 'photo') continue
+    push(media.url)
+    push(media.previewUrl)
+  }
+
+  return keys
+}
+
+function findPollutedFeedAvatarKeys(
+  feeds: FeedWithCount[],
+  entries: Entry[],
+): Map<string, string> {
+  const entryImageKeysByFeedId = new Map<string, Set<string>>()
+  for (const entry of entries) {
+    const current = entryImageKeysByFeedId.get(entry.feedId) || new Set()
+    for (const key of collectEntryImageKeys(entry)) current.add(key)
+    entryImageKeysByFeedId.set(entry.feedId, current)
+  }
+
+  const polluted = new Map<string, string>()
+  for (const feed of feeds) {
+    const feedImageKey = normalizeAvatarComparisonKey(feed.imageUrl)
+    if (!feedImageKey) continue
+    if (entryImageKeysByFeedId.get(feed.id)?.has(feedImageKey)) {
+      polluted.set(feed.id, feedImageKey)
+    }
+  }
+  return polluted
+}
+
 async function buildWebReaderSnapshot(
   input: ReaderSnapshotRequest = {},
 ): Promise<ReaderSnapshot> {
@@ -630,10 +737,31 @@ async function buildWebReaderSnapshot(
     limit: limit + 1,
     offset,
   })
-  const pageEntries = entries.slice(0, limit).map((entry) => ({
-    ...entry,
-    taskSnapshot: deriveEntryTaskSnapshot(entry),
-  }))
+  const pageEntries = entries.slice(0, limit)
+  const pollutedFeedAvatarKeys = findPollutedFeedAvatarKeys(
+    feedsWithCount,
+    pageEntries,
+  )
+  const snapshotEntries = pageEntries.map((entry) => {
+    const authorAvatarKey = normalizeAvatarComparisonKey(entry.authorAvatar)
+    const pollutedFeedAvatarKey = pollutedFeedAvatarKeys.get(entry.feedId)
+    const authorAvatar =
+      authorAvatarKey &&
+      (authorAvatarKey === pollutedFeedAvatarKey ||
+        collectEntryImageKeys(entry).has(authorAvatarKey))
+        ? ''
+        : entry.authorAvatar
+    return {
+      ...entry,
+      authorAvatar,
+      taskSnapshot: deriveEntryTaskSnapshot(entry),
+    }
+  })
+  const snapshotFeeds = feedsWithCount.map((feed) =>
+    pollutedFeedAvatarKeys.has(feed.id)
+      ? { ...feed, imageUrl: undefined }
+      : feed,
+  )
   const nextCursor =
     entries.length > limit
       ? encodeSnapshotCursor({ v: 1, offset: offset + limit, queryKey })
@@ -653,8 +781,8 @@ async function buildWebReaderSnapshot(
         : totalUnread
 
   return {
-    feeds: feedsWithCount.sort((a, b) => a.title.localeCompare(b.title)),
-    entries: pageEntries,
+    feeds: snapshotFeeds.sort((a, b) => a.title.localeCompare(b.title)),
+    entries: snapshotEntries,
     counts: {
       totalFeeds: feedsWithCount.length,
       totalUnread,
@@ -707,7 +835,10 @@ async function buildDiscoverFeedPreview(
       fetchUrl,
       parsed.title || undefined,
     )
-    const imageUrl = parsed.image?.url || getProbeImageFromParsed(parsed)
+    const imageUrl = await getFeedAvatarFromParsed(
+      parsed,
+      parsed.link || fetchUrl,
+    )
 
     return {
       success: true,
@@ -1259,7 +1390,10 @@ export function createWebAPI(): ElectronAPI {
             url: storedUrl,
             siteUrl: parsed.link,
             description: parsed.description,
-            imageUrl: parsed.image?.url || getProbeImageFromParsed(parsed),
+            imageUrl: await getFeedAvatarFromParsed(
+              parsed,
+              parsed.link || fetchUrl,
+            ),
             category: category || '',
             view: detectedView,
             showInAll: true,
@@ -1323,7 +1457,10 @@ export function createWebAPI(): ElectronAPI {
           await dbUpdateFeed(feedId, {
             title: parsed.title || feed.title,
             description: parsed.description,
-            imageUrl: parsed.image?.url || getProbeImageFromParsed(parsed),
+            imageUrl: await getFeedAvatarFromParsed(
+              parsed,
+              parsed.link || feed.siteUrl,
+            ),
             lastFetched: now,
             errorCount: 0,
           })
@@ -1378,7 +1515,10 @@ export function createWebAPI(): ElectronAPI {
             await dbUpdateFeed(feed.id, {
               title: parsed.title || feed.title,
               description: parsed.description,
-              imageUrl: parsed.image?.url || getProbeImageFromParsed(parsed),
+              imageUrl: await getFeedAvatarFromParsed(
+                parsed,
+                parsed.link || feed.siteUrl,
+              ),
               lastFetched: now,
               errorCount: 0,
             })
@@ -1465,8 +1605,10 @@ export function createWebAPI(): ElectronAPI {
                     url: storedXmlUrl,
                     siteUrl: opmlFeed.htmlUrl || parsed.link,
                     description: parsed.description,
-                    imageUrl:
-                      parsed.image?.url || getProbeImageFromParsed(parsed),
+                    imageUrl: await getFeedAvatarFromParsed(
+                      parsed,
+                      opmlFeed.htmlUrl || parsed.link,
+                    ),
                     category: opmlFeed.category || '',
                     view: detectViewType(parsed.items),
                     showInAll: true,
@@ -2292,12 +2434,11 @@ export function createWebAPI(): ElectronAPI {
         try {
           const fetchUrl = toFetchableFeedUrl(url, DEFAULT_RSSHUB_INSTANCE)
           const parsed = await parseFeedFromUrl(fetchUrl)
-          const fallbackImage = getProbeImageFromParsed(parsed)
           return {
             valid: true,
             title: parsed.title,
             description: parsed.description,
-            image: parsed.image?.url || fallbackImage,
+            image: await getFeedAvatarFromParsed(parsed, parsed.link || url),
             itemCount: parsed.items.length,
           }
         } catch (error) {
@@ -2525,7 +2666,8 @@ export function createWebAPI(): ElectronAPI {
             const feedUrl = `${DEFAULT_RSSHUB_INSTANCE}${route}`
             const parsed = await parseFeedFromUrl(feedUrl)
             const image =
-              getProbeImageFromParsed(parsed) ||
+              getFeedImageFromParsed(parsed) ||
+              (await getSiteAvatar(parsed.link || feedUrl)) ||
               profileAvatar ||
               `https://unavatar.io/instagram/${encodeURIComponent(clean)}`
             return {

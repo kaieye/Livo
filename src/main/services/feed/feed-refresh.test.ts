@@ -9,6 +9,7 @@ import {
   mapFeedRefreshError,
   queueBootstrapRefresh,
   refreshAllFeeds,
+  sanitizeExistingFeedAvatarForRefresh,
 } from './feed-refresh'
 import {
   FeedViewType,
@@ -132,6 +133,42 @@ describe('refreshAllFeeds', () => {
       runId: activeRun.runId,
     })
     expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe('sanitizeExistingFeedAvatarForRefresh', () => {
+  it('drops an existing feed avatar when it came from a parsed item image', () => {
+    expect(
+      sanitizeExistingFeedAvatarForRefresh(
+        'https://cdn.example.com/latest-cover.webp',
+        undefined,
+        [
+          {
+            enclosure: {
+              url: 'https://cdn.example.com/latest-cover.webp',
+              type: 'image/webp',
+            },
+          },
+        ],
+      ),
+    ).toBeUndefined()
+  })
+
+  it('keeps the existing feed avatar when upstream exposes a feed-level image', () => {
+    expect(
+      sanitizeExistingFeedAvatarForRefresh(
+        'https://cdn.example.com/logo.png',
+        'https://cdn.example.com/logo.png',
+        [
+          {
+            enclosure: {
+              url: 'https://cdn.example.com/logo.png',
+              type: 'image/png',
+            },
+          },
+        ],
+      ),
+    ).toBe('https://cdn.example.com/logo.png')
   })
 })
 

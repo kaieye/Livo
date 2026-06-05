@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { ElectronAPI } from '../preload/index'
-import { createWebAPI } from './web-api'
+import {
+  createWebAPI,
+  getFeedImageFromParsed,
+  getSiteAvatarFromHtml,
+} from './web-api'
 
 type ApiShape = {
   [key: string]: true | ApiShape
@@ -174,5 +178,42 @@ describe('web api contract', () => {
       api as unknown as Record<string, unknown>,
       ELECTRON_API_SHAPE,
     )
+  })
+})
+
+describe('getFeedImageFromParsed', () => {
+  it('does not use entry images as feed avatar fallback', () => {
+    expect(
+      getFeedImageFromParsed({
+        items: [{ imageUrl: 'https://blog.example.com/post-cover.jpg' }],
+      }),
+    ).toBe('')
+  })
+
+  it('uses the feed-level image metadata', () => {
+    expect(
+      getFeedImageFromParsed({
+        image: { url: ' https://blog.example.com/avatar.png ' },
+        items: [{ imageUrl: 'https://blog.example.com/post-cover.jpg' }],
+      }),
+    ).toBe('https://blog.example.com/avatar.png')
+  })
+})
+
+describe('getSiteAvatarFromHtml', () => {
+  it('uses a semantic profile image instead of a post image', () => {
+    expect(
+      getSiteAvatarFromHtml(
+        `
+          <article>
+            <img src="https://cdn.example.com/latest-post-cover.webp" />
+          </article>
+          <aside>
+            <img src="/blog/images/person2_s.jpg" alt="个人照片" />
+          </aside>
+        `,
+        'https://www.ruanyifeng.com/blog/',
+      ),
+    ).toBe('https://www.ruanyifeng.com/blog/images/person2_s.jpg')
   })
 })

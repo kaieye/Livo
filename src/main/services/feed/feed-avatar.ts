@@ -67,8 +67,111 @@ function isPlaceholderAvatar(url?: string): boolean {
   )
 }
 
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}
+
+function readHtmlAttribute(tag: string, name: string): string {
+  const pattern = new RegExp(
+    `\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    'i',
+  )
+  const match = tag.match(pattern)
+  return decodeHtmlAttribute(match?.[1] || match?.[2] || match?.[3] || '')
+}
+
+function resolveHttpUrl(rawUrl: string, baseUrl: string): string | undefined {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return undefined
+  try {
+    const resolved = new URL(trimmed, baseUrl).toString()
+    return /^https?:\/\//i.test(resolved) ? resolved : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function extractSiteAvatarFromHtml(
+  html: string,
+  siteUrl: string,
+): string | undefined {
+  // 优先使用标准页面头像元数据，避免正文首图污染订阅源头像。
+  const metaTags = html.match(/<meta\b[^>]*>/gi) || []
+  for (const tag of metaTags) {
+    const key = `${readHtmlAttribute(tag, 'property')} ${readHtmlAttribute(tag, 'name')}`
+    if (!/\b(?:og:image|twitter:image|image)\b/i.test(key)) continue
+    const resolved = resolveHttpUrl(readHtmlAttribute(tag, 'content'), siteUrl)
+    if (resolved) return resolved
+  }
+
+  // 普通站点的 favicon / touch icon 是没有头像元数据时的合理兜底。
+  const linkTags = html.match(/<link\b[^>]*>/gi) || []
+  for (const tag of linkTags) {
+    const rel = readHtmlAttribute(tag, 'rel')
+    if (!/(?:^|\s)(?:apple-touch-icon|icon|shortcut icon)(?:\s|$)/i.test(rel))
+      continue
+    const resolved = resolveHttpUrl(readHtmlAttribute(tag, 'href'), siteUrl)
+    if (resolved) return resolved
+  }
+
+  // 最后只接受带头像语义的图片，不扫描正文里的普通插图。
+  const imageTags = html.match(/<img\b[^>]*>/gi) || []
+  for (const tag of imageTags) {
+    const semanticText = [
+      readHtmlAttribute(tag, 'alt'),
+      readHtmlAttribute(tag, 'title'),
+      readHtmlAttribute(tag, 'class'),
+      readHtmlAttribute(tag, 'id'),
+    ].join(' ')
+    if (
+      !/(?:头像|个人照片|作者|关于|avatar|profile|portrait|author|person|photo)/i.test(
+        semanticText,
+      )
+    )
+      continue
+    const resolved = resolveHttpUrl(readHtmlAttribute(tag, 'src'), siteUrl)
+    if (resolved) return resolved
+  }
+
+  return undefined
+}
+
+async function fetchSiteAvatar(siteUrl?: string): Promise<string | undefined> {
+  if (!siteUrl || !/^https?:\/\//i.test(siteUrl)) return undefined
+  try {
+    const res = await fetch(siteUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return undefined
+    const contentType = (res.headers.get('content-type') || '').toLowerCase()
+    if (contentType && !contentType.includes('text/html')) return undefined
+    const html = await res.text()
+    const avatarUrl = extractSiteAvatarFromHtml(html, siteUrl)
+    if (!avatarUrl) return undefined
+    return (
+      (await tryConvertImageUrlToDataUri(avatarUrl, {
+        referer: siteUrl,
+      })) || avatarUrl
+    )
+  } catch {
+    return undefined
+  }
+}
+
 async function tryConvertImageUrlToDataUri(
   imageUrl: string,
+  options: { referer?: string; origin?: string } = {},
 ): Promise<string | undefined> {
   if (!/^https?:\/\//i.test(imageUrl)) return undefined
   try {
@@ -76,8 +179,8 @@ async function tryConvertImageUrlToDataUri(
       headers: {
         'User-Agent': 'Mozilla/5.0',
         Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
-        Referer: 'https://www.instagram.com/',
-        Origin: 'https://www.instagram.com',
+        Referer: options.referer || 'https://www.instagram.com/',
+        Origin: options.origin || 'https://www.instagram.com',
       },
       signal: AbortSignal.timeout(8000),
     })
@@ -195,6 +298,7 @@ export async function resolveFeedAvatar(
   feedUrl: string,
   incomingImageUrl?: string,
   existingImageUrl?: string,
+  siteUrl?: string,
 ): Promise<string | undefined> {
   if (incomingImageUrl && !isPlaceholderAvatar(incomingImageUrl))
     return incomingImageUrl
@@ -213,6 +317,9 @@ export async function resolveFeedAvatar(
     const svgAvatar = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${instagramUsername.charAt(0).toUpperCase()}</text></svg>`)}`
     return svgAvatar
   }
+
+  const siteAvatar = await fetchSiteAvatar(siteUrl)
+  if (siteAvatar) return siteAvatar
 
   return incomingImageUrl || existingImageUrl
 }

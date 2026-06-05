@@ -30,7 +30,7 @@ import {
 } from '../services/discovery/discover-dedupe'
 import { fetchAndParseFeed } from '../services/feed/rss-parser'
 import { formatFeedTitle } from '../services/feed/feed-title'
-import { deriveImageUrl } from '../services/feed/feed-utils'
+import { getFeedImageUrl } from '../services/feed/feed-utils'
 import { settingsProvider } from '../services/system/settings-provider'
 import { getYouTubeAccountState } from '../services/account/account-session'
 import { resolveYouTubeProfileToOfficialFeed } from '../services/discovery/youtube-profile-resolver'
@@ -169,22 +169,6 @@ async function inferDiscoverResultTitle(
   } catch {
     return feedUrl
   }
-}
-
-function getFeedImageUrl(parsed: any): string | undefined {
-  if (!parsed) return undefined
-  const imageUrl =
-    (parsed['image'] as { url?: string } | undefined)?.url ||
-    (parsed['itunes'] as { image?: string } | undefined)?.image
-  if (imageUrl) return imageUrl
-
-  const items =
-    (parsed['items'] as Array<Record<string, unknown>> | undefined) || []
-  for (const item of items.slice(0, 3)) {
-    const image = deriveImageUrl(item)
-    if (image) return image
-  }
-  return undefined
 }
 
 function buildPreviewFetchUrl(targetUrl: string): string {
@@ -622,6 +606,8 @@ export function registerDiscoverHandlers(): void {
         const imageUrl = await resolveFeedAvatar(
           resolvedFeedUrl,
           getFeedImageUrl(data),
+          undefined,
+          data.link || resolvedFeedUrl,
         )
         const view = inferPreviewViewFromUrl(resolvedFeedUrl)
         const entries = await buildEntriesFromParsedItems(
@@ -925,7 +911,12 @@ export function registerDiscoverHandlers(): void {
           const data = fetched.data
           if (!data) throw new Error('Empty feed data')
           const image =
-            (await resolveFeedAvatar(feedUrl, getFeedImageUrl(data))) ||
+            (await resolveFeedAvatar(
+              feedUrl,
+              getFeedImageUrl(data),
+              undefined,
+              data.link || feedUrl,
+            )) ||
             (await profileAvatarPromise) ||
             `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect fill="#E1306C" width="128" height="128" rx="24"/><text x="64" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="48" font-weight="600">${clean.charAt(0).toUpperCase()}</text></svg>`)}`
           return {

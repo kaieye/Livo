@@ -132,6 +132,8 @@ export async function subscribeFeed(
   const imageUrl = await resolveFeedAvatar(
     normalizedUrl,
     parsed ? getFeedImageUrl(parsed) : undefined,
+    undefined,
+    parsed?.link,
   )
 
   // ---- Feed creation ----

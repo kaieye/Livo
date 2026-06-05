@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { deriveImageUrl, extractContent, extractMedia } from './feed-utils'
+import {
+  deriveImageUrl,
+  extractContent,
+  extractMedia,
+  getFeedImageUrl,
+} from './feed-utils'
 
 describe('feed media extraction', () => {
   it('extracts podcast audio enclosure with iTunes cover and duration', () => {
@@ -92,5 +97,38 @@ describe('feed media extraction', () => {
       },
     ])
     expect(deriveImageUrl(item)).toBe('https://cdn.example.com/hero.webp')
+  })
+})
+
+describe('getFeedImageUrl', () => {
+  it('uses only feed-level image metadata for the feed avatar', () => {
+    const parsed = {
+      items: [
+        {
+          enclosure: {
+            url: 'https://blog.example.com/latest-post-cover.jpg',
+            type: 'image/jpeg',
+          },
+        },
+      ],
+    }
+
+    expect(getFeedImageUrl(parsed)).toBeUndefined()
+  })
+
+  it('keeps RSS channel image as feed avatar', () => {
+    expect(
+      getFeedImageUrl({
+        image: { url: 'https://blog.example.com/avatar.png' },
+        items: [
+          {
+            enclosure: {
+              url: 'https://blog.example.com/latest-post-cover.jpg',
+              type: 'image/jpeg',
+            },
+          },
+        ],
+      }),
+    ).toBe('https://blog.example.com/avatar.png')
   })
 })
