@@ -28,7 +28,7 @@ const AI_PROVIDER_VALUES = [
   'anthropic',
   'deepseek',
   'glm',
-  'ollama',
+  'minimax',
   'custom',
 ]
 const TRANSLATION_LANGUAGE_VALUES = [

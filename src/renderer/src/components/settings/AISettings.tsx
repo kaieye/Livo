@@ -9,7 +9,7 @@ import {
   type AIConfig,
   type AIProvider,
 } from '../../../../shared/types'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import {
   Eye,
   EyeOff,
@@ -51,12 +51,51 @@ function SectionCard({
   )
 }
 
+/** Fields that require explicit save via the bottom save button. */
+type PromptFields = Pick<
+  AIConfig,
+  | 'enableSystemPrompt'
+  | 'systemPromptTemplate'
+  | 'chatPersonaPrompt'
+  | 'summaryPrompt'
+  | 'translationPrompt'
+>
+
+function pickConnectionFields(config: AIConfig): Partial<AIConfig> {
+  return {
+    provider: config.provider,
+    apiKey: config.apiKey,
+    apiKeys: config.apiKeys,
+    baseUrl: config.baseUrl,
+    model: config.model,
+  }
+}
+
+function pickPromptFields(config: AIConfig): PromptFields {
+  return {
+    enableSystemPrompt: config.enableSystemPrompt,
+    systemPromptTemplate: config.systemPromptTemplate,
+    chatPersonaPrompt: config.chatPersonaPrompt,
+    summaryPrompt: config.summaryPrompt,
+    translationPrompt: config.translationPrompt,
+  }
+}
+
+function isPromptDirtyFn(draft: AIConfig, saved: AIConfig): boolean {
+  return (
+    draft.enableSystemPrompt !== saved.enableSystemPrompt ||
+    draft.systemPromptTemplate !== saved.systemPromptTemplate ||
+    draft.chatPersonaPrompt !== saved.chatPersonaPrompt ||
+    draft.summaryPrompt !== saved.summaryPrompt ||
+    draft.translationPrompt !== saved.translationPrompt
+  )
+}
+
 export function AISettings() {
   const ai = useSettingSection('ai')
   const { updateSettingsSection, setActiveTab } = useSettingsActions()
   const { t } = useTranslation()
   const [draftAi, setDraftAi] = useState<AIConfig>(ai)
-  const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [testResult, setTestResult] = useState<{
@@ -65,15 +104,40 @@ export function AISettings() {
   } | null>(null)
   const [isTesting, setIsTesting] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [isCustomModel, setIsCustomModel] = useState(false)
 
+  // Only prompt fields are "dirty" — connection fields auto-save.
+  const isPromptDirty = isPromptDirtyFn(draftAi, ai)
+
+  // Debounced auto-save for connection fields.
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const autoSave = useCallback(
+    (updates: Partial<AIConfig>) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => {
+        updateSettingsSection('ai', updates)
+      }, 600)
+    },
+    [updateSettingsSection],
+  )
+
+  // Sync draft when saved config changes externally.  Only sync when prompts
+  // are clean — otherwise the user is mid-edit on prompts and we don't want to
+  // clobber their work.
   useEffect(() => {
-    if (!isDirty) setDraftAi(ai)
-  }, [ai, isDirty])
+    if (!isPromptDirty) setDraftAi(ai)
+  }, [ai, isPromptDirty])
+
+  // Cleanup debounce on unmount.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   const providerConfig = AI_PROVIDERS[draftAi.provider]
   const isCustomProvider = draftAi.provider === 'custom'
-  const isApiKeyMissing =
-    draftAi.provider !== 'ollama' && !draftAi.apiKey.trim()
+  const isApiKeyMissing = !draftAi.apiKey.trim()
   const isBaseUrlMissing = isCustomProvider && !(draftAi.baseUrl || '').trim()
   const isModelMissing = isCustomProvider && !draftAi.model.trim()
   const draftValidationMessage = isBaseUrlMissing
@@ -82,23 +146,15 @@ export function AISettings() {
       ? t('settings.aiValidationModelRequired')
       : null
   const disableTestConnection =
-    isTesting ||
-    isDirty ||
-    isApiKeyMissing ||
-    isBaseUrlMissing ||
-    isModelMissing
-  const disableSave = isSaving || !isDirty || !!draftValidationMessage
+    isTesting || isApiKeyMissing || isBaseUrlMissing || isModelMissing
+  const disableSave = isSaving || !isPromptDirty || !!draftValidationMessage
 
-  const markDraftChanged = () => {
-    setIsDirty(true)
+  const clearFeedback = () => {
     setTestResult(null)
     setActionMessage(null)
   }
 
-  const updateDraftAi = (updates: Partial<AIConfig>) => {
-    setDraftAi((current) => ({ ...current, ...updates }))
-    markDraftChanged()
-  }
+  // ── Connection field handlers (auto-save) ──
 
   const handleProviderChange = (provider: AIProvider) => {
     const config = AI_PROVIDERS[provider]
@@ -107,9 +163,8 @@ export function AISettings() {
         ...(current.apiKeys || {}),
         [current.provider]: current.apiKey,
       }
-      const nextKey =
-        provider === 'ollama' ? 'ollama' : (rememberedKeys[provider] ?? '')
-      return {
+      const nextKey = rememberedKeys[provider] ?? ''
+      const next = {
         ...current,
         provider,
         baseUrl: '',
@@ -117,35 +172,71 @@ export function AISettings() {
         apiKey: nextKey,
         apiKeys: rememberedKeys,
       }
+      autoSave(pickConnectionFields(next))
+      return next
     })
-    markDraftChanged()
+    setIsCustomModel(false)
+    clearFeedback()
   }
 
   const handleApiKeyChange = (value: string) => {
     setDraftAi((current) => {
-      return {
+      const next = {
         ...current,
         apiKey: value,
         apiKeys: { ...(current.apiKeys || {}), [current.provider]: value },
       }
+      autoSave({ apiKey: value, apiKeys: next.apiKeys })
+      return next
     })
-    markDraftChanged()
+    clearFeedback()
   }
 
-  const handleReset = () => {
-    setDraftAi({
-      ...DEFAULT_SETTINGS.ai,
-      apiKeys: {},
+  const handleBaseUrlChange = (value: string) => {
+    setDraftAi((current) => {
+      const next = { ...current, baseUrl: value }
+      autoSave({ baseUrl: value })
+      return next
     })
-    setIsDirty(true)
-    setTestResult(null)
+    clearFeedback()
+  }
+
+  const handleModelChange = (value: string) => {
+    setDraftAi((current) => {
+      const next = { ...current, model: value }
+      autoSave({ model: value })
+      return next
+    })
+    clearFeedback()
+  }
+
+  // ── Prompt field handlers (mark dirty, no auto-save) ──
+
+  const updatePromptDraft = (updates: Partial<AIConfig>) => {
+    setDraftAi((current) => ({ ...current, ...updates }))
+    clearFeedback()
+  }
+
+  // ── Actions ──
+
+  const handleReset = () => {
+    setDraftAi((current) => {
+      const next = {
+        ...current,
+        ...pickPromptFields(DEFAULT_SETTINGS.ai),
+      }
+      return next
+    })
+    clearFeedback()
     setActionMessage(t('settings.aiResetDraftDone'))
   }
 
   const handleCancelDraft = () => {
-    setDraftAi(ai)
-    setIsDirty(false)
-    setTestResult(null)
+    setDraftAi((current) => ({
+      ...current,
+      ...pickPromptFields(ai),
+    }))
+    clearFeedback()
     setActionMessage(t('settings.aiDraftDiscarded'))
   }
 
@@ -157,8 +248,7 @@ export function AISettings() {
 
     setIsSaving(true)
     try {
-      await updateSettingsSection('ai', draftAi)
-      setIsDirty(false)
+      await updateSettingsSection('ai', pickPromptFields(draftAi))
       setTestResult(null)
       setActionMessage(t('settings.aiDraftSaved'))
     } catch (err) {
@@ -169,10 +259,6 @@ export function AISettings() {
   }
 
   const handleTestConnection = async () => {
-    if (isDirty) {
-      setActionMessage(t('settings.aiTestSaveFirst'))
-      return
-    }
     setIsTesting(true)
     setTestResult(null)
     try {
@@ -204,7 +290,7 @@ export function AISettings() {
         </p>
       </div>
 
-      {/* Model configuration */}
+      {/* Model configuration (auto-saved) */}
       <SectionCard
         icon={Cpu}
         title={t('settings.aiModelConfig')}
@@ -233,36 +319,34 @@ export function AISettings() {
         </div>
 
         {/* API Key */}
-        {draftAi.provider !== 'ollama' && (
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">
-              {t('settings.apiKey')}
-              {isCustomProvider ? ' *' : ''}
-            </label>
-            <div className="relative">
-              <input
-                type={showKey ? 'text' : 'password'}
-                value={draftAi.apiKey}
-                onChange={(e) => handleApiKeyChange(e.target.value)}
-                placeholder={t('settings.apiKeyPlaceholder', {
-                  provider: providerConfig.name,
-                })}
-                required={isCustomProvider}
-                className={`${inputClass} pr-10`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="text-text-tertiary absolute right-3 top-1/2 -translate-y-1/2"
-              >
-                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <p className="text-text-tertiary mt-1 text-xs">
-              {t('settings.apiKeyPerProviderHint')}
-            </p>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            {t('settings.apiKey')}
+            {isCustomProvider ? ' *' : ''}
+          </label>
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={draftAi.apiKey}
+              onChange={(e) => handleApiKeyChange(e.target.value)}
+              placeholder={t('settings.apiKeyPlaceholder', {
+                provider: providerConfig.name,
+              })}
+              required={isCustomProvider}
+              className={`${inputClass} pr-10`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="text-text-tertiary absolute right-3 top-1/2 -translate-y-1/2"
+            >
+              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
-        )}
+          <p className="text-text-tertiary mt-1 text-xs">
+            {t('settings.apiKeyPerProviderHint')}
+          </p>
+        </div>
 
         {/* Base URL */}
         <div>
@@ -275,7 +359,7 @@ export function AISettings() {
           <input
             type="text"
             value={draftAi.baseUrl || ''}
-            onChange={(e) => updateDraftAi({ baseUrl: e.target.value })}
+            onChange={(e) => handleBaseUrlChange(e.target.value)}
             placeholder={
               providerConfig.defaultBaseUrl || t('settings.baseUrlPlaceholder')
             }
@@ -294,11 +378,38 @@ export function AISettings() {
             {t('settings.model')}
             {isCustomProvider ? ' *' : ''}
           </label>
-          {providerConfig.models.length > 0 ? (
+          {isCustomProvider || isCustomModel ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={draftAi.model}
+                onChange={(e) => handleModelChange(e.target.value)}
+                placeholder={t('settings.modelPlaceholder')}
+                required={isCustomProvider}
+                className={`${inputClass} flex-1`}
+              />
+              {!isCustomProvider && (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomModel(false)}
+                  className="text-accent hover:text-accent-hover flex-shrink-0 text-xs transition-colors"
+                >
+                  {t('settings.aiChoosePreset', { defaultValue: '选择预设' })}
+                </button>
+              )}
+            </div>
+          ) : (
             <select
               value={draftAi.model}
-              onChange={(e) => updateDraftAi({ model: e.target.value })}
-              required={isCustomProvider}
+              onChange={(e) => {
+                const val = e.target.value
+                if (val === '__custom__') {
+                  setIsCustomModel(true)
+                  handleModelChange('')
+                } else {
+                  handleModelChange(val)
+                }
+              }}
               className={inputClass}
             >
               {providerConfig.models.map((m) => (
@@ -306,16 +417,10 @@ export function AISettings() {
                   {m}
                 </option>
               ))}
+              <option value="__custom__">
+                {t('settings.aiCustomModel', { defaultValue: '自定义…' })}
+              </option>
             </select>
-          ) : (
-            <input
-              type="text"
-              value={draftAi.model}
-              onChange={(e) => updateDraftAi({ model: e.target.value })}
-              placeholder={t('settings.modelPlaceholder')}
-              required={isCustomProvider}
-              className={inputClass}
-            />
           )}
         </div>
       </SectionCard>
@@ -344,15 +449,10 @@ export function AISettings() {
               {testResult.message}
             </div>
           )}
-          {isDirty && (
-            <span className="text-text-tertiary text-xs">
-              {t('settings.aiTestSaveFirst')}
-            </span>
-          )}
         </div>
       </SectionCard>
 
-      {/* System prompt */}
+      {/* System prompt (manual save) */}
       <SectionCard
         icon={MessageSquareText}
         title={t('settings.aiSystemPromptSection')}
@@ -374,7 +474,7 @@ export function AISettings() {
           </div>
           <button
             onClick={() =>
-              updateDraftAi({
+              updatePromptDraft({
                 enableSystemPrompt: !draftAi.enableSystemPrompt,
               })
             }
@@ -402,7 +502,7 @@ export function AISettings() {
           <textarea
             value={draftAi.systemPromptTemplate || ''}
             onChange={(e) =>
-              updateDraftAi({
+              updatePromptDraft({
                 systemPromptTemplate: e.target.value,
               })
             }
@@ -431,7 +531,7 @@ export function AISettings() {
           <textarea
             value={draftAi.chatPersonaPrompt || ''}
             onChange={(e) =>
-              updateDraftAi({
+              updatePromptDraft({
                 chatPersonaPrompt: e.target.value,
               })
             }
@@ -452,7 +552,7 @@ export function AISettings() {
         </div>
       </SectionCard>
 
-      {/* Task prompts: summary & translation */}
+      {/* Task prompts: summary & translation (manual save) */}
       <SectionCard
         icon={FileText}
         title={t('settings.aiTaskPromptSection', {
@@ -470,7 +570,7 @@ export function AISettings() {
           <textarea
             value={draftAi.summaryPrompt || ''}
             onChange={(e) =>
-              updateDraftAi({
+              updatePromptDraft({
                 summaryPrompt: e.target.value,
               })
             }
@@ -491,7 +591,7 @@ export function AISettings() {
           <textarea
             value={draftAi.translationPrompt || ''}
             onChange={(e) =>
-              updateDraftAi({
+              updatePromptDraft({
                 translationPrompt: e.target.value,
               })
             }
@@ -505,27 +605,10 @@ export function AISettings() {
         </div>
       </SectionCard>
 
-      {/* Agent permissions cross-link */}
-      <button
-        onClick={() => setActiveTab('agentPermissions')}
-        className="border-border bg-surface hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors"
-      >
-        <ShieldCheck size={16} className="text-accent flex-shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">
-            {t('settings.agentPermissions')}
-          </p>
-          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
-            {t('settings.aiAgentPermissionsLinkDesc')}
-          </p>
-        </div>
-        <ChevronRight size={16} className="text-text-tertiary flex-shrink-0" />
-      </button>
-
-      {/* 底部操作：重置、取消与保存 */}
+      {/* 底部操作：仅针对提示词的保存 / 取消 / 重置 */}
       <div className="flex items-center justify-between gap-3 pt-1">
         <p className="text-text-tertiary text-xs">
-          {isDirty
+          {isPromptDirty
             ? t('settings.aiDraftUnsavedHint')
             : t('settings.aiDraftSavedHint')}
         </p>
@@ -551,7 +634,7 @@ export function AISettings() {
           </button>
           <button
             onClick={handleCancelDraft}
-            disabled={!isDirty || isSaving}
+            disabled={!isPromptDirty || isSaving}
             className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
           >
             {t('common.cancel')}
@@ -565,6 +648,23 @@ export function AISettings() {
           </button>
         </div>
       </div>
+
+      {/* Agent permissions cross-link */}
+      <button
+        onClick={() => setActiveTab('agentPermissions')}
+        className="border-border bg-surface hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors"
+      >
+        <ShieldCheck size={16} className="text-accent flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">
+            {t('settings.agentPermissions')}
+          </p>
+          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
+            {t('settings.aiAgentPermissionsLinkDesc')}
+          </p>
+        </div>
+        <ChevronRight size={16} className="text-text-tertiary flex-shrink-0" />
+      </button>
     </div>
   )
 }

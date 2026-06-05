@@ -430,7 +430,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
 
 function validateChatConfig(): string | null {
   const ai = useSettingsStore.getState().settings.ai
-  if (ai.provider !== 'ollama' && !(ai.apiKey || '').trim()) {
+  if (!(ai.apiKey || '').trim()) {
     return '请先在「设置 > AI」中配置 API Key'
   }
   if (!(ai.model || '').trim()) {

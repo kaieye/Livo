@@ -987,15 +987,14 @@ async function callAI(
 ): Promise<{ content: string }> {
   const settings = await getSettings()
   const ai = settings.ai
-  if (!ai.apiKey && ai.provider !== 'ollama')
-    throw new Error('请先在设置中配置 AI API Key')
+  if (!ai.apiKey) throw new Error('请先在设置中配置 AI API Key')
 
   const baseUrl = ai.baseUrl || getDefaultBaseUrl(ai.provider)
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${ai.apiKey || 'ollama'}`,
+      Authorization: `Bearer ${ai.apiKey}`,
     },
     body: JSON.stringify({
       model: ai.model,
@@ -1021,7 +1020,7 @@ async function callAIStream(
 ): Promise<void> {
   const settings = await getSettings()
   const ai = settings.ai
-  if (!ai.apiKey && ai.provider !== 'ollama') {
+  if (!ai.apiKey) {
     const message = '请先在设置中配置 AI API Key'
     onError(message)
     throw new Error(message)
@@ -1033,7 +1032,7 @@ async function callAIStream(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${ai.apiKey || 'ollama'}`,
+        Authorization: `Bearer ${ai.apiKey}`,
       },
       body: JSON.stringify({
         model: ai.model,
@@ -1089,7 +1088,7 @@ function getDefaultBaseUrl(provider: string): string {
     anthropic: 'https://api.anthropic.com/v1',
     deepseek: 'https://api.deepseek.com/v1',
     glm: 'https://open.bigmodel.cn/api/paas/v4',
-    ollama: 'http://localhost:11434/v1',
+    minimax: 'https://api.minimax.chat/v1',
   }
   return urls[provider] || 'https://api.openai.com/v1'
 }
@@ -1743,7 +1742,7 @@ export function createWebAPI(): ElectronAPI {
         requestId?: string,
       ) => {
         const settings = await getSettings()
-        if (!settings.ai.apiKey && settings.ai.provider !== 'ollama')
+        if (!settings.ai.apiKey)
           return { success: false, error: '请先在设置中配置 AI API Key' }
         try {
           const lang = language || settings.general.language || 'zh-CN'
@@ -1863,7 +1862,7 @@ export function createWebAPI(): ElectronAPI {
         requestId?: string,
       ) => {
         const settings = await getSettings()
-        if (!settings.ai.apiKey && settings.ai.provider !== 'ollama')
+        if (!settings.ai.apiKey)
           return { success: false, error: '请先在设置中配置 AI API Key' }
         try {
           const messages = [
@@ -2115,7 +2114,7 @@ export function createWebAPI(): ElectronAPI {
         input: AISemanticFilterInput,
       ): Promise<AISemanticFilterResult> => {
         const settings = await getSettings()
-        if (!settings.ai.apiKey && settings.ai.provider !== 'ollama') {
+        if (!settings.ai.apiKey) {
           return { success: false, error: '请先在设置中配置 AI API Key' }
         }
 

@@ -13,8 +13,8 @@ export function resolveBaseUrl(config: AIConfig): string {
       return 'https://api.deepseek.com/v1'
     case 'glm':
       return 'https://open.bigmodel.cn/api/paas/v4'
-    case 'ollama':
-      return 'http://localhost:11434/v1'
+    case 'minimax':
+      return 'https://api.minimax.chat/v1'
     default:
       return 'https://api.openai.com/v1'
   }
@@ -22,7 +22,7 @@ export function resolveBaseUrl(config: AIConfig): string {
 
 export function createOpenAIClient(config: AIConfig): OpenAI {
   return new OpenAI({
-    apiKey: config.apiKey || 'ollama', // ollama doesn't require a key
+    apiKey: config.apiKey,
     baseURL: resolveBaseUrl(config),
   })
 }
@@ -33,7 +33,7 @@ export function validateAIConfig(config: AIConfig): string | null {
   const model = (config.model || '').trim()
   const baseUrl = (config.baseUrl || '').trim()
 
-  if (config.provider !== 'ollama' && !apiKey) {
+  if (!apiKey) {
     return '请先在设置中配置 AI API Key'
   }
   if (!model) {

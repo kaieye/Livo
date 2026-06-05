@@ -2539,13 +2539,10 @@ function FeedRefreshIssueBadge({ label }: { label: string | null }) {
   if (!label) return null
   return (
     <span
-      className="group relative ml-1 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-amber-600 dark:text-amber-400"
+      className="ml-1 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-amber-600 dark:text-amber-400"
       aria-hidden="true"
     >
       <AlertTriangle size={13} strokeWidth={2.4} />
-      <span className="dark:bg-surface-dark-secondary pointer-events-none absolute right-0 top-full z-30 mt-1 hidden max-w-56 rounded-md border border-amber-500/30 bg-white px-2 py-1 text-left text-xs font-normal leading-snug text-amber-800 shadow-lg group-hover:block dark:text-amber-200">
-        {label}
-      </span>
     </span>
   )
 }
@@ -2667,7 +2664,7 @@ const FeedCategory = memo(function FeedCategory({
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
                       className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
-                      title={issueLabel ?? displayTitle}
+                      title={displayTitle}
                       aria-label={
                         issueLabel
                           ? `${displayTitle}. ${issueLabel}`
@@ -2721,7 +2718,7 @@ const FeedCategory = memo(function FeedCategory({
                       onClick={() => onSelect(feed.id)}
                       onContextMenu={(e) => onContextMenu(e, feed.id)}
                       className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
-                      title={issueLabel ?? displayTitle}
+                      title={displayTitle}
                       aria-label={
                         issueLabel
                           ? `${displayTitle}. ${issueLabel}`
@@ -2818,7 +2815,7 @@ const RecommendedSection = memo(function RecommendedSection({
                 onClick={() => onSelect(feed.id)}
                 onContextMenu={(e) => onContextMenu(e, feed.id, true)}
                 className={`sidebar-item group w-full ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''}`}
-                title={issueLabel ?? displayTitle}
+                title={displayTitle}
                 aria-label={
                   issueLabel ? `${displayTitle}. ${issueLabel}` : displayTitle
                 }

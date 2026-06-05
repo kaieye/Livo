@@ -183,6 +183,8 @@ export const enSettings = {
   apiKeyPlaceholder: 'Enter {{provider}} API Key',
   model: 'Model',
   modelPlaceholder: 'Enter model name',
+  aiCustomModel: 'Custom…',
+  aiChoosePreset: 'Presets',
   baseUrl: 'API URL (optional)',
   baseUrlPlaceholder: 'Custom API URL',
   baseUrlHint: 'Leave empty for default: ',
@@ -205,7 +207,7 @@ export const enSettings = {
     'Preset system prompt for AI chat. It will be appended automatically in every conversation.',
   aiNotice: '🎉 No login, no subscription needed',
   aiNoticeDesc:
-    'Configure your own AI API Key to use all AI features including summary, translation and chat. Supports OpenAI, Anthropic, DeepSeek, and MiniMax.',
+    'Configure your own AI API Key to use all AI features including summary, translation and chat. Supports OpenAI, Anthropic, DeepSeek, GLM, and MiniMax.',
   aiModelConfig: 'Model Configuration',
   aiModelConfigDesc:
     'Pick a provider and fill in the API Key, Base URL and model.',
@@ -364,7 +366,7 @@ export const enSettings = {
   feature_localStorage: 'Local Storage',
   feature_localStorageDesc: 'Data stays on your device',
   feature_multiModel: 'Multi-Model Support',
-  feature_multiModelDesc: 'OpenAI/Anthropic/DeepSeek/MiniMax',
+  feature_multiModelDesc: 'OpenAI/Anthropic/DeepSeek/GLM/MiniMax',
   feature_darkMode: 'Dark Mode',
   feature_darkModeDesc: 'Follow system or manual toggle',
   openSourceFree: 'Open Source & Free',

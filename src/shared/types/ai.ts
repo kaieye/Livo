@@ -1,7 +1,7 @@
 // AI configuration and semantic filter types
 
 export interface AIConfig {
-  provider: 'openai' | 'anthropic' | 'deepseek' | 'glm' | 'ollama' | 'custom'
+  provider: 'openai' | 'anthropic' | 'deepseek' | 'glm' | 'minimax' | 'custom'
   apiKey: string
   apiKeys?: Record<string, string>
   baseUrl?: string
@@ -171,10 +171,12 @@ export const AI_PROVIDERS = {
     models: [
       'gpt-4o',
       'gpt-4o-mini',
-      'gpt-4-turbo',
-      'gpt-3.5-turbo',
-      'o1-mini',
-      'o1-preview',
+      'gpt-4.1',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
+      'o4-mini',
+      'o3-mini',
+      'o1',
     ],
   },
   anthropic: {
@@ -182,8 +184,8 @@ export const AI_PROVIDERS = {
     defaultBaseUrl: 'https://api.anthropic.com/v1',
     models: [
       'claude-sonnet-4-20250514',
+      'claude-opus-4-20250514',
       'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
     ],
   },
   deepseek: {
@@ -194,19 +196,12 @@ export const AI_PROVIDERS = {
   glm: {
     name: 'GLM',
     defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    models: [
-      'glm-4-plus',
-      'glm-4-long',
-      'glm-4-flash',
-      'glm-4',
-      'glm-4v-plus',
-      'glm-4v',
-    ],
+    models: ['glm-5.1', 'glm-4-plus', 'glm-4-flash', 'glm-4-air'],
   },
-  ollama: {
+  minimax: {
     name: 'MiniMax',
-    defaultBaseUrl: 'http://localhost:11434/v1',
-    models: ['llama3.2', 'llama3.1', 'mistral', 'qwen2.5', 'gemma2'],
+    defaultBaseUrl: 'https://api.minimax.chat/v1',
+    models: ['MiniMax-M3', 'MiniMax-M2.7'],
   },
   custom: {
     name: 'Custom',

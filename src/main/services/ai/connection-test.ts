@@ -1,3 +1,4 @@
+import OpenAI from 'openai'
 import type { AIConfig } from '../../../shared/types/index'
 import { createOpenAIClient, validateAIConfig } from './ai-client'
 import { normalizeAIError, isOpenAICompatible } from './provider-protocol'
@@ -18,7 +19,7 @@ export interface ConnectionTestResult {
 }
 
 const TEST_PROMPT = '简短告诉我你是什么公司的什么模型、是什么版本，不超过15个字'
-const MAX_TOKENS = 32
+const MAX_TOKENS = 256
 const MAX_ATTEMPTS = 2
 
 /**
@@ -67,7 +68,13 @@ export class ConnectionTestService {
             messages: [{ role: 'user', content: TEST_PROMPT }],
             max_tokens: MAX_TOKENS,
             temperature: 0,
-          })
+            // Disable thinking mode for DeepSeek V4 models — the default
+            // thinking mode consumes max_tokens on internal reasoning,
+            // leaving no budget for visible content.
+            ...(config.provider === 'deepseek'
+              ? { thinking: { type: 'disabled' as const } }
+              : {}),
+          } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
           return (response.choices[0]?.message?.content || '').trim()
         },
         {
