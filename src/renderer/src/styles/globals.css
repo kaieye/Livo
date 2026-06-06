@@ -400,7 +400,7 @@
 @keyframes page-transition-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -409,7 +409,23 @@
 }
 
 .page-transition {
-  animation: page-transition-in 0.22s ease-out;
+  animation: page-transition-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes view-transition-panel-in {
+  from {
+    opacity: 0.92;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-transition-panel-enter {
+  animation: view-transition-panel-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
 }
 
 /* Audio scrubber range input */

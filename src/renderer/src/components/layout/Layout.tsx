@@ -62,8 +62,24 @@ const SIDEBAR_MAX = 400
 const ENTRY_LIST_MIN = 260
 const ENTRY_LIST_MAX = 640
 
+function PanelSkeleton({ type }: { type: 'article' | 'social' | 'grid' }) {
+  return (
+    <div className="dark:bg-surface-dark flex min-w-0 flex-1 flex-col bg-white">
+      <div className="flex h-12 flex-shrink-0 items-center gap-2 border-b px-4">
+        <div className="bg-surface-secondary dark:bg-surface-dark-secondary h-4 w-28 animate-pulse rounded" />
+        <div className="bg-surface-secondary dark:bg-surface-dark-secondary ml-auto h-8 w-20 animate-pulse rounded-lg" />
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <SkeletonList count={8} type={type} />
+      </div>
+    </div>
+  )
+}
+
 export function Layout() {
   const contentFocusRef = useRef<HTMLDivElement>(null)
+  const transitionPanelRef = useRef<HTMLDivElement>(null)
+  const prevTransitionKeyRef = useRef<string | null>(null)
   const { isDiscoverOpen } = useStoreShallow(useDiscoverStore, (s) => ({
     isDiscoverOpen: s.isOpen,
   }))
@@ -91,7 +107,7 @@ export function Layout() {
   const isDigestRoute = location.pathname === '/digest'
 
   // Clear stale detail content when switching view/feed scope.
-  useEffect(() => {
+  useLayoutEffect(() => {
     performance.mark('vs:selectEntry-null')
     void selectEntry(null)
   }, [activeView, selectedFeedId, selectEntry])
@@ -100,33 +116,6 @@ export function Layout() {
   useLayoutEffect(() => {
     performance.mark('vs:layout-commit')
   }, [activeView, selectedFeedId])
-
-  // PERF: defer content mount so Layout commits fast (skeleton first, then real component).
-  // Uses a ref checked during render to show skeleton immediately on view switch,
-  // then mounts the real component on the next animation frame.
-  const deferRef = useRef(false)
-  const prevViewKeyRef2 = useRef(`${activeView}:${selectedFeedId}`)
-  const currentViewKey2 = `${activeView}:${selectedFeedId}`
-  if (currentViewKey2 !== prevViewKeyRef2.current) {
-    prevViewKeyRef2.current = currentViewKey2
-    deferRef.current = true
-  }
-  // During render: if a switch was just detected, show skeleton regardless of state
-  const effectiveShowContent = !deferRef.current
-
-  useEffect(() => {
-    if (!deferRef.current) return
-    deferRef.current = false
-    const raf = requestAnimationFrame(() => {
-      performance.mark('vs:content-mounted')
-      // Toggle dummy state to force re-render → real content mounts
-      setShowContent((c) => !c)
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [activeView, selectedFeedId])
-
-  // Dummy state to trigger re-render after rAF
-  const [, setShowContent] = useState(true)
 
   // PERF: schedule a post-paint measurement collection
   useEffect(() => {
@@ -149,9 +138,8 @@ export function Layout() {
         `🔍 View-switch perf (${(performance.now() - startMark.startTime).toFixed(1)}ms total to paint)`,
       )
       measureFrom('vs:store', '→ store update')
-      measureFrom('vs:layout-commit', '→ Layout commit (skeleton)')
+      measureFrom('vs:layout-commit', '→ Layout commit')
       measureFrom('vs:selectEntry-null', '→ selectEntry(null)')
-      measureFrom('vs:content-mounted', '→ Content mounted')
       measureFrom('vs:wideview-memos', '→ WideView useMemos done')
       measureFrom('vs:wideview-masonry', '→ WideView masonryCards')
       measureFrom('vs:wideview-layout1', '→ WideView useLayoutEffect #1')
@@ -166,7 +154,6 @@ export function Layout() {
         'vs:store',
         'vs:layout-commit',
         'vs:selectEntry-null',
-        'vs:content-mounted',
         'vs:wideview-memos',
         'vs:wideview-masonry',
         'vs:wideview-layout1',
@@ -257,6 +244,41 @@ export function Layout() {
       FeedViewType.Videos,
       FeedViewType.Pictures,
     ].includes(effectiveView)
+  const transitionScope = isDigestRoute
+    ? 'digest'
+    : isDiscoverOpen
+      ? 'discover'
+      : isWideView
+        ? `wide:${effectiveView}`
+        : 'reader'
+  const transitionKey = `${transitionScope}:${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
+
+  // 栏目切换只重播内容进入动画，不重挂载面板子树，避免三栏布局在中间态塌缩。
+  useLayoutEffect(() => {
+    if (prevTransitionKeyRef.current === null) {
+      prevTransitionKeyRef.current = transitionKey
+      return
+    }
+
+    if (prevTransitionKeyRef.current === transitionKey) return
+    prevTransitionKeyRef.current = transitionKey
+
+    const panel = transitionPanelRef.current
+    if (!panel) return
+
+    panel.classList.remove('view-transition-panel-enter')
+    void panel.offsetWidth
+    panel.classList.add('view-transition-panel-enter')
+
+    const timer = window.setTimeout(() => {
+      panel.classList.remove('view-transition-panel-enter')
+    }, 180)
+
+    return () => {
+      window.clearTimeout(timer)
+      panel.classList.remove('view-transition-panel-enter')
+    }
+  }, [transitionKey])
 
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)
   const [entryListWidth, setEntryListWidth] = useState(
@@ -330,38 +352,22 @@ export function Layout() {
             : ''
         }`}
       >
-        {isDigestRoute ? (
-          <Suspense fallback={<SkeletonList count={8} type="article" />}>
-            <DigestContent />
-          </Suspense>
-        ) : isDiscoverOpen ? (
-          <Suspense fallback={<SkeletonList count={8} type="article" />}>
-            <DiscoverPanel />
-          </Suspense>
-        ) : !effectiveShowContent ? (
-          /* Skeleton shown while deferring content mount */
-          <div className="dark:bg-surface-dark flex min-w-0 flex-1 flex-col bg-white">
-            <div className="flex h-12 items-center gap-2 border-b px-4">
-              <div className="bg-surface-secondary h-4 w-24 animate-pulse rounded" />
-            </div>
-            <SkeletonList
-              count={8}
-              type={
-                isWideView && effectiveView === FeedViewType.SocialMedia
-                  ? 'social'
-                  : isWideView
-                    ? 'grid'
-                    : 'article'
-              }
-            />
-          </div>
-        ) : isWideView ? (
-          /* 2-column layout for Social Media / Videos */
-          <div className="flex min-w-0 flex-1">
+        <div
+          ref={transitionPanelRef}
+          className="view-transition-panel flex min-w-0 flex-1"
+        >
+          {isDigestRoute ? (
+            <Suspense fallback={<PanelSkeleton type="article" />}>
+              <DigestContent />
+            </Suspense>
+          ) : isDiscoverOpen ? (
+            <Suspense fallback={<PanelSkeleton type="article" />}>
+              <DiscoverPanel />
+            </Suspense>
+          ) : isWideView ? (
             <Suspense
               fallback={
-                <SkeletonList
-                  count={8}
+                <PanelSkeleton
                   type={
                     effectiveView === FeedViewType.SocialMedia
                       ? 'social'
@@ -372,23 +378,21 @@ export function Layout() {
             >
               <WideViewContent />
             </Suspense>
-          </div>
-        ) : (
-          <>
-            {/* Entry List */}
-            <EntryList width={entryListWidth} />
+          ) : (
+            <>
+              <EntryList width={entryListWidth} />
 
-            {/* Resize handle: entry list ↔ content */}
-            <ResizeHandle
-              onMouseDown={(e) => handleMouseDown('entryList', e)}
-            />
+              <ResizeHandle
+                onMouseDown={(e) => handleMouseDown('entryList', e)}
+              />
 
-            {/* 主三栏阅读器详情列避开自定义标题栏，避免工具栏进入窗口拖拽命中区。 */}
-            <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
-              <EntryContent />
-            </div>
-          </>
-        )}
+              {/* 主三栏阅读器详情列避开自定义标题栏，避免工具栏进入窗口拖拽命中区。 */}
+              <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
+                <EntryContent />
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
