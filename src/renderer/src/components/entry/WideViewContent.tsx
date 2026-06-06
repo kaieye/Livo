@@ -519,7 +519,6 @@ export function WideViewContent() {
   // Pre-compute masonry card data to avoid per-render extraction
   const masonryCards = useMemo<MasonryCardData[]>(() => {
     if (!isPicturesAllView) return []
-    const t0 = performance.now()
     const result: MasonryCardData[] = []
     for (const entry of renderEntries) {
       let firstImage = ''

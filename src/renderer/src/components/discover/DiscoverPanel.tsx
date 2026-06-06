@@ -50,8 +50,6 @@ import {
   Sparkles,
   User,
   X,
-  Check,
-  Plus,
   Rss,
   ExternalLink,
   Loader2,
