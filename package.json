@@ -7,12 +7,16 @@
   "type": "module",
   "author": "Livo",
   "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10.17.0"
+  },
   "packageManager": "pnpm@10.17.0",
   "scripts": {
-    "dev": "chcp 65001 > nul & set ELECTRON_RUN_AS_NODE=& electron-vite dev --config config/electron.vite.config.ts",
+    "dev": "node scripts/run-electron-vite.mjs dev",
     "build": "electron-vite build --config config/electron.vite.config.ts",
-    "preview": "chcp 65001 > nul & set ELECTRON_RUN_AS_NODE=& electron-vite preview --config config/electron.vite.config.ts",
-    "start": "chcp 65001 > nul & set ELECTRON_RUN_AS_NODE=& electron-vite preview --config config/electron.vite.config.ts",
+    "preview": "node scripts/run-electron-vite.mjs preview",
+    "start": "node scripts/run-electron-vite.mjs preview",
     "postinstall": "electron-builder install-app-deps",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint --config config/eslint.config.mjs config/electron.vite.config.ts config/vite.config.web.ts config/tailwind.config.ts postcss.config.cjs scripts src",

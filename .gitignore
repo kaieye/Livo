@@ -23,6 +23,11 @@ docs/*
 !docs/feedfuse-inspired-todolist.md
 !docs/development.md
 !docs/architecture.md
+!docs/folo-desktop-comparison.md
+!docs/changelog/
+!docs/changelog/**
+!docs/release/
+!docs/release/**
 .reasonix/
 tmp/
 ref.png

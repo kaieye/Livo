@@ -1,0 +1,48 @@
+name: Bug report
+description: 报告可复现的问题
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 简要说明发生了什么。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 写出从干净状态触发问题的步骤。
+      placeholder: |
+        1. 打开...
+        2. 点击...
+        3. 看到...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Livo 版本或提交
+    validations:
+      required: false
+  - type: input
+    id: platform
+    attributes:
+      label: 系统环境
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04
+    validations:
+      required: false

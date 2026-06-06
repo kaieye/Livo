@@ -1,6 +1,7 @@
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
 import { logError, logInfo, logWarn } from './services/system/logger'
@@ -242,6 +243,55 @@ export class WindowManager {
       return { action: 'deny' }
     })
 
+    mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+      // 主窗口只允许停留在应用入口；正文或脚本触发的外部跳转统一走系统浏览器。
+      if (this.isAllowedAppNavigationUrl(navigationUrl)) return
+      event.preventDefault()
+      logWarn('[window] blocked main-frame navigation', {
+        url: navigationUrl,
+      })
+      this.safeOpenExternal(navigationUrl)
+    })
+
+    mainWindow.webContents.on(
+      'will-attach-webview',
+      (event, webPreferences, params) => {
+        const policy = classifyExternalUrl(params.src || '')
+        if (policy.blocked) {
+          event.preventDefault()
+          logWarn('[window] blocked webview attachment', {
+            url: params.src,
+            reason: policy.blockedReason,
+          })
+          return
+        }
+
+        // webview 只用于外部媒体页面，禁止它继承主窗口 preload 或 Node 能力。
+        delete webPreferences.preload
+        webPreferences.nodeIntegration = false
+        webPreferences.nodeIntegrationInSubFrames = false
+        webPreferences.contextIsolation = true
+        webPreferences.sandbox = true
+        webPreferences.webSecurity = true
+        webPreferences.allowRunningInsecureContent = false
+      },
+    )
+
+    mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
+      webContents.setWindowOpenHandler((details) => {
+        this.safeOpenExternal(details.url)
+        return { action: 'deny' }
+      })
+
+      webContents.on('will-navigate', (event, navigationUrl) => {
+        event.preventDefault()
+        logWarn('[window] blocked webview navigation', {
+          url: navigationUrl,
+        })
+        this.safeOpenExternal(navigationUrl)
+      })
+    })
+
     mainWindow.webContents.on('did-fail-load', (_event, code, desc) => {
       logError('[window] failed to load', { code, desc })
     })
@@ -274,6 +324,33 @@ export class WindowManager {
     mainWindow.webContents.on('did-finish-load', () => {
       this.installStartupWatchdog(mainWindow)
     })
+  }
+
+  private isAllowedAppNavigationUrl(rawUrl: string): boolean {
+    try {
+      const navigationUrl = new URL(rawUrl)
+      const rendererUrl = new URL(this.getRendererEntryUrl())
+
+      if (navigationUrl.protocol !== rendererUrl.protocol) {
+        return false
+      }
+
+      if (rendererUrl.protocol === 'file:') {
+        return navigationUrl.pathname === rendererUrl.pathname
+      }
+
+      return navigationUrl.origin === rendererUrl.origin
+    } catch (error) {
+      logWarn('[window] invalid navigation url', rawUrl, error)
+      return false
+    }
+  }
+
+  private getRendererEntryUrl(): string {
+    if (this.options.isDev && process.env['ELECTRON_RENDERER_URL']) {
+      return process.env['ELECTRON_RENDERER_URL']
+    }
+    return pathToFileURL(join(__dirname, '../renderer/index.html')).toString()
   }
 
   private installStartupWatchdog(mainWindow: BrowserWindow): void {
