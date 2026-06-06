@@ -26,6 +26,7 @@ import {
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useOverlayStackItem } from '../../store/overlay-stack-store'
 import { useQuickSearchStore } from '../../store/quick-search-store'
+import { rankFeedsForQuickSearch } from '../../lib/quick-search-ranking'
 
 // ====== Component ======
 type SearchType = 'all' | 'feed' | 'entry'
@@ -81,21 +82,9 @@ export function QuickSearchPanel() {
       }
       setIsSearching(true)
 
-      const qLower = q.toLowerCase()
-
       // Search feeds
       if (searchType === 'all' || searchType === 'feed') {
-        const matchedFeeds = scopedFeeds
-          .filter(
-            (f) =>
-              f.title.toLowerCase().includes(qLower) ||
-              f.url.toLowerCase().includes(qLower) ||
-              (f.siteUrl || '').toLowerCase().includes(qLower) ||
-              (f.category || '').toLowerCase().includes(qLower) ||
-              (f.description || '').toLowerCase().includes(qLower),
-          )
-          .slice(0, 5)
-        setFeedResults(matchedFeeds)
+        setFeedResults(rankFeedsForQuickSearch(scopedFeeds, q, 5))
       } else {
         setFeedResults([])
       }

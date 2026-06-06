@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 const command = process.argv[2]
 const allowedCommands = new Set(['dev', 'preview'])
@@ -11,9 +13,22 @@ if (!allowedCommands.has(command)) {
 const childEnv = { ...process.env }
 delete childEnv.ELECTRON_RUN_AS_NODE
 
+const electronViteBin = join(
+  process.cwd(),
+  'node_modules',
+  'electron-vite',
+  'bin',
+  'electron-vite.js',
+)
+
+if (!existsSync(electronViteBin)) {
+  console.error('electron-vite is not installed. Run `pnpm install` first.')
+  process.exit(1)
+}
+
 const child = spawn(
-  process.platform === 'win32' ? 'electron-vite.cmd' : 'electron-vite',
-  [command, '--config', 'config/electron.vite.config.ts'],
+  process.execPath,
+  [electronViteBin, command, '--config', 'config/electron.vite.config.ts'],
   {
     env: childEnv,
     stdio: 'inherit',

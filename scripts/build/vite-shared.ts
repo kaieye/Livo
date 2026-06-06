@@ -10,7 +10,7 @@ import { getBuildTimestamp, getGitCommitHash } from './metadata.mjs'
 export const LIVO_DEV_SERVER = {
   host: '127.0.0.1',
   port: 5431,
-  strictPort: true,
+  strictPort: false,
 } as const
 
 function createI18nCompletenessPlugin(): any {

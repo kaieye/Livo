@@ -252,18 +252,29 @@ export class EntryRepository implements IEntryRepository {
   }
 
   searchEntries(query: string, limit = 50): Entry[] {
-    const q = `%${query}%`
+    const trimmed = query.trim()
+    if (!trimmed) return []
+
+    const cappedLimit = Math.max(1, Math.min(Math.floor(limit), 100))
+    const q = `%${trimmed}%`
     const rows = this.db
       .prepare(
         `
       SELECT e.* FROM entries e
       INNER JOIN feeds f ON f.id = e.feed_id
       WHERE (e.title LIKE ? OR e.content LIKE ? OR e.summary LIKE ?)
-      ORDER BY e.published_at DESC
+      ORDER BY
+        CASE
+          WHEN e.title LIKE ? THEN 0
+          WHEN e.summary LIKE ? THEN 1
+          ELSE 2
+        END,
+        e.published_at DESC,
+        e.id DESC
       LIMIT ?
     `,
       )
-      .all(q, q, q, limit) as any[]
+      .all(q, q, q, q, q, cappedLimit) as any[]
     return rows.map(entryFromRow)
   }
 

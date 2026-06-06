@@ -5,6 +5,10 @@ import { pathToFileURL } from 'url'
 import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
 import { logError, logInfo, logWarn } from './services/system/logger'
+import {
+  persistWindowState,
+  readWindowState,
+} from './services/system/window-state'
 
 interface WindowManagerOptions {
   isDev: boolean
@@ -120,9 +124,12 @@ export class WindowManager {
   }
 
   createMainWindow(): BrowserWindow {
+    const windowState = readWindowState()
     const mainWindow = new BrowserWindow({
-      width: 1280,
-      height: 800,
+      x: windowState.x,
+      y: windowState.y,
+      width: windowState.width,
+      height: windowState.height,
       minWidth: 900,
       minHeight: 600,
       show: false,
@@ -150,6 +157,9 @@ export class WindowManager {
 
     this.mainWindow = mainWindow
     this.bindWindowEvents(mainWindow)
+    if (windowState.isMaximized) {
+      mainWindow.maximize()
+    }
 
     if (this.options.isDev) {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
@@ -177,6 +187,15 @@ export class WindowManager {
   }
 
   private bindWindowEvents(mainWindow: BrowserWindow): void {
+    const persistCurrentWindowState = (): void => {
+      if (mainWindow.isDestroyed() || mainWindow.isMinimized()) return
+      const bounds = mainWindow.getNormalBounds()
+      persistWindowState({
+        ...bounds,
+        isMaximized: mainWindow.isMaximized(),
+      })
+    }
+
     mainWindow.on('ready-to-show', () => {
       const shouldRevealWindow =
         !this.options.shouldStartInTray?.() || !!this.pendingProtocolUrl
@@ -204,13 +223,18 @@ export class WindowManager {
 
     mainWindow.on('maximize', () => {
       if (mainWindow.isDestroyed()) return
+      persistCurrentWindowState()
       mainWindow.webContents.send('window:maximize-changed', true)
     })
 
     mainWindow.on('unmaximize', () => {
       if (mainWindow.isDestroyed()) return
+      persistCurrentWindowState()
       mainWindow.webContents.send('window:maximize-changed', false)
     })
+
+    mainWindow.on('resized', persistCurrentWindowState)
+    mainWindow.on('moved', persistCurrentWindowState)
 
     mainWindow.on('close', (event) => {
       if (this.isQuitting || !this.options.shouldMinimizeToTray?.()) return
