@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getEntryIdFromSearch, withEntrySearchParam } from './route-paths'
+import {
+  ROUTES,
+  getEntryIdFromSearch,
+  withEntrySearchParam,
+} from './route-paths'
 
 describe('entry url state helpers', () => {
   it('reads entry id from query string', () => {
@@ -24,5 +28,13 @@ describe('entry url state helpers', () => {
     expect(withEntrySearchParam('/feed/feed-1?entry=entry-1', null)).toBe(
       '/feed/feed-1',
     )
+  })
+
+  it('encodes entry ids used as route path segments', () => {
+    const entryId = 'feed/entry ?part#1'
+
+    expect(ROUTES.entry(entryId)).toBe('/entry/feed%2Fentry%20%3Fpart%231')
+    expect(ROUTES.video(entryId)).toBe('/video/feed%2Fentry%20%3Fpart%231')
+    expect(ROUTES.image(entryId, 2)).toBe('/image/feed%2Fentry%20%3Fpart%231/2')
   })
 })

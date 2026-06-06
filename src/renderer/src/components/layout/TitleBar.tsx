@@ -151,23 +151,18 @@ export function TitleBar() {
 
   return (
     <>
-      {/* Drag strip. Kept at a low z-index so interactive headers/toolbars that
-          live in the top 36px (e.g. the reader toolbar, which uses a higher
-          z-index) stay clickable across their full height instead of being
-          swallowed by this strip; only truly empty areas remain draggable.
-          pointer-events-auto so -webkit-app-region:drag receives native mouse
-          events. Stops short of the Windows window controls; spans full width
-          on macOS to leave room for the native traffic lights. */}
+      {/* 顶部拖拽区高度与 reader-titlebar-safe-pt 共用变量，避免工具栏
+          和 Electron 原生拖拽命中区域再次错位。 */}
       <div
         aria-hidden
-        className={`drag-region pointer-events-auto fixed left-0 top-0 z-[5] h-9 select-none ${
+        className={`drag-region pointer-events-auto fixed left-0 top-0 z-[5] h-[var(--titlebar-drag-height)] select-none ${
           isWindows ? 'right-[150px]' : 'right-0'
         }`}
       />
       {isWindows && (
         <div
           aria-hidden
-          className="no-drag pointer-events-auto fixed right-0 top-0 z-[60] flex h-9 select-none items-stretch"
+          className="no-drag pointer-events-auto fixed right-0 top-0 z-[60] flex h-[var(--titlebar-drag-height)] select-none items-stretch"
         >
           <ControlButton
             label="最小化"

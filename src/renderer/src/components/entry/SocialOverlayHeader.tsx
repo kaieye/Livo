@@ -41,9 +41,9 @@ export const SocialOverlayHeader = memo(function SocialOverlayHeader({
   const { t } = useTranslation()
 
   return (
-    <div className="border-border/10 dark:border-border-dark/10 dark:bg-surface-dark/95 sticky top-0 z-20 border-b bg-white/95 backdrop-blur-sm">
+    <div className="drag-region reader-titlebar-safe-pt border-border/10 dark:border-border-dark/10 dark:bg-surface-dark/95 sticky top-0 z-20 border-b bg-white/95 backdrop-blur-sm">
       <div
-        className={`${contentWidthClass} mx-auto flex items-center justify-between px-4 py-2`}
+        className={`no-drag ${contentWidthClass} mx-auto flex items-center justify-between px-4 py-2`}
         style={contentWidthStyle}
       >
         <button

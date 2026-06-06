@@ -4,11 +4,34 @@
  * renderer-side store / router actions.
  */
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, type NavigateFunction } from 'react-router-dom'
 import type { AgentNavigationAction } from '@shared'
 import { useSettingsStore } from '../store/settings-store'
 import { useDiscoverStore } from '../store/discover-store'
+import { useAIChatStore } from '../store/ai-chat-store'
 import { ROUTES } from '../router/route-paths'
+
+function closePanelsBeforeEntryNavigation(): void {
+  const settingsStore = useSettingsStore.getState()
+  if (settingsStore.isOpen) settingsStore.setOpen(false)
+
+  const discoverStore = useDiscoverStore.getState()
+  if (discoverStore.isOpen) discoverStore.setOpen(false)
+
+  const aiChatStore = useAIChatStore.getState()
+  if (aiChatStore.isPanelOpen) aiChatStore.setPanelOpen(false)
+}
+
+export function openEntryDetailFromAgent(
+  entryId: string,
+  navigate: NavigateFunction,
+): void {
+  const normalizedEntryId = entryId.trim()
+  if (!normalizedEntryId) return
+
+  closePanelsBeforeEntryNavigation()
+  navigate(ROUTES.entry(normalizedEntryId))
+}
 
 export function useAgentNavigate() {
   const navigate = useNavigate()
@@ -35,7 +58,7 @@ export function useAgentNavigate() {
             navigate(-1)
             return
           case 'open-entry-detail':
-            navigate(ROUTES.entry(action.entryId))
+            openEntryDetailFromAgent(action.entryId, navigate)
             return
           case 'open-feed-detail':
             navigate(ROUTES.feed(action.feedId))

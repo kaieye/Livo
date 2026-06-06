@@ -53,9 +53,9 @@ export const WideViewHeader = memo(function WideViewHeader({
 
   return (
     <div
-      className={`flex-shrink-0 border-b px-6 pb-2 pt-3 ${activeView === FeedViewType.SocialMedia || activeView === FeedViewType.Pictures ? '' : 'space-y-2.5'}`}
+      className={`drag-region reader-titlebar-toolbar-pt flex-shrink-0 border-b px-6 pb-2 ${activeView === FeedViewType.SocialMedia || activeView === FeedViewType.Pictures ? '' : 'space-y-2.5'}`}
     >
-      <div className="flex items-center justify-between">
+      <div className="no-drag flex items-center justify-between">
         {inlineBilibili ? (
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
@@ -119,7 +119,7 @@ export const WideViewHeader = memo(function WideViewHeader({
       {activeView !== FeedViewType.SocialMedia &&
         activeView !== FeedViewType.Pictures &&
         !inlineBilibili && (
-          <div className="mt-2 flex items-center gap-3">
+          <div className="no-drag mt-2 flex items-center gap-3">
             <form onSubmit={onSearch} className="relative max-w-xs flex-1">
               <Search
                 size={14}

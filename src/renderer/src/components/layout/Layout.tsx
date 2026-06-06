@@ -383,8 +383,8 @@ export function Layout() {
               onMouseDown={(e) => handleMouseDown('entryList', e)}
             />
 
-            {/* Entry Content */}
-            <div className="flex min-w-0 flex-1">
+            {/* 主三栏阅读器详情列避开自定义标题栏，避免工具栏进入窗口拖拽命中区。 */}
+            <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
               <EntryContent />
             </div>
           </>

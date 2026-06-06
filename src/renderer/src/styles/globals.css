@@ -5,6 +5,8 @@
 @layer base {
   :root {
     color-scheme: light;
+    --titlebar-drag-height: 1.75rem;
+    --titlebar-window-controls-width: 150px;
   }
 
   :root.dark {
@@ -67,22 +69,34 @@
 
   /* Reserve space on the right edge for the custom window controls.
      Only active on Windows, where main.tsx adds `.has-window-controls`. */
-  .titlebar-safe-pr {
+  .titlebar-safe-pr,
+  .reader-titlebar-safe-pr {
     padding-right: 0;
   }
 
-  .has-window-controls .titlebar-safe-pr {
-    padding-right: 150px;
+  .has-window-controls .titlebar-safe-pr,
+  .has-window-controls .reader-titlebar-safe-pr {
+    padding-right: var(--titlebar-window-controls-width);
   }
 
   /* Reserve space at the top for the custom title bar (macOS + Windows).
      Only active when `.has-titlebar` is set by main.tsx. */
-  .titlebar-safe-pt {
+  .titlebar-safe-pt,
+  .reader-titlebar-safe-pt {
     padding-top: 0;
   }
 
-  .has-titlebar .titlebar-safe-pt {
-    padding-top: 2.25rem; /* h-9 = 36px */
+  .has-titlebar .titlebar-safe-pt,
+  .has-titlebar .reader-titlebar-safe-pt {
+    padding-top: var(--titlebar-drag-height);
+  }
+
+  .reader-titlebar-toolbar-pt {
+    padding-top: 0.5rem;
+  }
+
+  .has-titlebar .reader-titlebar-toolbar-pt {
+    padding-top: calc(var(--titlebar-drag-height) + 0.25rem);
   }
 
   .sidebar-item {

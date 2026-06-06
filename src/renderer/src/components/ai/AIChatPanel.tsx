@@ -7,7 +7,6 @@ import {
   Send,
   Square,
   Trash2,
-  Loader2,
   Bot,
   User,
   GripHorizontal,
@@ -17,11 +16,11 @@ import {
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useOverlayStackItem } from '../../store/overlay-stack-store'
-import { AIChatRunStatusBar } from './AIChatRunStatusBar'
 import { AIChatConfirmationCard } from './AIChatConfirmationCard'
 import { AIChatTracePanel } from './AIChatTracePanel'
 import { AIChatHistoryPanel } from './AIChatHistoryPanel'
 import { AIChatMarkdown } from './AIChatMarkdown'
+import { AIChatActivityBubble } from './AIChatActivityBubble'
 
 const STORAGE_KEY = 'ai-chat-panel-ratio'
 
@@ -106,7 +105,6 @@ export function AIChatPanel() {
     isConfirming,
     streamingContent,
     toolStatusItems,
-    showToolBanner,
     pendingConfirmation,
     elapsedLabel,
     timerVisible,
@@ -489,31 +487,22 @@ export function AIChatPanel() {
           />
         )}
 
-        {/* Thinking indicator (no streaming text and no tool banner yet) */}
-        {isLoading &&
-          !streamingContent &&
-          !showToolBanner &&
-          !pendingConfirmation && (
-            <div className="flex gap-2.5">
-              <div className="bg-accent/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
-                <Bot size={14} className="text-accent" />
-              </div>
-              <div className="bg-surface-secondary dark:bg-surface-dark-secondary rounded-xl rounded-bl-sm px-3 py-2">
-                <Loader2 size={16} className="text-accent animate-spin" />
-              </div>
+        {/* 临时展示 Agent 执行过程；最终回答开始输出时自动让位给回答气泡。 */}
+        {isLoading && !streamingContent && !pendingConfirmation && (
+          <div className="flex gap-2.5">
+            <div className="bg-accent/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
+              <Bot size={14} className="text-accent" />
             </div>
-          )}
+            <AIChatActivityBubble
+              items={toolStatusItems}
+              elapsedLabel={elapsedLabel}
+              timerVisible={timerVisible}
+            />
+          </div>
+        )}
 
         <div ref={messagesEndRef} />
       </div>
-
-      {/* Tool run status bar */}
-      <AIChatRunStatusBar
-        items={toolStatusItems}
-        show={showToolBanner}
-        timerVisible={timerVisible}
-        elapsedLabel={elapsedLabel}
-      />
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="flex-shrink-0 border-t p-3">

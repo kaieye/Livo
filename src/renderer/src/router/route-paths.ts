@@ -45,6 +45,10 @@ function buildDiscoverTargetSearch(target: DiscoverRouteTarget): string {
   return query ? `?${query}` : ''
 }
 
+function encodeRouteSegment(value: string): string {
+  return encodeURIComponent(value)
+}
+
 /**
  * Route path constants for type-safe navigation.
  * All paths are relative to the HashRouter root (#/).
@@ -58,12 +62,12 @@ export const ROUTES = {
     const slug = VIEW_TYPE_SLUGS[view]
     return slug ? `/${slug}/feed/${feedId}` : `/feed/${feedId}`
   },
-  entry: (entryId: string) => `/entry/${entryId}`,
-  video: (entryId: string) => `/video/${entryId}`,
+  entry: (entryId: string) => `/entry/${encodeRouteSegment(entryId)}`,
+  video: (entryId: string) => `/video/${encodeRouteSegment(entryId)}`,
   image: (entryId: string, index?: number) =>
     typeof index === 'number' && index > 0
-      ? `/image/${entryId}/${index}`
-      : `/image/${entryId}`,
+      ? `/image/${encodeRouteSegment(entryId)}/${index}`
+      : `/image/${encodeRouteSegment(entryId)}`,
   login: (provider?: string) => (provider ? `/login/${provider}` : '/login'),
   discover: '/discover',
   discoverPreview: (target: DiscoverRouteTarget) =>

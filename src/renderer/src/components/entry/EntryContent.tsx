@@ -1094,10 +1094,8 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         />
       </div>
 
-      {/* Toolbar. `no-drag` + a z-index above the title bar's drag strip keeps
-          every button (star / summarize / translate / …) fully clickable even
-          though it overlaps the top drag region. */}
-      <div className="no-drag titlebar-safe-pr dark:bg-surface-dark/80 sticky top-0 z-10 flex flex-shrink-0 items-center gap-0.5 border-b bg-white/80 px-3 py-1.5 backdrop-blur-sm">
+      {/* 工具栏由外层阅读器容器统一避开标题栏；右侧仍避开 Windows 窗口按钮。 */}
+      <div className="no-drag reader-titlebar-safe-pr dark:bg-surface-dark/80 sticky top-0 z-10 flex flex-shrink-0 items-center gap-0.5 border-b bg-white/80 px-3 py-1.5 backdrop-blur-sm">
         {embeddedPageUrl && (
           <>
             <ToolbarButton
