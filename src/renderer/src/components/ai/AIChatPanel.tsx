@@ -289,6 +289,17 @@ export function AIChatPanel() {
     setInput('')
   }
 
+  const handleSuggestionClick = useCallback(
+    (suggestion: string) => {
+      if (isLoading || pendingConfirmation) return
+
+      const context = selectedEntry?.content || selectedEntry?.summary || ''
+      void sendMessage(suggestion, context)
+      setInput('')
+    },
+    [isLoading, pendingConfirmation, selectedEntry, sendMessage],
+  )
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -403,10 +414,7 @@ export function AIChatPanel() {
               ].map((suggestion) => (
                 <button
                   key={suggestion}
-                  onClick={() => {
-                    setInput(suggestion)
-                    inputRef.current?.focus()
-                  }}
+                  onClick={() => handleSuggestionClick(suggestion)}
                   className="bg-surface-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary block w-full rounded-lg px-3 py-2 text-left text-xs transition-colors"
                 >
                   {suggestion}

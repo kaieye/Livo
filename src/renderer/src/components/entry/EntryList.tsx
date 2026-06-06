@@ -405,7 +405,50 @@ export function EntryList({ width }: { width?: number }) {
             {viewDef && <span className={viewDef.color}>{displayTitle}</span>}
             {!viewDef && displayTitle}
           </h2>
-          <div className="flex items-center gap-1">
+        </div>
+
+        {/* Search */}
+        <HomeInlineSearch
+          query={searchQuery}
+          onQueryChange={(value) => {
+            setSearchQuery(value)
+            if (!value.trim()) {
+              reloadCurrentList()
+            }
+          }}
+          onSubmit={handleSearch}
+          entries={renderEntries}
+          feedTitleFor={(entry) => feedById.get(entry.feedId)?.title ?? ''}
+          onSelectEntry={(entry) => selectEntry(entry)}
+          placeholder={t('entryList.searchArticles')}
+        />
+
+        {/* Filter tabs */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 gap-1 text-xs">
+            <button
+              onClick={() => setFilterMode('all')}
+              className={`rounded-full px-3 py-1 transition-colors ${
+                filterMode === 'all'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary'
+              }`}
+            >
+              {t('common.all')}
+            </button>
+            <button
+              onClick={() => setFilterMode('unread')}
+              className={`rounded-full px-3 py-1 transition-colors ${
+                filterMode === 'unread'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary'
+              }`}
+            >
+              {t('entryList.unread')}
+            </button>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
             <button
               onClick={refreshCurrentFeeds}
               disabled={isRefreshing}
@@ -428,46 +471,6 @@ export function EntryList({ width }: { width?: number }) {
               />
             </button>
           </div>
-        </div>
-
-        {/* Search */}
-        <HomeInlineSearch
-          query={searchQuery}
-          onQueryChange={(value) => {
-            setSearchQuery(value)
-            if (!value.trim()) {
-              reloadCurrentList()
-            }
-          }}
-          onSubmit={handleSearch}
-          entries={renderEntries}
-          feedTitleFor={(entry) => feedById.get(entry.feedId)?.title ?? ''}
-          onSelectEntry={(entry) => selectEntry(entry)}
-          placeholder={t('entryList.searchArticles')}
-        />
-
-        {/* Filter tabs */}
-        <div className="flex gap-1 text-xs">
-          <button
-            onClick={() => setFilterMode('all')}
-            className={`rounded-full px-3 py-1 transition-colors ${
-              filterMode === 'all'
-                ? 'bg-accent text-white'
-                : 'bg-surface-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary'
-            }`}
-          >
-            {t('common.all')}
-          </button>
-          <button
-            onClick={() => setFilterMode('unread')}
-            className={`rounded-full px-3 py-1 transition-colors ${
-              filterMode === 'unread'
-                ? 'bg-accent text-white'
-                : 'bg-surface-secondary hover:bg-surface-tertiary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary'
-            }`}
-          >
-            {t('entryList.unread')}
-          </button>
         </div>
 
         {isRefreshing && refreshProgress && refreshProgress.total > 0 && (

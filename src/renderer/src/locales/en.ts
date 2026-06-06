@@ -77,9 +77,9 @@ export const en = {
     welcome: 'AI Assistant',
     welcomeDesc:
       'Ask questions about the current article, or have any conversation',
-    suggestion1: 'Summarize the key points of this article',
-    suggestion2: "What problems are there with this article's views?",
-    suggestion3: 'Explain this article in simple terms',
+    suggestion1: 'Extract the core claim and evidence from this article',
+    suggestion2: "Find today's updates that are most worth reading first",
+    suggestion3: 'Suggest a topic I should follow next based on my feeds',
     inputPlaceholder: 'Type a message...',
     error: 'Error: {{message}}',
     newConversation: 'New conversation',
