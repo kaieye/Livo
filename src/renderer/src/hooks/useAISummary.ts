@@ -1,12 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { buildAISummarySessionViewState } from '../lib/ai-summary-session-model'
 
-interface AIStreamPayload {
-  requestId: string
-  content?: string
-  error?: string
-}
-
 interface AISummaryState {
   /** The generated summary text, null when no summary has been generated */
   summary: string | null
@@ -27,12 +21,6 @@ interface AISummaryOptions {
 
 function createAIRequestId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
-
-function isAIStreamPayload(value: unknown): value is AIStreamPayload {
-  if (!value || typeof value !== 'object') return false
-  const payload = value as Record<string, unknown>
-  return typeof payload.requestId === 'string'
 }
 
 /**
@@ -89,16 +77,14 @@ export function useAISummary(options: AISummaryOptions = {}): AISummaryState {
       setIsLoading(true)
 
       const cleanupChunk = window.api.on('ai:summary-stream-chunk', (data) => {
-        if (!isAIStreamPayload(data)) return
         if (data.requestId !== streamRequestId || !data.content) return
         if (requestId !== requestIdRef.current) return
         setSummary((prev) => `${prev ?? ''}${data.content}`)
       })
       const cleanupError = window.api.on('ai:summary-stream-error', (data) => {
-        if (!isAIStreamPayload(data)) return
         if (data.requestId !== streamRequestId) return
         if (requestId !== requestIdRef.current) return
-        setError(data.error ?? 'Unknown error')
+        setError(data.error)
       })
 
       try {

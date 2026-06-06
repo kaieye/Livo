@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, CheckCircle2 } from 'lucide-react'
-
-interface ImportProgress {
-  current: number
-  total: number
-  title: string
-  status: string
-}
+import type { ImportProgressPayload } from '../../../../shared/renderer-events'
 
 export function ImportProgressModal({
   open,
@@ -16,7 +10,7 @@ export function ImportProgressModal({
   open: boolean
   onDone: () => void
 }) {
-  const [progress, setProgress] = useState<ImportProgress | null>(null)
+  const [progress, setProgress] = useState<ImportProgressPayload | null>(null)
   const { t } = useTranslation()
 
   useEffect(() => {
@@ -25,8 +19,7 @@ export function ImportProgressModal({
       return
     }
 
-    const cleanup = window.api.on('import:progress', (...args: unknown[]) => {
-      const data = args[0] as ImportProgress
+    const cleanup = window.api.on('import:progress', (data) => {
       setProgress(data)
       if (data.status === 'done') {
         setTimeout(onDone, 600)

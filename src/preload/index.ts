@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/types'
 import { type IpcChannel, unwrapIpcEnvelope } from '../shared/ipc-contracts'
+import {
+  isRendererEventChannel,
+  type RendererEventCallback,
+  type RendererEventChannel,
+  type RendererEventArgs,
+} from '../shared/renderer-events'
 import type {
   AppSettings,
   Feed,
@@ -512,8 +518,15 @@ const api = {
   },
 
   // Events
-  on: (channel: string, callback: (...args: unknown[]) => void) => {
-    const handler = (_event: unknown, ...args: unknown[]) => callback(...args)
+  on: <C extends RendererEventChannel>(
+    channel: C,
+    callback: RendererEventCallback<C>,
+  ) => {
+    if (!isRendererEventChannel(channel)) {
+      throw new Error(`Unsupported renderer event channel: ${channel}`)
+    }
+    const handler = (_event: unknown, ...args: RendererEventArgs<C>) =>
+      callback(...args)
     ipcRenderer.on(channel, handler)
     return () => {
       ipcRenderer.removeListener(channel, handler)

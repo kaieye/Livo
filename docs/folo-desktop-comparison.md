@@ -81,7 +81,6 @@ Folo 主窗口 `webPreferences` 使用 `nodeIntegration: true`、`contextIsolati
 - P0：补 `livo://` deep link 分发，至少支持添加订阅、打开条目、打开设置、搜索、导入 OPML、账号回调。
 - P1：持久化窗口 bounds，并在恢复时 clamp 到屏幕内。
 - P1：增强托盘、Window 菜单、Always on top、Dock badge、原生上下文菜单。
-- P2：把 `window.api.on(channel: string)` 收紧为 typed allowlist。
 - P2：可以借鉴 Folo 的 typed proxy ergonomics，但继续保留 Livo 的 IPC validation 和 error envelope。
 
 证据：
@@ -106,7 +105,6 @@ Livo 的显式 `IPC_CONTRACTS`、`registerChannel`、`IpcEnvelope`、`validateIp
 保留 Livo 的安全接口，改进可维护性：
 
 - 按 `feed`、`entry`、`ai`、`settings`、`app`、`agent` 分组生成 typed facade。
-- 为 renderer event 建立枚举类型，替换泛 channel 监听。
 - 为 IPC 合同补类型级测试，防止 channel 和参数类型漂移。
 
 证据：
@@ -365,7 +363,7 @@ Folo 有 artifact attestation、签名策略说明、状态页和社区入口。
 4. 商店分发、artifact attestation、OTA/hot update。
 5. RSSHub 实例状态和托管管理。
 
-## 优先级最高的 10 个具体任务
+## 优先级最高的具体任务
 
 1. 新增 Playwright E2E，使用 fixture RSS 和临时 userData。
 2. 为 `livo://` 定义 typed deep link parser 和消费队列。
@@ -374,7 +372,6 @@ Folo 有 artifact attestation、签名策略说明、状态页和社区入口。
 5. 在 SQLite schema 中新增 `subscriptions`，先做最小读写接口。
 6. 引入本地 Fuse 搜索 index，先替代 Quick Search 的 includes/LIKE 排序。
 7. 把 MCP tools 作为动态 adapter 接入现有 `AgentToolRegistry`。
-8. 把 `window.api.on(channel: string)` 改成 typed event allowlist。
 
 ## 证据索引
 

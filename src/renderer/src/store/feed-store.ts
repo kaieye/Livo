@@ -1,6 +1,10 @@
 import { createAppStore } from './helpers'
 import type { FeedWithCount } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
+import type {
+  FeedRefreshProgressPayload,
+  ImportRefreshProgressPayload,
+} from '../../../shared/renderer-events'
 import { useSettingsStore } from './settings-store'
 import { useEntryStore } from './entry-store'
 import { buildHomeFeedLoadOptions } from '../lib/home-feed-scope'
@@ -278,7 +282,7 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     const removeListener = window.api.on(
       'feeds:refresh-progress',
       (payload) => {
-        const progress = payload as FeedState['refreshProgress']
+        const progress: FeedRefreshProgressPayload = payload
         if (!progress || typeof progress !== 'object') return
         set({ refreshProgress: progress })
       },
@@ -338,7 +342,7 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     const removeListener = window.api.on(
       'import:refresh-progress',
       (payload) => {
-        const progress = payload as FeedState['importRefreshProgress']
+        const progress: ImportRefreshProgressPayload = payload
         if (!progress || typeof progress !== 'object') return
         set({ importRefreshProgress: progress })
       },

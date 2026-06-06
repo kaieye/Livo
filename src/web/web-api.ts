@@ -5,6 +5,12 @@
  */
 
 import type { ElectronAPI } from '../preload/index'
+import {
+  isRendererEventChannel,
+  type RendererEventArgs,
+  type RendererEventCallback,
+  type RendererEventChannel,
+} from '../shared/renderer-events'
 import type {
   Feed,
   Entry,
@@ -1342,9 +1348,12 @@ function escXML(s: string) {
 // ====== Event System ======
 
 type EventCallback = (...args: unknown[]) => void
-const eventListeners = new Map<string, Set<EventCallback>>()
+const eventListeners = new Map<RendererEventChannel, Set<EventCallback>>()
 
-function emit(channel: string, ...args: unknown[]) {
+function emit<C extends RendererEventChannel>(
+  channel: C,
+  ...args: RendererEventArgs<C>
+) {
   const listeners = eventListeners.get(channel)
   if (listeners) listeners.forEach((cb) => cb(...args))
 }
@@ -2793,10 +2802,17 @@ export function createWebAPI(): ElectronAPI {
       onSyncProgress: () => (() => {}) as any,
     },
 
-    on: (channel: string, callback: (...args: unknown[]) => void) => {
+    on: <C extends RendererEventChannel>(
+      channel: C,
+      callback: RendererEventCallback<C>,
+    ) => {
+      if (!isRendererEventChannel(channel)) {
+        throw new Error(`Unsupported renderer event channel: ${channel}`)
+      }
+      const listener = callback as EventCallback
       if (!eventListeners.has(channel)) eventListeners.set(channel, new Set())
-      eventListeners.get(channel)!.add(callback)
-      return (() => eventListeners.get(channel)?.delete(callback)) as any
+      eventListeners.get(channel)!.add(listener)
+      return (() => eventListeners.get(channel)?.delete(listener)) as any
     },
   }
 
