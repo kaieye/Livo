@@ -43,6 +43,7 @@ import {
 } from '../shared/discover-helpers'
 import { FeedViewType as FVT } from '../shared/types'
 import { mergeSettings, normalizeSettings } from '../shared/settings'
+import { resolveOpenAIChatCompletionsUrl } from '../shared/ai-endpoint'
 import { resolveProfileUrlToCandidates } from '../shared/profile-resolver'
 import {
   CURATED_FEEDS,
@@ -989,8 +990,8 @@ async function callAI(
   const ai = settings.ai
   if (!ai.apiKey) throw new Error('请先在设置中配置 AI API Key')
 
-  const baseUrl = ai.baseUrl || getDefaultBaseUrl(ai.provider)
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const baseUrl = ai.baseUrl?.trim() || getDefaultBaseUrl(ai.provider)
+  const response = await fetch(resolveOpenAIChatCompletionsUrl(baseUrl), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1026,9 +1027,9 @@ async function callAIStream(
     throw new Error(message)
   }
 
-  const baseUrl = ai.baseUrl || getDefaultBaseUrl(ai.provider)
+  const baseUrl = ai.baseUrl?.trim() || getDefaultBaseUrl(ai.provider)
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await fetch(resolveOpenAIChatCompletionsUrl(baseUrl), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

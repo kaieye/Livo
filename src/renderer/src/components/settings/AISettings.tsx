@@ -67,7 +67,22 @@ function pickConnectionFields(config: AIConfig): Partial<AIConfig> {
     apiKey: config.apiKey,
     apiKeys: config.apiKeys,
     baseUrl: config.baseUrl,
+    baseUrls: config.baseUrls,
     model: config.model,
+    models: config.models,
+  }
+}
+
+function rememberCurrentProviderConnection(
+  config: AIConfig,
+): Partial<AIConfig> {
+  return {
+    apiKeys: { ...(config.apiKeys || {}), [config.provider]: config.apiKey },
+    baseUrls: {
+      ...(config.baseUrls || {}),
+      [config.provider]: config.baseUrl || '',
+    },
+    models: { ...(config.models || {}), [config.provider]: config.model },
   }
 }
 
@@ -140,6 +155,9 @@ export function AISettings() {
   const isApiKeyMissing = !draftAi.apiKey.trim()
   const isBaseUrlMissing = isCustomProvider && !(draftAi.baseUrl || '').trim()
   const isModelMissing = isCustomProvider && !draftAi.model.trim()
+  const baseUrlHint = isCustomProvider
+    ? t('settings.customBaseUrlHint')
+    : `${t('settings.baseUrlHint')}${providerConfig.defaultBaseUrl || 'N/A'}`
   const draftValidationMessage = isBaseUrlMissing
     ? t('settings.aiValidationBaseUrlRequired')
     : isModelMissing
@@ -158,24 +176,26 @@ export function AISettings() {
 
   const handleProviderChange = (provider: AIProvider) => {
     const config = AI_PROVIDERS[provider]
-    setDraftAi((current) => {
-      const rememberedKeys = {
-        ...(current.apiKeys || {}),
-        [current.provider]: current.apiKey,
-      }
-      const nextKey = rememberedKeys[provider] ?? ''
-      const next = {
-        ...current,
-        provider,
-        baseUrl: '',
-        model: config.models[0] || '',
-        apiKey: nextKey,
-        apiKeys: rememberedKeys,
-      }
-      autoSave(pickConnectionFields(next))
-      return next
-    })
-    setIsCustomModel(false)
+    const remembered = rememberCurrentProviderConnection(draftAi)
+    const rememberedKeys = remembered.apiKeys || {}
+    const rememberedBaseUrls = remembered.baseUrls || {}
+    const rememberedModels = remembered.models || {}
+    const nextModel = rememberedModels[provider] ?? (config.models[0] || '')
+    const next = {
+      ...draftAi,
+      ...remembered,
+      provider,
+      baseUrl: rememberedBaseUrls[provider] ?? '',
+      model: nextModel,
+      apiKey: rememberedKeys[provider] ?? '',
+    }
+    setDraftAi(next)
+    setIsCustomModel(
+      provider !== 'custom' &&
+        !!nextModel &&
+        !config.models.some((model) => model === nextModel),
+    )
+    autoSave(pickConnectionFields(next))
     clearFeedback()
   }
 
@@ -194,8 +214,12 @@ export function AISettings() {
 
   const handleBaseUrlChange = (value: string) => {
     setDraftAi((current) => {
-      const next = { ...current, baseUrl: value }
-      autoSave({ baseUrl: value })
+      const next = {
+        ...current,
+        baseUrl: value,
+        baseUrls: { ...(current.baseUrls || {}), [current.provider]: value },
+      }
+      autoSave({ baseUrl: value, baseUrls: next.baseUrls })
       return next
     })
     clearFeedback()
@@ -203,8 +227,12 @@ export function AISettings() {
 
   const handleModelChange = (value: string) => {
     setDraftAi((current) => {
-      const next = { ...current, model: value }
-      autoSave({ model: value })
+      const next = {
+        ...current,
+        model: value,
+        models: { ...(current.models || {}), [current.provider]: value },
+      }
+      autoSave({ model: value, models: next.models })
       return next
     })
     clearFeedback()
@@ -366,10 +394,7 @@ export function AISettings() {
             required={isCustomProvider}
             className={inputClass}
           />
-          <p className="text-text-tertiary mt-1 text-xs">
-            {t('settings.baseUrlHint')}
-            {providerConfig.defaultBaseUrl || 'N/A'}
-          </p>
+          <p className="text-text-tertiary mt-1 text-xs">{baseUrlHint}</p>
         </div>
 
         {/* Model */}

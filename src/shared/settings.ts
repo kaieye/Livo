@@ -19,6 +19,8 @@ function mergeDefined<T>(target: T, source: unknown): T {
   }
   const result: Record<string, unknown> = { ...target }
   if (!isPlainObject(source)) return result as T
+  // 空对象默认值表示动态记录，例如 ai.apiKeys/baseUrls/models。
+  if (Object.keys(target).length === 0) return { ...source } as T
   for (const key of Object.keys(target)) {
     const current = target[key as keyof typeof target]
     const next = source[key]

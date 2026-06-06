@@ -321,21 +321,43 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         typeof args['model'] === 'string'
           ? (args['model'] as string).trim()
           : nextProvider !== current.provider
-            ? defaultModelForProvider(nextProvider, current.model)
+            ? (current.models?.[nextProvider] ??
+              defaultModelForProvider(nextProvider, current.model))
             : current.model
+      const nextBaseUrl =
+        typeof args['baseUrl'] === 'string'
+          ? (args['baseUrl'] as string).trim()
+          : nextProvider !== current.provider
+            ? (current.baseUrls?.[nextProvider] ?? '')
+            : (current.baseUrl ?? '')
       // Keep apiKey mirrored to the (remembered) key of the active provider.
       const nextApiKey = (current.apiKeys?.[nextProvider] ||
         current.apiKey ||
         '') as string
+      const nextApiKeys = {
+        ...(current.apiKeys || {}),
+        [current.provider]: current.apiKey,
+        [nextProvider]: nextApiKey,
+      }
+      const nextBaseUrls = {
+        ...(current.baseUrls || {}),
+        [current.provider]: current.baseUrl || '',
+        [nextProvider]: nextBaseUrl,
+      }
+      const nextModels = {
+        ...(current.models || {}),
+        [current.provider]: current.model,
+        [nextProvider]: nextModel,
+      }
       const next: AIConfig = {
         ...current,
         provider: nextProvider,
         model: nextModel,
         apiKey: nextApiKey,
-        baseUrl:
-          typeof args['baseUrl'] === 'string'
-            ? (args['baseUrl'] as string).trim()
-            : current.baseUrl,
+        apiKeys: nextApiKeys,
+        baseUrl: nextBaseUrl,
+        baseUrls: nextBaseUrls,
+        models: nextModels,
         enableSystemPrompt:
           typeof args['enableSystemPrompt'] === 'boolean'
             ? (args['enableSystemPrompt'] as boolean)

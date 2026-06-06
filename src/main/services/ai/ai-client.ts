@@ -1,23 +1,33 @@
 import OpenAI from 'openai'
 import type { AIConfig } from '../../../shared/types/index'
+import { resolveOpenAICompatibleBaseUrl } from '../../../shared/ai-endpoint'
 
 /** Resolve the effective base URL for a provider, honoring explicit overrides. */
 export function resolveBaseUrl(config: AIConfig): string {
-  if (config.baseUrl) return config.baseUrl
+  const explicitBaseUrl = (config.baseUrl || '').trim()
+  if (explicitBaseUrl) return resolveOpenAICompatibleBaseUrl(explicitBaseUrl)
+
+  let defaultBaseUrl: string
   switch (config.provider) {
     case 'openai':
-      return 'https://api.openai.com/v1'
+      defaultBaseUrl = 'https://api.openai.com/v1'
+      break
     case 'anthropic':
-      return 'https://api.anthropic.com/v1'
+      defaultBaseUrl = 'https://api.anthropic.com/v1'
+      break
     case 'deepseek':
-      return 'https://api.deepseek.com/v1'
+      defaultBaseUrl = 'https://api.deepseek.com/v1'
+      break
     case 'glm':
-      return 'https://open.bigmodel.cn/api/paas/v4'
+      defaultBaseUrl = 'https://open.bigmodel.cn/api/paas/v4'
+      break
     case 'minimax':
-      return 'https://api.minimax.chat/v1'
+      defaultBaseUrl = 'https://api.minimax.chat/v1'
+      break
     default:
-      return 'https://api.openai.com/v1'
+      defaultBaseUrl = 'https://api.openai.com/v1'
   }
+  return resolveOpenAICompatibleBaseUrl(defaultBaseUrl)
 }
 
 export function createOpenAIClient(config: AIConfig): OpenAI {

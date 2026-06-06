@@ -191,6 +191,8 @@ export const enSettings = {
   baseUrl: 'API URL (optional)',
   baseUrlPlaceholder: 'Custom API URL',
   baseUrlHint: 'Leave empty for default: ',
+  customBaseUrlHint:
+    'Paste a full /chat/completions URL or the service root URL.',
   testConnection: 'Test Connection',
   testing: 'Testing...',
   testSuccess: 'Connection successful! Model responded normally.',
@@ -213,7 +215,7 @@ export const enSettings = {
     'Configure your own AI API Key to use all AI features including summary, translation and chat. Supports OpenAI, Anthropic, DeepSeek, GLM, and MiniMax.',
   aiModelConfig: 'Model Configuration',
   aiModelConfigDesc:
-    'Pick a provider and fill in the API Key, Base URL and model.',
+    'Pick a provider and fill in the API Key, API URL and model.',
   aiConnectionTest: 'Connection Test',
   aiSystemPromptSection: 'System Prompt',
   aiTaskPromptSection: 'AI Task Prompts',

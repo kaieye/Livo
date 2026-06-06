@@ -729,10 +729,6 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
     toggleStar,
   ])
 
-  const scrollToTop = useCallback(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
-
   // Audio media detection
   const audioMedia = useMemo(() => {
     if (!selectedEntry) return null
@@ -1086,147 +1082,144 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
 
   return (
     <div className="dark:bg-surface-dark relative flex min-w-0 flex-1 flex-col bg-white">
-      {/* Reading progress bar */}
-      <div className="absolute left-0 right-0 top-0 z-20 h-[2px]">
-        <div
-          className="bg-accent h-full transition-all duration-150 ease-out"
-          style={{ width: `${readPercent}%` }}
-        />
-      </div>
-
-      {/* 工具栏由外层阅读器容器统一避开标题栏；右侧仍避开 Windows 窗口按钮。 */}
-      <div className="no-drag reader-titlebar-safe-pr dark:bg-surface-dark/80 sticky top-0 z-10 flex flex-shrink-0 items-center gap-0.5 border-b bg-white/80 px-3 py-1.5 backdrop-blur-sm">
-        {embeddedPageUrl && (
-          <>
-            <ToolbarButton
-              onClick={() => setEmbeddedPageUrl(null)}
-              title={t('common.back', { defaultValue: '返回' })}
-            >
-              <X size={16} />
-            </ToolbarButton>
-            <div className="bg-border dark:bg-border-dark mx-1 h-4 w-px" />
-          </>
-        )}
-
-        <ToolbarButton
-          onClick={() => {
-            setStarAnimKey((k) => k + 1)
-            toggleStar(selectedEntry.id)
-          }}
-          title={selectedEntry.isStarred ? t('entry.unstar') : t('entry.star')}
-          active={selectedEntry.isStarred}
-        >
-          <span key={starAnimKey} className="star-pop inline-flex">
-            <Star
-              size={16}
-              className={
-                selectedEntry.isStarred ? 'fill-yellow-500 text-yellow-500' : ''
-              }
-            />
-          </span>
-        </ToolbarButton>
-
-        <EntryAIToolbar
-          onSummarize={handleSummarize}
-          onTranslate={handleTranslate}
-          isSummarizing={isSummarizing}
-          isTranslating={isTranslating}
-          showTranslation={showTranslation}
-          translationTargetLanguage={translationTargetLanguage}
-          onLanguageChange={(lang) =>
-            updateSettingsSection('translation', { targetLanguage: lang })
-          }
-          disabled={!aiApiKey}
-        />
-
-        <ToolbarButton
-          onClick={handleOpenAIChat}
-          disabled={!aiApiKey}
-          title="AI Chat"
-        >
-          <MessageSquare size={16} />
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={handleReadability}
-          disabled={isFetchingReadable || !selectedEntry.url}
-          active={isReadabilityMode}
-          title={
-            isReadabilityMode
-              ? t('entry.readabilityBack')
-              : t('entry.readability')
-          }
-        >
-          {isFetchingReadable ? (
-            <Loader2 size={16} className="text-accent animate-spin" />
-          ) : (
-            <BookType size={16} />
+      {/* 工具栏由外层阅读器容器统一避开标题栏。 */}
+      <div className="no-drag sticky top-0 z-10 flex flex-shrink-0 flex-col">
+        <div className="dark:bg-surface-dark/80 flex h-9 items-center gap-0.5 border-b bg-white/80 px-3 backdrop-blur-sm">
+          {embeddedPageUrl && (
+            <>
+              <ToolbarButton
+                onClick={() => setEmbeddedPageUrl(null)}
+                title={t('common.back', { defaultValue: '返回' })}
+              >
+                <X size={16} />
+              </ToolbarButton>
+              <div className="bg-border dark:bg-border-dark mx-1 h-4 w-px" />
+            </>
           )}
-        </ToolbarButton>
 
-        {audioMedia && (
-          <ToolbarButton onClick={handlePlayAudio} title={t('entry.playAudio')}>
-            <Play size={16} className="text-purple-500" />
-          </ToolbarButton>
-        )}
-
-        <ToolbarButton onClick={handleCopyLink} title={t('entry.copyLink')}>
-          {linkCopied ? (
-            <Check size={16} className="text-green-500" />
-          ) : (
-            <Copy size={16} />
-          )}
-        </ToolbarButton>
-
-        {/* Separator */}
-        <div className="bg-border dark:bg-border-dark mx-1 h-4 w-px" />
-
-        {/* Nav buttons */}
-        <ToolbarButton
-          onClick={() => goToEntry('prev')}
-          disabled={!hasPrev}
-          title={t('entry.prevArticleShortcut')}
-        >
-          <ChevronUp size={16} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => goToEntry('next')}
-          disabled={!hasNext}
-          title={t('entry.nextArticleShortcut')}
-        >
-          <ChevronDown size={16} />
-        </ToolbarButton>
-
-        <div className="flex-1" />
-
-        {/* Read progress */}
-        {readPercent > 0 && (
-          <button
-            onClick={scrollToTop}
-            className="text-text-tertiary hover:text-accent flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors"
-            title={t('entry.scrollToTop')}
-          >
-            <ReadProgressCircle percent={readPercent} />
-            <span>{readPercent}%</span>
-          </button>
-        )}
-
-        {selectedEntry.url && (
           <ToolbarButton
-            onClick={() => window.open(selectedEntry.url, '_blank')}
-            title={t('entry.openInBrowser')}
+            onClick={() => {
+              setStarAnimKey((k) => k + 1)
+              toggleStar(selectedEntry.id)
+            }}
+            title={
+              selectedEntry.isStarred ? t('entry.unstar') : t('entry.star')
+            }
+            active={selectedEntry.isStarred}
           >
-            <ExternalLink size={16} />
+            <span key={starAnimKey} className="star-pop inline-flex">
+              <Star
+                size={16}
+                className={
+                  selectedEntry.isStarred
+                    ? 'fill-yellow-500 text-yellow-500'
+                    : ''
+                }
+              />
+            </span>
           </ToolbarButton>
-        )}
 
-        {/* Read status */}
-        <div className="text-text-tertiary ml-1 flex items-center gap-1 text-xs">
-          {selectedEntry.isRead ? (
-            <CheckCircle2 size={14} className="text-green-500" />
-          ) : (
-            <Circle size={14} />
+          <EntryAIToolbar
+            onSummarize={handleSummarize}
+            onTranslate={handleTranslate}
+            isSummarizing={isSummarizing}
+            isTranslating={isTranslating}
+            showTranslation={showTranslation}
+            translationTargetLanguage={translationTargetLanguage}
+            onLanguageChange={(lang) =>
+              updateSettingsSection('translation', { targetLanguage: lang })
+            }
+            disabled={!aiApiKey}
+          />
+
+          <ToolbarButton
+            onClick={handleOpenAIChat}
+            disabled={!aiApiKey}
+            title="AI Chat"
+          >
+            <MessageSquare size={16} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            onClick={handleReadability}
+            disabled={isFetchingReadable || !selectedEntry.url}
+            active={isReadabilityMode}
+            title={
+              isReadabilityMode
+                ? t('entry.readabilityBack')
+                : t('entry.readability')
+            }
+          >
+            {isFetchingReadable ? (
+              <Loader2 size={16} className="text-accent animate-spin" />
+            ) : (
+              <BookType size={16} />
+            )}
+          </ToolbarButton>
+
+          {audioMedia && (
+            <ToolbarButton
+              onClick={handlePlayAudio}
+              title={t('entry.playAudio')}
+            >
+              <Play size={16} className="text-purple-500" />
+            </ToolbarButton>
           )}
+
+          <ToolbarButton onClick={handleCopyLink} title={t('entry.copyLink')}>
+            {linkCopied ? (
+              <Check size={16} className="text-green-500" />
+            ) : (
+              <Copy size={16} />
+            )}
+          </ToolbarButton>
+
+          {/* Separator */}
+          <div className="bg-border dark:bg-border-dark mx-1 h-4 w-px" />
+
+          {/* Nav buttons */}
+          <ToolbarButton
+            onClick={() => goToEntry('prev')}
+            disabled={!hasPrev}
+            title={t('entry.prevArticleShortcut')}
+          >
+            <ChevronUp size={16} />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => goToEntry('next')}
+            disabled={!hasNext}
+            title={t('entry.nextArticleShortcut')}
+          >
+            <ChevronDown size={16} />
+          </ToolbarButton>
+
+          <div className="flex-1" />
+
+          {selectedEntry.url && (
+            <ToolbarButton
+              onClick={() => window.open(selectedEntry.url, '_blank')}
+              title={t('entry.openInBrowser')}
+            >
+              <ExternalLink size={16} />
+            </ToolbarButton>
+          )}
+
+          {/* Read status */}
+          <div className="text-text-tertiary ml-1 flex items-center gap-1 text-xs">
+            {selectedEntry.isRead ? (
+              <CheckCircle2 size={14} className="text-green-500" />
+            ) : (
+              <Circle size={14} />
+            )}
+          </div>
+        </div>
+
+        {/* 阅读进度条跟随工具栏，避免覆盖右上角操作区。 */}
+        <div className="dark:bg-surface-dark/80 h-[2px] bg-white/80">
+          <div
+            className="bg-accent h-full transition-all duration-150 ease-out"
+            style={{ width: `${readPercent}%` }}
+          />
         </div>
       </div>
 
@@ -1716,38 +1709,5 @@ function ToolbarButton({
     >
       {children}
     </button>
-  )
-}
-
-/** ====== Reading progress circle SVG ====== */
-function ReadProgressCircle({ percent }: { percent: number }) {
-  const r = 5
-  const c = 2 * Math.PI * r
-  const offset = c - (percent / 100) * c
-
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" className="rotate-[-90deg]">
-      <circle
-        cx="7"
-        cy="7"
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        opacity={0.15}
-      />
-      <circle
-        cx="7"
-        cy="7"
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeDasharray={c}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        className="text-accent transition-all duration-300"
-      />
-    </svg>
   )
 }

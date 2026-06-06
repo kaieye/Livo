@@ -175,6 +175,7 @@ export const zhCNSettings = {
   baseUrl: 'API 地址 (可选)',
   baseUrlPlaceholder: '自定义 API 地址',
   baseUrlHint: '留空使用默认地址：',
+  customBaseUrlHint: '可填写完整 /chat/completions 地址，或服务根地址。',
   testConnection: '测试连接',
   testing: '测试中...',
   testSuccess: '连接成功！模型响应正常。',
@@ -196,7 +197,7 @@ export const zhCNSettings = {
   aiNoticeDesc:
     '配置你自己的 AI API Key 即可使用所有 AI 功能，包括摘要、翻译和对话。支持 OpenAI、Anthropic、DeepSeek、GLM、MiniMax 等。',
   aiModelConfig: '模型配置',
-  aiModelConfigDesc: '选择服务提供商并填写 API Key、Base URL 和模型。',
+  aiModelConfigDesc: '选择服务提供商并填写 API Key、API 地址和模型。',
   aiConnectionTest: '连接测试',
   aiSystemPromptSection: '系统提示词',
   aiTaskPromptSection: 'AI 任务提示词',

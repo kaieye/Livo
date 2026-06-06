@@ -5,7 +5,9 @@ export interface AIConfig {
   apiKey: string
   apiKeys?: Record<string, string>
   baseUrl?: string
+  baseUrls?: Record<string, string>
   model: string
+  models?: Record<string, string>
   enableSystemPrompt?: boolean
   systemPromptTemplate?: string
   chatPersonaPrompt?: string

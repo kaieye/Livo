@@ -6,6 +6,7 @@
   :root {
     color-scheme: light;
     --titlebar-drag-height: 1.75rem;
+    --reader-toolbar-top-offset: calc(var(--titlebar-drag-height) - 0.25rem);
     --titlebar-window-controls-width: 150px;
   }
 
@@ -81,22 +82,23 @@
 
   /* Reserve space at the top for the custom title bar (macOS + Windows).
      Only active when `.has-titlebar` is set by main.tsx. */
-  .titlebar-safe-pt,
-  .reader-titlebar-safe-pt {
+  .titlebar-safe-pt {
     padding-top: 0;
   }
 
-  .has-titlebar .titlebar-safe-pt,
-  .has-titlebar .reader-titlebar-safe-pt {
+  .has-titlebar .titlebar-safe-pt {
     padding-top: var(--titlebar-drag-height);
   }
 
+  /* 阅读器工具栏需要和窗口标题栏贴近，但控件顶部仍避开窗口按钮。 */
+  .reader-titlebar-safe-pt,
   .reader-titlebar-toolbar-pt {
-    padding-top: 0.5rem;
+    padding-top: 0;
   }
 
+  .has-titlebar .reader-titlebar-safe-pt,
   .has-titlebar .reader-titlebar-toolbar-pt {
-    padding-top: calc(var(--titlebar-drag-height) + 0.25rem);
+    padding-top: var(--reader-toolbar-top-offset);
   }
 
   .sidebar-item {

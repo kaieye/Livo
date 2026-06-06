@@ -151,8 +151,7 @@ export function TitleBar() {
 
   return (
     <>
-      {/* 顶部拖拽区高度与 reader-titlebar-safe-pt 共用变量，避免工具栏
-          和 Electron 原生拖拽命中区域再次错位。 */}
+      {/* 顶部拖拽区独立于阅读器工具栏偏移，避免控件和窗口按钮错位。 */}
       <div
         aria-hidden
         className={`drag-region pointer-events-auto fixed left-0 top-0 z-[5] h-[var(--titlebar-drag-height)] select-none ${

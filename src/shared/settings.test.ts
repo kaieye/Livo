@@ -73,6 +73,29 @@ describe('settings normalization', () => {
     expect(merged.ai.model).toBeTruthy()
   })
 
+  it('keeps per-provider AI connection history fields', () => {
+    const normalized = mergeSettings(normalizeSettings(), {
+      ai: {
+        provider: 'custom',
+        apiKey: 'sk-current',
+        apiKeys: { custom: 'sk-current', deepseek: 'sk-deepseek' },
+        baseUrl: 'https://gw.example.com/v1/chat/completions',
+        baseUrls: {
+          custom: 'https://gw.example.com/v1/chat/completions',
+          deepseek: 'https://api.deepseek.com/v1',
+        },
+        model: 'custom-model',
+        models: { custom: 'custom-model', deepseek: 'deepseek-chat' },
+      } as any,
+    })
+
+    expect(normalized.ai.apiKeys?.deepseek).toBe('sk-deepseek')
+    expect(normalized.ai.baseUrls?.custom).toBe(
+      'https://gw.example.com/v1/chat/completions',
+    )
+    expect(normalized.ai.models?.deepseek).toBe('deepseek-chat')
+  })
+
   it('derives default feed columns from the shared column defaults', () => {
     expect(DEFAULT_SETTINGS.general.feedColumns).toEqual(FEED_COLUMN_DEFAULTS)
     expect(DEFAULT_SETTINGS.general.feedColumns).not.toBe(FEED_COLUMN_DEFAULTS)
