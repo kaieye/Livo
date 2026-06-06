@@ -2,7 +2,7 @@
 
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Livo** (11075 symbols, 20766 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Livo** (11172 symbols, 20945 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

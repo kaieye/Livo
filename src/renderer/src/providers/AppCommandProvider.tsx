@@ -1,6 +1,6 @@
 import { useEffect, type PropsWithChildren } from 'react'
 import type { AppCommandPayload } from '../../../shared/types'
-import { useQuickSearchStore } from '../components/search/QuickSearch'
+import { useQuickSearchStore } from '../store/quick-search-store'
 import { useFeedStore } from '../store/feed-store'
 import { useSettingsStore } from '../store/settings-store'
 

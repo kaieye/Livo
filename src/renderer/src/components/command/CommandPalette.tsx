@@ -2,19 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Command, Search, Sparkles, X } from 'lucide-react'
 import { DEFAULT_SHORTCUTS } from '../../../../shared/shortcuts'
 import { useSettingsStore } from '../../store/settings-store'
-import { useQuickSearchStore } from '../search/QuickSearch'
+import { useQuickSearchStore } from '../../store/quick-search-store'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useAIChatStore } from '../../store/ai-chat-store'
 import { useUpdateStore } from '../../store/update-store'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
-import {
-  useOverlayStackItem,
-  useOverlayStackStore,
-} from '../../store/overlay-stack-store'
+import { useOverlayStackItem } from '../../store/overlay-stack-store'
 import { runLayoutCommand } from '../../lib/layout-commands'
-
-import { create } from 'zustand'
+import { useCommandPaletteStore } from '../../store/command-palette-store'
 
 type CommandAction = {
   id: string
@@ -25,36 +21,6 @@ type CommandAction = {
   run: () => void
   isAiFallback?: boolean
 }
-
-interface CommandPaletteState {
-  isOpen: boolean
-  open: () => void
-  close: () => void
-  toggle: () => void
-}
-
-export const useCommandPaletteStore = create<CommandPaletteState>(
-  (set, get) => ({
-    isOpen: false,
-    open: () => {
-      useOverlayStackStore.getState().open('command-palette')
-      set({ isOpen: true })
-    },
-    close: () => {
-      useOverlayStackStore.getState().close('command-palette')
-      set({ isOpen: false })
-    },
-    toggle: () => {
-      const next = !get().isOpen
-      if (next) {
-        useOverlayStackStore.getState().open('command-palette')
-      } else {
-        useOverlayStackStore.getState().close('command-palette')
-      }
-      set({ isOpen: next })
-    },
-  }),
-)
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPaletteStore()

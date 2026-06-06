@@ -74,6 +74,7 @@ describe('ipc-contracts', () => {
         { taskName: 'ai.summarize', limit: 10 },
       ]),
     ).toEqual([{ taskName: 'ai.summarize', limit: 10 }])
+    expect(validateIpcArgs(IPC.ACCOUNT_STATUS, ['google'])).toEqual(['google'])
 
     expect(() =>
       validateIpcArgs(IPC.ENTRY_MARK_READ, ['entry-1', 'yes']),
@@ -84,6 +85,9 @@ describe('ipc-contracts', () => {
     expect(() =>
       validateIpcArgs(IPC.TASK_RUN_LIST, [{ taskName: 42 }]),
     ).toThrow(IpcValidationError)
+    expect(() => validateIpcArgs(IPC.ACCOUNT_STATUS, ['unknown'])).toThrow(
+      IpcValidationError,
+    )
   })
 
   it('unwraps successful IPC envelopes for existing API callers', () => {

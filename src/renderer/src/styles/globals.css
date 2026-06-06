@@ -75,6 +75,16 @@
     padding-right: 150px;
   }
 
+  /* Reserve space at the top for the custom title bar (macOS + Windows).
+     Only active when `.has-titlebar` is set by main.tsx. */
+  .titlebar-safe-pt {
+    padding-top: 0;
+  }
+
+  .has-titlebar .titlebar-safe-pt {
+    padding-top: 2.25rem; /* h-9 = 36px */
+  }
+
   .sidebar-item {
     @apply hover:bg-sidebar-hover dark:hover:bg-sidebar-dark-hover flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors;
   }

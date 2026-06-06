@@ -89,6 +89,14 @@ pnpm dev
 
 这会通过 `electron-vite dev` 启动 Electron 窗口并开启 HMR。
 
+如需使用标准 Google OAuth / Sign in with Google，请先创建 Google OAuth
+Desktop Client，并在启动前设置 Client ID：
+
+```bash
+$env:LIVO_GOOGLE_OAUTH_CLIENT_ID="your-desktop-client-id.apps.googleusercontent.com"
+pnpm dev
+```
+
 ### 3. 启动 Web 开发模式
 
 ```bash

@@ -403,7 +403,8 @@ export function startAutoRefresh(
     }
   }
 
-  void runAndSchedule()
+  // 启动阶段只安排下一次到期刷新，避免开窗时执行一次不必要的全量任务。
+  scheduleNext()
 }
 
 export function stopAutoRefresh(): void {

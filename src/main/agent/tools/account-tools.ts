@@ -13,12 +13,14 @@ import { emptyParams, objectParams } from './schema'
 import { defineReadTool } from './factories'
 
 const PROVIDER_VALUES: AccountProvider[] = [
+  'google',
   'youtube',
   'x',
   'instagram',
   'bilibili',
 ]
 const PROVIDER_LABELS: Record<AccountProvider, string> = {
+  google: 'Google',
   youtube: 'YouTube',
   x: 'X',
   instagram: 'Instagram',
@@ -50,7 +52,7 @@ export function buildListAccountProvidersTool(): AgentTool {
     name: 'list_account_providers',
     title: '查看账号关联',
     description:
-      '查看 YouTube、X、Instagram、Bilibili 等账号关联状态，不返回 cookie 或 token',
+      '查看 Google、YouTube、X、Instagram、Bilibili 等账号关联状态，不返回 cookie 或 token',
     inputSchema: emptyParams(),
     execute: async (): Promise<AgentToolResult> => {
       const statuses = await Promise.all(
@@ -133,13 +135,13 @@ export function buildUnlinkAccountTool(): AgentTool {
   return {
     name: 'unlink_account',
     title: '取消账号关联',
-    description: '取消指定平台的账号关联，清除本地保存的登录 cookie',
+    description: '取消指定平台的账号关联，清除本地保存的登录会话或 OAuth 会话',
     inputSchema: providerParams('要取消关联的平台'),
     capability: 'destructive',
     risk: 'high',
     requiresConfirmation: true,
     confirmationTitle: '确认取消账号关联',
-    confirmationMessage: '将清除该平台在本地保存的登录会话 cookie。',
+    confirmationMessage: '将清除该平台在本地保存的登录会话或 OAuth 会话。',
     execute: async (
       _context,
       args: AgentToolArgs,

@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -7,12 +9,9 @@ import {
 } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
-import { DigestContent } from './DigestContent'
 import { EntryList } from '../entry/EntryList'
 import { EntryContent } from '../entry/EntryContent'
 import { SkeletonList } from '../ui/Skeleton'
-import { WideViewContent } from '../entry/WideViewContent'
-import { DiscoverPanel } from '../discover/DiscoverPanel'
 import { ResizeHandle } from '../ui/ResizeHandle'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useEntryStore } from '../../store/entry-store'
@@ -24,6 +23,21 @@ import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
+const DigestContent = lazy(() =>
+  import('./DigestContent').then((module) => ({
+    default: module.DigestContent,
+  })),
+)
+const WideViewContent = lazy(() =>
+  import('../entry/WideViewContent').then((module) => ({
+    default: module.WideViewContent,
+  })),
+)
+const DiscoverPanel = lazy(() =>
+  import('../discover/DiscoverPanel').then((module) => ({
+    default: module.DiscoverPanel,
+  })),
+)
 
 // Persisted widths key
 const STORAGE_KEY = 'livo-panel-widths'
@@ -112,7 +126,7 @@ export function Layout() {
   }, [activeView, selectedFeedId])
 
   // Dummy state to trigger re-render after rAF
-  const [showContent, setShowContent] = useState(true)
+  const [, setShowContent] = useState(true)
 
   // PERF: schedule a post-paint measurement collection
   useEffect(() => {
@@ -317,9 +331,13 @@ export function Layout() {
         }`}
       >
         {isDigestRoute ? (
-          <DigestContent />
+          <Suspense fallback={<SkeletonList count={8} type="article" />}>
+            <DigestContent />
+          </Suspense>
         ) : isDiscoverOpen ? (
-          <DiscoverPanel />
+          <Suspense fallback={<SkeletonList count={8} type="article" />}>
+            <DiscoverPanel />
+          </Suspense>
         ) : !effectiveShowContent ? (
           /* Skeleton shown while deferring content mount */
           <div className="dark:bg-surface-dark flex min-w-0 flex-1 flex-col bg-white">
@@ -340,7 +358,20 @@ export function Layout() {
         ) : isWideView ? (
           /* 2-column layout for Social Media / Videos */
           <div className="flex min-w-0 flex-1">
-            <WideViewContent />
+            <Suspense
+              fallback={
+                <SkeletonList
+                  count={8}
+                  type={
+                    effectiveView === FeedViewType.SocialMedia
+                      ? 'social'
+                      : 'grid'
+                  }
+                />
+              }
+            >
+              <WideViewContent />
+            </Suspense>
           </div>
         ) : (
           <>

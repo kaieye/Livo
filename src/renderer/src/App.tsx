@@ -2,18 +2,12 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Outlet } from 'react-router-dom'
 import { LocalErrorBoundary } from './components/LocalErrorBoundary'
-import { QuickSearchPanel } from './components/search/QuickSearch'
-import { CornerPlayer } from './components/media/MediaPlayer'
-import { TextContextMenu } from './components/ui/TextContextMenu'
 import { PageTransition } from './components/layout/PageTransition'
 import { TitleBar } from './components/layout/TitleBar'
 import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
-import {
-  CommandPalette,
-  useCommandPaletteStore,
-} from './components/command/CommandPalette'
+import { useCommandPaletteStore } from './store/command-palette-store'
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href
 
@@ -91,6 +85,26 @@ const SettingsDialog = lazy(() =>
 const AIChatPanel = lazy(() =>
   import('./components/ai/AIChatPanel').then((module) => ({
     default: module.AIChatPanel,
+  })),
+)
+const QuickSearchPanel = lazy(() =>
+  import('./components/search/QuickSearch').then((module) => ({
+    default: module.QuickSearchPanel,
+  })),
+)
+const CommandPalette = lazy(() =>
+  import('./components/command/CommandPalette').then((module) => ({
+    default: module.CommandPalette,
+  })),
+)
+const CornerPlayer = lazy(() =>
+  import('./components/media/AudioMiniBar').then((module) => ({
+    default: module.AudioMiniBar,
+  })),
+)
+const TextContextMenu = lazy(() =>
+  import('./components/ui/TextContextMenu').then((module) => ({
+    default: module.TextContextMenu,
   })),
 )
 function LazySettingsDialogMount() {
@@ -274,16 +288,22 @@ export default function App() {
         <LazyAIChatPanelMount />
       </LocalErrorBoundary>
       <LocalErrorBoundary title="快速搜索出现问题">
-        <QuickSearchPanel />
+        <Suspense fallback={null}>
+          <QuickSearchPanel />
+        </Suspense>
       </LocalErrorBoundary>
       <LocalErrorBoundary
         title="命令面板出现问题"
         onDismiss={() => useCommandPaletteStore.getState().close()}
       >
-        <CommandPalette />
+        <Suspense fallback={null}>
+          <CommandPalette />
+        </Suspense>
       </LocalErrorBoundary>
-      <CornerPlayer />
-      <TextContextMenu />
+      <Suspense fallback={null}>
+        <CornerPlayer />
+        <TextContextMenu />
+      </Suspense>
     </div>
   )
 }

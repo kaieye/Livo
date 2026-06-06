@@ -23,41 +23,9 @@ import {
   type Entry,
   type FeedWithCount,
 } from '../../../../shared/types'
-import { create } from 'zustand'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
-import {
-  useOverlayStackItem,
-  useOverlayStackStore,
-} from '../../store/overlay-stack-store'
-
-// ====== Quick Search Store ======
-interface QuickSearchState {
-  isOpen: boolean
-  open: () => void
-  close: () => void
-  toggle: () => void
-}
-
-export const useQuickSearchStore = create<QuickSearchState>((set, get) => ({
-  isOpen: false,
-  open: () => {
-    useOverlayStackStore.getState().open('quick-search')
-    set({ isOpen: true })
-  },
-  close: () => {
-    useOverlayStackStore.getState().close('quick-search')
-    set({ isOpen: false })
-  },
-  toggle: () => {
-    const next = !get().isOpen
-    if (next) {
-      useOverlayStackStore.getState().open('quick-search')
-    } else {
-      useOverlayStackStore.getState().close('quick-search')
-    }
-    set({ isOpen: next })
-  },
-}))
+import { useOverlayStackItem } from '../../store/overlay-stack-store'
+import { useQuickSearchStore } from '../../store/quick-search-store'
 
 // ====== Component ======
 type SearchType = 'all' | 'feed' | 'entry'

@@ -34,8 +34,12 @@ function installRendererErrorReporting(): void {
 
 installRendererErrorReporting()
 
-if (window.api?.windowControls?.platform === 'win32') {
+const _platform = window.api?.windowControls?.platform
+if (_platform === 'win32') {
   document.documentElement.classList.add('has-window-controls')
+}
+if (_platform === 'darwin' || _platform === 'win32') {
+  document.documentElement.classList.add('has-titlebar')
 }
 
 performance.mark('livo-render-start')

@@ -4,8 +4,8 @@ import { useSettingsStore } from '../store/settings-store'
 import { useStoreShallow } from '../store/helpers'
 import { useEntryStore } from '../store/entry-store'
 import { useAIChatStore } from '../store/ai-chat-store'
-import { useQuickSearchStore } from '../components/search/QuickSearch'
-import { useCommandPaletteStore } from '../components/command/CommandPalette'
+import { useQuickSearchStore } from '../store/quick-search-store'
+import { useCommandPaletteStore } from '../store/command-palette-store'
 import {
   handleRegisteredShortcutEvent,
   registerCommand,

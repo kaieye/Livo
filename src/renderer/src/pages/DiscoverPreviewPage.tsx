@@ -191,8 +191,8 @@ export default function DiscoverPreviewPage() {
   }, [])
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
-      <header className="flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-6 py-3">
+    <div className="titlebar-safe-pt flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
+      <header className="no-drag flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-6 py-3">
         <button
           type="button"
           onClick={handleBack}

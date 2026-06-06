@@ -166,8 +166,8 @@ export default function ImageViewerPage() {
   const hasNext = safeIndex < total - 1
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black">
-      <header className="flex flex-shrink-0 items-center gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-sm">
+    <div className="titlebar-safe-pt flex h-full w-full flex-col overflow-hidden bg-black">
+      <header className="no-drag flex flex-shrink-0 items-center gap-3 border-b border-white/10 bg-black/70 px-4 py-2 backdrop-blur-sm">
         <button
           type="button"
           onClick={handleBack}

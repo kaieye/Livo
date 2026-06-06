@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyActionRulesToEntriesAsync,
   applyActionRulesToEntries,
@@ -10,6 +10,8 @@ import {
   queueBootstrapRefresh,
   refreshAllFeeds,
   sanitizeExistingFeedAvatarForRefresh,
+  startAutoRefresh,
+  stopAutoRefresh,
 } from './feed-refresh'
 import {
   FeedViewType,
@@ -20,7 +22,19 @@ import type { ActionRule } from '../../../shared/actions'
 import type { AIConfig } from '../../../shared/types/index'
 import { FEED_BOOTSTRAP_REFRESH_TASK } from '../system/task-contracts'
 
+const getDbMock = vi.hoisted(() => vi.fn())
 const getLocalTaskRunnerMock = vi.hoisted(() => vi.fn())
+const settingsProviderGetMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../../database', () => ({
+  getDb: getDbMock,
+}))
+
+vi.mock('../system/settings-provider', () => ({
+  settingsProvider: {
+    get: settingsProviderGetMock,
+  },
+}))
 
 vi.mock('../system/task-runner-service', () => ({
   getLocalTaskRunner: getLocalTaskRunnerMock,
@@ -133,6 +147,40 @@ describe('refreshAllFeeds', () => {
       runId: activeRun.runId,
     })
     expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe('startAutoRefresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(60 * 60 * 1000)
+    getDbMock.mockReset()
+    getLocalTaskRunnerMock.mockReset()
+    settingsProviderGetMock.mockReset()
+    settingsProviderGetMock.mockReturnValue({
+      general: { showRecommended: true },
+      data: { enrichVideoDuration: false },
+    })
+  })
+
+  afterEach(() => {
+    stopAutoRefresh()
+    vi.useRealTimers()
+  })
+
+  it('启动时不立即排队刷新仍然新鲜的订阅源', () => {
+    const feeds = [{ ...makeFeed(), lastFetched: Date.now() - 60 * 1000 }]
+    getDbMock.mockReturnValue({
+      feeds: {
+        getAllFeeds: vi.fn(() => feeds),
+      },
+    })
+
+    startAutoRefresh(30, null, { freshnessTTL: 10, concurrency: 5 })
+
+    expect(getLocalTaskRunnerMock).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1000)
+    expect(getLocalTaskRunnerMock).not.toHaveBeenCalled()
   })
 })
 

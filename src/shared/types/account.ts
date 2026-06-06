@@ -1,7 +1,12 @@
 // Account and profile resolution types
 import type { FeedViewType } from './feed'
 
-export type AccountProvider = 'youtube' | 'x' | 'instagram' | 'bilibili'
+export type AccountProvider =
+  | 'google'
+  | 'youtube'
+  | 'x'
+  | 'instagram'
+  | 'bilibili'
 
 export interface AccountSessionState {
   provider: AccountProvider

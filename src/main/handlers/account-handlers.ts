@@ -10,6 +10,7 @@ import {
 import { getBilibiliFollowings } from '../services/bilibili/bilibili-followings'
 
 const SUPPORTED_PROVIDERS: AccountProvider[] = [
+  'google',
   'youtube',
   'x',
   'instagram',

@@ -511,6 +511,7 @@ function oneObject<C extends IpcChannel>(
 }
 
 const accountProviders = new Set<AccountProvider>([
+  'google',
   'youtube',
   'x',
   'instagram',

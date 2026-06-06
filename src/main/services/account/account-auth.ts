@@ -6,6 +6,11 @@ import type {
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { readFileSync } from 'fs'
+import {
+  getGoogleOAuthAccountState,
+  linkGoogleOAuthAccount,
+  unlinkGoogleOAuthAccount,
+} from './google-oauth'
 
 const MOBILE_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36'
@@ -48,7 +53,9 @@ interface ProviderConfig {
   timeoutMs?: number
 }
 
-const PROVIDER_CONFIGS: Record<AccountProvider, ProviderConfig> = {
+type CookieAccountProvider = Exclude<AccountProvider, 'google'>
+
+const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
   youtube: {
     loginUrl:
       'https://accounts.google.com/ServiceLogin?continue=https://m.youtube.com/',
@@ -214,7 +221,7 @@ async function fetchBilibiliNavState(): Promise<{
 }
 
 async function tryResolveDisplayName(
-  provider: AccountProvider,
+  provider: CookieAccountProvider,
 ): Promise<string | null> {
   // Bilibili has a stable auth-check API that returns current username.
   if (provider === 'bilibili') {
@@ -288,7 +295,7 @@ async function tryResolveDisplayName(
 }
 
 async function hasProviderAuthCookie(
-  provider: AccountProvider,
+  provider: CookieAccountProvider,
 ): Promise<boolean> {
   const config = PROVIDER_CONFIGS[provider]
   try {
@@ -309,6 +316,10 @@ async function hasProviderAuthCookie(
 export async function getAccountState(
   provider: AccountProvider,
 ): Promise<AccountSessionState> {
+  if (provider === 'google') {
+    return getGoogleOAuthAccountState()
+  }
+
   if (provider === 'bilibili') {
     const nav = await fetchBilibiliNavState()
     if (!nav.loggedIn) {
@@ -382,6 +393,10 @@ export async function setManualAccountDisplayName(
 export async function linkAccount(
   provider: AccountProvider,
 ): Promise<{ success: boolean; error?: string }> {
+  if (provider === 'google') {
+    return linkGoogleOAuthAccount()
+  }
+
   const config = PROVIDER_CONFIGS[provider]
 
   return new Promise((resolve) => {
@@ -563,6 +578,10 @@ export async function linkAccount(
 export async function unlinkAccount(
   provider: AccountProvider,
 ): Promise<{ success: boolean; error?: string }> {
+  if (provider === 'google') {
+    return unlinkGoogleOAuthAccount()
+  }
+
   const config = PROVIDER_CONFIGS[provider]
   try {
     for (const domain of config.cookieDomains) {

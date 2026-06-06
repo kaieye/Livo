@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 
 function MinimizeIcon() {
   return (
@@ -123,6 +123,16 @@ export function TitleBar() {
   const isWindows = platform === 'win32'
   const [isMaximized, setIsMaximized] = useState(false)
 
+  // Reserve layout space for the custom title bar. Kept in sync with the bar's
+  // own presence so `.titlebar-safe-pt` / `.titlebar-safe-pr` always resolve —
+  // main.tsx sets these once at boot, but that misses HMR/Fast-Refresh updates,
+  // which left full-window page headers tucked under the drag strip.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('has-titlebar', isMac || isWindows)
+    root.classList.toggle('has-window-controls', isWindows)
+  }, [isMac, isWindows])
+
   useEffect(() => {
     let mounted = true
     void window.api.windowControls.isMaximized().then((value) => {
@@ -140,12 +150,25 @@ export function TitleBar() {
   if (!isMac && !isWindows) return null
 
   return (
-    <div
-      aria-hidden
-      className="drag-region pointer-events-none fixed inset-x-0 top-0 z-[60] flex h-9 select-none items-stretch justify-end"
-    >
+    <>
+      {/* Drag strip. Kept at a low z-index so interactive headers/toolbars that
+          live in the top 36px (e.g. the reader toolbar, which uses a higher
+          z-index) stay clickable across their full height instead of being
+          swallowed by this strip; only truly empty areas remain draggable.
+          pointer-events-auto so -webkit-app-region:drag receives native mouse
+          events. Stops short of the Windows window controls; spans full width
+          on macOS to leave room for the native traffic lights. */}
+      <div
+        aria-hidden
+        className={`drag-region pointer-events-auto fixed left-0 top-0 z-[5] h-9 select-none ${
+          isWindows ? 'right-[150px]' : 'right-0'
+        }`}
+      />
       {isWindows && (
-        <div className="no-drag pointer-events-auto flex items-stretch">
+        <div
+          aria-hidden
+          className="no-drag pointer-events-auto fixed right-0 top-0 z-[60] flex h-9 select-none items-stretch"
+        >
           <ControlButton
             label="最小化"
             onClick={() => void window.api.windowControls.minimize()}
@@ -167,6 +190,6 @@ export function TitleBar() {
           </ControlButton>
         </div>
       )}
-    </div>
+    </>
   )
 }

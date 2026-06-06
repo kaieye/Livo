@@ -240,21 +240,21 @@ declare global {
       }
       accounts: {
         status: (
-          provider: 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
         ) => Promise<{
-          provider: 'youtube' | 'x' | 'instagram' | 'bilibili'
+          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili'
           linked: boolean
           displayName?: string | null
           error?: string
         }>
         link: (
-          provider: 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
         ) => Promise<{ success: boolean; error?: string }>
         unlink: (
-          provider: 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
         ) => Promise<{ success: boolean; error?: string }>
         setDisplayName: (
-          provider: 'youtube' | 'x' | 'instagram' | 'bilibili',
+          provider: 'google' | 'youtube' | 'x' | 'instagram' | 'bilibili',
           displayName: string,
         ) => Promise<{ success: boolean; error?: string }>
         bilibiliFollowings: () => Promise<{

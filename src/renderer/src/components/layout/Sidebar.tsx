@@ -51,7 +51,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
-import { useQuickSearchStore } from '../search/QuickSearch'
+import { useQuickSearchStore } from '../../store/quick-search-store'
 import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 
 const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {

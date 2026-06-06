@@ -12,6 +12,12 @@ export interface ProviderConfig {
 
 export const PROVIDER_CONFIGS: ProviderConfig[] = [
   {
+    provider: 'google',
+    name: 'Google',
+    colorClass: 'text-blue-500',
+    description: '使用标准 Google OAuth / Sign in with Google 关联账号。',
+  },
+  {
     provider: 'youtube',
     name: 'YouTube',
     colorClass: 'text-red-500',
