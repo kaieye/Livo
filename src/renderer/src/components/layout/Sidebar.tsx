@@ -1752,25 +1752,6 @@ export function Sidebar({ width }: { width?: number }) {
               : ''
           }`}
         >
-          {/* Starred */}
-          <button
-            onClick={() => handleSelectFeed('starred')}
-            className={`sidebar-item w-full ${selectedFeedId === 'starred' ? 'sidebar-item-active' : ''}`}
-          >
-            <Star size={18} />
-            <span className="flex-1 truncate text-left">
-              {t('sidebar.starred')}
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate('/digest')}
-            className={`sidebar-item w-full ${isDigestRoute ? 'sidebar-item-active' : ''}`}
-          >
-            <Sparkles size={18} />
-            <span className="flex-1 truncate text-left">AI 简报</span>
-          </button>
-
           {showGlobalFeedSearch && (
             <div className="mt-1 px-1">
               <div className="relative">
@@ -1901,6 +1882,25 @@ export function Sidebar({ width }: { width?: number }) {
           >
             <MessageSquare size={18} />
             <span className="flex-1 text-left">{t('sidebar.aiAssistant')}</span>
+          </button>
+
+          {/* Starred */}
+          <button
+            onClick={() => handleSelectFeed('starred')}
+            className={`sidebar-item w-full ${selectedFeedId === 'starred' ? 'sidebar-item-active' : ''}`}
+          >
+            <Star size={18} />
+            <span className="flex-1 truncate text-left">
+              {t('sidebar.starred')}
+            </span>
+          </button>
+
+          <button
+            onClick={() => navigate('/digest')}
+            className={`sidebar-item w-full ${isDigestRoute ? 'sidebar-item-active' : ''}`}
+          >
+            <Sparkles size={18} />
+            <span className="flex-1 truncate text-left">AI 简报</span>
           </button>
 
           {refreshHint && (

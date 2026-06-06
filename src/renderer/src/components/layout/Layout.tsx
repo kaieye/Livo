@@ -5,7 +5,9 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { DigestContent } from './DigestContent'
 import { EntryList } from '../entry/EntryList'
 import { EntryContent } from '../entry/EntryContent'
 import { SkeletonList } from '../ui/Skeleton'
@@ -71,6 +73,8 @@ export function Layout() {
     contentFocusRef,
   )
   useFocusableHotkeyScope('content', contentFocusRef)
+  const location = useLocation()
+  const isDigestRoute = location.pathname === '/digest'
 
   // Clear stale detail content when switching view/feed scope.
   useEffect(() => {
@@ -312,7 +316,9 @@ export function Layout() {
             : ''
         }`}
       >
-        {isDiscoverOpen ? (
+        {isDigestRoute ? (
+          <DigestContent />
+        ) : isDiscoverOpen ? (
           <DiscoverPanel />
         ) : !effectiveShowContent ? (
           /* Skeleton shown while deferring content mount */

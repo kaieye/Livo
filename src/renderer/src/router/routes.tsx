@@ -3,7 +3,6 @@ import { createHashRouter } from 'react-router-dom'
 import App from '../App'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
-const DigestPage = lazy(() => import('../pages/DigestPage'))
 const ArticleDetailPage = lazy(() => import('../pages/ArticleDetailPage'))
 const VideoPlayerPage = lazy(() => import('../pages/VideoPlayerPage'))
 const ImageViewerPage = lazy(() => import('../pages/ImageViewerPage'))
@@ -84,7 +83,7 @@ export const router = createHashRouter([
         path: 'digest',
         element: (
           <Suspense fallback={null}>
-            <DigestPage />
+            <HomePage />
           </Suspense>
         ),
       },
