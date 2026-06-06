@@ -31,7 +31,6 @@ import {
   ChevronRight,
   Trash2,
   CheckCheck,
-  MessageSquare,
   Edit3,
   X as XIcon,
   FileText,
@@ -49,7 +48,6 @@ import {
   User,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useAIChatStore } from '../../store/ai-chat-store'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
@@ -411,7 +409,6 @@ export function Sidebar({ width }: { width?: number }) {
     return valid.length > 0 ? valid : fallback
   }, [rawViewTabs])
   const language = useSettingsStore((s) => s.settings.general.language)
-  const { isPanelOpen, setPanelOpen } = useAIChatStore()
   const { isOpen: isDiscoverOpen } = useDiscoverStore()
   const isDigestRoute = location.pathname === '/digest'
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
@@ -1682,13 +1679,21 @@ export function Sidebar({ width }: { width?: number }) {
         }`}
         style={{ width: width ?? 260 }}
       >
-        {/* Drag region for titlebar */}
-        <div className="drag-region flex h-8 items-center justify-center px-4">
-          <span className="no-drag text-accent text-base font-bold">Livo</span>
+        {/* Brand + top drag strip — leaves room for macOS traffic lights */}
+        <div
+          className={`drag-region flex h-9 flex-shrink-0 items-center ${
+            window.api.windowControls.platform === 'darwin'
+              ? 'pl-[72px]'
+              : 'px-3'
+          }`}
+        >
+          <span className="no-drag text-accent text-[15px] font-bold tracking-tight">
+            Livo
+          </span>
         </div>
 
         {/* View type tabs */}
-        <div className="px-2 pb-1">
+        <div className="px-2 pb-1 pt-1">
           <div className="bg-surface-secondary dark:bg-surface-dark-secondary flex items-center gap-0.5 rounded-lg p-0.5">
             {/* All */}
             <button
@@ -1876,14 +1881,6 @@ export function Sidebar({ width }: { width?: number }) {
 
         {/* Bottom actions */}
         <div className="space-y-1 border-t p-2">
-          <button
-            onClick={() => setPanelOpen(!isPanelOpen)}
-            className={`sidebar-item w-full ${isPanelOpen ? 'sidebar-item-active' : 'text-text-secondary dark:text-text-dark-secondary'}`}
-          >
-            <MessageSquare size={18} />
-            <span className="flex-1 text-left">{t('sidebar.aiAssistant')}</span>
-          </button>
-
           {/* Starred */}
           <button
             onClick={() => handleSelectFeed('starred')}

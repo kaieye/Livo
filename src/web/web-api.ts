@@ -2752,6 +2752,15 @@ export function createWebAPI(): ElectronAPI {
       showContextMenu: async () => ({ id: null }),
     },
 
+    windowControls: {
+      minimize: async () => ({ success: true }),
+      maximizeToggle: async () => ({ success: true }),
+      close: async () => ({ success: true }),
+      isMaximized: async () => false,
+      onMaximizeChange: () => () => {},
+      platform: 'web',
+    },
+
     refreshLogs: {
       list: async () => [],
       clear: async () => ({ success: true }),

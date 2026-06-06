@@ -354,6 +354,23 @@ const api = {
       invokeIpc(IPC.MENU_SHOW_CONTEXT, items),
   },
 
+  // Native window controls (custom title bar)
+  windowControls: {
+    minimize: () => invokeIpc(IPC.WINDOW_MINIMIZE),
+    maximizeToggle: () => invokeIpc(IPC.WINDOW_MAXIMIZE_TOGGLE),
+    close: () => invokeIpc(IPC.WINDOW_CLOSE),
+    isMaximized: (): Promise<boolean> => invokeIpc(IPC.WINDOW_IS_MAXIMIZED),
+    onMaximizeChange: (callback: (isMaximized: boolean) => void) => {
+      const handler = (_event: unknown, isMaximized: boolean) =>
+        callback(isMaximized)
+      ipcRenderer.on('window:maximize-changed', handler)
+      return () => {
+        ipcRenderer.removeListener('window:maximize-changed', handler)
+      }
+    },
+    platform: process.platform as string,
+  },
+
   // Data maintenance
   data: {
     cleanup: (options?: {

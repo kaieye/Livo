@@ -98,4 +98,20 @@ export function registerAppHandlers(windowManager: WindowManager): void {
       })
     },
   )
+
+  registerChannel(IPC.WINDOW_MINIMIZE, () => {
+    windowManager.minimizeWindow()
+    return { success: true }
+  })
+  registerChannel(IPC.WINDOW_MAXIMIZE_TOGGLE, () => {
+    windowManager.toggleMaximizeWindow()
+    return { success: true }
+  })
+  registerChannel(IPC.WINDOW_CLOSE, () => {
+    windowManager.closeWindow()
+    return { success: true }
+  })
+  registerChannel(IPC.WINDOW_IS_MAXIMIZED, () => {
+    return windowManager.isWindowMaximized()
+  })
 }

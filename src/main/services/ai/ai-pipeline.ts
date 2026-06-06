@@ -27,6 +27,7 @@ import { getDb } from '../../database'
 import type {
   AIDigestGenerateResult,
   AIDigestPreset,
+  AIConfig,
 } from '../../../shared/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ function persistEntryAISummary(
 
 async function requestDigestText(
   client: OpenAI,
-  model: string,
+  aiConfig: AIConfig,
   messages: OpenAI.ChatCompletionMessageParam[],
   maxTokens: number,
   temperature: number,
@@ -86,11 +87,15 @@ async function requestDigestText(
   return runWithRetry(
     async () => {
       const response = await client.chat.completions.create({
-        model,
+        model: aiConfig.model,
         messages,
         temperature,
         max_tokens: maxTokens,
-      })
+        // DeepSeek 的 thinking 模式会消耗 max_tokens，可能导致可见正文为空。
+        ...(aiConfig.provider === 'deepseek'
+          ? { thinking: { type: 'disabled' as const } }
+          : {}),
+      } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
       return response.choices[0]?.message?.content || ''
     },
     { isEmpty: (text) => !text.trim() },
@@ -201,7 +206,7 @@ export async function generateAIDigest(
       })
       const rerankRaw = await requestDigestText(
         client,
-        aiConfig.model,
+        aiConfig,
         buildDigestRerankMessages({ topic, candidates, maxIds }),
         800,
         0,
@@ -246,7 +251,7 @@ export async function generateAIDigest(
     for (const batch of plan.batches) {
       const note = await requestDigestText(
         client,
-        aiConfig.model,
+        aiConfig,
         buildDigestBatchMessages({ topic, presetLabel, batch }),
         1200,
         0.2,
@@ -256,7 +261,7 @@ export async function generateAIDigest(
 
     const content = await requestDigestText(
       client,
-      aiConfig.model,
+      aiConfig,
       buildDigestReduceMessages({
         topic,
         presetLabel,

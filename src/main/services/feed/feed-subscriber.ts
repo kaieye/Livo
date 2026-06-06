@@ -23,6 +23,10 @@ export interface SubscribeFeedOptions {
   title?: string
   category?: string
   view?: FeedViewType
+  /** Skip the initial network fetch and insert an optimistic feed record so it
+   *  appears in the list instantly. The caller is responsible for queueing a
+   *  background bootstrap that performs the real fetch + entry ingestion. */
+  deferInitialFetch?: boolean
 }
 
 export interface SubscribeFeedResult {
@@ -35,6 +39,8 @@ export interface SubscribeFeedResult {
   entriesInserted: number
   /** Whether the feed was successfully fetched and parsed. */
   fetched: boolean
+  /** True when the feed was inserted optimistically and the initial fetch was deferred. */
+  deferred: boolean
 }
 
 /**
@@ -96,6 +102,7 @@ export async function subscribeFeed(
           existed: true,
           entriesInserted: 0,
           fetched: false,
+          deferred: false,
         }
       }
     }
@@ -106,6 +113,46 @@ export async function subscribeFeed(
       existed: true,
       entriesInserted: 0,
       fetched: false,
+      deferred: false,
+    }
+  }
+
+  // ---- Optimistic insert (deferred fetch) ----
+  // Insert the feed without waiting for the network so the subscription appears
+  // instantly; the caller queues a background bootstrap to fetch + ingest entries.
+  if (options.deferInitialFetch) {
+    const routeView = inferDiscoverFeedViewFromUrl(normalizedUrl)
+    const optimisticView =
+      routeView !== FeedViewType.Articles
+        ? routeView
+        : (options.view ?? FeedViewType.Articles)
+    const optimisticId = uuidv4()
+    const optimisticFeed: Feed = {
+      id: optimisticId,
+      title: formatFeedTitle(storedUrl, undefined, options.title || storedUrl),
+      url: storedUrl,
+      upstreamUrl: url,
+      siteUrl: undefined,
+      description: undefined,
+      imageUrl: getImmediateFeedAvatar(normalizedUrl),
+      folder: options.category || '',
+      category: options.category || '',
+      view: optimisticView,
+      fetchSource: 'auto',
+      showInAll: true,
+      lastFetched: 0,
+      errorCount: 0,
+      createdAt: Date.now(),
+    }
+    getDb().feeds.insertFeed(optimisticFeed)
+    return {
+      feedId: optimisticId,
+      feedTitle: optimisticFeed.title,
+      feed: optimisticFeed,
+      existed: false,
+      entriesInserted: 0,
+      fetched: false,
+      deferred: true,
     }
   }
 
@@ -202,5 +249,6 @@ export async function subscribeFeed(
     existed: false,
     entriesInserted,
     fetched: !!parsed,
+    deferred: false,
   }
 }

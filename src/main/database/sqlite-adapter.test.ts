@@ -113,6 +113,53 @@ const describeSqliteAdapter = canCreateSqliteAdapter()
   : describe.skip
 
 describeSqliteAdapter('SqliteAdapter repository contracts', () => {
+  it('cleanup keeps surviving entries when the kept set exceeds one delete batch', () => {
+    const adapter = createAdapter()
+    const now = Date.now()
+    adapter.insertFeed(makeFeed({ id: 'feed-1', maxEntries: 600 }))
+
+    const entries: Entry[] = []
+    // 600 recent entries that must survive — larger than the 500 delete batch.
+    for (let i = 0; i < 600; i++) {
+      entries.push(
+        makeEntry({
+          id: `keep-${i}`,
+          title: `keep-${i}`,
+          feedId: 'feed-1',
+          url: `https://example.com/keep-${i}`,
+          publishedAt: now - i * 1000,
+        }),
+      )
+    }
+    // 100 entries both over the per-feed cap and older than 90 days → removed.
+    const oldTs = now - 91 * 24 * 60 * 60 * 1000
+    for (let i = 0; i < 100; i++) {
+      entries.push(
+        makeEntry({
+          id: `old-${i}`,
+          title: `old-${i}`,
+          feedId: 'feed-1',
+          url: `https://example.com/old-${i}`,
+          publishedAt: oldTs - i * 1000,
+        }),
+      )
+    }
+    adapter.insertEntries(entries)
+
+    const stats = adapter.cleanupEntries({
+      entriesPerFeed: 128,
+      maxEntryAgeDays: 90,
+    })
+
+    expect(stats.removed).toBe(100)
+    const remaining = adapter.getEntries({
+      feedId: 'feed-1',
+      limit: 10000,
+      skipDedupe: true,
+    })
+    expect(remaining.entries).toHaveLength(600)
+  })
+
   it('runs migrations and preserves feed defaults through feed queries', () => {
     const adapter = createAdapter()
     const feed = makeFeed({ showInAll: undefined, provider: undefined })

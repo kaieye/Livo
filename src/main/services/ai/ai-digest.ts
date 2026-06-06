@@ -253,6 +253,28 @@ function readIdsFromPayload(payload: unknown): string[] {
   return Array.isArray(ids) ? ids.map(normalizeId).filter(Boolean) : []
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function readKnownIdsFromText(raw: string, candidateIds: string[]): string[] {
+  const matches: Array<{ id: string; index: number }> = []
+
+  for (const id of candidateIds) {
+    const pattern = new RegExp(
+      `(?<![\\p{Letter}\\p{Number}_-])${escapeRegExp(id)}(?![\\p{Letter}\\p{Number}_-])`,
+      'gu',
+    )
+    for (const match of raw.matchAll(pattern)) {
+      matches.push({ id, index: match.index ?? Number.MAX_SAFE_INTEGER })
+    }
+  }
+
+  return matches
+    .sort((left, right) => left.index - right.index)
+    .map((m) => m.id)
+}
+
 export function buildDigestRerankMessages(
   input: DigestRerankInput,
 ): OpenAI.ChatCompletionMessageParam[] {
@@ -290,11 +312,19 @@ export function selectValidDigestRerankIds(
   candidateIds: Iterable<string>,
   limit = Number.POSITIVE_INFINITY,
 ): DigestRerankSelection {
-  const allowed = new Set(Array.from(candidateIds))
+  const candidateIdList = Array.from(candidateIds)
+  const allowed = new Set(candidateIdList)
   const seen = new Set<string>()
   const ids: string[] = []
   const rejectedIds: string[] = []
-  const parsedIds = readIdsFromPayload(extractJsonPayload(raw))
+  let parsedIds: string[]
+
+  try {
+    parsedIds = readIdsFromPayload(extractJsonPayload(raw))
+  } catch {
+    // 部分模型会输出解释性文本；这里只从原文中提取已知候选 id，不做额外兜底选择。
+    parsedIds = readKnownIdsFromText(raw, candidateIdList)
+  }
 
   for (const id of parsedIds) {
     if (!allowed.has(id)) {

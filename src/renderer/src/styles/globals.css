@@ -65,6 +65,16 @@
     -webkit-app-region: no-drag;
   }
 
+  /* Reserve space on the right edge for the custom window controls.
+     Only active on Windows, where main.tsx adds `.has-window-controls`. */
+  .titlebar-safe-pr {
+    padding-right: 0;
+  }
+
+  .has-window-controls .titlebar-safe-pr {
+    padding-right: 150px;
+  }
+
   .sidebar-item {
     @apply hover:bg-sidebar-hover dark:hover:bg-sidebar-dark-hover flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors;
   }

@@ -31,6 +31,7 @@ export default defineConfig({
   },
   server: {
     ...sharedRendererConfig.server,
+    port: 5433,
     open: true,
   },
 })

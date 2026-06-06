@@ -41,7 +41,7 @@ export default function AccountLoginPage() {
   }, [setSettingsOpen, setSettingsTab])
 
   return (
-    <div className="bg-background dark:bg-surface-dark flex h-screen w-full flex-col overflow-hidden">
+    <div className="bg-background dark:bg-surface-dark flex h-full w-full flex-col overflow-hidden">
       <header className="dark:bg-surface-dark-secondary/80 flex flex-shrink-0 items-center gap-3 border-b bg-white/80 px-4 py-2 backdrop-blur-sm">
         <button
           type="button"

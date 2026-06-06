@@ -62,7 +62,13 @@ export function registerFeedHandlers(): void {
       title?: string,
     ) => {
       try {
-        const result = await addFeed({ url, title, category, view })
+        const result = await addFeed({
+          url,
+          title,
+          category,
+          view,
+          deferInitialFetch: true,
+        })
         return {
           success: true,
           feed: toRendererFeed(result.feed),

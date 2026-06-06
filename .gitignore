@@ -24,3 +24,5 @@ docs/*
 !docs/development.md
 !docs/architecture.md
 .reasonix/
+tmp/
+ref.png

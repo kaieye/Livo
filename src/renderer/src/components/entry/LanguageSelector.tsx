@@ -79,7 +79,7 @@ export function LanguageSelector({
       </button>
 
       {open && (
-        <div className="border-border-secondary bg-surface-primary dark:border-border-dark-secondary dark:bg-surface-dark-primary absolute bottom-full left-0 z-50 mb-1 min-w-[5rem] rounded-lg border py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-[80] mt-1 min-w-[5rem] rounded-lg border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] py-1 shadow-lg">
           {LANGUAGES.map((lang) => (
             <button
               key={lang.code}

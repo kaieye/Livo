@@ -44,6 +44,19 @@ describe('ai digest tools', () => {
     expect(selection.rejectedIds).toEqual([])
   })
 
+  it('extracts known ids from non-json rerank output', () => {
+    const selection = selectValidDigestRerankIds(
+      '我会选择 entry-2、entry-10 和 missing，其中 entry-2 最重要。',
+      ['entry-1', 'entry-2', 'entry-10'],
+      5,
+    )
+
+    expect(selection).toEqual({
+      ids: ['entry-2', 'entry-10'],
+      rejectedIds: [],
+    })
+  })
+
   it('builds digest batches with at most four articles by default', () => {
     const plan = buildDigestBudgetPlan(candidates, {
       totalContextChars: 10_000,

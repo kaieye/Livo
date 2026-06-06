@@ -34,6 +34,10 @@ function installRendererErrorReporting(): void {
 
 installRendererErrorReporting()
 
+if (window.api?.windowControls?.platform === 'win32') {
+  document.documentElement.classList.add('has-window-controls')
+}
+
 performance.mark('livo-render-start')
 
 try {

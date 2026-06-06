@@ -29,6 +29,9 @@ export interface AddFeedInput {
   title?: string
   category?: string
   view?: FeedViewType
+  /** Insert the feed optimistically and defer the initial fetch to a background
+   *  bootstrap task. Used by the UI subscribe path so the feed appears instantly. */
+  deferInitialFetch?: boolean
 }
 
 export interface AddFeedResult {
@@ -47,6 +50,7 @@ export async function addFeed(input: AddFeedInput): Promise<AddFeedResult> {
     title: input.title,
     category: input.category,
     view: input.view,
+    deferInitialFetch: input.deferInitialFetch,
   })
 
   const rsshubInstance =
@@ -109,6 +113,13 @@ export async function addFeed(input: AddFeedInput): Promise<AddFeedResult> {
   // New feed
   const feed = outcome.feed
   const normalizedUrl = normalizeRsshubProtocolUrl(feed.url, rsshubInstance)
+
+  // Optimistic subscribe: the feed was inserted without entries; perform the
+  // real fetch + ingestion in a background bootstrap so the UI stays responsive.
+  if (outcome.deferred) {
+    queueBootstrapRefresh(feed, normalizedUrl, feed.view)
+    return { success: true, feed, existed: false }
+  }
 
   if (
     outcome.fetched &&

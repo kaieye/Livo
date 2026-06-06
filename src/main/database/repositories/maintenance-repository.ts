@@ -32,18 +32,21 @@ export class MaintenanceRepository implements IMaintenanceRepository {
       .map(entryFromRow)
     const result = cleanupDatabaseEntries(feeds, allEntries, options)
     if (result.stats.removed > 0) {
-      const ids = result.entries.map((e) => e.id)
-      if (ids.length === 0) {
-        this.db.prepare('DELETE FROM entries').run()
-      } else {
-        const batchSize = 500
-        for (let i = 0; i < ids.length; i += batchSize) {
-          const batch = ids.slice(i, i + batchSize)
-          const placeholders = batch.map(() => '?').join(',')
-          this.db
-            .prepare(`DELETE FROM entries WHERE id NOT IN (${placeholders})`)
-            .run(...batch)
-        }
+      // Delete the complement (ids NOT kept), batched with `IN` so each batch is
+      // self-contained. The previous `NOT IN (keepBatch)` approach made batches
+      // delete each other's kept rows and wiped the whole table whenever the kept
+      // set exceeded one batch (>500 rows).
+      const keepIds = new Set(result.entries.map((e) => e.id))
+      const removeIds = allEntries
+        .map((e) => e.id)
+        .filter((id) => !keepIds.has(id))
+      const batchSize = 500
+      for (let i = 0; i < removeIds.length; i += batchSize) {
+        const batch = removeIds.slice(i, i + batchSize)
+        const placeholders = batch.map(() => '?').join(',')
+        this.db
+          .prepare(`DELETE FROM entries WHERE id IN (${placeholders})`)
+          .run(...batch)
       }
     }
     return result.stats

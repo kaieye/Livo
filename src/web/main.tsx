@@ -1,7 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from '@renderer/App'
+import { RouterProvider } from 'react-router-dom'
+import { router } from '@renderer/router'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
+import { RootProviders } from '@renderer/providers/RootProviders'
+import '@renderer/styles/tokens.css'
 import '@renderer/styles/globals.css'
 import { initWebPlatform } from './web-api'
 
@@ -176,7 +179,9 @@ async function main() {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <ErrorBoundary>
-        <App />
+        <RootProviders>
+          <RouterProvider router={router} />
+        </RootProviders>
       </ErrorBoundary>
     </React.StrictMode>,
   )

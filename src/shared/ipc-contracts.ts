@@ -99,6 +99,10 @@ export const IPC = {
   APP_SAVE_TEXT_FILE: 'app:save-text-file',
   APP_DOWNLOAD_URL: 'app:download-url',
   MENU_SHOW_CONTEXT: 'menu:show-context',
+  WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_MAXIMIZE_TOGGLE: 'window:maximize-toggle',
+  WINDOW_CLOSE: 'window:close',
+  WINDOW_IS_MAXIMIZED: 'window:is-maximized',
   FEVER_ACCOUNTS_LIST: 'fever:accounts-list',
   FEVER_ACCOUNTS_CREATE: 'fever:accounts-create',
   FEVER_ACCOUNTS_UPDATE: 'fever:accounts-update',
@@ -310,6 +314,10 @@ export type IpcArgsByChannel = {
   [IPC.APP_SAVE_TEXT_FILE]: [options: SaveTextFileOptions]
   [IPC.APP_DOWNLOAD_URL]: [options: DownloadUrlOptions]
   [IPC.MENU_SHOW_CONTEXT]: [items: NativeContextMenuItem[]]
+  [IPC.WINDOW_MINIMIZE]: []
+  [IPC.WINDOW_MAXIMIZE_TOGGLE]: []
+  [IPC.WINDOW_CLOSE]: []
+  [IPC.WINDOW_IS_MAXIMIZED]: []
   [IPC.FEVER_ACCOUNTS_LIST]: []
   [IPC.FEVER_ACCOUNTS_CREATE]: [
     input: { baseUrl: string; username: string; apiKey: string },
@@ -932,6 +940,10 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.MENU_SHOW_CONTEXT>
     },
   },
+  [IPC.WINDOW_MINIMIZE]: noArgs(IPC.WINDOW_MINIMIZE),
+  [IPC.WINDOW_MAXIMIZE_TOGGLE]: noArgs(IPC.WINDOW_MAXIMIZE_TOGGLE),
+  [IPC.WINDOW_CLOSE]: noArgs(IPC.WINDOW_CLOSE),
+  [IPC.WINDOW_IS_MAXIMIZED]: noArgs(IPC.WINDOW_IS_MAXIMIZED),
   [IPC.FEVER_ACCOUNTS_LIST]: noArgs(IPC.FEVER_ACCOUNTS_LIST),
   [IPC.FEVER_ACCOUNTS_CREATE]: oneObject(IPC.FEVER_ACCOUNTS_CREATE, 'input'),
   [IPC.FEVER_ACCOUNTS_UPDATE]: {

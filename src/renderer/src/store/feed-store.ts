@@ -4,13 +4,8 @@ import { FeedViewType } from '../../../shared/types'
 import { useSettingsStore } from './settings-store'
 import { useEntryStore } from './entry-store'
 import { buildHomeFeedLoadOptions } from '../lib/home-feed-scope'
-import { shouldUseSocialBackgroundRefresh } from '../../../shared/subscription-intake'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
-
-function delayMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
 
 async function reloadEntriesForCurrentScope(state: {
   selectedFeedId: string | null
@@ -130,58 +125,12 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   addFeed: async (url, category, view, title) => {
     const result = await window.api.feeds.add(url, category, view, title)
     if (result.success) {
-      // Avoid stale empty list cache for newly added subscriptions.
+      // The feed is inserted optimistically; the main process runs a background
+      // bootstrap that fetches entries and emits `feeds:updated`, which refreshes
+      // the list and unread counts. Surface the new feed locally and return so the
+      // dialog closes immediately instead of blocking on the initial fetch.
       useEntryStore.getState().clearListCache()
       await get().loadFeeds()
-      const shouldSkipWarmup = shouldUseSocialBackgroundRefresh(
-        result.feed?.url || '',
-        result.feed?.view ?? FeedViewType.Articles,
-      )
-      const newFeedId = result.feed?.id
-      if (newFeedId && !shouldSkipWarmup) {
-        try {
-          const unreadEntries = await window.api.entries.list({
-            feedId: newFeedId,
-            unreadOnly: true,
-            limit: 5000,
-            compact: true,
-            maxContentLength: 200,
-            skipDedupe: false,
-          })
-          set((state) => ({
-            feeds: state.feeds.map((f) =>
-              f.id === newFeedId
-                ? { ...f, unreadCount: unreadEntries.entries.length }
-                : f,
-            ),
-          }))
-
-          // Warm cache so opening the feed can render immediately.
-          await useEntryStore.getState().prefetchEntries({
-            feedId: newFeedId,
-            unreadOnly: false,
-            limit: 1000,
-          })
-        } catch {
-          // Keep UI on list() result when recount fails.
-        }
-      }
-      if (newFeedId && shouldSkipWarmup) {
-        // For slow social feeds (Instagram/X), emulate manual refresh in background
-        // so users don't have to click refresh after subscribing.
-        void (async () => {
-          for (let round = 0; round < 3; round++) {
-            await delayMs(1200 + round * 1800)
-            try {
-              await window.api.feeds.refresh(newFeedId)
-              await get().loadFeeds()
-              await reloadEntriesForCurrentScope(get())
-            } catch {
-              // Continue next round.
-            }
-          }
-        })()
-      }
     }
     return result
   },

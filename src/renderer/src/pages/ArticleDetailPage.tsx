@@ -378,7 +378,7 @@ export default function ArticleDetailPage() {
   }, [activeEntry, t, toggleStar])
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg-primary)]">
       <header className="flex flex-shrink-0 items-center gap-3 border-b border-[var(--color-border-secondary)] px-4 py-2">
         <button
           type="button"

@@ -300,7 +300,7 @@ export function Layout() {
   }, [sidebarWidth, entryListWidth])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
+    <div className="flex h-full w-screen overflow-hidden">
       {/* Sidebar */}
       <Sidebar width={sidebarWidth} />
 

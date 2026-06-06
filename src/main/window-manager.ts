@@ -63,6 +63,33 @@ export class WindowManager {
     this.mainWindow.hide()
   }
 
+  minimizeWindow(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    this.mainWindow.minimize()
+  }
+
+  toggleMaximizeWindow(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    if (this.mainWindow.isMaximized()) {
+      this.mainWindow.unmaximize()
+    } else {
+      this.mainWindow.maximize()
+    }
+  }
+
+  closeWindow(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    this.mainWindow.close()
+  }
+
+  isWindowMaximized(): boolean {
+    return (
+      !!this.mainWindow &&
+      !this.mainWindow.isDestroyed() &&
+      this.mainWindow.isMaximized()
+    )
+  }
+
   isMainWindowVisible(): boolean {
     return (
       !!this.mainWindow &&
@@ -98,8 +125,14 @@ export class WindowManager {
       minWidth: 900,
       minHeight: 600,
       show: false,
-      titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 16, y: 16 },
+      ...(process.platform === 'darwin'
+        ? {
+            titleBarStyle: 'hiddenInset' as const,
+            trafficLightPosition: { x: 16, y: 16 },
+          }
+        : process.platform === 'win32'
+          ? { titleBarStyle: 'hidden' as const }
+          : {}),
       autoHideMenuBar: true,
       icon: app.isPackaged
         ? join(process.resourcesPath, 'resources', 'Livo.png')
@@ -166,6 +199,16 @@ export class WindowManager {
           mainWindow.hide()
         }
       }, 0)
+    })
+
+    mainWindow.on('maximize', () => {
+      if (mainWindow.isDestroyed()) return
+      mainWindow.webContents.send('window:maximize-changed', true)
+    })
+
+    mainWindow.on('unmaximize', () => {
+      if (mainWindow.isDestroyed()) return
+      mainWindow.webContents.send('window:maximize-changed', false)
     })
 
     mainWindow.on('close', (event) => {
