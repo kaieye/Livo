@@ -7,7 +7,7 @@ import {
 } from './web-api'
 
 type ApiShape = {
-  [key: string]: true | ApiShape
+  [key: string]: true | 'string' | ApiShape
 }
 
 const ELECTRON_API_SHAPE = {
@@ -113,6 +113,14 @@ const ELECTRON_API_SHAPE = {
   menu: {
     showContextMenu: true,
   },
+  windowControls: {
+    minimize: true,
+    maximizeToggle: true,
+    close: true,
+    isMaximized: true,
+    onMaximizeChange: true,
+    platform: 'string',
+  },
   data: {
     cleanup: true,
     stats: true,
@@ -161,6 +169,10 @@ function assertApiShape(
     const actual = value[key]
     if (expected === true) {
       expect(typeof actual, nextPath).toBe('function')
+      continue
+    }
+    if (expected === 'string') {
+      expect(typeof actual, nextPath).toBe('string')
       continue
     }
 

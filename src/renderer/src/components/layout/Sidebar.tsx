@@ -44,7 +44,6 @@ import {
   GripVertical,
   Link,
   Pencil,
-  AlertTriangle,
   User,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -53,6 +52,8 @@ import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useQuickSearchStore } from '../../store/quick-search-store'
 import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
+import { getFeedRefreshIssueLabel } from '../../lib/feed-refresh-issue'
+import { FeedRefreshIssueBadge } from './FeedRefreshIssueBadge'
 
 const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
   [FeedViewType.Articles]: <FileText size={18} />,
@@ -209,33 +210,6 @@ function getSidebarFeedDisplayTitle(feed: {
     return formatInstagramFeedTitle(rawTitle, instagramUsername)
 
   return rawTitle
-}
-
-type SidebarT = (key: string, options?: Record<string, string>) => string
-
-const FAILURE_BADGE_GRACE_MS = 60 * 60 * 1000 // 1 hour
-
-function getFeedRefreshIssueLabel(
-  feed: Pick<
-    FeedWithCount,
-    'lastRefreshStatus' | 'lastRefreshError' | 'lastRefreshAttemptedAt'
-  >,
-  t: SidebarT,
-  showErrorBadge?: boolean,
-): string | null {
-  if (feed.lastRefreshStatus !== 'failed') return null
-  if (showErrorBadge === false) return null
-  // Grace period: suppress the badge for the first hour after a refresh attempt
-  if (
-    feed.lastRefreshAttemptedAt != null &&
-    Date.now() - feed.lastRefreshAttemptedAt < FAILURE_BADGE_GRACE_MS
-  ) {
-    return null
-  }
-  const error = feed.lastRefreshError?.trim()
-  return error
-    ? t('sidebar.feedRefreshFailed', { error })
-    : t('sidebar.feedRefreshFailedFallback')
 }
 
 function extractInstagramNameFromUrl(value: string): string {
@@ -2538,18 +2512,6 @@ type FeedCategoryProps = {
   onDragStart: (feedId: string, label: string, e: React.PointerEvent) => void
   autoExpand: boolean
   highlightedFeedIds: Set<string>
-}
-
-function FeedRefreshIssueBadge({ label }: { label: string | null }) {
-  if (!label) return null
-  return (
-    <span
-      className="ml-1 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-amber-600 dark:text-amber-400"
-      aria-hidden="true"
-    >
-      <AlertTriangle size={13} strokeWidth={2.4} />
-    </span>
-  )
 }
 
 const FeedCategory = memo(function FeedCategory({

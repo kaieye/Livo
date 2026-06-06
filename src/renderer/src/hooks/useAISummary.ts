@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { buildAISummarySessionViewState } from '../lib/ai-summary-session-model'
 
 interface AIStreamPayload {
   requestId: string
@@ -66,17 +67,10 @@ export function useAISummary(options: AISummaryOptions = {}): AISummaryState {
       .getSummarySession(entryId)
       .then((session) => {
         if (requestId !== requestIdRef.current || !session) return
-        if (session.status === 'failed') {
-          setSummary(session.draftText || session.finalText || null)
-          setError(session.errorMessage || 'Unknown error')
-          setIsLoading(false)
-          return
-        }
-        setSummary(session.finalText || session.draftText || initialSummary)
-        setError(null)
-        setIsLoading(
-          session.status === 'queued' || session.status === 'running',
-        )
+        const next = buildAISummarySessionViewState(session, initialSummary)
+        setSummary(next.summary)
+        setError(next.error)
+        setIsLoading(next.isLoading)
       })
       .catch((err) => {
         if (requestId !== requestIdRef.current) return

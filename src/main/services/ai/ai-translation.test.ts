@@ -147,4 +147,53 @@ describe('translateEntrySegments', () => {
       targetLanguage: 'zh-CN',
     })
   })
+
+  it('marks the session config_changed when settings change during translation', async () => {
+    mockDb()
+    settingsProviderGetMock
+      .mockReturnValueOnce({
+        ai: {
+          provider: 'openai',
+          apiKey: 'key-a',
+          model: 'test-model',
+        },
+      })
+      .mockReturnValueOnce({
+        ai: {
+          provider: 'openai',
+          apiKey: 'key-a',
+          model: 'test-model',
+        },
+      })
+      .mockReturnValue({
+        ai: {
+          provider: 'openai',
+          apiKey: 'key-b',
+          model: 'test-model',
+        },
+      })
+
+    const result = await translateEntrySegments({
+      entryId: 'entry-1',
+      paragraphs: ['hello world'],
+      targetLanguage: 'zh-CN',
+    })
+
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.session).toMatchObject({
+      status: 'config_changed',
+      errorCode: 'config_changed',
+      errorMessage: 'AI 配置已变更，翻译已中止',
+    })
+    expect(result.errorMap).toEqual({
+      0: 'AI 配置已变更，翻译已中止',
+    })
+    expect(result.session.segments[0]).toMatchObject({
+      index: 0,
+      status: 'failed',
+      errorMessage: 'AI 配置已变更，翻译已中止',
+    })
+    expect(runAITranslateTaskMock).not.toHaveBeenCalled()
+  })
 })

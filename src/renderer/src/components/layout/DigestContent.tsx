@@ -17,7 +17,7 @@ import type {
   Entry,
 } from '../../../../shared/types'
 import { AIChatMarkdown } from '../ai/AIChatMarkdown'
-import { ROUTES } from '../../router/route-paths'
+import { getDigestSourceEntryRoute } from '../../lib/digest-source-navigation'
 
 type DigestSourceItem =
   | { id: string; status: 'available'; entry: Entry | AIDigestCandidate }
@@ -257,7 +257,10 @@ export function DigestContent() {
                   <div key={source.id}>
                     {source.status === 'available' ? (
                       <button
-                        onClick={() => navigate(ROUTES.entry(source.id))}
+                        onClick={() => {
+                          const route = getDigestSourceEntryRoute(source)
+                          if (route) navigate(route)
+                        }}
                         className="border-border hover:border-accent/50 hover:bg-accent/5 dark:border-border-dark dark:bg-surface-dark dark:hover:border-accent/50 w-full rounded-lg border bg-white px-3 py-2 text-left transition"
                       >
                         <div className="line-clamp-2 text-sm font-medium">
