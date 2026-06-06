@@ -25,6 +25,7 @@ export default {
     output: 'dist',
   },
   files: ['out/**/*'],
+  extraResources: [{ from: 'resources', to: 'resources' }],
   electronDist: resolve('node_modules/electron/dist'),
   protocols: [
     {

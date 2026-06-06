@@ -1,16 +1,23 @@
-import { Menu, Tray, nativeImage } from 'electron'
+import { app, Menu, Tray, nativeImage } from 'electron'
+import { join } from 'path'
 import { logWarn } from './logger'
 
 function createTrayImage() {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-      <rect width="32" height="32" rx="9" fill="#FF7A1A"/>
-      <path d="M9 10.5a7 7 0 0 1 14 0v1.2c0 3.1 1.1 5 2.6 6.9.4.5 0 1.3-.7 1.3H7.1c-.7 0-1.1-.8-.7-1.3 1.5-1.9 2.6-3.8 2.6-6.9z" fill="#fff"/>
-      <circle cx="16" cy="23.6" r="2.1" fill="#fff"/>
-    </svg>
-  `.trim()
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'resources', 'Livo.png')
+    : join(app.getAppPath(), 'resources', 'Livo.png')
+  const png = nativeImage
+    .createFromPath(iconPath)
+    .resize({ width: 32, height: 32 })
+  const pngDataUrl = png.toDataURL()
+  const roundedSvg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">',
+    '<defs><clipPath id="rc"><rect width="32" height="32" rx="9"/></clipPath></defs>',
+    `<image href="${pngDataUrl}" width="32" height="32" clip-path="url(#rc)"/>`,
+    '</svg>',
+  ].join('')
   return nativeImage.createFromDataURL(
-    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(roundedSvg)}`,
   )
 }
 

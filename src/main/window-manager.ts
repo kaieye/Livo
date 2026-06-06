@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { classifyExternalUrl } from '../shared/url-policy'
@@ -101,6 +101,9 @@ export class WindowManager {
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 16, y: 16 },
       autoHideMenuBar: true,
+      icon: app.isPackaged
+        ? join(process.resourcesPath, 'resources', 'Livo.png')
+        : join(app.getAppPath(), 'resources', 'Livo.png'),
       webPreferences: {
         preload: this.options.preloadPath,
         sandbox: false,
