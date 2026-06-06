@@ -72,9 +72,22 @@ function isPrivateNetworkAddress(address: string): boolean {
   return false
 }
 
+function normalizeHostnameForNetworkPolicy(hostname: string): string {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1)
+  }
+  return hostname
+}
+
 async function resolveHostname(hostname: string): Promise<string[]> {
-  if (hostname === 'localhost' || isIP(hostname)) return [hostname]
-  const records = await lookup(hostname, { all: true, verbatim: true })
+  const normalizedHostname = normalizeHostnameForNetworkPolicy(hostname)
+  if (normalizedHostname === 'localhost' || isIP(normalizedHostname)) {
+    return [normalizedHostname]
+  }
+  const records = await lookup(normalizedHostname, {
+    all: true,
+    verbatim: true,
+  })
   return records.map((record) => record.address)
 }
 
@@ -93,14 +106,15 @@ export async function classifyNetworkFetchUrl(
     }
   }
 
-  const resolvedAddresses = await resolveHostname(base.hostname)
+  const hostname = normalizeHostnameForNetworkPolicy(base.hostname)
+  const resolvedAddresses = await resolveHostname(hostname)
   const hasLoopback = resolvedAddresses.some(isLoopbackAddress)
   const hasPrivateNetwork = resolvedAddresses.some(isPrivateNetworkAddress)
 
   if (hasLoopback && !options.allowLoopback) {
     return {
       url: base.url,
-      hostname: base.hostname,
+      hostname,
       allowed: false,
       blockedReason: 'loopback',
       resolvedAddresses,
@@ -109,7 +123,7 @@ export async function classifyNetworkFetchUrl(
   if (hasPrivateNetwork && !options.allowPrivateNetwork) {
     return {
       url: base.url,
-      hostname: base.hostname,
+      hostname,
       allowed: false,
       blockedReason: 'private-network',
       resolvedAddresses,
@@ -118,7 +132,7 @@ export async function classifyNetworkFetchUrl(
 
   return {
     url: base.url,
-    hostname: base.hostname,
+    hostname,
     allowed: true,
     blockedReason: null,
     resolvedAddresses,

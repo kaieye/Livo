@@ -26,6 +26,15 @@ describe('network-url-policy', () => {
     expect(result.blockedReason).toBe(reason)
   })
 
+  it('normalizes bracketed IPv6 literals before DNS resolution', async () => {
+    const result = await classifyNetworkFetchUrl('http://[::1]/feed.xml')
+
+    expect(result.allowed).toBe(false)
+    expect(result.blockedReason).toBe('loopback')
+    expect(result.hostname).toBe('::1')
+    expect(result.resolvedAddresses).toEqual(['::1'])
+  })
+
   it('allows local RSSHub only when explicitly requested', async () => {
     const result = await classifyNetworkFetchUrl(
       'http://localhost:1200/twitter/user/rss',
