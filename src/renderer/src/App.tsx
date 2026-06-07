@@ -9,6 +9,7 @@ import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useCommandPaletteStore } from './store/command-palette-store'
 import { AuthTestPanel } from './components/auth/AuthTestPanel'
+import { useAuthStore } from './store/auth-store'
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href
 
@@ -268,6 +269,11 @@ function FloatingAIAssistantButton() {
  */
 export default function App() {
   useAgentNavigate()
+
+  // 启动时自动恢复登录状态（从本地 Session）
+  useEffect(() => {
+    void useAuthStore.getState().checkSession()
+  }, [])
 
   return (
     <div className="relative h-full w-full overflow-hidden">
