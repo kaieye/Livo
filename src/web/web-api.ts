@@ -17,6 +17,8 @@ import type {
   EntryListResult,
   FeedWithCount,
   FeedViewType,
+  FeedSyncResult,
+  FeedSyncStatus,
   ReaderSnapshot,
   ReaderSnapshotRequest,
   ReaderSnapshotScope,
@@ -1686,6 +1688,30 @@ export function createWebAPI(): ElectronAPI {
         // The import itself already parses feeds inline.
         return { success: true, total: 0, refreshed: 0, failed: 0 }
       },
+
+      syncNow: async (): Promise<
+        FeedSyncResult | { success: false; error: string }
+      > => ({
+        success: false,
+        error: 'Web 模式暂不支持订阅源云同步',
+      }),
+      syncToCloud: async (): Promise<
+        FeedSyncResult | { success: false; error: string }
+      > => ({
+        success: false,
+        error: 'Web 模式暂不支持订阅源云同步',
+      }),
+      syncFromCloud: async (): Promise<
+        FeedSyncResult | { success: false; error: string }
+      > => ({
+        success: false,
+        error: 'Web 模式暂不支持订阅源云同步',
+      }),
+      syncStatus: async (): Promise<FeedSyncStatus> => ({
+        isAuthenticated: false,
+        lastSyncAt: null,
+        pendingChanges: 0,
+      }),
     },
 
     entries: {

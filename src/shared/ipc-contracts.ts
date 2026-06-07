@@ -24,6 +24,10 @@ export const IPC = {
   FEED_IMPORT_OPML: 'feed:import-opml',
   FEED_EXPORT_OPML: 'feed:export-opml',
   FEED_REFRESH_IMPORTED: 'feed:refresh-imported',
+  FEED_SYNC_NOW: 'feed:sync-now',
+  FEED_SYNC_TO_CLOUD: 'feed:sync-to-cloud',
+  FEED_SYNC_FROM_CLOUD: 'feed:sync-from-cloud',
+  FEED_SYNC_STATUS: 'feed:sync-status',
   ENTRY_LIST: 'entry:list',
   ENTRY_GET: 'entry:get',
   ENTRY_MARK_READ: 'entry:mark-read',
@@ -195,6 +199,10 @@ export type IpcArgsByChannel = {
   [IPC.FEED_IMPORT_OPML]: []
   [IPC.FEED_EXPORT_OPML]: []
   [IPC.FEED_REFRESH_IMPORTED]: [feedIds: string[]]
+  [IPC.FEED_SYNC_NOW]: []
+  [IPC.FEED_SYNC_TO_CLOUD]: []
+  [IPC.FEED_SYNC_FROM_CLOUD]: []
+  [IPC.FEED_SYNC_STATUS]: []
   [IPC.ENTRY_LIST]: [
     options: {
       feedId?: string
@@ -636,6 +644,10 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.FEED_REFRESH_IMPORTED>
     },
   },
+  [IPC.FEED_SYNC_NOW]: noArgs(IPC.FEED_SYNC_NOW),
+  [IPC.FEED_SYNC_TO_CLOUD]: noArgs(IPC.FEED_SYNC_TO_CLOUD),
+  [IPC.FEED_SYNC_FROM_CLOUD]: noArgs(IPC.FEED_SYNC_FROM_CLOUD),
+  [IPC.FEED_SYNC_STATUS]: noArgs(IPC.FEED_SYNC_STATUS),
   [IPC.ENTRY_LIST]: {
     channel: IPC.ENTRY_LIST,
     validateArgs: (args) => {

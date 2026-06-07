@@ -33,6 +33,8 @@ import { FeverRepository } from './repositories/fever-repository'
 import type { IFeverRepository } from './repositories/fever-repository'
 import { MaintenanceRepository } from './repositories/maintenance-repository'
 import type { IMaintenanceRepository } from './repositories/maintenance-repository'
+import { SyncChangesRepository } from './repositories/sync-changes-repository'
+import type { ISyncChangesRepository } from './repositories/sync-changes-repository'
 
 export type { CleanupOptions, CleanupStats }
 
@@ -45,6 +47,7 @@ export class SqliteAdapter {
   readonly digests: IDigestRepository
   readonly fever: IFeverRepository
   readonly maintenance: IMaintenanceRepository
+  readonly syncChanges: ISyncChangesRepository
 
   constructor(dbPath: string) {
     const dir = join(dbPath, '..')
@@ -65,6 +68,7 @@ export class SqliteAdapter {
     this.digests = new DigestRepository(this.db)
     this.fever = new FeverRepository(this.db)
     this.maintenance = new MaintenanceRepository(this.db, this.feeds)
+    this.syncChanges = new SyncChangesRepository(this.db)
   }
 
   getAllFeeds(): Feed[] {

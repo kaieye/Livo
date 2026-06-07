@@ -84,6 +84,33 @@ export interface FeedWithCount extends Feed {
   unreadCount: number
 }
 
+export type FeedSyncAction = 'subscribe' | 'unsubscribe'
+
+export interface FeedSyncRecord {
+  url: string
+  action: FeedSyncAction
+  updatedAt: number
+}
+
+export interface FeedSyncStatus {
+  isAuthenticated: boolean
+  lastSyncAt: number | null
+  pendingChanges: number
+}
+
+export interface FeedSyncResult extends FeedSyncStatus {
+  success: boolean
+  mode: 'to-cloud' | 'from-cloud' | 'now'
+  remoteRecords: number
+  localRecords: number
+  uploaded: number
+  downloaded: number
+  subscribed: number
+  unsubscribed: number
+  ignored: number
+  error?: string
+}
+
 export type FeedColumnId =
   | 'category'
   | 'type'

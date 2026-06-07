@@ -1,6 +1,15 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuthStore } from '../../store/auth-store'
-import { AlertCircle, Check, Loader2, LogOut, User } from 'lucide-react'
+import type { FeedSyncStatus } from '../../../../shared/types'
+import {
+  AlertCircle,
+  Check,
+  Cloud,
+  Loader2,
+  LogOut,
+  RefreshCw,
+  User,
+} from 'lucide-react'
 
 type AuthProvider = 'google' | 'wechat'
 
@@ -76,7 +85,10 @@ export function UserSettings() {
         {/* 当前账号的操作 */}
         {isAuthenticated && user && (
           <div className="mt-4 border-t pt-4">
-            <LogoutButton />
+            <div className="space-y-4">
+              <FeedSyncPanel />
+              <LogoutButton />
+            </div>
           </div>
         )}
       </div>
@@ -96,11 +108,110 @@ export function UserSettings() {
       {/* 说明 */}
       <div className="bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 rounded-lg p-4">
         <p className="text-text-secondary dark:text-text-dark-secondary text-xs leading-relaxed">
-          💡 Livo
-          账号用于同步订阅、偏好设置等数据。如需关联第三方平台（B站、YouTube
+          Livo 账号用于同步订阅源。如需关联第三方平台（B站、YouTube
           等）以获取关注列表，请前往「账号关联」页面。
         </p>
       </div>
+    </div>
+  )
+}
+
+function formatLastSyncAt(value: number | null): string {
+  if (!value) return '从未同步'
+  const diffMs = Date.now() - value
+  if (diffMs < 60 * 1000) return '刚刚'
+  if (diffMs < 60 * 60 * 1000) return `${Math.floor(diffMs / 60000)} 分钟前`
+  if (diffMs < 24 * 60 * 60 * 1000)
+    return `${Math.floor(diffMs / 3600000)} 小时前`
+  return new Date(value).toLocaleString()
+}
+
+function FeedSyncPanel() {
+  const [status, setStatus] = useState<FeedSyncStatus | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const nextStatus = await window.api.feeds.syncStatus()
+      setStatus(nextStatus)
+    } catch {
+      setStatus(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshStatus()
+  }, [refreshStatus])
+
+  const handleSync = useCallback(async () => {
+    setLoading(true)
+    setFeedback(null)
+    setError(null)
+    try {
+      const result = await window.api.feeds.syncNow()
+      if (result.success) {
+        setStatus({
+          isAuthenticated: result.isAuthenticated,
+          lastSyncAt: result.lastSyncAt,
+          pendingChanges: result.pendingChanges,
+        })
+        const changed = result.uploaded + result.downloaded
+        setFeedback(changed > 0 ? `已同步 ${changed} 项` : '已是最新')
+      } else {
+        setError(result.error || '同步失败')
+        await refreshStatus()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '同步失败')
+      await refreshStatus()
+    } finally {
+      setLoading(false)
+      setTimeout(() => {
+        setFeedback(null)
+        setError(null)
+      }, 3000)
+    }
+  }, [refreshStatus])
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Cloud size={15} className="text-accent" />
+          <span>订阅源同步</span>
+        </div>
+        <div className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
+          上次同步：{formatLastSyncAt(status?.lastSyncAt ?? null)}
+          {status?.pendingChanges
+            ? ` · 待上传 ${status.pendingChanges} 项`
+            : ''}
+        </div>
+        {(feedback || error) && (
+          <div
+            className={`mt-1 flex items-center gap-1 text-xs ${
+              error ? 'text-red-500' : 'text-green-600'
+            }`}
+          >
+            {error ? <AlertCircle size={13} /> : <Check size={13} />}
+            {error || feedback}
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={handleSync}
+        disabled={loading || status?.isAuthenticated === false}
+        className="bg-accent hover:bg-accent-hover inline-flex h-8 min-w-[104px] items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <RefreshCw size={14} />
+        )}
+        {loading ? '同步中' : '立即同步'}
+      </button>
     </div>
   )
 }
@@ -116,7 +227,7 @@ function LogoutButton() {
     try {
       await logout()
       setFeedback('已退出登录')
-    } catch (err) {
+    } catch (_err) {
       setFeedback('退出失败')
     } finally {
       setLoading(false)

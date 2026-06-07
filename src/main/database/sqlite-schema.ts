@@ -243,6 +243,24 @@ const MIGRATIONS: Array<{
         ON entry_ai_translation_sessions (entry_id, updated_at DESC);
     `,
   },
+  {
+    version: 8,
+    name: 'feed-sync-changes',
+    sql: `
+      CREATE TABLE IF NOT EXISTS sync_changes (
+        url TEXT NOT NULL,
+        action TEXT NOT NULL CHECK (action IN ('subscribe', 'unsubscribe')),
+        updated_at INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS sync_changes_user_url_idx
+        ON sync_changes (user_id, url);
+      CREATE INDEX IF NOT EXISTS sync_changes_user_synced_idx
+        ON sync_changes (user_id, synced, updated_at DESC);
+    `,
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

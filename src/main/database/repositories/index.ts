@@ -10,3 +10,8 @@ export type { IEntryAISummarySessionRepository } from './ai-summary-session-repo
 export type { IEntryAITranslationSessionRepository } from './ai-translation-session-repository'
 export type { IFeverRepository } from './fever-repository'
 export type { IMaintenanceRepository } from './maintenance-repository'
+export type {
+  ISyncChangesRepository,
+  SyncChange,
+  FeedSyncAction,
+} from './sync-changes-repository'

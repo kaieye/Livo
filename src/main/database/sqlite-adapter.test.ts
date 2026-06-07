@@ -211,6 +211,52 @@ describeSqliteAdapter('SqliteAdapter repository contracts', () => {
     })
   })
 
+  it('persists feed sync changes by user and URL', () => {
+    const adapter = createAdapter()
+
+    adapter.syncChanges.upsertChange({
+      userId: 'user-1',
+      url: 'https://example.com/feed.xml',
+      action: 'subscribe',
+      updatedAt: 1000,
+      synced: false,
+    })
+    adapter.syncChanges.upsertChange({
+      userId: 'user-1',
+      url: 'https://example.com/feed.xml',
+      action: 'unsubscribe',
+      updatedAt: 2000,
+      synced: true,
+    })
+    adapter.syncChanges.upsertChange({
+      userId: 'user-2',
+      url: 'https://example.com/feed.xml',
+      action: 'subscribe',
+      updatedAt: 1500,
+      synced: false,
+    })
+
+    expect(
+      adapter.syncChanges.getChange('user-1', 'https://example.com/feed.xml'),
+    ).toEqual({
+      userId: 'user-1',
+      url: 'https://example.com/feed.xml',
+      action: 'unsubscribe',
+      updatedAt: 2000,
+      synced: true,
+    })
+    expect(adapter.syncChanges.getChangesByUser('user-1')).toHaveLength(1)
+    expect(adapter.syncChanges.getUnsyncedChangesByUser('user-1')).toEqual([])
+
+    adapter.syncChanges.markChangesSynced('user-2', [
+      'https://example.com/feed.xml',
+    ])
+    expect(
+      adapter.syncChanges.getChange('user-2', 'https://example.com/feed.xml')
+        ?.synced,
+    ).toBe(true)
+  })
+
   it('stores entries and applies list filters, pagination, and read counts', () => {
     const adapter = createAdapter()
     adapter.insertFeed(makeFeed({ id: 'feed-1' }))

@@ -4,6 +4,8 @@ import { sessionStore } from '../services/auth/session-store'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
 import { IPC } from '../../shared/ipc-contracts'
+import { feedSyncService } from '../services/feed/feed-sync-service'
+import { logError } from '../services/system/logger'
 
 /**
  * 轮询登录状态直到完成或超时
@@ -44,6 +46,14 @@ async function pollUntilComplete(
   throw new Error('Login timeout - please try again')
 }
 
+function triggerFeedSyncAfterLogin(): void {
+  setImmediate(() => {
+    feedSyncService.syncNow().catch((error) => {
+      logError('[auth-feed-sync-after-login-failed]', error)
+    })
+  })
+}
+
 /**
  * 注册认证相关的 IPC 处理器
  */
@@ -72,6 +82,7 @@ export function registerAuthHandlers(): void {
         user,
         expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       })
+      triggerFeedSyncAfterLogin()
 
       return { success: true, token, user }
     } catch (error) {
@@ -102,6 +113,7 @@ export function registerAuthHandlers(): void {
         user,
         expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       })
+      triggerFeedSyncAfterLogin()
 
       return { success: true, token, user }
     } catch (error) {
@@ -127,6 +139,7 @@ export function registerAuthHandlers(): void {
           ...session,
           user,
         })
+        triggerFeedSyncAfterLogin()
 
         return { success: true, user, token: session.token }
       } catch {
@@ -164,6 +177,9 @@ export function registerAuthHandlers(): void {
   registerChannel(IPC.AUTH_CHECK_SESSION, async () => {
     const isValid = sessionStore.isSessionValid()
     const user = isValid ? sessionStore.getCurrentUser() : null
+    if (isValid && user) {
+      triggerFeedSyncAfterLogin()
+    }
     return { success: true, isValid, user }
   })
 }

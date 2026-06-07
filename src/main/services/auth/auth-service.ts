@@ -1,6 +1,5 @@
 import { session } from 'electron'
-
-const BASE_URL = 'http://127.0.0.1:8787'
+import { getBackendBaseUrl } from '../backend/backend-config'
 
 export interface LoginResponse {
   url: string
@@ -36,7 +35,7 @@ export interface CurrentUser {
 export class AuthService {
   private baseUrl: string
 
-  constructor(baseUrl: string = BASE_URL) {
+  constructor(baseUrl: string = getBackendBaseUrl()) {
     this.baseUrl = baseUrl
   }
 

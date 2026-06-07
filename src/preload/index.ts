@@ -14,6 +14,8 @@ import type {
   EntryListResult,
   FeedWithCount,
   FeedViewType,
+  FeedSyncResult,
+  FeedSyncStatus,
   ReaderSnapshot,
   ReaderSnapshotRequest,
   AccountProvider,
@@ -84,6 +86,15 @@ const api = {
     exportOPML: () => invokeIpc(IPC.FEED_EXPORT_OPML),
     refreshImportedFeeds: (feedIds: string[]) =>
       invokeIpc(IPC.FEED_REFRESH_IMPORTED, feedIds),
+    syncNow: (): Promise<FeedSyncResult | { success: false; error: string }> =>
+      invokeIpc(IPC.FEED_SYNC_NOW),
+    syncToCloud: (): Promise<
+      FeedSyncResult | { success: false; error: string }
+    > => invokeIpc(IPC.FEED_SYNC_TO_CLOUD),
+    syncFromCloud: (): Promise<
+      FeedSyncResult | { success: false; error: string }
+    > => invokeIpc(IPC.FEED_SYNC_FROM_CLOUD),
+    syncStatus: (): Promise<FeedSyncStatus> => invokeIpc(IPC.FEED_SYNC_STATUS),
   },
 
   // Entry operations

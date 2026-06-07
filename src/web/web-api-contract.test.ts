@@ -21,6 +21,10 @@ const ELECTRON_API_SHAPE = {
     importOPML: true,
     exportOPML: true,
     refreshImportedFeeds: true,
+    syncNow: true,
+    syncToCloud: true,
+    syncFromCloud: true,
+    syncStatus: true,
   },
   entries: {
     list: true,

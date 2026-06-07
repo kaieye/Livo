@@ -2,6 +2,7 @@ import { app, protocol } from 'electron'
 import { join } from 'path'
 import { initDatabase, getDb } from './database'
 import { registerFeedHandlers } from './handlers/feed-handlers'
+import { registerFeedSyncHandlers } from './handlers/feed-sync-handlers'
 import { registerEntryHandlers } from './handlers/entry-handlers'
 import { registerReaderHandlers } from './handlers/reader-handlers'
 import { registerAIHandlers } from './handlers/ai-handlers'
@@ -166,6 +167,7 @@ export class AppManager {
 
   private registerIpcHandlers(): void {
     registerFeedHandlers()
+    registerFeedSyncHandlers()
     registerEntryHandlers()
     registerReaderHandlers()
     registerAIHandlers()

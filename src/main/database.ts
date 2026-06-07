@@ -22,6 +22,7 @@ import type {
   IDigestRepository,
   IFeverRepository,
   IMaintenanceRepository,
+  ISyncChangesRepository,
 } from './database/repositories'
 
 // Re-export types needed by consumers
@@ -39,6 +40,7 @@ export function getDb(): {
   digests: IDigestRepository
   fever: IFeverRepository
   maintenance: IMaintenanceRepository
+  syncChanges: ISyncChangesRepository
   close: () => void
 } {
   return {
@@ -49,6 +51,7 @@ export function getDb(): {
     digests: adapter.digests,
     fever: adapter.fever,
     maintenance: adapter.maintenance,
+    syncChanges: adapter.syncChanges,
     close: () => adapter.close(),
   }
 }

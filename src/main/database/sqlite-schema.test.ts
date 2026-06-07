@@ -117,4 +117,47 @@ describeSqliteSchema('sqlite schema migrations', () => {
       db.close()
     }
   })
+
+  it('creates feed sync_changes table with user-url uniqueness', () => {
+    const db = createTempDb()
+    try {
+      runMigrations(db)
+
+      const columnNames = db
+        .prepare('PRAGMA table_info(sync_changes)')
+        .all()
+        .map((row: any) => row.name)
+      expect(columnNames).toEqual(
+        expect.arrayContaining([
+          'url',
+          'action',
+          'updated_at',
+          'user_id',
+          'synced',
+        ]),
+      )
+
+      db.prepare(
+        `INSERT INTO sync_changes (url, action, updated_at, user_id, synced)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).run('https://example.com/feed.xml', 'subscribe', 1000, 'user-1', 0)
+
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO sync_changes (url, action, updated_at, user_id, synced)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(
+            'https://example.com/feed.xml',
+            'unsubscribe',
+            2000,
+            'user-1',
+            0,
+          ),
+      ).toThrow()
+    } finally {
+      db.close()
+    }
+  })
 })

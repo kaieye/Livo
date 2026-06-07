@@ -6,6 +6,10 @@ import { refreshAllFeeds, refreshFeed, removeFeed } from './feed-operations'
 const getDbMock = vi.hoisted(() => vi.fn())
 const refreshSingleFeedMock = vi.hoisted(() => vi.fn())
 const refreshAllFeedsTaskMock = vi.hoisted(() => vi.fn())
+const sessionStoreMock = vi.hoisted(() => ({
+  isSessionValid: vi.fn<() => boolean>(() => false),
+  getSession: vi.fn<() => any>(() => null),
+}))
 
 vi.mock('../database', () => ({
   getDb: getDbMock,
@@ -16,6 +20,10 @@ vi.mock('../services/feed/feed-refresh', () => ({
   queueBootstrapRefresh: vi.fn(),
   refreshSingleFeed: refreshSingleFeedMock,
   refreshAllFeeds: refreshAllFeedsTaskMock,
+}))
+
+vi.mock('../services/auth/session-store', () => ({
+  sessionStore: sessionStoreMock,
 }))
 
 function makeFeed(overrides: Partial<Feed> = {}): Feed {
@@ -42,8 +50,11 @@ function mockDb(feed: Feed | null = makeFeed()) {
     }),
     getUnreadCount: vi.fn().mockReturnValue(3),
   }
-  getDbMock.mockReturnValue({ feeds, entries })
-  return { feeds, entries }
+  const syncChanges = {
+    upsertChange: vi.fn(),
+  }
+  getDbMock.mockReturnValue({ feeds, entries, syncChanges })
+  return { feeds, entries, syncChanges }
 }
 
 describe('feed operations', () => {
@@ -51,6 +62,8 @@ describe('feed operations', () => {
     getDbMock.mockReset()
     refreshSingleFeedMock.mockReset()
     refreshAllFeedsTaskMock.mockReset()
+    sessionStoreMock.isSessionValid.mockReturnValue(false)
+    sessionStoreMock.getSession.mockReturnValue(null)
   })
 
   it('removes an existing Feed and returns confirmation data', () => {
@@ -59,6 +72,29 @@ describe('feed operations', () => {
 
     expect(removeFeed(feed.id)).toEqual({ feed, entryCount: 1 })
     expect(db.feeds.deleteFeed).toHaveBeenCalledWith(feed.id)
+  })
+
+  it('records unsubscribe changes for the logged-in user', () => {
+    const feed = makeFeed()
+    const db = mockDb(feed)
+    sessionStoreMock.isSessionValid.mockReturnValue(true)
+    sessionStoreMock.getSession.mockReturnValue({
+      token: 'token',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      expiresAt: Date.now() + 1000,
+    })
+
+    removeFeed(feed.id)
+
+    expect(db.syncChanges.upsertChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: feed.url,
+        action: 'unsubscribe',
+        userId: 'user-1',
+        synced: false,
+      }),
+    )
   })
 
   it('returns null when removing a missing Feed', () => {
