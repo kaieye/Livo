@@ -14,6 +14,7 @@ import { defineReadTool } from './factories'
 
 const PROVIDER_VALUES: AccountProvider[] = [
   'google',
+  'wechat',
   'youtube',
   'x',
   'instagram',
@@ -21,6 +22,7 @@ const PROVIDER_VALUES: AccountProvider[] = [
 ]
 const PROVIDER_LABELS: Record<AccountProvider, string> = {
   google: 'Google',
+  wechat: 'WeChat',
   youtube: 'YouTube',
   x: 'X',
   instagram: 'Instagram',

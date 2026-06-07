@@ -3,6 +3,7 @@ import type { FeedViewType } from './feed'
 
 export type AccountProvider =
   | 'google'
+  | 'wechat'
   | 'youtube'
   | 'x'
   | 'instagram'

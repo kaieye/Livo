@@ -16,6 +16,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
+      '@supabase/supabase-js':
+        specifier: ^2.107.0
+        version: 2.107.0
       '@tanstack/query-sync-storage-persister':
         specifier: ^5.95.2
         version: 5.100.14
@@ -1037,6 +1040,54 @@ packages:
         integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==,
       }
     engines: { node: '>=10' }
+
+  '@supabase/auth-js@2.107.0':
+    resolution:
+      {
+        integrity: sha512-XA7x+WIeIvuC3GTZ2ey67QcBbGw4n+o5B7M+dMm9KT1lL3wX1B52DfEWW00WuPt/LnniJLLIn1WIm9YPtuxzKQ==,
+      }
+    engines: { node: '>=20.0.0' }
+
+  '@supabase/functions-js@2.107.0':
+    resolution:
+      {
+        integrity: sha512-iMtRUmEj1KOgQd/a3MR4hnBlPnZc62DW8+z8aPpnzbxWkexEZUVL2fSgvvp15gqFg1V55e2yMGqgK+yhSQxp5w==,
+      }
+    engines: { node: '>=20.0.0' }
+
+  '@supabase/phoenix@0.4.2':
+    resolution:
+      {
+        integrity: sha512-YSAGnmDAfuleFCVt3CeurQZAhxRfXWeZIIkwp7NhYzQ1UwW6ePSnzsFAiUm/mbCkfoCf70QQHKW/K6RKh52a4A==,
+      }
+
+  '@supabase/postgrest-js@2.107.0':
+    resolution:
+      {
+        integrity: sha512-7ARs47/tyIjX7T0Ive20d4NY8zQYXsP5/P07jJWxffSIM2gpnSnGRnL/Fe15GPbdjsW2sTYeckHcyaoKbM6yWQ==,
+      }
+    engines: { node: '>=20.0.0' }
+
+  '@supabase/realtime-js@2.107.0':
+    resolution:
+      {
+        integrity: sha512-cF2KYdR3JIn9YlWGeluY9S0G+otqTdL6hB8GzpatlEIY6fZudCcyFo6Dc3+X9tjeb+x9XcIyNAk9qhNAknjH1A==,
+      }
+    engines: { node: '>=20.0.0' }
+
+  '@supabase/storage-js@2.107.0':
+    resolution:
+      {
+        integrity: sha512-/X8OOVwKBn8aVKuHAGOz2yLA0d2OauqhVuy4mNtN+o7wttHOgx1/j+pqOzlsjmhOHrYykF6AJNZhs3gKZzcMUw==,
+      }
+    engines: { node: '>=20.0.0' }
+
+  '@supabase/supabase-js@2.107.0':
+    resolution:
+      {
+        integrity: sha512-ChKzdlWVweMUUhr0U79JhMmgm1haS/C5JquaiCDr70JaGARRtjjoY9rkIheXWybXxTSNzRiQs3Sk8IAg1HS3ZA==,
+      }
+    engines: { node: '>=20.0.0' }
 
   '@szmarczak/http-timer@4.0.6':
     resolution:
@@ -3256,6 +3307,13 @@ packages:
         integrity: sha512-06r/TitrM88Mg5FdUXAKL96dJMzgqLE5dv3ryBAra4KCwD9mJ4ndOTS95ZuymIGoE+2hzfdaMak2X11/es7ZWg==,
       }
 
+  iceberg-js@0.8.1:
+    resolution:
+      {
+        integrity: sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==,
+      }
+    engines: { node: '>=20.0.0' }
+
   iconv-corefoundation@1.1.7:
     resolution:
       {
@@ -5455,6 +5513,12 @@ packages:
         integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==,
       }
 
+  tslib@2.8.1:
+    resolution:
+      {
+        integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==,
+      }
+
   tunnel-agent@0.6.0:
     resolution:
       {
@@ -6406,6 +6470,38 @@ snapshots:
     optional: true
 
   '@sindresorhus/is@4.6.0': {}
+
+  '@supabase/auth-js@2.107.0':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/functions-js@2.107.0':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/phoenix@0.4.2': {}
+
+  '@supabase/postgrest-js@2.107.0':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/realtime-js@2.107.0':
+    dependencies:
+      '@supabase/phoenix': 0.4.2
+      tslib: 2.8.1
+
+  '@supabase/storage-js@2.107.0':
+    dependencies:
+      iceberg-js: 0.8.1
+      tslib: 2.8.1
+
+  '@supabase/supabase-js@2.107.0':
+    dependencies:
+      '@supabase/auth-js': 2.107.0
+      '@supabase/functions-js': 2.107.0
+      '@supabase/postgrest-js': 2.107.0
+      '@supabase/realtime-js': 2.107.0
+      '@supabase/storage-js': 2.107.0
 
   '@szmarczak/http-timer@4.0.6':
     dependencies:
@@ -7925,6 +8021,8 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.29.7
 
+  iceberg-js@0.8.1: {}
+
   iconv-corefoundation@1.1.7:
     dependencies:
       cli-truncate: 2.1.0
@@ -9284,6 +9382,8 @@ snapshots:
       typescript: 5.9.3
 
   ts-interface-checker@0.1.13: {}
+
+  tslib@2.8.1: {}
 
   tunnel-agent@0.6.0:
     dependencies:

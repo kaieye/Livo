@@ -53,7 +53,7 @@ interface ProviderConfig {
   timeoutMs?: number
 }
 
-type CookieAccountProvider = Exclude<AccountProvider, 'google'>
+type CookieAccountProvider = Exclude<AccountProvider, 'google' | 'wechat'>
 
 const PROVIDER_CONFIGS: Record<CookieAccountProvider, ProviderConfig> = {
   youtube: {
@@ -320,6 +320,16 @@ export async function getAccountState(
     return getGoogleOAuthAccountState()
   }
 
+  if (provider === 'wechat') {
+    // WeChat 使用 Supabase OAuth，暂时返回未链接状态
+    return {
+      provider,
+      linked: false,
+      displayName: null,
+      error: 'WeChat OAuth not yet implemented',
+    }
+  }
+
   if (provider === 'bilibili') {
     const nav = await fetchBilibiliNavState()
     if (!nav.loggedIn) {
@@ -395,6 +405,14 @@ export async function linkAccount(
 ): Promise<{ success: boolean; error?: string }> {
   if (provider === 'google') {
     return linkGoogleOAuthAccount()
+  }
+
+  if (provider === 'wechat') {
+    // WeChat 使用 Supabase OAuth
+    return {
+      success: false,
+      error: 'WeChat OAuth not yet implemented',
+    }
   }
 
   const config = PROVIDER_CONFIGS[provider]
@@ -580,6 +598,14 @@ export async function unlinkAccount(
 ): Promise<{ success: boolean; error?: string }> {
   if (provider === 'google') {
     return unlinkGoogleOAuthAccount()
+  }
+
+  if (provider === 'wechat') {
+    // WeChat 使用 Supabase OAuth
+    return {
+      success: false,
+      error: 'WeChat OAuth not yet implemented',
+    }
   }
 
   const config = PROVIDER_CONFIGS[provider]

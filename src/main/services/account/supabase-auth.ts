@@ -121,39 +121,17 @@ export async function linkGoogleOAuthAccount(): Promise<{
 
 /**
  * 微信 OAuth 登录
+ * 注意：Supabase 默认不支持 wechat provider，需要自定义实现
  */
 export async function linkWechatOAuthAccount(): Promise<{
   success: boolean
   error?: string
 }> {
-  try {
-    const client = getSupabaseClient()
-
-    const { data, error } = await client.auth.signInWithOAuth({
-      provider: 'wechat',
-      options: {
-        redirectTo: SUPABASE_CONFIG.auth.redirectTo,
-        scopes: SUPABASE_CONFIG.auth.wechat.scopes, // PC 扫码必须
-      },
-    })
-
-    if (error) {
-      return { success: false, error: error.message }
-    }
-
-    if (!data.url) {
-      return { success: false, error: 'No authorization URL returned' }
-    }
-
-    // 打开浏览器进行 OAuth 授权（会显示微信二维码）
-    await shell.openExternal(data.url)
-
-    return { success: true }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }
+  // TODO: 微信登录需要自定义 OAuth 流程
+  // Supabase 的 signInWithOAuth 不支持 'wechat' 作为 provider
+  return {
+    success: false,
+    error: 'WeChat OAuth not yet implemented',
   }
 }
 
@@ -190,10 +168,16 @@ export async function handleOAuthCallback(
   try {
     const client = getSupabaseClient()
 
-    // Supabase 会自动处理 URL 中的 session
-    const { data, error } = await client.auth.getSessionFromUrl({
-      url: callbackUrl,
-    })
+    // 从 URL 中提取 code 和 state 参数
+    const url = new URL(callbackUrl)
+    const code = url.searchParams.get('code')
+
+    if (!code) {
+      return { success: false, error: 'No authorization code in callback URL' }
+    }
+
+    // 使用 exchangeCodeForSession 交换 code 获取 session
+    const { data, error } = await client.auth.exchangeCodeForSession(code)
 
     if (error) {
       return { success: false, error: error.message }
