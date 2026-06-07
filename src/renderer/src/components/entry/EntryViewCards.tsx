@@ -1,7 +1,8 @@
 import { memo } from 'react'
 
 import type { Entry } from '../../../../shared/types'
-import { GridCard, SocialMediaItem } from './EntryList'
+import { GridCard } from './entry-list/items/GridCard'
+import { SocialMediaItem } from './entry-list/items/SocialMediaItem'
 
 interface FeedMeta {
   title?: string
