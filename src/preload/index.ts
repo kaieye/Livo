@@ -519,11 +519,11 @@ const api = {
 
   // Auth operations (for backend NestJS authentication)
   auth: {
-    loginGoogle: () => ipcRenderer.invoke('auth:login-google'),
-    loginWechat: () => ipcRenderer.invoke('auth:login-wechat'),
-    getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
-    logout: () => ipcRenderer.invoke('auth:logout'),
-    checkSession: () => ipcRenderer.invoke('auth:check-session'),
+    loginGoogle: () => invokeIpc(IPC.AUTH_LOGIN_GOOGLE),
+    loginWechat: () => invokeIpc(IPC.AUTH_LOGIN_WECHAT),
+    getCurrentUser: () => invokeIpc(IPC.AUTH_GET_CURRENT_USER),
+    logout: () => invokeIpc(IPC.AUTH_LOGOUT),
+    checkSession: () => invokeIpc(IPC.AUTH_CHECK_SESSION),
     onLoginProgress: (
       callback: (data: { status: string }) => void,
     ): (() => void) => {

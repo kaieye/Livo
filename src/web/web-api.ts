@@ -2738,6 +2738,29 @@ export function createWebAPI(): ElectronAPI {
       }),
     },
 
+    auth: {
+      loginGoogle: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
+      loginWechat: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
+      getCurrentUser: async () => ({
+        success: true as const,
+        user: null,
+        token: null,
+      }),
+      logout: async () => ({ success: true as const }),
+      checkSession: async () => ({
+        success: true as const,
+        isValid: false,
+        user: null,
+      }),
+      onLoginProgress: () => (() => {}) as any,
+    },
+
     actions: {
       sync: async () => ({ success: true }),
     },

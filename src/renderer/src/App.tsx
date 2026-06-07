@@ -8,6 +8,7 @@ import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useCommandPaletteStore } from './store/command-palette-store'
+import { AuthTestPanel } from './components/auth/AuthTestPanel'
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href
 
@@ -274,6 +275,10 @@ export default function App() {
         <Outlet />
       </PageTransition>
       <TitleBar />
+
+      {/* 🧪 OAuth 测试面板 - 完成测试后删除此行 */}
+      <AuthTestPanel />
+
       <LocalErrorBoundary
         title="设置面板加载失败"
         onDismiss={() => useSettingsStore.getState().setOpen(false)}

@@ -1,8 +1,9 @@
-import { ipcMain, shell, BrowserWindow } from 'electron'
+import { shell, BrowserWindow } from 'electron'
 import { authService } from '../services/auth/auth-service'
 import { sessionStore } from '../services/auth/session-store'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
+import { IPC } from '../../shared/ipc-contracts'
 
 /**
  * 轮询登录状态直到完成或超时
@@ -48,7 +49,7 @@ async function pollUntilComplete(
  */
 export function registerAuthHandlers(): void {
   // Google 登录
-  registerChannel('auth:login-google', async () => {
+  registerChannel(IPC.AUTH_LOGIN_GOOGLE, async () => {
     try {
       // 1. 获取登录 URL 和 loginId
       const { url, loginId } = await authService.getGoogleLoginUrl()
@@ -79,7 +80,7 @@ export function registerAuthHandlers(): void {
   })
 
   // 微信登录
-  registerChannel('auth:login-wechat', async () => {
+  registerChannel(IPC.AUTH_LOGIN_WECHAT, async () => {
     try {
       // 1. 获取登录 URL 和 loginId
       const { url, loginId } = await authService.getWechatLoginUrl()
@@ -109,7 +110,7 @@ export function registerAuthHandlers(): void {
   })
 
   // 获取当前用户
-  registerChannel('auth:get-current-user', async () => {
+  registerChannel(IPC.AUTH_GET_CURRENT_USER, async () => {
     try {
       const session = sessionStore.getSession()
 
@@ -128,7 +129,7 @@ export function registerAuthHandlers(): void {
         })
 
         return { success: true, user, token: session.token }
-      } catch (error) {
+      } catch {
         // Token 无效，清除 session
         sessionStore.clearSession()
         return { success: true, user: null, token: null }
@@ -139,7 +140,7 @@ export function registerAuthHandlers(): void {
   })
 
   // 登出
-  registerChannel('auth:logout', async () => {
+  registerChannel(IPC.AUTH_LOGOUT, async () => {
     try {
       const session = sessionStore.getSession()
 
@@ -160,7 +161,7 @@ export function registerAuthHandlers(): void {
   })
 
   // 检查登录状态
-  registerChannel('auth:check-session', async () => {
+  registerChannel(IPC.AUTH_CHECK_SESSION, async () => {
     const isValid = sessionStore.isSessionValid()
     const user = isValid ? sessionStore.getCurrentUser() : null
     return { success: true, isValid, user }

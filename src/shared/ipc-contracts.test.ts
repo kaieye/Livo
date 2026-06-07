@@ -75,6 +75,7 @@ describe('ipc-contracts', () => {
       ]),
     ).toEqual([{ taskName: 'ai.summarize', limit: 10 }])
     expect(validateIpcArgs(IPC.ACCOUNT_STATUS, ['google'])).toEqual(['google'])
+    expect(validateIpcArgs(IPC.AUTH_CHECK_SESSION, [])).toEqual([])
 
     expect(() =>
       validateIpcArgs(IPC.ENTRY_MARK_READ, ['entry-1', 'yes']),

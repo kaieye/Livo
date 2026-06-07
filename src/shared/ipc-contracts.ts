@@ -78,6 +78,11 @@ export const IPC = {
   ACCOUNT_UNLINK: 'account:unlink',
   ACCOUNT_SET_DISPLAY_NAME: 'account:set-display-name',
   ACCOUNT_BILIBILI_FOLLOWINGS: 'account:bilibili-followings',
+  AUTH_LOGIN_GOOGLE: 'auth:login-google',
+  AUTH_LOGIN_WECHAT: 'auth:login-wechat',
+  AUTH_GET_CURRENT_USER: 'auth:get-current-user',
+  AUTH_LOGOUT: 'auth:logout',
+  AUTH_CHECK_SESSION: 'auth:check-session',
   DATA_CLEANUP: 'data:cleanup',
   DATA_STATS: 'data:stats',
   REFRESH_LOG_LIST: 'refresh-log:list',
@@ -284,6 +289,11 @@ export type IpcArgsByChannel = {
     displayName: string,
   ]
   [IPC.ACCOUNT_BILIBILI_FOLLOWINGS]: []
+  [IPC.AUTH_LOGIN_GOOGLE]: []
+  [IPC.AUTH_LOGIN_WECHAT]: []
+  [IPC.AUTH_GET_CURRENT_USER]: []
+  [IPC.AUTH_LOGOUT]: []
+  [IPC.AUTH_CHECK_SESSION]: []
   [IPC.DATA_CLEANUP]: [
     options?: { entriesPerFeed?: number; maxEntryAgeDays?: number },
   ]
@@ -895,6 +905,11 @@ export const IPC_CONTRACTS = {
     },
   },
   [IPC.ACCOUNT_BILIBILI_FOLLOWINGS]: noArgs(IPC.ACCOUNT_BILIBILI_FOLLOWINGS),
+  [IPC.AUTH_LOGIN_GOOGLE]: noArgs(IPC.AUTH_LOGIN_GOOGLE),
+  [IPC.AUTH_LOGIN_WECHAT]: noArgs(IPC.AUTH_LOGIN_WECHAT),
+  [IPC.AUTH_GET_CURRENT_USER]: noArgs(IPC.AUTH_GET_CURRENT_USER),
+  [IPC.AUTH_LOGOUT]: noArgs(IPC.AUTH_LOGOUT),
+  [IPC.AUTH_CHECK_SESSION]: noArgs(IPC.AUTH_CHECK_SESSION),
   [IPC.DATA_CLEANUP]: {
     channel: IPC.DATA_CLEANUP,
     validateArgs: (args) => {

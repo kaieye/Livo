@@ -143,6 +143,14 @@ const ELECTRON_API_SHAPE = {
     setDisplayName: true,
     bilibiliFollowings: true,
   },
+  auth: {
+    loginGoogle: true,
+    loginWechat: true,
+    getCurrentUser: true,
+    logout: true,
+    checkSession: true,
+    onLoginProgress: true,
+  },
   fever: {
     listAccounts: true,
     createAccount: true,
