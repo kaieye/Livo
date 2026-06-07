@@ -1,0 +1,168 @@
+import { ipcMain, shell, BrowserWindow } from 'electron'
+import { authService } from '../services/auth/auth-service'
+import { sessionStore } from '../services/auth/session-store'
+import { registerChannel } from '../ipc/register-channel'
+import { toHandlerError } from '../ipc/handler-error'
+
+/**
+ * 轮询登录状态直到完成或超时
+ */
+async function pollUntilComplete(
+  loginId: string,
+  onProgress?: (status: string) => void,
+): Promise<{ token: string; user: any }> {
+  const maxAttempts = 60 // 最多轮询 60 次
+  const intervalMs = 2000 // 每 2 秒轮询一次
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const result = await authService.pollLoginStatus(loginId)
+
+      if (result.status === 'completed' && result.token && result.user) {
+        return { token: result.token, user: result.user }
+      }
+
+      if (result.status === 'expired') {
+        throw new Error('Login session expired')
+      }
+
+      // 通知进度
+      onProgress?.(
+        `Waiting for authentication... (${attempt + 1}/${maxAttempts})`,
+      )
+
+      // 等待后继续轮询
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    } catch (error) {
+      throw new Error(
+        `Failed to poll login status: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  throw new Error('Login timeout - please try again')
+}
+
+/**
+ * 注册认证相关的 IPC 处理器
+ */
+export function registerAuthHandlers(): void {
+  // Google 登录
+  registerChannel('auth:login-google', async () => {
+    try {
+      // 1. 获取登录 URL 和 loginId
+      const { url, loginId } = await authService.getGoogleLoginUrl()
+
+      // 2. 打开系统浏览器
+      await shell.openExternal(url)
+
+      // 3. 轮询登录状态
+      const { token, user } = await pollUntilComplete(loginId, (status) => {
+        // 可以通过 IPC 发送进度更新到渲染进程
+        BrowserWindow.getAllWindows().forEach((win) => {
+          win.webContents.send('auth:login-progress', { status })
+        })
+      })
+
+      // 4. 保存 session（30 天有效期）
+      sessionStore.saveSession({
+        token,
+        userId: user.id,
+        user,
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      })
+
+      return { success: true, token, user }
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
+  // 微信登录
+  registerChannel('auth:login-wechat', async () => {
+    try {
+      // 1. 获取登录 URL 和 loginId
+      const { url, loginId } = await authService.getWechatLoginUrl()
+
+      // 2. 打开系统浏览器
+      await shell.openExternal(url)
+
+      // 3. 轮询登录状态
+      const { token, user } = await pollUntilComplete(loginId, (status) => {
+        BrowserWindow.getAllWindows().forEach((win) => {
+          win.webContents.send('auth:login-progress', { status })
+        })
+      })
+
+      // 4. 保存 session
+      sessionStore.saveSession({
+        token,
+        userId: user.id,
+        user,
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      })
+
+      return { success: true, token, user }
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
+  // 获取当前用户
+  registerChannel('auth:get-current-user', async () => {
+    try {
+      const session = sessionStore.getSession()
+
+      if (!session || !sessionStore.isSessionValid()) {
+        return { success: true, user: null, token: null }
+      }
+
+      // 验证 token 是否仍然有效
+      try {
+        const user = await authService.getCurrentUser(session.token)
+
+        // 更新用户信息
+        sessionStore.saveSession({
+          ...session,
+          user,
+        })
+
+        return { success: true, user, token: session.token }
+      } catch (error) {
+        // Token 无效，清除 session
+        sessionStore.clearSession()
+        return { success: true, user: null, token: null }
+      }
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
+  // 登出
+  registerChannel('auth:logout', async () => {
+    try {
+      const session = sessionStore.getSession()
+
+      if (session) {
+        try {
+          await authService.logout(session.token)
+        } catch (error) {
+          // 即使后端登出失败，也清除本地 session
+          console.error('Logout API failed:', error)
+        }
+        sessionStore.clearSession()
+      }
+
+      return { success: true }
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
+  // 检查登录状态
+  registerChannel('auth:check-session', async () => {
+    const isValid = sessionStore.isSessionValid()
+    const user = isValid ? sessionStore.getCurrentUser() : null
+    return { success: true, isValid, user }
+  })
+}

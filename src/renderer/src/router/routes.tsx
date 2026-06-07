@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { createHashRouter } from 'react-router-dom'
 import App from '../App'
+import { AuthGuard } from '../components/auth/AuthGuard'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
 const ArticleDetailPage = lazy(() => import('../pages/ArticleDetailPage'))
@@ -17,6 +18,11 @@ const DiscoverSubscribeConfigPage = lazy(
  * Uses HashRouter since Electron serves via file:// protocol.
  *
  * Route order matters: specific paths must come before catch-all (:viewType).
+ *
+ * Note: AuthGuard is disabled for now. To enable authentication:
+ * 1. Wrap the App element with AuthGuard
+ * 2. Move all children under AuthGuard
+ * 3. Test the complete OAuth flow
  */
 export const router = createHashRouter([
   {

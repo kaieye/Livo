@@ -16,6 +16,7 @@ import { registerActionHandlers } from './handlers/action-handlers'
 import { registerFeverHandlers } from './handlers/fever-handlers'
 import { registerTaskHandlers } from './handlers/task-handlers'
 import { registerAppHandlers } from './handlers/app-handlers'
+import { registerAuthHandlers } from './handlers/auth-handlers'
 import { startAutoRefresh } from './services/feed/feed-refresh'
 import {
   startFeverAutoSync,
@@ -163,6 +164,7 @@ export class AppManager {
     registerActionHandlers()
     registerFeverHandlers()
     registerTaskHandlers()
+    registerAuthHandlers()
   }
 
   private createTray(): void {

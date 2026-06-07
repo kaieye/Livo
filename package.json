@@ -47,6 +47,7 @@
     "date-fns": "^4.1.0",
     "dompurify": "^3.3.3",
     "electron": "^33.4.11",
+    "electron-store": "^11.0.2",
     "i18next": "^23.7.6",
     "linkedom": "^0.18.12",
     "openai": "^4.73.0",

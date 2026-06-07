@@ -517,6 +517,23 @@ const api = {
     },
   },
 
+  // Auth operations (for backend NestJS authentication)
+  auth: {
+    loginGoogle: () => ipcRenderer.invoke('auth:login-google'),
+    loginWechat: () => ipcRenderer.invoke('auth:login-wechat'),
+    getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    checkSession: () => ipcRenderer.invoke('auth:check-session'),
+    onLoginProgress: (
+      callback: (data: { status: string }) => void,
+    ): (() => void) => {
+      const handler = (_event: unknown, data: { status: string }) =>
+        callback(data)
+      ipcRenderer.on('auth:login-progress', handler)
+      return () => ipcRenderer.removeListener('auth:login-progress', handler)
+    },
+  },
+
   // Events
   on: <C extends RendererEventChannel>(
     channel: C,
