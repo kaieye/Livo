@@ -38,20 +38,33 @@ import {
   canonicalizeSocialUrl,
   normalizeSocialHandle,
 } from '../../lib/social-url'
-import { LRUCache } from '../../lib/lru-cache'
+import { useEntryExpanded } from './entry-list/hooks/useEntryExpanded'
+import { useEntryMediaState } from './entry-list/hooks/useEntryMediaState'
+import { useEntryAvatar } from './entry-list/hooks/useEntryAvatar'
+import { useEntryAI } from './entry-list/hooks/useEntryAI'
+import { EntryListEmpty } from './entry-list/EntryListEmpty'
+import { EntryAvatar } from './entry-list/components/EntryAvatar'
+import { SocialAITranslation } from './entry-list/components/SocialAITranslation'
+import { SocialAISummary } from './entry-list/components/SocialAISummary'
+import { SocialActionBar } from './entry-list/components/SocialActionBar'
+import {
+  parseSocialHandle,
+  extractTwitterDisplayNameFromFeedTitle,
+} from './entry-list/utils/entry-social'
 import { useHomeFeedCoordinator } from '../../hooks/useHomeFeedCoordinator'
 import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
-import { formatDistanceToNow } from 'date-fns'
-import { getDateLocale } from '../../lib/date-locale'
+import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
 import {
-  isRedundantRichText,
-  splitHtmlIntoParagraphs,
-} from '../../lib/entry-text'
+  isSummaryRedundant,
+  cleanRelativeTime,
+} from './entry-list/utils/entry-text'
 import {
   decodeHtmlEntitiesUrl,
   decodeMediaUrl,
-} from '../../lib/entry-media-url'
+} from './entry-list/utils/entry-media'
+import { buildEntryListDerivedModel } from '../../lib/entry-list-model'
+import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
 import {
   cleanSocialPlainText,
   cleanSocialTextHtml,
@@ -59,16 +72,12 @@ import {
   isGenericInstagramIconUrl,
   normalizeInstagramUnavatar,
   resolveEntryBrowserOpenUrl,
-} from '../../lib/social-entry-utils'
-import { buildEntryListDerivedModel } from '../../lib/entry-list-model'
-import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
-import {
   advanceCardImageFallback,
   findRelatedSocialEntryFallback,
   normalizeImageCacheKey,
   resolveGridCardMedia,
   resolveSocialEntryMediaDecision,
-} from '../../lib/entry-media-decision'
+} from './entry-list/utils/entry-media'
 import {
   CheckCheck,
   Star,
@@ -105,28 +114,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
     target instanceof HTMLTextAreaElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   )
-}
-
-// LRU cache for expanded state of social media items
-const expandedCache = new LRUCache<string, boolean>(200)
-const mediaExpandedCache = new LRUCache<string, boolean>(200)
-const tweetTranslationCache = new LRUCache<string, string[]>(100)
-const tweetSummaryCache = new LRUCache<string, string>(100)
-
-/** Return true when the plain-text summary adds no information beyond the title. */
-function isSummaryRedundant(title: string, summary: string): boolean {
-  return isRedundantRichText(title, summary)
-}
-
-/** Clean relative time by stripping verbose locale prefixes like the English "about" prefix. */
-function cleanRelativeTime(date: Date | string | number): string {
-  const d = date instanceof Date ? date : new Date(date)
-  const result = formatDistanceToNow(d, {
-    addSuffix: true,
-    locale: getDateLocale(),
-  })
-  // Remove verbose prefixes for cleaner display.
-  return result.replace(/^about\s*/gi, '').replace(/^大约\s*/g, '')
 }
 
 export function EntryList({ width }: { width?: number }) {
@@ -515,32 +502,12 @@ export function EntryList({ width }: { width?: number }) {
             }
           />
         ) : renderEntries.length === 0 ? (
-          selectedFeedId && selectedFeedId !== 'starred' ? (
-            /* A specific feed is selected but has no entries - offer refresh */
-            <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
-              <Inbox size={40} className="text-text-tertiary mb-3" />
-              <p className="text-sm">{t('entryList.noArticles')}</p>
-              <button
-                onClick={refreshCurrentFeeds}
-                disabled={isRefreshing}
-                className="bg-accent hover:bg-accent/90 mt-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white disabled:opacity-50"
-              >
-                <RefreshCw
-                  size={14}
-                  className={isRefreshing ? 'animate-spin' : ''}
-                />
-                {isRefreshing ? t('common.refreshing') : t('common.refresh')}
-              </button>
-            </div>
-          ) : activeView !== null ? (
-            <ViewRecommendations viewType={activeView} />
-          ) : (
-            <div className="text-text-secondary dark:text-text-dark-secondary flex flex-col items-center justify-center py-12">
-              <Inbox size={40} className="text-text-tertiary mb-3" />
-              <p className="text-sm">{t('entryList.noArticles')}</p>
-              <p className="mt-1 text-xs">{t('entryList.addFeedToStart')}</p>
-            </div>
-          )
+          <EntryListEmpty
+            selectedFeedId={selectedFeedId}
+            activeView={activeView}
+            isRefreshing={isRefreshing}
+            onRefresh={refreshCurrentFeeds}
+          />
         ) : activeView === FeedViewType.SocialMedia ? (
           /* Social/Pictures timeline layout: virtualized to avoid mounting the whole feed at once */
           <div
@@ -782,10 +749,7 @@ const EntryCard = memo(function EntryCard({
   imageProxy?: boolean
   onContextMenu?: (e: React.MouseEvent) => void
 }) {
-  const timeAgo = formatDistanceToNow(new Date(entry.publishedAt), {
-    addSuffix: true,
-    locale: getDateLocale(),
-  })
+  const timeAgo = cleanRelativeTime(entry.publishedAt)
 
   // Thumbnail: prefer first media photo, then imageUrl, then extract from content.
   // Use previewUrl (stable mirror proxy) when available instead of url (expiring CDN).
@@ -944,28 +908,12 @@ export const GridCard = memo(function GridCard({
     const candidate = normalizeInstagramUnavatar(feedImage || '')
     return candidate && !isGenericInstagramIconUrl(candidate) ? candidate : ''
   }, [feedImage])
-  const avatarCandidates = useMemo(() => {
-    const candidates = [
-      cleanFeedAvatar,
-      extractPixnoyOriginUrl(cleanFeedAvatar),
-    ]
-    const unique: string[] = []
-    for (const c of candidates) {
-      const candidate = (c || '').trim()
-      if (!candidate || !/^https?:\/\//i.test(candidate)) continue
-      const key = normalizeImageCacheKey(candidate)
-      if (unique.some((u) => normalizeImageCacheKey(u) === key)) continue
-      unique.push(candidate)
-    }
-    return unique
-  }, [cleanFeedAvatar])
-  const [avatarCandidateIndex, setAvatarCandidateIndex] = useState(0)
-  const [avatarImageFailed, setAvatarImageFailed] = useState(false)
-  useEffect(() => {
-    setAvatarCandidateIndex(0)
-    setAvatarImageFailed(false)
-  }, [entry.id, avatarCandidates])
-  const avatarUrl = avatarCandidates[avatarCandidateIndex] || ''
+
+  // Use avatar hook for fallback management
+  const { avatarUrl, avatarImageFailed, handleAvatarError } = useEntryAvatar(
+    entry.id,
+    cleanFeedAvatar,
+  )
   const avatarLetter = (feedTitle || '?')[0]
 
   return (
@@ -1096,26 +1044,13 @@ export const GridCard = memo(function GridCard({
         <div className="text-text-tertiary mt-1 flex items-center justify-between text-[10px]">
           <div className="flex min-w-0 items-center gap-1">
             <span className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary dark:text-text-dark-secondary flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[9px] uppercase">
-              {avatarUrl && !avatarImageFailed ? (
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                  referrerPolicy="no-referrer"
-                  onError={() => {
-                    const nextIndex = avatarCandidateIndex + 1
-                    if (nextIndex < avatarCandidates.length) {
-                      setAvatarCandidateIndex(nextIndex)
-                      return
-                    }
-                    setAvatarImageFailed(true)
-                  }}
-                />
-              ) : (
-                avatarLetter
-              )}
+              <EntryAvatar
+                avatarUrl={avatarUrl}
+                avatarImageFailed={avatarImageFailed}
+                avatarLetter={avatarLetter}
+                onError={handleAvatarError}
+                size="small"
+              />
             </span>
             {feedTitle && (
               <span className="min-w-0 truncate text-[11px] font-medium">
@@ -1237,35 +1172,25 @@ export const SocialMediaItem = memo(function SocialMediaItem({
         }),
       [entry, relatedEntryFallback?.cover],
     )
-  const [isMediaExpanded, setIsMediaExpanded] = useState(
-    () => mediaExpandedCache.get(entry.id) ?? false,
-  )
-  useEffect(() => {
-    mediaExpandedCache.set(entry.id, isMediaExpanded)
-  }, [entry.id, isMediaExpanded])
+
+  // Use media state hook
+  const { isMediaExpanded, setIsMediaExpanded } = useEntryMediaState(entry.id)
   const visibleGalleryPhotos =
     galleryPhotos.length > 9 && !isMediaExpanded
       ? galleryPhotos.slice(0, 9)
       : galleryPhotos
 
-  // Collapsible content area for long social posts.
+  // Collapsible content area for long social posts - use expanded hook
   const contentRef = useRef<HTMLDivElement>(null)
   const CONTENT_COLLAPSE_HEIGHT = 220
-  const [isOverflow, setIsOverflow] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(
-    () => expandedCache.get(entry.id) ?? false,
-  )
+  const { isExpanded, setIsExpanded, isOverflow, setIsOverflow } =
+    useEntryExpanded(entry.id)
 
   useLayoutEffect(() => {
     if (contentRef.current) {
       setIsOverflow(contentRef.current.scrollHeight > CONTENT_COLLAPSE_HEIGHT)
     }
-  }, [sanitizedContent, plainContent])
-
-  // Sync expand state to LRU cache
-  useEffect(() => {
-    expandedCache.set(entry.id, isExpanded)
-  }, [isExpanded, entry.id])
+  }, [sanitizedContent, plainContent, setIsOverflow])
 
   // Smart avatar: use unavatar.io for Twitter/X feeds (always-fresh),
   // Detect from siteUrl (x.com/user) or feedUrl (rsshub /twitter/user/xxx)
@@ -1294,166 +1219,50 @@ export const SocialMediaItem = memo(function SocialMediaItem({
     }
     return null
   }, [feedSiteUrl, feedUrl])
-  const [avatarImageFailed, setAvatarImageFailed] = useState(false)
+
   const cleanAuthorAvatar = useMemo(() => {
     const candidate = normalizeInstagramUnavatar(entry.authorAvatar || '')
     return candidate && !isGenericInstagramIconUrl(candidate) ? candidate : ''
   }, [entry.authorAvatar])
+
   const cleanFeedImage = useMemo(() => {
     const candidate = normalizeInstagramUnavatar(feedImage || '')
     return candidate && !isGenericInstagramIconUrl(candidate) ? candidate : ''
   }, [feedImage])
+
+  // Build avatar candidates array for fallback
   const avatarCandidates = useMemo(() => {
-    const candidates = [
+    return [
       twitterAvatar || '',
       cleanAuthorAvatar,
       extractPixnoyOriginUrl(cleanAuthorAvatar),
       cleanFeedImage,
       extractPixnoyOriginUrl(cleanFeedImage),
     ]
-    const unique: string[] = []
-    for (const c of candidates) {
-      const candidate = (c || '').trim()
-      if (!candidate) continue
-      if (!/^https?:\/\//i.test(candidate)) continue
-      const key = normalizeImageCacheKey(candidate)
-      if (unique.some((u) => normalizeImageCacheKey(u) === key)) continue
-      unique.push(candidate)
-    }
-    return unique
   }, [twitterAvatar, cleanAuthorAvatar, cleanFeedImage])
-  const [avatarCandidateIndex, setAvatarCandidateIndex] = useState(0)
-  useEffect(() => {
-    setAvatarImageFailed(false)
-    setAvatarCandidateIndex(0)
-  }, [entry.id, avatarCandidates])
-  const avatarUrl = avatarCandidates[avatarCandidateIndex] || ''
+
+  // Use avatar hook with multiple candidates
+  const { avatarUrl, avatarImageFailed, handleAvatarError } = useEntryAvatar(
+    entry.id,
+    avatarCandidates,
+  )
   const avatarLetter = (entry.author || feedTitle || '?')[0]
 
-  // AI translation & summary state (per-tweet, with LRU cache persistence)
+  // AI translation & summary state - use AI hook
   const language = useGeneralSettingKey('language')
   const targetLanguage = useTranslationSettingKey('targetLanguage')
-  const [tweetTranslatedParagraphs, setTweetTranslatedParagraphs] = useState<
-    string[]
-  >(() => tweetTranslationCache.get(entry.id) ?? [])
-  const [tweetSummary, setTweetSummary] = useState<string | null>(
-    () => tweetSummaryCache.get(entry.id) ?? null,
-  )
-  const [isTranslatingTweet, setIsTranslatingTweet] = useState(false)
-  const [isSummarizingTweet, setIsSummarizingTweet] = useState(false)
-  const [showTweetTranslation, setShowTweetTranslation] = useState(() =>
-    tweetTranslationCache.has(entry.id),
-  )
-  const [showTweetSummary, setShowTweetSummary] = useState(() =>
-    tweetSummaryCache.has(entry.id),
-  )
-
-  const tweetTextContent = useMemo(() => {
-    const cleaned = cleanSocialPlainText(entry.content || entry.summary || '')
-    if (cleaned) return cleaned
-    return (entry.title || '').trim()
-  }, [entry.content, entry.summary, entry.title])
-
-  // Split content into paragraphs for bilingual translation
-  const tweetParagraphs = useMemo(() => {
-    const html = sanitizedContent || entry.content || entry.summary || ''
-    if (html.includes('<')) {
-      const safe = cleanSocialTextHtml(html)
-      if (safe.trim()) return splitHtmlIntoParagraphs(safe)
-    }
-    const plain = cleanSocialPlainText(html)
-    if (!plain) {
-      const titleFallback = (entry.title || '').trim()
-      return titleFallback ? [titleFallback] : []
-    }
-    // Split plain text by newlines so bilingual translation interleaves per paragraph
-    const lines = plain
-      .split(/\n+/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-    return lines.length > 0 ? lines : [plain]
-  }, [entry.content, entry.summary, entry.title, sanitizedContent])
-
-  const handleTranslateTweet = useCallback(async () => {
-    if (tweetParagraphs.length === 0) return
-    // Toggle off
-    if (showTweetTranslation && tweetTranslatedParagraphs.length > 0) {
-      setShowTweetTranslation(false)
-      return
-    }
-    // Toggle on if cached
-    if (tweetTranslatedParagraphs.length > 0) {
-      setShowTweetTranslation(true)
-      return
-    }
-    // Do translation paragraph by paragraph
-    setIsTranslatingTweet(true)
-    setShowTweetTranslation(true)
-    const targetLang = targetLanguage || language || 'zh-CN'
-    const results: string[] = []
-    for (let i = 0; i < tweetParagraphs.length; i++) {
-      const plainText = tweetParagraphs[i].replace(/<[^>]*>/g, '').trim()
-      if (!plainText || plainText.length < 5) {
-        results.push('')
-        continue
-      }
-      try {
-        const result = await window.api.ai.translate(
-          tweetParagraphs[i],
-          targetLang,
-        )
-        if (result.success) {
-          results.push(result.translation)
-        } else {
-          results.push(`<span class="text-red-400 text-xs">\u274c</span>`)
-        }
-      } catch {
-        results.push(`<span class="text-red-400 text-xs">\u274c</span>`)
-      }
-      setTweetTranslatedParagraphs([...results])
-    }
-    tweetTranslationCache.set(entry.id, results)
-    setIsTranslatingTweet(false)
-  }, [
-    entry.id,
-    language,
+  const {
+    tweetTranslatedParagraphs,
+    isTranslatingTweet,
     showTweetTranslation,
-    targetLanguage,
+    handleTranslateTweet,
     tweetParagraphs,
-    tweetTranslatedParagraphs.length,
-  ])
-
-  const handleSummarizeTweet = useCallback(async () => {
-    if (!tweetTextContent) return
-    // Toggle off
-    if (showTweetSummary && tweetSummary) {
-      setShowTweetSummary(false)
-      return
-    }
-    // Toggle on if cached
-    if (tweetSummary) {
-      setShowTweetSummary(true)
-      return
-    }
-    // Do summary
-    setIsSummarizingTweet(true)
-    setShowTweetSummary(true)
-    try {
-      const result = await window.api.ai.summarize(
-        tweetTextContent,
-        language || 'zh-CN',
-      )
-      if (result.success) {
-        setTweetSummary(result.summary)
-        tweetSummaryCache.set(entry.id, result.summary)
-      } else {
-        setTweetSummary(`Error: ${result.error}`)
-      }
-    } catch (err) {
-      setTweetSummary(`Error: ${String(err)}`)
-    }
-    setIsSummarizingTweet(false)
-  }, [entry.id, language, showTweetSummary, tweetSummary, tweetTextContent])
+    tweetSummary,
+    isSummarizingTweet,
+    showTweetSummary,
+    handleSummarizeTweet,
+    tweetTextContent,
+  } = useEntryAI(entry.id, entry, sanitizedContent, language, targetLanguage)
 
   // Hover action bar state
   const [showActionBar, setShowActionBar] = useState(false)
@@ -1512,26 +1321,13 @@ export const SocialMediaItem = memo(function SocialMediaItem({
       >
         {/* Avatar */}
         <div className="mt-1 flex-shrink-0">
-          {avatarUrl && !avatarImageFailed ? (
-            <img
-              src={avatarUrl}
-              alt=""
-              className="h-8 w-8 rounded-full object-cover"
-              referrerPolicy="no-referrer"
-              onError={() => {
-                const nextIndex = avatarCandidateIndex + 1
-                if (nextIndex < avatarCandidates.length) {
-                  setAvatarCandidateIndex(nextIndex)
-                  return
-                }
-                setAvatarImageFailed(true)
-              }}
-            />
-          ) : (
-            <div className="bg-surface-tertiary text-text-secondary dark:bg-surface-dark-tertiary flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
-              {avatarLetter}
-            </div>
-          )}
+          <EntryAvatar
+            avatarUrl={avatarUrl}
+            avatarImageFailed={avatarImageFailed}
+            avatarLetter={avatarLetter}
+            onError={handleAvatarError}
+            size="medium"
+          />
         </div>
 
         {/* Content area */}
@@ -1737,93 +1533,19 @@ export const SocialMediaItem = memo(function SocialMediaItem({
 
           {/* AI Translation result - bilingual paragraph-by-paragraph */}
           {showTweetTranslation && (
-            <div
-              className="border-accent/20 bg-accent/5 mt-2 rounded-lg border p-2.5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="text-accent mb-1.5 flex items-center gap-1.5 text-xs font-medium">
-                <Languages size={12} />
-                {t('social.translation')}
-              </div>
-              {isTranslatingTweet && tweetTranslatedParagraphs.length === 0 ? (
-                <div className="text-text-secondary flex items-center gap-1.5 text-xs">
-                  <Loader2 size={12} className="animate-spin" />
-                  {t('entry.translating')}
-                </div>
-              ) : (
-                <div className="space-y-0">
-                  {tweetParagraphs.map((para, i) => {
-                    const translated = tweetTranslatedParagraphs[i]
-                    const isLoading =
-                      isTranslatingTweet &&
-                      i === tweetTranslatedParagraphs.length
-                    const plainText = para.replace(/<[^>]*>/g, '').trim()
-                    if (!plainText) return null
-                    return (
-                      <div
-                        key={i}
-                        className="hover:border-accent/30 group border-l-2 border-transparent pl-0 transition-colors hover:pl-2"
-                      >
-                        {para.includes('<') ? (
-                          <div
-                            className="!mb-0 text-sm leading-relaxed"
-                            dangerouslySetInnerHTML={{ __html: para }}
-                          />
-                        ) : (
-                          <p className="!mb-0 whitespace-pre-line text-sm leading-relaxed">
-                            {para}
-                          </p>
-                        )}
-                        {translated ? (
-                          <div className="relative mb-2 mt-0.5">
-                            <div className="flex items-start gap-1.5">
-                              <Languages
-                                size={10}
-                                className="text-accent/50 mt-1 flex-shrink-0"
-                              />
-                              <div
-                                className="text-accent/80 !mb-0 text-sm leading-relaxed dark:text-orange-300/80"
-                                dangerouslySetInnerHTML={{ __html: translated }}
-                              />
-                            </div>
-                          </div>
-                        ) : isLoading ? (
-                          <div className="text-text-tertiary mb-2 mt-0.5 flex items-center gap-1.5 text-xs">
-                            <Loader2 size={10} className="animate-spin" />
-                            {t('entry.translating')}
-                          </div>
-                        ) : (
-                          <div className="mb-2" />
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+            <SocialAITranslation
+              isTranslating={isTranslatingTweet}
+              tweetParagraphs={tweetParagraphs}
+              tweetTranslatedParagraphs={tweetTranslatedParagraphs}
+            />
           )}
 
           {/* AI Summary result */}
           {showTweetSummary && (
-            <div
-              className="mt-2 rounded-lg border border-amber-300/30 bg-amber-50/50 p-2.5 dark:bg-amber-900/10"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                <Sparkles size={12} />
-                {t('social.aiSummary')}
-              </div>
-              {isSummarizingTweet ? (
-                <div className="text-text-secondary flex items-center gap-1.5 text-xs">
-                  <Loader2 size={12} className="animate-spin" />
-                  {t('entry.generatingSummary')}
-                </div>
-              ) : (
-                <p className="whitespace-pre-line text-sm leading-relaxed">
-                  {tweetSummary}
-                </p>
-              )}
-            </div>
+            <SocialAISummary
+              isSummarizing={isSummarizingTweet}
+              tweetSummary={tweetSummary}
+            />
           )}
 
           {/* Inline AI action buttons - below content */}
@@ -1875,207 +1597,3 @@ export const SocialMediaItem = memo(function SocialMediaItem({
 })
 
 /** Floating action bar on social media items. */
-function SocialActionBar({
-  entry,
-  browserOpenUrl,
-  onContextMenu,
-  onTranslate,
-  onSummarize,
-  isTranslating,
-  isSummarizing,
-  hasTranslation,
-  showTranslation,
-}: {
-  entry: Entry
-  browserOpenUrl?: string
-  onContextMenu?: (e: React.MouseEvent) => void
-  onTranslate?: () => void
-  onSummarize?: () => void
-  isTranslating?: boolean
-  isSummarizing?: boolean
-  hasTranslation?: boolean
-  showTranslation?: boolean
-}) {
-  const { markRead, toggleStar } = useStoreShallow(useEntryStore, (s) => ({
-    markRead: s.markRead,
-    toggleStar: s.toggleStar,
-  }))
-  const { t } = useTranslation()
-  const resolvedBrowserOpenUrl = useMemo(
-    () => browserOpenUrl || resolveEntryBrowserOpenUrl(entry),
-    [browserOpenUrl, entry],
-  )
-
-  return (
-    <div
-      className="absolute -right-2 top-0 z-10 -translate-y-1/2 rounded-lg border border-gray-200 bg-white/90 p-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-800/90"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-center gap-0.5">
-        {/* Translate */}
-        <button
-          onClick={onTranslate}
-          disabled={isTranslating}
-          className={`rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700 ${
-            showTranslation && hasTranslation
-              ? 'text-accent'
-              : 'text-text-secondary dark:text-text-dark-secondary'
-          }`}
-          title={t('social.translateTweet')}
-        >
-          {isTranslating ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Languages size={14} />
-          )}
-        </button>
-        {/* Summarize */}
-        <button
-          onClick={onSummarize}
-          disabled={isSummarizing}
-          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
-          title={t('social.summarizeTweet')}
-        >
-          {isSummarizing ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Sparkles size={14} />
-          )}
-        </button>
-        {/* Open in browser */}
-        {resolvedBrowserOpenUrl && (
-          <button
-            onClick={() => {
-              void openExternalUrlSafe(resolvedBrowserOpenUrl)
-            }}
-            className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
-            title={t('contextMenu.openInBrowser')}
-          >
-            <Globe size={14} />
-          </button>
-        )}
-        {/* Divider */}
-        <div className="mx-0.5 h-4 w-px bg-gray-200 dark:bg-neutral-600" />
-        {/* Mark read/unread */}
-        <button
-          onClick={() => markRead(entry.id, !entry.isRead)}
-          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
-          title={
-            entry.isRead
-              ? t('contextMenu.markUnread')
-              : t('contextMenu.markRead')
-          }
-        >
-          {entry.isRead ? <EyeOff size={14} /> : <Eye size={14} />}
-        </button>
-        {/* Star */}
-        <StarToggle
-          isStarred={entry.isStarred}
-          onToggle={() => toggleStar(entry.id)}
-          size={14}
-          title={entry.isStarred ? t('common.unstar') : t('common.star')}
-          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
-        />
-        {/* More (context menu) */}
-        <button
-          onClick={(e) => onContextMenu?.(e)}
-          className="text-text-secondary dark:text-text-dark-secondary rounded-md p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700"
-          title={t('contextMenu.more')}
-        >
-          <MoreHorizontal size={14} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/** Parse social media platform handle from URL - supports X/Twitter, Telegram, Bluesky, Threads, Truth Social */
-function parseSocialHandle(url: string): {
-  type: 'x' | 'telegram' | 'bluesky' | 'threads' | 'truth' | 'other'
-  handle?: string
-} {
-  // X / Twitter including Nitter mirrors.
-  try {
-    const u = new URL(url)
-    const host = u.hostname.toLowerCase()
-    if (
-      host === 'x.com' ||
-      host === 'twitter.com' ||
-      host === 'www.twitter.com' ||
-      host.includes('nitter')
-    ) {
-      const first = u.pathname.split('/').filter(Boolean)[0]
-      if (first && /^[a-zA-Z0-9_]+$/.test(first))
-        return { type: 'x', handle: normalizeSocialHandle(first) }
-    }
-  } catch {
-    // Ignore parse failure; regex fallbacks below.
-  }
-  const xMatch = url.match(
-    /(?:twitter\.com|x\.com|nitter\.[^/]+)\/([a-zA-Z0-9_]+)/,
-  )
-  if (xMatch) return { type: 'x', handle: normalizeSocialHandle(xMatch[1]) }
-  // RSSHub twitter route
-  const xRss = url.match(/\/twitter\/user\/([a-zA-Z0-9_]+)/)
-  if (xRss) return { type: 'x', handle: normalizeSocialHandle(xRss[1]) }
-  // Telegram
-  const tgMatch = url.match(/(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]+)/)
-  if (tgMatch) return { type: 'telegram', handle: tgMatch[1] }
-  const tgRss = url.match(/\/telegram\/channel\/([a-zA-Z0-9_]+)/)
-  if (tgRss) return { type: 'telegram', handle: tgRss[1] }
-  // Bluesky
-  const bskyMatch = url.match(/bsky\.(?:app|social)\/profile\/([a-zA-Z0-9_.]+)/)
-  if (bskyMatch) return { type: 'bluesky', handle: bskyMatch[1] }
-  const bskyRss = url.match(/\/bsky\/profile\/([a-zA-Z0-9_.]+)/)
-  if (bskyRss) return { type: 'bluesky', handle: bskyRss[1] }
-  // Threads
-  const threadsMatch = url.match(/threads\.net\/@?([a-zA-Z0-9_.]+)/)
-  if (threadsMatch)
-    return { type: 'threads', handle: normalizeSocialHandle(threadsMatch[1]) }
-  const threadsRss = url.match(/\/threads\/user\/([a-zA-Z0-9_.]+)/)
-  if (threadsRss)
-    return { type: 'threads', handle: normalizeSocialHandle(threadsRss[1]) }
-  // Truth Social
-  const truthMatch = url.match(/truthsocial\.com\/@?([a-zA-Z0-9_]+)/)
-  if (truthMatch)
-    return { type: 'truth', handle: normalizeSocialHandle(truthMatch[1]) }
-  const truthRss = url.match(/\/truthsocial\/user\/([a-zA-Z0-9_]+)/)
-  if (truthRss)
-    return { type: 'truth', handle: normalizeSocialHandle(truthRss[1]) }
-  return { type: 'other' }
-}
-
-function extractTwitterDisplayNameFromFeedTitle(
-  feedTitle?: string,
-  handle?: string,
-): string {
-  let cleaned = (feedTitle || '').trim()
-  if (!cleaned) return ''
-
-  cleaned = cleaned
-    .replace(/\s*-\s*(?:x|twitter)\s*$/i, '')
-    .replace(/\s+on\s+(?:x|twitter)\s*$/i, '')
-    .replace(/\(\s*@?[a-zA-Z0-9_]{1,15}\s*\)/g, '')
-    .trim()
-
-  const slashParts = cleaned
-    .split('/')
-    .map((part) => part.trim())
-    .filter(Boolean)
-  if (slashParts.length > 1) {
-    const nonHandle = slashParts.find(
-      (part) => !/^@?[a-zA-Z0-9_]{1,15}$/.test(part),
-    )
-    if (nonHandle) cleaned = nonHandle
-  }
-  cleaned = cleaned.replace(/\/\s*@?[a-zA-Z0-9_]{1,15}\s*$/i, '').trim()
-
-  if (!cleaned) return ''
-  if (
-    handle &&
-    cleaned.replace(/^@/, '').toLowerCase() ===
-      handle.replace(/^@/, '').toLowerCase()
-  )
-    return ''
-  return cleaned.replace(/^@+/, '').trim()
-}
