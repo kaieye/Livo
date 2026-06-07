@@ -8,7 +8,6 @@ import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useCommandPaletteStore } from './store/command-palette-store'
-import { AuthTestPanel } from './components/auth/AuthTestPanel'
 import { useAuthStore } from './store/auth-store'
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href
@@ -107,6 +106,11 @@ const CornerPlayer = lazy(() =>
 const TextContextMenu = lazy(() =>
   import('./components/ui/TextContextMenu').then((module) => ({
     default: module.TextContextMenu,
+  })),
+)
+const LoginModal = lazy(() =>
+  import('./components/auth/LoginModal').then((module) => ({
+    default: module.LoginModal,
   })),
 )
 function LazySettingsDialogMount() {
@@ -282,8 +286,10 @@ export default function App() {
       </PageTransition>
       <TitleBar />
 
-      {/* 🧪 OAuth 测试面板 - 完成测试后删除此行 */}
-      <AuthTestPanel />
+      {/* 登录弹窗（未登录时自动显示） */}
+      <Suspense fallback={null}>
+        <LoginModal />
+      </Suspense>
 
       <LocalErrorBoundary
         title="设置面板加载失败"

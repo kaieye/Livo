@@ -17,26 +17,22 @@ import { useStoreShallow } from '../../store/helpers'
 import { useGeneralSettingsShallowSelector } from '../../store/settings-store'
 import { FeedViewType, VIEW_DEFINITIONS } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
-import { SkeletonList } from '../ui/Skeleton'
 import {
   ContextMenu,
   useEntryContextMenu,
   useEntryContextActions,
 } from '../ui/ContextMenu'
 import { useAsyncSocialDedupe } from '../../hooks/useAsyncSocialDedupe'
-import { EntryListEmpty } from './entry-list/EntryListEmpty'
 import { EntryListHeader } from './entry-list/EntryListHeader'
-import { LinearListLayout } from './entry-list/layouts/LinearListLayout'
-import { GridLayout } from './entry-list/layouts/GridLayout'
-import { SocialLayout } from './entry-list/layouts/SocialLayout'
+import { EntryListContent } from './entry-list/EntryListContent'
 import { useGridProgressive } from './entry-list/hooks/useGridProgressive'
+import { useEntryFeedMaps } from './entry-list/hooks/useEntryFeedMaps'
 import { useHomeFeedCoordinator } from '../../hooks/useHomeFeedCoordinator'
 import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { buildEntryListDerivedModel } from '../../lib/entry-list-model'
 import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
 import { resolveEntryBrowserOpenUrl } from './entry-list/utils/entry-media'
-import { Loader2 } from 'lucide-react'
 import type { Entry } from '../../../../shared/types'
 
 const SharePoster = lazy(() =>
@@ -249,41 +245,14 @@ export function EntryList({ width }: { width?: number }) {
     [coordinatorHandleScroll, isGridMode, hasMoreGridEntries, gridProgressive],
   )
 
-  const feedTitleById = useMemo(
-    () =>
-      new Map(
-        Array.from(feedById.entries()).map(([id, feed]) => [id, feed.title]),
-      ),
-    [feedById],
-  )
-  const feedImageById = useMemo(
-    () =>
-      new Map(
-        Array.from(feedById.entries()).map(([id, feed]) => [id, feed.imageUrl]),
-      ),
-    [feedById],
-  )
-  const feedSiteUrlById = useMemo(
-    () =>
-      new Map(
-        Array.from(feedById.entries()).map(([id, feed]) => [id, feed.siteUrl]),
-      ),
-    [feedById],
-  )
-  const feedUrlById = useMemo(
-    () =>
-      new Map(
-        Array.from(feedById.entries()).map(([id, feed]) => [id, feed.url]),
-      ),
-    [feedById],
-  )
+  const { feedTitleById, feedImageById, feedSiteUrlById, feedUrlById } =
+    useEntryFeedMaps(feedById)
 
   return (
     <div
       className="dark:bg-surface-dark flex flex-shrink-0 flex-col border-r bg-white"
       style={{ width: width ?? (isGridMode ? 480 : 340) }}
     >
-      {/* Header */}
       <EntryListHeader
         displayTitle={displayTitle}
         viewColor={viewDef?.color}
@@ -306,81 +275,42 @@ export function EntryList({ width }: { width?: number }) {
         refreshProgress={refreshProgress}
       />
 
-      {/* Entry list */}
       <div
         ref={listScrollRef}
         className="flex-1 overflow-y-auto"
         id="entry-list-scroll"
         onScroll={handleListScroll}
       >
-        {isLoading && !hasStaleEntriesWhileLoading ? (
-          <SkeletonList
-            count={6}
-            type={
-              activeView === FeedViewType.SocialMedia
-                ? 'social'
-                : isGridMode
-                  ? 'grid'
-                  : 'article'
-            }
-          />
-        ) : renderEntries.length === 0 ? (
-          <EntryListEmpty
-            selectedFeedId={selectedFeedId}
-            activeView={activeView}
-            isRefreshing={isRefreshing}
-            onRefresh={refreshCurrentFeeds}
-          />
-        ) : activeView === FeedViewType.SocialMedia ? (
-          <SocialLayout
-            socialRows={socialRows}
-            scrollRef={listScrollRef}
-            renderEntries={renderEntries}
-            selectedEntryId={selectedEntry?.id ?? null}
-            feedTitleById={feedTitleById}
-            feedImageById={feedImageById}
-            feedSiteUrlById={feedSiteUrlById}
-            feedUrlById={feedUrlById}
-            dimRead={general.dimRead}
-            onSelectEntry={selectEntry}
-            onMarkAboveRead={markAboveRead}
-            onMarkBelowRead={markBelowRead}
-            onContextMenu={showMenu}
-            onMediaAllFailed={handleEntryMediaAllFailed}
-          />
-        ) : isGridMode ? (
-          <GridLayout
-            gridRows={gridRows}
-            scrollRef={listScrollRef}
-            selectedEntryId={selectedEntry?.id ?? null}
-            feedTitleById={feedTitleById}
-            feedImageById={feedImageById}
-            activeView={activeView}
-            hasMore={hasMoreGridEntries}
-            onSelectEntry={selectEntry}
-          />
-        ) : (
-          <LinearListLayout
-            entries={renderEntries}
-            virtualizerEntries={virtualizerEntries}
-            useVirtual={useVirtualLinearList}
-            scrollRef={listScrollRef}
-            selectedEntryId={selectedEntry?.id ?? null}
-            feedTitleById={feedTitleById}
-            dimRead={general.dimRead}
-            imageProxy={general.imageProxy}
-            onSelectEntry={selectEntry}
-            onContextMenu={showMenu}
-          />
-        )}
+        <EntryListContent
+          isLoading={isLoading}
+          hasStaleEntriesWhileLoading={hasStaleEntriesWhileLoading}
+          activeView={activeView}
+          selectedFeedId={selectedFeedId}
+          isRefreshing={isRefreshing}
+          isGridMode={isGridMode}
+          renderEntries={renderEntries}
+          socialRows={socialRows}
+          virtualizerEntries={virtualizerEntries}
+          gridRows={gridRows}
+          useVirtualLinearList={useVirtualLinearList}
+          hasMoreGridEntries={hasMoreGridEntries}
+          isLoadingMore={isLoadingMore}
+          scrollRef={listScrollRef}
+          selectedEntryId={selectedEntry?.id ?? null}
+          feedTitleById={feedTitleById}
+          feedImageById={feedImageById}
+          feedSiteUrlById={feedSiteUrlById}
+          feedUrlById={feedUrlById}
+          dimRead={general.dimRead}
+          imageProxy={general.imageProxy}
+          onRefresh={refreshCurrentFeeds}
+          onSelectEntry={selectEntry}
+          onMarkAboveRead={markAboveRead}
+          onMarkBelowRead={markBelowRead}
+          onContextMenu={showMenu}
+          onMediaAllFailed={handleEntryMediaAllFailed}
+        />
 
-        {isLoadingMore && (
-          <div className="text-text-tertiary flex items-center justify-center py-4">
-            <Loader2 size={16} className="animate-spin" />
-          </div>
-        )}
-
-        {/* Context Menu */}
         {menuState.visible &&
           menuState.entryId &&
           (() => {
@@ -406,7 +336,6 @@ export function EntryList({ width }: { width?: number }) {
             )
           })()}
 
-        {/* Share Poster Modal */}
         {posterEntry && (
           <Suspense fallback={null}>
             <SharePoster
@@ -421,7 +350,6 @@ export function EntryList({ width }: { width?: number }) {
   )
 }
 
-/** Context menu wrapper for entry items */
 function EntryContextMenuWrapper({
   entry,
   entryIndex,

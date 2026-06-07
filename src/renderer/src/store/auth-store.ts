@@ -13,19 +13,26 @@ interface AuthState {
   user: AuthUser | null
   token: string | null
   isAuthenticated: boolean
+  /** 应用启动后是否已完成一次本地 Session 检查（避免登录弹窗闪烁） */
+  isSessionChecked: boolean
+  /** 用户本次会话中选择了"稍后再说"，不再弹出登录框 */
+  isLoginPromptDismissed: boolean
   isLoading: boolean
   error: string | null
   setUser: (user: AuthUser | null, token?: string | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
+  dismissLoginPrompt: () => void
   logout: () => Promise<void>
   checkSession: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
   isAuthenticated: false,
+  isSessionChecked: false,
+  isLoginPromptDismissed: false,
   isLoading: false,
   error: null,
 
@@ -41,6 +48,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setError: (error) => set({ error }),
 
+  dismissLoginPrompt: () => set({ isLoginPromptDismissed: true }),
+
   logout: async () => {
     try {
       set({ isLoading: true, error: null })
@@ -50,6 +59,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         token: null,
         isAuthenticated: false,
         isLoading: false,
+        // 主动登出后不立即再弹登录框，避免打断
+        isLoginPromptDismissed: true,
       })
     } catch (error) {
       set({
@@ -66,12 +77,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
           user: result.user,
           isAuthenticated: true,
+          isSessionChecked: true,
         })
       } else {
         set({
           user: null,
           token: null,
           isAuthenticated: false,
+          isSessionChecked: true,
         })
       }
     } catch (error) {
@@ -80,6 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         user: null,
         token: null,
         isAuthenticated: false,
+        isSessionChecked: true,
       })
     }
   },
