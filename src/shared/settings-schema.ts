@@ -81,6 +81,7 @@ export type SettingsTabId =
   | 'ai'
   | 'translation'
   | 'actions'
+  | 'user'
   | 'accounts'
   | 'data'
   | 'privacy'

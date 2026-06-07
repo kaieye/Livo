@@ -1,8 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, Check, Loader2, UserPlus } from 'lucide-react'
+import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { FeedViewType } from '../../../../shared/types'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../../shared/discover-data'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
@@ -10,7 +9,6 @@ import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { accountStatusQueryOptions } from '../../lib/query-definitions'
 import { refreshAccountStatus } from '../../lib/account-status'
 import { useFeedStore } from '../../store/feed-store'
-import { useSettingsStore } from '../../store/settings-store'
 import {
   PROVIDER_CONFIGS,
   type ProviderConfig,
@@ -131,114 +129,15 @@ const ACCOUNT_CARDS: AccountCardConfig[] = PROVIDER_CONFIGS
 
 export function AccountsSettings() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const closeSettings = useSettingsStore((s) => s.setOpen)
-  const [selfChecking, setSelfChecking] = useState(false)
-  const [selfCheckSummary, setSelfCheckSummary] = useState<string | null>(null)
-  const [selfCheckRows, setSelfCheckRows] = useState<
-    Array<{ name: string; pass: boolean; detail: string }>
-  >([])
-
-  const handleSelfCheck = useCallback(async () => {
-    setSelfChecking(true)
-    setSelfCheckSummary(null)
-    setSelfCheckRows([])
-
-    try {
-      const results = await Promise.all(
-        ACCOUNT_CARDS.map(async (card) => {
-          try {
-            const status = await queryClient.fetchQuery(
-              accountStatusQueryOptions(card.provider),
-            )
-            const pass = status.linked && !!status.displayName
-            const detail = pass
-              ? `通过: ${status.displayName}`
-              : (status.error ??
-                (status.linked ? '已登录但未获取到账号名' : '未关联'))
-            return { name: card.name, pass, detail }
-          } catch (err) {
-            return {
-              name: card.name,
-              pass: false,
-              detail: err instanceof Error ? err.message : String(err),
-            }
-          }
-        }),
-      )
-
-      setSelfCheckRows(results)
-      const passed = results.filter((x) => x.pass).length
-      if (passed === results.length) {
-        setSelfCheckSummary(`一键自检通过（${passed}/${results.length}）`)
-      } else {
-        setSelfCheckSummary(`一键自检未通过（${passed}/${results.length}）`)
-      }
-    } finally {
-      setSelfChecking(false)
-    }
-  }, [queryClient])
+  const feeds = useFeedStore((s) => s.feeds)
+  const loadFeeds = useFeedStore((s) => s.loadFeeds)
 
   return (
     <div className="space-y-8">
       <p className="text-text-secondary dark:text-text-dark-secondary text-sm">
-        {t('settings.accountsDesc')}
+        关联第三方平台账号，以获取关注列表、订阅内容等数据访问权限。
       </p>
-
-      <div className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-4">
-        <button
-          type="button"
-          onClick={() => {
-            closeSettings(false)
-            navigate('/login')
-          }}
-          className="bg-accent hover:bg-accent-hover flex w-full items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            <UserPlus size={16} aria-hidden="true" />
-            {t('accountLogin.manageInSettings')}
-          </span>
-        </button>
-        <p className="text-text-secondary dark:text-text-dark-secondary mt-2 text-xs">
-          {t('accountLogin.manageInSettingsHint')}
-        </p>
-      </div>
-
-      <div className="dark:bg-surface-dark-secondary space-y-3 rounded-xl border bg-white p-4">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSelfCheck}
-            disabled={selfChecking}
-            className="bg-accent flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-white disabled:opacity-60"
-          >
-            {selfChecking && <Loader2 size={14} className="animate-spin" />}
-            一键自检
-          </button>
-          {selfCheckSummary && (
-            <span
-              className={`text-xs ${selfCheckSummary.includes('通过') ? 'text-green-600' : 'text-red-500'}`}
-            >
-              {selfCheckSummary}
-            </span>
-          )}
-        </div>
-        {selfCheckRows.length > 0 && (
-          <div className="space-y-1">
-            {selfCheckRows.map((row) => (
-              <div key={row.name} className="flex items-start gap-2 text-xs">
-                <span className={row.pass ? 'text-green-600' : 'text-red-500'}>
-                  {row.pass ? '✓' : '✕'}
-                </span>
-                <span className="min-w-24 font-medium">{row.name}</span>
-                <span className="text-text-secondary dark:text-text-dark-secondary">
-                  {row.detail}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div className="space-y-4">
         {ACCOUNT_CARDS.map((card) => (

@@ -19,6 +19,7 @@ import {
   Star,
   Flame,
   Keyboard,
+  User,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'
@@ -33,6 +34,7 @@ const settingsTabImporters = {
   ai: () => import('./AISettings'),
   translation: () => import('./TranslationSettings'),
   actions: () => import('./ActionsSettings'),
+  user: () => import('./UserSettings'),
   accounts: () => import('./AccountsSettings'),
   data: () => import('./DataSettings'),
   privacy: () => import('./PrivacySettings'),
@@ -83,6 +85,11 @@ const settingsTabComponents = {
     settingsTabImporters
       .actions()
       .then((module) => ({ default: module.ActionsSettings })),
+  ),
+  user: lazy(() =>
+    settingsTabImporters
+      .user()
+      .then((module) => ({ default: module.UserSettings })),
   ),
   accounts: lazy(() =>
     settingsTabImporters
@@ -146,6 +153,7 @@ export function SettingsDialog() {
   const ActiveTabPanel = settingsTabComponents[activeTab]
 
   const tabs = [
+    { id: 'user' as const, label: '账户', icon: User },
     { id: 'general' as const, label: t('settings.general'), icon: Settings },
     {
       id: 'appearance' as const,
