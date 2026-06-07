@@ -30,4 +30,6 @@ docs/*
 !docs/release/**
 .reasonix/
 tmp/
+test-results/
+playwright-report/
 ref.png

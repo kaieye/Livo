@@ -109,6 +109,7 @@ const ELECTRON_API_SHAPE = {
     checkForUpdates: true,
     saveTextFile: true,
     downloadUrl: true,
+    rendererReady: true,
   },
   menu: {
     showContextMenu: true,

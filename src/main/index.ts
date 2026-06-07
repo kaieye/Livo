@@ -1,8 +1,14 @@
 import { app } from 'electron'
 import { createAppManager } from './app-manager'
 
+const e2eUserDataPath = process.env['LIVO_E2E_USER_DATA']
+if (e2eUserDataPath) {
+  app.setPath('userData', e2eUserDataPath)
+}
+
 const isDev = !app.isPackaged
 const appManager = createAppManager({ isDev })
+appManager.handleInitialArgv(process.argv)
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 

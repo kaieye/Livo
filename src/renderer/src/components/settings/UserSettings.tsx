@@ -1,272 +1,144 @@
 import { useCallback, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
-import {
-  AlertCircle,
-  Check,
-  Loader2,
-  LogOut,
-  LogIn,
-  RefreshCw,
-} from 'lucide-react'
-import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
-import { refreshAccountStatus } from '../../lib/account-status'
-import type { AccountProvider } from '../../../../shared/types'
+import { useAuthStore } from '../../store/auth-store'
+import { AlertCircle, Check, Loader2, LogOut, User } from 'lucide-react'
+
+type AuthProvider = 'google' | 'wechat'
 
 const AUTH_PROVIDERS: Array<{
-  provider: AccountProvider
+  provider: AuthProvider
   name: string
-  icon: string
+  colorClass: string
 }> = [
-  {
-    provider: 'wechat',
-    name: '微信',
-    icon: '💬',
-  },
   {
     provider: 'google',
     name: 'Google',
-    icon: '🔵',
+    colorClass: 'text-blue-600',
+  },
+  {
+    provider: 'wechat',
+    name: '微信',
+    colorClass: 'text-green-600',
   },
 ]
 
 export function UserSettings() {
-  const { t } = useTranslation()
-  const wechatStatus = useAccountStatusQuery('wechat')
-  const googleStatus = useAccountStatusQuery('google')
-
-  // 获取当前登录的账号（优先微信，其次 Google）
-  const currentProvider =
-    wechatStatus.data?.linked && wechatStatus.data?.displayName
-      ? 'wechat'
-      : googleStatus.data?.linked && googleStatus.data?.displayName
-        ? 'google'
-        : null
-
-  const currentStatus =
-    currentProvider === 'wechat' ? wechatStatus.data : googleStatus.data
-  const currentProviderConfig = AUTH_PROVIDERS.find(
-    (p) => p.provider === currentProvider,
-  )
+  const { user, isAuthenticated } = useAuthStore()
 
   return (
     <div className="space-y-6">
-      {/* 用户信息卡片 */}
+      {/* 当前登录账号卡片 */}
       <div className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-6">
         <div className="flex items-start gap-4">
           {/* 头像 */}
-          <div className="bg-accent/10 text-accent flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full text-2xl font-semibold">
-            {currentStatus?.displayName?.[0]?.toUpperCase() || '?'}
-          </div>
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user.displayName}
+              className="h-16 w-16 flex-shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="bg-accent/10 text-accent flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full">
+              {isAuthenticated && user?.displayName ? (
+                <span className="text-2xl font-semibold">
+                  {user.displayName[0].toUpperCase()}
+                </span>
+              ) : (
+                <User size={28} />
+              )}
+            </div>
+          )}
 
           {/* 用户信息 */}
           <div className="min-w-0 flex-1">
-            {currentStatus?.displayName ? (
+            {isAuthenticated && user ? (
               <>
                 <h3 className="truncate text-lg font-semibold">
-                  {currentStatus.displayName}
+                  {user.displayName}
                 </h3>
-                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 flex items-center gap-1.5 text-sm">
-                  <span>{currentProviderConfig?.icon}</span>
-                  <span>{currentProviderConfig?.name} 账号</span>
+                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
+                  通过 OAuth 登录
+                </p>
+                <p className="text-text-tertiary dark:text-text-dark-secondary/70 mt-1.5 text-xs">
+                  用户 ID: {user.id}
                 </p>
               </>
             ) : (
               <>
                 <h3 className="text-lg font-semibold">未登录</h3>
                 <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
-                  请选择一个登录方式
+                  登录以同步你的订阅和偏好设置
                 </p>
               </>
             )}
           </div>
         </div>
 
-        {/* 当前登录账号的操作 */}
-        {currentProvider && (
+        {/* 当前账号的操作 */}
+        {isAuthenticated && user && (
           <div className="mt-4 border-t pt-4">
-            <AuthProviderActions provider={currentProvider} isActive={true} />
+            <LogoutButton />
           </div>
         )}
       </div>
 
       {/* 登录方式 */}
-      <div>
-        <h4 className="mb-3 text-sm font-medium">登录方式</h4>
-        <div className="space-y-3">
-          {AUTH_PROVIDERS.map((config) => {
-            const isActive = currentProvider === config.provider
-            return (
-              <div
-                key={config.provider}
-                className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{config.icon}</span>
-                    <div>
-                      <p className="font-medium">{config.name}</p>
-                      {isActive && (
-                        <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
-                          当前登录
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {!isActive && (
-                    <AuthProviderActions
-                      provider={config.provider}
-                      isActive={false}
-                    />
-                  )}
-                </div>
-              </div>
-            )
-          })}
+      {!isAuthenticated && (
+        <div>
+          <h4 className="mb-3 text-sm font-medium">选择登录方式</h4>
+          <div className="space-y-3">
+            {AUTH_PROVIDERS.map((config) => (
+              <LoginProviderCard key={config.provider} config={config} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 说明 */}
       <div className="bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 rounded-lg p-4">
         <p className="text-text-secondary dark:text-text-dark-secondary text-xs leading-relaxed">
-          💡 这些账号用于登录 Livo 应用本身。如需关联第三方平台（B站、YouTube
-          等）以获取订阅内容，请前往"账号关联"页面。
+          💡 Livo
+          账号用于同步订阅、偏好设置等数据。如需关联第三方平台（B站、YouTube
+          等）以获取关注列表，请前往「账号关联」页面。
         </p>
       </div>
     </div>
   )
 }
 
-function AuthProviderActions({
-  provider,
-  isActive,
-}: {
-  provider: AccountProvider
-  isActive: boolean
-}) {
-  const queryClient = useQueryClient()
-  const statusQuery = useAccountStatusQuery(provider)
-  const status = statusQuery.data ?? { linked: false, displayName: null }
-
+function LogoutButton() {
+  const logout = useAuthStore((s) => s.logout)
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [errorDetail, setErrorDetail] = useState<string | null>(null)
 
-  const refreshStatus = useCallback(
-    () => refreshAccountStatus(provider, queryClient),
-    [provider, queryClient],
-  )
-
-  const handleLink = useCallback(async () => {
+  const handleLogout = useCallback(async () => {
     setLoading(true)
     setFeedback(null)
-    setErrorDetail(null)
     try {
-      const result = window.api.accounts
-        ? await window.api.accounts.link(provider)
-        : {
-            success: false,
-            error: '当前版本未注入 accounts API，请重启应用后重试',
-          }
-      if (result.success) {
-        setFeedback('登录成功')
-        await refreshStatus()
-      } else {
-        setFeedback('登录失败')
-        setErrorDetail(result.error ?? null)
-      }
-    } catch (err) {
-      setFeedback('登录失败')
-      setErrorDetail(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-      setTimeout(() => setFeedback(null), 3000)
-    }
-  }, [provider, refreshStatus])
-
-  const handleUnlink = useCallback(async () => {
-    setLoading(true)
-    setFeedback(null)
-    setErrorDetail(null)
-    try {
-      const result = window.api.accounts
-        ? await window.api.accounts.unlink(provider)
-        : {
-            success: false,
-            error: '当前版本未注入 accounts API，请重启应用后重试',
-          }
-      if (result.success) {
-        setFeedback('已退出登录')
-        await refreshStatus()
-      } else {
-        setFeedback('退出失败')
-        setErrorDetail(result.error ?? null)
-      }
+      await logout()
+      setFeedback('已退出登录')
     } catch (err) {
       setFeedback('退出失败')
-      setErrorDetail(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
       setTimeout(() => setFeedback(null), 3000)
     }
-  }, [provider, refreshStatus])
-
-  const handleRefresh = useCallback(async () => {
-    setLoading(true)
-    setFeedback(null)
-    setErrorDetail(null)
-    try {
-      await refreshStatus()
-      setFeedback('刷新成功')
-    } catch (err) {
-      setFeedback('刷新失败')
-      setErrorDetail(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-      setTimeout(() => setFeedback(null), 3000)
-    }
-  }, [refreshStatus])
-
-  if (loading || statusQuery.isLoading) {
-    return (
-      <div className="text-text-secondary flex items-center gap-1.5 text-xs">
-        <Loader2 size={14} className="animate-spin" />
-        处理中...
-      </div>
-    )
-  }
+  }, [logout])
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        {status.linked && status.displayName ? (
-          <>
-            {isActive && (
-              <button
-                onClick={handleUnlink}
-                className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-              >
-                <LogOut size={14} />
-                退出登录
-              </button>
-            )}
-            <button
-              onClick={handleRefresh}
-              className="border-border hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors"
-            >
-              <RefreshCw size={14} />
-              刷新
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={handleLink}
-            className="bg-accent hover:bg-accent-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
-          >
-            <LogIn size={14} />
-            登录
-          </button>
-        )}
+        <button
+          onClick={handleLogout}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+        >
+          {loading ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <LogOut size={14} />
+          )}
+          {loading ? '退出中...' : '退出登录'}
+        </button>
 
         {feedback && (
           <div
@@ -281,8 +153,110 @@ function AuthProviderActions({
           </div>
         )}
       </div>
+    </div>
+  )
+}
 
-      {errorDetail && <p className="text-xs text-red-500">{errorDetail}</p>}
+function LoginProviderCard({
+  config,
+}: {
+  config: { provider: AuthProvider; name: string; colorClass: string }
+}) {
+  const [loading, setLoading] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
+
+  const handleLogin = useCallback(async () => {
+    setLoading(true)
+    setFeedback(null)
+    setErrorDetail(null)
+    try {
+      const result =
+        config.provider === 'google'
+          ? await window.api.auth.loginGoogle()
+          : await window.api.auth.loginWechat()
+
+      if (result.success && result.user && result.token) {
+        useAuthStore.getState().setUser(result.user, result.token)
+        setFeedback('登录成功')
+      } else {
+        setFeedback('登录失败')
+        setErrorDetail(result.error || '未知错误')
+      }
+    } catch (err) {
+      setFeedback('登录失败')
+      setErrorDetail(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+      setTimeout(() => setFeedback(null), 3000)
+    }
+  }, [config.provider])
+
+  return (
+    <div className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-10 w-10 items-center justify-center rounded-full ${
+              config.provider === 'google'
+                ? 'bg-blue-50 dark:bg-blue-950/30'
+                : 'bg-green-50 dark:bg-green-950/30'
+            }`}
+          >
+            {config.provider === 'google' ? (
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="h-5 w-5 text-green-600"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M8.5 10.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm.5 2.5c0-2-1.5-3.5-3.5-3.5S9 11 9 13c0 .5.1 1 .3 1.5l-2.8 1.4c-.3.1-.4.5-.3.8.1.2.3.3.5.3h.1l3.3-1.1c.6.1 1.2.1 1.9.1 2 0 3.5-1.5 3.5-3.5zM23 12c0-5.5-5.4-10-12-10S-1 6.5-1 12c0 3.3 2 6.3 5 8.2-.2.7-.6 2-1 3.2-.1.3.1.6.4.7h.2c.2 0 .4-.1.5-.2 1.6-1.4 3.3-2.9 4.2-3.6.9.1 1.8.2 2.7.2 6.6 0 12-4.5 12-10z" />
+              </svg>
+            )}
+          </div>
+          <div>
+            <p className="font-medium">{config.name}</p>
+            <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
+              通过 {config.name} 登录
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleLogin}
+          disabled={loading}
+          className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? '登录中...' : '登录'}
+        </button>
+      </div>
+
+      {feedback && (
+        <div className="mt-3 flex items-center gap-1.5 text-xs text-green-600">
+          <Check size={14} />
+          {feedback}
+        </div>
+      )}
+      {errorDetail && (
+        <div className="mt-2 text-xs text-red-500">{errorDetail}</div>
+      )}
     </div>
   )
 }

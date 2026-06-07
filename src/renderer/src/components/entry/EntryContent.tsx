@@ -23,7 +23,6 @@ import {
 import {
   Star,
   ExternalLink,
-  BookOpen,
   BookType,
   Languages,
   Sparkles,
@@ -35,12 +34,7 @@ import {
   ChevronDown,
   Copy,
   Check,
-  Clock,
-  User,
-  Calendar,
   Play,
-  Pause,
-  AlertTriangle,
   X,
   CheckSquare,
 } from 'lucide-react'
@@ -51,7 +45,6 @@ import {
   FeedViewType,
   type EntryTaskSnapshot,
   type EntryTaskState,
-  type MediaItem,
 } from '../../../../shared/types'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { splitHtmlIntoParagraphs } from '../../lib/entry-text'
@@ -61,138 +54,25 @@ import { Maximize2 } from 'lucide-react'
 import { useAISummary } from '../../hooks/useAISummary'
 import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
-import { BilingualContent } from './BilingualContent'
 import { EntryAIToolbar } from './EntryAIToolbar'
 import { InlineTaskStatus } from './InlineTaskStatus'
-
-/** Estimate reading time in minutes */
-function estimateReadingTime(html: string): number {
-  const text = html.replace(/<[^>]*>/g, '').trim()
-  // CJK: ~400 chars/min, Latin: ~200 words/min
-  const cjkCount = (
-    text.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []
-  ).length
-  const wordCount = text
-    .replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g, '')
-    .split(/\s+/)
-    .filter(Boolean).length
-  return Math.max(1, Math.round(cjkCount / 400 + wordCount / 200))
-}
-
-function formatMediaDuration(seconds?: number): string {
-  if (!seconds || seconds <= 0) return ''
-  const total = Math.floor(seconds)
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  const secs = total % 60
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  }
-  return `${minutes}:${String(secs).padStart(2, '0')}`
-}
-
-function isAudioOnlyContentFallback(
-  content: string | undefined,
-  media: MediaItem[] | undefined,
-): boolean {
-  const trimmed = (content || '').trim()
-  const audioUrl = media?.find((item) => item.type === 'audio')?.url?.trim()
-  return !!trimmed && !!audioUrl && trimmed === audioUrl
-}
-
-function normalizeMediaKey(url: string): string {
-  const decoded = url
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .trim()
-  if (!decoded) return ''
-  try {
-    const u = new URL(decoded, window.location.href)
-    const host = u.hostname.toLowerCase().replace(/^www\./, '')
-    const path = u.pathname.replace(/\/+$/, '')
-    return `${host}${path}`
-  } catch {
-    return decoded
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/[?#].*$/, '')
-      .replace(/\/+$/, '')
-  }
-}
-
-function stripDuplicateMediaFromHtml(
-  html: string,
-  options: {
-    duplicateImageKeys?: string[]
-    removeEmbeddedVideos?: boolean
-  },
-): string {
-  if (!html) return html
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(
-    `<div id="__root__">${html}</div>`,
-    'text/html',
-  )
-  const root = doc.getElementById('__root__')
-  if (!root) return html
-
-  const imageKeySet = new Set(
-    (options.duplicateImageKeys || []).map(normalizeMediaKey).filter(Boolean),
-  )
-
-  if (imageKeySet.size > 0) {
-    const imgs = Array.from(root.querySelectorAll('img'))
-    for (const img of imgs) {
-      const src =
-        img.getAttribute('src') ||
-        img.getAttribute('data-src') ||
-        img.getAttribute('data-original') ||
-        ''
-      if (!src) continue
-      const key = normalizeMediaKey(src)
-      if (imageKeySet.has(key)) {
-        img.remove()
-      }
-    }
-  }
-
-  if (options.removeEmbeddedVideos) {
-    const mediaNodes = root.querySelectorAll(
-      'video, iframe, embed, object, audio, source, picture',
-    )
-    mediaNodes.forEach((node) => node.remove())
-  }
-
-  return root.innerHTML
-}
-
-function htmlContainsImage(html: string, imageUrl: string): boolean {
-  if (!html || !imageUrl) return false
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(
-    `<div id="__root__">${html}</div>`,
-    'text/html',
-  )
-  const root = doc.getElementById('__root__')
-  if (!root) return false
-
-  const targetKey = normalizeMediaKey(imageUrl)
-  if (!targetKey) return false
-
-  return Array.from(root.querySelectorAll('img')).some((img) => {
-    const src =
-      img.getAttribute('src') ||
-      img.getAttribute('data-src') ||
-      img.getAttribute('data-original') ||
-      ''
-    return !!src && normalizeMediaKey(src) === targetKey
-  })
-}
+import { AudioPlaybackPanel } from './entry-content/AudioPlaybackPanel'
+import { EntryArticleHeader } from './entry-content/EntryArticleHeader'
+import { EntryBodyContent } from './entry-content/EntryBodyContent'
+import { EntryEmptyState } from './entry-content/EntryEmptyState'
+import { EntryEndNavigation } from './entry-content/EntryEndNavigation'
+import { EntryFeaturedImage } from './entry-content/EntryFeaturedImage'
+import {
+  ExternalLinkWarningModal,
+  type ExternalLinkWarningState,
+} from './entry-content/ExternalLinkWarningModal'
+import { ToolbarButton } from './entry-content/ToolbarButton'
+import {
+  estimateReadingTime,
+  htmlContainsImage,
+  isAudioOnlyContentFallback,
+  stripDuplicateMediaFromHtml,
+} from './entry-content/entry-content-utils'
 
 export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const {
@@ -285,11 +165,8 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
   const [isFetchingReadable, setIsFetchingReadable] = useState(false)
   const [readabilityError, setReadabilityError] = useState<string | null>(null)
   const [embeddedPageUrl, setEmbeddedPageUrl] = useState<string | null>(null)
-  const [externalLinkWarning, setExternalLinkWarning] = useState<{
-    url: string
-    hostname: string
-    isSuspicious: boolean
-  } | null>(null)
+  const [externalLinkWarning, setExternalLinkWarning] =
+    useState<ExternalLinkWarningState | null>(null)
   const [articleMenu, setArticleMenu] = useState<{
     visible: boolean
     x: number
@@ -908,43 +785,7 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
 
   // Empty state
   if (!selectedEntry) {
-    return (
-      <div className="bg-surface-secondary dark:bg-surface-dark flex flex-1 items-center justify-center">
-        <div className="text-text-secondary dark:text-text-dark-secondary text-center">
-          <BookOpen
-            size={48}
-            className="text-text-tertiary mx-auto mb-4"
-            strokeWidth={1.5}
-          />
-          <p className="text-lg font-medium">{t('entry.selectArticle')}</p>
-          <p className="text-text-tertiary mt-1 text-sm">
-            {t('entry.selectArticleHint')}
-          </p>
-          <div className="text-text-tertiary mt-6 space-y-1 text-xs">
-            <p>
-              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
-                J
-              </kbd>{' '}
-              /{' '}
-              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
-                K
-              </kbd>{' '}
-              {t('entry.navUpDown')}
-            </p>
-            <p>
-              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
-                S
-              </kbd>{' '}
-              {t('entry.starHint')}{' '}
-              <kbd className="bg-surface-tertiary dark:bg-surface-dark-tertiary rounded px-1.5 py-0.5 text-[10px]">
-                O
-              </kbd>{' '}
-              {t('entry.browserOpenHint')}
-            </p>
-          </div>
-        </div>
-      </div>
-    )
+    return <EntryEmptyState />
   }
 
   const timeAgo = formatDistanceToNow(new Date(selectedEntry.publishedAt), {
@@ -1166,42 +1007,18 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
               ...contentWidthStyle,
             }}
           >
-            {/* Title */}
-            <h1 className="mb-4 text-[1.7rem] font-bold leading-normal">
-              {selectedEntry.title}
-            </h1>
-
-            {/* Meta */}
-            <div className="text-text-secondary dark:text-text-dark-secondary mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium">
-              {selectedEntry.author && (
-                <span className="flex items-center gap-1">
-                  {authorAvatarUrl ? (
-                    <img
-                      src={authorAvatarUrl}
-                      alt=""
-                      className="h-4 w-4 rounded-full object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        ;(e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <User size={12} className="text-text-tertiary" />
-                  )}
-                  {selectedEntry.author}
-                </span>
-              )}
-              <span className="flex items-center gap-1" title={fullDate}>
-                <Calendar size={12} className="text-text-tertiary" />
-                {timeAgo}
-              </span>
-              {readingTime > 0 && (
-                <span className="flex items-center gap-1">
-                  <Clock size={12} className="text-text-tertiary" />
-                  {t('entry.readingTime', { minutes: readingTime })}
-                </span>
-              )}
-            </div>
+            <EntryArticleHeader
+              title={selectedEntry.title}
+              author={selectedEntry.author}
+              authorAvatarUrl={authorAvatarUrl}
+              timeAgo={timeAgo}
+              fullDate={fullDate}
+              readingTimeLabel={
+                readingTime > 0
+                  ? t('entry.readingTime', { minutes: readingTime })
+                  : undefined
+              }
+            />
 
             <InlineTaskStatus
               fulltext={fulltextTaskState}
@@ -1220,32 +1037,12 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
             />
 
             {/* Featured image */}
-            {shouldShowFeaturedImage && (
-              <div className="group/featured relative -mx-2 mb-8 overflow-hidden rounded-xl">
-                <img
-                  src={selectedEntry.imageUrl}
-                  alt=""
-                  className="max-h-[400px] w-full object-cover transition-transform duration-500 hover:scale-[1.02]"
-                  loading="lazy"
-                  onError={(e) => {
-                    ;(e.target as HTMLImageElement).style.display = 'none'
-                  }}
-                />
-                {/* Sole entry point to the ImageViewer page (1.5). Mirrors the
-                    Maximize2 hover button 1.4 added to the inline VideoPlayer. */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    navigate(ROUTES.image(selectedEntry.id))
-                  }}
-                  title={t('imageViewer.pageTitle')}
-                  aria-label={t('imageViewer.pageTitle')}
-                  className="absolute right-3 top-3 z-10 rounded-full bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover/featured:opacity-100"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              </div>
+            {shouldShowFeaturedImage && selectedEntry.imageUrl && (
+              <EntryFeaturedImage
+                imageUrl={selectedEntry.imageUrl}
+                title={t('imageViewer.pageTitle')}
+                onOpen={() => navigate(ROUTES.image(selectedEntry.id))}
+              />
             )}
 
             {/* Video player — prioritized like Folo-dev MediaLayout */}
@@ -1283,164 +1080,54 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
               />
             )}
 
-            {/* Article content — readability / bilingual / plain */}
-            {isReadabilityMode && readableContent ? (
-              <div>
-                <div className="mb-4 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
-                  <BookType size={14} />
-                  <span>{t('entry.readabilityMode')}</span>
-                  <button
-                    onClick={() => setIsReadabilityMode(false)}
-                    className="ml-auto hover:underline"
-                  >
-                    {t('entry.readabilityBack2')}
-                  </button>
-                </div>
-                <div
-                  className="entry-content"
-                  style={{
-                    fontSize: `${general.fontSize}px`,
-                    lineHeight: general.contentLineHeight,
-                  }}
-                  dangerouslySetInnerHTML={{ __html: sanitizedReadable }}
-                />
-              </div>
-            ) : articleContent ? (
-              showTranslation ? (
-                <BilingualContent
-                  paragraphs={paragraphs}
-                  translations={translatedParagraphs}
-                  isTranslating={isTranslating}
-                  errorMap={errorMap}
-                  onRetrySegment={retrySegment}
-                  fontSize={general.fontSize}
-                  lineHeight={general.contentLineHeight}
-                  fontFamily={general.contentFontFamily}
-                />
-              ) : (
-                <div
-                  className="entry-content"
-                  style={{
-                    fontSize: `${general.fontSize}px`,
-                    lineHeight: general.contentLineHeight,
-                  }}
-                  dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-                />
-              )
-            ) : audioMedia ? null : showEntryDetailFallback ? (
-              <EntryDetailFallback title={selectedEntry.title} />
-            ) : (
-              <div className="text-text-secondary dark:text-text-dark-secondary py-12 text-center">
-                {isFetchingReadable ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 size={24} className="text-accent animate-spin" />
-                    <p className="text-sm">{t('entry.fetchingContent')}</p>
-                  </div>
-                ) : (
-                  <>
-                    <p>{t('entry.noContent')}</p>
-                    {selectedEntry.url && (
-                      <div className="mt-3 space-y-2">
-                        <button
-                          onClick={handleReadability}
-                          className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
-                        >
-                          <BookType size={14} />
-                          {t('entry.tryFetchContent')}
-                        </button>
-                        <br />
-                        <a
-                          href={selectedEntry.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-accent inline-block text-sm hover:underline"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            window.open(selectedEntry.url, '_blank')
-                          }}
-                        >
-                          {t('entry.readInBrowser')}
-                        </a>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+            <EntryBodyContent
+              isReadabilityMode={isReadabilityMode}
+              readableContent={readableContent}
+              sanitizedReadable={sanitizedReadable}
+              articleContent={articleContent}
+              showTranslation={showTranslation}
+              paragraphs={paragraphs}
+              translatedParagraphs={translatedParagraphs}
+              isTranslating={isTranslating}
+              errorMap={errorMap}
+              onRetrySegment={retrySegment}
+              sanitizedContent={sanitizedContent}
+              fontSize={general.fontSize}
+              lineHeight={general.contentLineHeight}
+              fontFamily={general.contentFontFamily}
+              hasAudio={!!audioMedia}
+              showEntryDetailFallback={showEntryDetailFallback}
+              fallbackTitle={selectedEntry.title}
+              isFetchingReadable={isFetchingReadable}
+              entryUrl={selectedEntry.url}
+              onExitReadability={() => setIsReadabilityMode(false)}
+              onFetchReadable={handleReadability}
+            />
 
-            {/* End of article — navigate */}
-            <div className="text-text-secondary dark:text-text-dark-secondary mt-16 flex items-center justify-between border-t pt-8 text-sm">
-              <button
-                disabled={!hasPrev}
-                onClick={() => goToEntry('prev')}
-                className="hover:text-accent flex items-center gap-1 transition-colors disabled:cursor-default disabled:opacity-30"
-              >
-                <ChevronUp size={16} />
-                {t('entry.prevArticle')}
-              </button>
-              <span className="text-text-tertiary text-xs">
-                {currentIndex + 1} / {entries.length}
-              </span>
-              <button
-                disabled={!hasNext}
-                onClick={() => goToEntry('next')}
-                className="hover:text-accent flex items-center gap-1 transition-colors disabled:cursor-default disabled:opacity-30"
-              >
-                {t('entry.nextArticle')}
-                <ChevronDown size={16} />
-              </button>
-            </div>
+            <EntryEndNavigation
+              hasPrev={hasPrev}
+              hasNext={hasNext}
+              currentIndex={currentIndex}
+              total={entries.length}
+              prevLabel={t('entry.prevArticle')}
+              nextLabel={t('entry.nextArticle')}
+              onPrev={() => goToEntry('prev')}
+              onNext={() => goToEntry('next')}
+            />
           </article>
         </div>
       )}
 
       {/* External link warning modal */}
       {externalLinkWarning && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40">
-          <div className="animate-in dark:bg-surface-dark-secondary mx-4 w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
-            <div className="mb-3 flex items-center gap-2 text-amber-500">
-              <AlertTriangle size={20} />
-              <h3 className="font-semibold">
-                {t('entry.externalLinkWarning')}
-              </h3>
-              <button
-                onClick={() => setExternalLinkWarning(null)}
-                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary ml-auto rounded p-1"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <p className="text-text-secondary dark:text-text-dark-secondary mb-1 text-sm">
-              {t('entry.externalLinkDesc')}
-            </p>
-            <p className="bg-surface-secondary dark:bg-surface-dark-tertiary mb-3 break-all rounded px-2 py-1.5 font-mono text-xs text-red-500">
-              {externalLinkWarning.hostname}
-            </p>
-            {externalLinkWarning.isSuspicious && (
-              <p className="mb-3 flex items-center gap-1 text-xs text-red-500">
-                <AlertTriangle size={12} />
-                {t('entry.suspiciousLink')}
-              </p>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setExternalLinkWarning(null)}
-                className="hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary flex-1 rounded-lg border px-3 py-2 text-sm"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => {
-                  window.open(externalLinkWarning.url, '_blank')
-                  setExternalLinkWarning(null)
-                }}
-                className="bg-accent hover:bg-accent/90 flex-1 rounded-lg px-3 py-2 text-sm text-white"
-              >
-                {t('common.continueAccess')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ExternalLinkWarningModal
+          warning={externalLinkWarning}
+          onClose={() => setExternalLinkWarning(null)}
+          onContinue={() => {
+            window.open(externalLinkWarning.url, '_blank')
+            setExternalLinkWarning(null)
+          }}
+        />
       )}
 
       {articleMenu.visible && (
@@ -1452,154 +1139,5 @@ export function EntryContent({ hideVideo }: { hideVideo?: boolean }) {
         />
       )}
     </div>
-  )
-}
-
-function EntryDetailFallback({ title }: { title: string }) {
-  return (
-    <div className="animate-in fade-in-0 space-y-5 duration-200">
-      <div className="border-border/60 bg-surface-secondary/70 text-text-secondary dark:bg-surface-dark-secondary/70 dark:text-text-dark-secondary rounded-xl border px-4 py-3 text-sm">
-        正在准备完整内容…
-      </div>
-      <div className="animate-pulse space-y-3">
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-4 w-40 rounded" />
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-full rounded" />
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-[92%] rounded" />
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-[84%] rounded" />
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-40 w-full rounded-2xl" />
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-full rounded" />
-        <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-3.5 w-[88%] rounded" />
-      </div>
-      <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
-        {title}
-      </p>
-    </div>
-  )
-}
-
-function AudioPlaybackPanel({
-  title,
-  duration,
-  playLabel,
-  onPlay,
-  audioUrl,
-  listenProgress,
-}: {
-  title: string
-  duration?: number
-  playLabel: string
-  onPlay: () => void
-  audioUrl: string
-  listenProgress?: number
-}) {
-  const isPlaying = usePlayerStore((s) => s.isPlaying)
-  const currentTime = usePlayerStore((s) => s.currentTime)
-  const playerDuration = usePlayerStore((s) => s.duration)
-  const playerUrl = usePlayerStore((s) => s.url)
-  const togglePlay = usePlayerStore((s) => s.togglePlay)
-  const seekTo = usePlayerStore((s) => s.seekTo)
-
-  const isCurrentTrack = playerUrl === audioUrl
-  const effectiveDuration = isCurrentTrack ? playerDuration : duration || 0
-  const progress =
-    effectiveDuration > 0
-      ? ((isCurrentTrack ? currentTime : 0) / effectiveDuration) * 100
-      : 0
-  // Show saved progress when not currently playing this track
-  const savedProgress = !isCurrentTrack && listenProgress ? listenProgress : 0
-  const displayProgress = isCurrentTrack ? progress : savedProgress
-  const durationText = formatMediaDuration(effectiveDuration)
-  const currentText = formatMediaDuration(isCurrentTrack ? currentTime : 0)
-  const resumeTime =
-    listenProgress && effectiveDuration
-      ? formatMediaDuration((listenProgress / 100) * effectiveDuration)
-      : null
-
-  const handleClick = () => {
-    if (isCurrentTrack) {
-      togglePlay()
-    } else {
-      onPlay()
-    }
-  }
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isCurrentTrack || !effectiveDuration) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    seekTo(pct * effectiveDuration)
-  }
-
-  return (
-    <div className="border-border/70 bg-surface-secondary/70 dark:border-border-dark/70 dark:bg-surface-dark-secondary/70 mb-6 overflow-hidden rounded-lg border">
-      <button
-        type="button"
-        onClick={handleClick}
-        className="hover:bg-surface-tertiary/50 dark:hover:bg-surface-dark-tertiary/50 flex w-full items-center gap-3 px-3 py-3 text-left transition-colors"
-      >
-        <span className="bg-accent flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white">
-          {isCurrentTrack && isPlaying ? (
-            <Pause size={18} fill="currentColor" />
-          ) : (
-            <Play size={18} fill="currentColor" className="ml-0.5" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="text-text dark:text-text-dark-primary block text-sm font-medium">
-            {!isCurrentTrack && resumeTime
-              ? `继续播放 ${resumeTime}`
-              : playLabel}
-          </span>
-          <span className="text-text-secondary dark:text-text-dark-secondary block truncate text-xs">
-            {title}
-          </span>
-        </span>
-        {durationText && (
-          <span className="text-text-tertiary dark:text-text-dark-tertiary flex-shrink-0 text-xs tabular-nums">
-            {currentText} / {durationText}
-          </span>
-        )}
-      </button>
-      {/* Progress bar */}
-      <div
-        className="bg-surface-tertiary dark:bg-surface-dark-tertiary group relative h-1 cursor-pointer"
-        onClick={handleSeek}
-      >
-        <div
-          className="bg-accent absolute left-0 top-0 h-full transition-[width] duration-150"
-          style={{ width: `${displayProgress}%` }}
-        />
-        <div
-          className="bg-accent absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-          style={{ left: `calc(${progress}% - 6px)` }}
-        />
-      </div>
-    </div>
-  )
-}
-
-/** ====== Toolbar button component ====== */
-function ToolbarButton({
-  children,
-  onClick,
-  disabled,
-  active,
-  title,
-}: {
-  children: React.ReactNode
-  onClick?: () => void
-  disabled?: boolean
-  active?: boolean
-  title?: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`text-text-secondary hover:bg-surface-secondary hover:text-text dark:text-text-dark-secondary dark:hover:bg-surface-dark-secondary dark:hover:text-text-dark-primary rounded-lg p-1.5 transition-all duration-150 disabled:cursor-default disabled:opacity-30 ${active ? 'bg-accent/10 !text-accent' : ''} `}
-      title={title}
-    >
-      {children}
-    </button>
   )
 }

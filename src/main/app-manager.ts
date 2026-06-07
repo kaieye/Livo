@@ -37,6 +37,7 @@ import { AppTray } from './services/system/tray'
 import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili/bilibili-orphan-recovery'
 import { startCacheMaintenance } from './services/system/cache-maintenance'
 import { registerSessionPolicies } from './services/system/session-policies'
+import { parseDeepLink } from '../shared/deep-link'
 
 export class AppManager {
   readonly windowManager: WindowManager
@@ -64,14 +65,27 @@ export class AppManager {
   handleSecondInstance(argv: string[]): void {
     const protocolArg = argv.find((arg) => /^livo:\/\//i.test(arg))
     if (protocolArg) {
-      this.windowManager.setPendingProtocolUrl(protocolArg)
+      this.dispatchDeepLink(protocolArg)
     }
     this.windowManager.focusMainWindow()
   }
 
   handleOpenUrl(url: string): void {
-    this.windowManager.setPendingProtocolUrl(url)
+    this.dispatchDeepLink(url)
     this.windowManager.focusMainWindow()
+  }
+
+  handleInitialArgv(argv: string[]): void {
+    const protocolArg = argv.find((arg) => /^livo:\/\//i.test(arg))
+    if (protocolArg) {
+      this.dispatchDeepLink(protocolArg)
+    }
+  }
+
+  private dispatchDeepLink(url: string): void {
+    const action = parseDeepLink(url)
+    if (!action) return
+    this.windowManager.enqueueDeepLink(action)
   }
 
   async onReady(): Promise<void> {

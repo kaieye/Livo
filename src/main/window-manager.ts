@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
+import type { DeepLinkAction } from '../shared/deep-link'
 import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
 import { logError, logInfo, logWarn } from './services/system/logger'
@@ -21,13 +22,20 @@ interface WindowManagerOptions {
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null
-  private pendingProtocolUrl: string | null = null
+  private pendingDeepLinks: DeepLinkAction[] = []
+  private rendererReady = false
   private isQuitting = false
 
   constructor(private readonly options: WindowManagerOptions) {}
 
-  setPendingProtocolUrl(url: string): void {
-    this.pendingProtocolUrl = url
+  enqueueDeepLink(action: DeepLinkAction): void {
+    this.pendingDeepLinks.push(action)
+    this.flushPendingDeepLinks()
+  }
+
+  markRendererReady(): void {
+    this.rendererReady = true
+    this.flushPendingDeepLinks()
   }
 
   safeOpenExternal(url: string): void {
@@ -156,12 +164,13 @@ export class WindowManager {
     })
 
     this.mainWindow = mainWindow
+    this.rendererReady = false
     this.bindWindowEvents(mainWindow)
     if (windowState.isMaximized) {
       mainWindow.maximize()
     }
 
-    if (this.options.isDev) {
+    if (this.options.isDev && !process.env['LIVO_E2E']) {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
 
@@ -198,18 +207,12 @@ export class WindowManager {
 
     mainWindow.on('ready-to-show', () => {
       const shouldRevealWindow =
-        !this.options.shouldStartInTray?.() || !!this.pendingProtocolUrl
+        !this.options.shouldStartInTray?.() || this.pendingDeepLinks.length > 0
       if (shouldRevealWindow) {
         mainWindow.show()
       }
       this.options.onVisibilityChanged?.()
-      if (this.pendingProtocolUrl) {
-        logWarn(
-          '[protocol] pending deep link received',
-          this.pendingProtocolUrl,
-        )
-        this.pendingProtocolUrl = null
-      }
+      this.flushPendingDeepLinks()
     })
 
     mainWindow.on('minimize', () => {
@@ -375,6 +378,19 @@ export class WindowManager {
       return process.env['ELECTRON_RENDERER_URL']
     }
     return pathToFileURL(join(__dirname, '../renderer/index.html')).toString()
+  }
+
+  private flushPendingDeepLinks(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    if (!this.rendererReady) return
+    if (this.mainWindow.webContents.isLoadingMainFrame()) return
+
+    while (this.pendingDeepLinks.length > 0) {
+      const action = this.pendingDeepLinks.shift()
+      if (!action) continue
+      logInfo('[protocol] dispatching deep link', { type: action.type })
+      this.mainWindow.webContents.send('app:deep-link', action)
+    }
   }
 
   private installStartupWatchdog(mainWindow: BrowserWindow): void {

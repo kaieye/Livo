@@ -6,6 +6,7 @@ import type {
   FeedWithCount,
   TaskRunRecord,
 } from './types'
+import type { DeepLinkAction } from './deep-link'
 
 export interface FeedRefreshProgressPayload {
   total: number
@@ -72,6 +73,7 @@ export interface FeverSyncProgressPayload {
 
 export interface RendererEventPayloadByChannel {
   'app:command': [payload: AppCommandPayload]
+  'app:deep-link': [payload: DeepLinkAction]
   'feeds:updated': [payload: FeedsUpdatedPayload]
   'feeds:refresh-progress': [payload: FeedRefreshProgressPayload]
   'import:progress': [payload: ImportProgressPayload]
@@ -106,6 +108,7 @@ export type RendererEventCallback<C extends RendererEventChannel> = (
 
 export const RENDERER_EVENT_CHANNELS = [
   'app:command',
+  'app:deep-link',
   'feeds:updated',
   'feeds:refresh-progress',
   'import:progress',

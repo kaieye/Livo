@@ -44,6 +44,7 @@ export function AppBootstrapProvider({ children }: PropsWithChildren) {
       ]).then(() => {
         applyAfterReadyCallbacks()
         document.documentElement.dataset.appReady = 'true'
+        void window.api.app.rendererReady()
         window.requestAnimationFrame(() => {
           window.requestAnimationFrame(() => {
             recordAppMetric('app.bootstrapReady', performance.now())

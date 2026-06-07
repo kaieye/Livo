@@ -351,6 +351,8 @@ const api = {
       invokeIpc(IPC.APP_SAVE_TEXT_FILE, options),
     downloadUrl: (options: DownloadUrlOptions): Promise<DownloadUrlResult> =>
       invokeIpc(IPC.APP_DOWNLOAD_URL, options),
+    rendererReady: (): Promise<{ success: boolean }> =>
+      invokeIpc(IPC.APP_RENDERER_READY),
   },
 
   menu: {

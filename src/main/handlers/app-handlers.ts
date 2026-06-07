@@ -61,6 +61,10 @@ export function registerAppHandlers(windowManager: WindowManager): void {
   registerChannel(IPC.APP_DOWNLOAD_URL, async (_event, options) => {
     return downloadUrlToFile(options)
   })
+  registerChannel(IPC.APP_RENDERER_READY, () => {
+    windowManager.markRendererReady()
+    return { success: true }
+  })
   registerChannel(
     IPC.MENU_SHOW_CONTEXT,
     async (_event, items: NativeContextMenuItem[]) => {

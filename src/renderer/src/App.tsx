@@ -5,6 +5,7 @@ import { LocalErrorBoundary } from './components/LocalErrorBoundary'
 import { PageTransition } from './components/layout/PageTransition'
 import { TitleBar } from './components/layout/TitleBar'
 import { useAgentNavigate } from './hooks/useAgentNavigate'
+import { useDeepLinkNavigate } from './hooks/useDeepLinkNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useCommandPaletteStore } from './store/command-palette-store'
@@ -273,6 +274,7 @@ function FloatingAIAssistantButton() {
  */
 export default function App() {
   useAgentNavigate()
+  useDeepLinkNavigate()
 
   // 启动时自动恢复登录状态（从本地 Session）
   useEffect(() => {
