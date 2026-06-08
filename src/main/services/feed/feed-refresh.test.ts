@@ -25,6 +25,12 @@ import { FEED_BOOTSTRAP_REFRESH_TASK } from '../system/task-contracts'
 const getDbMock = vi.hoisted(() => vi.fn())
 const getLocalTaskRunnerMock = vi.hoisted(() => vi.fn())
 const settingsProviderGetMock = vi.hoisted(() => vi.fn())
+const resolveFeedPayloadMock = vi.hoisted(() => vi.fn())
+const resolveFeedAvatarMock = vi.hoisted(() => vi.fn())
+const ingestParsedFeedEntriesMock = vi.hoisted(() => vi.fn())
+const appendRefreshLogMock = vi.hoisted(() => vi.fn())
+const queueFeverSyncAccountMock = vi.hoisted(() => vi.fn())
+const logUserOperationMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../database', () => ({
   getDb: getDbMock,
@@ -39,6 +45,35 @@ vi.mock('../system/settings-provider', () => ({
 vi.mock('../system/task-runner-service', () => ({
   getLocalTaskRunner: getLocalTaskRunnerMock,
 }))
+
+vi.mock('./feed-source-provider', () => ({
+  resolveFeedPayload: resolveFeedPayloadMock,
+}))
+
+vi.mock('./feed-avatar', () => ({
+  resolveFeedAvatar: resolveFeedAvatarMock,
+}))
+
+vi.mock('../system/refresh-log-store', () => ({
+  appendRefreshLog: appendRefreshLogMock,
+}))
+
+vi.mock('../fever/fever-sync', () => ({
+  queueFeverSyncAccount: queueFeverSyncAccountMock,
+}))
+
+vi.mock('../system/user-operation-log', () => ({
+  logUserOperation: logUserOperationMock,
+}))
+
+vi.mock('../entry/entry-ingestion-pipeline', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../entry/entry-ingestion-pipeline')>()
+  return {
+    ...actual,
+    ingestParsedFeedEntries: ingestParsedFeedEntriesMock,
+  }
+})
 
 function makeEntry(url: string): Entry {
   return {
@@ -77,6 +112,17 @@ function makeRule(partial: Partial<ActionRule>): ActionRule {
     actions: partial.actions || [],
     createdAt: partial.createdAt || 1,
   }
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
 }
 
 const aiConfig: AIConfig = {
@@ -120,6 +166,14 @@ describe('filterForeignEntries', () => {
 describe('refreshAllFeeds', () => {
   beforeEach(() => {
     getLocalTaskRunnerMock.mockReset()
+    getDbMock.mockReset()
+    settingsProviderGetMock.mockReset()
+    resolveFeedPayloadMock.mockReset()
+    resolveFeedAvatarMock.mockReset()
+    ingestParsedFeedEntriesMock.mockReset()
+    appendRefreshLogMock.mockReset()
+    queueFeverSyncAccountMock.mockReset()
+    logUserOperationMock.mockReset()
   })
 
   it('returns the active run result when a batch refresh is already running', async () => {
@@ -147,6 +201,118 @@ describe('refreshAllFeeds', () => {
       runId: activeRun.runId,
     })
     expect(enqueue).not.toHaveBeenCalled()
+  })
+
+  it('emits per-feed progress as concurrent refreshes complete', async () => {
+    const feedA = {
+      ...makeFeed(),
+      id: 'feed-a',
+      title: 'Feed A',
+      url: 'https://a.example.com/feed.xml',
+    }
+    const feedB = {
+      ...makeFeed(),
+      id: 'feed-b',
+      title: 'Feed B',
+      url: 'https://b.example.com/feed.xml',
+    }
+    const feedById = new Map([feedA, feedB].map((feed) => [feed.id, feed]))
+    const getAllFeeds = vi.fn(() => Array.from(feedById.values()))
+    const updateFeed = vi.fn((feedId: string, updates: Partial<Feed>) => {
+      const current = feedById.get(feedId)
+      if (current) feedById.set(feedId, { ...current, ...updates })
+    })
+    const cleanupEntries = vi.fn()
+    getDbMock.mockReturnValue({
+      feeds: {
+        getAllFeeds,
+        updateFeed,
+      },
+      maintenance: {
+        cleanupEntries,
+      },
+      fever: {
+        getFeverAccounts: vi.fn(() => []),
+      },
+    })
+    settingsProviderGetMock.mockReturnValue({
+      general: { showRecommended: true },
+      data: {
+        enrichVideoDuration: false,
+        entriesPerFeed: 128,
+        maxEntryAgeDays: 90,
+      },
+    })
+    const runner = {
+      getActiveRun: vi.fn(() => undefined),
+      enqueue: vi.fn((contract, payload, handler) => ({
+        runId: `${contract.name}-test`,
+        promise: Promise.resolve().then(() =>
+          handler(payload, { reportProgress: vi.fn() }),
+        ),
+        getRecord: vi.fn(),
+      })),
+    }
+    getLocalTaskRunnerMock.mockReturnValue(runner)
+    resolveFeedAvatarMock.mockResolvedValue(undefined)
+    ingestParsedFeedEntriesMock.mockResolvedValue({ addedCount: 0 })
+
+    const delayedFeedB = createDeferred<{
+      parsed: { title: string; description: string; link: string; items: [] }
+    }>()
+    resolveFeedPayloadMock.mockImplementation((feed: Feed) =>
+      feed.id === feedA.id
+        ? Promise.resolve({
+            parsed: {
+              title: feed.title,
+              description: '',
+              link: feed.url,
+              items: [],
+            },
+          })
+        : delayedFeedB.promise,
+    )
+    const onProgress = vi.fn()
+
+    const refreshPromise = refreshAllFeeds({
+      force: true,
+      concurrency: 2,
+      onProgress,
+    })
+
+    await vi.waitFor(() => {
+      expect(onProgress).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feedId: feedA.id,
+          completed: 1,
+          total: 2,
+          done: false,
+        }),
+      )
+    })
+    expect(onProgress).not.toHaveBeenCalledWith(
+      expect.objectContaining({ completed: 2 }),
+    )
+
+    delayedFeedB.resolve({
+      parsed: {
+        title: feedB.title,
+        description: '',
+        link: feedB.url,
+        items: [],
+      },
+    })
+
+    await refreshPromise
+
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedId: feedB.id,
+        completed: 2,
+        total: 2,
+        done: true,
+      }),
+    )
   })
 })
 

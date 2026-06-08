@@ -843,36 +843,27 @@ async function runRefreshAllFeeds(
 
   let totalNew = 0
   const failedTitles: string[] = []
+  let completedRefreshes = 0
 
-  const settled = await runConcurrencyPool(
-    sortedStaleFeeds,
-    concurrency,
-    async (feed) => {
-      const newCount = await refreshSingleFeed(feed, { logOperation: false })
-      return newCount
-    },
-  )
-
-  // Emit per-feed progress events. Done after the pool completes so the
-  // listener sees a deterministic order and never a partial set.
-  for (let i = 0; i < settled.length; i += 1) {
-    const feed = sortedStaleFeeds[i]
-    const result = settled[i]
-    const success = result.status === 'fulfilled'
-    const newEntries = success ? result.value : 0
-    if (success) totalNew += newEntries
+  const reportFeedProgress = (
+    feed: Feed,
+    success: boolean,
+    newEntries: number,
+  ): void => {
+    completedRefreshes += 1
+    const completed = completedRefreshes
     options.onProgress?.({
       feedId: feed.id,
       feedTitle: feed.title,
       success,
       newEntries,
-      completed: i + 1,
-      total: settled.length,
-      done: i + 1 === settled.length,
+      completed,
+      total: sortedStaleFeeds.length,
+      done: completed === sortedStaleFeeds.length,
     })
     context?.reportProgress({
-      completed: i + 1,
-      total: settled.length,
+      completed,
+      total: sortedStaleFeeds.length,
       message: feed.title,
       data: {
         feedId: feed.id,
@@ -881,6 +872,22 @@ async function runRefreshAllFeeds(
       },
     })
   }
+
+  const settled = await runConcurrencyPool(
+    sortedStaleFeeds,
+    concurrency,
+    async (feed) => {
+      try {
+        const newCount = await refreshSingleFeed(feed, { logOperation: false })
+        totalNew += newCount
+        reportFeedProgress(feed, true, newCount)
+        return newCount
+      } catch (error) {
+        reportFeedProgress(feed, false, 0)
+        throw error
+      }
+    },
+  )
 
   // Run data cleanup after refresh
   getDb().maintenance.cleanupEntries(cleanupOptions)
