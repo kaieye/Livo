@@ -5,6 +5,7 @@ import {
   buildHomeFeedLoadOptions,
   buildHomeFeedRefreshTarget,
   computeViewFeedIds,
+  resolveScopedEntriesForRender,
 } from './home-feed-scope'
 
 describe('home-feed-scope', () => {
@@ -123,5 +124,30 @@ describe('home-feed-scope', () => {
         { feedId: 'feed-2', limit: 20 },
       ),
     ).toBe(false)
+  })
+
+  it('范围未匹配时优先使用当前范围缓存快照', () => {
+    expect(
+      resolveScopedEntriesForRender({
+        entries: ['fresh'],
+        entriesMatchCurrentScope: true,
+        cachedEntries: ['cached'],
+      }),
+    ).toEqual({ entries: ['fresh'], isUsingCachedScope: false })
+
+    expect(
+      resolveScopedEntriesForRender({
+        entries: ['old-scope'],
+        entriesMatchCurrentScope: false,
+        cachedEntries: ['cached'],
+      }),
+    ).toEqual({ entries: ['cached'], isUsingCachedScope: true })
+
+    expect(
+      resolveScopedEntriesForRender({
+        entries: ['old-scope'],
+        entriesMatchCurrentScope: false,
+      }),
+    ).toEqual({ entries: [], isUsingCachedScope: false })
   })
 })

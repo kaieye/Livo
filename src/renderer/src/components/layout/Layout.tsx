@@ -21,7 +21,6 @@ import { FeedViewType } from '../../../../shared/types'
 import { buildEntryWarmupRequests } from '../../lib/entry-warmup'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
-import { useViewPanelTransition } from './useViewPanelTransition'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 const DigestContent = lazy(() =>
@@ -156,14 +155,14 @@ export function Layout() {
     if (entryStore.selectedEntry) void entryStore.selectEntry(null)
   }, [activeView, selectedFeedId])
 
-  // Warm wide-view code after first paint so the first column switch avoids
-  // paying the lazy-import cost on the interaction path.
+  // Warm wide-view code shortly after first paint so the first column switch
+  // avoids paying the lazy-import cost on the interaction path.
   useEffect(() => {
     const cancelIdleTask = scheduleIdleTask(
       () => {
         void preloadWideViewModules()
       },
-      { timeout: 900, fallbackDelay: 900 },
+      { timeout: 180, fallbackDelay: 120 },
     )
 
     return cancelIdleTask
@@ -182,7 +181,7 @@ export function Layout() {
         if (cancelled) return
         void warmEntryScopesInOrder(requests, prefetchEntries, () => cancelled)
       },
-      { timeout: 1800, fallbackDelay: 1800 },
+      { timeout: 520, fallbackDelay: 520 },
     )
 
     return () => {
@@ -209,16 +208,6 @@ export function Layout() {
       FeedViewType.Videos,
       FeedViewType.Pictures,
     ].includes(effectiveView)
-  const transitionScope = isDigestRoute
-    ? 'digest'
-    : isDiscoverOpen
-      ? 'discover'
-      : isWideView
-        ? `wide:${effectiveView}`
-        : 'reader'
-  const transitionKey = `${transitionScope}:${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
-  const transitionPanelRef = useViewPanelTransition(transitionKey)
-
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)
   const [entryListWidth, setEntryListWidth] = useState(
     () => loadWidths().entryList,
@@ -291,10 +280,7 @@ export function Layout() {
             : ''
         }`}
       >
-        <div
-          ref={transitionPanelRef}
-          className="view-transition-panel flex min-w-0 flex-1"
-        >
+        <div className="flex min-w-0 flex-1">
           {isDigestRoute ? (
             <Suspense fallback={<PanelSkeleton type="article" />}>
               <DigestContent />

@@ -11,14 +11,16 @@ import {
   buildHomeFeedRefreshTarget,
   buildHomeFeedLoadOptions,
   computeViewFeedIds,
+  resolveScopedEntriesForRender,
 } from '../lib/home-feed-scope'
 import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
+import { LRUCache } from '../lib/lru-cache'
+import { buildListCacheKey, getCachedListResult } from '../lib/entry-cache'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
-const EMPTY_SCOPED_ENTRIES: ReturnType<
-  typeof useEntryStore.getState
->['entries'] = []
+type ScopedEntries = ReturnType<typeof useEntryStore.getState>['entries']
+const scopedEntriesCache = new LRUCache<string, { entries: ScopedEntries }>(8)
 
 export interface HomeFeedCoordinatorState {
   /** Raw entries from store. */
@@ -156,6 +158,9 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     [activeView, feeds, filterMode, selectedFeedId],
   )
   const currentLoadOptions = useStableHomeFeedLoadOptions(derivedLoadOptions)
+  const scopeCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${
+    filterMode === 'unread' ? 'unread' : 'all'
+  }:${showRecommended ? 'with-recommended' : 'no-recommended'}`
   const entriesMatchCurrentScope = useMemo(
     () =>
       areHomeFeedLoadOptionsEqual(currentLoadOptions, {
@@ -164,18 +169,44 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
       }),
     [currentLoadOptions, paginationOptions, paginationPageSize],
   )
-  const scopedSourceEntries = useMemo(
-    () => (entriesMatchCurrentScope ? entries : EMPTY_SCOPED_ENTRIES),
-    [entries, entriesMatchCurrentScope],
+  const cachedScopeEntries = useMemo(() => {
+    const memoryEntries = scopedEntriesCache.get(scopeCacheKey)?.entries
+    if (memoryEntries !== undefined) return memoryEntries
+
+    return (
+      getCachedListResult(
+        buildListCacheKey({
+          feedId: currentLoadOptions.feedId,
+          feedIds: currentLoadOptions.feedIds,
+          starred: currentLoadOptions.starred,
+          unreadOnly: currentLoadOptions.unreadOnly,
+        }),
+        currentLoadOptions.limit,
+      )?.entries ?? undefined
+    )
+  }, [currentLoadOptions, scopeCacheKey])
+  const scopedEntriesResult = useMemo(
+    () =>
+      resolveScopedEntriesForRender({
+        entries,
+        entriesMatchCurrentScope,
+        cachedEntries: cachedScopeEntries,
+      }),
+    [cachedScopeEntries, entries, entriesMatchCurrentScope],
   )
-  const scopedIsLoading = isLoading || !entriesMatchCurrentScope
+  const scopedSourceEntries = scopedEntriesResult.entries
+  const scopedIsLoading =
+    (isLoading || !entriesMatchCurrentScope) &&
+    !scopedEntriesResult.isUsingCachedScope
   const feedByIdMap = useMemo(
     () => new Map(feeds.map((feed) => [feed.id, feed] as const)),
     [feeds],
   )
-  const scopeCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${
-    filterMode === 'unread' ? 'unread' : 'all'
-  }:${showRecommended ? 'with-recommended' : 'no-recommended'}`
+
+  useEffect(() => {
+    if (!entriesMatchCurrentScope || isLoading) return
+    scopedEntriesCache.set(scopeCacheKey, { entries })
+  }, [entries, entriesMatchCurrentScope, isLoading, scopeCacheKey])
 
   // View-scoped feed IDs for refresh targeting (excludes recommended feeds)
   const viewFeedIds = useMemo(

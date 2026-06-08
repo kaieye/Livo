@@ -30,6 +30,10 @@ export function useUrlSync(): void {
   const syncingFromUrl = useRef(false)
   // Guard: true when pushing a URL from store → skip URL→store sync
   const syncingFromStore = useRef(false)
+  // Guard entry selections that were initiated by URL hydration. The async
+  // selection path can outlive syncingFromUrl, but should not write the same
+  // entry id back to the URL.
+  const entrySelectionFromUrl = useRef<string | null | undefined>(undefined)
 
   // Resolve current URL to the store state representation
   const resolvePath = (pathname: string, search: string) => {
@@ -41,13 +45,16 @@ export function useUrlSync(): void {
   }
 
   // Compute the URL that represents the current store state
-  const computeUrl = (): string => {
+  const computeUrl = (options: { includeEntry?: boolean } = {}): string => {
+    const includeEntry = options.includeEntry ?? true
     const discoverOpen = useDiscoverStore.getState().isOpen
     const settingsOpen = useSettingsStore.getState().isOpen
     if (discoverOpen) return '/discover'
     if (settingsOpen) return '/settings'
     const { selectedFeedId, activeView } = useFeedStore.getState()
-    const entryId = useEntryStore.getState().selectedEntry?.id ?? null
+    const entryId = includeEntry
+      ? (useEntryStore.getState().selectedEntry?.id ?? null)
+      : null
     const withEntry = (path: string) => withEntrySearchParam(path, entryId)
     if (selectedFeedId === 'starred') return withEntry('/starred')
     if (selectedFeedId) {
@@ -71,7 +78,14 @@ export function useUrlSync(): void {
   const selectEntryFromUrl = (entryId: string | null): void => {
     const entryStore = useEntryStore.getState()
     if (!entryId) {
-      if (entryStore.selectedEntry) void entryStore.selectEntry(null)
+      if (entryStore.selectedEntry) {
+        entrySelectionFromUrl.current = null
+        void entryStore.selectEntry(null).finally(() => {
+          if (entrySelectionFromUrl.current === null) {
+            entrySelectionFromUrl.current = undefined
+          }
+        })
+      }
       return
     }
     if (entryStore.selectedEntry?.id === entryId) return
@@ -82,12 +96,25 @@ export function useUrlSync(): void {
       if (current.selectedEntry?.id === entryId) return
       const inList = current.entries.find((entry) => entry.id === entryId)
       if (inList) {
-        void current.selectEntry(inList)
+        entrySelectionFromUrl.current = entryId
+        void current.selectEntry(inList).finally(() => {
+          if (entrySelectionFromUrl.current === entryId) {
+            entrySelectionFromUrl.current = undefined
+          }
+        })
         return
       }
       void window.api.entries.get(entryId).then((entry) => {
         if (!entry) return
-        void useEntryStore.getState().selectEntry(entry)
+        entrySelectionFromUrl.current = entryId
+        void useEntryStore
+          .getState()
+          .selectEntry(entry)
+          .finally(() => {
+            if (entrySelectionFromUrl.current === entryId) {
+              entrySelectionFromUrl.current = undefined
+            }
+          })
       })
     }, 0)
   }
@@ -147,7 +174,7 @@ export function useUrlSync(): void {
       )
         return
       syncingFromStore.current = true
-      navigate(computeUrl(), { replace: true })
+      navigate(computeUrl({ includeEntry: false }), { replace: true })
     })
 
     const unsubDiscover = useDiscoverStore.subscribe((state, prevState) => {
@@ -167,6 +194,14 @@ export function useUrlSync(): void {
     const unsubEntry = useEntryStore.subscribe((state, prevState) => {
       if (syncingFromUrl.current) return
       if (state.selectedEntry?.id === prevState.selectedEntry?.id) return
+      const selectedEntryId = state.selectedEntry?.id ?? null
+      if (
+        entrySelectionFromUrl.current !== undefined &&
+        entrySelectionFromUrl.current === selectedEntryId
+      ) {
+        entrySelectionFromUrl.current = undefined
+        return
+      }
       syncingFromStore.current = true
       navigate(computeUrl(), { replace: false })
     })

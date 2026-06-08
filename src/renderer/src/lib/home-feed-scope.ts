@@ -9,6 +9,11 @@ export interface HomeFeedLoadOptions {
   limit: number
 }
 
+export interface ScopedEntriesResult<TEntry> {
+  entries: TEntry[]
+  isUsingCachedScope: boolean
+}
+
 export type HomeFeedRefreshTarget =
   | { type: 'feed'; feedId: string }
   | { type: 'feeds'; feedIds: string[] }
@@ -35,6 +40,20 @@ export function areHomeFeedLoadOptionsEqual(
     (a.limit ?? null) === (b.limit ?? null) &&
     aFeedIds.every((id, index) => id === bFeedIds[index])
   )
+}
+
+export function resolveScopedEntriesForRender<TEntry>(input: {
+  entries: TEntry[]
+  entriesMatchCurrentScope: boolean
+  cachedEntries?: TEntry[]
+}): ScopedEntriesResult<TEntry> {
+  if (input.entriesMatchCurrentScope) {
+    return { entries: input.entries, isUsingCachedScope: false }
+  }
+  if (input.cachedEntries !== undefined) {
+    return { entries: input.cachedEntries, isUsingCachedScope: true }
+  }
+  return { entries: [], isUsingCachedScope: false }
 }
 
 /**

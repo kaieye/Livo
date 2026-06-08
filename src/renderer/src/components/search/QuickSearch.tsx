@@ -2,10 +2,17 @@
  * Quick Search panel — Cmd+K global search overlay.
  * Searches across feeds and entries with type filtering.
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import {
+  startTransition,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
-import { useEntryStore } from '../../store/entry-store'
 import {
   Search,
   X,
@@ -27,6 +34,7 @@ import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useOverlayStackItem } from '../../store/overlay-stack-store'
 import { useQuickSearchStore } from '../../store/quick-search-store'
 import { rankFeedsForQuickSearch } from '../../lib/quick-search-ranking'
+import { ROUTES, withEntrySearchParam } from '../../router/route-paths'
 
 // ====== Component ======
 type SearchType = 'all' | 'feed' | 'entry'
@@ -36,8 +44,8 @@ export function QuickSearchPanel() {
   useOverlayHotkeyScope('quick-search', isOpen)
   const { zIndex, isTop } = useOverlayStackItem('quick-search', isOpen)
   const { t } = useTranslation()
-  const { feeds, activeView, setSelectedFeed, setActiveView } = useFeedStore()
-  const { loadEntries, selectEntry } = useEntryStore()
+  const navigate = useNavigate()
+  const { feeds, activeView } = useFeedStore()
 
   const [query, setQuery] = useState('')
   const [searchType, setSearchType] = useState<SearchType>('all')
@@ -116,20 +124,24 @@ export function QuickSearchPanel() {
   }, [query, doSearch])
 
   const handleSelect = (item: (typeof allItems)[number]) => {
+    close()
+
     if (item.type === 'feed') {
       const feed = item.data as FeedWithCount
-      setSelectedFeed(feed.id)
-      setActiveView(null)
-      loadEntries({ feedId: feed.id })
-    } else {
-      const entry = item.data as Entry
-      // Find the feed and load its entries, then select this one
-      setSelectedFeed(entry.feedId)
-      loadEntries({ feedId: entry.feedId }).then(() => {
-        selectEntry(entry)
+      const view = feed.view ?? FeedViewType.Articles
+      startTransition(() => {
+        navigate(ROUTES.viewFeed(view, feed.id))
       })
+      return
     }
-    close()
+
+    const entry = item.data as Entry
+    const feed = feeds.find((candidate) => candidate.id === entry.feedId)
+    const view = feed?.view ?? FeedViewType.Articles
+    const feedPath = ROUTES.viewFeed(view, entry.feedId)
+    startTransition(() => {
+      navigate(withEntrySearchParam(feedPath, entry.id))
+    })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

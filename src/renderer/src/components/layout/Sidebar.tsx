@@ -1,4 +1,12 @@
-﻿import { memo, useState, useMemo, useCallback, useRef, useEffect } from 'react'
+﻿import {
+  memo,
+  startTransition,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+} from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
@@ -324,7 +332,6 @@ export function Sidebar({ width }: { width?: number }) {
     removeFeed,
     updateFeed,
     addFeed,
-    setActiveView,
   } = useStoreShallow(useFeedStore, (s) => ({
     feeds: s.feeds,
     selectedFeedId: s.selectedFeedId,
@@ -337,7 +344,6 @@ export function Sidebar({ width }: { width?: number }) {
     removeFeed: s.removeFeed,
     updateFeed: s.updateFeed,
     addFeed: s.addFeed,
-    setActiveView: s.setActiveView,
   }))
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
@@ -1181,22 +1187,11 @@ export function Sidebar({ width }: { width?: number }) {
         return
 
       const slug = view !== null ? VIEW_TYPE_SLUGS[view] : null
-      if (isDigestRoute || isDiscoverOpen) {
+      startTransition(() => {
         navigate(slug ? `/${slug}` : '/')
-        return
-      }
-
-      void useEntryStore.getState().selectEntry(null)
-      setActiveView(view)
+      })
     },
-    [
-      activeView,
-      isDigestRoute,
-      isDiscoverOpen,
-      navigate,
-      selectedFeedId,
-      setActiveView,
-    ],
+    [activeView, isDigestRoute, isDiscoverOpen, navigate, selectedFeedId],
   )
 
   const handleContextMenu = useCallback(
