@@ -50,10 +50,29 @@ export const WideViewHeader = memo(function WideViewHeader({
   onSetFilterMode: (mode: 'all' | 'unread') => void
 }) {
   const { t } = useTranslation()
+  const showArticleSearch =
+    activeView !== FeedViewType.SocialMedia &&
+    activeView !== FeedViewType.Pictures &&
+    activeView !== FeedViewType.Videos &&
+    !inlineBilibili
+  const showFilterTabs = showArticleSearch
+  const showRefreshProgress =
+    activeView !== FeedViewType.SocialMedia &&
+    activeView !== FeedViewType.Pictures &&
+    !inlineBilibili &&
+    isRefreshing &&
+    !!refreshProgress &&
+    refreshProgress.total > 0
+  const showSecondaryToolbar =
+    showArticleSearch || showFilterTabs || showRefreshProgress
+  const useCompactHeader =
+    activeView === FeedViewType.SocialMedia ||
+    activeView === FeedViewType.Pictures ||
+    (activeView === FeedViewType.Videos && !showSecondaryToolbar)
 
   return (
     <div
-      className={`drag-region reader-titlebar-toolbar-pt flex-shrink-0 border-b px-6 ${activeView === FeedViewType.SocialMedia || activeView === FeedViewType.Pictures ? '' : 'space-y-2.5 pb-2'}`}
+      className={`drag-region reader-titlebar-toolbar-pt flex-shrink-0 border-b px-6 ${useCompactHeader ? '' : 'space-y-2.5 pb-2'}`}
     >
       <div className="no-drag flex h-9 items-center justify-between">
         {inlineBilibili ? (
@@ -116,10 +135,9 @@ export const WideViewHeader = memo(function WideViewHeader({
         )}
       </div>
 
-      {activeView !== FeedViewType.SocialMedia &&
-        activeView !== FeedViewType.Pictures &&
-        !inlineBilibili && (
-          <div className="no-drag mt-2 flex items-center gap-3">
+      {showSecondaryToolbar && (
+        <div className="no-drag mt-2 flex items-center gap-3">
+          {showArticleSearch && (
             <form onSubmit={onSearch} className="relative max-w-xs flex-1">
               <Search
                 size={14}
@@ -133,7 +151,9 @@ export const WideViewHeader = memo(function WideViewHeader({
                 className="bg-surface-secondary focus:ring-accent/50 dark:bg-surface-dark-secondary w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-2"
               />
             </form>
+          )}
 
+          {showFilterTabs && (
             <div className="flex gap-1 text-xs">
               <button
                 onClick={() => onSetFilterMode('all')}
@@ -156,30 +176,31 @@ export const WideViewHeader = memo(function WideViewHeader({
                 {t('entryList.unread')}
               </button>
             </div>
+          )}
 
-            {isRefreshing && refreshProgress && refreshProgress.total > 0 && (
-              <div
-                className="flex min-w-[220px] max-w-[360px] flex-1 items-center gap-2"
-                title={refreshProgress.feedTitle || ''}
-              >
-                <span className="text-text-tertiary whitespace-nowrap text-[11px]">
-                  {`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}
-                </span>
-                <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-1.5 flex-1 overflow-hidden rounded-full">
-                  <div
-                    className="bg-accent h-full transition-[width] duration-200"
-                    style={{
-                      width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%`,
-                    }}
-                  />
-                </div>
-                <span className="text-text-tertiary w-9 shrink-0 text-right text-[11px]">
-                  {`${refreshProgress.percent}%`}
-                </span>
+          {showRefreshProgress && (
+            <div
+              className="flex min-w-[220px] max-w-[360px] flex-1 items-center gap-2"
+              title={refreshProgress.feedTitle || ''}
+            >
+              <span className="text-text-tertiary whitespace-nowrap text-[11px]">
+                {`Refreshing ${refreshProgress.completed}/${refreshProgress.total}`}
+              </span>
+              <div className="bg-surface-tertiary dark:bg-surface-dark-tertiary h-1.5 flex-1 overflow-hidden rounded-full">
+                <div
+                  className="bg-accent h-full transition-[width] duration-200"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, refreshProgress.percent))}%`,
+                  }}
+                />
               </div>
-            )}
-          </div>
-        )}
+              <span className="text-text-tertiary w-9 shrink-0 text-right text-[11px]">
+                {`${refreshProgress.percent}%`}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 })

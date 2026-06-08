@@ -377,6 +377,12 @@ export function WideViewContent() {
     () => getEntryLoadLimit(effectiveActiveView),
     [effectiveActiveView],
   )
+  const canUseArticleSearch =
+    effectiveActiveView !== FeedViewType.SocialMedia &&
+    effectiveActiveView !== FeedViewType.Pictures &&
+    effectiveActiveView !== FeedViewType.Videos
+  const activeSearchQuery = canUseArticleSearch ? searchQuery : ''
+  const hasActiveSearchQuery = activeSearchQuery.trim().length > 0
 
   // Video modal state
   const [videoEntry, setVideoEntry] = useState<Entry | null>(null)
@@ -431,9 +437,9 @@ export function WideViewContent() {
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault()
-      search(searchQuery)
+      search(activeSearchQuery)
     },
-    [search, searchQuery],
+    [activeSearchQuery, search],
   )
 
   const currentFeed = selectedFeedId ? feedById.get(selectedFeedId) : undefined
@@ -613,22 +619,22 @@ export function WideViewContent() {
       const nearBottom =
         el.scrollTop + el.clientHeight >= el.scrollHeight - bottomOffset
       if (!nearBottom || !hasScrolledEnough) return
-      if (searchQuery.trim()) return
+      if (hasActiveSearchQuery) return
       if (!hasMoreEntries || isLoadingMore) return
       void loadMoreEntries()
     },
     [
       effectiveActiveView,
       hasMoreEntries,
+      hasActiveSearchQuery,
       isLoadingMore,
       loadMoreEntries,
-      searchQuery,
     ],
   )
 
   useEffect(() => {
     if (!isPicturesAllView) return
-    if (searchQuery.trim()) return
+    if (hasActiveSearchQuery) return
     if (!hasMoreEntries || isLoadingMore) return
     // If initial viewport has too few image cards to produce scrolling,
     // prefetch additional pages so user can see more results immediately.
@@ -636,7 +642,7 @@ export function WideViewContent() {
     void loadMoreEntries()
   }, [
     isPicturesAllView,
-    searchQuery,
+    hasActiveSearchQuery,
     hasMoreEntries,
     isLoadingMore,
     masonryCards.length,
@@ -831,7 +837,7 @@ export function WideViewContent() {
         filterMode={filterMode}
         isRefreshing={isRefreshing}
         refreshProgress={refreshProgress}
-        searchQuery={searchQuery}
+        searchQuery={activeSearchQuery}
         onBack={() => setInlineBilibili(null)}
         onRefresh={handleRefreshCurrentView}
         onToggleUnreadFilter={() =>
