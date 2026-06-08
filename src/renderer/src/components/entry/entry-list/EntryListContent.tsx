@@ -68,6 +68,8 @@ export function EntryListContent({
   onContextMenu,
   onMediaAllFailed,
 }: EntryListContentProps) {
+  const virtualizerCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
+
   if (isLoading && !hasStaleEntriesWhileLoading) {
     return (
       <SkeletonList
@@ -107,6 +109,7 @@ export function EntryListContent({
           feedSiteUrlById={feedSiteUrlById}
           feedUrlById={feedUrlById}
           dimRead={dimRead}
+          cacheKey={`social:${virtualizerCacheKey}`}
           onSelectEntry={onSelectEntry}
           onMarkAboveRead={onMarkAboveRead}
           onMarkBelowRead={onMarkBelowRead}
@@ -122,6 +125,7 @@ export function EntryListContent({
           feedImageById={feedImageById}
           activeView={activeView}
           hasMore={hasMoreGridEntries}
+          cacheKey={`grid:${virtualizerCacheKey}`}
           onSelectEntry={onSelectEntry}
         />
       ) : (
@@ -134,6 +138,7 @@ export function EntryListContent({
           feedTitleById={feedTitleById}
           dimRead={dimRead}
           imageProxy={imageProxy}
+          cacheKey={`linear:${virtualizerCacheKey}`}
           onSelectEntry={onSelectEntry}
           onContextMenu={onContextMenu}
         />

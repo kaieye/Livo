@@ -13,6 +13,7 @@ export interface GridLayoutProps {
   feedImageById: Map<string, string | undefined>
   activeView: FeedViewType | null
   hasMore: boolean
+  cacheKey: string
   onSelectEntry: (entry: Entry) => void
 }
 
@@ -24,11 +25,13 @@ export function GridLayout({
   feedImageById,
   activeView,
   hasMore,
+  cacheKey,
   onSelectEntry,
 }: GridLayoutProps) {
   const virtualizer = useGridVirtualizer({
     gridRows,
     scrollElement: scrollRef,
+    cacheKey,
   })
   const virtualRows = virtualizer.getVirtualItems()
 

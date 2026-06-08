@@ -1,4 +1,5 @@
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
+import { LRUCache } from './lru-cache'
 
 export interface EntryReadingSurfaceScopeModel<TFeed extends Feed = Feed> {
   feedById: Map<string, TFeed>
@@ -11,6 +12,41 @@ export interface EntryReadingSurfaceRenderModel {
   renderEntries: Entry[]
   hasStaleEntriesWhileLoading: boolean
   shouldShowLoadingSkeleton: boolean
+}
+
+type EntryReadingSurfaceScopeInput<TFeed extends Feed = Feed> = {
+  entries: Entry[]
+  feeds: TFeed[]
+  feedById?: Map<string, TFeed>
+  activeView: FeedViewType | null
+  selectedFeedId?: string | null
+  showRecommended: boolean
+  recommendedCategory: string
+}
+
+type EntryReadingSurfaceScopeCacheRecord<TFeed extends Feed = Feed> =
+  EntryReadingSurfaceScopeInput<TFeed> & {
+    model: EntryReadingSurfaceScopeModel<TFeed>
+  }
+
+const scopeModelCache = new LRUCache<
+  string,
+  EntryReadingSurfaceScopeCacheRecord
+>(8)
+
+function isSameScopeInput<TFeed extends Feed>(
+  record: EntryReadingSurfaceScopeCacheRecord<TFeed>,
+  input: EntryReadingSurfaceScopeInput<TFeed>,
+): boolean {
+  return (
+    record.entries === input.entries &&
+    record.feeds === input.feeds &&
+    record.feedById === input.feedById &&
+    record.activeView === input.activeView &&
+    record.selectedFeedId === input.selectedFeedId &&
+    record.showRecommended === input.showRecommended &&
+    record.recommendedCategory === input.recommendedCategory
+  )
 }
 
 export function buildEntryReadingSurfaceScopeModel<TFeed extends Feed>(input: {
@@ -46,6 +82,28 @@ export function buildEntryReadingSurfaceScopeModel<TFeed extends Feed>(input: {
       showRecommended: input.showRecommended,
     }),
   }
+}
+
+export function buildCachedEntryReadingSurfaceScopeModel<TFeed extends Feed>(
+  input: EntryReadingSurfaceScopeInput<TFeed> & { cacheKey: string },
+): EntryReadingSurfaceScopeModel<TFeed> {
+  const cached = scopeModelCache.get(input.cacheKey) as
+    | EntryReadingSurfaceScopeCacheRecord<TFeed>
+    | undefined
+  if (cached && isSameScopeInput(cached, input)) return cached.model
+
+  const model = buildEntryReadingSurfaceScopeModel(input)
+  scopeModelCache.set(input.cacheKey, {
+    entries: input.entries,
+    feeds: input.feeds,
+    feedById: input.feedById,
+    activeView: input.activeView,
+    selectedFeedId: input.selectedFeedId,
+    showRecommended: input.showRecommended,
+    recommendedCategory: input.recommendedCategory,
+    model,
+  } as EntryReadingSurfaceScopeCacheRecord)
+  return model
 }
 
 export function buildEntryReadingSurfaceEntries(input: {

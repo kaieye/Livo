@@ -30,7 +30,7 @@ import { useEntryFeedMaps } from './entry-list/hooks/useEntryFeedMaps'
 import { useHomeFeedCoordinator } from '../../hooks/useHomeFeedCoordinator'
 import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
-import { buildEntryListDerivedModel } from '../../lib/entry-list-model'
+import { buildCachedEntryListDerivedModel } from '../../lib/entry-list-model'
 import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
 import { resolveEntryBrowserOpenUrl } from './entry-list/utils/entry-media'
 import type { Entry } from '../../../../shared/types'
@@ -198,21 +198,24 @@ export function EntryList({ width }: { width?: number }) {
     gridRows,
     hasMoreGridEntries,
   } = useMemo(() => {
-    const result = buildEntryListDerivedModel({
+    const result = buildCachedEntryListDerivedModel({
       baseRenderEntries,
       activeView,
       groupByDate: general.groupByDate,
       isGridMode,
       gridVisibleCount: gridProgressive.visibleCount,
+      cacheKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${filterMode}`,
     })
     performance.mark('vs:entrylist-memos')
     return result
   }, [
     activeView,
     baseRenderEntries,
+    filterMode,
     general.groupByDate,
     gridProgressive.visibleCount,
     isGridMode,
+    selectedFeedId,
   ])
 
   useLayoutEffect(() => {

@@ -2,6 +2,7 @@ import type { Entry } from '../../../shared/types'
 import { FeedViewType } from '../../../shared/types'
 import { groupEntriesByDate, type DateGroup } from './date-groups'
 import { collapseCoverOnlyBeforeVideoEntries } from './entry-media-decision'
+import { LRUCache } from './lru-cache'
 
 export type EntryListSocialRow =
   | {
@@ -30,13 +31,39 @@ export interface EntryListDerivedModel {
   hasMoreGridEntries: boolean
 }
 
-export function buildEntryListDerivedModel(input: {
+type EntryListDerivedModelInput = {
   baseRenderEntries: Entry[]
   activeView: FeedViewType | null
   groupByDate: boolean
   isGridMode: boolean
   gridVisibleCount: number
-}): EntryListDerivedModel {
+}
+
+type EntryListDerivedModelCacheRecord = EntryListDerivedModelInput & {
+  model: EntryListDerivedModel
+}
+
+const entryListDerivedModelCache = new LRUCache<
+  string,
+  EntryListDerivedModelCacheRecord
+>(8)
+
+function isSameDerivedModelInput(
+  record: EntryListDerivedModelCacheRecord,
+  input: EntryListDerivedModelInput,
+): boolean {
+  return (
+    record.baseRenderEntries === input.baseRenderEntries &&
+    record.activeView === input.activeView &&
+    record.groupByDate === input.groupByDate &&
+    record.isGridMode === input.isGridMode &&
+    record.gridVisibleCount === input.gridVisibleCount
+  )
+}
+
+export function buildEntryListDerivedModel(
+  input: EntryListDerivedModelInput,
+): EntryListDerivedModel {
   const renderEntries =
     input.activeView === FeedViewType.SocialMedia
       ? collapseCoverOnlyBeforeVideoEntries(input.baseRenderEntries)
@@ -76,6 +103,24 @@ export function buildEntryListDerivedModel(input: {
     hasMoreGridEntries:
       input.isGridMode && input.gridVisibleCount < renderEntries.length,
   }
+}
+
+export function buildCachedEntryListDerivedModel(
+  input: EntryListDerivedModelInput & { cacheKey: string },
+): EntryListDerivedModel {
+  const cached = entryListDerivedModelCache.get(input.cacheKey)
+  if (cached && isSameDerivedModelInput(cached, input)) return cached.model
+
+  const model = buildEntryListDerivedModel(input)
+  entryListDerivedModelCache.set(input.cacheKey, {
+    baseRenderEntries: input.baseRenderEntries,
+    activeView: input.activeView,
+    groupByDate: input.groupByDate,
+    isGridMode: input.isGridMode,
+    gridVisibleCount: input.gridVisibleCount,
+    model,
+  })
+  return model
 }
 
 function buildSocialRows(input: {

@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useDiscoverStore } from '../../store/discover-store'
+import { useStoreShallow } from '../../store/helpers'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
 import { useQuickSearchStore } from '../../store/quick-search-store'
@@ -321,7 +322,20 @@ export function Sidebar({ width }: { width?: number }) {
     isRefreshing,
     removeFeed,
     updateFeed,
-  } = useFeedStore()
+    addFeed,
+  } = useStoreShallow(useFeedStore, (s) => ({
+    feeds: s.feeds,
+    selectedFeedId: s.selectedFeedId,
+    activeView: s.activeView,
+    loadFeeds: s.loadFeeds,
+    refreshAll: s.refreshAll,
+    refreshFeed: s.refreshFeed,
+    refreshMultiple: s.refreshMultiple,
+    isRefreshing: s.isRefreshing,
+    removeFeed: s.removeFeed,
+    updateFeed: s.updateFeed,
+    addFeed: s.addFeed,
+  }))
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
     () =>
@@ -357,7 +371,7 @@ export function Sidebar({ width }: { width?: number }) {
       )
     })
   }, [filteredFeeds, allFeedsSearchLower])
-  const { markAllRead } = useEntryStore()
+  const markAllRead = useEntryStore((s) => s.markAllRead)
   const settingsLoaded = useSettingsStore((s) => s.isLoaded)
   const showRecommended = useSettingsStore(
     (s) => s.settings.general.showRecommended,
@@ -383,7 +397,7 @@ export function Sidebar({ width }: { width?: number }) {
     return valid.length > 0 ? valid : fallback
   }, [rawViewTabs])
   const language = useSettingsStore((s) => s.settings.general.language)
-  const { isOpen: isDiscoverOpen } = useDiscoverStore()
+  const isDiscoverOpen = useDiscoverStore((s) => s.isOpen)
   const isDigestRoute = location.pathname === '/digest'
   const toggleSearch = useQuickSearchStore((s) => s.toggle)
   const isSearchOpen = useQuickSearchStore((s) => s.isOpen)
@@ -640,7 +654,6 @@ export function Sidebar({ width }: { width?: number }) {
   const rsshubInstance =
     useSettingsStore((s) => s.settings.general.rsshubInstance) ||
     'https://rsshub.pseudoyu.com'
-  const { addFeed } = useFeedStore()
 
   // Instagram user search state
   const [instagramSearch, setInstagramSearch] = useState('')

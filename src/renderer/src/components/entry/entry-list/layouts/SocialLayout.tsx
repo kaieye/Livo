@@ -15,6 +15,7 @@ export interface SocialLayoutProps {
   feedSiteUrlById: Map<string, string | undefined>
   feedUrlById: Map<string, string | undefined>
   dimRead: boolean
+  cacheKey: string
   onSelectEntry: (entry: Entry) => void
   onMarkAboveRead: (entryId: string) => void
   onMarkBelowRead: (entryId: string) => void
@@ -32,6 +33,7 @@ export function SocialLayout({
   feedSiteUrlById,
   feedUrlById,
   dimRead,
+  cacheKey,
   onSelectEntry,
   onMarkAboveRead,
   onMarkBelowRead,
@@ -42,6 +44,7 @@ export function SocialLayout({
   const virtualizer = useSocialVirtualizer({
     socialRows,
     scrollElement: scrollRef,
+    cacheKey,
   })
   const virtualRows = virtualizer.getVirtualItems()
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
 import {
+  buildCachedWideViewEntryModel,
   buildWideViewBaseEntries,
   buildWideViewEntryModel,
 } from './wide-view-entry-model'
@@ -167,5 +168,47 @@ describe('buildWideViewEntryModel', () => {
       title: 'Video Feed',
       imageUrl: 'https://example.com/avatar.png',
     })
+  })
+
+  it('同一宽视图范围和同一数据引用复用派生模型缓存', () => {
+    const feeds = [feed({ id: 'feed-a' })]
+    const entries = [entry({ id: 'entry-a', feedId: 'feed-a' })]
+    const feedById = feedMap(feeds)
+    const input = {
+      entries,
+      viewFilteredEntries: entries,
+      feedById,
+      isLoading: false,
+      isSocialDedupeProcessing: false,
+      cacheKey: 'wide-view-cache-test',
+    }
+
+    const first = buildCachedWideViewEntryModel(input)
+    const second = buildCachedWideViewEntryModel(input)
+
+    expect(second).toBe(first)
+  })
+
+  it('feed 映射引用变化时不会复用宽视图缓存', () => {
+    const sourceFeed = feed({ id: 'feed-a' })
+    const entries = [entry({ id: 'entry-a', feedId: sourceFeed.id })]
+    const base = {
+      entries,
+      viewFilteredEntries: entries,
+      isLoading: false,
+      isSocialDedupeProcessing: false,
+      cacheKey: 'wide-view-cache-invalidates',
+    }
+
+    const first = buildCachedWideViewEntryModel({
+      ...base,
+      feedById: feedMap([sourceFeed]),
+    })
+    const second = buildCachedWideViewEntryModel({
+      ...base,
+      feedById: feedMap([sourceFeed]),
+    })
+
+    expect(second).not.toBe(first)
   })
 })

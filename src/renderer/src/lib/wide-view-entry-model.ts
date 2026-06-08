@@ -1,8 +1,10 @@
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
 import {
+  buildCachedEntryReadingSurfaceScopeModel,
   buildEntryReadingSurfaceRenderModel,
   buildEntryReadingSurfaceScopeModel,
 } from './entry-reading-surface-model'
+import { LRUCache } from './lru-cache'
 
 export interface TimelineFeedMeta {
   title?: string
@@ -27,6 +29,38 @@ export interface WideViewEntryModel {
   renderEntryIndexById: Map<string, number>
 }
 
+type WideViewEntryModelInput = {
+  entries: Entry[]
+  viewFilteredEntries: Entry[]
+  feedById: Map<string, Feed>
+  isLoading: boolean
+  isSocialDedupeProcessing: boolean
+  allowStaleEntriesWhileLoading?: boolean
+}
+
+type WideViewEntryModelCacheRecord = WideViewEntryModelInput & {
+  model: WideViewEntryModel
+}
+
+const wideViewEntryModelCache = new LRUCache<
+  string,
+  WideViewEntryModelCacheRecord
+>(8)
+
+function isSameWideViewEntryModelInput(
+  record: WideViewEntryModelCacheRecord,
+  input: WideViewEntryModelInput,
+): boolean {
+  return (
+    record.entries === input.entries &&
+    record.viewFilteredEntries === input.viewFilteredEntries &&
+    record.feedById === input.feedById &&
+    record.isLoading === input.isLoading &&
+    record.isSocialDedupeProcessing === input.isSocialDedupeProcessing &&
+    record.allowStaleEntriesWhileLoading === input.allowStaleEntriesWhileLoading
+  )
+}
+
 export function buildWideViewBaseEntries(input: {
   entries: Entry[]
   feeds: Feed[]
@@ -39,14 +73,15 @@ export function buildWideViewBaseEntries(input: {
   return buildEntryReadingSurfaceScopeModel(input).scopedEntries
 }
 
-export function buildWideViewEntryModel(input: {
-  entries: Entry[]
-  viewFilteredEntries: Entry[]
-  feedById: Map<string, Feed>
-  isLoading: boolean
-  isSocialDedupeProcessing: boolean
-  allowStaleEntriesWhileLoading?: boolean
-}): WideViewEntryModel {
+export function buildCachedWideViewBaseEntries(
+  input: Parameters<typeof buildWideViewBaseEntries>[0] & { cacheKey: string },
+): Entry[] {
+  return buildCachedEntryReadingSurfaceScopeModel(input).scopedEntries
+}
+
+export function buildWideViewEntryModel(
+  input: WideViewEntryModelInput,
+): WideViewEntryModel {
   const { renderEntries, shouldShowLoadingSkeleton } =
     buildEntryReadingSurfaceRenderModel({
       sourceEntries: input.entries,
@@ -95,4 +130,25 @@ export function buildWideViewEntryModel(input: {
     renderEntryById,
     renderEntryIndexById,
   }
+}
+
+export function buildCachedWideViewEntryModel(
+  input: WideViewEntryModelInput & { cacheKey: string },
+): WideViewEntryModel {
+  const cached = wideViewEntryModelCache.get(input.cacheKey)
+  if (cached && isSameWideViewEntryModelInput(cached, input)) {
+    return cached.model
+  }
+
+  const model = buildWideViewEntryModel(input)
+  wideViewEntryModelCache.set(input.cacheKey, {
+    entries: input.entries,
+    viewFilteredEntries: input.viewFilteredEntries,
+    feedById: input.feedById,
+    isLoading: input.isLoading,
+    isSocialDedupeProcessing: input.isSocialDedupeProcessing,
+    allowStaleEntriesWhileLoading: input.allowStaleEntriesWhileLoading,
+    model,
+  })
+  return model
 }

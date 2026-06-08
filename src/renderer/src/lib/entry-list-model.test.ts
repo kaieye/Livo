@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { FeedViewType, type Entry } from '../../../shared/types'
-import { buildEntryListDerivedModel } from './entry-list-model'
+import {
+  buildCachedEntryListDerivedModel,
+  buildEntryListDerivedModel,
+} from './entry-list-model'
 
 function entry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -96,5 +99,49 @@ describe('buildEntryListDerivedModel', () => {
     })
 
     expect(model.renderEntries.map((item) => item.id)).toEqual(['video'])
+  })
+
+  it('同一范围和同一数据引用复用派生模型缓存', () => {
+    const entries = [entry({ id: 'a' }), entry({ id: 'b' })]
+    const input = {
+      baseRenderEntries: entries,
+      activeView: FeedViewType.Articles,
+      groupByDate: false,
+      isGridMode: false,
+      gridVisibleCount: 40,
+      cacheKey: 'entry-list-cache-test',
+    }
+
+    const first = buildCachedEntryListDerivedModel(input)
+    const second = buildCachedEntryListDerivedModel(input)
+
+    expect(second).toBe(first)
+  })
+
+  it('可见数量变化时不会复用网格派生缓存', () => {
+    const entries = [entry({ id: 'a' }), entry({ id: 'b' }), entry({ id: 'c' })]
+    const base = {
+      baseRenderEntries: entries,
+      activeView: FeedViewType.Pictures,
+      groupByDate: false,
+      isGridMode: true,
+      cacheKey: 'entry-list-cache-invalidates',
+    }
+
+    const first = buildCachedEntryListDerivedModel({
+      ...base,
+      gridVisibleCount: 2,
+    })
+    const second = buildCachedEntryListDerivedModel({
+      ...base,
+      gridVisibleCount: 3,
+    })
+
+    expect(second).not.toBe(first)
+    expect(second.gridRows.flat().map((item) => item.id)).toEqual([
+      'a',
+      'b',
+      'c',
+    ])
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
 import {
+  buildCachedEntryReadingSurfaceScopeModel,
   buildEntryReadingSurfaceRenderModel,
   buildEntryReadingSurfaceScopeModel,
 } from './entry-reading-surface-model'
@@ -110,6 +111,60 @@ describe('buildEntryReadingSurfaceScopeModel', () => {
     })
 
     expect(model.scopedEntries).toBe(entries)
+  })
+
+  it('同一范围和同一数据引用复用派生模型缓存', () => {
+    const feeds = [feed({ id: 'feed-a' })]
+    const entries = [entry({ id: 'entry-a', feedId: 'feed-a' })]
+    const feedById = new Map(feeds.map((item) => [item.id, item] as const))
+
+    const first = buildCachedEntryReadingSurfaceScopeModel({
+      entries,
+      feeds,
+      feedById,
+      activeView: FeedViewType.Articles,
+      selectedFeedId: null,
+      showRecommended: false,
+      recommendedCategory: RECOMMENDED_CATEGORY,
+      cacheKey: 'scope-cache-test',
+    })
+    const second = buildCachedEntryReadingSurfaceScopeModel({
+      entries,
+      feeds,
+      feedById,
+      activeView: FeedViewType.Articles,
+      selectedFeedId: null,
+      showRecommended: false,
+      recommendedCategory: RECOMMENDED_CATEGORY,
+      cacheKey: 'scope-cache-test',
+    })
+
+    expect(second).toBe(first)
+  })
+
+  it('数据引用变化时不会复用范围缓存', () => {
+    const feeds = [feed({ id: 'feed-a' })]
+    const feedById = new Map(feeds.map((item) => [item.id, item] as const))
+    const base = {
+      feeds,
+      feedById,
+      activeView: FeedViewType.Articles,
+      selectedFeedId: null,
+      showRecommended: false,
+      recommendedCategory: RECOMMENDED_CATEGORY,
+      cacheKey: 'scope-cache-invalidates',
+    }
+
+    const first = buildCachedEntryReadingSurfaceScopeModel({
+      ...base,
+      entries: [entry({ id: 'entry-a', feedId: 'feed-a' })],
+    })
+    const second = buildCachedEntryReadingSurfaceScopeModel({
+      ...base,
+      entries: [entry({ id: 'entry-a', feedId: 'feed-a' })],
+    })
+
+    expect(second).not.toBe(first)
   })
 })
 

@@ -139,13 +139,9 @@ export function Layout() {
       feeds: s.feeds,
     }),
   )
-  const { selectEntry, prefetchEntries } = useStoreShallow(
-    useEntryStore,
-    (s) => ({
-      selectEntry: s.selectEntry,
-      prefetchEntries: s.prefetchEntries,
-    }),
-  )
+  const { prefetchEntries } = useStoreShallow(useEntryStore, (s) => ({
+    prefetchEntries: s.prefetchEntries,
+  }))
   const isContentFocusHighlighted = useLayoutFocusTarget(
     'content',
     contentFocusRef,
@@ -157,8 +153,9 @@ export function Layout() {
   // Clear stale detail content when switching view/feed scope.
   useLayoutEffect(() => {
     performance.mark('vs:selectEntry-null')
-    void selectEntry(null)
-  }, [activeView, selectedFeedId, selectEntry])
+    const entryStore = useEntryStore.getState()
+    if (entryStore.selectedEntry) void entryStore.selectEntry(null)
+  }, [activeView, selectedFeedId])
 
   // PERF: mark when React commits the new view layout (before paint)
   useLayoutEffect(() => {

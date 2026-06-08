@@ -518,6 +518,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
 
   selectEntry: async (entry) => {
     if (!entry) {
+      if (!get().selectedEntry && !get().isSelectedEntryHydrating) return
       set({ selectedEntry: null, isSelectedEntryHydrating: false })
       return
     }

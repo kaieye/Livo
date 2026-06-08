@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 
 import { FeedViewType, type Entry, type Feed } from '../../../shared/types'
-import { buildEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
-import { buildWideViewEntryModel } from '../lib/wide-view-entry-model'
+import {
+  buildCachedWideViewBaseEntries,
+  buildCachedWideViewEntryModel,
+} from '../lib/wide-view-entry-model'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { useAsyncSocialDedupe } from './useAsyncSocialDedupe'
 
@@ -23,9 +25,12 @@ export function useWideViewEntries({
   showRecommended: boolean
   isLoading: boolean
 }) {
+  const scopeCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${
+    showRecommended ? 'with-recommended' : 'no-recommended'
+  }`
   const baseFilteredEntries = useMemo(
     () =>
-      buildEntryReadingSurfaceScopeModel({
+      buildCachedWideViewBaseEntries({
         entries,
         feeds,
         feedById,
@@ -33,8 +38,17 @@ export function useWideViewEntries({
         selectedFeedId,
         showRecommended,
         recommendedCategory: RECOMMENDED_CATEGORY,
-      }).scopedEntries,
-    [activeView, entries, feedById, feeds, selectedFeedId, showRecommended],
+        cacheKey: scopeCacheKey,
+      }),
+    [
+      activeView,
+      entries,
+      feedById,
+      feeds,
+      scopeCacheKey,
+      selectedFeedId,
+      showRecommended,
+    ],
   )
 
   const shouldDedupeSocialEntries = activeView === FeedViewType.SocialMedia
@@ -47,13 +61,14 @@ export function useWideViewEntries({
   })
 
   const model = useMemo(() => {
-    const result = buildWideViewEntryModel({
+    const result = buildCachedWideViewEntryModel({
       entries,
       viewFilteredEntries,
       feedById,
       isLoading,
       isSocialDedupeProcessing,
       allowStaleEntriesWhileLoading: !selectedFeedId,
+      cacheKey: `${scopeCacheKey}:wide-model`,
     })
     // PERF: mark when WideView entry model computation is done
     performance.mark('vs:wideview-memos')
@@ -63,6 +78,7 @@ export function useWideViewEntries({
     feedById,
     isLoading,
     isSocialDedupeProcessing,
+    scopeCacheKey,
     selectedFeedId,
     viewFilteredEntries,
   ])

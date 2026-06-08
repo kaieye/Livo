@@ -10,7 +10,7 @@ import {
   buildHomeFeedLoadOptions,
   computeViewFeedIds,
 } from '../lib/home-feed-scope'
-import { buildEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
+import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
@@ -136,6 +136,13 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     () => getEntryLoadLimit(activeView),
     [activeView],
   )
+  const feedByIdMap = useMemo(
+    () => new Map(feeds.map((feed) => [feed.id, feed] as const)),
+    [feeds],
+  )
+  const scopeCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${
+    filterMode === 'unread' ? 'unread' : 'all'
+  }:${showRecommended ? 'with-recommended' : 'no-recommended'}`
 
   // View-scoped feed IDs for refresh targeting (excludes recommended feeds)
   const viewFeedIds = useMemo(
@@ -208,15 +215,25 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
 
   const readingSurfaceScope = useMemo(
     () =>
-      buildEntryReadingSurfaceScopeModel({
+      buildCachedEntryReadingSurfaceScopeModel({
         entries,
         feeds,
+        feedById: feedByIdMap,
         activeView,
         selectedFeedId,
         showRecommended,
         recommendedCategory: RECOMMENDED_CATEGORY,
+        cacheKey: scopeCacheKey,
       }),
-    [activeView, entries, feeds, selectedFeedId, showRecommended],
+    [
+      activeView,
+      entries,
+      feedByIdMap,
+      feeds,
+      scopeCacheKey,
+      selectedFeedId,
+      showRecommended,
+    ],
   )
   const {
     feedById,

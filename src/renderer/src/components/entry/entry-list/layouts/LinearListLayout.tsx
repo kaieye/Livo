@@ -12,6 +12,7 @@ export interface LinearListLayoutProps {
   feedTitleById: Map<string, string>
   dimRead: boolean
   imageProxy: boolean
+  cacheKey: string
   onSelectEntry: (entry: Entry) => void
   onContextMenu: (e: React.MouseEvent, entryId: string) => void
 }
@@ -25,12 +26,14 @@ export function LinearListLayout({
   feedTitleById,
   dimRead,
   imageProxy,
+  cacheKey,
   onSelectEntry,
   onContextMenu,
 }: LinearListLayoutProps) {
   const virtualizer = useLinearVirtualizer({
     entries: virtualizerEntries,
     scrollElement: scrollRef,
+    cacheKey,
   })
   const virtualItems = virtualizer.getVirtualItems()
 
