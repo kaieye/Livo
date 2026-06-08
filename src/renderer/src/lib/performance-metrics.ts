@@ -64,7 +64,9 @@ export interface PerformanceReport {
   status: 'excellent' | 'good' | 'needs-improvement'
 }
 
-export function generatePerformanceReport(targets: Record<string, number>): PerformanceReport[] {
+export function generatePerformanceReport(
+  targets: Record<string, number>,
+): PerformanceReport[] {
   const reports: PerformanceReport[] = []
 
   for (const [metricName, targetValue] of Object.entries(targets)) {
@@ -72,7 +74,10 @@ export function generatePerformanceReport(targets: Record<string, number>): Perf
     if (!metric) continue
 
     const achieved = metric.value <= targetValue
-    const improvement = calculateImprovement(targetValue, metric.value).percentage
+    const improvement = calculateImprovement(
+      targetValue,
+      metric.value,
+    ).percentage
 
     let status: 'excellent' | 'good' | 'needs-improvement'
     if (metric.value <= targetValue * 0.8) {
@@ -111,7 +116,12 @@ export function printPerformanceSummary(): void {
 
   console.group('[Livo Performance Summary]')
   for (const report of reports) {
-    const emoji = report.status === 'excellent' ? '🎉' : report.status === 'good' ? '✅' : '⚠️'
+    const emoji =
+      report.status === 'excellent'
+        ? '🎉'
+        : report.status === 'good'
+          ? '✅'
+          : '⚠️'
     const statusText = report.achieved ? 'ACHIEVED' : 'NEEDS WORK'
     console.log(
       `${emoji} ${report.metric}: ${report.current.toFixed(0)}ms / ${report.target}ms - ${statusText}`,

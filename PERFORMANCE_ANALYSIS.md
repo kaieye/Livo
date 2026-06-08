@@ -48,6 +48,7 @@ LCP: 3631-7067ms (取决于渲染策略)
    - 用户立即看到内容
 
 2. **Livo 每次都查询数据库**
+
    ```typescript
    // Livo: 每次启动都从后端 SQLite 查询
    const snapshot = await window.api.reader.snapshot({

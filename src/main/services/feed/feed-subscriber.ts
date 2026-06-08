@@ -240,7 +240,9 @@ export async function subscribeFeed(
         getEventBus().send('feeds:updated', {
           feedId: id,
           feedIds: [id],
-          feeds: updatedFeed ? [{ id: updatedFeed.id, imageUrl: updatedFeed.imageUrl }] : undefined,
+          feeds: updatedFeed
+            ? [{ id: updatedFeed.id, imageUrl: updatedFeed.imageUrl }]
+            : undefined,
         })
       }
     } catch {

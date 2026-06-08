@@ -15,14 +15,16 @@
       // Detect theme BEFORE any paint to avoid FOUC.
       // Mirrors the theme detection that React would do, so the skeleton
       // renders in the correct color scheme from the very first frame.
-      (function () {
+      ;(function () {
         try {
           var stored = localStorage.getItem('livo-theme')
           if (stored === '"dark"' || stored === 'dark') {
             document.documentElement.classList.add('dark')
           } else if (stored === '"light"' || stored === 'light') {
             document.documentElement.classList.remove('dark')
-          } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          } else if (
+            window.matchMedia('(prefers-color-scheme: dark)').matches
+          ) {
             document.documentElement.classList.add('dark')
           }
         } catch (_) {}
@@ -53,7 +55,10 @@
           --livo-skel-pulse-to: #3a3a3c;
         }
 
-        html, body, #root, #app-skeleton {
+        html,
+        body,
+        #root,
+        #app-skeleton {
           height: 100%;
           width: 100%;
           margin: 0;
@@ -65,7 +70,8 @@
           inset: 0;
           z-index: 1000;
           display: flex;
-          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
             Roboto, 'Helvetica Neue', sans-serif;
         }
 
@@ -160,8 +166,13 @@
 
         /* Pulse animation */
         @keyframes livo-skel-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.4;
+          }
         }
 
         .livo-skel-pulse {
@@ -171,90 +182,210 @@
         }
 
         /* Shared dimension helpers */
-        .livo-skel-h-5 { height: 20px; }
-        .livo-skel-h-3 { height: 12px; }
-        .livo-skel-h-2 { height: 8px; }
-        .livo-skel-h-8 { height: 32px; }
-        .livo-skel-h-9 { height: 36px; }
-        .livo-skel-h-6 { height: 24px; }
+        .livo-skel-h-5 {
+          height: 20px;
+        }
+        .livo-skel-h-3 {
+          height: 12px;
+        }
+        .livo-skel-h-2 {
+          height: 8px;
+        }
+        .livo-skel-h-8 {
+          height: 32px;
+        }
+        .livo-skel-h-9 {
+          height: 36px;
+        }
+        .livo-skel-h-6 {
+          height: 24px;
+        }
 
-        .livo-skel-w-20 { width: 80px; }
-        .livo-skel-w-16 { width: 64px; }
-        .livo-skel-w-32 { width: 128px; }
-        .livo-skel-w-24 { width: 96px; }
+        .livo-skel-w-20 {
+          width: 80px;
+        }
+        .livo-skel-w-16 {
+          width: 64px;
+        }
+        .livo-skel-w-32 {
+          width: 128px;
+        }
+        .livo-skel-w-24 {
+          width: 96px;
+        }
 
-        .livo-skel-w-3-4 { width: 75%; }
-        .livo-skel-w-5-6 { width: 83.3%; }
-        .livo-skel-w-full { width: 100%; }
+        .livo-skel-w-3-4 {
+          width: 75%;
+        }
+        .livo-skel-w-5-6 {
+          width: 83.3%;
+        }
+        .livo-skel-w-full {
+          width: 100%;
+        }
 
-        .livo-skel-rounded { border-radius: 4px; }
-        .livo-skel-rounded-full { border-radius: 9999px; }
+        .livo-skel-rounded {
+          border-radius: 4px;
+        }
+        .livo-skel-rounded-full {
+          border-radius: 9999px;
+        }
 
-        .livo-skel-mb-2 { margin-bottom: 8px; }
-        .livo-skel-mb-3 { margin-bottom: 12px; }
-        .livo-skel-mb-6 { margin-bottom: 24px; }
-        .livo-skel-mt-4 { margin-top: 16px; }
+        .livo-skel-mb-2 {
+          margin-bottom: 8px;
+        }
+        .livo-skel-mb-3 {
+          margin-bottom: 12px;
+        }
+        .livo-skel-mb-6 {
+          margin-bottom: 24px;
+        }
+        .livo-skel-mt-4 {
+          margin-top: 16px;
+        }
 
-        .livo-skel-gap-2 { gap: 8px; }
-        .livo-skel-gap-3 { gap: 12px; }
-        .livo-skel-flex { display: flex; }
-        .livo-skel-flex-col { display: flex; flex-direction: column; }
-        .livo-skel-items-center { align-items: center; }
+        .livo-skel-gap-2 {
+          gap: 8px;
+        }
+        .livo-skel-gap-3 {
+          gap: 12px;
+        }
+        .livo-skel-flex {
+          display: flex;
+        }
+        .livo-skel-flex-col {
+          display: flex;
+          flex-direction: column;
+        }
+        .livo-skel-items-center {
+          align-items: center;
+        }
       </style>
 
       <!-- Sidebar -->
       <div class="livo-skel-sidebar">
         <div class="livo-skel-sidebar-header">
-          <div class="livo-skel-pulse livo-skel-h-5 livo-skel-w-20 livo-skel-rounded"></div>
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-rounded" style="width:32px"></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-5 livo-skel-w-20 livo-skel-rounded"
+          ></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-rounded"
+            style="width: 32px"
+          ></div>
         </div>
         <div class="livo-skel-sidebar-tabs">
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded" style="animation-delay:0.1s"></div>
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded" style="animation-delay:0.2s"></div>
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded" style="animation-delay:0.3s"></div>
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded" style="animation-delay:0.4s"></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded"
+            style="animation-delay: 0.1s"
+          ></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded"
+            style="animation-delay: 0.2s"
+          ></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded"
+            style="animation-delay: 0.3s"
+          ></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-w-16 livo-skel-rounded"
+            style="animation-delay: 0.4s"
+          ></div>
         </div>
         <div class="livo-skel-sidebar-feeds">
           <div class="livo-skel-feed-item">
-            <div class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full" style="width:36px;animation-delay:0.08s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full"
+              style="width: 36px; animation-delay: 0.08s"
+            ></div>
             <div class="livo-skel-flex-col livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded" style="width:120px;animation-delay:0.08s"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:80px;animation-delay:0.13s;opacity:0.6"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded"
+                style="width: 120px; animation-delay: 0.08s"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 80px; animation-delay: 0.13s; opacity: 0.6"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-feed-item">
-            <div class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full" style="width:36px;animation-delay:0.16s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full"
+              style="width: 36px; animation-delay: 0.16s"
+            ></div>
             <div class="livo-skel-flex-col livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded" style="width:100px;animation-delay:0.16s"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:60px;animation-delay:0.21s;opacity:0.6"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded"
+                style="width: 100px; animation-delay: 0.16s"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 60px; animation-delay: 0.21s; opacity: 0.6"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-feed-item">
-            <div class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full" style="width:36px;animation-delay:0.24s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full"
+              style="width: 36px; animation-delay: 0.24s"
+            ></div>
             <div class="livo-skel-flex-col livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded" style="width:140px;animation-delay:0.24s"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:70px;animation-delay:0.29s;opacity:0.6"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded"
+                style="width: 140px; animation-delay: 0.24s"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 70px; animation-delay: 0.29s; opacity: 0.6"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-feed-item">
-            <div class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full" style="width:36px;animation-delay:0.32s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full"
+              style="width: 36px; animation-delay: 0.32s"
+            ></div>
             <div class="livo-skel-flex-col livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded" style="width:90px;animation-delay:0.32s"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:50px;animation-delay:0.37s;opacity:0.6"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded"
+                style="width: 90px; animation-delay: 0.32s"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 50px; animation-delay: 0.37s; opacity: 0.6"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-feed-item">
-            <div class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full" style="width:36px;animation-delay:0.40s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full"
+              style="width: 36px; animation-delay: 0.4s"
+            ></div>
             <div class="livo-skel-flex-col livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded" style="width:110px;animation-delay:0.40s"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:65px;animation-delay:0.45s;opacity:0.6"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded"
+                style="width: 110px; animation-delay: 0.4s"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 65px; animation-delay: 0.45s; opacity: 0.6"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-feed-item">
-            <div class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full" style="width:36px;animation-delay:0.48s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-9 livo-skel-rounded-full"
+              style="width: 36px; animation-delay: 0.48s"
+            ></div>
             <div class="livo-skel-flex-col livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded" style="width:130px;animation-delay:0.48s"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:75px;animation-delay:0.53s;opacity:0.6"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded"
+                style="width: 130px; animation-delay: 0.48s"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 75px; animation-delay: 0.53s; opacity: 0.6"
+              ></div>
             </div>
           </div>
         </div>
@@ -263,40 +394,93 @@
       <!-- Entry list -->
       <div class="livo-skel-entry-list">
         <div class="livo-skel-entry-header">
-          <div class="livo-skel-pulse livo-skel-h-6 livo-skel-w-32 livo-skel-rounded"></div>
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-rounded" style="width:32px"></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-6 livo-skel-w-32 livo-skel-rounded"
+          ></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-rounded"
+            style="width: 32px"
+          ></div>
         </div>
         <div class="livo-skel-entries">
           <div class="livo-skel-entry">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2" style="width:85%;animation-delay:0.1s"></div>
-            <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2" style="width:95%;animation-delay:0.15s;opacity:0.6"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2"
+              style="width: 85%; animation-delay: 0.1s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2"
+              style="width: 95%; animation-delay: 0.15s; opacity: 0.6"
+            ></div>
             <div class="livo-skel-flex livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:64px;animation-delay:0.2s;opacity:0.5"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:80px;animation-delay:0.25s;opacity:0.5"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 64px; animation-delay: 0.2s; opacity: 0.5"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 80px; animation-delay: 0.25s; opacity: 0.5"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-entry">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2" style="width:70%;animation-delay:0.2s"></div>
-            <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2" style="width:90%;animation-delay:0.25s;opacity:0.6"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2"
+              style="width: 70%; animation-delay: 0.2s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2"
+              style="width: 90%; animation-delay: 0.25s; opacity: 0.6"
+            ></div>
             <div class="livo-skel-flex livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:56px;animation-delay:0.3s;opacity:0.5"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:70px;animation-delay:0.35s;opacity:0.5"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 56px; animation-delay: 0.3s; opacity: 0.5"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 70px; animation-delay: 0.35s; opacity: 0.5"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-entry">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2" style="width:90%;animation-delay:0.3s"></div>
-            <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2" style="width:80%;animation-delay:0.35s;opacity:0.6"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2"
+              style="width: 90%; animation-delay: 0.3s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2"
+              style="width: 80%; animation-delay: 0.35s; opacity: 0.6"
+            ></div>
             <div class="livo-skel-flex livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:72px;animation-delay:0.4s;opacity:0.5"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:60px;animation-delay:0.45s;opacity:0.5"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 72px; animation-delay: 0.4s; opacity: 0.5"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 60px; animation-delay: 0.45s; opacity: 0.5"
+              ></div>
             </div>
           </div>
           <div class="livo-skel-entry">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2" style="width:75%;animation-delay:0.4s"></div>
-            <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2" style="width:85%;animation-delay:0.45s;opacity:0.6"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-mb-2"
+              style="width: 75%; animation-delay: 0.4s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded livo-skel-mb-2"
+              style="width: 85%; animation-delay: 0.45s; opacity: 0.6"
+            ></div>
             <div class="livo-skel-flex livo-skel-gap-2">
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:48px;animation-delay:0.5s;opacity:0.5"></div>
-              <div class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded" style="width:90px;animation-delay:0.55s;opacity:0.5"></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 48px; animation-delay: 0.5s; opacity: 0.5"
+              ></div>
+              <div
+                class="livo-skel-pulse livo-skel-h-2 livo-skel-rounded"
+                style="width: 90px; animation-delay: 0.55s; opacity: 0.5"
+              ></div>
             </div>
           </div>
         </div>
@@ -305,20 +489,46 @@
       <!-- Content area -->
       <div class="livo-skel-content">
         <div class="livo-skel-content-inner">
-          <div class="livo-skel-pulse livo-skel-h-8 livo-skel-rounded livo-skel-w-3-4 livo-skel-mb-3"></div>
+          <div
+            class="livo-skel-pulse livo-skel-h-8 livo-skel-rounded livo-skel-w-3-4 livo-skel-mb-3"
+          ></div>
           <div class="livo-skel-flex livo-skel-gap-3 livo-skel-mb-6">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-24" style="opacity:0.6"></div>
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-32" style="opacity:0.6"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-24"
+              style="opacity: 0.6"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-32"
+              style="opacity: 0.6"
+            ></div>
           </div>
           <div class="livo-skel-mt-4">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2" style="opacity:0.5;animation-delay:0.15s"></div>
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2" style="opacity:0.5;animation-delay:0.2s"></div>
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-5-6 livo-skel-mb-6" style="opacity:0.5;animation-delay:0.25s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2"
+              style="opacity: 0.5; animation-delay: 0.15s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2"
+              style="opacity: 0.5; animation-delay: 0.2s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-5-6 livo-skel-mb-6"
+              style="opacity: 0.5; animation-delay: 0.25s"
+            ></div>
           </div>
           <div class="livo-skel-mt-4">
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2" style="opacity:0.5;animation-delay:0.30s"></div>
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2" style="opacity:0.5;animation-delay:0.35s"></div>
-            <div class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-3-4 livo-skel-mb-6" style="opacity:0.5;animation-delay:0.40s"></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2"
+              style="opacity: 0.5; animation-delay: 0.3s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-full livo-skel-mb-2"
+              style="opacity: 0.5; animation-delay: 0.35s"
+            ></div>
+            <div
+              class="livo-skel-pulse livo-skel-h-3 livo-skel-rounded livo-skel-w-3-4 livo-skel-mb-6"
+              style="opacity: 0.5; animation-delay: 0.4s"
+            ></div>
           </div>
         </div>
       </div>

@@ -794,7 +794,10 @@ async function runRefreshAllFeeds(
   const sortedStaleFeeds = sortFeedsByPriority(staleFeeds)
 
   // PERF: Use optimal concurrency based on feed characteristics
-  const concurrency = getOptimalConcurrency(sortedStaleFeeds, options.concurrency)
+  const concurrency = getOptimalConcurrency(
+    sortedStaleFeeds,
+    options.concurrency,
+  )
 
   context?.reportProgress({
     completed: 0,
@@ -887,28 +890,33 @@ async function runRefreshAllFeeds(
   const refreshedFeedById = new Map(
     refreshedFeeds.map((feed) => [feed.id, feed]),
   )
-  const itemResults: RefreshRunItemResult[] = sortedStaleFeeds.map((feed, index) => {
-    const refreshed = refreshedFeedById.get(feed.id)
-    const result = settled[index]
-    const before = errorCountBefore.get(feed.id)
-    const failedByErrorCount =
-      before !== undefined && refreshed ? refreshed.errorCount > before : false
-    const failedByReject = result.status === 'rejected'
-    const status = failedByErrorCount || failedByReject ? 'failed' : 'succeeded'
-    const error =
-      status === 'failed'
-        ? refreshed?.lastRefreshError ||
-          (failedByReject ? String(result.reason) : undefined)
-        : undefined
+  const itemResults: RefreshRunItemResult[] = sortedStaleFeeds.map(
+    (feed, index) => {
+      const refreshed = refreshedFeedById.get(feed.id)
+      const result = settled[index]
+      const before = errorCountBefore.get(feed.id)
+      const failedByErrorCount =
+        before !== undefined && refreshed
+          ? refreshed.errorCount > before
+          : false
+      const failedByReject = result.status === 'rejected'
+      const status =
+        failedByErrorCount || failedByReject ? 'failed' : 'succeeded'
+      const error =
+        status === 'failed'
+          ? refreshed?.lastRefreshError ||
+            (failedByReject ? String(result.reason) : undefined)
+          : undefined
 
-    return {
-      feedId: feed.id,
-      feedTitle: refreshed?.title || feed.title,
-      status,
-      newEntries: result.status === 'fulfilled' ? result.value : 0,
-      error,
-    }
-  })
+      return {
+        feedId: feed.id,
+        feedTitle: refreshed?.title || feed.title,
+        status,
+        newEntries: result.status === 'fulfilled' ? result.value : 0,
+        error,
+      }
+    },
+  )
 
   const successCount = itemResults.filter(
     (item) => item.status === 'succeeded',
@@ -1172,14 +1180,16 @@ async function runBootstrapRefresh(
       hasAvatar,
       // PERF: Send incremental update with feed patch
       feedIds: [feed.id],
-      feeds: refreshed ? [
-        {
-          id: refreshed.id,
-          imageUrl: refreshed.imageUrl,
-          lastFetched: refreshed.lastFetched,
-          errorCount: refreshed.errorCount,
-        },
-      ] : undefined,
+      feeds: refreshed
+        ? [
+            {
+              id: refreshed.id,
+              imageUrl: refreshed.imageUrl,
+              lastFetched: refreshed.lastFetched,
+              errorCount: refreshed.errorCount,
+            },
+          ]
+        : undefined,
     })
 
     if (hasEntries && hasAvatar) break
