@@ -136,11 +136,75 @@ function isVideoDurationEnrichmentEnabled(): boolean {
 
 /** Default data-maintenance constants (overridden by settings at call site) */
 const DEFAULT_FRESHNESS_TTL_MINUTES = 10
-const DEFAULT_CONCURRENCY = 8
 const DEFAULT_FEED_REFRESH_TIMEOUT_MS = 12000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS = 15 * 60 * 1000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS = 90 * 60 * 1000
 const AUTO_REFRESH_MIN_DELAY_MS = 1000
+
+/**
+ * Get optimal concurrency level based on feed characteristics.
+ * PERF: Slow feeds (Instagram/Bilibili) need lower concurrency to avoid blocking the queue.
+ */
+function getOptimalConcurrency(
+  feeds: Feed[],
+  userConcurrency?: number,
+): number {
+  if (userConcurrency) return userConcurrency
+
+  const hasSlowFeeds = feeds.some(
+    (feed) =>
+      isInstagramFeedUrl(feed.url) ||
+      isBilibiliDynamicFeedUrl(feed.url) ||
+      isBilibiliVideoFeedUrl(feed.url),
+  )
+
+  // Reduce concurrency when slow feeds are present to prevent blocking
+  if (hasSlowFeeds) return 4
+
+  const feedCount = feeds.length
+  if (feedCount < 10) return Math.min(feedCount, 6)
+  if (feedCount < 50) return 8
+  return 12
+}
+
+/**
+ * Sort feeds by priority for optimal refresh order.
+ * PERF: Prioritize feeds that are likely to succeed quickly.
+ * Priority order:
+ * 1. Feeds with fewer errors (more likely to succeed)
+ * 2. Feeds that haven't been fetched recently (more stale)
+ * 3. Non-slow feeds before slow feeds
+ */
+function sortFeedsByPriority(feeds: Feed[]): Feed[] {
+  return [...feeds].sort((a, b) => {
+    // 1. Prioritize feeds with fewer errors
+    if (a.errorCount !== b.errorCount) {
+      return a.errorCount - b.errorCount
+    }
+
+    // 2. Prioritize older feeds (haven't been fetched recently)
+    const aLastFetched = a.lastFetched || 0
+    const bLastFetched = b.lastFetched || 0
+    if (aLastFetched !== bLastFetched) {
+      return aLastFetched - bLastFetched
+    }
+
+    // 3. Prioritize non-slow feeds (Instagram/Bilibili are slow)
+    const aIsSlow =
+      isInstagramFeedUrl(a.url) ||
+      isBilibiliDynamicFeedUrl(a.url) ||
+      isBilibiliVideoFeedUrl(a.url)
+    const bIsSlow =
+      isInstagramFeedUrl(b.url) ||
+      isBilibiliDynamicFeedUrl(b.url) ||
+      isBilibiliVideoFeedUrl(b.url)
+    if (aIsSlow !== bIsSlow) {
+      return aIsSlow ? 1 : -1
+    }
+
+    return 0
+  })
+}
 
 function isInstagramFeedUrl(feedUrl: string | undefined): boolean {
   return _isInstagramUserFeed(feedUrl || '')
@@ -709,7 +773,6 @@ async function runRefreshAllFeeds(
     : allFeeds.filter((f) => f.category !== RECOMMENDED_CATEGORY)
   const freshnessTTL =
     (options.freshnessTTL ?? DEFAULT_FRESHNESS_TTL_MINUTES) * 60 * 1000
-  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY
   const force = options.force ?? false
   const now = Date.now()
   const settingsCleanup: CleanupOptions = {
@@ -727,13 +790,19 @@ async function runRefreshAllFeeds(
         return now - feed.lastFetched >= freshnessTTL
       })
 
+  // PERF: Sort feeds by priority for optimal refresh order
+  const sortedStaleFeeds = sortFeedsByPriority(staleFeeds)
+
+  // PERF: Use optimal concurrency based on feed characteristics
+  const concurrency = getOptimalConcurrency(sortedStaleFeeds, options.concurrency)
+
   context?.reportProgress({
     completed: 0,
-    total: staleFeeds.length,
+    total: sortedStaleFeeds.length,
     message: 'refresh all',
   })
 
-  if (staleFeeds.length === 0) {
+  if (sortedStaleFeeds.length === 0) {
     getDb().maintenance.cleanupEntries(cleanupOptions)
     options.onProgress?.({
       feedId: '',
@@ -755,7 +824,7 @@ async function runRefreshAllFeeds(
 
   // Track pre-refresh error counts to detect fresh failures
   const errorCountBefore = new Map<string, number>()
-  for (const feed of staleFeeds) {
+  for (const feed of sortedStaleFeeds) {
     errorCountBefore.set(feed.id, feed.errorCount)
   }
 
@@ -765,7 +834,7 @@ async function runRefreshAllFeeds(
     success: true,
     newEntries: 0,
     completed: 0,
-    total: staleFeeds.length,
+    total: sortedStaleFeeds.length,
     done: false,
   })
 
@@ -773,7 +842,7 @@ async function runRefreshAllFeeds(
   const failedTitles: string[] = []
 
   const settled = await runConcurrencyPool(
-    staleFeeds,
+    sortedStaleFeeds,
     concurrency,
     async (feed) => {
       const newCount = await refreshSingleFeed(feed, { logOperation: false })
@@ -784,7 +853,7 @@ async function runRefreshAllFeeds(
   // Emit per-feed progress events. Done after the pool completes so the
   // listener sees a deterministic order and never a partial set.
   for (let i = 0; i < settled.length; i += 1) {
-    const feed = staleFeeds[i]
+    const feed = sortedStaleFeeds[i]
     const result = settled[i]
     const success = result.status === 'fulfilled'
     const newEntries = success ? result.value : 0
@@ -818,7 +887,7 @@ async function runRefreshAllFeeds(
   const refreshedFeedById = new Map(
     refreshedFeeds.map((feed) => [feed.id, feed]),
   )
-  const itemResults: RefreshRunItemResult[] = staleFeeds.map((feed, index) => {
+  const itemResults: RefreshRunItemResult[] = sortedStaleFeeds.map((feed, index) => {
     const refreshed = refreshedFeedById.get(feed.id)
     const result = settled[index]
     const before = errorCountBefore.get(feed.id)
@@ -1101,6 +1170,16 @@ async function runBootstrapRefresh(
       round: rounds,
       hasEntries,
       hasAvatar,
+      // PERF: Send incremental update with feed patch
+      feedIds: [feed.id],
+      feeds: refreshed ? [
+        {
+          id: refreshed.id,
+          imageUrl: refreshed.imageUrl,
+          lastFetched: refreshed.lastFetched,
+          errorCount: refreshed.errorCount,
+        },
+      ] : undefined,
     })
 
     if (hasEntries && hasAvatar) break

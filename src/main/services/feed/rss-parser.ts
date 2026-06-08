@@ -9,6 +9,7 @@ import {
   mapParsedDynamicFeedToVideoFeed,
 } from '../bilibili/bilibili-video-feed'
 import { assertNetworkFetchUrl } from '../system/network-url-policy'
+import { createLenientParser } from './rss-parser-lenient'
 
 const parser = new RssParser({
   timeout: 20000,
@@ -25,6 +26,33 @@ const parser = new RssParser({
       // NOTE: Do NOT add ["content", "content"] here — it overwrites rss-parser's
       // built-in Atom handling and turns the content string into an xml2js object
       // { _: "html", $: { type: "html" } }, breaking image extraction from HTML body.
+      ['description', 'description'],
+      ['summary', 'summary'],
+      ['link', 'atomLinks', { keepArray: true }],
+      ['itunes:summary', 'itunesSummary'],
+      ['itunes:subtitle', 'itunesSubtitle'],
+      ['itunes:duration', 'itunesDuration'],
+      ['itunes:image', 'itunesImage'],
+      ['media:content', 'media:content'],
+      ['media:thumbnail', 'media:thumbnail'],
+      ['media:group', 'media:group'],
+    ],
+  },
+})
+
+// PERF: Create lenient parser for malformed feeds
+const lenientParser = createLenientParser({
+  timeout: 20000,
+  headers: {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept:
+      'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+  },
+  customFields: {
+    item: [
+      ['content:encoded', 'content:encoded'],
       ['description', 'description'],
       ['summary', 'summary'],
       ['link', 'atomLinks', { keepArray: true }],
@@ -1001,7 +1029,20 @@ async function parseFeedUrl(
   options?: FetchTextOptions,
 ): Promise<RssParser.Output<Record<string, any>>> {
   const text = await fetchFeedText(url, options)
-  return parser.parseString(text)
+
+  // PERF: Try strict parsing first, then fall back to lenient mode
+  try {
+    return await parser.parseString(text)
+  } catch (strictError) {
+    // Strict parsing failed, try lenient mode
+    console.warn(`[RSS Parser] Strict parsing failed for ${url}, trying lenient mode:`, strictError)
+    try {
+      return await lenientParser.parseStringLenient(text)
+    } catch (lenientError) {
+      // Both parsers failed, throw the lenient error (which includes both error messages)
+      throw lenientError
+    }
+  }
 }
 
 export async function fetchAndParseFeed(
@@ -1269,8 +1310,14 @@ export async function fetchAndParseFeed(
           lastModified: result.lastModified,
         }
       }
-      // Parse the fetched body
-      const parsed = await parser.parseString(result.body!)
+      // Parse the fetched body with lenient fallback
+      let parsed: RssParser.Output<Record<string, any>>
+      try {
+        parsed = await parser.parseString(result.body!)
+      } catch (strictError) {
+        console.warn('[RSS Parser] Strict parsing failed for conditional GET, trying lenient mode:', strictError)
+        parsed = await lenientParser.parseStringLenient(result.body!)
+      }
       return {
         data: parsed,
         notModified: false,

@@ -27,6 +27,10 @@ export interface FeedsUpdatedPayload {
   round?: number
   hasEntries?: boolean
   hasAvatar?: boolean
+  /** Optional list of feed IDs that changed. If present, only these feeds need to be updated. */
+  feedIds?: string[]
+  /** Optional partial feed updates for incremental patching */
+  feeds?: Array<Partial<FeedWithCount> & { id: string }>
 }
 
 export interface ImportProgressPayload {

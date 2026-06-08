@@ -41,8 +41,38 @@ export function AppBootstrapProvider({ children }: PropsWithChildren) {
     if (!window.api?.on) return
 
     // Listen for incremental updates from backend
-    const cleanupFeedsUpdated = window.api.on('feeds:updated', () => {
-      loadFeeds() // Reload feeds to get updated counts
+    const cleanupFeedsUpdated = window.api.on('feeds:updated', (payload) => {
+      // PERF: Incremental update if feedIds are provided
+      if (payload?.feedIds && payload.feedIds.length > 0) {
+        // Only reload affected feeds
+        const currentFeeds = useFeedStore.getState().feeds
+        const needsFullReload = payload.feedIds.some(
+          (id) => !currentFeeds.find((f) => f.id === id),
+        )
+
+        if (needsFullReload) {
+          // A feed was added or removed, need full reload
+          loadFeeds()
+        } else if (payload.feeds && payload.feeds.length > 0) {
+          // Patch feeds in place
+          useFeedStore.setState((state) => {
+            const feedMap = new Map(state.feeds.map((f) => [f.id, f]))
+            for (const update of payload.feeds!) {
+              const existing = feedMap.get(update.id)
+              if (existing) {
+                feedMap.set(update.id, { ...existing, ...update })
+              }
+            }
+            return { feeds: Array.from(feedMap.values()) }
+          })
+        } else {
+          // No patch data, need to fetch the specific feeds
+          loadFeeds()
+        }
+      } else {
+        // No feedIds specified, fallback to full reload
+        loadFeeds()
+      }
       // DO NOT clearListCache() - preserve cache for better performance
       reloadEntriesForCurrentScope()
     })

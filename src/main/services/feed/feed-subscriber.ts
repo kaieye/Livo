@@ -235,7 +235,13 @@ export async function subscribeFeed(
       )
       if (resolved && resolved !== immediateImageUrl) {
         getDb().feeds.updateFeed(id, { imageUrl: resolved })
-        getEventBus().send('feeds:updated', { feedId: id })
+        // PERF: Send incremental update with feed patch
+        const updatedFeed = getDb().feeds.getFeedById(id)
+        getEventBus().send('feeds:updated', {
+          feedId: id,
+          feedIds: [id],
+          feeds: updatedFeed ? [{ id: updatedFeed.id, imageUrl: updatedFeed.imageUrl }] : undefined,
+        })
       }
     } catch {
       // Best-effort; feed works without avatar.

@@ -10,7 +10,6 @@ import { useDeepLinkNavigate } from './hooks/useDeepLinkNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useCommandPaletteStore } from './store/command-palette-store'
-import { useAuthStore } from './store/auth-store'
 import { useAppIsReady } from './store/app-store'
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href

@@ -46,6 +46,11 @@ if (_platform === 'darwin' || _platform === 'win32') {
 
 performance.mark('livo-render-start')
 
+// PERF OPTIMIZATION: Start data hydration immediately, before React mounts
+// This allows data loading and React initialization to happen in parallel
+const hydratePromise = hydrateDataToMemory()
+recordAppMetric('hydrate.start', performance.now())
+
 try {
   // Mount React immediately (with skeleton)
   ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -59,8 +64,8 @@ try {
   )
   recordAppMetric('app.reactMounted', performance.now())
 
-  // Hydrate data in parallel, then mark app as ready
-  hydrateDataToMemory()
+  // Wait for data hydration to complete
+  hydratePromise
     .then((result) => {
       console.log(
         `[Livo] Data hydration complete in ${result.timings.total.toFixed(0)}ms`,
