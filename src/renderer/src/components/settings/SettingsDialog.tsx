@@ -20,6 +20,11 @@ import {
   Flame,
   Keyboard,
   User,
+  Sliders,
+  ToggleLeft,
+  Users,
+  ScrollText,
+  BarChart3,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'

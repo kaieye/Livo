@@ -40,10 +40,13 @@ import { startCacheMaintenance } from './services/system/cache-maintenance'
 import { registerSessionPolicies } from './services/system/session-policies'
 import { parseDeepLink } from '../shared/deep-link'
 
+const STARTUP_BACKGROUND_DELAY_MS = 2500
+
 export class AppManager {
   readonly windowManager: WindowManager
   private tray: AppTray | null = null
   private stopCacheMaintenance: (() => void) | null = null
+  private startupBackgroundTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private readonly options: {
@@ -93,30 +96,31 @@ export class AppManager {
     this.configurePlatformIntegration()
     this.registerCacheProtocol()
 
-    await initDatabase()
-    await recoverOrphanBilibiliDynamicFeeds()
-
+    // 提前注册 IPC，窗口加载后可以立刻调用启动接口。
     this.registerIpcHandlers()
     registerAppHandlers(this.windowManager)
+
+    // 先创建窗口，再等待数据库初始化；renderer HTML 和骨架屏可以更早加载。
+    const mainWindow = this.windowManager.createMainWindow()
+
+    // 数据库初始化与 renderer 启动并行，避免主进程先把开窗链路堵住。
+    const dbInitPromise = (async () => {
+      await initDatabase()
+      await recoverOrphanBilibiliDynamicFeeds()
+    })()
 
     const settings = settingsProvider.get()
     await applyProxySettings(settings)
 
-    const mainWindow = this.windowManager.createMainWindow()
     this.createTray()
     this.registerMenu()
 
-    startAggregatorJobs()
-    this.stopCacheMaintenance = startCacheMaintenance(() =>
-      settingsProvider.get(),
-    )
-    startFeverAutoSync()
-    startAutoRefresh(settings.general.refreshInterval, mainWindow, {
-      freshnessTTL: settings.data?.freshnessTTL ?? 10,
-      concurrency: settings.data?.refreshConcurrency ?? 5,
-    })
-
     registerSessionPolicies()
+
+    // 数据库初始化完成后再安排后台任务；此时窗口与骨架屏已开始加载。
+    await dbInitPromise
+
+    this.scheduleStartupBackgroundJobs(mainWindow, settings)
   }
 
   handleActivate(): void {
@@ -130,6 +134,10 @@ export class AppManager {
 
   handleBeforeQuit(): void {
     this.windowManager.prepareForQuit()
+    if (this.startupBackgroundTimer) {
+      clearTimeout(this.startupBackgroundTimer)
+      this.startupBackgroundTimer = null
+    }
     this.tray?.destroy()
     this.tray = null
     stopFeverAutoSync()
@@ -206,6 +214,30 @@ export class AppManager {
       isWindowVisible: () => this.windowManager.isMainWindowVisible(),
     })
     this.tray.ensureCreated()
+  }
+
+  private scheduleStartupBackgroundJobs(
+    mainWindow: ReturnType<WindowManager['getMainWindow']>,
+    settings: ReturnType<typeof settingsProvider.get>,
+  ): void {
+    if (this.startupBackgroundTimer) {
+      clearTimeout(this.startupBackgroundTimer)
+    }
+
+    // 聚合预热、缓存扫描和自动刷新都不是首屏必需；延后启动，
+    // 避免刚开窗时和 hydrate / reader snapshot 抢数据库与 IO。
+    this.startupBackgroundTimer = setTimeout(() => {
+      this.startupBackgroundTimer = null
+      startAggregatorJobs()
+      this.stopCacheMaintenance = startCacheMaintenance(() =>
+        settingsProvider.get(),
+      )
+      startFeverAutoSync()
+      startAutoRefresh(settings.general.refreshInterval, mainWindow, {
+        freshnessTTL: settings.data?.freshnessTTL ?? 10,
+        concurrency: settings.data?.refreshConcurrency ?? 5,
+      })
+    }, STARTUP_BACKGROUND_DELAY_MS)
   }
 
   private registerMenu(): void {

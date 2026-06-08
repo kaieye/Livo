@@ -1,5 +1,6 @@
 import { app, Menu } from 'electron'
 import { IPC, type NativeContextMenuItem } from '../../shared/types'
+import type { FeedWithCount } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
 import { logError, readRecentLogs } from '../services/system/logger'
 import {
@@ -11,6 +12,9 @@ import {
 } from '../services/system/app-shell'
 import { checkForAppUpdates } from '../services/system/update-check'
 import { downloadUrlToFile, saveTextFile } from '../services/system/download'
+import { settingsProvider } from '../services/system/settings-provider'
+import { getDb, whenDbReady } from '../database'
+import { sessionStore } from '../services/auth/session-store'
 import type { WindowManager } from '../window-manager'
 
 export function registerAppHandlers(windowManager: WindowManager): void {
@@ -121,5 +125,35 @@ export function registerAppHandlers(windowManager: WindowManager): void {
   })
   registerChannel(IPC.WINDOW_IS_MAXIMIZED, () => {
     return windowManager.isWindowMaximized()
+  })
+
+  // Batched hydration: returns settings + feeds + auth in a single IPC call,
+  // eliminating 3 separate serialization round-trips during app startup.
+  registerChannel(IPC.APP_HYDRATE, async () => {
+    // Guard: the renderer may call hydrate before initDatabase() completes.
+    // Wait for the database to be ready before querying.
+    await whenDbReady()
+    const settings = settingsProvider.get()
+
+    const feeds = getDb().feeds.getAllFeeds()
+    const unreadCountMap = getDb().entries.getUnreadCountMap()
+    const RECOMMENDED = 'Recommended'
+    const feedList: FeedWithCount[] = feeds
+      .map((f) => ({
+        ...f,
+        folder:
+          f.folder ?? (f.category === RECOMMENDED ? '' : f.category || ''),
+        unreadCount: unreadCountMap.get(f.id) || 0,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title))
+
+    const isValid = sessionStore.isSessionValid()
+    const user = isValid ? sessionStore.getCurrentUser() : null
+
+    return {
+      settings,
+      feeds: feedList,
+      auth: { success: true, isValid, user },
+    }
   })
 }

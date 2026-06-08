@@ -104,6 +104,20 @@ function migrateFromJson(
   }
 }
 
+let dbReadyResolve: (() => void) | null = null
+const dbReadyPromise = new Promise<void>((resolve) => {
+  dbReadyResolve = resolve
+})
+
+/**
+ * Returns a promise that resolves when the database is fully initialized.
+ * IPC handlers that access the database should await this before querying,
+ * since the renderer may send hydration requests before initDatabase() completes.
+ */
+export function whenDbReady(): Promise<void> {
+  return dbReadyPromise
+}
+
 export async function initDatabase(): Promise<void> {
   const dir = getDbDir()
   const sqlitePath = join(dir, 'livo.db')
@@ -124,4 +138,6 @@ export async function initDatabase(): Promise<void> {
       migrateFromJson(sourceJson, sqlitePath, adapter)
     }
   }
+
+  dbReadyResolve?.()
 }

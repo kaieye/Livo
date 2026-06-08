@@ -5,11 +5,9 @@
 
 import { useSettingsStore } from '../store/settings-store'
 import { useFeedStore } from '../store/feed-store'
-import { useEntryStore } from '../store/entry-store'
 import { useActionsStore } from '../store/actions-store'
 import { useAuthStore } from '../store/auth-store'
 import { recordAppMetric } from '../lib/performance-metrics'
-import { getEntryLoadLimit } from '../lib/entry-load-limit'
 
 export interface HydrateResult {
   settings: any
@@ -39,88 +37,55 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     total: 0,
   }
 
-  // Load all data in parallel to minimize startup time
-  const [settingsResult, feedsResult, rulesResult, sessionResult] =
-    await Promise.allSettled([
-      // Settings
-      (async () => {
-        const start = performance.now()
-        try {
-          const settings = await window.api.settings.get()
-          timings.settings = performance.now() - start
-          recordAppMetric('hydrate.settings', timings.settings)
-          return settings
-        } catch (error) {
-          console.error('[Hydrate] Failed to load settings:', error)
-          timings.settings = performance.now() - start
-          return null
-        }
-      })(),
+  // 单次批量 IPC 替代多个独立请求，减少往返和结构化克隆成本。
+  // Web 端或旧桥接不支持时降级为独立请求。
+  let settings: any = null
+  let feeds: any[] = []
+  let sessionData: any = null
 
-      // Feeds
-      (async () => {
-        const start = performance.now()
-        try {
-          const feeds = await window.api.feeds.list()
-          timings.feeds = performance.now() - start
-          recordAppMetric(
-            'hydrate.feeds',
-            timings.feeds,
-            `${feeds.length} feeds`,
-          )
-          return feeds
-        } catch (error) {
-          console.error('[Hydrate] Failed to load feeds:', error)
-          timings.feeds = performance.now() - start
-          return []
-        }
-      })(),
+  try {
+    const batchStart = performance.now()
+    const batch = await window.api.app.hydrate()
+    const batchDuration = performance.now() - batchStart
+    recordAppMetric('hydrate.batch', batchDuration)
 
-      // Action rules (load from localStorage, not IPC)
-      (async () => {
-        const start = performance.now()
-        try {
-          // Actions are stored in localStorage, not backend
-          // Just initialize the store
-          timings.rules = performance.now() - start
-          recordAppMetric('hydrate.rules', timings.rules)
-          return []
-        } catch (_error) {
-          console.error('[Hydrate] Failed to load action rules:', _error)
-          timings.rules = performance.now() - start
-          return []
-        }
-      })(),
+    settings = batch.settings
+    feeds = batch.feeds
+    sessionData = batch.auth
+    timings.settings = batchDuration
+    timings.feeds = batchDuration
+    timings.auth = batchDuration
+  } catch {
+    console.warn(
+      '[Hydrate] Batch hydration failed, falling back to individual calls',
+    )
+    const [settingsResult, feedsResult, sessionResult] =
+      await Promise.allSettled([
+        (async () => {
+          const s = await window.api.settings.get()
+          return s
+        })(),
+        (async () => {
+          const f = await window.api.feeds.list()
+          return f
+        })(),
+        (async () => {
+          const s = await window.api.auth.checkSession()
+          return s
+        })(),
+      ])
+    settings =
+      settingsResult.status === 'fulfilled' ? settingsResult.value : null
+    feeds = feedsResult.status === 'fulfilled' ? feedsResult.value : []
+    sessionData =
+      sessionResult.status === 'fulfilled' ? sessionResult.value : null
+  }
 
-      // Auth session
-      (async () => {
-        const start = performance.now()
-        try {
-          const result = await window.api.auth.checkSession()
-          timings.auth = performance.now() - start
-          recordAppMetric(
-            'hydrate.auth',
-            timings.auth,
-            result?.isValid ? 'valid' : 'no session',
-          )
-          return result
-        } catch (_error) {
-          // Session might not exist, this is not an error
-          timings.auth = performance.now() - start
-          return null
-        }
-      })(),
-    ])
+  // 动作规则来自 localStorage，不需要 IPC。
+  const rules: any[] = []
+  timings.rules = 0
 
-  // Extract values from Promise.allSettled results
-  const settings =
-    settingsResult.status === 'fulfilled' ? settingsResult.value : null
-  const feeds = feedsResult.status === 'fulfilled' ? feedsResult.value : []
-  const rules = rulesResult.status === 'fulfilled' ? rulesResult.value : []
-  const sessionData =
-    sessionResult.status === 'fulfilled' ? sessionResult.value : null
-
-  // Write data directly to stores (bypassing actions to avoid side effects)
+  // 直接写入 store，避免调用 action 带来额外副作用。
   if (settings) {
     useSettingsStore.setState({ settings, isLoaded: true })
   }
@@ -129,17 +94,10 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     useFeedStore.setState({ feeds, isLoading: false })
   }
 
-  const cachedHomeSnapshot = useEntryStore
-    .getState()
-    .hydrateSnapshotCache({ limit: getEntryLoadLimit(null) })
-  if (cachedHomeSnapshot) {
-    useFeedStore.setState({ feeds: cachedHomeSnapshot.feeds, isLoading: false })
-  }
-
-  // Load action rules from localStorage (they handle their own hydration)
+  // 动作规则自行处理 localStorage hydrate。
   useActionsStore.getState().loadRules()
 
-  // Auth session check
+  // 认证状态 hydrate。
   if (sessionData?.success && sessionData?.isValid && sessionData?.user) {
     useAuthStore.setState({
       user: sessionData.user,

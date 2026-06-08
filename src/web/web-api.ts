@@ -2367,6 +2367,11 @@ export function createWebAPI(): ElectronAPI {
       }),
       rendererReady: async () => ({ success: true }),
       readyToShowMainWindow: async () => ({ success: true }),
+      hydrate: async () => {
+        // Web builds load data via HTTP API, not IPC.
+        // Throwing triggers the fallback to individual API calls in hydrate.ts.
+        throw new Error('hydrate not supported on web')
+      },
       checkForUpdates: async () => ({
         hasUpdate: false,
         currentVersion: 'web-dev',

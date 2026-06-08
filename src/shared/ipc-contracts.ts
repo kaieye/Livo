@@ -109,6 +109,7 @@ export const IPC = {
   APP_DOWNLOAD_URL: 'app:download-url',
   APP_RENDERER_READY: 'app:renderer-ready',
   APP_READY_TO_SHOW_MAIN_WINDOW: 'app:ready-to-show-main-window',
+  APP_HYDRATE: 'app:hydrate',
   MENU_SHOW_CONTEXT: 'menu:show-context',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE_TOGGLE: 'window:maximize-toggle',
@@ -122,6 +123,36 @@ export const IPC = {
   FEVER_SYNC: 'fever:sync',
   FEVER_SYNC_ALL: 'fever:sync-all',
   FEVER_SYNC_STATE: 'fever:sync-state',
+  // Admin APIs
+  ADMIN_GET_USERS: 'admin:get-users',
+  ADMIN_GET_USER_BY_ID: 'admin:get-user-by-id',
+  ADMIN_UPDATE_USER: 'admin:update-user',
+  ADMIN_UPDATE_USER_ROLE: 'admin:update-user-role',
+  ADMIN_BAN_USER: 'admin:ban-user',
+  ADMIN_UNBAN_USER: 'admin:unban-user',
+  ADMIN_DELETE_USER: 'admin:delete-user',
+  ADMIN_GET_USER_SESSIONS: 'admin:get-user-sessions',
+  ADMIN_REVOKE_SESSION: 'admin:revoke-session',
+  ADMIN_REVOKE_ALL_USER_SESSIONS: 'admin:revoke-all-user-sessions',
+  ADMIN_GET_FEATURE_FLAGS: 'admin:get-feature-flags',
+  ADMIN_UPDATE_FEATURE_FLAG: 'admin:update-feature-flag',
+  ADMIN_CHECK_FEATURE_FLAG: 'admin:check-feature-flag',
+  ADMIN_GET_SETTINGS: 'admin:get-settings',
+  ADMIN_UPDATE_SETTING: 'admin:update-setting',
+  ADMIN_BATCH_UPDATE_SETTINGS: 'admin:batch-update-settings',
+  ADMIN_GET_NOTIFICATIONS: 'admin:get-notifications',
+  ADMIN_GET_UNREAD_COUNT: 'admin:get-unread-count',
+  ADMIN_MARK_NOTIFICATION_READ: 'admin:mark-notification-read',
+  ADMIN_MARK_ALL_NOTIFICATIONS_READ: 'admin:mark-all-notifications-read',
+  ADMIN_GET_ROLES: 'admin:get-roles',
+  ADMIN_GET_ROLE_BY_ID: 'admin:get-role-by-id',
+  ADMIN_CREATE_ROLE: 'admin:create-role',
+  ADMIN_UPDATE_ROLE: 'admin:update-role',
+  ADMIN_DELETE_ROLE: 'admin:delete-role',
+  ADMIN_GET_AUDIT_LOGS: 'admin:get-audit-logs',
+  ADMIN_GET_ANALYTICS_SUMMARY: 'admin:get-analytics-summary',
+  ADMIN_GET_ANALYTICS_USER_GROWTH: 'admin:get-analytics-user-growth',
+  ADMIN_GET_ANALYTICS_ACTIVE_USERS: 'admin:get-analytics-active-users',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -335,6 +366,7 @@ export type IpcArgsByChannel = {
   [IPC.APP_DOWNLOAD_URL]: [options: DownloadUrlOptions]
   [IPC.APP_RENDERER_READY]: []
   [IPC.APP_READY_TO_SHOW_MAIN_WINDOW]: []
+  [IPC.APP_HYDRATE]: []
   [IPC.MENU_SHOW_CONTEXT]: [items: NativeContextMenuItem[]]
   [IPC.WINDOW_MINIMIZE]: []
   [IPC.WINDOW_MAXIMIZE_TOGGLE]: []
@@ -350,6 +382,67 @@ export type IpcArgsByChannel = {
   [IPC.FEVER_SYNC]: [accountId: string]
   [IPC.FEVER_SYNC_ALL]: []
   [IPC.FEVER_SYNC_STATE]: [accountId: string]
+  // Admin APIs
+  [IPC.ADMIN_GET_USERS]: [
+    query?: {
+      limit?: number
+      offset?: number
+      search?: string
+      role?: string
+      status?: string
+    },
+  ]
+  [IPC.ADMIN_GET_USER_BY_ID]: [id: string]
+  [IPC.ADMIN_UPDATE_USER]: [
+    id: string,
+    dto: { displayName?: string; note?: string },
+  ]
+  [IPC.ADMIN_UPDATE_USER_ROLE]: [id: string, role: string]
+  [IPC.ADMIN_BAN_USER]: [id: string, reason?: string]
+  [IPC.ADMIN_UNBAN_USER]: [id: string]
+  [IPC.ADMIN_DELETE_USER]: [id: string]
+  [IPC.ADMIN_GET_USER_SESSIONS]: [userId: string]
+  [IPC.ADMIN_REVOKE_SESSION]: [sessionId: string]
+  [IPC.ADMIN_REVOKE_ALL_USER_SESSIONS]: [userId: string]
+  [IPC.ADMIN_GET_FEATURE_FLAGS]: []
+  [IPC.ADMIN_UPDATE_FEATURE_FLAG]: [
+    key: string,
+    data: { enabled?: boolean; rollout?: number },
+  ]
+  [IPC.ADMIN_CHECK_FEATURE_FLAG]: [key: string]
+  [IPC.ADMIN_GET_SETTINGS]: [category?: string]
+  [IPC.ADMIN_UPDATE_SETTING]: [key: string, value: string]
+  [IPC.ADMIN_BATCH_UPDATE_SETTINGS]: [
+    updates: Array<{ key: string; value: string }>,
+  ]
+  [IPC.ADMIN_GET_NOTIFICATIONS]: [
+    options?: {
+      unread?: boolean
+      limit?: number
+      offset?: number
+    },
+  ]
+  [IPC.ADMIN_GET_UNREAD_COUNT]: []
+  [IPC.ADMIN_MARK_NOTIFICATION_READ]: [id: string]
+  [IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ]: []
+  [IPC.ADMIN_GET_ROLES]: []
+  [IPC.ADMIN_GET_ROLE_BY_ID]: [id: string]
+  [IPC.ADMIN_CREATE_ROLE]: [dto: { name: string; permissions: string[] }]
+  [IPC.ADMIN_UPDATE_ROLE]: [id: string, dto: { permissions: string[] }]
+  [IPC.ADMIN_DELETE_ROLE]: [id: string]
+  [IPC.ADMIN_GET_AUDIT_LOGS]: [
+    query?: {
+      limit?: number
+      offset?: number
+      userId?: string
+      action?: string
+      startDate?: string
+      endDate?: string
+    },
+  ]
+  [IPC.ADMIN_GET_ANALYTICS_SUMMARY]: []
+  [IPC.ADMIN_GET_ANALYTICS_USER_GROWTH]: [days?: number]
+  [IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS]: [days?: number]
 }
 
 export type IpcArgs<C extends IpcChannel> = C extends keyof IpcArgsByChannel
@@ -964,6 +1057,7 @@ export const IPC_CONTRACTS = {
   [IPC.APP_READY_TO_SHOW_MAIN_WINDOW]: noArgs(
     IPC.APP_READY_TO_SHOW_MAIN_WINDOW,
   ),
+  [IPC.APP_HYDRATE]: noArgs(IPC.APP_HYDRATE),
   [IPC.MENU_SHOW_CONTEXT]: {
     channel: IPC.MENU_SHOW_CONTEXT,
     validateArgs: (args) => {
@@ -1005,6 +1099,151 @@ export const IPC_CONTRACTS = {
   [IPC.FEVER_SYNC]: oneString(IPC.FEVER_SYNC, 'accountId'),
   [IPC.FEVER_SYNC_ALL]: noArgs(IPC.FEVER_SYNC_ALL),
   [IPC.FEVER_SYNC_STATE]: oneString(IPC.FEVER_SYNC_STATE, 'accountId'),
+  // Admin APIs
+  [IPC.ADMIN_GET_USERS]: {
+    channel: IPC.ADMIN_GET_USERS,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_GET_USERS, args, 0, 1)
+      assertOptionalObject(args[0], 'query')
+      return args as IpcArgs<typeof IPC.ADMIN_GET_USERS>
+    },
+  },
+  [IPC.ADMIN_GET_USER_BY_ID]: oneString(IPC.ADMIN_GET_USER_BY_ID, 'id'),
+  [IPC.ADMIN_UPDATE_USER]: {
+    channel: IPC.ADMIN_UPDATE_USER,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_UPDATE_USER, args, 2)
+      assertString(args[0], 'id')
+      assertObject(args[1], 'dto')
+      return args as IpcArgs<typeof IPC.ADMIN_UPDATE_USER>
+    },
+  },
+  [IPC.ADMIN_UPDATE_USER_ROLE]: {
+    channel: IPC.ADMIN_UPDATE_USER_ROLE,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_UPDATE_USER_ROLE, args, 2)
+      assertString(args[0], 'id')
+      assertString(args[1], 'role')
+      return args as IpcArgs<typeof IPC.ADMIN_UPDATE_USER_ROLE>
+    },
+  },
+  [IPC.ADMIN_BAN_USER]: {
+    channel: IPC.ADMIN_BAN_USER,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_BAN_USER, args, 1, 2)
+      assertString(args[0], 'id')
+      assertOptionalString(args[1], 'reason')
+      return args as IpcArgs<typeof IPC.ADMIN_BAN_USER>
+    },
+  },
+  [IPC.ADMIN_UNBAN_USER]: oneString(IPC.ADMIN_UNBAN_USER, 'id'),
+  [IPC.ADMIN_DELETE_USER]: oneString(IPC.ADMIN_DELETE_USER, 'id'),
+  [IPC.ADMIN_GET_USER_SESSIONS]: oneString(
+    IPC.ADMIN_GET_USER_SESSIONS,
+    'userId',
+  ),
+  [IPC.ADMIN_REVOKE_SESSION]: oneString(IPC.ADMIN_REVOKE_SESSION, 'sessionId'),
+  [IPC.ADMIN_REVOKE_ALL_USER_SESSIONS]: oneString(
+    IPC.ADMIN_REVOKE_ALL_USER_SESSIONS,
+    'userId',
+  ),
+  [IPC.ADMIN_GET_FEATURE_FLAGS]: noArgs(IPC.ADMIN_GET_FEATURE_FLAGS),
+  [IPC.ADMIN_UPDATE_FEATURE_FLAG]: {
+    channel: IPC.ADMIN_UPDATE_FEATURE_FLAG,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_UPDATE_FEATURE_FLAG, args, 2)
+      assertString(args[0], 'key')
+      assertObject(args[1], 'data')
+      return args as IpcArgs<typeof IPC.ADMIN_UPDATE_FEATURE_FLAG>
+    },
+  },
+  [IPC.ADMIN_CHECK_FEATURE_FLAG]: oneString(
+    IPC.ADMIN_CHECK_FEATURE_FLAG,
+    'key',
+  ),
+  [IPC.ADMIN_GET_SETTINGS]: {
+    channel: IPC.ADMIN_GET_SETTINGS,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_GET_SETTINGS, args, 0, 1)
+      assertOptionalString(args[0], 'category')
+      return args as IpcArgs<typeof IPC.ADMIN_GET_SETTINGS>
+    },
+  },
+  [IPC.ADMIN_UPDATE_SETTING]: {
+    channel: IPC.ADMIN_UPDATE_SETTING,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_UPDATE_SETTING, args, 2)
+      assertString(args[0], 'key')
+      assertString(args[1], 'value')
+      return args as IpcArgs<typeof IPC.ADMIN_UPDATE_SETTING>
+    },
+  },
+  [IPC.ADMIN_BATCH_UPDATE_SETTINGS]: {
+    channel: IPC.ADMIN_BATCH_UPDATE_SETTINGS,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_BATCH_UPDATE_SETTINGS, args, 1)
+      if (!Array.isArray(args[0])) {
+        throw new IpcValidationError('Invalid IPC argument', {
+          updates: 'expected_array',
+        })
+      }
+      return args as IpcArgs<typeof IPC.ADMIN_BATCH_UPDATE_SETTINGS>
+    },
+  },
+  [IPC.ADMIN_GET_NOTIFICATIONS]: {
+    channel: IPC.ADMIN_GET_NOTIFICATIONS,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_GET_NOTIFICATIONS, args, 0, 1)
+      assertOptionalObject(args[0], 'options')
+      return args as IpcArgs<typeof IPC.ADMIN_GET_NOTIFICATIONS>
+    },
+  },
+  [IPC.ADMIN_GET_UNREAD_COUNT]: noArgs(IPC.ADMIN_GET_UNREAD_COUNT),
+  [IPC.ADMIN_MARK_NOTIFICATION_READ]: oneString(
+    IPC.ADMIN_MARK_NOTIFICATION_READ,
+    'id',
+  ),
+  [IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ]: noArgs(
+    IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ,
+  ),
+  [IPC.ADMIN_GET_ROLES]: noArgs(IPC.ADMIN_GET_ROLES),
+  [IPC.ADMIN_GET_ROLE_BY_ID]: oneString(IPC.ADMIN_GET_ROLE_BY_ID, 'id'),
+  [IPC.ADMIN_CREATE_ROLE]: oneObject(IPC.ADMIN_CREATE_ROLE, 'dto'),
+  [IPC.ADMIN_UPDATE_ROLE]: {
+    channel: IPC.ADMIN_UPDATE_ROLE,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_UPDATE_ROLE, args, 2)
+      assertString(args[0], 'id')
+      assertObject(args[1], 'dto')
+      return args as IpcArgs<typeof IPC.ADMIN_UPDATE_ROLE>
+    },
+  },
+  [IPC.ADMIN_DELETE_ROLE]: oneString(IPC.ADMIN_DELETE_ROLE, 'id'),
+  [IPC.ADMIN_GET_AUDIT_LOGS]: {
+    channel: IPC.ADMIN_GET_AUDIT_LOGS,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_GET_AUDIT_LOGS, args, 0, 1)
+      assertOptionalObject(args[0], 'query')
+      return args as IpcArgs<typeof IPC.ADMIN_GET_AUDIT_LOGS>
+    },
+  },
+  [IPC.ADMIN_GET_ANALYTICS_SUMMARY]: noArgs(IPC.ADMIN_GET_ANALYTICS_SUMMARY),
+  [IPC.ADMIN_GET_ANALYTICS_USER_GROWTH]: {
+    channel: IPC.ADMIN_GET_ANALYTICS_USER_GROWTH,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_GET_ANALYTICS_USER_GROWTH, args, 0, 1)
+      assertOptionalNumber(args[0], 'days')
+      return args as IpcArgs<typeof IPC.ADMIN_GET_ANALYTICS_USER_GROWTH>
+    },
+  },
+  [IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS]: {
+    channel: IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS,
+    validateArgs: (args) => {
+      assertArity(IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS, args, 0, 1)
+      assertOptionalNumber(args[0], 'days')
+      return args as IpcArgs<typeof IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS>
+    },
+  },
 } satisfies { [C in IpcChannel]: IpcContract<C> }
 
 export function validateIpcArgs<C extends IpcChannel>(

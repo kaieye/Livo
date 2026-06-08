@@ -4,7 +4,6 @@ import { Outlet } from 'react-router-dom'
 import { LocalErrorBoundary } from './components/LocalErrorBoundary'
 import { PageTransition } from './components/layout/PageTransition'
 import { TitleBar } from './components/layout/TitleBar'
-import { AppSkeleton } from './components/AppSkeleton'
 import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useDeepLinkNavigate } from './hooks/useDeepLinkNavigate'
 import { useSettingsStore } from './store/settings-store'
@@ -273,7 +272,8 @@ function FloatingAIAssistantButton() {
  * Provides <Outlet /> for child routes and mounts global overlays
  * (Settings, AI Chat, Quick Search, Command Palette, Corner Player, Context Menu).
  *
- * Shows skeleton while app is hydrating data from backend.
+ * 在交互 shell 准备好之前保留内联 HTML 骨架屏。
+ * 数据 hydrate 会在 shell 挂载后继续进行。
  */
 export default function App() {
   useAgentNavigate()
@@ -286,6 +286,7 @@ export default function App() {
 
   return (
     <div className="relative h-full w-full overflow-hidden">
+      {/* 内联 HTML 骨架屏仍在显示；shell 准备好后再统一替换。 */}
       {appIsReady ? (
         <>
           <PageTransition>
@@ -329,9 +330,7 @@ export default function App() {
             <TextContextMenu />
           </Suspense>
         </>
-      ) : (
-        <AppSkeleton />
-      )}
+      ) : null}
     </div>
   )
 }
