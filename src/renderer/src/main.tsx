@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { recordAppMetric } from './lib/performance-metrics'
+import {
+  recordAppMetric,
+  printPerformanceSummary,
+} from './lib/performance-metrics'
 import { RootProviders } from './providers/RootProviders'
 import { hydrateDataToMemory } from './initialize/hydrate'
 import { setAppIsReady } from './store/app-store'
@@ -85,6 +88,14 @@ try {
       setAppIsReady(true)
       recordAppMetric('app.ready', performance.now())
       document.documentElement.dataset.appReady = 'true'
+      void window.api.app.readyToShowMainWindow().catch((error) => {
+        console.error('[Livo] Failed to show main window:', error)
+      })
+
+      // PERF: Print performance summary after app is ready
+      setTimeout(() => {
+        printPerformanceSummary()
+      }, 1000)
     })
 } catch (err) {
   console.error('[Livo] Failed to mount React app:', err)

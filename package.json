@@ -52,6 +52,7 @@
     "electron": "^33.4.11",
     "electron-store": "^11.0.2",
     "i18next": "^23.7.6",
+    "immer": "^11.1.8",
     "linkedom": "^0.18.12",
     "openai": "^4.73.0",
     "react-i18next": "^13.5.0",

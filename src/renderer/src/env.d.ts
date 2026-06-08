@@ -237,6 +237,8 @@ declare global {
           notes?: string
           error?: string
         }>
+        rendererReady: () => Promise<{ success: boolean }>
+        readyToShowMainWindow: () => Promise<{ success: boolean }>
       }
       accounts: {
         status: (

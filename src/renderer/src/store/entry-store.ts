@@ -5,6 +5,10 @@ import type {
   ReaderSnapshotRequest,
 } from '../../../shared/types'
 import {
+  readDefaultHomeSnapshotCache,
+  writeDefaultHomeSnapshotCache,
+} from '../lib/reader-snapshot-cache'
+import {
   buildListCacheKey,
   getCachedListResult,
   setCachedListResult,
@@ -85,6 +89,13 @@ interface EntryState {
     unreadOnly?: boolean
     limit?: number
   }) => Promise<ReaderSnapshot | null>
+  hydrateSnapshotCache: (options?: {
+    feedId?: string
+    feedIds?: string[]
+    starred?: boolean
+    unreadOnly?: boolean
+    limit?: number
+  }) => ReaderSnapshot | null
   prefetchEntries: (options?: {
     feedId?: string
     feedIds?: string[]
@@ -249,6 +260,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     })
     const listCacheKey = buildListCacheKey(normalizedOptions)
     const cachedHit = getCachedListResult(listCacheKey, pageSize)
+    const snapshotInput = buildReaderSnapshotInput(normalizedOptions)
 
     // Cache hit: show entries immediately, skip IPC entirely.
     if (cachedHit) {
@@ -289,15 +301,14 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     })
 
     try {
-      const snapshot = await window.api.reader.snapshot(
-        buildReaderSnapshotInput(normalizedOptions),
-      )
+      const snapshot = await window.api.reader.snapshot(snapshotInput)
       if (get().paginationQueryKey !== queryKey) return null
       const sorted = sortEntriesByPublishedDesc(snapshot.entries)
       setCachedListResult(listCacheKey, {
         entries: sorted,
         hasMore: snapshot.nextCursor !== null,
       })
+      writeDefaultHomeSnapshotCache(snapshotInput, snapshot)
       set({
         entries: cacheEntrySnapshots(sorted),
         isLoading: false,
@@ -312,6 +323,50 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       }
       return null
     }
+  },
+
+  hydrateSnapshotCache: (options) => {
+    const pageSize = Math.max(
+      1,
+      Math.min(options?.limit ?? getDefaultPageSize(), getMaxPageSize()),
+    )
+    const normalizedOptions = {
+      feedId: options?.feedId,
+      feedIds: options?.feedIds,
+      starred: options?.starred,
+      unreadOnly: options?.unreadOnly,
+      limit: pageSize,
+    }
+    const snapshotInput = buildReaderSnapshotInput(normalizedOptions)
+    const snapshot = readDefaultHomeSnapshotCache(snapshotInput)
+    if (!snapshot) return null
+
+    const queryKey = JSON.stringify({
+      snapshot: true,
+      feedId: normalizedOptions.feedId || '',
+      feedIds: [...(normalizedOptions.feedIds || [])].sort(),
+      starred: !!normalizedOptions.starred,
+      unreadOnly: !!normalizedOptions.unreadOnly,
+      pageSize,
+    })
+    const sorted = sortEntriesByPublishedDesc(snapshot.entries)
+    set({
+      entries: cacheEntrySnapshots(sorted),
+      isLoading: false,
+      isLoadingMore: false,
+      hasMoreEntries: snapshot.nextCursor !== null,
+      paginationQueryKey: queryKey,
+      paginationOptions: {
+        feedId: normalizedOptions.feedId,
+        feedIds: normalizedOptions.feedIds,
+        starred: normalizedOptions.starred,
+        unreadOnly: normalizedOptions.unreadOnly,
+      },
+      paginationPageSize: pageSize,
+      paginationSource: 'snapshot',
+      snapshotNextCursor: snapshot.nextCursor,
+    })
+    return snapshot
   },
 
   prefetchEntries: async (options) => {

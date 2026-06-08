@@ -2366,6 +2366,7 @@ export function createWebAPI(): ElectronAPI {
         error: 'Web 平台暂不支持原生下载文件',
       }),
       rendererReady: async () => ({ success: true }),
+      readyToShowMainWindow: async () => ({ success: true }),
       checkForUpdates: async () => ({
         hasUpdate: false,
         currentVersion: 'web-dev',

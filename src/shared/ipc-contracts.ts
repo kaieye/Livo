@@ -108,6 +108,7 @@ export const IPC = {
   APP_SAVE_TEXT_FILE: 'app:save-text-file',
   APP_DOWNLOAD_URL: 'app:download-url',
   APP_RENDERER_READY: 'app:renderer-ready',
+  APP_READY_TO_SHOW_MAIN_WINDOW: 'app:ready-to-show-main-window',
   MENU_SHOW_CONTEXT: 'menu:show-context',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE_TOGGLE: 'window:maximize-toggle',
@@ -333,6 +334,7 @@ export type IpcArgsByChannel = {
   [IPC.APP_SAVE_TEXT_FILE]: [options: SaveTextFileOptions]
   [IPC.APP_DOWNLOAD_URL]: [options: DownloadUrlOptions]
   [IPC.APP_RENDERER_READY]: []
+  [IPC.APP_READY_TO_SHOW_MAIN_WINDOW]: []
   [IPC.MENU_SHOW_CONTEXT]: [items: NativeContextMenuItem[]]
   [IPC.WINDOW_MINIMIZE]: []
   [IPC.WINDOW_MAXIMIZE_TOGGLE]: []
@@ -959,6 +961,9 @@ export const IPC_CONTRACTS = {
   [IPC.APP_SAVE_TEXT_FILE]: oneObject(IPC.APP_SAVE_TEXT_FILE, 'options'),
   [IPC.APP_DOWNLOAD_URL]: oneObject(IPC.APP_DOWNLOAD_URL, 'options'),
   [IPC.APP_RENDERER_READY]: noArgs(IPC.APP_RENDERER_READY),
+  [IPC.APP_READY_TO_SHOW_MAIN_WINDOW]: noArgs(
+    IPC.APP_READY_TO_SHOW_MAIN_WINDOW,
+  ),
   [IPC.MENU_SHOW_CONTEXT]: {
     channel: IPC.MENU_SHOW_CONTEXT,
     validateArgs: (args) => {

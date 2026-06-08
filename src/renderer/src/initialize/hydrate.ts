@@ -5,8 +5,11 @@
 
 import { useSettingsStore } from '../store/settings-store'
 import { useFeedStore } from '../store/feed-store'
+import { useEntryStore } from '../store/entry-store'
 import { useActionsStore } from '../store/actions-store'
 import { useAuthStore } from '../store/auth-store'
+import { recordAppMetric } from '../lib/performance-metrics'
+import { getEntryLoadLimit } from '../lib/entry-load-limit'
 
 export interface HydrateResult {
   settings: any
@@ -45,6 +48,7 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
         try {
           const settings = await window.api.settings.get()
           timings.settings = performance.now() - start
+          recordAppMetric('hydrate.settings', timings.settings)
           return settings
         } catch (error) {
           console.error('[Hydrate] Failed to load settings:', error)
@@ -59,6 +63,11 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
         try {
           const feeds = await window.api.feeds.list()
           timings.feeds = performance.now() - start
+          recordAppMetric(
+            'hydrate.feeds',
+            timings.feeds,
+            `${feeds.length} feeds`,
+          )
           return feeds
         } catch (error) {
           console.error('[Hydrate] Failed to load feeds:', error)
@@ -74,9 +83,10 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
           // Actions are stored in localStorage, not backend
           // Just initialize the store
           timings.rules = performance.now() - start
+          recordAppMetric('hydrate.rules', timings.rules)
           return []
-        } catch (error) {
-          console.error('[Hydrate] Failed to load action rules:', error)
+        } catch (_error) {
+          console.error('[Hydrate] Failed to load action rules:', _error)
           timings.rules = performance.now() - start
           return []
         }
@@ -88,8 +98,13 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
         try {
           const result = await window.api.auth.checkSession()
           timings.auth = performance.now() - start
+          recordAppMetric(
+            'hydrate.auth',
+            timings.auth,
+            result?.isValid ? 'valid' : 'no session',
+          )
           return result
-        } catch (error) {
+        } catch (_error) {
           // Session might not exist, this is not an error
           timings.auth = performance.now() - start
           return null
@@ -112,6 +127,13 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
 
   if (feeds && feeds.length > 0) {
     useFeedStore.setState({ feeds, isLoading: false })
+  }
+
+  const cachedHomeSnapshot = useEntryStore
+    .getState()
+    .hydrateSnapshotCache({ limit: getEntryLoadLimit(null) })
+  if (cachedHomeSnapshot) {
+    useFeedStore.setState({ feeds: cachedHomeSnapshot.feeds, isLoading: false })
   }
 
   // Load action rules from localStorage (they handle their own hydration)

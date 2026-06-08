@@ -97,6 +97,7 @@ export class AppManager {
     await recoverOrphanBilibiliDynamicFeeds()
 
     this.registerIpcHandlers()
+    registerAppHandlers(this.windowManager)
 
     const settings = settingsProvider.get()
     await applyProxySettings(settings)
@@ -116,7 +117,6 @@ export class AppManager {
     })
 
     registerSessionPolicies()
-    registerAppHandlers(this.windowManager)
   }
 
   handleActivate(): void {

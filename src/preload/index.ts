@@ -364,6 +364,8 @@ const api = {
       invokeIpc(IPC.APP_DOWNLOAD_URL, options),
     rendererReady: (): Promise<{ success: boolean }> =>
       invokeIpc(IPC.APP_RENDERER_READY),
+    readyToShowMainWindow: (): Promise<{ success: boolean }> =>
+      invokeIpc(IPC.APP_READY_TO_SHOW_MAIN_WINDOW),
   },
 
   menu: {

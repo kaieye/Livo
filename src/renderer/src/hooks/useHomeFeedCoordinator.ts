@@ -92,6 +92,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     hasMoreEntries,
     loadEntries,
     loadSnapshot,
+    hydrateSnapshotCache,
     loadMoreEntries,
     clearListCache,
     searchQuery,
@@ -104,6 +105,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     hasMoreEntries: s.hasMoreEntries,
     loadEntries: s.loadEntries,
     loadSnapshot: s.loadSnapshot,
+    hydrateSnapshotCache: s.hydrateSnapshotCache,
     loadMoreEntries: s.loadMoreEntries,
     clearListCache: s.clearListCache,
     searchQuery: s.searchQuery,
@@ -177,6 +179,8 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
       feeds,
       unreadOnly: filterMode === 'unread',
     })
+    const cachedSnapshot = hydrateSnapshotCache(options)
+    if (cachedSnapshot) applySnapshotFeeds(cachedSnapshot.feeds)
     const snapshot = await loadSnapshot(options)
     if (snapshot) applySnapshotFeeds(snapshot.feeds)
   }, [
@@ -184,6 +188,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     applySnapshotFeeds,
     feeds,
     filterMode,
+    hydrateSnapshotCache,
     loadSnapshot,
     selectedFeedId,
   ])

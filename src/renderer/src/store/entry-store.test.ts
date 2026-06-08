@@ -43,6 +43,7 @@ async function loadEntryStore(options: {
   detailResult: Entry
   snapshotResults?: ReaderSnapshot[]
   snapshotHandler?: () => Promise<ReaderSnapshot>
+  localStorageItems?: Record<string, string>
 }) {
   vi.resetModules()
 
@@ -76,9 +77,30 @@ async function loadEntryStore(options: {
     },
   }
 
-  vi.stubGlobal('window', { api })
+  vi.stubGlobal('window', {
+    api,
+    localStorage: createMemoryStorage(options.localStorageItems),
+  })
   const mod = await import('./entry-store')
   return { useEntryStore: mod.useEntryStore, api }
+}
+
+function createMemoryStorage(initial: Record<string, string> = {}): Storage {
+  const entries = new Map(Object.entries(initial))
+  return {
+    get length() {
+      return entries.size
+    },
+    clear: vi.fn(() => entries.clear()),
+    getItem: vi.fn((key: string) => entries.get(key) ?? null),
+    key: vi.fn((index: number) => Array.from(entries.keys())[index] ?? null),
+    removeItem: vi.fn((key: string) => {
+      entries.delete(key)
+    }),
+    setItem: vi.fn((key: string, value: string) => {
+      entries.set(key, value)
+    }),
+  }
 }
 
 function createDeferred<T>() {
@@ -100,6 +122,29 @@ function makeFeed(partial: Partial<FeedWithCount> = {}): FeedWithCount {
     errorCount: partial.errorCount ?? 0,
     createdAt: partial.createdAt ?? 1000,
     unreadCount: partial.unreadCount ?? 0,
+  }
+}
+
+const SNAPSHOT_CACHE_STORAGE_KEY = 'livo:reader-snapshot-cache:v1'
+
+function makeDefaultHomeSnapshotStorage(snapshot: ReaderSnapshot, limit = 1) {
+  const cacheKey = JSON.stringify({
+    scope: { type: 'all' },
+    unreadOnly: false,
+    limit,
+    compact: true,
+    maxContentLength: 520,
+  })
+  return {
+    [SNAPSHOT_CACHE_STORAGE_KEY]: JSON.stringify({
+      version: 1,
+      entries: {
+        [cacheKey]: {
+          cachedAt: Date.now(),
+          snapshot,
+        },
+      },
+    }),
   }
 }
 
@@ -215,6 +260,91 @@ describe('useEntryStore', () => {
       compact: true,
       maxContentLength: 520,
     })
+  })
+
+  it('hydrates default home snapshot from persistent cache before refreshing', async () => {
+    const cached = makeSnapshotEntry({
+      id: 'entry-cached',
+      title: 'Cached',
+      publishedAt: 1000,
+    })
+    const fresh = makeSnapshotEntry({
+      id: 'entry-fresh',
+      title: 'Fresh',
+      publishedAt: 2000,
+    })
+    const cachedSnapshot: ReaderSnapshot = {
+      feeds: [makeFeed({ unreadCount: 1 })],
+      entries: [cached],
+      counts: {
+        totalFeeds: 1,
+        totalUnread: 1,
+        unreadByFeedId: { 'feed-1': 1 },
+        scopeUnread: 1,
+      },
+      nextCursor: null,
+    }
+    const { useEntryStore, api } = await loadEntryStore({
+      listResults: [],
+      detailResult: cached,
+      snapshotResults: [
+        {
+          feeds: [makeFeed({ unreadCount: 2 })],
+          entries: [fresh],
+          counts: {
+            totalFeeds: 1,
+            totalUnread: 2,
+            unreadByFeedId: { 'feed-1': 2 },
+            scopeUnread: 2,
+          },
+          nextCursor: null,
+        },
+      ],
+      localStorageItems: makeDefaultHomeSnapshotStorage(cachedSnapshot),
+    })
+
+    const hydrated = useEntryStore.getState().hydrateSnapshotCache({ limit: 1 })
+    expect(hydrated?.entries.map((entry) => entry.id)).toEqual(['entry-cached'])
+    expect(useEntryStore.getState().entries.map((entry) => entry.id)).toEqual([
+      'entry-cached',
+    ])
+    expect(api.reader.snapshot).not.toHaveBeenCalled()
+
+    await useEntryStore.getState().loadSnapshot({ limit: 1 })
+    expect(api.reader.snapshot).toHaveBeenCalledTimes(1)
+    expect(useEntryStore.getState().entries.map((entry) => entry.id)).toEqual([
+      'entry-fresh',
+    ])
+  })
+
+  it('does not apply default home snapshot cache to feed-scoped lists', async () => {
+    const cached = makeSnapshotEntry({
+      id: 'entry-cached',
+      feedId: 'feed-1',
+    })
+    const cachedSnapshot: ReaderSnapshot = {
+      feeds: [makeFeed({ id: 'feed-1' })],
+      entries: [cached],
+      counts: {
+        totalFeeds: 1,
+        totalUnread: 0,
+        unreadByFeedId: { 'feed-1': 0 },
+        scopeUnread: 0,
+      },
+      nextCursor: null,
+    }
+    const { useEntryStore } = await loadEntryStore({
+      listResults: [],
+      detailResult: cached,
+      localStorageItems: makeDefaultHomeSnapshotStorage(cachedSnapshot),
+    })
+
+    const hydrated = useEntryStore
+      .getState()
+      .hydrateSnapshotCache({ feedId: 'feed-1', limit: 1 })
+
+    expect(hydrated).toBeNull()
+    expect(useEntryStore.getState().entries).toEqual([])
   })
 
   it('ignores stale snapshot pagination after switching feeds', async () => {

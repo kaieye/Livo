@@ -11,6 +11,8 @@ import {
   readWindowState,
 } from './services/system/window-state'
 
+const MAIN_WINDOW_READY_TIMEOUT_MS = 10000
+
 interface WindowManagerOptions {
   isDev: boolean
   preloadPath: string
@@ -24,18 +26,31 @@ export class WindowManager {
   private mainWindow: BrowserWindow | null = null
   private pendingDeepLinks: DeepLinkAction[] = []
   private rendererReady = false
+  private rendererAppReadyToShow = false
+  private mainWindowReadyToShow = false
+  private revealMainWindowRequested = false
+  private focusMainWindowWhenShown = false
+  private readyToShowTimeout: ReturnType<typeof setTimeout> | null = null
+  private mainWindowReadyTimedOut = false
   private isQuitting = false
 
   constructor(private readonly options: WindowManagerOptions) {}
 
   enqueueDeepLink(action: DeepLinkAction): void {
     this.pendingDeepLinks.push(action)
+    this.requestMainWindowReveal({ focus: true })
     this.flushPendingDeepLinks()
   }
 
   markRendererReady(): void {
     this.rendererReady = true
     this.flushPendingDeepLinks()
+  }
+
+  readyToShowMainWindow(): void {
+    this.rendererAppReadyToShow = true
+    this.flushPendingDeepLinks()
+    this.revealMainWindowIfReady()
   }
 
   safeOpenExternal(url: string): void {
@@ -67,8 +82,7 @@ export class WindowManager {
     if (this.mainWindow.isMinimized()) {
       this.mainWindow.restore()
     }
-    this.mainWindow.show()
-    this.mainWindow.focus()
+    this.requestMainWindowReveal({ focus: true })
   }
 
   hideMainWindow(): void {
@@ -165,6 +179,12 @@ export class WindowManager {
 
     this.mainWindow = mainWindow
     this.rendererReady = false
+    this.rendererAppReadyToShow = false
+    this.mainWindowReadyToShow = false
+    this.revealMainWindowRequested = false
+    this.focusMainWindowWhenShown = false
+    this.mainWindowReadyTimedOut = false
+    this.clearReadyToShowTimeout()
     this.bindWindowEvents(mainWindow)
     if (windowState.isMaximized) {
       mainWindow.maximize()
@@ -179,6 +199,7 @@ export class WindowManager {
     } else {
       void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
     }
+    this.installReadyToShowTimeout(mainWindow)
 
     return mainWindow
   }
@@ -206,12 +227,8 @@ export class WindowManager {
     }
 
     mainWindow.on('ready-to-show', () => {
-      const shouldRevealWindow =
-        !this.options.shouldStartInTray?.() || this.pendingDeepLinks.length > 0
-      if (shouldRevealWindow) {
-        mainWindow.show()
-      }
-      this.options.onVisibilityChanged?.()
+      this.mainWindowReadyToShow = true
+      this.revealMainWindowIfReady()
       this.flushPendingDeepLinks()
     })
 
@@ -249,6 +266,7 @@ export class WindowManager {
       if (this.mainWindow === mainWindow) {
         this.mainWindow = null
       }
+      this.clearReadyToShowTimeout()
       this.options.onVisibilityChanged?.()
     })
 
@@ -351,6 +369,70 @@ export class WindowManager {
     mainWindow.webContents.on('did-finish-load', () => {
       this.installStartupWatchdog(mainWindow)
     })
+  }
+
+  private requestMainWindowReveal(options?: { focus?: boolean }): void {
+    this.revealMainWindowRequested = true
+    this.focusMainWindowWhenShown =
+      this.focusMainWindowWhenShown || !!options?.focus
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    if (this.mainWindowReadyTimedOut) {
+      this.revealMainWindowIfReady({
+        ignoreRendererReady: true,
+        ignoreFirstPaint: true,
+      })
+      return
+    }
+    this.revealMainWindowIfReady()
+  }
+
+  private shouldRevealMainWindow(): boolean {
+    return (
+      !this.options.shouldStartInTray?.() ||
+      this.revealMainWindowRequested ||
+      this.pendingDeepLinks.length > 0
+    )
+  }
+
+  private revealMainWindowIfReady(options?: {
+    ignoreRendererReady?: boolean
+    ignoreFirstPaint?: boolean
+  }): void {
+    const current = this.mainWindow
+    if (!current || current.isDestroyed()) return
+    if (!this.shouldRevealMainWindow()) return
+    if (!options?.ignoreFirstPaint && !this.mainWindowReadyToShow) return
+    if (!options?.ignoreRendererReady && !this.rendererAppReadyToShow) return
+
+    this.clearReadyToShowTimeout()
+    current.show()
+    if (this.focusMainWindowWhenShown) {
+      current.focus()
+    }
+    this.focusMainWindowWhenShown = false
+  }
+
+  private installReadyToShowTimeout(mainWindow: BrowserWindow): void {
+    if (this.readyToShowTimeout) return
+    this.readyToShowTimeout = setTimeout(() => {
+      this.readyToShowTimeout = null
+      this.mainWindowReadyTimedOut = true
+      const current = this.mainWindow
+      if (!current || current !== mainWindow || current.isDestroyed()) return
+      if (!this.shouldRevealMainWindow() || current.isVisible()) return
+
+      logWarn('[window] renderer app ready timeout, showing main window')
+      this.revealMainWindowIfReady({
+        ignoreRendererReady: true,
+        ignoreFirstPaint: true,
+      })
+    }, MAIN_WINDOW_READY_TIMEOUT_MS)
+  }
+
+  private clearReadyToShowTimeout(): void {
+    if (!this.readyToShowTimeout) return
+    clearTimeout(this.readyToShowTimeout)
+    this.readyToShowTimeout = null
   }
 
   private isAllowedAppNavigationUrl(rawUrl: string): boolean {

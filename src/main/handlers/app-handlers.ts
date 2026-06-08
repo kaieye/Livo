@@ -65,6 +65,10 @@ export function registerAppHandlers(windowManager: WindowManager): void {
     windowManager.markRendererReady()
     return { success: true }
   })
+  registerChannel(IPC.APP_READY_TO_SHOW_MAIN_WINDOW, () => {
+    windowManager.readyToShowMainWindow()
+    return { success: true }
+  })
   registerChannel(
     IPC.MENU_SHOW_CONTEXT,
     async (_event, items: NativeContextMenuItem[]) => {
