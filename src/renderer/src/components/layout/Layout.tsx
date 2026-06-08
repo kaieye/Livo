@@ -18,9 +18,10 @@ import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
 import { FeedViewType } from '../../../../shared/types'
-import { getEntryLoadLimit } from '../../lib/entry-load-limit'
+import { buildEntryWarmupRequests } from '../../lib/entry-warmup'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
+import { useViewPanelTransition } from './useViewPanelTransition'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 const DigestContent = lazy(() =>
@@ -39,6 +40,9 @@ const DiscoverPanel = lazy(() =>
   })),
 )
 
+const warmedEntryScopeKeys = new Set<string>()
+let wideViewModulesPreloadPromise: Promise<unknown> | null = null
+
 // Persisted widths key
 const STORAGE_KEY = 'livo-panel-widths'
 
@@ -54,6 +58,52 @@ function loadWidths(): { sidebar: number; entryList: number } {
 
 function saveWidths(sidebar: number, entryList: number) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ sidebar, entryList }))
+}
+
+function scheduleIdleTask(
+  callback: () => void,
+  options: { timeout: number; fallbackDelay: number },
+): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(callback, {
+      timeout: options.timeout,
+    })
+    return () => window.cancelIdleCallback(handle)
+  }
+
+  const handle = window.setTimeout(callback, options.fallbackDelay)
+  return () => window.clearTimeout(handle)
+}
+
+function preloadWideViewModules(): Promise<unknown> {
+  wideViewModulesPreloadPromise ??= Promise.allSettled([
+    import('../entry/WideViewContent'),
+    import('../entry/TimelineSection'),
+    import('../entry/VideoGridSection'),
+    import('../entry/PictureMasonry'),
+  ])
+
+  return wideViewModulesPreloadPromise
+}
+
+async function warmEntryScopesInOrder(
+  requests: ReturnType<typeof buildEntryWarmupRequests>,
+  prefetchEntries: ReturnType<typeof useEntryStore.getState>['prefetchEntries'],
+  isCancelled: () => boolean,
+): Promise<void> {
+  for (const request of requests) {
+    if (isCancelled()) return
+    if (warmedEntryScopeKeys.has(request.key)) continue
+
+    warmedEntryScopeKeys.add(request.key)
+    try {
+      await prefetchEntries(request.options)
+    } catch {
+      warmedEntryScopeKeys.delete(request.key)
+    }
+  }
 }
 
 // Constraints
@@ -78,8 +128,6 @@ function PanelSkeleton({ type }: { type: 'article' | 'social' | 'grid' }) {
 
 export function Layout() {
   const contentFocusRef = useRef<HTMLDivElement>(null)
-  const transitionPanelRef = useRef<HTMLDivElement>(null)
-  const prevTransitionKeyRef = useRef<string | null>(null)
   const { isDiscoverOpen } = useStoreShallow(useDiscoverStore, (s) => ({
     isDiscoverOpen: s.isOpen,
   }))
@@ -167,64 +215,40 @@ export function Layout() {
     return () => cancelAnimationFrame(raf)
   }, [activeView, selectedFeedId])
 
+  // Warm wide-view code after first paint so the first column switch avoids
+  // paying the lazy-import cost on the interaction path.
+  useEffect(() => {
+    const cancelIdleTask = scheduleIdleTask(
+      () => {
+        void preloadWideViewModules()
+      },
+      { timeout: 900, fallbackDelay: 900 },
+    )
+
+    return cancelIdleTask
+  }, [])
+
   // Warm common timeline caches in the background to reduce first-switch stutter.
   useEffect(() => {
     if (feeds.length === 0) return
 
     let cancelled = false
-    const run = async () => {
-      const commonViews = [
-        FeedViewType.SocialMedia,
-        FeedViewType.Videos,
-        FeedViewType.Pictures,
-        FeedViewType.Articles,
-      ]
-      const tasks: Array<Promise<void>> = []
+    const requests = buildEntryWarmupRequests(feeds, RECOMMENDED_CATEGORY)
+    if (requests.length === 0) return
 
-      for (const view of commonViews) {
-        const feedIds = feeds
-          .filter(
-            (feed) =>
-              (feed.view ?? FeedViewType.Articles) === view &&
-              feed.category !== RECOMMENDED_CATEGORY &&
-              feed.showInAll !== false,
-          )
-          .map((feed) => feed.id)
-        if (feedIds.length === 0) continue
-        tasks.push(prefetchEntries({ feedIds, limit: getEntryLoadLimit(view) }))
-      }
-
-      const allFeedIds = feeds
-        .filter(
-          (feed) =>
-            feed.category !== RECOMMENDED_CATEGORY && feed.showInAll !== false,
-        )
-        .map((feed) => feed.id)
-      if (allFeedIds.length > 0) {
-        tasks.push(
-          prefetchEntries({
-            feedIds: allFeedIds,
-            limit: getEntryLoadLimit(null),
-          }),
-        )
-      }
-
-      await Promise.allSettled(tasks)
-    }
-
-    const timer = window.setTimeout(
+    const cancelIdleTask = scheduleIdleTask(
       () => {
         if (cancelled) return
-        void run()
+        void warmEntryScopesInOrder(requests, prefetchEntries, () => cancelled)
       },
-      selectedFeedId ? 220 : 40,
+      { timeout: 1800, fallbackDelay: 1800 },
     )
 
     return () => {
       cancelled = true
-      window.clearTimeout(timer)
+      cancelIdleTask()
     }
-  }, [activeView, feeds, prefetchEntries, selectedFeedId])
+  }, [feeds, prefetchEntries])
 
   // Determine the effective view for layout decisions.
   // When activeView is null (All view) but a Pictures/Social/Videos feed is
@@ -252,33 +276,7 @@ export function Layout() {
         ? `wide:${effectiveView}`
         : 'reader'
   const transitionKey = `${transitionScope}:${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
-
-  // 栏目切换只重播内容进入动画，不重挂载面板子树，避免三栏布局在中间态塌缩。
-  useLayoutEffect(() => {
-    if (prevTransitionKeyRef.current === null) {
-      prevTransitionKeyRef.current = transitionKey
-      return
-    }
-
-    if (prevTransitionKeyRef.current === transitionKey) return
-    prevTransitionKeyRef.current = transitionKey
-
-    const panel = transitionPanelRef.current
-    if (!panel) return
-
-    panel.classList.remove('view-transition-panel-enter')
-    void panel.offsetWidth
-    panel.classList.add('view-transition-panel-enter')
-
-    const timer = window.setTimeout(() => {
-      panel.classList.remove('view-transition-panel-enter')
-    }, 180)
-
-    return () => {
-      window.clearTimeout(timer)
-      panel.classList.remove('view-transition-panel-enter')
-    }
-  }, [transitionKey])
+  const transitionPanelRef = useViewPanelTransition(transitionKey)
 
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)
   const [entryListWidth, setEntryListWidth] = useState(

@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Outlet } from 'react-router-dom'
 import { LocalErrorBoundary } from './components/LocalErrorBoundary'
-import { PageTransition } from './components/layout/PageTransition'
 import { TitleBar } from './components/layout/TitleBar'
 import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useDeepLinkNavigate } from './hooks/useDeepLinkNavigate'
@@ -289,9 +288,7 @@ export default function App() {
       {/* 内联 HTML 骨架屏仍在显示；shell 准备好后再统一替换。 */}
       {appIsReady ? (
         <>
-          <PageTransition>
-            <Outlet />
-          </PageTransition>
+          <Outlet />
           <TitleBar />
 
           {/* 登录弹窗（未登录时自动显示） */}
