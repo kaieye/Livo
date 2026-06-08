@@ -8,6 +8,10 @@ import type {
 import { useSettingsStore } from './settings-store'
 import { useEntryStore } from './entry-store'
 import { buildHomeFeedLoadOptions } from '../lib/home-feed-scope'
+import {
+  invalidateFeedCache,
+  invalidateMultipleFeedsCaches,
+} from '../lib/entry-cache'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 
@@ -16,8 +20,8 @@ async function reloadEntriesForCurrentScope(state: {
   activeView: FeedViewType | null
   feeds: FeedWithCount[]
 }): Promise<void> {
-  const { clearListCache, loadEntries } = useEntryStore.getState()
-  clearListCache()
+  const { loadEntries } = useEntryStore.getState()
+  // DO NOT clearListCache here - let selective invalidation handle it
   await loadEntries(
     buildHomeFeedLoadOptions({
       selectedFeedId: state.selectedFeedId,
@@ -209,7 +213,9 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
       if (!patched) {
         await get().loadFeeds()
       }
-      // Refresh entry list for the currently visible scope to avoid stale empty cache.
+      // Invalidate only this feed's cache, not all caches
+      invalidateFeedCache(feedId)
+      // Refresh entry list for the currently visible scope
       await reloadEntriesForCurrentScope(get())
     } finally {
       set({ isRefreshing: false })
@@ -271,6 +277,8 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
       if (needsFallbackReload) {
         await get().loadFeeds()
       }
+      // Invalidate cache for all refreshed feeds
+      invalidateMultipleFeedsCaches(targets)
       await reloadEntriesForCurrentScope(get())
     } finally {
       set({ isRefreshing: false })
@@ -289,7 +297,8 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     )
     try {
       await window.api.feeds.refreshAll()
-      await get().loadFeeds()
+      // Feed list will be updated via feeds:updated event in AppBootstrapProvider
+      // No need to call loadFeeds() here - reduces IPC overhead
     } finally {
       removeListener()
       set({ isRefreshing: false })

@@ -4,12 +4,14 @@ import { Outlet } from 'react-router-dom'
 import { LocalErrorBoundary } from './components/LocalErrorBoundary'
 import { PageTransition } from './components/layout/PageTransition'
 import { TitleBar } from './components/layout/TitleBar'
+import { AppSkeleton } from './components/AppSkeleton'
 import { useAgentNavigate } from './hooks/useAgentNavigate'
 import { useDeepLinkNavigate } from './hooks/useDeepLinkNavigate'
 import { useSettingsStore } from './store/settings-store'
 import { useAIChatStore } from './store/ai-chat-store'
 import { useCommandPaletteStore } from './store/command-palette-store'
 import { useAuthStore } from './store/auth-store'
+import { useAppIsReady } from './store/app-store'
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href
 
@@ -271,58 +273,66 @@ function FloatingAIAssistantButton() {
  * Root layout component rendered by the HashRouter.
  * Provides <Outlet /> for child routes and mounts global overlays
  * (Settings, AI Chat, Quick Search, Command Palette, Corner Player, Context Menu).
+ *
+ * Shows skeleton while app is hydrating data from backend.
  */
 export default function App() {
   useAgentNavigate()
   useDeepLinkNavigate()
 
-  // 启动时自动恢复登录状态（从本地 Session）
-  useEffect(() => {
-    void useAuthStore.getState().checkSession()
-  }, [])
+  // Auth session is now loaded during hydration phase in main.tsx
+  // No need to check session here during render
+
+  const appIsReady = useAppIsReady()
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <PageTransition>
-        <Outlet />
-      </PageTransition>
-      <TitleBar />
+      {appIsReady ? (
+        <>
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
+          <TitleBar />
 
-      {/* 登录弹窗（未登录时自动显示） */}
-      <Suspense fallback={null}>
-        <LoginModal />
-      </Suspense>
+          {/* 登录弹窗（未登录时自动显示） */}
+          <Suspense fallback={null}>
+            <LoginModal />
+          </Suspense>
 
-      <LocalErrorBoundary
-        title="设置面板加载失败"
-        onDismiss={() => useSettingsStore.getState().setOpen(false)}
-      >
-        <LazySettingsDialogMount />
-      </LocalErrorBoundary>
-      <LocalErrorBoundary
-        title="AI 面板加载失败"
-        onDismiss={() => useAIChatStore.getState().setPanelOpen(false)}
-      >
-        <FloatingAIAssistantButton />
-        <LazyAIChatPanelMount />
-      </LocalErrorBoundary>
-      <LocalErrorBoundary title="快速搜索出现问题">
-        <Suspense fallback={null}>
-          <QuickSearchPanel />
-        </Suspense>
-      </LocalErrorBoundary>
-      <LocalErrorBoundary
-        title="命令面板出现问题"
-        onDismiss={() => useCommandPaletteStore.getState().close()}
-      >
-        <Suspense fallback={null}>
-          <CommandPalette />
-        </Suspense>
-      </LocalErrorBoundary>
-      <Suspense fallback={null}>
-        <CornerPlayer />
-        <TextContextMenu />
-      </Suspense>
+          <LocalErrorBoundary
+            title="设置面板加载失败"
+            onDismiss={() => useSettingsStore.getState().setOpen(false)}
+          >
+            <LazySettingsDialogMount />
+          </LocalErrorBoundary>
+          <LocalErrorBoundary
+            title="AI 面板加载失败"
+            onDismiss={() => useAIChatStore.getState().setPanelOpen(false)}
+          >
+            <FloatingAIAssistantButton />
+            <LazyAIChatPanelMount />
+          </LocalErrorBoundary>
+          <LocalErrorBoundary title="快速搜索出现问题">
+            <Suspense fallback={null}>
+              <QuickSearchPanel />
+            </Suspense>
+          </LocalErrorBoundary>
+          <LocalErrorBoundary
+            title="命令面板出现问题"
+            onDismiss={() => useCommandPaletteStore.getState().close()}
+          >
+            <Suspense fallback={null}>
+              <CommandPalette />
+            </Suspense>
+          </LocalErrorBoundary>
+          <Suspense fallback={null}>
+            <CornerPlayer />
+            <TextContextMenu />
+          </Suspense>
+        </>
+      ) : (
+        <AppSkeleton />
+      )}
     </div>
   )
 }

@@ -10,7 +10,7 @@
  */
 import type { Entry, EntryListResult } from '../../../shared/types'
 
-const ENTRY_LIST_CACHE_TTL_MS = 2 * 60 * 1000
+const ENTRY_LIST_CACHE_TTL_MS = 10 * 60 * 1000 // Extended from 2min to 10min
 const EMPTY_ENTRY_LIST_CACHE_TTL_MS = 5000
 const ENTRY_LIST_CACHE_VERSION = 4
 const DEFAULT_ENTRY_PAGE_SIZE = 10
@@ -193,6 +193,69 @@ export function clearAllCaches(): void {
 
 export function invalidateListCache(): void {
   entryListCache.clear()
+}
+
+/**
+ * Invalidate only the cache entries related to a specific feed.
+ * This is more granular than clearAllCaches() and preserves unrelated cached data.
+ */
+export function invalidateFeedCache(feedId: string): void {
+  const keysToDelete: string[] = []
+
+  for (const [key] of entryListCache) {
+    try {
+      const parsed = JSON.parse(key) as {
+        feedId?: string
+        feedIds?: string[]
+      }
+
+      // Invalidate if this cache key is for the specific feed or includes it in feedIds
+      if (parsed.feedId === feedId || parsed.feedIds?.includes(feedId)) {
+        keysToDelete.push(key)
+      }
+    } catch {
+      // Invalid key format, skip
+    }
+  }
+
+  for (const key of keysToDelete) {
+    entryListCache.delete(key)
+  }
+}
+
+/**
+ * Invalidate cache entries for multiple feeds.
+ * Useful when refreshing multiple feeds at once.
+ */
+export function invalidateMultipleFeedsCaches(feedIds: string[]): void {
+  if (feedIds.length === 0) return
+
+  const feedIdSet = new Set(feedIds)
+  const keysToDelete: string[] = []
+
+  for (const [key] of entryListCache) {
+    try {
+      const parsed = JSON.parse(key) as {
+        feedId?: string
+        feedIds?: string[]
+      }
+
+      // Invalidate if this cache key involves any of the specified feeds
+      const shouldInvalidate =
+        (parsed.feedId && feedIdSet.has(parsed.feedId)) ||
+        (parsed.feedIds && parsed.feedIds.some((id) => feedIdSet.has(id)))
+
+      if (shouldInvalidate) {
+        keysToDelete.push(key)
+      }
+    } catch {
+      // Invalid key format, skip
+    }
+  }
+
+  for (const key of keysToDelete) {
+    entryListCache.delete(key)
+  }
 }
 
 // ---- List helpers ----

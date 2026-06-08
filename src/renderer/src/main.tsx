@@ -5,6 +5,8 @@ import { router } from './router'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { recordAppMetric } from './lib/performance-metrics'
 import { RootProviders } from './providers/RootProviders'
+import { hydrateDataToMemory } from './initialize/hydrate'
+import { setAppIsReady } from './store/app-store'
 import './styles/tokens.css'
 import './styles/globals.css'
 
@@ -45,6 +47,7 @@ if (_platform === 'darwin' || _platform === 'win32') {
 performance.mark('livo-render-start')
 
 try {
+  // Mount React immediately (with skeleton)
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <ErrorBoundary>
@@ -55,6 +58,29 @@ try {
     </React.StrictMode>,
   )
   recordAppMetric('app.reactMounted', performance.now())
+
+  // Hydrate data in parallel, then mark app as ready
+  hydrateDataToMemory()
+    .then((result) => {
+      console.log(
+        `[Livo] Data hydration complete in ${result.timings.total.toFixed(0)}ms`,
+      )
+      recordAppMetric('app.dataHydrated', performance.now())
+    })
+    .catch((error) => {
+      console.error('[Livo] Data hydration failed:', error)
+      void window.api.app.reportError({
+        source: 'hydrate',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+    })
+    .finally(() => {
+      // Mark app as ready regardless of hydration result
+      setAppIsReady(true)
+      recordAppMetric('app.ready', performance.now())
+      document.documentElement.dataset.appReady = 'true'
+    })
 } catch (err) {
   console.error('[Livo] Failed to mount React app:', err)
   void window.api.app.reportError({

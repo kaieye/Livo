@@ -2,14 +2,11 @@ import { useEffect, type PropsWithChildren } from 'react'
 import { applyAfterReadyCallbacks } from '../initialize/queue'
 import { useInitRecommendedFeeds } from '../hooks/useInitRecommendedFeeds'
 import { buildHomeFeedLoadOptions } from '../lib/home-feed-scope'
-import { recordAppMetric } from '../lib/performance-metrics'
 import { useEntryStore } from '../store/entry-store'
 import { useFeedStore } from '../store/feed-store'
 import { useSettingsStore } from '../store/settings-store'
 import { useActionsStore } from '../store/actions-store'
 import { useStoreShallow } from '../store/helpers'
-
-let bootstrapPromise: Promise<void> | null = null
 
 function reloadEntriesForCurrentScope() {
   const { selectedFeedId, activeView, feeds } = useFeedStore.getState()
@@ -36,35 +33,24 @@ export function AppBootstrapProvider({ children }: PropsWithChildren) {
   useInitRecommendedFeeds()
 
   useEffect(() => {
-    if (!bootstrapPromise) {
-      bootstrapPromise = Promise.all([
-        loadSettings(),
-        loadFeeds(),
-        loadRules(),
-      ]).then(() => {
-        applyAfterReadyCallbacks()
-        document.documentElement.dataset.appReady = 'true'
-        void window.api.app.rendererReady()
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            recordAppMetric('app.bootstrapReady', performance.now())
-          })
-        })
-      })
-    }
+    // Data is already hydrated from main.tsx via hydrateDataToMemory()
+    // Just apply after-ready callbacks and notify main process
+    applyAfterReadyCallbacks()
+    void window.api.app.rendererReady()
 
     if (!window.api?.on) return
 
+    // Listen for incremental updates from backend
     const cleanupFeedsUpdated = window.api.on('feeds:updated', () => {
-      loadFeeds()
-      clearListCache()
+      loadFeeds() // Reload feeds to get updated counts
+      // DO NOT clearListCache() - preserve cache for better performance
       reloadEntriesForCurrentScope()
     })
     const cleanupEntriesEnriched = window.api.on('entries:enriched', () => {
       reloadEntriesForCurrentScope()
     })
     const cleanupEntriesRepaired = window.api.on('entries:repaired', () => {
-      clearListCache()
+      clearListCache() // Only clear cache for repairs (data integrity issue)
       reloadEntriesForCurrentScope()
     })
 
