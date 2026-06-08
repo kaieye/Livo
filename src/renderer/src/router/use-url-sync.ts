@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useFeedStore } from '../store/feed-store'
 import { useEntryStore } from '../store/entry-store'
@@ -93,7 +93,7 @@ export function useUrlSync(): void {
   }
 
   // Direction 1: URL → Store
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (syncingFromStore.current) {
       syncingFromStore.current = false
       return
@@ -121,11 +121,15 @@ export function useUrlSync(): void {
 
     // Sync feed view/selection (only when not on discover/settings)
     if (!isDiscover && !isSettings) {
-      if (feedStore.activeView !== viewType) {
-        feedStore.setActiveView(viewType)
-      }
-      if (feedStore.selectedFeedId !== feedId) {
-        feedStore.setSelectedFeed(feedId)
+      if (
+        feedStore.activeView !== viewType ||
+        feedStore.selectedFeedId !== feedId
+      ) {
+        useFeedStore.setState((state) =>
+          state.activeView === viewType && state.selectedFeedId === feedId
+            ? state
+            : { activeView: viewType, selectedFeedId: feedId },
+        )
       }
       selectEntryFromUrl(entryId)
     }

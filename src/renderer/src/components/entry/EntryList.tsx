@@ -6,7 +6,6 @@ import {
   useCallback,
   useMemo,
   useRef,
-  useLayoutEffect,
   type UIEvent,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -198,7 +197,7 @@ export function EntryList({ width }: { width?: number }) {
     gridRows,
     hasMoreGridEntries,
   } = useMemo(() => {
-    const result = buildCachedEntryListDerivedModel({
+    return buildCachedEntryListDerivedModel({
       baseRenderEntries,
       activeView,
       groupByDate: general.groupByDate,
@@ -206,8 +205,6 @@ export function EntryList({ width }: { width?: number }) {
       gridVisibleCount: gridProgressive.visibleCount,
       cacheKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${filterMode}`,
     })
-    performance.mark('vs:entrylist-memos')
-    return result
   }, [
     activeView,
     baseRenderEntries,
@@ -217,10 +214,6 @@ export function EntryList({ width }: { width?: number }) {
     isGridMode,
     selectedFeedId,
   ])
-
-  useLayoutEffect(() => {
-    performance.mark('vs:child-commit')
-  })
 
   useEffect(() => {
     const nextScope = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`

@@ -57,6 +57,7 @@ import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useSocialOverlayAvatar } from '../../hooks/useSocialOverlayAvatar'
 import { useWideViewEntries } from '../../hooks/useWideViewEntries'
 import { useRegisterCommand } from '../../hooks/useRegisterCommand'
+import { useStableHomeFeedLoadOptions } from '../../hooks/useStableHomeFeedLoadOptions'
 import { canonicalizeSocialUrl } from '../../lib/social-url'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import {
@@ -66,7 +67,10 @@ import {
 } from '../../lib/bilibili-video'
 import { getImageProxyFallbackUrls } from '../../lib/image-proxy'
 import { getEntryLoadLimit } from '../../lib/entry-load-limit'
-import { buildHomeFeedLoadOptions } from '../../lib/home-feed-scope'
+import {
+  areHomeFeedLoadOptionsEqual,
+  buildHomeFeedLoadOptions,
+} from '../../lib/home-feed-scope'
 import {
   isRedundantRichText,
   normalizeLooseText,
@@ -167,6 +171,7 @@ const MASONRY_RENDER_BATCH = 40
 const PAGED_LOAD_MORE_SCROLL_GUARD_PX = 120
 const SOCIAL_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX = 280
 const VIDEO_PAGED_LOAD_MORE_BOTTOM_OFFSET_PX = 1100
+const EMPTY_SCOPED_ENTRIES: Entry[] = []
 
 const rememberedContainerWidthByView = new Map<string, number>()
 
@@ -303,6 +308,8 @@ export function WideViewContent() {
     hasMoreEntries,
     loadEntries,
     loadMoreEntries,
+    paginationOptions,
+    paginationPageSize,
     selectEntry,
     markAllRead,
     markAboveRead,
@@ -317,6 +324,8 @@ export function WideViewContent() {
     hasMoreEntries: s.hasMoreEntries,
     loadEntries: s.loadEntries,
     loadMoreEntries: s.loadMoreEntries,
+    paginationOptions: s.paginationOptions,
+    paginationPageSize: s.paginationPageSize,
     selectEntry: s.selectEntry,
     markAllRead: s.markAllRead,
     markAboveRead: s.markAboveRead,
@@ -411,7 +420,7 @@ export function WideViewContent() {
     [feeds],
   )
 
-  const currentLoadOptions = useMemo(
+  const derivedLoadOptions = useMemo(
     () =>
       buildHomeFeedLoadOptions({
         selectedFeedId,
@@ -428,6 +437,21 @@ export function WideViewContent() {
       userFeeds,
     ],
   )
+  const currentLoadOptions = useStableHomeFeedLoadOptions(derivedLoadOptions)
+  const entriesMatchCurrentScope = useMemo(
+    () =>
+      areHomeFeedLoadOptionsEqual(currentLoadOptions, {
+        ...paginationOptions,
+        limit: paginationPageSize || undefined,
+      }),
+    [currentLoadOptions, paginationOptions, paginationPageSize],
+  )
+  const scopedEntries = useMemo(
+    () => (entriesMatchCurrentScope ? entries : EMPTY_SCOPED_ENTRIES),
+    [entries, entriesMatchCurrentScope],
+  )
+  const scopedIsLoading = isLoading || !entriesMatchCurrentScope
+  const scopedHasMoreEntries = entriesMatchCurrentScope && hasMoreEntries
 
   // Loading entries when feed selection changes
   useEffect(() => {
@@ -509,13 +533,13 @@ export function WideViewContent() {
     renderEntryById,
     renderEntryIndexById,
   } = useWideViewEntries({
-    entries,
+    entries: scopedEntries,
     feeds,
     feedById,
     activeView: effectiveActiveView,
     selectedFeedId,
     showRecommended: general.showRecommended,
-    isLoading,
+    isLoading: scopedIsLoading,
   })
   const isPicturesAllView =
     effectiveActiveView === FeedViewType.Pictures && !selectedFeedId
@@ -572,10 +596,8 @@ export function WideViewContent() {
         publishedAt: entry.publishedAt || 0,
       })
     }
-    // PERF: mark masonryCards computation
-    performance.mark('vs:wideview-masonry')
-    return result
     void masonryProbeVersion
+    return result
   }, [isPicturesAllView, masonryProbeVersion, renderEntries])
 
   const dateLocale = useMemo(() => {
@@ -620,22 +642,22 @@ export function WideViewContent() {
         el.scrollTop + el.clientHeight >= el.scrollHeight - bottomOffset
       if (!nearBottom || !hasScrolledEnough) return
       if (hasActiveSearchQuery) return
-      if (!hasMoreEntries || isLoadingMore) return
+      if (!scopedHasMoreEntries || isLoadingMore) return
       void loadMoreEntries()
     },
     [
       effectiveActiveView,
-      hasMoreEntries,
       hasActiveSearchQuery,
       isLoadingMore,
       loadMoreEntries,
+      scopedHasMoreEntries,
     ],
   )
 
   useEffect(() => {
     if (!isPicturesAllView) return
     if (hasActiveSearchQuery) return
-    if (!hasMoreEntries || isLoadingMore) return
+    if (!scopedHasMoreEntries || isLoadingMore) return
     // If initial viewport has too few image cards to produce scrolling,
     // prefetch additional pages so user can see more results immediately.
     if (masonryCards.length >= MASONRY_INITIAL_RENDER) return
@@ -643,10 +665,10 @@ export function WideViewContent() {
   }, [
     isPicturesAllView,
     hasActiveSearchQuery,
-    hasMoreEntries,
     isLoadingMore,
     masonryCards.length,
     loadMoreEntries,
+    scopedHasMoreEntries,
   ])
 
   useEffect(() => {
@@ -659,11 +681,8 @@ export function WideViewContent() {
   }, [effectiveActiveView, selectedFeedId])
 
   // Single useLayoutEffect: measure + observe container width for Videos/Pictures,
-  // sync cached width on view switch to prevent flash, and mark perf events.
+  // and sync cached width on view switch to prevent flash.
   useLayoutEffect(() => {
-    performance.mark('vs:child-commit')
-    performance.mark('vs:wideview-layout1')
-
     // Sync cached width immediately to prevent first-render flash
     const cached = rememberedContainerWidthByView.get(viewKey)
     if (cached) {

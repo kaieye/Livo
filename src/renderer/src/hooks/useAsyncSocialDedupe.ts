@@ -45,9 +45,10 @@ export function useAsyncSocialDedupe(
     [enabled, sourceEntries.length, workerThreshold],
   )
   const renderEntries = useMemo(() => {
+    if (!enabled) return sourceEntries
     if (activeKeyRef.current === cacheKey) return dedupedEntries
     return dedupeCacheByKey.get(cacheKey) ?? sourceEntries
-  }, [cacheKey, dedupedEntries, sourceEntries])
+  }, [cacheKey, dedupedEntries, enabled, sourceEntries])
 
   useEffect(() => {
     if (!shouldUseWorker) return
@@ -68,16 +69,16 @@ export function useAsyncSocialDedupe(
   }, [])
 
   useEffect(() => {
+    if (!enabled) {
+      activeKeyRef.current = cacheKey
+      setIsProcessing(false)
+      return
+    }
+
     if (activeKeyRef.current !== cacheKey) {
       activeKeyRef.current = cacheKey
       const cached = dedupeCacheByKey.get(cacheKey)
       setDedupedEntries(cached ?? sourceEntries)
-    }
-
-    if (!enabled) {
-      setIsProcessing(false)
-      setDedupedEntries(sourceEntries)
-      return
     }
 
     if (!shouldUseWorker) {

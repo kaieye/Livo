@@ -14,6 +14,29 @@ export type HomeFeedRefreshTarget =
   | { type: 'feeds'; feedIds: string[] }
   | { type: 'all' }
 
+function normalizeFeedIds(feedIds?: string[]): string[] {
+  return [...(feedIds || [])].sort()
+}
+
+export function areHomeFeedLoadOptionsEqual(
+  a: Partial<HomeFeedLoadOptions> | null | undefined,
+  b: Partial<HomeFeedLoadOptions> | null | undefined,
+): boolean {
+  if (!a || !b) return false
+
+  const aFeedIds = normalizeFeedIds(a.feedIds)
+  const bFeedIds = normalizeFeedIds(b.feedIds)
+  if (aFeedIds.length !== bFeedIds.length) return false
+
+  return (
+    (a.feedId || '') === (b.feedId || '') &&
+    !!a.starred === !!b.starred &&
+    !!a.unreadOnly === !!b.unreadOnly &&
+    (a.limit ?? null) === (b.limit ?? null) &&
+    aFeedIds.every((id, index) => id === bFeedIds[index])
+  )
+}
+
 /**
  * Derive entry load options from the current home feed scope.
  * Single source of truth for: starred → selected feed → active view → all feeds.

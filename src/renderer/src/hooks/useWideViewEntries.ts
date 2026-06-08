@@ -61,7 +61,7 @@ export function useWideViewEntries({
   })
 
   const model = useMemo(() => {
-    const result = buildCachedWideViewEntryModel({
+    return buildCachedWideViewEntryModel({
       entries,
       viewFilteredEntries,
       feedById,
@@ -70,9 +70,6 @@ export function useWideViewEntries({
       allowStaleEntriesWhileLoading: !selectedFeedId,
       cacheKey: `${scopeCacheKey}:wide-model`,
     })
-    // PERF: mark when WideView entry model computation is done
-    performance.mark('vs:wideview-memos')
-    return result
   }, [
     entries,
     feedById,

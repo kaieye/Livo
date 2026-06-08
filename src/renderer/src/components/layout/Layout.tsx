@@ -152,64 +152,8 @@ export function Layout() {
 
   // Clear stale detail content when switching view/feed scope.
   useLayoutEffect(() => {
-    performance.mark('vs:selectEntry-null')
     const entryStore = useEntryStore.getState()
     if (entryStore.selectedEntry) void entryStore.selectEntry(null)
-  }, [activeView, selectedFeedId])
-
-  // PERF: mark when React commits the new view layout (before paint)
-  useLayoutEffect(() => {
-    performance.mark('vs:layout-commit')
-  }, [activeView, selectedFeedId])
-
-  // PERF: schedule a post-paint measurement collection
-  useEffect(() => {
-    const measure = () => {
-      performance.mark('vs:paint')
-      const marks = performance.getEntriesByType('mark')
-      const startMark = marks.find((m) => m.name === 'vs:start')
-      if (!startMark) return
-
-      const measureFrom = (name: string, label: string) => {
-        const m = marks.find((x) => x.name === name)
-        if (m && m.startTime >= startMark.startTime) {
-          console.log(
-            `  ${label}: ${(m.startTime - startMark.startTime).toFixed(1)}ms`,
-          )
-        }
-      }
-
-      console.groupCollapsed(
-        `🔍 View-switch perf (${(performance.now() - startMark.startTime).toFixed(1)}ms total to paint)`,
-      )
-      measureFrom('vs:store', '→ store update')
-      measureFrom('vs:layout-commit', '→ Layout commit')
-      measureFrom('vs:selectEntry-null', '→ selectEntry(null)')
-      measureFrom('vs:wideview-memos', '→ WideView useMemos done')
-      measureFrom('vs:wideview-masonry', '→ WideView masonryCards')
-      measureFrom('vs:wideview-layout1', '→ WideView useLayoutEffect #1')
-      measureFrom('vs:entrylist-memos', '→ EntryList useMemos done')
-      measureFrom('vs:child-commit', '→ Child commit')
-      measureFrom('vs:paint', '→ post-paint rAF')
-      console.groupEnd()
-
-      // Cleanup marks for next measurement
-      ;[
-        'vs:start',
-        'vs:store',
-        'vs:layout-commit',
-        'vs:selectEntry-null',
-        'vs:wideview-memos',
-        'vs:wideview-masonry',
-        'vs:wideview-layout1',
-        'vs:entrylist-memos',
-        'vs:child-commit',
-        'vs:paint',
-      ].forEach((name) => performance.clearMarks(name))
-    }
-
-    const raf = requestAnimationFrame(measure)
-    return () => cancelAnimationFrame(raf)
   }, [activeView, selectedFeedId])
 
   // Warm wide-view code after first paint so the first column switch avoids

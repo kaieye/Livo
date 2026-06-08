@@ -179,6 +179,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       unreadOnly: !!normalizedOptions.unreadOnly,
       pageSize,
     })
+    const shouldResetEntries = get().paginationQueryKey !== queryKey
     set({
       paginationQueryKey: queryKey,
       paginationOptions: {
@@ -205,7 +206,8 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     }
 
     set({
-      isLoading: get().entries.length === 0,
+      entries: shouldResetEntries ? [] : get().entries,
+      isLoading: shouldResetEntries || get().entries.length === 0,
       isLoadingMore: false,
       hasMoreEntries: false,
     })
@@ -261,6 +263,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const listCacheKey = buildListCacheKey(normalizedOptions)
     const cachedHit = getCachedListResult(listCacheKey, pageSize)
     const snapshotInput = buildReaderSnapshotInput(normalizedOptions)
+    const shouldResetEntries = get().paginationQueryKey !== queryKey
 
     // Cache hit: show entries immediately, skip IPC entirely.
     if (cachedHit) {
@@ -284,8 +287,8 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     }
 
     set({
-      // Keep old entries visible while loading — no skeleton flash.
-      isLoading: get().entries.length === 0,
+      entries: shouldResetEntries ? [] : get().entries,
+      isLoading: shouldResetEntries || get().entries.length === 0,
       isLoadingMore: false,
       hasMoreEntries: false,
       paginationQueryKey: queryKey,

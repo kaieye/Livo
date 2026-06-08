@@ -64,6 +64,7 @@ const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
 }
 
 const EMPTY_FOLDERS_STORAGE_KEY = 'livo-empty-folders'
+const FEED_CATEGORY_VIRTUALIZE_THRESHOLD = 24
 
 function getPathLikeFromFeedUrl(rawUrl: string): string {
   try {
@@ -323,6 +324,7 @@ export function Sidebar({ width }: { width?: number }) {
     removeFeed,
     updateFeed,
     addFeed,
+    setActiveView,
   } = useStoreShallow(useFeedStore, (s) => ({
     feeds: s.feeds,
     selectedFeedId: s.selectedFeedId,
@@ -335,6 +337,7 @@ export function Sidebar({ width }: { width?: number }) {
     removeFeed: s.removeFeed,
     updateFeed: s.updateFeed,
     addFeed: s.addFeed,
+    setActiveView: s.setActiveView,
   }))
   const { t } = useTranslation()
   const filteredFeeds = useMemo(
@@ -1177,12 +1180,23 @@ export function Sidebar({ width }: { width?: number }) {
       )
         return
 
-      // PERF: mark view-switch start
-      performance.mark('vs:start')
       const slug = view !== null ? VIEW_TYPE_SLUGS[view] : null
-      navigate(slug ? `/${slug}` : '/')
+      if (isDigestRoute || isDiscoverOpen) {
+        navigate(slug ? `/${slug}` : '/')
+        return
+      }
+
+      void useEntryStore.getState().selectEntry(null)
+      setActiveView(view)
     },
-    [activeView, isDigestRoute, isDiscoverOpen, navigate, selectedFeedId],
+    [
+      activeView,
+      isDigestRoute,
+      isDiscoverOpen,
+      navigate,
+      selectedFeedId,
+      setActiveView,
+    ],
   )
 
   const handleContextMenu = useCallback(
@@ -2546,7 +2560,8 @@ const FeedCategory = memo(function FeedCategory({
   )
   const [expanded, setExpanded] = useState(true)
   const isDropHover = dropTarget === category && dragFeedId !== null
-  const shouldVirtualizeFeeds = feeds.length > 80
+  const shouldVirtualizeFeeds =
+    feeds.length > FEED_CATEGORY_VIRTUALIZE_THRESHOLD
   const listRef = useRef<HTMLDivElement | null>(null)
   const feedVirtualizer = useVirtualizer({
     count: expanded && shouldVirtualizeFeeds ? feeds.length : 0,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FeedViewType } from '../../../shared/types'
 import {
+  areHomeFeedLoadOptionsEqual,
   buildHomeFeedLoadOptions,
   buildHomeFeedRefreshTarget,
   computeViewFeedIds,
@@ -99,5 +100,28 @@ describe('home-feed-scope', () => {
         feeds,
       }),
     ).toEqual({ type: 'all' })
+  })
+
+  it('比较加载范围时忽略 feedIds 顺序并区分 limit', () => {
+    expect(
+      areHomeFeedLoadOptionsEqual(
+        { feedIds: ['b', 'a'], unreadOnly: true, limit: 20 },
+        { feedIds: ['a', 'b'], unreadOnly: true, limit: 20 },
+      ),
+    ).toBe(true)
+
+    expect(
+      areHomeFeedLoadOptionsEqual(
+        { feedIds: ['a', 'b'], unreadOnly: true, limit: 20 },
+        { feedIds: ['a', 'b'], unreadOnly: true, limit: 40 },
+      ),
+    ).toBe(false)
+
+    expect(
+      areHomeFeedLoadOptionsEqual(
+        { feedId: 'feed-1', limit: 20 },
+        { feedId: 'feed-2', limit: 20 },
+      ),
+    ).toBe(false)
   })
 })

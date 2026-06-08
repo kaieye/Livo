@@ -313,8 +313,6 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   setActiveView: (view) => {
     const { activeView, selectedFeedId } = get()
     if (activeView === view && selectedFeedId === null) return
-    // PERF: mark store update
-    performance.mark('vs:store')
     set({ activeView: view, selectedFeedId: null })
   },
 

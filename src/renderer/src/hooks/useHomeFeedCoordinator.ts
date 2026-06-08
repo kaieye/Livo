@@ -4,8 +4,10 @@ import { useFeedStore } from '../store/feed-store'
 import { useStoreShallow } from '../store/helpers'
 import { useGeneralSettingKey } from '../store/settings-store'
 import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
+import { useStableHomeFeedLoadOptions } from './useStableHomeFeedLoadOptions'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
 import {
+  areHomeFeedLoadOptionsEqual,
   buildHomeFeedRefreshTarget,
   buildHomeFeedLoadOptions,
   computeViewFeedIds,
@@ -14,6 +16,9 @@ import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-s
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
+const EMPTY_SCOPED_ENTRIES: ReturnType<
+  typeof useEntryStore.getState
+>['entries'] = []
 
 export interface HomeFeedCoordinatorState {
   /** Raw entries from store. */
@@ -95,6 +100,8 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     hydrateSnapshotCache,
     loadMoreEntries,
     clearListCache,
+    paginationOptions,
+    paginationPageSize,
     searchQuery,
     setSearchQuery,
     search,
@@ -108,6 +115,8 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     hydrateSnapshotCache: s.hydrateSnapshotCache,
     loadMoreEntries: s.loadMoreEntries,
     clearListCache: s.clearListCache,
+    paginationOptions: s.paginationOptions,
+    paginationPageSize: s.paginationPageSize,
     searchQuery: s.searchQuery,
     setSearchQuery: s.setSearchQuery,
     search: s.search,
@@ -136,6 +145,30 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     () => getEntryLoadLimit(activeView),
     [activeView],
   )
+  const derivedLoadOptions = useMemo(
+    () =>
+      buildHomeFeedLoadOptions({
+        selectedFeedId,
+        activeView,
+        feeds,
+        unreadOnly: filterMode === 'unread',
+      }),
+    [activeView, feeds, filterMode, selectedFeedId],
+  )
+  const currentLoadOptions = useStableHomeFeedLoadOptions(derivedLoadOptions)
+  const entriesMatchCurrentScope = useMemo(
+    () =>
+      areHomeFeedLoadOptionsEqual(currentLoadOptions, {
+        ...paginationOptions,
+        limit: paginationPageSize || undefined,
+      }),
+    [currentLoadOptions, paginationOptions, paginationPageSize],
+  )
+  const scopedSourceEntries = useMemo(
+    () => (entriesMatchCurrentScope ? entries : EMPTY_SCOPED_ENTRIES),
+    [entries, entriesMatchCurrentScope],
+  )
+  const scopedIsLoading = isLoading || !entriesMatchCurrentScope
   const feedByIdMap = useMemo(
     () => new Map(feeds.map((feed) => [feed.id, feed] as const)),
     [feeds],
@@ -180,24 +213,15 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   )
 
   const loadCurrentSnapshot = useCallback(async () => {
-    const options = buildHomeFeedLoadOptions({
-      selectedFeedId,
-      activeView,
-      feeds,
-      unreadOnly: filterMode === 'unread',
-    })
-    const cachedSnapshot = hydrateSnapshotCache(options)
+    const cachedSnapshot = hydrateSnapshotCache(currentLoadOptions)
     if (cachedSnapshot) applySnapshotFeeds(cachedSnapshot.feeds)
-    const snapshot = await loadSnapshot(options)
+    const snapshot = await loadSnapshot(currentLoadOptions)
     if (snapshot) applySnapshotFeeds(snapshot.feeds)
   }, [
-    activeView,
     applySnapshotFeeds,
-    feeds,
-    filterMode,
+    currentLoadOptions,
     hydrateSnapshotCache,
     loadSnapshot,
-    selectedFeedId,
   ])
 
   // Loading entries when feed selection / filter mode changes
@@ -216,7 +240,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   const readingSurfaceScope = useMemo(
     () =>
       buildCachedEntryReadingSurfaceScopeModel({
-        entries,
+        entries: scopedSourceEntries,
         feeds,
         feedById: feedByIdMap,
         activeView,
@@ -227,12 +251,12 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
       }),
     [
       activeView,
-      entries,
       feedByIdMap,
       feeds,
       scopeCacheKey,
       selectedFeedId,
       showRecommended,
+      scopedSourceEntries,
     ],
   )
   const {
@@ -303,9 +327,9 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   )
 
   return {
-    entries,
+    entries: scopedSourceEntries,
     selectedEntry: useEntryStore.getState().selectedEntry,
-    isLoading,
+    isLoading: scopedIsLoading,
     isLoadingMore,
     hasMoreEntries,
     loadEntries,
