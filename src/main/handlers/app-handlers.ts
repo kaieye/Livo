@@ -14,7 +14,7 @@ import { checkForAppUpdates } from '../services/system/update-check'
 import { downloadUrlToFile, saveTextFile } from '../services/system/download'
 import { settingsProvider } from '../services/system/settings-provider'
 import { getDb, whenDbReady } from '../database'
-import { sessionStore } from '../services/auth/session-store'
+import { getValidatedSession } from '../services/auth/session-validation'
 import type { WindowManager } from '../window-manager'
 
 export function registerAppHandlers(windowManager: WindowManager): void {
@@ -147,13 +147,16 @@ export function registerAppHandlers(windowManager: WindowManager): void {
       }))
       .sort((a, b) => a.title.localeCompare(b.title))
 
-    const isValid = sessionStore.isSessionValid()
-    const user = isValid ? sessionStore.getCurrentUser() : null
+    const session = await getValidatedSession()
 
     return {
       settings,
       feeds: feedList,
-      auth: { success: true, isValid, user },
+      auth: {
+        success: true,
+        isValid: !!session,
+        user: session?.user ?? null,
+      },
     }
   })
 }

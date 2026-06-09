@@ -1,6 +1,7 @@
 import { shell, BrowserWindow } from 'electron'
 import { authService } from '../services/auth/auth-service'
 import { sessionStore } from '../services/auth/session-store'
+import { getValidatedSession } from '../services/auth/session-validation'
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
 import { IPC } from '../../shared/ipc-contracts'
@@ -124,29 +125,13 @@ export function registerAuthHandlers(): void {
   // 获取当前用户
   registerChannel(IPC.AUTH_GET_CURRENT_USER, async () => {
     try {
-      const session = sessionStore.getSession()
-
-      if (!session || !sessionStore.isSessionValid()) {
+      const session = await getValidatedSession()
+      if (!session) {
         return { success: true, user: null, token: null }
       }
 
-      // 验证 token 是否仍然有效
-      try {
-        const user = await authService.getCurrentUser(session.token)
-
-        // 更新用户信息
-        sessionStore.saveSession({
-          ...session,
-          user,
-        })
-        triggerFeedSyncAfterLogin()
-
-        return { success: true, user, token: session.token }
-      } catch {
-        // Token 无效，清除 session
-        sessionStore.clearSession()
-        return { success: true, user: null, token: null }
-      }
+      triggerFeedSyncAfterLogin()
+      return { success: true, user: session.user, token: session.token }
     } catch (error) {
       return toHandlerError(error)
     }
@@ -175,11 +160,14 @@ export function registerAuthHandlers(): void {
 
   // 检查登录状态
   registerChannel(IPC.AUTH_CHECK_SESSION, async () => {
-    const isValid = sessionStore.isSessionValid()
-    const user = isValid ? sessionStore.getCurrentUser() : null
-    if (isValid && user) {
+    const session = await getValidatedSession()
+    if (session) {
       triggerFeedSyncAfterLogin()
     }
-    return { success: true, isValid, user }
+    return {
+      success: true,
+      isValid: !!session,
+      user: session?.user ?? null,
+    }
   })
 }
