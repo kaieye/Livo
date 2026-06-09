@@ -24,7 +24,6 @@ const SETTINGS_TABS = new Set<SettingsTabId>([
   'translation',
   'actions',
   'user',
-  'accounts',
   'data',
   'privacy',
   'about',

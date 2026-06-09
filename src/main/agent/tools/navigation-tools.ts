@@ -25,7 +25,6 @@ const SETTINGS_PANELS: AgentSettingsPanel[] = [
   'privacy',
   'about',
   'ai',
-  'accounts',
   'agentPermissions',
 ]
 
@@ -45,7 +44,6 @@ const SETTINGS_PANEL_LABELS: Record<AgentSettingsPanel, string> = {
   privacy: '隐私设置',
   about: '关于页',
   ai: 'AI 设置',
-  accounts: '账号设置',
   agentPermissions: 'Agent 权限',
 }
 
@@ -161,7 +159,7 @@ export function buildOpenSettingsPanelTool(): AgentTool {
     name: 'open_settings_panel',
     title: '打开设置面板',
     description:
-      '打开设置弹窗中的某个面板，如通用、外观、阅读、数据、隐私、AI、账号、关于、Agent 权限',
+      '打开设置弹窗中的某个面板，如通用、外观、阅读、数据、隐私、AI、关于、Agent 权限',
     inputSchema: objectParams(
       {
         panel: {

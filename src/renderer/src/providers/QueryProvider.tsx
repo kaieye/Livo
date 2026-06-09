@@ -1,22 +1,15 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import type { PropsWithChildren } from 'react'
-import {
-  getRendererPersistOptions,
-  getRendererQueryClient,
-} from '../lib/query-client'
+import { getRendererQueryClient } from '../lib/query-client'
 
+/**
+ * QueryProvider - 提供 React Query 客户端
+ *
+ * 性能优化：移除了 PersistQueryClientProvider，避免启动时同步读取 localStorage
+ * 导致的主线程阻塞（100-300ms）。数据持久化改由 IndexedDB hydrate 机制处理。
+ */
 export function QueryProvider({ children }: PropsWithChildren) {
   const client = getRendererQueryClient()
-  const persistOptions = getRendererPersistOptions()
 
-  if (!persistOptions) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  }
-
-  return (
-    <PersistQueryClientProvider client={client} persistOptions={persistOptions}>
-      {children}
-    </PersistQueryClientProvider>
-  )
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }

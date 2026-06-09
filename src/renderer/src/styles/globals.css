@@ -39,23 +39,29 @@
     @apply h-full;
   }
 
-  /* Scrollbar styling */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  /* Scrollbar styling - 隐藏滚动条但保持滚动功能 */
+  /* Firefox 滚动条 */
+  html {
+    scrollbar-width: none;
   }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
+  /* Webkit 滚动条 - 隐藏所有滚动条 */
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0 !important;
+    height: 0 !important;
   }
 
-  ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600;
-    border-radius: 3px;
+  *::-webkit-scrollbar-track {
+    display: none;
   }
 
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-500;
+  *::-webkit-scrollbar-thumb {
+    display: none;
+  }
+
+  *::-webkit-scrollbar-corner {
+    display: none;
   }
 }
 

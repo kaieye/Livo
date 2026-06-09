@@ -304,18 +304,18 @@ export function Layout() {
               <WideViewContent />
             </Suspense>
           ) : (
-            <>
+            // 主三栏阅读器：右侧两列作为整体避开标题栏，让分隔线不贯穿到顶部
+            <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
               <EntryList width={entryListWidth} />
 
               <ResizeHandle
                 onMouseDown={(e) => handleMouseDown('entryList', e)}
               />
 
-              {/* 主三栏阅读器详情列避开自定义标题栏，避免工具栏进入窗口拖拽命中区。 */}
-              <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
+              <div className="flex min-w-0 flex-1">
                 <EntryContent />
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>

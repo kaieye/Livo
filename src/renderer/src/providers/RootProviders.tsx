@@ -1,54 +1,41 @@
 import { type PropsWithChildren } from 'react'
 import { AppCommandProvider } from './AppCommandProvider'
-import { AppBootstrapProvider } from './AppBootstrapProvider'
 import { GlobalShortcutsProvider } from './GlobalShortcutsProvider'
 import { I18nProvider } from './I18nProvider'
-import { PerformanceMetricsProvider } from './PerformanceMetricsProvider'
 import { OverlayStackProvider } from './OverlayStackProvider'
 import { QueryProvider } from './QueryProvider'
 import { QueryVisibilityRefreshProvider } from './QueryVisibilityRefreshProvider'
 import { SettingSyncProvider } from './SettingSyncProvider'
 import { UpdateCheckProvider } from './UpdateCheckProvider'
-import { DeferredProviders } from './DeferredProviders'
+import { PerformanceMetricsProvider } from './PerformanceMetricsProvider'
 
 /**
- * RootProviders split into two tiers for better startup performance:
+ * RootProviders - 扁平化的 Provider 结构
  *
- * Tier 1 (Critical - mount immediately):
- *  - I18nProvider: Required for all text rendering
- *  - QueryProvider: Required for data fetching
- *  - OverlayStackProvider: Required for modals/dialogs
- *  - AppBootstrapProvider: Required for initial data setup
- *  - AppCommandProvider: Required for command execution
- *  - GlobalShortcutsProvider: Required for keyboard shortcuts
+ * 性能优化：
+ * 1. 移除了 AppBootstrapProvider - 其逻辑已迁移到 main.tsx 的 bootstrap() 函数
+ * 2. 移除了 DeferredProviders - 所有 Provider 同步初始化，减少嵌套层级
+ * 3. 数据 hydrate 已在 React 挂载前完成，组件首次渲染时数据已就绪
  *
- * Tier 2 (Non-critical - defer until idle):
- *  - QueryVisibilityRefreshProvider: Background refresh can wait
- *  - SettingSyncProvider: Settings sync is not blocking
- *  - UpdateCheckProvider: Update check can happen after app is ready
- *  - PerformanceMetricsProvider: Metrics collection is not blocking
+ * 原有的 11 层嵌套减少到 7 层，减少了 Context 初始化成本和重复渲染。
  */
 export function RootProviders({ children }: PropsWithChildren) {
   return (
     <I18nProvider>
       <QueryProvider>
         <OverlayStackProvider>
-          <AppBootstrapProvider>
-            <AppCommandProvider>
-              <GlobalShortcutsProvider>
-                <DeferredProviders>
-                  <QueryVisibilityRefreshProvider>
-                    <SettingSyncProvider>
-                      <UpdateCheckProvider>
-                        <PerformanceMetricsProvider />
-                      </UpdateCheckProvider>
-                    </SettingSyncProvider>
-                  </QueryVisibilityRefreshProvider>
-                </DeferredProviders>
-                {children}
-              </GlobalShortcutsProvider>
-            </AppCommandProvider>
-          </AppBootstrapProvider>
+          <AppCommandProvider>
+            <GlobalShortcutsProvider>
+              <QueryVisibilityRefreshProvider>
+                <SettingSyncProvider>
+                  <UpdateCheckProvider>
+                    <PerformanceMetricsProvider />
+                  </UpdateCheckProvider>
+                </SettingSyncProvider>
+              </QueryVisibilityRefreshProvider>
+              {children}
+            </GlobalShortcutsProvider>
+          </AppCommandProvider>
         </OverlayStackProvider>
       </QueryProvider>
     </I18nProvider>
