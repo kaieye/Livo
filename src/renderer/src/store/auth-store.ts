@@ -24,14 +24,11 @@ interface AuthState {
   isAuthenticated: boolean
   /** 应用启动后是否已完成一次本地 Session 检查（避免登录弹窗闪烁） */
   isSessionChecked: boolean
-  /** 用户本次会话中选择了"稍后再说"，不再弹出登录框 */
-  isLoginPromptDismissed: boolean
   isLoading: boolean
   error: string | null
   setUser: (user: AuthUser | null, token?: string | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
-  dismissLoginPrompt: () => void
   bindGoogle: () => Promise<void>
   bindWechat: () => Promise<void>
   logout: () => Promise<void>
@@ -58,7 +55,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   isAuthenticated: false,
   isSessionChecked: false,
-  isLoginPromptDismissed: false,
   isLoading: false,
   error: null,
 
@@ -73,8 +69,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
 
   setError: (error) => set({ error }),
-
-  dismissLoginPrompt: () => set({ isLoginPromptDismissed: true }),
 
   bindGoogle: async () => {
     try {
@@ -127,8 +121,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         token: null,
         isAuthenticated: false,
         isLoading: false,
-        // 主动登出后不立即再弹登录框，避免打断
-        isLoginPromptDismissed: true,
       })
     } catch (error) {
       set({

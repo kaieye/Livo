@@ -40,7 +40,6 @@ const settingsTabImporters = {
   translation: () => import('./TranslationSettings'),
   actions: () => import('./ActionsSettings'),
   user: () => import('./UserSettings'),
-  accounts: () => import('./AccountsSettings'),
   data: () => import('./DataSettings'),
   privacy: () => import('./PrivacySettings'),
   about: () => import('./AboutSettings'),
@@ -95,11 +94,6 @@ const settingsTabComponents = {
     settingsTabImporters
       .user()
       .then((module) => ({ default: module.UserSettings })),
-  ),
-  accounts: lazy(() =>
-    settingsTabImporters
-      .accounts()
-      .then((module) => ({ default: module.AccountsSettings })),
   ),
   data: lazy(() =>
     settingsTabImporters
@@ -187,7 +181,6 @@ export function SettingsDialog() {
       icon: Languages,
     },
     { id: 'actions' as const, label: t('settings.actions'), icon: Zap },
-    { id: 'accounts' as const, label: t('settings.accounts'), icon: Link2 },
     { id: 'data' as const, label: t('settings.data'), icon: Database },
     { id: 'privacy' as const, label: t('settings.privacy'), icon: Shield },
     { id: 'about' as const, label: t('settings.about'), icon: Info },

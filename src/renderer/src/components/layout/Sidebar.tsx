@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useSettingsStore } from '../../store/settings-store'
+import { useAuthStore } from '../../store/auth-store'
 import {
   FeedViewType,
   VIEW_DEFINITIONS,
@@ -320,6 +321,7 @@ export function Sidebar({ width }: { width?: number }) {
   const navFocusRef = useRef<HTMLElement>(null)
   const isSidebarFocusHighlighted = useLayoutFocusTarget('sidebar', navFocusRef)
   useFocusableHotkeyScope('sidebar', navFocusRef)
+  const { user } = useAuthStore()
   const {
     feeds,
     selectedFeedId,
@@ -1946,13 +1948,25 @@ export function Sidebar({ width }: { width?: number }) {
             </button>
             <button
               type="button"
+              onClick={() => {
+                navigate('/settings')
+                useSettingsStore.getState().setActiveTab('user')
+              }}
               className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
               title={t('sidebar.profile')}
               aria-label={t('sidebar.profile')}
             >
-              <span className="bg-accent/10 text-accent flex h-[22px] w-[22px] items-center justify-center rounded-full">
-                <User size={14} />
-              </span>
+              {user?.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.displayName || 'User'}
+                  className="h-[22px] w-[22px] rounded-full object-cover"
+                />
+              ) : (
+                <span className="bg-accent/10 text-accent flex h-[22px] w-[22px] items-center justify-center rounded-full">
+                  <User size={14} />
+                </span>
+              )}
             </button>
           </div>
         </div>

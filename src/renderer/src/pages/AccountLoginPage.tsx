@@ -36,7 +36,7 @@ export default function AccountLoginPage() {
   const handleBack = useCallback(() => navigate(-1), [navigate])
 
   const handleOpenSettings = useCallback(() => {
-    setSettingsTab('accounts')
+    setSettingsTab('user')
     setSettingsOpen(true)
   }, [setSettingsOpen, setSettingsTab])
 

@@ -7,16 +7,11 @@ import { useAuthStore } from '../../store/auth-store'
  * 场景：用户启动应用后未登录，显示居中悬浮的登录卡片
  * 行为：
  * - 检查本地 Session，有效则不显示
- * - 用户点击"稍后再说"后不再弹出（本次会话内）
  * - 登录成功后自动关闭
+ * - 不可跳过，必须登录后才能使用应用
  */
 export function LoginModal() {
-  const {
-    isAuthenticated,
-    isSessionChecked,
-    isLoginPromptDismissed,
-    dismissLoginPrompt,
-  } = useAuthStore()
+  const { isAuthenticated, isSessionChecked } = useAuthStore()
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
@@ -73,23 +68,15 @@ export function LoginModal() {
     }
   }, [])
 
-  const handleDismiss = useCallback(() => {
-    dismissLoginPrompt()
-    setError(null)
-  }, [dismissLoginPrompt])
-
   // 不显示弹窗的情况
-  if (!isSessionChecked || isAuthenticated || isLoginPromptDismissed) {
+  if (!isSessionChecked || isAuthenticated) {
     return null
   }
 
   return (
     <div className="backdrop-animate fixed inset-0 z-[100] flex items-center justify-center">
       {/* 半透明蒙层 */}
-      <div
-        className="absolute inset-0 bg-black/40 dark:bg-black/60"
-        onClick={handleDismiss}
-      />
+      <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
 
       {/* 登录卡片 */}
       <div className="login-card-animate border-border bg-surface dark:bg-surface-dark-secondary relative w-full max-w-md rounded-2xl border p-8 shadow-2xl dark:border-white/10 dark:shadow-black/50">
@@ -158,8 +145,12 @@ export function LoginModal() {
             disabled={isLoggingIn}
             className="group relative flex w-full items-center justify-center gap-3 rounded-xl bg-[#07C160] px-5 py-3.5 text-[15px] font-medium text-white shadow-sm transition-all hover:bg-[#06AD56] hover:shadow focus:outline-none focus:ring-2 focus:ring-[#07C160]/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8.5 10.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm.5 2.5c0-2-1.5-3.5-3.5-3.5S9 11 9 13c0 .5.1 1 .3 1.5l-2.8 1.4c-.3.1-.4.5-.3.8.1.2.3.3.5.3h.1l3.3-1.1c.6.1 1.2.1 1.9.1 2 0 3.5-1.5 3.5-3.5zM23 12c0-5.5-5.4-10-12-10S-1 6.5-1 12c0 3.3 2 6.3 5 8.2-.2.7-.6 2-1 3.2-.1.3.1.6.4.7h.2c.2 0 .4-.1.5-.2 1.6-1.4 3.3-2.9 4.2-3.6.9.1 1.8.2 2.7.2 6.6 0 12-4.5 12-10z" />
+            <svg
+              className="h-5 w-5"
+              viewBox="0 0 1024 1024"
+              fill="currentColor"
+            >
+              <path d="M680.832 390.656c10.24 0 20.48 0.512 30.208 1.536-27.136-126.464-162.304-220.672-317.44-220.672-175.616 0-318.464 119.808-318.464 267.264 0 86.528 47.104 157.696 125.952 213.504l-31.488 94.72 110.08-55.296c39.424 7.68 70.656 15.872 110.08 15.872 9.984 0 19.968-0.512 29.696-1.536-6.144-21.504-9.728-43.776-9.728-67.072 0.512-137.728 118.272-248.32 271.104-248.32z m-172.032-86.016c23.552 0 39.424 15.872 39.424 39.424s-15.872 39.424-39.424 39.424c-23.552 0-47.104-15.872-47.104-39.424s23.552-39.424 47.104-39.424z m-212.992 78.848c-23.552 0-47.104-15.872-47.104-39.424s23.552-39.424 47.104-39.424c23.552 0 39.424 15.872 39.424 39.424s-15.872 39.424-39.424 39.424z m606.72 114.176c0-126.464-126.464-229.376-267.264-229.376-148.48 0-267.776 102.912-267.776 229.376 0 126.976 119.296 229.376 267.776 229.376 31.488 0 63.488-7.68 94.72-15.872l86.528 47.104-23.552-78.848c63.488-47.104 109.568-110.08 109.568-181.76z m-356.352-39.424c-15.872 0-31.488-15.872-31.488-31.488s15.872-31.488 31.488-31.488c23.552 0 39.424 15.872 39.424 31.488s-15.872 31.488-39.424 31.488z m173.056 0c-15.872 0-31.488-15.872-31.488-31.488s15.872-31.488 31.488-31.488c23.552 0 39.424 15.872 39.424 31.488s-15.872 31.488-39.424 31.488z" />
             </svg>
             <span>
               {isLoggingIn ? 'Signing in...' : 'Continue with WeChat'}
@@ -168,14 +159,7 @@ export function LoginModal() {
         </div>
 
         {/* 底部文字 */}
-        <div className="border-border mt-6 space-y-3 border-t pt-5 dark:border-white/5">
-          <button
-            type="button"
-            onClick={handleDismiss}
-            className="text-text-tertiary hover:text-text-secondary dark:text-text-dark-secondary dark:hover:text-text-dark-primary block w-full text-center text-sm transition-colors"
-          >
-            Skip for now
-          </button>
+        <div className="border-border mt-6 border-t pt-5 dark:border-white/5">
           <p className="text-text-tertiary dark:text-text-dark-secondary/70 text-center text-xs">
             By signing in, you agree to our Terms and Privacy Policy
           </p>
