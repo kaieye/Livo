@@ -1,5 +1,5 @@
 import { shell, BrowserWindow } from 'electron'
-import { authService } from '../services/auth/auth-service'
+import { authService, type CurrentUser } from '../services/auth/auth-service'
 import { sessionStore } from '../services/auth/session-store'
 import { getValidatedSession } from '../services/auth/session-validation'
 import { registerChannel } from '../ipc/register-channel'
@@ -55,6 +55,62 @@ function triggerFeedSyncAfterLogin(): void {
   })
 }
 
+function sendAuthProgress(status: string): void {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('auth:login-progress', { status })
+  })
+}
+
+function saveLoginSession(token: string, user: CurrentUser): void {
+  sessionStore.saveSession({
+    token,
+    userId: user.id,
+    user,
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+  })
+}
+
+async function refreshStoredUser(token: string): Promise<CurrentUser> {
+  const user = await authService.getCurrentUser(token)
+  const session = sessionStore.getSession()
+
+  if (!session) {
+    throw new Error('Local session not found')
+  }
+
+  sessionStore.saveSession({
+    ...session,
+    userId: user.id,
+    user,
+  })
+
+  return user
+}
+
+async function bindProvider(
+  provider: 'google' | 'wechat',
+): Promise<{ success: true; user: CurrentUser }> {
+  const validatedSession = await getValidatedSession()
+  if (!validatedSession) {
+    throw new Error('Please sign in before binding an account')
+  }
+
+  const { url, loginId } =
+    provider === 'google'
+      ? await authService.getGoogleBindUrl(validatedSession.token)
+      : await authService.getWechatBindUrl(validatedSession.token)
+
+  await shell.openExternal(url)
+
+  await pollUntilComplete(loginId, (status) => {
+    sendAuthProgress(status)
+  })
+
+  const user = await refreshStoredUser(validatedSession.token)
+
+  return { success: true, user }
+}
+
 /**
  * 注册认证相关的 IPC 处理器
  */
@@ -71,18 +127,11 @@ export function registerAuthHandlers(): void {
       // 3. 轮询登录状态
       const { token, user } = await pollUntilComplete(loginId, (status) => {
         // 可以通过 IPC 发送进度更新到渲染进程
-        BrowserWindow.getAllWindows().forEach((win) => {
-          win.webContents.send('auth:login-progress', { status })
-        })
+        sendAuthProgress(status)
       })
 
       // 4. 保存 session（30 天有效期）
-      sessionStore.saveSession({
-        token,
-        userId: user.id,
-        user,
-        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      })
+      saveLoginSession(token, user)
       triggerFeedSyncAfterLogin()
 
       return { success: true, token, user }
@@ -102,21 +151,32 @@ export function registerAuthHandlers(): void {
 
       // 3. 轮询登录状态
       const { token, user } = await pollUntilComplete(loginId, (status) => {
-        BrowserWindow.getAllWindows().forEach((win) => {
-          win.webContents.send('auth:login-progress', { status })
-        })
+        sendAuthProgress(status)
       })
 
       // 4. 保存 session
-      sessionStore.saveSession({
-        token,
-        userId: user.id,
-        user,
-        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      })
+      saveLoginSession(token, user)
       triggerFeedSyncAfterLogin()
 
       return { success: true, token, user }
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
+  // Google 绑定
+  registerChannel(IPC.AUTH_BIND_GOOGLE, async () => {
+    try {
+      return await bindProvider('google')
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
+  // 微信绑定
+  registerChannel(IPC.AUTH_BIND_WECHAT, async () => {
+    try {
+      return await bindProvider('wechat')
     } catch (error) {
       return toHandlerError(error)
     }

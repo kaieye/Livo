@@ -2780,6 +2780,14 @@ export function createWebAPI(): ElectronAPI {
         success: false as const,
         error: 'Not available on web',
       }),
+      bindGoogle: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
+      bindWechat: async () => ({
+        success: false as const,
+        error: 'Not available on web',
+      }),
       getCurrentUser: async () => ({
         success: true as const,
         user: null,

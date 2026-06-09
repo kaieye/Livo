@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Check,
   Cloud,
+  Link2,
   Loader2,
   LogOut,
   RefreshCw,
@@ -16,16 +17,19 @@ type AuthProvider = 'google' | 'wechat'
 const AUTH_PROVIDERS: Array<{
   provider: AuthProvider
   name: string
+  bindLabel: string
   colorClass: string
 }> = [
   {
     provider: 'google',
     name: 'Google',
+    bindLabel: '绑定 Google',
     colorClass: 'text-blue-600',
   },
   {
     provider: 'wechat',
     name: '微信',
+    bindLabel: '绑定微信',
     colorClass: 'text-green-600',
   },
 ]
@@ -86,6 +90,7 @@ export function UserSettings() {
         {isAuthenticated && user && (
           <div className="mt-4 border-t pt-4">
             <div className="space-y-4">
+              <AccountBindingPanel />
               <FeedSyncPanel />
               <LogoutButton />
             </div>
@@ -216,6 +221,114 @@ function FeedSyncPanel() {
   )
 }
 
+function AccountBindingPanel() {
+  const user = useAuthStore((s) => s.user)
+  const bindGoogle = useAuthStore((s) => s.bindGoogle)
+  const bindWechat = useAuthStore((s) => s.bindWechat)
+  const [bindingProvider, setBindingProvider] = useState<AuthProvider | null>(
+    null,
+  )
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
+
+  const linkedProviders = new Set([
+    ...(user?.providers ?? []),
+    ...(user?.identities?.map((identity) => identity.provider) ?? []),
+  ])
+
+  const handleBind = useCallback(
+    async (provider: AuthProvider) => {
+      setBindingProvider(provider)
+      setFeedback(null)
+      try {
+        if (provider === 'google') {
+          await bindGoogle()
+        } else {
+          await bindWechat()
+        }
+        const providerName =
+          AUTH_PROVIDERS.find((item) => item.provider === provider)?.name ??
+          provider
+        setFeedback({ type: 'success', message: `${providerName} 已绑定` })
+      } catch (err) {
+        setFeedback({
+          type: 'error',
+          message: err instanceof Error ? err.message : '绑定失败',
+        })
+      } finally {
+        setBindingProvider(null)
+        setTimeout(() => setFeedback(null), 3000)
+      }
+    },
+    [bindGoogle, bindWechat],
+  )
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Link2 size={15} className="text-accent" />
+        <span>登录方式绑定</span>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {AUTH_PROVIDERS.map((config) => {
+          const linked = linkedProviders.has(config.provider)
+          const loading = bindingProvider === config.provider
+
+          return (
+            <div
+              key={config.provider}
+              className="border-border flex min-h-[72px] items-center justify-between gap-3 rounded-lg border px-3 py-2.5 dark:border-white/10"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span className={config.colorClass}>{config.name}</span>
+                  {linked && <Check size={14} className="text-green-600" />}
+                </div>
+                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
+                  {linked ? '已绑定当前账号' : '未绑定'}
+                </p>
+              </div>
+
+              {linked ? (
+                <span className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-950/40 dark:text-green-300">
+                  已绑定
+                </span>
+              ) : (
+                <button
+                  onClick={() => void handleBind(config.provider)}
+                  disabled={bindingProvider !== null}
+                  className="bg-accent hover:bg-accent-hover inline-flex h-8 min-w-[96px] items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading && <Loader2 size={14} className="animate-spin" />}
+                  {loading ? '绑定中' : config.bindLabel}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {feedback && (
+        <div
+          className={`flex items-center gap-1 text-xs ${
+            feedback.type === 'success' ? 'text-green-600' : 'text-red-500'
+          }`}
+        >
+          {feedback.type === 'success' ? (
+            <Check size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          {feedback.message}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LogoutButton() {
   const logout = useAuthStore((s) => s.logout)
   const [loading, setLoading] = useState(false)
@@ -271,7 +384,12 @@ function LogoutButton() {
 function LoginProviderCard({
   config,
 }: {
-  config: { provider: AuthProvider; name: string; colorClass: string }
+  config: {
+    provider: AuthProvider
+    name: string
+    bindLabel: string
+    colorClass: string
+  }
 }) {
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)

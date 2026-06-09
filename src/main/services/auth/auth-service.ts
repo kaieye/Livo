@@ -10,14 +10,14 @@ export interface LoginResponse {
 export interface PollResponse {
   status: 'pending' | 'completed' | 'expired'
   token?: string
-  user?: {
-    id: string
-    displayName: string
-    avatarUrl: string | null
-    role: string
-    status: string
-    createdAt: string
-  }
+  user?: CurrentUser
+}
+
+export interface CurrentUserIdentity {
+  provider: string
+  providerEmail: string | null
+  displayName: string | null
+  avatarUrl: string | null
 }
 
 export interface CurrentUser {
@@ -27,6 +27,8 @@ export interface CurrentUser {
   role: string
   status: string
   createdAt: string
+  providers?: string[]
+  identities?: CurrentUserIdentity[]
 }
 
 /**
@@ -69,6 +71,52 @@ export class AuthService {
       const text = await response.text().catch(() => '')
       throw new Error(
         `Failed to get Wechat login URL: ${response.status}${text ? ` ${text}` : ''}`,
+      )
+    }
+
+    return (await response.json()) as LoginResponse
+  }
+
+  /**
+   * 获取 Google 绑定 OAuth URL
+   */
+  async getGoogleBindUrl(token: string): Promise<LoginResponse> {
+    const response = await session.defaultSession.fetch(
+      `${this.baseUrl}/auth/google/bind?client=desktop`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(
+        `Failed to get Google bind URL: ${response.status}${text ? ` ${text}` : ''}`,
+      )
+    }
+
+    return (await response.json()) as LoginResponse
+  }
+
+  /**
+   * 获取微信绑定 OAuth URL
+   */
+  async getWechatBindUrl(token: string): Promise<LoginResponse> {
+    const response = await session.defaultSession.fetch(
+      `${this.baseUrl}/auth/wechat/bind?client=desktop`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(
+        `Failed to get Wechat bind URL: ${response.status}${text ? ` ${text}` : ''}`,
       )
     }
 

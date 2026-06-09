@@ -541,6 +541,8 @@ const api = {
   auth: {
     loginGoogle: () => invokeIpc(IPC.AUTH_LOGIN_GOOGLE),
     loginWechat: () => invokeIpc(IPC.AUTH_LOGIN_WECHAT),
+    bindGoogle: () => invokeIpc(IPC.AUTH_BIND_GOOGLE),
+    bindWechat: () => invokeIpc(IPC.AUTH_BIND_WECHAT),
     getCurrentUser: () => invokeIpc(IPC.AUTH_GET_CURRENT_USER),
     logout: () => invokeIpc(IPC.AUTH_LOGOUT),
     checkSession: () => invokeIpc(IPC.AUTH_CHECK_SESSION),
