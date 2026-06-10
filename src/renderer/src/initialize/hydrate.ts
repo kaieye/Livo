@@ -17,7 +17,7 @@ import {
 } from '../lib/entry-cache'
 import type { AppHydratePayload } from '../../../shared/types'
 
-const DEFAULT_INITIAL_SNAPSHOT_LIMIT = 10
+const DEFAULT_INITIAL_SNAPSHOT_LIMIT = 20
 
 function logStartupTiming(label: string, startTime: number): number {
   const duration = performance.now() - startTime

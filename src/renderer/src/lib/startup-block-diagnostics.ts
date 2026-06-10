@@ -4,6 +4,8 @@ const LONG_TASK_THRESHOLD_MS = 50
 const EVENT_LOOP_LAG_THRESHOLD_MS = 80
 const EVENT_LOOP_SAMPLE_INTERVAL_MS = 100
 const INPUT_DELAY_THRESHOLD_MS = 16
+const STARTUP_RENDER_THRESHOLD_MS = 8
+const STARTUP_REACT_PROFILER_THRESHOLD_MS = 8
 
 type StartupBlockEvent = {
   name: string
@@ -69,6 +71,45 @@ export function recordStartupBlockEvent(
 
 export function markStartupComponentMounted(name: string): void {
   recordStartupBlockEvent(`${name}.mounted`)
+}
+
+export function measureStartupRender<T>(
+  name: string,
+  fn: () => T,
+  detail?: string | (() => string | undefined),
+): T {
+  if (!session) return fn()
+
+  const start = performance.now()
+  const result = fn()
+  const duration = performance.now() - start
+
+  if (duration >= STARTUP_RENDER_THRESHOLD_MS) {
+    recordStartupBlockEvent(
+      `${name}.render`,
+      typeof detail === 'function' ? detail() : detail,
+      duration,
+    )
+  }
+
+  return result
+}
+
+export function recordStartupReactProfiler(
+  id: string,
+  phase: string,
+  actualDuration: number,
+  baseDuration: number,
+  startTime: number,
+  commitTime: number,
+): void {
+  if (!session || actualDuration < STARTUP_REACT_PROFILER_THRESHOLD_MS) return
+
+  recordStartupBlockEvent(
+    `${id}.profiler.${phase}`,
+    `base=${baseDuration.toFixed(1)}ms start=${(startTime - session.startedAt).toFixed(1)}ms commit=${(commitTime - session.startedAt).toFixed(1)}ms`,
+    actualDuration,
+  )
 }
 
 export async function traceStartupChunk<T>(

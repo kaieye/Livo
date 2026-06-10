@@ -50,6 +50,7 @@ import {
   resolveSocialEntryMediaDecision,
 } from '../utils/entry-media'
 import type { Entry } from '../../../../../../shared/types'
+import { measureStartupRender } from '../../../../lib/startup-block-diagnostics'
 
 export const SocialMediaItem = memo(function SocialMediaItem({
   entry,
@@ -119,24 +120,41 @@ export const SocialMediaItem = memo(function SocialMediaItem({
       .trim()
   }, [entry.author, feedTitle, parsed.type, parsed.handle])
 
-  const timeAgo = cleanRelativeTime(entry.publishedAt)
+  const timeAgo = measureStartupRender(
+    'SocialMediaItem.timeAgo',
+    () => cleanRelativeTime(entry.publishedAt),
+    `id=${entry.id}`,
+  )
 
   // Content: prefer HTML content, fallback to summary
   const htmlContent = entry.content || entry.summary || ''
   // Sanitize HTML and strip media tags for inline display
   const sanitizedContent = useMemo(() => {
     if (!htmlContent.includes('<')) return ''
-    return cleanSocialTextHtml(htmlContent)
-  }, [htmlContent])
+    return measureStartupRender(
+      'SocialMediaItem.sanitizeHtml',
+      () => cleanSocialTextHtml(htmlContent),
+      `id=${entry.id} length=${htmlContent.length}`,
+    )
+  }, [entry.id, htmlContent])
   // Plain text fallback
   const plainContent = useMemo(() => {
     const source = sanitizedContent || htmlContent
-    const cleaned = cleanSocialPlainText(source)
+    const cleaned = measureStartupRender(
+      'SocialMediaItem.cleanText',
+      () => cleanSocialPlainText(source),
+      `id=${entry.id} length=${source.length}`,
+    )
     if (cleaned) return cleaned
     return (entry.title || '').trim()
-  }, [sanitizedContent, htmlContent, entry.title])
+  }, [entry.id, sanitizedContent, htmlContent, entry.title])
   const relatedEntryFallback = useMemo(
-    () => findRelatedSocialEntryFallback(entry, allEntries),
+    () =>
+      measureStartupRender(
+        'SocialMediaItem.relatedFallback',
+        () => findRelatedSocialEntryFallback(entry, allEntries),
+        `id=${entry.id} entries=${allEntries.length}`,
+      ),
     [allEntries, entry],
   )
   const browserOpenUrl = useMemo(
@@ -148,10 +166,15 @@ export const SocialMediaItem = memo(function SocialMediaItem({
   const { visibleVideos, galleryPhotos, hasMirrorDerivedPhotoContent } =
     useMemo(
       () =>
-        resolveSocialEntryMediaDecision({
-          entry,
-          relatedFallbackCover: relatedEntryFallback?.cover,
-        }),
+        measureStartupRender(
+          'SocialMediaItem.resolveMedia',
+          () =>
+            resolveSocialEntryMediaDecision({
+              entry,
+              relatedFallbackCover: relatedEntryFallback?.cover,
+            }),
+          `id=${entry.id} media=${entry.media?.length ?? 0}`,
+        ),
       [entry, relatedEntryFallback?.cover],
     )
 

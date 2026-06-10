@@ -13,6 +13,7 @@ import {
 import { cleanSocialPlainText } from '../utils/entry-media'
 import { isSummaryRedundant } from '../utils/entry-text'
 import type { Entry } from '../../../../../../shared/types'
+import { measureStartupRender } from '../../../../lib/startup-block-diagnostics'
 
 /** Grid card for media/video view */
 export const GridCard = memo(function GridCard({
@@ -36,7 +37,12 @@ export const GridCard = memo(function GridCard({
 }) {
   const { t } = useTranslation()
   const { photoCovers, coverUrl, photoCount } = useMemo(
-    () => resolveGridCardMedia(entry),
+    () =>
+      measureStartupRender(
+        'GridCard.resolveMedia',
+        () => resolveGridCardMedia(entry),
+        `id=${entry.id} media=${entry.media?.length ?? 0}`,
+      ),
     [entry],
   )
   const cleanFeedAvatar = useMemo(() => {

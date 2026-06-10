@@ -64,7 +64,10 @@ import { useQuickSearchStore } from '../../store/quick-search-store'
 import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 import { getFeedRefreshIssueLabel } from '../../lib/feed-refresh-issue'
 import { FeedRefreshIssueBadge } from './FeedRefreshIssueBadge'
-import { markStartupComponentMounted } from '../../lib/startup-block-diagnostics'
+import {
+  markStartupComponentMounted,
+  measureStartupRender,
+} from '../../lib/startup-block-diagnostics'
 
 const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
   [FeedViewType.Articles]: <FileText size={18} />,
@@ -388,9 +391,16 @@ export function Sidebar({ width }: { width?: number }) {
     useState(false)
   const filteredFeeds = useMemo(
     () =>
-      activeView === null
-        ? feeds
-        : feeds.filter((f) => (f.view ?? FeedViewType.Articles) === activeView),
+      measureStartupRender(
+        'Sidebar.filteredFeeds',
+        () =>
+          activeView === null
+            ? feeds
+            : feeds.filter(
+                (f) => (f.view ?? FeedViewType.Articles) === activeView,
+              ),
+        `feeds=${feeds.length} activeView=${activeView ?? 'all'}`,
+      ),
     [feeds, activeView],
   )
   const [allFeedsSearch, setAllFeedsSearch] = useState('')
@@ -1094,62 +1104,78 @@ export function Sidebar({ width }: { width?: number }) {
     }
     return names
   }, [emptyFolders, activeView, viewDefaultFolderNames])
-  const liteUserCategories = useMemo(() => {
-    const groupedCategories = new Map<string, typeof filteredFeeds>()
+  const liteUserCategories = useMemo(
+    () =>
+      measureStartupRender(
+        'Sidebar.liteUserCategories',
+        () => {
+          const groupedCategories = new Map<string, typeof filteredFeeds>()
 
-    for (const feed of filteredFeeds) {
-      if (feed.category === RECOMMENDED_CATEGORY) continue
-      const category = getFeedFolderName(feed)
-      if (!groupedCategories.has(category)) groupedCategories.set(category, [])
-      groupedCategories.get(category)!.push(feed)
-    }
+          for (const feed of filteredFeeds) {
+            if (feed.category === RECOMMENDED_CATEGORY) continue
+            const category = getFeedFolderName(feed)
+            if (!groupedCategories.has(category))
+              groupedCategories.set(category, [])
+            groupedCategories.get(category)!.push(feed)
+          }
 
-    return groupedCategories
-  }, [filteredFeeds, getFeedFolderName])
+          return groupedCategories
+        },
+        `feeds=${filteredFeeds.length}`,
+      ),
+    [filteredFeeds, getFeedFolderName],
+  )
 
   const { userCategories, recommendedFeeds } = useMemo(() => {
-    if (!sidebarEnhancementsReady) {
-      return {
-        userCategories: liteUserCategories,
-        recommendedFeeds: [],
-      }
-    }
+    return measureStartupRender(
+      'Sidebar.groupedFeeds',
+      () => {
+        if (!sidebarEnhancementsReady) {
+          return {
+            userCategories: liteUserCategories,
+            recommendedFeeds: [],
+          }
+        }
 
-    const groupedUserCategories = new Map<string, typeof filteredFeeds>()
-    const groupedRecommendedFeeds: typeof filteredFeeds = []
+        const groupedUserCategories = new Map<string, typeof filteredFeeds>()
+        const groupedRecommendedFeeds: typeof filteredFeeds = []
 
-    for (const feed of displayFeeds) {
-      if (feed.category === RECOMMENDED_CATEGORY) {
-        groupedRecommendedFeeds.push(feed)
-      } else {
-        const cat = getFeedFolderName(feed)
-        if (!groupedUserCategories.has(cat)) groupedUserCategories.set(cat, [])
-        groupedUserCategories.get(cat)!.push(feed)
-      }
-    }
+        for (const feed of displayFeeds) {
+          if (feed.category === RECOMMENDED_CATEGORY) {
+            groupedRecommendedFeeds.push(feed)
+          } else {
+            const cat = getFeedFolderName(feed)
+            if (!groupedUserCategories.has(cat))
+              groupedUserCategories.set(cat, [])
+            groupedUserCategories.get(cat)!.push(feed)
+          }
+        }
 
-    // Include empty folders created by the user.
-    for (const folder of emptyFolders) {
-      const matchesView =
-        activeView === null ||
-        folder.view === null ||
-        folder.view === activeView
-      if (matchesView && !groupedUserCategories.has(folder.name)) {
-        groupedUserCategories.set(folder.name, [])
-      }
-    }
+        // Include empty folders created by the user.
+        for (const folder of emptyFolders) {
+          const matchesView =
+            activeView === null ||
+            folder.view === null ||
+            folder.view === activeView
+          if (matchesView && !groupedUserCategories.has(folder.name)) {
+            groupedUserCategories.set(folder.name, [])
+          }
+        }
 
-    // Ensure default folders are visible even when empty.
-    for (const name of defaultFolderNames) {
-      if (!groupedUserCategories.has(name)) {
-        groupedUserCategories.set(name, [])
-      }
-    }
+        // Ensure default folders are visible even when empty.
+        for (const name of defaultFolderNames) {
+          if (!groupedUserCategories.has(name)) {
+            groupedUserCategories.set(name, [])
+          }
+        }
 
-    return {
-      userCategories: groupedUserCategories,
-      recommendedFeeds: groupedRecommendedFeeds,
-    }
+        return {
+          userCategories: groupedUserCategories,
+          recommendedFeeds: groupedRecommendedFeeds,
+        }
+      },
+      `ready=${sidebarEnhancementsReady} display=${displayFeeds.length} liteCategories=${liteUserCategories.size}`,
+    )
   }, [
     activeView,
     defaultFolderNames,
@@ -2832,15 +2858,24 @@ const FeedCategory = memo(function FeedCategory({
               className="relative"
               style={{ height: `${feedVirtualizer.getTotalSize()}px` }}
             >
-              {virtualFeedItems.map((item) => {
-                const feed = feeds[item.index]
-                if (!feed) return null
-                return renderFeedRow(feed, item.start, item.index)
-              })}
+              {measureStartupRender(
+                'Sidebar.FeedCategory.virtualRows',
+                () =>
+                  virtualFeedItems.map((item) => {
+                    const feed = feeds[item.index]
+                    if (!feed) return null
+                    return renderFeedRow(feed, item.start, item.index)
+                  }),
+                `category=${category} rows=${virtualFeedItems.length} feeds=${feeds.length}`,
+              )}
             </div>
           ) : (
             <div className="space-y-0.5">
-              {feeds.map((feed) => renderFeedRow(feed))}
+              {measureStartupRender(
+                'Sidebar.FeedCategory.rows',
+                () => feeds.map((feed) => renderFeedRow(feed)),
+                `category=${category} feeds=${feeds.length} lite=${lite}`,
+              )}
             </div>
           )}
         </div>
@@ -2882,7 +2917,11 @@ const RecommendedSection = memo(function RecommendedSection({
     (s) => s.settings.general.showFeedRefreshErrorBadge,
   )
   const [expanded, setExpanded] = useState(true)
-  const totalUnread = feeds.reduce((sum, f) => sum + f.unreadCount, 0)
+  const totalUnread = measureStartupRender(
+    'Sidebar.RecommendedSection.totalUnread',
+    () => feeds.reduce((sum, f) => sum + f.unreadCount, 0),
+    `feeds=${feeds.length}`,
+  )
 
   return (
     <div className="border-border dark:border-border-dark mb-1 mt-2 border-t pt-2">
@@ -3016,85 +3055,104 @@ const FeedIcon = memo(function FeedIcon({
   const [imgFailed, setImgFailed] = useState(false)
   const [faviconFailed, setFaviconFailed] = useState(false)
   const [twitterFailed, setTwitterFailed] = useState(false)
-  const instagramUsername = useMemo(() => {
-    const extract = (value?: string): string | null => {
-      if (!value) return null
-      const raw = value.trim()
-      if (!raw) return null
-      try {
-        const parsed = new URL(raw)
-        const host = parsed.hostname.toLowerCase()
-        if (host === 'instagram.com' || host === 'www.instagram.com') {
-          const username = parsed.pathname.split('/').filter(Boolean)[0]
-          if (username && /^[a-zA-Z0-9._]+$/.test(username))
-            return username.replace(/^@/, '')
-        }
-      } catch {}
-      const rsshub = raw.match(/\/instagram\/user\/([^/?#]+)/i)
-      if (rsshub?.[1]) return decodeURIComponent(rsshub[1]).replace(/^@/, '')
-      const picnob = raw.match(
-        /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
-      )
-      if (picnob?.[1]) return decodeURIComponent(picnob[1]).replace(/^@/, '')
-      const unavatar = raw.match(/unavatar\.io\/instagram\/([^/?#]+)/i)
-      if (unavatar?.[1])
-        return decodeURIComponent(unavatar[1]).replace(/^@/, '')
-      return null
-    }
+  const instagramUsername = useMemo(
+    () =>
+      measureStartupRender(
+        'Sidebar.FeedIcon.instagramUsername',
+        () => {
+          const extract = (value?: string): string | null => {
+            if (!value) return null
+            const raw = value.trim()
+            if (!raw) return null
+            try {
+              const parsed = new URL(raw)
+              const host = parsed.hostname.toLowerCase()
+              if (host === 'instagram.com' || host === 'www.instagram.com') {
+                const username = parsed.pathname.split('/').filter(Boolean)[0]
+                if (username && /^[a-zA-Z0-9._]+$/.test(username))
+                  return username.replace(/^@/, '')
+              }
+            } catch {}
+            const rsshub = raw.match(/\/instagram\/user\/([^/?#]+)/i)
+            if (rsshub?.[1])
+              return decodeURIComponent(rsshub[1]).replace(/^@/, '')
+            const picnob = raw.match(
+              /\/(?:picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\/([^/?#]+)/i,
+            )
+            if (picnob?.[1])
+              return decodeURIComponent(picnob[1]).replace(/^@/, '')
+            const unavatar = raw.match(/unavatar\.io\/instagram\/([^/?#]+)/i)
+            if (unavatar?.[1])
+              return decodeURIComponent(unavatar[1]).replace(/^@/, '')
+            return null
+          }
 
-    const fromUrls = extract(siteUrl) || extract(feedUrl) || extract(imageUrl)
-    if (fromUrls) return fromUrls
-    const cleanedTitle = (title || '')
-      .replace(/\s*-\s*ins(?:tagram)?\s*$/i, '')
-      .replace(/^@/, '')
-      .trim()
-    if (cleanedTitle && /^[a-zA-Z0-9._]{1,30}$/.test(cleanedTitle))
-      return cleanedTitle
-    return null
-  }, [siteUrl, feedUrl, imageUrl, title])
+          const fromUrls =
+            extract(siteUrl) || extract(feedUrl) || extract(imageUrl)
+          if (fromUrls) return fromUrls
+          const cleanedTitle = (title || '')
+            .replace(/\s*-\s*ins(?:tagram)?\s*$/i, '')
+            .replace(/^@/, '')
+            .trim()
+          if (cleanedTitle && /^[a-zA-Z0-9._]{1,30}$/.test(cleanedTitle))
+            return cleanedTitle
+          return null
+        },
+        `title=${title ?? ''}`,
+      ),
+    [siteUrl, feedUrl, imageUrl, title],
+  )
 
   // For Twitter/X feeds, use unavatar.io for always-fresh profile pictures
   // Detect from siteUrl (x.com/user), RSSHub (/twitter/user/xxx), or Nitter (/{user}/rss)
-  const twitterAvatarUrl = useMemo(() => {
-    // Try siteUrl first (e.g. https://x.com/elonmusk)
-    if (siteUrl) {
-      try {
-        const { hostname, pathname } = new URL(siteUrl)
-        if (
-          hostname === 'x.com' ||
-          hostname === 'twitter.com' ||
-          hostname === 'www.x.com' ||
-          hostname === 'www.twitter.com'
-        ) {
-          const username = pathname.split('/').filter(Boolean)[0]
-          if (username && /^[a-zA-Z0-9_]+$/.test(username)) {
-            return `https://unavatar.io/x/${username}`
+  const twitterAvatarUrl = useMemo(
+    () =>
+      measureStartupRender(
+        'Sidebar.FeedIcon.twitterAvatarUrl',
+        () => {
+          // Try siteUrl first (e.g. https://x.com/elonmusk)
+          if (siteUrl) {
+            try {
+              const { hostname, pathname } = new URL(siteUrl)
+              if (
+                hostname === 'x.com' ||
+                hostname === 'twitter.com' ||
+                hostname === 'www.x.com' ||
+                hostname === 'www.twitter.com'
+              ) {
+                const username = pathname.split('/').filter(Boolean)[0]
+                if (username && /^[a-zA-Z0-9_]+$/.test(username)) {
+                  return `https://unavatar.io/x/${username}`
+                }
+              }
+            } catch {}
           }
-        }
-      } catch {}
-    }
-    // Try feedUrl (e.g. RSSHub or Nitter RSS URL)
-    if (feedUrl) {
-      const m = feedUrl.match(/\/twitter\/user\/([a-zA-Z0-9_]+)/i)
-      if (m) {
-        return `https://unavatar.io/x/${m[1]}`
-      }
-      try {
-        const parsed = new URL(feedUrl)
-        if (parsed.hostname.toLowerCase().includes('nitter')) {
-          const parts = parsed.pathname.split('/').filter(Boolean)
-          if (
-            parts.length >= 2 &&
-            parts[1].toLowerCase() === 'rss' &&
-            /^[a-zA-Z0-9_]+$/.test(parts[0])
-          ) {
-            return `https://unavatar.io/x/${parts[0]}`
+          // Try feedUrl (e.g. RSSHub or Nitter RSS URL)
+          if (feedUrl) {
+            const m = feedUrl.match(/\/twitter\/user\/([a-zA-Z0-9_]+)/i)
+            if (m) {
+              return `https://unavatar.io/x/${m[1]}`
+            }
+            try {
+              const parsed = new URL(feedUrl)
+              if (parsed.hostname.toLowerCase().includes('nitter')) {
+                const parts = parsed.pathname.split('/').filter(Boolean)
+                if (
+                  parts.length >= 2 &&
+                  parts[1].toLowerCase() === 'rss' &&
+                  /^[a-zA-Z0-9_]+$/.test(parts[0])
+                ) {
+                  return `https://unavatar.io/x/${parts[0]}`
+                }
+              }
+            } catch {}
           }
-        }
-      } catch {}
-    }
-    return null
-  }, [siteUrl, feedUrl])
+          return null
+        },
+        `title=${title ?? ''}`,
+      ),
+    [siteUrl, feedUrl, title],
+  )
 
   const instagramAvatarUrl = useMemo(() => {
     if (!instagramUsername) return null
@@ -3121,33 +3179,49 @@ const FeedIcon = memo(function FeedIcon({
     )
   }, [imageUrl])
 
-  const faviconUrl = useMemo(() => {
-    if (!siteUrl) return null
-    try {
-      const { host } = new URL(siteUrl)
-      return `https://icons.folo.is/${host}`
-    } catch {
-      return null
-    }
-  }, [siteUrl])
+  const faviconUrl = useMemo(
+    () =>
+      measureStartupRender(
+        'Sidebar.FeedIcon.faviconUrl',
+        () => {
+          if (!siteUrl) return null
+          try {
+            const { host } = new URL(siteUrl)
+            return `https://icons.folo.is/${host}`
+          } catch {
+            return null
+          }
+        },
+        `site=${siteUrl ?? ''}`,
+      ),
+    [siteUrl],
+  )
 
-  const initialsUrl = useMemo(() => {
-    if (!siteUrl && !title) return null
-    try {
-      let domain = ''
-      if (siteUrl) {
-        const { hostname } = new URL(siteUrl)
-        // Strip www. and get the main domain part
-        domain = hostname.replace(/^www\./, '').split('.')[0]
-      } else if (title) {
-        domain = title.replace(/^@/, '')
-      }
-      if (!domain) return null
-      return `https://avatar.vercel.sh/${encodeURIComponent(domain)}.svg?text=${encodeURIComponent(domain.slice(0, 2).toUpperCase())}`
-    } catch {
-      return null
-    }
-  }, [siteUrl, title])
+  const initialsUrl = useMemo(
+    () =>
+      measureStartupRender(
+        'Sidebar.FeedIcon.initialsUrl',
+        () => {
+          if (!siteUrl && !title) return null
+          try {
+            let domain = ''
+            if (siteUrl) {
+              const { hostname } = new URL(siteUrl)
+              // Strip www. and get the main domain part
+              domain = hostname.replace(/^www\./, '').split('.')[0]
+            } else if (title) {
+              domain = title.replace(/^@/, '')
+            }
+            if (!domain) return null
+            return `https://avatar.vercel.sh/${encodeURIComponent(domain)}.svg?text=${encodeURIComponent(domain.slice(0, 2).toUpperCase())}`
+          } catch {
+            return null
+          }
+        },
+        `title=${title ?? ''}`,
+      ),
+    [siteUrl, title],
+  )
 
   const px = `${size}px`
   const iconSize = Math.round(size * 0.6)

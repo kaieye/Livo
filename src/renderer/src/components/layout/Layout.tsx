@@ -1,5 +1,6 @@
 import {
   lazy,
+  Profiler,
   Suspense,
   useCallback,
   useEffect,
@@ -22,6 +23,7 @@ import { EntryEmptyState } from '../entry/entry-content/EntryEmptyState'
 import { Sidebar } from './Sidebar'
 import {
   markStartupComponentMounted,
+  recordStartupReactProfiler,
   recordStartupBlockEvent,
   traceStartupChunk,
 } from '../../lib/startup-block-diagnostics'
@@ -303,7 +305,9 @@ export function Layout() {
 
   return (
     <div className="flex h-full w-screen overflow-hidden">
-      <Sidebar width={sidebarWidth} />
+      <Profiler id="SidebarPane" onRender={recordStartupReactProfiler}>
+        <Sidebar width={sidebarWidth} />
+      </Profiler>
       <ResizeHandle onMouseDown={(e) => handleMouseDown('sidebar', e)} />
 
       <div
@@ -330,21 +334,28 @@ export function Layout() {
             </Suspense>
           ) : (
             <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
-              <EntryList width={entryListWidth} />
+              <Profiler
+                id="EntryListPane"
+                onRender={recordStartupReactProfiler}
+              >
+                <EntryList width={entryListWidth} />
+              </Profiler>
               <ResizeHandle
                 onMouseDown={(e) => handleMouseDown('entryList', e)}
               />
-              <div className="flex min-w-0 flex-1">
-                {!selectedEntryId ? (
-                  <EntryEmptyState />
-                ) : shouldRenderEntryContent ? (
-                  <Suspense fallback={<ContentPaneFallback />}>
-                    <EntryContent />
-                  </Suspense>
-                ) : (
-                  <ContentPaneFallback />
-                )}
-              </div>
+              <Profiler id="ContentPane" onRender={recordStartupReactProfiler}>
+                <div className="flex min-w-0 flex-1">
+                  {!selectedEntryId ? (
+                    <EntryEmptyState />
+                  ) : shouldRenderEntryContent ? (
+                    <Suspense fallback={<ContentPaneFallback />}>
+                      <EntryContent />
+                    </Suspense>
+                  ) : (
+                    <ContentPaneFallback />
+                  )}
+                </div>
+              </Profiler>
             </div>
           )}
         </div>

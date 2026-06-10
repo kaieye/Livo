@@ -7,6 +7,16 @@ declare module '*.svg' {
 }
 
 declare global {
+  interface ImportMetaEnv {
+    readonly DEV: boolean
+    readonly PROD: boolean
+    readonly VITE_LIVO_STRICT_MODE?: string
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv
+  }
+
   interface Window {
     api: ElectronAPI & {
       ai: {

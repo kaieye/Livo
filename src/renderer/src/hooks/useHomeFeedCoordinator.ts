@@ -16,6 +16,7 @@ import {
 import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
 import { LRUCache } from '../lib/lru-cache'
 import { buildListCacheKey, getCachedListResult } from '../lib/entry-cache'
+import { recordStartupBlockEvent } from '../lib/startup-block-diagnostics'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
@@ -244,9 +245,22 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   )
 
   const loadCurrentSnapshot = useCallback(async () => {
+    const cacheStart = performance.now()
     const cachedSnapshot = hydrateSnapshotCache(currentLoadOptions)
+    recordStartupBlockEvent(
+      'HomeFeedCoordinator.snapshotCache',
+      `hit=${cachedSnapshot ? 1 : 0} limit=${currentLoadOptions.limit ?? 'default'}`,
+      performance.now() - cacheStart,
+    )
     if (cachedSnapshot) applySnapshotFeeds(cachedSnapshot.feeds)
+    if (cachedSnapshot) return
+    const snapshotStart = performance.now()
     const snapshot = await loadSnapshot(currentLoadOptions)
+    recordStartupBlockEvent(
+      'HomeFeedCoordinator.snapshotIpc',
+      `hit=${snapshot ? 1 : 0} limit=${currentLoadOptions.limit ?? 'default'}`,
+      performance.now() - snapshotStart,
+    )
     if (snapshot) applySnapshotFeeds(snapshot.feeds)
   }, [
     applySnapshotFeeds,
@@ -257,6 +271,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
 
   // Loading entries when feed selection / filter mode changes
   useEffect(() => {
+    recordStartupBlockEvent('HomeFeedCoordinator.snapshot.start')
     void loadCurrentSnapshot()
   }, [loadCurrentSnapshot])
 

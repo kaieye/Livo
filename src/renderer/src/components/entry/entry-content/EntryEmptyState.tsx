@@ -1,8 +1,14 @@
 import { BookOpen } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { markStartupComponentMounted } from '../../../lib/startup-block-diagnostics'
 
 export function EntryEmptyState() {
   const { t } = useTranslation()
+
+  useEffect(() => {
+    markStartupComponentMounted('EntryEmptyState')
+  }, [])
 
   return (
     <div className="bg-surface-secondary dark:bg-surface-dark flex flex-1 items-center justify-center">

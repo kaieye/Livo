@@ -2,6 +2,7 @@ import type { Entry } from '../../../../../../shared/types'
 import { EntryCard } from '../items/EntryCard'
 import { useLinearVirtualizer } from '../hooks/useEntryVirtualizer'
 import type { RefObject } from 'react'
+import { measureStartupRender } from '../../../../lib/startup-block-diagnostics'
 
 export interface LinearListLayoutProps {
   entries: Entry[]
@@ -35,7 +36,11 @@ export function LinearListLayout({
     scrollElement: scrollRef,
     cacheKey,
   })
-  const virtualItems = virtualizer.getVirtualItems()
+  const virtualItems = measureStartupRender(
+    'LinearListLayout.getVirtualItems',
+    () => virtualizer.getVirtualItems(),
+    `useVirtual=${useVirtual} source=${virtualizerEntries.length}`,
+  )
 
   const renderEntry = (entry: Entry) => (
     <EntryCard
@@ -55,30 +60,40 @@ export function LinearListLayout({
         className="relative"
         style={{ height: `${virtualizer.getTotalSize()}px` }}
       >
-        {virtualItems.map((item) => {
-          const entry = virtualizerEntries[item.index]
-          if (!entry) return null
-          return (
-            <div
-              key={entry.id}
-              data-index={item.index}
-              ref={virtualizer.measureElement}
-              className="absolute left-0 top-0 w-full"
-              style={{ transform: `translateY(${item.start}px)` }}
-            >
-              {renderEntry(entry)}
-            </div>
-          )
-        })}
+        {measureStartupRender(
+          'LinearListLayout.virtualItems',
+          () =>
+            virtualItems.map((item) => {
+              const entry = virtualizerEntries[item.index]
+              if (!entry) return null
+              return (
+                <div
+                  key={entry.id}
+                  data-index={item.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ transform: `translateY(${item.start}px)` }}
+                >
+                  {renderEntry(entry)}
+                </div>
+              )
+            }),
+          `count=${virtualItems.length} source=${virtualizerEntries.length}`,
+        )}
       </div>
     )
   }
 
   return (
     <>
-      {entries.map((entry) => (
-        <div key={entry.id}>{renderEntry(entry)}</div>
-      ))}
+      {measureStartupRender(
+        'LinearListLayout.items',
+        () =>
+          entries.map((entry) => (
+            <div key={entry.id}>{renderEntry(entry)}</div>
+          )),
+        `count=${entries.length}`,
+      )}
     </>
   )
 }

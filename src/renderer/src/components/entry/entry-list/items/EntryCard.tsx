@@ -9,6 +9,7 @@ import {
   advanceCardImageFallback,
 } from '../utils/entry-media'
 import type { Entry } from '../../../../../../shared/types'
+import { measureStartupRender } from '../../../../lib/startup-block-diagnostics'
 
 /** Standard list item card */
 export const EntryCard = memo(function EntryCard({
@@ -28,23 +29,36 @@ export const EntryCard = memo(function EntryCard({
   imageProxy?: boolean
   onContextMenu?: (e: React.MouseEvent) => void
 }) {
-  const timeAgo = cleanRelativeTime(entry.publishedAt)
+  const timeAgo = measureStartupRender(
+    'EntryCard.timeAgo',
+    () => cleanRelativeTime(entry.publishedAt),
+    `id=${entry.id}`,
+  )
 
   // Thumbnail: prefer first media photo, then imageUrl, then extract from content.
   // Use previewUrl (stable mirror proxy) when available instead of url (expiring CDN).
-  const firstPhoto = entry.media?.find((m) => m.type === 'photo')
-  const rawThumbnail = firstPhoto?.previewUrl
-    ? decodeHtmlEntitiesUrl(firstPhoto.previewUrl)
-    : decodeMediaUrl(
-        firstPhoto?.url ||
-          entry.media?.find((m) => m.type === 'video')?.previewUrl ||
-          entry.imageUrl ||
-          '',
-      )
-  const thumbnail =
-    rawThumbnail && imageProxy
-      ? getThumbnailUrl(rawThumbnail, 80)
-      : rawThumbnail
+  const { rawThumbnail, thumbnail } = measureStartupRender(
+    'EntryCard.thumbnail',
+    () => {
+      const firstPhoto = entry.media?.find((m) => m.type === 'photo')
+      const rawThumbnail = firstPhoto?.previewUrl
+        ? decodeHtmlEntitiesUrl(firstPhoto.previewUrl)
+        : decodeMediaUrl(
+            firstPhoto?.url ||
+              entry.media?.find((m) => m.type === 'video')?.previewUrl ||
+              entry.imageUrl ||
+              '',
+          )
+      return {
+        rawThumbnail,
+        thumbnail:
+          rawThumbnail && imageProxy
+            ? getThumbnailUrl(rawThumbnail, 80)
+            : rawThumbnail,
+      }
+    },
+    `id=${entry.id} media=${entry.media?.length ?? 0} image=${entry.imageUrl ? 1 : 0}`,
+  )
 
   const hasThumbnail = !!thumbnail
 

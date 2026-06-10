@@ -9,19 +9,18 @@ import {
   printPerformanceSummary,
 } from './lib/performance-metrics'
 import { RootProviders } from './providers/RootProviders'
-import {
-  hydrateDataToMemory,
-  hydrateInitialSnapshot,
-  hydrateStartupCache,
-} from './initialize/hydrate'
+import { hydrateDataToMemory, hydrateStartupCache } from './initialize/hydrate'
 import { setAppIsHydrated, setAppIsReady } from './store/app-store'
 import { applyAfterReadyCallbacks } from './initialize/queue'
 import {
   recordStartupBlockEvent,
+  recordStartupReactProfiler,
   startStartupBlockDiagnostics,
 } from './lib/startup-block-diagnostics'
 import './styles/tokens.css'
 import './styles/globals.css'
+
+let hasStartupSnapshotCache = false
 
 performance.mark('livo-renderer-module-loaded')
 startStartupBlockDiagnostics()
@@ -64,16 +63,8 @@ if (_platform === 'darwin' || _platform === 'win32') {
 performance.mark('livo-render-start')
 recordAppMetric('app.moduleLoaded', performance.now())
 
-function removeInlineSkeleton(): void {
-  const skeleton = document.getElementById('app-skeleton')
-  if (skeleton) {
-    skeleton.remove()
-  }
-}
-
 function notifyRendererShellReady(): void {
   requestAnimationFrame(() => {
-    removeInlineSkeleton()
     void window.api.app.readyToShowMainWindow().catch((error) => {
       console.error('[Livo] Failed to notify shell ready:', error)
     })
@@ -86,18 +77,33 @@ function notifyRendererReady(): void {
   })
 }
 
+function StrictModeBoundary({ children }: { children: React.ReactNode }) {
+  if (import.meta.env.DEV && import.meta.env.VITE_LIVO_STRICT_MODE !== 'true') {
+    recordStartupBlockEvent('react.strictMode.disabledForDev')
+    return <>{children}</>
+  }
+
+  recordStartupBlockEvent('react.strictMode.enabled')
+  return <React.StrictMode>{children}</React.StrictMode>
+}
+
 function renderApp(): void {
   recordStartupBlockEvent('react.render.start')
   const root = ReactDOM.createRoot(document.getElementById('root')!)
 
   root.render(
-    <React.StrictMode>
+    <StrictModeBoundary>
       <ErrorBoundary>
         <RootProviders>
-          <RouterProvider router={router} />
+          <React.Profiler
+            id="RouterProvider"
+            onRender={recordStartupReactProfiler}
+          >
+            <RouterProvider router={router} />
+          </React.Profiler>
         </RootProviders>
       </ErrorBoundary>
-    </React.StrictMode>,
+    </StrictModeBoundary>,
   )
   recordAppMetric('app.reactMounted', performance.now())
   recordStartupBlockEvent('react.render.scheduled')
@@ -110,7 +116,7 @@ function renderApp(): void {
  */
 async function bootstrap(): Promise<void> {
   try {
-    hydrateStartupCache()
+    hasStartupSnapshotCache = hydrateStartupCache()
     recordStartupBlockEvent('hydrate.startupCache.complete')
     renderApp()
 
@@ -145,8 +151,11 @@ async function bootstrap(): Promise<void> {
     recordStartupBlockEvent('app.ready')
 
     if (!result.initialSnapshot) {
-      recordStartupBlockEvent('hydrate.initialSnapshot.deferredStart')
-      void hydrateInitialSnapshot()
+      recordStartupBlockEvent(
+        hasStartupSnapshotCache
+          ? 'hydrate.initialSnapshot.skippedStartupCache'
+          : 'hydrate.initialSnapshot.skippedNoStartupCache',
+      )
     }
 
     void import('./initialize/queue')

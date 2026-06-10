@@ -8,6 +8,7 @@ import { EntryListEmpty } from './EntryListEmpty'
 import { GridLayout } from './layouts/GridLayout'
 import { LinearListLayout } from './layouts/LinearListLayout'
 import { SocialLayout } from './layouts/SocialLayout'
+import { measureStartupRender } from '../../../lib/startup-block-diagnostics'
 
 export interface EntryListContentProps {
   isLoading: boolean
@@ -68,87 +69,94 @@ export function EntryListContent({
   onContextMenu,
   onMediaAllFailed,
 }: EntryListContentProps) {
-  const virtualizerCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
+  return measureStartupRender(
+    'EntryListContent',
+    () => {
+      const virtualizerCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}`
 
-  if (isLoading && !hasStaleEntriesWhileLoading) {
-    return (
-      <SkeletonList
-        count={6}
-        type={
-          activeView === FeedViewTypeEnum.SocialMedia
-            ? 'social'
-            : isGridMode
-              ? 'grid'
-              : 'article'
-        }
-      />
-    )
-  }
+      if (isLoading && !hasStaleEntriesWhileLoading) {
+        return (
+          <SkeletonList
+            count={6}
+            type={
+              activeView === FeedViewTypeEnum.SocialMedia
+                ? 'social'
+                : isGridMode
+                  ? 'grid'
+                  : 'article'
+            }
+          />
+        )
+      }
 
-  if (renderEntries.length === 0) {
-    return (
-      <EntryListEmpty
-        selectedFeedId={selectedFeedId}
-        activeView={activeView}
-        isRefreshing={isRefreshing}
-        onRefresh={onRefresh}
-      />
-    )
-  }
+      if (renderEntries.length === 0) {
+        return (
+          <EntryListEmpty
+            selectedFeedId={selectedFeedId}
+            activeView={activeView}
+            isRefreshing={isRefreshing}
+            onRefresh={onRefresh}
+          />
+        )
+      }
 
-  return (
-    <>
-      {activeView === FeedViewTypeEnum.SocialMedia ? (
-        <SocialLayout
-          socialRows={socialRows}
-          scrollRef={scrollRef}
-          renderEntries={renderEntries}
-          selectedEntryId={selectedEntryId}
-          feedTitleById={feedTitleById}
-          feedImageById={feedImageById}
-          feedSiteUrlById={feedSiteUrlById}
-          feedUrlById={feedUrlById}
-          dimRead={dimRead}
-          cacheKey={`social:${virtualizerCacheKey}`}
-          onSelectEntry={onSelectEntry}
-          onMarkAboveRead={onMarkAboveRead}
-          onMarkBelowRead={onMarkBelowRead}
-          onContextMenu={onContextMenu}
-          onMediaAllFailed={onMediaAllFailed}
-        />
-      ) : isGridMode ? (
-        <GridLayout
-          gridRows={gridRows}
-          scrollRef={scrollRef}
-          selectedEntryId={selectedEntryId}
-          feedTitleById={feedTitleById}
-          feedImageById={feedImageById}
-          activeView={activeView}
-          hasMore={hasMoreGridEntries}
-          cacheKey={`grid:${virtualizerCacheKey}`}
-          onSelectEntry={onSelectEntry}
-        />
-      ) : (
-        <LinearListLayout
-          entries={renderEntries}
-          virtualizerEntries={virtualizerEntries}
-          useVirtual={useVirtualLinearList}
-          scrollRef={scrollRef}
-          selectedEntryId={selectedEntryId}
-          feedTitleById={feedTitleById}
-          dimRead={dimRead}
-          imageProxy={imageProxy}
-          cacheKey={`linear:${virtualizerCacheKey}`}
-          onSelectEntry={onSelectEntry}
-          onContextMenu={onContextMenu}
-        />
-      )}
+      return (
+        <>
+          {activeView === FeedViewTypeEnum.SocialMedia ? (
+            <SocialLayout
+              socialRows={socialRows}
+              scrollRef={scrollRef}
+              renderEntries={renderEntries}
+              selectedEntryId={selectedEntryId}
+              feedTitleById={feedTitleById}
+              feedImageById={feedImageById}
+              feedSiteUrlById={feedSiteUrlById}
+              feedUrlById={feedUrlById}
+              dimRead={dimRead}
+              cacheKey={`social:${virtualizerCacheKey}`}
+              onSelectEntry={onSelectEntry}
+              onMarkAboveRead={onMarkAboveRead}
+              onMarkBelowRead={onMarkBelowRead}
+              onContextMenu={onContextMenu}
+              onMediaAllFailed={onMediaAllFailed}
+            />
+          ) : isGridMode ? (
+            <GridLayout
+              gridRows={gridRows}
+              scrollRef={scrollRef}
+              selectedEntryId={selectedEntryId}
+              feedTitleById={feedTitleById}
+              feedImageById={feedImageById}
+              activeView={activeView}
+              hasMore={hasMoreGridEntries}
+              cacheKey={`grid:${virtualizerCacheKey}`}
+              onSelectEntry={onSelectEntry}
+            />
+          ) : (
+            <LinearListLayout
+              entries={renderEntries}
+              virtualizerEntries={virtualizerEntries}
+              useVirtual={useVirtualLinearList}
+              scrollRef={scrollRef}
+              selectedEntryId={selectedEntryId}
+              feedTitleById={feedTitleById}
+              dimRead={dimRead}
+              imageProxy={imageProxy}
+              cacheKey={`linear:${virtualizerCacheKey}`}
+              onSelectEntry={onSelectEntry}
+              onContextMenu={onContextMenu}
+            />
+          )}
 
-      {isLoadingMore && (
-        <div className="text-text-tertiary flex items-center justify-center py-4">
-          <Loader2 size={16} className="animate-spin" />
-        </div>
-      )}
-    </>
+          {isLoadingMore && (
+            <div className="text-text-tertiary flex items-center justify-center py-4">
+              <Loader2 size={16} className="animate-spin" />
+            </div>
+          )}
+        </>
+      )
+    },
+    () =>
+      `mode=${activeView === FeedViewTypeEnum.SocialMedia ? 'social' : isGridMode ? 'grid' : 'linear'} render=${renderEntries.length} virtual=${virtualizerEntries.length} rows=${socialRows.length || gridRows.length} useVirtual=${useVirtualLinearList}`,
   )
 }
