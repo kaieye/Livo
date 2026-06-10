@@ -151,6 +151,8 @@ const ELECTRON_API_SHAPE = {
     bilibiliFollowings: true,
   },
   auth: {
+    bindGoogle: true,
+    bindWechat: true,
     loginGoogle: true,
     loginWechat: true,
     getCurrentUser: true,
