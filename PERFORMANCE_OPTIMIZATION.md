@@ -122,7 +122,7 @@ export const setAppIsReady = (ready: boolean) =>
 
 ```bash
 # 开发模式
-npm run dev
+pnpm dev
 
 # 测试要点:
 # - 骨架屏是否立即显示
