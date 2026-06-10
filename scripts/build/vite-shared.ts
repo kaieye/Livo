@@ -73,7 +73,32 @@ export function createRendererSharedConfig(projectRoot = process.cwd()): any {
     },
     define: createSharedDefines(),
     plugins: [react(), createI18nCompletenessPlugin()],
-    server: LIVO_DEV_SERVER,
+    server: {
+      ...LIVO_DEV_SERVER,
+      warmup: {
+        clientFiles: [
+          './src/renderer/src/main.tsx',
+          './src/renderer/src/App.tsx',
+          './src/renderer/src/router/routes.tsx',
+        ],
+      },
+    },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom/client',
+        'react/jsx-dev-runtime',
+        'react-router-dom',
+        'zustand',
+        'zustand/shallow',
+        'immer',
+        'i18next',
+        'react-i18next',
+        '@tanstack/react-query',
+        '@tanstack/react-virtual',
+        'date-fns',
+      ],
+    },
     build: {
       chunkSizeWarningLimit: 700,
       rollupOptions: {

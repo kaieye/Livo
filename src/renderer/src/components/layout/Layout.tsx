@@ -8,10 +8,6 @@ import {
   useState,
 } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Sidebar } from './Sidebar'
-import { EntryList } from '../entry/EntryList'
-import { EntryContent } from '../entry/EntryContent'
-import { SkeletonList } from '../ui/Skeleton'
 import { ResizeHandle } from '../ui/ResizeHandle'
 import { useDiscoverStore } from '../../store/discover-store'
 import { useEntryStore } from '../../store/entry-store'
@@ -21,23 +17,42 @@ import { FeedViewType } from '../../../../shared/types'
 import { buildEntryWarmupRequests } from '../../lib/entry-warmup'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
+import { EntryList } from '../entry/EntryList'
+import { EntryEmptyState } from '../entry/entry-content/EntryEmptyState'
+import { Sidebar } from './Sidebar'
+import {
+  markStartupComponentMounted,
+  recordStartupBlockEvent,
+  traceStartupChunk,
+} from '../../lib/startup-block-diagnostics'
+
+const EntryContent = lazy(() =>
+  traceStartupChunk('EntryContent', () => import('../entry/EntryContent')).then(
+    (m) => ({ default: m.EntryContent }),
+  ),
+)
+
+const DigestContent = lazy(() =>
+  traceStartupChunk('DigestContent', () => import('./DigestContent')).then(
+    (m) => ({ default: m.DigestContent }),
+  ),
+)
+
+const WideViewContent = lazy(() =>
+  traceStartupChunk(
+    'WideViewContent',
+    () => import('../entry/WideViewContent'),
+  ).then((m) => ({ default: m.WideViewContent })),
+)
+
+const DiscoverPanel = lazy(() =>
+  traceStartupChunk(
+    'DiscoverPanel',
+    () => import('../discover/DiscoverPanel'),
+  ).then((m) => ({ default: m.DiscoverPanel })),
+)
 
 const RECOMMENDED_CATEGORY = 'Recommended'
-const DigestContent = lazy(() =>
-  import('./DigestContent').then((module) => ({
-    default: module.DigestContent,
-  })),
-)
-const WideViewContent = lazy(() =>
-  import('../entry/WideViewContent').then((module) => ({
-    default: module.WideViewContent,
-  })),
-)
-const DiscoverPanel = lazy(() =>
-  import('../discover/DiscoverPanel').then((module) => ({
-    default: module.DiscoverPanel,
-  })),
-)
 
 const warmedEntryScopeKeys = new Set<string>()
 let wideViewModulesPreloadPromise: Promise<unknown> | null = null
@@ -110,23 +125,24 @@ const SIDEBAR_MIN = 200
 const SIDEBAR_MAX = 400
 const ENTRY_LIST_MIN = 260
 const ENTRY_LIST_MAX = 640
+const ENTRY_CONTENT_IDLE_TIMEOUT = 1200
+const ENTRY_CONTENT_FALLBACK_DELAY = 900
 
-function PanelSkeleton({ type }: { type: 'article' | 'social' | 'grid' }) {
+function ContentPaneFallback() {
   return (
-    <div className="dark:bg-surface-dark flex min-w-0 flex-1 flex-col bg-white">
-      <div className="flex h-12 flex-shrink-0 items-center gap-2 border-b px-4">
-        <div className="bg-surface-secondary dark:bg-surface-dark-secondary h-4 w-28 animate-pulse rounded" />
-        <div className="bg-surface-secondary dark:bg-surface-dark-secondary ml-auto h-8 w-20 animate-pulse rounded-lg" />
-      </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <SkeletonList count={8} type={type} />
-      </div>
-    </div>
+    <div className="bg-background dark:bg-background-dark min-w-0 flex-1" />
   )
 }
 
 export function Layout() {
   const contentFocusRef = useRef<HTMLDivElement>(null)
+  const [shouldRenderEntryContent, setShouldRenderEntryContent] =
+    useState(false)
+
+  useLayoutEffect(() => {
+    markStartupComponentMounted('Layout')
+  }, [])
+
   const { isDiscoverOpen } = useStoreShallow(useDiscoverStore, (s) => ({
     isDiscoverOpen: s.isOpen,
   }))
@@ -141,6 +157,7 @@ export function Layout() {
   const { prefetchEntries } = useStoreShallow(useEntryStore, (s) => ({
     prefetchEntries: s.prefetchEntries,
   }))
+  const selectedEntryId = useEntryStore((s) => s.selectedEntry?.id ?? null)
   const isContentFocusHighlighted = useLayoutFocusTarget(
     'content',
     contentFocusRef,
@@ -162,7 +179,7 @@ export function Layout() {
       () => {
         void preloadWideViewModules()
       },
-      { timeout: 180, fallbackDelay: 120 },
+      { timeout: 2500, fallbackDelay: 1800 },
     )
 
     return cancelIdleTask
@@ -181,7 +198,7 @@ export function Layout() {
         if (cancelled) return
         void warmEntryScopesInOrder(requests, prefetchEntries, () => cancelled)
       },
-      { timeout: 520, fallbackDelay: 520 },
+      { timeout: 5000, fallbackDelay: 4000 },
     )
 
     return () => {
@@ -208,6 +225,27 @@ export function Layout() {
       FeedViewType.Videos,
       FeedViewType.Pictures,
     ].includes(effectiveView)
+
+  useEffect(() => {
+    if (isDigestRoute || isDiscoverOpen || isWideView || !selectedEntryId) {
+      setShouldRenderEntryContent(false)
+      return
+    }
+
+    const cancelIdleTask = scheduleIdleTask(
+      () => {
+        recordStartupBlockEvent('EntryContent.idleMount')
+        setShouldRenderEntryContent(true)
+      },
+      {
+        timeout: ENTRY_CONTENT_IDLE_TIMEOUT,
+        fallbackDelay: ENTRY_CONTENT_FALLBACK_DELAY,
+      },
+    )
+
+    return cancelIdleTask
+  }, [isDigestRoute, isDiscoverOpen, isWideView, selectedEntryId])
+
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)
   const [entryListWidth, setEntryListWidth] = useState(
     () => loadWidths().entryList,
@@ -265,10 +303,7 @@ export function Layout() {
 
   return (
     <div className="flex h-full w-screen overflow-hidden">
-      {/* Sidebar */}
       <Sidebar width={sidebarWidth} />
-
-      {/* Resize handle: sidebar ↔ main */}
       <ResizeHandle onMouseDown={(e) => handleMouseDown('sidebar', e)} />
 
       <div
@@ -282,38 +317,33 @@ export function Layout() {
       >
         <div className="flex min-w-0 flex-1">
           {isDigestRoute ? (
-            <Suspense fallback={<PanelSkeleton type="article" />}>
+            <Suspense fallback={<ContentPaneFallback />}>
               <DigestContent />
             </Suspense>
           ) : isDiscoverOpen ? (
-            <Suspense fallback={<PanelSkeleton type="article" />}>
+            <Suspense fallback={<ContentPaneFallback />}>
               <DiscoverPanel />
             </Suspense>
           ) : isWideView ? (
-            <Suspense
-              fallback={
-                <PanelSkeleton
-                  type={
-                    effectiveView === FeedViewType.SocialMedia
-                      ? 'social'
-                      : 'grid'
-                  }
-                />
-              }
-            >
+            <Suspense fallback={<ContentPaneFallback />}>
               <WideViewContent />
             </Suspense>
           ) : (
-            // 主三栏阅读器：右侧两列作为整体避开标题栏，让分隔线不贯穿到顶部
             <div className="reader-titlebar-safe-pt flex min-w-0 flex-1">
               <EntryList width={entryListWidth} />
-
               <ResizeHandle
                 onMouseDown={(e) => handleMouseDown('entryList', e)}
               />
-
               <div className="flex min-w-0 flex-1">
-                <EntryContent />
+                {!selectedEntryId ? (
+                  <EntryEmptyState />
+                ) : shouldRenderEntryContent ? (
+                  <Suspense fallback={<ContentPaneFallback />}>
+                    <EntryContent />
+                  </Suspense>
+                ) : (
+                  <ContentPaneFallback />
+                )}
               </div>
             </div>
           )}

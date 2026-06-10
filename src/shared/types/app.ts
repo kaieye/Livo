@@ -1,5 +1,7 @@
 // App commands and native bridge types
-import type { SettingsTabId } from '../settings-schema'
+import type { AppSettings, SettingsTabId } from '../settings-schema'
+import type { FeedWithCount } from './feed'
+import type { ReaderSnapshot } from './entry'
 
 export type { AppSettings, SettingsTabId } from '../settings-schema'
 export { DEFAULT_SETTINGS } from '../settings-schema'
@@ -75,6 +77,17 @@ export interface DownloadUrlResult {
   canceled?: boolean
   filePath?: string
   error?: string
+}
+
+export interface AppHydratePayload {
+  settings: AppSettings
+  feeds: FeedWithCount[]
+  auth: {
+    success: boolean
+    isValid: boolean
+    user: unknown
+  }
+  initialSnapshot: ReaderSnapshot | null
 }
 
 export interface NativeContextMenuItem {

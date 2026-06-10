@@ -7,13 +7,54 @@ import { useSettingsStore } from '../store/settings-store'
 import { useFeedStore } from '../store/feed-store'
 import { useActionsStore } from '../store/actions-store'
 import { useAuthStore } from '../store/auth-store'
+import { useEntryStore } from '../store/entry-store'
 import { recordAppMetric } from '../lib/performance-metrics'
+import { writeDefaultHomeSnapshotCache } from '../lib/reader-snapshot-cache'
+import {
+  buildListCacheKey,
+  cacheEntrySnapshots,
+  setCachedListResult,
+} from '../lib/entry-cache'
+import type { AppHydratePayload } from '../../../shared/types'
+
+const DEFAULT_INITIAL_SNAPSHOT_LIMIT = 10
+
+function logStartupTiming(label: string, startTime: number): number {
+  const duration = performance.now() - startTime
+  console.log(`[Startup] ${label} ${duration.toFixed(0)}ms`)
+  recordAppMetric(label, duration)
+  return duration
+}
+
+/**
+ * Restore the last persisted home snapshot synchronously before IPC hydration.
+ * This mirrors Folo's local read-model-first startup: the shell can show cached
+ * reader content immediately, then backend hydration reconciles it afterward.
+ */
+export function hydrateStartupCache(): boolean {
+  const startTime = performance.now()
+  const snapshot = useEntryStore.getState().hydrateSnapshotCache({
+    limit: DEFAULT_INITIAL_SNAPSHOT_LIMIT,
+  })
+  const duration = logStartupTiming('hydrate.startupCache', startTime)
+
+  if (snapshot) {
+    console.log('[Hydrate] Startup cache restored:', {
+      entryCount: snapshot.entries.length,
+      feedCount: snapshot.feeds.length,
+      duration: Math.round(duration),
+    })
+  }
+
+  return !!snapshot
+}
 
 export interface HydrateResult {
   settings: any
   feeds: any[]
   rules: any[]
   session: any | null
+  initialSnapshot: any | null
   timings: {
     settings: number
     feeds: number
@@ -42,16 +83,17 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
   let settings: any = null
   let feeds: any[] = []
   let sessionData: any = null
+  let initialSnapshot: AppHydratePayload['initialSnapshot'] = null
 
   try {
     const batchStart = performance.now()
     const batch = await window.api.app.hydrate()
-    const batchDuration = performance.now() - batchStart
-    recordAppMetric('hydrate.batch', batchDuration)
+    const batchDuration = logStartupTiming('hydrate.batch', batchStart)
 
     settings = batch.settings
     feeds = batch.feeds
     sessionData = batch.auth
+    initialSnapshot = batch.initialSnapshot ?? null
     timings.settings = batchDuration
     timings.feeds = batchDuration
     timings.auth = batchDuration
@@ -94,6 +136,10 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     useFeedStore.setState({ feeds, isLoading: false })
   }
 
+  if (initialSnapshot) {
+    applyInitialSnapshot(initialSnapshot)
+  }
+
   // 动作规则自行处理 localStorage hydrate。
   useActionsStore.getState().loadRules()
 
@@ -130,6 +176,69 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     feeds,
     rules,
     session: sessionData,
+    initialSnapshot,
     timings,
   }
+}
+
+export async function hydrateInitialSnapshot(): Promise<void> {
+  const startTime = performance.now()
+  try {
+    const snapshot = await window.api.reader.snapshot({
+      limit: DEFAULT_INITIAL_SNAPSHOT_LIMIT,
+      compact: true,
+      maxContentLength: 520,
+    })
+    logStartupTiming('hydrate.initialSnapshot', startTime)
+    applyInitialSnapshot(snapshot)
+  } catch (error) {
+    console.warn('[Hydrate] Initial snapshot hydration failed', error)
+  }
+}
+
+function applyInitialSnapshot(
+  initialSnapshot: NonNullable<AppHydratePayload['initialSnapshot']>,
+): void {
+  const pageSize =
+    initialSnapshot.entries.length || DEFAULT_INITIAL_SNAPSHOT_LIMIT
+  writeDefaultHomeSnapshotCache(
+    {
+      scope: { type: 'all' },
+      limit: pageSize,
+      compact: true,
+      maxContentLength: 520,
+    },
+    initialSnapshot,
+  )
+  setCachedListResult(buildListCacheKey({}), {
+    entries: initialSnapshot.entries,
+    hasMore: initialSnapshot.nextCursor !== null,
+  })
+  useEntryStore.setState((state) =>
+    state.entries.length > 0
+      ? state
+      : {
+          entries: cacheEntrySnapshots(initialSnapshot.entries),
+          isLoading: false,
+          isLoadingMore: false,
+          hasMoreEntries: initialSnapshot.nextCursor !== null,
+          paginationSource: 'snapshot',
+          paginationQueryKey: JSON.stringify({
+            snapshot: true,
+            feedId: '',
+            feedIds: [],
+            starred: false,
+            unreadOnly: false,
+            pageSize,
+          }),
+          paginationOptions: {
+            feedId: undefined,
+            feedIds: undefined,
+            starred: undefined,
+            unreadOnly: undefined,
+          },
+          paginationPageSize: pageSize,
+          snapshotNextCursor: initialSnapshot.nextCursor,
+        },
+  )
 }

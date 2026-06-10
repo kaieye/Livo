@@ -42,6 +42,7 @@ import type {
   TaskRunRecord,
   FeverAccount,
   FeverSyncState,
+  AppHydratePayload,
 } from '../shared/types'
 import type { ResolvedProfileUrlResult } from '../shared/types'
 import type { ActionRule } from '../shared/actions'
@@ -366,11 +367,7 @@ const api = {
       invokeIpc(IPC.APP_RENDERER_READY),
     readyToShowMainWindow: (): Promise<{ success: boolean }> =>
       invokeIpc(IPC.APP_READY_TO_SHOW_MAIN_WINDOW),
-    hydrate: (): Promise<{
-      settings: AppSettings
-      feeds: FeedWithCount[]
-      auth: { success: boolean; isValid: boolean; user: any }
-    }> => invokeIpc(IPC.APP_HYDRATE),
+    hydrate: (): Promise<AppHydratePayload> => invokeIpc(IPC.APP_HYDRATE),
   },
 
   menu: {

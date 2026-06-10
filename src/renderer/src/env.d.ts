@@ -239,6 +239,7 @@ declare global {
         }>
         rendererReady: () => Promise<{ success: boolean }>
         readyToShowMainWindow: () => Promise<{ success: boolean }>
+        hydrate: () => Promise<import('../../shared/types').AppHydratePayload>
       }
       accounts: {
         status: (

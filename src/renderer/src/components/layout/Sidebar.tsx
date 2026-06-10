@@ -64,6 +64,7 @@ import { useQuickSearchStore } from '../../store/quick-search-store'
 import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 import { getFeedRefreshIssueLabel } from '../../lib/feed-refresh-issue'
 import { FeedRefreshIssueBadge } from './FeedRefreshIssueBadge'
+import { markStartupComponentMounted } from '../../lib/startup-block-diagnostics'
 
 const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
   [FeedViewType.Articles]: <FileText size={18} />,
@@ -74,6 +75,25 @@ const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
 
 const EMPTY_FOLDERS_STORAGE_KEY = 'livo-empty-folders'
 const FEED_CATEGORY_VIRTUALIZE_THRESHOLD = 24
+const SIDEBAR_ENHANCEMENT_IDLE_TIMEOUT = 2500
+const SIDEBAR_ENHANCEMENT_FALLBACK_DELAY = 1500
+
+function scheduleIdleTask(
+  callback: () => void,
+  options: { timeout: number; fallbackDelay: number },
+): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(callback, {
+      timeout: options.timeout,
+    })
+    return () => window.cancelIdleCallback(handle)
+  }
+
+  const handle = window.setTimeout(callback, options.fallbackDelay)
+  return () => window.clearTimeout(handle)
+}
 
 function getPathLikeFromFeedUrl(rawUrl: string): string {
   try {
@@ -223,6 +243,18 @@ function getSidebarFeedDisplayTitle(feed: {
   return rawTitle
 }
 
+function getSidebarLiteFeedDisplayTitle(feed: {
+  title?: string
+  url?: string
+  siteUrl?: string
+}): string {
+  const title = (feed.title || '').trim()
+  if (title) return title
+
+  const fallback = (feed.siteUrl || feed.url || '').trim()
+  return fallback.replace(/^https?:\/\//i, '').replace(/\/$/, '') || 'RSS'
+}
+
 function extractInstagramNameFromUrl(value: string): string {
   const raw = (value || '').trim()
   if (!raw) return ''
@@ -316,6 +348,10 @@ function loadPersistedEmptyFolders(): Array<{
 }
 
 export function Sidebar({ width }: { width?: number }) {
+  useEffect(() => {
+    markStartupComponentMounted('Sidebar')
+  }, [])
+
   const navigate = useNavigate()
   const location = useLocation()
   const navFocusRef = useRef<HTMLElement>(null)
@@ -348,6 +384,8 @@ export function Sidebar({ width }: { width?: number }) {
     addFeed: s.addFeed,
   }))
   const { t } = useTranslation()
+  const [sidebarEnhancementsReady, setSidebarEnhancementsReady] =
+    useState(false)
   const filteredFeeds = useMemo(
     () =>
       activeView === null
@@ -356,7 +394,7 @@ export function Sidebar({ width }: { width?: number }) {
     [feeds, activeView],
   )
   const [allFeedsSearch, setAllFeedsSearch] = useState('')
-  const showGlobalFeedSearch = true
+  const showGlobalFeedSearch = sidebarEnhancementsReady
   const allFeedsSearchLower = allFeedsSearch.trim().toLowerCase()
   const [searchExpandedCategories, setSearchExpandedCategories] = useState<
     Set<string>
@@ -368,7 +406,7 @@ export function Sidebar({ width }: { width?: number }) {
     null,
   )
   const displayFeeds = useMemo(() => {
-    if (!allFeedsSearchLower) return filteredFeeds
+    if (!sidebarEnhancementsReady || !allFeedsSearchLower) return filteredFeeds
     return filteredFeeds.filter((f) => {
       const title = f.title?.toLowerCase() || ''
       const url = f.url?.toLowerCase() || ''
@@ -381,7 +419,7 @@ export function Sidebar({ width }: { width?: number }) {
         category.includes(allFeedsSearchLower)
       )
     })
-  }, [filteredFeeds, allFeedsSearchLower])
+  }, [sidebarEnhancementsReady, filteredFeeds, allFeedsSearchLower])
   const markAllRead = useEntryStore((s) => s.markAllRead)
   const settingsLoaded = useSettingsStore((s) => s.isLoaded)
   const showRecommended = useSettingsStore(
@@ -567,8 +605,24 @@ export function Sidebar({ width }: { width?: number }) {
     return t('sidebar.newFolderName')
   }
 
+  useEffect(() => {
+    const cancelIdleTask = scheduleIdleTask(
+      () => {
+        setSidebarEnhancementsReady(true)
+      },
+      {
+        timeout: SIDEBAR_ENHANCEMENT_IDLE_TIMEOUT,
+        fallbackDelay: SIDEBAR_ENHANCEMENT_FALLBACK_DELAY,
+      },
+    )
+
+    return cancelIdleTask
+  }, [])
+
   // Global window-level listeners 锟?added once, check ref to see if drag is active
   useEffect(() => {
+    if (!sidebarEnhancementsReady) return
+
     const onMove = (ev: PointerEvent) => {
       if (!dragOverlayRef.current) return
       setDragOverlay((prev) =>
@@ -646,7 +700,7 @@ export function Sidebar({ width }: { width?: number }) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
-  }, [])
+  }, [sidebarEnhancementsReady])
 
   // Start drag 锟?just sets state; window listeners handle move/up
   const handleDragPointerStart = useCallback(
@@ -787,6 +841,7 @@ export function Sidebar({ width }: { width?: number }) {
   useEffect(() => {
     const input = instagramSearch.trim()
     const targetView = FeedViewType.SocialMedia
+    if (!sidebarEnhancementsReady) return
     if (!input) {
       setInstagramCandidate(null)
       return
@@ -1017,6 +1072,7 @@ export function Sidebar({ width }: { width?: number }) {
     normalizeRsshubProtocolInput,
     buildPicnobProtocolRoute,
     isFeedSubscribedInTargetView,
+    sidebarEnhancementsReady,
   ])
 
   // Track which default folders should be visible (regardless of being empty)
@@ -1038,7 +1094,27 @@ export function Sidebar({ width }: { width?: number }) {
     }
     return names
   }, [emptyFolders, activeView, viewDefaultFolderNames])
+  const liteUserCategories = useMemo(() => {
+    const groupedCategories = new Map<string, typeof filteredFeeds>()
+
+    for (const feed of filteredFeeds) {
+      if (feed.category === RECOMMENDED_CATEGORY) continue
+      const category = getFeedFolderName(feed)
+      if (!groupedCategories.has(category)) groupedCategories.set(category, [])
+      groupedCategories.get(category)!.push(feed)
+    }
+
+    return groupedCategories
+  }, [filteredFeeds, getFeedFolderName])
+
   const { userCategories, recommendedFeeds } = useMemo(() => {
+    if (!sidebarEnhancementsReady) {
+      return {
+        userCategories: liteUserCategories,
+        recommendedFeeds: [],
+      }
+    }
+
     const groupedUserCategories = new Map<string, typeof filteredFeeds>()
     const groupedRecommendedFeeds: typeof filteredFeeds = []
 
@@ -1080,6 +1156,8 @@ export function Sidebar({ width }: { width?: number }) {
     displayFeeds,
     emptyFolders,
     getFeedFolderName,
+    liteUserCategories,
+    sidebarEnhancementsReady,
   ])
 
   const viewCounts = useMemo(() => {
@@ -1105,6 +1183,12 @@ export function Sidebar({ width }: { width?: number }) {
   )
 
   useEffect(() => {
+    if (!sidebarEnhancementsReady) {
+      setSearchExpandedCategories(new Set())
+      setSearchHighlightedFeedIds(new Set())
+      return
+    }
+
     if (searchHighlightTimerRef.current) {
       clearTimeout(searchHighlightTimerRef.current)
       searchHighlightTimerRef.current = null
@@ -1131,7 +1215,12 @@ export function Sidebar({ width }: { width?: number }) {
       setSearchHighlightedFeedIds(new Set())
       searchHighlightTimerRef.current = null
     }, 2000)
-  }, [allFeedsSearchLower, displayFeeds, getFeedFolderName])
+  }, [
+    sidebarEnhancementsReady,
+    allFeedsSearchLower,
+    displayFeeds,
+    getFeedFolderName,
+  ])
 
   useEffect(() => {
     return () => {
@@ -1742,7 +1831,7 @@ export function Sidebar({ width }: { width?: number }) {
           tabIndex={-1}
           onContextMenu={(e) => {
             // Only show blank menu when right-clicking the nav itself (not a feed/category)
-            if (e.target === e.currentTarget) {
+            if (sidebarEnhancementsReady && e.target === e.currentTarget) {
               e.preventDefault()
               setBlankContextMenu({ x: e.clientX, y: e.clientY })
               setContextMenu(null)
@@ -1794,6 +1883,7 @@ export function Sidebar({ width }: { width?: number }) {
             {categoryEntries.map(([category, categoryFeeds]) => (
               <FeedCategory
                 key={category}
+                lite={!sidebarEnhancementsReady}
                 category={category}
                 feeds={categoryFeeds}
                 selectedFeedId={selectedFeedId}
@@ -1809,14 +1899,16 @@ export function Sidebar({ width }: { width?: number }) {
             ))}
 
             {/* Recommended feeds section 锟?only shown when enabled in settings */}
-            {showRecommended && recommendedFeeds.length > 0 && (
-              <RecommendedSection
-                feeds={recommendedFeeds}
-                selectedFeedId={selectedFeedId}
-                onSelect={handleSelectFeed}
-                onContextMenu={handleContextMenu}
-              />
-            )}
+            {sidebarEnhancementsReady &&
+              showRecommended &&
+              recommendedFeeds.length > 0 && (
+                <RecommendedSection
+                  feeds={recommendedFeeds}
+                  selectedFeedId={selectedFeedId}
+                  onSelect={handleSelectFeed}
+                  onContextMenu={handleContextMenu}
+                />
+              )}
 
             {userVisibleFeedCount === 0 && activeView !== null && (
               <div className="text-text-secondary dark:text-text-dark-secondary py-6 text-center text-xs">
@@ -1838,7 +1930,7 @@ export function Sidebar({ width }: { width?: number }) {
             )}
 
             {/* Folder name input — shown after right-click "新建文件夹" */}
-            {showNewFolder && (
+            {sidebarEnhancementsReady && showNewFolder && (
               <div className="border-accent/30 bg-accent/5 dark:bg-accent/10 mt-1 flex items-center gap-1.5 rounded-lg border border-dashed px-2 py-1.5">
                 <FolderPlus size={13} className="text-accent flex-shrink-0" />
                 <input
@@ -2533,6 +2625,7 @@ export function Sidebar({ width }: { width?: number }) {
 }
 
 type FeedCategoryProps = {
+  lite: boolean
   category: string
   feeds: FeedWithCount[]
   selectedFeedId: string | null
@@ -2551,6 +2644,7 @@ type FeedCategoryProps = {
 }
 
 const FeedCategory = memo(function FeedCategory({
+  lite,
   category,
   feeds,
   selectedFeedId,
@@ -2568,9 +2662,9 @@ const FeedCategory = memo(function FeedCategory({
     (s) => s.settings.general.showFeedRefreshErrorBadge,
   )
   const [expanded, setExpanded] = useState(true)
-  const isDropHover = dropTarget === category && dragFeedId !== null
+  const isDropHover = !lite && dropTarget === category && dragFeedId !== null
   const shouldVirtualizeFeeds =
-    feeds.length > FEED_CATEGORY_VIRTUALIZE_THRESHOLD
+    !lite && feeds.length > FEED_CATEGORY_VIRTUALIZE_THRESHOLD
   const listRef = useRef<HTMLDivElement | null>(null)
   const feedVirtualizer = useVirtualizer({
     count: expanded && shouldVirtualizeFeeds ? feeds.length : 0,
@@ -2594,8 +2688,94 @@ const FeedCategory = memo(function FeedCategory({
   if (!isDropHover) wasDropHover.current = false
 
   useEffect(() => {
-    if (autoExpand) setExpanded(true)
-  }, [autoExpand])
+    if (!lite && autoExpand) setExpanded(true)
+  }, [autoExpand, lite])
+
+  const renderFeedRow = useCallback(
+    (feed: FeedWithCount, itemStart?: number, itemIndex?: number) => {
+      const isSearchHighlighted = !lite && highlightedFeedIds.has(feed.id)
+      const displayTitle = lite
+        ? getSidebarLiteFeedDisplayTitle(feed)
+        : getSidebarFeedDisplayTitle(feed)
+      const issueLabel = lite
+        ? null
+        : getFeedRefreshIssueLabel(feed, t, showFeedRefreshErrorBadge)
+
+      return (
+        <div
+          key={feed.id}
+          data-index={itemIndex}
+          ref={
+            itemStart === undefined ? undefined : feedVirtualizer.measureElement
+          }
+          className={
+            itemStart === undefined
+              ? `transition-all duration-200 ${
+                  dragFeedId === feed.id ? 'scale-95 opacity-40' : 'opacity-100'
+                }`
+              : `absolute left-0 top-0 w-full transition-all duration-200 ${
+                  dragFeedId === feed.id ? 'scale-95 opacity-40' : 'opacity-100'
+                }`
+          }
+          style={
+            itemStart === undefined
+              ? undefined
+              : { transform: `translateY(${itemStart}px)` }
+          }
+        >
+          <button
+            onClick={() => onSelect(feed.id)}
+            onContextMenu={lite ? undefined : (e) => onContextMenu(e, feed.id)}
+            className={`sidebar-item ${lite ? '' : 'group'} w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
+            title={displayTitle}
+            aria-label={
+              issueLabel ? `${displayTitle}. ${issueLabel}` : displayTitle
+            }
+          >
+            {!lite && (
+              <GripVertical
+                size={12}
+                className="-ml-1 mr-0 flex-shrink-0 cursor-grab touch-none opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-40"
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onDragStart(feed.id, feed.title, e)
+                }}
+              />
+            )}
+            {lite ? (
+              <LiteFeedIcon title={displayTitle} />
+            ) : (
+              <FeedIcon
+                imageUrl={feed.imageUrl}
+                siteUrl={feed.siteUrl}
+                feedUrl={feed.url}
+                title={feed.title}
+                size={20}
+              />
+            )}
+            <span className="flex-1 truncate text-left">{displayTitle}</span>
+            {!lite && <FeedRefreshIssueBadge label={issueLabel} />}
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
+              {feed.unreadCount}
+            </span>
+          </button>
+        </div>
+      )
+    },
+    [
+      lite,
+      highlightedFeedIds,
+      dragFeedId,
+      onSelect,
+      onContextMenu,
+      selectedFeedId,
+      onDragStart,
+      t,
+      showFeedRefreshErrorBadge,
+      feedVirtualizer.measureElement,
+    ],
+  )
 
   return (
     <div
@@ -2608,12 +2788,15 @@ const FeedCategory = memo(function FeedCategory({
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        onContextMenu={(e) =>
-          onCategoryContextMenu(
-            e,
-            category,
-            feeds.map((f) => f.id),
-          )
+        onContextMenu={
+          lite
+            ? undefined
+            : (e) =>
+                onCategoryContextMenu(
+                  e,
+                  category,
+                  feeds.map((f) => f.id),
+                )
         }
         className={`flex w-full items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors ${
           isDropHover
@@ -2652,126 +2835,26 @@ const FeedCategory = memo(function FeedCategory({
               {virtualFeedItems.map((item) => {
                 const feed = feeds[item.index]
                 if (!feed) return null
-                const isSearchHighlighted = highlightedFeedIds.has(feed.id)
-                const displayTitle = getSidebarFeedDisplayTitle(feed)
-                const issueLabel = getFeedRefreshIssueLabel(
-                  feed,
-                  t,
-                  showFeedRefreshErrorBadge,
-                )
-                return (
-                  <div
-                    key={feed.id}
-                    data-index={item.index}
-                    ref={feedVirtualizer.measureElement}
-                    className={`absolute left-0 top-0 w-full transition-all duration-200 ${
-                      dragFeedId === feed.id
-                        ? 'scale-95 opacity-40'
-                        : 'opacity-100'
-                    }`}
-                    style={{ transform: `translateY(${item.start}px)` }}
-                  >
-                    <button
-                      onClick={() => onSelect(feed.id)}
-                      onContextMenu={(e) => onContextMenu(e, feed.id)}
-                      className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
-                      title={displayTitle}
-                      aria-label={
-                        issueLabel
-                          ? `${displayTitle}. ${issueLabel}`
-                          : displayTitle
-                      }
-                    >
-                      <GripVertical
-                        size={12}
-                        className="-ml-1 mr-0 flex-shrink-0 cursor-grab touch-none opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-40"
-                        onPointerDown={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onDragStart(feed.id, feed.title, e)
-                        }}
-                      />
-                      <FeedIcon
-                        imageUrl={feed.imageUrl}
-                        siteUrl={feed.siteUrl}
-                        feedUrl={feed.url}
-                        title={feed.title}
-                        size={20}
-                      />
-                      <span className="flex-1 truncate text-left">
-                        {displayTitle}
-                      </span>
-                      <FeedRefreshIssueBadge label={issueLabel} />
-                      <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
-                        {feed.unreadCount}
-                      </span>
-                    </button>
-                  </div>
-                )
+                return renderFeedRow(feed, item.start, item.index)
               })}
             </div>
           ) : (
             <div className="space-y-0.5">
-              {feeds.map((feed) => {
-                const isSearchHighlighted = highlightedFeedIds.has(feed.id)
-                const displayTitle = getSidebarFeedDisplayTitle(feed)
-                const issueLabel = getFeedRefreshIssueLabel(
-                  feed,
-                  t,
-                  showFeedRefreshErrorBadge,
-                )
-                return (
-                  <div
-                    key={feed.id}
-                    className={`transition-all duration-200 ${
-                      dragFeedId === feed.id
-                        ? 'scale-95 opacity-40'
-                        : 'opacity-100'
-                    }`}
-                  >
-                    <button
-                      onClick={() => onSelect(feed.id)}
-                      onContextMenu={(e) => onContextMenu(e, feed.id)}
-                      className={`sidebar-item group w-full transition-all duration-300 ${selectedFeedId === feed.id ? 'sidebar-item-active' : ''} ${isSearchHighlighted ? 'bg-accent/10 ring-accent/50 ring-1' : ''}`}
-                      title={displayTitle}
-                      aria-label={
-                        issueLabel
-                          ? `${displayTitle}. ${issueLabel}`
-                          : displayTitle
-                      }
-                    >
-                      {/* Drag grip 锟?pointer-based drag for smooth following */}
-                      <GripVertical
-                        size={12}
-                        className="-ml-1 mr-0 flex-shrink-0 cursor-grab touch-none opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-40"
-                        onPointerDown={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onDragStart(feed.id, feed.title, e)
-                        }}
-                      />
-                      <FeedIcon
-                        imageUrl={feed.imageUrl}
-                        siteUrl={feed.siteUrl}
-                        feedUrl={feed.url}
-                        title={feed.title}
-                        size={20}
-                      />
-                      <span className="flex-1 truncate text-left">
-                        {displayTitle}
-                      </span>
-                      <FeedRefreshIssueBadge label={issueLabel} />
-                      <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
-                        {feed.unreadCount}
-                      </span>
-                    </button>
-                  </div>
-                )
-              })}
+              {feeds.map((feed) => renderFeedRow(feed))}
             </div>
           )}
         </div>
       </div>
+    </div>
+  )
+})
+
+const LiteFeedIcon = memo(function LiteFeedIcon({ title }: { title: string }) {
+  const initial = title.trim().charAt(0).toUpperCase()
+
+  return (
+    <div className="bg-accent/10 text-accent flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold">
+      {initial || <Rss size={12} />}
     </div>
   )
 })

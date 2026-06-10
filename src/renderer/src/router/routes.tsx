@@ -1,149 +1,96 @@
-import { lazy, Suspense } from 'react'
-import { createHashRouter } from 'react-router-dom'
+import { createHashRouter, type RouteObject } from 'react-router-dom'
 import App from '../App'
-import { AuthGuard } from '../components/auth/AuthGuard'
+import { traceStartupChunk } from '../lib/startup-block-diagnostics'
 
-const HomePage = lazy(() => import('../pages/HomePage'))
-const ArticleDetailPage = lazy(() => import('../pages/ArticleDetailPage'))
-const VideoPlayerPage = lazy(() => import('../pages/VideoPlayerPage'))
-const ImageViewerPage = lazy(() => import('../pages/ImageViewerPage'))
-const AccountLoginPage = lazy(() => import('../pages/AccountLoginPage'))
-const DiscoverPreviewPage = lazy(() => import('../pages/DiscoverPreviewPage'))
-const DiscoverSubscribeConfigPage = lazy(
-  () => import('../pages/DiscoverSubscribeConfigPage'),
-)
+const homeRoute = {
+  lazy: async () => ({
+    Component: (
+      await traceStartupChunk('HomePage', () => import('../pages/HomePage'))
+    ).default,
+  }),
+}
 
-/**
- * Route definitions for the Livo desktop app.
- * Uses HashRouter since Electron serves via file:// protocol.
- *
- * Route order matters: specific paths must come before catch-all (:viewType).
- *
- * Note: AuthGuard is disabled for now. To enable authentication:
- * 1. Wrap the App element with AuthGuard
- * 2. Move all children under AuthGuard
- * 3. Test the complete OAuth flow
- */
-export const router = createHashRouter([
+const routes: RouteObject[] = [
   {
     path: '/',
     element: <App />,
     children: [
-      {
-        index: true,
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'starred',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'feed/:feedId',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
+      { index: true, ...homeRoute },
+      { path: 'starred', ...homeRoute },
+      { path: 'feed/:feedId', ...homeRoute },
       {
         path: 'discover/preview',
-        element: (
-          <Suspense fallback={null}>
-            <DiscoverPreviewPage />
-          </Suspense>
-        ),
+        lazy: async () => ({
+          Component: (
+            await traceStartupChunk(
+              'DiscoverPreviewPage',
+              () => import('../pages/DiscoverPreviewPage'),
+            )
+          ).default,
+        }),
       },
       {
         path: 'discover/subscribe',
-        element: (
-          <Suspense fallback={null}>
-            <DiscoverSubscribeConfigPage />
-          </Suspense>
-        ),
+        lazy: async () => ({
+          Component: (
+            await traceStartupChunk(
+              'DiscoverSubscribeConfigPage',
+              () => import('../pages/DiscoverSubscribeConfigPage'),
+            )
+          ).default,
+        }),
       },
-      {
-        path: 'discover',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'settings',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'digest',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
+      { path: 'discover', ...homeRoute },
+      { path: 'settings', ...homeRoute },
+      { path: 'digest', ...homeRoute },
       {
         path: 'entry/:entryId',
-        element: (
-          <Suspense fallback={null}>
-            <ArticleDetailPage />
-          </Suspense>
-        ),
+        lazy: async () => ({
+          Component: (
+            await traceStartupChunk(
+              'ArticleDetailPage',
+              () => import('../pages/ArticleDetailPage'),
+            )
+          ).default,
+        }),
       },
       {
         path: 'video/:entryId',
-        element: (
-          <Suspense fallback={null}>
-            <VideoPlayerPage />
-          </Suspense>
-        ),
+        lazy: async () => ({
+          Component: (
+            await traceStartupChunk(
+              'VideoPlayerPage',
+              () => import('../pages/VideoPlayerPage'),
+            )
+          ).default,
+        }),
       },
       {
         path: 'image/:entryId/:imageIndex?',
-        element: (
-          <Suspense fallback={null}>
-            <ImageViewerPage />
-          </Suspense>
-        ),
+        lazy: async () => ({
+          Component: (
+            await traceStartupChunk(
+              'ImageViewerPage',
+              () => import('../pages/ImageViewerPage'),
+            )
+          ).default,
+        }),
       },
       {
         path: 'login/:provider?',
-        element: (
-          <Suspense fallback={null}>
-            <AccountLoginPage />
-          </Suspense>
-        ),
+        lazy: async () => ({
+          Component: (
+            await traceStartupChunk(
+              'AccountLoginPage',
+              () => import('../pages/AccountLoginPage'),
+            )
+          ).default,
+        }),
       },
-      // View-specific feed selection: preserves the active view type
-      // when navigating to a specific feed within a view context.
-      {
-        path: ':viewType/feed/:feedId',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
-      // Catch-all: view type filter (articles, social, videos, pictures)
-      {
-        path: ':viewType',
-        element: (
-          <Suspense fallback={null}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
+      { path: ':viewType/feed/:feedId', ...homeRoute },
+      { path: ':viewType', ...homeRoute },
     ],
   },
-])
+]
+
+export const router = createHashRouter(routes)

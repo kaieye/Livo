@@ -228,7 +228,9 @@ export class WindowManager {
 
     mainWindow.on('ready-to-show', () => {
       this.mainWindowReadyToShow = true
-      this.revealMainWindowIfReady()
+      this.revealMainWindowIfReady({
+        ignoreRendererReady: true,
+      })
       this.flushPendingDeepLinks()
     })
 

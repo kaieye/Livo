@@ -16,21 +16,9 @@ let i18nInitDone = false
 function bootstrapI18n(): typeof i18n {
   if (!i18nInitDone) {
     i18nInitDone = true
-    // Fire-and-forget: initialize with default, then switch to user pref.
-    initI18n('zh-CN').then((instance) => {
-      window.api.settings
-        .get()
-        .then((result) => {
-          const lang = result?.general?.language
-          if (lang && lang !== 'zh-CN') {
-            changeLanguage(lang).catch(console.error)
-          }
-        })
-        .catch(() => {
-          // Settings not available yet — stay on zh-CN default.
-        })
-      return instance
-    })
+    // Fire-and-forget: initialize with default language. The batched settings
+    // hydration updates the store and switches language below when available.
+    initI18n('zh-CN').catch(console.error)
   }
   return i18n
 }

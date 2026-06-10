@@ -33,6 +33,10 @@ import { buildCachedEntryListDerivedModel } from '../../lib/entry-list-model'
 import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
 import { resolveEntryBrowserOpenUrl } from './entry-list/utils/entry-media'
 import type { Entry } from '../../../../shared/types'
+import {
+  markStartupComponentMounted,
+  recordStartupBlockEvent,
+} from '../../lib/startup-block-diagnostics'
 
 const SharePoster = lazy(() =>
   import('../ui/SharePoster').then((module) => ({
@@ -52,6 +56,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export function EntryList({ width }: { width?: number }) {
+  useEffect(() => {
+    markStartupComponentMounted('EntryList')
+  }, [])
+
   const coordinator = useHomeFeedCoordinator()
   const {
     entries,
@@ -161,23 +169,28 @@ export function EntryList({ width }: { width?: number }) {
   })
 
   const { renderEntries: baseRenderEntries, hasStaleEntriesWhileLoading } =
-    useMemo(
-      () =>
-        buildEntryReadingSurfaceRenderModel({
-          sourceEntries: entries,
-          scopedEntries: viewFilteredEntries,
-          isLoading,
-          isPostProcessing: isSocialDedupeProcessing,
-          allowStaleEntriesWhileLoading: !selectedFeedId,
-        }),
-      [
-        entries,
+    useMemo(() => {
+      const start = performance.now()
+      const model = buildEntryReadingSurfaceRenderModel({
+        sourceEntries: entries,
+        scopedEntries: viewFilteredEntries,
         isLoading,
-        isSocialDedupeProcessing,
-        selectedFeedId,
-        viewFilteredEntries,
-      ],
-    )
+        isPostProcessing: isSocialDedupeProcessing,
+        allowStaleEntriesWhileLoading: !selectedFeedId,
+      })
+      recordStartupBlockEvent(
+        'EntryList.readingSurfaceModel',
+        `source=${entries.length} scoped=${viewFilteredEntries.length} render=${model.renderEntries.length}`,
+        performance.now() - start,
+      )
+      return model
+    }, [
+      entries,
+      isLoading,
+      isSocialDedupeProcessing,
+      selectedFeedId,
+      viewFilteredEntries,
+    ])
   const isGridMode = viewDef?.gridMode ?? false
   const listScrollRef = useRef<HTMLDivElement>(null)
   const lastScrollScopeRef = useRef<string>('')
@@ -197,7 +210,8 @@ export function EntryList({ width }: { width?: number }) {
     gridRows,
     hasMoreGridEntries,
   } = useMemo(() => {
-    return buildCachedEntryListDerivedModel({
+    const start = performance.now()
+    const model = buildCachedEntryListDerivedModel({
       baseRenderEntries,
       activeView,
       groupByDate: general.groupByDate,
@@ -205,6 +219,12 @@ export function EntryList({ width }: { width?: number }) {
       gridVisibleCount: gridProgressive.visibleCount,
       cacheKey: `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${filterMode}`,
     })
+    recordStartupBlockEvent(
+      'EntryList.derivedModel',
+      `base=${baseRenderEntries.length} render=${model.renderEntries.length} virtual=${model.virtualizerEntries.length}`,
+      performance.now() - start,
+    )
+    return model
   }, [
     activeView,
     baseRenderEntries,

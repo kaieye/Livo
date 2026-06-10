@@ -1,4 +1,6 @@
+import { useLayoutEffect } from 'react'
 import { Layout } from '../components/layout/Layout'
+import { markStartupComponentMounted } from '../lib/startup-block-diagnostics'
 import { useUrlSync } from '../router/use-url-sync'
 
 /**
@@ -8,5 +10,8 @@ import { useUrlSync } from '../router/use-url-sync'
  */
 export default function HomePage() {
   useUrlSync()
+  useLayoutEffect(() => {
+    markStartupComponentMounted('HomePage')
+  }, [])
   return <Layout />
 }

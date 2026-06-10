@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 import { openExternalUrlSafe } from '../../services/external-url'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
+import { useAppIsHydrated } from '../../store/app-store'
 import { useStoreShallow } from '../../store/helpers'
 import {
   useGeneralSettingKey,
@@ -109,6 +110,7 @@ import { ViewRecommendations } from './ViewRecommendations'
 import { useAISummary } from '../../hooks/useAISummary'
 import { useAITranslation } from '../../hooks/useAITranslation'
 import { AISummaryPanel } from './AISummaryPanel'
+import { markStartupComponentMounted } from '../../lib/startup-block-diagnostics'
 
 const SharePoster = lazy(() =>
   import('../ui/SharePoster').then((module) => ({
@@ -301,12 +303,18 @@ function advanceOverlayPhotoFallback(
 }
 
 export function WideViewContent() {
+  useEffect(() => {
+    markStartupComponentMounted('WideViewContent')
+  }, [])
+
+  const appIsHydrated = useAppIsHydrated()
   const {
     entries,
     isLoading,
     isLoadingMore,
     hasMoreEntries,
     loadEntries,
+    loadSnapshot,
     loadMoreEntries,
     paginationOptions,
     paginationPageSize,
@@ -323,6 +331,7 @@ export function WideViewContent() {
     isLoadingMore: s.isLoadingMore,
     hasMoreEntries: s.hasMoreEntries,
     loadEntries: s.loadEntries,
+    loadSnapshot: s.loadSnapshot,
     loadMoreEntries: s.loadMoreEntries,
     paginationOptions: s.paginationOptions,
     paginationPageSize: s.paginationPageSize,
@@ -455,8 +464,9 @@ export function WideViewContent() {
 
   // Loading entries when feed selection changes
   useEffect(() => {
-    void loadEntries(currentLoadOptions)
-  }, [currentLoadOptions, loadEntries])
+    if (!appIsHydrated) return
+    void loadSnapshot(currentLoadOptions)
+  }, [appIsHydrated, currentLoadOptions, loadSnapshot])
 
   const handleSearch = useCallback(
     (e: React.FormEvent) => {

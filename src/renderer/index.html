@@ -68,8 +68,9 @@
         #app-skeleton {
           position: fixed;
           inset: 0;
-          z-index: 1000;
+          z-index: 9999;
           display: flex;
+          background: var(--livo-skel-bg);
           font-family:
             -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
             Roboto, 'Helvetica Neue', sans-serif;
@@ -534,7 +535,7 @@
       </div>
     </div>
 
-    <div id="root"></div>
+    <div id="root" style="height:100%;width:100%;"></div>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

@@ -1033,12 +1033,7 @@ async function parseFeedUrl(
   // PERF: Try strict parsing first, then fall back to lenient mode
   try {
     return await parser.parseString(text)
-  } catch (strictError) {
-    // Strict parsing failed, try lenient mode
-    console.warn(
-      `[RSS Parser] Strict parsing failed for ${url}, trying lenient mode:`,
-      strictError,
-    )
+  } catch {
     return await lenientParser.parseStringLenient(text)
   }
 }
@@ -1312,11 +1307,7 @@ export async function fetchAndParseFeed(
       let parsed: RssParser.Output<Record<string, any>>
       try {
         parsed = await parser.parseString(result.body!)
-      } catch (strictError) {
-        console.warn(
-          '[RSS Parser] Strict parsing failed for conditional GET, trying lenient mode:',
-          strictError,
-        )
+      } catch {
         parsed = await lenientParser.parseStringLenient(result.body!)
       }
       return {

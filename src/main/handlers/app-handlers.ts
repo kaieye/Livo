@@ -2,7 +2,7 @@ import { app, Menu } from 'electron'
 import { IPC, type NativeContextMenuItem } from '../../shared/types'
 import type { FeedWithCount } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
-import { logError, readRecentLogs } from '../services/system/logger'
+import { logError, logInfo, readRecentLogs } from '../services/system/logger'
 import {
   clearApplicationCache,
   getAppCacheDirectoryPath,
@@ -14,8 +14,14 @@ import { checkForAppUpdates } from '../services/system/update-check'
 import { downloadUrlToFile, saveTextFile } from '../services/system/download'
 import { settingsProvider } from '../services/system/settings-provider'
 import { getDb, whenDbReady } from '../database'
-import { getValidatedSession } from '../services/auth/session-validation'
+import { sessionStore } from '../services/auth/session-store'
 import type { WindowManager } from '../window-manager'
+
+function logStartupTiming(label: string, startedAt: number): void {
+  logInfo(`[startup] ${label}`, {
+    durationMs: Math.round(performance.now() - startedAt),
+  })
+}
 
 export function registerAppHandlers(windowManager: WindowManager): void {
   registerChannel(IPC.APP_GET_VERSION, () => app.getVersion())
@@ -127,36 +133,50 @@ export function registerAppHandlers(windowManager: WindowManager): void {
     return windowManager.isWindowMaximized()
   })
 
-  // Batched hydration: returns settings + feeds + auth in a single IPC call,
-  // eliminating 3 separate serialization round-trips during app startup.
+  // Batched shell hydration: returns settings + feeds + auth in a single IPC
+  // call. The heavier reader snapshot is loaded separately after the shell is
+  // visible so startup does not block on entry-list queries.
   registerChannel(IPC.APP_HYDRATE, async () => {
+    const startTime = performance.now()
     // Guard: the renderer may call hydrate before initDatabase() completes.
     // Wait for the database to be ready before querying.
+    const dbStartTime = performance.now()
     await whenDbReady()
-    const settings = settingsProvider.get()
+    logStartupTiming('app.hydrate.dbReady', dbStartTime)
 
-    const feeds = getDb().feeds.getAllFeeds()
-    const unreadCountMap = getDb().entries.getUnreadCountMap()
-    const RECOMMENDED = 'Recommended'
-    const feedList: FeedWithCount[] = feeds
-      .map((f) => ({
-        ...f,
+    const settingsStartTime = performance.now()
+    const settings = settingsProvider.get()
+    logStartupTiming('app.hydrate.settings', settingsStartTime)
+
+    const feedsStartTime = performance.now()
+    const db = getDb()
+    const unreadCountMap = db.entries.getUnreadCountMap()
+    const feeds: FeedWithCount[] = db.feeds
+      .getAllFeeds()
+      .map((feed) => ({
+        ...feed,
         folder:
-          f.folder ?? (f.category === RECOMMENDED ? '' : f.category || ''),
-        unreadCount: unreadCountMap.get(f.id) || 0,
+          feed.folder ??
+          (feed.category === 'Recommended' ? '' : feed.category || ''),
+        unreadCount: unreadCountMap.get(feed.id) || 0,
       }))
       .sort((a, b) => a.title.localeCompare(b.title))
+    logStartupTiming('app.hydrate.feeds', feedsStartTime)
 
-    const session = await getValidatedSession()
+    const authStartTime = performance.now()
+    const user = sessionStore.getCurrentUser()
+    logStartupTiming('app.hydrate.auth', authStartTime)
+    logStartupTiming('app.hydrate.total', startTime)
 
     return {
       settings,
-      feeds: feedList,
+      feeds,
       auth: {
         success: true,
-        isValid: !!session,
-        user: session?.user ?? null,
+        isValid: !!user,
+        user,
       },
+      initialSnapshot: null,
     }
   })
 }
