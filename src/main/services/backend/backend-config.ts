@@ -1,8 +1,8 @@
-const DEFAULT_BACKEND_BASE_URL = 'http://127.0.0.1:8787'
+const DEFAULT_BACKEND_BASE_URL = 'https://api.livospace.cn'
 
 /**
  * 后端服务地址统一入口。
- * 开发环境默认连接本地 Livo-Server，生产环境可通过环境变量覆盖。
+ * 桌面端默认连接生产后端，开发/测试环境可通过环境变量覆盖。
  */
 export function getBackendBaseUrl(): string {
   return (
