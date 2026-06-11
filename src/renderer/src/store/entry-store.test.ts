@@ -125,11 +125,12 @@ function makeFeed(partial: Partial<FeedWithCount> = {}): FeedWithCount {
   }
 }
 
-const SNAPSHOT_CACHE_STORAGE_KEY = 'livo:reader-snapshot-cache:v1'
+const SNAPSHOT_CACHE_STORAGE_KEY = 'livo:reader-snapshot-cache:v2'
 
 function makeDefaultHomeSnapshotStorage(snapshot: ReaderSnapshot, limit = 1) {
   const cacheKey = JSON.stringify({
     scope: { type: 'all' },
+    feedIds: [],
     unreadOnly: false,
     limit,
     compact: true,
@@ -137,7 +138,7 @@ function makeDefaultHomeSnapshotStorage(snapshot: ReaderSnapshot, limit = 1) {
   })
   return {
     [SNAPSHOT_CACHE_STORAGE_KEY]: JSON.stringify({
-      version: 1,
+      version: 2,
       entries: {
         [cacheKey]: {
           cachedAt: Date.now(),

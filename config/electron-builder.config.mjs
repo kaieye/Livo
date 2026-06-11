@@ -42,7 +42,7 @@ export default {
     },
   ],
   win: {
-    target: ['nsis'],
+    target: ['dir'],
     signAndEditExecutable: false,
   },
   mac: {
@@ -52,21 +52,5 @@ export default {
   linux: {
     target: ['AppImage'],
     category: 'News',
-  },
-  nsis: {
-    oneClick: false,
-    allowToChangeInstallationDirectory: true,
-    allowElevation: true,
-    installerIcon: 'resources/icon.ico',
-    uninstallerIcon: 'resources/icon.ico',
-    createDesktopShortcut: true,
-    createStartMenuShortcut: true,
-    shortcutName: 'Livo',
-    include: 'build/installer.nsh',
-    warningsAsErrors: false,
-    runAfterFinish: true,
-    perMachine: false,
-    deleteAppDataOnUninstall: false,
-    menuCategory: false,
   },
 }

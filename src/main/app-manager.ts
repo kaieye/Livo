@@ -46,7 +46,9 @@ import { registerWebSocketHandlers } from './handlers/websocket-handlers'
 import { registerNotificationHandlers } from './handlers/notification-handlers'
 import { getBackendBaseUrl } from './services/backend/backend-config'
 
-const STARTUP_BACKGROUND_DELAY_MS = 2500
+// 自动刷新会触发同步 SQLite 写事务并阻塞主进程 IPC；启动后的前几秒是
+// 用户交互最密集的窗口期，延后到首屏数据与交互稳定之后再开始。
+const STARTUP_BACKGROUND_DELAY_MS = 8000
 
 export class AppManager {
   readonly windowManager: WindowManager

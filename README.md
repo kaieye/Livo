@@ -204,6 +204,7 @@ pnpm dev                  # 开发模式启动桌面端
 pnpm dev:web              # 开发模式启动 Web 端
 pnpm preview              # 预览已构建的桌面端
 pnpm build                # 构建桌面端
+pnpm build:win            # 构建 Windows win-unpacked 产物，供 ../Livo-Installer 打包
 pnpm build:web            # 构建 Web 端
 pnpm typecheck            # 类型检查
 pnpm lint                 # 代码检查
@@ -238,6 +239,7 @@ pnpm test
 
 - 仓库开发约定与协作说明见 [`AGENTS.md`](AGENTS.md)
 - 开发入口、Web 限制和常用验证见 [`docs/development.md`](docs/development.md)
+- Windows 安装包统一由同级目录 `../Livo-Installer` 生成；主应用只产出 `dist/win-unpacked` 作为安装器 payload。
 - 架构分层、IPC 契约和数据路径见 [`docs/architecture.md`](docs/architecture.md)
 - 设计与实现文档见 `docs/superpowers/specs` 与 `docs/superpowers/plans`
 

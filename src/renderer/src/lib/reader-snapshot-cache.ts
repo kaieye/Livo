@@ -3,9 +3,9 @@ import type {
   ReaderSnapshotRequest,
 } from '../../../shared/types'
 
-const STORAGE_KEY = 'livo:reader-snapshot-cache:v1'
-const CACHE_VERSION = 1
-const MAX_CACHE_ENTRIES = 4
+const STORAGE_KEY = 'livo:reader-snapshot-cache:v2'
+const CACHE_VERSION = 2
+const MAX_CACHE_ENTRIES = 8
 
 interface PersistedSnapshotCacheEntry {
   cachedAt: number
@@ -36,11 +36,15 @@ function normalizeDefaultHomeSnapshotCacheKey(
 ): string | null {
   const scope = input.scope ?? { type: 'all' as const }
   if (scope.type !== 'all') return null
-  if (scope.feedIds && scope.feedIds.length > 0) return null
   if (input.cursor) return null
+
+  // 首屏视图通常带 feedIds（按视图过滤的订阅源列表），把排序后的
+  // feedIds 纳入 key，让各视图的首屏都能命中缓存而不是每次都走慢 IPC。
+  const feedIds = [...(scope.feedIds || [])].sort()
 
   return JSON.stringify({
     scope: { type: 'all' },
+    feedIds,
     unreadOnly: !!input.unreadOnly,
     limit: input.limit ?? null,
     compact: input.compact ?? true,

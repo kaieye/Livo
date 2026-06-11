@@ -66,6 +66,41 @@ export class EntryRepository implements IEntryRepository {
     return row ? entryFromRow(row) : undefined
   }
 
+  // 写路径的去重匹配只需要 identity 相关字段。截断 content/summary 并跳过
+  // readability / AI 摘要等大列，避免每次 upsert 把整个 feed 的全文读出来。
+  private getFeedEntriesLite(feedId: string): Entry[] {
+    const rows = this.db
+      .prepare(
+        `
+      SELECT id, feed_id, title, url,
+             substr(content, 1, 4096) AS content,
+             substr(summary, 1, 4096) AS summary,
+             author, author_avatar, image_url, media, published_at,
+             is_read, is_starred, read_progress,
+             is_listened, listen_progress, created_at
+      FROM entries WHERE feed_id = ?
+    `,
+      )
+      .all(feedId) as any[]
+    return rows.map(entryFromRow)
+  }
+
+  private getFeedEntriesForUpsert(
+    feedId: string,
+    feedCache?: Map<string, Entry[]>,
+  ): Entry[] {
+    const cached = feedCache?.get(feedId)
+    if (cached) return cached
+    const rows = this.getFeedEntriesLite(feedId)
+    feedCache?.set(feedId, rows)
+    return rows
+  }
+
+  private static replaceCachedEntry(rows: Entry[], updated: Entry): void {
+    const index = rows.findIndex((row) => row.id === updated.id)
+    if (index !== -1) rows[index] = updated
+  }
+
   insertEntry(entry: Entry): boolean {
     return this.upsertEntry(entry).added
   }
@@ -81,8 +116,9 @@ export class EntryRepository implements IEntryRepository {
     const insertMany = this.db.transaction((items: Entry[]) => {
       let added = 0
       const addedEntries: Entry[] = []
+      const feedCache = new Map<string, Entry[]>()
       for (const entry of items) {
-        const result = this.upsertEntry(entry)
+        const result = this.upsertEntry(entry, feedCache)
         if (result.added) {
           added++
           addedEntries.push(entry)
@@ -102,8 +138,15 @@ export class EntryRepository implements IEntryRepository {
     entries: Entry[],
   ): { addedCount: number; addedEntries: Entry[] } {
     const txn = this.db.transaction(() => {
+      // 只需要阅读状态相关的小列来保留用户状态，跳过正文等大列。
       const existingRows = this.db
-        .prepare('SELECT * FROM entries WHERE feed_id = ?')
+        .prepare(
+          `
+        SELECT title, published_at, is_read, is_starred, read_progress,
+               is_listened, listen_progress
+        FROM entries WHERE feed_id = ?
+      `,
+        )
         .all(feedId) as any[]
 
       const stateByKey = new Map<
@@ -126,21 +169,31 @@ export class EntryRepository implements IEntryRepository {
       }
 
       for (const row of existingRows) {
-        const entry = entryFromRow(row)
+        const entry = {
+          title: row.title as string,
+          publishedAt: row.published_at as number,
+          isRead: row.is_read === 1,
+          isStarred: row.is_starred === 1,
+          readProgress: (row.read_progress ?? undefined) as number | undefined,
+          isListened: row.is_listened === 1,
+          listenProgress: (row.listen_progress ?? undefined) as
+            | number
+            | undefined,
+        }
         const key = makeKeepKey(entry)
         const existing = stateByKey.get(key)
         if (!existing) {
           stateByKey.set(key, {
-            isRead: !!entry.isRead,
-            isStarred: !!entry.isStarred,
+            isRead: entry.isRead,
+            isStarred: entry.isStarred,
             readProgress: entry.readProgress,
-            isListened: !!entry.isListened,
+            isListened: entry.isListened,
             listenProgress: entry.listenProgress,
           })
           continue
         }
-        existing.isRead = existing.isRead || !!entry.isRead
-        existing.isStarred = existing.isStarred || !!entry.isStarred
+        existing.isRead = existing.isRead || entry.isRead
+        existing.isStarred = existing.isStarred || entry.isStarred
         if (
           entry.readProgress !== undefined &&
           (existing.readProgress === undefined ||
@@ -148,7 +201,7 @@ export class EntryRepository implements IEntryRepository {
         ) {
           existing.readProgress = entry.readProgress
         }
-        existing.isListened = existing.isListened || !!entry.isListened
+        existing.isListened = existing.isListened || entry.isListened
         if (
           entry.listenProgress !== undefined &&
           (existing.listenProgress === undefined ||
@@ -162,6 +215,7 @@ export class EntryRepository implements IEntryRepository {
 
       let added = 0
       const addedEntries: Entry[] = []
+      const feedCache = new Map<string, Entry[]>([[feedId, []]])
       for (const entry of entries) {
         const keep = stateByKey.get(makeKeepKey(entry))
         const incoming: Entry = keep
@@ -174,7 +228,7 @@ export class EntryRepository implements IEntryRepository {
               listenProgress: keep.listenProgress,
             }
           : entry
-        const result = this.upsertEntry(incoming)
+        const result = this.upsertEntry(incoming, feedCache)
         if (!keep && result.added) {
           added += 1
           addedEntries.push(incoming)
@@ -301,7 +355,27 @@ export class EntryRepository implements IEntryRepository {
       typeof options.beforePublishedAt === 'number' && !!options.beforeId
     const fetchLimit = options.skipDedupe ? limit + 1 : limit * 3 + 1
 
-    let sql = 'SELECT e.* FROM entries e INNER JOIN feeds f ON f.id = e.feed_id'
+    // 紧凑列表不需要 readability / AI 摘要全文，正文也只要 trim 预算内的前缀。
+    // 在 SQL 层截断可以避免把数百 KB 的大列读出再丢弃，这是列表查询的主要开销。
+    const compactContentBudget = Math.max(
+      2048,
+      Math.min(options.maxContentLength ?? 1600, 10000) * 2,
+    )
+    const selectColumns = options.compact
+      ? `e.id, e.feed_id, e.title, e.url,
+         substr(e.content, 1, ${compactContentBudget}) AS content,
+         substr(e.summary, 1, ${compactContentBudget}) AS summary,
+         substr(e.readability_content, 1, 600) AS readability_content,
+         e.readability_title, e.readability_excerpt, e.readability_site_name,
+         e.readability_length, e.readability_fetched_at, e.readability_error,
+         substr(e.ai_summary, 1, 600) AS ai_summary,
+         e.ai_summary_generated_at, e.ai_summary_error,
+         e.notified_at, e.author, e.author_avatar, e.image_url, e.media,
+         e.published_at, e.is_read, e.is_starred, e.read_progress,
+         e.is_listened, e.listen_progress, e.created_at`
+      : 'e.*'
+
+    let sql = `SELECT ${selectColumns} FROM entries e INNER JOIN feeds f ON f.id = e.feed_id`
     const conditions: string[] = []
     const params: any[] = []
 
@@ -480,16 +554,33 @@ export class EntryRepository implements IEntryRepository {
     return map
   }
 
-  private upsertEntry(entry: Entry): { added: boolean; changed: boolean } {
+  private upsertEntry(
+    entry: Entry,
+    feedCache?: Map<string, Entry[]>,
+  ): { added: boolean; changed: boolean } {
+    // 匹配阶段使用轻量行（截断正文、跳过大列），命中后再按 id 取完整行合并。
+    // 批量写入时通过 feedCache 复用同一 feed 的轻量行，避免每条都重读全表。
+    const mergeIntoExisting = (
+      liteRows: Entry[],
+      matchedId: string,
+      merge: (existing: Entry) => boolean,
+    ): { added: boolean; changed: boolean } => {
+      const existing = this.getEntryById(matchedId)
+      if (!existing) return { added: false, changed: false }
+      const changed = merge(existing)
+      if (changed) {
+        this.persistEntry(existing)
+        EntryRepository.replaceCachedEntry(liteRows, existing)
+      }
+      return { added: false, changed }
+    }
+
     if (isBrokenScraperEntry(entry)) {
-      const rows = this.db
-        .prepare('SELECT * FROM entries WHERE feed_id = ?')
-        .all(entry.feedId) as any[]
+      const liteRows = this.getFeedEntriesForUpsert(entry.feedId, feedCache)
 
       let bestMatch: Entry | null = null
       let bestDelta = Infinity
-      for (const row of rows) {
-        const e = entryFromRow(row)
+      for (const e of liteRows) {
         if (!titlesLikelySameForRead(e.title, entry.title)) continue
         const delta = Math.abs((e.publishedAt || 0) - (entry.publishedAt || 0))
         if (delta < bestDelta) {
@@ -498,9 +589,9 @@ export class EntryRepository implements IEntryRepository {
         }
       }
       if (bestMatch && bestDelta <= 48 * 60 * 60 * 1000) {
-        const changed = mergeTextFromEntry(bestMatch, entry)
-        if (changed) this.persistEntry(bestMatch)
-        return { added: false, changed }
+        return mergeIntoExisting(liteRows, bestMatch.id, (existing) =>
+          mergeTextFromEntry(existing, entry),
+        )
       }
       return { added: false, changed: false }
     }
@@ -516,7 +607,13 @@ export class EntryRepository implements IEntryRepository {
           const changed = mergeEntryData(existing, entry, {
             onPublishedAtAdvanced: () => {},
           })
-          if (changed) this.persistEntry(existing)
+          if (changed) {
+            this.persistEntry(existing)
+            const cachedRows = feedCache?.get(entry.feedId)
+            if (cachedRows) {
+              EntryRepository.replaceCachedEntry(cachedRows, existing)
+            }
+          }
           return {
             added: false,
             changed,
@@ -524,20 +621,14 @@ export class EntryRepository implements IEntryRepository {
         }
       }
 
-      const sameFeedRows = this.db
-        .prepare('SELECT * FROM entries WHERE feed_id = ?')
-        .all(entry.feedId) as any[]
-      for (const row of sameFeedRows) {
-        const existing = entryFromRow(row)
-        if (makeEntryIdentityKey(existing) === identityKey) {
-          const changed = mergeEntryData(existing, entry, {
-            onPublishedAtAdvanced: () => {},
-          })
-          if (changed) this.persistEntry(existing)
-          return {
-            added: false,
-            changed,
-          }
+      const liteRows = this.getFeedEntriesForUpsert(entry.feedId, feedCache)
+      for (const row of liteRows) {
+        if (makeEntryIdentityKey(row) === identityKey) {
+          return mergeIntoExisting(liteRows, row.id, (existing) =>
+            mergeEntryData(existing, entry, {
+              onPublishedAtAdvanced: () => {},
+            }),
+          )
         }
       }
     }
@@ -587,6 +678,7 @@ export class EntryRepository implements IEntryRepository {
         entry.listenProgress ?? null,
         entry.createdAt,
       )
+    feedCache?.get(entry.feedId)?.push(entry)
     return { added: true, changed: true }
   }
 }
