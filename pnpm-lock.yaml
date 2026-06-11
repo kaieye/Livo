@@ -43,9 +43,6 @@ importers:
       dompurify:
         specifier: ^3.3.3
         version: 3.4.7
-      electron:
-        specifier: ^33.4.11
-        version: 33.4.11
       electron-store:
         specifier: ^11.0.2
         version: 11.0.2
@@ -113,6 +110,9 @@ importers:
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.15)
+      electron:
+        specifier: ^33.4.11
+        version: 33.4.11
       electron-builder:
         specifier: ^25.1.8
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
