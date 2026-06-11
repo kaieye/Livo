@@ -1,26 +1,25 @@
 import { app, Menu, Tray, nativeImage } from 'electron'
 import { join } from 'path'
-import { logWarn } from './logger'
+import { logInfo, logWarn } from './logger'
 
 function createTrayImage() {
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
     : join(app.getAppPath(), 'resources', 'yuanjiao-Livo.png')
 
+  logInfo('[tray] loading icon from', iconPath)
+
   const image = nativeImage.createFromPath(iconPath)
   if (image.isEmpty()) {
+    logWarn('[tray] image is empty, path may be wrong:', iconPath)
     return nativeImage.createEmpty()
   }
 
+  logInfo('[tray] loaded image size:', image.getSize())
+
   const resized = image.resize({ width: 32, height: 32 })
-  const dataUrl = resized.toDataURL()
-
-  // Apply rounded corners via SVG
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><defs><clipPath id="round"><rect width="32" height="32" rx="8"/></clipPath></defs><image href="${dataUrl}" width="32" height="32" clip-path="url(#round)"/></svg>`
-
-  return nativeImage.createFromDataURL(
-    `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
-  )
+  logInfo('[tray] resized to:', resized.getSize())
+  return resized
 }
 
 export class AppTray {
