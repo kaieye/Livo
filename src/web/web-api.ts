@@ -2803,6 +2803,24 @@ export function createWebAPI(): ElectronAPI {
       onLoginProgress: () => (() => {}) as any,
     },
 
+    notifications: {
+      list: async () => ({
+        notifications: [],
+        total: 0,
+        limit: 0,
+        offset: 0,
+      }),
+      unreadCount: async () => ({ count: 0 }),
+      markRead: async () => ({ success: true }),
+      markAllRead: async () => ({ count: 0 }),
+    },
+
+    websocket: {
+      connect: async () => ({ success: true }),
+      disconnect: async () => ({ success: true }),
+      status: async () => ({ connected: false }),
+    },
+
     actions: {
       sync: async () => ({ success: true }),
     },

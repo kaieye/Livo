@@ -554,6 +554,20 @@ const api = {
     },
   },
 
+  notifications: {
+    list: (options?: { unread?: boolean; limit?: number; offset?: number }) =>
+      invokeIpc(IPC.ADMIN_GET_NOTIFICATIONS, options),
+    unreadCount: () => invokeIpc(IPC.ADMIN_GET_UNREAD_COUNT),
+    markRead: (id: string) => invokeIpc(IPC.ADMIN_MARK_NOTIFICATION_READ, id),
+    markAllRead: () => invokeIpc(IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ),
+  },
+
+  websocket: {
+    connect: (userId?: string) => invokeIpc(IPC.WS_CONNECT, userId),
+    disconnect: () => invokeIpc(IPC.WS_DISCONNECT),
+    status: () => invokeIpc(IPC.WS_STATUS),
+  },
+
   // Events
   on: <C extends RendererEventChannel>(
     channel: C,

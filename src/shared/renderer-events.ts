@@ -75,6 +75,13 @@ export interface FeverSyncProgressPayload {
   error?: string
 }
 
+export interface RealtimeNotificationPayload {
+  type: 'info' | 'warning' | 'error' | 'success'
+  title: string
+  message: string
+  data?: unknown
+}
+
 export interface RendererEventPayloadByChannel {
   'app:command': [payload: AppCommandPayload]
   'app:deep-link': [payload: DeepLinkAction]
@@ -99,6 +106,10 @@ export interface RendererEventPayloadByChannel {
   'window:maximize-changed': [isMaximized: boolean]
   'fever:sync-progress': [payload: FeverSyncProgressPayload]
   'tasks:run-updated': [record: TaskRunRecord]
+  'ws:connected': []
+  'ws:disconnected': []
+  'ws:error': [message: string]
+  'ws:notification': [payload: RealtimeNotificationPayload]
 }
 
 export type RendererEventChannel = keyof RendererEventPayloadByChannel
@@ -134,6 +145,10 @@ export const RENDERER_EVENT_CHANNELS = [
   'window:maximize-changed',
   'fever:sync-progress',
   'tasks:run-updated',
+  'ws:connected',
+  'ws:disconnected',
+  'ws:error',
+  'ws:notification',
 ] as const satisfies readonly RendererEventChannel[]
 
 const rendererEventChannels = new Set<string>(RENDERER_EVENT_CHANNELS)

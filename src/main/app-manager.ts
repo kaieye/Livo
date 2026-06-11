@@ -43,6 +43,8 @@ import { UpdaterService } from './services/updater'
 import { registerUpdaterHandlers } from './handlers/updater-handlers'
 import { WebSocketService } from './services/websocket'
 import { registerWebSocketHandlers } from './handlers/websocket-handlers'
+import { registerNotificationHandlers } from './handlers/notification-handlers'
+import { getBackendBaseUrl } from './services/backend/backend-config'
 
 const STARTUP_BACKGROUND_DELAY_MS = 2500
 
@@ -61,7 +63,7 @@ export class AppManager {
   ) {
     this.updater = new UpdaterService(options.isDev)
     this.websocket = new WebSocketService(
-      process.env.WS_SERVER_URL || 'http://localhost:3000',
+      process.env.WS_SERVER_URL || getBackendBaseUrl(),
     )
     this.windowManager = new WindowManager({
       isDev: options.isDev,
@@ -111,6 +113,7 @@ export class AppManager {
     registerAppHandlers(this.windowManager)
     registerUpdaterHandlers(this.updater)
     registerWebSocketHandlers(this.websocket)
+    registerNotificationHandlers()
 
     // 先创建窗口，再等待数据库初始化；renderer HTML 和骨架屏可以更早加载。
     const mainWindow = this.windowManager.createMainWindow()

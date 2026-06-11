@@ -2,13 +2,20 @@ import { create } from 'zustand'
 
 interface Notification {
   id: string
-  user_id: string
-  type: 'system' | 'feature' | 'account'
+  userId: string
+  type: 'system' | 'feature' | 'account' | 'account_banned' | 'account_unbanned'
   title: string
   content: string
   read: boolean
-  read_at: string | null
-  created_at: string
+  readAt: string | number | null
+  createdAt: string | number
+}
+
+interface NotificationsResponse {
+  notifications: Notification[]
+  total: number
+  limit: number
+  offset: number
 }
 
 interface NotificationStore {
@@ -47,16 +54,11 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
       if (options.limit) params.set('limit', String(options.limit))
       if (options.offset) params.set('offset', String(options.offset))
 
-      const url = `/api/notifications${params.toString() ? '?' + params.toString() : ''}`
-      const response = await fetch(url, {
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications')
-      }
-
-      const data = await response.json()
+      const data = (await window.api.notifications.list({
+        unread: options.read === false ? true : undefined,
+        limit: options.limit,
+        offset: options.offset,
+      })) as NotificationsResponse
       set({ notifications: data.notifications, loading: false })
     } catch (error) {
       set({ error: (error as Error).message, loading: false })
@@ -65,15 +67,9 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
 
   fetchUnreadCount: async () => {
     try {
-      const response = await fetch('/api/notifications/unread-count', {
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch unread count')
+      const { count } = (await window.api.notifications.unreadCount()) as {
+        count: number
       }
-
-      const { count } = await response.json()
       set({ unreadCount: count })
     } catch (error) {
       // Silently fail for polling
@@ -84,21 +80,12 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
   markAsRead: async (id: string) => {
     set({ error: null })
     try {
-      const response = await fetch(`/api/notifications/${id}/read`, {
-        method: 'PATCH',
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to mark notification as read')
-      }
+      await window.api.notifications.markRead(id)
 
       // Update local state
       set((state) => ({
         notifications: state.notifications.map((n) =>
-          n.id === id
-            ? { ...n, read: true, read_at: new Date().toISOString() }
-            : n,
+          n.id === id ? { ...n, read: true, readAt: Date.now() } : n,
         ),
         unreadCount: Math.max(0, state.unreadCount - 1),
       }))
@@ -111,21 +98,14 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
   markAllAsRead: async () => {
     set({ error: null })
     try {
-      const response = await fetch('/api/notifications/mark-all-read', {
-        method: 'POST',
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to mark all as read')
-      }
+      await window.api.notifications.markAllRead()
 
       // Update local state
       set((state) => ({
         notifications: state.notifications.map((n) => ({
           ...n,
           read: true,
-          read_at: new Date().toISOString(),
+          readAt: Date.now(),
         })),
         unreadCount: 0,
       }))

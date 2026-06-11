@@ -132,7 +132,7 @@ export function NotificationCenter({
                     {notification.content}
                   </p>
                   <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
-                    {formatDistanceToNow(new Date(notification.created_at), {
+                    {formatDistanceToNow(new Date(notification.createdAt), {
                       addSuffix: true,
                       locale: zhCN,
                     })}

@@ -16,6 +16,7 @@ import { useQuickSearchStore } from './store/quick-search-store'
 import { useAuthStore } from './store/auth-store'
 import { usePlayerStore } from './store/player-store'
 import { useAppIsReady } from './store/app-store'
+import { NotificationProvider } from './providers/NotificationProvider'
 
 const SettingsDialog = lazy(() =>
   import('./components/settings/SettingsDialog').then((module) => ({
@@ -50,6 +51,11 @@ const TextContextMenu = lazy(() =>
 const LoginModal = lazy(() =>
   import('./components/auth/LoginModal').then((module) => ({
     default: module.LoginModal,
+  })),
+)
+const NotificationBell = lazy(() =>
+  import('./components/notifications/NotificationBell').then((module) => ({
+    default: module.NotificationBell,
   })),
 )
 
@@ -313,7 +319,13 @@ function GlobalOverlays() {
       <Suspense fallback={null}>
         <LazyAudioMiniBarMount />
       </Suspense>
+      <Suspense fallback={null}>
+        <div className="no-drag fixed right-40 top-1 z-[65]">
+          <NotificationBell />
+        </div>
+      </Suspense>
       <TextContextMenu />
+      <NotificationProvider />
     </>
   )
 }
