@@ -2812,6 +2812,7 @@ export function createWebAPI(): ElectronAPI {
       }),
       unreadCount: async () => ({ count: 0 }),
       markRead: async () => ({ success: true }),
+      markUnread: async () => ({ success: true }),
       markAllRead: async () => ({ count: 0 }),
     },
 

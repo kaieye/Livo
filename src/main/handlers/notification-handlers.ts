@@ -73,6 +73,17 @@ export function registerNotificationHandlers(): void {
     }
   })
 
+  registerChannel(IPC.ADMIN_MARK_NOTIFICATION_UNREAD, async (_event, id) => {
+    try {
+      return await requestBackend(
+        `/api/notifications/${encodeURIComponent(id)}/unread`,
+        { method: 'PATCH' },
+      )
+    } catch (error) {
+      return toHandlerError(error)
+    }
+  })
+
   registerChannel(IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ, async () => {
     try {
       return await requestBackend('/api/notifications/mark-all-read', {

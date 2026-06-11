@@ -559,6 +559,8 @@ const api = {
       invokeIpc(IPC.ADMIN_GET_NOTIFICATIONS, options),
     unreadCount: () => invokeIpc(IPC.ADMIN_GET_UNREAD_COUNT),
     markRead: (id: string) => invokeIpc(IPC.ADMIN_MARK_NOTIFICATION_READ, id),
+    markUnread: (id: string) =>
+      invokeIpc(IPC.ADMIN_MARK_NOTIFICATION_UNREAD, id),
     markAllRead: () => invokeIpc(IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ),
   },
 

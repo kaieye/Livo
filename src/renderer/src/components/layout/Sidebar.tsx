@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next'
 import { useFeedStore } from '../../store/feed-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useSettingsStore } from '../../store/settings-store'
-import { useAuthStore } from '../../store/auth-store'
 import {
   FeedViewType,
   VIEW_DEFINITIONS,
@@ -47,7 +46,6 @@ import {
   GripVertical,
   Link,
   Pencil,
-  User,
 } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useDiscoverStore } from '../../store/discover-store'
@@ -58,6 +56,7 @@ import { useQuickSearchStore } from '../../store/quick-search-store'
 import { VIEW_TYPE_SLUGS } from '../../router/route-paths'
 import { getFeedRefreshIssueLabel } from '../../lib/feed-refresh-issue'
 import { FeedRefreshIssueBadge } from './FeedRefreshIssueBadge'
+import { NotificationBell } from '../notifications/NotificationBell'
 import {
   markStartupComponentMounted,
   measureStartupRender,
@@ -356,7 +355,6 @@ export function Sidebar({ width }: { width?: number }) {
   const navFocusRef = useRef<HTMLElement>(null)
   const isSidebarFocusHighlighted = useLayoutFocusTarget('sidebar', navFocusRef)
   useFocusableHotkeyScope('sidebar', navFocusRef)
-  const { user } = useAuthStore()
   const {
     feeds,
     selectedFeedId,
@@ -2079,28 +2077,10 @@ export function Sidebar({ width }: { width?: number }) {
             >
               <Settings size={18} />
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/settings')
-                useSettingsStore.getState().setActiveTab('user')
-              }}
+            <NotificationBell
+              iconSize={18}
               className="sidebar-item text-text-secondary dark:text-text-dark-secondary flex-1 justify-center"
-              title={t('sidebar.profile')}
-              aria-label={t('sidebar.profile')}
-            >
-              {user?.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.displayName || 'User'}
-                  className="h-[22px] w-[22px] rounded-full object-cover"
-                />
-              ) : (
-                <span className="bg-accent/10 text-accent flex h-[22px] w-[22px] items-center justify-center rounded-full">
-                  <User size={14} />
-                </span>
-              )}
-            </button>
+            />
           </div>
         </div>
       </aside>

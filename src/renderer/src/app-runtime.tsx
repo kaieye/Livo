@@ -53,11 +53,6 @@ const LoginModal = lazy(() =>
     default: module.LoginModal,
   })),
 )
-const NotificationBell = lazy(() =>
-  import('./components/notifications/NotificationBell').then((module) => ({
-    default: module.NotificationBell,
-  })),
-)
 
 const robotIconUrl = new URL('./assets/robot.svg', import.meta.url).href
 
@@ -318,11 +313,6 @@ function GlobalOverlays() {
       </Suspense>
       <Suspense fallback={null}>
         <LazyAudioMiniBarMount />
-      </Suspense>
-      <Suspense fallback={null}>
-        <div className="no-drag fixed right-40 top-1 z-[65]">
-          <NotificationBell />
-        </div>
       </Suspense>
       <TextContextMenu />
       <NotificationProvider />

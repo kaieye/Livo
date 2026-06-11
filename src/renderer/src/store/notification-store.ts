@@ -32,6 +32,7 @@ interface NotificationStore {
   }) => Promise<void>
   fetchUnreadCount: () => Promise<void>
   markAsRead: (id: string) => Promise<void>
+  markAsUnread: (id: string) => Promise<void>
   markAllAsRead: () => Promise<void>
   startPolling: () => void
   stopPolling: () => void
@@ -82,12 +83,34 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     try {
       await window.api.notifications.markRead(id)
 
-      // Update local state
       set((state) => ({
         notifications: state.notifications.map((n) =>
           n.id === id ? { ...n, read: true, readAt: Date.now() } : n,
         ),
-        unreadCount: Math.max(0, state.unreadCount - 1),
+        unreadCount: Math.max(
+          0,
+          state.unreadCount -
+            (state.notifications.find((n) => n.id === id && !n.read) ? 1 : 0),
+        ),
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  markAsUnread: async (id: string) => {
+    set({ error: null })
+    try {
+      await window.api.notifications.markUnread(id)
+
+      set((state) => ({
+        notifications: state.notifications.map((n) =>
+          n.id === id ? { ...n, read: false, readAt: null } : n,
+        ),
+        unreadCount:
+          state.unreadCount +
+          (state.notifications.find((n) => n.id === id && n.read) ? 1 : 0),
       }))
     } catch (error) {
       set({ error: (error as Error).message })

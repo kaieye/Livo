@@ -161,6 +161,18 @@ const ELECTRON_API_SHAPE = {
     checkSession: true,
     onLoginProgress: true,
   },
+  notifications: {
+    list: true,
+    unreadCount: true,
+    markRead: true,
+    markUnread: true,
+    markAllRead: true,
+  },
+  websocket: {
+    connect: true,
+    disconnect: true,
+    status: true,
+  },
   fever: {
     listAccounts: true,
     createAccount: true,

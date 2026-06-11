@@ -146,6 +146,7 @@ export const IPC = {
   ADMIN_GET_NOTIFICATIONS: 'admin:get-notifications',
   ADMIN_GET_UNREAD_COUNT: 'admin:get-unread-count',
   ADMIN_MARK_NOTIFICATION_READ: 'admin:mark-notification-read',
+  ADMIN_MARK_NOTIFICATION_UNREAD: 'admin:mark-notification-unread',
   ADMIN_MARK_ALL_NOTIFICATIONS_READ: 'admin:mark-all-notifications-read',
   ADMIN_GET_ROLES: 'admin:get-roles',
   UPDATER_CHECK: 'updater:check',
@@ -436,6 +437,7 @@ export type IpcArgsByChannel = {
   ]
   [IPC.ADMIN_GET_UNREAD_COUNT]: []
   [IPC.ADMIN_MARK_NOTIFICATION_READ]: [id: string]
+  [IPC.ADMIN_MARK_NOTIFICATION_UNREAD]: [id: string]
   [IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ]: []
   [IPC.ADMIN_GET_ROLES]: []
   [IPC.ADMIN_GET_ROLE_BY_ID]: [id: string]
@@ -1216,6 +1218,10 @@ export const IPC_CONTRACTS = {
   [IPC.ADMIN_GET_UNREAD_COUNT]: noArgs(IPC.ADMIN_GET_UNREAD_COUNT),
   [IPC.ADMIN_MARK_NOTIFICATION_READ]: oneString(
     IPC.ADMIN_MARK_NOTIFICATION_READ,
+    'id',
+  ),
+  [IPC.ADMIN_MARK_NOTIFICATION_UNREAD]: oneString(
+    IPC.ADMIN_MARK_NOTIFICATION_UNREAD,
     'id',
   ),
   [IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ]: noArgs(
