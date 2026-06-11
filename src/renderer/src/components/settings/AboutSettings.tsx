@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Github, Heart } from 'lucide-react'
+import { Github } from 'lucide-react'
 import { openExternalUrlSafe } from '../../services/external-url'
 import { useUpdateStore } from '../../store/update-store'
 
@@ -11,9 +11,15 @@ function formatPublishedAt(value: string | undefined): string {
   return date.toLocaleString()
 }
 
+/** 模块级缓存，避免每次进入页面时 IPC 未返回导致图标跳变 */
+let cachedIconUrl: string | null | undefined = undefined
+
 export function AboutSettings() {
   const [version, setVersion] = useState('')
-  const [iconUrl, setIconUrl] = useState<string | null>(null)
+  const [iconUrl, setIconUrl] = useState<string | null>(() => {
+    if (cachedIconUrl !== undefined) return cachedIconUrl
+    return null
+  })
   const updateInfo = useUpdateStore((state) => state.info)
   const checkingUpdates = useUpdateStore((state) => state.isChecking)
   const lastCheckedAt = useUpdateStore((state) => state.lastCheckedAt)
@@ -31,8 +37,14 @@ export function AboutSettings() {
 
     window.api.app
       .getIcon()
-      .then((icon) => setIconUrl(icon))
-      .catch(() => setIconUrl(null))
+      .then((icon) => {
+        cachedIconUrl = icon
+        setIconUrl(icon)
+      })
+      .catch(() => {
+        cachedIconUrl = null
+        setIconUrl(null)
+      })
   }, [])
 
   const handleCheckUpdates = useCallback(async () => {
