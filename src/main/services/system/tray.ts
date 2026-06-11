@@ -9,12 +9,18 @@ function createTrayImage() {
 
   const image = nativeImage.createFromPath(iconPath)
   if (image.isEmpty()) {
-    // Fallback to a simple icon if image fails to load
     return nativeImage.createEmpty()
   }
 
   const resized = image.resize({ width: 32, height: 32 })
-  return resized
+  const dataUrl = resized.toDataURL()
+
+  // Apply rounded corners via SVG
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><defs><clipPath id="round"><rect width="32" height="32" rx="8"/></clipPath></defs><image href="${dataUrl}" width="32" height="32" clip-path="url(#round)"/></svg>`
+
+  return nativeImage.createFromDataURL(
+    `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
+  )
 }
 
 export class AppTray {
