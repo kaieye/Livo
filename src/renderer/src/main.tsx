@@ -124,67 +124,46 @@ function renderApp(): void {
 }
 
 /**
- * Render the shell first with cached data, then hydrate fresh data in background.
- * This mimics Folo's strategy: instant UI from localStorage → background refresh.
+ * Bootstrap: cache → render → background refresh (Folo-style)
  */
 async function bootstrap(): Promise<void> {
   try {
-    // Step 1: Hydrate from localStorage synchronously (fast, <5ms)
     hydrateFromLocalCache()
 
-    // Step 2: Render UI immediately with cached data
+    // Render immediately, don't wait for IPC
     renderApp()
 
-    // Step 3: Background hydration from IPC (slow, but non-blocking)
-    if (isDev) {
-      recordAppMetric('hydrate.start', performance.now())
-      recordStartupBlockEvent('hydrate.data.start')
-    }
-    const result = await hydrateDataToMemory()
-    if (isDev) {
-      recordAppMetric('hydrate.complete', performance.now())
-      recordStartupBlockEvent(
-        'hydrate.data.complete',
-        undefined,
-        result.timings.total,
-      )
-    }
-
-    setAppIsHydrated(true)
-    console.log(
-      `[Livo] Background refresh complete in ${result.timings.total.toFixed(0)}ms`,
-    )
-
-    flushSync(() => {
-      if (isDev) recordStartupBlockEvent('app.ready.flushSync.start')
-      setAppIsReady(true)
-    })
-    if (isDev) recordStartupBlockEvent('app.ready.flushSync.complete')
-    applyAfterReadyCallbacks()
-    if (isDev) recordAppMetric('app.shellReady', performance.now())
-
-    document.documentElement.dataset.appReady = 'true'
-
-    notifyRendererReady()
-
-    if (isDev) {
-      recordAppMetric('app.ready', performance.now())
-      recordStartupBlockEvent('app.ready')
-    }
-
-    void import('./initialize/queue')
-      .then(({ setupBackgroundEventListeners }) =>
-        setupBackgroundEventListeners(),
-      )
-      .catch((error) => {
-        console.error('[Livo] Failed to setup background listeners:', error)
+    // Set ready in finally() so UI always shows, even if IPC fails
+    hydrateDataToMemory()
+      .then((result) => {
+        setAppIsHydrated(true)
+        console.log(
+          `[Livo] Background refresh complete in ${result.timings.total.toFixed(0)}ms`,
+        )
       })
+      .catch((err) => {
+        console.error('[Livo] Background hydration failed:', err)
+      })
+      .finally(() => {
+        flushSync(() => setAppIsReady(true))
+        applyAfterReadyCallbacks()
+        notifyRendererReady()
+        document.documentElement.dataset.appReady = 'true'
 
-    if (isDev) {
-      setTimeout(() => {
-        printPerformanceSummary()
-      }, 1000)
-    }
+        void import('./initialize/queue')
+          .then(({ setupBackgroundEventListeners }) =>
+            setupBackgroundEventListeners(),
+          )
+          .catch((error) => {
+            console.error('[Livo] Failed to setup background listeners:', error)
+          })
+
+        if (isDev) {
+          setTimeout(() => {
+            printPerformanceSummary()
+          }, 1000)
+        }
+      })
   } catch (err) {
     console.error('[Livo] Bootstrap failed:', err)
     void window.api.app.reportError({
