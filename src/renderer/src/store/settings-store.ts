@@ -8,17 +8,25 @@ import {
 import { useOverlayStackStore } from './overlay-stack-store'
 
 const SETTINGS_CACHE_KEY = 'livo-settings-cache'
+let hasLoadedSettingsFromStorage = false
+let cachedSettingsFromStorage: AppSettings | null = null
 
 function loadSettingsFromCache(): AppSettings | null {
+  if (hasLoadedSettingsFromStorage) return cachedSettingsFromStorage
+  hasLoadedSettingsFromStorage = true
   try {
     const raw = localStorage.getItem(SETTINGS_CACHE_KEY)
-    return raw ? JSON.parse(raw) : null
+    cachedSettingsFromStorage = raw ? JSON.parse(raw) : null
+    return cachedSettingsFromStorage
   } catch {
+    cachedSettingsFromStorage = null
     return null
   }
 }
 
 function saveSettingsToCache(settings: AppSettings): void {
+  hasLoadedSettingsFromStorage = true
+  cachedSettingsFromStorage = settings
   try {
     localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings))
   } catch {

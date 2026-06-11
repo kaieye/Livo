@@ -86,6 +86,14 @@ function notifyRendererReady(): void {
   })
 }
 
+function scheduleAfterFirstPaint(callback: () => void): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.setTimeout(callback, 0)
+    })
+  })
+}
+
 function StrictModeBoundary({ children }: { children: React.ReactNode }) {
   if (import.meta.env.DEV && import.meta.env.VITE_LIVO_STRICT_MODE !== 'true') {
     if (isDev) recordStartupBlockEvent('react.strictMode.disabledForDev')
@@ -156,17 +164,18 @@ async function bootstrap(): Promise<void> {
     applyAfterReadyCallbacks()
     notifyRendererReady()
 
-    // Background refresh
-    hydrateDataToMemory()
-      .then((result) => {
-        setAppIsHydrated(true)
-        console.log(
-          `[Livo] Background refresh complete in ${result.timings.total.toFixed(0)}ms`,
-        )
-      })
-      .catch((err) => {
-        console.error('[Livo] Background hydration failed:', err)
-      })
+    scheduleAfterFirstPaint(() => {
+      hydrateDataToMemory()
+        .then((result) => {
+          setAppIsHydrated(true)
+          console.log(
+            `[Livo] Background refresh complete in ${result.timings.total.toFixed(0)}ms`,
+          )
+        })
+        .catch((err) => {
+          console.error('[Livo] Background hydration failed:', err)
+        })
+    })
 
     document.documentElement.dataset.appReady = 'true'
 

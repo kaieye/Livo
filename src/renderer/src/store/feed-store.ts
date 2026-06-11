@@ -15,17 +15,25 @@ import {
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 const FEEDS_CACHE_KEY = 'livo-feeds-cache'
+let hasLoadedFeedsFromStorage = false
+let cachedFeedsFromStorage: FeedWithCount[] = []
 
 function loadFeedsFromCache(): FeedWithCount[] {
+  if (hasLoadedFeedsFromStorage) return cachedFeedsFromStorage
+  hasLoadedFeedsFromStorage = true
   try {
     const raw = localStorage.getItem(FEEDS_CACHE_KEY)
-    return raw ? JSON.parse(raw) : []
+    cachedFeedsFromStorage = raw ? JSON.parse(raw) : []
+    return cachedFeedsFromStorage
   } catch {
+    cachedFeedsFromStorage = []
     return []
   }
 }
 
 function saveFeedsToCache(feeds: FeedWithCount[]): void {
+  hasLoadedFeedsFromStorage = true
+  cachedFeedsFromStorage = feeds
   try {
     localStorage.setItem(FEEDS_CACHE_KEY, JSON.stringify(feeds))
   } catch {
@@ -325,7 +333,7 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     )
     try {
       await window.api.feeds.refreshAll()
-      // Feed list will be updated via feeds:updated event in AppBootstrapProvider
+      // Feed list will be updated via feeds:updated event in setupBackgroundEventListeners (queue.ts)
       // No need to call loadFeeds() here - reduces IPC overhead
     } finally {
       removeListener()

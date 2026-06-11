@@ -17,6 +17,12 @@ interface PersistedSnapshotCache {
   entries: Record<string, PersistedSnapshotCacheEntry>
 }
 
+let cachedPersistedSnapshotCache: PersistedSnapshotCache | null = null
+
+function emptyPersistedCache(): PersistedSnapshotCache {
+  return { version: CACHE_VERSION, entries: {} }
+}
+
 function getStorage(): Storage | null {
   try {
     return window.localStorage ?? null
@@ -43,26 +49,37 @@ function normalizeDefaultHomeSnapshotCacheKey(
 }
 
 function readPersistedCache(): PersistedSnapshotCache {
+  if (cachedPersistedSnapshotCache) return cachedPersistedSnapshotCache
   const storage = getStorage()
-  if (!storage) return { version: CACHE_VERSION, entries: {} }
+  if (!storage) {
+    cachedPersistedSnapshotCache = emptyPersistedCache()
+    return cachedPersistedSnapshotCache
+  }
 
   try {
     const raw = storage.getItem(STORAGE_KEY)
-    if (!raw) return { version: CACHE_VERSION, entries: {} }
+    if (!raw) {
+      cachedPersistedSnapshotCache = emptyPersistedCache()
+      return cachedPersistedSnapshotCache
+    }
     const parsed = JSON.parse(raw) as Partial<PersistedSnapshotCache>
     if (parsed.version !== CACHE_VERSION || !parsed.entries) {
-      return { version: CACHE_VERSION, entries: {} }
+      cachedPersistedSnapshotCache = emptyPersistedCache()
+      return cachedPersistedSnapshotCache
     }
-    return {
+    cachedPersistedSnapshotCache = {
       version: CACHE_VERSION,
       entries: parsed.entries,
     }
+    return cachedPersistedSnapshotCache
   } catch {
-    return { version: CACHE_VERSION, entries: {} }
+    cachedPersistedSnapshotCache = emptyPersistedCache()
+    return cachedPersistedSnapshotCache
   }
 }
 
 function writePersistedCache(cache: PersistedSnapshotCache): void {
+  cachedPersistedSnapshotCache = cache
   const storage = getStorage()
   if (!storage) return
 

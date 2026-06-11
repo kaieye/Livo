@@ -26,12 +26,6 @@ import {
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import {
-  RECOMMENDED_ARTICLE_FEEDS,
-  RECOMMENDED_SOCIAL_FEEDS,
-  RECOMMENDED_VIDEO_FEEDS,
-  DEFAULT_RSSHUB_INSTANCE,
-} from '../../../../shared/discover-data'
-import {
   Rss,
   Star,
   RefreshCw,
@@ -75,6 +69,8 @@ const VIEW_ICONS: Record<FeedViewType, React.ReactNode> = {
   [FeedViewType.Videos]: <Play size={18} />,
   [FeedViewType.Pictures]: <Image size={18} />,
 }
+
+const DEFAULT_RSSHUB_INSTANCE = 'https://rsshub.pseudoyu.com'
 
 const EMPTY_FOLDERS_STORAGE_KEY = 'livo-empty-folders'
 const FEED_CATEGORY_VIRTUALIZE_THRESHOLD = 24
@@ -821,7 +817,24 @@ export function Sidebar({ width }: { width?: number }) {
     },
     [],
   )
-  const recommendedUrls = useMemo(() => {
+  /**
+   * Lazily loads the full discover-data module (182 KB — too heavy for first paint).
+   * Only needed when the user unsubscribes from a recommended feed, which requires
+   * checking whether the feed URL is in the recommended catalog.
+   */
+  const recommendedUrlsRef = useRef<Set<string> | null>(null)
+
+  const getRecommendedUrls = useCallback(async (): Promise<Set<string>> => {
+    if (recommendedUrlsRef.current) return recommendedUrlsRef.current
+
+    const [
+      {
+        RECOMMENDED_ARTICLE_FEEDS,
+        RECOMMENDED_SOCIAL_FEEDS,
+        RECOMMENDED_VIDEO_FEEDS,
+      },
+    ] = await Promise.all([import('../../../../shared/discover-data')])
+
     const base = (rsshubInstance || DEFAULT_RSSHUB_INSTANCE).replace(/\/+$/, '')
     const all = [
       ...RECOMMENDED_ARTICLE_FEEDS,
@@ -833,6 +846,7 @@ export function Sidebar({ width }: { width?: number }) {
       const url = feed.isRSSHub ? `${base}${feed.url}` : feed.url
       urls.add(url)
     }
+    recommendedUrlsRef.current = urls
     return urls
   }, [rsshubInstance])
 
@@ -1324,13 +1338,14 @@ export function Sidebar({ width }: { width?: number }) {
     async (feedId: string) => {
       const feed = feeds.find((f) => f.id === feedId)
       if (!feed) return
+      const recommendedUrls = await getRecommendedUrls()
       if (recommendedUrls.has(feed.url)) {
         await updateFeed(feedId, { category: RECOMMENDED_CATEGORY })
         return
       }
       await removeFeed(feedId)
     },
-    [feeds, recommendedUrls, updateFeed, removeFeed],
+    [feeds, getRecommendedUrls, updateFeed, removeFeed],
   )
 
   const resolveUrlSubscriptionTarget = useCallback(

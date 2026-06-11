@@ -35,14 +35,7 @@ export function hydrateFromLocalCache(): void {
   const startTime = performance.now()
 
   useSettingsStore.getState().hydrateFromCache()
-  const cachedFeeds = useFeedStore.getState().hydrateFromCache()
-
-  // Restore snapshot cache if available
-  if (cachedFeeds.length > 0) {
-    useEntryStore.getState().hydrateSnapshotCache({
-      limit: DEFAULT_INITIAL_SNAPSHOT_LIMIT,
-    })
-  }
+  useFeedStore.getState().hydrateFromCache()
 
   logStartupTiming('hydrate.localCache', startTime)
 }

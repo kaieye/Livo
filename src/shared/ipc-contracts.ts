@@ -148,6 +148,12 @@ export const IPC = {
   ADMIN_MARK_NOTIFICATION_READ: 'admin:mark-notification-read',
   ADMIN_MARK_ALL_NOTIFICATIONS_READ: 'admin:mark-all-notifications-read',
   ADMIN_GET_ROLES: 'admin:get-roles',
+  UPDATER_CHECK: 'updater:check',
+  UPDATER_DOWNLOAD: 'updater:download',
+  UPDATER_INSTALL: 'updater:install',
+  WS_CONNECT: 'ws:connect',
+  WS_DISCONNECT: 'ws:disconnect',
+  WS_STATUS: 'ws:status',
   ADMIN_GET_ROLE_BY_ID: 'admin:get-role-by-id',
   ADMIN_CREATE_ROLE: 'admin:create-role',
   ADMIN_UPDATE_ROLE: 'admin:update-role',
@@ -1253,6 +1259,23 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.ADMIN_GET_ANALYTICS_ACTIVE_USERS>
     },
   },
+  [IPC.UPDATER_CHECK]: noArgs(IPC.UPDATER_CHECK),
+  [IPC.UPDATER_DOWNLOAD]: noArgs(IPC.UPDATER_DOWNLOAD),
+  [IPC.UPDATER_INSTALL]: noArgs(IPC.UPDATER_INSTALL),
+  [IPC.WS_CONNECT]: {
+    channel: IPC.WS_CONNECT,
+    validateArgs: (args) => {
+      assertArity(IPC.WS_CONNECT, args, 0, 1)
+      if (args[0] !== undefined && typeof args[0] !== 'string') {
+        throw new IpcValidationError('Invalid IPC argument', {
+          userId: 'expected_string',
+        })
+      }
+      return args as IpcArgs<typeof IPC.WS_CONNECT>
+    },
+  },
+  [IPC.WS_DISCONNECT]: noArgs(IPC.WS_DISCONNECT),
+  [IPC.WS_STATUS]: noArgs(IPC.WS_STATUS),
 } satisfies { [C in IpcChannel]: IpcContract<C> }
 
 export function validateIpcArgs<C extends IpcChannel>(

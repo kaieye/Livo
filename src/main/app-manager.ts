@@ -39,6 +39,10 @@ import { recoverOrphanBilibiliDynamicFeeds } from './services/bilibili/bilibili-
 import { startCacheMaintenance } from './services/system/cache-maintenance'
 import { registerSessionPolicies } from './services/system/session-policies'
 import { parseDeepLink } from '../shared/deep-link'
+import { UpdaterService } from './services/updater'
+import { registerUpdaterHandlers } from './handlers/updater-handlers'
+import { WebSocketService } from './services/websocket'
+import { registerWebSocketHandlers } from './handlers/websocket-handlers'
 
 const STARTUP_BACKGROUND_DELAY_MS = 2500
 
@@ -47,12 +51,18 @@ export class AppManager {
   private tray: AppTray | null = null
   private stopCacheMaintenance: (() => void) | null = null
   private startupBackgroundTimer: ReturnType<typeof setTimeout> | null = null
+  private updater: UpdaterService
+  private websocket: WebSocketService
 
   constructor(
     private readonly options: {
       isDev: boolean
     },
   ) {
+    this.updater = new UpdaterService(options.isDev)
+    this.websocket = new WebSocketService(
+      process.env.WS_SERVER_URL || 'http://localhost:3000',
+    )
     this.windowManager = new WindowManager({
       isDev: options.isDev,
       preloadPath: join(__dirname, '../preload/index.mjs'),
@@ -99,9 +109,13 @@ export class AppManager {
     // 提前注册 IPC，窗口加载后可以立刻调用启动接口。
     this.registerIpcHandlers()
     registerAppHandlers(this.windowManager)
+    registerUpdaterHandlers(this.updater)
+    registerWebSocketHandlers(this.websocket)
 
     // 先创建窗口，再等待数据库初始化；renderer HTML 和骨架屏可以更早加载。
     const mainWindow = this.windowManager.createMainWindow()
+    this.updater.setWindow(mainWindow)
+    this.websocket.setWindow(mainWindow)
 
     // 数据库初始化与 renderer 启动并行，避免主进程先把开窗链路堵住。
     const dbInitPromise = (async () => {
@@ -140,6 +154,7 @@ export class AppManager {
     }
     this.tray?.destroy()
     this.tray = null
+    this.websocket.disconnect()
     stopFeverAutoSync()
     if (this.stopCacheMaintenance) {
       this.stopCacheMaintenance()

@@ -17,11 +17,32 @@ import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-s
 import { LRUCache } from '../lib/lru-cache'
 import { buildListCacheKey, getCachedListResult } from '../lib/entry-cache'
 import { recordStartupBlockEvent } from '../lib/startup-block-diagnostics'
+import { useAppStore } from '../store/app-store'
 
 const SOCIAL_LIST_SCROLL_GUARD_PX = 120
 const SOCIAL_LIST_LOAD_MORE_BOTTOM_OFFSET_PX = 260
 type ScopedEntries = ReturnType<typeof useEntryStore.getState>['entries']
 const scopedEntriesCache = new LRUCache<string, { entries: ScopedEntries }>(8)
+const STARTUP_SNAPSHOT_IPC_DELAY_MS = 1200
+
+function waitForAppHydrationOrTimeout(timeoutMs: number): Promise<void> {
+  if (useAppStore.getState().isHydrated) return Promise.resolve()
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      unsubscribe()
+      window.clearTimeout(timeout)
+      resolve()
+    }
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.isHydrated) finish()
+    })
+    const timeout = window.setTimeout(finish, timeoutMs)
+  })
+}
 
 export interface HomeFeedCoordinatorState {
   /** Raw entries from store. */
@@ -257,6 +278,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
       // Don't fetch IPC on startup - refresh triggered by user or auto-refresh
       return
     }
+    await waitForAppHydrationOrTimeout(STARTUP_SNAPSHOT_IPC_DELAY_MS)
     // Cache miss: fetch
     const snapshotStart = performance.now()
     const snapshot = await loadSnapshot(currentLoadOptions)
