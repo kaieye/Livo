@@ -193,7 +193,7 @@ export const zhCNSettings = {
     '例如：请用简洁、专业、带步骤的方式回答；优先给结论再给解释。',
   aiPersonaPromptDesc:
     '用于 AI 对话的预设系统提示词。保存后每次对话都会自动附加。',
-  aiNotice: '🎉 无需登录，无需订阅',
+  aiNotice: '🎉 AI 功能完全开放',
   aiNoticeDesc:
     '配置你自己的 AI API Key 即可使用所有 AI 功能，包括摘要、翻译和对话。支持 OpenAI、Anthropic、DeepSeek、GLM、MiniMax 等。',
   aiModelConfig: '模型配置',
@@ -334,8 +334,6 @@ export const zhCNSettings = {
   openReleasePage: '打开发布页',
   updatePublishedAt: '发布时间',
   aboutDesc: 'Livo 是一款自由开源的 RSS 阅读器，灵感来自',
-  noLoginNeeded: '无需登录',
-  noSubscriptionNeeded: '无需订阅',
   aiFeaturesOpen: 'AI 功能完全开放',
   aboutAIDesc: '使用你自己的 AI API Key，畅享翻译、摘要、对话等功能。',
   feature_rss: 'RSS/Atom 订阅',
@@ -345,7 +343,7 @@ export const zhCNSettings = {
   feature_aiChat: 'AI 对话',
   feature_aiChatDesc: '与文章内容互动',
   feature_localStorage: '本地存储',
-  feature_localStorageDesc: '数据完全在本机',
+  feature_localStorageDesc: '所有数据本地保存',
   feature_multiModel: '多模型支持',
   feature_multiModelDesc: 'OpenAI/Anthropic/DeepSeek/GLM/MiniMax',
   feature_darkMode: '暗色模式',

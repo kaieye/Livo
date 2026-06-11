@@ -193,6 +193,22 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       snapshotNextCursor: null,
     })
 
+    // 当前视图没有订阅源时，直接返回空结果
+    if (
+      !normalizedOptions.feedId &&
+      !normalizedOptions.starred &&
+      normalizedOptions.feedIds &&
+      normalizedOptions.feedIds.length === 0
+    ) {
+      set({
+        entries: [],
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: false,
+      })
+      return
+    }
+
     const cacheKey = buildListCacheKey(normalizedOptions)
     const cachedHit = getCachedListResult(cacheKey, normalizedOptions.limit)
     if (cachedHit) {
@@ -260,6 +276,43 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       unreadOnly: !!normalizedOptions.unreadOnly,
       pageSize,
     })
+
+    // 当前视图没有订阅源时，直接返回空结果，避免不必要的 IPC 请求
+    if (
+      !normalizedOptions.feedId &&
+      !normalizedOptions.starred &&
+      normalizedOptions.feedIds &&
+      normalizedOptions.feedIds.length === 0
+    ) {
+      set({
+        entries: [],
+        isLoading: false,
+        isLoadingMore: false,
+        hasMoreEntries: false,
+        paginationQueryKey: queryKey,
+        paginationOptions: {
+          feedId: normalizedOptions.feedId,
+          feedIds: normalizedOptions.feedIds,
+          starred: normalizedOptions.starred,
+          unreadOnly: normalizedOptions.unreadOnly,
+        },
+        paginationPageSize: pageSize,
+        paginationSource: 'snapshot',
+        snapshotNextCursor: null,
+      })
+      return {
+        entries: [],
+        feeds: [],
+        counts: {
+          totalFeeds: 0,
+          totalUnread: 0,
+          unreadByFeedId: {},
+          scopeUnread: 0,
+        },
+        nextCursor: null,
+      }
+    }
+
     const listCacheKey = buildListCacheKey(normalizedOptions)
     const cachedHit = getCachedListResult(listCacheKey, pageSize)
     const snapshotInput = buildReaderSnapshotInput(normalizedOptions)

@@ -312,6 +312,10 @@ function FeverAccountCard({
         </div>
 
         <div className="flex items-center gap-3">
+          <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
+            {t('settings.feverLastSync')}: {lastSyncText}
+          </span>
+
           <button
             onClick={handleSync}
             disabled={syncMutation.isPending || !account.enabled}
@@ -324,10 +328,6 @@ function FeverAccountCard({
             )}
             {t('settings.feverSync')}
           </button>
-
-          <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
-            {t('settings.feverLastSync')}: {lastSyncText}
-          </span>
         </div>
 
         {syncState?.lastError && (

@@ -333,6 +333,7 @@ const api = {
   // App
   app: {
     getVersion: (): Promise<string> => invokeIpc(IPC.APP_GET_VERSION),
+    getIcon: (): Promise<string | null> => invokeIpc(IPC.APP_GET_ICON),
     openExternal: (url: string): Promise<{ success: boolean }> =>
       invokeIpc(IPC.APP_OPEN_EXTERNAL, url),
     reportError: (payload: {

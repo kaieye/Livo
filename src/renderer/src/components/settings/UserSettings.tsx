@@ -319,12 +319,6 @@ function FeedSyncPanel() {
           <Cloud size={15} className="text-accent" />
           <span>订阅源同步</span>
         </div>
-        <div className="text-text-secondary dark:text-text-dark-secondary mt-1 text-xs">
-          上次同步：{formatLastSyncAt(status?.lastSyncAt ?? null)}
-          {status?.pendingChanges
-            ? ` · 待上传 ${status.pendingChanges} 项`
-            : ''}
-        </div>
         {(feedback || error) && (
           <div
             className={`mt-1 flex items-center gap-1 text-xs ${
@@ -337,18 +331,26 @@ function FeedSyncPanel() {
         )}
       </div>
 
-      <button
-        onClick={handleSync}
-        disabled={loading || status?.isAuthenticated === false}
-        className="bg-accent hover:bg-accent-hover inline-flex h-8 min-w-[104px] items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <RefreshCw size={14} />
-        )}
-        {loading ? '同步中' : '立即同步'}
-      </button>
+      <div className="flex items-center gap-3">
+        <div className="text-text-secondary dark:text-text-dark-secondary text-xs">
+          上次同步：{formatLastSyncAt(status?.lastSyncAt ?? null)}
+          {status?.pendingChanges
+            ? ` · 待上传 ${status.pendingChanges} 项`
+            : ''}
+        </div>
+        <button
+          onClick={handleSync}
+          disabled={loading || status?.isAuthenticated === false}
+          className="bg-accent hover:bg-accent-hover inline-flex h-8 min-w-[104px] items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          {loading ? '同步中' : '立即同步'}
+        </button>
+      </div>
     </div>
   )
 }

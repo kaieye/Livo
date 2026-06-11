@@ -635,30 +635,43 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
 
   return (
     <div className="dark:bg-surface-dark-secondary overflow-hidden rounded-xl border bg-white">
-      <div className="bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 flex items-center gap-3 border-b px-4 py-3">
-        <span className={`text-sm font-semibold ${config.colorClass}`}>
-          {config.name}
-        </span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs ${
-            status.linked && status.displayName
-              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-          }`}
-        >
-          {status.linked && status.displayName ? '已关联' : '未关联'}
-        </span>
+      <div className="bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50 flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className={`text-sm font-semibold ${config.colorClass}`}>
+            {config.name}
+          </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs ${
+              status.linked && status.displayName
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+            }`}
+          >
+            {status.linked && status.displayName ? '已关联' : '未关联'}
+          </span>
+          {status.displayName && (
+            <span className="text-text-secondary dark:text-text-dark-secondary text-xs">
+              {status.displayName}
+            </span>
+          )}
+        </div>
+        {!loading &&
+          !isStatusLoading &&
+          status.linked &&
+          status.displayName && (
+            <button
+              onClick={handleUnlink}
+              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-500 transition-colors hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+            >
+              取消关联
+            </button>
+          )}
       </div>
 
       <div className="px-4 py-3.5">
         <p className="text-text-secondary dark:text-text-dark-secondary mb-3 text-xs">
           {config.description}
         </p>
-        {status.displayName && (
-          <p className="text-text-secondary dark:text-text-dark-secondary mb-3 text-xs">
-            账号: {status.displayName}
-          </p>
-        )}
 
         <div className="flex flex-wrap items-center gap-2">
           {loading ? (
@@ -671,21 +684,14 @@ function AccountCard({ config }: { config: AccountCardConfig }) {
               <Loader2 size={14} className="animate-spin" />
               正在检查状态...
             </div>
-          ) : status.linked && status.displayName ? (
-            <button
-              onClick={handleUnlink}
-              className="rounded-lg border border-red-200 px-4 py-2 text-xs text-red-500 transition-colors hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-            >
-              取消关联
-            </button>
-          ) : (
+          ) : !status.linked || !status.displayName ? (
             <button
               onClick={handleLink}
               className="bg-accent hover:bg-accent-hover rounded-lg px-4 py-2 text-xs font-medium text-white transition-colors"
             >
               关联账号
             </button>
-          )}
+          ) : null}
 
           <button
             onClick={handleCheck}

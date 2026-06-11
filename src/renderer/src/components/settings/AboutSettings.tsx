@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Rss, Github, Heart } from 'lucide-react'
+import { Github, Heart } from 'lucide-react'
 import { openExternalUrlSafe } from '../../services/external-url'
 import { useUpdateStore } from '../../store/update-store'
 
@@ -13,6 +13,7 @@ function formatPublishedAt(value: string | undefined): string {
 
 export function AboutSettings() {
   const [version, setVersion] = useState('')
+  const [iconUrl, setIconUrl] = useState<string | null>(null)
   const updateInfo = useUpdateStore((state) => state.info)
   const checkingUpdates = useUpdateStore((state) => state.isChecking)
   const lastCheckedAt = useUpdateStore((state) => state.lastCheckedAt)
@@ -27,6 +28,11 @@ export function AboutSettings() {
         useUpdateStore.getState().setCurrentVersion(nextVersion)
       })
       .catch(() => setVersion('1.0.0'))
+
+    window.api.app
+      .getIcon()
+      .then((icon) => setIconUrl(icon))
+      .catch(() => setIconUrl(null))
   }, [])
 
   const handleCheckUpdates = useCallback(async () => {
@@ -41,9 +47,29 @@ export function AboutSettings() {
     <div className="space-y-6">
       {/* Logo and name */}
       <div className="py-4 text-center">
-        <div className="bg-accent/10 mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl">
-          <Rss size={36} className="text-accent" />
-        </div>
+        {iconUrl ? (
+          <img
+            src={iconUrl}
+            alt="Livo"
+            className="mx-auto mb-4 h-20 w-20 rounded-3xl"
+          />
+        ) : (
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-orange-500/10 to-orange-600/10">
+            <svg
+              className="text-accent h-12 w-12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 11a9 9 0 0 1 9 9" />
+              <path d="M4 4a16 16 0 0 1 16 16" />
+              <circle cx="5" cy="19" r="1" fill="currentColor" />
+            </svg>
+          </div>
+        )}
         <h2 className="text-xl font-bold">Livo</h2>
         <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
           {t('settings.version')} {version || '1.0.0'}
@@ -127,8 +153,6 @@ export function AboutSettings() {
       <div className="text-text-secondary dark:text-text-dark-secondary space-y-2 text-center text-sm">
         <p>{t('settings.aboutDesc')}</p>
         <p>
-          <strong>{t('settings.noLoginNeeded')}</strong> ·{' '}
-          <strong>{t('settings.noSubscriptionNeeded')}</strong> ·{' '}
           <strong>{t('settings.aiFeaturesOpen')}</strong>
         </p>
         <p>{t('settings.aboutAIDesc')}</p>

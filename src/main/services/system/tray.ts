@@ -6,19 +6,15 @@ function createTrayImage() {
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'resources', 'Livo.png')
     : join(app.getAppPath(), 'resources', 'Livo.png')
-  const png = nativeImage
-    .createFromPath(iconPath)
-    .resize({ width: 32, height: 32 })
-  const pngDataUrl = png.toDataURL()
-  const roundedSvg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">',
-    '<defs><clipPath id="rc"><rect width="32" height="32" rx="9"/></clipPath></defs>',
-    `<image href="${pngDataUrl}" width="32" height="32" clip-path="url(#rc)"/>`,
-    '</svg>',
-  ].join('')
-  return nativeImage.createFromDataURL(
-    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(roundedSvg)}`,
-  )
+
+  const image = nativeImage.createFromPath(iconPath)
+  if (image.isEmpty()) {
+    // Fallback to a simple icon if image fails to load
+    return nativeImage.createEmpty()
+  }
+
+  const resized = image.resize({ width: 32, height: 32 })
+  return resized
 }
 
 export class AppTray {

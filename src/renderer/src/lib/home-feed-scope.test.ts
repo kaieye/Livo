@@ -68,6 +68,20 @@ describe('home-feed-scope', () => {
     ).toEqual({ feedId: 'video-1', unreadOnly: undefined, limit: 20 })
   })
 
+  it('栏目没有订阅源时返回空 feedIds 数组避免加载所有文章', () => {
+    expect(
+      buildHomeFeedLoadOptions({
+        selectedFeedId: null,
+        activeView: FeedViewType.Videos,
+        feeds: [
+          { id: 'article-1', view: FeedViewType.Articles },
+          { id: 'social-1', view: FeedViewType.SocialMedia },
+        ],
+        limit: 20,
+      }),
+    ).toEqual({ feedIds: [], unreadOnly: undefined, limit: 20 })
+  })
+
   it('过滤 view 列表时按需排除推荐源', () => {
     expect(
       computeViewFeedIds(feeds, FeedViewType.SocialMedia, 'Recommended'),

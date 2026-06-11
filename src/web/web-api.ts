@@ -2320,6 +2320,7 @@ export function createWebAPI(): ElectronAPI {
 
     app: {
       getVersion: async () => 'web-dev',
+      getIcon: async () => null,
       openExternal: async (url: string) => {
         try {
           window.open(url, '_blank', 'noopener,noreferrer')

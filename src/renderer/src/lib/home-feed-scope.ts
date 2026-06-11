@@ -94,6 +94,8 @@ export function buildHomeFeedLoadOptions(options: {
     if (viewFeedIds.length > 0) {
       return { feedIds: viewFeedIds, unreadOnly, limit }
     }
+    // 当前视图没有订阅源，返回空 feedIds 避免加载所有文章
+    return { feedIds: [], unreadOnly, limit }
   }
 
   return { unreadOnly, limit }

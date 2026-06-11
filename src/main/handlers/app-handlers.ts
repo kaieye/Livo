@@ -1,4 +1,5 @@
-import { app, Menu } from 'electron'
+import { app, Menu, nativeImage } from 'electron'
+import { join } from 'path'
 import { IPC, type NativeContextMenuItem } from '../../shared/types'
 import type { FeedWithCount } from '../../shared/types'
 import { registerChannel } from '../ipc/register-channel'
@@ -178,5 +179,13 @@ export function registerAppHandlers(windowManager: WindowManager): void {
       },
       initialSnapshot: null,
     }
+  })
+
+  registerChannel(IPC.APP_GET_ICON, () => {
+    const iconPath = app.isPackaged
+      ? join(process.resourcesPath, 'resources', 'Livo.png')
+      : join(app.getAppPath(), 'resources', 'Livo.png')
+    const image = nativeImage.createFromPath(iconPath)
+    return image.isEmpty() ? null : image.toDataURL()
   })
 }

@@ -99,6 +99,7 @@ export const IPC = {
   VIDEO_YT_STATUS: 'video:yt-status',
   VIDEO_YT_LOGOUT: 'video:yt-logout',
   APP_GET_VERSION: 'app:version',
+  APP_GET_ICON: 'app:get-icon',
   APP_OPEN_EXTERNAL: 'app:open-external',
   APP_REPORT_ERROR: 'app:report-error',
   APP_READ_RECENT_LOGS: 'app:read-recent-logs',
@@ -351,6 +352,7 @@ export type IpcArgsByChannel = {
   [IPC.VIDEO_YT_STATUS]: []
   [IPC.VIDEO_YT_LOGOUT]: []
   [IPC.APP_GET_VERSION]: []
+  [IPC.APP_GET_ICON]: []
   [IPC.APP_OPEN_EXTERNAL]: [url: string]
   [IPC.APP_REPORT_ERROR]: [
     payload: {
@@ -1042,6 +1044,7 @@ export const IPC_CONTRACTS = {
   [IPC.VIDEO_YT_STATUS]: noArgs(IPC.VIDEO_YT_STATUS),
   [IPC.VIDEO_YT_LOGOUT]: noArgs(IPC.VIDEO_YT_LOGOUT),
   [IPC.APP_GET_VERSION]: noArgs(IPC.APP_GET_VERSION),
+  [IPC.APP_GET_ICON]: noArgs(IPC.APP_GET_ICON),
   [IPC.APP_OPEN_EXTERNAL]: oneString(IPC.APP_OPEN_EXTERNAL, 'url'),
   [IPC.APP_REPORT_ERROR]: oneObject(IPC.APP_REPORT_ERROR, 'payload'),
   [IPC.APP_READ_RECENT_LOGS]: {
