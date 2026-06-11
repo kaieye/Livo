@@ -111,6 +111,7 @@ const ELECTRON_API_SHAPE = {
     openLogsDirectory: true,
     clearCache: true,
     checkForUpdates: true,
+    getIcon: true,
     saveTextFile: true,
     downloadUrl: true,
     rendererReady: true,
