@@ -7,12 +7,32 @@ import {
 } from '../../../shared/settings'
 import { useOverlayStackStore } from './overlay-stack-store'
 
+const SETTINGS_CACHE_KEY = 'livo-settings-cache'
+
+function loadSettingsFromCache(): AppSettings | null {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function saveSettingsToCache(settings: AppSettings): void {
+  try {
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings))
+  } catch {
+    /* ignore */
+  }
+}
+
 interface SettingsState {
   settings: AppSettings
   isLoaded: boolean
   isOpen: boolean
   activeTab: SettingsTabId
 
+  hydrateFromCache: () => AppSettings | null
   loadSettings: () => Promise<void>
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>
   updateSettingsSection: <K extends keyof AppSettings>(
@@ -26,17 +46,26 @@ interface SettingsState {
 type SettingsSelector<T> = (settings: AppSettings) => T
 
 export const useSettingsStore = createAppStore<SettingsState>((set, get) => ({
-  settings: cloneDefaultSettings(),
+  settings: loadSettingsFromCache() ?? cloneDefaultSettings(),
   isLoaded: false,
   isOpen: false,
   activeTab: 'general',
 
+  hydrateFromCache: () => {
+    const cached = loadSettingsFromCache()
+    if (cached) {
+      set({ settings: normalizeSettings(cached) })
+    }
+    return cached
+  },
+
   loadSettings: async () => {
     try {
       const settings = await window.api.settings.get()
-      set({ settings: normalizeSettings(settings), isLoaded: true })
+      const normalized = normalizeSettings(settings)
+      set({ settings: normalized, isLoaded: true })
+      saveSettingsToCache(normalized)
     } catch {
-      // Use defaults
       set({ settings: cloneDefaultSettings(), isLoaded: true })
     }
   },
@@ -46,7 +75,9 @@ export const useSettingsStore = createAppStore<SettingsState>((set, get) => ({
     set({ settings: optimistic })
     const result = await window.api.settings.set(updates)
     if (result.success) {
-      set({ settings: normalizeSettings(result.settings) })
+      const normalized = normalizeSettings(result.settings)
+      set({ settings: normalized })
+      saveSettingsToCache(normalized)
     }
   },
 

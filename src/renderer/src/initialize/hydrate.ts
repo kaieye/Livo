@@ -18,35 +18,33 @@ import {
 import type { AppHydratePayload } from '../../../shared/types'
 
 const DEFAULT_INITIAL_SNAPSHOT_LIMIT = 20
+const isDev = import.meta.env.DEV
 
 function logStartupTiming(label: string, startTime: number): number {
   const duration = performance.now() - startTime
   console.log(`[Startup] ${label} ${duration.toFixed(0)}ms`)
-  recordAppMetric(label, duration)
+  if (isDev) recordAppMetric(label, duration)
   return duration
 }
 
 /**
- * Restore the last persisted home snapshot synchronously before IPC hydration.
- * This mirrors Folo's local read-model-first startup: the shell can show cached
- * reader content immediately, then backend hydration reconciles it afterward.
+ * Hydrate stores from localStorage cache immediately (synchronous).
+ * This gives the UI instant data to render while IPC loads fresh data.
  */
-export function hydrateStartupCache(): boolean {
+export function hydrateFromLocalCache(): void {
   const startTime = performance.now()
-  const snapshot = useEntryStore.getState().hydrateSnapshotCache({
-    limit: DEFAULT_INITIAL_SNAPSHOT_LIMIT,
-  })
-  const duration = logStartupTiming('hydrate.startupCache', startTime)
 
-  if (snapshot) {
-    console.log('[Hydrate] Startup cache restored:', {
-      entryCount: snapshot.entries.length,
-      feedCount: snapshot.feeds.length,
-      duration: Math.round(duration),
+  useSettingsStore.getState().hydrateFromCache()
+  const cachedFeeds = useFeedStore.getState().hydrateFromCache()
+
+  // Restore snapshot cache if available
+  if (cachedFeeds.length > 0) {
+    useEntryStore.getState().hydrateSnapshotCache({
+      limit: DEFAULT_INITIAL_SNAPSHOT_LIMIT,
     })
   }
 
-  return !!snapshot
+  logStartupTiming('hydrate.localCache', startTime)
 }
 
 export interface HydrateResult {
@@ -65,8 +63,8 @@ export interface HydrateResult {
 }
 
 /**
- * Load all critical application data from backend in parallel and write directly to stores.
- * This runs before React renders, so stores are pre-populated when components mount.
+ * Load all critical application data from backend and write to stores.
+ * This runs in the background after the shell renders with cached data.
  */
 export async function hydrateDataToMemory(): Promise<HydrateResult> {
   const startTime = performance.now()
@@ -78,8 +76,6 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     total: 0,
   }
 
-  // 单次批量 IPC 替代多个独立请求，减少往返和结构化克隆成本。
-  // Web 端或旧桥接不支持时降级为独立请求。
   let settings: any = null
   let feeds: any[] = []
   let sessionData: any = null
@@ -103,18 +99,9 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     )
     const [settingsResult, feedsResult, sessionResult] =
       await Promise.allSettled([
-        (async () => {
-          const s = await window.api.settings.get()
-          return s
-        })(),
-        (async () => {
-          const f = await window.api.feeds.list()
-          return f
-        })(),
-        (async () => {
-          const s = await window.api.auth.checkSession()
-          return s
-        })(),
+        window.api.settings.get(),
+        window.api.feeds.list(),
+        window.api.auth.checkSession(),
       ])
     settings =
       settingsResult.status === 'fulfilled' ? settingsResult.value : null
@@ -123,11 +110,9 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
       sessionResult.status === 'fulfilled' ? sessionResult.value : null
   }
 
-  // 动作规则来自 localStorage，不需要 IPC。
   const rules: any[] = []
   timings.rules = 0
 
-  // 直接写入 store，避免调用 action 带来额外副作用。
   if (settings) {
     useSettingsStore.setState({ settings, isLoaded: true })
   }
@@ -140,10 +125,8 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     applyInitialSnapshot(initialSnapshot)
   }
 
-  // 动作规则自行处理 localStorage hydrate。
   useActionsStore.getState().loadRules()
 
-  // 认证状态 hydrate。
   if (sessionData?.success && sessionData?.isValid && sessionData?.user) {
     useAuthStore.setState({
       user: sessionData.user,

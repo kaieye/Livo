@@ -14,6 +14,24 @@ import {
 } from '../lib/entry-cache'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
+const FEEDS_CACHE_KEY = 'livo-feeds-cache'
+
+function loadFeedsFromCache(): FeedWithCount[] {
+  try {
+    const raw = localStorage.getItem(FEEDS_CACHE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveFeedsToCache(feeds: FeedWithCount[]): void {
+  try {
+    localStorage.setItem(FEEDS_CACHE_KEY, JSON.stringify(feeds))
+  } catch {
+    /* ignore quota errors */
+  }
+}
 
 async function reloadEntriesForCurrentScope(state: {
   selectedFeedId: string | null
@@ -50,6 +68,7 @@ interface FeedState {
   isRefreshing: boolean
 
   // Actions
+  hydrateFromCache: () => FeedWithCount[]
   loadFeeds: () => Promise<void>
   addFeed: (
     url: string,
@@ -113,18 +132,27 @@ interface FeedState {
 
 export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   refreshProgress: null,
-  feeds: [],
+  feeds: loadFeedsFromCache(),
   selectedFeedId: null,
   activeView: null,
   isLoading: false,
   isRefreshing: false,
   importRefreshProgress: null,
 
+  hydrateFromCache: () => {
+    const cached = loadFeedsFromCache()
+    if (cached.length > 0) {
+      set({ feeds: cached })
+    }
+    return cached
+  },
+
   loadFeeds: async () => {
     set({ isLoading: true })
     try {
       const feeds = await window.api.feeds.list()
       set({ feeds, isLoading: false })
+      saveFeedsToCache(feeds)
     } catch {
       set({ isLoading: false })
     }

@@ -1,17 +1,9 @@
-import { type PropsWithChildren, useEffect, useState } from 'react'
+import { type PropsWithChildren } from 'react'
 
 /**
- * DeferredProviders wrapper delays initialization of non-critical providers
- * until after the initial render is complete. This improves startup performance
- * by allowing critical UI to render first.
+ * DeferredProviders - renders children immediately for faster interactivity.
+ * Non-critical providers are lazy-loaded via React.lazy in parent.
  */
 export function DeferredProviders({ children }: PropsWithChildren) {
-  const [isReady, setIsReady] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsReady(true), 0)
-    return () => clearTimeout(timer)
-  }, [])
-
-  return <>{isReady ? children : null}</>
+  return <>{children}</>
 }

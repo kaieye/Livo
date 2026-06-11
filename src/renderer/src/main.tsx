@@ -9,7 +9,10 @@ import {
   printPerformanceSummary,
 } from './lib/performance-metrics'
 import { RootProviders } from './providers/RootProviders'
-import { hydrateDataToMemory, hydrateStartupCache } from './initialize/hydrate'
+import {
+  hydrateFromLocalCache,
+  hydrateDataToMemory,
+} from './initialize/hydrate'
 import { setAppIsHydrated, setAppIsReady } from './store/app-store'
 import { applyAfterReadyCallbacks } from './initialize/queue'
 import {
@@ -20,11 +23,13 @@ import {
 import './styles/tokens.css'
 import './styles/globals.css'
 
-let hasStartupSnapshotCache = false
+const isDev = import.meta.env.DEV
 
-performance.mark('livo-renderer-module-loaded')
-startStartupBlockDiagnostics()
-recordStartupBlockEvent('renderer.moduleLoaded')
+if (isDev) {
+  performance.mark('livo-renderer-module-loaded')
+  startStartupBlockDiagnostics()
+  recordStartupBlockEvent('renderer.moduleLoaded')
+}
 
 function installRendererErrorReporting(): void {
   window.addEventListener('error', (event) => {
@@ -60,8 +65,10 @@ if (_platform === 'darwin' || _platform === 'win32') {
   document.documentElement.classList.add('has-titlebar')
 }
 
-performance.mark('livo-render-start')
-recordAppMetric('app.moduleLoaded', performance.now())
+if (isDev) {
+  performance.mark('livo-render-start')
+  recordAppMetric('app.moduleLoaded', performance.now())
+}
 
 function notifyRendererShellReady(): void {
   requestAnimationFrame(() => {
@@ -79,83 +86,90 @@ function notifyRendererReady(): void {
 
 function StrictModeBoundary({ children }: { children: React.ReactNode }) {
   if (import.meta.env.DEV && import.meta.env.VITE_LIVO_STRICT_MODE !== 'true') {
-    recordStartupBlockEvent('react.strictMode.disabledForDev')
+    if (isDev) recordStartupBlockEvent('react.strictMode.disabledForDev')
     return <>{children}</>
   }
 
-  recordStartupBlockEvent('react.strictMode.enabled')
+  if (isDev) recordStartupBlockEvent('react.strictMode.enabled')
   return <React.StrictMode>{children}</React.StrictMode>
 }
 
 function renderApp(): void {
-  recordStartupBlockEvent('react.render.start')
+  if (isDev) recordStartupBlockEvent('react.render.start')
   const root = ReactDOM.createRoot(document.getElementById('root')!)
 
   root.render(
     <StrictModeBoundary>
       <ErrorBoundary>
         <RootProviders>
-          <React.Profiler
-            id="RouterProvider"
-            onRender={recordStartupReactProfiler}
-          >
+          {isDev ? (
+            <React.Profiler
+              id="RouterProvider"
+              onRender={recordStartupReactProfiler}
+            >
+              <RouterProvider router={router} />
+            </React.Profiler>
+          ) : (
             <RouterProvider router={router} />
-          </React.Profiler>
+          )}
         </RootProviders>
       </ErrorBoundary>
     </StrictModeBoundary>,
   )
-  recordAppMetric('app.reactMounted', performance.now())
-  recordStartupBlockEvent('react.render.scheduled')
+  if (isDev) {
+    recordAppMetric('app.reactMounted', performance.now())
+    recordStartupBlockEvent('react.render.scheduled')
+  }
   notifyRendererShellReady()
 }
 
 /**
- * Render the shell first, then hydrate data. This keeps the window responsive
- * while settings, feeds, auth, and initial entries load in the background.
+ * Render the shell first with cached data, then hydrate fresh data in background.
+ * This mimics Folo's strategy: instant UI from localStorage → background refresh.
  */
 async function bootstrap(): Promise<void> {
   try {
-    hasStartupSnapshotCache = hydrateStartupCache()
-    recordStartupBlockEvent('hydrate.startupCache.complete')
+    // Step 1: Hydrate from localStorage synchronously (fast, <5ms)
+    hydrateFromLocalCache()
+
+    // Step 2: Render UI immediately with cached data
     renderApp()
 
-    recordAppMetric('hydrate.start', performance.now())
-    recordStartupBlockEvent('hydrate.data.start')
+    // Step 3: Background hydration from IPC (slow, but non-blocking)
+    if (isDev) {
+      recordAppMetric('hydrate.start', performance.now())
+      recordStartupBlockEvent('hydrate.data.start')
+    }
     const result = await hydrateDataToMemory()
-    recordAppMetric('hydrate.complete', performance.now())
-    recordStartupBlockEvent(
-      'hydrate.data.complete',
-      undefined,
-      result.timings.total,
-    )
+    if (isDev) {
+      recordAppMetric('hydrate.complete', performance.now())
+      recordStartupBlockEvent(
+        'hydrate.data.complete',
+        undefined,
+        result.timings.total,
+      )
+    }
 
     setAppIsHydrated(true)
     console.log(
-      `[Livo] Data hydration complete in ${result.timings.total.toFixed(0)}ms`,
+      `[Livo] Background refresh complete in ${result.timings.total.toFixed(0)}ms`,
     )
 
     flushSync(() => {
-      recordStartupBlockEvent('app.ready.flushSync.start')
+      if (isDev) recordStartupBlockEvent('app.ready.flushSync.start')
       setAppIsReady(true)
     })
-    recordStartupBlockEvent('app.ready.flushSync.complete')
+    if (isDev) recordStartupBlockEvent('app.ready.flushSync.complete')
     applyAfterReadyCallbacks()
-    recordAppMetric('app.shellReady', performance.now())
+    if (isDev) recordAppMetric('app.shellReady', performance.now())
 
     document.documentElement.dataset.appReady = 'true'
 
     notifyRendererReady()
 
-    recordAppMetric('app.ready', performance.now())
-    recordStartupBlockEvent('app.ready')
-
-    if (!result.initialSnapshot) {
-      recordStartupBlockEvent(
-        hasStartupSnapshotCache
-          ? 'hydrate.initialSnapshot.skippedStartupCache'
-          : 'hydrate.initialSnapshot.skippedNoStartupCache',
-      )
+    if (isDev) {
+      recordAppMetric('app.ready', performance.now())
+      recordStartupBlockEvent('app.ready')
     }
 
     void import('./initialize/queue')
@@ -166,9 +180,11 @@ async function bootstrap(): Promise<void> {
         console.error('[Livo] Failed to setup background listeners:', error)
       })
 
-    setTimeout(() => {
-      printPerformanceSummary()
-    }, 1000)
+    if (isDev) {
+      setTimeout(() => {
+        printPerformanceSummary()
+      }, 1000)
+    }
   } catch (err) {
     console.error('[Livo] Bootstrap failed:', err)
     void window.api.app.reportError({

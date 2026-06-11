@@ -24,34 +24,26 @@ import { Sidebar } from './Sidebar'
 import {
   markStartupComponentMounted,
   recordStartupReactProfiler,
-  recordStartupBlockEvent,
-  traceStartupChunk,
 } from '../../lib/startup-block-diagnostics'
 
 const EntryContent = lazy(() =>
-  traceStartupChunk('EntryContent', () => import('../entry/EntryContent')).then(
-    (m) => ({ default: m.EntryContent }),
-  ),
+  import('../entry/EntryContent').then((m) => ({ default: m.EntryContent })),
 )
 
 const DigestContent = lazy(() =>
-  traceStartupChunk('DigestContent', () => import('./DigestContent')).then(
-    (m) => ({ default: m.DigestContent }),
-  ),
+  import('./DigestContent').then((m) => ({ default: m.DigestContent })),
 )
 
 const WideViewContent = lazy(() =>
-  traceStartupChunk(
-    'WideViewContent',
-    () => import('../entry/WideViewContent'),
-  ).then((m) => ({ default: m.WideViewContent })),
+  import('../entry/WideViewContent').then((m) => ({
+    default: m.WideViewContent,
+  })),
 )
 
 const DiscoverPanel = lazy(() =>
-  traceStartupChunk(
-    'DiscoverPanel',
-    () => import('../discover/DiscoverPanel'),
-  ).then((m) => ({ default: m.DiscoverPanel })),
+  import('../discover/DiscoverPanel').then((m) => ({
+    default: m.DiscoverPanel,
+  })),
 )
 
 const RECOMMENDED_CATEGORY = 'Recommended'
