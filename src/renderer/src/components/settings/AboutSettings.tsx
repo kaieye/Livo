@@ -11,15 +11,62 @@ function formatPublishedAt(value: string | undefined): string {
   return date.toLocaleString()
 }
 
-/** 模块级缓存，避免每次进入页面时 IPC 未返回导致图标跳变 */
+const ICON_CACHE_KEY = 'livo-about-icon'
+
+/**
+ * 模块级缓存（会话内）+ localStorage 持久化（跨会话），
+ * 配合 SettingsDialog 的 hover 预加载机制，确保首帧渲染前 icon 已就绪，消除跳变。
+ */
 let cachedIconUrl: string | null | undefined = undefined
+let iconFetchPromise: Promise<string | null> | null = null
+
+function readCachedIcon(): string | null {
+  if (cachedIconUrl !== undefined) return cachedIconUrl
+  try {
+    const stored = localStorage.getItem(ICON_CACHE_KEY)
+    if (stored) {
+      cachedIconUrl = stored
+      return stored
+    }
+  } catch {
+    /* localStorage unavailable (e.g. SSR / test) */
+  }
+  return null
+}
+
+function ensureIconFetched(): Promise<string | null> {
+  if (cachedIconUrl !== undefined) return Promise.resolve(cachedIconUrl)
+  if (iconFetchPromise) return iconFetchPromise
+
+  iconFetchPromise = window.api.app
+    .getIcon()
+    .then((icon) => {
+      cachedIconUrl = icon
+      if (icon) {
+        try {
+          localStorage.setItem(ICON_CACHE_KEY, icon)
+        } catch {
+          /* ignore */
+        }
+      }
+      return icon
+    })
+    .catch(() => {
+      cachedIconUrl = null
+      return null
+    })
+
+  return iconFetchPromise
+}
+
+// 模块加载时立即启动预取，利用 SettingsDialog 中 preloadSettingsTab 的 hover 预加载时间窗口
+if (typeof window !== 'undefined' && window.api) {
+  ensureIconFetched()
+}
 
 export function AboutSettings() {
   const [version, setVersion] = useState('')
-  const [iconUrl, setIconUrl] = useState<string | null>(() => {
-    if (cachedIconUrl !== undefined) return cachedIconUrl
-    return null
-  })
+  const [iconUrl, setIconUrl] = useState<string | null>(readCachedIcon)
   const updateInfo = useUpdateStore((state) => state.info)
   const checkingUpdates = useUpdateStore((state) => state.isChecking)
   const lastCheckedAt = useUpdateStore((state) => state.lastCheckedAt)
@@ -35,16 +82,9 @@ export function AboutSettings() {
       })
       .catch(() => setVersion('1.0.0'))
 
-    window.api.app
-      .getIcon()
-      .then((icon) => {
-        cachedIconUrl = icon
-        setIconUrl(icon)
-      })
-      .catch(() => {
-        cachedIconUrl = null
-        setIconUrl(null)
-      })
+    ensureIconFetched().then((icon) => {
+      setIconUrl(icon)
+    })
   }, [])
 
   const handleCheckUpdates = useCallback(async () => {
