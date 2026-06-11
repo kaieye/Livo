@@ -225,19 +225,7 @@ export function Layout() {
       setShouldRenderEntryContent(false)
       return
     }
-
-    const cancelIdleTask = scheduleIdleTask(
-      () => {
-        recordStartupBlockEvent('EntryContent.idleMount')
-        setShouldRenderEntryContent(true)
-      },
-      {
-        timeout: ENTRY_CONTENT_IDLE_TIMEOUT,
-        fallbackDelay: ENTRY_CONTENT_FALLBACK_DELAY,
-      },
-    )
-
-    return cancelIdleTask
+    setShouldRenderEntryContent(true)
   }, [isDigestRoute, isDiscoverOpen, isWideView, selectedEntryId])
 
   const [sidebarWidth, setSidebarWidth] = useState(() => loadWidths().sidebar)

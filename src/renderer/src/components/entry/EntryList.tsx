@@ -56,10 +56,8 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export function EntryList({ width }: { width?: number }) {
-  console.time('[PERF] EntryList render')
   useEffect(() => {
     markStartupComponentMounted('EntryList')
-    console.timeEnd('[PERF] EntryList render')
   }, [])
 
   const coordinator = useHomeFeedCoordinator()

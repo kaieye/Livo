@@ -9,7 +9,7 @@ const AppRuntime = lazy(() =>
 )
 
 function AppSkeleton() {
-  return <div className="h-full w-full" aria-hidden />
+  return <div className="h-full w-full bg-[var(--bg-base)]" aria-hidden />
 }
 
 function AppLayer() {
@@ -29,7 +29,9 @@ function AppLayer() {
     }
   }, [appIsReady])
 
-  return appIsReady ? <Outlet /> : <AppSkeleton />
+  if (!appIsReady) return <AppSkeleton />
+
+  return <Outlet />
 }
 
 export default function App() {

@@ -31,6 +31,8 @@ if (isDev) {
   recordStartupBlockEvent('renderer.moduleLoaded')
 }
 
+const t0 = performance.now()
+
 function installRendererErrorReporting(): void {
   window.addEventListener('error', (event) => {
     const error = event.error instanceof Error ? event.error : null
@@ -95,6 +97,13 @@ function StrictModeBoundary({ children }: { children: React.ReactNode }) {
 }
 
 function renderApp(): void {
+  console.log(
+    `[T] renderApp called at ${(performance.now() - t0).toFixed(0)}ms`,
+  )
+
+  // Remove skeleton immediately so content is clickable
+  document.getElementById('app-skeleton')?.remove()
+
   if (isDev) recordStartupBlockEvent('react.render.start')
   const root = ReactDOM.createRoot(document.getElementById('root')!)
 
@@ -128,12 +137,26 @@ function renderApp(): void {
  */
 async function bootstrap(): Promise<void> {
   try {
+    console.log(
+      `[T] bootstrap start at ${(performance.now() - t0).toFixed(0)}ms`,
+    )
     hydrateFromLocalCache()
+    console.log(
+      `[T] cache hydrated at ${(performance.now() - t0).toFixed(0)}ms`,
+    )
 
-    // Render immediately, don't wait for IPC
     renderApp()
+    console.log(
+      `[T] renderApp done at ${(performance.now() - t0).toFixed(0)}ms`,
+    )
 
-    // Set ready in finally() so UI always shows, even if IPC fails
+    // Set ready immediately so UI is interactive
+    flushSync(() => setAppIsReady(true))
+    console.log(`[T] setAppIsReady at ${(performance.now() - t0).toFixed(0)}ms`)
+    applyAfterReadyCallbacks()
+    notifyRendererReady()
+
+    // Background refresh
     hydrateDataToMemory()
       .then((result) => {
         setAppIsHydrated(true)
@@ -144,26 +167,22 @@ async function bootstrap(): Promise<void> {
       .catch((err) => {
         console.error('[Livo] Background hydration failed:', err)
       })
-      .finally(() => {
-        flushSync(() => setAppIsReady(true))
-        applyAfterReadyCallbacks()
-        notifyRendererReady()
-        document.documentElement.dataset.appReady = 'true'
 
-        void import('./initialize/queue')
-          .then(({ setupBackgroundEventListeners }) =>
-            setupBackgroundEventListeners(),
-          )
-          .catch((error) => {
-            console.error('[Livo] Failed to setup background listeners:', error)
-          })
+    document.documentElement.dataset.appReady = 'true'
 
-        if (isDev) {
-          setTimeout(() => {
-            printPerformanceSummary()
-          }, 1000)
-        }
+    void import('./initialize/queue')
+      .then(({ setupBackgroundEventListeners }) =>
+        setupBackgroundEventListeners(),
+      )
+      .catch((error) => {
+        console.error('[Livo] Failed to setup background listeners:', error)
       })
+
+    if (isDev) {
+      setTimeout(() => {
+        printPerformanceSummary()
+      }, 1000)
+    }
   } catch (err) {
     console.error('[Livo] Bootstrap failed:', err)
     void window.api.app.reportError({

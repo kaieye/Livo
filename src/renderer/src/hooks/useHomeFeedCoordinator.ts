@@ -93,7 +93,6 @@ export interface HomeFeedCoordinatorState {
  * Extracted from EntryList.tsx to separate data coordination from rendering.
  */
 export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
-  console.time('[PERF] useHomeFeedCoordinator total')
   const {
     entries,
     isLoading,
@@ -255,17 +254,10 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     )
     if (cachedSnapshot) {
       applySnapshotFeeds(cachedSnapshot.feeds)
-      // Cache hit: fetch fresh data in background without blocking
-      requestIdleCallback(
-        async () => {
-          const snapshot = await loadSnapshot(currentLoadOptions)
-          if (snapshot) applySnapshotFeeds(snapshot.feeds)
-        },
-        { timeout: 2000 },
-      )
+      // Don't fetch IPC on startup - refresh triggered by user or auto-refresh
       return
     }
-    // Cache miss: fetch immediately
+    // Cache miss: fetch
     const snapshotStart = performance.now()
     const snapshot = await loadSnapshot(currentLoadOptions)
     recordStartupBlockEvent(
