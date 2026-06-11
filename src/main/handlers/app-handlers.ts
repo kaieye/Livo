@@ -184,7 +184,7 @@ export function registerAppHandlers(windowManager: WindowManager): void {
   registerChannel(IPC.APP_GET_ICON, () => {
     const iconPath = app.isPackaged
       ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
-      : join(app.getAppPath(), 'resources', 'yuanjiao-Livo.png')
+      : 'D:\\project\\Livo-project\\Livo\\yuanjiao-Livo.png'
     const image = nativeImage.createFromPath(iconPath)
     return image.isEmpty() ? null : image.toDataURL()
   })

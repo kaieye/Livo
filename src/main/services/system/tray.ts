@@ -5,7 +5,7 @@ import { logInfo, logWarn } from './logger'
 function createTrayImage() {
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
-    : join(app.getAppPath(), 'resources', 'yuanjiao-Livo.png')
+    : 'D:\\project\\Livo-project\\Livo\\yuanjiao-Livo.png'
 
   logInfo('[tray] loading icon from', iconPath)
 
