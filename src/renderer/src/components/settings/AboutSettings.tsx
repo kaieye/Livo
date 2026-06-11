@@ -174,16 +174,8 @@ export function AboutSettings() {
             desc: t('settings.feature_aiChatDesc'),
           },
           {
-            label: t('settings.feature_localStorage'),
-            desc: t('settings.feature_localStorageDesc'),
-          },
-          {
             label: t('settings.feature_multiModel'),
             desc: t('settings.feature_multiModelDesc'),
-          },
-          {
-            label: t('settings.feature_darkMode'),
-            desc: t('settings.feature_darkModeDesc'),
           },
         ].map((feature) => (
           <div
@@ -207,10 +199,6 @@ export function AboutSettings() {
           <Github size={16} />
           GitHub
         </a>
-        <span className="text-text-secondary flex items-center gap-1.5 text-sm">
-          <Heart size={16} className="text-red-400" />
-          {t('settings.openSourceFree')}
-        </span>
       </div>
     </div>
   )

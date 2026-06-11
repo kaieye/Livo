@@ -177,7 +177,6 @@ export type AgentSettingsPanel =
   | 'privacy'
   | 'about'
   | 'ai'
-  | 'agentPermissions'
 
 /** A navigation intent relayed from a navigation tool (main) to the renderer. */
 export type AgentNavigationAction =

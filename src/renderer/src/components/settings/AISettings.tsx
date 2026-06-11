@@ -22,6 +22,9 @@ import {
   RotateCcw,
   ShieldCheck,
   ChevronRight,
+  Link2,
+  Trash2,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 
 function SectionCard({
@@ -108,6 +111,7 @@ function isPromptDirtyFn(draft: AIConfig, saved: AIConfig): boolean {
 
 export function AISettings() {
   const ai = useSettingSection('ai')
+  const permissions = useSettingSection('agentPermissions')
   const { updateSettingsSection, setActiveTab } = useSettingsActions()
   const { t } = useTranslation()
   const [draftAi, setDraftAi] = useState<AIConfig>(ai)
@@ -674,22 +678,90 @@ export function AISettings() {
         </div>
       </div>
 
-      {/* Agent permissions cross-link */}
-      <button
-        onClick={() => setActiveTab('agentPermissions')}
-        className="border-border bg-surface hover:bg-surface-secondary dark:bg-surface-dark-secondary dark:hover:bg-surface-dark-tertiary flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors"
-      >
-        <ShieldCheck size={16} className="text-accent flex-shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">
+      {/* --- Agent permissions --- */}
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <ShieldCheck size={16} className="text-accent" />
+          <h4 className="text-sm font-medium">
             {t('settings.agentPermissions')}
-          </p>
-          <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
-            {t('settings.aiAgentPermissionsLinkDesc')}
-          </p>
+          </h4>
         </div>
-        <ChevronRight size={16} className="text-text-tertiary flex-shrink-0" />
-      </button>
+        <p className="text-text-secondary dark:text-text-dark-secondary text-xs">
+          {t('settings.agentPermissionsDesc')}
+        </p>
+      </section>
+
+      <div className="divide-border border-border bg-surface dark:bg-surface-dark-secondary divide-y overflow-hidden rounded-xl border">
+        {[
+          {
+            key: 'allowRead' as const,
+            icon: FileText,
+            title: t('settings.agentPermAllowRead'),
+            subtitle: t('settings.agentPermAllowReadDesc'),
+          },
+          {
+            key: 'allowNavigate' as const,
+            icon: ChevronRight,
+            title: t('settings.agentPermAllowNavigate'),
+            subtitle: t('settings.agentPermAllowNavigateDesc'),
+          },
+          {
+            key: 'allowMutate' as const,
+            icon: SettingsIcon,
+            title: t('settings.agentPermAllowMutate'),
+            subtitle: t('settings.agentPermAllowMutateDesc'),
+          },
+          {
+            key: 'allowExternal' as const,
+            icon: Link2,
+            title: t('settings.agentPermAllowExternal'),
+            subtitle: t('settings.agentPermAllowExternalDesc'),
+          },
+          {
+            key: 'allowDestructive' as const,
+            icon: Trash2,
+            title: t('settings.agentPermAllowDestructive'),
+            subtitle: t('settings.agentPermAllowDestructiveDesc'),
+          },
+        ].map((row) => (
+          <div key={row.key} className="flex items-center gap-3 px-4 py-3.5">
+            <row.icon size={18} className="text-accent flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-text-primary dark:text-text-dark-primary text-sm font-medium">
+                {row.title}
+              </p>
+              <p className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
+                {row.subtitle}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={permissions[row.key]}
+              onClick={() =>
+                updateSettingsSection('agentPermissions', {
+                  [row.key]: !permissions[row.key],
+                })
+              }
+              className={`inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors ${
+                permissions[row.key]
+                  ? 'bg-accent'
+                  : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                  permissions[row.key] ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <p className="dark:text-text-dark-tertiary text-text-tertiary text-xs">
+        {t('settings.agentPermissionsConfirmHint')}
+      </p>
     </div>
   )
 }

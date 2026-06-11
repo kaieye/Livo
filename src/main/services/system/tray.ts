@@ -4,8 +4,8 @@ import { logWarn } from './logger'
 
 function createTrayImage() {
   const iconPath = app.isPackaged
-    ? join(process.resourcesPath, 'resources', 'Livo.png')
-    : join(app.getAppPath(), 'resources', 'Livo.png')
+    ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
+    : join(app.getAppPath(), 'resources', 'yuanjiao-Livo.png')
 
   const image = nativeImage.createFromPath(iconPath)
   if (image.isEmpty()) {

@@ -44,7 +44,6 @@ const settingsTabImporters = {
   privacy: () => import('./PrivacySettings'),
   about: () => import('./AboutSettings'),
   refreshLogs: () => import('./RefreshLogSettings'),
-  agentPermissions: () => import('./AgentPermissionsSettings'),
   favorites: () => import('./FavoritesPanel'),
   fever: () => import('./FeverSettings'),
 } satisfies Record<SettingsTabId, () => Promise<unknown>>
@@ -115,11 +114,6 @@ const settingsTabComponents = {
       .refreshLogs()
       .then((module) => ({ default: module.RefreshLogSettings })),
   ),
-  agentPermissions: lazy(() =>
-    settingsTabImporters
-      .agentPermissions()
-      .then((module) => ({ default: module.AgentPermissionsSettings })),
-  ),
   favorites: lazy(() =>
     settingsTabImporters
       .favorites()
@@ -171,11 +165,6 @@ export function SettingsDialog() {
     },
     { id: 'ai' as const, label: t('settings.ai'), icon: Bot },
     {
-      id: 'agentPermissions' as const,
-      label: t('settings.agentPermissions'),
-      icon: ShieldCheck,
-    },
-    {
       id: 'translation' as const,
       label: t('settings.translation'),
       icon: Languages,
@@ -183,7 +172,6 @@ export function SettingsDialog() {
     { id: 'actions' as const, label: t('settings.actions'), icon: Zap },
     { id: 'data' as const, label: t('settings.data'), icon: Database },
     { id: 'privacy' as const, label: t('settings.privacy'), icon: Shield },
-    { id: 'about' as const, label: t('settings.about'), icon: Info },
     {
       id: 'refreshLogs' as const,
       label: t('settings.refreshLogs'),
@@ -199,6 +187,7 @@ export function SettingsDialog() {
       label: t('settings.fever'),
       icon: Flame,
     },
+    { id: 'about' as const, label: t('settings.about'), icon: Info },
   ]
 
   useEffect(() => {
@@ -278,7 +267,7 @@ export function SettingsDialog() {
         }}
       >
         {/* Left sidebar */}
-        <div className="bg-sidebar dark:bg-sidebar-dark w-[200px] flex-shrink-0 space-y-1 border-r p-4">
+        <div className="bg-sidebar dark:bg-sidebar-dark w-[200px] flex-shrink-0 space-y-1 overflow-y-auto border-r p-4">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold">{t('settings.title')}</h2>
           </div>

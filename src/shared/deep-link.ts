@@ -28,7 +28,6 @@ const SETTINGS_TABS = new Set<SettingsTabId>([
   'privacy',
   'about',
   'refreshLogs',
-  'agentPermissions',
   'favorites',
   'fever',
 ])

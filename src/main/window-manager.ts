@@ -165,8 +165,8 @@ export class WindowManager {
           : {}),
       autoHideMenuBar: true,
       icon: app.isPackaged
-        ? join(process.resourcesPath, 'resources', 'Livo.png')
-        : join(app.getAppPath(), 'resources', 'Livo.png'),
+        ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
+        : join(app.getAppPath(), 'resources', 'yuanjiao-Livo.png'),
       webPreferences: {
         preload: this.options.preloadPath,
         sandbox: false,

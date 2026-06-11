@@ -86,7 +86,6 @@ export type SettingsTabId =
   | 'privacy'
   | 'about'
   | 'refreshLogs'
-  | 'agentPermissions'
   | 'favorites'
   | 'fever'
 

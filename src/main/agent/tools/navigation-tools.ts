@@ -25,7 +25,6 @@ const SETTINGS_PANELS: AgentSettingsPanel[] = [
   'privacy',
   'about',
   'ai',
-  'agentPermissions',
 ]
 
 const ROOT_TAB_LABELS: Record<AgentRootTab, string> = {
@@ -44,7 +43,6 @@ const SETTINGS_PANEL_LABELS: Record<AgentSettingsPanel, string> = {
   privacy: '隐私设置',
   about: '关于页',
   ai: 'AI 设置',
-  agentPermissions: 'Agent 权限',
 }
 
 export function buildOpenRootTabTool(): AgentTool {
