@@ -174,7 +174,7 @@ export class AppManager {
 
   private configurePlatformIntegration(): void {
     if (process.platform === 'win32') {
-      app.setAppUserModelId('com.livo.app')
+      app.setAppUserModelId('com.livospace.cn')
     }
     if (app.isPackaged) {
       app.setAsDefaultProtocolClient('livo')

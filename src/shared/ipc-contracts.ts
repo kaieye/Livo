@@ -108,6 +108,7 @@ export const IPC = {
   APP_OPEN_LOGS_DIRECTORY: 'app:open-logs-directory',
   APP_CLEAR_CACHE: 'app:clear-cache',
   APP_CHECK_FOR_UPDATES: 'app:check-for-updates',
+  APP_INSTALL_UPDATE: 'app:install-update',
   APP_SAVE_TEXT_FILE: 'app:save-text-file',
   APP_DOWNLOAD_URL: 'app:download-url',
   APP_RENDERER_READY: 'app:renderer-ready',
@@ -375,6 +376,7 @@ export type IpcArgsByChannel = {
   [IPC.APP_OPEN_LOGS_DIRECTORY]: []
   [IPC.APP_CLEAR_CACHE]: []
   [IPC.APP_CHECK_FOR_UPDATES]: []
+  [IPC.APP_INSTALL_UPDATE]: []
   [IPC.APP_SAVE_TEXT_FILE]: [options: SaveTextFileOptions]
   [IPC.APP_DOWNLOAD_URL]: [options: DownloadUrlOptions]
   [IPC.APP_RENDERER_READY]: []
@@ -1068,6 +1070,7 @@ export const IPC_CONTRACTS = {
   [IPC.APP_OPEN_LOGS_DIRECTORY]: noArgs(IPC.APP_OPEN_LOGS_DIRECTORY),
   [IPC.APP_CLEAR_CACHE]: noArgs(IPC.APP_CLEAR_CACHE),
   [IPC.APP_CHECK_FOR_UPDATES]: noArgs(IPC.APP_CHECK_FOR_UPDATES),
+  [IPC.APP_INSTALL_UPDATE]: noArgs(IPC.APP_INSTALL_UPDATE),
   [IPC.APP_SAVE_TEXT_FILE]: oneObject(IPC.APP_SAVE_TEXT_FILE, 'options'),
   [IPC.APP_DOWNLOAD_URL]: oneObject(IPC.APP_DOWNLOAD_URL, 'options'),
   [IPC.APP_RENDERER_READY]: noArgs(IPC.APP_RENDERER_READY),

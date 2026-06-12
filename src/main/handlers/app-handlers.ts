@@ -12,6 +12,7 @@ import {
   openDirectory,
 } from '../services/system/app-shell'
 import { checkForAppUpdates } from '../services/system/update-check'
+import { installAppUpdate } from '../services/system/update-install'
 import { downloadUrlToFile, saveTextFile } from '../services/system/download'
 import { settingsProvider } from '../services/system/settings-provider'
 import { getDb, whenDbReady } from '../database'
@@ -65,6 +66,9 @@ export function registerAppHandlers(windowManager: WindowManager): void {
   })
   registerChannel(IPC.APP_CHECK_FOR_UPDATES, async () => {
     return checkForAppUpdates()
+  })
+  registerChannel(IPC.APP_INSTALL_UPDATE, async () => {
+    return installAppUpdate()
   })
   registerChannel(IPC.APP_SAVE_TEXT_FILE, async (_event, options) => {
     return saveTextFile(options)

@@ -16,20 +16,27 @@ export class UpdaterService {
     autoUpdater.autoInstallOnAppQuit = true
 
     autoUpdater.on('update-available', (info) => {
-      this.window?.webContents.send('updater:available', info)
+      this.sendToWindow('updater:available', info)
     })
 
     autoUpdater.on('download-progress', (progress) => {
-      this.window?.webContents.send('updater:progress', progress)
+      this.sendToWindow('updater:progress', progress)
     })
 
     autoUpdater.on('update-downloaded', (info) => {
-      this.window?.webContents.send('updater:downloaded', info)
+      this.sendToWindow('updater:downloaded', info)
     })
 
     autoUpdater.on('error', (error) => {
-      this.window?.webContents.send('updater:error', error.message)
+      this.sendToWindow('updater:error', error.message)
     })
+  }
+
+  // autoUpdater 的事件可能在窗口销毁后（如退出过程中）触发，
+  // 直接 send 会抛 "Object has been destroyed"。
+  private sendToWindow(channel: string, ...args: unknown[]) {
+    if (!this.window || this.window.isDestroyed()) return
+    this.window.webContents.send(channel, ...args)
   }
 
   setWindow(window: BrowserWindow) {
@@ -39,7 +46,7 @@ export class UpdaterService {
   async checkForUpdates() {
     try {
       return await autoUpdater.checkForUpdates()
-    } catch (error) {
+    } catch {
       return null
     }
   }

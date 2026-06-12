@@ -2377,6 +2377,10 @@ export function createWebAPI(): ElectronAPI {
         hasUpdate: false,
         currentVersion: 'web-dev',
       }),
+      installUpdate: async () => ({
+        success: false,
+        error: 'Web 平台不支持原生更新安装',
+      }),
     },
 
     // Readability

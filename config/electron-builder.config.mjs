@@ -9,7 +9,7 @@ const buildCommit = getGitCommitHash()
 const buildTime = getBuildTimestamp()
 
 export default {
-  appId: 'com.livo.app',
+  appId: 'com.livospace.cn',
   productName: 'Livo',
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
   asar: true,

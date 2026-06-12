@@ -20,6 +20,7 @@ import type {
   ReaderSnapshotRequest,
   AccountProvider,
   AppUpdateInfo,
+  AppUpdateInstallResult,
   NativeContextMenuItem,
   DownloadUrlOptions,
   DownloadUrlResult,
@@ -360,6 +361,8 @@ const api = {
     }> => invokeIpc(IPC.APP_CLEAR_CACHE),
     checkForUpdates: (): Promise<AppUpdateInfo> =>
       invokeIpc(IPC.APP_CHECK_FOR_UPDATES),
+    installUpdate: (): Promise<AppUpdateInstallResult> =>
+      invokeIpc(IPC.APP_INSTALL_UPDATE),
     saveTextFile: (options: SaveTextFileOptions): Promise<SaveTextFileResult> =>
       invokeIpc(IPC.APP_SAVE_TEXT_FILE, options),
     downloadUrl: (options: DownloadUrlOptions): Promise<DownloadUrlResult> =>

@@ -15,6 +15,13 @@ interface GitHubReleasePayload {
   html_url?: string
   published_at?: string
   body?: string
+  assets?: GitHubReleaseAssetPayload[]
+}
+
+interface GitHubReleaseAssetPayload {
+  name?: string
+  browser_download_url?: string
+  size?: number
 }
 
 function buildBaseResult(currentVersion = app.getVersion()): AppUpdateInfo {
@@ -59,11 +66,18 @@ export async function checkForAppUpdates(
       }
     }
 
+    const installerAsset = __internal.pickWindowsInstallerAsset(
+      payload.assets,
+      latestVersion,
+    )
     const result: AppUpdateInfo = {
       hasUpdate: __internal.compareVersions(latestVersion, currentVersion) > 0,
       currentVersion,
       latestVersion,
       releaseUrl: payload.html_url,
+      installerAssetName: installerAsset?.name,
+      installerDownloadUrl: installerAsset?.downloadUrl,
+      installerSize: installerAsset?.size,
       publishedAt: payload.published_at,
       notes: payload.body,
     }

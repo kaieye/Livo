@@ -240,6 +240,7 @@ pnpm test
 - 仓库开发约定与协作说明见 [`AGENTS.md`](AGENTS.md)
 - 开发入口、Web 限制和常用验证见 [`docs/development.md`](docs/development.md)
 - Windows 安装包统一由同级目录 `../Livo-Installer` 生成；主应用只产出 `dist/win-unpacked` 作为安装器 payload。
+- 桌面端自动更新会检查 GitHub Release 中的 `Livo-Setup-<version>.zip` asset，下载解压后调用 `Livo-Installer` 的静默模式原地覆盖安装。
 - 架构分层、IPC 契约和数据路径见 [`docs/architecture.md`](docs/architecture.md)
 - 设计与实现文档见 `docs/superpowers/specs` 与 `docs/superpowers/plans`
 

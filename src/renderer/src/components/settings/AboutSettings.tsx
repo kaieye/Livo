@@ -69,8 +69,11 @@ export function AboutSettings() {
   const [iconUrl, setIconUrl] = useState<string | null>(readCachedIcon)
   const updateInfo = useUpdateStore((state) => state.info)
   const checkingUpdates = useUpdateStore((state) => state.isChecking)
+  const isInstallingUpdate = useUpdateStore((state) => state.isInstallingUpdate)
+  const installError = useUpdateStore((state) => state.installError)
   const lastCheckedAt = useUpdateStore((state) => state.lastCheckedAt)
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
+  const installUpdate = useUpdateStore((state) => state.installUpdate)
   const { t } = useTranslation()
 
   useEffect(() => {
@@ -189,13 +192,35 @@ export function AboutSettings() {
                 )}
               </div>
             )}
-            {updateInfo.hasUpdate && updateInfo.releaseUrl && (
-              <button
-                onClick={() => void openExternalUrlSafe(updateInfo.releaseUrl!)}
-                className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 dark:hover:bg-black/10"
-              >
-                {t('settings.openReleasePage')}
-              </button>
+            {updateInfo.hasUpdate && (
+              <div className="flex flex-wrap gap-2">
+                {updateInfo.installerDownloadUrl && (
+                  <button
+                    onClick={() => void installUpdate()}
+                    disabled={isInstallingUpdate}
+                    className="bg-accent rounded-lg px-3 py-2 text-sm text-white transition-colors hover:opacity-90 disabled:opacity-60"
+                  >
+                    {isInstallingUpdate
+                      ? t('settings.installingUpdate')
+                      : t('settings.installUpdate')}
+                  </button>
+                )}
+                {updateInfo.releaseUrl && (
+                  <button
+                    onClick={() =>
+                      void openExternalUrlSafe(updateInfo.releaseUrl!)
+                    }
+                    className="rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-white/70 dark:hover:bg-black/10"
+                  >
+                    {t('settings.openReleasePage')}
+                  </button>
+                )}
+              </div>
+            )}
+            {installError && (
+              <p className="text-xs text-red-500">
+                {t('settings.updateInstallFailed')}: {installError}
+              </p>
             )}
           </div>
         )}

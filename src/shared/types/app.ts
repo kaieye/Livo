@@ -40,8 +40,16 @@ export interface AppUpdateInfo {
   currentVersion: string
   latestVersion?: string
   releaseUrl?: string
+  installerAssetName?: string
+  installerDownloadUrl?: string
+  installerSize?: number
   publishedAt?: string
   notes?: string
+  error?: string
+}
+
+export interface AppUpdateInstallResult {
+  success: boolean
   error?: string
 }
 

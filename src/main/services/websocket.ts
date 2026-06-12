@@ -14,6 +14,13 @@ export class WebSocketService {
     this.window = window
   }
 
+  // 退出流程中窗口可能已被销毁，socket.io 的 disconnect 事件会同步触发，
+  // 直接 send 会抛 "Object has been destroyed" 并打崩主进程。
+  private sendToWindow(channel: string, ...args: unknown[]) {
+    if (!this.window || this.window.isDestroyed()) return
+    this.window.webContents.send(channel, ...args)
+  }
+
   connect(userId?: string) {
     if (this.socket?.connected) return
 
@@ -26,24 +33,25 @@ export class WebSocketService {
     })
 
     this.socket.on('connect', () => {
-      this.window?.webContents.send('ws:connected')
+      this.sendToWindow('ws:connected')
     })
 
     this.socket.on('disconnect', () => {
-      this.window?.webContents.send('ws:disconnected')
+      this.sendToWindow('ws:disconnected')
     })
 
     this.socket.on('notification', (data) => {
-      this.window?.webContents.send('ws:notification', data)
+      this.sendToWindow('ws:notification', data)
     })
 
     this.socket.on('connect_error', (error) => {
-      this.window?.webContents.send('ws:error', error.message)
+      this.sendToWindow('ws:error', error.message)
     })
   }
 
   disconnect() {
     if (this.socket) {
+      this.socket.removeAllListeners()
       this.socket.disconnect()
       this.socket = null
     }

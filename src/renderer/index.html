@@ -32,18 +32,10 @@
       <style>
         :root {
           --livo-boot-bg: rgb(255 255 255);
-          --livo-boot-sidebar: rgb(246 246 247);
-          --livo-boot-entry: rgb(255 255 255);
-          --livo-boot-content: rgb(250 250 251);
-          --livo-boot-border: rgb(226 226 229);
         }
 
         :root.dark {
           --livo-boot-bg: rgb(28 28 30);
-          --livo-boot-sidebar: rgb(28 28 30);
-          --livo-boot-entry: rgb(28 28 30);
-          --livo-boot-content: rgb(22 22 24);
-          --livo-boot-border: rgb(56 56 58);
         }
 
         html,
@@ -60,36 +52,9 @@
           position: fixed;
           inset: 0;
           z-index: 9999;
-          display: flex;
           background: var(--livo-boot-bg);
-          font-family:
-            -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
-            Roboto, 'Helvetica Neue', sans-serif;
-        }
-
-        .livo-boot-sidebar {
-          width: 260px;
-          flex: 0 0 260px;
-          background: var(--livo-boot-sidebar);
-          border-right: 1px solid var(--livo-boot-border);
-        }
-
-        .livo-boot-entry {
-          width: 340px;
-          flex: 0 0 340px;
-          background: var(--livo-boot-entry);
-          border-right: 1px solid var(--livo-boot-border);
-        }
-
-        .livo-boot-content {
-          min-width: 0;
-          flex: 1;
-          background: var(--livo-boot-content);
         }
       </style>
-      <div class="livo-boot-sidebar"></div>
-      <div class="livo-boot-entry"></div>
-      <div class="livo-boot-content"></div>
     </div>
 
     <div id="root" style="height: 100%; width: 100%"></div>

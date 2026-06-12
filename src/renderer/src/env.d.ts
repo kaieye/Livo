@@ -258,8 +258,15 @@ declare global {
           currentVersion: string
           latestVersion?: string
           releaseUrl?: string
+          installerAssetName?: string
+          installerDownloadUrl?: string
+          installerSize?: number
           publishedAt?: string
           notes?: string
+          error?: string
+        }>
+        installUpdate: () => Promise<{
+          success: boolean
           error?: string
         }>
         rendererReady: () => Promise<{ success: boolean }>

@@ -6,8 +6,12 @@ export function UpdatePrompt() {
   const info = useUpdateStore((state) => state.info)
   const dismissedVersion = useUpdateStore((state) => state.dismissedVersion)
   const dismissVersion = useUpdateStore((state) => state.dismissVersion)
+  const installUpdate = useUpdateStore((state) => state.installUpdate)
+  const isInstallingUpdate = useUpdateStore((state) => state.isInstallingUpdate)
+  const installError = useUpdateStore((state) => state.installError)
 
   const latestVersion = info?.latestVersion || ''
+  const canInstallUpdate = !!info?.installerDownloadUrl
   const isVisible = useMemo(() => {
     return !!(
       info &&
@@ -27,26 +31,42 @@ export function UpdatePrompt() {
             检测到新版本 {latestVersion}
           </div>
           <div className="text-text-secondary dark:text-text-dark-secondary mt-0.5 text-xs">
-            当前版本 {info.currentVersion}，可以查看发行说明并手动更新。
+            {canInstallUpdate
+              ? `当前版本 ${info.currentVersion}，可以静默安装更新。`
+              : `当前版本 ${info.currentVersion}，可以查看发行说明并手动更新。`}
           </div>
+          {installError && (
+            <div className="mt-1 text-xs text-red-500">{installError}</div>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => dismissVersion(latestVersion)}
+            disabled={isInstallingUpdate}
             className="border-border hover:bg-surface-secondary dark:border-surface-dark-tertiary dark:hover:bg-surface-dark-tertiary rounded-lg border px-3 py-1.5 text-sm"
           >
             稍后
           </button>
-          <button
-            onClick={() => {
-              const settingsStore = useSettingsStore.getState()
-              settingsStore.setActiveTab('about')
-              settingsStore.setOpen(true)
-            }}
-            className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
-          >
-            查看更新
-          </button>
+          {canInstallUpdate ? (
+            <button
+              onClick={() => void installUpdate()}
+              disabled={isInstallingUpdate}
+              className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {isInstallingUpdate ? '正在更新…' : '立即更新'}
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                const settingsStore = useSettingsStore.getState()
+                settingsStore.setActiveTab('about')
+                settingsStore.setOpen(true)
+              }}
+              className="bg-accent rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
+            >
+              查看更新
+            </button>
+          )}
         </div>
       </div>
     </div>

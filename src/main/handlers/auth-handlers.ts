@@ -57,6 +57,7 @@ function triggerFeedSyncAfterLogin(): void {
 
 function sendAuthProgress(status: string): void {
   BrowserWindow.getAllWindows().forEach((win) => {
+    if (win.isDestroyed()) return
     win.webContents.send('auth:login-progress', { status })
   })
 }
