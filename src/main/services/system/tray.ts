@@ -1,11 +1,9 @@
-import { app, Menu, Tray, nativeImage } from 'electron'
-import { join } from 'path'
+import { Menu, Tray, nativeImage } from 'electron'
+import { getAppIconPath } from '../../app-icon'
 import { logInfo, logWarn } from './logger'
 
 function createTrayImage() {
-  const iconPath = app.isPackaged
-    ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
-    : 'D:\\project\\Livo-project\\Livo\\yuanjiao-Livo.png'
+  const iconPath = getAppIconPath()
 
   logInfo('[tray] loading icon from', iconPath)
 

@@ -1,10 +1,11 @@
-import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { BrowserWindow, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { DeepLinkAction } from '../shared/deep-link'
 import { classifyExternalUrl } from '../shared/url-policy'
 import type { AppCommandPayload } from '../shared/types'
+import { getAppIconPath } from './app-icon'
 import { logError, logInfo, logWarn } from './services/system/logger'
 import {
   persistWindowState,
@@ -164,9 +165,7 @@ export class WindowManager {
           ? { titleBarStyle: 'hidden' as const }
           : {}),
       autoHideMenuBar: true,
-      icon: app.isPackaged
-        ? join(process.resourcesPath, 'resources', 'yuanjiao-Livo.png')
-        : 'D:\\project\\Livo-project\\Livo\\yuanjiao-Livo.png',
+      icon: getAppIconPath(),
       webPreferences: {
         preload: this.options.preloadPath,
         sandbox: false,
