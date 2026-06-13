@@ -2654,6 +2654,14 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
     language: 'Chinese',
   },
   {
+    title: '36氪 - 最新快讯',
+    url: 'rsshub://36kr/newsflash',
+    siteUrl: 'https://36kr.com',
+    description: '36氪最新科技快讯流',
+    category: 'articles',
+    language: 'Chinese',
+  },
+  {
     title: '什么值得买 - 数码好价',
     url: 'rsshub://smzdm/ranking/pinlei/11',
     siteUrl: 'https://smzdm',
@@ -5130,7 +5138,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'YUQI',
-    url: 'https://rsshub.liumingye.cn/picnob/user/yuqisong.923',
+    url: 'rsshub://picnob/user/yuqisong.923',
     siteUrl: 'https://www.instagram.com/yuqisong.923/',
     description: 'I-DLE 成员宋雨琦的 Instagram 日常',
     category: 'ins',
@@ -5138,7 +5146,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'SOYEON / 전소연',
-    url: 'https://rsshub.liumingye.cn/picnob/user/tiny.pretty.j',
+    url: 'rsshub://picnob/user/tiny.pretty.j',
     siteUrl: 'https://www.instagram.com/tiny.pretty.j/',
     description: 'I-DLE 队长全昭妍，创作型偶像的 Instagram 动态',
     category: 'ins',
@@ -5146,7 +5154,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'NewJeans',
-    url: 'https://rsshub.liumingye.cn/picnob/user/newjeans_official',
+    url: 'rsshub://picnob/user/newjeans_official',
     siteUrl: 'https://www.instagram.com/newjeans_official/',
     description: '韩国女团 NewJeans 官方 Instagram，清新少女风格',
     category: 'ins',
@@ -5154,7 +5162,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'JIHYO',
-    url: 'https://rsshub.liumingye.cn/picnob/user/_zyozyo',
+    url: 'rsshub://picnob/user/_zyozyo',
     siteUrl: 'https://www.instagram.com/_zyozyo/',
     description: 'TWICE 队长朴志效的 Instagram 日常与舞台写真',
     category: 'ins',
@@ -5162,7 +5170,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'ROSÉ',
-    url: 'https://rsshub.liumingye.cn/picnob/user/roses_are_rosie',
+    url: 'rsshub://picnob/user/roses_are_rosie',
     siteUrl: 'https://www.instagram.com/roses_are_rosie/',
     description: 'BLACKPINK 成员 ROSÉ 的 Instagram 时尚与生活分享',
     category: 'ins',
@@ -5170,7 +5178,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '김예림 🪽 yeri',
-    url: 'https://rsshub.liumingye.cn/picnob/user/yerimiese',
+    url: 'rsshub://picnob/user/yerimiese',
     siteUrl: 'https://www.instagram.com/yerimiese/',
     description: 'Red Velvet 成员 Yeri 的 Instagram 个人日常',
     category: 'ins',
@@ -5178,7 +5186,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '안유진 AN YUJIN',
-    url: 'https://rsshub.liumingye.cn/picnob/user/_yujin_an',
+    url: 'rsshub://picnob/user/_yujin_an',
     siteUrl: 'https://www.instagram.com/_yujin_an/',
     description: 'IVE 成员安俞真的 Instagram 写真与日常动态',
     category: 'ins',
@@ -5186,7 +5194,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Wendy',
-    url: 'https://rsshub.liumingye.cn/picnob/user/todayis_wendy',
+    url: 'rsshub://picnob/user/todayis_wendy',
     siteUrl: 'https://www.instagram.com/todayis_wendy/',
     description: 'Red Velvet 成员 Wendy 的 Instagram 日常与音乐分享',
     category: 'ins',
@@ -5194,7 +5202,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Sakura Miyawaki',
-    url: 'https://rsshub.liumingye.cn/picnob/user/39saku_chan',
+    url: 'rsshub://picnob/user/39saku_chan',
     siteUrl: 'https://www.instagram.com/39saku_chan/',
     description: 'LE SSERAFIM 成员宫脇咲良的 Instagram 日常',
     category: 'ins',
@@ -5202,7 +5210,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'HUH YUNJIN',
-    url: 'https://rsshub.liumingye.cn/picnob/user/jenaissante',
+    url: 'rsshub://picnob/user/jenaissante',
     siteUrl: 'https://www.instagram.com/jenaissante/',
     description: 'LE SSERAFIM 成员宫脇咲良的 Instagram 日常',
     category: 'ins',
@@ -5210,7 +5218,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '김채원 (CHAEWON)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/_chaechae_1',
+    url: 'rsshub://picnob/user/_chaechae_1',
     siteUrl: 'https://www.instagram.com/_chaechae_1/',
     description: 'LE SSERAFIM 成员许允真的 Instagram 创作与日常',
     category: 'ins',
@@ -5218,7 +5226,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '이서 LEESEO',
-    url: 'https://rsshub.liumingye.cn/picnob/user/eeseooes',
+    url: 'rsshub://picnob/user/eeseooes',
     siteUrl: 'https://www.instagram.com/eeseooes/',
     description: 'LE SSERAFIM 队长金彩源的 Instagram 写真与日常',
     category: 'ins',
@@ -5226,7 +5234,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'HONG EUNCHAE',
-    url: 'https://rsshub.liumingye.cn/picnob/user/hhh.e_c.v',
+    url: 'rsshub://picnob/user/hhh.e_c.v',
     siteUrl: 'https://www.instagram.com/hhh.e_c.v/',
     description: 'IVE 成员李瑞的 Instagram 日常与舞台动态',
     category: 'ins',
@@ -5234,7 +5242,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '나연 (NAYEON)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/nayeonyny',
+    url: 'rsshub://picnob/user/nayeonyny',
     siteUrl: 'https://www.instagram.com/nayeonyny/',
     description: 'LE SSERAFIM 成员洪恩彩的 Instagram 日常分享',
     category: 'ins',
@@ -5242,7 +5250,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '리즈 LIZ',
-    url: 'https://rsshub.liumingye.cn/picnob/user/liz.yeyo',
+    url: 'rsshub://picnob/user/liz.yeyo',
     siteUrl: 'https://www.instagram.com/liz.yeyo/',
     description: 'TWICE 成员娜璉的 Instagram 写真与个人动态',
     category: 'ins',
@@ -5250,7 +5258,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'JISOO🪐',
-    url: 'https://rsshub.liumingye.cn/picnob/user/sooyaaa__',
+    url: 'rsshub://picnob/user/sooyaaa__',
     siteUrl: 'https://www.instagram.com/sooyaaa__/',
     description: 'IVE 成员 LIZ 的 Instagram 日常与舞台写真',
     category: 'ins',
@@ -5258,7 +5266,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'WINTER',
-    url: 'https://rsshub.liumingye.cn/picnob/user/imwinter',
+    url: 'rsshub://picnob/user/imwinter',
     siteUrl: 'https://www.instagram.com/imwinter/',
     description: 'aespa 成员 WINTER 的 Instagram 写真与日常动态',
     category: 'ins',
@@ -5266,7 +5274,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Joy',
-    url: 'https://rsshub.liumingye.cn/picnob/user/_imyour_joy',
+    url: 'rsshub://picnob/user/_imyour_joy',
     siteUrl: 'https://www.instagram.com/_imyour_joy/',
     description: 'Red Velvet 成员 Joy 的 Instagram 时尚与生活分享',
     category: 'ins',
@@ -5274,7 +5282,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '쯔위 (TZUYU)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/thinkaboutzu',
+    url: 'rsshub://picnob/user/thinkaboutzu',
     siteUrl: 'https://www.instagram.com/thinkaboutzu/',
     description: 'BLACKPINK 成员金智秀的 Instagram 时尚与生活分享',
     category: 'ins',
@@ -5282,7 +5290,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'MINNIE',
-    url: 'https://rsshub.liumingye.cn/picnob/user/min.nicha',
+    url: 'rsshub://picnob/user/min.nicha',
     siteUrl: 'https://www.instagram.com/min.nicha/',
     description: 'I-DLE 成员 MINNIE 的 Instagram 日常',
     category: 'ins',
@@ -5290,7 +5298,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'YUNA',
-    url: 'https://rsshub.liumingye.cn/picnob/user/igotyuandme',
+    url: 'rsshub://picnob/user/igotyuandme',
     siteUrl: 'https://www.instagram.com/igotyuandme/',
     description: 'ITZY 成员柳娜的 Instagram 写真与日常动态',
     category: 'ins',
@@ -5298,7 +5306,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'LIA',
-    url: 'https://rsshub.liumingye.cn/picnob/user/lia_loves___',
+    url: 'rsshub://picnob/user/lia_loves___',
     siteUrl: 'https://www.instagram.com/lia_loves___/',
     description: 'ITZY 成员 LIA 的 Instagram 个人日常分享',
     category: 'ins',
@@ -5306,7 +5314,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'IRENE',
-    url: 'https://rsshub.liumingye.cn/picnob/user/renebaebae',
+    url: 'rsshub://picnob/user/renebaebae',
     siteUrl: 'https://www.instagram.com/renebaebae/',
     description: 'Red Velvet 队长 IRENE 的 Instagram 写真与日常',
     category: 'ins',
@@ -5314,7 +5322,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '슬기 Seulgi',
-    url: 'https://rsshub.liumingye.cn/picnob/user/hi_sseulgi',
+    url: 'rsshub://picnob/user/hi_sseulgi',
     siteUrl: 'https://www.instagram.com/hi_sseulgi/',
     description: 'Red Velvet 成员 Joy 的 Instagram 时尚与生活分享',
     category: 'ins',
@@ -5322,7 +5330,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '장원영 WONYOUNG',
-    url: 'https://rsshub.liumingye.cn/picnob/user/for_everyoung10',
+    url: 'rsshub://picnob/user/for_everyoung10',
     siteUrl: 'https://www.instagram.com/for_everyoung10/',
     description: 'TWICE 成员周子瑜的 Instagram 写真与日常',
     category: 'ins',
@@ -5330,7 +5338,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'YEJI',
-    url: 'https://rsshub.liumingye.cn/picnob/user/yezyizhere',
+    url: 'rsshub://picnob/user/yezyizhere',
     siteUrl: 'https://www.instagram.com/yezyizhere/',
     description: 'ITZY 队长 YEJI 的 Instagram 舞蹈与日常动态',
     category: 'ins',
@@ -5338,7 +5346,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'MIYEON / 미연',
-    url: 'https://rsshub.liumingye.cn/picnob/user/noodle.zip',
+    url: 'rsshub://picnob/user/noodle.zip',
     siteUrl: 'https://www.instagram.com/noodle.zip/',
     description: 'I-DLE 成员 MIYEON 的 Instagram 日常',
     category: 'ins',
@@ -5346,7 +5354,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '다현 (DAHYUN)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/dahhyunnee',
+    url: 'rsshub://picnob/user/dahhyunnee',
     siteUrl: 'https://www.instagram.com/dahhyunnee/',
     description: 'Red Velvet 成员 Seulgi 的 Instagram 舞台与日常分享',
     category: 'ins',
@@ -5354,7 +5362,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'KAZUHA',
-    url: 'https://rsshub.liumingye.cn/picnob/user/zuhazana',
+    url: 'rsshub://picnob/user/zuhazana',
     siteUrl: 'https://www.instagram.com/zuhazana/',
     description: 'LE SSERAFIM 成员藤吉夏铃的 Instagram 芭蕾与日常',
     category: 'ins',
@@ -5362,7 +5370,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '사나 𝚂𝚊𝚗𝚊',
-    url: 'https://rsshub.liumingye.cn/picnob/user/m.by__sana',
+    url: 'rsshub://picnob/user/m.by__sana',
     siteUrl: 'https://www.instagram.com/m.by__sana/',
     description: 'IVE 成员张元英的 Instagram 时尚写真与日常',
     category: 'ins',
@@ -5370,7 +5378,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '鞠婧祎 ju jingyi',
-    url: 'https://rsshub.liumingye.cn/picnob/user/jujingyi_kikuuu',
+    url: 'rsshub://picnob/user/jujingyi_kikuuu',
     siteUrl: 'https://www.instagram.com/jujingyi_kikuuu/',
     description: 'I-DLE 成员 MIYEON 的 Instagram 清纯日常分享',
     category: 'ins',
@@ -5378,7 +5386,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'BABYMONSTER PHARITA (파리타)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/pharitas.babymonsters',
+    url: 'rsshub://picnob/user/pharitas.babymonsters',
     siteUrl: 'https://www.instagram.com/pharitas.babymonsters/',
     description: 'TWICE 成员金多贤的 Instagram 搞怪与日常动态',
     category: 'ins',
@@ -5386,7 +5394,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '陈都灵',
-    url: 'https://rsshub.liumingye.cn/picnob/user/du_chenduling',
+    url: 'rsshub://picnob/user/du_chenduling',
     siteUrl: 'https://www.instagram.com/du_chenduling/',
     description: 'TWICE 成员三矢纱也香的 Instagram 可爱日常分享',
     category: 'ins',
@@ -5394,7 +5402,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '모모 (MOMO)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/momo',
+    url: 'rsshub://picnob/user/momo',
     siteUrl: 'https://www.instagram.com/momo/',
     description: '中国女演员兼歌手鞠婧祎的 Instagram 时尚写真',
     category: 'ins',
@@ -5402,7 +5410,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'nana',
-    url: 'https://rsshub.liumingye.cn/picnob/user/nanaouyang',
+    url: 'rsshub://picnob/user/nanaouyang',
     siteUrl: 'https://www.instagram.com/nanaouyang/',
     description: '中国女演员欧阳娜娜的 Instagram 音乐与生活分享',
     category: 'ins',
@@ -5410,7 +5418,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'LISA',
-    url: 'https://rsshub.liumingye.cn/picnob/user/lalalalisa_m',
+    url: 'rsshub://picnob/user/lalalalisa_m',
     siteUrl: 'https://www.instagram.com/lalalalisa_m/',
     description: 'BLACKPINK 成员 LISA 的 Instagram 时尚与舞蹈动态',
     category: 'ins',
@@ -5418,7 +5426,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'Shuhua',
-    url: 'https://rsshub.liumingye.cn/picnob/user/yeh.shaa_',
+    url: 'rsshub://picnob/user/yeh.shaa_',
     siteUrl: 'https://www.instagram.com/yeh.shaa_/',
     description: 'I-DLE 成员叶舒华的 Instagram 台湾风情日常',
     category: 'ins',
@@ -5426,7 +5434,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '周也 Zhou Ye',
-    url: 'https://rsshub.liumingye.cn/picnob/user/yeahzhoou',
+    url: 'rsshub://picnob/user/yeahzhoou',
     siteUrl: 'https://www.instagram.com/yeahzhoou/',
     description: 'BABYMONSTER 成员 PHARITA 的 Instagram 日常动态',
     category: 'ins',
@@ -5434,7 +5442,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'BABYMONSTER ASA (아사) FANPAGE',
-    url: 'https://rsshub.liumingye.cn/picnob/user/asa__babymonsters',
+    url: 'rsshub://picnob/user/asa__babymonsters',
     siteUrl: 'https://www.instagram.com/asa__babymonsters/',
     description: '中国女演员陈都灵的 Instagram 时尚与生活分享',
     category: 'ins',
@@ -5442,7 +5450,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'J',
-    url: 'https://rsshub.liumingye.cn/picnob/user/jennierubyjane',
+    url: 'rsshub://picnob/user/jennierubyjane',
     siteUrl: 'https://www.instagram.com/jennierubyjane/',
     description: 'TWICE 成员平井桃的 Instagram 舞蹈与日常动态',
     category: 'ins',
@@ -5450,7 +5458,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'KARINA',
-    url: 'https://rsshub.liumingye.cn/picnob/user/katarinabluu',
+    url: 'rsshub://picnob/user/katarinabluu',
     siteUrl: 'https://www.instagram.com/katarinabluu/',
     description: 'aespa 队长 KARINA 的 Instagram 写真与日常动态',
     category: 'ins',
@@ -5458,7 +5466,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'BABYMONSTER AHYEON (정아현)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/ahyeon_babymoster',
+    url: 'rsshub://picnob/user/ahyeon_babymoster',
     siteUrl: 'https://www.instagram.com/ahyeon_babymoster/',
     description: '中国女演员欧阳娜娜的 Instagram 音乐与生活分享',
     category: 'ins',
@@ -5466,7 +5474,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '미나 (MINA)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/mina_sr_my',
+    url: 'rsshub://picnob/user/mina_sr_my',
     siteUrl: 'https://www.instagram.com/mina_sr_my/',
     description: 'BLACKPINK 成员 LISA 的 Instagram 日常分享',
     category: 'ins',
@@ -5474,7 +5482,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '레이 REI',
-    url: 'https://rsshub.liumingye.cn/picnob/user/reinyourheart',
+    url: 'rsshub://picnob/user/reinyourheart',
     siteUrl: 'https://www.instagram.com/reinyourheart/',
     description: 'I-DLE 成员叶舒华的 Instagram 日常分享',
     category: 'ins',
@@ -5482,7 +5490,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '가을 GAEUL',
-    url: 'https://rsshub.liumingye.cn/picnob/user/fallingin__fall',
+    url: 'rsshub://picnob/user/fallingin__fall',
     siteUrl: 'https://www.instagram.com/fallingin__fall/',
     description: '中国女演员周也的 Instagram 日常分享',
     category: 'ins',
@@ -5490,7 +5498,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '정연 (JEONGYEON)',
-    url: 'https://rsshub.liumingye.cn/picnob/user/jy_piece',
+    url: 'rsshub://picnob/user/jy_piece',
     siteUrl: 'https://www.instagram.com/jy_piece/',
     description: 'BABYMONSTER 成员 ASA 的 Instagram 日常分享',
     category: 'ins',
@@ -5498,7 +5506,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'CHAERYEONG',
-    url: 'https://rsshub.liumingye.cn/picnob/user/chaerrry0',
+    url: 'rsshub://picnob/user/chaerrry0',
     siteUrl: 'https://www.instagram.com/chaerrry0/',
     description: 'ITZY 成员李彩领的 Instagram 日常分享',
     category: 'ins',
@@ -5506,7 +5514,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: '채영 CHAEYOUNG',
-    url: 'https://rsshub.liumingye.cn/picnob/user/chaeyo.0',
+    url: 'rsshub://picnob/user/chaeyo.0',
     siteUrl: 'https://www.instagram.com/chaeyo.0/',
     description: 'BLACKPINK 成员 JENNIE 的 Instagram 日常分享',
     category: 'ins',
@@ -5514,7 +5522,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'BABYMONSTER RUKA 루카 𝘒𝘢𝘮𝘢𝘭 𝘞𝘢𝘭𝘪𝘢',
-    url: 'https://rsshub.liumingye.cn/picnob/user/ruka.babymonstar',
+    url: 'rsshub://picnob/user/ruka.babymonstar',
     siteUrl: 'https://www.instagram.com/ruka.babymonstar/',
     description: 'aespa 队长 KARINA 的 Instagram 日常分享',
     category: 'ins',
@@ -5522,7 +5530,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'NINGNING',
-    url: 'https://rsshub.liumingye.cn/picnob/user/imnotningning',
+    url: 'rsshub://picnob/user/imnotningning',
     siteUrl: 'https://www.instagram.com/imnotningning/',
     description: 'aespa 成员宁宁的 Instagram 日常分享',
     category: 'ins',
@@ -5530,7 +5538,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'public posts',
-    url: 'https://rsshub.liumingye.cn/picnob/user/aerichandesu',
+    url: 'rsshub://picnob/user/aerichandesu',
     siteUrl: 'https://www.instagram.com/aerichandesu/',
     description: 'BABYMONSTER 成员 AHYEON 的 Instagram 日常分享',
     category: 'ins',
@@ -5538,7 +5546,7 @@ export const CURATED_FEEDS: DiscoverFeed[] = [
   },
   {
     title: 'BABYMONSTER RAMI (라미) FANPAGE',
-    url: 'https://rsshub.liumingye.cn/picnob/user/rami.babymonster',
+    url: 'rsshub://picnob/user/rami.babymonster',
     siteUrl: 'https://www.instagram.com/rami.babymonster/',
     description: 'TWICE 成员名井南的 Instagram 日常分享',
     category: 'ins',
