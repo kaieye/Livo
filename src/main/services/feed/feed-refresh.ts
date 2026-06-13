@@ -11,7 +11,11 @@ import {
   queueVideoDurationEnrich,
   enrichAllVideoFeeds,
 } from '../video/video-duration'
-import { resolveFeedPayload } from './feed-source-provider'
+import {
+  resolveFeedPayload,
+  prefetchServerFeedCache,
+  getNormalizedFeedUrlForCache,
+} from './feed-source-provider'
 import {
   ensureInstagramUserFeedLimit,
   ensureTwitterUserFeedLimit,
@@ -485,7 +489,11 @@ export function stopAutoRefresh(): void {
  */
 export async function refreshSingleFeed(
   feed: Feed,
-  options?: { force?: boolean; logOperation?: boolean },
+  options?: {
+    force?: boolean
+    logOperation?: boolean
+    serverCacheHit?: import('./feed-cache-client').FeedCacheHit
+  },
 ): Promise<number> {
   const task = getLocalTaskRunner().enqueue(
     FEED_REFRESH_SINGLE_TASK,
@@ -545,7 +553,12 @@ export async function refreshSingleFeed(
 
 async function runRefreshSingleFeed(
   feed: Feed,
-  options: { force?: boolean } | undefined,
+  options:
+    | {
+        force?: boolean
+        serverCacheHit?: import('./feed-cache-client').FeedCacheHit
+      }
+    | undefined,
   context?: TaskRunContext,
 ): Promise<number> {
   context?.reportProgress({
@@ -574,7 +587,10 @@ async function runRefreshSingleFeed(
     }
 
     const result = await withTimeout(
-      resolveFeedPayload(feed, { force: options?.force }),
+      resolveFeedPayload(feed, {
+        force: options?.force,
+        serverCacheHit: options?.serverCacheHit,
+      }),
       getRefreshTimeoutMs(feed.url),
       normalizedFeedUrl,
     )
@@ -845,6 +861,10 @@ async function runRefreshAllFeeds(
   const failedTitles: string[] = []
   let completedRefreshes = 0
 
+  // admin/vip 用户登录时，先批量问后端是否已经缓存了对应条目；
+  // 命中的源会被 resolveFeedPayload 直接消费，避免本地再去拉一次 RSS。
+  const serverCacheByUrl = await prefetchServerFeedCache(sortedStaleFeeds)
+
   const reportFeedProgress = (
     feed: Feed,
     success: boolean,
@@ -878,7 +898,12 @@ async function runRefreshAllFeeds(
     concurrency,
     async (feed) => {
       try {
-        const newCount = await refreshSingleFeed(feed, { logOperation: false })
+        const newCount = await refreshSingleFeed(feed, {
+          logOperation: false,
+          serverCacheHit: serverCacheByUrl.get(
+            getNormalizedFeedUrlForCache(feed),
+          ),
+        })
         totalNew += newCount
         reportFeedProgress(feed, true, newCount)
         return newCount

@@ -12,11 +12,17 @@ import {
   type AggregatorDiagnostics,
 } from './aggregator-store'
 import { isInstagramUserFeedUrl } from '../../../shared/url-detect'
+import {
+  queryServerFeedCache,
+  shouldUseServerFeedCache,
+  type FeedCacheEntry,
+  type FeedCacheHit,
+} from './feed-cache-client'
 
 type ParsedFeed = RssParser.Output<Record<string, any>>
 
 export interface AggregatedFeedPayload {
-  source: 'direct' | 'local-agent' | 'private-aggregator'
+  source: 'direct' | 'local-agent' | 'private-aggregator' | 'server-cache'
   fetchedAt: number
   notModified: boolean
   etag?: string
@@ -267,11 +273,81 @@ async function fetchLocalAgentPayload(
 
 export async function resolveFeedPayload(
   feed: Feed,
-  options?: { force?: boolean },
+  options?: {
+    force?: boolean
+    serverCacheHit?: FeedCacheHit
+  },
 ): Promise<AggregatedFeedPayload> {
+  // server-cache 优先级最高：admin/vip 用户的拉取优先吃后端缓存。
+  // 如果调用方已经预取（批量刷新），直接用；否则自己问一次后端。
+  // miss 时静默退回到原有 direct/local-agent 路径。
+  if (shouldUseServerFeedCache()) {
+    const normalizedUrl = getNormalizedFeedUrl(feed)
+    const hit =
+      options?.serverCacheHit ??
+      (await maybeFetchSingleServerCacheHit(normalizedUrl))
+    if (hit) {
+      return buildServerCachePayload(hit, normalizedUrl)
+    }
+  }
+
   const source = getDesiredSource(feed)
   if (source === 'local-agent') return fetchLocalAgentPayload(feed, options)
   return fetchDirectPayload(feed, options)
+}
+
+async function maybeFetchSingleServerCacheHit(
+  normalizedUrl: string,
+): Promise<FeedCacheHit | null> {
+  try {
+    const { hits } = await queryServerFeedCache([normalizedUrl])
+    return hits[0] ?? null
+  } catch {
+    // 后端不可用时静默回退到本地路径。
+    return null
+  }
+}
+
+function feedCacheEntryToParsedItem(
+  entry: FeedCacheEntry,
+): Record<string, any> {
+  // 把后端的结构化条目伪装成 rss-parser 的 item，下游 buildSingleEntry 能直接消费。
+  return {
+    guid: entry.guid,
+    title: entry.title,
+    link: entry.link ?? undefined,
+    creator: entry.author ?? undefined,
+    author: entry.author ?? undefined,
+    pubDate: entry.publishedAt ?? undefined,
+    isoDate: entry.publishedAt ?? undefined,
+    content: entry.contentHtml ?? undefined,
+    'content:encoded': entry.contentHtml ?? undefined,
+    contentSnippet: entry.summary ?? undefined,
+    summary: entry.summary ?? undefined,
+    description: entry.contentHtml ?? entry.summary ?? undefined,
+  }
+}
+
+function buildServerCachePayload(
+  hit: FeedCacheHit,
+  normalizedUrl: string,
+): AggregatedFeedPayload {
+  const parsed = {
+    items: hit.entries.map(feedCacheEntryToParsedItem),
+  } as unknown as ParsedFeed
+
+  const fetchedAt = Date.parse(hit.lastFetchedAt)
+  return {
+    source: 'server-cache',
+    fetchedAt: Number.isFinite(fetchedAt) ? fetchedAt : Date.now(),
+    notModified: false,
+    parsed,
+    diagnostics: {
+      upstreamsTried: [normalizedUrl],
+      cacheHit: true,
+      freshnessMs: Number.isFinite(fetchedAt) ? Date.now() - fetchedAt : 0,
+    },
+  }
 }
 
 export async function warmAggregatorForFeeds(feeds: Feed[]): Promise<void> {
@@ -285,4 +361,39 @@ export async function warmAggregatorForFeeds(feeds: Feed[]): Promise<void> {
       }
     })
   await Promise.all(tasks)
+}
+
+/**
+ * 批量预取后端缓存：返回 url → hit 的映射。
+ * 仅当 admin/vip 用户登录时才会真正打后端，其他情况直接返回空 Map。
+ * 调用方把命中结果通过 resolveFeedPayload 的 serverCacheHit 参数注入。
+ */
+export async function prefetchServerFeedCache(
+  feeds: Feed[],
+): Promise<Map<string, FeedCacheHit>> {
+  const result = new Map<string, FeedCacheHit>()
+  if (!shouldUseServerFeedCache() || feeds.length === 0) return result
+
+  // 用 normalize 后的 url 去问，和后端 BuiltinFeedSource.url 对齐。
+  const urlByFeedId = new Map<string, string>()
+  const uniqueUrls = new Set<string>()
+  for (const feed of feeds) {
+    const url = getNormalizedFeedUrl(feed)
+    urlByFeedId.set(feed.id, url)
+    uniqueUrls.add(url)
+  }
+
+  try {
+    const { hits } = await queryServerFeedCache(Array.from(uniqueUrls))
+    for (const hit of hits) {
+      result.set(hit.url, hit)
+    }
+  } catch {
+    // 静默失败：批量预取失败不应阻塞整体刷新流程。
+  }
+  return result
+}
+
+export function getNormalizedFeedUrlForCache(feed: Feed): string {
+  return getNormalizedFeedUrl(feed)
 }

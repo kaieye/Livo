@@ -25,6 +25,7 @@ export interface CurrentUser {
   displayName: string
   avatarUrl: string | null
   role: string
+  roles?: string[]
   status: string
   createdAt: string
   providers?: string[]
