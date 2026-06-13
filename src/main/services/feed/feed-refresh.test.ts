@@ -26,6 +26,10 @@ const getDbMock = vi.hoisted(() => vi.fn())
 const getLocalTaskRunnerMock = vi.hoisted(() => vi.fn())
 const settingsProviderGetMock = vi.hoisted(() => vi.fn())
 const resolveFeedPayloadMock = vi.hoisted(() => vi.fn())
+const prefetchServerFeedCacheMock = vi.hoisted(() => vi.fn())
+const getNormalizedFeedUrlForCacheMock = vi.hoisted(() =>
+  vi.fn((feed: Feed) => feed.url),
+)
 const resolveFeedAvatarMock = vi.hoisted(() => vi.fn())
 const ingestParsedFeedEntriesMock = vi.hoisted(() => vi.fn())
 const appendRefreshLogMock = vi.hoisted(() => vi.fn())
@@ -48,6 +52,8 @@ vi.mock('../system/task-runner-service', () => ({
 
 vi.mock('./feed-source-provider', () => ({
   resolveFeedPayload: resolveFeedPayloadMock,
+  prefetchServerFeedCache: prefetchServerFeedCacheMock,
+  getNormalizedFeedUrlForCache: getNormalizedFeedUrlForCacheMock,
 }))
 
 vi.mock('./feed-avatar', () => ({
@@ -169,6 +175,12 @@ describe('refreshAllFeeds', () => {
     getDbMock.mockReset()
     settingsProviderGetMock.mockReset()
     resolveFeedPayloadMock.mockReset()
+    prefetchServerFeedCacheMock.mockReset()
+    prefetchServerFeedCacheMock.mockResolvedValue(new Map())
+    getNormalizedFeedUrlForCacheMock.mockReset()
+    getNormalizedFeedUrlForCacheMock.mockImplementation(
+      (feed: Feed) => feed.url,
+    )
     resolveFeedAvatarMock.mockReset()
     ingestParsedFeedEntriesMock.mockReset()
     appendRefreshLogMock.mockReset()
@@ -312,6 +324,73 @@ describe('refreshAllFeeds', () => {
         total: 2,
         done: true,
       }),
+    )
+  })
+
+  it('passes prefetched server-cache hits into per-feed refreshes', async () => {
+    const feed = {
+      ...makeFeed(),
+      id: 'feed-cached',
+      title: 'Cached Feed',
+      url: 'https://cache.example.com/feed.xml',
+    }
+    getDbMock.mockReturnValue({
+      feeds: {
+        getAllFeeds: vi.fn(() => [feed]),
+        updateFeed: vi.fn(),
+      },
+      maintenance: {
+        cleanupEntries: vi.fn(),
+      },
+      fever: {
+        getFeverAccounts: vi.fn(() => []),
+      },
+    })
+    settingsProviderGetMock.mockReturnValue({
+      general: { showRecommended: true },
+      data: {
+        enrichVideoDuration: false,
+        entriesPerFeed: 128,
+        maxEntryAgeDays: 90,
+      },
+    })
+    getLocalTaskRunnerMock.mockReturnValue({
+      getActiveRun: vi.fn(() => undefined),
+      enqueue: vi.fn((contract, payload, handler) => ({
+        runId: `${contract.name}-test`,
+        promise: Promise.resolve().then(() =>
+          handler(payload, { reportProgress: vi.fn() }),
+        ),
+        getRecord: vi.fn(),
+      })),
+    })
+
+    const serverCacheHit = {
+      url: feed.url,
+      sourceId: 'source-1',
+      lastFetchedAt: new Date().toISOString(),
+      entries: [],
+    }
+    prefetchServerFeedCacheMock.mockResolvedValue(
+      new Map([[feed.url, serverCacheHit]]),
+    )
+    resolveFeedPayloadMock.mockResolvedValue({
+      parsed: {
+        title: feed.title,
+        description: '',
+        link: feed.url,
+        items: [],
+      },
+    })
+    resolveFeedAvatarMock.mockResolvedValue(undefined)
+    ingestParsedFeedEntriesMock.mockResolvedValue({ addedCount: 0 })
+
+    await refreshAllFeeds({ force: true })
+
+    expect(prefetchServerFeedCacheMock).toHaveBeenCalledWith([feed])
+    expect(resolveFeedPayloadMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: feed.id }),
+      expect.objectContaining({ serverCacheHit }),
     )
   })
 })
