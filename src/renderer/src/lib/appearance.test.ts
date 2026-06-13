@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { ACCENT_COLOR_MAP, resolveAccentPalette } from './appearance'
 
 describe('resolveAccentPalette', () => {
-  it('returns the orange preset by default', () => {
-    expect(resolveAccentPalette(undefined)).toBe(ACCENT_COLOR_MAP.orange)
-    expect(resolveAccentPalette('unknown-name')).toBe(ACCENT_COLOR_MAP.orange)
+  it('returns the rose preset by default', () => {
+    expect(resolveAccentPalette(undefined)).toBe(ACCENT_COLOR_MAP.rose)
+    expect(resolveAccentPalette('unknown-name')).toBe(ACCENT_COLOR_MAP.rose)
   })
 
   it('returns the matching named preset', () => {
@@ -22,8 +22,8 @@ describe('resolveAccentPalette', () => {
     expect(palette.soft).toBe('#3366cc1A')
   })
 
-  it('falls back to orange for malformed hex', () => {
-    expect(resolveAccentPalette('#xyz')).toBe(ACCENT_COLOR_MAP.orange)
-    expect(resolveAccentPalette('#fff')).toBe(ACCENT_COLOR_MAP.orange)
+  it('falls back to rose for malformed hex', () => {
+    expect(resolveAccentPalette('#xyz')).toBe(ACCENT_COLOR_MAP.rose)
+    expect(resolveAccentPalette('#fff')).toBe(ACCENT_COLOR_MAP.rose)
   })
 })

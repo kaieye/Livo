@@ -121,7 +121,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     uiFontFamily: 'inherit',
     contentFontFamily: 'inherit',
     rsshubInstance: 'https://rsshub.pseudoyu.com',
-    accentColor: 'orange',
+    accentColor: 'rose',
     opaqueSidebar: false,
     reduceMotion: false,
     renderInlineStyle: true,

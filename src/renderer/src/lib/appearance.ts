@@ -56,7 +56,7 @@ function lighten(hex: string, amount: number): string {
 export function resolveAccentPalette(
   accentColor: string | undefined,
 ): AccentPalette {
-  if (!accentColor) return ACCENT_COLOR_MAP.orange
+  if (!accentColor) return ACCENT_COLOR_MAP.rose
   if (accentColor in ACCENT_COLOR_MAP) return ACCENT_COLOR_MAP[accentColor]
   if (/^#[0-9a-f]{6}$/i.test(accentColor)) {
     return {
@@ -65,7 +65,7 @@ export function resolveAccentPalette(
       soft: `${accentColor}1A`,
     }
   }
-  return ACCENT_COLOR_MAP.orange
+  return ACCENT_COLOR_MAP.rose
 }
 
 function ensureCustomStyleElement(): HTMLStyleElement {

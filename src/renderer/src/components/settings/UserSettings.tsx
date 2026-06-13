@@ -294,8 +294,12 @@ function FeedSyncPanel() {
           lastSyncAt: result.lastSyncAt,
           pendingChanges: result.pendingChanges,
         })
-        const changed = result.uploaded + result.downloaded
-        setFeedback(changed > 0 ? `已同步 ${changed} 项` : '已是最新')
+        const parts: string[] = []
+        if (result.uploaded > 0) parts.push(`上传 ${result.uploaded} 项`)
+        if (result.downloaded > 0) parts.push(`下载 ${result.downloaded} 项`)
+        setFeedback(
+          parts.length > 0 ? `已同步：${parts.join('，')}` : '已是最新',
+        )
       } else {
         setError(result.error || '同步失败')
         await refreshStatus()
@@ -315,20 +319,22 @@ function FeedSyncPanel() {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Cloud size={15} className="text-accent" />
-          <span>订阅源同步</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
+          <span className="flex items-center gap-2">
+            <Cloud size={15} className="text-accent" />
+            <span>订阅源同步</span>
+          </span>
+          {(feedback || error) && (
+            <span
+              className={`flex items-center gap-1 text-xs font-normal ${
+                error ? 'text-red-500' : 'text-green-600'
+              }`}
+            >
+              {error ? <AlertCircle size={13} /> : <Check size={13} />}
+              {error || feedback}
+            </span>
+          )}
         </div>
-        {(feedback || error) && (
-          <div
-            className={`mt-1 flex items-center gap-1 text-xs ${
-              error ? 'text-red-500' : 'text-green-600'
-            }`}
-          >
-            {error ? <AlertCircle size={13} /> : <Check size={13} />}
-            {error || feedback}
-          </div>
-        )}
       </div>
 
       <div className="flex items-center gap-3">

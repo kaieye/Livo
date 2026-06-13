@@ -1,8 +1,8 @@
 :root {
-  --color-accent: #ff5c00;
-  --color-accent-hover: #ff7a33;
-  --color-accent-soft: #fff0e6;
-  --color-accent-rgb: 255 92 0;
+  --color-accent: #f43f5e;
+  --color-accent-hover: #fb7185;
+  --color-accent-soft: #ffe4e6;
+  --color-accent-rgb: 244 63 94;
   --color-accent-text: #ffffff;
 
   /* Tailwind triplet tokens (consumed via rgb(var(--x) / <alpha-value>)). */
