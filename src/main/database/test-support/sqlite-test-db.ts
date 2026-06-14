@@ -28,7 +28,9 @@ function bsq3Dir(): string {
 
 function isAbiMismatch(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  return /NODE_MODULE_VERSION|was compiled against a different Node\.js version/i.test(
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  if (code === 'ERR_DLOPEN_FAILED') return true
+  return /NODE_MODULE_VERSION|was compiled against a different Node\.js version|did not self-register/i.test(
     message,
   )
 }
