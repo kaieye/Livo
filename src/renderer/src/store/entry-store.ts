@@ -32,6 +32,14 @@ import {
 } from '../lib/entry-cache'
 import { dedupeEntriesForClient } from '../lib/entry-client-dedupe'
 import { recordReadActivity } from '../lib/reading-activity'
+import {
+  buildEntryByIdMap,
+  findEntryById,
+  getEntriesAbove,
+  getEntriesBelow,
+  getEntriesByFeedId as selectEntriesByFeedId,
+  patchEntryState,
+} from '../lib/entry-selectors'
 
 function buildReaderSnapshotInput(options?: {
   feedId?: string
@@ -74,6 +82,11 @@ interface EntryState {
   } | null
   paginationPageSize: number
   searchQuery: string
+
+  // Selectors
+  getEntryById: (entryId: string | null | undefined) => Entry | null
+  getEntryByIdMap: () => Map<string, Entry>
+  getEntriesByFeedId: (feedId: string | null | undefined) => Entry[]
 
   // Actions
   loadEntries: (options?: {
@@ -159,6 +172,17 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   paginationOptions: null,
   paginationPageSize: 0,
   searchQuery: '',
+
+  getEntryById: (entryId) => {
+    if (!entryId) return null
+    const selectedEntry = get().selectedEntry
+    if (selectedEntry?.id === entryId) return selectedEntry
+    return findEntryById(get().entries, entryId)
+  },
+
+  getEntryByIdMap: () => buildEntryByIdMap(get().entries),
+
+  getEntriesByFeedId: (feedId) => selectEntriesByFeedId(get().entries, feedId),
 
   loadEntries: async (options) => {
     const pageSize = Math.max(
@@ -562,13 +586,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     const nextDetail = cacheEntryDetail(refreshed)
     cacheEntrySnapshot(nextDetail)
 
-    set((state) => ({
-      entries: state.entries.map((entry) =>
-        entry.id === entryId ? nextDetail : entry,
-      ),
-      selectedEntry:
-        state.selectedEntry?.id === entryId ? nextDetail : state.selectedEntry,
-    }))
+    set((state) => patchEntryState(state, entryId, () => nextDetail))
 
     return nextDetail
   },
@@ -590,15 +608,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
       await window.api.entries.markRead(entry.id, true)
       recordReadActivity(1)
       // Update local state
-      set((state) => ({
-        entries: state.entries.map((e) =>
-          e.id === entry.id ? { ...e, isRead: true } : e,
-        ),
-        selectedEntry:
-          state.selectedEntry?.id === entry.id
-            ? { ...state.selectedEntry, isRead: true }
-            : state.selectedEntry,
-      }))
+      set((state) => patchEntryState(state, entry.id, { isRead: true }))
       patchCachedEntry(entry.id, { isRead: true })
     }
     const fullEntry = await fetchEntryDetail(entry.id)
@@ -621,30 +631,16 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
         const detail = await fetchEntryDetail(id)
         if (!detail) return
         cacheEntrySnapshot(detail)
-        set((state) => ({
-          entries: state.entries.map((entry) =>
-            entry.id === id ? detail : entry,
-          ),
-          selectedEntry:
-            state.selectedEntry?.id === id ? detail : state.selectedEntry,
-        }))
+        set((state) => patchEntryState(state, id, () => detail))
       }),
     )
   },
 
   markRead: async (entryId, isRead) => {
-    const wasRead = get().entries.find((e) => e.id === entryId)?.isRead
+    const wasRead = get().getEntryById(entryId)?.isRead
     await window.api.entries.markRead(entryId, isRead)
     if (isRead && !wasRead) recordReadActivity(1)
-    set((state) => ({
-      entries: state.entries.map((e) =>
-        e.id === entryId ? { ...e, isRead } : e,
-      ),
-      selectedEntry:
-        state.selectedEntry?.id === entryId
-          ? { ...state.selectedEntry, isRead }
-          : state.selectedEntry,
-    }))
+    set((state) => patchEntryState(state, entryId, { isRead }))
     patchCachedEntry(entryId, { isRead })
   },
 
@@ -670,89 +666,57 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
 
   markAboveRead: async (entryId) => {
     const { entries } = get()
-    const idx = entries.findIndex((e) => e.id === entryId)
-    if (idx <= 0) return
-    const toMark = entries.slice(0, idx).filter((e) => !e.isRead)
+    const toMark = getEntriesAbove(entries, entryId).filter((e) => !e.isRead)
+    if (toMark.length === 0) return
     for (const e of toMark) {
       await window.api.entries.markRead(e.id, true)
     }
+    const ids = new Set(toMark.map((entry) => entry.id))
     set((state) => ({
-      entries: state.entries.map((e, i) =>
-        i < idx ? { ...e, isRead: true } : e,
+      entries: state.entries.map((e) =>
+        ids.has(e.id) ? { ...e, isRead: true } : e,
       ),
     }))
   },
 
   markBelowRead: async (entryId) => {
     const { entries } = get()
-    const idx = entries.findIndex((e) => e.id === entryId)
-    if (idx < 0 || idx >= entries.length - 1) return
-    const toMark = entries.slice(idx + 1).filter((e) => !e.isRead)
+    const toMark = getEntriesBelow(entries, entryId).filter((e) => !e.isRead)
+    if (toMark.length === 0) return
     for (const e of toMark) {
       await window.api.entries.markRead(e.id, true)
     }
+    const ids = new Set(toMark.map((entry) => entry.id))
     set((state) => ({
-      entries: state.entries.map((e, i) =>
-        i > idx ? { ...e, isRead: true } : e,
+      entries: state.entries.map((e) =>
+        ids.has(e.id) ? { ...e, isRead: true } : e,
       ),
     }))
   },
 
   toggleStar: async (entryId) => {
     const result = await window.api.entries.toggleStar(entryId)
-    set((state) => ({
-      entries: state.entries.map((e) =>
-        e.id === entryId ? { ...e, isStarred: result.isStarred } : e,
-      ),
-      selectedEntry:
-        state.selectedEntry?.id === entryId
-          ? { ...state.selectedEntry, isStarred: result.isStarred }
-          : state.selectedEntry,
-    }))
+    set((state) =>
+      patchEntryState(state, entryId, { isStarred: result.isStarred }),
+    )
     patchCachedEntry(entryId, { isStarred: result.isStarred })
   },
 
   saveProgress: async (entryId, readProgress) => {
     await window.api.entries.saveProgress(entryId, readProgress)
-    set((state) => {
-      const updated = state.entries.map((e) =>
-        e.id === entryId ? { ...e, readProgress } : e,
-      )
-      const selected =
-        state.selectedEntry?.id === entryId
-          ? { ...state.selectedEntry, readProgress }
-          : state.selectedEntry
-      return { entries: updated, selectedEntry: selected }
-    })
+    set((state) => patchEntryState(state, entryId, { readProgress }))
     patchCachedEntry(entryId, { readProgress })
   },
 
   markListened: async (entryId, isListened) => {
     await window.api.entries.markListened(entryId, isListened)
-    set((state) => ({
-      entries: state.entries.map((e) =>
-        e.id === entryId ? { ...e, isListened } : e,
-      ),
-      selectedEntry:
-        state.selectedEntry?.id === entryId
-          ? { ...state.selectedEntry, isListened }
-          : state.selectedEntry,
-    }))
+    set((state) => patchEntryState(state, entryId, { isListened }))
     patchCachedEntry(entryId, { isListened })
   },
 
   saveListenProgress: async (entryId, listenProgress) => {
     await window.api.entries.saveListenProgress(entryId, listenProgress)
-    set((state) => {
-      const updated = state.entries.map((e) =>
-        e.id === entryId ? { ...e, listenProgress } : e,
-      )
-      const selected =
-        state.selectedEntry?.id === entryId
-          ? { ...state.selectedEntry, listenProgress }
-          : state.selectedEntry
-      return { entries: updated, selectedEntry: selected }
-    })
+    set((state) => patchEntryState(state, entryId, { listenProgress }))
     patchCachedEntry(entryId, { listenProgress })
   },
 

@@ -4,6 +4,8 @@ import {
   areHomeFeedLoadOptionsEqual,
   buildHomeFeedLoadOptions,
   buildHomeFeedRefreshTarget,
+  buildHomeFeedScopeCacheKey,
+  buildHomeFeedScopeDescriptor,
   computeViewFeedIds,
   resolveScopedEntriesForRender,
 } from './home-feed-scope'
@@ -163,5 +165,44 @@ describe('home-feed-scope', () => {
         entriesMatchCurrentScope: false,
       }),
     ).toEqual({ entries: [], isUsingCachedScope: false })
+  })
+
+  it('构建阅读面范围描述符', () => {
+    const descriptor = buildHomeFeedScopeDescriptor({
+      selectedFeedId: null,
+      activeView: FeedViewType.SocialMedia,
+      feeds,
+      filterMode: 'unread',
+      showRecommended: false,
+      recommendedCategory: 'Recommended',
+      paginationOptions: {
+        feedIds: ['social-recommended', 'social-1'],
+        unreadOnly: true,
+      },
+      paginationPageSize: 20,
+      limit: 20,
+    })
+
+    expect(descriptor).toEqual({
+      loadOptions: {
+        feedIds: ['social-1', 'social-recommended'],
+        unreadOnly: true,
+        limit: 20,
+      },
+      cacheKey: '1:all:unread:no-recommended',
+      entriesMatchCurrentScope: true,
+      viewFeedIds: ['social-1'],
+    })
+  })
+
+  it('构建稳定的阅读面范围缓存 key', () => {
+    expect(
+      buildHomeFeedScopeCacheKey({
+        activeView: null,
+        selectedFeedId: 'starred',
+        filterMode: 'all',
+        showRecommended: true,
+      }),
+    ).toBe('all:starred:all:with-recommended')
   })
 })

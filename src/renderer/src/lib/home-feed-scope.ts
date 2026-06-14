@@ -14,6 +14,15 @@ export interface ScopedEntriesResult<TEntry> {
   isUsingCachedScope: boolean
 }
 
+export type HomeFeedFilterMode = 'all' | 'unread'
+
+export interface HomeFeedScopeDescriptor {
+  loadOptions: HomeFeedLoadOptions
+  cacheKey: string
+  entriesMatchCurrentScope: boolean
+  viewFeedIds: string[] | undefined
+}
+
 export type HomeFeedRefreshTarget =
   | { type: 'feed'; feedId: string }
   | { type: 'feeds'; feedIds: string[] }
@@ -54,6 +63,17 @@ export function resolveScopedEntriesForRender<TEntry>(input: {
     return { entries: input.cachedEntries, isUsingCachedScope: true }
   }
   return { entries: [], isUsingCachedScope: false }
+}
+
+export function buildHomeFeedScopeCacheKey(options: {
+  activeView: FeedViewType | null
+  selectedFeedId: string | null
+  filterMode: HomeFeedFilterMode
+  showRecommended: boolean
+}): string {
+  return `${options.activeView ?? 'all'}:${options.selectedFeedId ?? 'all'}:${
+    options.filterMode === 'unread' ? 'unread' : 'all'
+  }:${options.showRecommended ? 'with-recommended' : 'no-recommended'}`
 }
 
 /**
@@ -99,6 +119,55 @@ export function buildHomeFeedLoadOptions(options: {
   }
 
   return { unreadOnly, limit }
+}
+
+export function buildHomeFeedScopeDescriptor(options: {
+  selectedFeedId: string | null
+  activeView: FeedViewType | null
+  feeds: Array<{
+    id: string
+    view?: FeedViewType
+    category?: string
+    showInAll?: boolean
+  }>
+  filterMode: HomeFeedFilterMode
+  showRecommended: boolean
+  recommendedCategory: string
+  paginationOptions: {
+    feedId?: string
+    feedIds?: string[]
+    starred?: boolean
+    unreadOnly?: boolean
+  } | null
+  paginationPageSize: number
+  limit?: number
+}): HomeFeedScopeDescriptor {
+  const loadOptions = buildHomeFeedLoadOptions({
+    selectedFeedId: options.selectedFeedId,
+    activeView: options.activeView,
+    feeds: options.feeds,
+    unreadOnly: options.filterMode === 'unread',
+    limit: options.limit,
+  })
+
+  return {
+    loadOptions,
+    cacheKey: buildHomeFeedScopeCacheKey({
+      activeView: options.activeView,
+      selectedFeedId: options.selectedFeedId,
+      filterMode: options.filterMode,
+      showRecommended: options.showRecommended,
+    }),
+    entriesMatchCurrentScope: areHomeFeedLoadOptionsEqual(loadOptions, {
+      ...options.paginationOptions,
+      limit: options.paginationPageSize || undefined,
+    }),
+    viewFeedIds: computeViewFeedIds(
+      options.feeds,
+      options.activeView,
+      options.recommendedCategory,
+    ),
+  }
 }
 
 /**

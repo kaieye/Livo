@@ -6,14 +6,9 @@ import { FeedViewType } from '../../../../shared/types'
 import { FeedAvatar } from '../feed/FeedAvatar'
 import { FeedSubscribeViewTypeRail } from '../feed/FeedSubscribeViewTypeRail'
 import {
-  buildDiscoverCategoryOptions,
-  findDiscoverSubscribeFeed,
-  hostOfDiscoverTarget,
   normalizeDiscoverCategory,
-  resolveDiscoverSubscribeCategory,
-  resolveDiscoverSubscribeTitle,
+  resolveDiscoverSubscribeConfig,
   resolveDiscoverSubscribeUrl,
-  resolveDiscoverSubscribeView,
   type DiscoverSubscribeTarget,
 } from '../../lib/discover-subscribe-config'
 import { shouldPreserveExplicitDiscoverView } from '../../lib/discover-search'
@@ -37,10 +32,22 @@ export function SubscribeConfigDialog({
   const addFeed = useFeedStore((state) => state.addFeed)
   const updateFeed = useFeedStore((state) => state.updateFeed)
 
-  const existingFeed = useMemo(
-    () => findDiscoverSubscribeFeed(feeds, target),
+  const subscribeConfig = useMemo(
+    () => resolveDiscoverSubscribeConfig({ feeds, target }),
     [feeds, target],
   )
+  const {
+    existingFeed,
+    effectiveUrl,
+    effectiveTarget,
+    isEditMode,
+    displayTitle,
+    displayHost,
+    categoryOptions,
+    initialTitle,
+    initialCategory,
+    initialView,
+  } = subscribeConfig
 
   const [titleValue, setTitleValue] = useState('')
   const [categoryValue, setCategoryValue] = useState('')
@@ -50,29 +57,6 @@ export function SubscribeConfigDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const effectiveUrl = existingFeed?.url || target.url
-  const effectiveTarget = useMemo(
-    () => ({
-      ...target,
-      url: effectiveUrl,
-      title: target.title || existingFeed?.title,
-      siteUrl: target.siteUrl || existingFeed?.siteUrl,
-      imageUrl: target.imageUrl || existingFeed?.imageUrl,
-      description: target.description || existingFeed?.description,
-      category:
-        target.category || existingFeed?.folder || existingFeed?.category,
-      view: target.view ?? existingFeed?.view,
-    }),
-    [effectiveUrl, existingFeed, target],
-  )
-
-  const isEditMode = !!existingFeed
-  const displayTitle = resolveDiscoverSubscribeTitle(target, existingFeed)
-  const displayHost = hostOfDiscoverTarget(effectiveTarget)
-  const categoryOptions = useMemo(
-    () => buildDiscoverCategoryOptions(feeds),
-    [feeds],
-  )
   const submitLabel = isEditMode
     ? t('discoverSubscribeConfig.save')
     : t('discoverSubscribeConfig.subscribe')
@@ -86,11 +70,11 @@ export function SubscribeConfigDialog({
   }, [feeds.length, isLoadingFeeds, loadFeeds])
 
   useEffect(() => {
-    setTitleValue(resolveDiscoverSubscribeTitle(target, existingFeed))
-    setCategoryValue(resolveDiscoverSubscribeCategory(target, existingFeed))
-    setSelectedView(resolveDiscoverSubscribeView(target, existingFeed))
+    setTitleValue(initialTitle)
+    setCategoryValue(initialCategory)
+    setSelectedView(initialView)
     setSubmitError('')
-  }, [existingFeed, target])
+  }, [initialCategory, initialTitle, initialView])
 
   const handleSubmit = useCallback(async () => {
     const targetUrl = effectiveTarget.url.trim()

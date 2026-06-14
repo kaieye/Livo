@@ -7,10 +7,8 @@ import { RECOMMENDED_CATEGORY } from './useInitRecommendedFeeds'
 import { useStableHomeFeedLoadOptions } from './useStableHomeFeedLoadOptions'
 import { getEntryLoadLimit } from '../lib/entry-load-limit'
 import {
-  areHomeFeedLoadOptionsEqual,
   buildHomeFeedRefreshTarget,
-  buildHomeFeedLoadOptions,
-  computeViewFeedIds,
+  buildHomeFeedScopeDescriptor,
   resolveScopedEntriesForRender,
 } from '../lib/home-feed-scope'
 import { buildCachedEntryReadingSurfaceScopeModel } from '../lib/entry-reading-surface-model'
@@ -171,28 +169,35 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
     () => getEntryLoadLimit(activeView),
     [activeView],
   )
-  const derivedLoadOptions = useMemo(
+  const scopeDescriptor = useMemo(
     () =>
-      buildHomeFeedLoadOptions({
+      buildHomeFeedScopeDescriptor({
         selectedFeedId,
         activeView,
         feeds,
-        unreadOnly: filterMode === 'unread',
+        filterMode,
+        showRecommended,
+        recommendedCategory: RECOMMENDED_CATEGORY,
+        paginationOptions,
+        paginationPageSize,
+        limit: entryLoadLimit,
       }),
-    [activeView, feeds, filterMode, selectedFeedId],
+    [
+      activeView,
+      entryLoadLimit,
+      feeds,
+      filterMode,
+      paginationOptions,
+      paginationPageSize,
+      selectedFeedId,
+      showRecommended,
+    ],
   )
-  const currentLoadOptions = useStableHomeFeedLoadOptions(derivedLoadOptions)
-  const scopeCacheKey = `${activeView ?? 'all'}:${selectedFeedId ?? 'all'}:${
-    filterMode === 'unread' ? 'unread' : 'all'
-  }:${showRecommended ? 'with-recommended' : 'no-recommended'}`
-  const entriesMatchCurrentScope = useMemo(
-    () =>
-      areHomeFeedLoadOptionsEqual(currentLoadOptions, {
-        ...paginationOptions,
-        limit: paginationPageSize || undefined,
-      }),
-    [currentLoadOptions, paginationOptions, paginationPageSize],
+  const currentLoadOptions = useStableHomeFeedLoadOptions(
+    scopeDescriptor.loadOptions,
   )
+  const scopeCacheKey = scopeDescriptor.cacheKey
+  const entriesMatchCurrentScope = scopeDescriptor.entriesMatchCurrentScope
   const cachedScopeEntries = useMemo(() => {
     const memoryEntries = scopedEntriesCache.get(scopeCacheKey)?.entries
     if (memoryEntries !== undefined) return memoryEntries
@@ -233,10 +238,7 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
   }, [entries, entriesMatchCurrentScope, isLoading, scopeCacheKey])
 
   // View-scoped feed IDs for refresh targeting (excludes recommended feeds)
-  const viewFeedIds = useMemo(
-    () => computeViewFeedIds(feeds, activeView, RECOMMENDED_CATEGORY),
-    [feeds, activeView],
-  )
+  const viewFeedIds = scopeDescriptor.viewFeedIds
 
   const loadCurrentSnapshot = useCallback(async () => {
     const cacheStart = performance.now()

@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   insertFeed: vi.fn(),
   updateFeed: vi.fn(),
   getFeedById: vi.fn(),
+  getEntryById: vi.fn(),
   insertEntry: vi.fn(),
   updateEntry: vi.fn(),
 }))
@@ -57,6 +58,7 @@ vi.mock('../../database', () => ({
       getFeedById: mocks.getFeedById,
     },
     entries: {
+      getEntryById: mocks.getEntryById,
       insertEntry: mocks.insertEntry,
       updateEntry: mocks.updateEntry,
     },
@@ -86,6 +88,7 @@ describe('queueFeverSyncAccount', () => {
     mocks.getFeverItemMapping.mockReturnValue(undefined)
     mocks.getFeverSyncState.mockReturnValue(undefined)
     mocks.getFeedById.mockReturnValue(undefined)
+    mocks.getEntryById.mockReturnValue(undefined)
     mocks.listItems.mockResolvedValueOnce([
       {
         id: 101,
@@ -145,6 +148,80 @@ describe('queueFeverSyncAccount', () => {
     expect(mocks.eventSend).toHaveBeenCalledWith(
       'fever:sync-progress',
       expect.objectContaining({ accountId: account.id, phase: 'done' }),
+    )
+  })
+
+  it('reconciles read and starred state for existing mapped Fever items', async () => {
+    const { queueFeverSyncAccount } = await import('./fever-sync')
+    mocks.getFeverFeedMappingByRemoteId.mockReturnValue({
+      accountId: account.id,
+      feverFeedId: 42,
+      localFeedId: 'local-feed-42',
+      remoteGroup: 'News',
+      remoteTitle: 'Remote feed',
+      remoteUrl: 'https://example.com/feed.xml',
+      isActive: true,
+      lastSeenAt: 1000,
+    })
+    mocks.getFeverItemMapping.mockReturnValue({
+      accountId: account.id,
+      feverItemId: 101,
+      feverFeedId: 42,
+      localFeedId: 'local-feed-42',
+      localEntryId: 'entry-1',
+      remoteIsRead: false,
+      remoteIsStarred: true,
+      isActive: true,
+      lastSeenAt: 1000,
+    })
+    mocks.getEntryById.mockReturnValue({
+      id: 'entry-1',
+      feedId: 'local-feed-42',
+      title: 'Remote entry',
+      url: 'https://example.com/post',
+      publishedAt: 1000,
+      isRead: false,
+      isStarred: true,
+      createdAt: 1000,
+    })
+    mocks.listItems.mockReset()
+    mocks.listItems.mockResolvedValueOnce([
+      {
+        id: 101,
+        feedId: 42,
+        title: 'Remote entry',
+        author: 'Author',
+        html: '<p>Hello</p>',
+        url: 'https://example.com/post',
+        isRead: 1,
+        isSaved: 0,
+        createdOnTime: 1000,
+      },
+    ])
+
+    const result = await queueFeverSyncAccount(account.id, {
+      force: true,
+    }).promise
+
+    expect(result).toMatchObject({
+      success: true,
+      itemsSynced: 1,
+      newEntries: 0,
+    })
+    expect(mocks.insertEntry).not.toHaveBeenCalled()
+    expect(mocks.updateEntry).toHaveBeenCalledWith('entry-1', {
+      isRead: true,
+      isStarred: false,
+    })
+    expect(mocks.upsertFeverItemMapping).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: account.id,
+        feverItemId: 101,
+        localEntryId: 'entry-1',
+        remoteIsRead: true,
+        remoteIsStarred: false,
+        isActive: true,
+      }),
     )
   })
 })

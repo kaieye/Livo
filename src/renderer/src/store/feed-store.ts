@@ -12,6 +12,12 @@ import {
   invalidateFeedCache,
   invalidateMultipleFeedsCaches,
 } from '../lib/entry-cache'
+import {
+  buildFeedByIdMap,
+  findFeedById,
+  findFeedByUrl,
+  getFeedsByView as selectFeedsByView,
+} from '../lib/feed-selectors'
 
 const RECOMMENDED_CATEGORY = 'Recommended'
 const FEEDS_CACHE_KEY = 'livo-feeds-cache'
@@ -112,6 +118,15 @@ interface FeedState {
   isLoading: boolean
   isRefreshing: boolean
 
+  // Selectors
+  getFeedById: (feedId: string | null | undefined) => FeedWithCount | null
+  getFeedByUrl: (url: string | null | undefined) => FeedWithCount | null
+  getFeedsByView: (
+    view: FeedViewType | null,
+    options?: { excludeCategory?: string },
+  ) => FeedWithCount[]
+  getFeedByIdMap: () => Map<string, FeedWithCount>
+
   // Actions
   hydrateFromCache: () => FeedWithCount[]
   applySnapshotFeeds: (snapshotFeeds: FeedWithCount[]) => void
@@ -184,6 +199,15 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
   isLoading: false,
   isRefreshing: false,
   importRefreshProgress: null,
+
+  getFeedById: (feedId) => findFeedById(get().feeds, feedId),
+
+  getFeedByUrl: (url) => findFeedByUrl(get().feeds, url),
+
+  getFeedsByView: (view, options) =>
+    selectFeedsByView(get().feeds, view, options),
+
+  getFeedByIdMap: () => buildFeedByIdMap(get().feeds),
 
   hydrateFromCache: () => {
     const cached = loadFeedsFromCache()

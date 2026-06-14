@@ -484,4 +484,42 @@ describe('useEntryStore', () => {
       isStarred: false,
     })
   })
+
+  it('exposes entry lookup selectors through the store Interface', async () => {
+    const article = makeEntry({ id: 'article', feedId: 'feed-1' })
+    const video = makeEntry({ id: 'video', feedId: 'feed-2' })
+    const { useEntryStore } = await loadEntryStore({
+      listResults: [],
+      detailResult: article,
+    })
+    useEntryStore.setState({
+      entries: [article, video],
+      selectedEntry: makeEntry({ id: 'selected', feedId: 'feed-1' }),
+    })
+
+    const state = useEntryStore.getState()
+
+    expect(state.getEntryById('video')).toBe(video)
+    expect(state.getEntryById('selected')).toBe(state.selectedEntry)
+    expect(state.getEntryById('missing')).toBeNull()
+    expect(state.getEntryByIdMap().get('article')).toBe(article)
+    expect(state.getEntriesByFeedId('feed-1').map((entry) => entry.id)).toEqual(
+      ['article'],
+    )
+  })
+
+  it('patches list and selected entry consistently when saving progress', async () => {
+    const entry = makeEntry({ id: 'entry-1', readProgress: 10 })
+    const selectedEntry = makeEntry({ id: 'entry-1', readProgress: 10 })
+    const { useEntryStore } = await loadEntryStore({
+      listResults: [],
+      detailResult: entry,
+    })
+    useEntryStore.setState({ entries: [entry], selectedEntry })
+
+    await useEntryStore.getState().saveProgress('entry-1', 75)
+
+    expect(useEntryStore.getState().entries[0]?.readProgress).toBe(75)
+    expect(useEntryStore.getState().selectedEntry?.readProgress).toBe(75)
+  })
 })

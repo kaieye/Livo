@@ -99,7 +99,7 @@ export default function ArticleDetailPage() {
 
   // Social entry detection — look up the parent feed's viewType
   const feed = useFeedStore((s) =>
-    activeEntry ? s.feeds.find((f) => f.id === activeEntry.feedId) : null,
+    activeEntry ? s.getFeedById(activeEntry.feedId) : null,
   )
   const isSocial = feed?.view === FeedViewType.SocialMedia
   const isPictures = feed?.view === FeedViewType.Pictures

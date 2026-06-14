@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FeedWithCount } from '../../../shared/types'
+import { FeedViewType, type FeedWithCount } from '../../../shared/types'
 
 function makeFeed(partial: Partial<FeedWithCount> = {}): FeedWithCount {
   return {
@@ -119,5 +119,53 @@ describe('useFeedStore.applySnapshotFeeds', () => {
     useFeedStore.getState().applySnapshotFeeds(snapshot)
 
     expect(useFeedStore.getState().feeds).toBe(snapshot)
+  })
+})
+
+describe('useFeedStore selectors', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('finds feeds by id and normalized url through the store Interface', async () => {
+    const { useFeedStore } = await loadFeedStore()
+    const feeds = [
+      makeFeed({ id: 'article', url: 'https://Example.com/rss/' }),
+      makeFeed({ id: 'video', url: 'https://video.example.com/feed.xml' }),
+    ]
+    useFeedStore.setState({ feeds })
+
+    const state = useFeedStore.getState()
+
+    expect(state.getFeedById('video')).toBe(feeds[1])
+    expect(state.getFeedById('missing')).toBeNull()
+    expect(state.getFeedByUrl('https://example.com/rss')).toBe(feeds[0])
+    expect(state.getFeedByUrl('')).toBeNull()
+  })
+
+  it('returns view-scoped feeds and can exclude Recommended feeds', async () => {
+    const { useFeedStore } = await loadFeedStore()
+    const feeds = [
+      makeFeed({ id: 'article', view: FeedViewType.Articles }),
+      makeFeed({ id: 'video', view: FeedViewType.Videos }),
+      makeFeed({
+        id: 'recommended-video',
+        view: FeedViewType.Videos,
+        category: 'Recommended',
+      }),
+    ]
+    useFeedStore.setState({ feeds })
+
+    const state = useFeedStore.getState()
+
+    expect(state.getFeedsByView(FeedViewType.Videos)).toEqual([
+      feeds[1],
+      feeds[2],
+    ])
+    expect(
+      state.getFeedsByView(FeedViewType.Videos, {
+        excludeCategory: 'Recommended',
+      }),
+    ).toEqual([feeds[1]])
   })
 })

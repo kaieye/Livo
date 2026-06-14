@@ -214,13 +214,16 @@ async function syncItems(
           remoteIsStarred: item.isSaved === 1,
         })
 
-        const entry = getDb().feeds.getFeedById(existingMapping.localEntryId)
-          ? undefined
-          : undefined
-        if (entry !== undefined) {
+        const entry = getDb().entries.getEntryById(existingMapping.localEntryId)
+        const remoteIsRead = item.isRead === 1
+        const remoteIsStarred = item.isSaved === 1
+        if (
+          entry &&
+          (entry.isRead !== remoteIsRead || entry.isStarred !== remoteIsStarred)
+        ) {
           getDb().entries.updateEntry(existingMapping.localEntryId, {
-            isRead: item.isRead === 1,
-            isStarred: item.isSaved === 1,
+            isRead: remoteIsRead,
+            isStarred: remoteIsStarred,
           })
         }
       } else {

@@ -94,7 +94,7 @@ export function useUrlSync(): void {
     window.setTimeout(() => {
       const current = useEntryStore.getState()
       if (current.selectedEntry?.id === entryId) return
-      const inList = current.entries.find((entry) => entry.id === entryId)
+      const inList = current.getEntryById(entryId)
       if (inList) {
         entrySelectionFromUrl.current = entryId
         void current.selectEntry(inList).finally(() => {

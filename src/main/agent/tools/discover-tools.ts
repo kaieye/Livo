@@ -9,7 +9,7 @@ import {
   type DiscoverFeed,
 } from '../../../shared/discover-data'
 import { getDb } from '../../database'
-import { subscribeFeed } from '../../services/feed/feed-subscriber'
+import { addFeed } from '../../operations/feed-operations'
 import { objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
@@ -114,7 +114,7 @@ export function buildAddBuiltinSubscriptionTool(): AgentTool {
       if (getDb().feeds.getFeedByUrl(matched.url)) {
         return { status: 'success', message: `您已订阅 "${matched.title}"` }
       }
-      const outcome = await subscribeFeed({
+      const outcome = await addFeed({
         url: matched.url,
         title: matched.title,
         category: matched.category,
@@ -122,7 +122,7 @@ export function buildAddBuiltinSubscriptionTool(): AgentTool {
       return {
         status: 'success',
         message: `成功添加推荐订阅源：${matched.title}\n分类：${matched.category}`,
-        data: { feedId: outcome.feedId },
+        data: { feedId: outcome.feed.id },
       }
     },
   })
