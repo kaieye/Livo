@@ -85,6 +85,9 @@ const ELECTRON_API_SHAPE = {
   readability: {
     fetch: true,
   },
+  readingActivity: {
+    sync: true,
+  },
   discover: {
     categories: true,
     popular: true,
