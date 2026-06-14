@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Feeds State</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    pre { background: #f0f0f0; padding: 10px; border-radius: 4px; }
+    button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>Livo Feeds State Debugger</h2>
+  <button onclick="checkCache()">Check localStorage Cache</button>
+  <button onclick="clearCache()">Clear Cache</button>
+  <button onclick="location.reload()">Reload</button>
+  <pre id="output">Click "Check localStorage Cache" to inspect...</pre>
+
+  <script>
+    function checkCache() {
+      const output = document.getElementById('output');
+      let result = '=== localStorage Cache Inspection ===\n\n';
+
+      try {
+        const cached = localStorage.getItem('livo-feeds-cache');
+        if (!cached) {
+          result += '❌ No cache found (livo-feeds-cache is null)\n';
+        } else {
+          const feeds = JSON.parse(cached);
+          result += `✅ Cache exists with ${feeds.length} feeds\n\n`;
+          result += 'First 3 feeds:\n';
+          feeds.slice(0, 3).forEach((feed, i) => {
+            result += `${i + 1}. ${feed.title || 'Untitled'} (ID: ${feed.id})\n`;
+            result += `   URL: ${feed.url}\n`;
+            result += `   Category: ${feed.category || 'None'}\n`;
+            result += `   Unread: ${feed.unreadCount || 0}\n\n`;
+          });
+
+          if (feeds.length > 3) {
+            result += `... and ${feeds.length - 3} more feeds\n`;
+          }
+        }
+      } catch (e) {
+        result += `❌ Error reading cache: ${e.message}\n`;
+      }
+
+      output.textContent = result;
+    }
+
+    function clearCache() {
+      if (confirm('Clear livo-feeds-cache from localStorage?')) {
+        localStorage.removeItem('livo-feeds-cache');
+        alert('Cache cleared!');
+        checkCache();
+      }
+    }
+
+    // Auto-check on load
+    window.onload = checkCache;
+  </script>
+</body>
+</html>

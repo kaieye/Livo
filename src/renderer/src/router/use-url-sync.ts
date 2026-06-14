@@ -152,10 +152,28 @@ export function useUrlSync(): void {
         feedStore.activeView !== viewType ||
         feedStore.selectedFeedId !== feedId
       ) {
+        const currentFeedsCount = feedStore.feeds.length
+        console.log('[UrlSync] Updating view state:', {
+          from: {
+            activeView: feedStore.activeView,
+            selectedFeedId: feedStore.selectedFeedId,
+          },
+          to: { activeView: viewType, selectedFeedId: feedId },
+          currentFeedsCount,
+        })
         useFeedStore.setState({
           activeView: viewType,
           selectedFeedId: feedId,
         })
+        const afterFeedsCount = useFeedStore.getState().feeds.length
+        if (afterFeedsCount !== currentFeedsCount) {
+          console.error(
+            '[UrlSync] ⚠️ Feeds count changed!',
+            currentFeedsCount,
+            '→',
+            afterFeedsCount,
+          )
+        }
       }
       selectEntryFromUrl(entryId)
     }

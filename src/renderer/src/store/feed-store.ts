@@ -149,6 +149,7 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
 
   hydrateFromCache: () => {
     const cached = loadFeedsFromCache()
+    console.log('[FeedStore] hydrateFromCache:', cached.length, 'feeds')
     if (cached.length > 0) {
       set({ feeds: cached })
     }
@@ -159,6 +160,7 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     set({ isLoading: true })
     try {
       const feeds = await window.api.feeds.list()
+      console.log('[FeedStore] loadFeeds:', feeds.length, 'feeds from IPC')
       set({ feeds, isLoading: false })
       saveFeedsToCache(feeds)
     } catch {
@@ -401,3 +403,18 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     }
   },
 }))
+
+// Debug: Monitor all state changes
+if (import.meta.env.DEV) {
+  useFeedStore.subscribe((state, prevState) => {
+    if (state.feeds.length !== prevState.feeds.length) {
+      console.log(
+        '[FeedStore] feeds.length changed:',
+        prevState.feeds.length,
+        '→',
+        state.feeds.length,
+      )
+      console.trace('[FeedStore] Stack trace:')
+    }
+  })
+}

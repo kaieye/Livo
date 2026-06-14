@@ -110,7 +110,9 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
     useSettingsStore.setState({ settings, isLoaded: true })
   }
 
-  if (feeds && feeds.length > 0) {
+  if (feeds !== null && feeds !== undefined) {
+    // Always update feeds from IPC, even if empty array.
+    // This ensures the store reflects the true backend state.
     useFeedStore.setState({ feeds, isLoading: false })
     // Save to localStorage cache for next startup
     try {
