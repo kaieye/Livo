@@ -238,8 +238,43 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
 
   const applySnapshotFeeds = useCallback(
     (snapshotFeeds: typeof feeds): void => {
+      console.error(
+        '[HomeFeedCoordinator] applySnapshotFeeds called with',
+        snapshotFeeds.length,
+        'feeds',
+      )
+      console.error(
+        '[HomeFeedCoordinator] Current store has',
+        useFeedStore.getState().feeds.length,
+        'feeds',
+      )
+
       useFeedStore.setState((state) => {
         const current = state.feeds
+
+        // 🛡️ CRITICAL FIX: Never replace feeds with an empty snapshot.
+        // Snapshots may contain filtered/scoped feeds, not the complete list.
+        // An empty snapshot means "no feeds in this view", NOT "no feeds at all".
+        if (snapshotFeeds.length === 0) {
+          console.error(
+            '[HomeFeedCoordinator] ⚠️ Rejecting empty snapshot - would clear all feeds!',
+          )
+          return state
+        }
+
+        // 🛡️ CRITICAL FIX: If snapshot has significantly fewer feeds than current state,
+        // it's likely a scoped snapshot (e.g., only video feeds). Don't replace the full list.
+        // Only apply snapshot if it has a similar number of feeds (within reason).
+        const ratio = snapshotFeeds.length / Math.max(current.length, 1)
+        if (current.length > 0 && ratio < 0.5) {
+          console.error(
+            '[HomeFeedCoordinator] ⚠️ Rejecting snapshot - too few feeds (ratio:',
+            ratio.toFixed(2),
+            ') - likely a filtered view',
+          )
+          return state
+        }
+
         const unchanged =
           current.length === snapshotFeeds.length &&
           current.every((feed, index) => {
@@ -259,7 +294,23 @@ export function useHomeFeedCoordinator(): HomeFeedCoordinatorState {
               feed.lastRefreshRawError === next.lastRefreshRawError
             )
           })
-        return unchanged ? state : { feeds: snapshotFeeds }
+
+        if (unchanged) {
+          console.error(
+            '[HomeFeedCoordinator] Feeds unchanged, keeping current state',
+          )
+          return state
+        }
+
+        console.error(
+          '[HomeFeedCoordinator] Applying snapshot: replacing',
+          current.length,
+          'feeds with',
+          snapshotFeeds.length,
+          'feeds',
+        )
+
+        return { feeds: snapshotFeeds }
       })
     },
     [],

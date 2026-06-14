@@ -408,13 +408,21 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
 if (import.meta.env.DEV) {
   useFeedStore.subscribe((state, prevState) => {
     if (state.feeds.length !== prevState.feeds.length) {
-      console.log(
+      console.error(
         '[FeedStore] feeds.length changed:',
         prevState.feeds.length,
         '→',
         state.feeds.length,
       )
-      console.trace('[FeedStore] Stack trace:')
+      console.error('[FeedStore] Stack trace:', new Error().stack)
+
+      // Show which feeds were added/removed
+      if (state.feeds.length < prevState.feeds.length) {
+        const removedIds = prevState.feeds
+          .filter((pf) => !state.feeds.find((f) => f.id === pf.id))
+          .map((f) => f.id)
+        console.error('[FeedStore] Removed feed IDs:', removedIds)
+      }
     }
   })
 }
