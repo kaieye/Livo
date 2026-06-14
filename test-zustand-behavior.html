@@ -1,79 +1,108 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>Zustand setState Behavior Test</title>
-  <style>
-    body { font-family: monospace; padding: 20px; }
-    button { padding: 8px 16px; margin: 5px; cursor: pointer; }
-    pre { background: #f0f0f0; padding: 10px; border-radius: 4px; white-space: pre-wrap; }
-  </style>
-</head>
-<body>
-  <h2>Zustand setState Behavior Test</h2>
-  <p>Testing if setState preserves other fields when updating</p>
-
-  <button onclick="test1()">Test 1: Object setState</button>
-  <button onclick="test2()">Test 2: Function setState returning partial</button>
-  <button onclick="test3()">Test 3: Function setState with spread</button>
-
-  <pre id="output"></pre>
-
-  <script type="module">
-    import { create } from 'https://esm.sh/zustand@4.5.0';
-
-    const output = document.getElementById('output');
-    function log(msg) {
-      output.textContent += msg + '\n';
-    }
-
-    // Simulate the feed store structure
-    const useStore = create((set, get) => ({
-      feeds: [{ id: '1', title: 'Feed 1' }, { id: '2', title: 'Feed 2' }],
-      activeView: null,
-      selectedFeedId: null,
-
-      setViewObject: (view) => {
-        log(`\nsetViewObject called with view=${view}`);
-        log(`Before: feeds.length=${get().feeds.length}, activeView=${get().activeView}`);
-        set({ activeView: view, selectedFeedId: null });
-        log(`After: feeds.length=${get().feeds.length}, activeView=${get().activeView}`);
-      },
-
-      setViewFunction: (view) => {
-        log(`\nsetViewFunction called with view=${view}`);
-        log(`Before: feeds.length=${get().feeds.length}, activeView=${get().activeView}`);
-        set((state) => ({ activeView: view, selectedFeedId: null }));
-        log(`After: feeds.length=${get().feeds.length}, activeView=${get().activeView}`);
-      },
-
-      setViewFunctionSpread: (view) => {
-        log(`\nsetViewFunctionSpread called with view=${view}`);
-        log(`Before: feeds.length=${get().feeds.length}, activeView=${get().activeView}`);
-        set((state) => ({ ...state, activeView: view, selectedFeedId: null }));
-        log(`After: feeds.length=${get().feeds.length}, activeView=${get().activeView}`);
+  <head>
+    <title>Zustand setState Behavior Test</title>
+    <style>
+      body {
+        font-family: monospace;
+        padding: 20px;
       }
-    }));
+      button {
+        padding: 8px 16px;
+        margin: 5px;
+        cursor: pointer;
+      }
+      pre {
+        background: #f0f0f0;
+        padding: 10px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Zustand setState Behavior Test</h2>
+    <p>Testing if setState preserves other fields when updating</p>
 
-    window.test1 = () => {
-      output.textContent = '';
-      log('=== Test 1: Object setState ===');
-      const store = useStore.getState();
-      store.setViewObject('videos');
-    };
+    <button onclick="test1()">Test 1: Object setState</button>
+    <button onclick="test2()">
+      Test 2: Function setState returning partial
+    </button>
+    <button onclick="test3()">Test 3: Function setState with spread</button>
 
-    window.test2 = () => {
-      output.textContent = '';
-      log('=== Test 2: Function setState returning partial ===');
-      const store = useStore.getState();
-      store.setViewFunction('social');
-    };
+    <pre id="output"></pre>
 
-    window.test3 = () => {
-      output.textContent = '';
-      log('=== Test 3: Function setState with spread ===');
-      const store = useStore.getState();
-      store.setViewFunctionSpread('articles');
-    };
-  </script>
-</body>
+    <script type="module">
+      import { create } from 'https://esm.sh/zustand@4.5.0'
+
+      const output = document.getElementById('output')
+      function log(msg) {
+        output.textContent += msg + '\n'
+      }
+
+      // Simulate the feed store structure
+      const useStore = create((set, get) => ({
+        feeds: [
+          { id: '1', title: 'Feed 1' },
+          { id: '2', title: 'Feed 2' },
+        ],
+        activeView: null,
+        selectedFeedId: null,
+
+        setViewObject: (view) => {
+          log(`\nsetViewObject called with view=${view}`)
+          log(
+            `Before: feeds.length=${get().feeds.length}, activeView=${get().activeView}`,
+          )
+          set({ activeView: view, selectedFeedId: null })
+          log(
+            `After: feeds.length=${get().feeds.length}, activeView=${get().activeView}`,
+          )
+        },
+
+        setViewFunction: (view) => {
+          log(`\nsetViewFunction called with view=${view}`)
+          log(
+            `Before: feeds.length=${get().feeds.length}, activeView=${get().activeView}`,
+          )
+          set((state) => ({ activeView: view, selectedFeedId: null }))
+          log(
+            `After: feeds.length=${get().feeds.length}, activeView=${get().activeView}`,
+          )
+        },
+
+        setViewFunctionSpread: (view) => {
+          log(`\nsetViewFunctionSpread called with view=${view}`)
+          log(
+            `Before: feeds.length=${get().feeds.length}, activeView=${get().activeView}`,
+          )
+          set((state) => ({ ...state, activeView: view, selectedFeedId: null }))
+          log(
+            `After: feeds.length=${get().feeds.length}, activeView=${get().activeView}`,
+          )
+        },
+      }))
+
+      window.test1 = () => {
+        output.textContent = ''
+        log('=== Test 1: Object setState ===')
+        const store = useStore.getState()
+        store.setViewObject('videos')
+      }
+
+      window.test2 = () => {
+        output.textContent = ''
+        log('=== Test 2: Function setState returning partial ===')
+        const store = useStore.getState()
+        store.setViewFunction('social')
+      }
+
+      window.test3 = () => {
+        output.textContent = ''
+        log('=== Test 3: Function setState with spread ===')
+        const store = useStore.getState()
+        store.setViewFunctionSpread('articles')
+      }
+    </script>
+  </body>
 </html>
