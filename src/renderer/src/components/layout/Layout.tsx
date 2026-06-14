@@ -122,8 +122,6 @@ const SIDEBAR_MIN = 200
 const SIDEBAR_MAX = 400
 const ENTRY_LIST_MIN = 260
 const ENTRY_LIST_MAX = 640
-const ENTRY_CONTENT_IDLE_TIMEOUT = 1200
-const ENTRY_CONTENT_FALLBACK_DELAY = 900
 
 function ContentPaneFallback() {
   return (

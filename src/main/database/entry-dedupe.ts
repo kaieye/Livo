@@ -5,7 +5,6 @@ import {
   getLooseNormalizedTitle,
   isMirrorSingleForRead,
   isRichGalleryForRead,
-  makeEntryIdentityKey,
   titlesLikelySameForRead,
 } from './entry-identity'
 import {

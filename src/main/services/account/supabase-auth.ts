@@ -139,7 +139,7 @@ export async function linkWechatOAuthAccount(): Promise<{
  * 登出账号
  */
 export async function unlinkAccount(
-  provider: AccountProvider,
+  _provider: AccountProvider,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getSupabaseClient()

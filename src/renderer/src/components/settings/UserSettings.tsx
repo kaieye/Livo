@@ -5,13 +5,11 @@ import {
   AlertCircle,
   Check,
   Cloud,
-  Link2,
   Loader2,
   LogOut,
   RefreshCw,
   User,
 } from 'lucide-react'
-import { useSettingsStore } from '../../store/settings-store'
 import { useQueryClient } from '@tanstack/react-query'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../../shared/discover-data'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'

@@ -11,20 +11,13 @@ import {
   Zap,
   Rss,
   Database,
-  Link2,
   Palette,
   Shield,
-  ShieldCheck,
   Clock,
   Star,
   Flame,
   Keyboard,
   User,
-  Sliders,
-  ToggleLeft,
-  Users,
-  ScrollText,
-  BarChart3,
 } from 'lucide-react'
 import { useOverlayHotkeyScope } from '../../hooks/useHotkeyScope'
 import { LocalErrorBoundary } from '../LocalErrorBoundary'

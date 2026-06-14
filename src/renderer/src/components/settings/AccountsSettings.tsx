@@ -1,12 +1,10 @@
 import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { FeedViewType } from '../../../../shared/types'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../../shared/discover-data'
 import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
-import { accountStatusQueryOptions } from '../../lib/query-definitions'
 import { refreshAccountStatus } from '../../lib/account-status'
 import { useFeedStore } from '../../store/feed-store'
 import {
@@ -128,11 +126,6 @@ function buildBilibiliImportUrl(
 const ACCOUNT_CARDS: AccountCardConfig[] = PROVIDER_CONFIGS
 
 export function AccountsSettings() {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const feeds = useFeedStore((s) => s.feeds)
-  const loadFeeds = useFeedStore((s) => s.loadFeeds)
-
   return (
     <div className="space-y-8">
       <p className="text-text-secondary dark:text-text-dark-secondary text-sm">

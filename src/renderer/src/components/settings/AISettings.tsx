@@ -112,7 +112,7 @@ function isPromptDirtyFn(draft: AIConfig, saved: AIConfig): boolean {
 export function AISettings() {
   const ai = useSettingSection('ai')
   const permissions = useSettingSection('agentPermissions')
-  const { updateSettingsSection, setActiveTab } = useSettingsActions()
+  const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
   const [draftAi, setDraftAi] = useState<AIConfig>(ai)
   const [isSaving, setIsSaving] = useState(false)
