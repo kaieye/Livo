@@ -152,11 +152,10 @@ export function useUrlSync(): void {
         feedStore.activeView !== viewType ||
         feedStore.selectedFeedId !== feedId
       ) {
-        useFeedStore.setState((state) =>
-          state.activeView === viewType && state.selectedFeedId === feedId
-            ? state
-            : { activeView: viewType, selectedFeedId: feedId },
-        )
+        useFeedStore.setState({
+          activeView: viewType,
+          selectedFeedId: feedId,
+        })
       }
       selectEntryFromUrl(entryId)
     }
