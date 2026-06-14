@@ -1,4 +1,5 @@
 import type OpenAI from 'openai'
+import { extractJsonValue } from './ai-json'
 import { clampContentToBudget } from './ai-prompts'
 
 export interface DigestCandidate {
@@ -220,29 +221,6 @@ function clampDigestText(value: string, maxChars: number): string {
   return clampContentToBudget(value, maxChars)
 }
 
-function extractJsonPayload(raw: string): unknown {
-  const text = raw.trim()
-  if (!text) throw new Error('AI 返回为空')
-
-  try {
-    return JSON.parse(text)
-  } catch {
-    const arrayStart = text.indexOf('[')
-    const arrayEnd = text.lastIndexOf(']')
-    if (arrayStart !== -1 && arrayEnd > arrayStart) {
-      return JSON.parse(text.slice(arrayStart, arrayEnd + 1))
-    }
-
-    const objectStart = text.indexOf('{')
-    const objectEnd = text.lastIndexOf('}')
-    if (objectStart !== -1 && objectEnd > objectStart) {
-      return JSON.parse(text.slice(objectStart, objectEnd + 1))
-    }
-  }
-
-  throw new Error('AI 返回不是可解析的 JSON')
-}
-
 function readIdsFromPayload(payload: unknown): string[] {
   if (Array.isArray(payload)) return payload.map(normalizeId).filter(Boolean)
   if (!payload || typeof payload !== 'object') return []
@@ -320,7 +298,7 @@ export function selectValidDigestRerankIds(
   let parsedIds: string[]
 
   try {
-    parsedIds = readIdsFromPayload(extractJsonPayload(raw))
+    parsedIds = readIdsFromPayload(extractJsonValue(raw))
   } catch {
     // 部分模型会输出解释性文本；这里只从原文中提取已知候选 id，不做额外兜底选择。
     parsedIds = readKnownIdsFromText(raw, candidateIdList)

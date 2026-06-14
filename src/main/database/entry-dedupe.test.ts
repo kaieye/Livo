@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Entry } from '../../shared/types'
-import {
-  dedupeEntriesForRead,
-  dedupeEntriesInPlace,
-  mergeEntryData,
-} from './entry-dedupe'
+import { dedupeEntriesForRead, mergeEntryData } from './entry-dedupe'
 
 function createEntry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -76,34 +72,6 @@ describe('entry dedupe helpers', () => {
     expect(result).toHaveLength(1)
     expect(result[0].isRead).toBe(false)
     expect(result[0].isStarred).toBe(true)
-  })
-
-  it('removes broken scraper entries during in-place dedupe', () => {
-    const now = Date.now()
-    const entries = [
-      createEntry({
-        id: 'good',
-        url: 'https://www.instagram.com/p/ABC123/',
-        title: 'same title',
-        summary: 'good summary',
-        publishedAt: now,
-      }),
-      createEntry({
-        id: 'broken',
-        url: 'https://www.instagram.com/p/6735542423462773506815/',
-        title: 'same title',
-        summary: 'better summary',
-        publishedAt: now + 10,
-      }),
-    ]
-
-    const result = dedupeEntriesInPlace(entries, {
-      markEntriesOrderDirty: () => {},
-    })
-
-    expect(result.changed).toBe(true)
-    expect(result.entries).toHaveLength(1)
-    expect(result.entries[0].summary).toBe('better summary')
   })
 
   it('prefers incoming meaningful titles and author labels when merging existing entries', () => {

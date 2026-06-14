@@ -48,13 +48,14 @@ Feed 中的单条内容。Atom 语境下即 `<entry>`，RSS 语境下即 `<item>
 
 ### ViewModel（视图模型）
 
-从原始 `Entry` / `Feed` 数据派生的渲染用模型，由 renderer 端的 `lib/` 模块计算生成。关键类型：
+从原始 `Entry` / `Feed` 数据派生的渲染用模型，由 renderer 端的 `lib/*-model.ts` 模块计算生成，每个模块都有配套测试。关键模块：
 
-- **EntryCardModel** — 列表/网格中的条目卡片。包含计算属性：`publishedLabel`（相对时间）、`viewBadgeColor`（CSS 颜色类）、`mediaUrls`（处理后媒体 URL）
-- **FeedCardModel** — 侧边栏/Feed 列表中的订阅源卡片。包含 `unreadLabel`（"99+" 格式）、`isRefreshing`（刷新中状态）
-- **ArticleDetailModel** — 文章详情页全量数据。包含 AI 摘要/翻译状态、阅读时长估算
+- **entry-list-model** — 列表/网格条目行模型（相对时间、视图徽章色、处理后媒体 URL）
+- **entry-reading-surface-model** — 当前阅读面（home feed）的 scope / 过滤 / 卡片派生模型
+- **wide-view-entry-model** — 宽屏视图（社交/视频/图片）的条目派生模型
+- **ai-summary-session-model** — AI 摘要会话的渲染状态模型
 
-ViewModel 是组件与 store 之间的 seam——组件消费 ViewModel，不直接读 store 原始数据。
+ViewModel 是组件与 store 之间的 seam——组件应消费这些 `lib/*-model.ts` 派生模型，而非在组件内重复从 store 原始数据派生。该层是「真实」的视图模型层；曾经的 `shared/model-mappers.ts` + `shared/view-models.ts` 是无调用方的死代码，已删除。
 
 ### Subscription（订阅）
 
@@ -115,8 +116,10 @@ Main ↔ Renderer 通信的类型安全契约层。`ipc-contracts.ts` 定义：
 
 - 通道名称常量（`IPC.FEED_ADD` 等）
 - 参数元组类型（`IpcArgsByChannel`）
-- 运行时校验器（`IPC_CONTRACTS`）
-- 返回值信封（`IpcEnvelope<T>`: `{ ok, data } | { ok, error }`）
+- 运行时校验器（`IPC_CONTRACTS`）— 所有验证在此进行，handler 不重复检查
+- 返回值信封（`IpcEnvelope<T>`: `{ ok, data } | { ok, error }`）— 传输层异常错误封装
+
+**错误协议边界**（见 ADR-0001）：`IpcEnvelope` 是传输层异常错误 seam（preload 的 `unwrapIpcEnvelope` throw 给 renderer）。许多 handler 同时返回 `{ success: boolean }` 形状，但这**不是冗余包装**——它是领域结果判别式，携带正常失败的部分数据（`fever.sync` 报告已同步计数、`video.resolve` 报告可用信息、`ai.testConnection` 报告测试结果）。禁止盲目"删除 `{ success }` 改用 throw"全面重构——那会丢失领域信息并混淆正常失败与异常。
 
 ## 架构原则
 

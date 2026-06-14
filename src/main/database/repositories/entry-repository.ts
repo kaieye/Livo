@@ -1,16 +1,8 @@
 import type Database from 'better-sqlite3'
 import type { Entry } from '../../../shared/types'
-import {
-  dedupeEntriesForRead,
-  isBrokenScraperEntry,
-  mergeEntryData,
-  mergeTextFromEntry,
-} from '../entry-dedupe'
-import {
-  makeEntryIdentityKey,
-  normalizeIdentityText,
-  titlesLikelySameForRead,
-} from '../entry-identity'
+import { planEntryWrite } from '../../services/entry/entry-write-plan'
+import { dedupeEntriesForRead } from '../entry-dedupe'
+import { normalizeIdentityText } from '../entry-identity'
 import { entryFromRow } from '../row-mappers'
 
 export interface EntryListOptions {
@@ -560,77 +552,24 @@ export class EntryRepository implements IEntryRepository {
   ): { added: boolean; changed: boolean } {
     // 匹配阶段使用轻量行（截断正文、跳过大列），命中后再按 id 取完整行合并。
     // 批量写入时通过 feedCache 复用同一 feed 的轻量行，避免每条都重读全表。
-    const mergeIntoExisting = (
-      liteRows: Entry[],
-      matchedId: string,
-      merge: (existing: Entry) => boolean,
-    ): { added: boolean; changed: boolean } => {
-      const existing = this.getEntryById(matchedId)
+    // 去重/合并的决策（insert / merge / noop）由 entry-write-plan 的纯函数
+    // planEntryWrite 负责，本方法只负责执行该计划（原始 SQL 插入/更新）。
+    const liteRows = this.getFeedEntriesForUpsert(entry.feedId, feedCache)
+    const plan = planEntryWrite(entry, liteRows)
+
+    if (plan.type === 'noop') {
+      return { added: false, changed: false }
+    }
+
+    if (plan.type === 'merge') {
+      const existing = this.getEntryById(plan.targetId)
       if (!existing) return { added: false, changed: false }
-      const changed = merge(existing)
+      const changed = plan.applyMerge(existing)
       if (changed) {
         this.persistEntry(existing)
         EntryRepository.replaceCachedEntry(liteRows, existing)
       }
       return { added: false, changed }
-    }
-
-    if (isBrokenScraperEntry(entry)) {
-      const liteRows = this.getFeedEntriesForUpsert(entry.feedId, feedCache)
-
-      let bestMatch: Entry | null = null
-      let bestDelta = Infinity
-      for (const e of liteRows) {
-        if (!titlesLikelySameForRead(e.title, entry.title)) continue
-        const delta = Math.abs((e.publishedAt || 0) - (entry.publishedAt || 0))
-        if (delta < bestDelta) {
-          bestDelta = delta
-          bestMatch = e
-        }
-      }
-      if (bestMatch && bestDelta <= 48 * 60 * 60 * 1000) {
-        return mergeIntoExisting(liteRows, bestMatch.id, (existing) =>
-          mergeTextFromEntry(existing, entry),
-        )
-      }
-      return { added: false, changed: false }
-    }
-
-    const identityKey = makeEntryIdentityKey(entry)
-    if (identityKey) {
-      if (entry.url) {
-        const existingByUrl = this.db
-          .prepare('SELECT * FROM entries WHERE feed_id = ? AND url = ?')
-          .get(entry.feedId, entry.url) as any
-        if (existingByUrl) {
-          const existing = entryFromRow(existingByUrl)
-          const changed = mergeEntryData(existing, entry, {
-            onPublishedAtAdvanced: () => {},
-          })
-          if (changed) {
-            this.persistEntry(existing)
-            const cachedRows = feedCache?.get(entry.feedId)
-            if (cachedRows) {
-              EntryRepository.replaceCachedEntry(cachedRows, existing)
-            }
-          }
-          return {
-            added: false,
-            changed,
-          }
-        }
-      }
-
-      const liteRows = this.getFeedEntriesForUpsert(entry.feedId, feedCache)
-      for (const row of liteRows) {
-        if (makeEntryIdentityKey(row) === identityKey) {
-          return mergeIntoExisting(liteRows, row.id, (existing) =>
-            mergeEntryData(existing, entry, {
-              onPublishedAtAdvanced: () => {},
-            }),
-          )
-        }
-      }
     }
 
     this.db

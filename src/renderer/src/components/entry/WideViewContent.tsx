@@ -43,11 +43,7 @@ import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '../../lib/date-locale'
 import { SkeletonList } from '../ui/Skeleton'
-import {
-  ContextMenu,
-  useEntryContextMenu,
-  useEntryContextActions,
-} from '../ui/ContextMenu'
+import { useEntryContextMenu } from '../ui/ContextMenu'
 import { ScrollArea } from '../ui/ScrollArea'
 import { transformVideoUrl } from '../media/MediaPlayer'
 import { usePictureMasonry } from '../../hooks/usePictureMasonry'
@@ -68,6 +64,7 @@ import {
 } from '../../lib/bilibili-video'
 import { getImageProxyFallbackUrls } from '../../lib/image-proxy'
 import { getEntryLoadLimit } from '../../lib/entry-load-limit'
+import { resolveEffectiveView } from '../../lib/feed-view-layout'
 import {
   areHomeFeedLoadOptionsEqual,
   buildHomeFeedLoadOptions,
@@ -105,6 +102,7 @@ import {
   withCacheBust,
 } from '../../lib/social-entry-utils'
 import { Loader2, Inbox, RefreshCw, X, ExternalLink } from 'lucide-react'
+import { EntryContextMenuWrapper } from './EntryContextMenuWrapper'
 import { WideViewHeader } from './WideViewHeader'
 import { ViewRecommendations } from './ViewRecommendations'
 import { useAISummary } from '../../hooks/useAISummary'
@@ -377,19 +375,16 @@ export function WideViewContent() {
   // Derive effective active view: when in "All" view (activeView=null) but
   // a Pictures/Social/Videos feed is selected, use the feed's view type so
   // the wide-view content renders with the proper layout and behaviour.
-  const effectiveActiveView = useMemo(() => {
-    if (activeView !== null) return activeView
-    if (!selectedFeedId) return null
-    const feed = feeds.find((f) => f.id === selectedFeedId)
-    const feedView = feed?.view ?? FeedViewType.Articles
-    return [
-      FeedViewType.SocialMedia,
-      FeedViewType.Videos,
-      FeedViewType.Pictures,
-    ].includes(feedView)
-      ? feedView
-      : null
-  }, [activeView, selectedFeedId, feeds])
+  const effectiveActiveView = useMemo(
+    () =>
+      resolveEffectiveView({
+        activeView,
+        selectedFeed: selectedFeedId
+          ? feeds.find((f) => f.id === selectedFeedId)
+          : null,
+      }),
+    [activeView, selectedFeedId, feeds],
+  )
   const [masonryProbeVersion, setMasonryProbeVersion] = useState(0)
   const entryLoadLimit = useMemo(
     () => getEntryLoadLimit(effectiveActiveView),
@@ -1048,7 +1043,7 @@ export function WideViewContent() {
             if (!menuEntry) return null
             const menuIndex = renderEntryIndexById.get(menuState.entryId) ?? -1
             return (
-              <WideViewContextMenuWrapper
+              <EntryContextMenuWrapper
                 entry={menuEntry}
                 entryIndex={menuIndex}
                 totalEntries={renderEntries.length}
@@ -1460,56 +1455,6 @@ function VideoModal({
       </button>
     </div>
   )
-}
-
-// Context Menu Wrapper
-
-function WideViewContextMenuWrapper({
-  entry,
-  entryIndex,
-  totalEntries,
-  x,
-  y,
-  onClose,
-  onMarkAboveRead,
-  onMarkBelowRead,
-  onSharePoster,
-}: {
-  entry: Entry
-  entryIndex: number
-  totalEntries: number
-  x: number
-  y: number
-  onClose: () => void
-  onMarkAboveRead: () => void
-  onMarkBelowRead: () => void
-  onSharePoster: () => void
-}) {
-  const { markRead, toggleStar } = useStoreShallow(useEntryStore, (s) => ({
-    markRead: s.markRead,
-    toggleStar: s.toggleStar,
-  }))
-  const feedSiteUrl = useFeedStore(
-    (state) => state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
-  )
-  const browserOpenUrl = resolveEntryBrowserOpenUrl(entry)
-  const actions = useEntryContextActions({
-    entry,
-    entryIndex,
-    totalEntries,
-    onMarkRead: markRead,
-    onToggleStar: toggleStar,
-    onMarkAboveRead,
-    onMarkBelowRead,
-    onOpenInBrowser: browserOpenUrl
-      ? () => {
-          void openExternalUrlSafe(browserOpenUrl)
-        }
-      : undefined,
-    feedSiteUrl,
-    onSharePoster,
-  })
-  return <ContextMenu x={x} y={y} onClose={onClose} actions={actions} />
 }
 
 // Social Media Overlay

@@ -4,9 +4,9 @@ import type {
   AISemanticFilterDecision,
   AISemanticFilterInput,
 } from '../../../shared/types/index'
-import { createOpenAIClient, validateAIConfig } from './ai-client'
+import { runAICompletionText } from './ai-completion'
+import { extractJsonValue } from './ai-json'
 import { clampContentToBudget } from './ai-prompts'
-import { runWithRetry } from './ai-retry'
 
 const MAX_FILTER_TEXT_CHARS = 2400
 const FILTER_DECISION_MAX_TOKENS = 180
@@ -61,20 +61,6 @@ export function buildSemanticFilterMessages(
   ]
 }
 
-function extractJsonObject(raw: string): unknown {
-  const text = raw.trim()
-  if (!text) throw new Error('AI 返回为空')
-
-  try {
-    return JSON.parse(text)
-  } catch {
-    const start = text.indexOf('{')
-    const end = text.lastIndexOf('}')
-    if (start === -1 || end <= start) throw new Error('AI 返回不是 JSON 对象')
-    return JSON.parse(text.slice(start, end + 1))
-  }
-}
-
 function parseConfidence(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0
   return Math.max(0, Math.min(1, value))
@@ -83,7 +69,7 @@ function parseConfidence(value: unknown): number {
 export function parseSemanticFilterDecision(
   raw: string,
 ): AISemanticFilterDecision {
-  const parsed = extractJsonObject(raw)
+  const parsed = extractJsonValue(raw)
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('AI 返回不是 JSON 对象')
   }
@@ -107,24 +93,12 @@ export async function judgeSemanticFilter(
   input: AISemanticFilterInput,
   config: AIConfig,
 ): Promise<AISemanticFilterDecision> {
-  const configError = validateAIConfig(config)
-  if (configError) throw new Error(configError)
-
-  const client = createOpenAIClient(config)
-  const messages = buildSemanticFilterMessages(input)
-
-  return runWithRetry(
-    async () => {
-      const response = await client.chat.completions.create({
-        model: config.model,
-        messages,
-        temperature: 0,
-        max_tokens: FILTER_DECISION_MAX_TOKENS,
-      })
-      return parseSemanticFilterDecision(
-        response.choices[0]?.message?.content || '',
-      )
-    },
-    { maxAttempts: 2 },
-  )
+  return runAICompletionText({
+    aiConfig: config,
+    messages: buildSemanticFilterMessages(input),
+    temperature: 0,
+    maxTokens: FILTER_DECISION_MAX_TOKENS,
+    maxAttempts: 2,
+    parse: parseSemanticFilterDecision,
+  })
 }

@@ -14,8 +14,11 @@ import { useDiscoverStore } from '../../store/discover-store'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
-import { FeedViewType } from '../../../../shared/types'
 import { buildEntryWarmupRequests } from '../../lib/entry-warmup'
+import {
+  isWideLayoutView,
+  resolveEffectiveView,
+} from '../../lib/feed-view-layout'
 import { useLayoutFocusTarget } from '../../hooks/useLayoutFocusTarget'
 import { useFocusableHotkeyScope } from '../../hooks/useHotkeyScope'
 import { EntryList } from '../entry/EntryList'
@@ -205,20 +208,15 @@ export function Layout() {
   // When activeView is null (All view) but a Pictures/Social/Videos feed is
   // selected, use the feed's configured view type so wide-view feeds render
   // with the proper 2-column layout instead of the article 3-column layout.
-  const selectedFeedView =
-    activeView === null && selectedFeedId
-      ? (feeds.find((f) => f.id === selectedFeedId)?.view ?? null)
-      : null
-  const effectiveView = activeView ?? selectedFeedView
+  const effectiveView = resolveEffectiveView({
+    activeView,
+    selectedFeed: selectedFeedId
+      ? feeds.find((f) => f.id === selectedFeedId)
+      : null,
+  })
 
   // Views that use a 2-column layout (sidebar + wide content).
-  const isWideView =
-    effectiveView !== null &&
-    [
-      FeedViewType.SocialMedia,
-      FeedViewType.Videos,
-      FeedViewType.Pictures,
-    ].includes(effectiveView)
+  const isWideView = isWideLayoutView(effectiveView)
 
   useEffect(() => {
     if (isDigestRoute || isDiscoverOpen || isWideView || !selectedEntryId) {

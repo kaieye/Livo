@@ -282,6 +282,42 @@ async function probeVideoSourcesByKeyword(
   return results
 }
 
+/**
+ * Map a batch of platform probe candidates into IPC discover results and append
+ * them (skipping URLs already present). Unifies the previously per-platform
+ * re-mapping loops; each platform supplies only how to derive `siteUrl` and
+ * `description` from its candidate, everything else is identical.
+ */
+function appendProbeCandidatesToResults<
+  Candidate extends {
+    title: string
+    feedUrl: string
+    description: string
+    image: string
+    followers?: string
+  },
+>(
+  results: DiscoverSearchResult[],
+  candidates: Candidate[],
+  mapper: {
+    siteUrl: (candidate: Candidate) => string
+    description: (candidate: Candidate) => string
+  },
+): void {
+  for (const candidate of candidates) {
+    if (results.some((r) => r.url === candidate.feedUrl)) continue
+    results.push({
+      title: candidate.title,
+      url: candidate.feedUrl,
+      siteUrl: mapper.siteUrl(candidate),
+      description: mapper.description(candidate),
+      source: 'rsshub',
+      image: candidate.image || '',
+      followers: candidate.followers,
+    })
+  }
+}
+
 export function registerDiscoverHandlers(): void {
   // Get categories
   registerChannel(IPC.DISCOVER_CATEGORIES, () => {
@@ -378,22 +414,14 @@ export function registerDiscoverHandlers(): void {
               console.log(
                 `[Discover Search] Video candidates: ${videoCandidates.length}`,
               )
-              for (const candidate of videoCandidates) {
-                if (results.some((r) => r.url === candidate.feedUrl)) continue
-                results.push({
-                  title: candidate.title,
-                  url: candidate.feedUrl,
-                  siteUrl: candidate.feedUrl,
-                  description:
-                    candidate.description ||
-                    (candidate.platform === 'youtube'
-                      ? 'YouTube channel'
-                      : 'Bilibili user'),
-                  source: 'rsshub',
-                  image: candidate.image || '',
-                  followers: candidate.followers,
-                })
-              }
+              appendProbeCandidatesToResults(results, videoCandidates, {
+                siteUrl: (candidate) => candidate.feedUrl,
+                description: (candidate) =>
+                  candidate.description ||
+                  (candidate.platform === 'youtube'
+                    ? 'YouTube channel'
+                    : 'Bilibili user'),
+              })
             },
           ),
         )
@@ -403,18 +431,12 @@ export function registerDiscoverHandlers(): void {
         searchPromises.push(
           probeXUsersByKeyword(query, instance).then((xCandidates) => {
             console.log(`[Discover Search] X candidates: ${xCandidates.length}`)
-            for (const candidate of xCandidates) {
-              if (results.some((r) => r.url === candidate.feedUrl)) continue
-              results.push({
-                title: candidate.title,
-                url: candidate.feedUrl,
-                siteUrl: `https://x.com/${encodeURIComponent(candidate.username)}`,
-                description: candidate.followers || candidate.description,
-                source: 'rsshub',
-                image: candidate.image,
-                followers: candidate.followers,
-              })
-            }
+            appendProbeCandidatesToResults(results, xCandidates, {
+              siteUrl: (candidate) =>
+                `https://x.com/${encodeURIComponent(candidate.username)}`,
+              description: (candidate) =>
+                candidate.followers || candidate.description,
+            })
           }),
         )
       }
@@ -425,18 +447,11 @@ export function registerDiscoverHandlers(): void {
             console.log(
               `[Discover Search] Instagram candidates: ${igCandidates.length}`,
             )
-            for (const candidate of igCandidates) {
-              if (results.some((r) => r.url === candidate.feedUrl)) continue
-              results.push({
-                title: candidate.title,
-                url: candidate.feedUrl,
-                siteUrl: `https://www.instagram.com/${encodeURIComponent(candidate.username)}/`,
-                description: candidate.description,
-                source: 'rsshub',
-                image: candidate.image,
-                followers: candidate.followers,
-              })
-            }
+            appendProbeCandidatesToResults(results, igCandidates, {
+              siteUrl: (candidate) =>
+                `https://www.instagram.com/${encodeURIComponent(candidate.username)}/`,
+              description: (candidate) => candidate.description,
+            })
           }),
         )
       }

@@ -41,6 +41,43 @@ function saveFeedsToCache(feeds: FeedWithCount[]): void {
   }
 }
 
+/**
+ * Decide whether a reader snapshot's feed list may replace the canonical `feeds`.
+ * A snapshot can be scoped (e.g. only video feeds), so it must never shrink or clear
+ * the full list. Returns the next feed array, or null when the current list should stand.
+ */
+export function resolveSnapshotFeeds(
+  current: FeedWithCount[],
+  snapshotFeeds: FeedWithCount[],
+): FeedWithCount[] | null {
+  // An empty snapshot means "no feeds in this view", not "no feeds at all".
+  if (snapshotFeeds.length === 0) return null
+  // Far fewer feeds than the canonical list signals a scoped view, not the full set.
+  if (current.length > 0 && snapshotFeeds.length / current.length < 0.5) {
+    return null
+  }
+  const unchanged =
+    current.length === snapshotFeeds.length &&
+    current.every((feed, index) => {
+      const next = snapshotFeeds[index]
+      return (
+        next &&
+        feed.id === next.id &&
+        feed.unreadCount === next.unreadCount &&
+        feed.title === next.title &&
+        feed.category === next.category &&
+        feed.folder === next.folder &&
+        feed.view === next.view &&
+        feed.showInAll === next.showInAll &&
+        feed.lastRefreshStatus === next.lastRefreshStatus &&
+        feed.lastRefreshAttemptedAt === next.lastRefreshAttemptedAt &&
+        feed.lastRefreshError === next.lastRefreshError &&
+        feed.lastRefreshRawError === next.lastRefreshRawError
+      )
+    })
+  return unchanged ? null : snapshotFeeds
+}
+
 async function reloadEntriesForCurrentScope(state: {
   selectedFeedId: string | null
   activeView: FeedViewType | null
@@ -77,6 +114,7 @@ interface FeedState {
 
   // Actions
   hydrateFromCache: () => FeedWithCount[]
+  applySnapshotFeeds: (snapshotFeeds: FeedWithCount[]) => void
   loadFeeds: () => Promise<void>
   addFeed: (
     url: string,
@@ -154,6 +192,13 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
       set({ feeds: cached })
     }
     return cached
+  },
+
+  applySnapshotFeeds: (snapshotFeeds) => {
+    set((state) => {
+      const next = resolveSnapshotFeeds(state.feeds, snapshotFeeds)
+      return next ? { feeds: next } : state
+    })
   },
 
   loadFeeds: async () => {
@@ -403,26 +448,3 @@ export const useFeedStore = createAppStore<FeedState>((set, get) => ({
     }
   },
 }))
-
-// Debug: Monitor all state changes
-if (import.meta.env.DEV) {
-  useFeedStore.subscribe((state, prevState) => {
-    if (state.feeds.length !== prevState.feeds.length) {
-      console.error(
-        '[FeedStore] feeds.length changed:',
-        prevState.feeds.length,
-        '→',
-        state.feeds.length,
-      )
-      console.error('[FeedStore] Stack trace:', new Error().stack)
-
-      // Show which feeds were added/removed
-      if (state.feeds.length < prevState.feeds.length) {
-        const removedIds = prevState.feeds
-          .filter((pf) => !state.feeds.find((f) => f.id === pf.id))
-          .map((f) => f.id)
-        console.error('[FeedStore] Removed feed IDs:', removedIds)
-      }
-    }
-  })
-}

@@ -11,8 +11,6 @@ export * from './task'
 // Re-export sibling shared modules (paths relative to src/shared/)
 export * from '../ipc-contracts'
 export * from '../agent'
-export * from '../view-models'
-export * from '../model-mappers'
 export * from '../discover-data'
 export * from '../shortcuts'
 export * from '../settings'

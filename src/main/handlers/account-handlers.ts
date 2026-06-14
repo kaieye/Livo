@@ -1,6 +1,6 @@
 import { registerChannel } from '../ipc/register-channel'
 import { toHandlerError } from '../ipc/handler-error'
-import { IPC, type AccountProvider } from '../../shared/types'
+import { IPC } from '../../shared/types'
 import {
   getAccountState,
   linkAccount,
@@ -9,53 +9,25 @@ import {
 } from '../services/account/account-auth'
 import { getBilibiliFollowings } from '../services/bilibili/bilibili-followings'
 
-const SUPPORTED_PROVIDERS: AccountProvider[] = [
-  'google',
-  'youtube',
-  'x',
-  'instagram',
-  'bilibili',
-]
-
-function isSupportedProvider(value: string): value is AccountProvider {
-  return SUPPORTED_PROVIDERS.includes(value as AccountProvider)
-}
-
 export function registerAccountHandlers(): void {
-  registerChannel(IPC.ACCOUNT_STATUS, async (_event, provider: string) => {
-    if (!isSupportedProvider(provider)) {
-      return {
-        provider,
-        linked: false,
-        displayName: null,
-        error: 'Unsupported provider',
-      }
-    }
-    return getAccountState(provider)
-  })
+  // Provider validity is enforced by the IPC contract (assertAccountProvider),
+  // so handlers receive an already-validated AccountProvider.
+  registerChannel(IPC.ACCOUNT_STATUS, async (_event, provider) =>
+    getAccountState(provider),
+  )
 
-  registerChannel(IPC.ACCOUNT_LINK, async (_event, provider: string) => {
-    if (!isSupportedProvider(provider)) {
-      return { success: false, error: 'Unsupported provider' }
-    }
-    return linkAccount(provider)
-  })
+  registerChannel(IPC.ACCOUNT_LINK, async (_event, provider) =>
+    linkAccount(provider),
+  )
 
-  registerChannel(IPC.ACCOUNT_UNLINK, async (_event, provider: string) => {
-    if (!isSupportedProvider(provider)) {
-      return { success: false, error: 'Unsupported provider' }
-    }
-    return unlinkAccount(provider)
-  })
+  registerChannel(IPC.ACCOUNT_UNLINK, async (_event, provider) =>
+    unlinkAccount(provider),
+  )
 
   registerChannel(
     IPC.ACCOUNT_SET_DISPLAY_NAME,
-    async (_event, provider: string, displayName: string) => {
-      if (!isSupportedProvider(provider)) {
-        return { success: false, error: 'Unsupported provider' }
-      }
-      return setManualAccountDisplayName(provider, displayName)
-    },
+    async (_event, provider, displayName) =>
+      setManualAccountDisplayName(provider, displayName),
   )
 
   registerChannel(IPC.ACCOUNT_BILIBILI_FOLLOWINGS, async () => {

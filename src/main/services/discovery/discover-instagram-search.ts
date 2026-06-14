@@ -1,6 +1,11 @@
 import { session } from 'electron'
 import { decodeHtmlEntities, formatFollowerCount } from './discover-helpers'
 import { assertPublicDiscoveryUrl } from './discover-url-policy'
+import {
+  type DiscoveryFetch,
+  discoveryFetch,
+  extractOgMeta,
+} from './platform-search'
 
 export const INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS = 1600
 
@@ -407,6 +412,7 @@ export function extractLikelyInstagramHandle(query: string): string | null {
 export async function probeInstagramUsersByKeyword(
   query: string,
   rsshubInstance: string,
+  fetchImpl?: DiscoveryFetch,
 ): Promise<InstagramUserProbeCandidate[]> {
   const clean = query.trim().replace(/^@+/, '')
   if (!clean) return []
@@ -450,34 +456,15 @@ export async function probeInstagramUsersByKeyword(
     try {
       const profileUrl = `https://www.instagram.com/${encodeURIComponent(directHandle)}/`
       console.log(`[Instagram Search] Trying to fetch profile: ${profileUrl}`)
-      const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
-      const res = await session.defaultSession.fetch(safeProfileUrl, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept:
-            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-        },
+      const res = await discoveryFetch(profileUrl, {
+        fetchImpl,
         signal: AbortSignal.timeout(INSTAGRAM_DISCOVER_PROFILE_TIMEOUT_MS),
       })
-      if (res.ok) {
+      if (res?.ok) {
         const html = await res.text()
         // Try to extract display name from meta tags
-        const ogTitle =
-          html.match(
-            /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
-          )?.[1] ||
-          html.match(
-            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
-          )?.[1]
-        const ogDesc =
-          html.match(
-            /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i,
-          )?.[1] ||
-          html.match(
-            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i,
-          )?.[1]
+        const ogTitle = extractOgMeta(html, 'og:title') || undefined
+        const ogDesc = extractOgMeta(html, 'og:description') || undefined
 
         // Try to extract followers from JSON-LD structured data
         let followersFromJsonLd: string | undefined

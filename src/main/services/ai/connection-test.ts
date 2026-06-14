@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import type { AIConfig } from '../../../shared/types/index'
 import { createOpenAIClient, validateAIConfig } from './ai-client'
+import { providerRequestQuirks } from './ai-completion'
 import { normalizeAIError, isOpenAICompatible } from './provider-protocol'
 import { runWithRetry } from './ai-retry'
 
@@ -68,12 +69,9 @@ export class ConnectionTestService {
             messages: [{ role: 'user', content: TEST_PROMPT }],
             max_tokens: MAX_TOKENS,
             temperature: 0,
-            // Disable thinking mode for DeepSeek V4 models — the default
-            // thinking mode consumes max_tokens on internal reasoning,
-            // leaving no budget for visible content.
-            ...(config.provider === 'deepseek'
-              ? { thinking: { type: 'disabled' as const } }
-              : {}),
+            // DeepSeek's thinking-disabled quirk lives in the shared completion
+            // module so it stays in one place across every AI flow.
+            ...providerRequestQuirks(config),
           } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
           return (response.choices[0]?.message?.content || '').trim()
         },

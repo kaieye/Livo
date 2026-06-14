@@ -1,6 +1,11 @@
-import { session } from 'electron'
 import { computeMatchTier } from './discover-dedupe'
-import { formatFollowerCount } from './discover-helpers'
+import {
+  type DiscoveryFetch,
+  type ScoredCandidate,
+  dedupeScoreAndSort,
+  discoveryFetch,
+  formatFollowerLabel,
+} from './platform-search'
 import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 export type BilibiliUserProbeCandidate = {
@@ -87,26 +92,29 @@ export async function fetchBilibiliAvatarByUid(
 export async function probeBilibiliUsersByKeyword(
   query: string,
   rsshubInstance: string,
+  fetchImpl?: DiscoveryFetch,
 ): Promise<BilibiliUserProbeCandidate[]> {
   const clean = query.trim().replace(/^@+/, '')
   if (!clean) return []
-  const candidates: Array<BilibiliUserProbeCandidate & { score: number }> = []
+  const candidates: Array<ScoredCandidate & { uid: string }> = []
+  // Dedupe by mid at scan time (first occurrence wins, even if its score is 0)
+  // to preserve the original shadowing behavior; the core dedupe is then a
+  // redundant safety net.
   const seen = new Set<string>()
-  try {
-    const endpoint = `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(clean)}`
-    const safeEndpoint = await assertPublicDiscoveryUrl(endpoint)
-    // Use Electron session fetch for consistent network behavior
-    const res = await session.defaultSession.fetch(safeEndpoint, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'application/json, text/plain, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.9',
-        Referer: 'https://www.bilibili.com/',
-        Origin: 'https://www.bilibili.com',
-      },
-    })
-    if (res.ok) {
+  const endpoint = `https://api.bilibili.com/x/web-interface/search/type?search_type=bili_user&keyword=${encodeURIComponent(clean)}`
+  // Use Electron session fetch for consistent network behavior; Bilibili search
+  // is a JSON API, so override the shared HTML headers.
+  const res = await discoveryFetch(endpoint, {
+    fetchImpl,
+    headers: {
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+      Referer: 'https://www.bilibili.com/',
+      Origin: 'https://www.bilibili.com',
+    },
+  })
+  if (res?.ok) {
+    try {
       const json = (await res.json()) as {
         code?: number
         data?: {
@@ -135,16 +143,10 @@ export async function probeBilibiliUsersByKeyword(
           const midTier = computeMatchTier(clean, mid)
           const score = nameTier * 1000 + signTier * 200 + midTier * 120
           if (score <= 0) continue
-          const rawFans =
-            typeof user.fans === 'string' ? Number(user.fans) : user.fans
-          const followers =
-            typeof rawFans === 'number' &&
-            Number.isFinite(rawFans) &&
-            rawFans >= 0
-              ? `${formatFollowerCount(rawFans)} 粉丝`
-              : undefined
+          const followers = formatFollowerLabel(user.fans, ' 粉丝')
           candidates.push({
             uid: mid,
+            dedupeKey: mid,
             title: `${uname} - Bilibili`,
             description: usign,
             image: user.upic || '',
@@ -155,12 +157,14 @@ export async function probeBilibiliUsersByKeyword(
           })
         }
       }
+    } catch {
+      // Ignore Bilibili JSON parse failures.
     }
-  } catch {
-    // Ignore Bilibili search failures.
   }
-  return candidates
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 100)
-    .map(({ score: _score, ...candidate }) => candidate)
+  // Re-attach the platform identity (uid) the core strips during dedupe/sort.
+  const uidByFeedUrl = new Map(candidates.map((c) => [c.feedUrl, c.uid]))
+  return dedupeScoreAndSort(candidates, 100).map((candidate) => ({
+    uid: uidByFeedUrl.get(candidate.feedUrl) || '',
+    ...candidate,
+  }))
 }

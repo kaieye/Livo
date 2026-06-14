@@ -8,6 +8,13 @@ import {
   normalizeXFollowersLabel,
 } from './discover-helpers'
 import { assertPublicDiscoveryUrl } from './discover-url-policy'
+import {
+  type DiscoveryFetch,
+  type ScoredCandidate,
+  dedupeScoreAndSort,
+  discoveryFetch,
+  extractOgMeta,
+} from './platform-search'
 
 export type XUserProbeCandidate = {
   username: string
@@ -62,33 +69,12 @@ export async function fetchXAvatarByUsername(
   if (cached && cached.expiresAt > now) return cached.image
   try {
     const profileUrl = `https://x.com/${encodeURIComponent(clean)}`
-    const safeProfileUrl = await assertPublicDiscoveryUrl(profileUrl)
     // Use session fetch to respect proxy settings
-    const res = await session.defaultSession.fetch(safeProfileUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-    })
-    if (!res.ok) return ''
+    const res = await discoveryFetch(profileUrl)
+    if (!res?.ok) return ''
     const html = await res.text()
     const raw =
-      html.match(
-        /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-      )?.[1] ||
-      html.match(
-        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
-      )?.[1] ||
-      html.match(
-        /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
-      )?.[1] ||
-      html.match(
-        /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
-      )?.[1] ||
-      ''
+      extractOgMeta(html, 'og:image') || extractOgMeta(html, 'twitter:image')
     const decoded = decodeBasicHtmlEntities(raw)
     if (!/^https?:\/\//i.test(decoded)) return ''
     const image = decoded.replace(/_normal(\.[a-z0-9]+)(\?.*)?$/i, '$1')
@@ -121,12 +107,7 @@ export async function fetchXDisplayNameByUsername(
     if (!res.ok) return ''
     const html = await res.text()
     const ogTitle =
-      html.match(
-        /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
-      )?.[1] ||
-      html.match(
-        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
-      )?.[1] ||
+      extractOgMeta(html, 'og:title') ||
       html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ||
       ''
     const decoded = decodeBasicHtmlEntities(ogTitle)
@@ -447,6 +428,7 @@ export async function _fetchXFollowersByUsername(
 export async function probeXUsersByKeyword(
   query: string,
   rsshubInstance: string,
+  fetchImpl?: DiscoveryFetch,
 ): Promise<XUserProbeCandidate[]> {
   const clean = query.trim().replace(/^@+/, '')
   if (!clean) return []
@@ -522,17 +504,15 @@ export async function probeXUsersByKeyword(
     try {
       const searchUrl = `${nitterInstance}/search?f=users&q=${encodeURIComponent(clean)}`
       console.log(`[X Search] Trying Nitter: ${searchUrl}`)
-      const safeSearchUrl = await assertPublicDiscoveryUrl(searchUrl)
-      const res = await session.defaultSession.fetch(safeSearchUrl, {
+      const res = await discoveryFetch(searchUrl, {
+        fetchImpl,
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           Accept:
             'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       })
-      console.log(`[X Search] Nitter status: ${res.status}`)
-      if (res.ok) {
+      console.log(`[X Search] Nitter status: ${res?.status}`)
+      if (res?.ok) {
         const html = await res.text()
         console.log(`[X Search] Nitter HTML length: ${html.length}`)
 
@@ -605,18 +585,9 @@ export async function probeXUsersByKeyword(
   try {
     const searchUrl = `https://x.com/search?q=${encodeURIComponent(clean)}&f=user`
     console.log(`[X Search] Trying X.com: ${searchUrl}`)
-    const safeSearchUrl = await assertPublicDiscoveryUrl(searchUrl)
-    const res = await session.defaultSession.fetch(safeSearchUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-    })
-    console.log(`[X Search] X.com status: ${res.status}`)
-    if (res.ok) {
+    const res = await discoveryFetch(searchUrl, { fetchImpl })
+    console.log(`[X Search] X.com status: ${res?.status}`)
+    if (res?.ok) {
       const html = await res.text()
       console.log(`[X Search] X.com HTML length: ${html.length}`)
 
@@ -688,17 +659,24 @@ export async function probeXUsersByKeyword(
 
   console.log(`[X Search] Total candidates: ${out.length}`)
 
-  // Use sourceScore for sorting
-  const scored = out
-    .map((candidate: any) => {
-      return { candidate, score: candidate.sourceScore || 1 }
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 20)
-    .map((item) => {
-      const { sourceScore: _sourceScore, ...rest } = item.candidate as any
-      return rest as XUserProbeCandidate
-    })
+  // Use sourceScore for sorting via the shared dedupe/score/sort core. Each
+  // candidate already has a unique username key (merged above), so dedupe is a
+  // no-op here and only the stable score-sort + slice applies.
+  const usernameByFeedUrl = new Map(
+    out.map((candidate) => [candidate.feedUrl, candidate.username]),
+  )
+  const scoredInput: ScoredCandidate[] = out.map((candidate: any) => {
+    const { username: _username, sourceScore, ...rest } = candidate
+    return {
+      ...rest,
+      dedupeKey: String(candidate.username).toLowerCase(),
+      score: sourceScore || 1,
+    }
+  })
+  const scored = dedupeScoreAndSort(scoredInput, 20).map((candidate) => ({
+    username: usernameByFeedUrl.get(candidate.feedUrl) || '',
+    ...candidate,
+  })) as XUserProbeCandidate[]
 
   console.log(`[X Search] Final results: ${scored.length}`)
   return scored

@@ -2,10 +2,9 @@ import OpenAI from 'openai'
 import { createHash } from 'crypto'
 import { getEventBus } from '../system/event-bus'
 import { settingsProvider } from '../system/settings-provider'
-import { createOpenAIClient, validateAIConfig } from './ai-client'
-import { runAICompletion } from './ai-completion'
+import { validateAIConfig } from './ai-client'
+import { runAICompletion, runAICompletionText } from './ai-completion'
 import { normalizeAIError } from './provider-protocol'
-import { runWithRetry } from './ai-retry'
 import {
   buildSummaryPrompt,
   buildTranslatePrompt,
@@ -79,28 +78,22 @@ function persistEntryAISummary(
 }
 
 async function requestDigestText(
-  client: OpenAI,
   aiConfig: AIConfig,
   messages: OpenAI.ChatCompletionMessageParam[],
   maxTokens: number,
   temperature: number,
 ): Promise<string> {
-  return runWithRetry(
-    async () => {
-      const response = await client.chat.completions.create({
-        model: aiConfig.model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        // DeepSeek 的 thinking 模式会消耗 max_tokens，可能导致可见正文为空。
-        ...(aiConfig.provider === 'deepseek'
-          ? { thinking: { type: 'disabled' as const } }
-          : {}),
-      } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
-      return response.choices[0]?.message?.content || ''
-    },
-    { isEmpty: (text) => !text.trim() },
-  )
+  // Routes through the shared completion seam, which owns client creation,
+  // empty-result retry, and the DeepSeek thinking-disabled quirk. Config is
+  // already validated by generateAIDigest, so skip the redundant check and let
+  // raw provider errors bubble up to its catch for normalization.
+  return runAICompletionText({
+    aiConfig,
+    messages,
+    temperature,
+    maxTokens,
+    validateConfig: false,
+  })
 }
 
 // ── Digest pipeline ──────────────────────────────────────────────────────────
@@ -193,7 +186,6 @@ export async function generateAIDigest(
   }
 
   try {
-    const client = createOpenAIClient(aiConfig)
     const topic = presetLabel
     const maxIds = Math.min(12, candidates.length)
     let selectedIds = candidates.slice(0, 1).map((candidate) => candidate.id)
@@ -206,7 +198,6 @@ export async function generateAIDigest(
         data: { preset, feedId: input?.feedId, digestRunId: run.id },
       })
       const rerankRaw = await requestDigestText(
-        client,
         aiConfig,
         buildDigestRerankMessages({ topic, candidates, maxIds }),
         800,
@@ -251,7 +242,6 @@ export async function generateAIDigest(
 
     for (const batch of plan.batches) {
       const note = await requestDigestText(
-        client,
         aiConfig,
         buildDigestBatchMessages({ topic, presetLabel, batch }),
         1200,
@@ -261,7 +251,6 @@ export async function generateAIDigest(
     }
 
     const content = await requestDigestText(
-      client,
       aiConfig,
       buildDigestReduceMessages({
         topic,

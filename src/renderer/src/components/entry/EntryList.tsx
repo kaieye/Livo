@@ -9,18 +9,13 @@ import {
   type UIEvent,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { openExternalUrlSafe } from '../../services/external-url'
 import { useEntryStore } from '../../store/entry-store'
 import { useFeedStore } from '../../store/feed-store'
 import { useStoreShallow } from '../../store/helpers'
 import { useGeneralSettingsShallowSelector } from '../../store/settings-store'
 import { FeedViewType, VIEW_DEFINITIONS } from '../../../../shared/types'
 import { VIEW_TYPE_I18N_KEYS } from '../../lib/view-type-keys'
-import {
-  ContextMenu,
-  useEntryContextMenu,
-  useEntryContextActions,
-} from '../ui/ContextMenu'
+import { useEntryContextMenu } from '../ui/ContextMenu'
 import { useAsyncSocialDedupe } from '../../hooks/useAsyncSocialDedupe'
 import { EntryListHeader } from './entry-list/EntryListHeader'
 import { EntryListContent } from './entry-list/EntryListContent'
@@ -31,7 +26,7 @@ import { useRegisterCommand } from '../../hooks/useRegisterCommand'
 import { HOTKEY_OVERLAY_SCOPES } from '../../lib/hotkey-scope'
 import { buildCachedEntryListDerivedModel } from '../../lib/entry-list-model'
 import { buildEntryReadingSurfaceRenderModel } from '../../lib/entry-reading-surface-model'
-import { resolveEntryBrowserOpenUrl } from './entry-list/utils/entry-media'
+import { EntryContextMenuWrapper } from './EntryContextMenuWrapper'
 import type { Entry } from '../../../../shared/types'
 import {
   markStartupComponentMounted,
@@ -364,52 +359,4 @@ export function EntryList({ width }: { width?: number }) {
       </div>
     </div>
   )
-}
-
-function EntryContextMenuWrapper({
-  entry,
-  entryIndex,
-  totalEntries,
-  x,
-  y,
-  onClose,
-  onMarkAboveRead,
-  onMarkBelowRead,
-  onSharePoster,
-}: {
-  entry: Entry
-  entryIndex: number
-  totalEntries: number
-  x: number
-  y: number
-  onClose: () => void
-  onMarkAboveRead: () => void
-  onMarkBelowRead: () => void
-  onSharePoster: () => void
-}) {
-  const { markRead, toggleStar } = useStoreShallow(useEntryStore, (s) => ({
-    markRead: s.markRead,
-    toggleStar: s.toggleStar,
-  }))
-  const feedSiteUrl = useFeedStore(
-    (state) => state.feeds.find((feed) => feed.id === entry.feedId)?.siteUrl,
-  )
-  const browserOpenUrl = resolveEntryBrowserOpenUrl(entry)
-  const actions = useEntryContextActions({
-    entry,
-    entryIndex,
-    totalEntries,
-    onMarkRead: markRead,
-    onToggleStar: toggleStar,
-    onMarkAboveRead,
-    onMarkBelowRead,
-    onOpenInBrowser: browserOpenUrl
-      ? () => {
-          void openExternalUrlSafe(browserOpenUrl)
-        }
-      : undefined,
-    feedSiteUrl,
-    onSharePoster,
-  })
-  return <ContextMenu x={x} y={y} onClose={onClose} actions={actions} />
 }
