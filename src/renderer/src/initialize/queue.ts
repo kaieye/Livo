@@ -75,7 +75,17 @@ export async function setupBackgroundEventListeners(): Promise<void> {
               feedMap.set(update.id, { ...existing, ...update })
             }
           }
-          return { feeds: Array.from(feedMap.values()) }
+          const updatedFeeds = Array.from(feedMap.values())
+          // Save to cache after partial update
+          try {
+            localStorage.setItem(
+              'livo-feeds-cache',
+              JSON.stringify(updatedFeeds),
+            )
+          } catch {
+            /* ignore quota errors */
+          }
+          return { feeds: updatedFeeds }
         })
       } else {
         loadFeeds()

@@ -112,6 +112,12 @@ export async function hydrateDataToMemory(): Promise<HydrateResult> {
 
   if (feeds && feeds.length > 0) {
     useFeedStore.setState({ feeds, isLoading: false })
+    // Save to localStorage cache for next startup
+    try {
+      localStorage.setItem('livo-feeds-cache', JSON.stringify(feeds))
+    } catch {
+      /* ignore quota errors */
+    }
   }
 
   if (initialSnapshot) {
