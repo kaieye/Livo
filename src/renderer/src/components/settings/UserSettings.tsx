@@ -313,7 +313,8 @@ function FeedSyncPanel() {
         setFeedback(
           parts.length > 0 ? `已同步：${parts.join('，')}` : '已是最新',
         )
-        // 订阅同步完成后，顺带同步阅读活动
+        // 订阅同步完成后刷新本地列表 + 顺带同步阅读活动
+        await loadFeeds()
         void syncReadingActivityToServer()
       } else {
         setError(result.error || '同步失败')
@@ -329,7 +330,7 @@ function FeedSyncPanel() {
         setError(null)
       }, 3000)
     }
-  }, [refreshStatus])
+  }, [loadFeeds, refreshStatus])
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
