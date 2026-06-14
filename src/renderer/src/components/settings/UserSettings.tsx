@@ -277,6 +277,7 @@ function formatLastSyncAt(value: number | null): string {
 }
 
 function FeedSyncPanel() {
+  const loadFeeds = useFeedStore((s) => s.loadFeeds)
   const [status, setStatus] = useState<FeedSyncStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
