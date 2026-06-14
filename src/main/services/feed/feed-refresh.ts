@@ -25,9 +25,13 @@ import { resolveFeedAvatar } from './feed-avatar'
 import { formatFeedTitle } from './feed-title'
 import { logWarnQuiet } from '../system/logger'
 import {
-  isInstagramFeedUrl as _isInstagramFeed,
-  isInstagramUserFeedUrl as _isInstagramUserFeed,
-} from '../../../shared/url-detect'
+  getBootstrapRefreshTimeoutMs,
+  getRefreshTimeoutMs,
+  isBilibiliVideoFeedUrl,
+  isInstagramKeywordFeedUrl,
+  isInstagramUserFeedUrl,
+  isSlowFeedUrl,
+} from './feed-route-policy'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from '../system/refresh-log-store'
 import { runConcurrencyPool } from '../../utils/concurrency-pool'
@@ -40,7 +44,7 @@ import {
 } from '../system/task-contracts'
 import { getLocalTaskRunner } from '../system/task-runner-service'
 import type { TaskRunContext } from '../system/task-runner'
-import { logUserOperation } from '../system/user-operation-log'
+import { runLoggedTask } from '../system/task-operation'
 import { ingestParsedFeedEntries } from '../entry/entry-ingestion-pipeline'
 import { USER_OPERATION_KEYS } from '../../../shared/user-operations'
 
@@ -72,10 +76,6 @@ function isPlaceholderAvatar(url: string | undefined): boolean {
   return false
 }
 
-function isInstagramLikeFeed(feedUrl: string | undefined): boolean {
-  return _isInstagramFeed(feedUrl || '')
-}
-
 function pickBestFeedAvatar(
   feedUrl: string | undefined,
   existing: string | undefined,
@@ -88,7 +88,7 @@ function pickBestFeedAvatar(
   if (current === next) return current
   // Instagram/Picnob avatar URLs are often signed/expiring.
   // Prefer the latest fetched value so old expired URLs get replaced.
-  if (isInstagramLikeFeed(feedUrl)) return next
+  if (isInstagramKeywordFeedUrl(feedUrl)) return next
   if (!isPlaceholderAvatar(next)) return next
   if (isPlaceholderAvatar(current) && !isPlaceholderAvatar(next)) return next
   return current
@@ -140,7 +140,6 @@ function isVideoDurationEnrichmentEnabled(): boolean {
 
 /** Default data-maintenance constants (overridden by settings at call site) */
 const DEFAULT_FRESHNESS_TTL_MINUTES = 10
-const DEFAULT_FEED_REFRESH_TIMEOUT_MS = 12000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS = 15 * 60 * 1000
 const INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS = 90 * 60 * 1000
 const AUTO_REFRESH_MIN_DELAY_MS = 1000
@@ -155,12 +154,7 @@ function getOptimalConcurrency(
 ): number {
   if (userConcurrency) return userConcurrency
 
-  const hasSlowFeeds = feeds.some(
-    (feed) =>
-      isInstagramFeedUrl(feed.url) ||
-      isBilibiliDynamicFeedUrl(feed.url) ||
-      isBilibiliVideoFeedUrl(feed.url),
-  )
+  const hasSlowFeeds = feeds.some((feed) => isSlowFeedUrl(feed.url))
 
   // Reduce concurrency when slow feeds are present to prevent blocking
   if (hasSlowFeeds) return 4
@@ -194,48 +188,14 @@ function sortFeedsByPriority(feeds: Feed[]): Feed[] {
     }
 
     // 3. Prioritize non-slow feeds (Instagram/Bilibili are slow)
-    const aIsSlow =
-      isInstagramFeedUrl(a.url) ||
-      isBilibiliDynamicFeedUrl(a.url) ||
-      isBilibiliVideoFeedUrl(a.url)
-    const bIsSlow =
-      isInstagramFeedUrl(b.url) ||
-      isBilibiliDynamicFeedUrl(b.url) ||
-      isBilibiliVideoFeedUrl(b.url)
+    const aIsSlow = isSlowFeedUrl(a.url)
+    const bIsSlow = isSlowFeedUrl(b.url)
     if (aIsSlow !== bIsSlow) {
       return aIsSlow ? 1 : -1
     }
 
     return 0
   })
-}
-
-function isInstagramFeedUrl(feedUrl: string | undefined): boolean {
-  return _isInstagramUserFeed(feedUrl || '')
-}
-
-function isBilibiliDynamicFeedUrl(feedUrl: string | undefined): boolean {
-  const raw = (feedUrl || '').toLowerCase()
-  return /\/bilibili\/user\/dynamic\//.test(raw)
-}
-
-function isBilibiliVideoFeedUrl(feedUrl: string | undefined): boolean {
-  const raw = (feedUrl || '').toLowerCase()
-  return /\/bilibili\/user\/video\//.test(raw)
-}
-
-function getRefreshTimeoutMs(feedUrl: string | undefined): number {
-  // Instagram refreshes may fan out across many RSSHub candidates and route
-  // variants before we can pick the freshest result, so they need a wider
-  // timeout budget than normal feeds. Bilibili video fallbacks use a serialized
-  // hidden BrowserWindow scraper, so later feeds in the queue also need extra time.
-  if (isInstagramFeedUrl(feedUrl) || isBilibiliDynamicFeedUrl(feedUrl)) {
-    return 40000
-  }
-  if (isBilibiliVideoFeedUrl(feedUrl)) {
-    return 120000
-  }
-  return DEFAULT_FEED_REFRESH_TIMEOUT_MS
 }
 
 function isKnownInstagramUpstreamFailure(error: unknown): boolean {
@@ -308,7 +268,7 @@ export function mapFeedRefreshError(
 
 function shouldBackOffFeed(feed: Feed, now: number, force: boolean): boolean {
   if (force) return false
-  if (!isInstagramFeedUrl(feed.url)) return false
+  if (!isInstagramUserFeedUrl(feed.url)) return false
   if (!feed.lastFetched || feed.errorCount <= 0) return false
   const exp = Math.max(0, feed.errorCount - 1)
   const backoffMs = Math.min(
@@ -319,7 +279,7 @@ function shouldBackOffFeed(feed: Feed, now: number, force: boolean): boolean {
 }
 
 function getFeedBackoffUntilMs(feed: Feed): number | null {
-  if (!isInstagramFeedUrl(feed.url)) return null
+  if (!isInstagramUserFeedUrl(feed.url)) return null
   if (!feed.lastFetched || feed.errorCount <= 0) return null
   const exp = Math.max(0, feed.errorCount - 1)
   const backoffMs = Math.min(
@@ -495,60 +455,25 @@ export async function refreshSingleFeed(
     serverCacheHit?: import('./feed-cache-client').FeedCacheHit
   },
 ): Promise<number> {
-  const task = getLocalTaskRunner().enqueue(
-    FEED_REFRESH_SINGLE_TASK,
-    { feedId: feed.id, force: !!options?.force },
-    async (_payload, context) => {
-      return runRefreshSingleFeed(feed, options, context)
+  const { promise } = runLoggedTask({
+    contract: FEED_REFRESH_SINGLE_TASK,
+    payload: { feedId: feed.id, force: !!options?.force },
+    handler: (_payload, context) =>
+      runRefreshSingleFeed(feed, options, context),
+    operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
+    metadata: {
+      feedId: feed.id,
+      feedTitle: feed.title,
+      force: !!options?.force,
     },
-    {
-      metadata: {
-        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
-        feedId: feed.id,
-        feedTitle: feed.title,
-        force: !!options?.force,
-      },
+    log: options?.logOperation !== false,
+    target: { id: feed.id, label: feed.title },
+    details: {
+      queued: { force: !!options?.force },
+      succeeded: (newEntries) => ({ newEntries }),
     },
-  )
-  const shouldLogOperation = options?.logOperation !== false
-  if (shouldLogOperation) {
-    logUserOperation({
-      operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
-      status: 'queued',
-      runId: task.runId,
-      targetId: feed.id,
-      targetLabel: feed.title,
-      details: { force: !!options?.force },
-    })
-  }
-  return task.promise.then(
-    (result) => {
-      if (shouldLogOperation) {
-        logUserOperation({
-          operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
-          status: 'succeeded',
-          runId: task.runId,
-          targetId: feed.id,
-          targetLabel: feed.title,
-          details: { newEntries: result },
-        })
-      }
-      return result
-    },
-    (error) => {
-      if (shouldLogOperation) {
-        logUserOperation({
-          operationKey: USER_OPERATION_KEYS.FEED_REFRESH_SINGLE,
-          status: 'failed',
-          runId: task.runId,
-          targetId: feed.id,
-          targetLabel: feed.title,
-          error,
-        })
-      }
-      throw error
-    },
-  )
+  })
+  return promise
 }
 
 async function runRefreshSingleFeed(
@@ -688,7 +613,7 @@ async function runRefreshSingleFeed(
     return newCount
   } catch (error) {
     const knownInstagramFailure =
-      isInstagramFeedUrl(feed.url) && isKnownInstagramUpstreamFailure(error)
+      isInstagramUserFeedUrl(feed.url) && isKnownInstagramUpstreamFailure(error)
     const refreshMessage = `[refresh] failed: ${feed.title} (${normalizedFeedUrl})`
     if (knownInstagramFailure) {
       logWarnQuiet(refreshMessage, error)
@@ -721,59 +646,24 @@ export async function refreshAllFeeds(
     onProgress?: (event: RefreshProgressEvent) => void
   } = {},
 ): Promise<RefreshAllResult & { runId: string }> {
-  const runner = getLocalTaskRunner()
-  const dedupeKey =
-    FEED_REFRESH_ALL_TASK.dedupeKey?.({ force: !!options.force }) || 'all'
-  const activeRun = runner.getActiveRun<RefreshAllResult>(
-    FEED_REFRESH_ALL_TASK.name,
-    dedupeKey,
-  )
-  if (activeRun) {
-    const result = await activeRun.promise
-    return { ...result, runId: activeRun.runId }
-  }
-
-  const task = runner.enqueue(
-    FEED_REFRESH_ALL_TASK,
-    { force: !!options.force },
-    async (_payload, context) => runRefreshAllFeeds(options, context),
-    {
-      metadata: {
-        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
-        force: !!options.force,
-      },
-    },
-  )
-  logUserOperation({
+  const { runId, promise } = runLoggedTask({
+    contract: FEED_REFRESH_ALL_TASK,
+    payload: { force: !!options.force },
+    handler: (_payload, context) => runRefreshAllFeeds(options, context),
     operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
-    status: 'queued',
-    runId: task.runId,
-    details: { force: !!options.force },
+    metadata: { force: !!options.force },
+    reuseActiveDedupe: true,
+    details: {
+      queued: { force: !!options.force },
+      succeeded: (result) => ({
+        refreshedCount: result.refreshedCount,
+        failedCount: result.failedCount,
+        totalNewEntries: result.totalNewEntries,
+      }),
+    },
   })
-  return task.promise.then(
-    (result) => {
-      logUserOperation({
-        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
-        status: 'succeeded',
-        runId: task.runId,
-        details: {
-          refreshedCount: result.refreshedCount,
-          failedCount: result.failedCount,
-          totalNewEntries: result.totalNewEntries,
-        },
-      })
-      return { ...result, runId: task.runId }
-    },
-    (error) => {
-      logUserOperation({
-        operationKey: USER_OPERATION_KEYS.FEED_REFRESH_ALL,
-        status: 'failed',
-        runId: task.runId,
-        error,
-      })
-      throw error
-    },
-  )
+  const result = await promise
+  return { ...result, runId }
 }
 
 async function runRefreshAllFeeds(
@@ -940,12 +830,23 @@ async function runRefreshAllFeeds(
             (failedByReject ? String(result.reason) : undefined)
           : undefined
 
+      // 命中后端缓存的源最终走的是 server-cache 路径（resolveFeedPayload
+      // 在 shouldUseServerFeedCache 为真时直接消费 serverCacheHit）；
+      // 未命中或非 admin/vip 用户都视作直接从订阅源原链接拉取。
+      const cacheKey = getNormalizedFeedUrlForCache(feed)
+      const hadServerCacheHit = serverCacheByUrl.has(cacheKey)
+      const source: RefreshRunItemResult['source'] =
+        status === 'succeeded' && hadServerCacheHit
+          ? 'server-cache'
+          : 'upstream'
+
       return {
         feedId: feed.id,
         feedTitle: refreshed?.title || feed.title,
         status,
         newEntries: result.status === 'fulfilled' ? result.value : 0,
         error,
+        source,
       }
     },
   )
@@ -1018,75 +919,6 @@ function emptyRefreshAllResult(): RefreshAllResult {
 }
 
 // ---- Bootstrap helpers ----
-
-export function getInitialFetchTimeoutMs(
-  url: string,
-  view?: FeedViewType,
-): number {
-  const raw = (url || '').toLowerCase()
-  const isSocialRoute =
-    /\/(?:twitter|x)\/user\//i.test(raw) ||
-    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
-      raw,
-    ) ||
-    /\/bilibili\/user\/dynamic\//i.test(raw)
-  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
-  if (
-    isSocialRoute ||
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Pictures
-  ) {
-    return 18000
-  }
-  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
-    return 45000
-  }
-  return 6000
-}
-
-export function getBootstrapRefreshTimeoutMs(
-  url: string,
-  view?: FeedViewType,
-): number {
-  const raw = (url || '').toLowerCase()
-  const isSocialRoute =
-    /\/(?:twitter|x)\/user\//i.test(raw) ||
-    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
-      raw,
-    ) ||
-    /\/bilibili\/user\/dynamic\//i.test(raw)
-  const isBilibiliVideoRoute = /\/bilibili\/user\/video\//i.test(raw)
-
-  if (
-    isSocialRoute ||
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Pictures
-  ) {
-    return 45000
-  }
-  if (isBilibiliVideoRoute || view === FeedViewType.Videos) {
-    return 120000
-  }
-  return 18000
-}
-
-export function shouldDeferBootstrap(
-  url: string,
-  view?: FeedViewType,
-): boolean {
-  const raw = (url || '').toLowerCase()
-  const isSocialRoute =
-    /\/(?:twitter|x)\/user\//i.test(raw) ||
-    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(
-      raw,
-    ) ||
-    /\/bilibili\/user\/dynamic\//i.test(raw)
-  return (
-    isSocialRoute ||
-    view === FeedViewType.SocialMedia ||
-    view === FeedViewType.Pictures
-  )
-}
 
 export async function bootstrapFeedEntries(
   feed: Feed,

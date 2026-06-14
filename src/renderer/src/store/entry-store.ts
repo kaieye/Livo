@@ -31,6 +31,7 @@ import {
   mergeEntriesById,
 } from '../lib/entry-cache'
 import { dedupeEntriesForClient } from '../lib/entry-client-dedupe'
+import { recordReadActivity } from '../lib/reading-activity'
 
 function buildReaderSnapshotInput(options?: {
   feedId?: string
@@ -587,6 +588,7 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
     })
     if (entry && !entry.isRead) {
       await window.api.entries.markRead(entry.id, true)
+      recordReadActivity(1)
       // Update local state
       set((state) => ({
         entries: state.entries.map((e) =>
@@ -631,7 +633,9 @@ export const useEntryStore = createAppStore<EntryState>((set, get) => ({
   },
 
   markRead: async (entryId, isRead) => {
+    const wasRead = get().entries.find((e) => e.id === entryId)?.isRead
     await window.api.entries.markRead(entryId, isRead)
+    if (isRead && !wasRead) recordReadActivity(1)
     set((state) => ({
       entries: state.entries.map((e) =>
         e.id === entryId ? { ...e, isRead } : e,

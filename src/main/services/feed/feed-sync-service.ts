@@ -266,30 +266,35 @@ export class FeedSyncService {
     )
   }
 
-  private async applyRemoteRecord(
-    userId: string,
+  // 让本地订阅表与一条云端记录的 action 对齐：subscribe 时确保订阅存在，
+  // unsubscribe 时确保订阅已删除。幂等，可安全重复调用。
+  private async ensureFeedMaterialized(
     record: FeedSyncRecord,
   ): Promise<{ subscribed: number; unsubscribed: number }> {
-    let subscribed = 0
-    let unsubscribed = 0
+    const existing = this.findLocalFeedByUrl(record.url)
 
     if (record.action === 'subscribe') {
-      const existing = this.findLocalFeedByUrl(record.url)
       if (!existing) {
         await addFeed({
           url: record.url,
           deferInitialFetch: true,
           recordSyncChange: false,
         })
-        subscribed = 1
+        return { subscribed: 1, unsubscribed: 0 }
       }
-    } else {
-      const existing = this.findLocalFeedByUrl(record.url)
-      if (existing) {
-        removeFeed(existing.id, { recordSyncChange: false })
-        unsubscribed = 1
-      }
+    } else if (existing) {
+      removeFeed(existing.id, { recordSyncChange: false })
+      return { subscribed: 0, unsubscribed: 1 }
     }
+
+    return { subscribed: 0, unsubscribed: 0 }
+  }
+
+  private async applyRemoteRecord(
+    userId: string,
+    record: FeedSyncRecord,
+  ): Promise<{ subscribed: number; unsubscribed: number }> {
+    const applied = await this.ensureFeedMaterialized(record)
 
     // 本地快照只保存云端同步所需的 URL/action/updatedAt，不保存标题等元数据。
     getDb().syncChanges.upsertChange({
@@ -298,7 +303,7 @@ export class FeedSyncService {
       synced: true,
     })
 
-    return { subscribed, unsubscribed }
+    return applied
   }
 
   private async applyRemoteRecords(
@@ -326,6 +331,14 @@ export class FeedSyncService {
         local.updatedAt === record.updatedAt &&
         local.action === record.action
       ) {
+        // 快照已对齐，但本地订阅表可能与之脱节（如订阅被清空而快照仍在），
+        // 这里强制让订阅表与云端 action 一致，否则订阅永远补不回来。
+        const applied = await this.ensureFeedMaterialized(record)
+        subscribed += applied.subscribed
+        unsubscribed += applied.unsubscribed
+        if (applied.subscribed || applied.unsubscribed) {
+          downloaded++
+        }
         if (!local.synced) {
           getDb().syncChanges.upsertChange({
             ...record,
@@ -362,7 +375,7 @@ export class FeedSyncService {
 
     const remoteToApply: FeedSyncRecord[] = []
     const localToUpload: FeedSyncRecord[] = []
-    const alignedUrls: string[] = []
+    const alignedRecords: FeedSyncRecord[] = []
     let ignored = 0
 
     for (const url of urls) {
@@ -378,7 +391,7 @@ export class FeedSyncService {
           // 同一毫秒内冲突时以云端为准，避免两端反复覆盖。
           remoteToApply.push(remote)
         } else {
-          alignedUrls.push(url)
+          alignedRecords.push(remote)
         }
         continue
       }
@@ -390,13 +403,27 @@ export class FeedSyncService {
       }
     }
 
-    if (alignedUrls.length > 0) {
-      getDb().syncChanges.markChangesSynced(auth.userId, alignedUrls)
-    }
-
     let downloaded = 0
     let subscribed = 0
     let unsubscribed = 0
+
+    if (alignedRecords.length > 0) {
+      getDb().syncChanges.markChangesSynced(
+        auth.userId,
+        alignedRecords.map((record) => record.url),
+      )
+      // 快照两端一致，但本地订阅表可能已被清空，下行同步时补齐订阅表。
+      if (options.download) {
+        for (const record of alignedRecords) {
+          const applied = await this.ensureFeedMaterialized(record)
+          subscribed += applied.subscribed
+          unsubscribed += applied.unsubscribed
+          if (applied.subscribed || applied.unsubscribed) {
+            downloaded++
+          }
+        }
+      }
+    }
 
     if (options.download) {
       const applied = await this.applyRemoteRecords(auth.userId, remoteToApply)

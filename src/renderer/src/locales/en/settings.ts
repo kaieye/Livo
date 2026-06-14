@@ -393,6 +393,9 @@ export const enSettings = {
   refreshLogsFailedFeeds: 'Failed feeds',
   refreshLogsFeedSuccess: 'Refreshed successfully, {{count}} new entries',
   refreshLogsFeedFailed: 'Refresh failed',
+  refreshLogsSourceUpstream: 'Original feed URL',
+  refreshLogsSourceServerCache: 'Livo-Server cache',
+  refreshLogsSourceLabel: 'Source: {{source}}',
   refreshLogsMaxHint: 'Up to 60 most recent refresh records are retained.',
   agentPermissions: 'Agent Permissions',
   agentPermissionsDesc:

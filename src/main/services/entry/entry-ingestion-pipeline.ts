@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/actions'
 import {
   evaluateActionRules,
+  evaluateActionRulesWithMatcherAsync,
   isSemanticCondition,
   matchCondition,
 } from '../../../shared/actions'
@@ -21,7 +22,11 @@ import { enqueueEntryActionEffects } from './entry-action-effects'
 import { getActionRules } from '../actions/action-rules-store'
 import { validateAIConfig } from '../ai/ai-client'
 import { judgeSemanticFilter } from '../ai/ai-filter'
-import { isInstagramUserFeedUrl as _isInstagramUserFeed } from '../../../shared/url-detect'
+import {
+  isBilibiliUserFeedUrl,
+  isInstagramUserFeedUrl,
+  isTwitterUserFeedUrl,
+} from '../feed/feed-route-policy'
 
 export interface EntryIngestionInput {
   feed: Feed
@@ -62,12 +67,11 @@ export function filterForeignEntries(
   parsedFeedLink: string | undefined,
   feedUrl?: string,
 ): Entry[] {
-  const rawFeedUrl = (feedUrl || '').toLowerCase()
-  const isTwitterFeed = /\/(?:twitter|x)\/user\//i.test(rawFeedUrl)
-  const isInstagramMirrorFeed = _isInstagramUserFeed(rawFeedUrl)
-  const isBilibiliUserFeed =
-    /\/bilibili\/user\/(?:dynamic|video|article)\//i.test(rawFeedUrl)
-  if (isTwitterFeed || isInstagramMirrorFeed || isBilibiliUserFeed) {
+  if (
+    isTwitterUserFeedUrl(feedUrl) ||
+    isInstagramUserFeedUrl(feedUrl) ||
+    isBilibiliUserFeedUrl(feedUrl)
+  ) {
     return entries
   }
 
@@ -227,30 +231,9 @@ export async function applyActionRulesToEntriesAsync(
 
   const kept: ActionRuleAppliedEntry[] = []
   for (const entry of entries) {
-    const decision = {
-      blocked: false,
-      star: false,
-      markRead: false,
-      effects: [] as ActionEffectType[],
-    }
-    const seen = new Set<ActionEffectType>()
-
-    for (const rule of rules) {
-      if (!rule.enabled) continue
-      if (!(await matchAllActionConditions(rule, entry, feed, options))) {
-        continue
-      }
-
-      for (const effect of rule.actions) {
-        if (!seen.has(effect.type)) {
-          seen.add(effect.type)
-          decision.effects.push(effect.type)
-        }
-        if (effect.type === 'block') decision.blocked = true
-        else if (effect.type === 'star') decision.star = true
-        else if (effect.type === 'mark_read') decision.markRead = true
-      }
-    }
+    const decision = await evaluateActionRulesWithMatcherAsync(rules, (rule) =>
+      matchAllActionConditions(rule, entry, feed, options),
+    )
 
     if (decision.blocked) continue
 

@@ -18,10 +18,12 @@ import { useAccountStatusQuery } from '../../hooks/useAccountStatusQuery'
 import { RECOMMENDED_CATEGORY } from '../../hooks/useInitRecommendedFeeds'
 import { refreshAccountStatus } from '../../lib/account-status'
 import { useFeedStore } from '../../store/feed-store'
+import { syncReadingActivityToServer } from '../../lib/reading-activity'
 import {
   PROVIDER_CONFIGS,
   type ProviderConfig,
 } from '../account/provider-config'
+import { ReadingHeatmap } from './ReadingHeatmap'
 
 type AuthProvider = 'google' | 'wechat'
 
@@ -165,52 +167,57 @@ export function UserSettings() {
   const { user, isAuthenticated } = useAuthStore()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 当前登录账号卡片 */}
       <div className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-6">
-        <div className="flex items-start gap-4">
-          {/* 头像 */}
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={user.displayName}
-              className="h-16 w-16 flex-shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="bg-accent/10 text-accent flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full">
-              {isAuthenticated && user?.displayName ? (
-                <span className="text-2xl font-semibold">
-                  {user.displayName[0].toUpperCase()}
-                </span>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            {/* 头像 */}
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.displayName}
+                className="h-16 w-16 flex-shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="bg-accent/10 text-accent flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full">
+                {isAuthenticated && user?.displayName ? (
+                  <span className="text-2xl font-semibold">
+                    {user.displayName[0].toUpperCase()}
+                  </span>
+                ) : (
+                  <User size={28} />
+                )}
+              </div>
+            )}
+
+            {/* 用户信息 */}
+            <div className="min-w-0 flex-1">
+              {isAuthenticated && user ? (
+                <>
+                  <h3 className="truncate text-lg font-semibold">
+                    {user.displayName}
+                  </h3>
+                  <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
+                    通过 OAuth 登录
+                  </p>
+                  <p className="text-text-tertiary dark:text-text-dark-secondary/70 mt-1.5 text-xs">
+                    用户 ID: {user.id}
+                  </p>
+                </>
               ) : (
-                <User size={28} />
+                <>
+                  <h3 className="text-lg font-semibold">未登录</h3>
+                  <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
+                    登录以同步你的订阅和偏好设置
+                  </p>
+                </>
               )}
             </div>
-          )}
-
-          {/* 用户信息 */}
-          <div className="min-w-0 flex-1">
-            {isAuthenticated && user ? (
-              <>
-                <h3 className="truncate text-lg font-semibold">
-                  {user.displayName}
-                </h3>
-                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
-                  通过 OAuth 登录
-                </p>
-                <p className="text-text-tertiary dark:text-text-dark-secondary/70 mt-1.5 text-xs">
-                  用户 ID: {user.id}
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-semibold">未登录</h3>
-                <p className="text-text-secondary dark:text-text-dark-secondary mt-1 text-sm">
-                  登录以同步你的订阅和偏好设置
-                </p>
-              </>
-            )}
           </div>
+
+          {/* 退出登录按钮 */}
+          {isAuthenticated && user && <LogoutButton />}
         </div>
 
         {/* 当前账号的操作 */}
@@ -219,11 +226,17 @@ export function UserSettings() {
             <div className="space-y-4">
               <AccountBindingPanel />
               <FeedSyncPanel />
-              <LogoutButton />
             </div>
           </div>
         )}
       </div>
+
+      {/* 阅读热力图 */}
+      {isAuthenticated && user && (
+        <div className="dark:bg-surface-dark-secondary rounded-xl border bg-white p-4">
+          <ReadingHeatmap />
+        </div>
+      )}
 
       {/* 登录方式 */}
       {!isAuthenticated && (
@@ -300,6 +313,8 @@ function FeedSyncPanel() {
         setFeedback(
           parts.length > 0 ? `已同步：${parts.join('，')}` : '已是最新',
         )
+        // 订阅同步完成后，顺带同步阅读活动
+        void syncReadingActivityToServer()
       } else {
         setError(result.error || '同步失败')
         await refreshStatus()
@@ -407,11 +422,6 @@ function AccountBindingPanel() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Link2 size={15} className="text-accent" />
-        <span>登录方式绑定</span>
-      </div>
-
       <div className="grid gap-2 sm:grid-cols-2">
         {AUTH_PROVIDERS.map((config) => {
           const linked = linkedProviders.has(config.provider)
@@ -489,34 +499,32 @@ function LogoutButton() {
   }, [logout])
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={handleLogout}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-        >
-          {loading ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <LogOut size={14} />
-          )}
-          {loading ? '退出中...' : '退出登录'}
-        </button>
-
-        {feedback && (
-          <div
-            className={`flex items-center gap-1 text-xs ${feedback.includes('成功') ? 'text-green-600' : 'text-red-500'}`}
-          >
-            {feedback.includes('成功') ? (
-              <Check size={14} />
-            ) : (
-              <AlertCircle size={14} />
-            )}
-            {feedback}
-          </div>
+    <div className="flex shrink-0 flex-col items-end gap-2">
+      <button
+        onClick={handleLogout}
+        disabled={loading}
+        className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+      >
+        {loading ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <LogOut size={14} />
         )}
-      </div>
+        {loading ? '退出中...' : '退出登录'}
+      </button>
+
+      {feedback && (
+        <div
+          className={`flex items-center gap-1 text-xs ${feedback.includes('成功') ? 'text-green-600' : 'text-red-500'}`}
+        >
+          {feedback.includes('成功') ? (
+            <Check size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          {feedback}
+        </div>
+      )}
     </div>
   )
 }

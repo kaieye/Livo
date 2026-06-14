@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AIDigestRun } from '../../../shared/types'
 import { generateAIDigest, runAISummarizeTask } from './ai-pipeline'
+import { runAICompletion } from './ai-completion'
 
 const getDbMock = vi.hoisted(() => vi.fn())
 const settingsProviderGetMock = vi.hoisted(() => vi.fn())
 const validateAIConfigMock = vi.hoisted(() => vi.fn())
 const createOpenAIClientMock = vi.hoisted(() => vi.fn())
 const createCompletionMock = vi.hoisted(() => vi.fn())
+const eventSendMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../database', () => ({
   getDb: getDbMock,
@@ -22,7 +24,7 @@ vi.mock('./ai-client', () => ({
 }))
 
 vi.mock('../system/event-bus', () => ({
-  getEventBus: () => ({ send: vi.fn() }),
+  getEventBus: () => ({ send: eventSendMock }),
 }))
 
 function makeDigestRun(overrides: Partial<AIDigestRun> = {}): AIDigestRun {
@@ -209,6 +211,13 @@ describe('runAISummarizeTask', () => {
         aiSummaryError: undefined,
       }),
     )
+    expect(eventSendMock).toHaveBeenCalledWith('ai:summary-stream-chunk', {
+      requestId: 'request-1',
+      content: '摘要',
+    })
+    expect(eventSendMock).toHaveBeenCalledWith('ai:summary-stream-done', {
+      requestId: 'request-1',
+    })
   })
 
   it('persists failed summary session state when AI config is invalid', async () => {
@@ -238,5 +247,81 @@ describe('runAISummarizeTask', () => {
         rawErrorMessage: 'No API key',
       }),
     )
+  })
+})
+
+describe('runAICompletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    validateAIConfigMock.mockReturnValue(null)
+    createOpenAIClientMock.mockReturnValue({
+      chat: {
+        completions: {
+          create: createCompletionMock,
+        },
+      },
+    })
+  })
+
+  it('owns the streaming event protocol for chat-style completions', async () => {
+    async function* stream() {
+      yield { choices: [{ delta: { content: 'hello ' } }] }
+      yield { choices: [{ delta: { content: 'world' } }] }
+    }
+    createCompletionMock.mockResolvedValueOnce(stream())
+    const sendEvent = vi.fn()
+
+    await expect(
+      runAICompletion({
+        aiConfig: {
+          provider: 'openai',
+          apiKey: 'test-key',
+          model: 'gpt-test',
+        },
+        messages: [{ role: 'user', content: 'hello' }],
+        temperature: 0.7,
+        maxTokens: 100,
+        requestId: 'chat-request',
+        eventPrefix: 'ai:chat',
+        sendEvent,
+      }),
+    ).resolves.toBe('hello world')
+
+    expect(sendEvent.mock.calls).toEqual([
+      [
+        'ai:chat-stream-chunk',
+        { requestId: 'chat-request', content: 'hello ' },
+      ],
+      ['ai:chat-stream-chunk', { requestId: 'chat-request', content: 'world' }],
+      ['ai:chat-stream-done', { requestId: 'chat-request' }],
+    ])
+  })
+
+  it('retries empty non-streaming completions with rebuilt messages', async () => {
+    createCompletionMock
+      .mockResolvedValueOnce({ choices: [{ message: { content: '' } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'ok' } }] })
+
+    await expect(
+      runAICompletion({
+        aiConfig: {
+          provider: 'openai',
+          apiKey: 'test-key',
+          model: 'gpt-test',
+        },
+        messages: (attempt) => [{ role: 'user', content: `try-${attempt}` }],
+        temperature: 0,
+        maxTokens: 100,
+        eventPrefix: 'ai:summary',
+        sendEvent: vi.fn(),
+      }),
+    ).resolves.toBe('ok')
+
+    expect(
+      createCompletionMock.mock.calls.map(([payload]) => payload.messages),
+    ).toEqual([
+      [{ role: 'user', content: 'try-0' }],
+      [{ role: 'user', content: 'try-1' }],
+    ])
   })
 })

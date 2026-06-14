@@ -18,7 +18,11 @@ import { registerFeverHandlers } from './handlers/fever-handlers'
 import { registerTaskHandlers } from './handlers/task-handlers'
 import { registerAppHandlers } from './handlers/app-handlers'
 import { registerAuthHandlers } from './handlers/auth-handlers'
+import { registerReadingActivityHandlers } from './handlers/reading-activity-handlers'
 import { startAutoRefresh } from './services/feed/feed-refresh'
+import { feedSyncService } from './services/feed/feed-sync-service'
+import { sessionStore } from './services/auth/session-store'
+import { logError } from './services/system/logger'
 import {
   startFeverAutoSync,
   stopFeverAutoSync,
@@ -209,6 +213,7 @@ export class AppManager {
     registerFeverHandlers()
     registerTaskHandlers()
     registerAuthHandlers()
+    registerReadingActivityHandlers()
   }
 
   private createTray(): void {
@@ -257,6 +262,13 @@ export class AppManager {
         freshnessTTL: settings.data?.freshnessTTL ?? 10,
         concurrency: settings.data?.refreshConcurrency ?? 5,
       })
+      // 免登录启动时不会触发登录后同步，这里在会话有效时主动对账一次，
+      // 把云端订阅补齐到本地（修复“云端有、本地 0 条”需重新登录才能恢复的问题）。
+      if (sessionStore.isSessionValid()) {
+        feedSyncService.syncNow().catch((error) => {
+          logError('[startup-feed-sync-failed]', error)
+        })
+      }
     }, STARTUP_BACKGROUND_DELAY_MS)
   }
 

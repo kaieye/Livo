@@ -12,6 +12,13 @@ export interface RefreshRunItemResult {
   status: 'succeeded' | 'failed'
   newEntries: number
   error?: string
+  /**
+   * 拉取来源：
+   * - `upstream` 表示直接从订阅源原链接（含本地聚合器/RSSHub）拉取。
+   * - `server-cache` 表示命中 Livo-Server 后端缓存。
+   * 字段为可选，兼容旧的刷新日志记录。
+   */
+  source?: 'upstream' | 'server-cache'
 }
 
 export interface RefreshLogEntry {

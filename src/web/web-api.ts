@@ -1714,6 +1714,12 @@ export function createWebAPI(): ElectronAPI {
       }),
     },
 
+    readingActivity: {
+      sync: async () => {
+        throw new Error('Web 模式暂不支持阅读活动云同步')
+      },
+    },
+
     entries: {
       list: async (options: {
         feedId?: string

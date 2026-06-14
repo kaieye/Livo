@@ -99,6 +99,12 @@ const api = {
     syncStatus: (): Promise<FeedSyncStatus> => invokeIpc(IPC.FEED_SYNC_STATUS),
   },
 
+  // Reading activity
+  readingActivity: {
+    sync: (deviceId: string, days: Array<{ day: string; count: number }>) =>
+      invokeIpc(IPC.READING_ACTIVITY_SYNC, deviceId, days),
+  },
+
   // Entry operations
   entries: {
     list: (options: {

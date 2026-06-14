@@ -9,6 +9,8 @@ import {
   X,
   CheckCircle2,
   XCircle,
+  Cloud,
+  Link2,
 } from 'lucide-react'
 import type {
   RefreshLogEntry,
@@ -31,6 +33,35 @@ function sortItems(items: RefreshRunItemResult[]): RefreshRunItemResult[] {
     if (a.status !== 'failed' && b.status === 'failed') return 1
     return a.feedTitle.localeCompare(b.feedTitle)
   })
+}
+
+function FeedSourceBadge({
+  source,
+  t,
+}: {
+  source: RefreshRunItemResult['source']
+  t: (key: string, opts?: Record<string, unknown>) => string
+}) {
+  if (source !== 'server-cache' && source !== 'upstream') return null
+
+  const isServerCache = source === 'server-cache'
+  const Icon = isServerCache ? Cloud : Link2
+  const label = isServerCache
+    ? t('settings.refreshLogsSourceServerCache')
+    : t('settings.refreshLogsSourceUpstream')
+  const className = isServerCache
+    ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+
+  return (
+    <span
+      className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}
+      title={t('settings.refreshLogsSourceLabel', { source: label })}
+    >
+      <Icon size={11} />
+      {label}
+    </span>
+  )
 }
 
 function FeedDetailModal({
@@ -103,6 +134,7 @@ function FeedDetailModal({
                         })
                       : item.error || t('settings.refreshLogsFeedFailed')}
                   </p>
+                  <FeedSourceBadge source={item.source} t={t} />
                 </div>
               </li>
             ))}

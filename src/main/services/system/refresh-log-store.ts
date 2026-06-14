@@ -10,12 +10,17 @@ const MAX_REFRESH_LOGS = 60
 
 function normalizeRunItem(item: RefreshRunItemResult): RefreshRunItemResult {
   const status = item.status === 'failed' ? 'failed' : 'succeeded'
+  const source =
+    item.source === 'server-cache' || item.source === 'upstream'
+      ? item.source
+      : undefined
   return {
     feedId: String(item.feedId || ''),
     feedTitle: String(item.feedTitle || ''),
     status,
     newEntries: Math.max(0, Number(item.newEntries) || 0),
     error: item.error ? String(item.error) : undefined,
+    source,
   }
 }
 

@@ -2,7 +2,7 @@ import { registerChannel } from '../ipc/register-channel'
 import OpenAI from 'openai'
 import { IPC } from '../../shared/types'
 import { settingsProvider } from '../services/system/settings-provider'
-import { createOpenAIClient, validateAIConfig } from '../services/ai/ai-client'
+import { runAICompletion } from '../services/ai/ai-completion'
 import { judgeSemanticFilter } from '../services/ai/ai-filter'
 import { normalizeAIError } from '../services/ai/provider-protocol'
 import { ConnectionTestService } from '../services/ai/connection-test'
@@ -20,9 +20,9 @@ import {
   AI_DIGEST_GENERATE_TASK,
   AI_SUMMARIZE_TASK,
   AI_TRANSLATE_TASK,
+  type AiDigestGenerateTaskPayload,
 } from '../services/system/task-contracts'
-import { getLocalTaskRunner } from '../services/system/task-runner-service'
-import { logUserOperation } from '../services/system/user-operation-log'
+import { runLoggedTask } from '../services/system/task-operation'
 import { getDb } from '../database'
 import type {
   AIDigestGenerateResult,
@@ -78,27 +78,32 @@ export function registerAIHandlers(): void {
   registerChannel(
     IPC.AI_SUMMARIZE,
     async (_event, content: string, language?: string, requestId?: string) => {
-      const task = getLocalTaskRunner().enqueue(
-        AI_SUMMARIZE_TASK,
-        { content, language, requestId },
-        runAISummarizeTask,
-        {
-          metadata: {
-            operationKey: USER_OPERATION_KEYS.AI_SUMMARIZE,
+      const { runId, promise } = runLoggedTask({
+        contract: AI_SUMMARIZE_TASK,
+        payload: { content, language, requestId },
+        handler: runAISummarizeTask,
+        operationKey: USER_OPERATION_KEYS.AI_SUMMARIZE,
+        metadata: {
+          streaming: Boolean(requestId),
+          language,
+          contentLength: content.length,
+        },
+        details: {
+          queued: {
             streaming: Boolean(requestId),
             language,
             contentLength: content.length,
           },
         },
-      )
+      })
       try {
-        const result = await task.promise
-        return { ...result, runId: task.runId }
+        const result = await promise
+        return { ...result, runId }
       } catch (error) {
         return {
           success: false,
           error: normalizeAIError(error, settingsProvider.get().ai),
-          runId: task.runId,
+          runId,
         }
       }
     },
@@ -188,9 +193,9 @@ export function registerAIHandlers(): void {
         model: settingsProvider.get().ai.model,
         sourceHash,
       })
-      const task = getLocalTaskRunner().enqueue(
-        AI_SUMMARIZE_TASK,
-        {
+      const { runId, promise } = runLoggedTask({
+        contract: AI_SUMMARIZE_TASK,
+        payload: {
           content,
           language,
           requestId,
@@ -198,28 +203,35 @@ export function registerAIHandlers(): void {
           sessionId: session.id,
           sourceHash,
         },
-        runAISummarizeTask,
-        {
-          metadata: {
-            operationKey: USER_OPERATION_KEYS.AI_SUMMARIZE,
+        handler: runAISummarizeTask,
+        operationKey: USER_OPERATION_KEYS.AI_SUMMARIZE,
+        metadata: {
+          streaming: Boolean(requestId),
+          language,
+          entryId,
+          sessionId: session.id,
+          contentLength: content.length,
+        },
+        target: { id: entryId, label: entry.title },
+        details: {
+          queued: {
             streaming: Boolean(requestId),
             language,
-            entryId,
             sessionId: session.id,
             contentLength: content.length,
           },
         },
-      )
+      })
       getDb().aiSummarySessions.updateSession(session.id, {
-        runId: task.runId,
+        runId,
       })
       try {
-        const result = await task.promise
+        const result = await promise
         return {
           ...result,
           session:
             getDb().aiSummarySessions.getSessionById(session.id) || session,
-          runId: task.runId,
+          runId,
         }
       } catch (error) {
         return {
@@ -227,7 +239,7 @@ export function registerAIHandlers(): void {
           error: normalizeAIError(error, settingsProvider.get().ai),
           session:
             getDb().aiSummarySessions.getSessionById(session.id) || session,
-          runId: task.runId,
+          runId,
         }
       }
     },
@@ -242,27 +254,32 @@ export function registerAIHandlers(): void {
       targetLanguage: string,
       requestId?: string,
     ) => {
-      const task = getLocalTaskRunner().enqueue(
-        AI_TRANSLATE_TASK,
-        { content, targetLanguage, requestId },
-        runAITranslateTask,
-        {
-          metadata: {
-            operationKey: USER_OPERATION_KEYS.AI_TRANSLATE,
+      const { runId, promise } = runLoggedTask({
+        contract: AI_TRANSLATE_TASK,
+        payload: { content, targetLanguage, requestId },
+        handler: runAITranslateTask,
+        operationKey: USER_OPERATION_KEYS.AI_TRANSLATE,
+        metadata: {
+          streaming: Boolean(requestId),
+          targetLanguage,
+          contentLength: content.length,
+        },
+        details: {
+          queued: {
             streaming: Boolean(requestId),
             targetLanguage,
             contentLength: content.length,
           },
         },
-      )
+      })
       try {
-        const result = await task.promise
-        return { ...result, runId: task.runId }
+        const result = await promise
+        return { ...result, runId }
       } catch (error) {
         return {
           success: false,
           error: normalizeAIError(error, settingsProvider.get().ai),
-          runId: task.runId,
+          runId,
         }
       }
     },
@@ -279,23 +296,17 @@ export function registerAIHandlers(): void {
       const settings = settingsProvider.get()
       const aiConfig = settings.ai
 
-      const configError = validateAIConfig(aiConfig)
-      if (configError) return { success: false, error: configError }
-
       try {
-        const client = createOpenAIClient(aiConfig)
-
-        const response = await client.chat.completions.create({
-          model: aiConfig.model,
+        const message = await runAICompletion({
+          aiConfig,
           messages: messages as OpenAI.ChatCompletionMessageParam[],
           temperature: 0.7,
-          max_tokens: 2000,
+          maxTokens: 2000,
+          eventPrefix: 'ai:chat',
+          sendEvent: sendToAllWindows,
         })
 
-        return {
-          success: true,
-          message: response.choices[0]?.message?.content || '',
-        }
+        return { success: true, message }
       } catch (error) {
         return { success: false, error: normalizeAIError(error, aiConfig) }
       }
@@ -313,40 +324,19 @@ export function registerAIHandlers(): void {
       const settings = settingsProvider.get()
       const aiConfig = settings.ai
 
-      const configError = validateAIConfig(aiConfig)
-      if (configError) return { success: false, error: configError }
-
       try {
-        const client = createOpenAIClient(aiConfig)
-
-        const stream = await client.chat.completions.create({
-          model: aiConfig.model,
+        await runAICompletion({
+          aiConfig,
           messages: messages as OpenAI.ChatCompletionMessageParam[],
           temperature: 0.7,
-          max_tokens: 4000,
-          stream: true,
+          maxTokens: 4000,
+          requestId,
+          eventPrefix: 'ai:chat',
+          sendEvent: sendToAllWindows,
         })
-
-        for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content || ''
-          if (content) {
-            sendToAllWindows('ai:chat-stream-chunk', {
-              requestId,
-              content,
-            })
-          }
-        }
-
-        sendToAllWindows('ai:chat-stream-done', { requestId })
-
         return { success: true }
       } catch (error) {
-        const normalized = normalizeAIError(error, aiConfig)
-        sendToAllWindows('ai:chat-stream-error', {
-          requestId,
-          error: normalized,
-        })
-        return { success: false, error: normalized }
+        return { success: false, error: normalizeAIError(error, aiConfig) }
       }
     },
   )
@@ -377,10 +367,13 @@ export function registerAIHandlers(): void {
       input?: AIDigestGenerateInput,
     ): Promise<AIDigestGenerateResult> => {
       const preset = normalizeDigestPreset(input?.preset)
-      const task = getLocalTaskRunner().enqueue(
-        AI_DIGEST_GENERATE_TASK,
-        { preset, feedId: input?.feedId },
-        async (payload, context) =>
+      const { promise } = runLoggedTask<
+        AiDigestGenerateTaskPayload,
+        AIDigestGenerateResult
+      >({
+        contract: AI_DIGEST_GENERATE_TASK,
+        payload: { preset, feedId: input?.feedId },
+        handler: async (payload, context) =>
           generateAIDigest(
             {
               preset: normalizeDigestPreset(payload.preset),
@@ -388,43 +381,30 @@ export function registerAIHandlers(): void {
             },
             context,
           ),
-        {
-          metadata: {
-            operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
-            preset,
-            feedId: input?.feedId,
-          },
-        },
-      )
-
-      const settings = settingsProvider.get()
-      logUserOperation({
         operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
-        status: 'queued',
-        runId: task.runId,
-        targetId: input?.feedId,
-        details: { preset },
+        metadata: {
+          preset,
+          feedId: input?.feedId,
+        },
+        target: { id: input?.feedId },
+        resultStatus: (result) => (result.success ? 'succeeded' : 'failed'),
+        resultError: (result) => (result.success ? undefined : result.error),
+        details: {
+          queued: { preset },
+          succeeded: (result) => ({
+            preset,
+            digestRunId: result.run?.id,
+          }),
+          resultFailed: (result) => ({
+            preset,
+            digestRunId: result.success ? undefined : result.run?.id,
+          }),
+        },
       })
       try {
-        const result = await task.promise
-        logUserOperation({
-          operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
-          status: result.success ? 'succeeded' : 'failed',
-          runId: task.runId,
-          targetId: input?.feedId,
-          details: { preset, digestRunId: result.run?.id },
-          error: result.success ? undefined : result.error,
-        })
-        return result
+        return await promise
       } catch (error) {
-        logUserOperation({
-          operationKey: USER_OPERATION_KEYS.AI_DIGEST_GENERATE,
-          status: 'failed',
-          runId: task.runId,
-          targetId: input?.feedId,
-          details: { preset },
-          error,
-        })
+        const settings = settingsProvider.get()
         return { success: false, error: normalizeAIError(error, settings.ai) }
       }
     },

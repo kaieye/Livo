@@ -368,6 +368,9 @@ export const zhCNSettings = {
   refreshLogsFailedFeeds: '失败订阅源',
   refreshLogsFeedSuccess: '刷新成功，新增 {{count}} 条',
   refreshLogsFeedFailed: '刷新失败',
+  refreshLogsSourceUpstream: '订阅源原链接',
+  refreshLogsSourceServerCache: 'Livo-Server 缓存',
+  refreshLogsSourceLabel: '拉取来源：{{source}}',
   refreshLogsMaxHint: '最多保留最近 60 条刷新记录。',
   agentPermissions: 'Agent 权限',
   agentPermissionsDesc:

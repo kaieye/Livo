@@ -178,6 +178,66 @@ export interface ActionRuleDecision {
   effects: ActionEffectType[]
 }
 
+type RuleMatcher<Result> = (rule: ActionRule) => Result
+type MaybePromise<T> = T | Promise<T>
+
+function createEmptyActionRuleDecision(): ActionRuleDecision {
+  return {
+    blocked: false,
+    star: false,
+    markRead: false,
+    effects: [],
+  }
+}
+
+function applyRuleEffectsToDecision(
+  decision: ActionRuleDecision,
+  seen: Set<ActionEffectType>,
+  rule: ActionRule,
+): void {
+  for (const effect of rule.actions) {
+    if (!seen.has(effect.type)) {
+      seen.add(effect.type)
+      decision.effects.push(effect.type)
+    }
+    if (effect.type === 'block') decision.blocked = true
+    else if (effect.type === 'star') decision.star = true
+    else if (effect.type === 'mark_read') decision.markRead = true
+  }
+}
+
+export function evaluateActionRulesWithMatcher(
+  rules: ActionRule[],
+  matchesRule: RuleMatcher<boolean>,
+): ActionRuleDecision {
+  const decision = createEmptyActionRuleDecision()
+  const seen = new Set<ActionEffectType>()
+
+  for (const rule of rules) {
+    if (!rule.enabled) continue
+    if (!matchesRule(rule)) continue
+    applyRuleEffectsToDecision(decision, seen, rule)
+  }
+
+  return decision
+}
+
+export async function evaluateActionRulesWithMatcherAsync(
+  rules: ActionRule[],
+  matchesRule: RuleMatcher<MaybePromise<boolean>>,
+): Promise<ActionRuleDecision> {
+  const decision = createEmptyActionRuleDecision()
+  const seen = new Set<ActionEffectType>()
+
+  for (const rule of rules) {
+    if (!rule.enabled) continue
+    if (!(await matchesRule(rule))) continue
+    applyRuleEffectsToDecision(decision, seen, rule)
+  }
+
+  return decision
+}
+
 /**
  * Evaluate all enabled rules against one entry and collapse the matched effects
  * into a single decision. Effects that change what gets stored (block/star/
@@ -189,28 +249,7 @@ export function evaluateActionRules(
   entry: { title: string; content?: string; author?: string; url: string },
   feed: { title: string; url: string; category?: string },
 ): ActionRuleDecision {
-  const decision: ActionRuleDecision = {
-    blocked: false,
-    star: false,
-    markRead: false,
-    effects: [],
-  }
-  const seen = new Set<ActionEffectType>()
-
-  for (const rule of rules) {
-    if (!rule.enabled) continue
-    if (!matchAllConditions(rule, entry, feed)) continue
-
-    for (const effect of rule.actions) {
-      if (!seen.has(effect.type)) {
-        seen.add(effect.type)
-        decision.effects.push(effect.type)
-      }
-      if (effect.type === 'block') decision.blocked = true
-      else if (effect.type === 'star') decision.star = true
-      else if (effect.type === 'mark_read') decision.markRead = true
-    }
-  }
-
-  return decision
+  return evaluateActionRulesWithMatcher(rules, (rule) =>
+    matchAllConditions(rule, entry, feed),
+  )
 }

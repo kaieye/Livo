@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { getEventBus } from '../system/event-bus'
 import { settingsProvider } from '../system/settings-provider'
 import { createOpenAIClient, validateAIConfig } from './ai-client'
+import { runAICompletion } from './ai-completion'
 import { normalizeAIError } from './provider-protocol'
 import { runWithRetry } from './ai-retry'
 import {
@@ -319,144 +320,84 @@ export async function runAISummarizeTask(
   const { content, language, requestId, entryId, sessionId, sourceHash } =
     payload
 
-  const fail = (error: string): never => {
-    if (requestId) {
-      sendToAllWindows('ai:summary-stream-error', { requestId, error })
-    }
-    persistAISummarySessionPatch(sessionId, {
-      status: 'failed',
-      errorCode: 'provider_error',
-      errorMessage: error,
-      rawErrorMessage: error,
-      finishedAt: Date.now(),
-    })
-    throw new Error(error)
-  }
+  const lang = language || settings.general.language || 'zh-CN'
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    {
+      role: 'system',
+      content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
+    },
+    {
+      role: 'user',
+      content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
+    },
+  ]
 
-  const configError = validateAIConfig(aiConfig)
-  if (configError) fail(configError)
-
-  try {
-    context?.reportProgress({
-      completed: 0,
-      total: 1,
-      message: '生成摘要',
-      data: { streaming: Boolean(requestId), contentLength: content.length },
-    })
-
-    const client = createOpenAIClient(aiConfig)
-    persistAISummarySessionPatch(sessionId, {
-      status: 'running',
-      model: aiConfig.model,
-      sourceHash,
-      runId: context?.runId,
-    })
-    const lang = language || settings.general.language || 'zh-CN'
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: buildSummaryPrompt(lang, aiConfig.summaryPrompt),
+  const summary = await runAICompletion({
+    aiConfig,
+    messages,
+    temperature: 0.3,
+    maxTokens: 500,
+    requestId,
+    eventPrefix: 'ai:summary',
+    sendEvent: sendToAllWindows,
+    context,
+    progress: {
+      start: {
+        completed: 0,
+        total: 1,
+        message: '生成摘要',
+        data: { streaming: Boolean(requestId), contentLength: content.length },
       },
-      {
-        role: 'user',
-        content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
-      },
-    ]
-
-    if (requestId) {
-      const stream = await client.chat.completions.create({
-        model: aiConfig.model,
-        messages,
-        temperature: 0.3,
-        max_tokens: 500,
-        stream: true,
-      })
-
-      let summary = ''
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta?.content || ''
-        if (!delta) continue
-        summary += delta
-        persistAISummarySessionPatch(sessionId, {
-          status: 'running',
-          draftText: summary,
-        })
-        sendToAllWindows('ai:summary-stream-chunk', {
-          requestId,
-          content: delta,
-        })
-      }
-      sendToAllWindows('ai:summary-stream-done', { requestId })
-      context?.reportProgress({
+      done: (streaming) => ({
         completed: 1,
         total: 1,
         message: '摘要已生成',
-        data: { streaming: true, contentLength: content.length },
-      })
-
-      persistAISummarySessionPatch(sessionId, {
-        status: 'succeeded',
-        draftText: summary,
-        finalText: summary,
-        errorCode: undefined,
-        errorMessage: undefined,
-        rawErrorMessage: undefined,
-        finishedAt: Date.now(),
-      })
-      persistEntryAISummary(entryId, summary)
-      return { success: true, summary }
-    }
-
-    const summary = await runWithRetry(
-      async () => {
-        const response = await client.chat.completions.create({
+        data: { streaming, contentLength: content.length },
+      }),
+    },
+    hooks: {
+      onStart: () => {
+        persistAISummarySessionPatch(sessionId, {
+          status: 'running',
           model: aiConfig.model,
-          messages,
-          temperature: 0.3,
-          max_tokens: 500,
+          sourceHash,
+          runId: context?.runId,
         })
-        return response.choices[0]?.message?.content || ''
       },
-      { isEmpty: (text) => !text.trim() },
-    )
+      onChunk: ({ text }) => {
+        persistAISummarySessionPatch(sessionId, {
+          status: 'running',
+          draftText: text,
+        })
+      },
+      onSuccess: (summary) => {
+        persistAISummarySessionPatch(sessionId, {
+          status: 'succeeded',
+          draftText: summary,
+          finalText: summary,
+          errorCode: undefined,
+          errorMessage: undefined,
+          rawErrorMessage: undefined,
+          finishedAt: Date.now(),
+        })
+        persistEntryAISummary(entryId, summary)
+      },
+      onError: (normalized, raw) => {
+        persistAISummarySessionPatch(sessionId, {
+          status: 'failed',
+          errorCode: 'provider_error',
+          errorMessage: normalized,
+          rawErrorMessage: raw instanceof Error ? raw.message : String(raw),
+          finishedAt: Date.now(),
+        })
+        if (entryId) {
+          getDb().entries.updateEntry(entryId, { aiSummaryError: normalized })
+        }
+      },
+    },
+  })
 
-    context?.reportProgress({
-      completed: 1,
-      total: 1,
-      message: '摘要已生成',
-      data: { streaming: false, contentLength: content.length },
-    })
-    persistAISummarySessionPatch(sessionId, {
-      status: 'succeeded',
-      draftText: summary,
-      finalText: summary,
-      errorCode: undefined,
-      errorMessage: undefined,
-      rawErrorMessage: undefined,
-      finishedAt: Date.now(),
-    })
-    persistEntryAISummary(entryId, summary)
-    return { success: true, summary }
-  } catch (error) {
-    const normalized = normalizeAIError(error, aiConfig)
-    if (requestId) {
-      sendToAllWindows('ai:summary-stream-error', {
-        requestId,
-        error: normalized,
-      })
-    }
-    persistAISummarySessionPatch(sessionId, {
-      status: 'failed',
-      errorCode: 'provider_error',
-      errorMessage: normalized,
-      rawErrorMessage: error instanceof Error ? error.message : String(error),
-      finishedAt: Date.now(),
-    })
-    if (entryId) {
-      getDb().entries.updateEntry(entryId, { aiSummaryError: normalized })
-    }
-    throw new Error(normalized)
-  }
+  return { success: true, summary }
 }
 
 // ── Translate pipeline ───────────────────────────────────────────────────────
@@ -469,124 +410,59 @@ export async function runAITranslateTask(
   const aiConfig = settings.ai
   const { content, targetLanguage, requestId } = payload
 
-  const fail = (error: string): never => {
-    if (requestId) {
-      sendToAllWindows('ai:translate-stream-error', { requestId, error })
-    }
-    throw new Error(error)
+  const systemPrompt = buildTranslatePrompt(
+    targetLanguage,
+    aiConfig.translationPrompt,
+  )
+  const contentBudgets = [6000, 4000, 2500]
+  const messages = (attempt: number): OpenAI.ChatCompletionMessageParam[] => {
+    const budget = requestId
+      ? contentBudgets[0]
+      : contentBudgets[Math.min(attempt, contentBudgets.length - 1)]
+    return [
+      {
+        role: 'system',
+        content: systemPrompt,
+      },
+      {
+        role: 'user',
+        content: clampContentToBudget(content, budget),
+      },
+    ]
   }
 
-  const configError = validateAIConfig(aiConfig)
-  if (configError) fail(configError)
-
-  try {
-    context?.reportProgress({
-      completed: 0,
-      total: 1,
-      message: '生成翻译',
-      data: {
-        streaming: Boolean(requestId),
-        targetLanguage,
-        contentLength: content.length,
+  const translation = await runAICompletion({
+    aiConfig,
+    messages,
+    temperature: 0.2,
+    maxTokens: 4000,
+    requestId,
+    eventPrefix: 'ai:translate',
+    sendEvent: sendToAllWindows,
+    context,
+    progress: {
+      start: {
+        completed: 0,
+        total: 1,
+        message: '生成翻译',
+        data: {
+          streaming: Boolean(requestId),
+          targetLanguage,
+          contentLength: content.length,
+        },
       },
-    })
-
-    const client = createOpenAIClient(aiConfig)
-    const systemPrompt = buildTranslatePrompt(
-      targetLanguage,
-      aiConfig.translationPrompt,
-    )
-
-    if (requestId) {
-      const stream = await client.chat.completions.create({
-        model: aiConfig.model,
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt,
-          },
-          {
-            role: 'user',
-            content: clampContentToBudget(content, 6000),
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 4000,
-        stream: true,
-      })
-
-      let translation = ''
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta?.content || ''
-        if (!delta) continue
-        translation += delta
-        sendToAllWindows('ai:translate-stream-chunk', {
-          requestId,
-          content: delta,
-        })
-      }
-      sendToAllWindows('ai:translate-stream-done', { requestId })
-      context?.reportProgress({
+      done: (streaming) => ({
         completed: 1,
         total: 1,
         message: '翻译已生成',
         data: {
-          streaming: true,
+          streaming,
           targetLanguage,
           contentLength: content.length,
         },
-      })
+      }),
+    },
+  })
 
-      return { success: true, translation }
-    }
-
-    // Each retry trims the context further so an over-long request that
-    // returned empty can still succeed on a shorter one.
-    const contentBudgets = [6000, 4000, 2500]
-
-    const translation = await runWithRetry(
-      async (attempt) => {
-        const budget =
-          contentBudgets[Math.min(attempt, contentBudgets.length - 1)]
-        const response = await client.chat.completions.create({
-          model: aiConfig.model,
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt,
-            },
-            {
-              role: 'user',
-              content: clampContentToBudget(content, budget),
-            },
-          ],
-          temperature: 0.2,
-          max_tokens: 4000,
-        })
-        return response.choices[0]?.message?.content || ''
-      },
-      { isEmpty: (text) => !text.trim() },
-    )
-
-    context?.reportProgress({
-      completed: 1,
-      total: 1,
-      message: '翻译已生成',
-      data: {
-        streaming: false,
-        targetLanguage,
-        contentLength: content.length,
-      },
-    })
-    return { success: true, translation }
-  } catch (error) {
-    const normalized = normalizeAIError(error, aiConfig)
-    if (requestId) {
-      sendToAllWindows('ai:translate-stream-error', {
-        requestId,
-        error: normalized,
-      })
-    }
-    throw new Error(normalized)
-  }
+  return { success: true, translation }
 }

@@ -28,6 +28,7 @@ export const IPC = {
   FEED_SYNC_TO_CLOUD: 'feed:sync-to-cloud',
   FEED_SYNC_FROM_CLOUD: 'feed:sync-from-cloud',
   FEED_SYNC_STATUS: 'feed:sync-status',
+  READING_ACTIVITY_SYNC: 'reading-activity:sync',
   ENTRY_LIST: 'entry:list',
   ENTRY_GET: 'entry:get',
   ENTRY_MARK_READ: 'entry:mark-read',
@@ -246,6 +247,10 @@ export type IpcArgsByChannel = {
   [IPC.FEED_SYNC_TO_CLOUD]: []
   [IPC.FEED_SYNC_FROM_CLOUD]: []
   [IPC.FEED_SYNC_STATUS]: []
+  [IPC.READING_ACTIVITY_SYNC]: [
+    deviceId: string,
+    days: Array<{ day: string; count: number }>,
+  ]
   [IPC.ENTRY_LIST]: [
     options: {
       feedId?: string
@@ -759,6 +764,28 @@ export const IPC_CONTRACTS = {
   [IPC.FEED_SYNC_TO_CLOUD]: noArgs(IPC.FEED_SYNC_TO_CLOUD),
   [IPC.FEED_SYNC_FROM_CLOUD]: noArgs(IPC.FEED_SYNC_FROM_CLOUD),
   [IPC.FEED_SYNC_STATUS]: noArgs(IPC.FEED_SYNC_STATUS),
+  [IPC.READING_ACTIVITY_SYNC]: {
+    channel: IPC.READING_ACTIVITY_SYNC,
+    validateArgs: (args) => {
+      assertArity(IPC.READING_ACTIVITY_SYNC, args, 2)
+      assertString(args[0], 'deviceId')
+      if (!Array.isArray(args[1])) {
+        throw new IpcValidationError('Invalid IPC argument', {
+          days: 'expected_array',
+        })
+      }
+      for (const day of args[1]) {
+        if (!isRecord(day)) {
+          throw new IpcValidationError('Invalid IPC argument', {
+            days: 'expected_object_array',
+          })
+        }
+        assertString(day.day, 'day.day')
+        assertNumber(day.count, 'day.count')
+      }
+      return args as IpcArgs<typeof IPC.READING_ACTIVITY_SYNC>
+    },
+  },
   [IPC.ENTRY_LIST]: {
     channel: IPC.ENTRY_LIST,
     validateArgs: (args) => {
