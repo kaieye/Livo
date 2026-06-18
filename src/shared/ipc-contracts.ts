@@ -145,11 +145,11 @@ export const IPC = {
   ADMIN_GET_SETTINGS: 'admin:get-settings',
   ADMIN_UPDATE_SETTING: 'admin:update-setting',
   ADMIN_BATCH_UPDATE_SETTINGS: 'admin:batch-update-settings',
-  ADMIN_GET_NOTIFICATIONS: 'admin:get-notifications',
-  ADMIN_GET_UNREAD_COUNT: 'admin:get-unread-count',
-  ADMIN_MARK_NOTIFICATION_READ: 'admin:mark-notification-read',
-  ADMIN_MARK_NOTIFICATION_UNREAD: 'admin:mark-notification-unread',
-  ADMIN_MARK_ALL_NOTIFICATIONS_READ: 'admin:mark-all-notifications-read',
+  NOTIFICATION_LIST: 'notification:list',
+  NOTIFICATION_UNREAD_COUNT: 'notification:unread-count',
+  NOTIFICATION_MARK_READ: 'notification:mark-read',
+  NOTIFICATION_MARK_UNREAD: 'notification:mark-unread',
+  NOTIFICATION_MARK_ALL_READ: 'notification:mark-all-read',
   ADMIN_GET_ROLES: 'admin:get-roles',
   UPDATER_CHECK: 'updater:check',
   UPDATER_DOWNLOAD: 'updater:download',
@@ -435,17 +435,17 @@ export type IpcArgsByChannel = {
   [IPC.ADMIN_BATCH_UPDATE_SETTINGS]: [
     updates: Array<{ key: string; value: string }>,
   ]
-  [IPC.ADMIN_GET_NOTIFICATIONS]: [
+  [IPC.NOTIFICATION_LIST]: [
     options?: {
       unread?: boolean
       limit?: number
       offset?: number
     },
   ]
-  [IPC.ADMIN_GET_UNREAD_COUNT]: []
-  [IPC.ADMIN_MARK_NOTIFICATION_READ]: [id: string]
-  [IPC.ADMIN_MARK_NOTIFICATION_UNREAD]: [id: string]
-  [IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ]: []
+  [IPC.NOTIFICATION_UNREAD_COUNT]: []
+  [IPC.NOTIFICATION_MARK_READ]: [id: string]
+  [IPC.NOTIFICATION_MARK_UNREAD]: [id: string]
+  [IPC.NOTIFICATION_MARK_ALL_READ]: []
   [IPC.ADMIN_GET_ROLES]: []
   [IPC.ADMIN_GET_ROLE_BY_ID]: [id: string]
   [IPC.ADMIN_CREATE_ROLE]: [dto: { name: string; permissions: string[] }]
@@ -1237,26 +1237,18 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.ADMIN_BATCH_UPDATE_SETTINGS>
     },
   },
-  [IPC.ADMIN_GET_NOTIFICATIONS]: {
-    channel: IPC.ADMIN_GET_NOTIFICATIONS,
+  [IPC.NOTIFICATION_LIST]: {
+    channel: IPC.NOTIFICATION_LIST,
     validateArgs: (args) => {
-      assertArity(IPC.ADMIN_GET_NOTIFICATIONS, args, 0, 1)
+      assertArity(IPC.NOTIFICATION_LIST, args, 0, 1)
       assertOptionalObject(args[0], 'options')
-      return args as IpcArgs<typeof IPC.ADMIN_GET_NOTIFICATIONS>
+      return args as IpcArgs<typeof IPC.NOTIFICATION_LIST>
     },
   },
-  [IPC.ADMIN_GET_UNREAD_COUNT]: noArgs(IPC.ADMIN_GET_UNREAD_COUNT),
-  [IPC.ADMIN_MARK_NOTIFICATION_READ]: oneString(
-    IPC.ADMIN_MARK_NOTIFICATION_READ,
-    'id',
-  ),
-  [IPC.ADMIN_MARK_NOTIFICATION_UNREAD]: oneString(
-    IPC.ADMIN_MARK_NOTIFICATION_UNREAD,
-    'id',
-  ),
-  [IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ]: noArgs(
-    IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ,
-  ),
+  [IPC.NOTIFICATION_UNREAD_COUNT]: noArgs(IPC.NOTIFICATION_UNREAD_COUNT),
+  [IPC.NOTIFICATION_MARK_READ]: oneString(IPC.NOTIFICATION_MARK_READ, 'id'),
+  [IPC.NOTIFICATION_MARK_UNREAD]: oneString(IPC.NOTIFICATION_MARK_UNREAD, 'id'),
+  [IPC.NOTIFICATION_MARK_ALL_READ]: noArgs(IPC.NOTIFICATION_MARK_ALL_READ),
   [IPC.ADMIN_GET_ROLES]: noArgs(IPC.ADMIN_GET_ROLES),
   [IPC.ADMIN_GET_ROLE_BY_ID]: oneString(IPC.ADMIN_GET_ROLE_BY_ID, 'id'),
   [IPC.ADMIN_CREATE_ROLE]: oneObject(IPC.ADMIN_CREATE_ROLE, 'dto'),

@@ -1,14 +1,13 @@
 import { BrowserWindow, Notification } from 'electron'
+import { createHash } from 'crypto'
 import { getEventBus } from '../system/event-bus'
-import type OpenAI from 'openai'
 import type { ActionEffectType } from '../../../shared/actions'
 import type { Entry, Feed } from '../../../shared/types/index'
 import { dispatchAgentNavigation } from '../../agent/navigation-bridge'
 import { getDb } from '../../database'
 import { settingsProvider } from '../system/settings-provider'
-import { createOpenAIClient, validateAIConfig } from '../ai/ai-client'
-import { buildSummaryPrompt, clampContentToBudget } from '../ai/ai-prompts'
-import { runWithRetry } from '../ai/ai-retry'
+import { validateAIConfig } from '../ai/ai-client'
+import { runAISummarizeTask } from '../ai/ai-pipeline'
 import { logWarnQuiet } from '../system/logger'
 import { normalizeAIError } from '../ai/provider-protocol'
 import { fetchReadableContent, resolveRelativeUrls } from './readability'
@@ -96,8 +95,8 @@ async function fetchReadability(entry: Entry): Promise<string> {
 async function summarizeEntry(
   entry: Entry,
   contentOverride?: string,
-): Promise<string> {
-  if (entry.aiSummary?.trim()) return entry.aiSummary
+): Promise<void> {
+  if (entry.aiSummary?.trim()) return
 
   const settings = settingsProvider.get()
   const aiConfig = settings.ai
@@ -112,32 +111,29 @@ async function summarizeEntry(
     entry.title
   if (!plainText(content).trim()) throw new Error('缺少可用于摘要的内容')
 
-  const client = createOpenAIClient(aiConfig)
+  // Route through the AI Summary pipeline so this auto-summarize path persists
+  // an EntryAISummarySession (visible in the AI Summary UI) and inherits the
+  // streaming-event / DeepSeek thinking-mode quirk / retry handling that the
+  // user-initiated summarize already gets. Keeps a single AI Summary
+  // implementation behind one seam.
+  const sourceHash = createHash('sha256').update(content).digest('hex')
+  const session = getDb().aiSummarySessions.createSession({
+    entryId: entry.id,
+    status: 'queued',
+    draftText: '',
+    model: aiConfig.model,
+    sourceHash,
+  })
+
   const language =
     settings.summary?.language || settings.general.language || 'zh-CN'
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    {
-      role: 'system',
-      content: buildSummaryPrompt(language, aiConfig.summaryPrompt),
-    },
-    {
-      role: 'user',
-      content: `Please summarize the following article:\n\n${clampContentToBudget(content, 8000)}`,
-    },
-  ]
-
-  return runWithRetry(
-    async () => {
-      const response = await client.chat.completions.create({
-        model: aiConfig.model,
-        messages,
-        temperature: 0.3,
-        max_tokens: 500,
-      })
-      return response.choices[0]?.message?.content || ''
-    },
-    { isEmpty: (text) => !text.trim() },
-  )
+  await runAISummarizeTask({
+    content,
+    language,
+    entryId: entry.id,
+    sessionId: session.id,
+    sourceHash,
+  })
 }
 
 async function runJob(job: EntryActionEffectJob): Promise<void> {
@@ -173,12 +169,10 @@ async function runJob(job: EntryActionEffectJob): Promise<void> {
 
   if (effects.includes('summarize')) {
     try {
-      const summary = await summarizeEntry(job.entry, readableContent)
-      updateEntryAndNotify(job.entry.id, {
-        aiSummary: summary,
-        aiSummaryGeneratedAt: Date.now(),
-        aiSummaryError: undefined,
-      })
+      // runAISummarizeTask persists aiSummary + aiSummaryError on success/error
+      // hooks; we just need to surface a renderer notification.
+      await summarizeEntry(job.entry, readableContent)
+      notifyRenderer()
     } catch (error) {
       const message = normalizeAIError(error, settingsProvider.get().ai)
       updateEntryAndNotify(job.entry.id, { aiSummaryError: message })

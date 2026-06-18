@@ -11,7 +11,7 @@ import {
   touchAggregatorFailure,
   type AggregatorDiagnostics,
 } from './aggregator-store'
-import { isInstagramUserFeedUrl } from '../../../shared/url-detect'
+import { classifyFeedRoute } from './feed-route-policy'
 import {
   queryServerFeedCache,
   shouldUseServerFeedCache,
@@ -31,12 +31,16 @@ export interface AggregatedFeedPayload {
   diagnostics?: AggregatorDiagnostics
 }
 
+// Routes that warrant private-aggregator/local-agent fan-out by default —
+// social user routes that frequently throttle direct fetches. Sourced from
+// `feed-route-policy.classifyFeedRoute` so the policy lives in one place
+// instead of being duplicated across modules.
 function isHighRiskFeed(feedUrl: string | undefined): boolean {
-  const raw = (feedUrl || '').toLowerCase()
+  const route = classifyFeedRoute(feedUrl)
   return (
-    isInstagramUserFeedUrl(raw) ||
-    /(?:^|\/)(?:twitter|x)\/user\//.test(raw) ||
-    /\/bilibili\/user\/dynamic\//.test(raw)
+    route === 'instagram-user' ||
+    route === 'twitter-user' ||
+    route === 'bilibili-dynamic'
   )
 }
 

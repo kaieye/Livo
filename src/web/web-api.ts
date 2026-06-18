@@ -54,6 +54,11 @@ import { mergeSettings, normalizeSettings } from '../shared/settings'
 import { resolveOpenAIChatCompletionsUrl } from '../shared/ai-endpoint'
 import { resolveProfileUrlToCandidates } from '../shared/profile-resolver'
 import {
+  ensureInstagramUserFeedLimit,
+  ensureTwitterUserFeedLimit,
+} from '../shared/rsshub-url'
+import { inferDiscoverFeedViewFromUrl } from '../shared/subscription-intake'
+import {
   CURATED_FEEDS,
   DISCOVER_CATEGORIES,
   RSSHUB_ROUTES,
@@ -1385,15 +1390,37 @@ export function createWebAPI(): ElectronAPI {
         title?: string,
       ) => {
         try {
-          const storedUrl = toRsshubProtocolUrl(url)
+          // Subscription intake mirrors the desktop subscriber's seams so the
+          // web adapter doesn't silently skip dedup or URL-based view inference:
+          //   1. URL normalization (rsshub:// + per-platform limit hints)
+          //   2. Dedup against existing IndexedDB feeds
+          //   3. View-type inference from URL (route wins over content)
+          const rawProtocolUrl = toRsshubProtocolUrl(url)
+          const storedUrl = ensureTwitterUserFeedLimit(
+            ensureInstagramUserFeedLimit(rawProtocolUrl, 100),
+            120,
+          )
           const fetchUrl = toFetchableFeedUrl(
             storedUrl,
             DEFAULT_RSSHUB_INSTANCE,
           )
+
+          const existing = await getFeedByUrl(storedUrl)
+          if (existing) {
+            return { success: true, feed: existing }
+          }
+
           const parsed = await parseFeedFromUrl(fetchUrl)
           const id = generateId()
           const now = Date.now()
-          const detectedView = view ?? detectViewType(parsed.items)
+
+          // Route-derived view wins over explicit + content-derived, matching
+          // desktop subscribeFeed.
+          const inferredView = inferDiscoverFeedViewFromUrl(fetchUrl)
+          const detectedView =
+            inferredView !== FVT.Articles
+              ? inferredView
+              : (view ?? detectViewType(parsed.items))
 
           const feed: Feed = {
             id,

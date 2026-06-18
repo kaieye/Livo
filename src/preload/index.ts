@@ -565,12 +565,11 @@ const api = {
 
   notifications: {
     list: (options?: { unread?: boolean; limit?: number; offset?: number }) =>
-      invokeIpc(IPC.ADMIN_GET_NOTIFICATIONS, options),
-    unreadCount: () => invokeIpc(IPC.ADMIN_GET_UNREAD_COUNT),
-    markRead: (id: string) => invokeIpc(IPC.ADMIN_MARK_NOTIFICATION_READ, id),
-    markUnread: (id: string) =>
-      invokeIpc(IPC.ADMIN_MARK_NOTIFICATION_UNREAD, id),
-    markAllRead: () => invokeIpc(IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ),
+      invokeIpc(IPC.NOTIFICATION_LIST, options),
+    unreadCount: () => invokeIpc(IPC.NOTIFICATION_UNREAD_COUNT),
+    markRead: (id: string) => invokeIpc(IPC.NOTIFICATION_MARK_READ, id),
+    markUnread: (id: string) => invokeIpc(IPC.NOTIFICATION_MARK_UNREAD, id),
+    markAllRead: () => invokeIpc(IPC.NOTIFICATION_MARK_ALL_READ),
   },
 
   websocket: {

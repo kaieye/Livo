@@ -36,7 +36,7 @@ async function requestBackend<T>(
 }
 
 export function registerNotificationHandlers(): void {
-  registerChannel(IPC.ADMIN_GET_NOTIFICATIONS, async (_event, options) => {
+  registerChannel(IPC.NOTIFICATION_LIST, async (_event, options) => {
     try {
       const params = new URLSearchParams()
       if (options?.unread !== undefined) {
@@ -54,7 +54,7 @@ export function registerNotificationHandlers(): void {
     }
   })
 
-  registerChannel(IPC.ADMIN_GET_UNREAD_COUNT, async () => {
+  registerChannel(IPC.NOTIFICATION_UNREAD_COUNT, async () => {
     try {
       return await requestBackend('/api/notifications/unread-count')
     } catch (error) {
@@ -62,7 +62,7 @@ export function registerNotificationHandlers(): void {
     }
   })
 
-  registerChannel(IPC.ADMIN_MARK_NOTIFICATION_READ, async (_event, id) => {
+  registerChannel(IPC.NOTIFICATION_MARK_READ, async (_event, id) => {
     try {
       return await requestBackend(
         `/api/notifications/${encodeURIComponent(id)}/read`,
@@ -73,7 +73,7 @@ export function registerNotificationHandlers(): void {
     }
   })
 
-  registerChannel(IPC.ADMIN_MARK_NOTIFICATION_UNREAD, async (_event, id) => {
+  registerChannel(IPC.NOTIFICATION_MARK_UNREAD, async (_event, id) => {
     try {
       return await requestBackend(
         `/api/notifications/${encodeURIComponent(id)}/unread`,
@@ -84,7 +84,7 @@ export function registerNotificationHandlers(): void {
     }
   })
 
-  registerChannel(IPC.ADMIN_MARK_ALL_NOTIFICATIONS_READ, async () => {
+  registerChannel(IPC.NOTIFICATION_MARK_ALL_READ, async () => {
     try {
       return await requestBackend('/api/notifications/mark-all-read', {
         method: 'POST',

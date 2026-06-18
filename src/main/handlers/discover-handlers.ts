@@ -1,12 +1,10 @@
 import {
-  CURATED_FEEDS,
   DISCOVER_CATEGORIES,
+  CURATED_FEEDS,
   RSSHUB_ROUTES,
   DEFAULT_RSSHUB_INSTANCE,
-  searchCuratedFeeds,
 } from '../../shared/discover-data'
 import {
-  normalizeDiscoverQueryToFeedUrl,
   extractBilibiliUid,
   extractTwitterDisplayNameFromText,
   FALLBACK_RSSHUB_INSTANCES,
@@ -19,14 +17,11 @@ import type {
 import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
 import { registerChannel } from '../ipc/register-channel'
 import {
-  dedupeAndSortDiscoverResults,
-  type DiscoverSearchResult,
-} from '../services/discovery/discover-dedupe'
-import {
-  inferDiscoverResultImage,
-  inferDiscoverResultTitle,
-  previewDiscoverFeed,
-} from '../services/discovery/discover-preview'
+  discoverSearch,
+  probeVideoSourcesByKeyword,
+  type DiscoverSearchPlatform,
+} from '../services/discovery/discover-search'
+import { previewDiscoverFeed } from '../services/discovery/discover-preview'
 import { fetchAndParseFeed } from '../services/feed/rss-parser'
 import { formatFeedTitle } from '../services/feed/feed-title'
 import { getFeedImageUrl } from '../services/feed/feed-utils'
@@ -38,16 +33,9 @@ import {
   toRsshubProtocolUrl,
 } from '../services/feed/rsshub-url'
 import { resolveFeedAvatar } from '../services/feed/feed-avatar'
+import { looksLikeYouTubeChannelId } from '../services/discovery/discover-youtube'
 import {
-  searchYouTubeChannelsByKeyword,
-  looksLikeYouTubeChannelId,
-  type VideoProbeCandidate,
-} from '../services/discovery/discover-youtube'
-import {
-  extractLikelyXHandle,
-  extractLikelyXHandleFromKeywords,
   fetchXDisplayNameByUsername,
-  probeXUsersByKeyword,
   FALLBACK_NITTER_INSTANCES,
 } from '../services/discovery/discover-x'
 import {
@@ -55,15 +43,7 @@ import {
   fetchBilibiliAvatarByUid,
   probeBilibiliUsersByKeyword,
 } from '../services/discovery/discover-bilibili'
-import {
-  fetchInstagramAvatarByUsername,
-  probeInstagramUsersByKeyword,
-} from '../services/discovery/discover-instagram-search'
-const DISCOVER_SEARCH_CACHE_TTL = 30 * 1000
-const discoverSearchCache = new Map<
-  string,
-  { expiresAt: number; results: DiscoverSearchResult[] }
->()
+import { fetchInstagramAvatarByUsername } from '../services/discovery/discover-instagram-search'
 
 /** Return the configured RSSHub instance URL (no trailing slash) */
 function getRSSHubInstance(): string {
@@ -97,101 +77,6 @@ function appendSameRouteOnFallbackInstances(
   candidates.splice(0, candidates.length, ...nextCandidates)
 }
 
-async function probeVideoSourcesByKeyword(
-  query: string,
-  rsshubInstance: string,
-  platform: 'all' | 'youtube' | 'bilibili' | 'x' = 'all',
-): Promise<
-  Array<{
-    platform: 'youtube' | 'bilibili'
-    title: string
-    description: string
-    image: string
-    feedUrl: string
-    followers?: string
-  }>
-> {
-  const results: VideoProbeCandidate[] = []
-  const clean = query.trim().replace(/^@/, '')
-  if (!clean) return results
-  if (looksLikeYouTubeChannelId(clean)) return results
-
-  // Run searches in parallel based on selected platform
-  const searchPromises: Promise<VideoProbeCandidate[]>[] = []
-
-  if (platform === 'all' || platform === 'youtube') {
-    searchPromises.push(searchYouTubeChannelsByKeyword(clean, rsshubInstance))
-  } else {
-    searchPromises.push(Promise.resolve([]))
-  }
-
-  if (platform === 'all' || platform === 'bilibili') {
-    searchPromises.push(
-      probeBilibiliUsersByKeyword(clean, rsshubInstance).then((users) =>
-        users.map((user) => ({
-          platform: 'bilibili' as const,
-          title: user.title,
-          description: user.description,
-          image: user.image,
-          feedUrl: user.feedUrl,
-          followers: user.followers,
-        })),
-      ),
-    )
-  } else {
-    searchPromises.push(Promise.resolve([]))
-  }
-
-  const [ytSearchCandidates, biliCandidates] = await Promise.all(searchPromises)
-
-  for (const c of ytSearchCandidates) {
-    if (!results.some((x) => x.feedUrl === c.feedUrl)) results.push(c)
-  }
-
-  for (const candidate of biliCandidates) {
-    if (!results.some((x) => x.feedUrl === candidate.feedUrl))
-      results.push(candidate)
-  }
-
-  return results
-}
-
-/**
- * Map a batch of platform probe candidates into IPC discover results and append
- * them (skipping URLs already present). Unifies the previously per-platform
- * re-mapping loops; each platform supplies only how to derive `siteUrl` and
- * `description` from its candidate, everything else is identical.
- */
-function appendProbeCandidatesToResults<
-  Candidate extends {
-    title: string
-    feedUrl: string
-    description: string
-    image: string
-    followers?: string
-  },
->(
-  results: DiscoverSearchResult[],
-  candidates: Candidate[],
-  mapper: {
-    siteUrl: (candidate: Candidate) => string
-    description: (candidate: Candidate) => string
-  },
-): void {
-  for (const candidate of candidates) {
-    if (results.some((r) => r.url === candidate.feedUrl)) continue
-    results.push({
-      title: candidate.title,
-      url: candidate.feedUrl,
-      siteUrl: mapper.siteUrl(candidate),
-      description: mapper.description(candidate),
-      source: 'rsshub',
-      image: candidate.image || '',
-      followers: candidate.followers,
-    })
-  }
-}
-
 export function registerDiscoverHandlers(): void {
   // Get categories
   registerChannel(IPC.DISCOVER_CATEGORIES, () => {
@@ -206,228 +91,10 @@ export function registerDiscoverHandlers(): void {
     return CURATED_FEEDS
   })
 
-  type DiscoverSearchPlatform =
-    | 'all'
-    | 'youtube'
-    | 'bilibili'
-    | 'x'
-    | 'instagram'
-
-  // Search feeds by query (check curated feeds + try as URL)
   registerChannel(
     IPC.DISCOVER_SEARCH,
-    async (_event, query: string, platform: DiscoverSearchPlatform = 'all') => {
-      const cacheKey = `${query.trim().toLowerCase()}:${platform}`
-      const shouldUseCache = platform !== 'instagram'
-      const cached = discoverSearchCache.get(cacheKey)
-      if (
-        shouldUseCache &&
-        cacheKey &&
-        cached &&
-        cached.expiresAt > Date.now()
-      ) {
-        return cached.results
-      }
-
-      console.log(`[Discover Search] ========== START SEARCH ==========`)
-      console.log(
-        `[Discover Search] Query: "${query}", Platform: "${platform}"`,
-      )
-      const startTime = Date.now()
-      const results: DiscoverSearchResult[] = []
-
-      // Search curated feeds (fast, local) - only for "all" or matching platform
-      if (platform === 'all') {
-        const curated = searchCuratedFeeds(query)
-        console.log(`[Discover Search] Curated feeds: ${curated.length}`)
-        for (const feed of curated) {
-          results.push({
-            title: feed.title,
-            url: feed.url,
-            siteUrl: feed.siteUrl,
-            description: feed.description,
-            source: 'curated',
-            image: feed.imageUrl || '',
-          })
-        }
-
-        // Search RSSHub routes (fast, local)
-        const q = query.toLowerCase()
-        const matchingRoutes = RSSHUB_ROUTES.filter(
-          (r) =>
-            r.name.toLowerCase().includes(q) ||
-            r.description.toLowerCase().includes(q),
-        )
-        console.log(`[Discover Search] RSSHub routes: ${matchingRoutes.length}`)
-        const instance = getRSSHubInstance()
-        for (const route of matchingRoutes.slice(0, 20)) {
-          results.push({
-            title: route.name,
-            url: `${instance}${route.url}`,
-            siteUrl: `${instance}${route.url}`,
-            description: `${route.description} (RSSHub)`,
-            source: 'rsshub',
-            image: '',
-          })
-        }
-      }
-
-      const instance = getRSSHubInstance()
-
-      // Run platform-specific searches based on selected platform
-      const searchPromises: Promise<void>[] = []
-
-      if (
-        platform === 'all' ||
-        platform === 'youtube' ||
-        platform === 'bilibili'
-      ) {
-        searchPromises.push(
-          probeVideoSourcesByKeyword(query, instance, platform).then(
-            (videoCandidates) => {
-              console.log(
-                `[Discover Search] Video candidates: ${videoCandidates.length}`,
-              )
-              appendProbeCandidatesToResults(results, videoCandidates, {
-                siteUrl: (candidate) => candidate.feedUrl,
-                description: (candidate) =>
-                  candidate.description ||
-                  (candidate.platform === 'youtube'
-                    ? 'YouTube channel'
-                    : 'Bilibili user'),
-              })
-            },
-          ),
-        )
-      }
-
-      if (platform === 'all' || platform === 'x') {
-        searchPromises.push(
-          probeXUsersByKeyword(query, instance).then((xCandidates) => {
-            console.log(`[Discover Search] X candidates: ${xCandidates.length}`)
-            appendProbeCandidatesToResults(results, xCandidates, {
-              siteUrl: (candidate) =>
-                `https://x.com/${encodeURIComponent(candidate.username)}`,
-              description: (candidate) =>
-                candidate.followers || candidate.description,
-            })
-          }),
-        )
-      }
-
-      if (platform === 'all' || platform === 'instagram') {
-        searchPromises.push(
-          probeInstagramUsersByKeyword(query, instance).then((igCandidates) => {
-            console.log(
-              `[Discover Search] Instagram candidates: ${igCandidates.length}`,
-            )
-            appendProbeCandidatesToResults(results, igCandidates, {
-              siteUrl: (candidate) =>
-                `https://www.instagram.com/${encodeURIComponent(candidate.username)}/`,
-              description: (candidate) => candidate.description,
-            })
-          }),
-        )
-      }
-
-      await Promise.all(searchPromises)
-
-      const trimmedQuery = query.trim()
-
-      // Resolve profile-like inputs. For X search, keyword mode already generates
-      // candidates, so only keep explicit URL resolution to avoid noisy fallback routes.
-      if (platform !== 'instagram') {
-        const profileInputs = new Set<string>()
-        if (trimmedQuery) {
-          const isExplicitUrl = /^https?:\/\//i.test(trimmedQuery)
-          if (platform === 'x') {
-            if (isExplicitUrl) profileInputs.add(trimmedQuery)
-          } else {
-            profileInputs.add(trimmedQuery)
-            const xHandle = extractLikelyXHandle(trimmedQuery)
-            if (xHandle) profileInputs.add(`https://x.com/${xHandle}`)
-            const compactXHandle =
-              extractLikelyXHandleFromKeywords(trimmedQuery)
-            if (compactXHandle)
-              profileInputs.add(`https://x.com/${compactXHandle}`)
-          }
-        }
-        for (const profileInput of profileInputs) {
-          const resolved = resolveProfileUrlToCandidates(profileInput, instance)
-          for (const candidate of resolved.candidates) {
-            if (results.some((r) => r.url === candidate.feedUrl)) continue
-            results.push({
-              title: candidate.title,
-              url: candidate.feedUrl,
-              siteUrl: candidate.siteUrl || profileInput,
-              description: candidate.description || 'Profile feed',
-              source: candidate.source === 'rss' ? 'url' : 'rsshub',
-              image: '', // Skip image fetch for speed
-            })
-          }
-        }
-      }
-
-      // If query looks like a URL, try to fetch it as RSS
-      const looksLikeUrl =
-        /^rsshub:\/\//i.test(trimmedQuery) ||
-        /^https?:\/\//i.test(trimmedQuery) ||
-        (platform !== 'instagram' &&
-          trimmedQuery.includes('.') &&
-          !trimmedQuery.includes(' '))
-      if (looksLikeUrl) {
-        const feedUrl = normalizeDiscoverQueryToFeedUrl(trimmedQuery, instance)
-        try {
-          const parsed = await fetchAndParseFeed(feedUrl)
-          const data = parsed.data
-          // Only add if not already in results
-          if (data && !results.some((r) => r.url === feedUrl)) {
-            const displayTitle = await inferDiscoverResultTitle(
-              feedUrl,
-              data.title || undefined,
-            )
-            results.push({
-              title: displayTitle,
-              url: feedUrl,
-              siteUrl: data.link || feedUrl,
-              description: data.description || '直接 URL 订阅',
-              source: 'url',
-              image:
-                getFeedImageUrl(data) ||
-                (await inferDiscoverResultImage(feedUrl, data.link || feedUrl)),
-            })
-          }
-        } catch {
-          // Keep a direct subscribable option even when probe fails.
-          if (!results.some((r) => r.url === feedUrl)) {
-            const displayTitle = await inferDiscoverResultTitle(feedUrl)
-            results.push({
-              title: displayTitle,
-              url: feedUrl,
-              siteUrl: feedUrl,
-              description: 'Direct URL subscription',
-              source: 'url',
-              image: await inferDiscoverResultImage(feedUrl, feedUrl),
-            })
-          }
-        }
-      }
-
-      const finalResults = dedupeAndSortDiscoverResults(query, results)
-
-      console.log(`[Discover Search] Final results: ${finalResults.length}`)
-      console.log(`[Discover Search] Elapsed: ${Date.now() - startTime}ms`)
-      console.log(`[Discover Search] ========== END SEARCH ==========`)
-
-      if (shouldUseCache && cacheKey) {
-        discoverSearchCache.set(cacheKey, {
-          expiresAt: Date.now() + DISCOVER_SEARCH_CACHE_TTL,
-          results: finalResults,
-        })
-      }
-
-      return finalResults
-    },
+    (_event, query: string, platform: DiscoverSearchPlatform = 'all') =>
+      discoverSearch(query, platform, getRSSHubInstance()),
   )
 
   // Get RSSHub routes - prepend instance URL to make them subscribable
