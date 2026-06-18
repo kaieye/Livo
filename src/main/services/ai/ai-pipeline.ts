@@ -1,6 +1,5 @@
 import OpenAI from 'openai'
-import { createHash } from 'crypto'
-import { getEventBus } from '../system/event-bus'
+import { sendToAllWindows } from '../system/event-bus'
 import { settingsProvider } from '../system/settings-provider'
 import { validateAIConfig } from './ai-client'
 import { runAICompletion, runAICompletionText } from './ai-completion'
@@ -16,6 +15,8 @@ import {
   buildDigestReduceMessages,
   buildDigestRerankMessages,
   dedupeDigestCandidates,
+  getDigestPresetLabel,
+  normalizeDigestPreset,
   selectValidDigestRerankIds,
 } from './ai-digest'
 import type { TaskRunContext } from '../system/task-runner'
@@ -38,22 +39,6 @@ export type AISummarizeResult = { success: true; summary: string }
 export type AITranslateResult = { success: true; translation: string }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-export function sendToAllWindows(channel: string, payload: unknown): void {
-  getEventBus().send(channel, payload)
-}
-
-export function getDigestPresetLabel(preset: AIDigestPreset): string {
-  return preset === 'week' ? '本周趋势' : '今日简报'
-}
-
-export function normalizeDigestPreset(value: unknown): AIDigestPreset {
-  return value === 'week' ? 'week' : 'today'
-}
-
-export function hashAISummarySource(content: string): string {
-  return createHash('sha256').update(content).digest('hex')
-}
 
 function persistAISummarySessionPatch(
   sessionId: string | undefined,

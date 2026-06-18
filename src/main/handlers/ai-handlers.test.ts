@@ -47,6 +47,8 @@ vi.mock('../services/system/event-bus', () => ({
   getEventBus: () => ({
     send: mocks.eventSend,
   }),
+  sendToAllWindows: (channel: string, payload: unknown) =>
+    mocks.eventSend(channel, payload),
 }))
 
 vi.mock('../services/system/logger', () => ({

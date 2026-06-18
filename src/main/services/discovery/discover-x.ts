@@ -6,7 +6,7 @@ import {
   extractTwitterDisplayNameFromText,
   formatFollowerCount,
   normalizeXFollowersLabel,
-} from './discover-helpers'
+} from '../../../shared/discover-helpers'
 import { assertPublicDiscoveryUrl } from './discover-url-policy'
 import {
   type DiscoveryFetch,

@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { getEventBus } from '../system/event-bus'
 import { getDb } from '../../database'
 import type { CleanupOptions } from '../../database'
-import { deriveImageUrl, extractMedia, getFeedImageUrl } from './feed-utils'
+import { getFeedImageUrl } from './feed-utils'
 import { settingsProvider } from '../system/settings-provider'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import type { Feed, RefreshRunItemResult } from '../../../shared/types/index'
@@ -22,16 +22,29 @@ import {
   normalizeFeedUrl,
 } from './rsshub-url'
 import { resolveFeedAvatar } from './feed-avatar'
+import {
+  pickBestFeedAvatar,
+  sanitizeExistingFeedAvatarForRefresh,
+} from './feed-avatar-policy'
 import { formatFeedTitle } from './feed-title'
 import { logWarnQuiet } from '../system/logger'
 import {
   getBootstrapRefreshTimeoutMs,
   getRefreshTimeoutMs,
   isBilibiliVideoFeedUrl,
-  isInstagramKeywordFeedUrl,
   isInstagramUserFeedUrl,
   isSlowFeedUrl,
 } from './feed-route-policy'
+import {
+  getNextAutoRefreshDelayMs,
+  shouldBackOffFeed,
+  withTimeout,
+} from './feed-backoff-policy'
+import {
+  isKnownInstagramUpstreamFailure,
+  mapFeedRefreshError,
+  type FeedRefreshErrorContext,
+} from './feed-refresh-error'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from '../system/refresh-log-store'
 import { runConcurrencyPool } from '../../utils/concurrency-pool'
@@ -52,96 +65,12 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshGeneration = 0
 const RECOMMENDED_CATEGORY = 'Recommended'
 
-function isPlaceholderAvatar(url: string | undefined): boolean {
-  const raw = (url || '').trim()
-  if (!raw) return true
-  const lower = raw.toLowerCase()
-  if (lower.includes('unavatar.io/instagram/')) return true
-  if (
-    lower.includes('instagram.com/static/images/ico') ||
-    lower.includes('instagram_static/images/ico') ||
-    lower.includes('instagram_logo') ||
-    lower.includes('instagram-logo') ||
-    lower.includes('/apple-touch-icon') ||
-    lower.includes('favicon')
-  )
-    return true
-  if (
-    (lower.includes('picnob') ||
-      lower.includes('pixnoy') ||
-      lower.includes('piokok')) &&
-    lower.includes('logo')
-  )
-    return true
-  return false
-}
-
-function pickBestFeedAvatar(
-  feedUrl: string | undefined,
-  existing: string | undefined,
-  incoming: string | undefined,
-): string {
-  const current = (existing || '').trim()
-  const next = (incoming || '').trim()
-  if (!current) return next
-  if (!next) return current
-  if (current === next) return current
-  // Instagram/Picnob avatar URLs are often signed/expiring.
-  // Prefer the latest fetched value so old expired URLs get replaced.
-  if (isInstagramKeywordFeedUrl(feedUrl)) return next
-  if (!isPlaceholderAvatar(next)) return next
-  if (isPlaceholderAvatar(current) && !isPlaceholderAvatar(next)) return next
-  return current
-}
-
-function normalizeAvatarComparisonKey(value: string | undefined): string {
-  return (value || '').trim()
-}
-
-function collectParsedItemImageKeys(
-  items: Array<Record<string, any>>,
-): Set<string> {
-  const keys = new Set<string>()
-  const push = (value: string | undefined): void => {
-    const key = normalizeAvatarComparisonKey(value)
-    if (key) keys.add(key)
-  }
-
-  for (const item of items) {
-    push(deriveImageUrl(item))
-    for (const media of extractMedia(item) || []) {
-      if (media.type !== 'photo') continue
-      push(media.url)
-      push(media.previewUrl)
-    }
-  }
-
-  return keys
-}
-
-export function sanitizeExistingFeedAvatarForRefresh(
-  existingImageUrl: string | undefined,
-  parsedFeedImageUrl: string | undefined,
-  items: Array<Record<string, any>>,
-): string | undefined {
-  if (parsedFeedImageUrl) return existingImageUrl
-  const existingKey = normalizeAvatarComparisonKey(existingImageUrl)
-  if (!existingKey) return existingImageUrl
-
-  // 历史版本会把最新文章图写进 feed.imageUrl；刷新时不能继续保留。
-  return collectParsedItemImageKeys(items).has(existingKey)
-    ? undefined
-    : existingImageUrl
-}
-
 function isVideoDurationEnrichmentEnabled(): boolean {
   return !!settingsProvider.get().data?.enrichVideoDuration
 }
 
 /** Default data-maintenance constants (overridden by settings at call site) */
 const DEFAULT_FRESHNESS_TTL_MINUTES = 10
-const INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS = 15 * 60 * 1000
-const INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS = 90 * 60 * 1000
 const AUTO_REFRESH_MIN_DELAY_MS = 1000
 
 /**
@@ -195,146 +124,6 @@ function sortFeedsByPriority(feeds: Feed[]): Feed[] {
     }
 
     return 0
-  })
-}
-
-function isKnownInstagramUpstreamFailure(error: unknown): boolean {
-  const message = String(error || '').toLowerCase()
-  if (!message) return false
-  return (
-    message.includes('feed not recognized as rss') ||
-    message.includes('challenge_required') ||
-    message.includes('[refresh] timeout after') ||
-    message.includes('err_connection_closed') ||
-    message.includes('http 403') ||
-    message.includes('http 429') ||
-    message.includes('http 503')
-  )
-}
-
-export interface FeedRefreshErrorContext {
-  knownInstagramFailure?: boolean
-}
-
-export interface FeedRefreshErrorInfo {
-  userMessage: string
-  rawMessage: string
-}
-
-function getRawErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message || error.name
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
-}
-
-export function mapFeedRefreshError(
-  error: unknown,
-  context: FeedRefreshErrorContext = {},
-): FeedRefreshErrorInfo {
-  const rawMessage = getRawErrorMessage(error) || 'Unknown refresh error'
-  const lower = rawMessage.toLowerCase()
-
-  if (context.knownInstagramFailure) {
-    return {
-      userMessage: 'Instagram/RSSHub 上游暂时不可用，请稍后重试',
-      rawMessage,
-    }
-  }
-
-  if (lower.includes('[refresh] timeout after') || lower.includes('timeout')) {
-    return {
-      userMessage: '刷新超时，请稍后重试',
-      rawMessage,
-    }
-  }
-
-  const httpStatus = rawMessage.match(/\bHTTP\s+(\d{3})\b/i)?.[1]
-  if (httpStatus) {
-    return {
-      userMessage: `源站返回 HTTP ${httpStatus}`,
-      rawMessage,
-    }
-  }
-
-  return {
-    userMessage: rawMessage,
-    rawMessage,
-  }
-}
-
-function shouldBackOffFeed(feed: Feed, now: number, force: boolean): boolean {
-  if (force) return false
-  if (!isInstagramUserFeedUrl(feed.url)) return false
-  if (!feed.lastFetched || feed.errorCount <= 0) return false
-  const exp = Math.max(0, feed.errorCount - 1)
-  const backoffMs = Math.min(
-    INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS * Math.pow(2, exp),
-    INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS,
-  )
-  return now - feed.lastFetched < backoffMs
-}
-
-function getFeedBackoffUntilMs(feed: Feed): number | null {
-  if (!isInstagramUserFeedUrl(feed.url)) return null
-  if (!feed.lastFetched || feed.errorCount <= 0) return null
-  const exp = Math.max(0, feed.errorCount - 1)
-  const backoffMs = Math.min(
-    INSTAGRAM_FEED_FAILURE_BACKOFF_BASE_MS * Math.pow(2, exp),
-    INSTAGRAM_FEED_FAILURE_BACKOFF_MAX_MS,
-  )
-  return feed.lastFetched + backoffMs
-}
-
-export function getNextAutoRefreshDelayMs(
-  feeds: Feed[],
-  now: number,
-  intervalMinutes: number,
-): number | null {
-  if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) return null
-
-  const intervalMs = intervalMinutes * 60 * 1000
-  if (feeds.length === 0) return intervalMs
-
-  let nextDueAt = Number.POSITIVE_INFINITY
-  for (const feed of feeds) {
-    if (!feed.lastFetched) return 0
-    const dueAt = Math.max(
-      feed.lastFetched + intervalMs,
-      getFeedBackoffUntilMs(feed) ?? 0,
-    )
-    nextDueAt = Math.min(nextDueAt, dueAt)
-  }
-
-  if (!Number.isFinite(nextDueAt)) return intervalMs
-  return Math.max(0, nextDueAt - now)
-}
-
-export function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  context: string,
-): Promise<T> {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return promise
-  }
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`[refresh] timeout after ${timeoutMs}ms: ${context}`))
-    }, timeoutMs)
-    promise.then(
-      (value) => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (error) => {
-        clearTimeout(timer)
-        reject(error)
-      },
-    )
   })
 }
 

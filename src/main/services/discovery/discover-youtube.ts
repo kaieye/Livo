@@ -1,4 +1,4 @@
-import { normalizeNameForMatch } from './discover-helpers'
+import { normalizeNameForMatch } from '../../../shared/discover-helpers'
 import { type DiscoveryFetch, discoveryFetch } from './platform-search'
 
 export type VideoProbeCandidate = {

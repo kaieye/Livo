@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Entry } from '../../shared/types'
+import type { Entry } from '../../../shared/types'
 import {
   extractInstagramAssetId,
-  getEntryReadDedupKey,
   makeEntryIdentityKey,
   normalizeIdentityUrl,
   titlesLikelySameForRead,
@@ -51,21 +50,6 @@ describe('entry identity helpers', () => {
     )
 
     expect(identityKey).toBe('asset:feed-1:9876543210123456')
-  })
-
-  it('keeps read dedupe keys aligned with canonical urls', () => {
-    const direct = getEntryReadDedupKey(
-      createEntry({
-        url: 'https://www.instagram.com/p/ABC123/',
-      }),
-    )
-    const mirrored = getEntryReadDedupKey(
-      createEntry({
-        url: 'https://picnob.com/post/ABC123/',
-      }),
-    )
-
-    expect(direct).toBe(mirrored)
   })
 
   it('matches loosely equivalent titles for mirror dedupe', () => {

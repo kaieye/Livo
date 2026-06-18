@@ -1,6 +1,15 @@
 import type OpenAI from 'openai'
+import type { AIDigestPreset } from '../../../shared/types'
 import { extractJsonValue } from './ai-json'
 import { clampContentToBudget } from './ai-prompts'
+
+export function getDigestPresetLabel(preset: AIDigestPreset): string {
+  return preset === 'week' ? '本周趋势' : '今日简报'
+}
+
+export function normalizeDigestPreset(value: unknown): AIDigestPreset {
+  return value === 'week' ? 'week' : 'today'
+}
 
 export interface DigestCandidate {
   id: string

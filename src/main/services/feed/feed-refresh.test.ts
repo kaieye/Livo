@@ -5,14 +5,14 @@ import {
   filterForeignEntries,
 } from '../entry/entry-ingestion-pipeline'
 import {
-  getNextAutoRefreshDelayMs,
-  mapFeedRefreshError,
   queueBootstrapRefresh,
   refreshAllFeeds,
-  sanitizeExistingFeedAvatarForRefresh,
   startAutoRefresh,
   stopAutoRefresh,
 } from './feed-refresh'
+import { sanitizeExistingFeedAvatarForRefresh } from './feed-avatar-policy'
+import { getNextAutoRefreshDelayMs } from './feed-backoff-policy'
+import { mapFeedRefreshError } from './feed-refresh-error'
 import {
   FeedViewType,
   type Entry,

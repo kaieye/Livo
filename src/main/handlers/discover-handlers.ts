@@ -8,26 +8,25 @@ import {
 import {
   normalizeDiscoverQueryToFeedUrl,
   extractBilibiliUid,
-  extractTwitterUsernameFromUrl,
-  decodeBasicHtmlEntities,
   extractTwitterDisplayNameFromText,
-  isGenericTwitterTitle,
   FALLBACK_RSSHUB_INSTANCES,
-} from '../services/discovery/discover-helpers'
-import { FeedViewType, IPC } from '../../shared/types'
+} from '../../shared/discover-helpers'
+import { IPC } from '../../shared/types'
 import type {
-  DiscoverFeedPreviewEntry,
   DiscoverFeedPreviewResult,
-  Entry,
   ResolvedProfileFeedCandidate,
 } from '../../shared/types'
 import { resolveProfileUrlToCandidates } from '../../shared/profile-resolver'
 import { registerChannel } from '../ipc/register-channel'
-import { toHandlerError } from '../ipc/handler-error'
 import {
   dedupeAndSortDiscoverResults,
   type DiscoverSearchResult,
 } from '../services/discovery/discover-dedupe'
+import {
+  inferDiscoverResultImage,
+  inferDiscoverResultTitle,
+  previewDiscoverFeed,
+} from '../services/discovery/discover-preview'
 import { fetchAndParseFeed } from '../services/feed/rss-parser'
 import { formatFeedTitle } from '../services/feed/feed-title'
 import { getFeedImageUrl } from '../services/feed/feed-utils'
@@ -35,14 +34,10 @@ import { settingsProvider } from '../services/system/settings-provider'
 import { getYouTubeAccountState } from '../services/account/account-session'
 import { resolveYouTubeProfileToOfficialFeed } from '../services/discovery/youtube-profile-resolver'
 import {
-  ensureInstagramUserFeedLimit,
-  ensureTwitterUserFeedLimit,
   normalizeRsshubProtocolUrl,
   toRsshubProtocolUrl,
 } from '../services/feed/rsshub-url'
 import { resolveFeedAvatar } from '../services/feed/feed-avatar'
-import { buildEntriesFromParsedItems } from '../services/entry/entry-builder'
-import { detectRouteViewFromUrl } from '../services/feed/feed-view'
 import {
   searchYouTubeChannelsByKeyword,
   looksLikeYouTubeChannelId,
@@ -100,127 +95,6 @@ function appendSameRouteOnFallbackInstances(
     }
   }
   candidates.splice(0, candidates.length, ...nextCandidates)
-}
-
-async function inferDiscoverResultImage(
-  feedUrl: string,
-  siteUrl?: string,
-): Promise<string | undefined> {
-  const twitterUsername = extractTwitterUsernameFromUrl(feedUrl)
-  if (twitterUsername) {
-    const clean = extractLikelyXHandle(twitterUsername)
-    if (clean) {
-      return `https://unavatar.io/x/${encodeURIComponent(clean)}?v=${Date.now()}`
-    }
-  }
-
-  const fromSite = (siteUrl || '').trim()
-  if (fromSite) {
-    try {
-      const siteHost = new URL(fromSite).hostname.replace(/^www\./i, '')
-      if (siteHost) return `https://unavatar.io/${siteHost}`
-    } catch {
-      // Ignore invalid site URL.
-    }
-  }
-
-  return undefined
-}
-
-async function inferDiscoverResultTitle(
-  feedUrl: string,
-  parsedTitle?: string,
-): Promise<string> {
-  const twitterUsername = extractTwitterUsernameFromUrl(feedUrl)
-  if (twitterUsername) {
-    const normalizedByFeed = formatFeedTitle(
-      feedUrl,
-      parsedTitle,
-      `${twitterUsername} - X`,
-    )
-    const parsedName = extractTwitterDisplayNameFromText(
-      normalizedByFeed,
-      twitterUsername,
-    )
-    if (parsedName) return `${parsedName} - X`
-    if (
-      normalizedByFeed &&
-      !isGenericTwitterTitle(normalizedByFeed, twitterUsername)
-    )
-      return normalizedByFeed
-    const fetchedName = await fetchXDisplayNameByUsername(twitterUsername)
-    if (fetchedName) return `${fetchedName} - X`
-    return `${twitterUsername} - X`
-  }
-
-  const normalizedByFeed = formatFeedTitle(feedUrl, parsedTitle, feedUrl)
-  if (normalizedByFeed && normalizedByFeed !== feedUrl) return normalizedByFeed
-
-  const bilibiliUid = extractBilibiliUid(feedUrl)
-  if (bilibiliUid) {
-    const name = await fetchBilibiliNameByUid(bilibiliUid)
-    return `${name || `UID ${bilibiliUid}`} - Bilibili`
-  }
-
-  try {
-    const u = new URL(feedUrl)
-    const host = u.hostname.replace(/^www\./i, '')
-    return `${host} - RSS`
-  } catch {
-    return feedUrl
-  }
-}
-
-function buildPreviewFetchUrl(targetUrl: string): string {
-  const rawProtocolUrl = toRsshubProtocolUrl(targetUrl.trim())
-  const limitedProtocolUrl = ensureTwitterUserFeedLimit(
-    ensureInstagramUserFeedLimit(rawProtocolUrl, 100),
-    120,
-  )
-  return normalizeRsshubProtocolUrl(limitedProtocolUrl, getRSSHubInstance())
-}
-
-function inferPreviewViewFromUrl(feedUrl: string): FeedViewType {
-  const routeView = detectRouteViewFromUrl(feedUrl)
-  if (routeView !== null) return routeView
-
-  const raw = (feedUrl || '').toLowerCase()
-  if (/\/(?:twitter|x)\/user\//i.test(raw)) return FeedViewType.SocialMedia
-  if (
-    /\/(?:instagram|picnob(?:\.info)?|pixnoy|piokok|pixwox)\/user\//i.test(raw)
-  ) {
-    return FeedViewType.Pictures
-  }
-  return FeedViewType.Articles
-}
-
-function stripPreviewText(raw?: string): string {
-  return decodeBasicHtmlEntities(String(raw || ''))
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function getPreviewEntryImage(entry: Entry): string | undefined {
-  return (
-    entry.imageUrl ||
-    entry.media?.find((media) => media.type === 'photo')?.previewUrl ||
-    entry.media?.find((media) => media.type === 'photo')?.url
-  )
-}
-
-function toDiscoverPreviewEntry(entry: Entry): DiscoverFeedPreviewEntry {
-  const summary = stripPreviewText(entry.summary || entry.content || '')
-  return {
-    id: entry.id,
-    title: entry.title || entry.author || entry.url,
-    url: entry.url,
-    summary: summary ? summary.slice(0, 240) : undefined,
-    content: entry.content || '',
-    author: entry.author || undefined,
-    imageUrl: getPreviewEntryImage(entry),
-    publishedAt: entry.publishedAt,
-  }
 }
 
 async function probeVideoSourcesByKeyword(
@@ -603,58 +477,8 @@ export function registerDiscoverHandlers(): void {
 
   registerChannel(
     IPC.DISCOVER_PREVIEW_FEED,
-    async (_event, url: string): Promise<DiscoverFeedPreviewResult> => {
-      const targetUrl = (url || '').trim()
-      if (!targetUrl) {
-        return { success: false, error: 'Feed URL is required' }
-      }
-
-      try {
-        const resolvedFeedUrl = buildPreviewFetchUrl(targetUrl)
-        console.log(`[Discover Preview] Loading preview for ${resolvedFeedUrl}`)
-        const parsed = await fetchAndParseFeed(resolvedFeedUrl)
-        const data = parsed.data
-        if (!data) {
-          return { success: false, error: 'Feed returned no data' }
-        }
-
-        const imageUrl = await resolveFeedAvatar(
-          resolvedFeedUrl,
-          getFeedImageUrl(data),
-          undefined,
-          data.link || resolvedFeedUrl,
-        )
-        const view = inferPreviewViewFromUrl(resolvedFeedUrl)
-        const entries = await buildEntriesFromParsedItems(
-          'discover-preview',
-          ((data.items || []) as Array<Record<string, any>>).slice(0, 6),
-          imageUrl,
-          view,
-          Date.now(),
-        )
-        const displayTitle = await inferDiscoverResultTitle(
-          resolvedFeedUrl,
-          data.title || undefined,
-        )
-
-        return {
-          success: true,
-          preview: {
-            targetUrl,
-            resolvedFeedUrl,
-            feedTitle: displayTitle || data.title || targetUrl,
-            siteUrl: data.link || resolvedFeedUrl,
-            description: data.description || '',
-            imageUrl,
-            itemCount: data.items?.length || 0,
-            entries: entries.map(toDiscoverPreviewEntry),
-          },
-        }
-      } catch (error) {
-        console.warn(`[Discover Preview] Failed to preview ${targetUrl}`, error)
-        return toHandlerError(error)
-      }
-    },
+    (_event, url: string): Promise<DiscoverFeedPreviewResult> =>
+      previewDiscoverFeed(url, getRSSHubInstance()),
   )
 
   // Quick probe for a Twitter user via RSSHub - returns name + avatar fast

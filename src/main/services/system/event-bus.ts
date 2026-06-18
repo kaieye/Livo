@@ -29,3 +29,8 @@ export function getEventBus(): EventBus {
 export function setEventBus(bus: EventBus): void {
   _instance = bus
 }
+
+/** Convenience wrapper around `getEventBus().send` for the common (channel, payload) shape. */
+export function sendToAllWindows(channel: string, payload: unknown): void {
+  getEventBus().send(channel, payload)
+}

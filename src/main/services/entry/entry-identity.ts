@@ -1,5 +1,5 @@
-import type { Entry } from '../../shared/types'
-import { isMirrorHost } from '../../shared/url-detect'
+import type { Entry } from '../../../shared/types'
+import { isMirrorHost } from '../../../shared/url-detect'
 
 function isPicnobMirrorHost(host: string): boolean {
   return isMirrorHost(host)
@@ -176,53 +176,6 @@ export function makeEntryIdentityKey(entry: Entry): string | null {
   return `fallback-text:${entry.feedId}\n${title}\n${author}\n${contentSnippet}\n${publishedBucket}`
 }
 
-function getPrimaryMediaIdentity(entry: Entry): string {
-  for (const m of entry.media || []) {
-    const normalized = normalizeIdentityUrl(m.url || m.previewUrl || '')
-    if (normalized) return normalized
-  }
-  return normalizeIdentityUrl(entry.imageUrl || '')
-}
-
-export function getEntryReadDedupKey(entry: Entry): string {
-  const candidates: string[] = [entry.url || '', entry.imageUrl || '']
-  for (const m of entry.media || []) {
-    candidates.push(m.url || '', m.previewUrl || '')
-  }
-
-  let fallbackAssetId = ''
-  for (const s of candidates) {
-    const assetId = extractInstagramAssetId(s)
-    if (assetId) {
-      if (/^\d+$/.test(assetId)) return `read-asset:${entry.feedId}:${assetId}`
-      if (!fallbackAssetId) fallbackAssetId = assetId
-    }
-  }
-
-  const normalizedUrl = normalizeIdentityUrl(entry.url)
-  if (normalizedUrl) return `read-url:${entry.feedId}:${normalizedUrl}`
-  if (fallbackAssetId) return `read-asset:${entry.feedId}:${fallbackAssetId}`
-
-  const title = normalizeIdentityText(entry.title).slice(0, 80)
-  const bucket = Math.floor((entry.publishedAt || 0) / (5 * 60 * 1000))
-  const media = getPrimaryMediaIdentity(entry)
-  if (media) return `read-media:${entry.feedId}:${title}:${bucket}:${media}`
-
-  const text = normalizeIdentityText(
-    (entry.content || entry.summary || '').replace(/<[^>]+>/g, ''),
-  ).slice(0, 120)
-  return `read-text:${entry.feedId}:${title}:${bucket}:${text}`
-}
-
-export function entryRichnessForRead(entry: Entry): number {
-  return (
-    (entry.media?.length || 0) * 400 +
-    (entry.content?.length || 0) +
-    (entry.summary?.length || 0) +
-    (entry.imageUrl ? 50 : 0)
-  )
-}
-
 function normalizeTitleLooseForRead(value: string | undefined): string {
   return (value || '')
     .normalize('NFKC')
@@ -245,70 +198,4 @@ export function titlesLikelySameForRead(
   if (!ta || !tb) return false
   if (ta === tb) return true
   return ta.includes(tb) || tb.includes(ta)
-}
-
-function isStaticSocialAssetUrl(url: string): boolean {
-  const lower = url.toLowerCase()
-  if (lower.includes('static.cdninstagram.com/rsrc')) return true
-  if (lower.includes('instagram.com/static/')) return true
-  return false
-}
-
-function getMediaIdentityKeysForRead(entry: Entry): string[] {
-  const keys: string[] = []
-  for (const m of entry.media || []) {
-    const rawUrl = m.url || ''
-    const rawPreview = m.previewUrl || ''
-    if (isStaticSocialAssetUrl(rawUrl) && !rawPreview) continue
-    if (isStaticSocialAssetUrl(rawPreview) && !rawUrl) continue
-    const url = normalizeIdentityUrl(rawUrl)
-    const preview = normalizeIdentityUrl(rawPreview)
-    if (url && !isStaticSocialAssetUrl(rawUrl)) keys.push(url)
-    if (preview && !isStaticSocialAssetUrl(rawPreview)) keys.push(preview)
-  }
-  const rawImage = entry.imageUrl || ''
-  if (rawImage && !isStaticSocialAssetUrl(rawImage)) {
-    const image = normalizeIdentityUrl(rawImage)
-    if (image) keys.push(image)
-  }
-  return Array.from(new Set(keys))
-}
-
-export function isMirrorSingleForRead(entry: Entry): boolean {
-  const mediaCount = getMediaIdentityKeysForRead(entry).length
-  if (mediaCount > 1) return false
-  const blob = [
-    entry.url || '',
-    entry.imageUrl || '',
-    entry.content || '',
-    entry.summary || '',
-    ...(entry.media || []).flatMap((m) => [m.url || '', m.previewUrl || '']),
-  ]
-    .join('\n')
-    .toLowerCase()
-  return (
-    blob.includes('pixnoy.com') ||
-    blob.includes('sp1.pixnoy.com') ||
-    blob.includes('piokok.com') ||
-    blob.includes('picnob.com') ||
-    blob.includes('media.picnob.info/get') ||
-    blob.includes('media.pixnoy.com/get') ||
-    blob.includes('media.picnob.com/get') ||
-    blob.includes('media.piokok.com/get') ||
-    blob.includes('/p/pt_') ||
-    blob.includes('picnob.info/post/') ||
-    blob.includes('picnob.com/post/')
-  )
-}
-
-export function isRichGalleryForRead(entry: Entry): boolean {
-  const mediaCount = getMediaIdentityKeysForRead(entry).length
-  if (mediaCount >= 2) return true
-
-  const realMediaCount = (entry.media || []).filter(
-    (m) =>
-      !isStaticSocialAssetUrl(m.url || '') ||
-      !isStaticSocialAssetUrl(m.previewUrl || ''),
-  ).length
-  return realMediaCount >= 2
 }

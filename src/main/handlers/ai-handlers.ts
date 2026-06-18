@@ -1,20 +1,20 @@
 import { registerChannel } from '../ipc/register-channel'
 import OpenAI from 'openai'
+import { createHash } from 'crypto'
 import { IPC } from '../../shared/types'
 import { settingsProvider } from '../services/system/settings-provider'
+import { sendToAllWindows } from '../services/system/event-bus'
 import { runAICompletion } from '../services/ai/ai-completion'
 import { judgeSemanticFilter } from '../services/ai/ai-filter'
 import { normalizeAIError } from '../services/ai/provider-protocol'
 import { ConnectionTestService } from '../services/ai/connection-test'
 import {
   generateAIDigest,
-  hashAISummarySource,
   runAISummarizeTask,
   runAITranslateTask,
-  normalizeDigestPreset,
-  sendToAllWindows,
   type AIDigestGenerateInput,
 } from '../services/ai/ai-pipeline'
+import { normalizeDigestPreset } from '../services/ai/ai-digest'
 import { translateEntrySegments } from '../services/ai/ai-translation'
 import {
   AI_DIGEST_GENERATE_TASK,
@@ -185,7 +185,7 @@ export function registerAIHandlers(): void {
       const content = pickEntrySummaryContent(entry)
       if (!content) return { success: false, error: 'entry_content_empty' }
 
-      const sourceHash = hashAISummarySource(content)
+      const sourceHash = createHash('sha256').update(content).digest('hex')
       const session = getDb().aiSummarySessions.createSession({
         entryId,
         status: 'queued',

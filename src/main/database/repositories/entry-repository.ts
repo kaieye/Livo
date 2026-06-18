@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3'
 import type { Entry } from '../../../shared/types'
 import { planEntryWrite } from '../../services/entry/entry-write-plan'
-import { dedupeEntriesForRead } from '../entry-dedupe'
-import { normalizeIdentityText } from '../entry-identity'
+import { dedupeEntriesForRead } from '../../services/entry/entry-read-dedup'
+import { normalizeIdentityText } from '../../services/entry/entry-identity'
 import { entryFromRow } from '../row-mappers'
 
 export interface EntryListOptions {

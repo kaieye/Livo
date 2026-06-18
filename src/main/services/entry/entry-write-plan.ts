@@ -3,11 +3,8 @@ import {
   isBrokenScraperEntry,
   mergeEntryData,
   mergeTextFromEntry,
-} from '../../database/entry-dedupe'
-import {
-  makeEntryIdentityKey,
-  titlesLikelySameForRead,
-} from '../../database/entry-identity'
+} from './entry-merge-policy'
+import { makeEntryIdentityKey, titlesLikelySameForRead } from './entry-identity'
 
 /**
  * The write-path dedup/identity policy, isolated as a pure decision.

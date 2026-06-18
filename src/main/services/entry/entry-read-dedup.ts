@@ -1,209 +1,135 @@
-import type { Entry } from '../../shared/types'
+import type { Entry } from '../../../shared/types'
 import {
-  entryRichnessForRead,
-  getEntryReadDedupKey,
+  isBrokenScraperEntry,
+  mergeEntryData,
+  mergeTextFromEntry,
+} from './entry-merge-policy'
+import {
+  extractInstagramAssetId,
   getLooseNormalizedTitle,
-  isMirrorSingleForRead,
-  isRichGalleryForRead,
+  normalizeIdentityText,
+  normalizeIdentityUrl,
   titlesLikelySameForRead,
 } from './entry-identity'
 import {
   areEntrySimHashesNearDuplicate,
   computeEntrySimHash,
-} from './entry-simhash'
+} from '../../database/entry-simhash'
 
 const MATCH_WINDOW_MS = 48 * 60 * 60 * 1000
 const NEAR_DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
-const SOCIAL_QUOTE_CARD_CLASS = 'social-quote-card'
 
-export function isBrokenScraperEntry(entry: Entry): boolean {
-  return /instagram\.com\/(?:p|reel)\/\d{13,}\/?$/i.test(entry.url || '')
+function isStaticSocialAssetUrl(url: string): boolean {
+  const lower = url.toLowerCase()
+  if (lower.includes('static.cdninstagram.com/rsrc')) return true
+  if (lower.includes('instagram.com/static/')) return true
+  return false
 }
 
-function hasSocialQuoteCard(content: string | undefined): boolean {
-  return String(content || '').includes(SOCIAL_QUOTE_CARD_CLASS)
-}
-
-function isNitterRetweetDisplayTitle(title: string | undefined): boolean {
-  return /^RT\s+@[a-zA-Z0-9_]{1,15}\s*$/.test(String(title || '').trim())
-}
-
-function isLegacyNitterRetweetTitle(title: string | undefined): boolean {
-  return /^RT by @[a-zA-Z0-9_]{1,15}:\s*/i.test(String(title || '').trim())
-}
-
-function shouldUpgradeNitterRetweetPresentation(
-  existing: Entry,
-  incoming: Entry,
-): boolean {
-  if (!isNitterRetweetDisplayTitle(incoming.title)) return false
-  if (!hasSocialQuoteCard(incoming.content)) return false
-  if (isLegacyNitterRetweetTitle(existing.title)) return true
-  return !!incoming.url && incoming.url === existing.url
-}
-
-export function mergeTextFromEntry(target: Entry, source: Entry): boolean {
-  let changed = false
-  const srcTitle = (source.title || '').normalize('NFKC')
-  const tgtTitle = (target.title || '').normalize('NFKC')
-
-  const isStatLikeTitle = (value: string): boolean => {
-    const normalized = (value || '').normalize('NFKC').trim()
-    if (!normalized) return true
-    if (/[\p{Script=Han}A-Za-z]/u.test(normalized)) return false
-    return /^(?:\d+(?:\.\d+)?(?:万|亿)?)+(?::\d{1,2}){1,2}$/u.test(normalized)
+function getMediaIdentityKeysForRead(entry: Entry): string[] {
+  const keys: string[] = []
+  for (const m of entry.media || []) {
+    const rawUrl = m.url || ''
+    const rawPreview = m.previewUrl || ''
+    if (isStaticSocialAssetUrl(rawUrl) && !rawPreview) continue
+    if (isStaticSocialAssetUrl(rawPreview) && !rawUrl) continue
+    const url = normalizeIdentityUrl(rawUrl)
+    const preview = normalizeIdentityUrl(rawPreview)
+    if (url && !isStaticSocialAssetUrl(rawUrl)) keys.push(url)
+    if (preview && !isStaticSocialAssetUrl(rawPreview)) keys.push(preview)
   }
-
-  const shouldPreferSourceTitle =
-    srcTitle.length > tgtTitle.length ||
-    (isStatLikeTitle(tgtTitle) && !isStatLikeTitle(srcTitle))
-
-  if (shouldPreferSourceTitle && srcTitle && srcTitle !== tgtTitle) {
-    target.title = source.title
-    changed = true
+  const rawImage = entry.imageUrl || ''
+  if (rawImage && !isStaticSocialAssetUrl(rawImage)) {
+    const image = normalizeIdentityUrl(rawImage)
+    if (image) keys.push(image)
   }
-  if ((source.summary || '').length > (target.summary || '').length) {
-    target.summary = source.summary
-    changed = true
-  }
-  return changed
+  return Array.from(new Set(keys))
 }
 
-export function mergeEntryData(
-  existing: Entry,
-  incoming: Entry,
-  options?: { onPublishedAtAdvanced?: () => void },
-): boolean {
-  let changed = false
-
-  const preferredTitleBeforeMerge = existing.title
-  if (mergeTextFromEntry(existing, incoming)) {
-    changed = true
-  }
-
-  const shouldUpgradeNitterRetweet = shouldUpgradeNitterRetweetPresentation(
-    existing,
-    incoming,
+export function isMirrorSingleForRead(entry: Entry): boolean {
+  const mediaCount = getMediaIdentityKeysForRead(entry).length
+  if (mediaCount > 1) return false
+  const blob = [
+    entry.url || '',
+    entry.imageUrl || '',
+    entry.content || '',
+    entry.summary || '',
+    ...(entry.media || []).flatMap((m) => [m.url || '', m.previewUrl || '']),
+  ]
+    .join('\n')
+    .toLowerCase()
+  return (
+    blob.includes('pixnoy.com') ||
+    blob.includes('sp1.pixnoy.com') ||
+    blob.includes('piokok.com') ||
+    blob.includes('picnob.com') ||
+    blob.includes('media.picnob.info/get') ||
+    blob.includes('media.pixnoy.com/get') ||
+    blob.includes('media.picnob.com/get') ||
+    blob.includes('media.piokok.com/get') ||
+    blob.includes('/p/pt_') ||
+    blob.includes('picnob.info/post/') ||
+    blob.includes('picnob.com/post/')
   )
+}
 
-  if (shouldUpgradeNitterRetweet && existing.title !== incoming.title) {
-    existing.title = incoming.title
-    changed = true
+export function isRichGalleryForRead(entry: Entry): boolean {
+  const mediaCount = getMediaIdentityKeysForRead(entry).length
+  if (mediaCount >= 2) return true
+
+  const realMediaCount = (entry.media || []).filter(
+    (m) =>
+      !isStaticSocialAssetUrl(m.url || '') ||
+      !isStaticSocialAssetUrl(m.previewUrl || ''),
+  ).length
+  return realMediaCount >= 2
+}
+
+function getPrimaryMediaIdentity(entry: Entry): string {
+  for (const m of entry.media || []) {
+    const normalized = normalizeIdentityUrl(m.url || m.previewUrl || '')
+    if (normalized) return normalized
+  }
+  return normalizeIdentityUrl(entry.imageUrl || '')
+}
+
+export function getEntryReadDedupKey(entry: Entry): string {
+  const candidates: string[] = [entry.url || '', entry.imageUrl || '']
+  for (const m of entry.media || []) {
+    candidates.push(m.url || '', m.previewUrl || '')
   }
 
-  if ((incoming.publishedAt || 0) > (existing.publishedAt || 0)) {
-    existing.publishedAt = incoming.publishedAt
-    changed = true
-    options?.onPublishedAtAdvanced?.()
-  } else if (
-    existing.title !== preferredTitleBeforeMerge &&
-    incoming.publishedAt &&
-    incoming.publishedAt !== existing.publishedAt
-  ) {
-    existing.publishedAt = incoming.publishedAt
-    changed = true
-    options?.onPublishedAtAdvanced?.()
-  }
-
-  if ((incoming.media?.length || 0) > 0) {
-    const existingMediaSignature = JSON.stringify(
-      (existing.media || []).map((m) => `${m.type || ''}|${m.url || ''}`),
-    )
-    const incomingMediaSignature = JSON.stringify(
-      (incoming.media || []).map((m) => `${m.type || ''}|${m.url || ''}`),
-    )
-    if (existingMediaSignature !== incomingMediaSignature) {
-      existing.media = incoming.media
-      changed = true
+  let fallbackAssetId = ''
+  for (const s of candidates) {
+    const assetId = extractInstagramAssetId(s)
+    if (assetId) {
+      if (/^\d+$/.test(assetId)) return `read-asset:${entry.feedId}:${assetId}`
+      if (!fallbackAssetId) fallbackAssetId = assetId
     }
   }
 
-  if (shouldUpgradeNitterRetweet && incoming.content !== existing.content) {
-    existing.content = incoming.content
-    changed = true
-  } else if (
-    (incoming.content || '').length > (existing.content || '').length
-  ) {
-    existing.content = incoming.content
-    changed = true
-  }
-  if ((incoming.summary || '').length > (existing.summary || '').length) {
-    existing.summary = incoming.summary
-    changed = true
-  }
-  if (
-    incoming.readabilityContent &&
-    (!existing.readabilityContent ||
-      (incoming.readabilityFetchedAt || 0) >
-        (existing.readabilityFetchedAt || 0))
-  ) {
-    existing.readabilityContent = incoming.readabilityContent
-    existing.readabilityTitle = incoming.readabilityTitle
-    existing.readabilityExcerpt = incoming.readabilityExcerpt
-    existing.readabilitySiteName = incoming.readabilitySiteName
-    existing.readabilityLength = incoming.readabilityLength
-    existing.readabilityFetchedAt = incoming.readabilityFetchedAt
-    existing.readabilityError = incoming.readabilityError
-    changed = true
-  }
-  if (
-    incoming.aiSummary &&
-    (!existing.aiSummary ||
-      (incoming.aiSummaryGeneratedAt || 0) >
-        (existing.aiSummaryGeneratedAt || 0))
-  ) {
-    existing.aiSummary = incoming.aiSummary
-    existing.aiSummaryGeneratedAt = incoming.aiSummaryGeneratedAt
-    existing.aiSummaryError = incoming.aiSummaryError
-    changed = true
-  }
-  if (
-    incoming.notifiedAt &&
-    (!existing.notifiedAt || incoming.notifiedAt > existing.notifiedAt)
-  ) {
-    existing.notifiedAt = incoming.notifiedAt
-    changed = true
-  }
-  if (incoming.authorAvatar && !existing.authorAvatar) {
-    existing.authorAvatar = incoming.authorAvatar
-    changed = true
-  }
-  if (
-    shouldUpgradeNitterRetweet &&
-    incoming.authorAvatar &&
-    incoming.authorAvatar !== existing.authorAvatar
-  ) {
-    existing.authorAvatar = incoming.authorAvatar
-    changed = true
-  }
-  if (
-    (incoming.author || '').trim() &&
-    (!(existing.author || '').trim() ||
-      (existing.author || '').includes('投稿视频') ||
-      (existing.author || '').includes('视频分享')) &&
-    incoming.author !== existing.author
-  ) {
-    existing.author = incoming.author
-    changed = true
-  }
-  if (
-    shouldUpgradeNitterRetweet &&
-    (incoming.author || '').trim() &&
-    incoming.author !== existing.author
-  ) {
-    existing.author = incoming.author
-    changed = true
-  }
-  if (incoming.imageUrl && incoming.imageUrl !== existing.imageUrl) {
-    existing.imageUrl = incoming.imageUrl
-    changed = true
-  }
-  if (incoming.url && !existing.url) {
-    existing.url = incoming.url
-    changed = true
-  }
+  const normalizedUrl = normalizeIdentityUrl(entry.url)
+  if (normalizedUrl) return `read-url:${entry.feedId}:${normalizedUrl}`
+  if (fallbackAssetId) return `read-asset:${entry.feedId}:${fallbackAssetId}`
 
-  return changed
+  const title = normalizeIdentityText(entry.title).slice(0, 80)
+  const bucket = Math.floor((entry.publishedAt || 0) / (5 * 60 * 1000))
+  const media = getPrimaryMediaIdentity(entry)
+  if (media) return `read-media:${entry.feedId}:${title}:${bucket}:${media}`
+
+  const text = normalizeIdentityText(
+    (entry.content || entry.summary || '').replace(/<[^>]+>/g, ''),
+  ).slice(0, 120)
+  return `read-text:${entry.feedId}:${title}:${bucket}:${text}`
+}
+
+export function entryRichnessForRead(entry: Entry): number {
+  return (
+    (entry.media?.length || 0) * 400 +
+    (entry.content?.length || 0) +
+    (entry.summary?.length || 0) +
+    (entry.imageUrl ? 50 : 0)
+  )
 }
 
 function dedupeMirrorPairsForRead(entries: Entry[]): Entry[] {

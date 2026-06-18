@@ -15,7 +15,7 @@
  *   - og:image / og:title / og:description meta-tag scraping.
  */
 import { session } from 'electron'
-import { formatFollowerCount } from './discover-helpers'
+import { formatFollowerCount } from '../../../shared/discover-helpers'
 import { assertPublicDiscoveryUrl } from './discover-url-policy'
 
 /** Chrome desktop User-Agent shared by every discovery probe. */

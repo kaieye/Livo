@@ -1,5 +1,8 @@
 import { session } from 'electron'
-import { decodeHtmlEntities, formatFollowerCount } from './discover-helpers'
+import {
+  decodeHtmlEntities,
+  formatFollowerCount,
+} from '../../../shared/discover-helpers'
 import { assertPublicDiscoveryUrl } from './discover-url-policy'
 import {
   type DiscoveryFetch,

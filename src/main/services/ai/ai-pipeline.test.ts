@@ -25,6 +25,8 @@ vi.mock('./ai-client', () => ({
 
 vi.mock('../system/event-bus', () => ({
   getEventBus: () => ({ send: eventSendMock }),
+  sendToAllWindows: (channel: string, payload: unknown) =>
+    eventSendMock(channel, payload),
 }))
 
 function makeDigestRun(overrides: Partial<AIDigestRun> = {}): AIDigestRun {
