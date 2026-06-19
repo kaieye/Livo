@@ -22,6 +22,10 @@ import { agentToolRegistryProvider } from './registry-provider'
 import { buildAllowedAgentToolRegistry } from './default-tools'
 import { buildContextFallback } from './context-builder'
 import { parseTextToolCalls } from './tool-call-parser'
+import {
+  interruptionReasonFromResult,
+  isInterruptedToolResult,
+} from './tool-runtime'
 
 export const MAX_AGENT_ROUNDS = 5
 const MODEL_MAX_RETRIES = 2
@@ -255,6 +259,60 @@ function appendToolCallResults(
   }
 }
 
+function appendSkippedToolFailure(
+  toolCall: NormalizedToolCall,
+  messages: ChatMessage[],
+  toolRounds: AgentRoundDetail[],
+  onToolEvent: ((event: AgentToolExecutionEvent) => void) | undefined,
+  reason: 'cancelled' | 'timeout',
+): void {
+  const startedAt = nowMs()
+  const message =
+    reason === 'timeout'
+      ? '工具执行超时，已跳过后续工具。'
+      : '工具执行已取消，已跳过后续工具。'
+  const run: AgentToolRun = {
+    toolName: toolCall.name,
+    args: {},
+    elapsedMs: nowMs() - startedAt,
+    result: {
+      status: 'failed',
+      message,
+      data: { interrupted: true, reason },
+    },
+  }
+  const text = truncateToolResult(agentToolResultToText(run.result))
+  const resultSummary = pushToolRound(toolCall, run, text, toolRounds)
+  messages.push(toolResultMessage(toolCall, text))
+  onToolEvent?.({
+    type: 'tool_failed',
+    toolCallId: toolCall.id,
+    toolName: toolCall.name,
+    args: toolCall.arguments,
+    message,
+    resultSummary,
+    elapsedMs: run.elapsedMs,
+  })
+}
+
+function appendSkippedToolFailures(
+  toolCalls: NormalizedToolCall[],
+  messages: ChatMessage[],
+  toolRounds: AgentRoundDetail[],
+  onToolEvent: ((event: AgentToolExecutionEvent) => void) | undefined,
+  reason: 'cancelled' | 'timeout',
+): void {
+  for (const toolCall of toolCalls) {
+    appendSkippedToolFailure(
+      toolCall,
+      messages,
+      toolRounds,
+      onToolEvent,
+      reason,
+    )
+  }
+}
+
 async function executeToolCallsUntilConfirmation(
   toolCalls: NormalizedToolCall[],
   messages: ChatMessage[],
@@ -264,7 +322,7 @@ async function executeToolCallsUntilConfirmation(
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
 ): Promise<
-  | { status: 'completed' }
+  | { status: 'completed'; interrupted?: 'cancelled' | 'timeout' }
   | {
       status: 'confirmation_required'
       toolCall: NormalizedToolCall
@@ -285,6 +343,22 @@ async function executeToolCallsUntilConfirmation(
         signal,
       )
       appendToolCallResults(messages, toolRounds, results)
+      const interrupted = results.find((result) =>
+        isInterruptedToolResult(result.executed.run.result),
+      )
+      if (interrupted) {
+        const reason =
+          interruptionReasonFromResult(interrupted.executed.run.result) ??
+          'cancelled'
+        appendSkippedToolFailures(
+          toolCalls.slice(i + batch.length),
+          messages,
+          toolRounds,
+          onToolEvent,
+          reason,
+        )
+        return { status: 'completed', interrupted: reason }
+      }
       i += batch.length
       continue
     }
@@ -307,6 +381,18 @@ async function executeToolCallsUntilConfirmation(
       }
     }
     messages.push(toolResultMessage(toolCall, executed.text))
+    if (isInterruptedToolResult(executed.run.result)) {
+      const reason =
+        interruptionReasonFromResult(executed.run.result) ?? 'cancelled'
+      appendSkippedToolFailures(
+        toolCalls.slice(i + 1),
+        messages,
+        toolRounds,
+        onToolEvent,
+        reason,
+      )
+      return { status: 'completed', interrupted: reason }
+    }
     i += 1
   }
 
@@ -340,8 +426,6 @@ async function executeToolCall(
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
 ): Promise<ExecutedToolCall> {
-  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-
   onToolEvent?.({
     type: 'tool_started',
     toolCallId: toolCall.id,
@@ -380,7 +464,7 @@ async function executeToolCall(
     parsedArgs.args,
     confirmed,
     permissions,
-    { sessionId },
+    { sessionId, signal },
   )
   const text = truncateToolResult(agentToolResultToText(run.result))
   const resultSummary = pushToolRound(toolCall, run, text, toolRounds)
@@ -463,6 +547,23 @@ function buildConfirmationResult(
       toolRounds: toolRounds.slice(),
       nextRound,
     },
+    metrics,
+  }
+}
+
+function buildInterruptedResult(
+  reason: 'cancelled' | 'timeout',
+  toolRounds: AgentRoundDetail[],
+  metrics: AgentRunMetrics,
+): AgentRunResult {
+  metrics.totalMs = metrics.llmMs + metrics.toolMs
+  return {
+    text:
+      reason === 'timeout'
+        ? '工具执行超时，已停止后续工具。'
+        : '工具执行已取消，已停止后续工具。',
+    toolRounds,
+    status: 'completed',
     metrics,
   }
 }
@@ -566,6 +667,13 @@ async function runAgentLoop(
     const toolMs = nowMs() - toolStart
     metrics.toolMs += toolMs
     metrics.rounds.push({ round, llmMs, toolMs, toolCalls: toolCalls.length })
+    if (toolExecution.interrupted) {
+      return buildInterruptedResult(
+        toolExecution.interrupted,
+        toolRounds,
+        metrics,
+      )
+    }
   }
 
   // Reached MAX_AGENT_ROUNDS: do one final call to summarize.
@@ -655,6 +763,19 @@ export async function resumeAgentCore(
     options.signal,
   )
   messages.push(toolResultMessage(continuation.pendingToolCall, pending.text))
+  if (isInterruptedToolResult(pending.run.result)) {
+    const reason =
+      interruptionReasonFromResult(pending.run.result) ?? 'cancelled'
+    appendSkippedToolFailures(
+      continuation.remainingToolCalls,
+      messages,
+      toolRounds,
+      options.onToolEvent,
+      reason,
+    )
+    metrics.toolMs += nowMs() - toolStart
+    return buildInterruptedResult(reason, toolRounds, metrics)
+  }
 
   // Run the remaining queued tool calls (may hit another confirmation).
   const remaining = continuation.remainingToolCalls
@@ -681,6 +802,13 @@ export async function resumeAgentCore(
     )
   }
   metrics.toolMs += nowMs() - toolStart
+  if (toolExecution.interrupted) {
+    return buildInterruptedResult(
+      toolExecution.interrupted,
+      toolRounds,
+      metrics,
+    )
+  }
 
   return runAgentLoop(
     messages,

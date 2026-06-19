@@ -40,10 +40,10 @@ import {
   shouldBackOffFeed,
   withTimeout,
 } from './feed-backoff-policy'
+import { isAbortError, throwIfAborted } from '../../utils/abort-signal'
 import {
   isKnownInstagramUpstreamFailure,
   mapFeedRefreshError,
-  type FeedRefreshErrorContext,
 } from './feed-refresh-error'
 import { reconcileFeedView } from './feed-view'
 import { appendRefreshLog } from '../system/refresh-log-store'
@@ -136,6 +136,8 @@ export interface RefreshOptions {
   force?: boolean
   /** Optional override of data cleanup options */
   cleanup?: CleanupOptions
+  /** Optional external cancellation signal for foreground callers. */
+  signal?: AbortSignal
 }
 
 export interface RefreshProgressEvent {
@@ -242,6 +244,7 @@ export async function refreshSingleFeed(
     force?: boolean
     logOperation?: boolean
     serverCacheHit?: import('./feed-cache-client').FeedCacheHit
+    signal?: AbortSignal
   },
 ): Promise<number> {
   const { promise } = runLoggedTask({
@@ -271,10 +274,12 @@ async function runRefreshSingleFeed(
     | {
         force?: boolean
         serverCacheHit?: import('./feed-cache-client').FeedCacheHit
+        signal?: AbortSignal
       }
     | undefined,
   context?: TaskRunContext,
 ): Promise<number> {
+  throwIfAborted(options?.signal)
   context?.reportProgress({
     completed: 0,
     total: 1,
@@ -290,6 +295,7 @@ async function runRefreshSingleFeed(
   const normalizedFeedUrl = normalizeFeedUrl(feed.url, rsshubInstance)
 
   try {
+    throwIfAborted(options?.signal)
     // 更新 RSSHub 用户路由的 limit，后续刷新直接使用规范化 URL。
     const feedUrlToStore = ensureTwitterUserFeedLimit(
       ensureInstagramUserFeedLimit(feed.url, 100),
@@ -304,10 +310,13 @@ async function runRefreshSingleFeed(
       resolveFeedPayload(feed, {
         force: options?.force,
         serverCacheHit: options?.serverCacheHit,
+        signal: options?.signal,
       }),
       getRefreshTimeoutMs(feed.url),
       normalizedFeedUrl,
+      options?.signal,
     )
+    throwIfAborted(options?.signal)
 
     // 304 Not Modified - no need to parse entries
     if (result.notModified || !result.parsed) {
@@ -345,6 +354,7 @@ async function runRefreshSingleFeed(
       existingFeedImage,
       parsed.link || feed.siteUrl,
     )
+    throwIfAborted(options?.signal)
     const selectedFeedAvatar = pickBestFeedAvatar(
       feed.url,
       existingFeedImage,
@@ -384,6 +394,7 @@ async function runRefreshSingleFeed(
       now,
       replaceExisting: isBilibiliVideoFeedUrl(feed.url),
     })
+    throwIfAborted(options?.signal)
     const newCount = ingestionResult.addedCount
 
     if (
@@ -401,6 +412,7 @@ async function runRefreshSingleFeed(
     })
     return newCount
   } catch (error) {
+    if (isAbortError(error)) throw error
     const knownInstagramFailure =
       isInstagramUserFeedUrl(feed.url) && isKnownInstagramUpstreamFailure(error)
     const refreshMessage = `[refresh] failed: ${feed.title} (${normalizedFeedUrl})`
@@ -435,6 +447,7 @@ export async function refreshAllFeeds(
     onProgress?: (event: RefreshProgressEvent) => void
   } = {},
 ): Promise<RefreshAllResult & { runId: string }> {
+  throwIfAborted(options.signal)
   const { runId, promise } = runLoggedTask({
     contract: FEED_REFRESH_ALL_TASK,
     payload: { force: !!options.force },
@@ -452,6 +465,7 @@ export async function refreshAllFeeds(
     },
   })
   const result = await promise
+  throwIfAborted(options.signal)
   return { ...result, runId }
 }
 
@@ -461,6 +475,7 @@ async function runRefreshAllFeeds(
   },
   context?: TaskRunContext,
 ): Promise<RefreshAllResult> {
+  throwIfAborted(options.signal)
   const allFeeds = getDb().feeds.getAllFeeds()
   const receiveRecommended = !!settingsProvider.get().general.showRecommended
   const feeds = receiveRecommended
@@ -487,6 +502,7 @@ async function runRefreshAllFeeds(
 
   // PERF: Sort feeds by priority for optimal refresh order
   const sortedStaleFeeds = sortFeedsByPriority(staleFeeds)
+  throwIfAborted(options.signal)
 
   // PERF: Use optimal concurrency based on feed characteristics
   const concurrency = getOptimalConcurrency(
@@ -501,7 +517,14 @@ async function runRefreshAllFeeds(
   })
 
   if (sortedStaleFeeds.length === 0) {
-    getDb().maintenance.cleanupEntries(cleanupOptions)
+    throwIfAborted(options.signal)
+    if (options.signal) {
+      getDb().maintenance.cleanupEntries(cleanupOptions, {
+        signal: options.signal,
+      })
+    } else {
+      getDb().maintenance.cleanupEntries(cleanupOptions)
+    }
     options.onProgress?.({
       feedId: '',
       feedTitle: '',
@@ -523,6 +546,7 @@ async function runRefreshAllFeeds(
   // Track pre-refresh error counts to detect fresh failures
   const errorCountBefore = new Map<string, number>()
   for (const feed of sortedStaleFeeds) {
+    throwIfAborted(options.signal)
     errorCountBefore.set(feed.id, feed.errorCount)
   }
 
@@ -542,7 +566,12 @@ async function runRefreshAllFeeds(
 
   // admin/vip 用户登录时，先批量问后端是否已经缓存了对应条目；
   // 命中的源会被 resolveFeedPayload 直接消费，避免本地再去拉一次 RSS。
-  const serverCacheByUrl = await prefetchServerFeedCache(sortedStaleFeeds)
+  const serverCacheByUrl = options.signal
+    ? await prefetchServerFeedCache(sortedStaleFeeds, {
+        signal: options.signal,
+      })
+    : await prefetchServerFeedCache(sortedStaleFeeds)
+  throwIfAborted(options.signal)
 
   const reportFeedProgress = (
     feed: Feed,
@@ -576,12 +605,14 @@ async function runRefreshAllFeeds(
     sortedStaleFeeds,
     concurrency,
     async (feed) => {
+      throwIfAborted(options.signal)
       try {
         const newCount = await refreshSingleFeed(feed, {
           logOperation: false,
           serverCacheHit: serverCacheByUrl.get(
             getNormalizedFeedUrlForCache(feed),
           ),
+          signal: options.signal,
         })
         totalNew += newCount
         reportFeedProgress(feed, true, newCount)
@@ -591,10 +622,21 @@ async function runRefreshAllFeeds(
         throw error
       }
     },
+    undefined,
+    options.signal,
   )
+  throwIfAborted(options.signal)
 
   // Run data cleanup after refresh
-  getDb().maintenance.cleanupEntries(cleanupOptions)
+  throwIfAborted(options.signal)
+  if (options.signal) {
+    getDb().maintenance.cleanupEntries(cleanupOptions, {
+      signal: options.signal,
+    })
+  } else {
+    getDb().maintenance.cleanupEntries(cleanupOptions)
+  }
+  throwIfAborted(options.signal)
 
   // Record refresh log entry
   const refreshedFeeds = getDb().feeds.getAllFeeds()
@@ -672,17 +714,22 @@ async function runRefreshAllFeeds(
 
   // Sync Fever accounts after normal feed refresh
   try {
+    throwIfAborted(options.signal)
     const feverAccounts = getDb()
       .fever.getFeverAccounts()
       .filter((a) => a.enabled)
     for (const account of feverAccounts) {
+      throwIfAborted(options.signal)
       try {
         await queueFeverSyncAccount(account.id).promise
+        throwIfAborted(options.signal)
       } catch (err) {
+        if (isAbortError(err) && options.signal?.aborted) throw err
         console.warn('[fever] sync failed for', account.baseUrl, err)
       }
     }
-  } catch {
+  } catch (error) {
+    if (isAbortError(error) && options.signal?.aborted) throw error
     // Database not ready or import failure — skip fever sync
   }
 

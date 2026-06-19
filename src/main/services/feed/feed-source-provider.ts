@@ -3,6 +3,7 @@ import type { Feed } from '../../../shared/types/index'
 import { DEFAULT_RSSHUB_INSTANCE } from '../../../shared/discover-data'
 import { settingsProvider } from '../system/settings-provider'
 import { fetchAndParseFeed, type FetchFeedOptions } from './rss-parser'
+import { isAbortError, throwIfAborted } from '../../utils/abort-signal'
 import { normalizeFeedUrl } from './rsshub-url'
 import {
   getAggregatorSnapshot,
@@ -98,8 +99,9 @@ function getDesiredSource(feed: Feed): AggregatedFeedPayload['source'] {
 
 async function fetchDirectPayload(
   feed: Feed,
-  options?: { force?: boolean },
+  options?: { force?: boolean; signal?: AbortSignal },
 ): Promise<AggregatedFeedPayload> {
+  throwIfAborted(options?.signal)
   const normalizedUrl = getNormalizedFeedUrl(feed)
   const fetchOptions: FetchFeedOptions | undefined = options?.force
     ? undefined
@@ -108,7 +110,10 @@ async function fetchDirectPayload(
         lastModified: feed.lastModified,
       }
 
-  const result = await fetchAndParseFeed(normalizedUrl, fetchOptions)
+  const result = await fetchAndParseFeed(normalizedUrl, {
+    ...fetchOptions,
+    signal: options?.signal,
+  })
   if (result.notModified) {
     return {
       source: 'direct',
@@ -143,8 +148,9 @@ async function fetchDirectPayload(
 
 async function fetchLocalAgentPayload(
   feed: Feed,
-  options?: { force?: boolean },
+  options?: { force?: boolean; signal?: AbortSignal },
 ): Promise<AggregatedFeedPayload> {
+  throwIfAborted(options?.signal)
   const normalizedUrl = getNormalizedFeedUrl(feed)
   const key = getFeedKey(feed, normalizedUrl)
   const settings = settingsProvider.get().aggregator
@@ -184,7 +190,10 @@ async function fetchLocalAgentPayload(
           lastModified: snapshot?.lastModified || feed.lastModified,
         }
 
-    const result = await fetchAndParseFeed(normalizedUrl, fetchOptions)
+    const result = await fetchAndParseFeed(normalizedUrl, {
+      ...fetchOptions,
+      signal: options?.signal,
+    })
     if (result.notModified) {
       if (snapshot) {
         const ageMs = now - (snapshot.lastSuccessAt || snapshot.fetchedAt || 0)
@@ -253,6 +262,7 @@ async function fetchLocalAgentPayload(
       },
     }
   } catch (error) {
+    if (isAbortError(error)) throw error
     touchAggregatorFailure(key, 'local-agent', error)
     if (snapshot) {
       return {
@@ -280,8 +290,10 @@ export async function resolveFeedPayload(
   options?: {
     force?: boolean
     serverCacheHit?: FeedCacheHit
+    signal?: AbortSignal
   },
 ): Promise<AggregatedFeedPayload> {
+  throwIfAborted(options?.signal)
   // server-cache 优先级最高：admin/vip 用户的拉取优先吃后端缓存。
   // 如果调用方已经预取（批量刷新），直接用；否则自己问一次后端。
   // miss 时静默退回到原有 direct/local-agent 路径。
@@ -289,7 +301,7 @@ export async function resolveFeedPayload(
     const normalizedUrl = getNormalizedFeedUrl(feed)
     const hit =
       options?.serverCacheHit ??
-      (await maybeFetchSingleServerCacheHit(normalizedUrl))
+      (await maybeFetchSingleServerCacheHit(normalizedUrl, options?.signal))
     if (hit) {
       return buildServerCachePayload(hit, normalizedUrl)
     }
@@ -302,11 +314,13 @@ export async function resolveFeedPayload(
 
 async function maybeFetchSingleServerCacheHit(
   normalizedUrl: string,
+  signal?: AbortSignal,
 ): Promise<FeedCacheHit | null> {
   try {
-    const { hits } = await queryServerFeedCache([normalizedUrl])
+    const { hits } = await queryServerFeedCache([normalizedUrl], { signal })
     return hits[0] ?? null
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error
     // 后端不可用时静默回退到本地路径。
     return null
   }
@@ -374,7 +388,9 @@ export async function warmAggregatorForFeeds(feeds: Feed[]): Promise<void> {
  */
 export async function prefetchServerFeedCache(
   feeds: Feed[],
+  options: { signal?: AbortSignal } = {},
 ): Promise<Map<string, FeedCacheHit>> {
+  throwIfAborted(options.signal)
   const result = new Map<string, FeedCacheHit>()
   if (!shouldUseServerFeedCache() || feeds.length === 0) return result
 
@@ -388,11 +404,14 @@ export async function prefetchServerFeedCache(
   }
 
   try {
-    const { hits } = await queryServerFeedCache(Array.from(uniqueUrls))
+    const { hits } = await queryServerFeedCache(Array.from(uniqueUrls), {
+      signal: options.signal,
+    })
     for (const hit of hits) {
       result.set(hit.url, hit)
     }
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error
     // 静默失败：批量预取失败不应阻塞整体刷新流程。
   }
   return result

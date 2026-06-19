@@ -9,6 +9,12 @@ import type {
 } from '../../shared/types'
 import { AgentPolicyGuard } from './policy-guard'
 import { AgentToolRegistry } from './tool-registry'
+import {
+  agentToolInterruptionResult,
+  createAgentToolContext,
+  runAgentToolWithSignal,
+  throwIfAgentToolAborted,
+} from './tool-runtime'
 
 export interface AgentHarnessExecuteRequest {
   toolName: string
@@ -98,8 +104,13 @@ export class AgentHarness {
       }
     }
 
+    const scoped = createAgentToolContext(tool.name, request.context)
     try {
-      const result = await tool.execute(request.context, request.args)
+      throwIfAgentToolAborted(scoped.context.signal)
+      const result = await runAgentToolWithSignal(
+        tool.execute(scoped.context, request.args),
+        scoped.context.signal,
+      )
       return {
         toolName: tool.name,
         args: request.args,
@@ -107,15 +118,18 @@ export class AgentHarness {
         result,
       }
     } catch (error) {
+      const interruption = agentToolInterruptionResult(error)
       return {
         toolName: tool.name,
         args: request.args,
         elapsedMs: Date.now() - startedAt,
-        result: {
+        result: interruption ?? {
           status: 'failed',
           message: error instanceof Error ? error.message : String(error),
         },
       }
+    } finally {
+      scoped.dispose()
     }
   }
 }

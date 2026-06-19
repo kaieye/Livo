@@ -54,6 +54,8 @@ export interface AgentExecutionContext {
   activeRoute?: string
   activeRootTab?: string
   now: number
+  signal: AbortSignal
+  deadlineMs?: number
   agentPermissions?: AgentPermissionSettings
   dryRun?: boolean
   metadata?: Record<string, AgentToolValue>

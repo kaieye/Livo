@@ -26,6 +26,10 @@ import { formatFeedTitle } from '../services/feed/feed-title'
 import { sessionStore } from '../services/auth/session-store'
 import type { FeedSyncAction } from '../database/repositories'
 
+export interface CancellableOperationOptions {
+  signal?: AbortSignal
+}
+
 export interface AddFeedInput {
   url: string
   title?: string
@@ -215,11 +219,15 @@ export interface RefreshFeedResult {
 /** Refresh a single Feed and return the state needed by UI/Agent adapters. */
 export async function refreshFeed(
   feedId: string,
+  options: CancellableOperationOptions = {},
 ): Promise<RefreshFeedResult | null> {
   const feed = getDb().feeds.getFeedById(feedId)
   if (!feed) return null
 
-  const newEntries = await refreshSingleFeed(feed, { force: true })
+  const newEntries = await refreshSingleFeed(feed, {
+    force: true,
+    signal: options.signal,
+  })
   const refreshedFeed = getDb().feeds.getFeedById(feedId) ?? feed
   const unreadCount = getDb().entries.getUnreadCount(feedId)
 
@@ -228,6 +236,7 @@ export async function refreshFeed(
 
 export type RefreshAllFeedsInput = RefreshOptions & {
   onProgress?: (event: RefreshProgressEvent) => void
+  signal?: AbortSignal
 }
 
 /** Refresh all Feeds through the shared Task Runner backed refresh Module. */

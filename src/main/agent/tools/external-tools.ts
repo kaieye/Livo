@@ -29,12 +29,9 @@ export function buildWebSearchTool(): AgentTool {
     capability: 'external',
     risk: 'low',
     requiresConfirmation: false,
-    execute: async (
-      _context,
-      args: AgentToolArgs,
-    ): Promise<AgentToolResult> => {
+    execute: async (context, args: AgentToolArgs): Promise<AgentToolResult> => {
       const query = String(args['query']).trim()
-      const results = await webSearch(query)
+      const results = await webSearch(query, { signal: context.signal })
       return {
         status: 'success',
         message: formatWebSearchResultsForAI(results, query),

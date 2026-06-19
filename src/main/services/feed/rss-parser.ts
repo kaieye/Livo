@@ -10,6 +10,11 @@ import {
 } from '../bilibili/bilibili-video-feed'
 import { assertNetworkFetchUrl } from '../system/network-url-policy'
 import { createLenientParser } from './rss-parser-lenient'
+import {
+  isAbortError,
+  scopedSignalWithTimeout,
+  throwIfAborted,
+} from '../../utils/abort-signal'
 
 const parser = new RssParser({
   timeout: 20000,
@@ -74,6 +79,8 @@ export interface FetchFeedOptions {
   etag?: string
   /** Last-Modified from previous fetch — enables conditional GET (returns null on 304) */
   lastModified?: string
+  /** Optional external cancellation signal. */
+  signal?: AbortSignal
 }
 
 export interface FetchFeedResult {
@@ -166,6 +173,7 @@ const FAST_CONDITIONAL_TIMEOUT_MS = 7000
 interface FetchTextOptions {
   attemptTimeouts?: number[]
   conditionalTimeoutMs?: number
+  signal?: AbortSignal
 }
 
 function isPlaceholderMirrorPostUrl(url: string): boolean {
@@ -736,7 +744,9 @@ function itemHasImageSignal(item: Record<string, any>): boolean {
 async function pickBestRsshubFallbackFeed(
   candidates: string[],
   fast = false,
+  signal?: AbortSignal,
 ): Promise<RssParser.Output<Record<string, any>> | null> {
+  throwIfAborted(signal)
   let bestFeed: RssParser.Output<Record<string, any>> | null = null
   const fetchOptions = fast
     ? {
@@ -746,12 +756,14 @@ async function pickBestRsshubFallbackFeed(
     : undefined
   const tasks = candidates.map(async (candidate) => {
     try {
-      return await parseFeedUrl(candidate, fetchOptions)
-    } catch {
+      return await parseFeedUrl(candidate, { ...fetchOptions, signal })
+    } catch (error) {
+      if (isAbortError(error)) throw error
       return null
     }
   })
   const results = await Promise.all(tasks)
+  throwIfAborted(signal)
   for (const parsed of results) {
     if (!parsed) continue
     bestFeed = pickBetterFeed(bestFeed, parsed)
@@ -762,7 +774,9 @@ async function pickBestRsshubFallbackFeed(
 async function mergeAllRsshubFallbackFeeds(
   candidates: string[],
   fast = false,
+  signal?: AbortSignal,
 ): Promise<RssParser.Output<Record<string, any>> | null> {
+  throwIfAborted(signal)
   const fetchOptions = fast
     ? {
         attemptTimeouts: FAST_FETCH_TIMEOUTS,
@@ -771,12 +785,14 @@ async function mergeAllRsshubFallbackFeeds(
     : undefined
   const tasks = candidates.map(async (candidate) => {
     try {
-      return await parseFeedUrl(candidate, fetchOptions)
-    } catch {
+      return await parseFeedUrl(candidate, { ...fetchOptions, signal })
+    } catch (error) {
+      if (isAbortError(error)) throw error
       return null
     }
   })
   const results = await Promise.all(tasks)
+  throwIfAborted(signal)
   let merged: RssParser.Output<Record<string, any>> | null = null
   for (const parsed of results) {
     if (!parsed) continue
@@ -851,15 +867,52 @@ async function fetchWithConditional(
   timeoutMs = DEFAULT_CONDITIONAL_TIMEOUT_MS,
   cookie?: string | null,
   redirectDepth = 0,
+  signal?: AbortSignal,
 ): Promise<{
   body: string | null
   notModified: boolean
   etag?: string
   lastModified?: string
 }> {
+  throwIfAborted(signal)
   return new Promise((resolve, reject) => {
+    let settled = false
+    let abortHandlerAttached = false
+    let req: ReturnType<typeof http.get> | undefined
+
+    const cleanup = (): void => {
+      if (abortHandlerAttached) {
+        signal?.removeEventListener('abort', onAbort)
+        abortHandlerAttached = false
+      }
+    }
+
+    const resolveOnce = (value: {
+      body: string | null
+      notModified: boolean
+      etag?: string
+      lastModified?: string
+    }): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(value)
+    }
+
+    const rejectOnce = (error: unknown): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+
+    const onAbort = (): void => {
+      req?.destroy(signal?.reason ?? new DOMException('Aborted', 'AbortError'))
+      rejectOnce(signal?.reason ?? new DOMException('Aborted', 'AbortError'))
+    }
+
     if (redirectDepth > 5) {
-      reject(new Error('Too many redirects'))
+      rejectOnce(new Error('Too many redirects'))
       return
     }
     const parsedUrl = new URL(url)
@@ -875,7 +928,7 @@ async function fetchWithConditional(
       headers['User-Agent'] = INSTAGRAM_MOBILE_UA
     }
 
-    const req = transport.get(
+    req = transport.get(
       {
         hostname: parsedUrl.hostname,
         port: parsedUrl.port,
@@ -907,9 +960,10 @@ async function fetchWithConditional(
                     timeoutMs,
                     newCookie,
                     redirectDepth + 1,
+                    signal,
                   )
-                    .then(resolve)
-                    .catch(reject)
+                    .then(resolveOnce)
+                    .catch(rejectOnce)
                 })
               } else {
                 fetchWithConditional(
@@ -919,19 +973,20 @@ async function fetchWithConditional(
                   timeoutMs,
                   cookie,
                   redirectDepth + 1,
+                  signal,
                 )
-                  .then(resolve)
-                  .catch(reject)
+                  .then(resolveOnce)
+                  .catch(rejectOnce)
               }
             })
-            .catch(reject)
+            .catch(rejectOnce)
           res.resume()
           return
         }
 
         if (res.statusCode === 304) {
           res.resume()
-          resolve({
+          resolveOnce({
             body: null,
             notModified: true,
             etag: res.headers.etag,
@@ -944,21 +999,26 @@ async function fetchWithConditional(
         res.on('data', (chunk) => chunks.push(chunk))
         res.on('end', () => {
           const body = Buffer.concat(chunks).toString('utf-8')
-          resolve({
+          resolveOnce({
             body,
             notModified: false,
             etag: res.headers.etag,
             lastModified: res.headers['last-modified'],
           })
         })
-        res.on('error', reject)
+        res.on('error', rejectOnce)
       },
     )
     req.on('timeout', () => {
       req.destroy()
-      reject(new Error('Request timed out'))
+      rejectOnce(new Error('Request timed out'))
     })
-    req.on('error', reject)
+    req.on('error', rejectOnce)
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true })
+      abortHandlerAttached = true
+      if (signal.aborted) onAbort()
+    }
   })
 }
 
@@ -966,6 +1026,7 @@ async function fetchFeedText(
   url: string,
   options?: FetchTextOptions,
 ): Promise<string> {
+  throwIfAborted(options?.signal)
   const safeUrl = await assertNetworkFetchUrl(url, {
     allowLoopback: true,
     allowPrivateNetwork: true,
@@ -978,6 +1039,7 @@ async function fetchFeedText(
 
   for (const timeout of timeouts) {
     try {
+      throwIfAborted(options?.signal)
       // Build headers with Instagram cookie if available
       let headers = buildRequestHeaders(safeUrl)
 
@@ -989,14 +1051,22 @@ async function fetchFeedText(
         }
       }
 
-      const res = await session.defaultSession.fetch(safeUrl, {
-        method: 'GET',
-        headers,
-        signal: AbortSignal.timeout(timeout),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return await res.text()
+      const scoped = scopedSignalWithTimeout(timeout, options?.signal)
+      try {
+        const res = await session.defaultSession.fetch(safeUrl, {
+          method: 'GET',
+          headers,
+          signal: scoped.signal,
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const text = await res.text()
+        throwIfAborted(options?.signal)
+        return text
+      } finally {
+        scoped.dispose()
+      }
     } catch (error) {
+      if (isAbortError(error) && options?.signal?.aborted) throw error
       lastError = error
     }
   }
@@ -1014,10 +1084,13 @@ async function fetchFeedText(
       undefined,
       options?.conditionalTimeoutMs ?? DEFAULT_CONDITIONAL_TIMEOUT_MS,
       cookie,
+      0,
+      options?.signal,
     )
     if (!fallback.body) throw new Error('Empty response body')
     return fallback.body
   } catch (error) {
+    if (isAbortError(error) && options?.signal?.aborted) throw error
     lastError = error
   }
 
@@ -1028,6 +1101,7 @@ async function parseFeedUrl(
   url: string,
   options?: FetchTextOptions,
 ): Promise<RssParser.Output<Record<string, any>>> {
+  throwIfAborted(options?.signal)
   const text = await fetchFeedText(url, options)
 
   // PERF: Try strict parsing first, then fall back to lenient mode
@@ -1042,6 +1116,7 @@ export async function fetchAndParseFeed(
   url: string,
   options?: FetchFeedOptions,
 ): Promise<FetchFeedResult> {
+  throwIfAborted(options?.signal)
   // Handle special URL formats
   let feedUrl = url.trim()
 
@@ -1081,21 +1156,33 @@ export async function fetchAndParseFeed(
     }
 
     // Fast path first for responsiveness.
-    const bestFeedFast = await pickBestRsshubFallbackFeed(candidates, true)
+    const bestFeedFast = await pickBestRsshubFallbackFeed(
+      candidates,
+      true,
+      options?.signal,
+    )
     // If fast result looks thin/stale, continue with slower merge and choose the better feed.
     if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
       return { data: bestFeedFast, notModified: false }
     }
 
     // Slow path retry for unstable / throttled instances.
-    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(candidates, false)
+    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
+      candidates,
+      false,
+      options?.signal,
+    )
     const improved = pickBetterNullableFeed(
       bestFeedFast || null,
       mergedFeedSlow,
     )
     if (improved) return { data: improved, notModified: false }
 
-    const bestFeedSlow = await pickBestRsshubFallbackFeed(candidates, false)
+    const bestFeedSlow = await pickBestRsshubFallbackFeed(
+      candidates,
+      false,
+      options?.signal,
+    )
     if (bestFeedSlow)
       return {
         data: pickBetterFeed(bestFeedFast || null, bestFeedSlow),
@@ -1154,19 +1241,31 @@ export async function fetchAndParseFeed(
     // some nodes are fresh but thin, while others are richer but delayed.
     // Prefer a quick freshest pick first, then fall back to a slower merge only
     // when the fast result still looks thin/stale.
-    const bestFeedFast = await pickBestRsshubFallbackFeed(candidates, true)
+    const bestFeedFast = await pickBestRsshubFallbackFeed(
+      candidates,
+      true,
+      options?.signal,
+    )
     if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
       return { data: bestFeedFast, notModified: false }
     }
 
-    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(candidates, false)
+    const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
+      candidates,
+      false,
+      options?.signal,
+    )
     const improved = pickBetterNullableFeed(
       bestFeedFast || null,
       mergedFeedSlow,
     )
     if (improved) return { data: improved, notModified: false }
 
-    const bestFeedSlow = await pickBestRsshubFallbackFeed(candidates, false)
+    const bestFeedSlow = await pickBestRsshubFallbackFeed(
+      candidates,
+      false,
+      options?.signal,
+    )
     if (bestFeedSlow) {
       return {
         data: pickBetterFeed(bestFeedFast || null, bestFeedSlow),
@@ -1182,6 +1281,7 @@ export async function fetchAndParseFeed(
     const bestFeedFast = await pickBestRsshubFallbackFeed(
       rsshubCandidates,
       true,
+      options?.signal,
     )
     if (bestFeedFast && !isLikelyThinOrStaleFeed(bestFeedFast)) {
       return { data: bestFeedFast, notModified: false }
@@ -1190,6 +1290,7 @@ export async function fetchAndParseFeed(
     const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
       rsshubCandidates,
       false,
+      options?.signal,
     )
     const improved = pickBetterNullableFeed(
       bestFeedFast || null,
@@ -1200,6 +1301,7 @@ export async function fetchAndParseFeed(
     const bestFeedSlow = await pickBestRsshubFallbackFeed(
       rsshubCandidates,
       false,
+      options?.signal,
     )
     if (bestFeedSlow) {
       return {
@@ -1209,12 +1311,15 @@ export async function fetchAndParseFeed(
     }
 
     try {
+      throwIfAborted(options?.signal)
       const officialFeed =
         await fetchBilibiliDynamicFeedFromOfficialApi(feedUrl)
+      throwIfAborted(options?.signal)
       if (officialFeed) {
         return { data: officialFeed, notModified: false }
       }
-    } catch {
+    } catch (error) {
+      if (isAbortError(error) && options?.signal?.aborted) throw error
       // Keep generic fallback path below.
     }
   }
@@ -1223,6 +1328,7 @@ export async function fetchAndParseFeed(
     const bestFeedFast = await pickBestRsshubFallbackFeed(
       rsshubCandidates,
       true,
+      options?.signal,
     )
     if (bestFeedFast && (bestFeedFast.items?.length || 0) > 0) {
       return { data: bestFeedFast, notModified: false }
@@ -1231,6 +1337,7 @@ export async function fetchAndParseFeed(
     const mergedFeedSlow = await mergeAllRsshubFallbackFeeds(
       rsshubCandidates,
       false,
+      options?.signal,
     )
     const improved = pickBetterNullableFeed(
       bestFeedFast || null,
@@ -1243,6 +1350,7 @@ export async function fetchAndParseFeed(
     const bestFeedSlow = await pickBestRsshubFallbackFeed(
       rsshubCandidates,
       false,
+      options?.signal,
     )
     if (bestFeedSlow && (bestFeedSlow.items?.length || 0) > 0) {
       return {
@@ -1252,20 +1360,25 @@ export async function fetchAndParseFeed(
     }
 
     try {
+      throwIfAborted(options?.signal)
       const spaceFeed = await fetchBilibiliVideoFeedFromSpacePage(feedUrl)
+      throwIfAborted(options?.signal)
       if (spaceFeed && (spaceFeed.items?.length || 0) > 0) {
         return { data: spaceFeed, notModified: false }
       }
-    } catch {
+    } catch (error) {
+      if (isAbortError(error) && options?.signal?.aborted) throw error
       // Keep generic fallback path below.
     }
 
     try {
       const uid = feedUrl.match(/\/bilibili\/user\/video\/(\d+)/i)?.[1]
       if (uid) {
+        throwIfAborted(options?.signal)
         const dynamicFeed = await fetchBilibiliDynamicFeedFromOfficialApi(
           feedUrl.replace('/user/video/', '/user/dynamic/'),
         )
+        throwIfAborted(options?.signal)
         const filteredVideoFeed = mapParsedDynamicFeedToVideoFeed(
           uid,
           dynamicFeed,
@@ -1274,7 +1387,8 @@ export async function fetchAndParseFeed(
           return { data: filteredVideoFeed, notModified: false }
         }
       }
-    } catch {
+    } catch (error) {
+      if (isAbortError(error) && options?.signal?.aborted) throw error
       // Keep generic fallback path below.
     }
   }
@@ -1285,7 +1399,11 @@ export async function fetchAndParseFeed(
   try {
     // For RSSHub-like routes, race fallback instances first to avoid hanging on a single slow node.
     if (isRsshubLikeUrl(feedUrl) && rsshubCandidates.length > 1) {
-      const best = await pickBestRsshubFallbackFeed(rsshubCandidates, true)
+      const best = await pickBestRsshubFallbackFeed(
+        rsshubCandidates,
+        true,
+        options?.signal,
+      )
       if (best) return { data: best, notModified: false }
     }
 
@@ -1294,6 +1412,10 @@ export async function fetchAndParseFeed(
         feedUrl,
         options?.etag,
         options?.lastModified,
+        DEFAULT_CONDITIONAL_TIMEOUT_MS,
+        null,
+        0,
+        options?.signal,
       )
       if (result.notModified) {
         return {
@@ -1319,12 +1441,16 @@ export async function fetchAndParseFeed(
     }
 
     // No conditional headers — plain fetch
-    const parsed = await parseFeedUrl(feedUrl)
+    const parsed = await parseFeedUrl(feedUrl, { signal: options?.signal })
 
     // RSSHub instance may return a valid but empty feed; try same route on fallback instances
     // and pick the best (most items, then newest item timestamp).
     if ((parsed.items?.length || 0) === 0 && rsshubCandidates.length > 1) {
-      const bestFeed = pickBestRsshubFallbackFeed(rsshubCandidates, true)
+      const bestFeed = pickBestRsshubFallbackFeed(
+        rsshubCandidates,
+        true,
+        options?.signal,
+      )
       const resolved = await bestFeed
       if (resolved) {
         return { data: resolved, notModified: false }
@@ -1333,10 +1459,15 @@ export async function fetchAndParseFeed(
 
     return { data: parsed, notModified: false }
   } catch (error) {
+    if (isAbortError(error) && options?.signal?.aborted) throw error
     // Try RSSHub fallback instances for the same route before generic path probing.
     // This avoids creating/keeping empty subscriptions when one instance is blocked.
     if (rsshubCandidates.length > 1) {
-      const bestFeed = await pickBestRsshubFallbackFeed(rsshubCandidates, true)
+      const bestFeed = await pickBestRsshubFallbackFeed(
+        rsshubCandidates,
+        true,
+        options?.signal,
+      )
       if (bestFeed) {
         return { data: bestFeed, notModified: false }
       }
@@ -1361,7 +1492,9 @@ export async function fetchAndParseFeed(
       try {
         const baseUrl = new URL(feedUrl)
         const tryUrl = `${baseUrl.origin}${path}`
-        const parsed = await parseFeedUrl(tryUrl)
+        const parsed = await parseFeedUrl(tryUrl, {
+          signal: options?.signal,
+        })
         return { data: parsed, notModified: false }
       } catch {
         continue

@@ -24,6 +24,10 @@ export interface FeedCacheResponse {
   misses: string[]
 }
 
+export interface FeedCacheQueryOptions {
+  signal?: AbortSignal
+}
+
 /**
  * 判断当前用户是否有资格使用服务端缓存（admin 或 vip）。
  * 后端会再校验一次；这里只是客户端的提前过滤，避免无谓请求。
@@ -42,6 +46,7 @@ export function shouldUseServerFeedCache(): boolean {
  */
 export async function queryServerFeedCache(
   urls: string[],
+  options: FeedCacheQueryOptions = {},
 ): Promise<FeedCacheResponse> {
   if (urls.length === 0) return { hits: [], misses: [] }
   const token = sessionStore.getValidToken()
@@ -51,6 +56,7 @@ export async function queryServerFeedCache(
     `${getBackendBaseUrl()}/api/feed-cache/entries`,
     {
       method: 'POST',
+      signal: options.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,

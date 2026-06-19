@@ -6,9 +6,17 @@ import {
 } from '../cleanup'
 import { entryFromRow } from '../row-mappers'
 import type { IFeedRepository } from './feed-repository'
+import { throwIfAborted } from '../../utils/abort-signal'
+
+export interface MaintenanceRunOptions {
+  signal?: AbortSignal
+}
 
 export interface IMaintenanceRepository {
-  cleanupEntries(options: CleanupOptions): CleanupStats
+  cleanupEntries(
+    options: CleanupOptions,
+    runOptions?: MaintenanceRunOptions,
+  ): CleanupStats
   getDatabaseStats(): {
     totalFeeds: number
     totalEntries: number
@@ -24,13 +32,20 @@ export class MaintenanceRepository implements IMaintenanceRepository {
     private readonly feeds: IFeedRepository,
   ) {}
 
-  cleanupEntries(options: CleanupOptions): CleanupStats {
+  cleanupEntries(
+    options: CleanupOptions,
+    runOptions: MaintenanceRunOptions = {},
+  ): CleanupStats {
+    throwIfAborted(runOptions.signal)
     const feeds = this.feeds.getAllFeeds()
+    throwIfAborted(runOptions.signal)
     const allEntries = this.db
       .prepare('SELECT * FROM entries')
       .all()
       .map(entryFromRow)
+    throwIfAborted(runOptions.signal)
     const result = cleanupDatabaseEntries(feeds, allEntries, options)
+    throwIfAborted(runOptions.signal)
     if (result.stats.removed > 0) {
       // Delete the complement (ids NOT kept), batched with `IN` so each batch is
       // self-contained. The previous `NOT IN (keepBatch)` approach made batches
@@ -42,6 +57,7 @@ export class MaintenanceRepository implements IMaintenanceRepository {
         .filter((id) => !keepIds.has(id))
       const batchSize = 500
       for (let i = 0; i < removeIds.length; i += batchSize) {
+        throwIfAborted(runOptions.signal)
         const batch = removeIds.slice(i, i + batchSize)
         const placeholders = batch.map(() => '?').join(',')
         this.db
@@ -49,6 +65,7 @@ export class MaintenanceRepository implements IMaintenanceRepository {
           .run(...batch)
       }
     }
+    throwIfAborted(runOptions.signal)
     return result.stats
   }
 

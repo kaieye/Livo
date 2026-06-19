@@ -233,12 +233,9 @@ export function buildRefreshSubscriptionTool(): AgentTool {
     confirmationTitle: '确认刷新订阅源',
     confirmationMessage:
       '将访问订阅源网络地址并写入最新文章、抓取状态和刷新日志。',
-    execute: async (
-      _context,
-      args: AgentToolArgs,
-    ): Promise<AgentToolResult> => {
+    execute: async (context, args: AgentToolArgs): Promise<AgentToolResult> => {
       const feedId = String(args['feedId']).trim()
-      const result = await refreshFeed(feedId)
+      const result = await refreshFeed(feedId, { signal: context.signal })
       if (!result) {
         return {
           status: 'failed',
@@ -264,8 +261,11 @@ export function buildRefreshAllSubscriptionsTool(): AgentTool {
     confirmationTitle: '确认刷新全部订阅源',
     confirmationMessage:
       '将访问所有订阅源网络地址并写入最新文章、抓取状态和刷新日志。',
-    execute: async (): Promise<AgentToolResult> => {
-      const result = await refreshAllFeeds({ force: true })
+    execute: async (context): Promise<AgentToolResult> => {
+      const result = await refreshAllFeeds({
+        force: true,
+        signal: context.signal,
+      })
       if (result.totalFeeds === 0) {
         return { status: 'success', message: '当前没有可刷新的订阅源。' }
       }

@@ -32,7 +32,10 @@ import type { IFeedRepository } from './repositories/feed-repository'
 import { FeverRepository } from './repositories/fever-repository'
 import type { IFeverRepository } from './repositories/fever-repository'
 import { MaintenanceRepository } from './repositories/maintenance-repository'
-import type { IMaintenanceRepository } from './repositories/maintenance-repository'
+import type {
+  IMaintenanceRepository,
+  MaintenanceRunOptions,
+} from './repositories/maintenance-repository'
 import { SyncChangesRepository } from './repositories/sync-changes-repository'
 import type { ISyncChangesRepository } from './repositories/sync-changes-repository'
 
@@ -190,8 +193,11 @@ export class SqliteAdapter {
     return this.digests.updateAIDigestRun(id, updates)
   }
 
-  cleanupEntries(options: CleanupOptions): CleanupStats {
-    return this.maintenance.cleanupEntries(options)
+  cleanupEntries(
+    options: CleanupOptions,
+    runOptions?: MaintenanceRunOptions,
+  ): CleanupStats {
+    return this.maintenance.cleanupEntries(options, runOptions)
   }
 
   getDatabaseStats(): {

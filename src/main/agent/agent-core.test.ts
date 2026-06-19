@@ -36,6 +36,7 @@ const ctx = (
 ): AgentExecutionContext => ({
   sessionId: 'test',
   now: Date.now(),
+  signal: new AbortController().signal,
   agentPermissions: permissions,
 })
 
@@ -277,6 +278,115 @@ describe('AgentHarness', () => {
     expect(run.result.status).toBe('confirmation_required')
     expect(run.result.confirmation).toBeDefined()
     expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('does not enter tool implementation when signal is already aborted', async () => {
+    const execute = vi.fn(
+      async (): Promise<AgentToolResult> => ({
+        status: 'success',
+        message: 'done',
+      }),
+    )
+    const controller = new AbortController()
+    controller.abort()
+    const registry = new AgentToolRegistry([makeTool({ execute })])
+    const harness = new AgentHarness(registry)
+
+    const run = await harness.execute({
+      toolName: 'read_thing',
+      args: { id: 'x' },
+      context: { ...ctx(), signal: controller.signal },
+    })
+
+    expect(run.result.status).toBe('failed')
+    expect(run.result.message).toMatch(/取消/)
+    expect(run.result.data).toEqual({
+      interrupted: true,
+      reason: 'cancelled',
+    })
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('fails quickly when signal is aborted during tool execution', async () => {
+    const controller = new AbortController()
+    let toolSignal: AbortSignal | undefined
+    const execute = vi.fn(async (context): Promise<AgentToolResult> => {
+      toolSignal = context.signal
+      return await new Promise((resolve) => {
+        setTimeout(() => resolve({ status: 'success', message: 'late' }), 500)
+      })
+    })
+    const registry = new AgentToolRegistry([makeTool({ execute })])
+    const harness = new AgentHarness(registry)
+
+    const startedAt = Date.now()
+    const runPromise = harness.execute({
+      toolName: 'read_thing',
+      args: { id: 'x' },
+      context: { ...ctx(), signal: controller.signal },
+    })
+    await vi.waitFor(() => expect(toolSignal).toBeDefined())
+    controller.abort()
+    const run = await runPromise
+
+    expect(Date.now() - startedAt).toBeLessThan(300)
+    expect(toolSignal?.aborted).toBe(true)
+    expect(run.result.status).toBe('failed')
+    expect(run.result.message).toMatch(/取消/)
+    expect(run.result.data).toEqual({
+      interrupted: true,
+      reason: 'cancelled',
+    })
+  })
+
+  it('passes a timeout signal into the running tool', async () => {
+    let toolSignal: AbortSignal | undefined
+    const execute = vi.fn(async (context): Promise<AgentToolResult> => {
+      toolSignal = context.signal
+      return await new Promise((resolve) => {
+        setTimeout(() => resolve({ status: 'success', message: 'late' }), 500)
+      })
+    })
+    const registry = new AgentToolRegistry([makeTool({ execute })])
+    const harness = new AgentHarness(registry)
+
+    const run = await harness.execute({
+      toolName: 'read_thing',
+      args: { id: 'x' },
+      context: { ...ctx(), deadlineMs: Date.now() + 5 },
+    })
+
+    expect(toolSignal?.aborted).toBe(true)
+    expect(run.result.status).toBe('failed')
+    expect(run.result.message).toMatch(/超时/)
+    expect(run.result.data).toEqual({
+      interrupted: true,
+      reason: 'timeout',
+    })
+  })
+
+  it('returns failed when the tool deadline expires', async () => {
+    const execute = vi.fn(
+      async (): Promise<AgentToolResult> =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ status: 'success', message: 'late' }), 500)
+        }),
+    )
+    const registry = new AgentToolRegistry([makeTool({ execute })])
+    const harness = new AgentHarness(registry)
+
+    const run = await harness.execute({
+      toolName: 'read_thing',
+      args: { id: 'x' },
+      context: { ...ctx(), deadlineMs: Date.now() + 5 },
+    })
+
+    expect(run.result.status).toBe('failed')
+    expect(run.result.message).toMatch(/超时/)
+    expect(run.result.data).toEqual({
+      interrupted: true,
+      reason: 'timeout',
+    })
   })
 
   it('executes a confirmed mutate tool', async () => {

@@ -1,3 +1,9 @@
+import {
+  isAbortError,
+  scopedSignalWithTimeout,
+  throwIfAborted,
+} from '../../utils/abort-signal'
+
 /**
  * Minimal DuckDuckGo HTML search (no API key required), used by the agent's
  * web_search tool to fetch fresh information not present in local feeds.
@@ -11,6 +17,10 @@ export interface WebSearchResult {
 const SEARCH_ENDPOINT = 'https://html.duckduckgo.com/html/'
 const MAX_RESULTS = 8
 const REQUEST_TIMEOUT_MS = 12000
+
+export interface WebSearchOptions {
+  signal?: AbortSignal
+}
 
 function decodeEntities(input: string): string {
   return input
@@ -45,17 +55,20 @@ function normalizeResultUrl(raw: string): string {
   }
 }
 
-export async function webSearch(query: string): Promise<WebSearchResult[]> {
+export async function webSearch(
+  query: string,
+  options: WebSearchOptions = {},
+): Promise<WebSearchResult[]> {
   const trimmed = query.trim()
   if (!trimmed) return []
+  throwIfAborted(options.signal)
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const scoped = scopedSignalWithTimeout(REQUEST_TIMEOUT_MS, options.signal)
   try {
     const body = new URLSearchParams({ q: trimmed, kl: 'wt-wt' }).toString()
     const response = await fetch(SEARCH_ENDPOINT, {
       method: 'POST',
-      signal: controller.signal,
+      signal: scoped.signal,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent':
@@ -65,11 +78,13 @@ export async function webSearch(query: string): Promise<WebSearchResult[]> {
     })
     if (!response.ok) return []
     const html = await response.text()
+    throwIfAborted(scoped.signal)
     return parseSearchResults(html)
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error
     return []
   } finally {
-    clearTimeout(timer)
+    scoped.dispose()
   }
 }
 

@@ -3,6 +3,7 @@ export async function runConcurrencyPool<T, R>(
   concurrency: number,
   worker: (item: T, index: number) => Promise<R>,
   onProgress?: (completed: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<PromiseSettledResult<R>[]> {
   const total = items.length
   if (total === 0) return []
@@ -14,8 +15,12 @@ export async function runConcurrencyPool<T, R>(
 
   const runWorker = async () => {
     while (nextIndex < total) {
+      if (signal?.aborted) break
       const index = nextIndex++
       try {
+        if (signal?.aborted) {
+          throw signal.reason ?? new DOMException('Aborted', 'AbortError')
+        }
         const value = await worker(items[index], index)
         results[index] = { status: 'fulfilled', value }
       } catch (reason) {
@@ -30,6 +35,14 @@ export async function runConcurrencyPool<T, R>(
     runWorker(),
   )
   await Promise.all(workers)
+
+  while (nextIndex < total) {
+    const index = nextIndex++
+    results[index] = {
+      status: 'rejected',
+      reason: signal?.reason ?? new DOMException('Aborted', 'AbortError'),
+    }
+  }
 
   return results
 }

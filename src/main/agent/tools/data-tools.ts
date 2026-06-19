@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/types'
 import { getDb } from '../../database'
 import { exportOPML } from '../../operations/data-operations'
+import { throwIfAgentToolAborted } from '../tool-runtime'
 import {
   loadRefreshLogs,
   clearRefreshLogs,
@@ -57,8 +58,8 @@ export function buildExportOpmlTool(): AgentTool {
     confirmationTitle: '确认导出 OPML',
     confirmationMessage:
       '将把当前订阅列表写入你选择的 OPML 文件，不会导出文章正文或 API Key。',
-    execute: async (): Promise<AgentToolResult> => {
-      const result = await exportOPML()
+    execute: async (context): Promise<AgentToolResult> => {
+      const result = await exportOPML({ signal: context.signal })
       if (!result.success) {
         if (result.cancelled)
           return { status: 'success', message: '已取消 OPML 导出' }
@@ -129,10 +130,8 @@ export function buildCleanupOldEntriesTool(): AgentTool {
     confirmationTitle: '确认清理旧文章',
     confirmationMessage:
       '将删除超出保留范围的本地旧文章（收藏文章会保留），不可撤销。',
-    execute: async (
-      _context,
-      args: AgentToolArgs,
-    ): Promise<AgentToolResult> => {
+    execute: async (context, args: AgentToolArgs): Promise<AgentToolResult> => {
+      throwIfAgentToolAborted(context.signal)
       const entriesPerFeed =
         typeof args['entriesPerFeed'] === 'number'
           ? Math.max(1, Math.floor(args['entriesPerFeed'] as number))
@@ -141,10 +140,14 @@ export function buildCleanupOldEntriesTool(): AgentTool {
         typeof args['maxEntryAgeDays'] === 'number'
           ? Math.max(1, Math.floor(args['maxEntryAgeDays'] as number))
           : 90
-      const stats = getDb().maintenance.cleanupEntries({
-        entriesPerFeed,
-        maxEntryAgeDays,
-      })
+      const stats = getDb().maintenance.cleanupEntries(
+        {
+          entriesPerFeed,
+          maxEntryAgeDays,
+        },
+        { signal: context.signal },
+      )
+      throwIfAgentToolAborted(context.signal)
       return {
         status: 'success',
         message: `清理完成：移除 ${stats.removed} 篇旧文章（按数量上限 ${stats.removedByCap}，按时间 ${stats.removedByAge}）`,

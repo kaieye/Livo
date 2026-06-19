@@ -368,6 +368,86 @@ describe('runAgentCore', () => {
     ])
   })
 
+  it('reports tool_failed and skips later tools when a tool is cancelled', async () => {
+    const controller = new AbortController()
+    const started: string[] = []
+    const events: AgentToolExecutionEvent[] = []
+    const readOne = makeTool({
+      name: 'read_one',
+      risk: 'medium',
+      execute: async (_context): Promise<AgentToolResult> => {
+        started.push('read_one')
+        controller.abort()
+        await new Promise<void>((resolve) => setTimeout(resolve, 500))
+        return { status: 'success', message: 'late' }
+      },
+    })
+    const readTwo = makeTool({
+      name: 'read_two',
+      execute: async (): Promise<AgentToolResult> => {
+        started.push('read_two')
+        return { status: 'success', message: 'should not run' }
+      },
+    })
+
+    agentToolRegistryProvider.setBuilder(() => [readOne, readTwo])
+
+    const twoToolCallResponse = {
+      choices: [
+        {
+          message: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'call-1',
+                type: 'function',
+                function: { name: 'read_one', arguments: '{"id":"a"}' },
+              },
+              {
+                id: 'call-2',
+                type: 'function',
+                function: { name: 'read_two', arguments: '{"id":"b"}' },
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    const client = makeClient([twoToolCallResponse, textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const result = await runAgentCore({
+      prompt: 'lookup two things',
+      aiConfig: fakeConfig,
+      signal: controller.signal,
+      onToolEvent: (event) => events.push(event),
+    })
+
+    expect(result.status).toBe('completed')
+    expect(started).toEqual(['read_one'])
+    expect(result.toolRounds.map((round) => round.name)).toEqual([
+      'read_one',
+      'read_two',
+    ])
+    expect(result.toolRounds.map((round) => round.status)).toEqual([
+      'failed',
+      'failed',
+    ])
+    expect(events.filter((event) => event.type === 'tool_failed')).toHaveLength(
+      2,
+    )
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'tool_failed' &&
+          event.toolName === 'read_two' &&
+          (event.message ?? '').includes('已跳过后续工具'),
+      ),
+    ).toBe(true)
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(1)
+  })
+
   it('resumes a confirmed tool then batches remaining low-risk read tools', async () => {
     const release: Array<() => void> = []
     const started: string[] = []
@@ -437,6 +517,81 @@ describe('runAgentCore', () => {
       'read_one',
       'read_two',
     ])
+  })
+
+  it('skips remaining resumed tools when the confirmed tool is cancelled', async () => {
+    const controller = new AbortController()
+    const started: string[] = []
+    const events: AgentToolExecutionEvent[] = []
+
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        name: 'do_mutate',
+        capability: 'mutate',
+        risk: 'medium',
+        requiresConfirmation: true,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+        execute: async (): Promise<AgentToolResult> => {
+          started.push('do_mutate')
+          controller.abort()
+          await new Promise<void>((resolve) => setTimeout(resolve, 500))
+          return { status: 'success', message: 'late' }
+        },
+      }),
+      makeTool({
+        name: 'read_one',
+        execute: async (): Promise<AgentToolResult> => {
+          started.push('read_one')
+          return { status: 'success', message: 'should not run' }
+        },
+      }),
+    ])
+
+    vi.mocked(createOpenAIClient).mockReturnValue(
+      makeClient([textOnlyResponse]) as never,
+    )
+
+    const resumed = await resumeAgentCore({
+      continuation: {
+        messages: [],
+        pendingToolCall: {
+          id: 'call-1',
+          name: 'do_mutate',
+          arguments: '{}',
+        },
+        remainingToolCalls: [
+          {
+            id: 'call-2',
+            name: 'read_one',
+            arguments: '{"id":"a"}',
+          },
+        ],
+        toolRounds: [],
+        nextRound: 1,
+      },
+      aiConfig: fakeConfig,
+      signal: controller.signal,
+      onToolEvent: (event) => events.push(event),
+    })
+
+    expect(resumed.status).toBe('completed')
+    expect(started).toEqual(['do_mutate'])
+    expect(resumed.toolRounds.map((round) => round.name)).toEqual([
+      'do_mutate',
+      'read_one',
+    ])
+    expect(resumed.toolRounds.map((round) => round.status)).toEqual([
+      'failed',
+      'failed',
+    ])
+    expect(events.filter((event) => event.type === 'tool_failed')).toHaveLength(
+      2,
+    )
   })
 
   it('honors an already-aborted signal by rejecting before any LLM call', async () => {

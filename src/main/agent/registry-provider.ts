@@ -67,6 +67,8 @@ class AgentToolRegistryProviderImpl {
       context: {
         sessionId: context?.sessionId ?? 'ai-chat',
         now: Date.now(),
+        signal: context?.signal ?? new AbortController().signal,
+        deadlineMs: context?.deadlineMs,
         agentPermissions: normalized,
         activeRoute: context?.activeRoute,
         activeRootTab: context?.activeRootTab,

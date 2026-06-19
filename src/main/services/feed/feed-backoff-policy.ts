@@ -59,22 +59,48 @@ export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   context: string,
+  signal?: AbortSignal,
 ): Promise<T> {
+  if (signal?.aborted) {
+    return Promise.reject(
+      signal.reason ?? new DOMException('Aborted', 'AbortError'),
+    )
+  }
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return promise
   }
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`[refresh] timeout after ${timeoutMs}ms: ${context}`))
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const cleanup = (): void => {
+      if (timer) clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const rejectOnce = (reason: unknown): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(reason)
+    }
+    const onAbort = (): void => {
+      rejectOnce(signal?.reason ?? new DOMException('Aborted', 'AbortError'))
+    }
+    timer = setTimeout(() => {
+      rejectOnce(
+        new Error(`[refresh] timeout after ${timeoutMs}ms: ${context}`),
+      )
     }, timeoutMs)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) onAbort()
     promise.then(
       (value) => {
-        clearTimeout(timer)
+        if (settled) return
+        settled = true
+        cleanup()
         resolve(value)
       },
       (error) => {
-        clearTimeout(timer)
-        reject(error)
+        rejectOnce(error)
       },
     )
   })
