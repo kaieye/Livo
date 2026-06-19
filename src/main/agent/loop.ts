@@ -4,6 +4,7 @@ import type {
   AgentToolArgs,
   AgentToolDefinition,
   AgentToolRun,
+  AgentTool,
   AIConfig,
   AgentRoundDetail,
   AgentRunStatus,
@@ -18,10 +19,7 @@ import { createOpenAIClient } from '../services/ai/ai-client'
 import { runWithRetry } from '../services/ai/ai-retry'
 import { agentToolResultToText } from './tool-result-text'
 import { agentToolRegistryProvider } from './registry-provider'
-import {
-  buildAllowedAgentToolRegistry,
-  buildDefaultAgentToolRegistry,
-} from './default-tools'
+import { buildAllowedAgentToolRegistry } from './default-tools'
 import { buildContextFallback } from './context-builder'
 import { parseTextToolCalls } from './tool-call-parser'
 
@@ -170,6 +168,169 @@ interface ExecutedToolCall {
   text: string
 }
 
+interface ExecutedToolCallWithRounds {
+  toolCall: NormalizedToolCall
+  executed: ExecutedToolCall
+  rounds: AgentRoundDetail[]
+}
+
+type ParsedToolArgs =
+  | { ok: true; args: AgentToolArgs }
+  | { ok: false; message: string }
+
+function parseToolArgs(argumentsText: string): ParsedToolArgs {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(argumentsText || '{}')
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    return { ok: false, message: `工具参数不是合法 JSON: ${detail}` }
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, message: '工具参数必须是 JSON object' }
+  }
+
+  return { ok: true, args: parsed as AgentToolArgs }
+}
+
+function isParallelReadTool(tool: AgentTool | undefined): boolean {
+  return (
+    !!tool &&
+    tool.capability === 'read' &&
+    tool.risk === 'low' &&
+    !tool.requiresConfirmation
+  )
+}
+
+function collectParallelReadToolBatch(
+  toolCalls: NormalizedToolCall[],
+  startIndex: number,
+  permissions: AgentPermissionSettings,
+): NormalizedToolCall[] {
+  const registry = agentToolRegistryProvider.forPermissions(permissions)
+  const batch: NormalizedToolCall[] = []
+  for (let i = startIndex; i < toolCalls.length; i += 1) {
+    const toolCall = toolCalls[i]
+    if (!isParallelReadTool(registry.get(toolCall.name))) {
+      break
+    }
+    batch.push(toolCall)
+  }
+  return batch
+}
+
+async function executeParallelReadToolBatch(
+  batch: NormalizedToolCall[],
+  permissions: AgentPermissionSettings,
+  sessionId: string,
+  onToolEvent?: (event: AgentToolExecutionEvent) => void,
+  signal?: AbortSignal,
+): Promise<ExecutedToolCallWithRounds[]> {
+  return Promise.all(
+    batch.map(async (toolCall) => {
+      const rounds: AgentRoundDetail[] = []
+      const executed = await executeToolCall(
+        toolCall,
+        false,
+        permissions,
+        sessionId,
+        rounds,
+        onToolEvent,
+        signal,
+      )
+      return { toolCall, executed, rounds }
+    }),
+  )
+}
+
+function appendToolCallResults(
+  messages: ChatMessage[],
+  toolRounds: AgentRoundDetail[],
+  results: ExecutedToolCallWithRounds[],
+): void {
+  for (const result of results) {
+    toolRounds.push(...result.rounds)
+    messages.push(toolResultMessage(result.toolCall, result.executed.text))
+  }
+}
+
+async function executeToolCallsUntilConfirmation(
+  toolCalls: NormalizedToolCall[],
+  messages: ChatMessage[],
+  permissions: AgentPermissionSettings,
+  sessionId: string,
+  toolRounds: AgentRoundDetail[],
+  onToolEvent?: (event: AgentToolExecutionEvent) => void,
+  signal?: AbortSignal,
+): Promise<
+  | { status: 'completed' }
+  | {
+      status: 'confirmation_required'
+      toolCall: NormalizedToolCall
+      remainingToolCalls: NormalizedToolCall[]
+      executed: ExecutedToolCall
+    }
+> {
+  for (let i = 0; i < toolCalls.length; ) {
+    const toolCall = toolCalls[i]
+
+    const batch = collectParallelReadToolBatch(toolCalls, i, permissions)
+    if (batch.length > 1) {
+      const results = await executeParallelReadToolBatch(
+        batch,
+        permissions,
+        sessionId,
+        onToolEvent,
+        signal,
+      )
+      appendToolCallResults(messages, toolRounds, results)
+      i += batch.length
+      continue
+    }
+
+    const executed = await executeToolCall(
+      toolCall,
+      false,
+      permissions,
+      sessionId,
+      toolRounds,
+      onToolEvent,
+      signal,
+    )
+    if (executed.run.result.status === 'confirmation_required') {
+      return {
+        status: 'confirmation_required',
+        toolCall,
+        remainingToolCalls: toolCalls.slice(i + 1),
+        executed,
+      }
+    }
+    messages.push(toolResultMessage(toolCall, executed.text))
+    i += 1
+  }
+
+  return { status: 'completed' }
+}
+
+function pushToolRound(
+  toolCall: NormalizedToolCall,
+  run: AgentToolRun,
+  text: string,
+  toolRounds: AgentRoundDetail[],
+): string {
+  const resultSummary = toolCallResultSummary(toolCall.name, text)
+  toolRounds.push({
+    name: toolCall.name,
+    args: toolCall.arguments,
+    resultSummary,
+    status: run.result.status,
+    elapsedMs: run.elapsedMs,
+    confirmation: run.result.confirmation,
+  })
+  return resultSummary
+}
+
 async function executeToolCall(
   toolCall: NormalizedToolCall,
   confirmed: boolean,
@@ -188,30 +349,41 @@ async function executeToolCall(
     args: toolCall.arguments,
   })
 
-  let parsedArgs: AgentToolArgs = {}
-  try {
-    parsedArgs = JSON.parse(toolCall.arguments || '{}') as AgentToolArgs
-  } catch {
-    parsedArgs = {}
+  const startedAt = nowMs()
+  const parsedArgs = parseToolArgs(toolCall.arguments)
+  if (!parsedArgs.ok) {
+    const run: AgentToolRun = {
+      toolName: toolCall.name,
+      args: {},
+      elapsedMs: nowMs() - startedAt,
+      result: {
+        status: 'failed',
+        message: parsedArgs.message,
+      },
+    }
+    const text = truncateToolResult(agentToolResultToText(run.result))
+    const resultSummary = pushToolRound(toolCall, run, text, toolRounds)
+    onToolEvent?.({
+      type: 'tool_failed',
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      args: toolCall.arguments,
+      message: run.result.message,
+      resultSummary,
+      elapsedMs: run.elapsedMs,
+    })
+    return { run, text }
   }
 
   const run = await agentToolRegistryProvider.executeToolRun(
     toolCall.name,
-    parsedArgs,
+    parsedArgs.args,
     confirmed,
     permissions,
     { sessionId },
   )
   const text = truncateToolResult(agentToolResultToText(run.result))
-  const resultSummary = toolCallResultSummary(toolCall.name, text)
-  toolRounds.push({
-    name: toolCall.name,
-    args: toolCall.arguments,
-    resultSummary,
-    status: run.result.status,
-    elapsedMs: run.elapsedMs,
-    confirmation: run.result.confirmation,
-  })
+  const resultSummary = pushToolRound(toolCall, run, text, toolRounds)
 
   if (run.result.status === 'confirmation_required') {
     onToolEvent?.({
@@ -299,9 +471,7 @@ function resolveTools(
   permissions: AgentPermissionSettings,
 ): AgentToolDefinition[] {
   const registry = buildAllowedAgentToolRegistry(permissions)
-  const definitions = registry.toModelToolDefinitions()
-  if (definitions.length > 0) return definitions
-  return buildDefaultAgentToolRegistry().toModelToolDefinitions()
+  return registry.toModelToolDefinitions()
 }
 
 async function runAgentLoop(
@@ -364,38 +534,34 @@ async function runAgentLoop(
     messages.push(assistantToolCallMessage(content, toolCalls))
 
     const toolStart = nowMs()
-    for (let i = 0; i < toolCalls.length; i += 1) {
-      const toolCall = toolCalls[i]
-      const executed = await executeToolCall(
-        toolCall,
-        false,
-        permissions,
-        sessionId,
+    const toolExecution = await executeToolCallsUntilConfirmation(
+      toolCalls,
+      messages,
+      permissions,
+      sessionId,
+      toolRounds,
+      onToolEvent,
+      signal,
+    )
+    if (toolExecution.status === 'confirmation_required') {
+      const toolMs = nowMs() - toolStart
+      metrics.toolMs += toolMs
+      metrics.rounds.push({
+        round,
+        llmMs,
+        toolMs,
+        toolCalls: toolCalls.length,
+      })
+      metrics.totalMs = metrics.llmMs + metrics.toolMs
+      return buildConfirmationResult(
+        toolExecution.toolCall,
+        toolExecution.remainingToolCalls,
+        messages,
         toolRounds,
-        onToolEvent,
-        signal,
+        round + 1,
+        toolExecution.executed,
+        metrics,
       )
-      if (executed.run.result.status === 'confirmation_required') {
-        const toolMs = nowMs() - toolStart
-        metrics.toolMs += toolMs
-        metrics.rounds.push({
-          round,
-          llmMs,
-          toolMs,
-          toolCalls: toolCalls.length,
-        })
-        metrics.totalMs = metrics.llmMs + metrics.toolMs
-        return buildConfirmationResult(
-          toolCall,
-          toolCalls.slice(i + 1),
-          messages,
-          toolRounds,
-          round + 1,
-          executed,
-          metrics,
-        )
-      }
-      messages.push(toolResultMessage(toolCall, executed.text))
     }
     const toolMs = nowMs() - toolStart
     metrics.toolMs += toolMs
@@ -492,31 +658,27 @@ export async function resumeAgentCore(
 
   // Run the remaining queued tool calls (may hit another confirmation).
   const remaining = continuation.remainingToolCalls
-  for (let i = 0; i < remaining.length; i += 1) {
-    const toolCall = remaining[i]
-    const executed = await executeToolCall(
-      toolCall,
-      false,
-      permissions,
-      sessionId,
+  const toolExecution = await executeToolCallsUntilConfirmation(
+    remaining,
+    messages,
+    permissions,
+    sessionId,
+    toolRounds,
+    options.onToolEvent,
+    options.signal,
+  )
+  if (toolExecution.status === 'confirmation_required') {
+    metrics.toolMs += nowMs() - toolStart
+    metrics.totalMs = metrics.llmMs + metrics.toolMs
+    return buildConfirmationResult(
+      toolExecution.toolCall,
+      toolExecution.remainingToolCalls,
+      messages,
       toolRounds,
-      options.onToolEvent,
-      options.signal,
+      continuation.nextRound,
+      toolExecution.executed,
+      metrics,
     )
-    if (executed.run.result.status === 'confirmation_required') {
-      metrics.toolMs += nowMs() - toolStart
-      metrics.totalMs = metrics.llmMs + metrics.toolMs
-      return buildConfirmationResult(
-        toolCall,
-        remaining.slice(i + 1),
-        messages,
-        toolRounds,
-        continuation.nextRound,
-        executed,
-        metrics,
-      )
-    }
-    messages.push(toolResultMessage(toolCall, executed.text))
   }
   metrics.toolMs += nowMs() - toolStart
 

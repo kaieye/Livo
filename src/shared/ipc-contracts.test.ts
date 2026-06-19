@@ -94,6 +94,65 @@ describe('ipc-contracts', () => {
     )
   })
 
+  it('validates agent run and resume payloads deeply', () => {
+    const runPayload = {
+      requestId: 'agent-run-1',
+      prompt: '帮我看一下今天更新',
+      history: [
+        { role: 'user', content: '你好' },
+        { role: 'assistant', content: '你好，有什么需要？' },
+      ],
+      pageContext: 'home',
+    }
+    expect(validateIpcArgs(IPC.AGENT_RUN, [runPayload])).toEqual([runPayload])
+
+    const resumePayload = {
+      requestId: 'agent-run-2',
+      pendingId: 'pending-agent-run-1',
+    }
+    expect(validateIpcArgs(IPC.AGENT_RESUME, [resumePayload])).toEqual([
+      resumePayload,
+    ])
+    expect(validateIpcArgs(IPC.AGENT_CANCEL_PENDING, ['pending-1'])).toEqual([
+      'pending-1',
+    ])
+
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_RUN, [{ requestId: 'run-1' }]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_RUN, [{ requestId: 1, prompt: 'hi' }]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_RUN, [
+        { requestId: 'run-1', prompt: 'hi', history: 123 },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_RUN, [
+        {
+          requestId: 'run-1',
+          prompt: 'hi',
+          history: [{ role: 'system', content: 'nope' }],
+        },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_RESUME, [
+        { requestId: 'run-1', pendingId: 123 },
+      ]),
+    ).toThrow(IpcValidationError)
+    expect(() => validateIpcArgs(IPC.AGENT_CANCEL_PENDING, [123])).toThrow(
+      IpcValidationError,
+    )
+    expect(() => validateIpcArgs(IPC.AGENT_CANCEL_PENDING, ['  '])).toThrow(
+      IpcValidationError,
+    )
+    expect(() =>
+      validateIpcArgs(IPC.AGENT_CANCEL_PENDING, ['x'.repeat(241)]),
+    ).toThrow(IpcValidationError)
+  })
+
   it('unwraps successful IPC envelopes for existing API callers', () => {
     const data = { success: true, value: 1 }
 

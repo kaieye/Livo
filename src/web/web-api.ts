@@ -2873,6 +2873,7 @@ export function createWebAPI(): ElectronAPI {
         error: 'Not available on web',
       }),
       abort: async () => ({ success: true }),
+      cancelPending: async () => ({ success: true }),
       listTraces: async () => [],
       clearTraces: async () => ({ success: true }),
       onToolEvent: () => (() => {}) as any,

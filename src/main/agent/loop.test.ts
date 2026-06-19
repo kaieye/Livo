@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { AIConfig, AgentTool, AgentToolResult } from '../../shared/types'
+import type {
+  AgentPermissionSettings,
+  AIConfig,
+  AgentTool,
+  AgentToolExecutionEvent,
+  AgentToolResult,
+} from '../../shared/types'
 import { agentToolRegistryProvider } from './registry-provider'
 
 vi.mock('../services/ai/ai-client', () => ({
@@ -15,14 +21,27 @@ vi.mock('./context-builder', () => ({
 // load. Stub it out so the test owns the registry through `setBuilder`.
 vi.mock('./default-tools', () => ({
   buildDefaultAgentToolRegistry: () => ({
-    toModelToolDefinitions: () => [],
+    toModelToolDefinitions: () => [
+      {
+        type: 'function',
+        function: {
+          name: 'default_fallback_tool',
+          description: 'Should not be exposed by permission fallback',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+      },
+    ],
   }),
   buildAllowedAgentToolRegistry: () => ({
     toModelToolDefinitions: () => [],
   }),
 }))
 
-import { runAgentCore } from './loop'
+import { resumeAgentCore, runAgentCore } from './loop'
 import { createOpenAIClient } from '../services/ai/ai-client'
 
 const fakeConfig: AIConfig = {
@@ -37,7 +56,7 @@ function makeClient(responses: unknown[]) {
   return {
     chat: {
       completions: {
-        create: vi.fn(async () => {
+        create: vi.fn(async (..._args: unknown[]) => {
           const value = responses[Math.min(index, responses.length - 1)]
           index += 1
           return value
@@ -90,6 +109,23 @@ const toolCallResponse = {
   ],
 }
 
+const malformedToolCallResponse = {
+  choices: [
+    {
+      message: {
+        content: '',
+        tool_calls: [
+          {
+            id: 'call-1',
+            type: 'function',
+            function: { name: 'read_thing', arguments: '{"id":' },
+          },
+        ],
+      },
+    },
+  ],
+}
+
 const mutateCallResponse = {
   choices: [
     {
@@ -105,6 +141,41 @@ const mutateCallResponse = {
       },
     },
   ],
+}
+
+const mutateThenReadCallResponse = {
+  choices: [
+    {
+      message: {
+        content: '',
+        tool_calls: [
+          {
+            id: 'call-1',
+            type: 'function',
+            function: { name: 'do_mutate', arguments: '{}' },
+          },
+          {
+            id: 'call-2',
+            type: 'function',
+            function: { name: 'read_one', arguments: '{"id":"a"}' },
+          },
+          {
+            id: 'call-3',
+            type: 'function',
+            function: { name: 'read_two', arguments: '{"id":"b"}' },
+          },
+        ],
+      },
+    },
+  ],
+}
+
+const noAgentPermissions: AgentPermissionSettings = {
+  allowRead: false,
+  allowNavigate: false,
+  allowMutate: false,
+  allowDestructive: false,
+  allowExternal: false,
 }
 
 beforeEach(() => {
@@ -177,6 +248,195 @@ describe('runAgentCore', () => {
     expect(result.continuation).toBeDefined()
     expect(result.continuation?.pendingToolCall.id).toBe('call-1')
     expect(result.continuation?.nextRound).toBe(1)
+  })
+
+  it('feeds malformed tool JSON back as a failed tool result', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const client = makeClient([malformedToolCallResponse, textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const events: AgentToolExecutionEvent[] = []
+    const result = await runAgentCore({
+      prompt: 'lookup a',
+      aiConfig: fakeConfig,
+      onToolEvent: (event) => events.push(event),
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.toolRounds).toHaveLength(1)
+    expect(result.toolRounds[0].status).toBe('failed')
+    expect(result.toolRounds[0].resultSummary).toMatch(/工具参数不是合法 JSON/)
+    expect(events.some((event) => event.type === 'tool_failed')).toBe(true)
+
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(2)
+    const secondCallOptions = client.chat.completions.create.mock
+      .calls[1]?.[0] as {
+      messages: Array<{
+        role: string
+        content?: string
+      }>
+    }
+    const messages = secondCallOptions.messages
+    expect(
+      messages.some(
+        (m) =>
+          m.role === 'tool' && m.content?.includes('工具参数不是合法 JSON'),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not expose tools when all agent permissions are disabled', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const client = makeClient([textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    await runAgentCore({
+      prompt: 'lookup a',
+      aiConfig: fakeConfig,
+      permissions: noAgentPermissions,
+    })
+
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(1)
+    const firstCallOptions = client.chat.completions.create.mock
+      .calls[0]?.[0] as {
+      tools?: unknown
+      tool_choice?: unknown
+    }
+    expect(firstCallOptions.tools).toBeUndefined()
+    expect(firstCallOptions.tool_choice).toBeUndefined()
+  })
+
+  it('executes consecutive low-risk read tools in the same round concurrently', async () => {
+    const release: Array<() => void> = []
+    const started: string[] = []
+    const makeBlockingTool = (name: string): AgentTool =>
+      makeTool({
+        name,
+        execute: async (): Promise<AgentToolResult> => {
+          started.push(name)
+          await new Promise<void>((resolve) => release.push(resolve))
+          return { status: 'success', message: `${name} ok` }
+        },
+      })
+
+    agentToolRegistryProvider.setBuilder(() => [
+      makeBlockingTool('read_one'),
+      makeBlockingTool('read_two'),
+    ])
+
+    const twoToolCallResponse = {
+      choices: [
+        {
+          message: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'call-1',
+                type: 'function',
+                function: { name: 'read_one', arguments: '{"id":"a"}' },
+              },
+              {
+                id: 'call-2',
+                type: 'function',
+                function: { name: 'read_two', arguments: '{"id":"b"}' },
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    vi.mocked(createOpenAIClient).mockReturnValue(
+      makeClient([twoToolCallResponse, textOnlyResponse]) as never,
+    )
+
+    const runPromise = runAgentCore({
+      prompt: 'lookup two things',
+      aiConfig: fakeConfig,
+    })
+
+    await vi.waitFor(() => {
+      expect(started).toEqual(['read_one', 'read_two'])
+    })
+    release.forEach((resolve) => resolve())
+
+    const result = await runPromise
+    expect(result.status).toBe('completed')
+    expect(result.toolRounds.map((round) => round.name)).toEqual([
+      'read_one',
+      'read_two',
+    ])
+  })
+
+  it('resumes a confirmed tool then batches remaining low-risk read tools', async () => {
+    const release: Array<() => void> = []
+    const started: string[] = []
+    const makeBlockingReadTool = (name: string): AgentTool =>
+      makeTool({
+        name,
+        execute: async (): Promise<AgentToolResult> => {
+          started.push(name)
+          await new Promise<void>((resolve) => release.push(resolve))
+          return { status: 'success', message: `${name} ok` }
+        },
+      })
+
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        name: 'do_mutate',
+        capability: 'mutate',
+        risk: 'medium',
+        requiresConfirmation: true,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+        execute: async (): Promise<AgentToolResult> => ({
+          status: 'success',
+          message: 'mutated',
+        }),
+      }),
+      makeBlockingReadTool('read_one'),
+      makeBlockingReadTool('read_two'),
+    ])
+
+    vi.mocked(createOpenAIClient)
+      .mockReturnValueOnce(makeClient([mutateThenReadCallResponse]) as never)
+      .mockReturnValueOnce(makeClient([textOnlyResponse]) as never)
+
+    const firstResult = await runAgentCore({
+      prompt: 'mutate then read',
+      aiConfig: fakeConfig,
+    })
+
+    expect(firstResult.status).toBe('confirmation_required')
+    expect(
+      firstResult.continuation?.remainingToolCalls.map((call) => call.id),
+    ).toEqual(['call-2', 'call-3'])
+
+    const continuation = firstResult.continuation
+    expect(continuation).toBeDefined()
+    const resumePromise = resumeAgentCore({
+      continuation: continuation!,
+      aiConfig: fakeConfig,
+    })
+
+    await vi.waitFor(() => {
+      expect(started).toEqual(['read_one', 'read_two'])
+    })
+    release.forEach((resolve) => resolve())
+
+    const resumed = await resumePromise
+    expect(resumed.status).toBe('completed')
+    expect(resumed.text).toBe('hello back')
+    expect(resumed.toolRounds.map((round) => round.name)).toEqual([
+      'do_mutate',
+      'do_mutate',
+      'read_one',
+      'read_two',
+    ])
   })
 
   it('honors an already-aborted signal by rejecting before any LLM call', async () => {

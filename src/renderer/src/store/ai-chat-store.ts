@@ -138,6 +138,20 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
     })
   }
 
+  function releasePendingConfirmation(pendingId: string | null): void {
+    if (!pendingId) return
+    void window.api.agent
+      .cancelPending(pendingId)
+      .then((result) => {
+        if (!result.success) {
+          console.warn('Agent pending confirmation was already gone', pendingId)
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to cancel pending agent confirmation', error)
+      })
+  }
+
   function finishAssistantResponse(text: string): void {
     set({ isLoading: false, isConfirming: false, currentRequestId: null })
     typewriter.start(text, {
@@ -328,7 +342,9 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
 
     cancelPending: () => {
       const pending = get().pendingConfirmation
+      const pendingId = get().pendingId
       if (!pending) return
+      releasePendingConfirmation(pendingId)
       set((state) => {
         const items = state.toolStatusItems.slice()
         const index = items.findIndex((item) => item.key === pending.toolCallId)
@@ -376,6 +392,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
 
     clearMessages: () => {
       saveCurrentSession()
+      releasePendingConfirmation(get().pendingId)
       typewriter.cancel()
       stopTimer()
       set({
@@ -399,6 +416,7 @@ export const useAIChatStore = createAppStore<AIChatState>((set, get) => {
 
     loadSession: (session) => {
       saveCurrentSession()
+      releasePendingConfirmation(get().pendingId)
       typewriter.cancel()
       stopTimer()
       set({

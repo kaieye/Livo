@@ -44,7 +44,10 @@ class AgentServiceImpl {
     string,
     {
       continuation: AgentContinuationState
+      requestId: string
+      traceId: string
       startedAt: number
+      prompt: string
       expiresAt: number
     }
   >()
@@ -94,10 +97,12 @@ class AgentServiceImpl {
         signal: controller.signal,
       })
       return this.finalize(
-        request.requestId,
+        parked.requestId,
         '(用户确认后继续)',
         parked.startedAt,
         result,
+        parked.traceId,
+        parked.prompt,
       )
     } finally {
       this.aborters.delete(request.requestId)
@@ -112,11 +117,42 @@ class AgentServiceImpl {
     return true
   }
 
+  cancelPending(pendingId: string): boolean {
+    const parked = this.pending.get(pendingId)
+    if (!parked) return false
+    if (parked.expiresAt < Date.now()) {
+      this.pending.delete(pendingId)
+      return false
+    }
+    this.pending.delete(pendingId)
+    this.saveTraceRecord({
+      traceId: parked.traceId,
+      sessionId: parked.requestId,
+      startedAt: parked.startedAt,
+      completedAt: Date.now(),
+      promptSummary: parked.prompt.slice(0, 120),
+      finalText: '用户取消执行等待确认的 Agent 工具调用。',
+      status: 'cancelled',
+      toolCalls: parked.continuation.toolRounds.map((round, index) => ({
+        id: `${parked.requestId}-${index}`,
+        toolName: round.name,
+        argsPreview: (round.args || '').slice(0, 200),
+        status: round.status || 'confirmation_required',
+        resultSummary: round.resultSummary,
+        elapsedMs: round.elapsedMs || 0,
+        at: parked.startedAt,
+      })),
+    })
+    return true
+  }
+
   private finalize(
     requestId: string,
     prompt: string,
     startedAt: number,
     result: AgentRunResult,
+    traceId = this.createTraceId(requestId, startedAt),
+    tracePrompt = prompt,
   ): AgentServiceResult {
     this.evictExpiredPending()
 
@@ -125,12 +161,15 @@ class AgentServiceImpl {
       pendingId = `pending-${requestId}-${Date.now()}`
       this.pending.set(pendingId, {
         continuation: result.continuation,
+        requestId,
+        traceId,
         startedAt,
+        prompt: tracePrompt,
         expiresAt: Date.now() + PENDING_TTL_MS,
       })
     }
 
-    this.saveTrace(requestId, prompt, startedAt, result)
+    this.saveTrace(requestId, tracePrompt, startedAt, result, traceId)
 
     return {
       text: result.text,
@@ -147,13 +186,14 @@ class AgentServiceImpl {
     prompt: string,
     startedAt: number,
     result: AgentRunResult,
+    traceId = this.createTraceId(requestId, startedAt),
   ): void {
     const status: AgentTraceStatus =
       result.status === 'confirmation_required'
         ? 'confirmation_required'
         : 'completed'
     const record: AgentTraceRecord = {
-      traceId: `trace-${requestId}-${startedAt}`,
+      traceId,
       sessionId: requestId,
       startedAt,
       completedAt: Date.now(),
@@ -170,7 +210,15 @@ class AgentServiceImpl {
         at: startedAt,
       })),
     }
+    this.saveTraceRecord(record)
+  }
+
+  private saveTraceRecord(record: AgentTraceRecord): void {
     AgentTraceStore.save(record)
+  }
+
+  private createTraceId(requestId: string, startedAt: number): string {
+    return `trace-${requestId}-${startedAt}`
   }
 
   private evictExpiredPending(): void {

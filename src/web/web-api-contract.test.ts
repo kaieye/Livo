@@ -77,6 +77,7 @@ const ELECTRON_API_SHAPE = {
     run: true,
     resume: true,
     abort: true,
+    cancelPending: true,
     listTraces: true,
     clearTraces: true,
     onToolEvent: true,

@@ -58,6 +58,7 @@ export const IPC = {
   AGENT_RUN: 'agent:run',
   AGENT_RESUME: 'agent:resume',
   AGENT_ABORT: 'agent:abort',
+  AGENT_CANCEL_PENDING: 'agent:cancel-pending',
   AGENT_TRACES_LIST: 'agent:traces-list',
   AGENT_TRACES_CLEAR: 'agent:traces-clear',
   SETTINGS_GET: 'settings:get',
@@ -315,6 +316,7 @@ export type IpcArgsByChannel = {
   ]
   [IPC.AGENT_RESUME]: [payload: { requestId: string; pendingId: string }]
   [IPC.AGENT_ABORT]: [requestId: string]
+  [IPC.AGENT_CANCEL_PENDING]: [pendingId: string]
   [IPC.AGENT_TRACES_LIST]: []
   [IPC.AGENT_TRACES_CLEAR]: []
   [IPC.SETTINGS_GET]: []
@@ -562,6 +564,30 @@ function assertOptionalObject(
   if (value !== undefined) assertObject(value, field)
 }
 
+function assertNonEmptyString(
+  value: unknown,
+  field: string,
+): asserts value is string {
+  assertString(value, field)
+  if (value.trim().length === 0) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: 'expected_non_empty_string',
+    })
+  }
+}
+
+function assertMaxStringLength(
+  value: string,
+  field: string,
+  maxLength: number,
+): void {
+  if (value.length > maxLength) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      [field]: `max_length_${maxLength}`,
+    })
+  }
+}
+
 function assertTaskRunListOptions(value: unknown): void {
   assertOptionalObject(value, 'options')
   if (!value) return
@@ -683,6 +709,77 @@ function assertMessages(value: unknown): void {
       })
     }
   }
+}
+
+const AGENT_REQUEST_ID_MAX_LENGTH = 120
+const AGENT_PROMPT_MAX_LENGTH = 20_000
+const AGENT_HISTORY_MAX_ITEMS = 40
+const AGENT_HISTORY_CONTENT_MAX_LENGTH = 20_000
+const AGENT_PAGE_CONTEXT_MAX_LENGTH = 60_000
+
+function assertAgentChatHistory(value: unknown): void {
+  if (value === undefined) return
+  if (!Array.isArray(value)) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      'payload.history': 'expected_array',
+    })
+  }
+  if (value.length > AGENT_HISTORY_MAX_ITEMS) {
+    throw new IpcValidationError('Invalid IPC argument', {
+      'payload.history': `max_items_${AGENT_HISTORY_MAX_ITEMS}`,
+    })
+  }
+  for (const [index, message] of value.entries()) {
+    assertObject(message, `payload.history.${index}`)
+    if (message.role !== 'user' && message.role !== 'assistant') {
+      throw new IpcValidationError('Invalid IPC argument', {
+        [`payload.history.${index}.role`]: 'expected_user_or_assistant',
+      })
+    }
+    assertString(message.content, `payload.history.${index}.content`)
+    assertMaxStringLength(
+      message.content,
+      `payload.history.${index}.content`,
+      AGENT_HISTORY_CONTENT_MAX_LENGTH,
+    )
+  }
+}
+
+function assertAgentRunPayload(value: unknown): void {
+  assertObject(value, 'payload')
+  assertNonEmptyString(value.requestId, 'payload.requestId')
+  assertMaxStringLength(
+    value.requestId,
+    'payload.requestId',
+    AGENT_REQUEST_ID_MAX_LENGTH,
+  )
+  assertNonEmptyString(value.prompt, 'payload.prompt')
+  assertMaxStringLength(value.prompt, 'payload.prompt', AGENT_PROMPT_MAX_LENGTH)
+  assertAgentChatHistory(value.history)
+  assertOptionalString(value.pageContext, 'payload.pageContext')
+  if (value.pageContext !== undefined) {
+    assertMaxStringLength(
+      value.pageContext,
+      'payload.pageContext',
+      AGENT_PAGE_CONTEXT_MAX_LENGTH,
+    )
+  }
+}
+
+function assertAgentResumePayload(value: unknown): void {
+  assertObject(value, 'payload')
+  assertNonEmptyString(value.requestId, 'payload.requestId')
+  assertMaxStringLength(
+    value.requestId,
+    'payload.requestId',
+    AGENT_REQUEST_ID_MAX_LENGTH,
+  )
+  assertAgentPendingId(value.pendingId, 'payload.pendingId')
+}
+
+function assertAgentPendingId(value: unknown, field: string): void {
+  assertNonEmptyString(value, field)
+  assertMaxStringLength(value, field, AGENT_REQUEST_ID_MAX_LENGTH * 2)
 }
 
 function validateEntryListOptions(value: unknown): void {
@@ -949,9 +1046,31 @@ export const IPC_CONTRACTS = {
       return args as IpcArgs<typeof IPC.TASK_RUN_LIST>
     },
   },
-  [IPC.AGENT_RUN]: oneObject(IPC.AGENT_RUN, 'payload'),
-  [IPC.AGENT_RESUME]: oneObject(IPC.AGENT_RESUME, 'payload'),
+  [IPC.AGENT_RUN]: {
+    channel: IPC.AGENT_RUN,
+    validateArgs: (args) => {
+      assertArity(IPC.AGENT_RUN, args, 1)
+      assertAgentRunPayload(args[0])
+      return args as IpcArgs<typeof IPC.AGENT_RUN>
+    },
+  },
+  [IPC.AGENT_RESUME]: {
+    channel: IPC.AGENT_RESUME,
+    validateArgs: (args) => {
+      assertArity(IPC.AGENT_RESUME, args, 1)
+      assertAgentResumePayload(args[0])
+      return args as IpcArgs<typeof IPC.AGENT_RESUME>
+    },
+  },
   [IPC.AGENT_ABORT]: oneString(IPC.AGENT_ABORT, 'requestId'),
+  [IPC.AGENT_CANCEL_PENDING]: {
+    channel: IPC.AGENT_CANCEL_PENDING,
+    validateArgs: (args) => {
+      assertArity(IPC.AGENT_CANCEL_PENDING, args, 1)
+      assertAgentPendingId(args[0], 'pendingId')
+      return args as IpcArgs<typeof IPC.AGENT_CANCEL_PENDING>
+    },
+  },
   [IPC.AGENT_TRACES_LIST]: noArgs(IPC.AGENT_TRACES_LIST),
   [IPC.AGENT_TRACES_CLEAR]: noArgs(IPC.AGENT_TRACES_CLEAR),
   [IPC.SETTINGS_GET]: noArgs(IPC.SETTINGS_GET),

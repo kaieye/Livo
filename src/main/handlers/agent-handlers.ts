@@ -85,6 +85,10 @@ export function registerAgentHandlers(): void {
     return { success: agentService.abort(requestId) }
   })
 
+  registerChannel(IPC.AGENT_CANCEL_PENDING, (_event, pendingId: string) => {
+    return { success: agentService.cancelPending(pendingId) }
+  })
+
   registerChannel(IPC.AGENT_TRACES_LIST, () => {
     return AgentTraceStore.loadAll()
   })

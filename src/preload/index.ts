@@ -283,6 +283,8 @@ const api = {
     }): Promise<AgentRunResponse> => invokeIpc(IPC.AGENT_RESUME, payload),
     abort: (requestId: string): Promise<{ success: boolean }> =>
       invokeIpc(IPC.AGENT_ABORT, requestId),
+    cancelPending: (pendingId: string): Promise<{ success: boolean }> =>
+      invokeIpc(IPC.AGENT_CANCEL_PENDING, pendingId),
     listTraces: (): Promise<AgentTraceRecord[]> =>
       invokeIpc(IPC.AGENT_TRACES_LIST),
     clearTraces: (): Promise<{ success: boolean }> =>
