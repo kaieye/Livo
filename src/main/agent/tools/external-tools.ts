@@ -7,7 +7,7 @@ import {
   webSearch,
   formatWebSearchResultsForAI,
 } from '../../services/ai/web-search'
-import { objectParams } from './schema'
+import { LONG_TEXT_MAX_LENGTH, objectParams } from './schema'
 
 export function buildWebSearchTool(): AgentTool {
   return {
@@ -16,7 +16,14 @@ export function buildWebSearchTool(): AgentTool {
     description:
       '执行网络搜索获取实时信息。当用户的问题需要最新网络信息、新闻、天气、价格或订阅源中没有的内容时使用',
     inputSchema: objectParams(
-      { query: { type: 'string', description: '搜索关键词或问题' } },
+      {
+        query: {
+          type: 'string',
+          description: '搜索关键词或问题',
+          minLength: 1,
+          maxLength: LONG_TEXT_MAX_LENGTH,
+        },
+      },
       ['query'],
     ),
     capability: 'external',

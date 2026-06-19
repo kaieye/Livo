@@ -12,7 +12,14 @@ import {
   refreshFeed,
   removeFeed,
 } from '../../operations/feed-operations'
-import { clampLimit, emptyParams, objectParams } from './schema'
+import {
+  FEED_URL_SCHEMES,
+  SHORT_TEXT_MAX_LENGTH,
+  URL_MAX_LENGTH,
+  clampLimit,
+  emptyParams,
+  objectParams,
+} from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
 const VIEW_NAMES = ['文章', '社交', '视频', '图片']
@@ -58,8 +65,18 @@ export function buildGetFeedEntriesTool(): AgentTool {
     description: '获取指定订阅源的文章列表',
     inputSchema: objectParams(
       {
-        feedId: { type: 'string', description: '订阅源ID' },
-        limit: { type: 'number', description: '返回文章数量，默认10，最大30' },
+        feedId: {
+          type: 'string',
+          description: '订阅源ID',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+        limit: {
+          type: 'number',
+          description: '返回文章数量，默认10，最大30',
+          minimum: 1,
+          maximum: 30,
+        },
       },
       ['feedId'],
     ),
@@ -103,9 +120,24 @@ export function buildAddFeedTool(): AgentTool {
       '添加新的 RSS 订阅源。当用户要求添加、订阅某个源、网站或 URL 时使用。需要 URL，可选名称和分类',
     inputSchema: objectParams(
       {
-        url: { type: 'string', description: '订阅源的 RSS URL 或网站 URL' },
-        title: { type: 'string', description: '订阅源的名称，可选' },
-        category: { type: 'string', description: '订阅源的分类，可选' },
+        url: {
+          type: 'string',
+          description: '订阅源的 RSS URL 或网站 URL',
+          minLength: 1,
+          maxLength: URL_MAX_LENGTH,
+          format: 'uri',
+          allowedSchemes: FEED_URL_SCHEMES,
+        },
+        title: {
+          type: 'string',
+          description: '订阅源的名称，可选',
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+        category: {
+          type: 'string',
+          description: '订阅源的分类，可选',
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
       },
       ['url'],
     ),
@@ -140,7 +172,14 @@ export function buildRemoveSubscriptionTool(): AgentTool {
     description:
       '删除指定订阅源及其本地文章。必须先确认；通常先查询订阅源列表获得 feedId',
     inputSchema: objectParams(
-      { feedId: { type: 'string', description: '要删除的订阅源 ID' } },
+      {
+        feedId: {
+          type: 'string',
+          description: '要删除的订阅源 ID',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+      },
       ['feedId'],
     ),
     capability: 'destructive',
@@ -181,7 +220,14 @@ export function buildRefreshSubscriptionTool(): AgentTool {
     description:
       '刷新指定订阅源，拉取最新文章并更新本地数据。通常先查询订阅源列表获得 feedId',
     inputSchema: objectParams(
-      { feedId: { type: 'string', description: '要刷新的订阅源 ID' } },
+      {
+        feedId: {
+          type: 'string',
+          description: '要刷新的订阅源 ID',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+      },
       ['feedId'],
     ),
     confirmationTitle: '确认刷新订阅源',

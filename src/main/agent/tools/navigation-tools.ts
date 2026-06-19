@@ -8,7 +8,13 @@ import {
   type AgentRootTab,
   type AgentSettingsPanel,
 } from '../navigation-bridge'
-import { emptyParams, objectParams } from './schema'
+import {
+  HTTP_URL_SCHEMES,
+  SHORT_TEXT_MAX_LENGTH,
+  URL_MAX_LENGTH,
+  emptyParams,
+  objectParams,
+} from './schema'
 
 const ROOT_TABS: AgentRootTab[] = [
   'home',
@@ -104,7 +110,14 @@ export function buildOpenEntryDetailTool(): AgentTool {
     title: '打开文章详情',
     description: '根据文章 ID 打开文章详情。通常先通过查询工具获得 entryId',
     inputSchema: objectParams(
-      { entryId: { type: 'string', description: '要打开的文章 ID' } },
+      {
+        entryId: {
+          type: 'string',
+          description: '要打开的文章 ID',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+      },
       ['entryId'],
     ),
     capability: 'navigate',
@@ -131,7 +144,14 @@ export function buildOpenFeedDetailTool(): AgentTool {
     title: '打开订阅详情',
     description: '根据订阅源 ID 打开订阅详情。通常先通过查询工具获得 feedId',
     inputSchema: objectParams(
-      { feedId: { type: 'string', description: '要打开的订阅源 ID' } },
+      {
+        feedId: {
+          type: 'string',
+          description: '要打开的订阅源 ID',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+      },
       ['feedId'],
     ),
     capability: 'navigate',
@@ -193,9 +213,26 @@ export function buildOpenVideoPlayerTool(): AgentTool {
     description: '使用指定视频地址打开应用内视频播放',
     inputSchema: objectParams(
       {
-        videoUrl: { type: 'string', description: '视频地址' },
-        title: { type: 'string', description: '视频标题，可选' },
-        previewUrl: { type: 'string', description: '视频封面地址，可选' },
+        videoUrl: {
+          type: 'string',
+          description: '视频地址',
+          minLength: 1,
+          maxLength: URL_MAX_LENGTH,
+          format: 'uri',
+          allowedSchemes: HTTP_URL_SCHEMES,
+        },
+        title: {
+          type: 'string',
+          description: '视频标题，可选',
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+        previewUrl: {
+          type: 'string',
+          description: '视频封面地址，可选',
+          maxLength: URL_MAX_LENGTH,
+          format: 'uri',
+          allowedSchemes: HTTP_URL_SCHEMES,
+        },
       },
       ['videoUrl'],
     ),
@@ -231,8 +268,19 @@ export function buildOpenImageViewerTool(): AgentTool {
     description: '使用指定图片地址打开应用内图片预览',
     inputSchema: objectParams(
       {
-        imageUrl: { type: 'string', description: '图片地址' },
-        title: { type: 'string', description: '图片标题，可选' },
+        imageUrl: {
+          type: 'string',
+          description: '图片地址',
+          minLength: 1,
+          maxLength: URL_MAX_LENGTH,
+          format: 'uri',
+          allowedSchemes: HTTP_URL_SCHEMES,
+        },
+        title: {
+          type: 'string',
+          description: '图片标题，可选',
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
       },
       ['imageUrl'],
     ),

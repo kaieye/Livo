@@ -14,13 +14,23 @@ export type AgentToolResultStatus =
   | 'confirmation_required'
 
 export interface AgentToolParamSchema {
-  type: string
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
   description?: string
   enum?: string[]
+  minLength?: number
+  maxLength?: number
+  minimum?: number
+  maximum?: number
+  format?: 'uri'
+  allowedSchemes?: string[]
+  properties?: Record<string, AgentToolParamSchema>
+  required?: string[]
+  additionalProperties?: boolean
+  items?: AgentToolParamSchema
 }
 
 export interface AgentToolInputSchema {
-  type: string
+  type: 'object'
   properties: Record<string, AgentToolParamSchema>
   required: string[]
   additionalProperties?: boolean
@@ -36,7 +46,7 @@ export interface AgentToolDefinition {
   }
 }
 
-export type AgentToolValue = string | number | boolean | object
+export type AgentToolValue = string | number | boolean | object | unknown[]
 export type AgentToolArgs = Record<string, AgentToolValue>
 
 export interface AgentExecutionContext {

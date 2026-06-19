@@ -10,7 +10,7 @@ import {
 } from '../../../shared/discover-data'
 import { getDb } from '../../database'
 import { addFeed } from '../../operations/feed-operations'
-import { objectParams } from './schema'
+import { SHORT_TEXT_MAX_LENGTH, objectParams } from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
 const CATEGORY_VALUES = [
@@ -91,7 +91,14 @@ export function buildAddBuiltinSubscriptionTool(): AgentTool {
     title: '添加推荐订阅源',
     description: '从应用内置的推荐订阅源列表中添加到用户订阅',
     inputSchema: objectParams(
-      { feedTitle: { type: 'string', description: '要添加的推荐订阅源名称' } },
+      {
+        feedTitle: {
+          type: 'string',
+          description: '要添加的推荐订阅源名称',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+      },
       ['feedTitle'],
     ),
     execute: async (

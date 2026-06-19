@@ -3,6 +3,12 @@ import type {
   AgentToolParamSchema,
 } from '../../../shared/types'
 
+export const SHORT_TEXT_MAX_LENGTH = 128
+export const LONG_TEXT_MAX_LENGTH = 2048
+export const URL_MAX_LENGTH = 4096
+export const HTTP_URL_SCHEMES = ['http', 'https']
+export const FEED_URL_SCHEMES = ['http', 'https', 'rsshub']
+
 /** Schema with no parameters. */
 export function emptyParams(): AgentToolInputSchema {
   return {
@@ -28,7 +34,10 @@ export function objectParams(
 
 /** Single optional `limit` number param. */
 export function limitParams(description: string): AgentToolInputSchema {
-  return objectParams({ limit: { type: 'number', description } }, [])
+  return objectParams(
+    { limit: { type: 'number', description, minimum: 1, maximum: 50 } },
+    [],
+  )
 }
 
 export function clampLimit(

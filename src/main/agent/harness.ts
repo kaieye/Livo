@@ -124,64 +124,204 @@ export function validateToolArgs(
   schema: AgentToolInputSchema,
   args: AgentToolArgs,
 ): string {
-  for (const key of schema.required) {
-    if (!Object.prototype.hasOwnProperty.call(args, key)) {
-      return `缺少必填参数: ${key}`
+  return validateObjectSchema('参数', schema, args)
+}
+
+function validateObjectSchema(
+  path: string,
+  schema: Pick<
+    AgentToolInputSchema,
+    'properties' | 'required' | 'additionalProperties'
+  >,
+  value: unknown,
+): string {
+  if (!isPlainObject(value)) {
+    return `${path} 必须是 object`
+  }
+
+  const required = schema.required ?? []
+  for (const key of required) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+      return `缺少必填参数: ${joinPath(path, key)}`
     }
   }
 
+  const properties = schema.properties ?? {}
   if (schema.additionalProperties === false) {
-    for (const key of Object.keys(args)) {
-      if (!Object.prototype.hasOwnProperty.call(schema.properties, key)) {
-        return `不支持的参数: ${key}`
+    for (const key of Object.keys(value)) {
+      if (!Object.prototype.hasOwnProperty.call(properties, key)) {
+        return `不支持的参数: ${joinPath(path, key)}`
       }
     }
   }
 
-  for (const key of Object.keys(schema.properties)) {
-    if (!Object.prototype.hasOwnProperty.call(args, key)) {
+  for (const key of Object.keys(properties)) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) {
       continue
     }
-    const prop = schema.properties[key]
-    const value = args[key]
-    const typeError = validateType(key, prop, value)
-    if (typeError) {
-      return typeError
-    }
-    if (
-      prop.enum &&
-      prop.enum.length > 0 &&
-      !prop.enum.includes(String(value))
-    ) {
-      return `参数 ${key} 不在允许范围内`
-    }
+    const error = validateParamSchema(
+      joinPath(path, key),
+      properties[key],
+      value[key],
+    )
+    if (error) return error
+  }
+
+  return ''
+}
+
+function validateParamSchema(
+  path: string,
+  prop: AgentToolParamSchema,
+  value: AgentToolValue,
+): string {
+  const typeError = validateType(path, prop, value)
+  if (typeError) return typeError
+
+  if (
+    prop.enum &&
+    prop.enum.length > 0 &&
+    (typeof value !== 'string' || !prop.enum.includes(value))
+  ) {
+    return `${path} 不在允许范围内`
+  }
+
+  if (prop.type === 'string') {
+    return validateStringBounds(path, prop, value as string)
+  }
+
+  if (prop.type === 'number') {
+    return validateNumberBounds(path, prop, value as number)
+  }
+
+  if (prop.type === 'object') {
+    return validateObjectSchema(
+      path,
+      {
+        properties: prop.properties ?? {},
+        required: prop.required ?? [],
+        additionalProperties: prop.additionalProperties,
+      },
+      value,
+    )
+  }
+
+  if (prop.type === 'array') {
+    return validateArrayItems(path, prop, value as unknown[])
   }
 
   return ''
 }
 
 function validateType(
-  key: string,
+  path: string,
   prop: AgentToolParamSchema,
   value: AgentToolValue,
 ): string {
   if (prop.type === 'string' && typeof value !== 'string') {
-    return `参数 ${key} 必须是 string`
-  }
-  if (prop.type === 'number' && typeof value !== 'number') {
-    return `参数 ${key} 必须是 number`
-  }
-  if (prop.type === 'boolean' && typeof value !== 'boolean') {
-    return `参数 ${key} 必须是 boolean`
+    return `${path} 必须是 string`
   }
   if (
-    prop.type === 'object' &&
-    (typeof value !== 'object' || value === null || Array.isArray(value))
+    prop.type === 'number' &&
+    (typeof value !== 'number' || !Number.isFinite(value))
   ) {
-    return `参数 ${key} 必须是 object`
+    return `${path} 必须是 number`
+  }
+  if (prop.type === 'boolean' && typeof value !== 'boolean') {
+    return `${path} 必须是 boolean`
+  }
+  if (prop.type === 'object' && !isPlainObject(value)) {
+    return `${path} 必须是 object`
   }
   if (prop.type === 'array' && !Array.isArray(value)) {
-    return `参数 ${key} 必须是 array`
+    return `${path} 必须是 array`
   }
   return ''
+}
+
+function validateStringBounds(
+  path: string,
+  prop: AgentToolParamSchema,
+  value: string,
+): string {
+  if (prop.minLength !== undefined && value.trim().length < prop.minLength) {
+    return `${path} 长度不能小于 ${prop.minLength}`
+  }
+  if (prop.maxLength !== undefined && value.length > prop.maxLength) {
+    return `${path} 长度不能大于 ${prop.maxLength}`
+  }
+  if (prop.format === 'uri' || prop.allowedSchemes) {
+    return validateUri(path, prop, value)
+  }
+  return ''
+}
+
+function validateUri(
+  path: string,
+  prop: AgentToolParamSchema,
+  value: string,
+): string {
+  let parsed: URL
+  try {
+    parsed = new URL(value.trim())
+  } catch (_error) {
+    return `${path} 必须是合法 URL`
+  }
+
+  const allowedSchemes = prop.allowedSchemes
+  if (!allowedSchemes || allowedSchemes.length === 0) {
+    return ''
+  }
+
+  const protocol = parsed.protocol.replace(/:$/, '').toLowerCase()
+  if (
+    !allowedSchemes.map((scheme) => scheme.toLowerCase()).includes(protocol)
+  ) {
+    return `${path} URL scheme 不在允许范围内`
+  }
+
+  return ''
+}
+
+function validateNumberBounds(
+  path: string,
+  prop: AgentToolParamSchema,
+  value: number,
+): string {
+  if (prop.minimum !== undefined && value < prop.minimum) {
+    return `${path} 不能小于 ${prop.minimum}`
+  }
+  if (prop.maximum !== undefined && value > prop.maximum) {
+    return `${path} 不能大于 ${prop.maximum}`
+  }
+  return ''
+}
+
+function validateArrayItems(
+  path: string,
+  prop: AgentToolParamSchema,
+  value: unknown[],
+): string {
+  if (!prop.items) {
+    return ''
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const error = validateParamSchema(
+      `${path}[${index}]`,
+      prop.items,
+      value[index] as AgentToolValue,
+    )
+    if (error) return error
+  }
+  return ''
+}
+
+function isPlainObject(
+  value: unknown,
+): value is Record<string, AgentToolValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function joinPath(parent: string, key: string): string {
+  return parent === '参数' ? key : `${parent}.${key}`
 }

@@ -113,10 +113,14 @@ export function buildCleanupOldEntriesTool(): AgentTool {
       entriesPerFeed: {
         type: 'number',
         description: '每个订阅源保留的最新文章数量，默认 128',
+        minimum: 1,
+        maximum: 10000,
       },
       maxEntryAgeDays: {
         type: 'number',
         description: '超过该天数的文章会被清理，默认 90',
+        minimum: 1,
+        maximum: 3650,
       },
     }),
     capability: 'destructive',

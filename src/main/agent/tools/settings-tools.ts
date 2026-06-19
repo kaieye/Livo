@@ -8,7 +8,13 @@ import type {
 } from '../../../shared/types'
 import { AI_PROVIDERS } from '../../../shared/types'
 import { applySettingsUpdate } from '../../handlers/settings-handlers'
-import { emptyParams, objectParams } from './schema'
+import {
+  LONG_TEXT_MAX_LENGTH,
+  SHORT_TEXT_MAX_LENGTH,
+  URL_MAX_LENGTH,
+  emptyParams,
+  objectParams,
+} from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
 const THEME_VALUES = ['light', 'dark', 'system']
@@ -181,6 +187,8 @@ export function buildUpdateGeneralSettingsTool(): AgentTool {
       refreshInterval: {
         type: 'number',
         description: '自动刷新间隔分钟数，建议 15、30、60 或 120',
+        minimum: 1,
+        maximum: 1440,
       },
       imageProxy: { type: 'boolean', description: '是否开启图片代理' },
     }),
@@ -283,8 +291,17 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
         description: 'AI 提供商，不包含 API Key',
         enum: AI_PROVIDER_VALUES,
       },
-      model: { type: 'string', description: '模型名称' },
-      baseUrl: { type: 'string', description: 'Base URL，不包含 API Key' },
+      model: {
+        type: 'string',
+        description: '模型名称',
+        minLength: 1,
+        maxLength: SHORT_TEXT_MAX_LENGTH,
+      },
+      baseUrl: {
+        type: 'string',
+        description: 'Base URL，不包含 API Key',
+        maxLength: URL_MAX_LENGTH,
+      },
       enableSystemPrompt: {
         type: 'boolean',
         description: '是否启用自定义系统提示词模板',
@@ -292,10 +309,12 @@ export function buildUpdateAIRuntimeSettingsTool(): AgentTool {
       systemPromptTemplate: {
         type: 'string',
         description: '系统提示词模板，不应包含密钥',
+        maxLength: LONG_TEXT_MAX_LENGTH,
       },
       chatPersonaPrompt: {
         type: 'string',
         description: 'AI 对话人格提示，不应包含密钥',
+        maxLength: LONG_TEXT_MAX_LENGTH,
       },
     }),
     confirmationTitle: '确认更新 AI 运行配置',

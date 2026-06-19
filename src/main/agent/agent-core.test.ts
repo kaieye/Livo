@@ -95,6 +95,109 @@ describe('validateToolArgs', () => {
     expect(validateToolArgs(enumSchema, { mode: 'c' })).toMatch(/不在允许范围/)
     expect(validateToolArgs(enumSchema, { mode: 'a' })).toBe('')
   })
+
+  it('rejects non-object root args', () => {
+    expect(
+      validateToolArgs(schema, [] as unknown as Record<string, never>),
+    ).toMatch(/必须是 object/)
+  })
+
+  it('validates string length and URL schemes', () => {
+    const urlSchema = makeTool({
+      inputSchema: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            minLength: 3,
+            maxLength: 20,
+            format: 'uri',
+            allowedSchemes: ['https'],
+          },
+        },
+        required: ['url'],
+        additionalProperties: false,
+      },
+    }).inputSchema
+    expect(validateToolArgs(urlSchema, { url: 'x' })).toMatch(/长度不能小于/)
+    expect(validateToolArgs(urlSchema, { url: 'not-a-url' })).toMatch(
+      /合法 URL/,
+    )
+    expect(validateToolArgs(urlSchema, { url: 'http://example.com' })).toMatch(
+      /scheme 不在允许范围/,
+    )
+    expect(validateToolArgs(urlSchema, { url: 'https://example.com' })).toBe('')
+  })
+
+  it('validates finite number bounds', () => {
+    const numberSchema = makeTool({
+      inputSchema: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', minimum: 1, maximum: 10 },
+        },
+        required: ['limit'],
+        additionalProperties: false,
+      },
+    }).inputSchema
+    expect(validateToolArgs(numberSchema, { limit: Number.NaN })).toMatch(
+      /必须是 number/,
+    )
+    expect(validateToolArgs(numberSchema, { limit: 0 })).toMatch(/不能小于/)
+    expect(validateToolArgs(numberSchema, { limit: 11 })).toMatch(/不能大于/)
+    expect(validateToolArgs(numberSchema, { limit: 10 })).toBe('')
+  })
+
+  it('validates nested object fields and unsupported nested args', () => {
+    const nestedSchema = makeTool({
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filter: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', minLength: 1 },
+            },
+            required: ['query'],
+            additionalProperties: false,
+          },
+        },
+        required: ['filter'],
+        additionalProperties: false,
+      },
+    }).inputSchema
+    expect(validateToolArgs(nestedSchema, { filter: {} })).toMatch(
+      /缺少必填参数: filter.query/,
+    )
+    expect(
+      validateToolArgs(nestedSchema, {
+        filter: { query: 'rss', injected: true },
+      }),
+    ).toMatch(/不支持的参数: filter.injected/)
+    expect(validateToolArgs(nestedSchema, { filter: { query: 'rss' } })).toBe(
+      '',
+    )
+  })
+
+  it('validates array item schemas', () => {
+    const arraySchema = makeTool({
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ids: {
+            type: 'array',
+            items: { type: 'string', minLength: 1 },
+          },
+        },
+        required: ['ids'],
+        additionalProperties: false,
+      },
+    }).inputSchema
+    expect(validateToolArgs(arraySchema, { ids: ['a', ''] })).toMatch(
+      /ids\[1\] 长度不能小于/,
+    )
+    expect(validateToolArgs(arraySchema, { ids: ['a', 'b'] })).toBe('')
+  })
 })
 
 describe('AgentPolicyGuard', () => {
@@ -226,6 +329,41 @@ describe('AgentHarness', () => {
       confirmed: true,
     })
     expect(run.result.status).toBe('failed')
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('fails invalid args before entering the tool implementation', async () => {
+    const execute = vi.fn(
+      async (): Promise<AgentToolResult> => ({
+        status: 'success',
+        message: 'done',
+      }),
+    )
+    const registry = new AgentToolRegistry([
+      makeTool({
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              format: 'uri',
+              allowedSchemes: ['https'],
+            },
+          },
+          required: ['url'],
+          additionalProperties: false,
+        },
+        execute,
+      }),
+    ])
+    const harness = new AgentHarness(registry)
+    const run = await harness.execute({
+      toolName: 'read_thing',
+      args: { url: 'javascript:alert(1)' },
+      context: ctx(),
+    })
+    expect(run.result.status).toBe('failed')
+    expect(run.result.message).toMatch(/scheme 不在允许范围/)
     expect(execute).not.toHaveBeenCalled()
   })
 })

@@ -6,7 +6,13 @@ import type {
 } from '../../../shared/types'
 import { getDb } from '../../database'
 import { markAllRead } from '../../operations/entry-operations'
-import { clampLimit, emptyParams, limitParams, objectParams } from './schema'
+import {
+  SHORT_TEXT_MAX_LENGTH,
+  clampLimit,
+  emptyParams,
+  limitParams,
+  objectParams,
+} from './schema'
 import { defineMutateTool, defineReadTool } from './factories'
 
 function entrySummary(entry: Entry, index: number): string {
@@ -74,7 +80,14 @@ export function buildGetEntryDetailTool(): AgentTool {
     title: '查看文章详情',
     description: '获取指定文章的完整内容和详细信息',
     inputSchema: objectParams(
-      { entryId: { type: 'string', description: '文章ID' } },
+      {
+        entryId: {
+          type: 'string',
+          description: '文章ID',
+          minLength: 1,
+          maxLength: SHORT_TEXT_MAX_LENGTH,
+        },
+      },
       ['entryId'],
     ),
     execute: async (
