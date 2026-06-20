@@ -26,10 +26,18 @@ import {
   interruptionReasonFromResult,
   isInterruptedToolResult,
 } from './tool-runtime'
+import {
+  abortErrorFromSignal,
+  scopedSignalWithTimeout,
+} from '../utils/abort-signal'
 
 export const MAX_AGENT_ROUNDS = 5
+export const AGENT_RUN_TIMEOUT_MS = 120_000
 const MODEL_MAX_RETRIES = 2
 const TOOL_RESULT_MAX_LEN = 8000
+const MAX_AGENT_HISTORY_MESSAGES = 16
+const MAX_AGENT_HISTORY_MESSAGE_LEN = 4000
+const MAX_AGENT_USER_PROMPT_LEN = 12000
 
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam
 
@@ -75,6 +83,7 @@ export interface AgentRunOptions {
   sessionId?: string
   onToolEvent?: (event: AgentToolExecutionEvent) => void
   signal?: AbortSignal
+  timeoutMs?: number
 }
 
 export interface AgentResumeOptions {
@@ -84,6 +93,7 @@ export interface AgentResumeOptions {
   sessionId?: string
   onToolEvent?: (event: AgentToolExecutionEvent) => void
   signal?: AbortSignal
+  timeoutMs?: number
 }
 
 const AGENT_SYSTEM_PROMPT = `你是 Livo 应用内的智能助手，可以帮用户查看和管理 RSS 订阅，并按需操作应用功能。
@@ -98,6 +108,8 @@ const AGENT_SYSTEM_PROMPT = `你是 Livo 应用内的智能助手，可以帮用
 7. 回复时使用友好、简洁的语气，对信息做适当的归纳和总结。
 
 工具清单和参数说明会通过 function calling 协议直接传递给你，不要在 prompt 里二次列举。`
+
+const TOOL_ROUND_LIMIT_SUMMARY_PROMPT = `已达到本次 Agent 的工具调用轮次上限。请停止调用工具，基于上面的工具结果给用户一个简洁总结：说明已经查到或完成了什么、还缺什么、以及用户下一步可以怎么做。不要声称已执行未完成的操作。`
 
 function nowMs(): number {
   return Date.now()
@@ -116,6 +128,38 @@ function toolCallResultSummary(name: string, result: string): string {
 function truncateToolResult(result: string): string {
   if (result.length <= TOOL_RESULT_MAX_LEN) return result
   return `${result.slice(0, TOOL_RESULT_MAX_LEN)}\n\n...(结果已截断，总长度 ${result.length} 字)`
+}
+
+function truncateAgentInputText(value: string, maxChars: number): string {
+  const text = value.trim()
+  if (text.length <= maxChars) return text
+  return `${text.slice(0, maxChars)}\n\n...(内容已截断，原始长度 ${text.length} 字)`
+}
+
+function recentHistoryMessages(
+  history: AgentHistoryMessage[] | undefined,
+): AgentHistoryMessage[] {
+  const messages = history ?? []
+  return messages.slice(
+    Math.max(0, messages.length - MAX_AGENT_HISTORY_MESSAGES),
+  )
+}
+
+function appendHistoryMessages(
+  messages: ChatMessage[],
+  history: AgentHistoryMessage[] | undefined,
+): void {
+  for (const m of recentHistoryMessages(history)) {
+    if (m.role === 'user' || m.role === 'assistant') {
+      messages.push({
+        role: m.role,
+        content: truncateAgentInputText(
+          m.content,
+          MAX_AGENT_HISTORY_MESSAGE_LEN,
+        ),
+      })
+    }
+  }
 }
 
 interface ModelResult {
@@ -230,6 +274,7 @@ async function executeParallelReadToolBatch(
   sessionId: string,
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
+  deadlineMs?: number,
 ): Promise<ExecutedToolCallWithRounds[]> {
   return Promise.all(
     batch.map(async (toolCall) => {
@@ -242,6 +287,7 @@ async function executeParallelReadToolBatch(
         rounds,
         onToolEvent,
         signal,
+        deadlineMs,
       )
       return { toolCall, executed, rounds }
     }),
@@ -321,6 +367,7 @@ async function executeToolCallsUntilConfirmation(
   toolRounds: AgentRoundDetail[],
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
+  deadlineMs?: number,
 ): Promise<
   | { status: 'completed'; interrupted?: 'cancelled' | 'timeout' }
   | {
@@ -341,6 +388,7 @@ async function executeToolCallsUntilConfirmation(
         sessionId,
         onToolEvent,
         signal,
+        deadlineMs,
       )
       appendToolCallResults(messages, toolRounds, results)
       const interrupted = results.find((result) =>
@@ -371,6 +419,7 @@ async function executeToolCallsUntilConfirmation(
       toolRounds,
       onToolEvent,
       signal,
+      deadlineMs,
     )
     if (executed.run.result.status === 'confirmation_required') {
       return {
@@ -425,6 +474,7 @@ async function executeToolCall(
   toolRounds: AgentRoundDetail[],
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
+  deadlineMs?: number,
 ): Promise<ExecutedToolCall> {
   onToolEvent?.({
     type: 'tool_started',
@@ -464,7 +514,7 @@ async function executeToolCall(
     parsedArgs.args,
     confirmed,
     permissions,
-    { sessionId, signal },
+    { sessionId, signal, deadlineMs },
   )
   const text = truncateToolResult(agentToolResultToText(run.result))
   const resultSummary = pushToolRound(toolCall, run, text, toolRounds)
@@ -586,11 +636,12 @@ async function runAgentLoop(
   metrics: AgentRunMetrics,
   onToolEvent?: (event: AgentToolExecutionEvent) => void,
   signal?: AbortSignal,
+  deadlineMs?: number,
 ): Promise<AgentRunResult> {
   const client = createOpenAIClient(aiConfig)
 
   for (let round = startRound; round < MAX_AGENT_ROUNDS; round += 1) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    if (signal?.aborted) throw abortErrorFromSignal(signal)
 
     const llmStart = nowMs()
     const result = await callModel(
@@ -643,6 +694,7 @@ async function runAgentLoop(
       toolRounds,
       onToolEvent,
       signal,
+      deadlineMs,
     )
     if (toolExecution.status === 'confirmation_required') {
       const toolMs = nowMs() - toolStart
@@ -676,13 +728,17 @@ async function runAgentLoop(
     }
   }
 
-  // Reached MAX_AGENT_ROUNDS: do one final call to summarize.
+  // Reached MAX_AGENT_ROUNDS: do one final tool-free call to summarize.
+  messages.push({
+    role: 'system',
+    content: TOOL_ROUND_LIMIT_SUMMARY_PROMPT,
+  })
   const llmStart = nowMs()
   const finalResult = await callModel(
     client,
     aiConfig.model,
     messages,
-    tools,
+    [],
     signal,
   )
   metrics.llmMs += nowMs() - llmStart
@@ -698,128 +754,163 @@ async function runAgentLoop(
 export async function runAgentCore(
   options: AgentRunOptions,
 ): Promise<AgentRunResult> {
-  const permissions = normalizeAgentPermissionSettings(options.permissions)
-  const sessionId = options.sessionId ?? 'ai-chat'
-  const tools = resolveTools(permissions)
-  const contextFallback = buildContextFallback(
-    options.pageContext || '',
-    permissions,
-  )
-  const systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n当前订阅数据如下（如果模型不支持 function calling，请直接基于此数据回答）：\n${contextFallback}`
+  const timeoutMs = options.timeoutMs ?? AGENT_RUN_TIMEOUT_MS
+  const scopedSignal = scopedSignalWithTimeout(timeoutMs, options.signal)
+  const deadlineMs =
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? Date.now() + timeoutMs
+      : undefined
+  try {
+    const permissions = normalizeAgentPermissionSettings(options.permissions)
+    const sessionId = options.sessionId ?? 'ai-chat'
+    const tools = resolveTools(permissions)
+    const contextFallback = buildContextFallback(
+      options.pageContext || '',
+      permissions,
+    )
+    const systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n当前订阅数据如下（如果模型不支持 function calling，请直接基于此数据回答）：\n${contextFallback}`
 
-  const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }]
-  for (const m of options.history ?? []) {
-    if (m.role === 'user' || m.role === 'assistant') {
-      messages.push({ role: m.role, content: m.content })
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }]
+    appendHistoryMessages(messages, options.history)
+    messages.push({
+      role: 'user',
+      content: truncateAgentInputText(
+        options.prompt,
+        MAX_AGENT_USER_PROMPT_LEN,
+      ),
+    })
+
+    const metrics: AgentRunMetrics = {
+      totalMs: 0,
+      llmMs: 0,
+      toolMs: 0,
+      rounds: [],
     }
+    return await runAgentLoop(
+      messages,
+      tools,
+      options.aiConfig,
+      permissions,
+      sessionId,
+      [],
+      0,
+      metrics,
+      options.onToolEvent,
+      scopedSignal.signal,
+      deadlineMs,
+    )
+  } catch (error) {
+    if (scopedSignal.signal.aborted) {
+      throw abortErrorFromSignal(scopedSignal.signal)
+    }
+    throw error
+  } finally {
+    scopedSignal.dispose()
   }
-  messages.push({ role: 'user', content: options.prompt })
-
-  const metrics: AgentRunMetrics = {
-    totalMs: 0,
-    llmMs: 0,
-    toolMs: 0,
-    rounds: [],
-  }
-  return runAgentLoop(
-    messages,
-    tools,
-    options.aiConfig,
-    permissions,
-    sessionId,
-    [],
-    0,
-    metrics,
-    options.onToolEvent,
-    options.signal,
-  )
 }
 
 export async function resumeAgentCore(
   options: AgentResumeOptions,
 ): Promise<AgentRunResult> {
-  const permissions = normalizeAgentPermissionSettings(options.permissions)
-  const sessionId = options.sessionId ?? 'ai-chat'
-  const tools = resolveTools(permissions)
-  const { continuation } = options
-  const messages = continuation.messages.slice()
-  const toolRounds = continuation.toolRounds.slice()
-  const metrics: AgentRunMetrics = {
-    totalMs: 0,
-    llmMs: 0,
-    toolMs: 0,
-    rounds: [],
-  }
+  const timeoutMs = options.timeoutMs ?? AGENT_RUN_TIMEOUT_MS
+  const scopedSignal = scopedSignalWithTimeout(timeoutMs, options.signal)
+  const deadlineMs =
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? Date.now() + timeoutMs
+      : undefined
+  try {
+    const permissions = normalizeAgentPermissionSettings(options.permissions)
+    const sessionId = options.sessionId ?? 'ai-chat'
+    const tools = resolveTools(permissions)
+    const { continuation } = options
+    const messages = continuation.messages.slice()
+    const toolRounds = continuation.toolRounds.slice()
+    const metrics: AgentRunMetrics = {
+      totalMs: 0,
+      llmMs: 0,
+      toolMs: 0,
+      rounds: [],
+    }
 
-  // Run the confirmed pending tool call.
-  const toolStart = nowMs()
-  const pending = await executeToolCall(
-    continuation.pendingToolCall,
-    true,
-    permissions,
-    sessionId,
-    toolRounds,
-    options.onToolEvent,
-    options.signal,
-  )
-  messages.push(toolResultMessage(continuation.pendingToolCall, pending.text))
-  if (isInterruptedToolResult(pending.run.result)) {
-    const reason =
-      interruptionReasonFromResult(pending.run.result) ?? 'cancelled'
-    appendSkippedToolFailures(
-      continuation.remainingToolCalls,
-      messages,
+    // Run the confirmed pending tool call.
+    const toolStart = nowMs()
+    const pending = await executeToolCall(
+      continuation.pendingToolCall,
+      true,
+      permissions,
+      sessionId,
       toolRounds,
       options.onToolEvent,
-      reason,
+      scopedSignal.signal,
+      deadlineMs,
+    )
+    messages.push(toolResultMessage(continuation.pendingToolCall, pending.text))
+    if (isInterruptedToolResult(pending.run.result)) {
+      const reason =
+        interruptionReasonFromResult(pending.run.result) ?? 'cancelled'
+      appendSkippedToolFailures(
+        continuation.remainingToolCalls,
+        messages,
+        toolRounds,
+        options.onToolEvent,
+        reason,
+      )
+      metrics.toolMs += nowMs() - toolStart
+      return buildInterruptedResult(reason, toolRounds, metrics)
+    }
+
+    // Run the remaining queued tool calls (may hit another confirmation).
+    const remaining = continuation.remainingToolCalls
+    const toolExecution = await executeToolCallsUntilConfirmation(
+      remaining,
+      messages,
+      permissions,
+      sessionId,
+      toolRounds,
+      options.onToolEvent,
+      scopedSignal.signal,
+      deadlineMs,
     )
     metrics.toolMs += nowMs() - toolStart
-    return buildInterruptedResult(reason, toolRounds, metrics)
-  }
+    if (toolExecution.status === 'confirmation_required') {
+      metrics.totalMs = metrics.llmMs + metrics.toolMs
+      return buildConfirmationResult(
+        toolExecution.toolCall,
+        toolExecution.remainingToolCalls,
+        messages,
+        toolRounds,
+        continuation.nextRound,
+        toolExecution.executed,
+        metrics,
+      )
+    }
+    if (toolExecution.interrupted) {
+      return buildInterruptedResult(
+        toolExecution.interrupted,
+        toolRounds,
+        metrics,
+      )
+    }
 
-  // Run the remaining queued tool calls (may hit another confirmation).
-  const remaining = continuation.remainingToolCalls
-  const toolExecution = await executeToolCallsUntilConfirmation(
-    remaining,
-    messages,
-    permissions,
-    sessionId,
-    toolRounds,
-    options.onToolEvent,
-    options.signal,
-  )
-  if (toolExecution.status === 'confirmation_required') {
-    metrics.toolMs += nowMs() - toolStart
-    metrics.totalMs = metrics.llmMs + metrics.toolMs
-    return buildConfirmationResult(
-      toolExecution.toolCall,
-      toolExecution.remainingToolCalls,
+    return await runAgentLoop(
       messages,
+      tools,
+      options.aiConfig,
+      permissions,
+      sessionId,
       toolRounds,
       continuation.nextRound,
-      toolExecution.executed,
       metrics,
+      options.onToolEvent,
+      scopedSignal.signal,
+      deadlineMs,
     )
+  } catch (error) {
+    if (scopedSignal.signal.aborted) {
+      throw abortErrorFromSignal(scopedSignal.signal)
+    }
+    throw error
+  } finally {
+    scopedSignal.dispose()
   }
-  metrics.toolMs += nowMs() - toolStart
-  if (toolExecution.interrupted) {
-    return buildInterruptedResult(
-      toolExecution.interrupted,
-      toolRounds,
-      metrics,
-    )
-  }
-
-  return runAgentLoop(
-    messages,
-    tools,
-    options.aiConfig,
-    permissions,
-    sessionId,
-    toolRounds,
-    continuation.nextRound,
-    metrics,
-    options.onToolEvent,
-    options.signal,
-  )
 }

@@ -32,6 +32,19 @@ export interface AgentServiceResumeRequest {
 }
 
 const PENDING_TTL_MS = 10 * 60 * 1000
+const ERROR_TRACE_TEXT_MAX_LEN = 2000
+
+function errorMessageOf(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function errorFinalText(error: unknown): string {
+  const err = error as { name?: unknown } | undefined
+  const name = typeof err?.name === 'string' ? err.name : 'Error'
+  const message = errorMessageOf(error)
+  return `${name}: ${message}`.slice(0, ERROR_TRACE_TEXT_MAX_LEN)
+}
 
 /**
  * Unified entry point for the agent: owns abort controllers per request,
@@ -69,6 +82,9 @@ class AgentServiceImpl {
         signal: controller.signal,
       })
       return this.finalize(request.requestId, request.prompt, startedAt, result)
+    } catch (error) {
+      this.saveFailedTrace(request.requestId, request.prompt, startedAt, error)
+      throw error
     } finally {
       this.aborters.delete(request.requestId)
     }
@@ -104,6 +120,15 @@ class AgentServiceImpl {
         parked.traceId,
         parked.prompt,
       )
+    } catch (error) {
+      this.saveFailedTrace(
+        parked.requestId,
+        parked.prompt,
+        parked.startedAt,
+        error,
+        parked.traceId,
+      )
+      throw error
     } finally {
       this.aborters.delete(request.requestId)
     }
@@ -209,6 +234,26 @@ class AgentServiceImpl {
         elapsedMs: round.elapsedMs || 0,
         at: startedAt,
       })),
+    }
+    this.saveTraceRecord(record)
+  }
+
+  private saveFailedTrace(
+    requestId: string,
+    prompt: string,
+    startedAt: number,
+    error: unknown,
+    traceId = this.createTraceId(requestId, startedAt),
+  ): void {
+    const record: AgentTraceRecord = {
+      traceId,
+      sessionId: requestId,
+      startedAt,
+      completedAt: Date.now(),
+      promptSummary: prompt.slice(0, 120),
+      finalText: errorFinalText(error),
+      status: 'failed',
+      toolCalls: [],
     }
     this.saveTraceRecord(record)
   }

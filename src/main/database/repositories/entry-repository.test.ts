@@ -92,6 +92,67 @@ describeWithDb('EntryRepository search', () => {
       entries.searchEntries('react', 3).map((result) => result.id),
     ).toEqual(['title', 'summary', 'content'])
   })
+
+  it('filters search results by feed, read/star state, and published range', () => {
+    const db = createTempDb()
+    seedFeed(db, 'feed-1')
+    seedFeed(db, 'feed-2')
+    const entries = new EntryRepository(db)
+    entries.insertEntries([
+      entry({
+        id: 'match',
+        feedId: 'feed-2',
+        title: 'Local first RSS',
+        publishedAt: 2000,
+        isRead: false,
+        isStarred: true,
+      }),
+      entry({
+        id: 'wrong-feed',
+        feedId: 'feed-1',
+        title: 'Local first RSS',
+        publishedAt: 2000,
+        isRead: false,
+        isStarred: true,
+      }),
+      entry({
+        id: 'wrong-read-state',
+        feedId: 'feed-2',
+        title: 'Local first RSS',
+        publishedAt: 2000,
+        isRead: true,
+        isStarred: true,
+      }),
+      entry({
+        id: 'wrong-star-state',
+        feedId: 'feed-2',
+        title: 'Local first RSS',
+        publishedAt: 2000,
+        isRead: false,
+        isStarred: false,
+      }),
+      entry({
+        id: 'too-old',
+        feedId: 'feed-2',
+        title: 'Local first RSS',
+        publishedAt: 1000,
+        isRead: false,
+        isStarred: true,
+      }),
+    ])
+
+    expect(
+      entries
+        .searchEntries('local first', {
+          feedId: 'feed-2',
+          unreadOnly: true,
+          starredOnly: true,
+          publishedAfter: 1500,
+          publishedBefore: 2500,
+        })
+        .map((result) => result.id),
+    ).toEqual(['match'])
+  })
 })
 
 // Characterization tests: lock in the CURRENT behavior of the write-path

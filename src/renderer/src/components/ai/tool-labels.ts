@@ -11,6 +11,10 @@ export function aiChatToolLabelOf(name: string): string {
       return '查询今日更新'
     case 'get_entry_detail':
       return '查看文章详情'
+    case 'search_entries':
+      return '搜索本地文章'
+    case 'search_and_open_entry':
+      return '搜索并打开文章'
     case 'get_unread_count':
       return '统计未读'
     case 'web_search':
@@ -65,6 +69,10 @@ export function aiChatToolLabelOf(name: string): string {
       return '刷新账号状态'
     case 'mark_all_read':
       return '标记已读'
+    case 'set_entry_read_state':
+      return '标记文章已读'
+    case 'set_entry_starred_state':
+      return '标记文章收藏'
     case 'toggle_star':
       return '收藏/取消收藏'
     case 'open_root_tab':

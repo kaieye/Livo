@@ -41,7 +41,7 @@ vi.mock('./default-tools', () => ({
   }),
 }))
 
-import { resumeAgentCore, runAgentCore } from './loop'
+import { MAX_AGENT_ROUNDS, resumeAgentCore, runAgentCore } from './loop'
 import { createOpenAIClient } from '../services/ai/ai-client'
 
 const fakeConfig: AIConfig = {
@@ -304,6 +304,74 @@ describe('runAgentCore', () => {
     }
     expect(firstCallOptions.tools).toBeUndefined()
     expect(firstCallOptions.tool_choice).toBeUndefined()
+  })
+
+  it('keeps only recent bounded history and truncates oversized prompt input', async () => {
+    const client = makeClient([textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    await runAgentCore({
+      prompt: 'p'.repeat(13000),
+      aiConfig: fakeConfig,
+      history: Array.from({ length: 20 }, (_, index) => ({
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        content: `${index}:${'h'.repeat(5000)}`,
+      })),
+    })
+
+    const firstCallOptions = client.chat.completions.create.mock
+      .calls[0]?.[0] as {
+      messages: Array<{
+        role: string
+        content?: string
+      }>
+    }
+    expect(firstCallOptions.messages).toHaveLength(18)
+    expect(firstCallOptions.messages[1]?.content).toMatch(/^4:/)
+    expect(firstCallOptions.messages[1]?.content).toContain('内容已截断')
+    expect(firstCallOptions.messages.at(-1)?.content).toContain('内容已截断')
+    expect(firstCallOptions.messages.at(-1)?.content?.length).toBeLessThan(
+      12200,
+    )
+  })
+
+  it('uses a tool-free final summary call when tool rounds reach the limit', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const client = makeClient([
+      ...Array.from({ length: MAX_AGENT_ROUNDS }, () => toolCallResponse),
+      textOnlyResponse,
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const result = await runAgentCore({
+      prompt: 'keep looking',
+      aiConfig: fakeConfig,
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.text).toBe('hello back')
+    expect(result.toolRounds).toHaveLength(MAX_AGENT_ROUNDS)
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(
+      MAX_AGENT_ROUNDS + 1,
+    )
+    const finalCallOptions = client.chat.completions.create.mock.calls.at(
+      -1,
+    )?.[0] as {
+      messages: Array<{
+        role: string
+        content?: string
+      }>
+      tools?: unknown
+      tool_choice?: unknown
+    }
+    expect(finalCallOptions.tools).toBeUndefined()
+    expect(finalCallOptions.tool_choice).toBeUndefined()
+    expect(finalCallOptions.messages.at(-1)).toMatchObject({
+      role: 'system',
+    })
+    expect(finalCallOptions.messages.at(-1)?.content).toContain(
+      '工具调用轮次上限',
+    )
   })
 
   it('executes consecutive low-risk read tools in the same round concurrently', async () => {
@@ -608,5 +676,66 @@ describe('runAgentCore', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(client.chat.completions.create).not.toHaveBeenCalled()
+  })
+
+  it('aborts a hanging model call at the agent run timeout', async () => {
+    vi.useFakeTimers()
+    const client = {
+      chat: {
+        completions: {
+          create: vi.fn(
+            (_options: unknown, requestOptions?: { signal?: AbortSignal }) =>
+              new Promise((_resolve, reject) => {
+                requestOptions?.signal?.addEventListener(
+                  'abort',
+                  () => reject(requestOptions.signal?.reason),
+                  { once: true },
+                )
+              }),
+          ),
+        },
+      },
+    }
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const runPromise = runAgentCore({
+      prompt: 'hi',
+      aiConfig: fakeConfig,
+      timeoutMs: 25,
+    })
+    const assertion = expect(runPromise).rejects.toMatchObject({
+      name: 'TimeoutError',
+    })
+    await vi.advanceTimersByTimeAsync(25)
+
+    await assertion
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('passes the agent deadline to tool execution', async () => {
+    let observedDeadline: number | undefined
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        execute: async (context): Promise<AgentToolResult> => {
+          observedDeadline = context.deadlineMs
+          return { status: 'success', message: 'ok' }
+        },
+      }),
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(
+      makeClient([toolCallResponse, textOnlyResponse]) as never,
+    )
+
+    const before = Date.now()
+    const result = await runAgentCore({
+      prompt: 'lookup a',
+      aiConfig: fakeConfig,
+      timeoutMs: 5000,
+    })
+
+    expect(result.status).toBe('completed')
+    expect(observedDeadline).toBeGreaterThanOrEqual(before + 4900)
+    expect(observedDeadline).toBeLessThanOrEqual(Date.now() + 5000)
   })
 })

@@ -14,6 +14,10 @@ import {
   buildGetTodayUpdatesTool,
   buildGetUnreadCountTool,
   buildMarkAllReadTool,
+  buildSearchAndOpenEntryTool,
+  buildSearchEntriesTool,
+  buildSetEntryReadStateTool,
+  buildSetEntryStarredStateTool,
   buildViewStarredEntriesTool,
 } from './tools/entry-tools'
 import {
@@ -64,8 +68,12 @@ export function buildAllAgentTools(): AgentTool[] {
     // Entry
     buildGetTodayUpdatesTool(),
     buildGetEntryDetailTool(),
+    buildSearchEntriesTool(),
+    buildSearchAndOpenEntryTool(),
     buildGetUnreadCountTool(),
     buildViewStarredEntriesTool(),
+    buildSetEntryReadStateTool(),
+    buildSetEntryStarredStateTool(),
     buildMarkAllReadTool(),
     // Discover
     buildListBuiltinFeedsTool(),

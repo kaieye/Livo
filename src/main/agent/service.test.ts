@@ -264,7 +264,7 @@ describe('agentService', () => {
     expect(agentService.abort('request-5')).toBe(false)
   })
 
-  it('does not save traces when the core throws before finalize', async () => {
+  it('saves a failed trace when the core throws before finalize', async () => {
     mocks.runAgentCore.mockRejectedValueOnce(new Error('model failed'))
     const agentService = await loadService()
 
@@ -274,7 +274,45 @@ describe('agentService', () => {
         prompt: '失败任务',
       }),
     ).rejects.toThrow('model failed')
-    expect(mocks.saveTrace).not.toHaveBeenCalled()
+    expect(mocks.saveTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'request-6',
+        promptSummary: '失败任务',
+        finalText: expect.stringContaining('model failed'),
+        status: 'failed',
+        toolCalls: [],
+      }),
+    )
     expect(agentService.abort('request-6')).toBe(false)
+  })
+
+  it('saves failed resume traces under the original request and trace id', async () => {
+    mocks.runAgentCore.mockResolvedValueOnce(confirmationResult())
+    mocks.resumeAgentCore.mockRejectedValueOnce(new Error('resume failed'))
+    const agentService = await loadService()
+
+    const first = await agentService.run({
+      requestId: 'request-resume-fail-1',
+      prompt: '继续失败',
+    })
+    const confirmationTrace = mocks.saveTrace.mock.calls[0]?.[0]
+    mocks.saveTrace.mockClear()
+
+    await expect(
+      agentService.resume({
+        requestId: 'request-resume-fail-2',
+        pendingId: first.pendingId!,
+      }),
+    ).rejects.toThrow('resume failed')
+
+    expect(mocks.saveTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceId: confirmationTrace.traceId,
+        sessionId: 'request-resume-fail-1',
+        promptSummary: '继续失败',
+        finalText: expect.stringContaining('resume failed'),
+        status: 'failed',
+      }),
+    )
   })
 })

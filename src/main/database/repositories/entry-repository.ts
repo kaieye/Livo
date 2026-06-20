@@ -25,6 +25,15 @@ export interface EntryListResult {
   nextCursorEntry?: Pick<Entry, 'id' | 'publishedAt'>
 }
 
+export interface EntrySearchOptions {
+  limit?: number
+  feedId?: string
+  starredOnly?: boolean
+  unreadOnly?: boolean
+  publishedAfter?: number
+  publishedBefore?: number
+}
+
 export interface EntryWriteResult {
   addedCount: number
   addedEntries: Entry[]
@@ -42,7 +51,10 @@ export interface IEntryRepository {
   ): EntryWriteResult
   updateEntry(id: string, updates: Partial<Entry>): void
   markAllRead(feedId?: string): void
-  searchEntries(query: string, limit?: number): Entry[]
+  searchEntries(
+    query: string,
+    limitOrOptions?: number | EntrySearchOptions,
+  ): Entry[]
   getEntries(options: EntryListOptions): EntryListResult
   getOrphanEntries(): Entry[]
   reassignEntriesToFeed(fromFeedId: string, toFeedId: string): number
@@ -297,18 +309,49 @@ export class EntryRepository implements IEntryRepository {
     }
   }
 
-  searchEntries(query: string, limit = 50): Entry[] {
+  searchEntries(
+    query: string,
+    limitOrOptions: number | EntrySearchOptions = 50,
+  ): Entry[] {
     const trimmed = query.trim()
     if (!trimmed) return []
 
+    const options =
+      typeof limitOrOptions === 'number'
+        ? { limit: limitOrOptions }
+        : limitOrOptions
+    const limit = options.limit ?? 50
     const cappedLimit = Math.max(1, Math.min(Math.floor(limit), 100))
     const q = `%${trimmed}%`
+    const conditions = [
+      '(e.title LIKE ? OR e.content LIKE ? OR e.summary LIKE ?)',
+    ]
+    const params: any[] = [q, q, q]
+    if (options.feedId) {
+      conditions.push('e.feed_id = ?')
+      params.push(options.feedId)
+    }
+    if (options.starredOnly) {
+      conditions.push('e.is_starred = 1')
+    }
+    if (options.unreadOnly) {
+      conditions.push('e.is_read = 0')
+    }
+    if (typeof options.publishedAfter === 'number') {
+      conditions.push('e.published_at >= ?')
+      params.push(options.publishedAfter)
+    }
+    if (typeof options.publishedBefore === 'number') {
+      conditions.push('e.published_at <= ?')
+      params.push(options.publishedBefore)
+    }
+
     const rows = this.db
       .prepare(
         `
       SELECT e.* FROM entries e
       INNER JOIN feeds f ON f.id = e.feed_id
-      WHERE (e.title LIKE ? OR e.content LIKE ? OR e.summary LIKE ?)
+      WHERE ${conditions.join(' AND ')}
       ORDER BY
         CASE
           WHEN e.title LIKE ? THEN 0
@@ -320,7 +363,7 @@ export class EntryRepository implements IEntryRepository {
       LIMIT ?
     `,
       )
-      .all(q, q, q, q, q, cappedLimit) as any[]
+      .all(...params, q, q, cappedLimit) as any[]
     return rows.map(entryFromRow)
   }
 
