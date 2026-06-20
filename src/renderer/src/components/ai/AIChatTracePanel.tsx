@@ -8,31 +8,19 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { aiChatToolLabelOf } from './tool-labels'
+import {
+  agentTraceFailureContext,
+  agentTraceFailureReason,
+  agentTraceFailureStage,
+  agentTraceStatusColor,
+  agentTraceStatusLabel,
+  formatAgentTraceDuration,
+  formatAgentTraceTime,
+} from '../../lib/agent-trace-panel-model'
 import type { AgentTraceRecord, AgentTraceToolCall } from '@shared'
 
 interface Props {
   onClose: () => void
-}
-
-function formatTime(timestamp: number): string {
-  if (timestamp <= 0) return '未知时间'
-  const date = new Date(timestamp)
-  const pad = (n: number) => `${n}`.padStart(2, '0')
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function statusLabel(status: string): string {
-  if (status === 'completed' || status === 'success') return '完成'
-  if (status === 'confirmation_required') return '待确认'
-  if (status === 'cancelled') return '已取消'
-  return '失败'
-}
-
-function statusColor(status: string): string {
-  if (status === 'completed' || status === 'success') return '#16A34A'
-  if (status === 'confirmation_required') return '#F59E0B'
-  if (status === 'cancelled' || status === 'failed') return '#DC2626'
-  return 'var(--text-tertiary)'
 }
 
 /**
@@ -116,6 +104,7 @@ export function AIChatTracePanel({ onClose }: Props) {
         ) : (
           traces.map((trace) => {
             const expanded = expandedId === trace.traceId
+            const failed = trace.status === 'failed'
             return (
               <div
                 key={trace.traceId}
@@ -123,11 +112,14 @@ export function AIChatTracePanel({ onClose }: Props) {
                 onClick={() => setExpandedId(expanded ? '' : trace.traceId)}
               >
                 <div className="flex items-center gap-2 text-[11px]">
-                  <span style={{ color: statusColor(trace.status) }}>
-                    {statusLabel(trace.status)}
+                  <span style={{ color: agentTraceStatusColor(trace.status) }}>
+                    {agentTraceStatusLabel(trace.status)}
                   </span>
                   <span className="text-text-tertiary flex-1">
-                    {formatTime(trace.startedAt)}
+                    {formatAgentTraceTime(trace.startedAt)}
+                  </span>
+                  <span className="text-text-tertiary tabular-nums">
+                    {formatAgentTraceDuration(trace)}
                   </span>
                   <span className="text-accent">
                     {trace.toolCalls.length} 工具
@@ -142,6 +134,39 @@ export function AIChatTracePanel({ onClose }: Props) {
                 </p>
                 {expanded && (
                   <div className="mt-2 space-y-1.5">
+                    {failed && (
+                      <div className="rounded-lg border border-red-200 bg-red-50/70 px-2.5 py-2 dark:border-red-900/40 dark:bg-red-950/20">
+                        <div className="grid gap-1 text-[11px] leading-snug">
+                          <div className="flex items-center gap-2">
+                            <span className="text-text-tertiary shrink-0">
+                              失败阶段
+                            </span>
+                            <span className="text-text-primary min-w-0 flex-1 truncate font-medium">
+                              {agentTraceFailureStage(trace, aiChatToolLabelOf)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-text-tertiary shrink-0">
+                              上下文
+                            </span>
+                            <span className="text-text-secondary min-w-0 flex-1 truncate">
+                              {agentTraceFailureContext(
+                                trace,
+                                aiChatToolLabelOf,
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-text-tertiary shrink-0">
+                              错误原因
+                            </span>
+                            <span className="text-text-secondary max-h-24 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words">
+                              {agentTraceFailureReason(trace)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {trace.toolCalls.length === 0 ? (
                       <p className="text-text-tertiary text-[11px]">
                         没有工具调用
@@ -153,8 +178,12 @@ export function AIChatTracePanel({ onClose }: Props) {
                           className="bg-surface dark:bg-surface-dark rounded-lg px-2.5 py-2"
                         >
                           <div className="flex items-center gap-2 text-[11px]">
-                            <span style={{ color: statusColor(call.status) }}>
-                              {statusLabel(call.status)}
+                            <span
+                              style={{
+                                color: agentTraceStatusColor(call.status),
+                              }}
+                            >
+                              {agentTraceStatusLabel(call.status)}
                             </span>
                             <span className="flex-1 truncate font-medium">
                               {aiChatToolLabelOf(call.toolName)}

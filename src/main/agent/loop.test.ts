@@ -3,6 +3,7 @@ import type {
   AgentPermissionSettings,
   AIConfig,
   AgentTool,
+  AgentToolArgs,
   AgentToolExecutionEvent,
   AgentToolResult,
 } from '../../shared/types'
@@ -107,6 +108,29 @@ const toolCallResponse = {
       },
     },
   ],
+}
+
+function toolCallResponseFor(
+  id: string,
+  name: string,
+  args: AgentToolArgs,
+): unknown {
+  return {
+    choices: [
+      {
+        message: {
+          content: '',
+          tool_calls: [
+            {
+              id,
+              type: 'function',
+              function: { name, arguments: JSON.stringify(args) },
+            },
+          ],
+        },
+      },
+    ],
+  }
 }
 
 const malformedToolCallResponse = {
@@ -373,6 +397,222 @@ describe('runAgentCore', () => {
       '工具调用轮次上限',
     )
   })
+
+  it('handles a natural-language search-and-open request through search_and_open_entry', async () => {
+    const executedArgs: AgentToolArgs[] = []
+    const prompt = '搜索并打开最相关文章：Rust async'
+    const client = makeClient([
+      toolCallResponseFor('call-open', 'search_and_open_entry', {
+        query: 'Rust async',
+        limit: 1,
+      }),
+      {
+        choices: [
+          { message: { content: '已打开最匹配文章', tool_calls: null } },
+        ],
+      },
+    ])
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        name: 'search_and_open_entry',
+        title: '搜索并打开文章',
+        capability: 'navigate',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索关键词' },
+            limit: { type: 'number', description: '返回文章数量' },
+          },
+          required: ['query'],
+          additionalProperties: false,
+        },
+        execute: async (_context, args): Promise<AgentToolResult> => {
+          executedArgs.push(args)
+          return {
+            status: 'success',
+            message: '已打开最匹配的文章：Rust async in practice',
+          }
+        },
+      }),
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const events: AgentToolExecutionEvent[] = []
+    const result = await runAgentCore({
+      prompt,
+      aiConfig: fakeConfig,
+      onToolEvent: (event) => events.push(event),
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.text).toBe('已打开最匹配文章')
+    expect(executedArgs).toEqual([{ query: 'Rust async', limit: 1 }])
+    expect(result.toolRounds).toHaveLength(1)
+    expect(result.toolRounds[0]).toMatchObject({
+      name: 'search_and_open_entry',
+      status: 'success',
+    })
+    expect(events.map((event) => event.type)).toEqual([
+      'tool_started',
+      'tool_completed',
+    ])
+    const firstCallOptions = client.chat.completions.create.mock
+      .calls[0]?.[0] as {
+      messages: Array<{ role: string; content?: string }>
+    }
+    expect(
+      firstCallOptions.messages.some(
+        (message) => message.role === 'user' && message.content === prompt,
+      ),
+    ).toBe(true)
+  })
+
+  it('parks and resumes a natural-language favorite request through set_entry_starred_state', async () => {
+    const executedArgs: AgentToolArgs[] = []
+    agentToolRegistryProvider.setBuilder(() => [
+      makeTool({
+        name: 'set_entry_starred_state',
+        title: '标记文章收藏状态',
+        capability: 'mutate',
+        risk: 'medium',
+        requiresConfirmation: true,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            entryId: { type: 'string', description: '文章 ID' },
+            isStarred: { type: 'boolean', description: '是否收藏' },
+          },
+          required: ['entryId', 'isStarred'],
+          additionalProperties: false,
+        },
+        execute: async (_context, args): Promise<AgentToolResult> => {
+          executedArgs.push(args)
+          return { status: 'success', message: '已收藏文章' }
+        },
+      }),
+    ])
+    vi.mocked(createOpenAIClient)
+      .mockReturnValueOnce(
+        makeClient([
+          toolCallResponseFor('call-star', 'set_entry_starred_state', {
+            entryId: 'entry-1',
+            isStarred: true,
+          }),
+        ]) as never,
+      )
+      .mockReturnValueOnce(
+        makeClient([
+          {
+            choices: [
+              { message: { content: '已收藏这篇文章', tool_calls: null } },
+            ],
+          },
+        ]) as never,
+      )
+
+    const firstResult = await runAgentCore({
+      prompt: '收藏这篇文章',
+      aiConfig: fakeConfig,
+    })
+
+    expect(firstResult.status).toBe('confirmation_required')
+    expect(firstResult.confirmation).toMatchObject({
+      toolName: 'set_entry_starred_state',
+      args: JSON.stringify({ entryId: 'entry-1', isStarred: true }),
+    })
+    expect(executedArgs).toEqual([])
+
+    const continuation = firstResult.continuation
+    expect(continuation).toBeDefined()
+    const resumed = await resumeAgentCore({
+      continuation: continuation!,
+      aiConfig: fakeConfig,
+    })
+
+    expect(resumed.status).toBe('completed')
+    expect(resumed.text).toBe('已收藏这篇文章')
+    expect(executedArgs).toEqual([{ entryId: 'entry-1', isStarred: true }])
+    expect(resumed.toolRounds.map((round) => round.name)).toEqual([
+      'set_entry_starred_state',
+      'set_entry_starred_state',
+    ])
+    expect(resumed.toolRounds.map((round) => round.status)).toEqual([
+      'confirmation_required',
+      'success',
+    ])
+  })
+
+  it.each([
+    { prompt: '把这篇文章标为已读', isRead: true, finalText: '已标为已读' },
+    { prompt: '把这篇文章标为未读', isRead: false, finalText: '已标为未读' },
+  ])(
+    'parks and resumes a natural-language read-state request: $prompt',
+    async ({ prompt, isRead, finalText }) => {
+      const executedArgs: AgentToolArgs[] = []
+      agentToolRegistryProvider.setBuilder(() => [
+        makeTool({
+          name: 'set_entry_read_state',
+          title: '标记文章已读状态',
+          capability: 'mutate',
+          risk: 'medium',
+          requiresConfirmation: true,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              entryId: { type: 'string', description: '文章 ID' },
+              isRead: { type: 'boolean', description: '是否已读' },
+            },
+            required: ['entryId', 'isRead'],
+            additionalProperties: false,
+          },
+          execute: async (_context, args): Promise<AgentToolResult> => {
+            executedArgs.push(args)
+            return { status: 'success', message: finalText }
+          },
+        }),
+      ])
+      vi.mocked(createOpenAIClient)
+        .mockReturnValueOnce(
+          makeClient([
+            toolCallResponseFor('call-read', 'set_entry_read_state', {
+              entryId: 'entry-1',
+              isRead,
+            }),
+          ]) as never,
+        )
+        .mockReturnValueOnce(
+          makeClient([
+            {
+              choices: [{ message: { content: finalText, tool_calls: null } }],
+            },
+          ]) as never,
+        )
+
+      const firstResult = await runAgentCore({
+        prompt,
+        aiConfig: fakeConfig,
+      })
+
+      expect(firstResult.status).toBe('confirmation_required')
+      expect(firstResult.confirmation?.toolName).toBe('set_entry_read_state')
+      expect(executedArgs).toEqual([])
+
+      const continuation = firstResult.continuation
+      expect(continuation).toBeDefined()
+      const resumed = await resumeAgentCore({
+        continuation: continuation!,
+        aiConfig: fakeConfig,
+      })
+
+      expect(resumed.status).toBe('completed')
+      expect(resumed.text).toBe(finalText)
+      expect(executedArgs).toEqual([{ entryId: 'entry-1', isRead }])
+      expect(resumed.toolRounds.map((round) => round.status)).toEqual([
+        'confirmation_required',
+        'success',
+      ])
+    },
+  )
 
   it('executes consecutive low-risk read tools in the same round concurrently', async () => {
     const release: Array<() => void> = []
