@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import {
   AI_PROVIDERS,
   DEFAULT_SETTINGS,
+  MAX_AGENT_RUN_TIMEOUT_SECONDS,
   type AIConfig,
   type AIProvider,
 } from '../../../../shared/types'
@@ -25,6 +26,7 @@ import {
   Link2,
   Trash2,
   Settings as SettingsIcon,
+  Timer,
 } from 'lucide-react'
 
 function SectionCard({
@@ -111,6 +113,7 @@ function isPromptDirtyFn(draft: AIConfig, saved: AIConfig): boolean {
 
 export function AISettings() {
   const ai = useSettingSection('ai')
+  const agent = useSettingSection('agent') || DEFAULT_SETTINGS.agent
   const permissions = useSettingSection('agentPermissions')
   const { updateSettingsSection } = useSettingsActions()
   const { t } = useTranslation()
@@ -307,6 +310,15 @@ export function AISettings() {
       })
     }
     setIsTesting(false)
+  }
+
+  const handleAgentRunTimeoutChange = (value: string) => {
+    const seconds = Number(value)
+    void updateSettingsSection('agent', {
+      runTimeoutSeconds: Number.isFinite(seconds)
+        ? seconds
+        : DEFAULT_SETTINGS.agent.runTimeoutSeconds,
+    })
   }
 
   const inputClass =
@@ -677,6 +689,36 @@ export function AISettings() {
           </button>
         </div>
       </div>
+
+      {/* Agent runtime */}
+      <SectionCard
+        icon={Timer}
+        title={t('settings.agentRuntime')}
+        description={t('settings.agentRuntimeDesc')}
+      >
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            {t('settings.agentRunTimeout')}
+          </label>
+          <div className="flex max-w-xs items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={MAX_AGENT_RUN_TIMEOUT_SECONDS}
+              step={1}
+              value={agent.runTimeoutSeconds}
+              onChange={(e) => handleAgentRunTimeoutChange(e.target.value)}
+              className={`${inputClass} flex-1`}
+            />
+            <span className="text-text-secondary dark:text-text-dark-secondary text-sm">
+              {t('settings.agentRunTimeoutUnit')}
+            </span>
+          </div>
+          <p className="text-text-tertiary mt-1 text-xs">
+            {t('settings.agentRunTimeoutDesc')}
+          </p>
+        </div>
+      </SectionCard>
 
       {/* --- Agent permissions --- */}
       <section>

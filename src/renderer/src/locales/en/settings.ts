@@ -397,6 +397,12 @@ export const enSettings = {
   refreshLogsSourceServerCache: 'Livo-Server cache',
   refreshLogsSourceLabel: 'Source: {{source}}',
   refreshLogsMaxHint: 'Up to 60 most recent refresh records are retained.',
+  agentRuntime: 'Agent Runtime',
+  agentRuntimeDesc: 'Controls the global time budget for one AI agent task.',
+  agentRunTimeout: 'Run timeout',
+  agentRunTimeoutDesc:
+    'Model calls and tool calls share this budget. Invalid values fall back to the 120 second default.',
+  agentRunTimeoutUnit: 'sec',
   agentPermissions: 'Agent Permissions',
   agentPermissionsDesc:
     'Control which tool capabilities the AI assistant can use when running tasks. Disabling a category causes those tools to be rejected.',

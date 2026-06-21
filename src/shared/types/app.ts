@@ -4,7 +4,11 @@ import type { FeedWithCount } from './feed'
 import type { ReaderSnapshot } from './entry'
 
 export type { AppSettings, SettingsTabId } from '../settings-schema'
-export { DEFAULT_SETTINGS } from '../settings-schema'
+export {
+  DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+  DEFAULT_SETTINGS,
+  MAX_AGENT_RUN_TIMEOUT_SECONDS,
+} from '../settings-schema'
 
 export interface RefreshRunItemResult {
   feedId: string

@@ -16,7 +16,7 @@ function loadSettingsFromCache(): AppSettings | null {
   hasLoadedSettingsFromStorage = true
   try {
     const raw = localStorage.getItem(SETTINGS_CACHE_KEY)
-    cachedSettingsFromStorage = raw ? JSON.parse(raw) : null
+    cachedSettingsFromStorage = raw ? normalizeSettings(JSON.parse(raw)) : null
     return cachedSettingsFromStorage
   } catch {
     cachedSettingsFromStorage = null

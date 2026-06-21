@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { mergeSettings, normalizeSettings } from './settings'
-import { DEFAULT_SETTINGS, FeedViewType, FEED_COLUMN_DEFAULTS } from './types'
+import {
+  DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+  DEFAULT_SETTINGS,
+  FEED_COLUMN_DEFAULTS,
+  FeedViewType,
+  MAX_AGENT_RUN_TIMEOUT_SECONDS,
+} from './types'
 
 describe('settings normalization', () => {
   it('fills nested defaults and repairs missing view tabs', () => {
@@ -33,6 +39,9 @@ describe('settings normalization', () => {
 
   it('normalizes numeric settings to safe runtime ranges', () => {
     const normalized = normalizeSettings({
+      agent: {
+        runTimeoutSeconds: 0,
+      } as any,
       general: {
         refreshInterval: Number.POSITIVE_INFINITY,
         fontSize: -1,
@@ -50,6 +59,9 @@ describe('settings normalization', () => {
       } as any,
     })
 
+    expect(normalized.agent.runTimeoutSeconds).toBe(
+      DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+    )
     expect(normalized.general.refreshInterval).toBe(30)
     expect(normalized.general.fontSize).toBe(12)
     expect(normalized.general.contentMaxWidth).toBe(1400)
@@ -61,6 +73,20 @@ describe('settings normalization', () => {
     expect(normalized.data.refreshConcurrency).toBe(20)
     expect(normalized.data.cacheSizeLimitMB).toBe(0)
     expect(normalized.data.codeCacheLimitMB).toBe(100)
+  })
+
+  it('keeps valid custom agent timeout seconds and caps excessive values', () => {
+    expect(
+      normalizeSettings({
+        agent: { runTimeoutSeconds: 45.9 },
+      } as any).agent.runTimeoutSeconds,
+    ).toBe(45)
+
+    expect(
+      normalizeSettings({
+        agent: { runTimeoutSeconds: Number.MAX_SAFE_INTEGER },
+      } as any).agent.runTimeoutSeconds,
+    ).toBe(MAX_AGENT_RUN_TIMEOUT_SECONDS)
   })
 
   it('merges nested sections without dropping unrelated keys', () => {
@@ -97,6 +123,9 @@ describe('settings normalization', () => {
   })
 
   it('derives default feed columns from the shared column defaults', () => {
+    expect(DEFAULT_SETTINGS.agent.runTimeoutSeconds).toBe(
+      DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+    )
     expect(DEFAULT_SETTINGS.general.feedColumns).toEqual(FEED_COLUMN_DEFAULTS)
     expect(DEFAULT_SETTINGS.general.feedColumns).not.toBe(FEED_COLUMN_DEFAULTS)
   })

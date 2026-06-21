@@ -1,5 +1,10 @@
 import { settingsProvider } from '../services/system/settings-provider'
-import type { AgentRunSummary } from '@shared'
+import {
+  DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+  MAX_AGENT_RUN_TIMEOUT_SECONDS,
+  type AgentRunSummary,
+  type AppSettings,
+} from '@shared'
 import {
   runAgentCore,
   resumeAgentCore,
@@ -33,6 +38,7 @@ export interface AgentServiceResumeRequest {
 
 const PENDING_TTL_MS = 10 * 60 * 1000
 const ERROR_TRACE_TEXT_MAX_LEN = 2000
+const MS_PER_SECOND = 1000
 
 function errorMessageOf(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -44,6 +50,22 @@ function errorFinalText(error: unknown): string {
   const name = typeof err?.name === 'string' ? err.name : 'Error'
   const message = errorMessageOf(error)
   return `${name}: ${message}`.slice(0, ERROR_TRACE_TEXT_MAX_LEN)
+}
+
+function resolveAgentRunTimeoutMs(settings: {
+  agent?: Partial<AppSettings['agent']>
+}): number {
+  const seconds = settings.agent?.runTimeoutSeconds
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return DEFAULT_AGENT_RUN_TIMEOUT_SECONDS * MS_PER_SECOND
+  }
+
+  const safeSeconds = Math.floor(seconds)
+  if (safeSeconds <= 0) {
+    return DEFAULT_AGENT_RUN_TIMEOUT_SECONDS * MS_PER_SECOND
+  }
+
+  return Math.min(safeSeconds, MAX_AGENT_RUN_TIMEOUT_SECONDS) * MS_PER_SECOND
 }
 
 /**
@@ -67,6 +89,7 @@ class AgentServiceImpl {
 
   async run(request: AgentServiceRunRequest): Promise<AgentServiceResult> {
     const settings = settingsProvider.get()
+    const timeoutMs = resolveAgentRunTimeoutMs(settings)
     const controller = new AbortController()
     this.aborters.set(request.requestId, controller)
     const startedAt = Date.now()
@@ -80,6 +103,7 @@ class AgentServiceImpl {
         sessionId: request.requestId,
         onToolEvent: request.onToolEvent,
         signal: controller.signal,
+        timeoutMs,
       })
       return this.finalize(request.requestId, request.prompt, startedAt, result)
     } catch (error) {
@@ -101,6 +125,7 @@ class AgentServiceImpl {
     this.pending.delete(request.pendingId)
 
     const settings = settingsProvider.get()
+    const timeoutMs = resolveAgentRunTimeoutMs(settings)
     const controller = new AbortController()
     this.aborters.set(request.requestId, controller)
     try {
@@ -111,6 +136,7 @@ class AgentServiceImpl {
         sessionId: request.requestId,
         onToolEvent: request.onToolEvent,
         signal: controller.signal,
+        timeoutMs,
       })
       return this.finalize(
         parked.requestId,

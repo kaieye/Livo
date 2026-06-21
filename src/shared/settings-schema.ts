@@ -9,8 +9,14 @@ import {
   type FeedColumnId,
 } from './types/feed'
 
+export const DEFAULT_AGENT_RUN_TIMEOUT_SECONDS = 120
+export const MAX_AGENT_RUN_TIMEOUT_SECONDS = 3600
+
 export interface AppSettings {
   ai: AIConfig
+  agent: {
+    runTimeoutSeconds: number
+  }
   agentPermissions: AgentPermissionSettings
   general: {
     language: string
@@ -103,6 +109,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     chatPersonaPrompt: '',
     summaryPrompt: '',
     translationPrompt: '',
+  },
+  agent: {
+    runTimeoutSeconds: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
   },
   agentPermissions: { ...DEFAULT_AGENT_PERMISSION_SETTINGS },
   general: {

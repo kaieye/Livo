@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_AGENT_RUN_TIMEOUT_SECONDS } from '../../shared/types'
 import type { AIConfig, AgentRunMetrics } from '../../shared/types'
 import type { AgentRunResult, AgentRunOptions } from './loop'
 
@@ -31,6 +32,14 @@ const fakeAIConfig: AIConfig = {
   apiKey: 'test-key',
   baseUrl: 'https://api.example.com/v1',
   model: 'gpt-test',
+}
+
+const fakeAgentPermissions = {
+  allowRead: true,
+  allowNavigate: true,
+  allowMutate: true,
+  allowDestructive: true,
+  allowExternal: true,
 }
 
 const emptyMetrics = (): AgentRunMetrics => ({
@@ -99,19 +108,80 @@ describe('agentService', () => {
     vi.clearAllMocks()
     mocks.getSettings.mockReturnValue({
       ai: fakeAIConfig,
-      agentPermissions: {
-        allowRead: true,
-        allowNavigate: true,
-        allowMutate: true,
-        allowDestructive: true,
-        allowExternal: true,
-      },
+      agentPermissions: fakeAgentPermissions,
     })
   })
 
   afterEach(() => {
     vi.useRealTimers()
   })
+
+  it('passes the default 120s run timeout to the core when the setting is missing', async () => {
+    mocks.runAgentCore.mockResolvedValueOnce(completedResult())
+    const agentService = await loadService()
+
+    await agentService.run({
+      requestId: 'request-timeout-default',
+      prompt: '默认超时',
+    })
+
+    expect(mocks.runAgentCore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS * 1000,
+      }),
+    )
+  })
+
+  it('passes a custom run timeout to new and resumed agent runs', async () => {
+    mocks.getSettings.mockReturnValue({
+      ai: fakeAIConfig,
+      agent: { runTimeoutSeconds: 45 },
+      agentPermissions: fakeAgentPermissions,
+    })
+    mocks.runAgentCore.mockResolvedValueOnce(confirmationResult())
+    mocks.resumeAgentCore.mockResolvedValueOnce(completedResult())
+    const agentService = await loadService()
+
+    const first = await agentService.run({
+      requestId: 'request-timeout-custom-1',
+      prompt: '自定义超时',
+    })
+    await agentService.resume({
+      requestId: 'request-timeout-custom-2',
+      pendingId: first.pendingId!,
+    })
+
+    expect(mocks.runAgentCore).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: 45_000 }),
+    )
+    expect(mocks.resumeAgentCore).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: 45_000 }),
+    )
+  })
+
+  it.each([0, -5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'falls back to the default run timeout for invalid setting value %s',
+    async (runTimeoutSeconds) => {
+      mocks.getSettings.mockReturnValue({
+        ai: fakeAIConfig,
+        agent: { runTimeoutSeconds },
+        agentPermissions: fakeAgentPermissions,
+      })
+      mocks.runAgentCore.mockResolvedValueOnce(completedResult())
+      const agentService = await loadService()
+
+      await agentService.run({
+        requestId: `request-timeout-invalid-${String(runTimeoutSeconds)}`,
+        prompt: '非法超时',
+      })
+
+      expect(mocks.runAgentCore).toHaveBeenCalledWith(
+        expect.objectContaining({
+          timeoutMs: DEFAULT_AGENT_RUN_TIMEOUT_SECONDS * 1000,
+        }),
+      )
+    },
+  )
 
   it('parks confirmation continuations and saves a confirmation trace', async () => {
     mocks.runAgentCore.mockResolvedValueOnce(confirmationResult())

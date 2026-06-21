@@ -372,6 +372,12 @@ export const zhCNSettings = {
   refreshLogsSourceServerCache: 'Livo-Server 缓存',
   refreshLogsSourceLabel: '拉取来源：{{source}}',
   refreshLogsMaxHint: '最多保留最近 60 条刷新记录。',
+  agentRuntime: 'Agent 运行',
+  agentRuntimeDesc: '控制 AI 助手单次任务的全局时间预算。',
+  agentRunTimeout: '单次运行超时',
+  agentRunTimeoutDesc:
+    '模型调用和工具调用共享这段时间；非法值会回退到默认 120 秒。',
+  agentRunTimeoutUnit: '秒',
   agentPermissions: 'Agent 权限',
   agentPermissionsDesc:
     '控制 AI 助手在执行任务时可以调用哪些工具能力。关闭后对应类别的工具将被拒绝执行。',

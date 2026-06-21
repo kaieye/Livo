@@ -42,7 +42,12 @@ vi.mock('./default-tools', () => ({
   }),
 }))
 
-import { MAX_AGENT_ROUNDS, resumeAgentCore, runAgentCore } from './loop'
+import {
+  AGENT_RUN_TIMEOUT_MS,
+  MAX_AGENT_ROUNDS,
+  resumeAgentCore,
+  runAgentCore,
+} from './loop'
 import { createOpenAIClient } from '../services/ai/ai-client'
 
 const fakeConfig: AIConfig = {
@@ -916,6 +921,45 @@ describe('runAgentCore', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(client.chat.completions.create).not.toHaveBeenCalled()
+  })
+
+  it('keeps 120s as the default agent run timeout', async () => {
+    vi.useFakeTimers()
+    let observedSignal: AbortSignal | undefined
+    const client = {
+      chat: {
+        completions: {
+          create: vi.fn(
+            (_options: unknown, requestOptions?: { signal?: AbortSignal }) => {
+              observedSignal = requestOptions?.signal
+              return new Promise((_resolve, reject) => {
+                requestOptions?.signal?.addEventListener(
+                  'abort',
+                  () => reject(requestOptions.signal?.reason),
+                  { once: true },
+                )
+              })
+            },
+          ),
+        },
+      },
+    }
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const runPromise = runAgentCore({
+      prompt: 'hi',
+      aiConfig: fakeConfig,
+    })
+    const assertion = expect(runPromise).rejects.toMatchObject({
+      name: 'TimeoutError',
+    })
+    await vi.advanceTimersByTimeAsync(AGENT_RUN_TIMEOUT_MS - 1)
+    expect(observedSignal?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await assertion
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
   it('aborts a hanging model call at the agent run timeout', async () => {

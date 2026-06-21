@@ -4,7 +4,11 @@ import {
   type FeedColumnId,
 } from './types/feed'
 import { DEFAULT_AI_SYSTEM_PROMPT_TEMPLATE } from './types/ai'
-import { DEFAULT_SETTINGS, type AppSettings } from './settings-schema'
+import {
+  DEFAULT_SETTINGS,
+  MAX_AGENT_RUN_TIMEOUT_SECONDS,
+  type AppSettings,
+} from './settings-schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -41,6 +45,20 @@ function normalizeNumber(
   let next = options.integer ? Math.floor(numeric) : numeric
   if (options.min !== undefined) next = Math.max(options.min, next)
   if (options.max !== undefined) next = Math.min(options.max, next)
+  return next
+}
+
+function normalizePositiveIntegerOrFallback(
+  value: unknown,
+  fallback: number,
+  options: { max?: number } = {},
+): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+
+  const next = Math.floor(numeric)
+  if (next <= 0) return fallback
+  if (options.max !== undefined) return Math.min(options.max, next)
   return next
 }
 
@@ -88,6 +106,12 @@ function syncContentWidth(settings: AppSettings): void {
 
 function normalizeNumericSettings(settings: AppSettings): void {
   const defaults = DEFAULT_SETTINGS
+
+  settings.agent.runTimeoutSeconds = normalizePositiveIntegerOrFallback(
+    settings.agent.runTimeoutSeconds,
+    defaults.agent.runTimeoutSeconds,
+    { max: MAX_AGENT_RUN_TIMEOUT_SECONDS },
+  )
 
   settings.general.refreshInterval = normalizeNumber(
     settings.general.refreshInterval,
