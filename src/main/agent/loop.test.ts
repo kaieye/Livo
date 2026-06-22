@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type {
   AgentPermissionSettings,
   AIConfig,
+  AgentRunMetrics,
   AgentTool,
   AgentToolArgs,
   AgentToolExecutionEvent,
   AgentToolResult,
 } from '../../shared/types'
+import { DEFAULT_AGENT_MAX_ROUNDS } from '../../shared/types'
 import { agentToolRegistryProvider } from './registry-provider'
 
 vi.mock('../services/ai/ai-client', () => ({
@@ -257,6 +259,43 @@ beforeEach(() => {
   vi.mocked(buildContextFallback).mockClear()
 })
 
+describe('shouldEnterWrapUp', () => {
+  function metrics(overrides: Partial<AgentRunMetrics> = {}): AgentRunMetrics {
+    return {
+      totalMs: 0,
+      llmMs: 100,
+      toolMs: 100,
+      rounds: [],
+      ...overrides,
+    }
+  }
+
+  it('stays under budget while time and tokens are comfortably available', () => {
+    expect(
+      shouldEnterWrapUp(metrics({ tokens: { totalTokens: 500 } }), {
+        runTimeoutMs: 10_000,
+        tokenBudget: 10_000,
+      }),
+    ).toBe(false)
+  })
+
+  it('enters wrap-up when elapsed runtime reaches 80 percent of timeout', () => {
+    expect(
+      shouldEnterWrapUp(metrics({ llmMs: 6_000, toolMs: 2_000 }), {
+        runTimeoutMs: 10_000,
+      }),
+    ).toBe(true)
+  })
+
+  it('enters wrap-up when total tokens reach 90 percent of token budget', () => {
+    expect(
+      shouldEnterWrapUp(metrics({ tokens: { totalTokens: 9_000 } }), {
+        tokenBudget: 10_000,
+      }),
+    ).toBe(true)
+  })
+})
+
 describe('runAgentCore', () => {
   it('returns completed status with text and empty tool rounds for a text-only reply', async () => {
     vi.mocked(createOpenAIClient).mockReturnValue(
@@ -454,9 +493,8 @@ describe('runAgentCore', () => {
 
   it('executes a tool then completes when the tool needs no confirmation', async () => {
     agentToolRegistryProvider.setBuilder(() => [makeTool()])
-    vi.mocked(createOpenAIClient).mockReturnValue(
-      makeClient([toolCallResponse, textOnlyResponse]) as never,
-    )
+    const client = makeClient([toolCallResponse, textOnlyResponse])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
 
     const result = await runAgentCore({
       prompt: 'lookup a',
@@ -468,6 +506,19 @@ describe('runAgentCore', () => {
     expect(result.toolRounds).toHaveLength(1)
     expect(result.toolRounds[0].name).toBe('read_thing')
     expect(result.metrics.rounds.length).toBeGreaterThanOrEqual(2)
+
+    const secondCallOptions = client.chat.completions.create.mock
+      .calls[1]?.[0] as {
+      messages: Array<{ role: string; content?: string }>
+    }
+    const toolMessage = secondCallOptions.messages.find(
+      (message) => message.role === 'tool',
+    )
+    expect(toolMessage?.content).toContain(
+      '<source name="read_thing" trusted="false">',
+    )
+    expect(toolMessage?.content).toContain('"tool": "read_thing"')
+    expect(toolMessage?.content).toContain('"status": "success"')
   })
 
   it('returns confirmation_required with continuation state when a mutate tool needs confirmation', async () => {
@@ -586,10 +637,13 @@ describe('runAgentCore', () => {
     )
   })
 
-  it('uses a tool-free final summary call when tool rounds reach the limit', async () => {
+  it('uses a tool-free final summary call when default tool rounds reach the budget', async () => {
     agentToolRegistryProvider.setBuilder(() => [makeTool()])
     const client = makeClient([
-      ...Array.from({ length: MAX_AGENT_ROUNDS }, () => toolCallResponse),
+      ...Array.from(
+        { length: DEFAULT_AGENT_MAX_ROUNDS },
+        () => toolCallResponse,
+      ),
       textOnlyResponse,
     ])
     vi.mocked(createOpenAIClient).mockReturnValue(client as never)
@@ -601,9 +655,9 @@ describe('runAgentCore', () => {
 
     expect(result.status).toBe('completed')
     expect(result.text).toBe('hello back')
-    expect(result.toolRounds).toHaveLength(MAX_AGENT_ROUNDS)
+    expect(result.toolRounds).toHaveLength(DEFAULT_AGENT_MAX_ROUNDS)
     expect(client.chat.completions.create).toHaveBeenCalledTimes(
-      MAX_AGENT_ROUNDS + 1,
+      DEFAULT_AGENT_MAX_ROUNDS + 1,
     )
     const finalCallOptions = client.chat.completions.create.mock.calls.at(
       -1,
@@ -623,6 +677,74 @@ describe('runAgentCore', () => {
     expect(finalCallOptions.messages.at(-1)?.content).toContain(
       '工具调用轮次上限',
     )
+  })
+
+  it('honors configured maxRounds above the default and below the hard cap', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const requestedRounds = Math.min(10, MAX_AGENT_ROUNDS)
+    const client = makeClient([
+      ...Array.from({ length: requestedRounds }, () => toolCallResponse),
+      textOnlyResponse,
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const result = await runAgentCore({
+      prompt: 'keep looking longer',
+      aiConfig: fakeConfig,
+      maxRounds: requestedRounds,
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.toolRounds).toHaveLength(requestedRounds)
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(
+      requestedRounds + 1,
+    )
+  })
+
+  it('asks the model to wrap up before the hard cap when token budget is nearly spent', async () => {
+    agentToolRegistryProvider.setBuilder(() => [makeTool()])
+    const client = makeClient([
+      toolCallResponseWithUsage({
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+      }),
+      toolCallResponseWithUsage({
+        prompt_tokens: 9,
+        completion_tokens: 1,
+        total_tokens: 10,
+      }),
+      textOnlyResponse,
+    ])
+    vi.mocked(createOpenAIClient).mockReturnValue(client as never)
+
+    const result = await runAgentCore({
+      prompt: 'budgeted lookup',
+      aiConfig: {
+        ...fakeConfig,
+        agentMaxTokens: 5,
+      },
+      maxRounds: 2,
+    })
+
+    expect(result.status).toBe('completed')
+    expect(result.toolRounds).toHaveLength(2)
+    const finalCallOptions = client.chat.completions.create.mock.calls.at(
+      -1,
+    )?.[0] as {
+      messages: Array<{
+        role: string
+        content?: string
+      }>
+      tools?: unknown
+    }
+    const systemMessages = finalCallOptions.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content || '')
+    expect(systemMessages.some((content) => content.includes('接近轮次'))).toBe(
+      true,
+    )
+    expect(finalCallOptions.tools).toBeUndefined()
   })
 
   it('handles a natural-language search-and-open request through search_and_open_entry', async () => {
@@ -1293,7 +1415,7 @@ describe('runAgentCore', () => {
       expect.objectContaining({
         name: 'read_thing',
         status: 'success',
-        resultSummary: expect.stringContaining('read_thing 执行完毕'),
+        resultSummary: expect.stringContaining('"tool": "read_thing"'),
       }),
     ])
   })

@@ -6,6 +6,7 @@ import type {
 import {
   webSearch,
   formatWebSearchResultsForAI,
+  sanitizeWebSearchResult,
 } from '../../services/ai/web-search'
 import { LONG_TEXT_MAX_LENGTH, objectParams } from './schema'
 
@@ -32,10 +33,14 @@ export function buildWebSearchTool(): AgentTool {
     execute: async (context, args: AgentToolArgs): Promise<AgentToolResult> => {
       const query = String(args['query']).trim()
       const results = await webSearch(query, { signal: context.signal })
+      const safeResults = results.map(sanitizeWebSearchResult)
       return {
         status: 'success',
-        message: formatWebSearchResultsForAI(results, query),
-        data: { count: results.length, results: results as unknown as object },
+        message: formatWebSearchResultsForAI(safeResults, query),
+        data: {
+          count: safeResults.length,
+          results: safeResults as unknown as object,
+        },
       }
     },
   }

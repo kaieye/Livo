@@ -6,6 +6,11 @@
 - Agent rounds also emit `round_started` and `round_finished` events. Existing tool events remain unchanged.
 - Tool-call streaming accumulates `delta.tool_calls[index].function.arguments` before JSON parsing and execution.
 - `AIConfig.agentTemperature` and `AIConfig.agentMaxTokens` control Agent model sampling. Defaults remain `0.5` and `2000`.
+- `settings.agent.maxRounds` controls the adaptive round budget. The default is `8` and the hard cap is `16`.
+- Model `usage` metadata is accumulated into `AgentRunMetrics.tokens`, mirrored on `round_finished` events, and persisted as `AgentTraceRecord.metricsSnapshot`. Providers that do not return usage leave token fields undefined.
+- The loop enters wrap-up when elapsed LLM+tool time reaches 80% of run timeout or total tokens reach 90% of the estimated token budget.
+- Tool results sent back to the model use structured JSON from `serializeToolResultForModel` and are wrapped in `<source name="..." trusted="true|false">`.
+- Treat untrusted source content as passive data only. `web_search` output is untrusted and strips common prompt-like instructions before serialization.
 - Tool-calling providers receive compact context. Full subscription/today/unread context is available through `get_session_overview`.
 
 ## Compatibility Rules

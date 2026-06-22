@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_AGENT_RUN_TIMEOUT_SECONDS } from '../../shared/types'
+import {
+  DEFAULT_AGENT_MAX_ROUNDS,
+  DEFAULT_AGENT_RUN_TIMEOUT_SECONDS,
+} from '../../shared/types'
 import type { AIConfig, AgentRunMetrics } from '../../shared/types'
 import type { AgentRunResult, AgentRunOptions } from './loop'
 
@@ -62,7 +65,9 @@ const completedResult = (
   ...overrides,
 })
 
-const confirmationResult = (): AgentRunResult => ({
+const confirmationResult = (
+  overrides: Partial<AgentRunResult> = {},
+): AgentRunResult => ({
   text: '需要确认',
   status: 'confirmation_required',
   toolRounds: [
@@ -98,6 +103,7 @@ const confirmationResult = (): AgentRunResult => ({
     nextRound: 1,
   },
   metrics: emptyMetrics(),
+  ...overrides,
 })
 
 async function loadService() {
@@ -135,10 +141,26 @@ describe('agentService', () => {
     )
   })
 
+  it('passes the default max rounds to the core when the setting is missing', async () => {
+    mocks.runAgentCore.mockResolvedValueOnce(completedResult())
+    const agentService = await loadService()
+
+    await agentService.run({
+      requestId: 'request-rounds-default',
+      prompt: '默认轮次',
+    })
+
+    expect(mocks.runAgentCore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxRounds: DEFAULT_AGENT_MAX_ROUNDS,
+      }),
+    )
+  })
+
   it('passes a custom run timeout to new and resumed agent runs', async () => {
     mocks.getSettings.mockReturnValue({
       ai: fakeAIConfig,
-      agent: { runTimeoutSeconds: 45 },
+      agent: { runTimeoutSeconds: 45, maxRounds: 12 },
       agentPermissions: fakeAgentPermissions,
     })
     mocks.runAgentCore.mockResolvedValueOnce(confirmationResult())
@@ -155,10 +177,10 @@ describe('agentService', () => {
     })
 
     expect(mocks.runAgentCore).toHaveBeenCalledWith(
-      expect.objectContaining({ timeoutMs: 45_000 }),
+      expect.objectContaining({ timeoutMs: 45_000, maxRounds: 12 }),
     )
     expect(mocks.resumeAgentCore).toHaveBeenCalledWith(
-      expect.objectContaining({ timeoutMs: 45_000 }),
+      expect.objectContaining({ timeoutMs: 45_000, maxRounds: 12 }),
     )
   })
 
@@ -187,7 +209,14 @@ describe('agentService', () => {
   )
 
   it('parks confirmation continuations and saves a confirmation trace', async () => {
-    mocks.runAgentCore.mockResolvedValueOnce(confirmationResult())
+    const metrics = {
+      ...emptyMetrics(),
+      totalMs: 12,
+      llmMs: 10,
+      toolMs: 2,
+      tokens: { totalTokens: 42 },
+    }
+    mocks.runAgentCore.mockResolvedValueOnce(confirmationResult({ metrics }))
     const agentService = await loadService()
 
     const result = await agentService.run({
@@ -208,6 +237,7 @@ describe('agentService', () => {
             status: 'confirmation_required',
           }),
         ],
+        metricsSnapshot: metrics,
       }),
     )
   })

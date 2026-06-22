@@ -17,6 +17,10 @@ export interface WebSearchResult {
 const SEARCH_ENDPOINT = 'https://html.duckduckgo.com/html/'
 const MAX_RESULTS = 8
 const REQUEST_TIMEOUT_MS = 12000
+const PROMPT_LIKE_TEXT =
+  /\b(ignore (all )?(previous|above|prior) (instructions|messages|rules)|you are now|system prompt|developer message|act as|disregard (the )?(previous|above|prior))\b/gi
+const PROMPT_LIKE_TEXT_START =
+  /^\s*(ignore (all )?(previous|above|prior) (instructions|messages|rules)|you are now|system prompt|developer message|act as|disregard (the )?(previous|above|prior))/i
 
 export interface WebSearchOptions {
   signal?: AbortSignal
@@ -37,6 +41,23 @@ function stripTags(html: string): string {
   return decodeEntities(html.replace(/<[^>]+>/g, ''))
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+export function stripPromptLikeSearchText(input: string): string {
+  if (PROMPT_LIKE_TEXT_START.test(input)) {
+    return '[已移除疑似提示注入文本]'
+  }
+  return input.replace(PROMPT_LIKE_TEXT, '[已移除疑似提示注入文本]')
+}
+
+export function sanitizeWebSearchResult(
+  result: WebSearchResult,
+): WebSearchResult {
+  return {
+    title: stripPromptLikeSearchText(result.title),
+    url: result.url,
+    snippet: stripPromptLikeSearchText(result.snippet),
+  }
 }
 
 /**
@@ -120,12 +141,13 @@ export function formatWebSearchResultsForAI(
   results: WebSearchResult[],
   query: string,
 ): string {
-  if (results.length === 0) {
+  const safeResults = results.map(sanitizeWebSearchResult)
+  if (safeResults.length === 0) {
     return `没有找到关于「${query}」的网络搜索结果。`
   }
-  let text = `「${query}」的网络搜索结果（共 ${results.length} 条）：\n\n`
-  for (let i = 0; i < results.length; i += 1) {
-    const r = results[i]
+  let text = `「${query}」的网络搜索结果（共 ${safeResults.length} 条）：\n\n`
+  for (let i = 0; i < safeResults.length; i += 1) {
+    const r = safeResults[i]
     text += `[${i + 1}] ${r.title}\n`
     if (r.snippet) text += `   摘要: ${r.snippet}\n`
     text += `   链接: ${r.url}\n\n`
